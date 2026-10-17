@@ -48,6 +48,20 @@ Nueve hitos, cada uno con una puerta de salida que se comprueba con pruebas, no 
 
 Sin fechas: dependen del ritmo y del gasto que decidas. Los hitos 3 a 6 pueden solaparse en worktrees distintos una vez cerrado el 2, y el 7 es opcional: puede quedar fuera sin afectar al resto.
 
+Versión en texto de la hoja de ruta, para quien lea el documento exportado a Markdown (los diagramas no se exportan):
+
+| Hito | Contenido | Puerta de salida |
+| --- | --- | --- |
+| 0 · Fundaciones | Repo, CLAUDE.md, CI en tres sistemas, cargo-deny | CI verde: Linux, Windows y macOS compilan |
+| 1 · Núcleo y formatos | Color (`Rgba`), paleta con índice transparente, imagen en modos RGBA, indexado y grises, documento y comandos con deshacer, PNG indexado y RGBA | Ida y vuelta de PNG sin pérdida en el corpus |
+| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno y paleta; conversión RGB y HSL, reordenar la paleta, conversión entre modos, lienzos grandes y panel de paletas | Abrir, editar y guardar un PNG real en tres sistemas |
+| 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde |
+| 4 · Herramientas de pixel art | Formas, degradados, sombreado, simetría, selección | Dorados contra referencias |
+| 5 · Animación | Fotogramas, línea de tiempo, onion skin, GIF | GIF y hojas de sprites verificados |
+| 6 · Más formatos | `.aseprite` desde su especificación, IFF, BMP, PCX | Corpus de ficheros ajenos se abre |
+| 7 · Estilo DPaint (opcional) | Ciclo de color, stencil, perspectiva, por caja negra | Casos del emulador en verde |
+| 8 · Automatización y lanzamiento | CLI, scripting, MCP, traducciones, instaladores | Primera versión: instaladores y licencias revisadas |
+
 ## Repositorio y Claude Code
 
 Un solo repositorio con un `CLAUDE.md` corto, las reglas en `.claude/` y una unidad de trabajo pequeña por sesión.
@@ -169,7 +183,7 @@ Cada unidad sigue el mismo bucle, y el gasto de tokens se controla con unidades 
 - Modelo según la tarea: tests, formatos y código repetitivo con uno más barato (por ejemplo `model: sonnet` en el subagente); arquitectura y revisiones con el más capaz.
 - No hagas leer a Claude logs largos: resume el error o pega solo las líneas relevantes. Para dependencias, apunta a docs.rs.
 - Las tandas mecánicas (un lector de formato con su batería de tests) pueden ir con `claude -p` y el mismo `settings.json`; pruébalo antes en tu versión.
-- Mide: anota el gasto por hito en `docs/COSTES.md` (con `/cost` o el panel de uso) y ajusta el tamaño de las unidades.
+- Mide: anota el gasto por hito en `docs/COSTES.md` (con `/`usage y /context; /cost solo existe como alias en algunas versiones) y ajusta el tamaño de las unidades.
 
 No hay una cifra fiable de antemano, porque depende del tamaño de cada unidad; por eso se mide desde el hito 0.
 
