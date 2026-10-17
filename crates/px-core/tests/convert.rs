@@ -1384,3 +1384,155 @@ proptest! {
         }
     }
 }
+
+// Fila 21: el RGB de un píxel con `a = 0` no cuenta como color perdido en ningún destino.
+
+#[test]
+fn fila_21_los_transparentes_con_rgb_distinto_no_cuentan_como_color() {
+    // Posiciones de los píxeles que no son transparentes; el resto, 300 transparentes con RGB
+    // distinto, en orden de `i`.
+    #[derive(Clone, Copy)]
+    enum Tipo {
+        Gris(u8),
+        Semi,
+    }
+    let especiales = [
+        (3, Tipo::Gris(10)),
+        (50, Tipo::Gris(90)),
+        (120, Tipo::Semi),
+        (121, Tipo::Gris(170)),
+        (200, Tipo::Semi),
+        (305, Tipo::Gris(250)),
+    ];
+    let mut colores = Vec::new();
+    let mut tipos = Vec::new();
+    let mut i = 0usize;
+    for posicion in 0..306 {
+        match especiales.iter().find(|(p, _)| *p == posicion) {
+            Some(&(_, Tipo::Gris(v))) => {
+                colores.push(opaco(v, v, v));
+                tipos.push(Some(Tipo::Gris(v)));
+            }
+            Some(&(_, Tipo::Semi)) => {
+                colores.push(rgba(50, 50, 50, 128));
+                tipos.push(Some(Tipo::Semi));
+            }
+            None => {
+                colores.push(rgba(
+                    (i % 256) as u8,
+                    (i / 256) as u8,
+                    ((7 * i) % 256) as u8,
+                    0,
+                ));
+                tipos.push(None);
+                i += 1;
+            }
+        }
+    }
+    assert_eq!(i, 300);
+    let origen = imagen_de_colores(306, 1, &colores);
+
+    // GrayAlpha sin ningún permiso: nada se pierde, y los transparentes salen canónicos.
+    let img = ok(&origen, Mode::GrayAlpha, N, 0, 0);
+    let esperados: Vec<(u8, u8)> = tipos
+        .iter()
+        .map(|t| match t {
+            None => (0, 0),
+            Some(Tipo::Gris(v)) => (*v, 255),
+            Some(Tipo::Semi) => (50, 128),
+        })
+        .collect();
+    assert_eq!(pares(&img), esperados);
+
+    // Gray con el fondo blanco y con el negro: 300 + 2 píxeles pierden alfa, ninguno color.
+    // Los transparentes dan el fondo; 152 y 25 son `comp(50, fondo, 128)` hechos a mano.
+    for (permiso, fondo, semi) in [(A, 255u8, 152u8), (A0, 0u8, 25u8)] {
+        let img = ok(&origen, Mode::Gray, permiso, 0, 302);
+        let esperados: Vec<u8> = tipos
+            .iter()
+            .map(|t| match t {
+                None => fondo,
+                Some(Tipo::Gris(v)) => *v,
+                Some(Tipo::Semi) => semi,
+            })
+            .collect();
+        assert_eq!(grises(&img), esperados, "fondo {fondo}");
+    }
+    // Sin `drop_alpha` hace falta el permiso de alfa, pero nunca el de `luma`.
+    rechaza(&origen, Mode::Gray, N, 0, 302);
+    rechaza(&origen, Mode::Gray, L, 0, 302);
+
+    // Control: un único píxel visible con color sí cuenta, y solo él (1, nunca 301).
+    let mut con_rojo = colores.clone();
+    con_rojo.push(opaco(200, 0, 0));
+    let origen = imagen_de_colores(307, 1, &con_rojo);
+    rechaza(&origen, Mode::GrayAlpha, N, 1, 0);
+    rechaza(&origen, Mode::Gray, A, 1, 302);
+    let img = ok(&origen, Mode::GrayAlpha, L, 1, 0);
+    assert_eq!(pares(&img).last(), Some(&(luma(200, 0, 0), 255)));
+}
+
+// Propiedad 7: umbral de 256 colores.
+
+proptest! {
+    #[test]
+    fn umbral_de_256_colores(
+        n in prop::sample::select(vec![255usize, 256, 257]),
+        base in 0u32..(1 << 24),
+        paso in any::<u32>(),
+        transparentes in prop_oneof![
+            Just(None),
+            (1usize..=40, any::<bool>()).prop_map(Some),
+        ],
+        orden in prop::collection::vec(any::<u32>(), 300),
+    ) {
+        // `n` opacos distintos: un paso impar recorre los 2^24 colores sin repetir ninguno.
+        let paso = u64::from((paso | 1) & 0x00ff_ffff);
+        let mut colores: Vec<Rgba> = (0..n as u64)
+            .map(|i| {
+                let v = (u64::from(base) + i * paso) % (1 << 24);
+                opaco((v >> 16) as u8, (v >> 8) as u8, v as u8)
+            })
+            .collect();
+        // Transparentes con el mismo RGB o con RGB distinto.
+        if let Some((k, distintos)) = transparentes {
+            colores.extend((0..k).map(|i| {
+                if distintos {
+                    rgba((i * 37) as u8, (i * 11 + 1) as u8, (255 - i) as u8, 0)
+                } else {
+                    transparente()
+                }
+            }));
+        }
+        // Orden aleatorio, estable: el transparente puede ir en cualquier sitio.
+        let mut posiciones: Vec<usize> = (0..colores.len()).collect();
+        posiciones.sort_by_key(|&p| orden[p]);
+        let colores: Vec<Rgba> = posiciones.iter().map(|&p| colores[p]).collect();
+        let origen = imagen_de_colores(colores.len() as u32, 1, &colores);
+
+        let hay_transparente = transparentes.is_some();
+        let entradas = n + usize::from(hay_transparente);
+        let resultado = convert_image(&origen, Mode::Indexed, Allowed::NOTHING);
+        if entradas <= 256 {
+            let conversion = resultado
+                .map_err(|e| TestCaseError::fail(format!("{entradas} entradas y falló: {e:?}")))?;
+            prop_assert_eq!(conversion.report, ConversionReport::default());
+            prop_assert_eq!(conversion.image.palette().unwrap().len(), entradas);
+            prop_assert_eq!(
+                indice_transparente(&conversion.image),
+                hay_transparente.then_some(0)
+            );
+            let canonicos: Vec<Rgba> = colores
+                .iter()
+                .map(|c| if c.a == 0 { transparente() } else { *c })
+                .collect();
+            prop_assert_eq!(resueltos(&conversion.image), canonicos);
+        } else {
+            prop_assert_eq!(
+                resultado.err(),
+                Some(ConvertError::TooManyColors { at_least: 257 }),
+                "{} entradas", entradas
+            );
+        }
+    }
+}

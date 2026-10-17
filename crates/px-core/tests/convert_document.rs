@@ -295,6 +295,75 @@ fn fila_14_errores_del_documento_dejan_todo_intacto() {
     assert!(doc.can_redo());
 }
 
+/// `apply(cmd)` falla con `InBatch { index, source }` donde `source` cumple `es`, y no toca
+/// nada observable.
+fn rechaza_en_lote(
+    doc: &mut Document,
+    cmd: Command,
+    index: usize,
+    es: impl Fn(&DocumentError) -> bool,
+) {
+    let antes = estado(doc);
+    match doc.apply(cmd.clone()) {
+        Err(DocumentError::InBatch { index: i, source }) => {
+            assert_eq!(i, index, "índice del comando que falló en {cmd:?}");
+            assert!(es(&source), "error inesperado {source:?} en {cmd:?}");
+        }
+        otro => panic!("se esperaba InBatch en {cmd:?} y salió {otro:?}"),
+    }
+    assert_eq!(estado(doc), antes, "{cmd:?}");
+}
+
+#[test]
+fn fila_20_not_batchable_gana_a_unknown_image_y_el_primer_error_gana() {
+    let mut doc = doc_d();
+    let id = doc.main_image();
+    let desconocida = ImageId::from_raw(99);
+    let fuera = |image: ImageId| set(image, 5, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255)));
+    let es_not_batchable = |e: &DocumentError| *e == DocumentError::NotBatchable;
+
+    // Solo un `ConvertMode` sobre una imagen que no existe: no es `UnknownImage`.
+    let lote = Command::Batch(vec![convertir(desconocida, Mode::Gray, N)]);
+    rechaza_en_lote(&mut doc, lote, 0, es_not_batchable);
+
+    // Con un `SetPixels` válido antes: el índice es el del `ConvertMode`, y el `SetPixels` se
+    // revierte. El modo de destino y los permisos no importan.
+    for (target, allowed) in [(Mode::Rgba, L_Y_A), (Mode::Indexed, N), (Mode::Gray, L)] {
+        let lote = Command::Batch(vec![
+            set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
+            convertir(desconocida, target, allowed),
+        ]);
+        rechaza_en_lote(&mut doc, lote, 1, es_not_batchable);
+        assert_eq!(
+            imagen_de(&doc).get_pixel(0, 0),
+            Ok(Pixel::Rgba(Rgba::new(255, 0, 0, 255)))
+        );
+    }
+
+    // Gana el primer error del lote: un `SetPixels` fuera del lienzo antes del `ConvertMode`...
+    let lote = Command::Batch(vec![fuera(id), convertir(desconocida, Mode::Gray, L)]);
+    rechaza_en_lote(&mut doc, lote, 0, |e| {
+        matches!(e, DocumentError::Pixel { .. })
+    });
+    // ...y el `ConvertMode` primero, aunque después haya otro fallo.
+    let lote = Command::Batch(vec![convertir(desconocida, Mode::Gray, L), fuera(id)]);
+    rechaza_en_lote(&mut doc, lote, 0, es_not_batchable);
+
+    // Con historia previa y pila de rehacer, tampoco cambia nada.
+    assert_eq!(
+        doc.apply(set(id, 1, 0, Pixel::Rgba(Rgba::new(9, 9, 9, 255)))),
+        Ok(true)
+    );
+    assert_eq!(doc.undo(), Ok(()));
+    assert!(doc.can_redo());
+    let lote = Command::Batch(vec![
+        set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
+        convertir(desconocida, Mode::Gray, N),
+    ]);
+    rechaza_en_lote(&mut doc, lote, 1, es_not_batchable);
+    assert!(doc.can_redo());
+}
+
 #[test]
 fn fila_15_con_limite_cero_el_paso_grande_se_conserva() {
     let mut doc = Document::new(Image::new(4, 4, Mode::Rgba).unwrap());
