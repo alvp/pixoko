@@ -55,6 +55,8 @@ Un único test de estructura en `px-golden` (solo `std`, sin dependencias) que l
 - cada uno hereda `license.workspace = true` y `lints.workspace = true`, salvo px-render, que declara sus propios lints;
 - ningún `Cargo.toml` de crate tiene sección `[dependencies]` con entradas.
 
+> Actualización (hito 1, unidad 1): la tercera comprobación («ningún crate declara dependencias») se sustituyó por «toda dependencia externa está anotada en `docs/DEPENDENCIES.md`» (regla de `CLAUDE.md`), porque la decisión 1 ya preveía que cada unidad añadiera las suyas. Las aristas entre crates `px-` no cuentan.
+
 Esto evita que la estructura se deshaga sin que nadie lo note, sin inventar tests artificiales dentro de crates vacíos.
 
 ## Decisiones

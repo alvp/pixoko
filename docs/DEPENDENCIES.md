@@ -4,7 +4,13 @@ Registro de lo que se incorpora al proyecto. Las dependencias de Cargo deben pas
 
 ## Crates de Cargo
 
-Ninguno por ahora.
+| Crate | Versión | Licencia | Tipo | Uso |
+| --- | --- | --- | --- | --- |
+| [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-core` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
+
+`proptest` deja 49 crates transitivos en `Cargo.lock`, de los cuales 32 se compilan con las features por defecto (`rand`, `tempfile`, `rustix`, `windows-sys`…); `serde` y `syn`, por ejemplo, solo figuran en el lockfile. Todos son solo para tests y no entran en los binarios (`cargo tree -p px-core -e normal` está vacío). `cargo deny check` los acepta.
+
+Nota sobre `r-efi 6.0.0` (transitivo, solo UEFI; no se compila en Linux, Windows ni macOS): su licencia es `MIT OR Apache-2.0 OR LGPL-2.1-or-later`. Es una disyunción: se usa bajo MIT o Apache-2.0, nunca bajo LGPL, así que no afecta a la política MIT del proyecto.
 
 ## Acciones de GitHub
 

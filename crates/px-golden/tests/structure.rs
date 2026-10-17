@@ -201,17 +201,32 @@ fn px_render_declares_its_own_lints_with_unsafe_deny() {
     assert_no_failures(&failures);
 }
 
+/// Regla de `CLAUDE.md`: toda dependencia externa se anota en `docs/DEPENDENCIES.md`.
+/// Las aristas entre crates `px-` no cuentan.
 #[test]
-fn no_crate_declares_dependencies() {
+fn every_external_dependency_is_documented() {
+    let path = workspace_root().join("docs/DEPENDENCIES.md");
+    let documented = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()));
     let mut failures = Vec::new();
     for name in EXPECTED_CRATES {
         let manifest = read_manifest(name);
-        let deps = manifest.dependency_entries();
-        if !deps.is_empty() {
-            failures.push(format!(
-                "{name}: no debe tener entradas en [dependencies], [dev-dependencies] ni [build-dependencies]; encontradas: {deps:?}"
-            ));
+        for entry in manifest.dependency_entries() {
+            let mut segments = entry.split('.');
+            let dep = segments
+                .by_ref()
+                .skip_while(|seg| !DEPENDENCY_TABLES.contains(seg))
+                .nth(1);
+            let Some(dep) = dep.filter(|d| !d.starts_with("px-")) else {
+                continue;
+            };
+            if !documented.contains(&format!("`{dep}`")) {
+                failures.push(format!(
+                    "{name}: la dependencia `{dep}` no esta anotada en docs/DEPENDENCIES.md"
+                ));
+            }
         }
     }
+    failures.dedup();
     assert_no_failures(&failures);
 }
