@@ -10,7 +10,7 @@ Dar en `px-raster` los píxeles de un segmento entre dos puntos, igual en cualqu
 
 - `px_raster::Line`: iterador **perezoso** de `(i32, i32)`. Deriva `Clone` y `Debug`. No guarda píxeles: solo extremos, índice y longitud, así que ocupa memoria constante aunque el segmento tenga 2³² píxeles.
 - `Line::new(a: (i32, i32), b: (i32, i32)) -> Line`: no falla ni hace pánico con ningún `i32`.
-- `Line::len(&self) -> u64` e `is_empty(&self) -> bool`: píxeles que **quedan** por devolver. Es `u64` porque `i32::MIN` a `i32::MAX` son 2³² píxeles y no caben en `u32`; no se implementa `ExactSizeIterator` (exige `usize`, y en 32 bits no cabría). `size_hint` da `len` recortado a `usize::MAX`.
+- `Line::len(&self) -> u64` e `is_empty(&self) -> bool`: píxeles que **quedan** por devolver. Es `u64` porque `i32::MIN` a `i32::MAX` son 2³² píxeles y no caben en `u32`; no se implementa `ExactSizeIterator` (exige `usize`, y en 32 bits no cabría). `size_hint` está fijado en el comportamiento 11.
 - `Iterator::nth` se sobrescribe y cuesta O(1); `next` también. Es lo que permite recortar sin recorrer el segmento.
 - `Line::clip_to(self, width: u32, height: u32) -> Line`: deja solo los píxeles con `0 <= x < width` y `0 <= y < height`, en el mismo orden. Puede quedar vacía.
 - `line_command(doc: &Document, image: ImageId, a, b, pixel: Pixel) -> Result<Option<Command>, DocumentError>`: lee el tamaño de la imagen en `doc` (solo lectura), recorta y devuelve `Some(SetPixels)` o `None` si no queda ningún píxel. Errores: `UnknownImage` si `image` no existe y `OutOfMemory` si no se puede reservar el `Vec` (`try_reserve_exact`).
@@ -32,6 +32,9 @@ Dar en `px-raster` los píxeles de un segmento entre dos puntos, igual en cualqu
 8. **Trazo vacío.** Si no queda ningún píxel, `line_command` devuelve `Ok(None)` y `draw_line` devuelve `Ok(false)`; el documento y su historia quedan intactos (`SetPixels` vacío es `EmptyCommand` en `apply`, y esto lo evita sin error).
 9. **El modo del `Pixel` lo valida `Document`.** Un `Pixel` que no coincide con el modo de la imagen (o un índice fuera de la paleta) hace que `apply` falle con `DocumentError::Pixel { pixel: 0, .. }` y sin cambios, como cualquier otro `SetPixels`. `line_command` no lo comprueba.
 10. **Sin pánico** con ningún `i32`, ni con `width` o `height` iguales a 0 (lienzo vacío: `clip_to` da una línea vacía).
+11. **Dos decisiones fijadas tras la implementación** (la spec no las decía; las probaron los tests):
+    - **`size_hint`.** Con `len` los píxeles que quedan: si `len` cabe en `usize`, devuelve `(len, Some(len))`; si no, `(usize::MAX, None)`. En destinos de 64 bits `len` (como mucho 2³²) siempre cabe, así que la segunda rama solo se da en 32 bits, donde `Line::new((i32::MIN, 0), (i32::MAX, 0))` da `(usize::MAX, None)`.
+    - **Orden de errores en `line_command` (y `draw_line`).** Se busca la imagen antes de recortar: con un `ImageId` que no existe, el resultado es `Err(UnknownImage(id))` aunque la línea quedara totalmente fuera del lienzo (y sin saber su tamaño no podría quedar fuera). `Ok(None)` solo se da con una imagen que existe.
 
 ## Fuera de alcance
 
@@ -66,6 +69,7 @@ Dar en `px-raster` los píxeles de un segmento entre dos puntos, igual en cualqu
 | Coordenadas negativas: `(-5,-5)→(-1,-1)`, `(-5,0)→(-1,0)` y `(0,-9)→(0,-1)`, las tres a 4×4 | vacías (todos los píxeles tienen `x < 0` o `y < 0`) |
 | `(-2,0)→(5,0)` recortada a 4×1; `(0,0)→(3,3)` recortada a 0×4, a 4×0 y a 0×0 | `(0,0),(1,0),(2,0),(3,0)`; las tres últimas vacías (`width` o `height` cero no admiten ningún píxel) |
 | `line_command` de `(0,0)→(3,3)` con `Pixel::Rgba` sobre una imagen RGBA 4×4 | `Some(SetPixels)` con 4 `PixelEdit` `(0,0),(1,1),(2,2),(3,3)`, en ese orden |
+| `line_command` y `draw_line` con `ImageId` desconocido y una línea totalmente fuera de una imagen de 4×4 (`(10,10)→(20,20)`, `(-5,-5)→(-1,-1)`, `(MIN,MIN)→(MIN,MIN)`, `(MIN,0)→(MIN,5)`, `(-3,2)→(2,-3)`, `(MAX,MAX)→(MIN,MAX)`); y con una imagen que existe y las mismas seis líneas | `Err(UnknownImage(id))` en las seis, con las dos funciones, y el documento intacto; `Ok(None)` (`line_command`) u `Ok(false)` (`draw_line`) con la imagen existente |
 | `draw_line` totalmente fuera; con el mismo color que ya hay; con `ImageId` desconocido; con `Pixel::Gray` sobre imagen RGBA | `Ok(false)` sin tocar `can_undo`; `Ok(false)` (lo decide `apply`); `Err(UnknownImage)`; `Err(Pixel { pixel: 0, .. })`, con la imagen intacta |
 
 **Calculadas a mano** (aplicando a mano la fórmula del comportamiento 2; en los tests son listas escritas literalmente, no derivadas del modelo ni de la implementación):
@@ -87,6 +91,8 @@ En `crates/px-raster/tests/line.rs`, sobre la API pública. **Unitarios**: una p
 4. **Longitud y exactitud.** `len() == max(|dx|, |dy|) + 1` calculado en `i128`, con cualquier `i32`; y cada `nth(i)` coincide con el modelo exacto de la definición (comportamiento 2, escrito en los tests con `i128` y sin copiar la implementación). `len` baja de uno en uno al iterar y llega a 0.
 5. **Recorte.** Con coordenadas pequeñas y cualquier `width`, `height` en `0..=12`, `clip_to` da lo mismo que `Line::new(a, b).filter(dentro)`, en el mismo orden. Los rectángulos de `0` de ancho o de alto y las coordenadas negativas se generan siempre (no solo por azar). Con `i32` completo y un lienzo de hasta 16×16, todo píxel recortado está dentro, coincide con el modelo exacto, y el resultado tiene una cantidad de elementos igual a la de los píxeles del modelo que caen dentro, contados solo en las columnas (eje mayor x) o filas (eje mayor y) del lienzo.
 6. **Comando a través de `Document`.** Sobre una imagen RGBA de 1 a 16 de lado y cualquier `a`, `b` (pequeños y extremos): `line_command` es `None` si y solo si el recorte está vacío; si no, tras `doc.apply` los píxeles del recorte valen el color y **todos los demás son iguales que antes**, `apply` devuelve `true` si y solo si algún píxel cambió de valor, y `undo` deja la imagen igual que la copia previa. Con `None`, `draw_line` devuelve `Ok(false)` y `can_undo`, `can_redo` e `history_bytes` no cambian.
+
+Fijan el comportamiento 11: `size_hint` por una prueba unitaria (con las dos ramas escritas según `usize::BITS`; la de 32 bits solo se ejecuta en un destino de 32 bits, que el CI no tiene) y por la propiedad 4 (que exige `None` como cota superior cuando `len` no cabe en `usize`), y el orden de errores por la fila de `UnknownImage` con línea fuera de la tabla.
 
 No hay dorado: ver «Fuera de alcance».
 

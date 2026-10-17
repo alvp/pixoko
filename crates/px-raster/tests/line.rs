@@ -459,6 +459,50 @@ fn fila_draw_line_con_imagen_desconocida() {
     assert_eq!(instantanea(&doc), antes);
 }
 
+/// Comportamiento 11: la imagen se busca antes de recortar, así que `UnknownImage` gana a `None`
+/// incluso con una línea que queda totalmente fuera del lienzo.
+#[test]
+fn fila_imagen_desconocida_gana_a_linea_fuera_del_lienzo() {
+    let mut doc = doc_rgba(4, 4);
+    let id = doc.main_image();
+    let desconocida = ImageId::from_raw(99);
+    let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
+    let fuera: [Par; 6] = [
+        ((10, 10), (20, 20)),
+        ((-5, -5), (-1, -1)),
+        ((MIN, MIN), (MIN, MIN)),
+        ((MIN, 0), (MIN, 5)),
+        ((-3, 2), (2, -3)),
+        ((MAX, MAX), (MIN, MAX)),
+    ];
+    let antes = instantanea(&doc);
+    for (a, b) in fuera {
+        // Con una imagen que existe, la línea queda fuera: sin comando y sin cambios.
+        assert_eq!(
+            line_command(&doc, id, a, b, pixel),
+            Ok(None),
+            "{a:?}->{b:?}"
+        );
+        assert_eq!(
+            draw_line(&mut doc, id, a, b, pixel),
+            Ok(false),
+            "{a:?}->{b:?}"
+        );
+        // Con una que no existe, el error de imagen va primero.
+        assert_eq!(
+            line_command(&doc, desconocida, a, b, pixel),
+            Err(DocumentError::UnknownImage(desconocida)),
+            "{a:?}->{b:?}"
+        );
+        assert_eq!(
+            draw_line(&mut doc, desconocida, a, b, pixel),
+            Err(DocumentError::UnknownImage(desconocida)),
+            "{a:?}->{b:?}"
+        );
+        assert_eq!(instantanea(&doc), antes);
+    }
+}
+
 #[test]
 fn fila_draw_line_con_pixel_de_otro_modo() {
     let mut doc = doc_rgba(4, 4);
@@ -627,10 +671,19 @@ fn size_hint_en_lineas_pequenas_y_enormes() {
     assert_eq!(l.size_hint(), (5, Some(5)));
     let _ = l.next();
     assert_eq!(l.size_hint(), (4, Some(4)));
-    // `len` recortado a `usize::MAX` (en 64 bits 2^32 cabe y sale entero).
+    // Comportamiento 11: `(len, Some(len))` si `len` cabe en `usize`, `(usize::MAX, None)` si no.
+    // 2^32 píxeles caben en `usize` de 64 bits y no en el de 32.
     let enorme = Line::new((MIN, 0), (MAX, 0));
-    let esperado = usize::try_from(DOS_32).unwrap_or(usize::MAX);
-    assert_eq!(enorme.size_hint().0, esperado);
+    if usize::BITS >= 64 {
+        assert_eq!(enorme.size_hint(), (1 << 32, Some(1 << 32)));
+    } else {
+        assert_eq!(enorme.size_hint(), (usize::MAX, None));
+    }
+    // Una línea recortada devuelve el tamaño de lo que queda, también con la cota superior.
+    let recortada = Line::new((MIN, MIN), (MAX, MAX)).clip_to(4, 4);
+    assert_eq!(recortada.size_hint(), (4, Some(4)));
+    let vacia = Line::new((0, 0), (3, 3)).clip_to(0, 4);
+    assert_eq!(vacia.size_hint(), (0, Some(0)));
 }
 
 // Estrategias.
@@ -852,9 +905,8 @@ proptest! {
         let (bajo, alto) = l.size_hint();
         let cabe = usize::try_from(l.len()).ok();
         prop_assert_eq!(bajo, cabe.unwrap_or(usize::MAX));
-        if cabe.is_some() {
-            prop_assert_eq!(alto, Some(bajo));
-        }
+        // Comportamiento 11: `Some(len)` si cabe en `usize`; si no, sin cota superior.
+        prop_assert_eq!(alto, cabe);
 
         for i in indices_de_interes(n, &azar) {
             let mut c = l.clone();
