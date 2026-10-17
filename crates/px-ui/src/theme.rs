@@ -20,6 +20,11 @@ pub const ACCENT: Color32 = Color32::from_rgb(0x39, 0xd0, 0xb2);
 /// Avisos (siempre con `NOTICE_PREFIX`: el color solo refuerza).
 pub const WARNING: Color32 = Color32::from_rgb(0xef, 0x8e, 0x39);
 
+/// Anillo de la muestra elegida en el panel de paletas (contraste ≥ 3:1 con `SURFACE_1`).
+pub const RING_ACTIVE: Color32 = ACCENT;
+/// Anillo de la muestra bajo el cursor.
+pub const RING_HOVER: Color32 = TEXT;
+
 /// Prefijo de texto de los avisos: no dependen solo del color.
 pub const NOTICE_PREFIX: &str = "aviso: ";
 
