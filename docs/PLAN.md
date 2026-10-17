@@ -82,7 +82,7 @@ pixoko/                         (raíz del repositorio)
 ├── specs/                      una página por función: comportamiento y casos límite
 ├── golden/                     entradas y salidas de referencia
 ├── deny.toml                   política de licencias (cargo-deny)
-└── docs/                       PLAN.md, DEPENDENCIES.md, COSTES.md
+└── docs/                       PLAN.md, DEPENDENCIES.md
 ```
 
 **CLAUDE.md**
