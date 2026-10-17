@@ -98,12 +98,61 @@ impl Palette {
         Ok(())
     }
 
+    /// Índice de la entrada más parecida a `color`, o `None` si la paleta está vacía.
+    ///
+    /// Compara con el valor resuelto de cada entrada. Con empate gana el índice más
+    /// bajo. Distancia y motivos: `specs/hito-2-color-cercano.md`.
+    pub fn nearest(&self, color: Rgba) -> Option<u8> {
+        let target = premultiplied(color);
+        let mut best: Option<(i64, u8)> = None;
+        for (i, &stored) in self.colors.iter().enumerate() {
+            // Como mucho 256 entradas: el índice siempre cabe en `u8`.
+            let index = u8::try_from(i).ok()?;
+            let entry = if self.transparent_index == Some(index) {
+                Rgba { a: 0, ..stored }
+            } else {
+                stored
+            };
+            let distance = squared_distance(premultiplied(entry), target);
+            // Solo una distancia estrictamente menor desplaza a la mejor.
+            if best.is_none_or(|(d, _)| distance < d) {
+                best = Some((distance, index));
+                if distance == 0 {
+                    break;
+                }
+            }
+        }
+        best.map(|(_, index)| index)
+    }
+
     fn out_of_range(&self, index: u8) -> PaletteError {
         PaletteError::IndexOutOfRange {
             index,
             len: self.colors.len(),
         }
     }
+}
+
+/// Color premultiplicado por el alfa: `(r·a, g·a, b·a, 255·a)`, cada componente en `[0, 65025]`.
+fn premultiplied(color: Rgba) -> [i64; 4] {
+    let a = i64::from(color.a);
+    [
+        i64::from(color.r) * a,
+        i64::from(color.g) * a,
+        i64::from(color.b) * a,
+        255 * a,
+    ]
+}
+
+/// Distancia euclídea al cuadrado; como máximo `4 · 65025²`, sin riesgo en `i64`.
+fn squared_distance(p: [i64; 4], q: [i64; 4]) -> i64 {
+    p.iter()
+        .zip(q)
+        .map(|(&x, y)| {
+            let d = x - y;
+            d * d
+        })
+        .sum()
 }
 
 /// Error al operar con una paleta.
