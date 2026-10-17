@@ -8,10 +8,10 @@ use std::error::Error;
 use std::fmt;
 
 use egui::{
-    Color32, ColorImage, Event, Key, PointerButton, Rect, Sense, TextureHandle, TextureOptions, Ui,
-    pos2, vec2,
+    Color32, ColorImage, Context, Event, Key, PointerButton, Rect, Sense, TextureHandle,
+    TextureOptions, Ui, pos2, vec2,
 };
-use px_core::Image;
+use px_core::{Image, Rgba};
 
 use crate::texture::to_rgba8;
 use crate::view::{Size, View, Zoom};
@@ -39,6 +39,19 @@ impl fmt::Display for CanvasError {
 
 impl Error for CanvasError {}
 
+/// Lo que el gesto del lápiz pide a quien dibuja, en coordenadas de imagen con signo (pueden
+/// caer fuera de la imagen) y en el orden en que ocurrieron (specs/hito-2-lapiz-deshacer.md,
+/// sección 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CanvasEvent {
+    /// Botón izquierdo pulsado en el lienzo, sin espacio.
+    StrokeBegin((i32, i32)),
+    /// El puntero se movió (uno por cada `PointerMoved`), o se soltó el botón en esa posición.
+    StrokeMove((i32, i32)),
+    /// Fin del trazo: botón soltado, ventana sin foco o botón que egui ya no ve pulsado.
+    StrokeEnd,
+}
+
 /// Lo que el lienzo dejó en pantalla en el último fotograma.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CanvasInfo {
@@ -52,6 +65,26 @@ pub struct CanvasInfo {
     pub error: Option<CanvasError>,
 }
 
+/// Qué hace el arrastre en curso. Se decide al pulsar y no cambia hasta soltar.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum Gesture {
+    #[default]
+    None,
+    /// Desplazar, con el botón que lo empezó.
+    Pan(PointerButton),
+    /// Dibujar (botón izquierdo).
+    Draw,
+}
+
+/// Lo que `interact` calcula para que `paint` lo dibuje.
+#[derive(Clone, Copy)]
+struct Frame {
+    rect: Rect,
+    viewport: Size,
+    ppp: f32,
+    hover: Option<(u32, u32)>,
+}
+
 /// Estado del lienzo: la imagen, su textura y la vista.
 #[derive(Default)]
 pub struct Canvas {
@@ -62,6 +95,8 @@ pub struct Canvas {
     size: Option<Size>,
     view: Option<View>,
     error: Option<CanvasError>,
+    gesture: Gesture,
+    frame: Option<Frame>,
 }
 
 impl Canvas {
@@ -77,6 +112,22 @@ impl Canvas {
         self.texture = None;
         self.view = None;
         self.error = None;
+        self.gesture = Gesture::None;
+    }
+
+    /// Regenera la textura con el contenido de `image` **conservando la vista** (tras un trazo,
+    /// un deshacer o un rehacer). Si la imagen tiene otro tamaño o aún no hay textura, se
+    /// comporta como [`Canvas::set_image`]. La textura se sube entera: las regiones son de la
+    /// unidad 14.
+    pub fn refresh(&mut self, ctx: &Context, image: &Image) {
+        let same_size = self.size == Some(Size::new(image.width(), image.height()));
+        match &mut self.texture {
+            Some(texture) if same_size => {
+                texture.set(color_image(image), TextureOptions::NEAREST);
+                ctx.request_repaint();
+            }
+            _ => self.set_image(image),
+        }
     }
 
     /// Textura de la imagen, una vez subida.
@@ -84,12 +135,29 @@ impl Canvas {
         self.texture.as_ref().map(TextureHandle::id)
     }
 
-    /// Dibuja el lienzo en todo el espacio libre de `ui` y procesa sus entradas.
+    /// Dibuja el lienzo en todo el espacio libre de `ui` y procesa sus entradas: [`interact`]
+    /// y [`paint`] seguidos, sin superposición y sin los eventos de trazo.
     ///
     /// Rueda o pellizco: un paso de zoom por evento, anclado al cursor. Arrastre con el botón
     /// central, o con espacio y el izquierdo: desplazamiento. `Home`: ajuste. `+` y `-`: zoom
     /// en el centro.
+    ///
+    /// [`interact`]: Canvas::interact
+    /// [`paint`]: Canvas::paint
     pub fn show(&mut self, ui: &mut Ui) -> CanvasInfo {
+        self.interact(ui);
+        self.paint(ui, std::iter::empty())
+    }
+
+    /// Primera mitad de [`Canvas::show`]: sube la textura si falta, reserva el espacio, procesa
+    /// las entradas (zoom, desplazamiento y el gesto del lápiz) y devuelve los eventos de trazo
+    /// del fotograma, en orden. Debe ir antes de [`Canvas::paint`] en el mismo fotograma.
+    ///
+    /// El gesto se decide al pulsar: botón central, o izquierdo con espacio abajo, desplaza;
+    /// izquierdo sin espacio dibuja (solo si la pulsación cae dentro del lienzo). Un segundo
+    /// botón durante el gesto se ignora. El trazo sigue aunque el puntero salga del lienzo o de
+    /// la ventana y termina al soltar, al perder el foco o si egui ya no ve el botón pulsado.
+    pub fn interact(&mut self, ui: &mut Ui) -> Vec<CanvasEvent> {
         self.upload_if_pending(ui);
 
         let rect = ui.available_rect_before_wrap();
@@ -105,16 +173,15 @@ impl Canvas {
             .filter(|p| rect.contains(*p))
             .map(|p| (physical(p.x - rect.min.x), physical(p.y - rect.min.y)));
 
-        let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 0.0, BACKGROUND);
-
-        let (Some(texture), Some(size)) = (&self.texture, self.size) else {
-            return CanvasInfo {
-                zoom: Zoom::default(),
-                hover: None,
-                image_rect: None,
-                error: self.error.clone(),
-            };
+        let mut frame = Frame {
+            rect,
+            viewport,
+            ppp,
+            hover: None,
+        };
+        let (Some(_), Some(size)) = (&self.texture, self.size) else {
+            self.frame = Some(frame);
+            return Vec::new();
         };
 
         let mut view = self.view.unwrap_or_else(|| View::fit(viewport, size));
@@ -122,6 +189,14 @@ impl Canvas {
             i64::from(viewport.width) / 2,
             i64::from(viewport.height) / 2,
         );
+        let to_image = |view: &View, p: egui::Pos2| {
+            view.screen_to_image_i32(
+                (physical(p.x - rect.min.x), physical(p.y - rect.min.y)),
+                size,
+            )
+        };
+        let space_down = ui.input(|i| i.key_down(Key::Space));
+        let mut strokes = Vec::new();
         let events = ui.input(|i| i.events.clone());
         for event in &events {
             match event {
@@ -143,8 +218,60 @@ impl Canvas {
                     Key::Minus => zoom_step(&mut view, false, center),
                     _ => {}
                 },
+                Event::PointerButton {
+                    pos,
+                    button,
+                    pressed: true,
+                    ..
+                } if self.gesture == Gesture::None && rect.contains(*pos) => {
+                    self.gesture = match button {
+                        PointerButton::Middle => Gesture::Pan(PointerButton::Middle),
+                        PointerButton::Primary if space_down => {
+                            Gesture::Pan(PointerButton::Primary)
+                        }
+                        PointerButton::Primary => Gesture::Draw,
+                        _ => Gesture::None,
+                    };
+                    if self.gesture == Gesture::Draw {
+                        strokes.push(CanvasEvent::StrokeBegin(to_image(&view, *pos)));
+                    }
+                }
+                Event::PointerButton {
+                    pos,
+                    button,
+                    pressed: false,
+                    ..
+                } => match self.gesture {
+                    Gesture::Draw if *button == PointerButton::Primary => {
+                        strokes.push(CanvasEvent::StrokeMove(to_image(&view, *pos)));
+                        strokes.push(CanvasEvent::StrokeEnd);
+                        self.gesture = Gesture::None;
+                    }
+                    Gesture::Pan(owner) if *button == owner => self.gesture = Gesture::None,
+                    _ => {}
+                },
+                Event::PointerMoved(pos) if self.gesture == Gesture::Draw => {
+                    strokes.push(CanvasEvent::StrokeMove(to_image(&view, *pos)));
+                }
+                Event::WindowFocused(false) => {
+                    if self.gesture == Gesture::Draw {
+                        strokes.push(CanvasEvent::StrokeEnd);
+                    }
+                    self.gesture = Gesture::None;
+                }
                 _ => {}
             }
+        }
+        // Red de seguridad: un soltar que no llegó (por ejemplo, fuera de la ventana).
+        match self.gesture {
+            Gesture::Draw if !ui.input(|i| i.pointer.primary_down()) => {
+                strokes.push(CanvasEvent::StrokeEnd);
+                self.gesture = Gesture::None;
+            }
+            Gesture::Pan(button) if !ui.input(|i| i.pointer.button_down(button)) => {
+                self.gesture = Gesture::None;
+            }
+            _ => {}
         }
         // Pellizco y Ctrl + rueda: egui los resume en `zoom_delta`.
         let pinch = ui.input(|i| i.zoom_delta());
@@ -153,19 +280,56 @@ impl Canvas {
         {
             zoom_step(&mut view, pinch > 1.0, anchor);
         }
-        let panning = response.dragged_by(PointerButton::Middle)
-            || (response.dragged_by(PointerButton::Primary)
-                && ui.input(|i| i.key_down(Key::Space)));
-        if panning {
+        if let Gesture::Pan(button) = self.gesture
+            && response.dragged_by(button)
+        {
             let delta = response.drag_delta();
             view.pan(physical(delta.x), physical(delta.y), viewport, size);
         }
         view.clamp(viewport, size);
         self.view = Some(view);
 
+        frame.hover = pointer.and_then(|p| view.screen_to_image(p, size));
+        self.frame = Some(frame);
+        strokes
+    }
+
+    /// Segunda mitad de [`Canvas::show`]: pinta el fondo, la imagen y, encima, los píxeles de
+    /// `overlay` (`(x, y, color)`: lo que se escribirá, con el color que tendrá en la imagen).
+    /// Cada uno es un rectángulo de `zoom × zoom` píxeles físicos; con alfa menor que 255 va
+    /// sobre el fondo y no sobre la imagen, porque el resultado reemplaza el píxel.
+    ///
+    /// Si no hubo `interact` antes en el fotograma, no pinta nada.
+    pub fn paint(
+        &mut self,
+        ui: &mut Ui,
+        overlay: impl IntoIterator<Item = (u32, u32, Rgba)>,
+    ) -> CanvasInfo {
+        let Some(frame) = self.frame else {
+            return CanvasInfo {
+                zoom: Zoom::default(),
+                hover: None,
+                image_rect: None,
+                error: self.error.clone(),
+            };
+        };
+        let painter = ui.painter_at(frame.rect);
+        painter.rect_filled(frame.rect, 0.0, BACKGROUND);
+
+        let (Some(texture), Some(size), Some(view)) = (&self.texture, self.size, self.view) else {
+            return CanvasInfo {
+                zoom: Zoom::default(),
+                hover: None,
+                image_rect: None,
+                error: self.error.clone(),
+            };
+        };
+        let ppp = frame.ppp;
+        let to_points = |p: (i64, i64)| frame.rect.min + vec2(p.0 as f32 / ppp, p.1 as f32 / ppp);
+
         let placed = view.image_rect(size);
         let image_rect = Rect::from_min_size(
-            rect.min + vec2(placed.x as f32 / ppp, placed.y as f32 / ppp),
+            to_points((placed.x, placed.y)),
             vec2(placed.width as f32 / ppp, placed.height as f32 / ppp),
         );
         painter.image(
@@ -175,9 +339,29 @@ impl Canvas {
             Color32::WHITE,
         );
 
+        let (view_w, view_h) = (
+            i64::from(frame.viewport.width),
+            i64::from(frame.viewport.height),
+        );
+        for (x, y, color) in overlay {
+            let min = view.image_to_screen(x, y);
+            let max = view.image_to_screen(x.saturating_add(1), y.saturating_add(1));
+            if max.0 <= 0 || max.1 <= 0 || min.0 >= view_w || min.1 >= view_h {
+                continue;
+            }
+            let block = Rect::from_min_max(to_points(min), to_points(max));
+            if color.a < 255 {
+                painter.rect_filled(block, 0.0, BACKGROUND);
+            }
+            if color.a > 0 {
+                let color = Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
+                painter.rect_filled(block, 0.0, color);
+            }
+        }
+
         CanvasInfo {
             zoom: view.zoom(),
-            hover: pointer.and_then(|p| view.screen_to_image(p, size)),
+            hover: frame.hover,
             image_rect: Some(image_rect),
             error: None,
         }
@@ -194,16 +378,20 @@ impl Canvas {
             self.error = Some(CanvasError::TooLarge { width, height, max });
             return;
         }
-        let pixels = ColorImage::from_rgba_unmultiplied(
-            [width as usize, height as usize],
-            &to_rgba8(&image),
-        );
         // Sin suavizado al ampliar ni al reducir, y sin mipmaps.
-        self.texture = Some(
-            ui.ctx()
-                .load_texture("px-image", pixels, TextureOptions::NEAREST),
-        );
+        self.texture = Some(ui.ctx().load_texture(
+            "px-image",
+            color_image(&image),
+            TextureOptions::NEAREST,
+        ));
     }
+}
+
+fn color_image(image: &Image) -> ColorImage {
+    ColorImage::from_rgba_unmultiplied(
+        [image.width() as usize, image.height() as usize],
+        &to_rgba8(image),
+    )
 }
 
 fn zoom_step(view: &mut View, zoom_in: bool, anchor: (i64, i64)) {
