@@ -71,7 +71,7 @@ Ver 2, 3 y 6.
 - Mientras el botón está abajo **el documento no se modifica**. El trazo pendiente se pinta como **superposición** sobre la textura: por cada píxel pendiente, un rectángulo del tamaño del zoom (y, debajo, uno del color de fondo si el alfa es menor que 255, para que se vea lo que quedará: el resultado **reemplaza** el píxel, no se mezcla con el anterior). No se copia ni se sube la imagen en los fotogramas del trazo.
 - Al soltar: `Stroke::commit` ⇒ **un `SetPixels`** (no `Batch`: es una sola imagen y un solo comando). `Ok(true)` ⇒ un paso nuevo; `Ok(false)` (trazo vacío, todo fuera del lienzo, o que no cambia ningún píxel) ⇒ **no entra en la historia** y `can_undo`, `can_redo` e `history_bytes` quedan como estaban (un `redo` pendiente no se pierde).
 - Un `Err` (hoy solo `OutOfMemory`) descarta el trazo, deja el documento intacto y se muestra en el título hasta la siguiente acción correcta.
-- Coste del overlay: **O(P) por fotograma**, con `P` los píxeles del trazo. **Umbral de fluidez: por medir al implementar** (se anotará aquí: los píxeles por trazo a partir de los cuales el fotograma deja de caber en ~16 ms, en `--release`). Mientras no se mida, la cifra es desconocida. **La superposición como textura es de la unidad 14.**
+- Coste del overlay: **O(P) por fotograma**, con `P` los píxeles del trazo. **Umbral de fluidez (medido, 2026-10-17, una máquina y un perfil `--release`, orden de magnitud):** solo CPU, es decir, construir las formas con `paint` y teselarlas con egui, sin la subida a la GPU ni el dibujado, con una imagen de 700×500 a zoom ×1 y todos los píxeles del trazo visibles (mediana de 7 fotogramas): 1 000 píxeles ⇒ 0,13 ms; 10 000 ⇒ 1,7 ms; 50 000 ⇒ 6,5 ms; 100 000 ⇒ 13,4 ms; 200 000 ⇒ 27 ms; 350 000 ⇒ 45 ms. El coste es lineal (~0,13 µs por píxel). Un fotograma de 16 ms se alcanza hacia los **~100 000 píxeles visibles por trazo** y, dejando margen para la GPU y el resto de la app, el umbral práctico es de **unos 50 000**: un garabato que cubre media pantalla. Los píxeles fuera de la ventana no cuestan casi nada (se descartan antes de crear la forma). No se ha medido en debug ni con la GPU de una ventana real. **La superposición como textura es de la unidad 14.**
 
 ### 3. Interacción
 
@@ -97,7 +97,7 @@ Ver 2, 3 y 6.
 | GrayAlpha | como Gray con alfa 255 en las ranuras 1 a 8, y la 9 transparente: `{gray: 0, alpha: 0}` |
 | Indexed | `Indexed(n−1)` si `n ≤ paleta.len()`; si no, `None`: las ranuras sobrantes se ignoran sin error (solo se alcanzan los 9 primeros índices hasta el panel de la unidad 11) |
 
-- La tabla de colores es propia y original (no sale de ningún otro programa). Elegir una ranura que da `None` con la imagen actual **se ignora** (sin error, y la ranura activa no cambia): no se puede elegir una ranura inexistente. Cualquier otro valor (0, 10…) da `None`.
+- La tabla de colores es propia y original (no sale de ningún otro programa): las ranuras 1 a 8 son los ocho vértices del cubo RGB (negro, blanco, los tres primarios y los tres secundarios) y la 9 es transparente. Elegir una ranura que da `None` con la imagen actual **se ignora** (sin error, y la ranura activa no cambia): no se puede elegir una ranura inexistente. Cualquier otro valor (0, 10…) da `None`.
 - El título muestra la ranura y su color, con `slot_label(image, slot) -> Option<String>`: `color 3 #ff0000`, `color 2 índice 1`, `color 4 gris 96`, `color 9 transparente` (alfa 0 en RGBA y GrayAlpha; `color 9 gris 255` en Gray).
 
 ### 5. Deshacer y rehacer
