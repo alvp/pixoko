@@ -1,0 +1,4 @@
+# Los ficheros dorados son datos: git no debe convertir finales de línea ni
+# hacer diff de texto, o el CI de Windows los alteraría al hacer checkout.
+golden/** binary
+golden/**/*.md text diff

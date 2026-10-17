@@ -174,6 +174,11 @@ En `crates/px-formats/tests/png.rs` (integración sobre la API pública). **El c
 
 No hay dorado: el PNG tiene especificación pública y los valores esperados salen de ella, no de la salida de un programa de referencia.
 
+## Para el hito 2
+
+- **Pico de memoria al escribir: unos 2 GiB.** `write_png` conserva la `Image` (hasta `Image::MAX_BYTES`, 1 GiB), copia todas las muestras a un búfer contiguo (otro tanto, hasta 1 GiB) y codifica sobre un `Vec` de salida que crece con el fichero comprimido (hasta ~1 GiB si los datos no comprimen). Con un lienzo en el límite, el pico supera los 2 GiB. La lectura tiene un pico parecido (comportamiento 7: hasta `2 × MAX_BYTES` más lo del crate).
+- **Escritor por flujo para lienzos grandes.** Una función que escriba sobre un `impl Write` y codifique fila a fila (el crate `png` ofrece escritura por flujo), con un búfer de una sola fila en lugar de la copia completa: el pico baja a la `Image` más una fila más el codificador, y se puede escribir directo a fichero sin acumular la salida. Necesita acceso por filas a `Image`, que enlaza con el acceso por bytes de la decisión 2 (spec propia en `px-core`).
+
 ## Decisiones
 
 Las marcadas con **?** se aprobaron el 2026-10-17 (decisiones 1 a 6, sin cambios); el resto son consecuencia directa de ellas.
