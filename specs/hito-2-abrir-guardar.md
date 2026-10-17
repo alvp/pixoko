@@ -2,6 +2,8 @@
 
 Estado: **aprobada** (2026-10-17; decisiones 1 a 8 con los cambios del visto bueno incorporados al texto: `Document::state_id` en `px-core` en vez de la pila paralela, `png_dimensions` en `px-formats` para rechazar antes de decodificar, confirmación por repetición al abrir y al cerrar, error del argumento también a stderr, título con solo el nombre del fichero, conversión ⇒ copia con la razón en el título, y «Limitaciones»). **Sin dependencias externas nuevas** (`rfd` queda para la unidad 11): `px-app` gana `px-formats` (crate del workspace) y `proptest` como dev-dependency (la misma versión ya registrada).
 
+> **Cambio de la unidad 11b (2026-10-18):** abrir un fichero ya no conserva la ranura de color: reinicia la selección y el desplazamiento del panel de paletas. `adjust_slot` y sus dos tests se eliminan (fila 8 y pasos de «abrir» más abajo), y `Session` guarda `choice` y `scroll`. Guardar y guardar como no los tocan.
+
 ## Objetivo
 
 Abrir un PNG (argumento de línea de comandos o arrastrar y soltar) y guardarlo (`Ctrl`/`Cmd`+`S`, con `Mayús` «guardar como»), sin menús, sin fuente y sin diálogos. La lógica es pura sobre `std::fs` y se prueba sin ventana.
@@ -57,7 +59,7 @@ pub fn open_warning(name: &str) -> String;
 pub fn close_warning() -> String;
 
 // px-app/src/session.rs
-pub struct Session { pub document: Document, /* ruta, id guardado, nota de conversión */ }
+pub struct Session { pub document: Document, pub choice: ColorChoice, pub scroll: Scroll, /* ruta, id guardado, nota de conversión */ }   // choice y scroll: unidad 11b
 pub struct Saved { pub path: PathBuf, pub copy_reason: Option<String> }
 impl Session {
     pub fn sample(document: Document) -> Session;           // sin ruta, sin cambios
@@ -69,7 +71,7 @@ impl Session {
     pub fn save_as(&mut self, new_dir: &Path) -> Result<Saved, FileError>;
 }
 pub fn describe_saved(saved: &Saved) -> String;
-pub fn adjust_slot(image: &Image, slot: u8) -> u8;          // la ranura si vale para la imagen; si no, 1
+// adjust_slot: eliminada en la unidad 11b (abrir reinicia la selección; ver specs/hito-2-panel-paletas.md)
 
 // px-app/src/title.rs: aditivo (window_title y TitleInfo no cambian)
 pub fn title_with_file(file: Option<&str>, modified: bool, title: &str) -> String;
@@ -91,7 +93,7 @@ pub fn title_with_file(file: Option<&str>, modified: bool, title: &str) -> Strin
 1. **Cambios sin guardar: confirmación por repetición.** Si `modified()` y `discard` es falso, `Session::open` da `Err(Unsaved)` sin leer el fichero. En la app, con cambios: la primera petición (`Request::Open(ruta)`) arma la confirmación y el título avisa (`open_warning`: «hay cambios sin guardar: suelta casa.png otra vez en 5 s para descartarlos, o guarda con Ctrl+S»); **la segunda petición con la misma ruta dentro de 5 s reemplaza el documento** (`discard = true`). Otra ruta, u otra petición (`Close`), vuelve a armar; pasados los 5 s hay que empezar de nuevo. Tras guardar o abrir con éxito, `Confirm::clear`. Sin cambios no hay confirmación.
 2. Se lee con tope: fichero normal (`NotAFile` para directorios, FIFO, dispositivos), de hasta `MAX_FILE_BYTES` (`TooBigFile`, comprobado por `metadata` y por una lectura limitada que no reserva más de `max_bytes`).
 3. **Se rechaza antes de decodificar.** `png_dimensions` lee la cabecera; `check_fits(ancho, alto, max_side)` da `TooLargeToShow` si un lado supera `max_side` y, si no, `TooManyPixels` si `ancho × alto` (en `u64`) supera `MAX_OPEN_PIXELS`. `max_side` es **`ctx.input(|i| i.max_texture_side)`**, no un número fijo. Solo si cabe se llama a `read_png`. Las dos constantes son temporales hasta la unidad 14 (texturas por teselas y tope de memoria); con 2^26 el pico entre imagen, copia pendiente y textura queda en torno a 1 GiB, porque `Canvas::set_image` y `to_rgba8` reservan sin comprobar. `Canvas` conserva su `TooLarge` como respaldo. El documento actual sigue intacto en cualquier error.
-4. Éxito: `Document::new(imagen)` (historia vacía, `state_id` 0), ruta absoluta (`std::path::absolute`; si falla, la dada), id guardado = 0, **ranura de color `adjust_slot`** (se conserva si vale para el modo y la paleta de la imagen nueva; si no, 1) y **vista ajustada con `Home`** (`Canvas::set_image` ya reinicia la vista al ajuste). La herramienta activa se conserva.
+4. Éxito: `Document::new(imagen)` (historia vacía, `state_id` 0), ruta absoluta (`std::path::absolute`; si falla, la dada), id guardado = 0, **selección de color reiniciada** (desde la unidad 11b: `choice = initial_choice(imagen nueva)` y `scroll` a 0, siempre; antes se conservaba la ranura si valía para la imagen nueva, con `adjust_slot`, que ya no existe) y **vista ajustada con `Home`** (`Canvas::set_image` ya reinicia la vista al ajuste). La herramienta activa se conserva.
 5. Aviso 5 s (`describe_open`): `abierto casa.png · 16×16 · indexado`, más `· convertido: gris de 4 bits ampliado a 8, color clave convertido en alfa` y `· Ctrl+S guardará una copia` si el informe no está vacío (`DepthExpanded{n}` ⇒ «gris de n bits ampliado a 8»; `Depth16Reduced` ⇒ «16 bits reducido a 8»; `RgbToRgba` ⇒ «RGB convertido a RGBA»; `ColorKeyToAlpha` ⇒ «color clave convertido en alfa»). Modos: «indexado», «gris», «gris con alfa», «RGBA».
 6. **Título normal:** `title_with_file`, **solo con el nombre** (sin directorios, `file_label`): `casa.png — Pixoko: 16×16 · …`; modificado, `casa.png* — …`; sin ruta y sin cambios, el título de hoy; sin ruta y modificado, `sin título* — …`.
 
@@ -129,7 +131,7 @@ Diálogos de archivo y `Ctrl`+`O` (unidad 11, con `rfd`), otras ventanas o pesta
 | 5 | `check_fits(w, h, 16384)`: `(8192, 8192)`, `(16384, 4096)`, `(8193, 8192)`, `(16385, 1)`, `(1, 16385)`, `(u32::MAX, u32::MAX)` | `Ok`, `Ok`, `TooManyPixels`, `TooLargeToShow`, `TooLargeToShow`, `TooLargeToShow` (sin desbordar) |
 | 6 | Tras un `apply` sin guardar, `open` de un fichero que no existe; y `open(.., discard = true)` del corpus | `Err(Unsaved)` (no `Read`: no se lee), sesión intacta; abre y descarta: historia vacía, ruta nueva, `modified` falso |
 | 7 | Sesión con un fichero abierto, `apply`, `save`, y `open` de otro | tras `save`, `open` sin `discard` funciona; historia vacía, ruta y `modified` del nuevo; `can_undo` falso |
-| 8 | `adjust_slot`: indexado de 3 colores con ranura 2, 5, 9; RGBA con 7; gris con 9 | `2`, `1`, `1`; `7`; `9` |
+| 8 | ~~`adjust_slot`~~ (sustituida en la unidad 11b por `fila_8_abrir_reinicia_la_seleccion_y_el_desplazamiento`: `Session::open` con éxito deja `choice == initial_choice(imagen nueva)` y `scroll` a 0, aunque coincidan modo y paleta; con error no cambian; `specs/hito-2-panel-paletas.md`, filas 8 y 13) | – |
 | 9 | `describe_open`: informe vacío; `[DepthExpanded{4}, ColorKeyToAlpha]`; `[Depth16Reduced]`; RGBA, gris, gris con alfa, indexado | `abierto casa.png · 16×16 · RGBA`; `… · convertido: gris de 4 bits ampliado a 8, color clave convertido en alfa · Ctrl+S guardará una copia`; `… 16 bits reducido a 8 …`; `RGBA`, `gris`, `gris con alfa`, `indexado` |
 | 10 | Indicador con `state_id`: `apply` ⇒ `modified`; `save`; `apply, undo` (vuelve al guardado); `redo`; `save, undo, apply nuevo, undo, redo` | cierto; falso; falso; cierto; **cierto en cada paso del último** (el estado guardado ya no es alcanzable) |
 | 11 | Ida y vuelta, cuatro modos: abrir (corpus indexado y RGBA; gris y gris con alfa sintéticos), `SetPixels` de 3 píxeles, `save`, abrir en otra sesión | imagen idéntica a la editada; `modified` falso tras guardar; ningún `.pixoko-tmp` en el directorio; `undo` + `save` deja la imagen original exacta |
