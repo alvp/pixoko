@@ -29,6 +29,14 @@ pub struct PixelEdit {
     pub pixel: Pixel,
 }
 
+/// Los píxeles `x_start..x_end` (fin excluido) de la fila `y`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    pub y: u32,
+    pub x_start: u32,
+    pub x_end: u32,
+}
+
 /// Una edición del documento, como dato.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -37,6 +45,13 @@ pub enum Command {
     SetPixels {
         image: ImageId,
         pixels: Vec<PixelEdit>,
+    },
+    /// Pone `pixel` en todos los píxeles de los tramos. Los tramos van estrictamente ordenados
+    /// por `(y, x_start)`, sin solapes ni vacíos; los pegados valen.
+    FillSpans {
+        image: ImageId,
+        spans: Vec<Span>,
+        pixel: Pixel,
     },
     /// Ejecuta los comandos en orden como un solo paso de deshacer. No se anida.
     Batch(Vec<Command>),
@@ -52,28 +67,64 @@ struct Change {
     after: Pixel,
 }
 
-/// Paso de la historia: los cambios de un comando, en orden de aplicación.
+/// Trozo de un relleno: `len` píxeles contiguos de la fila `y` desde `x`, todos con el mismo
+/// valor anterior.
+#[derive(Clone, Copy, Debug)]
+struct Run {
+    y: u32,
+    x: u32,
+    len: u32,
+    before: Pixel,
+}
+
+/// Parte de un paso que viene de un `FillSpans`: los trozos que cambiaron y el valor que se
+/// escribió (el mismo en todos). Va tras los primeros `at` cambios sueltos del paso.
 #[derive(Clone, Debug)]
+struct FillPart {
+    at: usize,
+    image: ImageId,
+    after: Pixel,
+    runs: Vec<Run>,
+}
+
+/// Paso de la historia: una secuencia ordenada de partes, que son cambios sueltos (`changes`,
+/// en orden de aplicación) y rellenos (`fills`, cada uno con su posición `at` entre los
+/// cambios, no decreciente). La secuencia es `changes[..at₀]`, `fills[0]`, `changes[at₀..at₁]`,
+/// `fills[1]`, …, y el resto de `changes`.
+#[derive(Clone, Debug, Default)]
 struct Step {
     changes: Vec<Change>,
+    fills: Vec<FillPart>,
 }
 
 impl Step {
-    /// Memoria que ocupa el paso, contando la capacidad reservada.
+    /// Memoria que ocupa el paso, contando la capacidad reservada. Un paso sin rellenos cuesta
+    /// lo mismo que cuando `Step` solo tenía el `Vec<Change>`.
     fn cost(&self) -> usize {
-        size_of::<Step>()
+        let runs = self.fills.iter().fold(0usize, |total, fill| {
+            total.saturating_add(fill.runs.capacity().saturating_mul(size_of::<Run>()))
+        });
+        size_of::<Vec<Change>>()
             .saturating_add(self.changes.capacity().saturating_mul(size_of::<Change>()))
+            .saturating_add(self.fills.capacity().saturating_mul(size_of::<FillPart>()))
+            .saturating_add(runs)
     }
 
-    /// Ajusta la capacidad al número de cambios; si no se puede reservar, no hace nada.
+    /// Ajusta las capacidades al número de elementos; si no se puede reservar, no hace nada.
     fn fit(&mut self) {
-        if self.changes.capacity() == self.changes.len() {
-            return;
+        if self.changes.capacity() != self.changes.len() {
+            let mut exact = Vec::new();
+            if exact.try_reserve_exact(self.changes.len()).is_ok() {
+                exact.extend_from_slice(&self.changes);
+                self.changes = exact;
+            }
         }
-        let mut exact = Vec::new();
-        if exact.try_reserve_exact(self.changes.len()).is_ok() {
-            exact.extend_from_slice(&self.changes);
-            self.changes = exact;
+        if self.fills.capacity() != self.fills.len() {
+            let mut exact = Vec::new();
+            if exact.try_reserve_exact(self.fills.len()).is_ok() {
+                exact.append(&mut self.fills);
+                self.fills = exact;
+            }
         }
     }
 }
@@ -136,23 +187,27 @@ impl Document {
     /// nuevo y no se puede rehacer); `Ok(false)` si no cambió ninguno. Con error, el documento
     /// y la historia quedan como estaban.
     pub fn apply(&mut self, command: Command) -> Result<bool, DocumentError> {
-        // Todo lo que pide memoria se reserva antes de modificar nada.
-        let mut changes = Vec::new();
-        changes
-            .try_reserve_exact(count_writes(&command)?)
+        // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
+        // justo antes de escribirlo (ver `execute_fill`).
+        let (writes, fills) = count_leaves(&command)?;
+        let mut step = Step::default();
+        step.changes
+            .try_reserve_exact(writes)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        step.fills
+            .try_reserve_exact(fills)
             .map_err(|_| DocumentError::OutOfMemory)?;
         self.undo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
 
-        if let Err(error) = self.execute(&command, &mut changes) {
-            self.revert(&changes);
+        if let Err(error) = self.execute(&command, &mut step) {
+            self.revert(&step);
             return Err(error);
         }
-        if changes.is_empty() {
+        if step.changes.is_empty() && step.fills.is_empty() {
             return Ok(false);
         }
-        let mut step = Step { changes };
         step.fit();
         self.redo.clear();
         self.undo_bytes = self.undo_bytes.saturating_add(step.cost());
@@ -172,7 +227,7 @@ impl Document {
             return Err(DocumentError::NothingToUndo);
         };
         self.undo_bytes = self.undo_bytes.saturating_sub(step.cost());
-        self.revert(&step.changes);
+        self.revert(&step);
         self.redo.push(step);
         Ok(())
     }
@@ -187,9 +242,7 @@ impl Document {
         let Some(step) = self.redo.pop() else {
             return Err(DocumentError::NothingToRedo);
         };
-        for change in &step.changes {
-            self.write(change.image, change.x, change.y, change.after);
-        }
+        self.replay(&step);
         self.undo_bytes = self.undo_bytes.saturating_add(step.cost());
         self.undo.push_back(step);
         self.trim();
@@ -229,19 +282,15 @@ impl Document {
         }
     }
 
-    fn execute(
-        &mut self,
-        command: &Command,
-        changes: &mut Vec<Change>,
-    ) -> Result<(), DocumentError> {
+    fn execute(&mut self, command: &Command, step: &mut Step) -> Result<(), DocumentError> {
         let Command::Batch(commands) = command else {
-            return self.execute_leaf(command, changes);
+            return self.execute_leaf(command, step);
         };
         if commands.is_empty() {
             return Err(DocumentError::EmptyCommand);
         }
         for (index, command) in commands.iter().enumerate() {
-            self.execute_leaf(command, changes)
+            self.execute_leaf(command, step)
                 .map_err(|error| DocumentError::InBatch {
                     index,
                     source: Box::new(error),
@@ -250,22 +299,30 @@ impl Document {
         Ok(())
     }
 
-    /// Ejecuta un comando que no es un `Batch`, anotando las escrituras que cambian un valor.
-    /// No reserva memoria: `changes` tiene capacidad para todas las escrituras (ver `apply`).
-    fn execute_leaf(
+    /// Ejecuta un comando que no es un `Batch`, anotando en `step` lo que cambia. Los cambios
+    /// sueltos caben en la capacidad reservada en `apply`.
+    fn execute_leaf(&mut self, command: &Command, step: &mut Step) -> Result<(), DocumentError> {
+        match command {
+            Command::SetPixels { image, pixels } => self.execute_set(*image, pixels, step),
+            Command::FillSpans {
+                image,
+                spans,
+                pixel,
+            } => self.execute_fill(*image, spans, *pixel, step),
+            _ => Err(DocumentError::NestedBatch),
+        }
+    }
+
+    fn execute_set(
         &mut self,
-        command: &Command,
-        changes: &mut Vec<Change>,
+        id: ImageId,
+        pixels: &[PixelEdit],
+        step: &mut Step,
     ) -> Result<(), DocumentError> {
-        let Command::SetPixels { image: id, pixels } = command else {
-            return Err(DocumentError::NestedBatch);
-        };
         if pixels.is_empty() {
             return Err(DocumentError::EmptyCommand);
         }
-        let image = self
-            .image_mut(*id)
-            .ok_or(DocumentError::UnknownImage(*id))?;
+        let image = self.image_mut(id).ok_or(DocumentError::UnknownImage(id))?;
         for (pixel, edit) in pixels.iter().enumerate() {
             let at_pixel = |source: ImageError| DocumentError::Pixel { pixel, source };
             let before = image.get_pixel(edit.x, edit.y).map_err(at_pixel)?;
@@ -273,8 +330,8 @@ impl Document {
                 .set_pixel(edit.x, edit.y, edit.pixel)
                 .map_err(at_pixel)?;
             if before != edit.pixel {
-                changes.push(Change {
-                    image: *id,
+                step.changes.push(Change {
+                    image: id,
                     x: edit.x,
                     y: edit.y,
                     before,
@@ -285,10 +342,87 @@ impl Document {
         Ok(())
     }
 
-    /// Restaura los valores «antes» en orden inverso.
-    fn revert(&mut self, changes: &[Change]) {
-        for change in changes.iter().rev() {
+    /// Relleno de tramos. Primero una pasada de solo lectura que valida y cuenta los trozos;
+    /// después reserva exacta; después una segunda pasada de lectura que los anota; y solo
+    /// entonces escribe, sin poder fallar.
+    fn execute_fill(
+        &mut self,
+        id: ImageId,
+        spans: &[Span],
+        pixel: Pixel,
+        step: &mut Step,
+    ) -> Result<(), DocumentError> {
+        if spans.is_empty() {
+            return Err(DocumentError::EmptyCommand);
+        }
+        let image = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
+        image
+            .check_pixel(pixel)
+            .map_err(|source| DocumentError::Pixel { pixel: 0, source })?;
+
+        let mut count = 0usize;
+        scan_runs(image, spans, pixel, |_| count = count.saturating_add(1))?;
+        if count == 0 {
+            return Ok(());
+        }
+        let mut runs = Vec::new();
+        runs.try_reserve_exact(count)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        scan_runs(image, spans, pixel, |run| {
+            if runs.len() < count {
+                runs.push(run);
+            }
+        })?;
+
+        if let Some(image) = self.image_mut(id) {
+            for run in &runs {
+                write_run(image, run, pixel);
+            }
+        }
+        step.fills.push(FillPart {
+            at: step.changes.len(),
+            image: id,
+            after: pixel,
+            runs,
+        });
+        Ok(())
+    }
+
+    /// Deshace un paso: recorre la secuencia al revés escribiendo los valores «antes».
+    fn revert(&mut self, step: &Step) {
+        let mut end = step.changes.len();
+        for fill in step.fills.iter().rev() {
+            for change in step.changes.get(fill.at..end).unwrap_or(&[]).iter().rev() {
+                self.write(change.image, change.x, change.y, change.before);
+            }
+            end = fill.at;
+            if let Some(image) = self.image_mut(fill.image) {
+                for run in fill.runs.iter().rev() {
+                    write_run(image, run, run.before);
+                }
+            }
+        }
+        for change in step.changes.get(..end).unwrap_or(&[]).iter().rev() {
             self.write(change.image, change.x, change.y, change.before);
+        }
+    }
+
+    /// Rehace un paso: recorre la secuencia hacia delante escribiendo los valores «después».
+    fn replay(&mut self, step: &Step) {
+        let mut start = 0;
+        for fill in &step.fills {
+            for change in step.changes.get(start..fill.at).unwrap_or(&[]) {
+                self.write(change.image, change.x, change.y, change.after);
+            }
+            start = fill.at;
+            if let Some(image) = self.image_mut(fill.image) {
+                for run in &fill.runs {
+                    write_run(image, run, fill.after);
+                }
+            }
+        }
+        for change in step.changes.get(start..).unwrap_or(&[]) {
+            self.write(change.image, change.x, change.y, change.after);
         }
     }
 
@@ -301,18 +435,100 @@ impl Document {
     }
 }
 
-/// Número máximo de escrituras de un comando, para reservar la lista de cambios.
-fn count_writes(command: &Command) -> Result<usize, DocumentError> {
-    match command {
-        Command::SetPixels { pixels, .. } => Ok(pixels.len()),
-        Command::Batch(commands) => commands.iter().try_fold(0usize, |total, command| {
-            let writes = match command {
-                Command::SetPixels { pixels, .. } => pixels.len(),
-                _ => 0,
-            };
-            total.checked_add(writes).ok_or(DocumentError::OutOfMemory)
-        }),
+/// Escribe `pixel` en los `run.len` píxeles del trozo. Los trozos salen de la propia imagen,
+/// así que no puede fallar; si fallara, se ignora como en `Document::write`.
+fn write_run(image: &mut Image, run: &Run, pixel: Pixel) {
+    for dx in 0..run.len {
+        let _ = image.set_pixel(run.x.saturating_add(dx), run.y, pixel);
     }
+}
+
+/// Recorre los tramos sin modificar nada: los valida y llama a `emit` con cada trozo, en
+/// orden. Un trozo es una serie máxima de píxeles de un tramo con el mismo valor anterior,
+/// todos distintos de `pixel`. Orden de errores: por tramo, `BadSpans` antes que `Span`.
+fn scan_runs(
+    image: &Image,
+    spans: &[Span],
+    pixel: Pixel,
+    mut emit: impl FnMut(Run),
+) -> Result<(), DocumentError> {
+    let (width, height) = (image.width(), image.height());
+    let mut previous: Option<&Span> = None;
+    for (index, span) in spans.iter().enumerate() {
+        let after_previous = previous
+            .is_none_or(|prev| span.y > prev.y || (span.y == prev.y && span.x_start >= prev.x_end));
+        if span.x_start >= span.x_end || !after_previous {
+            return Err(DocumentError::BadSpans { span: index });
+        }
+        previous = Some(span);
+        if span.y >= height || span.x_end > width {
+            let x = if span.y >= height {
+                span.x_start
+            } else {
+                span.x_start.max(width)
+            };
+            return Err(DocumentError::Span {
+                span: index,
+                source: ImageError::OutOfBounds {
+                    x,
+                    y: span.y,
+                    width,
+                    height,
+                },
+            });
+        }
+        let mut open: Option<Run> = None;
+        for x in span.x_start..span.x_end {
+            let old = image
+                .get_pixel(x, span.y)
+                .map_err(|source| DocumentError::Span {
+                    span: index,
+                    source,
+                })?;
+            match &mut open {
+                Some(run) if old != pixel && run.before == old => run.len += 1,
+                _ => {
+                    if let Some(run) = open.take() {
+                        emit(run);
+                    }
+                    if old != pixel {
+                        open = Some(Run {
+                            y: span.y,
+                            x,
+                            len: 1,
+                            before: old,
+                        });
+                    }
+                }
+            }
+        }
+        if let Some(run) = open {
+            emit(run);
+        }
+    }
+    Ok(())
+}
+
+/// Cotas del comando para reservar antes de modificar nada: escrituras de los `SetPixels` y
+/// número de `FillSpans`.
+fn count_leaves(command: &Command) -> Result<(usize, usize), DocumentError> {
+    let leaf = |command: &Command| match command {
+        Command::SetPixels { pixels, .. } => (pixels.len(), 0),
+        Command::FillSpans { .. } => (0, 1),
+        _ => (0, 0),
+    };
+    let Command::Batch(commands) = command else {
+        return Ok(leaf(command));
+    };
+    commands
+        .iter()
+        .try_fold((0usize, 0usize), |(writes, fills), command| {
+            let (w, f) = leaf(command);
+            Ok((
+                writes.checked_add(w).ok_or(DocumentError::OutOfMemory)?,
+                fills.checked_add(f).ok_or(DocumentError::OutOfMemory)?,
+            ))
+        })
 }
 
 /// Error al aplicar un comando o al deshacer y rehacer.
@@ -326,7 +542,18 @@ pub enum DocumentError {
         pixel: usize,
         source: ImageError,
     },
-    /// `SetPixels` sin píxeles o `Batch` sin comandos.
+    /// El tramo número `span` de un `FillSpans` se sale del lienzo; `source` es `OutOfBounds`
+    /// con el primer píxel fuera.
+    Span {
+        span: usize,
+        source: ImageError,
+    },
+    /// El tramo número `span` de un `FillSpans` está vacío o no va estrictamente después del
+    /// anterior (desordenado o solapado).
+    BadSpans {
+        span: usize,
+    },
+    /// `SetPixels` sin píxeles, `FillSpans` sin tramos o `Batch` sin comandos.
     EmptyCommand,
     /// Un `Batch` dentro de otro `Batch`.
     NestedBatch,
@@ -353,6 +580,13 @@ impl fmt::Display for DocumentError {
                     "no se pudo escribir el píxel {pixel} de la lista: {source}"
                 )
             }
+            DocumentError::Span { span, source } => {
+                write!(f, "el tramo {span} se sale del lienzo: {source}")
+            }
+            DocumentError::BadSpans { span } => write!(
+                f,
+                "el tramo {span} está vacío o no va después del tramo anterior"
+            ),
             DocumentError::EmptyCommand => write!(f, "el comando no contiene ninguna edición"),
             DocumentError::NestedBatch => write!(f, "un Batch no puede contener otro Batch"),
             DocumentError::InBatch { index, source } => {
@@ -370,7 +604,9 @@ impl fmt::Display for DocumentError {
 impl Error for DocumentError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            DocumentError::Pixel { source, .. } => Some(source),
+            DocumentError::Pixel { source, .. } | DocumentError::Span { source, .. } => {
+                Some(source)
+            }
             DocumentError::InBatch { source, .. } => Some(source.as_ref()),
             _ => None,
         }

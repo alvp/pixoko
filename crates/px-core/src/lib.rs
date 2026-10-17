@@ -6,7 +6,7 @@ mod image;
 mod palette;
 mod rgba;
 
-pub use document::{Command, Document, DocumentError, ImageId, PixelEdit};
+pub use document::{Command, Document, DocumentError, ImageId, PixelEdit, Span};
 pub use hsl::Hsl;
 pub use image::{Image, ImageError, Mode, Pixel};
 pub use palette::{Palette, PaletteError};

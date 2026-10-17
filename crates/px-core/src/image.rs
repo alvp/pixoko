@@ -159,6 +159,20 @@ impl Image {
     /// Escribe un píxel del modo de la imagen; si hay error, la imagen no cambia.
     pub fn set_pixel(&mut self, x: u32, y: u32, pixel: Pixel) -> Result<(), ImageError> {
         let at = self.offset(x, y)?;
+        self.check_pixel(pixel)?;
+        let d = &mut self.data[at..at + self.mode.bytes_per_pixel()];
+        match pixel {
+            Pixel::Rgba(c) => d.copy_from_slice(&[c.r, c.g, c.b, c.a]),
+            Pixel::Indexed(i) => d[0] = i,
+            Pixel::Gray(g) => d[0] = g,
+            Pixel::GrayAlpha { gray, alpha } => d.copy_from_slice(&[gray, alpha]),
+        }
+        Ok(())
+    }
+
+    /// Comprueba, sin escribir, que el píxel es del modo de la imagen y que su índice cabe
+    /// en la paleta.
+    pub(crate) fn check_pixel(&self, pixel: Pixel) -> Result<(), ImageError> {
         if pixel.mode() != self.mode {
             return Err(ImageError::ModeMismatch {
                 expected: self.mode,
@@ -172,13 +186,6 @@ impl Image {
                 index,
                 len: palette.len(),
             });
-        }
-        let d = &mut self.data[at..at + self.mode.bytes_per_pixel()];
-        match pixel {
-            Pixel::Rgba(c) => d.copy_from_slice(&[c.r, c.g, c.b, c.a]),
-            Pixel::Indexed(i) => d[0] = i,
-            Pixel::Gray(g) => d[0] = g,
-            Pixel::GrayAlpha { gray, alpha } => d.copy_from_slice(&[gray, alpha]),
         }
         Ok(())
     }
