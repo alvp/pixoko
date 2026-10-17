@@ -342,6 +342,7 @@ name = "px-ui"
 version = "0.0.0"
 dependencies = [
  "proptest",
+ "px-core",
 ]
 
 [[package]]
