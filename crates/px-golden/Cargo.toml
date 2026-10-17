@@ -8,3 +8,8 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+px-core = { path = "../px-core" }
+px-formats = { path = "../px-formats" }
+proptest = "1.12.0"

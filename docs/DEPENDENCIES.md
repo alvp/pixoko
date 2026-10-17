@@ -6,7 +6,7 @@ Registro de lo que se incorpora al proyecto. Las dependencias de Cargo deben pas
 
 | Crate | Versión | Licencia | Tipo | Uso |
 | --- | --- | --- | --- | --- |
-| [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-core` y `px-formats` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
+| [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-core`, `px-formats` y `px-golden` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
 | [`png`](https://crates.io/crates/png) | 0.18.1 | MIT OR Apache-2.0 | dependencia de `px-formats` | Leer y escribir PNG (`specs/hito-1-png.md`). Sin features: no tiene features por defecto y no se activan `zlib-rs`, `unstable` ni `benchmarks` |
 
 `proptest` deja 49 crates transitivos en `Cargo.lock`, de los cuales 32 se compilan con las features por defecto (`rand`, `tempfile`, `rustix`, `windows-sys`…); `serde` y `syn`, por ejemplo, solo figuran en el lockfile. Todos son solo para tests y no entran en los binarios (`cargo tree -p px-core -e normal` está vacío). `cargo deny check` los acepta.
