@@ -12,11 +12,13 @@ use std::path::{Path, PathBuf};
 /// Sistemas operativos que debe cubrir la matriz.
 const EXPECTED_OS: [&str; 3] = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
-/// Los cuatro comandos de comprobacion, en el orden del punto 6 de la spec.
-const EXPECTED_COMMANDS: [&str; 4] = [
+/// Los cinco comandos de comprobacion, en el orden del punto 6 de la spec (el de `build` se
+/// anadio en specs/hito-2-ventana.md).
+const EXPECTED_COMMANDS: [&str; 5] = [
     "cargo fmt --all --check",
     "cargo clippy --workspace --all-targets --locked -- -D warnings",
     "cargo test --workspace --locked",
+    "cargo build -p px-app --locked",
     "cargo deny --locked check",
 ];
 
@@ -155,7 +157,7 @@ fn matrix_does_not_fail_fast() {
 }
 
 #[test]
-fn run_steps_include_the_four_commands() {
+fn run_steps_include_the_five_commands() {
     let commands = run_commands(&read_workflow());
     let missing: Vec<&str> = EXPECTED_COMMANDS
         .iter()
@@ -178,13 +180,13 @@ fn run_commands_appear_in_the_specified_order() {
         .collect();
     assert!(
         positions.iter().all(Option::is_some),
-        "{WORKFLOW_PATH}: no estan los cuatro comandos {EXPECTED_COMMANDS:?}; \
+        "{WORKFLOW_PATH}: no estan los cinco comandos {EXPECTED_COMMANDS:?}; \
          comandos `run` encontrados: {commands:?}"
     );
     let found: Vec<usize> = positions.into_iter().flatten().collect();
     assert!(
         found.windows(2).all(|w| w[0] < w[1]),
-        "{WORKFLOW_PATH}: los comandos deben ir en este orden (fmt, clippy, test, deny): \
+        "{WORKFLOW_PATH}: los comandos deben ir en este orden (fmt, clippy, test, build, deny): \
          {EXPECTED_COMMANDS:?}; posiciones encontradas: {found:?}"
     );
 }

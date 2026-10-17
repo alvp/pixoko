@@ -186,7 +186,7 @@ Comportamiento y propiedades que prueban los tests:
 
 - `px-ui::texture::to_rgba8(image: &Image) -> Vec<u8>`, alfa directo, `w·h·4` bytes: RGBA tal cual; indexado con `palette.resolved(i)` (el índice transparente da `a = 0`); gris `(g, g, g, 255)`; gris con alfa `(g, g, g, a)`. Usa `get_pixel` hasta que la unidad 12 dé acceso por bytes y la sustituya.
 - Luego `egui::ColorImage::from_rgba_unmultiplied([w, h], &bytes)` (egui premultiplica; un píxel semitransparente se cuantiza a 8 bits premultiplicado, y los de `a = 0` pierden el RGB; solo afecta a lo que se ve) y `ctx.load_texture("imagen", color_image, egui::TextureOptions::NEAREST)`: **sin suavizado** ni al ampliar ni al reducir, sin mipmaps. Se sube una vez; el refresco por cambios y por regiones son las unidades 6 y 14.
-- Si `w` o `h` superan `max_texture_side` del contexto, el lienzo no pinta la imagen y devuelve un error (`TooLarge`), que `px-app` muestra en el título. Dividir en teselas es la unidad 14.
+- Si `w` o `h` superan `max_texture_side` del contexto, el lienzo no pinta la imagen y lo anota en `CanvasInfo::error` (`CanvasError::TooLarge`), que `px-app` muestra en el título. La textura se sube en el primer `show`, no en `Canvas::set_image`, porque solo entonces egui conoce el lado máximo de la GPU; hay que comprobarlo antes, porque `load_texture` falla (en debug) si se supera. Implementado así. Dividir en teselas es la unidad 14.
 
 ### Lienzo (`px-ui::canvas`)
 

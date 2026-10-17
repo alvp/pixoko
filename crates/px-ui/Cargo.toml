@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 px-core = { path = "../px-core" }
+egui = { version = "=0.37.0", default-features = false }
 
 [dev-dependencies]
 proptest = "1.12.0"

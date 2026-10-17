@@ -24,10 +24,11 @@ Un workflow de GitHub Actions que, en cada push a `main` y en cada pull request,
    3. `cargo fmt --all --check`
    4. `cargo clippy --workspace --all-targets --locked -- -D warnings`
    5. `cargo test --workspace --locked`
-   6. `cargo deny --locked check`
+   6. `cargo build -p px-app --locked` (añadido en `specs/hito-2-ventana.md`: comprueba que la app compila y enlaza en los tres sistemas)
+   7. `cargo deny --locked check`
 7. **`--locked`.** Clippy, test y deny fallan si `Cargo.lock` no está al día, de modo que un lock desactualizado no pasa desapercibido.
 8. **Entorno.** `CARGO_TERM_COLOR=always` y `RUST_BACKTRACE=1` a nivel de workflow. No se define `RUSTFLAGS`: los avisos ya se convierten en error con `-D warnings` en clippy.
-9. **Comandos idénticos a los locales.** Los comandos de los pasos 3 a 6 son los mismos que pide `CLAUDE.md` y los criterios de aceptación de la unidad 1, salvo `--all`, `--locked` y `--all-targets`, que solo hacen la comprobación más estricta. Lo que pasa en local debe pasar en CI y al revés.
+9. **Comandos idénticos a los locales.** Los comandos de los pasos 3 a 7 son los mismos que pide `CLAUDE.md` y los criterios de aceptación de la unidad 1, salvo `--all`, `--locked` y `--all-targets`, que solo hacen la comprobación más estricta. Lo que pasa en local debe pasar en CI y al revés.
 10. **Un solo shell.** Todos los `run` usan `shell: bash` para que la sintaxis sea la misma en Windows (Git Bash, preinstalado en el runner).
 
 ## Casos límite
@@ -37,7 +38,7 @@ Un workflow de GitHub Actions que, en cada push a `main` y en cada pull request,
 - **`cargo deny` y la red.** `cargo deny check` incluye `advisories`, que descarga la base RustSec. Una caída de la red o de GitHub haría fallar el paso aunque el código esté bien; se relanza el job. No se desactiva la comprobación.
 - **Versiones flotantes.** `*-latest` cambia de imagen sin aviso. Se acepta en el hito 0; si una actualización de imagen rompe el build se fija la versión concreta del runner.
 - **Dependencias del sistema.** Hoy el workspace no tiene dependencias, así que no se instala ningún paquete del sistema. Cuando `px-ui` o `px-render` necesiten bibliotecas de Linux (X11, Wayland, etc.), esa unidad añade el paso de instalación.
-- **Caché.** No se añade: sin dependencias externas no hay nada que cachear y evita una acción de terceros más. Se revisa cuando entre la primera dependencia.
+- **Caché.** No se añade: sin dependencias externas no hay nada que cachear y evita una acción de terceros más. Se revisó al entrar la primera dependencia grande (`eframe`, `specs/hito-2-ventana.md`, §6) y se decidió no añadirla todavía.
 - **PR desde un fork.** Con `permissions: contents: read` y sin secretos, el workflow es seguro para forks.
 
 ## Criterios de aceptación
@@ -45,7 +46,7 @@ Un workflow de GitHub Actions que, en cada push a `main` y en cada pull request,
 Verificables sin GitHub:
 
 - `cargo test --workspace` pasa, incluido el test de estructura nuevo (sección Tests).
-- Los cuatro comandos del punto 6 pasan en local en Linux.
+- Los comandos del punto 6 pasan en local en Linux.
 - `.github/workflows/ci.yml` es YAML válido (`python3 -c 'import yaml…'` o `actionlint` si está disponible; no hay ninguno de los dos instalado ahora, así que se comprobará lo que haya).
 
 Verificable solo con un push (lo haces tú, o me indicas que lo haga):
@@ -59,9 +60,9 @@ Test de estructura en `px-golden` (`crates/px-golden/tests/ci.rs`), solo con `st
 
 - aparecen los tres sistemas `ubuntu-latest`, `windows-latest` y `macos-latest`;
 - aparece `fail-fast: false`;
-- aparecen, como líneas `run`, los cuatro comandos del punto 6 (comparados tras recortar espacios);
+- aparecen, como líneas `run`, los cinco comandos del punto 6 (comparados tras recortar espacios);
 - aparece `-D warnings` en la línea de clippy;
-- los cuatro comandos aparecen en el orden fmt, clippy, test, deny;
+- los cinco comandos aparecen en el orden fmt, clippy, test, build, deny;
 - `permissions:` está declarado y no hay `write` en el archivo;
 - la versión de `rustup toolchain install` coincide con el prefijo de `rust-version` del `Cargo.toml` raíz (`1.99.x` frente a `1.99`);
 - toda acción `uses:` está en la lista permitida (`actions/checkout` y `taiki-e/install-action`) y va fijada por SHA de commit de 40 caracteres hexadecimales, con la etiqueta de versión en un comentario;

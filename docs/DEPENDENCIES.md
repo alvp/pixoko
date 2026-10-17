@@ -8,6 +8,8 @@ Registro de lo que se incorpora al proyecto. Las dependencias de Cargo deben pas
 | --- | --- | --- | --- | --- |
 | [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-core`, `px-formats` y `px-golden` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
 | [`png`](https://crates.io/crates/png) | 0.18.1 | MIT OR Apache-2.0 | dependencia de `px-formats` | Leer y escribir PNG (`specs/hito-1-png.md`). Sin features: no tiene features por defecto y no se activan `zlib-rs`, `unstable` ni `benchmarks` |
+| [`eframe`](https://crates.io/crates/eframe) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-app` | Ventana, bucle de eventos y renderizador OpenGL (`specs/hito-2-ventana.md`). `default-features = false`; features `glow` y, solo en Linux, `x11` y `wayland`. No se activan `wgpu`, `accesskit`, `persistence`, `clipboard`, `links`, `system_fonts` ni `default_fonts` |
+| [`egui`](https://crates.io/crates/egui) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-ui` | Lienzo de `px-ui` y pruebas del lienzo sin ventana. `default-features = false`; la misma versión que usa `eframe`, fijada con `=` en las dos |
 
 `proptest` deja 49 crates transitivos en `Cargo.lock`, de los cuales 32 se compilan con las features por defecto (`rand`, `tempfile`, `rustix`, `windows-sys`…); `serde` y `syn`, por ejemplo, solo figuran en el lockfile. Todos son solo para tests y no entran en los binarios (`cargo tree -p px-core -e normal` está vacío). `cargo deny check` los acepta.
 
@@ -68,3 +70,22 @@ No son dependencias de Cargo ni entran en los binarios: solo se ejecutan en el C
 | [`cargo-deny`](https://github.com/EmbarkStudios/cargo-deny) | 0.20.2 | MIT OR Apache-2.0 | Licencias, avisos de seguridad y orígenes |
 | [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) | 0.13.2 | MIT OR Apache-2.0 | Lanzar el fuzzer (`docs/FUZZING.md`); solo en local, no en el CI |
 | Rust nightly (con `rust-src`) | 1.101.0 (2026-10-16) | MIT OR Apache-2.0 | `cargo-fuzz` compila con `-Zbuild-std` y AddressSanitizer; solo en local |
+
+### Ventana: `eframe` y `egui` (`specs/hito-2-ventana.md`)
+
+Árbol de `px-app` con la configuración de arriba: 125 crates distintos en Linux, 92 en Windows y 108 en macOS (`cargo tree -p px-app -e normal`); 236 con todos los destinos y las dependencias de build; `Cargo.lock` pasa de 67 a 317 entradas. `cargo deny --locked check` da `advisories ok, bans ok, licenses ok, sources ok` sin tocar `deny.toml`; solo avisa de crates duplicadas (`windows-sys`, `objc2*`, `rustix`, `syn`, `thiserror`…), que no hacen fallar el check. `png` 0.18.1 es la misma crate que usa `px-formats` (la trae `image`, que usa `eframe`): no se duplica.
+
+Todos los crates del árbol tienen una licencia de `allow` o una disyunción con una rama de `allow`. Las que mencionan identificadores que no están en `allow`, siempre como alternativa de un `OR` (se usa la rama MIT, Apache-2.0 o similar; los textos están en `specs/hito-2-ventana-licencias.md`):
+
+| Crate | Licencia declarada | Nota |
+| --- | --- | --- |
+| `self_cell` 1.3.0 (vía `epaint`) | `Apache-2.0 OR GPL-2.0-only` | **`GPL-2.0-only` es copyleft y no se usa**: es una disyunción y se usa bajo Apache-2.0, nunca bajo la GPL, así que no afecta a la política MIT del proyecto (igual que `r-efi`, arriba) |
+| `r-efi` 5.3.0 (vía `getrandom`) y 6.0.0 | `MIT OR Apache-2.0 OR LGPL-2.1-or-later` | Solo UEFI, no se compila en Linux, Windows ni macOS. Misma nota que arriba: no se usa la rama LGPL |
+| `byteorder-lite` 0.1.0 (vía `image`), `memchr` 2.8.3 | `Unlicense OR MIT` | Se usa MIT |
+| `same-file` 1.0.6, `walkdir` 2.5.0, `winapi-util` 0.1.11 | `Unlicense OR MIT` (o `Unlicense/MIT`) | Se usa MIT. Solo dependencias de build de Android: no se compilan en los tres sistemas |
+| `adler2` 2.0.1 | `0BSD OR MIT OR Apache-2.0` | Ya anotada arriba |
+| `rustix` 0.38.44 y 1.1.5, `linux-raw-sys` 0.4.15 y 0.12.1, `wasip2` 1.0.4, `wit-bindgen` 0.57.1 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` | Se usa Apache-2.0 o MIT |
+
+Sin `default_fonts`, la crate `epaint_default_fonts` (`(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`) **no entra** en el árbol, y por eso `deny.toml` no cambia. La decisión de la fuente queda pendiente antes de la primera unidad que dibuje texto: preferible una fuente de píxeles con licencia OFL (con su texto de licencia en el archivo de licencias de terceros) o propia. Activar `default_fonts` exigiría una excepción de licencia solo para esa crate.
+
+`libfuzzer-sys` y su excepción NCSA siguen como antes; el aviso `license-exception-not-encountered` de `cargo deny` es esa excepción, que solo aplica al crate `fuzz/`, fuera del workspace.
