@@ -95,6 +95,9 @@ struct FillPart {
 struct Step {
     changes: Vec<Change>,
     fills: Vec<FillPart>,
+    /// Identificador de estado del otro lado del paso: en la pila de deshacer, el de antes del
+    /// paso; en la de rehacer, el de después. `undo` y `redo` lo intercambian con el actual.
+    state: u64,
 }
 
 impl Step {
@@ -140,6 +143,10 @@ pub struct Document {
     /// Suma de `Step::cost` de la pila de deshacer.
     undo_bytes: usize,
     limit: usize,
+    /// Identificador del estado actual (`state_id`).
+    current_id: u64,
+    /// Siguiente identificador por estrenar; solo crece.
+    next_id: u64,
 }
 
 impl PartialEq for Document {
@@ -161,7 +168,20 @@ impl Document {
             redo: Vec::new(),
             undo_bytes: 0,
             limit: Document::DEFAULT_HISTORY_LIMIT,
+            current_id: 0,
+            next_id: 1,
         }
+    }
+
+    /// Identificador opaco del estado actual del documento (specs/hito-2-abrir-guardar.md).
+    ///
+    /// `0` en el estado inicial. Cada paso aplicado (`apply` que devuelve `Ok(true)`) lleva a un
+    /// identificador nuevo y nunca reutilizado; `undo` y `redo` recorren esos identificadores.
+    /// Un `apply` sin cambios o con error, y un `undo` o `redo` que falla, no lo alteran, y
+    /// descartar pasos viejos por el límite de la historia tampoco. Dos estados con el mismo
+    /// identificador tienen el mismo contenido; la inversa no se garantiza.
+    pub fn state_id(&self) -> u64 {
+        self.current_id
     }
 
     /// El id de la imagen con la que se creó el documento.
@@ -209,6 +229,9 @@ impl Document {
             return Ok(false);
         }
         step.fit();
+        step.state = self.current_id;
+        self.current_id = self.next_id;
+        self.next_id = self.next_id.saturating_add(1);
         self.redo.clear();
         self.undo_bytes = self.undo_bytes.saturating_add(step.cost());
         self.undo.push_back(step);
@@ -223,11 +246,12 @@ impl Document {
         self.redo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
-        let Some(step) = self.undo.pop_back() else {
+        let Some(mut step) = self.undo.pop_back() else {
             return Err(DocumentError::NothingToUndo);
         };
         self.undo_bytes = self.undo_bytes.saturating_sub(step.cost());
         self.revert(&step);
+        std::mem::swap(&mut step.state, &mut self.current_id);
         self.redo.push(step);
         Ok(())
     }
@@ -239,10 +263,11 @@ impl Document {
         self.undo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
-        let Some(step) = self.redo.pop() else {
+        let Some(mut step) = self.redo.pop() else {
             return Err(DocumentError::NothingToRedo);
         };
         self.replay(&step);
+        std::mem::swap(&mut step.state, &mut self.current_id);
         self.undo_bytes = self.undo_bytes.saturating_add(step.cost());
         self.undo.push_back(step);
         self.trim();
