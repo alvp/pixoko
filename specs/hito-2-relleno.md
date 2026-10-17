@@ -1,6 +1,6 @@
 # Hito 2 · Unidad 5: relleno por inundación
 
-Estado: **aprobada** (2026-10-17; decisiones 1 a 7 con cuatro matices incorporados al texto: (a) la pasada final solo recorre las filas tocadas y el coste es O(R + N/8); (b) `Image::check_pixel` pasa a ser pública en `px-core`, con sus tests, y es la única comprobación de `Document` y de `px-raster`; (c) la pila se libera antes de reservar la salida, con el pico estimado en 16384² RGBA; (d) pruebas grandes de 1024² en la ejecución normal y las de 2048² en `#[ignore]` si pasan de ~10 s en debug, con los tiempos medidos tras implementar).
+Estado: **aprobada** (2026-10-17; decisiones 1 a 7 con cuatro matices incorporados al texto: (a) la pasada final solo recorre las filas tocadas y el coste es O(R + N/8); (b) `Image::check_pixel` pasa a ser pública en `px-core`, con sus tests, y es la única comprobación de `Document` y de `px-raster`; (c) la pila se libera antes de reservar la salida, con el pico estimado en 16384² RGBA; (d) pruebas grandes de 1024² en la ejecución normal y las de 2048² en `#[ignore]` si pasan de ~10 s en debug, con los tiempos medidos tras implementar; **actualizado después de medir: las de 2048² tardan ~2 s en debug, así que no llevan `#[ignore]` y corren siempre**).
 
 ## Objetivo
 
@@ -65,7 +65,7 @@ Imágenes RGBA salvo que se diga otra cosa. `A` y `B` son dos colores distintos,
 | 13 | `C` igual al valor de la semilla | fuera; `flood_fill` da `Ok(false)` y `can_undo`, `can_redo` e `history_bytes` no cambian |
 | 14 | Indexed 3×1 con índices `0 1 0`, paleta `[rojo, rojo, azul]`, semilla `(0,0)`, relleno `Indexed(2)`; y relleno `Indexed(1)` | `[sp(0,0,1)]` (el índice 1 tiene el mismo color, pero es otro valor); y con `Indexed(1)` es un cambio real: `Some`, `Ok(true)` |
 | 15 | Rgba `(10,20,30,255)` y `(10,20,30,254)` seguidos, semilla en el primero; y `GrayAlpha{5,0}` junto a `GrayAlpha{6,0}` | solo el píxel de la semilla en cada caso; rellenar el primero con `(10,20,30,254)` es un cambio real |
-| 16 | `L`×`L` RGBA, con `L = 1024` en la ejecución normal y `L = 2048` en pruebas `#[ignore]`: (a) uniforme, semilla en el centro; (b) tablero, semilla en el centro; (c) peine (fila 0 llena y columnas pares `A` en el resto), semilla `(0,1)` | (a) `L` tramos `sp(y,0,L)`; (b) 1 tramo; (c) `S = 1 + (L−1)·L/2` tramos (523 777 con 1024; 2 096 129 con 2048). En los tres, `apply` devuelve `true`, `undo` restaura la imagen y `redo` la rellena |
+| 16 | `L`×`L` RGBA, con `L = 1024` y `L = 2048`, las dos en la ejecución normal: (a) uniforme, semilla en el centro; (b) tablero, semilla en el centro; (c) peine (fila 0 llena y columnas pares `A` en el resto), semilla `(0,1)` | (a) `L` tramos `sp(y,0,L)`; (b) 1 tramo; (c) `S = 1 + (L−1)·L/2` tramos (523 777 con 1024; 2 096 129 con 2048). En los tres, `apply` devuelve `true`, `undo` restaura la imagen y `redo` la rellena |
 
 **Tiempo medido** (2026-10-17, una sola máquina y una sola pasada, así que son órdenes de magnitud, no cifras para comprobar; `fill_command` solo / `apply` / total del test con la creación de las imágenes, que es lo que más pesa en debug):
 
@@ -77,7 +77,7 @@ Imágenes RGBA salvo que se diga otra cosa. `A` y `B` son dos colores distintos,
 | (c) peine 1024² (523 777 tramos) | 13 ms / 11 ms | 132 ms / 86 ms | 10 475 612 |
 | (c) peine 2048² (2 096 129 tramos) | 65 ms / 43 ms | 536 ms / 344 ms | 41 922 652 |
 
-El tiempo de `fill_command` crece ×4 al duplicar el lado (×4 los píxeles), como pide O(R + N/8), y el historial es 20 B por tramo (`apply` con el peine de 2048²: 41,9 MB, por debajo del límite por defecto de 64 MiB). Los tests de 2048² tardan **1,6 a 1,8 s cada uno en debug**, muy por debajo de los ~10 s de la regla; siguen en `#[ignore]` (la ejecución normal usa 1024²) y se lanzan con `cargo test -p px-raster --test fill -- --ignored`, o `--include-ignored` con `--release`. Las pruebas imprimen los tiempos y **solo fallan por encima de 120 s**, que ya delata un coste cuadrático. El pico de memoria de 16384² RGBA (comportamiento 7) sigue siendo una estimación: no se ha medido, por tamaño.
+El tiempo de `fill_command` crece ×4 al duplicar el lado (×4 los píxeles), como pide O(R + N/8), y el historial es 20 B por tramo (`apply` con el peine de 2048²: 41,9 MB, por debajo del límite por defecto de 64 MiB). Los tests de 2048² tardan **0,6 a 1,8 s cada uno en debug** (el tablero, el más rápido, 0,6 s), muy por debajo de los ~10 s de la regla; **corren siempre, sin `#[ignore]`**, junto a las de 1024². Las pruebas imprimen los tiempos (con `-- --nocapture`) y **solo fallan por encima de 120 s**, que ya delata un coste cuadrático. El pico de memoria de 16384² RGBA (comportamiento 7) sigue siendo una estimación: no se ha medido, por tamaño.
 
 ## Propiedades (proptest, imágenes de 1 a 12 de lado)
 
@@ -100,9 +100,14 @@ Todas aprobadas (2026-10-17) con los matices de la cabecera.
 4. **`Image::check_pixel` pública en `px-core`; no se duplica la validación** (matiz de la aprobación). `Document` y `px-raster` llaman a la misma función, antes de inundar en el segundo caso. Es el único cambio en `px-core`, con sus tests; la propiedad 5 sigue comparando el error con el de `apply`.
 5. **El tablero de ajedrez no es el peor caso de tramos con 4 vecinos.** Allí cada casilla del mismo color es una región de 1 píxel (solo se tocan en diagonal), así que la inundación termina enseguida con 1 tramo. El peor caso de tramos (hasta ~`N/2`, un tramo por diente) es el **peine**. Pruebo los dos: el tablero comprueba que la región se queda en 1 píxel y no se arrastra la diagonal; el peine ejerce la memoria y el tiempo máximos. Con 8 vecinos (hito 4) el tablero sí sería el peor caso.
 6. **Lectura con `Image::get_pixel`**, sin API nueva en `px-core`. Es lo más lento del algoritmo (comprueba límites y construye un `Pixel` en cada lectura). Si al medir domina, un acceso por filas en `px-core` sería una unidad aparte, no esta.
-7. **Pruebas grandes** (fila 16): 1024² siempre, 2048² en `#[ignore]` si pasan de ~10 s en debug; imprimen tiempos, techo de 120 s; tras implementar se miden y se sustituyen las estimaciones.
+7. **Pruebas grandes** (fila 16): 1024² y 2048² siempre (la regla de `#[ignore]` a partir de ~10 s en debug no se activó: miden ~2 s); imprimen tiempos, techo de 120 s.
 
 ## Para la unidad 8 y el hito 4
 
 - La herramienta debe llamar a `flood_fill` con la semilla en coordenadas de lienzo (con signo) y no filtrar «fuera» ni «igual»: ya dan `Ok(false)` sin tocar la historia.
 - La tolerancia de color cambia el predicado de «mismo valor» y deja de ser cierto que cada trozo de historia sea un tramo (los valores anteriores pueden diferir dentro de un tramo); el coste por tramo de 20 B pasa a ser por trozo.
+
+## Para la unidad 14
+
+- Con el peine en 16384×16384 RGBA el pico es de unos 5,3 GiB con `apply` (estimado, sin medir; comportamiento 7). Con *overcommit*, `try_reserve*` puede tener éxito aunque luego falte memoria real, y el sistema puede acabar matando el proceso en lugar de dar un `Err(OutOfMemory)` limpio.
+- Valorar un **tope configurable de tramos por relleno**, que dé error en lugar de reservar al superarlo (por ejemplo, cortando en la inundación cuando `count` pasa del tope, antes de reservar la salida), y **medir** el pico real (memoria residente) con el peine en 16384² antes de fijar su valor por defecto.

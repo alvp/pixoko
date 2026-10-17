@@ -2,9 +2,9 @@
 //!
 //! Una prueba unitaria por cada fila de «Casos límite» (`fila_NN_...`) y una propiedad por
 //! cada una de las seis de «Propiedades». Las filas 1 a 15 y las propiedades usan imágenes de
-//! 12 x 12 como mucho. La fila 16 es la única grande: 1024 x 1024 en la ejecución normal y
-//! 2048 x 2048 en pruebas `#[ignore]` (`cargo test --release -- --ignored`); imprimen sus
-//! tiempos y solo fallan por encima de 120 s.
+//! 12 x 12 como mucho. La fila 16 es la única grande: 1024 x 1024 y 2048 x 2048, las dos en
+//! la ejecución normal (de 0,6 a 1,8 s cada una en debug); imprimen sus tiempos y solo fallan por
+//! encima de 120 s.
 //!
 //! El oráculo (`region_ingenua`) es un recorrido pixel a pixel con `VecDeque`, 4 vecinos y
 //! `Image::get_pixel`; no usa nada de `px-raster`. Las filas «a mano» son listas literales.
@@ -735,19 +735,16 @@ fn fila_16c_peine_1024() {
 }
 
 #[test]
-#[ignore = "2048 x 2048: lento en debug; se lanza con `cargo test --release -- --ignored`"]
 fn fila_16a_uniforme_2048() {
     prueba_grande(Grande::Uniforme, 2048);
 }
 
 #[test]
-#[ignore = "2048 x 2048: lento en debug; se lanza con `cargo test --release -- --ignored`"]
 fn fila_16b_tablero_2048() {
     prueba_grande(Grande::Tablero, 2048);
 }
 
 #[test]
-#[ignore = "2048 x 2048: lento en debug; se lanza con `cargo test --release -- --ignored`"]
 fn fila_16c_peine_2048() {
     prueba_grande(Grande::Peine, 2048);
 }
