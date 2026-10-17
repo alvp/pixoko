@@ -67,7 +67,17 @@ Imágenes RGBA salvo que se diga otra cosa. `A` y `B` son dos colores distintos,
 | 15 | Rgba `(10,20,30,255)` y `(10,20,30,254)` seguidos, semilla en el primero; y `GrayAlpha{5,0}` junto a `GrayAlpha{6,0}` | solo el píxel de la semilla en cada caso; rellenar el primero con `(10,20,30,254)` es un cambio real |
 | 16 | `L`×`L` RGBA, con `L = 1024` en la ejecución normal y `L = 2048` en pruebas `#[ignore]`: (a) uniforme, semilla en el centro; (b) tablero, semilla en el centro; (c) peine (fila 0 llena y columnas pares `A` en el resto), semilla `(0,1)` | (a) `L` tramos `sp(y,0,L)`; (b) 1 tramo; (c) `S = 1 + (L−1)·L/2` tramos (523 777 con 1024; 2 096 129 con 2048). En los tres, `apply` devuelve `true`, `undo` restaura la imagen y `redo` la rellena |
 
-**Tiempo esperado** (estimación sin medir; se sustituye por los tiempos medidos tras implementar, en debug y en `--release`): en `--release`, (a) y (b) por debajo de ~0,2 s y (c) por debajo de ~0,5 s con 2048². En el perfil de test del workspace (sin optimizar), unos pocos segundos con 1024² y varias veces más con 2048². Las pruebas imprimen los tiempos y **solo fallan por encima de 120 s**, que ya delata un coste cuadrático; no se comprueban cifras finas para no crear un test inestable. Las de `L = 1024` se ejecutan siempre. Las de `L = 2048` van en `#[ignore]` (si en debug pasan de ~10 s) y se lanzan con `cargo test --release -- --ignored`; el CI no cambia. (b) es barata en tiempo, pero el mapa se reserva igual (128 KiB con 1024²).
+**Tiempo medido** (2026-10-17, una sola máquina y una sola pasada, así que son órdenes de magnitud, no cifras para comprobar; `fill_command` solo / `apply` / total del test con la creación de las imágenes, que es lo que más pesa en debug):
+
+| Caso | `--release`: `fill_command` / `apply` | debug (perfil de test): `fill_command` / `apply` | `history_bytes` |
+| --- | --- | --- | --- |
+| (a) uniforme 1024² | 3,6 ms / 18 ms | 42 ms / 122 ms | 20 552 |
+| (a) uniforme 2048² | 14 ms / 70 ms | 162 ms / 488 ms | 41 032 |
+| (b) tablero 1024² / 2048² | 0,04 ms / 0,15 ms | 0,08 ms / 0,32 ms | 92 |
+| (c) peine 1024² (523 777 tramos) | 13 ms / 11 ms | 132 ms / 86 ms | 10 475 612 |
+| (c) peine 2048² (2 096 129 tramos) | 65 ms / 43 ms | 536 ms / 344 ms | 41 922 652 |
+
+El tiempo de `fill_command` crece ×4 al duplicar el lado (×4 los píxeles), como pide O(R + N/8), y el historial es 20 B por tramo (`apply` con el peine de 2048²: 41,9 MB, por debajo del límite por defecto de 64 MiB). Los tests de 2048² tardan **1,6 a 1,8 s cada uno en debug**, muy por debajo de los ~10 s de la regla; siguen en `#[ignore]` (la ejecución normal usa 1024²) y se lanzan con `cargo test -p px-raster --test fill -- --ignored`, o `--include-ignored` con `--release`. Las pruebas imprimen los tiempos y **solo fallan por encima de 120 s**, que ya delata un coste cuadrático. El pico de memoria de 16384² RGBA (comportamiento 7) sigue siendo una estimación: no se ha medido, por tamaño.
 
 ## Propiedades (proptest, imágenes de 1 a 12 de lado)
 
