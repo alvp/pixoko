@@ -120,6 +120,39 @@ impl Plan {
     }
 }
 
+/// Firma de 8 bytes de todo PNG.
+const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+
+/// Mayor dimensión que admite el formato (2³¹ − 1).
+const MAX_DIMENSION: u32 = i32::MAX as u32;
+
+/// Lee solo las dimensiones `(ancho, alto)` de la cabecera (specs/hito-2-abrir-guardar.md).
+///
+/// Mira la firma y el primer chunk, que debe ser `IHDR` de 13 bytes. No decodifica, no reserva
+/// memoria y **no verifica el CRC ni nada posterior al IHDR**: de eso se encarga `read_png`.
+/// Una dimensión 0 o mayor que 2³¹ − 1 es un error.
+pub fn png_dimensions(bytes: &[u8]) -> Result<(u32, u32), PngError> {
+    let bad = |msg: &str| PngError::Decode(msg.to_string());
+    // Firma (8) + longitud (4) + tipo (4) + ancho (4) + alto (4).
+    let header = bytes
+        .get(..24)
+        .ok_or_else(|| bad("cabecera PNG incompleta"))?;
+    if header[..8] != SIGNATURE {
+        return Err(bad("firma PNG incorrecta"));
+    }
+    if header[8..12] != 13u32.to_be_bytes() || &header[12..16] != b"IHDR" {
+        return Err(bad("el primer chunk no es un IHDR de 13 bytes"));
+    }
+    let be = |at: usize| {
+        u32::from_be_bytes([header[at], header[at + 1], header[at + 2], header[at + 3]])
+    };
+    let (width, height) = (be(16), be(20));
+    if !(1..=MAX_DIMENSION).contains(&width) || !(1..=MAX_DIMENSION).contains(&height) {
+        return Err(bad("dimensiones fuera de rango"));
+    }
+    Ok((width, height))
+}
+
 /// Lee un PNG. Ver `specs/hito-1-png.md` para la correspondencia con los modos de `Image`.
 pub fn read_png(bytes: &[u8]) -> Result<PngRead, PngError> {
     let mut decoder = Decoder::new_with_limits(

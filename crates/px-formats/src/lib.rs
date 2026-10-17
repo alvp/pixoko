@@ -2,4 +2,4 @@
 
 mod png;
 
-pub use png::{Conversion, PngError, PngRead, read_png, write_png};
+pub use png::{Conversion, PngError, PngRead, png_dimensions, read_png, write_png};
