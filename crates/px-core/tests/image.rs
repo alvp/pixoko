@@ -1,7 +1,8 @@
 //! Tests de `Image`, imagen en modos RGBA, indexado y grises (specs/hito-1-image.md).
 //!
-//! Ningún test reserva más de unos pocos KiB: `Image::MAX_BYTES` solo se prueba
-//! por el lado del rechazo.
+//! Ningún test reserva más de unos pocos KiB: el límite exacto de `Image::MAX_BYTES`
+//! se prueba con `Image::byte_len`, que no reserva; `new` solo se prueba con tamaños
+//! pequeños y por el lado del rechazo.
 
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -191,6 +192,83 @@ fn new_con_producto_desbordado_es_too_large() {
 fn new_por_encima_de_max_bytes_es_too_large() {
     assert!(es_too_large(Image::new(u32::MAX, 1, Mode::Gray)));
     assert!(es_too_large(Image::new(16385, 16384, Mode::Rgba)));
+}
+
+#[test]
+fn byte_len_en_el_limite_exacto_cabe() {
+    let tope = Image::MAX_BYTES;
+    assert_eq!(Image::byte_len(16384, 16384, Mode::Rgba), Ok(tope));
+    assert_eq!(Image::byte_len(tope as u32, 1, Mode::Gray), Ok(tope));
+    assert_eq!(Image::byte_len(1, tope as u32, Mode::Gray), Ok(tope));
+    assert_eq!(
+        Image::byte_len(tope as u32 / 2, 1, Mode::GrayAlpha),
+        Ok(tope)
+    );
+    assert_eq!(
+        Image::byte_len(16384, 16384, Mode::Indexed),
+        Ok(16384 * 16384)
+    );
+}
+
+#[test]
+fn byte_len_un_byte_por_encima_es_too_large() {
+    let uno_mas = Image::MAX_BYTES as u32 + 1;
+    for (width, height, mode) in [
+        (uno_mas, 1, Mode::Gray),
+        (1, uno_mas, Mode::Gray),
+        (uno_mas, 1, Mode::Indexed),
+        (16385, 16384, Mode::Rgba),
+        (16384, 16385, Mode::Rgba),
+        (uno_mas / 2 + 1, 1, Mode::GrayAlpha),
+        (u32::MAX, u32::MAX, Mode::Rgba),
+    ] {
+        assert_eq!(
+            Image::byte_len(width, height, mode),
+            Err(ImageError::TooLarge { width, height }),
+            "{width} x {height} en {mode:?}"
+        );
+    }
+}
+
+#[test]
+fn byte_len_con_cero_es_zero_size() {
+    for mode in TODOS {
+        assert_eq!(
+            Image::byte_len(0, 5, mode),
+            Err(ImageError::ZeroSize {
+                width: 0,
+                height: 5
+            })
+        );
+        assert_eq!(
+            Image::byte_len(5, 0, mode),
+            Err(ImageError::ZeroSize {
+                width: 5,
+                height: 0
+            })
+        );
+        assert_eq!(
+            Image::byte_len(0, 0, mode),
+            Err(ImageError::ZeroSize {
+                width: 0,
+                height: 0
+            })
+        );
+    }
+}
+
+#[test]
+fn byte_len_pequenos_por_modo() {
+    for mode in TODOS {
+        assert_eq!(
+            Image::byte_len(1, 1, mode),
+            Ok(bytes_por_pixel(mode) as usize)
+        );
+        assert_eq!(
+            Image::byte_len(4, 3, mode),
+            Ok(12 * bytes_por_pixel(mode) as usize)
+        );
+    }
 }
 
 #[test]
@@ -629,6 +707,23 @@ proptest! {
             let pixeles = todos_los_pixeles(&img);
             prop_assert_eq!(pixeles.len() as u128, u128::from(width) * u128::from(height));
             prop_assert!(pixeles.iter().all(|&p| p == inicial(mode)));
+        }
+    }
+
+    #[test]
+    fn byte_len_es_el_producto_o_el_error(
+        (width, height, mode) in caso_de_tamano(),
+        indexado in any::<bool>(),
+    ) {
+        let mode = if indexado { Mode::Indexed } else { mode };
+        let bytes = u128::from(width) * u128::from(height) * bytes_por_pixel(mode);
+        let r = Image::byte_len(width, height, mode);
+        if width == 0 || height == 0 {
+            prop_assert_eq!(r, Err(ImageError::ZeroSize { width, height }));
+        } else if bytes > Image::MAX_BYTES as u128 {
+            prop_assert_eq!(r, Err(ImageError::TooLarge { width, height }));
+        } else {
+            prop_assert_eq!(r, Ok(bytes as usize));
         }
     }
 

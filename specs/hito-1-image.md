@@ -16,6 +16,7 @@ Definir en `px-core` la imagen de un solo plano: un rectángulo de píxeles en u
   - `GrayAlpha { gray: u8, alpha: u8 }`: gris con alfa directo.
 - `px_core::Image`: deriva `Clone`, `Debug`, `PartialEq`, `Eq`. La igualdad compara modo, dimensiones, píxeles y paleta.
 - `pub const Image::MAX_BYTES: usize = 1 << 30`: constante pública, 1 GiB de píxeles (un RGBA de 16384 × 16384 cabe justo).
+- `Image::byte_len(width: u32, height: u32, mode: Mode) -> Result<usize, ImageError>`: función pura y pública con el tamaño en bytes de los píxeles; no reserva memoria (ver comportamiento 2).
 - `Image::new(width: u32, height: u32, mode: Mode) -> Result<Image, ImageError>`: para `Rgba`, `Gray` y `GrayAlpha`. Con `Mode::Indexed` devuelve `PaletteRequired`.
 - `Image::new_indexed(width: u32, height: u32, palette: Palette) -> Result<Image, ImageError>`.
 - `width() -> u32`, `height() -> u32`, `mode() -> Mode`.
@@ -36,7 +37,7 @@ Definir en `px-core` la imagen de un solo plano: un rectángulo de píxeles en u
 ## Comportamiento
 
 1. **Modos.** Cuatro modos, porque PNG distingue gris (tipo 0) de gris con alfa (tipo 4) y la ida y vuelta no puede inventar un alfa ni quitarlo. `Gray` no tiene alfa (opaco). Un `Pixel` guarda exactamente lo que se escribió: no se normaliza ni se convierte (`Rgba(1,2,3,0)` conserva su RGB). La conversión entre modos queda para el hito 2.
-2. **Dimensiones.** `width >= 1` y `height >= 1`; con cero, `Err(ZeroSize)`. Así una imagen siempre tiene al menos un píxel. El tamaño en bytes es `width * height * bytes_por_píxel` (RGBA 4, grises con alfa 2, indexado y grises 1), calculado con `usize::try_from` y `checked_mul` en cada paso: si desborda o supera `MAX_BYTES`, `Err(TooLarge)`, sin reservar memoria antes de comprobarlo. La reserva usa `try_reserve_exact`: si falla, también `TooLarge` (nunca aborta). El resultado es el mismo en 32 y 64 bits.
+2. **Dimensiones.** `width >= 1` y `height >= 1`; con cero, `Err(ZeroSize)`. Así una imagen siempre tiene al menos un píxel. `Image::byte_len` calcula el tamaño en bytes (válido para los cuatro modos, `Indexed` incluido, y sin comprobar la paleta) y `new` y `new_indexed` lo usan. El tamaño es `width * height * bytes_por_píxel` (RGBA 4, grises con alfa 2, indexado y grises 1), calculado con `usize::try_from` y `checked_mul` en cada paso: si desborda o supera `MAX_BYTES`, `Err(TooLarge)`, sin reservar memoria antes de comprobarlo. La reserva usa `try_reserve_exact`: si falla, también `TooLarge` (nunca aborta). El resultado es el mismo en 32 y 64 bits.
 3. **Orden de comprobación al crear.** Primero las dimensiones (`ZeroSize`, luego `TooLarge`), después el modo y la paleta (`PaletteRequired` o `EmptyPalette`). Un `Err` no deja nada reservado.
 4. **Contenido inicial.** Todo a ceros: `Rgba(Rgba::TRANSPARENT)`, `Gray(0)` (negro opaco), `GrayAlpha { gray: 0, alpha: 0 }` (transparente) e `Indexed(0)`.
 5. **Coordenadas.** `x` crece hacia la derecha y `y` hacia abajo, desde `(0, 0)` arriba a la izquierda. Son `u32`: no hay coordenadas negativas y quien parta de `i32` convierte antes. `get_pixel` y `set_pixel` con `x >= width` o `y >= height` devuelven `Err(OutOfBounds)` con la coordenada y el tamaño; nunca hacen pánico, tampoco con `u32::MAX`.
@@ -73,6 +74,9 @@ Notación: `P[...]` es una `Palette` con esas entradas; `c0`, `c1`… son colore
 | `new(0, 5, M)`, `new(5, 0, M)`, `new(0, 0, M)` | `Err(ZeroSize { width, height })` con los valores pedidos |
 | `new(u32::MAX, u32::MAX, Rgba)` y con `Gray` | `Err(TooLarge { .. })` (el producto desborda) |
 | `new(u32::MAX, 1, Gray)`; `new(16385, 16384, Rgba)` | `Err(TooLarge { .. })` (superan `MAX_BYTES`); no reserva memoria |
+| `byte_len(16384, 16384, Rgba)`; `byte_len(MAX_BYTES as u32, 1, Gray)`; `byte_len(16384, 16384, Indexed)` | `Ok(MAX_BYTES)`, `Ok(MAX_BYTES)` y `Ok(16384 * 16384)` (el límite exacto cabe) |
+| `byte_len(MAX_BYTES as u32 + 1, 1, Gray)`; `byte_len(1, MAX_BYTES as u32 + 1, Gray)`; `byte_len(16385, 16384, Rgba)`; `byte_len(u32::MAX, u32::MAX, Rgba)` | `Err(TooLarge { width, height })` con los valores pedidos (un byte de más; desbordamiento en el último) |
+| `byte_len(0, 5, M)`; `byte_len(5, 0, M)` | `Err(ZeroSize { width, height })` |
 | `new(2, 2, Indexed)`; `new(0, 2, Indexed)` | `Err(PaletteRequired)`; `Err(ZeroSize)` (las dimensiones se comprueban antes) |
 | `new_indexed(2, 2, P[c0, c1])` | `Ok`; `mode() == Indexed`; `palette() == Some(&P[c0, c1])`; todos los píxeles `Indexed(0)` |
 | `new_indexed(2, 2, Palette::new())`; `new_indexed(0, 2, Palette::new())`; `new_indexed(u32::MAX, u32::MAX, P[c0])` | `Err(EmptyPalette)`; `Err(ZeroSize)`; `Err(TooLarge)` |
@@ -95,13 +99,13 @@ Desde la raíz, en Linux (el CI cubre los otros dos sistemas):
 
 ## Tests
 
-En `crates/px-core/tests/image.rs` (integración sobre la API pública). Los tests no reservan más de unos pocos KiB: el límite de `MAX_BYTES` solo se prueba por el lado del rechazo.
+En `crates/px-core/tests/image.rs` (integración sobre la API pública). Los tests no reservan más de unos pocos KiB: el límite exacto de `MAX_BYTES` se prueba con `byte_len`, que no reserva; `new` y `new_indexed` solo se prueban con tamaños pequeños y por el lado del rechazo.
 
 **Unitarios**: una prueba por fila de la tabla de casos límite.
 
 **Propiedades** (`proptest`):
 
-1. **Dimensiones y tamaño.** Para cualquier `width, height: u32` y modo no indexado: `Err(ZeroSize)` si alguno es cero; si no, `Err(TooLarge)` si `width * height * bytes_por_píxel` (calculado en `u128`) supera `MAX_BYTES`; si no, `Ok` con las dimensiones y el modo pedidos y todos los píxeles al valor inicial. Los casos que darían `Ok` se limitan a un tamaño pequeño para no reservar memoria.
+1. **Dimensiones y tamaño.** Para cualquier `width, height: u32` y modo no indexado: `Err(ZeroSize)` si alguno es cero; si no, `Err(TooLarge)` si `width * height * bytes_por_píxel` (calculado en `u128`) supera `MAX_BYTES`; si no, `Ok` con las dimensiones y el modo pedidos y todos los píxeles al valor inicial. Los casos que darían `Ok` se limitan a un tamaño pequeño para no reservar memoria. `byte_len` devuelve el mismo `ZeroSize` o `TooLarge`, y en el resto `Ok(width * height * bytes_por_píxel)`, sin límite de tamaño de prueba.
 2. **Coordenadas.** Para una imagen de cualquier modo y cualquier `(x, y)` de `u32` completo: `get_pixel` es `Ok` si y solo si `x < width && y < height`; si no, `OutOfBounds` con esos mismos valores. Nunca hay pánico.
 3. **Ida y vuelta y localidad.** Para cualquier imagen pequeña (1 a 16 de lado, cualquier modo; el indexado con paleta de 1 a 256 entradas) y cualquier `(x, y)` válidos y `Pixel` válido para ese modo: tras `set_pixel`, `get_pixel(x, y)` devuelve ese `Pixel` exacto y todos los demás píxeles son iguales que antes.
 4. **Secuencias contra un modelo.** Para una secuencia de 0 a 80 `set_pixel` con `(x, y)` en un rango algo mayor que la imagen y `Pixel` de cualquier variante (incluidos otros modos e índices fuera de paleta), comparada con un `Vec<Pixel>` simple como modelo: cada operación devuelve el error esperado según el orden del comportamiento 6 o `Ok`; si es error la imagen no cambia; y tras cada operación todos los píxeles coinciden con el modelo. Ninguna hace pánico.
@@ -116,7 +120,7 @@ Las marcadas con **?** necesitan visto bueno; el resto son consecuencia directa 
 
 1. **? Cuatro modos: `Gray` y `GrayAlpha` separados.** Un solo modo «grises con alfa siempre» haría que un PNG de gris sin alfa saliera como gris con alfa (cambia el fichero y obliga a decidir qué alfa inventar); uno «sin alfa» perdería el alfa de los PNG tipo 4. Coste: una variante más.
 2. **? `Pixel` es un enum con una variante por modo y `set_pixel` es estricto** (`ModeMismatch`, sin conversión implícita). Alternativa descartada: `get_pixel` devolviendo siempre `Rgba` resuelto; pierde el índice y rompe la ida y vuelta del indexado.
-3. **? Ancho o alto cero es error (`ZeroSize`)** y hay un tope `MAX_BYTES = 1 GiB` (`TooLarge`). Sin tope, un tamaño como 100 000 × 100 000 podría aceptarse o fallar según la máquina y el sistema; con él, el resultado es el mismo en todas. 1 GiB admite lienzos de 16384 × 16384 RGBA; subirlo es cambiar una constante.
+3. **? Ancho o alto cero es error (`ZeroSize`)** y hay un tope `MAX_BYTES = 1 GiB` (`TooLarge`). Sin tope, un tamaño como 100 000 × 100 000 podría aceptarse o fallar según la máquina y el sistema; con él, el resultado es el mismo en todas. 1 GiB admite lienzos de 16384 × 16384 RGBA; subirlo es cambiar una constante. `byte_len` es pública para poder probar el límite exacto sin reservar 1 GiB (y como asociada de `Image`, no como función suelta de la crate, para no ocupar un nombre genérico).
 4. **? La imagen indexada es dueña de la paleta y solo la expone como `&Palette`.** Con esto el invariante «todo índice < `paleta.len()`» se sostiene sin comprobaciones extra, pero en esta unidad la paleta de una imagen no se puede editar; el editor del hito 2 añade métodos que la cambian y remapean los píxeles a la vez. Alternativa: exponer `push` y `set` ahora (también seguros hoy), a costa de más API sin un uso inmediato.
 5. **`new_indexed` aparte de `new`**: el indexado necesita paleta y `new` solo toma el modo. `new(.., Mode::Indexed)` devuelve `PaletteRequired` en lugar de inventar una paleta.
 6. **Contenido inicial a ceros** en todos los modos (transparente en RGBA y grises con alfa, negro opaco en grises, índice 0 en indexado).

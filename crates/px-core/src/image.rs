@@ -71,9 +71,25 @@ impl Image {
     /// Tamaño máximo de los píxeles, en bytes (1 GiB).
     pub const MAX_BYTES: usize = 1 << 30;
 
+    /// Tamaño en bytes de los píxeles de una imagen de ese tamaño y modo, sin reservar memoria.
+    ///
+    /// Error si alguna dimensión es cero o si el tamaño desborda o supera [`Image::MAX_BYTES`].
+    pub fn byte_len(width: u32, height: u32, mode: Mode) -> Result<usize, ImageError> {
+        if width == 0 || height == 0 {
+            return Err(ImageError::ZeroSize { width, height });
+        }
+        let too_large = || ImageError::TooLarge { width, height };
+        usize::try_from(width)
+            .ok()
+            .and_then(|w| w.checked_mul(usize::try_from(height).ok()?))
+            .and_then(|pixels| pixels.checked_mul(mode.bytes_per_pixel()))
+            .filter(|&bytes| bytes <= Image::MAX_BYTES)
+            .ok_or_else(too_large)
+    }
+
     /// Imagen a ceros en un modo que no necesita paleta; con `Mode::Indexed` usa [`Image::new_indexed`].
     pub fn new(width: u32, height: u32, mode: Mode) -> Result<Image, ImageError> {
-        let len = byte_len(width, height, mode)?;
+        let len = Image::byte_len(width, height, mode)?;
         if mode == Mode::Indexed {
             return Err(ImageError::PaletteRequired);
         }
@@ -82,7 +98,7 @@ impl Image {
 
     /// Imagen indexada con todos los píxeles en el índice 0; la paleta no puede estar vacía.
     pub fn new_indexed(width: u32, height: u32, palette: Palette) -> Result<Image, ImageError> {
-        let len = byte_len(width, height, Mode::Indexed)?;
+        let len = Image::byte_len(width, height, Mode::Indexed)?;
         if palette.is_empty() {
             return Err(ImageError::EmptyPalette);
         }
@@ -180,20 +196,6 @@ impl Image {
         // El producto cabe: `byte_len` lo comprobó al crear la imagen.
         Ok((y as usize * self.width as usize + x as usize) * self.mode.bytes_per_pixel())
     }
-}
-
-/// Tamaño en bytes de los píxeles, o el error de dimensiones.
-fn byte_len(width: u32, height: u32, mode: Mode) -> Result<usize, ImageError> {
-    if width == 0 || height == 0 {
-        return Err(ImageError::ZeroSize { width, height });
-    }
-    let too_large = || ImageError::TooLarge { width, height };
-    usize::try_from(width)
-        .ok()
-        .and_then(|w| w.checked_mul(usize::try_from(height).ok()?))
-        .and_then(|pixels| pixels.checked_mul(mode.bytes_per_pixel()))
-        .filter(|&bytes| bytes <= Image::MAX_BYTES)
-        .ok_or_else(too_large)
 }
 
 /// Error al crear o usar una imagen.
