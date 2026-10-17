@@ -64,20 +64,60 @@ Texto con la fuente de 11a, **sin color como única señal** (la elegida lleva a
 
 ## Piezas (firmas)
 
-`px-ui/src/color.rs` (se amplía): `ColorChoice`, `pixel_for_choice`, `initial_choice(image)` (`Entry(0)` si es indexada, si no `Slot(1)`), `choice_for_cell`, `cell_of_choice(image, choice) -> Option<usize>`, `key_choice`, `choice_label`, `cell_label(image, cell)`, `info_flags`.
+**`px-ui/src/color.rs`** (se amplía; `slot_label`, `pixel_for_slot`, `SLOTS` no cambian):
 
-`px-ui/src/palette_grid.rs` (nuevo, **sin tipos de egui**; píxeles físicos `i64` y `view::ScreenRect`):
-- `COLUMNS = 16`, `CELL = 10`, `GAP = 4`, `PITCH = 14` (en `u`), `PANEL_WIDTH_U = 233`, `GRID_ORIGIN_U = (4, 41)`.
-- `total_rows(count)`, `visible_rows(panel_h_px, n)`, `max_first_row(total, visible)` = `total − max(visible, 1)` saturado.
-- `Grid::new(n, count, visible_rows, first_row)` con `cell_rect(i) -> Option<ScreenRect>` e `index_at(x, y) -> Option<usize>`, relativos al origen de la rejilla; `None` si la fila no se ve, `i ≥ count`, en un hueco o fuera.
-- `Scroll { first_row, rest }` (`Default` = 0, 0) con `by(delta_px, n, total, visible)` y `clamp(total, visible)`. `by` suma `delta` (saturando) a `rest`, avanza `div_euclid(14n)` filas, deja el resto en `0..14n` y limita a `0..=max_first_row`; `rest` queda en 0 si se limitó o si `first_row` es el máximo (no hay nada más que acumular); `thumb(first_row, visible, total, n) -> Option<(i64, i64)>` (`y`, `alto` relativos a la pista).
-- `swatch_parts(n, color: Rgba) -> Vec<(ScreenRect, Rgba)>` y `ring_rects(cell: ScreenRect, thickness: i64) -> [ScreenRect; 4]`.
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColorChoice { Slot(u8), Entry(u8) }
+impl From<u8> for ColorChoice { /* Slot(n) */ }
+pub fn pixel_for_choice(image: &Image, choice: ColorChoice) -> Option<Pixel>;
+pub fn initial_choice(image: &Image) -> ColorChoice;          // Entry(0) si es indexada; si no, Slot(1)
+pub fn cell_count(image: &Image) -> usize;                    // paleta.len() si es indexada; si no, 9
+pub fn choice_for_cell(image: &Image, cell: usize) -> Option<ColorChoice>;  // None si cell >= cell_count
+pub fn cell_of_choice(image: &Image, choice: ColorChoice) -> Option<usize>; // None si no vale para la imagen
+pub fn key_choice(image: &Image, n: u8) -> Option<ColorChoice>;             // n en 1..=9; None si no existe esa muestra
+pub fn cell_color(image: &Image, cell: usize) -> Option<Rgba>;             // el color con que se ve (resuelto)
+pub fn is_transparent_cell(image: &Image, cell: usize) -> bool;
+pub fn cell_label(image: &Image, cell: usize) -> Option<String>;           // línea 1
+pub fn info_flags(hover: bool, active: bool, transparent: bool) -> String; // línea 2
+pub fn choice_label(image: &Image, choice: ColorChoice) -> Option<String>; // barra de estado
+```
 
-`px-ui/src/palette_panel.rs` (nuevo, `egui`): `show(ui, image, choice, scroll: &mut Scroll, enabled) -> Option<ColorChoice>` (`enabled` falso con un gesto en curso: sigue mostrando y desplazando, pero no elige). `px-ui/src/theme.rs`: `CHECK_A` `#4a4a4a` y `CHECK_B` `#6e6e6e` (damero; sin texto encima, así que no entran en la tabla de contraste del texto), `RING_ACTIVE` (= `ACCENT`) y `RING_HOVER` (= `TEXT`), que contrastan ≥ 3:1 con `SURFACE_1` (`contrast_ratio` de 11a; fila 10).
+`ToolState::canvas_event` y `canvas_input` (en `tool.rs`) pasan de `slot: u8` a `choice: impl Into<ColorChoice>` y usan `pixel_for_choice`.
 
-**Constantes en un solo sitio:** todas las medidas (columnas, muestra, hueco, paso, márgenes, posición y alto de las líneas de texto, separador, pista, grosores de los anillos y ancho del panel) son constantes en `palette_grid.rs`, en `u`; `palette_panel.rs` y los tests las leen de ahí y no repiten ningún número. **`u` = `n` = `text_scale(ppp)` píxeles físicos**, siempre un entero (`ui_unit(ppp)` de 11a, en puntos).
+**`px-ui/src/palette_grid.rs`** (nuevo, **sin tipos de egui**; píxeles físicos `i64`, `view::ScreenRect` y `px_core::Rgba`). Constantes `pub const`, en `u` y de tipo `i64` salvo `COLUMNS: usize`: `COLUMNS = 16`, `CELL_U = 10`, `GAP_U = 4`, `PITCH_U = 14`, `CHECK_U = 5`, `PANEL_WIDTH_U = 233`, `GRID_X_U = 4`, `GRID_Y_U = 41`, `TEXT_X_U = 4`, `TEXT_WIDTH_U = 225`, `LINE_H_U = 14`, `LINE1_Y_U = 4`, `LINE2_Y_U = 18`, `SEPARATOR_Y_U = 36`, `TRACK_X_U = 230`, `TRACK_W_U = 2`, `RIGHT_LINE_X_U = 232`, `RING_ACTIVE_U = 2`, `RING_HOVER_U = 1`; y `CHECK_A`, `CHECK_B: Rgba` (`#4a4a4a`, `#6e6e6e`).
 
-`px-app/src/session.rs`: `Session` gana `pub choice: ColorChoice` y `pub scroll: Scroll`; `sample` y un `open` con éxito ponen `initial_choice(imagen)` y `Scroll::default()`; un error de `open`, `save` y `save_as` no los tocan; se elimina `adjust_slot`. `px-app/src/main.rs`: `slot` desaparece; `handle_keys` usa `key_choice` y `session.choice`; el panel recibe `session.choice` y `session.scroll`; la barra usa `choice_label`.
+```rust
+pub fn edges_u() -> Vec<i64>;   // todas las coordenadas x e y, en u, que usa la maqueta (bordes del panel, textos, separador, pista, y de la primera fila y columna y de la última de cada muestra con sus anillos)
+pub fn total_rows(count: usize) -> usize;
+pub fn visible_rows(panel_h_px: i64, n: u32) -> usize;
+pub fn max_first_row(total: usize, visible: usize) -> usize;   // total − max(visible, 1), saturado
+pub struct Grid { /* n, count, visible_rows, first_row */ }
+impl Grid {
+    pub fn new(n: u32, count: usize, visible_rows: usize, first_row: usize) -> Grid;
+    pub fn cell_rect(&self, index: usize) -> Option<ScreenRect>;   // relativo al origen de la rejilla
+    pub fn index_at(&self, x: i64, y: i64) -> Option<usize>;
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Scroll { pub first_row: usize, pub rest: i64 }
+impl Scroll {
+    pub fn by(&mut self, delta_px: i64, n: u32, total: usize, visible: usize);
+    pub fn clamp(&mut self, total: usize, visible: usize);
+}
+pub fn thumb(first_row: usize, visible: usize, total: usize, n: u32) -> Option<(i64, i64)>;  // (y, alto) relativos a la pista
+pub fn swatch_parts(n: u32, color: Rgba) -> Vec<(ScreenRect, Rgba)>;
+pub fn ring_rects(cell: ScreenRect, thickness: i64) -> [ScreenRect; 4];   // arriba, abajo, izquierda, derecha
+```
+
+`Grid::cell_rect` e `index_at`: `None` si la fila no se ve, `i ≥ count`, en un hueco o fuera. `Scroll::by` suma `delta` (saturando) a `rest`, avanza `div_euclid(14n)` filas, deja el resto en `0..14n` y limita a `0..=max_first_row`; `rest` queda en 0 si se limitó o si `first_row` es el máximo (no hay nada más que acumular). `thumb`: `T = visible·14n`; `alto = max(2n, floor(T·visible/total))`, `y = min(floor(T·first_row/total), T − alto)`; `None` si `total ≤ visible` o `visible = 0`.
+
+**`px-ui/src/palette_panel.rs`** (nuevo, `egui`): `pub fn show(ui: &mut Ui, image: &Image, choice: ColorChoice, scroll: &mut Scroll, enabled: bool) -> Option<ColorChoice>` (`enabled` falso con un gesto en curso: sigue mostrando y desplazando, pero no elige). Es un `Panel::left("paleta")` de `PANEL_WIDTH_U · ui_unit(ppp)` puntos, sin separador propio, con marco `SURFACE_1`; se monta después de `status::show` y antes del lienzo. Solo lee las constantes de `palette_grid`.
+
+**`px-ui/src/theme.rs`:** `RING_ACTIVE: Color32` (= `ACCENT`) y `RING_HOVER: Color32` (= `TEXT`), que contrastan ≥ 3:1 con `SURFACE_1` (`contrast_ratio` de 11a; fila 10). El damero no lleva texto encima, así que no entra en la tabla de contraste del texto.
+
+**Constantes en un solo sitio:** todas las medidas son constantes de `palette_grid.rs`, en `u`; `palette_panel.rs` y los tests las leen de ahí y no repiten ningún número. **`u` = `n` = `text_scale(ppp)` píxeles físicos**, siempre un entero (`ui_unit(ppp)` de 11a, en puntos).
+
+**`px-app/src/session.rs`:** `Session` gana `pub choice: ColorChoice` y `pub scroll: Scroll`; `sample` y un `open` con éxito ponen `initial_choice(imagen)` y `Scroll::default()`; un error de `open`, `save` y `save_as` no los tocan; se elimina `adjust_slot`. **`px-app/src/main.rs`:** `slot` desaparece; `handle_keys` usa `key_choice` y `session.choice`; el panel recibe `session.choice` y `session.scroll`; la barra usa `choice_label`.
 
 **Damero y marcas** (`swatch_parts`, relativo a la esquina de la muestra, orden de pintado): alfa 255, un rectángulo de 10n×10n con el color; alfa 0, cuatro cuadrados de 5n (`CHECK_A` en (0,0) y (5n,5n); `CHECK_B` en los otros dos), sin color; alfa de 1 a 254, el damero de cuatro y encima el rectángulo con su alfa.
 
