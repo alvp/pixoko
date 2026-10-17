@@ -1,30 +1,34 @@
 //! Pixoko: ventana mínima que muestra una imagen con zoom entero y desplazamiento
-//! (specs/hito-2-ventana.md), con lápiz y deshacer/rehacer (specs/hito-2-lapiz-deshacer.md).
-//! Todavía no abre ficheros.
+//! (specs/hito-2-ventana.md), con lápiz y deshacer/rehacer (specs/hito-2-lapiz-deshacer.md)
+//! y las herramientas línea y relleno (specs/hito-2-linea-relleno-app.md). Todavía no abre
+//! ficheros.
 
 mod demo;
 mod title;
 
-use eframe::egui;
-use px_core::{Document, Pixel};
-use px_ui::canvas::{Canvas, CanvasEvent};
-use px_ui::color::{pixel_for_slot, slot_label};
-use px_ui::shortcuts::{Action, action_for_key};
-use px_ui::stroke::Stroke;
-use px_ui::texture::pixel_rgba;
+use std::time::Duration;
 
-use crate::title::{TitleInfo, title_text};
+use eframe::egui;
+use px_core::Document;
+use px_ui::canvas::Canvas;
+use px_ui::color::{pixel_for_slot, slot_label};
+use px_ui::notice::{NOTICE_SECS, Notice};
+use px_ui::shortcuts::{Action, action_for_key};
+use px_ui::texture::pixel_rgba;
+use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
+
+use crate::title::{TitleInfo, window_title};
 
 struct App {
     document: Document,
     canvas: Canvas,
     title: String,
-    /// Ranura de color activa (1 a 9). El `Pixel` se calcula al empezar cada trazo.
+    /// Ranura de color activa (1 a 9). El `Pixel` se calcula al empezar cada gesto.
     slot: u8,
-    /// Trazo en curso con su píxel; el documento no cambia hasta soltar.
-    pen: Option<(Stroke, Pixel)>,
-    /// Último error de `apply`, `undo` o `redo`, hasta la siguiente acción correcta.
-    error: Option<String>,
+    /// Herramienta activa y gesto en curso; el documento no cambia hasta soltar.
+    tools: ToolState,
+    /// Último error de una herramienta, `undo` o `redo`; caduca a los `NOTICE_SECS`.
+    notice: Option<Notice>,
 }
 
 impl App {
@@ -38,46 +42,14 @@ impl App {
             canvas,
             title: String::new(),
             slot: 1,
-            pen: None,
-            error: None,
+            tools: ToolState::new(),
+            notice: None,
         }
     }
 
-    /// Aplica los eventos de trazo del fotograma: el trazo se acumula y al terminar es un solo
-    /// paso de deshacer.
-    fn handle_strokes(&mut self, ctx: &egui::Context, events: Vec<CanvasEvent>) {
-        for event in events {
-            match event {
-                CanvasEvent::StrokeBegin(pos) => {
-                    let image = self.document.image(self.document.main_image());
-                    self.pen = image.and_then(|image| {
-                        let pixel = pixel_for_slot(image, self.slot)?;
-                        let mut stroke = Stroke::new(image.width(), image.height());
-                        stroke.move_to(pos, pixel);
-                        Some((stroke, pixel))
-                    });
-                }
-                CanvasEvent::StrokeMove(pos) => {
-                    if let Some((stroke, pixel)) = &mut self.pen {
-                        stroke.move_to(pos, *pixel);
-                    }
-                }
-                CanvasEvent::StrokeEnd => {
-                    if let Some((stroke, _)) = self.pen.take() {
-                        let id = self.document.main_image();
-                        let result = stroke.commit(&mut self.document, id);
-                        self.finish(ctx, result);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Atajos de teclado. Con un trazo en curso se ignoran.
+    /// Atajos de teclado. Con un gesto en curso se ignoran (`Escape` ya llega en orden por
+    /// `Canvas::interact_ordered`, y la selección de herramienta la ignora `ToolState`).
     fn handle_keys(&mut self, ctx: &egui::Context, events: &[egui::Event]) {
-        if self.pen.is_some() {
-            return;
-        }
         for event in events {
             let egui::Event::Key {
                 key,
@@ -88,6 +60,15 @@ impl App {
             else {
                 continue;
             };
+            if let Some(action) = tool_action_for_key(*key, *modifiers) {
+                if let ToolAction::Select(_) = action {
+                    self.tools.apply_action(action);
+                }
+                continue;
+            }
+            if self.tools.busy() {
+                continue;
+            }
             match action_for_key(*key, *modifiers) {
                 Some(Action::Undo) if self.document.can_undo() => {
                     let result = self.document.undo().map(|()| true);
@@ -110,16 +91,20 @@ impl App {
 
     /// `Ok(true)`: algo cambió y la textura se regenera entera (las regiones son de la unidad
     /// 14). `Ok(false)`: nada que hacer. `Err`: el documento quedó intacto y el error va al
-    /// título.
+    /// título durante `NOTICE_SECS`.
     fn finish<E: std::fmt::Display>(&mut self, ctx: &egui::Context, result: Result<bool, E>) {
         match result {
-            Ok(changed) => {
-                self.error = None;
-                if changed && let Some(image) = self.document.image(self.document.main_image()) {
+            Ok(true) => {
+                if let Some(image) = self.document.image(self.document.main_image()) {
                     self.canvas.refresh(ctx, image);
                 }
             }
-            Err(error) => self.error = Some(error.to_string()),
+            Ok(false) => {}
+            Err(error) => {
+                let now = ctx.input(|i| i.time);
+                self.notice = Some(Notice::new(error.to_string(), now));
+                ctx.request_repaint_after(Duration::from_secs_f64(NOTICE_SECS));
+            }
         }
     }
 }
@@ -127,34 +112,44 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        let strokes = self.canvas.interact(ui);
-        self.handle_strokes(&ctx, strokes);
+        let id = self.document.main_image();
+        for input in self.canvas.interact_ordered(ui) {
+            let result = self
+                .tools
+                .canvas_input(&mut self.document, id, self.slot, input);
+            self.finish(&ctx, result);
+        }
         let events = ui.input(|i| i.events.clone());
         self.handle_keys(&ctx, &events);
 
-        let image = self.document.image(self.document.main_image());
-        let overlay = self
-            .pen
-            .iter()
-            .flat_map(|(stroke, _)| stroke.pixels())
-            .filter_map(|edit| {
-                let color = pixel_rgba(image?, edit.pixel)?;
-                Some((edit.x, edit.y, color))
-            });
+        let image = self.document.image(id);
+        let overlay = self.tools.preview().filter_map(|edit| {
+            let color = pixel_rgba(image?, edit.pixel)?;
+            Some((edit.x, edit.y, color))
+        });
         let info = self.canvas.paint(ui, overlay);
 
-        let title = title_text(&TitleInfo {
-            size: image.map(|image| (image.width(), image.height())),
-            zoom: info.zoom,
-            hover: info.hover,
-            color: image.and_then(|image| slot_label(image, self.slot)),
-            can_undo: self.document.can_undo(),
-            can_redo: self.document.can_redo(),
-            error: info
-                .error
-                .map(|error| error.to_string())
-                .or_else(|| self.error.clone()),
-        });
+        let now = ui.input(|i| i.time);
+        let notice = self
+            .notice
+            .as_ref()
+            .and_then(|notice| notice.visible(now))
+            .map(str::to_string);
+        if notice.is_none() {
+            self.notice = None;
+        }
+        let title = window_title(
+            self.tools.tool(),
+            &TitleInfo {
+                size: image.map(|image| (image.width(), image.height())),
+                zoom: info.zoom,
+                hover: info.hover,
+                color: image.and_then(|image| slot_label(image, self.slot)),
+                can_undo: self.document.can_undo(),
+                can_redo: self.document.can_redo(),
+                error: info.error.map(|error| error.to_string()).or(notice),
+            },
+        );
         if title != self.title {
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));

@@ -43,6 +43,20 @@ pub fn title_text(info: &TitleInfo) -> String {
     title
 }
 
+/// Título completo con la herramienta: `title_text` con `status_text(tool, color)` en el campo
+/// `color`. (Apaño hasta que `TitleInfo` tenga un campo propio, unidad 14.)
+pub fn window_title(tool: px_ui::tool::Tool, info: &TitleInfo) -> String {
+    title_text(&TitleInfo {
+        size: info.size,
+        zoom: info.zoom,
+        hover: info.hover,
+        color: Some(px_ui::tool::status_text(tool, info.color.as_deref())),
+        can_undo: info.can_undo,
+        can_redo: info.can_redo,
+        error: info.error.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     //! Fila 17 de specs/hito-2-lapiz-deshacer.md: el título de la ventana se construye con una
@@ -212,5 +226,159 @@ mod tests {
             ..base()
         };
         assert_eq!(title_text(&sin), "Pixoko: 64×48 · ×12");
+    }
+}
+
+#[cfg(test)]
+mod window_title_tests {
+    //! Fila 22 de specs/hito-2-linea-relleno-app.md: `window_title(tool, info)` da el título
+    //! completo, con `status_text(tool, color)` dentro del campo `color` de `title_text`. No toca
+    //! los tests del módulo `tests` ni cambia `TitleInfo` ni `title_text`.
+
+    use super::*;
+    use px_ui::tool::Tool;
+    use px_ui::view::Zoom;
+
+    fn zoom(n: u32) -> Zoom {
+        Zoom::from_int(n).expect("el zoom existe")
+    }
+
+    /// `info` completo: tamaño, zoom, cursor, color, y sin deshacer ni rehacer.
+    fn completo() -> TitleInfo {
+        TitleInfo {
+            size: Some((64, 48)),
+            zoom: zoom(8),
+            hover: Some((3, 4)),
+            color: Some("color 3 #ff0000".to_string()),
+            can_undo: false,
+            can_redo: false,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn fila_22_titulo_completo_con_la_linea() {
+        let info = TitleInfo {
+            can_undo: true,
+            can_redo: true,
+            ..completo()
+        };
+        assert_eq!(
+            window_title(Tool::Line, &info),
+            "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer"
+        );
+    }
+
+    #[test]
+    fn fila_22_sin_color_solo_sale_la_herramienta() {
+        let sin_cursor = TitleInfo {
+            hover: None,
+            color: None,
+            ..completo()
+        };
+        assert_eq!(
+            window_title(Tool::Pencil, &sin_cursor),
+            "Pixoko: 64×48 · ×8 · lápiz"
+        );
+        assert_eq!(
+            window_title(Tool::Line, &sin_cursor),
+            "Pixoko: 64×48 · ×8 · línea"
+        );
+        assert_eq!(
+            window_title(Tool::Fill, &sin_cursor),
+            "Pixoko: 64×48 · ×8 · relleno"
+        );
+        let con_cursor = TitleInfo {
+            color: None,
+            ..completo()
+        };
+        assert_eq!(
+            window_title(Tool::Pencil, &con_cursor),
+            "Pixoko: 64×48 · ×8 · (3, 4) · lápiz"
+        );
+    }
+
+    #[test]
+    fn fila_22_deshacer_y_rehacer_aparecen_solo_si_se_puede() {
+        let casos = [
+            (
+                false,
+                false,
+                "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000",
+            ),
+            (
+                true,
+                false,
+                "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer",
+            ),
+            (
+                false,
+                true,
+                "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · rehacer",
+            ),
+            (
+                true,
+                true,
+                "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer",
+            ),
+        ];
+        for (can_undo, can_redo, esperado) in casos {
+            let info = TitleInfo {
+                can_undo,
+                can_redo,
+                ..completo()
+            };
+            assert_eq!(
+                window_title(Tool::Line, &info),
+                esperado,
+                "undo {can_undo}, redo {can_redo}"
+            );
+        }
+    }
+
+    #[test]
+    fn fila_22_con_error_el_titulo_es_pixoko_y_el_error_y_nada_mas() {
+        for tool in [Tool::Pencil, Tool::Line, Tool::Fill] {
+            for (can_undo, can_redo) in [(false, false), (true, false), (false, true), (true, true)]
+            {
+                let info = TitleInfo {
+                    can_undo,
+                    can_redo,
+                    error: Some("no hay memoria para guardar el paso en la historia".to_string()),
+                    ..completo()
+                };
+                assert_eq!(
+                    window_title(tool, &info),
+                    "Pixoko: no hay memoria para guardar el paso en la historia",
+                    "{tool:?}, undo {can_undo}, redo {can_redo}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn el_relleno_con_la_ranura_transparente_y_la_herramienta_van_juntos() {
+        let info = TitleInfo {
+            color: Some("color 9 transparente".to_string()),
+            ..completo()
+        };
+        assert_eq!(
+            window_title(Tool::Fill, &info),
+            "Pixoko: 64×48 · ×8 · (3, 4) · relleno · color 9 transparente"
+        );
+    }
+
+    #[test]
+    fn sin_tamano_se_conserva_la_cadena_vacia_y_se_anade_la_herramienta() {
+        let info = TitleInfo {
+            size: None,
+            zoom: Zoom::default(),
+            hover: None,
+            color: None,
+            can_undo: false,
+            can_redo: false,
+            error: None,
+        };
+        assert_eq!(window_title(Tool::Pencil, &info), "Pixoko:  · ×1 · lápiz");
     }
 }
