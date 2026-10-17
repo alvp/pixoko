@@ -1902,6 +1902,7 @@ dependencies = [
  "egui",
  "proptest",
  "px-core",
+ "px-raster",
 ]
 
 [[package]]

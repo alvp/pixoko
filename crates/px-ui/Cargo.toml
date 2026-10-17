@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 px-core = { path = "../px-core" }
+px-raster = { path = "../px-raster" }
 egui = { version = "=0.37.0", default-features = false }
 
 [dev-dependencies]

@@ -2,5 +2,8 @@
 //! los paneles.
 
 pub mod canvas;
+pub mod color;
+pub mod shortcuts;
+pub mod stroke;
 pub mod texture;
 pub mod view;
