@@ -10,14 +10,18 @@ use super::*;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, PixelEdit, Rgba};
-use px_formats::{read_png, write_png};
+use px_formats::read_png;
+#[cfg(unix)]
+use px_formats::write_png;
 
+#[cfg(unix)]
 use crate::session::Session;
 
 // ---------------------------------------------------------------------------------------
@@ -141,6 +145,7 @@ fn corpus() -> Vec<PathBuf> {
 }
 
 /// Imagen pequeña y variada en el modo pedido.
+#[cfg_attr(not(unix), allow(dead_code))]
 fn sample_image(mode: Mode) -> Image {
     let (w, h) = (5u32, 4u32);
     let mut image = match mode {
@@ -177,6 +182,7 @@ fn sample_image(mode: Mode) -> Image {
 }
 
 /// Un píxel del mismo modo y distinto del que hay en `(x, y)`.
+#[cfg_attr(not(unix), allow(dead_code))]
 fn other_pixel(image: &Image, x: u32, y: u32) -> Pixel {
     match image.get_pixel(x, y).expect("píxel") {
         Pixel::Rgba(c) => Pixel::Rgba(Rgba::new(!c.r, c.g, c.b, c.a)),
@@ -193,6 +199,7 @@ fn other_pixel(image: &Image, x: u32, y: u32) -> Pixel {
 }
 
 /// Cambia el píxel `(x, y)` del documento por otro distinto; `true` si hubo cambio.
+#[cfg_attr(not(unix), allow(dead_code))]
 fn edit_one(document: &mut Document, x: u32, y: u32) -> bool {
     let id = document.main_image();
     let pixel = other_pixel(document.image(id).expect("imagen"), x, y);
@@ -204,6 +211,7 @@ fn edit_one(document: &mut Document, x: u32, y: u32) -> bool {
         .expect("apply")
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn main_image(document: &Document) -> &Image {
     document
         .image(document.main_image())
@@ -863,7 +871,9 @@ proptest! {
     fn propiedad_7_copy_path(name in file_name(), existing in 0usize..=5) {
         let tmp = TmpDir::new();
         let original = tmp.path().join(&name);
-        fs::write(&original, b"original").unwrap();
+        // Un sistema de ficheros puede rechazar un nombre generado (macOS devuelve `EILSEQ`
+        // con algunos Unicode): eso no dice nada de `copy_path`, así que se descarta el caso.
+        prop_assume!(fs::write(&original, b"original").is_ok());
         let mut seen: Vec<PathBuf> = Vec::new();
         for i in 0..=existing {
             let copy = copy_path(&original);
@@ -873,7 +883,7 @@ proptest! {
             prop_assert_ne!(&copy, &original);
             prop_assert!(!seen.contains(&copy), "{:?} repetido", copy);
             if i < existing {
-                fs::write(&copy, b"copia").unwrap();
+                prop_assume!(fs::write(&copy, b"copia").is_ok());
             }
             seen.push(copy);
         }
