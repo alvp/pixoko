@@ -6,6 +6,7 @@
 mod confirm;
 mod demo;
 mod files;
+mod licenses;
 mod session;
 mod title;
 
@@ -23,13 +24,19 @@ use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
 
 use crate::confirm::{Confirm, Confirmation, Request, close_warning, open_warning};
 use crate::files::{file_label, parse_args, pick_dropped};
+use crate::licenses::wants_licenses;
 use crate::session::{Session, adjust_slot, describe_saved};
-use crate::title::{TitleInfo, title_with_file, window_title};
+use crate::title::{TitleInfo, status_line, title_with_file, window_title};
 
 struct App {
     session: Session,
     canvas: Canvas,
     title: String,
+    /// Texto de la barra de estado del fotograma anterior y si es un aviso: la barra se pinta
+    /// antes del lienzo, que usa el espacio que sobra, y su texto sale del estado del lienzo.
+    status: (String, bool),
+    /// `ppp` con el que se aplicaron el tema y la escala del texto.
+    themed_ppp: f32,
     /// Ranura de color activa (1 a 9). El `Pixel` se calcula al empezar cada gesto.
     slot: u8,
     /// Herramienta activa y gesto en curso; el documento no cambia hasta soltar.
@@ -52,11 +59,23 @@ impl App {
             session: Session::sample(document),
             canvas,
             title: String::new(),
+            status: (String::new(), false),
+            themed_ppp: 0.0,
             slot: 1,
             tools: ToolState::new(),
             notice: None,
             confirm: Confirm::new(),
             cli_path,
+        }
+    }
+
+    /// Escala del texto y tema para el `ppp` actual (se repite al cambiar de monitor).
+    fn apply_theme(&mut self, ctx: &egui::Context) {
+        let ppp = ctx.pixels_per_point();
+        px_ui::text::apply_scale(ctx);
+        if ppp != self.themed_ppp {
+            ctx.set_visuals_of(egui::Theme::Dark, px_ui::theme::visuals(ppp));
+            self.themed_ppp = ppp;
         }
     }
 
@@ -222,6 +241,8 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.apply_theme(&ctx);
+        px_ui::status::show(ui, &self.status.0, self.status.1);
         self.handle_close(&ctx);
         if let Some(path) = self.cli_path.take() {
             self.open_file(&ctx, &path, 0, true);
@@ -252,7 +273,7 @@ impl eframe::App for App {
             let color = pixel_rgba(image?, edit.pixel)?;
             Some((edit.x, edit.y, color))
         });
-        let info = self.canvas.paint(ui, overlay);
+        let canvas_info = self.canvas.paint(ui, overlay);
 
         let now = ui.input(|i| i.time);
         let notice = self
@@ -263,18 +284,21 @@ impl eframe::App for App {
         if notice.is_none() {
             self.notice = None;
         }
-        let title = window_title(
-            self.tools.tool(),
-            &TitleInfo {
-                size: image.map(|image| (image.width(), image.height())),
-                zoom: info.zoom,
-                hover: info.hover,
-                color: image.and_then(|image| slot_label(image, self.slot)),
-                can_undo: self.session.document.can_undo(),
-                can_redo: self.session.document.can_redo(),
-                error: info.error.map(|error| error.to_string()).or(notice),
-            },
-        );
+        let info = TitleInfo {
+            size: image.map(|image| (image.width(), image.height())),
+            zoom: canvas_info.zoom,
+            hover: canvas_info.hover,
+            color: image.and_then(|image| slot_label(image, self.slot)),
+            can_undo: self.session.document.can_undo(),
+            can_redo: self.session.document.can_redo(),
+            error: canvas_info.error.map(|error| error.to_string()).or(notice),
+        };
+        let status = (status_line(self.tools.tool(), &info), info.error.is_some());
+        if status != self.status {
+            self.status = status;
+            ctx.request_repaint();
+        }
+        let title = window_title(self.tools.tool(), &info);
         let label = self.session.path().map(file_label);
         let title = title_with_file(label.as_deref(), self.session.modified(), &title);
         if title != self.title {
@@ -287,6 +311,10 @@ impl eframe::App for App {
 
 fn main() -> eframe::Result {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if wants_licenses(&args) {
+        print!("{}", licenses::THIRD_PARTY);
+        return Ok(());
+    }
     let cli_path = match parse_args(&args) {
         Ok(path) => path,
         Err(usage) => {
@@ -304,6 +332,16 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "Pixoko",
         options,
-        Box::new(|_cc| Ok(Box::new(App::new(document, cli_path)))),
+        Box::new(|cc| {
+            px_ui::text::install_fonts(&cc.egui_ctx);
+            cc.egui_ctx.set_theme(egui::ThemePreference::Dark);
+            if cfg!(debug_assertions) {
+                // Un glifo ausente en texto fijo es un fallo; el texto externo ya pasa por
+                // `replace_missing`. En release se dibuja el cuadrado en vez de caerse.
+                cc.egui_ctx
+                    .set_missing_glyph_policy(egui::MissingGlyphPolicy::Panic);
+            }
+            Ok(Box::new(App::new(document, cli_path)))
+        }),
     )
 }

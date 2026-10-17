@@ -57,6 +57,16 @@ pub fn window_title(tool: px_ui::tool::Tool, info: &TitleInfo) -> String {
     })
 }
 
+/// Texto de la barra de estado: el título de `window_title` sin el prefijo `Pixoko: ` y sin el
+/// fichero (specs/hito-2-texto.md). `window_title` es, pues, `Pixoko: ` más esto.
+pub fn status_line(tool: px_ui::tool::Tool, info: &TitleInfo) -> String {
+    let title = window_title(tool, info);
+    match title.strip_prefix("Pixoko: ") {
+        Some(line) => line.to_string(),
+        None => title,
+    }
+}
+
 /// Antepone al título el fichero del documento (solo el nombre, sin directorios) y, si hay
 /// cambios sin guardar, un `*`: `casa.png* — {title}`. Sin fichero y con cambios, `sin título*`;
 /// sin fichero y sin cambios, el título tal cual (specs/hito-2-abrir-guardar.md).
@@ -439,5 +449,201 @@ mod file_title_tests {
             title_with_file(Some("casa.png"), true, error),
             format!("casa.png* — {error}")
         );
+    }
+}
+
+#[cfg(test)]
+mod status_line_tests {
+    //! Fila 10 y propiedad 5 de specs/hito-2-texto.md: `status_line(tool, info)` es el título de
+    //! la ventana **sin** el prefijo `Pixoko: ` (la barra de estado repite lo que va en el título);
+    //! `window_title` pasa a ser `format!("Pixoko: {}", status_line(..))` y `title_with_file` no
+    //! cambia, así que el título sale idéntico. Con error o aviso, solo ese texto.
+    //!
+    //! La propiedad 5 exige además que `status_line` use solo caracteres de `INTERFACE_CHARSET`
+    //! (la fuente de la interfaz tiene glifo para todos) y que no lleve saltos de línea.
+
+    use super::*;
+    use proptest::prelude::*;
+    use px_ui::text::INTERFACE_CHARSET;
+    use px_ui::tool::Tool;
+    use px_ui::view::Zoom;
+
+    fn zoom(n: u32) -> Zoom {
+        Zoom::from_int(n).expect("el zoom existe")
+    }
+
+    /// `info` completo: tamaño, zoom, cursor, color, deshacer y rehacer.
+    fn completo() -> TitleInfo {
+        TitleInfo {
+            size: Some((64, 48)),
+            zoom: zoom(8),
+            hover: Some((3, 4)),
+            color: Some("color 3 #ff0000".to_string()),
+            can_undo: true,
+            can_redo: true,
+            error: None,
+        }
+    }
+
+    /// Comprueba `window_title == "Pixoko: " + status_line` y que `title_with_file` no cambia.
+    fn comprueba_titulo(tool: Tool, info: &TitleInfo, linea: &str) {
+        assert_eq!(status_line(tool, info), linea);
+        let titulo = window_title(tool, info);
+        assert_eq!(titulo, format!("Pixoko: {linea}"));
+        assert_eq!(
+            title_with_file(Some("casa.png"), true, &titulo),
+            format!("casa.png* — Pixoko: {linea}")
+        );
+        assert_eq!(
+            title_with_file(Some("casa.png"), false, &titulo),
+            format!("casa.png — Pixoko: {linea}")
+        );
+        assert_eq!(
+            title_with_file(None, true, &titulo),
+            format!("sin título* — Pixoko: {linea}")
+        );
+        assert_eq!(title_with_file(None, false, &titulo), titulo);
+    }
+
+    #[test]
+    fn fila_10_la_linea_de_estado_completa() {
+        comprueba_titulo(
+            Tool::Line,
+            &completo(),
+            "64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer",
+        );
+    }
+
+    #[test]
+    fn fila_10_sin_color_solo_sale_la_herramienta() {
+        let info = TitleInfo {
+            color: None,
+            ..completo()
+        };
+        comprueba_titulo(
+            Tool::Line,
+            &info,
+            "64×48 · ×8 · (3, 4) · línea · deshacer · rehacer",
+        );
+    }
+
+    #[test]
+    fn fila_10_sin_cursor_no_sale_la_posicion() {
+        let info = TitleInfo {
+            hover: None,
+            ..completo()
+        };
+        comprueba_titulo(
+            Tool::Line,
+            &info,
+            "64×48 · ×8 · línea · color 3 #ff0000 · deshacer · rehacer",
+        );
+    }
+
+    #[test]
+    fn fila_10_con_error_solo_sale_el_error() {
+        let info = TitleInfo {
+            error: Some("no hay memoria para guardar el paso en la historia".to_string()),
+            ..completo()
+        };
+        comprueba_titulo(
+            Tool::Line,
+            &info,
+            "no hay memoria para guardar el paso en la historia",
+        );
+    }
+
+    #[test]
+    fn fila_10_cada_herramienta_pone_su_etiqueta() {
+        for (tool, etiqueta) in [
+            (Tool::Pencil, "lápiz"),
+            (Tool::Line, "línea"),
+            (Tool::Fill, "relleno"),
+        ] {
+            let info = TitleInfo {
+                can_undo: false,
+                can_redo: false,
+                ..completo()
+            };
+            comprueba_titulo(
+                tool,
+                &info,
+                &format!("64×48 · ×8 · (3, 4) · {etiqueta} · color 3 #ff0000"),
+            );
+        }
+    }
+
+    #[test]
+    fn fila_10_sin_tamano_se_conserva_la_cadena_vacia_del_titulo() {
+        // `window_title` da `Pixoko:  · ×1 · lápiz` (tests de la unidad 7) y sale idéntico:
+        // la línea de estado es ese título sin el prefijo `Pixoko: `.
+        let info = TitleInfo {
+            size: None,
+            zoom: Zoom::default(),
+            hover: None,
+            color: None,
+            can_undo: false,
+            can_redo: false,
+            error: None,
+        };
+        assert_eq!(window_title(Tool::Pencil, &info), "Pixoko:  · ×1 · lápiz");
+        assert_eq!(status_line(Tool::Pencil, &info), " · ×1 · lápiz");
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Propiedad 5
+    // -----------------------------------------------------------------------------------------
+
+    fn herramienta() -> impl Strategy<Value = Tool> {
+        prop::sample::select(vec![Tool::Pencil, Tool::Line, Tool::Fill])
+    }
+
+    /// Los zoom enteros posibles, y el de por defecto.
+    fn zoom_cualquiera() -> impl Strategy<Value = Zoom> {
+        let mut todos: Vec<Zoom> = (1..=64).filter_map(Zoom::from_int).collect();
+        todos.push(Zoom::default());
+        prop::sample::select(todos)
+    }
+
+    /// Los textos de color que produce `slot_label`: `color 3 #ff0000`, `color 2 índice 1`,
+    /// `color 4 gris 96` y `color 9 transparente`.
+    fn color_cualquiera() -> impl Strategy<Value = Option<String>> {
+        prop_oneof![
+            1 => Just(None),
+            3 => (0_u8..=255, any::<u8>(), any::<u8>(), any::<u8>())
+                .prop_map(|(slot, r, g, b)| Some(format!("color {slot} #{r:02x}{g:02x}{b:02x}"))),
+            1 => (0_u8..=255, any::<u8>())
+                .prop_map(|(slot, i)| Some(format!("color {slot} índice {i}"))),
+            1 => (0_u8..=255, any::<u8>())
+                .prop_map(|(slot, g)| Some(format!("color {slot} gris {g}"))),
+            1 => (0_u8..=255).prop_map(|slot| Some(format!("color {slot} transparente"))),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn propiedad_5_el_titulo_es_pixoko_mas_la_linea_de_estado(
+            tool in herramienta(),
+            size in prop::option::of((0_u32..=16384, 0_u32..=16384)),
+            zoom in zoom_cualquiera(),
+            hover in prop::option::of((0_u32..=16384, 0_u32..=16384)),
+            color in color_cualquiera(),
+            can_undo in any::<bool>(),
+            can_redo in any::<bool>(),
+        ) {
+            let info = TitleInfo { size, zoom, hover, color, can_undo, can_redo, error: None };
+            let linea = status_line(tool, &info);
+            prop_assert_eq!(window_title(tool, &info), format!("Pixoko: {linea}"));
+            prop_assert!(!linea.contains('\n') && !linea.contains('\r'), "{:?}", linea);
+            for c in linea.chars() {
+                prop_assert!(
+                    INTERFACE_CHARSET.contains(c),
+                    "{:?} (U+{:04X}) no está en INTERFACE_CHARSET: {:?}",
+                    c,
+                    c as u32,
+                    linea
+                );
+            }
+        }
     }
 }
