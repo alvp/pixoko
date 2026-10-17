@@ -818,3 +818,234 @@ proptest! {
         }
     }
 }
+
+// `Image::check_pixel` (pública desde el hito 2, unidad 5; specs/hito-2-relleno.md).
+
+/// Un píxel de cada modo, con valores que valen en cualquier imagen del modo.
+fn muestra(mode: Mode) -> Pixel {
+    match mode {
+        Mode::Rgba => Pixel::Rgba(c0()),
+        Mode::Indexed => Pixel::Indexed(0),
+        Mode::Gray => Pixel::Gray(7),
+        Mode::GrayAlpha => Pixel::GrayAlpha { gray: 7, alpha: 9 },
+    }
+}
+
+#[test]
+fn check_pixel_acepta_un_pixel_del_modo() {
+    let casos = [
+        (imagen_3x2(Mode::Rgba), Pixel::Rgba(c0())),
+        (imagen_3x2(Mode::Rgba), Pixel::Rgba(Rgba::TRANSPARENT)),
+        (imagen_3x2(Mode::Rgba), Pixel::Rgba(Rgba::new(1, 2, 3, 0))),
+        (imagen_3x2(Mode::Gray), Pixel::Gray(0)),
+        (imagen_3x2(Mode::Gray), Pixel::Gray(255)),
+        (
+            imagen_3x2(Mode::GrayAlpha),
+            Pixel::GrayAlpha { gray: 0, alpha: 0 },
+        ),
+        (
+            imagen_3x2(Mode::GrayAlpha),
+            Pixel::GrayAlpha {
+                gray: 255,
+                alpha: 255,
+            },
+        ),
+    ];
+    for (img, pixel) in casos {
+        assert_eq!(
+            img.check_pixel(pixel),
+            Ok(()),
+            "{pixel:?} en {:?}",
+            img.mode()
+        );
+    }
+}
+
+#[test]
+fn check_pixel_indexado_dentro_de_la_paleta_incluido_el_ultimo() {
+    // Paleta de 2: los índices 0 y 1 (el último).
+    let img = imagen_3x2(Mode::Indexed);
+    assert_eq!(img.check_pixel(Pixel::Indexed(0)), Ok(()));
+    assert_eq!(img.check_pixel(Pixel::Indexed(1)), Ok(()));
+    // Paleta de 1, de 3 y de 256 (último índice, 255).
+    for (n, ultimo) in [(1usize, 0u8), (3, 2), (255, 254), (256, 255)] {
+        let img = crea(Mode::Indexed, 3, 2, n);
+        assert_eq!(img.check_pixel(Pixel::Indexed(0)), Ok(()), "paleta de {n}");
+        assert_eq!(
+            img.check_pixel(Pixel::Indexed(ultimo)),
+            Ok(()),
+            "último índice de una paleta de {n}"
+        );
+    }
+}
+
+#[test]
+fn check_pixel_de_otro_modo_es_mode_mismatch() {
+    for esperado in TODOS {
+        let img = imagen_3x2(esperado);
+        let copia = img.clone();
+        for encontrado in TODOS {
+            if encontrado == esperado {
+                continue;
+            }
+            let pixel = muestra(encontrado);
+            assert_eq!(
+                img.check_pixel(pixel),
+                Err(desajuste(esperado, encontrado)),
+                "{pixel:?} en una imagen {esperado:?}"
+            );
+        }
+        assert_eq!(img, copia);
+    }
+}
+
+#[test]
+fn check_pixel_mode_mismatch_con_valores_exactos() {
+    // Las combinaciones que la spec nombra o que más importan, con los valores literales.
+    let rgba = imagen_3x2(Mode::Rgba);
+    assert_eq!(
+        rgba.check_pixel(Pixel::Indexed(0)),
+        Err(ImageError::ModeMismatch {
+            expected: Mode::Rgba,
+            found: Mode::Indexed
+        })
+    );
+    assert_eq!(
+        rgba.check_pixel(Pixel::Gray(1)),
+        Err(ImageError::ModeMismatch {
+            expected: Mode::Rgba,
+            found: Mode::Gray
+        })
+    );
+    let gray = imagen_3x2(Mode::Gray);
+    assert_eq!(
+        gray.check_pixel(Pixel::GrayAlpha { gray: 1, alpha: 2 }),
+        Err(ImageError::ModeMismatch {
+            expected: Mode::Gray,
+            found: Mode::GrayAlpha
+        })
+    );
+    let gray_alpha = imagen_3x2(Mode::GrayAlpha);
+    assert_eq!(
+        gray_alpha.check_pixel(Pixel::Gray(1)),
+        Err(ImageError::ModeMismatch {
+            expected: Mode::GrayAlpha,
+            found: Mode::Gray
+        })
+    );
+    let indexada = imagen_3x2(Mode::Indexed);
+    assert_eq!(
+        indexada.check_pixel(Pixel::Rgba(c0())),
+        Err(ImageError::ModeMismatch {
+            expected: Mode::Indexed,
+            found: Mode::Rgba
+        })
+    );
+    assert_eq!(
+        indexada.check_pixel(Pixel::Gray(9)),
+        Err(ImageError::ModeMismatch {
+            expected: Mode::Indexed,
+            found: Mode::Gray
+        })
+    );
+}
+
+#[test]
+fn check_pixel_mode_mismatch_gana_a_indice_fuera_de_la_paleta() {
+    // Indexed(9) en una imagen RGBA: el modo va primero, no hay paleta con la que comparar.
+    for mode in NO_INDEXADOS {
+        let img = imagen_3x2(mode);
+        assert_eq!(
+            img.check_pixel(Pixel::Indexed(9)),
+            Err(desajuste(mode, Mode::Indexed))
+        );
+        assert_eq!(
+            img.check_pixel(Pixel::Indexed(255)),
+            Err(desajuste(mode, Mode::Indexed))
+        );
+    }
+}
+
+#[test]
+fn check_pixel_indice_fuera_de_la_paleta_no_cambia_la_imagen() {
+    // `index == len` (el primero que no cabe) y 255.
+    for (n, index) in [
+        (1usize, 1u8),
+        (1, 255),
+        (2, 2),
+        (2, 255),
+        (3, 3),
+        (3, 255),
+        (255, 255),
+    ] {
+        let img = crea(Mode::Indexed, 3, 2, n);
+        let copia = img.clone();
+        assert_eq!(
+            img.check_pixel(Pixel::Indexed(index)),
+            Err(ImageError::IndexNotInPalette { index, len: n }),
+            "índice {index} con paleta de {n}"
+        );
+        assert_eq!(img, copia);
+        assert_eq!(todos_los_pixeles(&img), todos_los_pixeles(&copia));
+    }
+}
+
+#[test]
+fn check_pixel_concuerda_con_set_pixel_en_casos_fijos() {
+    let pixeles = [
+        Pixel::Rgba(c0()),
+        Pixel::Indexed(0),
+        Pixel::Indexed(1),
+        Pixel::Indexed(2),
+        Pixel::Indexed(255),
+        Pixel::Gray(7),
+        Pixel::GrayAlpha { gray: 7, alpha: 9 },
+    ];
+    for mode in TODOS {
+        for pixel in pixeles {
+            let img = imagen_3x2(mode);
+            let mut copia = img.clone();
+            assert_eq!(
+                img.check_pixel(pixel),
+                copia.set_pixel(0, 0, pixel),
+                "{pixel:?} en una imagen {mode:?}"
+            );
+        }
+    }
+}
+
+proptest! {
+    /// Para cualquier píxel y modo, `check_pixel(p)` es `Err(e)` si y solo si
+    /// `set_pixel(0, 0, p)` da `Err(e)` sobre una copia; y no cambia la imagen.
+    #[test]
+    fn check_pixel_concuerda_con_set_pixel(img in imagen_pequena(), pixel in pixel_cualquiera()) {
+        let antes = img.clone();
+        let comprobado = img.check_pixel(pixel);
+        let mut copia = img.clone();
+        let escrito = copia.set_pixel(0, 0, pixel);
+        prop_assert_eq!(&comprobado, &escrito, "{:?} en una imagen {:?}", pixel, img.mode());
+        prop_assert_eq!(comprobado.is_ok(), escrito.is_ok());
+        prop_assert_eq!(&img, &antes);
+        // Si falla, `set_pixel` tampoco cambió su copia.
+        if escrito.is_err() {
+            prop_assert_eq!(&copia, &antes);
+        }
+    }
+
+    /// El resultado es el del modelo: modo distinto es `ModeMismatch`, índice `>= len` es
+    /// `IndexNotInPalette` y en cualquier otro caso `Ok`.
+    #[test]
+    fn check_pixel_es_el_modelo(img in imagen_pequena(), pixel in pixel_cualquiera()) {
+        let previsto = if modo_de(pixel) != img.mode() {
+            Err(desajuste(img.mode(), modo_de(pixel)))
+        } else {
+            match (pixel, img.palette()) {
+                (Pixel::Indexed(index), Some(p)) if usize::from(index) >= p.len() => {
+                    Err(fuera_de_paleta(index, p.len()))
+                }
+                _ => Ok(()),
+            }
+        };
+        prop_assert_eq!(img.check_pixel(pixel), previsto);
+    }
+}

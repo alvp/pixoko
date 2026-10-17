@@ -172,7 +172,11 @@ impl Image {
 
     /// Comprueba, sin escribir, que el píxel es del modo de la imagen y que su índice cabe
     /// en la paleta.
-    pub(crate) fn check_pixel(&self, pixel: Pixel) -> Result<(), ImageError> {
+    ///
+    /// Errores: `ModeMismatch { expected, found }` si el modo no coincide (también con un índice
+    /// fuera de la paleta: el modo se comprueba primero) e `IndexNotInPalette { index, len }`
+    /// si el índice es `>= len`. Es la comprobación de `set_pixel` y de `Document::apply`.
+    pub fn check_pixel(&self, pixel: Pixel) -> Result<(), ImageError> {
         if pixel.mode() != self.mode {
             return Err(ImageError::ModeMismatch {
                 expected: self.mode,
