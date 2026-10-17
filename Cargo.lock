@@ -1886,6 +1886,10 @@ dependencies = [
 [[package]]
 name = "px-raster"
 version = "0.0.0"
+dependencies = [
+ "proptest",
+ "px-core",
+]
 
 [[package]]
 name = "px-render"
