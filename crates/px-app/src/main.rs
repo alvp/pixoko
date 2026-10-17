@@ -16,7 +16,7 @@ use std::time::Duration;
 use eframe::egui;
 use px_core::Document;
 use px_ui::canvas::Canvas;
-use px_ui::color::{pixel_for_slot, slot_label};
+use px_ui::color::{choice_label, key_choice};
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
 use px_ui::texture::pixel_rgba;
@@ -25,7 +25,7 @@ use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
 use crate::confirm::{Confirm, Confirmation, Request, close_warning, open_warning};
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::licenses::wants_licenses;
-use crate::session::{Session, adjust_slot, describe_saved};
+use crate::session::{Session, describe_saved};
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
 
 struct App {
@@ -37,8 +37,6 @@ struct App {
     status: (String, bool),
     /// `ppp` con el que se aplicaron el tema y la escala del texto.
     themed_ppp: f32,
-    /// Ranura de color activa (1 a 9). El `Pixel` se calcula al empezar cada gesto.
-    slot: u8,
     /// Herramienta activa y gesto en curso; el documento no cambia hasta soltar.
     tools: ToolState,
     /// Último error de una herramienta, `undo` o `redo`; caduca a los `NOTICE_SECS`.
@@ -61,7 +59,6 @@ impl App {
             title: String::new(),
             status: (String::new(), false),
             themed_ppp: 0.0,
-            slot: 1,
             tools: ToolState::new(),
             notice: None,
             confirm: Confirm::new(),
@@ -117,7 +114,6 @@ impl App {
                     .image(self.session.document.main_image())
                 {
                     self.canvas.set_image(image);
-                    self.slot = adjust_slot(image, self.slot);
                 }
                 if ignored > 0 {
                     text.push_str(&format!(" · se ignoran {ignored} más"));
@@ -209,8 +205,8 @@ impl App {
                         .session
                         .document
                         .image(self.session.document.main_image());
-                    if image.is_some_and(|image| pixel_for_slot(image, slot).is_some()) {
-                        self.slot = slot;
+                    if let Some(choice) = image.and_then(|image| key_choice(image, slot)) {
+                        self.session.choice = choice;
                     }
                 }
                 _ => {}
@@ -243,6 +239,19 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
         px_ui::status::show(ui, &self.status.0, self.status.1);
+        let busy = self.tools.busy();
+        let main = self.session.document.main_image();
+        if let Some(image) = self.session.document.image(main)
+            && let Some(choice) = px_ui::palette_panel::show(
+                ui,
+                image,
+                self.session.choice,
+                &mut self.session.scroll,
+                !busy,
+            )
+        {
+            self.session.choice = choice;
+        }
         self.handle_close(&ctx);
         if let Some(path) = self.cli_path.take() {
             self.open_file(&ctx, &path, 0, true);
@@ -260,9 +269,9 @@ impl eframe::App for App {
 
         let id = self.session.document.main_image();
         for input in self.canvas.interact_ordered(ui) {
-            let result = self
-                .tools
-                .canvas_input(&mut self.session.document, id, self.slot, input);
+            let result =
+                self.tools
+                    .canvas_input(&mut self.session.document, id, self.session.choice, input);
             self.finish(&ctx, result);
         }
         let events = ui.input(|i| i.events.clone());
@@ -288,7 +297,7 @@ impl eframe::App for App {
             size: image.map(|image| (image.width(), image.height())),
             zoom: canvas_info.zoom,
             hover: canvas_info.hover,
-            color: image.and_then(|image| slot_label(image, self.slot)),
+            color: image.and_then(|image| choice_label(image, self.session.choice)),
             can_undo: self.session.document.can_undo(),
             can_redo: self.session.document.can_redo(),
             error: canvas_info.error.map(|error| error.to_string()).or(notice),

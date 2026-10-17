@@ -1,5 +1,7 @@
-//! Tests de `session` (specs/hito-2-abrir-guardar.md): filas 2, 6, 7, 8, 9, 10, 11, 16 y 17;
-//! propiedades 1, 2 y 5 (con `Session::open`; la de `load_png` va en la misma propiedad).
+//! Tests de `session` (specs/hito-2-abrir-guardar.md): filas 2, 6, 7, 9, 10, 11, 16 y 17;
+//! propiedades 1, 2 y 5 (con `Session::open`; la de `load_png` va en la misma propiedad). Y, de
+//! specs/hito-2-panel-paletas.md, las filas 8 (abrir reinicia la selección y el desplazamiento del
+//! panel; sustituye a los dos tests de `adjust_slot`) y 13 (guardar no los reinicia).
 //!
 //! Cada test usa su propio directorio temporal y nunca guarda dentro de `golden/`: el corpus se
 //! copia al directorio temporal antes de editarlo y guardarlo. Ningún test depende del
@@ -14,6 +16,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use proptest::prelude::*;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, PixelEdit, Rgba};
 use px_formats::{Conversion, read_png, write_png};
+
+use px_ui::color::{ColorChoice, initial_choice};
+use px_ui::palette_grid::Scroll;
 
 use crate::files::{FileError, MAX_FILE_BYTES, describe_open, load_png};
 
@@ -385,41 +390,247 @@ fn fila_7_guardar_y_abrir_otro() {
 }
 
 // ---------------------------------------------------------------------------------------
-// Fila 8: adjust_slot.
+// Fila 8 (specs/hito-2-panel-paletas.md): abrir reinicia la selección y el desplazamiento.
 // ---------------------------------------------------------------------------------------
 
-#[test]
-fn fila_8_adjust_slot() {
-    let indexed = Image::new_indexed(
-        2,
-        2,
-        Palette::from_colors([
-            Rgba::opaque(0, 0, 0),
-            Rgba::opaque(255, 0, 0),
-            Rgba::opaque(0, 255, 0),
-        ])
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(adjust_slot(&indexed, 2), 2);
-    assert_eq!(adjust_slot(&indexed, 5), 1);
-    assert_eq!(adjust_slot(&indexed, 9), 1);
-    // Derivados de «la ranura si vale para la imagen»: la 3 vale (hay 3 colores), la 4 no.
-    assert_eq!(adjust_slot(&indexed, 1), 1);
-    assert_eq!(adjust_slot(&indexed, 3), 3);
-    assert_eq!(adjust_slot(&indexed, 4), 1);
+/// Indexada de 3 colores, de lado `side` (para distinguir ficheros iguales en modo y paleta).
+fn indexed_of_3(side: u32) -> Image {
+    let palette = Palette::from_colors([
+        Rgba::opaque(0, 0, 0),
+        Rgba::opaque(255, 0, 0),
+        Rgba::opaque(0, 255, 0),
+    ])
+    .expect("paleta de 3");
+    Image::new_indexed(side, side, palette).expect("imagen indexada de 3")
+}
 
-    let rgba = Image::new(2, 2, Mode::Rgba).unwrap();
-    assert_eq!(adjust_slot(&rgba, 7), 7);
-    let gray = Image::new(2, 2, Mode::Gray).unwrap();
-    assert_eq!(adjust_slot(&gray, 9), 9);
+/// Indexada de 256 colores distintos.
+fn indexed_of_256() -> Image {
+    let palette = Palette::from_colors((0..=255u8).map(|i| Rgba::opaque(i, 255 - i, i / 2)))
+        .expect("paleta de 256");
+    Image::new_indexed(6, 6, palette).expect("imagen indexada de 256")
+}
+
+/// Escribe `image` como PNG en `dir/name` y devuelve la ruta.
+fn write_image(dir: &Path, name: &str, image: &Image) -> PathBuf {
+    let path = dir.join(name);
+    fs::write(&path, write_png(image).expect("write_png")).expect("escribir el PNG");
+    path
+}
+
+/// Un desplazamiento que no es el de partida (ni fila 0 ni resto 0).
+fn scrolled() -> Scroll {
+    Scroll {
+        first_row: 7,
+        rest: 3,
+    }
 }
 
 #[test]
-fn fila_8_una_ranura_fuera_de_rango_vuelve_a_la_1() {
-    let rgba = Image::new(2, 2, Mode::Rgba).unwrap();
-    assert_eq!(adjust_slot(&rgba, 0), 1);
-    assert_eq!(adjust_slot(&rgba, 10), 1);
+fn fila_8_abrir_reinicia_la_seleccion_y_el_desplazamiento() {
+    let tmp = TmpDir::new();
+    // (imagen de la sesión, selección que se deja, fichero que se abre).
+    let casos: Vec<(&str, Image, ColorChoice, Image)> = vec![
+        (
+            "indexada de 256 con Entry(200) -> RGBA",
+            indexed_of_256(),
+            ColorChoice::Entry(200),
+            sample_image(Mode::Rgba),
+        ),
+        (
+            "RGBA con Slot(9) -> indexada de 3",
+            sample_image(Mode::Rgba),
+            ColorChoice::Slot(9),
+            indexed_of_3(4),
+        ),
+        (
+            "indexada con Entry(2) -> otra indexada de 3 (mismo modo y tamaño)",
+            indexed_of_3(3),
+            ColorChoice::Entry(2),
+            indexed_of_3(3),
+        ),
+        (
+            "Gray",
+            indexed_of_256(),
+            ColorChoice::Entry(255),
+            sample_image(Mode::Gray),
+        ),
+        (
+            "GrayAlpha",
+            sample_image(Mode::Rgba),
+            ColorChoice::Slot(5),
+            sample_image(Mode::GrayAlpha),
+        ),
+    ];
+    for (index, (label, start, choice, opened)) in casos.into_iter().enumerate() {
+        let path = write_image(tmp.path(), &format!("abrir-{index}.png"), &opened);
+        let expected = read_png(&fs::read(&path).unwrap())
+            .expect("PNG válido")
+            .image;
+
+        let mut session = Session::sample(Document::new(start));
+        session.choice = choice;
+        session.scroll = scrolled();
+        session
+            .open(&path, 16384, false)
+            .unwrap_or_else(|e| panic!("{label}: {e:?}"));
+
+        assert_eq!(main_image(&session.document), &expected, "{label}");
+        assert_eq!(
+            session.choice,
+            initial_choice(&expected),
+            "{label}: la selección vuelve a la inicial"
+        );
+        assert_eq!(
+            session.scroll,
+            Scroll::default(),
+            "{label}: el desplazamiento vuelve a 0"
+        );
+    }
+}
+
+#[test]
+fn fila_8_la_seleccion_inicial_depende_del_modo_de_la_imagen_nueva() {
+    let tmp = TmpDir::new();
+    for (mode, expected) in [
+        (Mode::Rgba, ColorChoice::Slot(1)),
+        (Mode::Indexed, ColorChoice::Entry(0)),
+        (Mode::Gray, ColorChoice::Slot(1)),
+        (Mode::GrayAlpha, ColorChoice::Slot(1)),
+    ] {
+        let path = write_image(
+            tmp.path(),
+            &format!("modo-{}.png", mode_label(mode).replace(' ', "-")),
+            &sample_image(mode),
+        );
+        let mut session = fresh_session();
+        session.choice = ColorChoice::Entry(3);
+        session.scroll = scrolled();
+        session.open(&path, 16384, false).expect("abrir");
+        assert_eq!(session.choice, expected, "{mode:?}");
+        assert_eq!(session.scroll, Scroll::default(), "{mode:?}");
+    }
+}
+
+#[test]
+fn fila_8_la_sesion_de_muestra_empieza_con_la_seleccion_inicial() {
+    for mode in MODES {
+        let image = sample_image(mode);
+        let expected = initial_choice(&image);
+        let session = Session::sample(Document::new(image));
+        assert_eq!(session.choice, expected, "{mode:?}");
+        assert_eq!(session.scroll, Scroll::default(), "{mode:?}");
+    }
+}
+
+#[test]
+fn fila_8_un_open_con_error_no_cambia_la_seleccion_ni_el_desplazamiento() {
+    let tmp = TmpDir::new();
+
+    // Fichero inexistente, con y sin `discard`.
+    for discard in [false, true] {
+        let mut session = Session::sample(Document::new(indexed_of_256()));
+        session.choice = ColorChoice::Entry(200);
+        session.scroll = scrolled();
+        let result = session.open(&tmp.path().join("no-existe.png"), 16384, discard);
+        assert!(matches!(result, Err(FileError::Read(_))), "{result:?}");
+        assert_eq!(session.choice, ColorChoice::Entry(200), "discard {discard}");
+        assert_eq!(session.scroll, scrolled(), "discard {discard}");
+    }
+
+    // Cambios sin guardar y sin `discard`: ni siquiera se lee el fichero (que existe y es
+    // válido: el error es `Unsaved`).
+    let valid = write_image(tmp.path(), "valido.png", &indexed_of_3(4));
+    let mut session = Session::sample(Document::new(indexed_of_256()));
+    assert!(edit_one(&mut session.document, 0, 0));
+    session.choice = ColorChoice::Entry(200);
+    session.scroll = scrolled();
+    let result = session.open(&valid, 16384, false);
+    assert_eq!(result, Err(FileError::Unsaved));
+    assert_eq!(session.choice, ColorChoice::Entry(200));
+    assert_eq!(session.scroll, scrolled());
+
+    // Un fichero que no es PNG, con `discard`: error de lectura y todo igual.
+    let garbage = tmp.path().join("basura.png");
+    fs::write(&garbage, b"esto no es un PNG").unwrap();
+    let result = session.open(&garbage, 16384, true);
+    assert!(result.is_err(), "{result:?}");
+    assert_eq!(session.choice, ColorChoice::Entry(200));
+    assert_eq!(session.scroll, scrolled());
+
+    // Y con `discard`, un fichero válido sí reinicia (contraste: el banco recoge el cambio).
+    session
+        .open(&valid, 16384, true)
+        .expect("abrir con discard");
+    assert_eq!(session.choice, ColorChoice::Entry(0));
+    assert_eq!(session.scroll, Scroll::default());
+}
+
+// ---------------------------------------------------------------------------------------
+// Fila 13 (specs/hito-2-panel-paletas.md): guardar y guardar como no reinician.
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn fila_13_guardar_no_reinicia_la_seleccion() {
+    let tmp = TmpDir::new();
+    let path = write_image(tmp.path(), "paleta.png", &indexed_of_256());
+
+    let mut session = fresh_session();
+    session.open(&path, 16384, false).expect("abrir");
+    session.choice = ColorChoice::Entry(200);
+    session.scroll = scrolled();
+    let keep = |session: &Session, step: &str| {
+        assert_eq!(session.choice, ColorChoice::Entry(200), "{step}: choice");
+        assert_eq!(session.scroll, scrolled(), "{step}: scroll");
+    };
+
+    // Una edición del documento tampoco los toca.
+    assert!(edit_one(&mut session.document, 0, 0));
+    keep(&session, "apply");
+
+    session.save(tmp.path()).expect("save");
+    assert!(!session.modified());
+    keep(&session, "save");
+
+    assert!(edit_one(&mut session.document, 1, 1));
+    session.save_as(tmp.path()).expect("save_as");
+    keep(&session, "save_as");
+
+    // Una sesión de muestra sin ruta: `save` escribe `sin-titulo.png`.
+    let mut sample = Session::sample(Document::new(sample_image(Mode::Indexed)));
+    sample.choice = ColorChoice::Entry(2);
+    sample.scroll = scrolled();
+    sample.save(tmp.path()).expect("save sin ruta");
+    assert_eq!(sample.choice, ColorChoice::Entry(2), "save sin ruta");
+    assert_eq!(sample.scroll, scrolled(), "save sin ruta");
+}
+
+#[test]
+fn fila_13_si_el_guardado_falla_tampoco_cambian() {
+    let tmp = TmpDir::new();
+    let missing = tmp.path().join("no-existe").join("tampoco");
+
+    let mut session = Session::sample(Document::new(sample_image(Mode::Indexed)));
+    session.choice = ColorChoice::Entry(3);
+    session.scroll = scrolled();
+    assert!(edit_one(&mut session.document, 0, 0));
+
+    let result = session.save(&missing);
+    assert!(
+        result.is_err(),
+        "guardar en un directorio inexistente: {result:?}"
+    );
+    assert_eq!(session.choice, ColorChoice::Entry(3), "save fallido");
+    assert_eq!(session.scroll, scrolled(), "save fallido");
+    assert!(session.modified(), "el fallo no marca como guardado");
+
+    let result = session.save_as(&missing);
+    assert!(
+        result.is_err(),
+        "guardar como en un directorio inexistente: {result:?}"
+    );
+    assert_eq!(session.choice, ColorChoice::Entry(3), "save_as fallido");
+    assert_eq!(session.scroll, scrolled(), "save_as fallido");
 }
 
 // ---------------------------------------------------------------------------------------

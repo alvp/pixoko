@@ -3,9 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use px_core::{Document, Image};
+use px_core::Document;
 use px_formats::write_png;
-use px_ui::color::pixel_for_slot;
+use px_ui::color::{ColorChoice, initial_choice};
+use px_ui::palette_grid::Scroll;
 
 use crate::files::{
     FileError, MAX_FILE_BYTES, copy_path, describe_open, describe_report, file_label, load_png,
@@ -22,6 +23,10 @@ pub struct Saved {
 
 pub struct Session {
     pub document: Document,
+    /// Color activo del panel de paletas. Abrir un fichero lo reinicia (specs/hito-2-panel-paletas.md).
+    pub choice: ColorChoice,
+    /// Desplazamiento del panel de paletas; abrir un fichero lo reinicia.
+    pub scroll: Scroll,
     path: Option<PathBuf>,
     /// `state_id` del documento al abrir o guardar por última vez.
     saved_id: u64,
@@ -31,9 +36,14 @@ pub struct Session {
 
 impl Session {
     pub fn sample(document: Document) -> Session {
+        let choice = document
+            .image(document.main_image())
+            .map_or(ColorChoice::Slot(1), initial_choice);
         Session {
             saved_id: document.state_id(),
             document,
+            choice,
+            scroll: Scroll::default(),
             path: None,
             conversion: None,
         }
@@ -65,6 +75,8 @@ impl Session {
         let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let text = describe_open(&file_label(&absolute), &read.image, &read.report);
         self.conversion = (!read.report.is_empty()).then(|| describe_report(&read.report));
+        self.choice = initial_choice(&read.image);
+        self.scroll = Scroll::default();
         self.document = Document::new(read.image);
         self.saved_id = self.document.state_id();
         self.path = Some(absolute);
@@ -117,15 +129,6 @@ pub fn describe_saved(saved: &Saved) -> String {
         Some(reason) => format!(
             "guardado como {name}: el original se convierte al abrir ({reason}) y no se sobrescribe"
         ),
-    }
-}
-
-/// La ranura de color si vale para la imagen nueva (su modo y su paleta); si no, la 1.
-pub fn adjust_slot(image: &Image, slot: u8) -> u8 {
-    if pixel_for_slot(image, slot).is_some() {
-        slot
-    } else {
-        1
     }
 }
 
