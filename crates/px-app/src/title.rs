@@ -57,6 +57,17 @@ pub fn window_title(tool: px_ui::tool::Tool, info: &TitleInfo) -> String {
     })
 }
 
+/// Antepone al título el fichero del documento (solo el nombre, sin directorios) y, si hay
+/// cambios sin guardar, un `*`: `casa.png* — {title}`. Sin fichero y con cambios, `sin título*`;
+/// sin fichero y sin cambios, el título tal cual (specs/hito-2-abrir-guardar.md).
+pub fn title_with_file(file: Option<&str>, modified: bool, title: &str) -> String {
+    match (file, modified) {
+        (Some(name), _) => format!("{name}{} — {title}", if modified { "*" } else { "" }),
+        (None, true) => format!("sin título* — {title}"),
+        (None, false) => title.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Fila 17 de specs/hito-2-lapiz-deshacer.md: el título de la ventana se construye con una
@@ -380,5 +391,53 @@ mod window_title_tests {
             error: None,
         };
         assert_eq!(window_title(Tool::Pencil, &info), "Pixoko:  · ×1 · lápiz");
+    }
+}
+
+#[cfg(test)]
+mod file_title_tests {
+    //! Fila 21 de specs/hito-2-abrir-guardar.md (parte `title_with_file`): el nombre del fichero
+    //! y el asterisco de modificado van delante del título normal. Sin fichero y sin cambios, el
+    //! título no cambia; sin fichero y con cambios, el nombre es `sin título`.
+
+    use super::*;
+
+    /// Un título cualquiera (`T` de la spec).
+    const T: &str = "Pixoko: 16×16 · ×8";
+
+    #[test]
+    fn fila_21_sin_fichero_y_sin_cambios_es_el_titulo_de_hoy() {
+        assert_eq!(title_with_file(None, false, T), T);
+    }
+
+    #[test]
+    fn fila_21_con_fichero_sin_cambios() {
+        assert_eq!(
+            title_with_file(Some("a.png"), false, T),
+            format!("a.png — {T}")
+        );
+    }
+
+    #[test]
+    fn fila_21_con_fichero_y_cambios_lleva_asterisco() {
+        assert_eq!(
+            title_with_file(Some("a.png"), true, T),
+            format!("a.png* — {T}")
+        );
+    }
+
+    #[test]
+    fn fila_21_sin_fichero_y_con_cambios_es_sin_titulo() {
+        assert_eq!(title_with_file(None, true, T), format!("sin título* — {T}"));
+    }
+
+    #[test]
+    fn el_titulo_con_error_tambien_lleva_el_nombre() {
+        // `title` ya viene calculado (con `window_title`), también cuando es un error.
+        let error = "Pixoko: no se pudo guardar";
+        assert_eq!(
+            title_with_file(Some("casa.png"), true, error),
+            format!("casa.png* — {error}")
+        );
     }
 }

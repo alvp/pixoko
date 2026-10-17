@@ -12,7 +12,11 @@ workspace = true
 [dependencies]
 px-core = { path = "../px-core" }
 px-ui = { path = "../px-ui" }
+px-formats = { path = "../px-formats" }
 eframe = { version = "=0.37.0", default-features = false, features = ["glow"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 eframe = { version = "=0.37.0", default-features = false, features = ["glow", "x11", "wayland"] }
+
+[dev-dependencies]
+proptest = "1.12.0"

@@ -1850,7 +1850,9 @@ name = "px-app"
 version = "0.0.0"
 dependencies = [
  "eframe",
+ "proptest",
  "px-core",
+ "px-formats",
  "px-ui",
 ]
 

@@ -6,8 +6,8 @@ Registro de lo que se incorpora al proyecto. Las dependencias de Cargo deben pas
 
 | Crate | Versión | Licencia | Tipo | Uso |
 | --- | --- | --- | --- | --- |
-| [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-core`, `px-formats`, `px-golden` y `px-raster` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
-| [`png`](https://crates.io/crates/png) | 0.18.1 | MIT OR Apache-2.0 | dependencia de `px-formats` | Leer y escribir PNG (`specs/hito-1-png.md`). Sin features: no tiene features por defecto y no se activan `zlib-rs`, `unstable` ni `benchmarks` |
+| [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-app`, `px-core`, `px-formats`, `px-golden` y `px-raster` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
+| [`png`](https://crates.io/crates/png) | 0.18.1 | MIT OR Apache-2.0 | dependencia de `px-formats` (y, a través de ella, de `px-app` desde la unidad 15) | Leer y escribir PNG (`specs/hito-1-png.md`; abrir y guardar en la app, `specs/hito-2-abrir-guardar.md`). Sin features: no tiene features por defecto y no se activan `zlib-rs`, `unstable` ni `benchmarks` |
 | [`eframe`](https://crates.io/crates/eframe) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-app` | Ventana, bucle de eventos y renderizador OpenGL (`specs/hito-2-ventana.md`). `default-features = false`; features `glow` y, solo en Linux, `x11` y `wayland`. No se activan `wgpu`, `accesskit`, `persistence`, `clipboard`, `links`, `system_fonts` ni `default_fonts` |
 | [`egui`](https://crates.io/crates/egui) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-ui` | Lienzo de `px-ui` y pruebas del lienzo sin ventana. `default-features = false`; la misma versión que usa `eframe`, fijada con `=` en las dos |
 
