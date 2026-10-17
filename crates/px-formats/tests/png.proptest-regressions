@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 18bcd7ae9052edef6f536a8d7f41cd75a7251d017346b72926b8dd69a1e254fe # shrinks to caso = CasoConversion { color: 0, prof: 1, ancho: 1, alto: 1, entrelazado: false, muestras: [0], clave: Some([0]) }
