@@ -183,9 +183,6 @@ Cada unidad sigue el mismo bucle, y el gasto de tokens se controla con unidades 
 - Modelo según la tarea: tests, formatos y código repetitivo con uno más barato (por ejemplo `model: sonnet` en el subagente); arquitectura y revisiones con el más capaz.
 - No hagas leer a Claude logs largos: resume el error o pega solo las líneas relevantes. Para dependencias, apunta a docs.rs.
 - Las tandas mecánicas (un lector de formato con su batería de tests) pueden ir con `claude -p` y el mismo `settings.json`; pruébalo antes en tu versión.
-- Mide: anota el gasto por hito en `docs/COSTES.md` (con `/`usage y /context; /cost solo existe como alias en algunas versiones) y ajusta el tamaño de las unidades.
-
-No hay una cifra fiable de antemano, porque depende del tamaño de cada unidad; por eso se mide desde el hito 0.
 
 ## Pruebas y referencias
 
@@ -233,7 +230,7 @@ El mayor riesgo es el alcance: un editor completo no tiene fin si no se acota co
 | Riesgo | Mitigación |
 | --- | --- |
 | Alcance sin fin | Hitos con puerta de salida; cada función con página de especificación; recortar antes de añadir |
-| Coste de tokens | Unidades pequeñas, sesiones cortas, modelo por tarea y gasto anotado por hito |
+| Coste de tokens | Unidades pequeñas, sesiones cortas y modelo por tarea |
 | Aspecto pixel en egui | Tema y fuente propios; si no basta, lienzo y paneles críticos dibujados a mano |
 | Rendimiento con lienzos grandes y muchas capas | Compositor por regiones modificadas, GPU opcional y benchmarks en CI |
 | Código ajeno colado en el proyecto, que rompería la licencia MIT | Hook de guardia, especificaciones propias, `license-auditor` y revisión humana del diff |
