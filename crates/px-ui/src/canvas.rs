@@ -52,6 +52,14 @@ pub enum CanvasEvent {
     StrokeEnd,
 }
 
+/// Entrada ordenada del lienzo: un evento de trazo o `Escape` (sin modificadores), en el orden
+/// en que egui entregó los eventos del fotograma (specs/hito-2-linea-relleno-app.md, sección 2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CanvasInput {
+    Stroke(CanvasEvent),
+    Escape,
+}
+
 /// Lo que el lienzo dejó en pantalla en el último fotograma.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CanvasInfo {
@@ -158,6 +166,19 @@ impl Canvas {
     /// botón durante el gesto se ignora. El trazo sigue aunque el puntero salga del lienzo o de
     /// la ventana y termina al soltar, al perder el foco o si egui ya no ve el botón pulsado.
     pub fn interact(&mut self, ui: &mut Ui) -> Vec<CanvasEvent> {
+        self.interact_ordered(ui)
+            .into_iter()
+            .filter_map(|input| match input {
+                CanvasInput::Stroke(event) => Some(event),
+                CanvasInput::Escape => None,
+            })
+            .collect()
+    }
+
+    /// Como [`Canvas::interact`], pero además emite `CanvasInput::Escape` (tecla `Escape` sin
+    /// modificadores) **en su sitio** entre los eventos de trazo del fotograma, para que quien
+    /// dibuja respete el orden de los eventos de egui. `interact` es esto sin los `Escape`.
+    pub fn interact_ordered(&mut self, ui: &mut Ui) -> Vec<CanvasInput> {
         self.upload_if_pending(ui);
 
         let rect = ui.available_rect_before_wrap();
@@ -216,6 +237,7 @@ impl Canvas {
                     Key::Home => view = View::fit(viewport, size),
                     Key::Plus | Key::Equals => zoom_step(&mut view, true, center),
                     Key::Minus => zoom_step(&mut view, false, center),
+                    Key::Escape if modifiers.is_none() => strokes.push(CanvasInput::Escape),
                     _ => {}
                 },
                 Event::PointerButton {
@@ -233,7 +255,9 @@ impl Canvas {
                         _ => Gesture::None,
                     };
                     if self.gesture == Gesture::Draw {
-                        strokes.push(CanvasEvent::StrokeBegin(to_image(&view, *pos)));
+                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeBegin(to_image(
+                            &view, *pos,
+                        ))));
                     }
                 }
                 Event::PointerButton {
@@ -243,19 +267,23 @@ impl Canvas {
                     ..
                 } => match self.gesture {
                     Gesture::Draw if *button == PointerButton::Primary => {
-                        strokes.push(CanvasEvent::StrokeMove(to_image(&view, *pos)));
-                        strokes.push(CanvasEvent::StrokeEnd);
+                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(
+                            &view, *pos,
+                        ))));
+                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeEnd));
                         self.gesture = Gesture::None;
                     }
                     Gesture::Pan(owner) if *button == owner => self.gesture = Gesture::None,
                     _ => {}
                 },
                 Event::PointerMoved(pos) if self.gesture == Gesture::Draw => {
-                    strokes.push(CanvasEvent::StrokeMove(to_image(&view, *pos)));
+                    strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(
+                        &view, *pos,
+                    ))));
                 }
                 Event::WindowFocused(false) => {
                     if self.gesture == Gesture::Draw {
-                        strokes.push(CanvasEvent::StrokeEnd);
+                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeEnd));
                     }
                     self.gesture = Gesture::None;
                 }
@@ -265,7 +293,7 @@ impl Canvas {
         // Red de seguridad: un soltar que no llegó (por ejemplo, fuera de la ventana).
         match self.gesture {
             Gesture::Draw if !ui.input(|i| i.pointer.primary_down()) => {
-                strokes.push(CanvasEvent::StrokeEnd);
+                strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeEnd));
                 self.gesture = Gesture::None;
             }
             Gesture::Pan(button) if !ui.input(|i| i.pointer.button_down(button)) => {

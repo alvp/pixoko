@@ -3,7 +3,9 @@
 
 pub mod canvas;
 pub mod color;
+pub mod notice;
 pub mod shortcuts;
 pub mod stroke;
 pub mod texture;
+pub mod tool;
 pub mod view;
