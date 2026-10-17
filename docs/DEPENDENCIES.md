@@ -34,6 +34,23 @@ Notas:
 - `miniz_oxide` aparece **duplicada** (0.8.9 la pide `png` y 0.9.1 `flate2`). `cargo deny` da solo un aviso (`duplicate`), que no hace fallar el check; no hay nada que hacer salvo volver a mirarlo al actualizar `png`.
 - `zlib-rs` 0.6.8 (Zlib, que está en la lista) figura solo en `Cargo.lock`, por la feature opcional `zlib-rs` de `flate2`; no se compila.
 
+### Fuzzing (`fuzz/`, fuera del workspace)
+
+`fuzz/Cargo.toml` (crate `pixoko-fuzz`, con su propio `Cargo.lock`) depende de `libfuzzer-sys`, de `px-core` y `px-formats` (rutas) y, por tanto, de `png` y sus transitivas (arriba). Solo se compila en el fuzzer, que no se distribuye: nada de esto entra en los binarios de Pixoko. El `cargo deny` del CI no lo ve; se comprueba en local con `cargo deny --manifest-path fuzz/Cargo.toml --locked check` (`docs/FUZZING.md`), que da `advisories ok, bans ok, licenses ok, sources ok`.
+
+| Crate | Versión | Licencia | Uso |
+| --- | --- | --- | --- |
+| [`libfuzzer-sys`](https://crates.io/crates/libfuzzer-sys) | 0.4.13 | (MIT OR Apache-2.0) AND NCSA | Enlaza libFuzzer con el objetivo `read_png` (`specs/hito-1-fuzz.md`) |
+| `arbitrary` | 1.5.0 | MIT OR Apache-2.0 | Dependencia de `libfuzzer-sys` |
+| `cc` | 1.8.0 | MIT OR Apache-2.0 | Solo build (de `libfuzzer-sys`) |
+| `find-msvc-tools` | 0.1.14 | MIT OR Apache-2.0 | Solo build (de `cc`) |
+| `jobserver` | 0.1.35 | MIT OR Apache-2.0 | Solo build (de `cc`) |
+| `libc` | 0.2.191 | MIT OR Apache-2.0 | Solo build (de `jobserver`) |
+| `getrandom` | 0.4.3 | MIT OR Apache-2.0 | Solo build (de `jobserver`); su dependencia `r-efi` es solo UEFI y ya está explicada arriba |
+| `shlex` | 2.0.1 | MIT OR Apache-2.0 | Solo build (de `cc`) |
+
+**Excepción de licencia: `NCSA` para `libfuzzer-sys` (2026-10-17).** La licencia de la crate es `(MIT OR Apache-2.0) AND NCSA`; con `AND`, NCSA es obligatoria (empaqueta libFuzzer, de LLVM) y no hay rama alternativa. NCSA (University of Illinois/NCSA Open Source License) es permisiva, del estilo de MIT y BSD-3 (conservar el aviso de copyright y el descargo), está aprobada por la OSI y no es GPL, LGPL ni AGPL. Por eso `deny.toml` no la añade a `allow`: declara una excepción `[[licenses.exceptions]]` solo para `libfuzzer-sys`. El `cargo deny check` del workspace no usa esa crate y da un aviso inofensivo (`license-exception-not-encountered`). Si otra crate pidiera NCSA, habría que decidirlo de nuevo.
+
 ## Acciones de GitHub
 
 No son dependencias de Cargo ni entran en los binarios: solo se ejecutan en el CI (`.github/workflows/ci.yml`). Van fijadas por SHA de commit completo; para actualizarlas se resuelve el SHA de la nueva versión y se cambia aquí y en el workflow.
@@ -49,3 +66,5 @@ No son dependencias de Cargo ni entran en los binarios: solo se ejecutan en el C
 | --- | --- | --- | --- |
 | Rust (toolchain) | 1.99.1 | MIT OR Apache-2.0 | Compilar, `rustfmt`, `clippy` |
 | [`cargo-deny`](https://github.com/EmbarkStudios/cargo-deny) | 0.20.2 | MIT OR Apache-2.0 | Licencias, avisos de seguridad y orígenes |
+| [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz) | 0.13.2 | MIT OR Apache-2.0 | Lanzar el fuzzer (`docs/FUZZING.md`); solo en local, no en el CI |
+| Rust nightly (con `rust-src`) | 1.101.0 (2026-10-16) | MIT OR Apache-2.0 | `cargo-fuzz` compila con `-Zbuild-std` y AddressSanitizer; solo en local |

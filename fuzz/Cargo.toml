@@ -1,0 +1,24 @@
+[package]
+name = "pixoko-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+px-core = { path = "../crates/px-core" }
+px-formats = { path = "../crates/px-formats" }
+
+[[bin]]
+name = "read_png"
+path = "fuzz_targets/read_png.rs"
+test = false
+doc = false
+bench = false
+
+# Fuera del workspace raíz (specs/hito-1-fuzz.md): el CI en estable no lo compila.
+[workspace]
