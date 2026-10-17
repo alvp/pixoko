@@ -8,7 +8,7 @@ use px_core::{Document, DocumentError, ImageId, Pixel, PixelEdit};
 use px_raster::{Line, draw_line, flood_fill};
 
 use crate::canvas::{CanvasEvent, CanvasInput};
-use crate::color::pixel_for_slot;
+use crate::color::{ColorChoice, pixel_for_choice};
 use crate::stroke::Stroke;
 
 /// Herramienta activa.
@@ -124,11 +124,13 @@ impl ToolState {
         &mut self,
         doc: &mut Document,
         image: ImageId,
-        slot: u8,
+        choice: impl Into<ColorChoice>,
         event: CanvasEvent,
     ) -> Result<bool, DocumentError> {
         match event {
-            CanvasEvent::StrokeBegin(pos) if !self.busy() => self.begin(doc, image, slot, pos),
+            CanvasEvent::StrokeBegin(pos) if !self.busy() => {
+                self.begin(doc, image, choice.into(), pos)
+            }
             CanvasEvent::StrokeBegin(_) => Ok(false),
             CanvasEvent::StrokeMove(pos) => {
                 match &mut self.gesture {
@@ -154,11 +156,11 @@ impl ToolState {
         &mut self,
         doc: &mut Document,
         image: ImageId,
-        slot: u8,
+        choice: impl Into<ColorChoice>,
         input: CanvasInput,
     ) -> Result<bool, DocumentError> {
         match input {
-            CanvasInput::Stroke(event) => self.canvas_event(doc, image, slot, event),
+            CanvasInput::Stroke(event) => self.canvas_event(doc, image, choice, event),
             CanvasInput::Escape => {
                 self.apply_action(ToolAction::Cancel);
                 Ok(false)
@@ -170,14 +172,14 @@ impl ToolState {
         &mut self,
         doc: &mut Document,
         image: ImageId,
-        slot: u8,
+        choice: ColorChoice,
         pos: (i32, i32),
     ) -> Result<bool, DocumentError> {
         self.gesture = Gesture::Waiting;
         let Some(target) = doc.image(image) else {
             return Ok(false);
         };
-        let Some(pixel) = pixel_for_slot(target, slot) else {
+        let Some(pixel) = pixel_for_choice(target, choice) else {
             return Ok(false);
         };
         let (width, height) = (target.width(), target.height());
