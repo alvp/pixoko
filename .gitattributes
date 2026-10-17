@@ -2,3 +2,7 @@
 # hacer diff de texto, o el CI de Windows los alteraría al hacer checkout.
 golden/** binary
 golden/**/*.md text diff
+assets/fonts/** binary
+# THIRD-PARTY.md lleva dentro el texto literal de la licencia de la fuente y un test lo busca:
+# con finales de línea CRLF (Git para Windows) no lo encontraría.
+docs/THIRD-PARTY.md text eol=lf

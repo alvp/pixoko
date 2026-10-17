@@ -86,6 +86,6 @@ Todos los crates del árbol tienen una licencia de `allow` o una disyunción con
 | `adler2` 2.0.1 | `0BSD OR MIT OR Apache-2.0` | Ya anotada arriba |
 | `rustix` 0.38.44 y 1.1.5, `linux-raw-sys` 0.4.15 y 0.12.1, `wasip2` 1.0.4, `wit-bindgen` 0.57.1 | `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT` | Se usa Apache-2.0 o MIT |
 
-Sin `default_fonts`, la crate `epaint_default_fonts` (`(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`) **no entra** en el árbol, y por eso `deny.toml` no cambia. La decisión de la fuente queda pendiente antes de la primera unidad que dibuje texto: preferible una fuente de píxeles con licencia OFL (con su texto de licencia en el archivo de licencias de terceros) o propia. Activar `default_fonts` exigiría una excepción de licencia solo para esa crate.
+Sin `default_fonts`, la crate `epaint_default_fonts` (`(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`) **no entra** en el árbol, y por eso `deny.toml` no cambia. La fuente de la interfaz se decidió en la unidad 11a (`specs/hito-2-texto.md`): Departure Mono 1.500 (SIL OFL 1.1) cargada con `include_bytes!` desde `assets/fonts/`. No es una dependencia de Cargo: su origen, copyright, SHA-256 y licencia están en `docs/THIRD-PARTY.md`. Activar `default_fonts` exigiría una excepción de licencia solo para `epaint_default_fonts`; no se activa.
 
 `libfuzzer-sys` y su excepción NCSA siguen como antes; el aviso `license-exception-not-encountered` de `cargo deny` es esa excepción, que solo aplica al crate `fuzz/`, fuera del workspace.
