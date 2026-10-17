@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fmt;
 use std::mem::size_of;
 
-use crate::{Image, ImageError, Pixel};
+use crate::{Allowed, Conversion, ConvertError, Image, ImageError, Mode, Pixel, convert_image};
 
 /// Identificador de una imagen dentro de un documento. Solo `Document` reparte ids válidos.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -55,6 +55,14 @@ pub enum Command {
     },
     /// Ejecuta los comandos en orden como un solo paso de deshacer. No se anida.
     Batch(Vec<Command>),
+    /// Convierte la imagen a otro modo (`convert_image`) como un solo paso de deshacer. Si ya
+    /// está en ese modo no hace nada. Solo como comando suelto: dentro de un `Batch` es
+    /// `NotBatchable`.
+    ConvertMode {
+        image: ImageId,
+        target: Mode,
+        allowed: Allowed,
+    },
 }
 
 /// Un píxel que cambió de valor.
@@ -95,6 +103,10 @@ struct FillPart {
 struct Step {
     changes: Vec<Change>,
     fills: Vec<FillPart>,
+    /// En un paso de conversión de modo, la imagen que no está en el documento: la anterior
+    /// mientras el paso está en la pila de deshacer, la convertida en la de rehacer. `undo` y
+    /// `redo` la intercambian con la del documento.
+    swapped: Option<(ImageId, Image)>,
     /// Identificador de estado del otro lado del paso: en la pila de deshacer, el de antes del
     /// paso; en la de rehacer, el de después. `undo` y `redo` lo intercambian con el actual.
     state: u64,
@@ -107,10 +119,14 @@ impl Step {
         let runs = self.fills.iter().fold(0usize, |total, fill| {
             total.saturating_add(fill.runs.capacity().saturating_mul(size_of::<Run>()))
         });
+        let swapped = self.swapped.as_ref().map_or(0, |(_, image)| {
+            size_of::<Image>().saturating_add(image.content_bytes())
+        });
         size_of::<Vec<Change>>()
             .saturating_add(self.changes.capacity().saturating_mul(size_of::<Change>()))
             .saturating_add(self.fills.capacity().saturating_mul(size_of::<FillPart>()))
             .saturating_add(runs)
+            .saturating_add(swapped)
     }
 
     /// Ajusta las capacidades al número de elementos; si no se puede reservar, no hace nada.
@@ -207,6 +223,14 @@ impl Document {
     /// nuevo y no se puede rehacer); `Ok(false)` si no cambió ninguno. Con error, el documento
     /// y la historia quedan como estaban.
     pub fn apply(&mut self, command: Command) -> Result<bool, DocumentError> {
+        if let Command::ConvertMode {
+            image,
+            target,
+            allowed,
+        } = command
+        {
+            return self.apply_convert(image, target, allowed);
+        }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
         // justo antes de escribirlo (ver `execute_fill`).
         let (writes, fills) = count_leaves(&command)?;
@@ -229,6 +253,13 @@ impl Document {
             return Ok(false);
         }
         step.fit();
+        self.commit(step);
+        Ok(true)
+    }
+
+    /// Anota un paso ya aplicado: nuevo identificador de estado, rehacer borrado, coste en la
+    /// pila de deshacer y recorte por el límite. La pila de deshacer tiene el hueco reservado.
+    fn commit(&mut self, mut step: Step) {
         step.state = self.current_id;
         self.current_id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
@@ -236,7 +267,45 @@ impl Document {
         self.undo_bytes = self.undo_bytes.saturating_add(step.cost());
         self.undo.push_back(step);
         self.trim();
+    }
+
+    /// `ConvertMode`: todo lo que puede fallar o reservar ocurre antes de tocar el documento;
+    /// después solo se intercambian dos imágenes.
+    fn apply_convert(
+        &mut self,
+        id: ImageId,
+        target: Mode,
+        allowed: Allowed,
+    ) -> Result<bool, DocumentError> {
+        let mode = self
+            .image(id)
+            .ok_or(DocumentError::UnknownImage(id))?
+            .mode();
+        if mode == target {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let current = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
+        let Conversion { image: mut new, .. } =
+            convert_image(current, target, allowed).map_err(DocumentError::Convert)?;
+        let slot = self.image_mut(id).ok_or(DocumentError::UnknownImage(id))?;
+        std::mem::swap(slot, &mut new);
+        self.commit(Step {
+            swapped: Some((id, new)),
+            ..Step::default()
+        });
         Ok(true)
+    }
+
+    /// Intercambia la imagen del documento con la que guarda el paso. No reserva ni falla.
+    fn swap_image(&mut self, step: &mut Step) {
+        if let Some((id, stored)) = step.swapped.as_mut()
+            && let Some(slot) = self.image_mut(*id)
+        {
+            std::mem::swap(slot, stored);
+        }
     }
 
     pub fn undo(&mut self) -> Result<(), DocumentError> {
@@ -250,7 +319,11 @@ impl Document {
             return Err(DocumentError::NothingToUndo);
         };
         self.undo_bytes = self.undo_bytes.saturating_sub(step.cost());
-        self.revert(&step);
+        if step.swapped.is_some() {
+            self.swap_image(&mut step);
+        } else {
+            self.revert(&step);
+        }
         std::mem::swap(&mut step.state, &mut self.current_id);
         self.redo.push(step);
         Ok(())
@@ -266,7 +339,11 @@ impl Document {
         let Some(mut step) = self.redo.pop() else {
             return Err(DocumentError::NothingToRedo);
         };
-        self.replay(&step);
+        if step.swapped.is_some() {
+            self.swap_image(&mut step);
+        } else {
+            self.replay(&step);
+        }
         std::mem::swap(&mut step.state, &mut self.current_id);
         self.undo_bytes = self.undo_bytes.saturating_add(step.cost());
         self.undo.push_back(step);
@@ -334,6 +411,7 @@ impl Document {
                 spans,
                 pixel,
             } => self.execute_fill(*image, spans, *pixel, step),
+            Command::ConvertMode { .. } => Err(DocumentError::NotBatchable),
             _ => Err(DocumentError::NestedBatch),
         }
     }
@@ -587,6 +665,10 @@ pub enum DocumentError {
         index: usize,
         source: Box<DocumentError>,
     },
+    /// `ConvertMode` dentro de un `Batch`.
+    NotBatchable,
+    /// La conversión de modo de `ConvertMode` falló.
+    Convert(ConvertError),
     NothingToUndo,
     NothingToRedo,
     /// No se pudo reservar memoria para la historia.
@@ -617,6 +699,10 @@ impl fmt::Display for DocumentError {
             DocumentError::InBatch { index, source } => {
                 write!(f, "el comando {index} del Batch falló: {source}")
             }
+            DocumentError::NotBatchable => {
+                write!(f, "la conversión de modo no puede ir dentro de un Batch")
+            }
+            DocumentError::Convert(source) => write!(f, "no se pudo convertir la imagen: {source}"),
             DocumentError::NothingToUndo => write!(f, "no hay nada que deshacer"),
             DocumentError::NothingToRedo => write!(f, "no hay nada que rehacer"),
             DocumentError::OutOfMemory => {
@@ -632,6 +718,7 @@ impl Error for DocumentError {
             DocumentError::Pixel { source, .. } | DocumentError::Span { source, .. } => {
                 Some(source)
             }
+            DocumentError::Convert(source) => Some(source),
             DocumentError::InBatch { source, .. } => Some(source.as_ref()),
             _ => None,
         }

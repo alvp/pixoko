@@ -21,7 +21,7 @@ Convertir una imagen de `px-core` entre `Rgba`, `GrayAlpha`, `Gray` e `Indexed` 
 - `LUMA_WEIGHTS: [u32; 3] = [54, 183, 19]`: pesos de `r`, `g` y `b` en 256avos, constante pública con nombre. `luma(r: u8, g: u8, b: u8) -> u8`: la fórmula de luminancia, pública para poder probarla y reutilizarla.
 - `Command::ConvertMode { image: ImageId, target: Mode, allowed: Allowed }` (variante nueva de `Command`, que ya es `#[non_exhaustive]`). Es un dato pequeño y completo, como el resto de comandos.
 - `DocumentError` (también `#[non_exhaustive]`) gana `Convert(ConvertError)` (con `source`) y `NotBatchable`.
-- Todo se exporta desde `px_core`. Internamente, `Image` gana dos funciones `pub(crate)` (construir una imagen a partir de sus datos y paleta, y contar sus bytes); la API pública de `Image` no cambia.
+- Todo se exporta desde `px_core`. Internamente, `Image` gana tres funciones `pub(crate)` (construir una imagen a partir de sus datos y paleta, leer sus bytes y contar lo que ocupa en la historia); la API pública de `Image` no cambia.
 
 ## Comportamiento
 

@@ -125,6 +125,38 @@ impl Image {
         })
     }
 
+    /// Imagen a partir de sus bytes ya construidos. Quien llama garantiza las invariantes:
+    /// `data.len()` es el de `Image::byte_len` y `palette` es `Some` solo en modo indexado, con
+    /// todo píxel menor que su longitud (solo lo usa la conversión de modos).
+    pub(crate) fn from_raw(
+        width: u32,
+        height: u32,
+        mode: Mode,
+        data: Vec<u8>,
+        palette: Option<Palette>,
+    ) -> Image {
+        Image {
+            width,
+            height,
+            mode,
+            data,
+            palette,
+        }
+    }
+
+    /// Los bytes de los píxeles, fila a fila, tal como los describe el tipo.
+    pub(crate) fn raw(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// Bytes de píxeles más 4 por entrada de paleta: lo que ocupa la imagen en la historia.
+    pub(crate) fn content_bytes(&self) -> usize {
+        let palette = self.palette.as_ref().map_or(0, Palette::len);
+        self.data
+            .len()
+            .saturating_add(palette.saturating_mul(size_of::<Rgba>()))
+    }
+
     pub fn width(&self) -> u32 {
         self.width
     }
