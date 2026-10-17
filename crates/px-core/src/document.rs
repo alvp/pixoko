@@ -5,7 +5,11 @@ use std::error::Error;
 use std::fmt;
 use std::mem::size_of;
 
-use crate::{Allowed, Conversion, ConvertError, Image, ImageError, Mode, Pixel, convert_image};
+use crate::palette_edit::{self, PaletteStep};
+use crate::{
+    Allowed, Conversion, ConvertError, Image, ImageError, Mode, PaletteEditError, Pixel, Rgba,
+    convert_image,
+};
 
 /// Identificador de una imagen dentro de un documento. Solo `Document` reparte ids válidos.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -63,6 +67,35 @@ pub enum Command {
         target: Mode,
         allowed: Allowed,
     },
+    /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
+    SetPaletteColor {
+        image: ImageId,
+        index: u8,
+        color: Rgba,
+    },
+    /// La entrada `from` pasa a estar en `to` y las de en medio se desplazan un lugar, como
+    /// `Vec::remove` más `Vec::insert`. Píxeles e índice transparente se remapean: la imagen
+    /// no cambia. Equivale a la `PermutePalette` correspondiente.
+    MovePaletteEntry { image: ImageId, from: u8, to: u8 },
+    /// Reordena la paleta: `order[nuevo] = antiguo`. Debe ser una permutación de las entradas.
+    /// Píxeles e índice transparente se remapean: la imagen no cambia.
+    PermutePalette { image: ImageId, order: Vec<u8> },
+    /// Añade una entrada al final de la paleta.
+    AddPaletteEntry { image: ImageId, color: Rgba },
+    /// Quita la entrada `index`; los píxeles que la usan pasan a `into` (los dos, índices
+    /// antes de quitar). Si `index` era el índice transparente, deja de haberlo.
+    RemovePaletteEntry { image: ImageId, index: u8, into: u8 },
+    /// Fija o quita el índice transparente.
+    SetTransparentIndex { image: ImageId, index: Option<u8> },
+    /// Rota `steps` posiciones (con signo, hacia índices mayores si es positivo) los colores
+    /// de las entradas `start..start + len`; los píxeles conservan su índice y el índice
+    /// transparente se queda en su ranura.
+    RotateColors {
+        image: ImageId,
+        start: u8,
+        len: u16,
+        steps: i32,
+    },
 }
 
 /// Un píxel que cambió de valor.
@@ -107,6 +140,8 @@ struct Step {
     /// mientras el paso está en la pila de deshacer, la convertida en la de rehacer. `undo` y
     /// `redo` la intercambian con la del documento.
     swapped: Option<(ImageId, Image)>,
+    /// En un paso de edición de paleta, el paso (que es todo su contenido).
+    palette: Option<PaletteStep>,
     /// Identificador de estado del otro lado del paso: en la pila de deshacer, el de antes del
     /// paso; en la de rehacer, el de después. `undo` y `redo` lo intercambian con el actual.
     state: u64,
@@ -122,11 +157,13 @@ impl Step {
         let swapped = self.swapped.as_ref().map_or(0, |(_, image)| {
             size_of::<Image>().saturating_add(image.content_bytes())
         });
+        let palette = self.palette.as_ref().map_or(0, PaletteStep::cost);
         size_of::<Vec<Change>>()
             .saturating_add(self.changes.capacity().saturating_mul(size_of::<Change>()))
             .saturating_add(self.fills.capacity().saturating_mul(size_of::<FillPart>()))
             .saturating_add(runs)
             .saturating_add(swapped)
+            .saturating_add(palette)
     }
 
     /// Ajusta las capacidades al número de elementos; si no se puede reservar, no hace nada.
@@ -231,6 +268,9 @@ impl Document {
         {
             return self.apply_convert(image, target, allowed);
         }
+        if let Some(id) = palette_edit::command_image(&command) {
+            return self.apply_palette(id, &command);
+        }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
         // justo antes de escribirlo (ver `execute_fill`).
         let (writes, fills) = count_leaves(&command)?;
@@ -299,6 +339,79 @@ impl Document {
         Ok(true)
     }
 
+    /// Comandos de paleta: todo lo que puede fallar o reservar ocurre antes de tocar la imagen
+    /// (spec, puntos 5 y 6); después solo se aplica el paso, que no reserva ni falla.
+    fn apply_palette(&mut self, id: ImageId, command: &Command) -> Result<bool, DocumentError> {
+        let image = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
+        if !palette_edit::check(image, command).map_err(DocumentError::PaletteEdit)? {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let image = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
+        let mut palette_step = palette_edit::build(image, id, command)?;
+        if palette_step.grows_on_redo() {
+            self.reserve_palette_slot(id)?;
+        }
+        let slot = self.image_mut(id).ok_or(DocumentError::UnknownImage(id))?;
+        palette_step.redo(slot);
+        self.commit(Step {
+            palette: Some(palette_step),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// Hace sitio en la paleta de la imagen para una entrada más (`OutOfMemory` si no hay).
+    fn reserve_palette_slot(&mut self, id: ImageId) -> Result<(), DocumentError> {
+        let reserved = self
+            .image_mut(id)
+            .is_none_or(|image| image.reserve_palette_slot());
+        if reserved {
+            Ok(())
+        } else {
+            Err(DocumentError::OutOfMemory)
+        }
+    }
+
+    /// Antes de sacar un paso de paleta de su pila: si deshacerlo (`undoing`) o rehacerlo
+    /// agranda la paleta, reserva ese hueco. Si falla, nada ha cambiado y se puede reintentar.
+    fn reserve_for_palette_step(&mut self, undoing: bool) -> Result<(), DocumentError> {
+        let step = if undoing {
+            self.undo.back()
+        } else {
+            self.redo.last()
+        };
+        let target = step
+            .and_then(|step| step.palette.as_ref())
+            .filter(|palette| {
+                if undoing {
+                    palette.grows_on_undo()
+                } else {
+                    palette.grows_on_redo()
+                }
+            })
+            .map(PaletteStep::image);
+        match target {
+            Some(id) => self.reserve_palette_slot(id),
+            None => Ok(()),
+        }
+    }
+
+    /// Deshace (`undoing`) o rehace el paso de paleta. No reserva ni falla.
+    fn run_palette_step(&mut self, step: &mut Step, undoing: bool) {
+        if let Some(palette_step) = step.palette.as_mut()
+            && let Some(image) = self.image_mut(palette_step.image())
+        {
+            if undoing {
+                palette_step.undo(image);
+            } else {
+                palette_step.redo(image);
+            }
+        }
+    }
+
     /// Intercambia la imagen del documento con la que guarda el paso. No reserva ni falla.
     fn swap_image(&mut self, step: &mut Step) {
         if let Some((id, stored)) = step.swapped.as_mut()
@@ -315,12 +428,15 @@ impl Document {
         self.redo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
+        self.reserve_for_palette_step(true)?;
         let Some(mut step) = self.undo.pop_back() else {
             return Err(DocumentError::NothingToUndo);
         };
         self.undo_bytes = self.undo_bytes.saturating_sub(step.cost());
         if step.swapped.is_some() {
             self.swap_image(&mut step);
+        } else if step.palette.is_some() {
+            self.run_palette_step(&mut step, true);
         } else {
             self.revert(&step);
         }
@@ -336,11 +452,14 @@ impl Document {
         self.undo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
+        self.reserve_for_palette_step(false)?;
         let Some(mut step) = self.redo.pop() else {
             return Err(DocumentError::NothingToRedo);
         };
         if step.swapped.is_some() {
             self.swap_image(&mut step);
+        } else if step.palette.is_some() {
+            self.run_palette_step(&mut step, false);
         } else {
             self.replay(&step);
         }
@@ -412,6 +531,9 @@ impl Document {
                 pixel,
             } => self.execute_fill(*image, spans, *pixel, step),
             Command::ConvertMode { .. } => Err(DocumentError::NotBatchable),
+            command if palette_edit::command_image(command).is_some() => {
+                Err(DocumentError::NotBatchable)
+            }
             _ => Err(DocumentError::NestedBatch),
         }
     }
@@ -665,8 +787,10 @@ pub enum DocumentError {
         index: usize,
         source: Box<DocumentError>,
     },
-    /// `ConvertMode` dentro de un `Batch`.
+    /// `ConvertMode` o un comando de paleta dentro de un `Batch`.
     NotBatchable,
+    /// Falló un comando de edición de la paleta.
+    PaletteEdit(PaletteEditError),
     /// La conversión de modo de `ConvertMode` falló.
     Convert(ConvertError),
     NothingToUndo,
@@ -699,8 +823,12 @@ impl fmt::Display for DocumentError {
             DocumentError::InBatch { index, source } => {
                 write!(f, "el comando {index} del Batch falló: {source}")
             }
-            DocumentError::NotBatchable => {
-                write!(f, "la conversión de modo no puede ir dentro de un Batch")
+            DocumentError::NotBatchable => write!(
+                f,
+                "la conversión de modo y la edición de la paleta no pueden ir dentro de un Batch"
+            ),
+            DocumentError::PaletteEdit(source) => {
+                write!(f, "no se pudo editar la paleta: {source}")
             }
             DocumentError::Convert(source) => write!(f, "no se pudo convertir la imagen: {source}"),
             DocumentError::NothingToUndo => write!(f, "no hay nada que deshacer"),
@@ -719,6 +847,7 @@ impl Error for DocumentError {
                 Some(source)
             }
             DocumentError::Convert(source) => Some(source),
+            DocumentError::PaletteEdit(source) => Some(source),
             DocumentError::InBatch { source, .. } => Some(source.as_ref()),
             _ => None,
         }

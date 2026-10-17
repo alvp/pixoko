@@ -157,6 +157,159 @@ impl Image {
             .saturating_add(palette.saturating_mul(size_of::<Rgba>()))
     }
 
+    // Edición de la paleta (specs/hito-2-paleta-editar.md, punto 11). Son la única vía para
+    // cambiar la paleta de una imagen sin romper su invariante: cada método deja todo píxel
+    // menor que la longitud de la paleta y el índice transparente existente. Con argumentos
+    // inválidos devuelven `false` sin tocar nada; ninguno entra en pánico.
+
+    /// Cambia el color guardado de una entrada.
+    pub(crate) fn set_palette_entry(&mut self, index: u8, color: Rgba) -> bool {
+        self.palette
+            .as_mut()
+            .is_some_and(|palette| palette.set(index, color).is_ok())
+    }
+
+    /// Fija o quita el índice transparente.
+    pub(crate) fn set_transparent(&mut self, index: Option<u8>) -> bool {
+        self.palette
+            .as_mut()
+            .is_some_and(|palette| palette.set_transparent_index(index).is_ok())
+    }
+
+    /// Añade una entrada al final. Los píxeles no cambian.
+    pub(crate) fn push_palette_entry(&mut self, color: Rgba) -> bool {
+        self.palette
+            .as_mut()
+            .is_some_and(|palette| palette.push(color).is_ok())
+    }
+
+    /// Quita la última entrada, si ningún píxel la usa y no es la única.
+    pub(crate) fn pop_palette_entry(&mut self) -> bool {
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        let Some(last) = palette.len().checked_sub(1) else {
+            return false;
+        };
+        let used = u8::try_from(last)
+            .map(|last| self.data.contains(&last))
+            .unwrap_or(true);
+        if used || last == 0 {
+            return false;
+        }
+        palette.pop().is_some()
+    }
+
+    /// Hace sitio para una entrada más de paleta sin asignar después.
+    pub(crate) fn reserve_palette_slot(&mut self) -> bool {
+        self.palette.as_mut().is_some_and(Palette::reserve_one)
+    }
+
+    /// Reordena la paleta con la tabla `adelante[antiguo] = nuevo` y remapea los píxeles y el
+    /// índice transparente a la vez: ningún color resuelto cambia.
+    pub(crate) fn reorder_palette(&mut self, forward: &[u8]) -> bool {
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        if !palette.permute(forward) {
+            return false;
+        }
+        for byte in &mut self.data {
+            *byte = forward.get(usize::from(*byte)).copied().unwrap_or(*byte);
+        }
+        true
+    }
+
+    /// Quita la entrada `index`: los píxeles que la usan pasan a `into` (índices antes de
+    /// quitar) y los de detrás bajan un lugar.
+    pub(crate) fn remove_palette_entry(&mut self, index: u8, into: u8) -> bool {
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        let len = palette.len();
+        if len < 2 || usize::from(index) >= len || usize::from(into) >= len || index == into {
+            return false;
+        }
+        let into_after = if into < index { into } else { into - 1 };
+        for byte in &mut self.data {
+            *byte = match (*byte).cmp(&index) {
+                std::cmp::Ordering::Less => *byte,
+                std::cmp::Ordering::Equal => into_after,
+                std::cmp::Ordering::Greater => *byte - 1,
+            };
+        }
+        palette.remove_entry(index).is_some()
+    }
+
+    /// Deshace `remove_palette_entry`: reinserta el color en `index`, fija el índice
+    /// transparente anterior y devuelve a `index` los píxeles marcados en `mask` (un bit por
+    /// píxel, vacía si ninguno la usaba); los demás vuelven a su valor anterior.
+    pub(crate) fn restore_palette_entry(
+        &mut self,
+        index: u8,
+        color: Rgba,
+        transparent: Option<u8>,
+        mask: &[u64],
+    ) -> bool {
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        if !mask.is_empty() && mask.len().saturating_mul(64) < self.data.len() {
+            return false;
+        }
+        if !palette.insert_entry(index, color, transparent) {
+            return false;
+        }
+        for (position, byte) in self.data.iter_mut().enumerate() {
+            let marked = mask
+                .get(position / 64)
+                .is_some_and(|word| word >> (position % 64) & 1 == 1);
+            *byte = if marked {
+                index
+            } else if *byte < index {
+                *byte
+            } else {
+                byte.saturating_add(1)
+            };
+        }
+        true
+    }
+
+    /// Rota las entradas `start..start + len` de la paleta (ver `Palette::rotate_range`). Los
+    /// píxeles no cambian de índice.
+    pub(crate) fn rotate_palette_range(
+        &mut self,
+        start: u8,
+        len: u16,
+        k: u16,
+        right: bool,
+    ) -> bool {
+        self.palette
+            .as_mut()
+            .is_some_and(|palette| palette.rotate_range(start, len, k, right))
+    }
+
+    /// Número de píxeles con el valor `index`.
+    pub(crate) fn count_pixels_using(&self, index: u8) -> usize {
+        self.data.iter().filter(|&&byte| byte == index).count()
+    }
+
+    /// Marca en `mask` (un bit por píxel, el bit 0 de la palabra 0 es el primero) los píxeles
+    /// con el valor `index`. `false` si `mask` no tiene sitio para todos.
+    pub(crate) fn fill_mask(&self, index: u8, mask: &mut [u64]) -> bool {
+        if mask.len().saturating_mul(64) < self.data.len() {
+            return false;
+        }
+        for (position, &byte) in self.data.iter().enumerate() {
+            if byte == index
+                && let Some(word) = mask.get_mut(position / 64)
+            {
+                *word |= 1 << (position % 64);
+            }
+        }
+        true
+    }
+
     pub fn width(&self) -> u32 {
         self.width
     }

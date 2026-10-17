@@ -5,6 +5,7 @@ mod document;
 mod hsl;
 mod image;
 mod palette;
+mod palette_edit;
 mod rgba;
 
 pub use convert::{
@@ -15,4 +16,5 @@ pub use document::{Command, Document, DocumentError, ImageId, PixelEdit, Span};
 pub use hsl::Hsl;
 pub use image::{Image, ImageError, Mode, Pixel};
 pub use palette::{Palette, PaletteError};
+pub use palette_edit::PaletteEditError;
 pub use rgba::{ParseHexError, Rgba};

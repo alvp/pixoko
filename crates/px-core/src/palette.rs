@@ -125,12 +125,117 @@ impl Palette {
         best.map(|(_, index)| index)
     }
 
+    /// Hace sitio para una entrada más sin asignar después; `false` si no hay memoria.
+    pub(crate) fn reserve_one(&mut self) -> bool {
+        self.colors.try_reserve(1).is_ok()
+    }
+
+    /// Quita la última entrada. Si era la transparente, el índice transparente se quita.
+    pub(crate) fn pop(&mut self) -> Option<Rgba> {
+        let color = self.colors.pop()?;
+        if self
+            .transparent_index
+            .is_some_and(|t| usize::from(t) >= self.colors.len())
+        {
+            self.transparent_index = None;
+        }
+        Some(color)
+    }
+
+    /// Reordena las entradas: la entrada `i` pasa a la posición `forward[i]`, y el índice
+    /// transparente la sigue. Sin tocar nada y `false` si `forward` no es una permutación de
+    /// `0..len`.
+    pub(crate) fn permute(&mut self, forward: &[u8]) -> bool {
+        if !is_permutation(forward, self.colors.len()) {
+            return false;
+        }
+        let mut old = [Rgba::default(); Palette::MAX_COLORS];
+        for (slot, color) in old.iter_mut().zip(&self.colors) {
+            *slot = *color;
+        }
+        for (color, &to) in old.iter().zip(forward) {
+            if let Some(slot) = self.colors.get_mut(usize::from(to)) {
+                *slot = *color;
+            }
+        }
+        self.transparent_index = self
+            .transparent_index
+            .and_then(|t| forward.get(usize::from(t)).copied());
+        true
+    }
+
+    /// Quita una entrada y ajusta el índice transparente: desaparece si era la quitada y baja
+    /// un lugar si estaba detrás.
+    pub(crate) fn remove_entry(&mut self, index: u8) -> Option<Rgba> {
+        if usize::from(index) >= self.colors.len() {
+            return None;
+        }
+        let color = self.colors.remove(usize::from(index));
+        self.transparent_index = match self.transparent_index {
+            Some(t) if t == index => None,
+            Some(t) if t > index => Some(t - 1),
+            other => other,
+        };
+        Some(color)
+    }
+
+    /// Inserta una entrada en `index` (como mucho `len`) y fija el índice transparente tal
+    /// cual se da. `false`, sin tocar nada, si no cabe o algún índice no existe después.
+    pub(crate) fn insert_entry(&mut self, index: u8, color: Rgba, transparent: Option<u8>) -> bool {
+        let len = self.colors.len();
+        if len >= Palette::MAX_COLORS
+            || usize::from(index) > len
+            || transparent.is_some_and(|t| usize::from(t) > len)
+        {
+            return false;
+        }
+        self.colors.insert(usize::from(index), color);
+        self.transparent_index = transparent;
+        true
+    }
+
+    /// Rota hacia índices mayores (`right`) o menores `k` posiciones las entradas
+    /// `start..start + len`. El índice transparente no se mueve. `false`, sin tocar nada, si el
+    /// rango se sale de la paleta.
+    pub(crate) fn rotate_range(&mut self, start: u8, len: u16, k: u16, right: bool) -> bool {
+        let start = usize::from(start);
+        let Some(end) = start.checked_add(usize::from(len)) else {
+            return false;
+        };
+        let Some(range) = self.colors.get_mut(start..end) else {
+            return false;
+        };
+        if range.is_empty() {
+            return true;
+        }
+        let k = usize::from(k) % range.len();
+        if right {
+            range.rotate_right(k);
+        } else {
+            range.rotate_left(k);
+        }
+        true
+    }
+
     fn out_of_range(&self, index: u8) -> PaletteError {
         PaletteError::IndexOutOfRange {
             index,
             len: self.colors.len(),
         }
     }
+}
+
+/// `true` si `table` tiene `len` elementos y contiene cada valor de `0..len` exactamente una vez.
+pub(crate) fn is_permutation(table: &[u8], len: usize) -> bool {
+    if table.len() != len || len > Palette::MAX_COLORS {
+        return false;
+    }
+    let mut seen = [false; Palette::MAX_COLORS];
+    table.iter().all(|&value| {
+        seen.get_mut(usize::from(value))
+            .is_some_and(|seen| !std::mem::replace(seen, true))
+            && usize::from(value) < len
+    })
 }
 
 /// Color premultiplicado por el alfa: `(r·a, g·a, b·a, 255·a)`, cada componente en `[0, 65025]`.
