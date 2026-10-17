@@ -2066,6 +2066,108 @@ fn aplica_validos(
     Ok(())
 }
 
+// `history_bytes()` es el coste de la pila de deshacer (fila 18 y propiedad 7).
+
+/// Aplica `cmds` en orden, todos con `Ok(true)`, y comprueba que `history_bytes()` sube con
+/// cada `apply`, baja con cada `undo` hasta 0 y sube con cada `redo` hasta el valor final,
+/// pasando por los mismos valores. Devuelve esos valores (el primero es 0).
+fn comprueba_bytes_de_la_pila(mut doc: Document, cmds: Vec<Command>) -> Vec<usize> {
+    let mut bytes = vec![doc.history_bytes()];
+    assert_eq!(bytes[0], 0);
+    for cmd in cmds {
+        assert_eq!(doc.apply(cmd), Ok(true));
+        let ahora = doc.history_bytes();
+        assert!(
+            ahora > *bytes.last().unwrap(),
+            "apply debe sumar el coste del paso"
+        );
+        bytes.push(ahora);
+    }
+    for (j, esperado) in bytes.iter().rev().skip(1).enumerate() {
+        assert_eq!(doc.undo(), Ok(()));
+        assert_eq!(doc.history_bytes(), *esperado, "tras {} undo", j + 1);
+    }
+    assert_eq!(doc.history_bytes(), 0);
+    for (j, esperado) in bytes.iter().enumerate().skip(1) {
+        assert_eq!(doc.redo(), Ok(()));
+        assert_eq!(doc.history_bytes(), *esperado, "tras {j} redo");
+    }
+    bytes
+}
+
+#[test]
+fn fila_18_history_bytes_sigue_la_pila_de_deshacer() {
+    let id = doc_d().main_image();
+    // Un `SetPixels`, un `FillSpans` y un `Batch` que mezcla ambos, uno tras otro.
+    let bytes = comprueba_bytes_de_la_pila(
+        doc_d(),
+        vec![
+            set(id, &[px(0, 0, c1())]),
+            fr(id, &[sp(1, 0, 4), sp(2, 1, 3)], c2()),
+            lote(vec![
+                set(id, &[px(3, 0, c1())]),
+                fr(id, &[sp(0, 0, 4)], c3()),
+                set(id, &[px(2, 2, c1())]),
+            ]),
+        ],
+    );
+    assert_eq!(bytes.len(), 4);
+}
+
+#[test]
+fn fila_18_un_solo_paso_de_cada_clase() {
+    let id = doc_d().main_image();
+    let casos = [
+        set(id, &[px(0, 0, c1())]),
+        fr(id, &[sp(0, 0, 4), sp(1, 0, 4), sp(2, 0, 4)], c1()),
+        lote(vec![
+            set(id, &[px(1, 1, c1())]),
+            fr(id, &[sp(1, 0, 4)], c2()),
+        ]),
+    ];
+    for cmd in casos {
+        let mut doc = doc_d();
+        assert_eq!(doc.apply(cmd), Ok(true));
+        let coste = doc.history_bytes();
+        assert!(coste > 0);
+        assert_eq!(doc.undo(), Ok(()));
+        assert_eq!(
+            doc.history_bytes(),
+            0,
+            "tras undo la pila de deshacer está vacía"
+        );
+        assert!(doc.can_redo());
+        assert_eq!(doc.redo(), Ok(()));
+        assert_eq!(
+            doc.history_bytes(),
+            coste,
+            "tras redo vuelve al coste del paso"
+        );
+    }
+}
+
+#[test]
+fn fila_18_un_apply_tras_undo_cuenta_solo_su_paso() {
+    let mut doc = doc_d();
+    let id = doc.main_image();
+    assert_eq!(doc.apply(fr(id, &[sp(0, 0, 4)], c1())), Ok(true));
+    assert_eq!(doc.apply(fr(id, &[sp(1, 0, 4)], c2())), Ok(true));
+    let dos = doc.history_bytes();
+    assert_eq!(doc.undo(), Ok(()));
+    let uno = doc.history_bytes();
+    assert!(uno < dos);
+    // Un paso nuevo borra rehacer: la pila de deshacer pasa a tener el primero y el nuevo.
+    assert_eq!(doc.apply(fr(id, &[sp(1, 0, 4)], c3())), Ok(true));
+    assert!(!doc.can_redo());
+    assert_eq!(doc.history_bytes(), dos);
+    // Un `apply` sin cambios y un `undo` fallido no tocan `history_bytes()`.
+    assert_eq!(doc.apply(fr(id, &[sp(1, 0, 4)], c3())), Ok(false));
+    assert_eq!(doc.history_bytes(), dos);
+    let mut vacio = doc_d();
+    assert_eq!(vacio.undo(), Err(DocumentError::NothingToUndo));
+    assert_eq!(vacio.history_bytes(), 0);
+}
+
 // Propiedades.
 
 proptest! {
@@ -2225,6 +2327,34 @@ proptest! {
         let mut instantes = vec![img];
         aplica_validos(&mut doc, &mut instantes, f, &cmds, limite)?;
         comprueba_limite(&doc, &instantes, limite)?;
+    }
+
+    // Propiedad 7: `history_bytes()` es el coste de la pila de deshacer: baja con cada `undo`,
+    // sube con cada `redo` y pasa por los mismos valores.
+    #[test]
+    fn history_bytes_sigue_la_pila_de_deshacer(
+        img in imagen_6(),
+        cmds in prop::collection::vec(cmd(false), 0..=12),
+    ) {
+        let f = forma(&img);
+        let mut doc = Document::new(img);
+        let id = doc.main_image();
+        let mut bytes = vec![0usize];
+        for raw in &cmds {
+            if doc.apply(comando(f, id, raw)) == Ok(true) {
+                bytes.push(doc.history_bytes());
+            }
+        }
+        prop_assert!(bytes.windows(2).all(|w| w[0] < w[1]), "no crece: {bytes:?}");
+        for esperado in bytes.iter().rev().skip(1) {
+            prop_assert_eq!(doc.undo(), Ok(()));
+            prop_assert_eq!(doc.history_bytes(), *esperado);
+        }
+        prop_assert_eq!(doc.history_bytes(), 0);
+        for esperado in bytes.iter().skip(1) {
+            prop_assert_eq!(doc.redo(), Ok(()));
+            prop_assert_eq!(doc.history_bytes(), *esperado);
+        }
     }
 
     // Propiedad 6: un `Batch` mixto es un paso.
