@@ -8,7 +8,7 @@ Elegir entre lápiz, línea y relleno con el teclado y usar las dos nuevas con e
 
 ## Piezas
 
-La lógica de trazo que hoy está en `main.rs` pasa a `px-ui` para poder probarla. `Stroke`, `color` y `shortcuts` **no cambian**. `Canvas` solo gana, de forma aditiva, el evento `CanvasEvent::Escape` (ver sección 2). La API de `ToolState` **no usa tipos de egui**: `main.rs` solo traduce eventos de egui a `CanvasEvent` y a `ToolAction`.
+La lógica de trazo que hoy está en `main.rs` pasa a `px-ui` para poder probarla. `Stroke`, `color` y `shortcuts` **no cambian**. `Canvas` solo gana, de forma aditiva, `CanvasInput` e `interact_ordered` (ver sección 2); `CanvasEvent` e `interact` no cambian. La API de `ToolState` **no usa tipos de egui**: `main.rs` solo traduce eventos de egui a `CanvasEvent` y a `ToolAction`.
 
 ```rust
 // px-ui/src/tool.rs  (solo usa egui::Key y egui::Modifiers como datos)
@@ -19,8 +19,11 @@ pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction>
 /// Texto del título para herramienta y color: "línea · color 3 #ff0000"; sin color, solo la herramienta.
 pub fn status_text(tool: Tool, color: Option<&str>) -> String;
 
-// px-ui/src/canvas.rs: variante nueva, aditiva
-// CanvasEvent::Escape   // `Escape` sin modificadores, en el mismo orden que los eventos del puntero
+// px-ui/src/canvas.rs: aditivo (CanvasEvent e interact no cambian: una variante nueva rompería
+// los `match` exhaustivos de tests/pencil.rs, de la unidad 6)
+pub enum CanvasInput { Stroke(CanvasEvent), Escape }   // `Escape` sin modificadores, en orden
+impl Canvas { pub fn interact_ordered(&mut self, ui: &mut Ui) -> Vec<CanvasInput>; }
+// `interact` es `interact_ordered` sin los `Escape`.
 
 pub struct ToolState { /* herramienta activa y gesto en curso */ }
 impl ToolState {
@@ -29,8 +32,11 @@ impl ToolState {
     pub fn busy(&self) -> bool;                     // entre Begin y End, ambos incluidos
     pub fn apply_action(&mut self, action: ToolAction);
     /// Ok(true): el documento cambió (hay que hacer `refresh`). Ok(false): nada que hacer.
-    /// `CanvasEvent::Escape` equivale a `apply_action(Cancel)`.
     pub fn canvas_event(&mut self, doc: &mut Document, image: ImageId, slot: u8, event: CanvasEvent)
+        -> Result<bool, DocumentError>;
+    /// Como `canvas_event`, para la entrada ordenada de `interact_ordered`:
+    /// `CanvasInput::Escape` equivale a `apply_action(Cancel)` (`Ok(false)`).
+    pub fn canvas_input(&mut self, doc: &mut Document, image: ImageId, slot: u8, input: CanvasInput)
         -> Result<bool, DocumentError>;
     /// Píxeles pendientes para la superposición (lápiz: el trazo; línea: la línea recortada).
     pub fn preview(&self) -> impl Iterator<Item = PixelEdit> + '_;
@@ -47,7 +53,7 @@ impl Notice {
 
 En `px-app/src/title.rs`, una **sola función** da el título completo: `pub fn window_title(tool: Tool, info: &TitleInfo) -> String`, que construye `status_text(tool, info.color)` dentro del campo `color` y llama a `title_text`. `title_text` y `TitleInfo` no cambian (sus tests tampoco). El apaño de meter la herramienta en `color` queda dentro de esa función y anotado para la unidad 14.
 
-`px-app` queda como pegamento: pasa los eventos de `Canvas::interact` a `ToolState` (incluido `Escape`), las teclas **de selección** a `tool_action_for_key` (el `Cancel` ya llega por `CanvasEvent::Escape`, en orden) y `action_for_key`, y llama a `refresh` cuando algo cambia (como en la unidad 6).
+`px-app` queda como pegamento: pasa la entrada de `Canvas::interact_ordered` a `ToolState::canvas_input` (incluido `Escape`), las teclas **de selección** a `tool_action_for_key` (el `Cancel` ya llega por `CanvasInput::Escape`, en orden) y `action_for_key`, y llama a `refresh` cuando algo cambia (como en la unidad 6).
 
 ## Comportamiento
 
@@ -72,7 +78,7 @@ En `px-app/src/title.rs`, una **sola función** da el título completo: `pub fn 
 - **Extremos fuera del lienzo:** se recortan con `clip_to`, así que se dibuja la parte visible. Una línea entera fuera es `Ok(false)`.
 - **Fin del gesto:** igual que el lápiz, porque lo emite `Canvas`: soltar en cualquier sitio (con su posición como último `Move`), perder el foco y el botón que egui ya no ve pulsado **aplican** la línea hasta el último destino. `PointerGone` no termina.
 - **`Escape` cancela:** descarta la línea pendiente, sin paso ni cambios en la historia. El gesto sigue `busy` hasta soltar el botón, y los `Move` y el `End` que lleguen no aplican nada. `Escape` sin una línea en curso (en reposo, con lápiz o con relleno) no hace nada: el lápiz no se cancela, la unidad 6 lo dejó fuera de alcance.
-- **Orden dentro de un fotograma:** egui entrega teclas y botones en una sola lista ordenada. `Canvas::interact` ya recorre esa lista y emite `CanvasEvent::Escape` en su sitio, entre los `Move` y el `End`. Así **manda el orden de los eventos**: si `Escape` va **antes** del soltado, cancela; si va **después**, el soltado ya aplicó la línea y `Escape` no hace nada (`Ctrl+Z` la deshace). Si los eventos no llegaran ordenados, gana el soltado (se aplica; la otra opción pierde una línea sin remedio). `px-app` no procesa `Cancel` por la vía de las teclas, para no tratarlo dos veces ni fuera de orden.
+- **Orden dentro de un fotograma:** egui entrega teclas y botones en una sola lista ordenada. `Canvas::interact_ordered` ya recorre esa lista y emite `CanvasInput::Escape` en su sitio, entre los `Move` y el `End`. Así **manda el orden de los eventos**: si `Escape` va **antes** del soltado, cancela; si va **después**, el soltado ya aplicó la línea y `Escape` no hace nada (`Ctrl+Z` la deshace). Si los eventos no llegaran ordenados, gana el soltado (se aplica; la otra opción pierde una línea sin remedio). `px-app` no procesa `Cancel` por la vía de las teclas, para no tratarlo dos veces ni fuera de orden.
 
 ### 3. Relleno
 
@@ -120,7 +126,7 @@ Imagen RGBA de 8×8 vacía (todo `A`) salvo que se diga otra cosa, ranura 3 (roj
 | 17 | Relleno mantenido: `Begin(3,3)` y después 100 `Move` a la misma posición (y, con el banco de egui, el botón abajo durante 30 fotogramas sin otro evento) | un solo `Ok(true)`, un paso; `Canvas` solo emitió `Begin`; ningún relleno más |
 | 18 | `Escape` **antes** del soltado: `Begin(1,1)`, `Move(5,1)`, `Escape`, `Move(5,1)`, `End` | `Ok(false)` en `Escape`, `Move` y `End`; imagen e historia intactas; `busy` hasta el `End` |
 | 19 | `Escape` **después** del soltado: `Begin(1,1)`, `Move(5,1)`, `Move(5,1)`, `End`, `Escape` | `End` da `Ok(true)` con los 5 píxeles rojos y un paso; `Escape` da `Ok(false)` y no lo deshace (`can_undo` sigue a `true`) |
-| 20 | Banco de egui (como `tests/pencil.rs`): trazo abierto y un fotograma con [`Escape`, soltar]; otro con [soltar, `Escape`]; `Shift`+`Escape`; `Escape` sin trazo | `[Escape, Move, End]`; `[Move, End, Escape]`; sin evento de `Escape`; `[Escape]` (y `ToolState` no hace nada con él) |
+| 20 | Banco de egui (como `tests/pencil.rs`): trazo abierto y un fotograma con [`Escape`, soltar]; otro con [soltar, `Escape`]; `Shift`+`Escape`; `Escape` sin trazo | con `interact_ordered`: `[Escape, Move, End]`; `[Move, End, Escape]`; sin `Escape`; `[Escape]` (y `ToolState` no hace nada con él). `interact` (sin `Escape`) da en los cuatro lo mismo que antes |
 | 21 | `Canvas` + `ToolState` con el banco de egui: trazo de línea y `WindowFocused(false)`; otro con `PointerGone` y soltar fuera de la ventana; otro con el soltar perdido; y en indexado con paleta de 3, ranura 5: pulsar y soltar | `busy()` es falso después de cada uno, sin gesto colgado y sin cambios en el último; tras el último, `Select(Fill)` cambia de herramienta |
 | 22 | `window_title(Line, info)` con `info` completo; con `color: None`; con `can_undo` y `can_redo`; con `error` | `Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer`; `… · ×8 · lápiz` (solo la herramienta, para `Pencil`); `deshacer` y `rehacer` solo si se puede; con error, `Pixoko: {error}` y nada más |
 
@@ -143,13 +149,13 @@ Imágenes de 1 a 16 de lado, en los cuatro modos; posiciones `i32` arbitrarias c
 
 1. **Teclas `P`, `L`, `F` y `Escape` sin modificadores**, y la función `tool_action_for_key` aparte de `action_for_key` (para no tocar la propiedad 6 de la unidad 6). Sin probar en teclado físico no QWERTY.
 2. **El relleno se ejecuta al pulsar**, no al soltar; un arrastre no hace nada más. Alternativa: al soltar en el punto de pulsación.
-3. **`Escape` solo cancela la línea** (el lápiz no cambia), y si coincide en el mismo fotograma con el soltado, **manda el orden de los eventos** (antes cancela, después gana el soltado). Para eso `Canvas` emite `CanvasEvent::Escape`, un cambio aditivo.
+3. **`Escape` solo cancela la línea** (el lápiz no cambia), y si coincide en el mismo fotograma con el soltado, **manda el orden de los eventos** (antes cancela, después gana el soltado). Para eso `Canvas` gana `interact_ordered` y `CanvasInput::Escape`, un cambio aditivo que no toca `CanvasEvent` ni `interact`.
 4. **Error en el título 5 s** y un éxito no lo borra antes (cambia la regla de la unidad 6: «hasta la siguiente acción correcta»).
 5. **El relleno es síncrono:** puede bloquear la ventana con regiones enormes; el tope de tramos o el hilo aparte son de la unidad 14. No puedo prometer que «no se cuelgue», solo que no hace pánico ni aborta por memoria.
 6. **El título completo sale de `window_title`**, que mete la herramienta dentro del campo `color` (`status_text`) en vez de añadir un campo, para no tocar 13 literales de la unidad 6. Un campo propio, para la unidad 14.
 7. **`screen_to_image_i32` conserva `Size`:** quitarlo toca 14 llamadas de `view_i32.rs` (unidad 6), así que queda para la unidad 14.
 8. **`busy()` va de `Begin` a `End` aunque no haya gesto real** (cambio mínimo respecto a la unidad 6 en el caso de ranura sin color).
-9. **La lógica de herramientas se mueve de `main.rs` a `px-ui`** (`ToolState`, sin tipos de egui en su API), sin cambiar `Stroke`; `Canvas` solo gana `CanvasEvent::Escape`.
+9. **La lógica de herramientas se mueve de `main.rs` a `px-ui`** (`ToolState`, sin tipos de egui en su API), sin cambiar `Stroke`; `Canvas` solo gana `CanvasInput` e `interact_ordered`.
 
 ## Para la unidad 14
 
