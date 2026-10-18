@@ -1168,14 +1168,18 @@ fn fila_6_con_alto_200n_no_hay_aviso_de_ventana_baja_y_el_editor_pinta_su_cabece
             let mut banco = Banco::con_alto_de_panel(ppp, alto, imagen_f(), ColorChoice::Entry(1));
             for _ in 0..3 {
                 let f = banco.reposo();
-                // `PanelOutput` solo tiene `choice`, `commit` y `notice`: si recupera
-                // `editor_hidden` (u otro campo) esta desestructuración deja de compilar.
+                // `PanelOutput` solo tiene `choice`, `commit`, `notice` y, desde 11d, `op` y
+                // `op_unused`: si recupera `editor_hidden` (u otro campo) esta desestructuración
+                // deja de compilar.
                 let PanelOutput {
                     choice,
                     commit,
                     notice,
+                    op,
+                    op_unused,
                 } = f.salida.clone();
                 assert_eq!((choice, commit, notice), (None, None, None));
+                assert_eq!((op, op_unused), (None, false));
                 assert!(
                     f.pinta("editar índice 1"),
                     "ppp {ppp}, alto {alto}: el editor pinta su cabecera"

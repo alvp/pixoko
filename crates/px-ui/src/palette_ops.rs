@@ -275,6 +275,16 @@ impl MoveDrag {
         self.dragging
     }
 
+    /// Entrada que se arrastra.
+    pub fn from(&self) -> u8 {
+        self.from
+    }
+
+    /// Último destino bajo el puntero (solo con arrastre vivo).
+    pub fn target(&self) -> Option<u8> {
+        self.target
+    }
+
     /// `(from, to)` si se arrastra, hay destino y es otra posición.
     pub fn preview(&self) -> Option<(u8, u8)> {
         self.target
@@ -311,6 +321,7 @@ pub struct PaletteOps {
     removal: Option<(Removal, u64)>,
     range_end: Option<u8>,
     doc_state: u64,
+    text_focus: bool,
 }
 
 impl PaletteOps {
@@ -341,6 +352,11 @@ impl PaletteOps {
 
     pub fn drag(&mut self) -> Option<&mut MoveDrag> {
         self.drag.as_mut()
+    }
+
+    /// El arrastre en curso, sin poder modificarlo (para pintar).
+    pub fn drag_state(&self) -> Option<&MoveDrag> {
+        self.drag.as_ref()
     }
 
     /// Termina el arrastre (soltar) y dice cómo acabó.
@@ -392,6 +408,16 @@ impl PaletteOps {
     /// Hay un arrastre de verdad (pasó el umbral); el botón solo armado no cuenta.
     pub fn busy(&self) -> bool {
         self.drag.as_ref().is_some_and(MoveDrag::dragging)
+    }
+
+    /// Había un campo de texto enfocado al terminar el fotograma anterior. egui le quita el foco
+    /// al principio del fotograma de un `Escape`, así que el panel recuerda el del anterior.
+    pub fn text_focus(&self) -> bool {
+        self.text_focus
+    }
+
+    pub fn set_text_focus(&mut self, focused: bool) {
+        self.text_focus = focused;
     }
 
     pub fn reset(&mut self) {

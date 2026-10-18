@@ -8,26 +8,33 @@ use egui::{
     Align2, Color32, Event, FontFamily, FontId, Frame, MouseWheelUnit, Panel, PointerButton, Pos2,
     Rect, Sense, Ui, vec2,
 };
-use px_core::{Image, Rgba};
+use px_core::{Image, Mode, Rgba};
 
 use crate::color::{
     ColorChoice, SlotColors, cell_color_with, cell_count, cell_label_with, cell_of_choice,
-    choice_for_cell, info_flags, is_transparent_cell_with,
+    choice_for_cell, info_flags_range, is_transparent_cell_with,
 };
 use crate::color_edit::{
     ColorEditor, Commit, EditTarget, HexOutcome, Resolved, hex_notice, stale_notice,
 };
-use crate::color_editor::{self, Geometry};
-use crate::edit_layout::{PanelLayout, block_height_px, panel_layout};
+use crate::color_editor::{self, ButtonsView, Extras, Geometry, hex_field_id, is_escape};
+use crate::edit_layout::{PaletteButton, PanelLayout, block_height_px, button_hit, panel_layout};
 use crate::palette_grid::{
     COLUMNS, GRID_X_U, GRID_Y_U, Grid, LINE_H_U, LINE1_Y_U, LINE2_Y_U, PANEL_WIDTH_U, PITCH_U,
-    PanelView, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U,
-    TEXT_X_U, TRACK_W_U, TRACK_X_U, panel_thumb, ring_rects, swatch_parts, thumb, total_rows,
-    visible_rows_reserved,
+    PanelView, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_DEST_U, RING_HOVER_U, RING_RANGE_U,
+    SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U, TEXT_X_U, TRACK_W_U, TRACK_X_U, drop_mark_rect,
+    panel_thumb, ring_rects, swatch_parts, thumb, total_rows, visible_rows_reserved,
+};
+use crate::palette_ops::{
+    DragEnd, PaletteOp, PaletteOps, blocked_reason, default_destination, drag_labels,
+    removal_prompt, removal_warning, rotation_range, uses_entry,
 };
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, text_scale, ui_unit};
-use crate::theme::{RING_ACTIVE, RING_HOVER, SURFACE_1, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM};
+use crate::theme::{
+    DROP_MARK, RING_ACTIVE, RING_DEST, RING_HOVER, RING_RANGE, SURFACE_1, SURFACE_2, SURFACE_3,
+    TEXT, TEXT_DIM,
+};
 use crate::view::ScreenRect;
 
 /// Filas que desplaza una «línea» de la rueda.
@@ -84,6 +91,10 @@ pub struct PanelOutput {
     pub commit: Option<Commit>,
     /// Aviso de 5 s para la barra de estado (hexadecimal inválido al perder el foco).
     pub notice: Option<String>,
+    /// Edición de la paleta pedida (botones o soltar un arrastre de muestra); la aplica la sesión.
+    pub op: Option<PaletteOp>,
+    /// Con `op` = `Remove`: ningún píxel usaba la entrada (se quita sin pedir destino).
+    pub op_unused: bool,
 }
 
 /// Pinta el panel a la izquierda de `ui` y devuelve la elección que pidió un clic (botón
@@ -107,6 +118,7 @@ pub fn show(
         &mut PanelView::default(),
         enabled,
         &slots,
+        None,
         None,
     )
     .choice
@@ -152,6 +164,34 @@ pub fn show_editing_view(
     slots: &SlotColors,
     editor: &mut ColorEditor,
 ) -> PanelOutput {
+    show_editing_ops(
+        ui,
+        image,
+        choice,
+        scroll,
+        view,
+        enabled,
+        slots,
+        editor,
+        &mut PaletteOps::default(),
+    )
+}
+
+/// Como [`show_editing_view`], con los botones de añadir, quitar y rotar, el arrastre de muestras,
+/// el rango y la quita pendiente de las indexadas (`ops`, specs/hito-2-paleta-operaciones.md).
+/// Las ediciones salen en `PanelOutput::op`; el panel no toca el documento.
+#[allow(clippy::too_many_arguments)]
+pub fn show_editing_ops(
+    ui: &mut Ui,
+    image: &Image,
+    choice: ColorChoice,
+    scroll: &mut Scroll,
+    view: &mut PanelView,
+    enabled: bool,
+    slots: &SlotColors,
+    editor: &mut ColorEditor,
+    ops: &mut PaletteOps,
+) -> PanelOutput {
     show_panel(
         ui,
         image,
@@ -161,6 +201,7 @@ pub fn show_editing_view(
         enabled,
         slots,
         Some(editor),
+        Some(ops),
     )
 }
 
@@ -174,6 +215,7 @@ fn show_panel(
     enabled: bool,
     slots: &SlotColors,
     mut editor: Option<&mut ColorEditor>,
+    mut ops: Option<&mut PaletteOps>,
 ) -> PanelOutput {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
@@ -226,6 +268,28 @@ fn show_panel(
             view.reveal = false;
             view.last_visible = Some(visible);
             let busy_editing = editor.as_ref().is_some_and(|editor| editor.dragging());
+            // Operaciones de paleta: solo indexadas, con editor y con una entrada activa.
+            let active_entry = match choice {
+                ColorChoice::Entry(index) => Some(index),
+                ColorChoice::Slot(_) => None,
+            };
+            let ops_on = mode == Mode::Indexed
+                && target.is_some()
+                && ops.is_some()
+                && active_entry.is_some();
+            let text_focused =
+                ctx.text_edit_focused() || ops.as_deref().is_some_and(|ops| ops.text_focus());
+            let stored = |target: EditTarget| target.stored(image, slots);
+            let primary_down = ui.input(|i| i.pointer.primary_down());
+            let pre_geometry = Geometry {
+                ppp,
+                n: layout.n,
+                panel_min: rect.min,
+                panel_rect: rect,
+                top_px: placed.top_px,
+                mode,
+            };
+            let phys = |p: Pos2| ((p.x * ppp).round() as i64, (p.y * ppp).round() as i64);
 
             let pointer = ui
                 .input(|i| i.pointer.hover_pos())
@@ -263,15 +327,105 @@ fn show_panel(
                         pos,
                         button: PointerButton::Primary,
                         pressed: true,
-                        ..
+                        modifiers,
                     } if enabled && !busy_editing && rect.contains(*pos) => {
+                        if ops_on {
+                            let removing = ops.as_deref().is_some_and(|o| o.removal().is_some());
+                            let (rx, ry) = pre_geometry.rel_px(*pos);
+                            if let Some(button) = button_hit(mode, removing, rx, ry, layout.n) {
+                                // Pulsar un botón es salir del campo: su texto pendiente se
+                                // resuelve antes de la operación (el `Commit` llega primero).
+                                if let Some(editor) = editor.as_mut() {
+                                    resolve_pending(editor, mode, &stored, &mut output);
+                                    ctx.memory_mut(|m| m.surrender_focus(hex_field_id()));
+                                }
+                                if let (Some(ops), Some(active)) =
+                                    (ops.as_deref_mut(), active_entry)
+                                {
+                                    press_button(button, image, active, count, ops, &mut output);
+                                }
+                                continue;
+                            }
+                        }
                         let grid = Grid::new(layout.n, count, visible, scroll.first_row);
                         let (x, y) = layout.grid_px(*pos);
                         if let Some(cell) = grid.index_at(x, y) {
-                            picked = choice_for_cell(image, cell).or(picked);
+                            let cell_u8 = u8::try_from(cell).ok();
+                            match (ops.as_deref_mut(), cell_u8) {
+                                (Some(ops), Some(cell_u8)) if ops_on => {
+                                    if ops.removal().is_some() {
+                                        // Con una quita pendiente, pulsar es elegir el destino.
+                                        ops.set_destination(cell_u8, count);
+                                    } else if modifiers.shift {
+                                        // `Mayús` + clic: fija el rango, sin elegir ni arrastrar.
+                                        ops.set_range_end(cell_u8);
+                                    } else {
+                                        picked = choice_for_cell(image, cell).or(picked);
+                                        ops.clear_range();
+                                        ops.begin_drag(cell_u8, phys(*pos));
+                                    }
+                                }
+                                _ => picked = choice_for_cell(image, cell).or(picked),
+                            }
+                        }
+                    }
+                    Event::PointerMoved(pos) => {
+                        if let Some(ops) = ops.as_deref_mut() {
+                            let first_row = scroll.first_row;
+                            let target = drop_target(&layout, count, visible, first_row, *pos);
+                            if let Some(drag) = ops.drag() {
+                                drag.update(phys(*pos), layout.n, target);
+                            }
+                        }
+                    }
+                    Event::PointerButton {
+                        pos,
+                        button: PointerButton::Primary,
+                        pressed: false,
+                        ..
+                    } => {
+                        if let Some(ops) = ops.as_deref_mut() {
+                            let first_row = scroll.first_row;
+                            let target = drop_target(&layout, count, visible, first_row, *pos);
+                            if let Some(drag) = ops.drag() {
+                                drag.update(phys(*pos), layout.n, target);
+                            }
+                            finish_drag(ops, &mut output);
+                        }
+                    }
+                    Event::WindowFocused(false) => {
+                        if let Some(ops) = ops.as_deref_mut() {
+                            ops.cancel_drag();
+                        }
+                    }
+                    event if is_escape(event) && !text_focused => {
+                        // Prioridad de `Escape`: el campo de texto, el gesto de dibujo o el
+                        // deslizador (no llegan aquí), el arrastre de muestra y la quita pendiente.
+                        if let Some(ops) = ops.as_deref_mut() {
+                            if ops.drag_state().is_some() {
+                                ops.cancel_drag();
+                            } else if ops.removal().is_some() && enabled && !busy_editing {
+                                ops.cancel_removal();
+                            }
                         }
                     }
                     _ => {}
+                }
+            }
+            if let Some(ops) = ops.as_deref_mut()
+                && ops.drag_state().is_some()
+            {
+                // Tras la rueda o un cambio de diseño el destino puede haber cambiado; y si
+                // egui ya no ve el botón (se perdió el soltar), es un soltar.
+                if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
+                    let first_row = scroll.first_row;
+                    let target = drop_target(&layout, count, visible, first_row, pos);
+                    if let Some(drag) = ops.drag() {
+                        drag.update(phys(pos), layout.n, target);
+                    }
+                }
+                if !primary_down {
+                    finish_drag(ops, &mut output);
                 }
             }
             output.choice = picked;
@@ -279,7 +433,6 @@ fn show_panel(
             view.offset_px = placed.offset_px;
             layout.min = rect.min - vec2(0.0, placed.offset_px as f32 / ppp);
 
-            let stored = |target: EditTarget| target.stored(image, slots);
             let mut preview = None;
             if let Some(editor) = editor.as_mut() {
                 match target {
@@ -292,17 +445,31 @@ fn show_panel(
                             top_px: placed.top_px,
                             mode,
                         };
-                        let primary_down = ui.input(|i| i.pointer.primary_down());
                         output.commit = color_editor::interact(
                             &events,
                             &geometry,
                             editor,
                             enabled,
                             primary_down,
-                        );
+                        )
+                        .or(output.commit);
                         preview = editor.preview();
                         let transparent = matches!(target, EditTarget::Entry(index)
                             if image.palette().and_then(|p| p.transparent_index()) == Some(index));
+                        let removal = ops.as_deref().and_then(|o| o.removal());
+                        let extras = Extras {
+                            buttons: ops_on.then_some(ButtonsView {
+                                removing: removal.is_some(),
+                                len: count,
+                                has_destination: removal.is_some_and(|r| r.into.is_some()),
+                            }),
+                            prompt: removal.map(|r| {
+                                let warn = image
+                                    .palette()
+                                    .and_then(|p| removal_warning(p, r.index, r.into));
+                                removal_prompt(r.index, r.into, warn)
+                            }),
+                        };
                         let shown = color_editor::show(
                             ui,
                             &geometry,
@@ -311,9 +478,10 @@ fn show_panel(
                             transparent,
                             &events,
                             &stored,
+                            &extras,
                         );
                         output.commit = shown.commit.or(output.commit);
-                        output.notice = shown.notice;
+                        output.notice = shown.notice.or(output.notice.take());
                     }
                     None => {
                         // El campo desaparece: su texto pendiente se resuelve como al perder el
@@ -343,9 +511,13 @@ fn show_panel(
             let panel_bar = placed
                 .scrolling
                 .then(|| panel_thumb(placed.offset_px, height_px, block_height_px(mode, n), n));
+            if let Some(ops) = ops.as_deref_mut() {
+                ops.set_text_focus(ctx.text_edit_focused());
+            }
+            let marks = Marks::new(ops.as_deref(), active_entry, ops_on);
             paint(
                 ui, &layout, image, slots, choice, &grid, hover, preview, scroll, total, visible,
-                panel_bar,
+                panel_bar, &marks,
             );
             output
         })
@@ -366,6 +538,7 @@ fn paint(
     total: usize,
     visible: usize,
     panel_bar: Option<Option<(i64, i64)>>,
+    marks: &Marks,
 ) {
     let ctx = ui.ctx();
     let (n, ppp) = (layout.n, layout.ppp);
@@ -391,18 +564,24 @@ fn paint(
 
     // Información: la muestra bajo el cursor o, si no hay, la elegida.
     let shown = hover.or(active);
-    let line1 = shown
+    let mut line1 = shown
         .and_then(|cell| cell_label_with(image, cell, slots))
         .unwrap_or_default();
-    let line2 = shown
+    let mut line2 = shown
         .map(|cell| {
-            info_flags(
+            info_flags_range(
                 hover.is_some(),
                 Some(cell) == active,
+                marks.in_range(cell),
                 is_transparent_cell_with(image, cell, slots),
             )
         })
         .unwrap_or_default();
+    // Durante un arrastre, el panel dice qué se mueve y cómo cancelarlo.
+    if let Some([first, second]) = &marks.drag_text {
+        line1 = first.clone();
+        line2 = second.clone();
+    }
     let cols = columns((TEXT_WIDTH_U * n_px) as f32, ppp);
     let font = FontId::new(font_size_points(ppp), FontFamily::Proportional);
     for (y, text, color) in [(LINE1_Y_U, line1, TEXT), (LINE2_Y_U, line2, TEXT_DIM)] {
@@ -438,7 +617,18 @@ fn paint(
         }
     }
 
-    // Anillos: el del cursor (si no es la elegida) y el de la elegida.
+    // Anillos: los del rango de rotación, el del cursor (si no es la elegida), el de la elegida y
+    // el destino de una quita pendiente.
+    if let Some((low, high)) = marks.range {
+        for cell in (low..=high).filter(|cell| Some(*cell) != active) {
+            let Some(rect) = grid.cell_rect(cell) else {
+                continue;
+            };
+            for ring in ring_rects(rect, RING_RANGE_U * n_px) {
+                painter.rect_filled(layout.grid_rect(ring), 0.0, RING_RANGE);
+            }
+        }
+    }
     let rings = [
         (
             hover.filter(|cell| Some(*cell) != active),
@@ -454,6 +644,19 @@ fn paint(
         for ring in ring_rects(rect, thickness * n_px) {
             painter.rect_filled(layout.grid_rect(ring), 0.0, color);
         }
+    }
+
+    if let Some(rect) = marks.dest.and_then(|cell| grid.cell_rect(cell)) {
+        for ring in ring_rects(rect, RING_DEST_U * n_px) {
+            painter.rect_filled(layout.grid_rect(ring), 0.0, RING_DEST);
+        }
+    }
+    // Barra del destino de un arrastre.
+    if let Some((from, to)) = marks.drop
+        && let Some(rect) = grid.cell_rect(to)
+    {
+        let bar = drop_mark_rect(rect, to > from, n);
+        painter.rect_filled(layout.grid_rect(bar), 0.0, DROP_MARK);
     }
 
     // Pista e indicador, solo si hace falta desplazar: los de todo el panel si no cabe; si no,
@@ -490,6 +693,143 @@ fn paint(
             vec2(TRACK_W_U as f32 * ui_unit(ppp), height as f32 / ppp),
         );
         painter.rect_filled(bar, 0.0, TEXT_DIM);
+    }
+}
+
+/// Lo que las operaciones de paleta añaden al pintado de la rejilla.
+#[derive(Default)]
+struct Marks {
+    /// Muestras del rango de rotación (extremos incluidos).
+    range: Option<(usize, usize)>,
+    /// Destino elegido de la quita pendiente.
+    dest: Option<usize>,
+    /// Arrastre con destino: `(from, to)`.
+    drop: Option<(usize, usize)>,
+    /// Líneas de información mientras se arrastra.
+    drag_text: Option<[String; 2]>,
+}
+
+impl Marks {
+    fn new(ops: Option<&PaletteOps>, active: Option<u8>, on: bool) -> Marks {
+        let Some(ops) = ops.filter(|_| on) else {
+            return Marks::default();
+        };
+        let range = active
+            .zip(ops.range_end())
+            .map(|(a, e)| (usize::from(a.min(e)), usize::from(a.max(e))));
+        let drag = ops.drag_state().filter(|drag| drag.dragging());
+        Marks {
+            range,
+            dest: ops.removal().and_then(|r| r.into).map(usize::from),
+            drop: drag
+                .and_then(|d| d.preview())
+                .map(|(from, to)| (usize::from(from), usize::from(to))),
+            drag_text: drag.map(|d| drag_labels(d.from(), d.target())),
+        }
+    }
+
+    fn in_range(&self, cell: usize) -> bool {
+        self.range
+            .is_some_and(|(low, high)| (low..=high).contains(&cell))
+    }
+}
+
+/// Destino de un arrastre bajo un punto de egui: el índice final de la entrada movida.
+fn drop_target(
+    layout: &Layout,
+    count: usize,
+    visible: usize,
+    first_row: usize,
+    pos: Pos2,
+) -> Option<u8> {
+    let grid = Grid::new(layout.n, count, visible, first_row);
+    let (x, y) = layout.grid_px(pos);
+    grid.drop_index(x, y)
+        .and_then(|index| u8::try_from(index).ok())
+}
+
+/// Resuelve el texto pendiente del campo hexadecimal como al perder el foco.
+fn resolve_pending(
+    editor: &mut ColorEditor,
+    mode: Mode,
+    stored: &dyn Fn(EditTarget) -> Option<Rgba>,
+    output: &mut PanelOutput,
+) {
+    match editor.confirm_hex_checked(mode, true, stored) {
+        Resolved::Done(HexOutcome::Commit(commit)) => output.commit = Some(commit),
+        Resolved::Done(HexOutcome::Invalid(error)) => {
+            output.notice = Some(hex_notice(&error).to_string());
+        }
+        Resolved::Done(_) => {}
+        Resolved::Stale(reason) => output.notice = Some(stale_notice(reason).to_string()),
+    }
+}
+
+/// Termina el arrastre: soltar en otra posición pide un `Move`.
+fn finish_drag(ops: &mut PaletteOps, output: &mut PanelOutput) {
+    if let Some(DragEnd::Move { from, to }) = ops.end_drag() {
+        output.op = Some(PaletteOp::Move { from, to });
+    }
+}
+
+/// Pulsar un botón de la paleta: o pide una edición, o cambia la quita pendiente, o avisa de por
+/// qué no se puede.
+fn press_button(
+    button: PaletteButton,
+    image: &Image,
+    active: u8,
+    count: usize,
+    ops: &mut PaletteOps,
+    output: &mut PanelOutput,
+) {
+    let removal = ops.removal();
+    if let Some(reason) = blocked_reason(
+        button,
+        count,
+        removal.is_some_and(|removal| removal.into.is_some()),
+    ) {
+        output.notice = Some(reason.to_string());
+        return;
+    }
+    match button {
+        PaletteButton::Add => output.op = Some(PaletteOp::Add),
+        PaletteButton::Remove => {
+            let default = image
+                .palette()
+                .and_then(|palette| default_destination(palette, active));
+            if uses_entry(image, active) {
+                ops.begin_removal(active, default);
+            } else {
+                // Nadie la usa: el destino da igual (la transparente no tiene por defecto).
+                let into = default.unwrap_or(u8::from(active == 0));
+                output.op = Some(PaletteOp::Remove {
+                    index: active,
+                    into,
+                });
+                output.op_unused = true;
+            }
+        }
+        PaletteButton::Confirm => {
+            if let Some(removal) = removal
+                && let Some(into) = removal.into
+            {
+                output.op = Some(PaletteOp::Remove {
+                    index: removal.index,
+                    into,
+                });
+                ops.cancel_removal();
+            }
+        }
+        PaletteButton::Cancel => ops.cancel_removal(),
+        PaletteButton::RotateLeft | PaletteButton::RotateRight => {
+            let (start, len) = rotation_range(count, active, ops.range_end());
+            let steps = if button == PaletteButton::RotateLeft {
+                -1
+            } else {
+                1
+            };
+            output.op = Some(PaletteOp::Rotate { start, len, steps });
+        }
     }
 }
 

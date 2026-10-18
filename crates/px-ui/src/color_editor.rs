@@ -16,14 +16,18 @@ use crate::color_edit::{
     hex_text, slider_value_at, slider_x, stale_notice, value_text,
 };
 use crate::edit_layout::{
-    FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, HEADER_X_U, HEADER_Y_U, LABEL_X_U, ROW_H_U,
-    SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_X_U, control_row_u,
-    field_y_u, notice_y_u, slider_hit,
+    BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, HEADER_X_U,
+    HEADER_Y_U, LABEL_X_U, PaletteButton, ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U,
+    TRACK_W_U, TRACK_X_U, VALUE_X_U, button_rect_u, control_row_u, field_y_u, notice_y_u,
+    slider_hit,
 };
 use crate::palette_grid::{PANEL_WIDTH_U, TEXT_WIDTH_U};
+use crate::palette_ops::blocked_reason;
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, ui_unit};
-use crate::theme::{ACCENT, SURFACE_0, SURFACE_3, TEXT, TEXT_DIM, WARNING};
+use crate::theme::{
+    ACCENT, NOTICE_PREFIX, SURFACE_0, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM, WARNING,
+};
 
 /// Dónde está el editor: escala, esquina del panel y `top_px` desde su borde superior (negativo
 /// si el panel se desplazó). Lo pintado y los clics se limitan a `panel_rect`.
@@ -62,7 +66,7 @@ impl Geometry {
     }
 
     /// Un punto de egui, en píxeles físicos desde la esquina del editor.
-    fn rel_px(&self, pos: Pos2) -> (i64, i64) {
+    pub(crate) fn rel_px(&self, pos: Pos2) -> (i64, i64) {
         (
             ((pos.x - self.panel_min.x) * self.ppp).round() as i64,
             ((pos.y - self.panel_min.y) * self.ppp).round() as i64 - self.top_px,
@@ -75,11 +79,16 @@ impl Geometry {
     }
 }
 
-fn is_escape(event: &Event) -> bool {
+pub(crate) fn is_escape(event: &Event) -> bool {
     matches!(
         event,
         Event::Key { key: Key::Escape, pressed: true, modifiers, .. } if modifiers.is_none()
     )
+}
+
+/// Identificador del campo hexadecimal (el mismo cada fotograma).
+pub(crate) fn hex_field_id() -> Id {
+    Id::unique("pixoko-campo-hex")
 }
 
 fn is_enter(event: &Event) -> bool {
@@ -144,6 +153,37 @@ pub(crate) fn interact(
     commit
 }
 
+/// Qué botones de la paleta hay que pintar y cómo (specs/hito-2-paleta-operaciones.md).
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ButtonsView {
+    /// Hay una quita pendiente: la fila 1 es `Confirmar` y `Cancelar`.
+    pub removing: bool,
+    /// Entradas de la paleta.
+    pub len: usize,
+    /// La quita pendiente tiene destino.
+    pub has_destination: bool,
+}
+
+/// Lo que el editor pinta además de los deslizadores y el campo.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Extras {
+    /// Botones de la paleta (solo indexadas).
+    pub buttons: Option<ButtonsView>,
+    /// Las dos líneas de una quita pendiente, en lugar del aviso del editor.
+    pub prompt: Option<[String; 2]>,
+}
+
+fn button_label(button: PaletteButton) -> &'static str {
+    match button {
+        PaletteButton::Add => "Añadir",
+        PaletteButton::Remove => "Quitar",
+        PaletteButton::Confirm => "Confirmar",
+        PaletteButton::Cancel => "Cancelar",
+        PaletteButton::RotateLeft => "Rotar a la izquierda",
+        PaletteButton::RotateRight => "Rotar a la derecha",
+    }
+}
+
 /// Lo que pidió el editor en un fotograma.
 #[derive(Debug, Default)]
 pub(crate) struct Output {
@@ -154,6 +194,7 @@ pub(crate) struct Output {
 
 /// Pinta el editor y atiende el campo hexadecimal. `transparent`: el destino es la entrada
 /// transparente de la paleta.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn show(
     ui: &mut Ui,
     geo: &Geometry,
@@ -162,6 +203,7 @@ pub(crate) fn show(
     transparent: bool,
     events: &[Event],
     stored: &dyn Fn(EditTarget) -> Option<Rgba>,
+    extras: &Extras,
 ) -> Output {
     let mut output = Output::default();
     let Some((rgba, hsl)) = editor.shown() else {
@@ -220,7 +262,7 @@ pub(crate) fn show(
 
     // Campo hexadecimal: fondo y borde nuestros; el `TextEdit` va dentro y sin marco, porque los
     // márgenes de egui son enteros en puntos y no caen en píxeles físicos enteros a 1,5×.
-    let id = Id::unique("pixoko-campo-hex");
+    let id = hex_field_id();
     let field_y = field_y_u(mode);
     let focused = ui.memory(|memory| memory.has_focus(id));
     painter.rect(
@@ -271,11 +313,55 @@ pub(crate) fn show(
         }
     }
 
-    // Aviso de dos líneas.
-    let [first, second] = editor.notice(transparent);
+    // Aviso de dos líneas, o las de la quita pendiente.
     let notice = notice_y_u(mode);
-    text(HEADER_X_U, notice, &first, WARNING);
-    text(HEADER_X_U, notice + ROW_H_U, &second, WARNING);
+    if let Some([first, second]) = &extras.prompt {
+        text(HEADER_X_U, notice, first, TEXT);
+        let warning = second.starts_with(NOTICE_PREFIX);
+        let color = if warning { WARNING } else { TEXT_DIM };
+        text(HEADER_X_U, notice + ROW_H_U, second, color);
+    } else {
+        let [first, second] = editor.notice(transparent);
+        text(HEADER_X_U, notice, &first, WARNING);
+        text(HEADER_X_U, notice + ROW_H_U, &second, WARNING);
+    }
+
+    // Botones de la paleta.
+    if let Some(view) = extras.buttons {
+        let pointer = ui.input(|input| input.pointer.hover_pos());
+        let (first, second) = if view.removing {
+            (PaletteButton::Confirm, PaletteButton::Cancel)
+        } else {
+            (PaletteButton::Add, PaletteButton::Remove)
+        };
+        for button in [
+            first,
+            second,
+            PaletteButton::RotateLeft,
+            PaletteButton::RotateRight,
+        ] {
+            let Some((x, y, width, height)) = button_rect_u(mode, button) else {
+                continue;
+            };
+            let rect = geo.rect_u(x, y, width, height);
+            let disabled = blocked_reason(button, view.len, view.has_destination).is_some();
+            let hover = !disabled
+                && pointer.is_some_and(|p| geo.panel_rect.contains(p) && rect.contains(p));
+            let (fill, edge) = if hover {
+                (SURFACE_3, ACCENT)
+            } else {
+                (SURFACE_2, SURFACE_3)
+            };
+            painter.rect(rect, 0.0, fill, Stroke::new(u, edge), StrokeKind::Inside);
+            let color = if disabled { TEXT_DIM } else { TEXT };
+            text(
+                x + BUTTON_TEXT_X_U,
+                y + BUTTON_TEXT_Y_U,
+                button_label(button),
+                color,
+            );
+        }
+    }
 
     output
 }
