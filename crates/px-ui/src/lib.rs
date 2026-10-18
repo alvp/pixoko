@@ -1,8 +1,10 @@
 //! px-ui: modelo de vista del lienzo, conversión de imágenes, lienzo de egui, texto, tema y
-//! barra de estado y el panel de paletas.
+//! barra de estado, el panel de paletas y el editor de color.
 
 pub mod canvas;
 pub mod color;
+pub mod color_edit;
+pub mod edit_layout;
 pub mod notice;
 pub mod palette_grid;
 pub mod palette_panel;
