@@ -18,15 +18,19 @@ pub enum Tool {
     Pencil,
     Line,
     Fill,
+    Dropper,
+    Eraser,
 }
 
 impl Tool {
-    /// Nombre para el título: `lápiz`, `línea` o `relleno`.
+    /// Nombre para el título: `lápiz`, `línea`, `relleno`, `cuentagotas` o `borrador`.
     pub fn label(self) -> &'static str {
         match self {
             Tool::Pencil => "lápiz",
             Tool::Line => "línea",
             Tool::Fill => "relleno",
+            Tool::Dropper => "cuentagotas",
+            Tool::Eraser => "borrador",
         }
     }
 }
@@ -38,8 +42,8 @@ pub enum ToolAction {
     Cancel,
 }
 
-/// `P`, `L` y `F` eligen herramienta y `Escape` cancela, solo sin ningún modificador (así
-/// `Ctrl`+`P`, `Ctrl`+`L` y `Ctrl`+`F` no hacen nada). Es aparte de
+/// `P`, `L`, `F`, `I` y `E` eligen herramienta y `Escape` cancela, solo sin ningún modificador (así
+/// `Ctrl`+`P`, `Ctrl`+`L`, `Ctrl`+`F`, `Ctrl`+`I` y `Ctrl`+`E` no hacen nada). Es aparte de
 /// [`crate::shortcuts::action_for_key`], que da `None` para estas teclas.
 pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
     if !modifiers.is_none() {
@@ -49,6 +53,8 @@ pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction>
         Key::P => Some(ToolAction::Select(Tool::Pencil)),
         Key::L => Some(ToolAction::Select(Tool::Line)),
         Key::F => Some(ToolAction::Select(Tool::Fill)),
+        Key::I => Some(ToolAction::Select(Tool::Dropper)),
+        Key::E => Some(ToolAction::Select(Tool::Eraser)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -231,6 +237,8 @@ impl ToolState {
                 Ok(false)
             }
             Tool::Fill => flood_fill(doc, image, pos.0, pos.1, pixel),
+            // Sus gestos llegan en el commit siguiente (specs/hito-2-cuentagotas-borrador.md).
+            Tool::Dropper | Tool::Eraser => Ok(false),
         }
     }
 
