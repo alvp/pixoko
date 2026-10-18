@@ -1,11 +1,16 @@
-//! Tests de `edit_layout` (specs/hito-2-editar-color.md, unidad 11c): la maqueta del editor de
-//! color, sin tipos de `egui`, y `visible_rows_reserved`.
+//! Tests de `edit_layout`: la maqueta del editor de color, sin tipos de `egui`, y
+//! `visible_rows_reserved` (specs/hito-2-editar-color.md, unidad 11c) y la parte pura de la
+//! spec del panel con la ventana baja (specs/hito-2-panel-ventana-baja.md).
 //!
-//! Cubre la fila 3 de «Casos límite» en su parte de maqueta (`editor_layout`, `editor_height_u`,
-//! `visible_rows_reserved == visible_rows` con reserva 0, `slider_hit`, `control_row_u`,
-//! `field_y_u`, `notice_y_u` y `edges_u`: todo borde en puntos × `ppp` es un entero, ±0,001, a
-//! `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0 con `n = text_scale(ppp)`) y las medidas de la fila 18 que son
-//! de geometría (240n y 241n).
+//! Cubre la fila 3 de «Casos límite» de la spec del editor en su parte de maqueta
+//! (`editor_height_u`, `visible_rows_reserved == visible_rows` con reserva 0, `slider_hit`,
+//! `control_row_u`, `field_y_u`, `notice_y_u` y `edges_u`: todo borde en puntos × `ppp` es un
+//! entero, ±0,001, a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0 con `n = text_scale(ppp)`). De la spec de la
+//! ventana baja, en su parte pura: las filas 1 (`min_panel_height_px`, `min_window_height_pt`),
+//! 2 (una sola función para la altura del editor: `editor_height_u`, `editor_height_u_max`,
+//! `block_height_px`) y 3 (`panel_layout` con 241·n, 240·n, 200·n y 100·n). `editor_layout`,
+//! `EditorLayout` y `EDITOR_HIDDEN_NOTICE` desaparecieron: la fila 18 de la spec del editor la
+//! sustituye la spec de la ventana baja.
 //!
 //! Los números de la tabla «Geometría» están escritos como literales en un solo test
 //! (`las_constantes_valen_lo_que_dice_la_spec`); el resto usa las constantes de `edit_layout`,
@@ -15,13 +20,14 @@ use proptest::prelude::*;
 use px_core::Mode;
 use px_ui::color_edit::{Control, controls};
 use px_ui::edit_layout::{
-    BLOCK_GAP_U, EDITOR_HIDDEN_NOTICE, EditorLayout, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U,
-    FIRST_ROW_Y_U, GROUP_GAP_U, HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U, LABEL_X_U,
-    NOTICE_LINES, ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U,
-    VALUE_W_U, VALUE_X_U, control_row_u, edges_u, editor_height_u, editor_layout, field_y_u,
-    notice_y_u, slider_hit,
+    BLOCK_GAP_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, FIRST_ROW_Y_U, GROUP_GAP_U,
+    HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U, LABEL_X_U, NOTICE_LINES, PanelLayout,
+    ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_W_U,
+    VALUE_X_U, block_height_px, control_row_u, edges_u, editor_height_u, editor_height_u_max,
+    field_y_u, min_panel_height_px, min_window_height_pt, notice_y_u, panel_layout, slider_hit,
 };
 use px_ui::palette_grid::{GRID_Y_U, PITCH_U, visible_rows, visible_rows_reserved};
+use px_ui::status::bar_height_px;
 use px_ui::text::text_scale;
 
 const MODOS: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
@@ -55,7 +61,6 @@ fn las_constantes_valen_lo_que_dice_la_spec() {
     assert_eq!(FIELD_PAD_U, 3);
     assert_eq!(BLOCK_GAP_U, 4);
     assert_eq!(NOTICE_LINES, 2);
-    assert_eq!(EDITOR_HIDDEN_NOTICE, "ventana baja: editor oculto");
 }
 
 #[test]
@@ -199,27 +204,244 @@ fn la_maqueta_se_deduce_de_las_constantes() {
     }
 }
 
-// `editor_layout`.
+// `editor_height_u_max`, `block_height_px`, `min_panel_height_px` y `min_window_height_pt`.
+
+/// El bloque `[texto · rejilla de 1 fila · editor]` calculado a mano desde las constantes.
+fn bloque_px(modo: Mode, n: i64) -> i64 {
+    (GRID_Y_U + PITCH_U + editor_height_u(modo)) * n
+}
+
+#[test]
+fn editor_height_u_max_es_el_mayor_de_los_modos() {
+    let mayor = MODOS
+        .iter()
+        .map(|m| editor_height_u(*m))
+        .max()
+        .expect("hay modos");
+    assert_eq!(editor_height_u_max(), mayor);
+    assert_eq!(editor_height_u_max(), 186);
+}
+
+#[test]
+fn block_height_px_es_texto_una_fila_y_editor() {
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        for modo in MODOS {
+            assert_eq!(
+                block_height_px(modo, n),
+                bloque_px(modo, n_i),
+                "{modo:?}, n = {n}"
+            );
+        }
+        // Mientras no haya botones (11d): 241, 241, 167 y 149 u.
+        assert_eq!(block_height_px(Mode::Indexed, n), 241 * n_i);
+        assert_eq!(block_height_px(Mode::Rgba, n), 241 * n_i);
+        assert_eq!(block_height_px(Mode::GrayAlpha, n), 167 * n_i);
+        assert_eq!(block_height_px(Mode::Gray, n), 149 * n_i);
+    }
+}
+
+// Fila 1 (parte pura de `edit_layout`).
+
+#[test]
+fn fila_1_min_panel_height_px_es_241n() {
+    for n in [1u32, 2, 3] {
+        let n_i = i64::from(n);
+        assert_eq!(min_panel_height_px(n), 241 * n_i, "n = {n}");
+        // Sin literales: una fila, el texto y el editor del modo de mayor editor.
+        assert_eq!(
+            min_panel_height_px(n),
+            (GRID_Y_U + PITCH_U + editor_height_u_max()) * n_i
+        );
+    }
+}
+
+#[test]
+fn fila_1_el_minimo_cubre_el_bloque_de_todos_los_modos() {
+    // Abrir una imagen Gray no cambia el mínimo: es el del mayor editor, no el del modo actual.
+    for n in ESCALAS {
+        for modo in MODOS {
+            assert!(
+                block_height_px(modo, n) <= min_panel_height_px(n),
+                "{modo:?}, n = {n}"
+            );
+        }
+        assert_eq!(
+            block_height_px(Mode::Indexed, n),
+            min_panel_height_px(n),
+            "n = {n}"
+        );
+        assert!(block_height_px(Mode::Gray, n) < min_panel_height_px(n));
+    }
+}
+
+#[test]
+fn fila_1_min_window_height_pt_a_los_cinco_ppp() {
+    let esperado = [
+        (1.0f32, 261.0f32),
+        (1.25, 208.8),
+        (1.5, 348.0),
+        (2.0, 261.0),
+        (3.0, 261.0),
+    ];
+    for (ppp, puntos) in esperado {
+        let medido = min_window_height_pt(ppp);
+        assert!(
+            (medido - puntos).abs() <= 0.01,
+            "ppp {ppp}: {medido} pt y se esperaban {puntos}"
+        );
+        // Barra de estado más panel mínimo, en píxeles físicos, entre `ppp`.
+        let n = text_scale(ppp);
+        let formula = (i64::from(bar_height_px(n)) + min_panel_height_px(n)) as f32 / ppp;
+        assert!(
+            (medido - formula).abs() <= 0.001,
+            "ppp {ppp}: {medido} pt y la fórmula da {formula}"
+        );
+    }
+}
+
+#[test]
+fn fila_1_el_minimo_cabe_en_la_mitad_de_768_y_deja_una_fila_con_el_editor() {
+    let mut mayor = 0.0f32;
+    for ppp in PPPS {
+        let n = text_scale(ppp);
+        let minimo = min_window_height_pt(ppp);
+        mayor = mayor.max(minimo);
+        assert!(
+            minimo >= min_panel_height_px(n) as f32 / ppp,
+            "ppp {ppp}: {minimo} pt no deja sitio a una fila y al editor"
+        );
+        // Y la barra de estado.
+        assert!(minimo > min_panel_height_px(n) as f32 / ppp, "ppp {ppp}");
+    }
+    assert!(mayor <= 384.0, "el mayor de los cinco mide {mayor} pt");
+}
+
+// Fila 2: una sola función para la altura del editor.
+
+#[test]
+fn fila_2_editor_height_u_coincide_con_la_derivacion_de_la_maqueta() {
+    let esperado = [
+        (Mode::Indexed, 186),
+        (Mode::Rgba, 186),
+        (Mode::GrayAlpha, 112),
+        (Mode::Gray, 94),
+    ];
+    for (modo, altura) in esperado {
+        let derivada = notice_y_u(modo) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U;
+        assert_eq!(editor_height_u(modo), derivada, "{modo:?}");
+        assert_eq!(editor_height_u(modo), altura, "{modo:?}");
+    }
+}
+
+/// No se puede simular de verdad una altura de botones de 20 u sin tocar la maqueta; lo que sí se
+/// comprueba es que todo lo que depende de la altura del editor es función **solo** de
+/// `editor_height_u`: dos modos con la misma altura dan lo mismo, y entre dos modos con alturas
+/// distintas la diferencia de cada cantidad derivada es exactamente la diferencia de alturas por
+/// `n`. Así, 20 u más en `editor_height_u` mueven `block_height_px`, el mínimo y `panel_layout` en
+/// la misma cuantía y sin tocar nada más.
+#[test]
+fn fila_2_lo_derivado_solo_depende_de_editor_height_u() {
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        // Misma altura (186 u): Indexed y Rgba son indistinguibles.
+        assert_eq!(
+            block_height_px(Mode::Indexed, n),
+            block_height_px(Mode::Rgba, n)
+        );
+        for alto in [0, 100 * n_i, 200 * n_i, 241 * n_i, 700 * n_i] {
+            for pedido in [0, n_i, 50 * n_i, 10_000] {
+                assert_eq!(
+                    panel_layout(Mode::Indexed, alto, n, pedido),
+                    panel_layout(Mode::Rgba, alto, n, pedido),
+                    "alto {alto}, pedido {pedido}"
+                );
+            }
+        }
+        // Alturas distintas: la diferencia es `Δh · n`.
+        for a in MODOS {
+            for b in MODOS {
+                let delta = (editor_height_u(a) - editor_height_u(b)) * n_i;
+                assert_eq!(
+                    block_height_px(a, n) - block_height_px(b, n),
+                    delta,
+                    "{a:?} frente a {b:?}"
+                );
+            }
+            // El mínimo es el bloque del mayor editor: la diferencia con el bloque de `a` es lo
+            // que le falta a `a` para llegar al mayor.
+            assert_eq!(
+                min_panel_height_px(n) - block_height_px(a, n),
+                (editor_height_u_max() - editor_height_u(a)) * n_i,
+                "{a:?}"
+            );
+            // `panel_layout` cambia de régimen exactamente en el bloque de cada modo.
+            let bloque = block_height_px(a, n);
+            assert!(!panel_layout(a, bloque, n, 0).scrolling, "{a:?}");
+            assert!(panel_layout(a, bloque - 1, n, 0).scrolling, "{a:?}");
+            // Y el editor, anclado al fondo, empieza siempre `editor_height_u · n` por encima.
+            let pie = panel_layout(a, bloque, n, 0);
+            assert_eq!(pie.top_px, bloque - editor_height_u(a) * n_i, "{a:?}");
+        }
+    }
+}
+
+// `panel_layout`.
+
+/// `PanelLayout` del diseño normal (sin desplazamiento) con `alto` ≥ bloque.
+fn normal(modo: Mode, alto: i64, n: u32) -> PanelLayout {
+    let n_i = i64::from(n);
+    let top = (alto - editor_height_u(modo) * n_i).div_euclid(n_i) * n_i;
+    PanelLayout {
+        scrolling: false,
+        offset_px: 0,
+        max_offset_px: 0,
+        top_px: top,
+        visible_rows: visible_rows_reserved(alto, alto - top, n),
+    }
+}
 
 #[test]
 fn con_alto_700n_el_editor_se_ancla_al_fondo() {
     for n in ESCALAS {
         let n_i = i64::from(n);
         let esperado = [
-            (Mode::Indexed, 514, 186),
-            (Mode::Rgba, 514, 186),
-            (Mode::GrayAlpha, 588, 112),
-            (Mode::Gray, 606, 94),
+            (Mode::Indexed, 514),
+            (Mode::Rgba, 514),
+            (Mode::GrayAlpha, 588),
+            (Mode::Gray, 606),
         ];
-        for (modo, arriba, reservado) in esperado {
+        for (modo, arriba) in esperado {
+            let layout = panel_layout(modo, 700 * n_i, n, 0);
+            assert!(!layout.scrolling, "{modo:?}, n = {n}");
+            assert_eq!(layout.offset_px, 0, "{modo:?}, n = {n}");
+            assert_eq!(layout.top_px, arriba * n_i, "{modo:?}, n = {n}");
             assert_eq!(
-                editor_layout(modo, 700 * n_i, n),
-                Some(EditorLayout {
-                    top_px: arriba * n_i,
-                    reserved_px: reservado * n_i
-                }),
+                layout.visible_rows,
+                visible_rows_reserved(700 * n_i, 700 * n_i - layout.top_px, n),
                 "{modo:?}, n = {n}"
             );
+        }
+        // 700n con 186n reservados: (700 − 186 − 41) / 14 = 33 filas.
+        assert_eq!(
+            panel_layout(Mode::Indexed, 700 * n_i, n, 0).visible_rows,
+            33
+        );
+    }
+}
+
+#[test]
+fn en_el_diseno_normal_el_desplazamiento_pedido_se_ignora() {
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        for modo in MODOS {
+            let alto = 700 * n_i;
+            for pedido in [0, 1, n_i, 1000, -5] {
+                let layout = panel_layout(modo, alto, n, pedido);
+                assert!(!layout.scrolling, "{modo:?}, pedido {pedido}");
+                assert_eq!(layout.offset_px, 0, "{modo:?}, pedido {pedido}");
+                assert_eq!(layout.top_px, normal(modo, alto, n).top_px);
+            }
         }
     }
 }
@@ -233,13 +455,17 @@ fn top_px_siempre_es_multiplo_de_n_aunque_el_alto_no_lo_sea() {
     for modo in MODOS {
         for resto in 0..=5 {
             let alto = 700 * n_i + resto;
-            let layout = editor_layout(modo, alto, n).expect("cabe");
+            let layout = panel_layout(modo, alto, n, 0);
+            assert!(!layout.scrolling, "{modo:?}, resto {resto}");
             assert_eq!(layout.top_px % n_i, 0, "{modo:?}, resto {resto}");
             // `((alto − H·n) div n)·n`, con el alto redondeado a píxeles físicos.
             let h = editor_height_u(modo) * n_i;
             assert_eq!(layout.top_px, (alto - h).div_euclid(n_i) * n_i);
-            assert_eq!(layout.reserved_px, alto - layout.top_px);
-            assert!(layout.reserved_px >= h);
+            assert!(alto - layout.top_px >= h);
+            assert_eq!(
+                layout.visible_rows,
+                visible_rows_reserved(alto, alto - layout.top_px, n)
+            );
         }
     }
 }
@@ -251,54 +477,46 @@ fn un_pixel_mas_de_alto_no_mueve_el_editor_hasta_completar_n() {
     let n = 2u32;
     let n_i = i64::from(n);
     let modo = Mode::Rgba;
-    let a = editor_layout(modo, 700 * n_i, n).expect("cabe");
-    let b = editor_layout(modo, 700 * n_i + 1, n).expect("cabe");
-    let c = editor_layout(modo, 701 * n_i, n).expect("cabe");
+    let a = panel_layout(modo, 700 * n_i, n, 0);
+    let b = panel_layout(modo, 700 * n_i + 1, n, 0);
+    let c = panel_layout(modo, 701 * n_i, n, 0);
     assert_eq!(a.top_px, b.top_px);
     assert_eq!(c.top_px, a.top_px + n_i);
 }
 
 #[test]
-fn no_cabe_con_240n_pero_si_con_241n_en_indexadas_y_rgba() {
+fn el_cambio_de_regimen_es_el_bloque_de_cada_modo() {
     for n in ESCALAS {
         let n_i = i64::from(n);
-        for modo in [Mode::Indexed, Mode::Rgba] {
-            assert_eq!(editor_layout(modo, 240 * n_i, n), None, "{modo:?}, n = {n}");
-            let layout = editor_layout(modo, 241 * n_i, n).expect("cabe");
-            assert_eq!(layout.reserved_px, 186 * n_i);
-            // Queda justo una fila de rejilla.
-            assert_eq!(
-                visible_rows_reserved(241 * n_i, layout.reserved_px, n),
-                1,
-                "{modo:?}, n = {n}"
-            );
+        for modo in MODOS {
+            let limite = bloque_px(modo, n_i);
+            assert_eq!(limite, block_height_px(modo, n));
+            let justo = panel_layout(modo, limite, n, 0);
+            assert!(!justo.scrolling, "{modo:?}, n = {n}");
+            assert_eq!(justo.visible_rows, 1, "{modo:?}, n = {n}");
+            let debajo = panel_layout(modo, limite - 1, n, 0);
+            assert!(debajo.scrolling, "{modo:?}, n = {n}");
+            assert_eq!(debajo.visible_rows, 1, "{modo:?}, n = {n}");
+            // Sin salto: con `offset = 0` el `top_px` es el mismo a un lado y otro.
+            assert_eq!(debajo.top_px, justo.top_px, "{modo:?}, n = {n}");
+            assert_eq!(debajo.top_px, (GRID_Y_U + PITCH_U) * n_i);
         }
     }
 }
 
 #[test]
-fn el_limite_es_una_fila_de_rejilla_mas_el_editor_en_cada_modo() {
-    for n in ESCALAS {
-        let n_i = i64::from(n);
-        for modo in MODOS {
-            let limite = (GRID_Y_U + PITCH_U + editor_height_u(modo)) * n_i;
-            assert_eq!(
-                editor_layout(modo, limite - 1, n),
-                None,
-                "{modo:?}, n = {n}"
-            );
-            let layout = editor_layout(modo, limite, n).expect("cabe");
-            assert_eq!(visible_rows_reserved(limite, layout.reserved_px, n), 1);
-        }
-    }
-}
-
-#[test]
-fn alto_cero_o_negativo_no_tiene_editor() {
+fn alto_cero_o_negativo_no_da_panico_y_desplaza() {
     for n in ESCALAS {
         for modo in MODOS {
-            assert_eq!(editor_layout(modo, 0, n), None);
-            assert_eq!(editor_layout(modo, -5, n), None);
+            for alto in [0, -5] {
+                let layout = panel_layout(modo, alto, n, 0);
+                assert!(layout.scrolling, "{modo:?}, alto {alto}");
+                assert_eq!(layout.visible_rows, 1);
+                assert_eq!(layout.offset_px, 0);
+                // Con cualquier desplazamiento pedido, sigue en su rango.
+                let enorme = panel_layout(modo, alto, n, i64::MAX / 4);
+                assert_eq!(enorme.offset_px, enorme.max_offset_px);
+            }
         }
     }
 }
@@ -309,16 +527,175 @@ fn con_el_editor_visible_siempre_queda_una_fila_de_rejilla() {
         let n_i = i64::from(n);
         for modo in MODOS {
             for alto in 0..(900 * n_i) {
-                if let Some(layout) = editor_layout(modo, alto, n) {
-                    assert!(
-                        visible_rows_reserved(alto, layout.reserved_px, n) >= 1,
-                        "{modo:?}, n = {n}, alto {alto}"
-                    );
-                    assert_eq!(layout.top_px % n_i, 0);
-                    assert!(layout.top_px >= (GRID_Y_U + PITCH_U) * n_i);
+                let layout = panel_layout(modo, alto, n, 0);
+                assert!(layout.visible_rows >= 1, "{modo:?}, n = {n}, alto {alto}");
+                assert_eq!(layout.top_px % n_i, 0);
+                assert!(layout.top_px >= (GRID_Y_U + PITCH_U) * n_i);
+                assert_eq!(layout.scrolling, alto < block_height_px(modo, n));
+            }
+        }
+    }
+}
+
+// Fila 3: alto del panel 241n, 240n, 200n y 100n.
+
+#[test]
+fn fila_3_con_241n_el_editor_cabe_y_la_rejilla_tiene_una_fila() {
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        for modo in [Mode::Indexed, Mode::Rgba] {
+            let layout = panel_layout(modo, 241 * n_i, n, 0);
+            assert!(!layout.scrolling, "{modo:?}, n = {n}");
+            assert_eq!(layout.offset_px, 0);
+            assert_eq!(layout.top_px, 55 * n_i, "{modo:?}, n = {n}");
+            assert_eq!(layout.visible_rows, 1, "{modo:?}, n = {n}");
+        }
+    }
+}
+
+#[test]
+fn fila_3_con_240n_y_offset_0_no_hay_salto_respecto_de_241n() {
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        for modo in [Mode::Indexed, Mode::Rgba] {
+            let justo = panel_layout(modo, 241 * n_i, n, 0);
+            let debajo = panel_layout(modo, 240 * n_i, n, 0);
+            assert!(debajo.scrolling, "{modo:?}, n = {n}");
+            assert_eq!(debajo.offset_px, 0);
+            assert_eq!(debajo.top_px, 55 * n_i, "{modo:?}, n = {n}");
+            assert_eq!(debajo.top_px, justo.top_px);
+            assert_eq!(debajo.visible_rows, 1);
+            // Un solo `n` de desplazamiento posible: el bloque excede el panel en `n`.
+            assert_eq!(debajo.max_offset_px, n_i, "{modo:?}, n = {n}");
+        }
+    }
+}
+
+#[test]
+fn fila_3_max_offset_px_y_top_con_offset_maximo() {
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        for modo in MODOS {
+            let bloque = block_height_px(modo, n);
+            for alto in [241 * n_i, 240 * n_i, 200 * n_i, 100 * n_i] {
+                let sin = panel_layout(modo, alto, n, 0);
+                if alto >= bloque {
+                    assert!(!sin.scrolling, "{modo:?}, n = {n}, alto {alto}");
+                    continue;
+                }
+                let max = (bloque - alto).div_euclid(n_i) * n_i;
+                assert!(sin.scrolling, "{modo:?}, n = {n}, alto {alto}");
+                assert_eq!(sin.max_offset_px, max, "{modo:?}, n = {n}, alto {alto}");
+                assert_eq!(sin.visible_rows, 1);
+                assert_eq!(sin.top_px, (GRID_Y_U + PITCH_U) * n_i);
+
+                let abajo = panel_layout(modo, alto, n, max);
+                assert_eq!(abajo.offset_px, max);
+                assert_eq!(abajo.max_offset_px, max);
+                assert_eq!(abajo.top_px, (GRID_Y_U + PITCH_U) * n_i - max);
+                // Con el alto múltiplo de `n`, coincide con el editor anclado al fondo.
+                assert_eq!(
+                    abajo.top_px,
+                    alto - editor_height_u(modo) * n_i,
+                    "{modo:?}, n = {n}, alto {alto}"
+                );
+                assert_eq!(abajo.visible_rows, 1);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_3_el_desplazamiento_se_recorta_y_baja_a_multiplo_de_n() {
+    let n = 3u32;
+    let n_i = i64::from(n);
+    let modo = Mode::Indexed;
+    let alto = 200 * n_i;
+    let max = panel_layout(modo, alto, n, 0).max_offset_px;
+    assert_eq!(max, 41 * n_i);
+    for (pedido, esperado) in [
+        (-100, 0),
+        (0, 0),
+        (1, 0),
+        (n_i - 1, 0),
+        (n_i, n_i),
+        (n_i + 1, n_i),
+        (2 * n_i + 2, 2 * n_i),
+        (max - 1, max - n_i),
+        (max, max),
+        (max + 1, max),
+        (10_000, max),
+    ] {
+        let layout = panel_layout(modo, alto, n, pedido);
+        assert_eq!(layout.offset_px, esperado, "pedido {pedido}");
+        assert_eq!(
+            layout.top_px,
+            (GRID_Y_U + PITCH_U) * n_i - esperado,
+            "pedido {pedido}"
+        );
+    }
+}
+
+#[test]
+fn fila_3_el_editor_siempre_tiene_sitio_con_offset_maximo() {
+    // Con `offset = max` el editor entero cae dentro del panel (alto múltiplo de `n`).
+    for n in ESCALAS {
+        let n_i = i64::from(n);
+        for modo in MODOS {
+            for alto_n in [60, 100, 120, 200, 240] {
+                let alto = alto_n * n_i;
+                let sin = panel_layout(modo, alto, n, 0);
+                let layout = panel_layout(modo, alto, n, sin.max_offset_px.max(0));
+                if layout.scrolling {
+                    let fin = layout.top_px + editor_height_u(modo) * n_i;
+                    assert_eq!(fin, alto, "{modo:?}, n = {n}, alto {alto}");
                 }
             }
         }
+    }
+}
+
+proptest! {
+    #[test]
+    fn panel_layout_cumple_sus_invariantes(
+        modo in prop::sample::select(MODOS.to_vec()),
+        alto in -50i64..6000,
+        n in 1u32..=8,
+        pedido in -200i64..9000,
+    ) {
+        let n_i = i64::from(n);
+        let bloque = block_height_px(modo, n);
+        let layout = panel_layout(modo, alto, n, pedido);
+        if alto >= bloque {
+            prop_assert!(!layout.scrolling);
+            prop_assert_eq!(layout.offset_px, 0);
+            prop_assert_eq!(layout.top_px, normal(modo, alto, n).top_px);
+            prop_assert_eq!(layout.visible_rows, normal(modo, alto, n).visible_rows);
+        } else {
+            let max = (bloque - alto).div_euclid(n_i) * n_i;
+            prop_assert!(layout.scrolling);
+            prop_assert_eq!(layout.max_offset_px, max);
+            prop_assert!(layout.offset_px >= 0 && layout.offset_px <= max);
+            prop_assert_eq!(layout.offset_px % n_i, 0);
+            prop_assert_eq!(layout.offset_px, pedido.clamp(0, max).div_euclid(n_i) * n_i);
+            prop_assert_eq!(layout.top_px, (GRID_Y_U + PITCH_U) * n_i - layout.offset_px);
+            prop_assert_eq!(layout.visible_rows, 1);
+        }
+        prop_assert_eq!(layout.top_px % n_i, 0);
+    }
+
+    #[test]
+    fn el_editor_no_salta_al_cruzar_el_bloque(
+        modo in prop::sample::select(MODOS.to_vec()),
+        n in 1u32..=8,
+        extra in 0i64..40,
+    ) {
+        // Un píxel por encima o por debajo del bloque, con offset 0, el top es el mismo.
+        let bloque = block_height_px(modo, n);
+        let a = panel_layout(modo, bloque - 1 - extra.min(i64::from(n) - 1), n, 0);
+        let b = panel_layout(modo, bloque, n, 0);
+        prop_assert_eq!(a.top_px, b.top_px);
+        prop_assert_eq!(a.visible_rows, b.visible_rows);
     }
 }
 
@@ -533,7 +910,8 @@ fn el_anclaje_del_editor_cae_en_pixeles_fisicos_enteros() {
         for modo in MODOS {
             for alto in [700, 701, 777, 1080, 1441] {
                 let alto = alto * i64::from(n) + i64::from(n) / 2;
-                let layout = editor_layout(modo, alto, n).expect("cabe");
+                let layout = panel_layout(modo, alto, n, 0);
+                assert!(!layout.scrolling, "{modo:?}, ppp {ppp}, alto {alto}");
                 let puntos = layout.top_px as f32 / ppp;
                 let fisico = puntos * ppp;
                 assert!(

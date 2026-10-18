@@ -8,6 +8,11 @@
 //! (hexadecimal). Lo que necesita un `Document` (la fila 1 con `commit_edit`, la fila 4) no está
 //! aquí.
 //!
+//! Del texto pendiente del campo (specs/hito-2-panel-ventana-baja.md) cubre, en su parte pura,
+//! las filas 7, 8 y 9 de «Casos»: `ColorEditor::has_pending`, `confirm_hex_checked` con sus
+//! `Resolved` y `StaleReason`, `stale_notice` y `DOCUMENT_CHANGED_NOTICE`. El flujo con ventana
+//! está en `panel_baja.rs` y el de `Session::open` en `px-app`.
+//!
 //! Imagen `F`: indexada 4×1, paleta `[R, G, B, K]`, píxeles `[0, 1, 2, 3]`.
 //!
 //! Los números esperados salen de la spec. El oráculo de la propiedad 3 está escrito a mano y no
@@ -20,12 +25,13 @@ use proptest::test_runner::TestCaseError;
 use px_core::{Hsl, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::color::{ColorChoice, SlotColors};
 use px_ui::color_edit::{
-    ColorEditor, Commit, Control, EditTarget, HexError, HexOutcome, apply_control, control_value,
-    controls, hex_notice, hex_text, hsl_after_rgb, parse_hex, slider_value_at, slider_x,
-    value_text,
+    ColorEditor, Commit, Control, DOCUMENT_CHANGED_NOTICE, EditTarget, HexError, HexOutcome,
+    Resolved, StaleReason, apply_control, control_value, controls, hex_notice, hex_text,
+    hsl_after_rgb, parse_hex, slider_value_at, slider_x, stale_notice, value_text,
 };
 use px_ui::text::INTERFACE_CHARSET;
 use px_ui::theme::NOTICE_PREFIX;
+use std::cell::Cell;
 
 // Apoyo común.
 
@@ -2030,4 +2036,323 @@ fn el_oraculo_de_la_propiedad_3_acierta_los_ejemplos_de_la_spec() {
         oraculo("#80808080", Mode::Gray, Rgba::opaque(0, 0, 0)),
         Err(HexError::NoAlpha)
     );
+}
+
+// Texto pendiente del campo: `has_pending`, `confirm_hex_checked` y los avisos
+// (specs/hito-2-panel-ventana-baja.md, filas 7, 8 y 9 en su parte pura).
+
+fn hecho(resuelto: Resolved) -> HexOutcome {
+    match resuelto {
+        Resolved::Done(resultado) => resultado,
+        Resolved::Stale(motivo) => panic!("se esperaba Done y fue Stale({motivo:?})"),
+    }
+}
+
+fn descartado(resuelto: Resolved) -> StaleReason {
+    match resuelto {
+        Resolved::Stale(motivo) => motivo,
+        Resolved::Done(_) => panic!("se esperaba Stale y fue Done"),
+    }
+}
+
+fn commit_a(target: EditTarget, color: Rgba) -> HexOutcome {
+    HexOutcome::Commit(Commit { target, color })
+}
+
+#[test]
+fn has_pending_sigue_a_type_hex_y_a_lo_que_lo_borra() {
+    let destino = EditTarget::Entry(2);
+    let mut editor = editor_con(destino, AZUL);
+    assert!(!editor.has_pending(), "recién creado");
+
+    // Teclear lo deja pendiente, aunque el texto aún no sea válido.
+    teclear(&mut editor, destino, AZUL, "#00");
+    assert!(editor.has_pending());
+
+    // Intro con un valor inválido conserva el texto: sigue pendiente.
+    assert_eq!(
+        editor.confirm_hex(Mode::Indexed, false),
+        HexOutcome::Invalid(HexError::Length(2))
+    );
+    assert!(
+        editor.has_pending(),
+        "con Intro el texto inválido se conserva"
+    );
+
+    // Perder el foco con un valor inválido lo revierte.
+    assert_eq!(
+        editor.confirm_hex(Mode::Indexed, true),
+        HexOutcome::Invalid(HexError::Length(2))
+    );
+    assert!(!editor.has_pending());
+
+    // Confirmar uno válido, Escape y `reset` lo borran.
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    assert!(editor.has_pending());
+    editor.confirm_hex(Mode::Indexed, false);
+    assert!(!editor.has_pending());
+
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    editor.escape_hex();
+    assert!(!editor.has_pending());
+
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    editor.reset();
+    assert!(!editor.has_pending());
+    assert_eq!(editor.hex_display(), None);
+}
+
+#[test]
+fn has_pending_coincide_con_hex_display() {
+    let destino = EditTarget::Entry(1);
+    let mut editor = editor_con(destino, VERDE);
+    assert_eq!(editor.has_pending(), editor.hex_display().is_some());
+    teclear(&mut editor, destino, VERDE, "f");
+    assert_eq!(editor.has_pending(), editor.hex_display().is_some());
+    assert!(editor.has_pending());
+}
+
+// Fila 7: el texto válido sobre una entrada que sigue igual se aplica.
+
+#[test]
+fn fila_7_una_entrada_que_sigue_igual_aplica_el_texto_al_destino_original() {
+    for blur in [true, false] {
+        let destino = EditTarget::Entry(2);
+        let mut editor = editor_con(destino, AZUL);
+        teclear(&mut editor, destino, AZUL, "#00ff00");
+        let resuelto = editor.confirm_hex_checked(Mode::Indexed, blur, |_| Some(AZUL));
+        assert_eq!(hecho(resuelto), commit_a(destino, VERDE), "blur {blur}");
+        assert!(!editor.has_pending(), "blur {blur}");
+        assert_eq!(editor.hex_display(), None);
+        assert!(editor.notice(false).iter().all(|l| vacia(l)));
+    }
+}
+
+#[test]
+fn fila_7_consulta_el_guardado_del_destino_original_no_el_actual() {
+    // Entre teclear y perder el foco la elección pasó a la entrada 3.
+    let original = EditTarget::Entry(2);
+    let mut editor = editor_con(original, AZUL);
+    teclear(&mut editor, original, AZUL, "#00ff00");
+    editor.sync(Some((EditTarget::Entry(3), NEGRO)));
+    let preguntado = Cell::new(None);
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |destino| {
+        preguntado.set(Some(destino));
+        Some(AZUL)
+    });
+    assert_eq!(hecho(resuelto), commit_a(original, VERDE));
+    assert_eq!(
+        preguntado.get(),
+        Some(original),
+        "se pregunta por el destino original"
+    );
+}
+
+#[test]
+fn fila_7_con_el_mismo_color_dice_unchanged_y_sin_pendiente_nothing() {
+    let destino = EditTarget::Entry(2);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "#0000ff");
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |_| Some(AZUL));
+    assert_eq!(hecho(resuelto), HexOutcome::Unchanged);
+    assert!(!editor.has_pending());
+
+    // Sin nada pendiente no hay nada que descartar.
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |_| Some(AZUL));
+    assert_eq!(hecho(resuelto), HexOutcome::Nothing);
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, false, |_| None);
+    assert_eq!(hecho(resuelto), HexOutcome::Nothing);
+}
+
+#[test]
+fn fila_7_conserva_el_alfa_del_color_base_y_vale_con_una_ranura() {
+    let destino = EditTarget::Slot(4);
+    let base = rgba(10, 20, 30, 128);
+    let mut editor = editor_con(destino, base);
+    teclear(&mut editor, destino, base, "#00ff00");
+    let resuelto = editor.confirm_hex_checked(Mode::Rgba, true, |d| {
+        assert_eq!(d, destino);
+        Some(base)
+    });
+    assert_eq!(hecho(resuelto), commit_a(destino, rgba(0, 255, 0, 128)));
+}
+
+#[test]
+fn fila_7_un_texto_invalido_sobre_una_entrada_que_sigue_igual_es_el_de_confirm_hex() {
+    let destino = EditTarget::Entry(2);
+    // Perder el foco: invalido, revierte.
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "zzz");
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |_| Some(AZUL));
+    assert_eq!(hecho(resuelto), HexOutcome::Invalid(HexError::Digit));
+    assert!(!editor.has_pending());
+    // Intro: conserva el texto y el aviso.
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "zzz");
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, false, |_| Some(AZUL));
+    assert_eq!(hecho(resuelto), HexOutcome::Invalid(HexError::Digit));
+    assert!(editor.has_pending());
+    assert_eq!(editor.hex_display().as_deref(), Some("zzz"));
+}
+
+// Fila 8: la entrada ya no existe.
+
+#[test]
+fn fila_8_si_la_entrada_ya_no_existe_se_descarta_sin_commit() {
+    for blur in [true, false] {
+        let destino = EditTarget::Entry(9);
+        let mut editor = editor_con(destino, AZUL);
+        teclear(&mut editor, destino, AZUL, "#00ff00");
+        let resuelto = editor.confirm_hex_checked(Mode::Indexed, blur, |_| None);
+        assert_eq!(descartado(resuelto), StaleReason::Gone, "blur {blur}");
+        assert!(!editor.has_pending(), "blur {blur}");
+        assert_eq!(editor.hex_display(), None, "blur {blur}");
+        // No deja aviso de hexadecimal en el editor: el aviso va a la barra.
+        assert!(editor.notice(false).iter().all(|l| vacia(l)), "blur {blur}");
+    }
+}
+
+#[test]
+fn fila_8_la_entrada_ausente_gana_a_un_texto_invalido() {
+    let destino = EditTarget::Entry(9);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "zzz");
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, false, |_| None);
+    assert_eq!(descartado(resuelto), StaleReason::Gone);
+    assert!(!editor.has_pending(), "ni con Intro se conserva");
+    assert!(editor.notice(false).iter().all(|l| vacia(l)));
+}
+
+#[test]
+fn fila_8_vale_tambien_para_una_ranura_sin_color_guardado() {
+    let destino = EditTarget::Slot(4);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    let resuelto = editor.confirm_hex_checked(Mode::Rgba, true, |_| None);
+    assert_eq!(descartado(resuelto), StaleReason::Gone);
+    assert!(!editor.has_pending());
+}
+
+// Fila 9: el color guardado cambió.
+
+#[test]
+fn fila_9_si_el_color_guardado_cambio_se_descarta_sin_commit() {
+    for blur in [true, false] {
+        let destino = EditTarget::Entry(2);
+        let mut editor = editor_con(destino, AZUL);
+        teclear(&mut editor, destino, AZUL, "#00ff00");
+        let resuelto = editor.confirm_hex_checked(Mode::Indexed, blur, |_| Some(ROJO));
+        assert_eq!(descartado(resuelto), StaleReason::Changed, "blur {blur}");
+        assert!(!editor.has_pending(), "blur {blur}");
+        assert_eq!(editor.hex_display(), None, "blur {blur}");
+    }
+}
+
+#[test]
+fn fila_9_cambia_el_color_pero_tambien_si_solo_cambia_el_alfa() {
+    let destino = EditTarget::Entry(2);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    let cambiado = rgba(0, 0, 255, 128);
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |_| Some(cambiado));
+    assert_eq!(descartado(resuelto), StaleReason::Changed);
+}
+
+#[test]
+fn fila_9_un_texto_invalido_sobre_un_color_cambiado_tambien_se_descarta() {
+    let destino = EditTarget::Entry(2);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "zzz");
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, false, |_| Some(ROJO));
+    assert_eq!(descartado(resuelto), StaleReason::Changed);
+    assert!(!editor.has_pending());
+    assert!(editor.notice(false).iter().all(|l| vacia(l)));
+}
+
+#[test]
+fn fila_9_cambia_la_ranura_tras_teclear_y_el_pendiente_sobrevive_al_sync_hasta_resolverlo() {
+    // Deshacer o rehacer, o cambiar la ranura, hacen que `sync` vea otro color; el texto sin
+    // error sigue pendiente hasta que el campo lo resuelva.
+    let destino = EditTarget::Slot(4);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    editor.sync(Some((destino, ROJO)));
+    assert!(
+        editor.has_pending(),
+        "el sync no resuelve el texto pendiente"
+    );
+    let resuelto = editor.confirm_hex_checked(Mode::Rgba, true, |_| Some(ROJO));
+    assert_eq!(descartado(resuelto), StaleReason::Changed);
+    assert!(!editor.has_pending());
+}
+
+#[test]
+fn fila_9_si_el_color_vuelve_a_ser_el_base_se_aplica() {
+    // Deshacer (cambia) y rehacer (vuelve): al resolver, el guardado es otra vez el base.
+    let destino = EditTarget::Entry(2);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    editor.sync(Some((destino, ROJO)));
+    editor.sync(Some((destino, AZUL)));
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |_| Some(AZUL));
+    assert_eq!(hecho(resuelto), commit_a(destino, VERDE));
+    assert!(!editor.has_pending());
+}
+
+#[test]
+fn tras_un_stale_el_editor_acepta_texto_nuevo() {
+    let destino = EditTarget::Entry(2);
+    let mut editor = editor_con(destino, AZUL);
+    teclear(&mut editor, destino, AZUL, "#00ff00");
+    editor.confirm_hex_checked(Mode::Indexed, true, |_| None);
+    teclear(&mut editor, destino, AZUL, "#ffff00");
+    assert!(editor.has_pending());
+    let resuelto = editor.confirm_hex_checked(Mode::Indexed, true, |_| Some(AZUL));
+    assert_eq!(hecho(resuelto), commit_a(destino, AMARILLO));
+}
+
+// Avisos fijos.
+
+#[test]
+fn los_avisos_de_texto_descartado_son_los_de_la_spec() {
+    assert_eq!(
+        stale_notice(StaleReason::Gone),
+        "texto descartado: la entrada ya no existe"
+    );
+    assert_eq!(
+        stale_notice(StaleReason::Changed),
+        "texto descartado: el color cambió"
+    );
+    assert_eq!(
+        DOCUMENT_CHANGED_NOTICE,
+        "texto descartado: se abrió otro documento"
+    );
+}
+
+#[test]
+fn los_avisos_de_texto_descartado_solo_usan_el_juego_de_caracteres() {
+    for aviso in [
+        stale_notice(StaleReason::Gone),
+        stale_notice(StaleReason::Changed),
+        DOCUMENT_CHANGED_NOTICE,
+    ] {
+        assert!(
+            en_el_juego(aviso),
+            "{aviso:?} lleva un carácter fuera del juego"
+        );
+        assert!(!aviso.is_empty());
+        assert!(!aviso.contains('\n'), "{aviso:?}: una sola línea");
+    }
+    assert_ne!(
+        stale_notice(StaleReason::Gone),
+        stale_notice(StaleReason::Changed)
+    );
+}
+
+#[test]
+fn stale_reason_es_copiable_y_comparable() {
+    let motivo = StaleReason::Gone;
+    let copia = motivo;
+    assert_eq!(motivo, copia);
+    assert_ne!(StaleReason::Gone, StaleReason::Changed);
 }

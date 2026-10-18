@@ -14,13 +14,16 @@ use crate::color::{
     ColorChoice, SlotColors, cell_color_with, cell_count, cell_label_with, cell_of_choice,
     choice_for_cell, info_flags, is_transparent_cell_with,
 };
-use crate::color_edit::{ColorEditor, Commit, EditTarget};
+use crate::color_edit::{
+    ColorEditor, Commit, EditTarget, HexOutcome, Resolved, hex_notice, stale_notice,
+};
 use crate::color_editor::{self, Geometry};
-use crate::edit_layout::editor_layout;
+use crate::edit_layout::{PanelLayout, block_height_px, panel_layout};
 use crate::palette_grid::{
-    GRID_X_U, GRID_Y_U, Grid, LINE_H_U, LINE1_Y_U, LINE2_Y_U, PANEL_WIDTH_U, PITCH_U,
-    RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U, TEXT_X_U,
-    TRACK_W_U, TRACK_X_U, ring_rects, swatch_parts, thumb, total_rows, visible_rows_reserved,
+    COLUMNS, GRID_X_U, GRID_Y_U, Grid, LINE_H_U, LINE1_Y_U, LINE2_Y_U, PANEL_WIDTH_U, PITCH_U,
+    PanelView, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U,
+    TEXT_X_U, TRACK_W_U, TRACK_X_U, panel_thumb, ring_rects, swatch_parts, thumb, total_rows,
+    visible_rows_reserved,
 };
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, text_scale, ui_unit};
@@ -36,10 +39,9 @@ struct Layout {
     n: u32,
     /// El panel, en puntos.
     rect: Rect,
-    /// Esquina superior izquierda del panel, en puntos.
+    /// Esquina superior izquierda del bloque del panel, en puntos: la del panel menos el
+    /// desplazamiento de todo el panel cuando no cabe.
     min: Pos2,
-    /// Alto del panel en píxeles físicos.
-    height_px: i64,
 }
 
 impl Layout {
@@ -82,8 +84,6 @@ pub struct PanelOutput {
     pub commit: Option<Commit>,
     /// Aviso de 5 s para la barra de estado (hexadecimal inválido al perder el foco).
     pub notice: Option<String>,
-    /// Hay destino pero el panel es demasiado bajo para mostrar el editor.
-    pub editor_hidden: bool,
 }
 
 /// Pinta el panel a la izquierda de `ui` y devuelve la elección que pidió un clic (botón
@@ -99,13 +99,23 @@ pub fn show(
     enabled: bool,
 ) -> Option<ColorChoice> {
     let slots = SlotColors::defaults(image.mode());
-    show_panel(ui, image, choice, scroll, enabled, &slots, None).choice
+    show_panel(
+        ui,
+        image,
+        choice,
+        scroll,
+        &mut PanelView::default(),
+        enabled,
+        &slots,
+        None,
+    )
+    .choice
 }
 
 /// Como [`show`], con el editor de color anclado al fondo del panel (specs/hito-2-editar-color.md).
-/// La rejilla usa la altura que queda; si no caben una fila y el editor, este se oculta
-/// (`editor_hidden`) y la rejilla usa todo el alto. El editor se pone al día antes
-/// (`ColorEditor::sync`); el panel no toca el documento: devuelve el color a aplicar.
+/// La rejilla usa la altura que queda. El editor se pone al día antes (`ColorEditor::sync`); el
+/// panel no toca el documento: devuelve el color a aplicar. Sin memoria entre fotogramas: ni
+/// desplazamiento del panel ni «mostrar la elegida» (para eso, [`show_editing_view`]).
 pub fn show_editing(
     ui: &mut Ui,
     image: &Image,
@@ -115,14 +125,52 @@ pub fn show_editing(
     slots: &SlotColors,
     editor: &mut ColorEditor,
 ) -> PanelOutput {
-    show_panel(ui, image, choice, scroll, enabled, slots, Some(editor))
+    show_editing_view(
+        ui,
+        image,
+        choice,
+        scroll,
+        &mut PanelView::default(),
+        enabled,
+        slots,
+        editor,
+    )
 }
 
+/// Como [`show_editing`], con el estado del panel entre fotogramas (`view`). Si el panel no
+/// cabe (`edit_layout::panel_layout`), el bloque `[texto · una fila · editor]` se desplaza
+/// entero con la rueda y una barra visible; la elegida se muestra al cambiar el número de filas
+/// visibles o si `view.reveal`, nunca por la rueda (specs/hito-2-panel-ventana-baja.md).
+#[allow(clippy::too_many_arguments)]
+pub fn show_editing_view(
+    ui: &mut Ui,
+    image: &Image,
+    choice: ColorChoice,
+    scroll: &mut Scroll,
+    view: &mut PanelView,
+    enabled: bool,
+    slots: &SlotColors,
+    editor: &mut ColorEditor,
+) -> PanelOutput {
+    show_panel(
+        ui,
+        image,
+        choice,
+        scroll,
+        view,
+        enabled,
+        slots,
+        Some(editor),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
 fn show_panel(
     ui: &mut Ui,
     image: &Image,
     choice: ColorChoice,
     scroll: &mut Scroll,
+    view: &mut PanelView,
     enabled: bool,
     slots: &SlotColors,
     mut editor: Option<&mut ColorEditor>,
@@ -138,26 +186,45 @@ fn show_panel(
         .frame(Frame::new().fill(SURFACE_1))
         .show(ui, |ui| {
             let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
-            let layout = Layout {
+            let height_px = (rect.height() * ppp).round() as i64;
+            let n = text_scale(ppp);
+            let mut layout = Layout {
                 ppp,
-                n: text_scale(ppp),
+                n,
                 rect,
                 min: rect.min,
-                height_px: (rect.height() * ppp).round() as i64,
             };
             let mode = image.mode();
             let target = editor.as_ref().and_then(|_| EditTarget::of(image, choice));
-            let editor_layout =
-                target.and_then(|_| editor_layout(mode, layout.height_px, layout.n));
-            let reserved = editor_layout.map_or(0, |placed| placed.reserved_px);
-            let mut output = PanelOutput {
-                editor_hidden: target.is_some() && editor_layout.is_none(),
-                ..PanelOutput::default()
+            // Reparto vertical: con destino, el del editor (que puede desplazar todo el panel);
+            // sin él, la rejilla usa todo el alto.
+            let place = |offset_px: i64| match target {
+                Some(_) => panel_layout(mode, height_px, n, offset_px),
+                None => PanelLayout {
+                    scrolling: false,
+                    offset_px: 0,
+                    max_offset_px: 0,
+                    top_px: height_px,
+                    visible_rows: visible_rows_reserved(height_px, 0, n),
+                },
             };
+            let mut placed = place(view.offset_px);
+            view.offset_px = placed.offset_px;
+            if !placed.scrolling {
+                view.rest_px = 0;
+            }
+            layout.min = rect.min - vec2(0.0, placed.offset_px as f32 / ppp);
+            let mut output = PanelOutput::default();
             let count = cell_count(image);
             let total = total_rows(count);
-            let visible = visible_rows_reserved(layout.height_px, reserved, layout.n);
+            let visible = placed.visible_rows;
             scroll.clamp(total, visible);
+            let changed = view.reveal || view.last_visible.is_some_and(|last| last != visible);
+            if changed && let Some(cell) = cell_of_choice(image, choice) {
+                scroll.reveal(cell / COLUMNS, total, visible);
+            }
+            view.reveal = false;
+            view.last_visible = Some(visible);
             let busy_editing = editor.as_ref().is_some_and(|editor| editor.dragging());
 
             let pointer = ui
@@ -175,12 +242,22 @@ fn show_panel(
                     } if !modifiers.command && delta.y != 0.0 && pointer.is_some() => {
                         let pitch_px = (PITCH_U * i64::from(layout.n)) as f32;
                         let down = -delta.y;
+                        let page = if placed.scrolling {
+                            height_px as f32
+                        } else {
+                            visible as f32 * pitch_px
+                        };
                         let pixels = match unit {
                             MouseWheelUnit::Point => down * ppp,
                             MouseWheelUnit::Line => down * WHEEL_LINE_ROWS * pitch_px,
-                            MouseWheelUnit::Page => down * visible as f32 * pitch_px,
+                            MouseWheelUnit::Page => down * page,
                         };
-                        scroll.by(pixels.round() as i64, layout.n, total, visible);
+                        let pixels = pixels.round() as i64;
+                        if !placed.scrolling {
+                            scroll.by(pixels, layout.n, total, visible);
+                        } else if !busy_editing {
+                            view.scroll_by(pixels, layout.n, placed.max_offset_px);
+                        }
                     }
                     Event::PointerButton {
                         pos,
@@ -198,15 +275,20 @@ fn show_panel(
                 }
             }
             output.choice = picked;
+            placed = place(view.offset_px);
+            view.offset_px = placed.offset_px;
+            layout.min = rect.min - vec2(0.0, placed.offset_px as f32 / ppp);
 
+            let stored = |target: EditTarget| target.stored(image, slots);
             let mut preview = None;
             if let Some(editor) = editor.as_mut() {
-                match (target, editor_layout) {
-                    (Some(target), Some(placed)) => {
+                match target {
+                    Some(target) => {
                         let geometry = Geometry {
                             ppp,
                             n: layout.n,
                             panel_min: rect.min,
+                            panel_rect: rect,
                             top_px: placed.top_px,
                             mode,
                         };
@@ -221,12 +303,35 @@ fn show_panel(
                         preview = editor.preview();
                         let transparent = matches!(target, EditTarget::Entry(index)
                             if image.palette().and_then(|p| p.transparent_index()) == Some(index));
-                        let shown =
-                            color_editor::show(ui, &geometry, editor, target, transparent, &events);
+                        let shown = color_editor::show(
+                            ui,
+                            &geometry,
+                            editor,
+                            target,
+                            transparent,
+                            &events,
+                            &stored,
+                        );
                         output.commit = shown.commit.or(output.commit);
                         output.notice = shown.notice;
                     }
-                    _ => editor.cancel(),
+                    None => {
+                        // El campo desaparece: su texto pendiente se resuelve como al perder el
+                        // foco (egui no avisa de un campo que ya no se pinta).
+                        match editor.confirm_hex_checked(mode, true, stored) {
+                            Resolved::Done(HexOutcome::Commit(commit)) => {
+                                output.commit = Some(commit);
+                            }
+                            Resolved::Done(HexOutcome::Invalid(error)) => {
+                                output.notice = Some(hex_notice(&error).to_string());
+                            }
+                            Resolved::Done(_) => {}
+                            Resolved::Stale(reason) => {
+                                output.notice = Some(stale_notice(reason).to_string());
+                            }
+                        }
+                        editor.cancel();
+                    }
                 }
             }
 
@@ -235,8 +340,12 @@ fn show_panel(
                 let (x, y) = layout.grid_px(p);
                 grid.index_at(x, y)
             });
+            let panel_bar = placed
+                .scrolling
+                .then(|| panel_thumb(placed.offset_px, height_px, block_height_px(mode, n), n));
             paint(
                 ui, &layout, image, slots, choice, &grid, hover, preview, scroll, total, visible,
+                panel_bar,
             );
             output
         })
@@ -256,6 +365,7 @@ fn paint(
     scroll: &Scroll,
     total: usize,
     visible: usize,
+    panel_bar: Option<Option<(i64, i64)>>,
 ) {
     let ctx = ui.ctx();
     let (n, ppp) = (layout.n, layout.ppp);
@@ -271,7 +381,10 @@ fn paint(
     );
     let line = layout.u_rect(RIGHT_LINE_X_U, 0, 1, 0);
     painter.rect_filled(
-        Rect::from_min_size(line.min, vec2(line.width(), layout.rect.height())),
+        Rect::from_min_size(
+            Pos2::new(line.min.x, layout.rect.min.y),
+            vec2(line.width(), layout.rect.height()),
+        ),
         0.0,
         SURFACE_3,
     );
@@ -343,8 +456,28 @@ fn paint(
         }
     }
 
-    // Pista e indicador, solo si hace falta desplazar.
-    if let Some((y, height)) = thumb(scroll.first_row, visible, total, n) {
+    // Pista e indicador, solo si hace falta desplazar: los de todo el panel si no cabe; si no,
+    // los de la rejilla.
+    if let Some(bar) = panel_bar {
+        if let Some((y, height)) = bar {
+            let x = layout.u_rect(TRACK_X_U, 0, 0, 0).min.x;
+            let width = TRACK_W_U as f32 * ui_unit(ppp);
+            let top = layout.rect.min.y;
+            painter.rect_filled(
+                Rect::from_min_size(Pos2::new(x, top), vec2(width, layout.rect.height())),
+                0.0,
+                SURFACE_2,
+            );
+            painter.rect_filled(
+                Rect::from_min_size(
+                    Pos2::new(x, top + y as f32 / ppp),
+                    vec2(width, height as f32 / ppp),
+                ),
+                0.0,
+                TEXT_DIM,
+            );
+        }
+    } else if let Some((y, height)) = thumb(scroll.first_row, visible, total, n) {
         let track_h = visible as i64 * PITCH_U;
         painter.rect_filled(
             layout.u_rect(TRACK_X_U, GRID_Y_U, TRACK_W_U, track_h),

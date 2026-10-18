@@ -8,8 +8,8 @@ mod demo;
 mod files;
 mod licenses;
 mod session;
-mod status_error;
 mod title;
+mod window_min;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -18,7 +18,7 @@ use eframe::egui;
 use px_core::Document;
 use px_ui::canvas::Canvas;
 use px_ui::color::{choice_label_with, key_choice};
-use px_ui::color_edit::EditTarget;
+use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, gate_keys};
 use px_ui::texture::pixel_rgba;
@@ -28,8 +28,8 @@ use crate::confirm::{Confirm, Confirmation, Request, close_warning, open_warning
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::licenses::wants_licenses;
 use crate::session::{Session, describe_saved};
-use crate::status_error::status_error;
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
+use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
 struct App {
     session: Session,
@@ -48,8 +48,10 @@ struct App {
     confirm: Confirm,
     /// Fichero del argumento de la línea de comandos, pendiente de abrir en el primer fotograma.
     cli_path: Option<PathBuf>,
-    /// El panel es demasiado bajo para el editor de color (la barra de estado lo avisa).
-    editor_hidden: bool,
+    /// El mínimo de altura de la ventana está activo (`PIXOKO_SIN_MINIMO=1` lo desactiva).
+    min_enabled: bool,
+    /// Último mínimo enviado a la ventana, para enviar solo cuando cambia.
+    min_sent: Option<[f32; 2]>,
 }
 
 impl App {
@@ -68,7 +70,8 @@ impl App {
             notice: None,
             confirm: Confirm::new(),
             cli_path,
-            editor_hidden: false,
+            min_enabled: min_enabled(std::env::var(ENV_NO_MIN).ok().as_deref()),
+            min_sent: None,
         }
     }
 
@@ -79,6 +82,14 @@ impl App {
         if ppp != self.themed_ppp {
             ctx.set_visuals_of(egui::Theme::Dark, px_ui::theme::visuals(ppp));
             self.themed_ppp = ppp;
+            // El mínimo depende de la escala: se envía al empezar y al cambiar de monitor.
+            let min = min_inner_size(ppp, self.min_enabled);
+            if let Some(size) = min
+                && min != self.min_sent
+            {
+                ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(size.into()));
+                self.min_sent = min;
+            }
         }
     }
 
@@ -129,6 +140,9 @@ impl App {
                 }
                 if ignored > 0 {
                     text.push_str(&format!(" · se ignoran {ignored} más"));
+                }
+                if self.session.take_discarded_text() {
+                    text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
                 }
                 self.notify(ctx, text);
             }
@@ -205,11 +219,15 @@ impl App {
             }
             match action_for_key(*key, *modifiers) {
                 Some(Action::Undo) if self.session.document.can_undo() => {
+                    let before = self.session.choice;
                     let result = self.session.document.undo().map(|()| true);
+                    self.session.reveal_if_choice_changed(before);
                     self.finish(ctx, result);
                 }
                 Some(Action::Redo) if self.session.document.can_redo() => {
+                    let before = self.session.choice;
                     let result = self.session.document.redo().map(|()| true);
+                    self.session.reveal_if_choice_changed(before);
                     self.finish(ctx, result);
                 }
                 Some(Action::SelectColor(slot)) => {
@@ -218,7 +236,7 @@ impl App {
                         .document
                         .image(self.session.document.main_image());
                     if let Some(choice) = image.and_then(|image| key_choice(image, slot)) {
-                        self.session.choice = choice;
+                        self.session.set_choice_revealing(choice);
                     }
                 }
                 _ => {}
@@ -256,11 +274,12 @@ impl eframe::App for App {
         let main = self.session.document.main_image();
         let mut panel = None;
         if let Some(image) = self.session.document.image(main) {
-            panel = Some(px_ui::palette_panel::show_editing(
+            panel = Some(px_ui::palette_panel::show_editing_view(
                 ui,
                 image,
                 self.session.choice,
                 &mut self.session.scroll,
+                &mut self.session.view,
                 enabled,
                 self.session.slots.get(image.mode()),
                 &mut self.session.editor,
@@ -277,7 +296,6 @@ impl eframe::App for App {
             if let Some(text) = panel.notice {
                 self.notify(&ctx, text);
             }
-            self.editor_hidden = panel.editor_hidden;
         }
         self.handle_close(&ctx);
         if let Some(path) = self.cli_path.take() {
@@ -347,18 +365,10 @@ impl eframe::App for App {
             }),
             can_undo: self.session.document.can_undo(),
             can_redo: self.session.document.can_redo(),
-            error: canvas_error.clone().or(notice.clone()),
+            error: canvas_error.or(notice),
         };
         let title = window_title(self.tools.tool(), &info);
-        // La barra, además, avisa de que el editor está oculto por falta de altura.
-        let status_info = TitleInfo {
-            error: status_error(canvas_error, notice, self.editor_hidden),
-            ..info
-        };
-        let status = (
-            status_line(self.tools.tool(), &status_info),
-            status_info.error.is_some(),
-        );
+        let status = (status_line(self.tools.tool(), &info), info.error.is_some());
         if status != self.status {
             self.status = status;
             ctx.request_repaint();
@@ -386,10 +396,16 @@ fn main() -> eframe::Result {
             std::process::exit(2);
         }
     };
+    // Mínimo inicial para `ppp` 1,0: el real se envía en el primer fotograma (`apply_theme`).
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("Pixoko")
+        .with_inner_size([960.0, 720.0]);
+    let min_enabled = min_enabled(std::env::var(ENV_NO_MIN).ok().as_deref());
+    if let Some(size) = min_inner_size(1.0, min_enabled) {
+        viewport = viewport.with_min_inner_size(size);
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Pixoko")
-            .with_inner_size([960.0, 720.0]),
+        viewport,
         ..eframe::NativeOptions::default()
     };
     let document = Document::new(demo::demo_image());

@@ -7,6 +7,9 @@
 use px_core::Mode;
 
 use crate::color_edit::{Control, controls};
+use crate::palette_grid::{GRID_Y_U, PITCH_U, visible_rows_reserved};
+use crate::status::bar_height_px;
+use crate::text::text_scale;
 
 /// Franja de 1 u en la parte superior del editor.
 pub const SEPARATOR_Y_U: i64 = 0;
@@ -41,31 +44,93 @@ pub const FIELD_PAD_U: i64 = 3;
 pub const BLOCK_GAP_U: i64 = 4;
 /// Líneas del aviso.
 pub const NOTICE_LINES: i64 = 2;
-/// Cabecera: texto de aviso de «ventana baja».
-pub const EDITOR_HIDDEN_NOTICE: &str = "ventana baja: editor oculto";
+/// Modos de imagen: la altura del editor depende de ellos.
+const MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
+/// Alto del editor del modo, en `u`: hasta el final del aviso más el margen inferior. Es el
+/// **único** sitio donde se calcula (specs/hito-2-panel-ventana-baja.md): todo lo demás cuelga de
+/// ella.
 pub fn editor_height_u(mode: Mode) -> i64 {
-    match mode {
-        Mode::Gray => 94,
-        Mode::GrayAlpha => 112,
-        _ => 186,
-    }
+    notice_y_u(mode) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
 }
+
+/// El mayor alto de editor entre los modos.
+pub fn editor_height_u_max() -> i64 {
+    MODES
+        .iter()
+        .map(|mode| editor_height_u(*mode))
+        .max()
+        .unwrap_or(0)
+}
+
+fn scale(n: u32) -> i64 {
+    i64::from(n.max(1))
+}
+
+/// Alto del bloque `[texto · una fila de rejilla · editor]` del modo, en píxeles físicos: el
+/// alto del panel a partir del cual no hay desplazamiento.
+pub fn block_height_px(mode: Mode, n: u32) -> i64 {
+    (GRID_Y_U + PITCH_U + editor_height_u(mode)) * scale(n)
+}
+
+/// Alto mínimo del panel, en píxeles físicos, para cualquier modo.
+pub fn min_panel_height_px(n: u32) -> i64 {
+    (GRID_Y_U + PITCH_U + editor_height_u_max()) * scale(n)
+}
+
+/// Alto mínimo de la ventana en píxeles lógicos (puntos de egui): la barra de estado más el
+/// panel mínimo.
+pub fn min_window_height_pt(ppp: f32) -> f32 {
+    let ppp = if ppp.is_finite() && ppp > 0.0 {
+        ppp
+    } else {
+        1.0
+    };
+    let n = text_scale(ppp);
+    let physical = i64::from(bar_height_px(n)) + min_panel_height_px(n);
+    physical as f32 / ppp
+}
+
+/// Reparto vertical del panel: dónde va el editor y cuántas filas ve la rejilla.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EditorLayout {
+pub struct PanelLayout {
+    /// El panel es más bajo que su bloque y se desplaza entero.
+    pub scrolling: bool,
+    /// Desplazamiento aplicado: 0 si no hay, si no un múltiplo de `n` en `0..=max_offset_px`.
+    pub offset_px: i64,
+    pub max_offset_px: i64,
+    /// Borde superior del editor desde el del panel, en píxeles físicos (puede ser negativo).
     pub top_px: i64,
-    pub reserved_px: i64,
+    pub visible_rows: usize,
 }
-pub fn editor_layout(mode: Mode, panel_h_px: i64, n: u32) -> Option<EditorLayout> {
-    let n = i64::from(n.max(1));
-    if panel_h_px < (41 + 14 + editor_height_u(mode)) * n {
-        return None;
+
+/// Reparto del panel de `panel_h_px` con el editor del modo. Con alto suficiente, el editor se
+/// ancla al fondo y la rejilla usa el resto; con menos, el bloque se desplaza `offset_px` (se
+/// recorta a lo que cabe) y la rejilla enseña una fila. Con `offset_px = 0` y `alto = bloque`
+/// los dos repartos coinciden.
+pub fn panel_layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64) -> PanelLayout {
+    let n = scale(n);
+    let height = editor_height_u(mode) * n;
+    let block = block_height_px(mode, n as u32);
+    if panel_h_px >= block {
+        let top = panel_h_px.saturating_sub(height).div_euclid(n) * n;
+        return PanelLayout {
+            scrolling: false,
+            offset_px: 0,
+            max_offset_px: 0,
+            top_px: top,
+            visible_rows: visible_rows_reserved(panel_h_px, panel_h_px - top, n as u32),
+        };
     }
-    let top = (panel_h_px - editor_height_u(mode) * n).div_euclid(n) * n;
-    Some(EditorLayout {
-        top_px: top,
-        reserved_px: panel_h_px - top,
-    })
+    let max = block.saturating_sub(panel_h_px).div_euclid(n) * n;
+    let offset = offset_px.clamp(0, max).div_euclid(n) * n;
+    PanelLayout {
+        scrolling: true,
+        offset_px: offset,
+        max_offset_px: max,
+        top_px: (GRID_Y_U + PITCH_U) * n - offset,
+        visible_rows: 1,
+    }
 }
 pub fn control_row_u(mode: Mode, control: Control) -> Option<i64> {
     let idx = controls(mode).iter().position(|c| *c == control)?;

@@ -9,11 +9,11 @@ use egui::{
     Align2, Event, FontFamily, FontId, Frame, Id, Key, Margin, PointerButton, Pos2, Rect, Stroke,
     StrokeKind, TextEdit, Ui, vec2,
 };
-use px_core::Mode;
+use px_core::{Mode, Rgba};
 
 use crate::color_edit::{
-    ColorEditor, Commit, EditTarget, HexOutcome, control_value, controls, hex_notice, hex_text,
-    slider_value_at, slider_x, value_text,
+    ColorEditor, Commit, EditTarget, HexOutcome, Resolved, control_value, controls, hex_notice,
+    hex_text, slider_value_at, slider_x, stale_notice, value_text,
 };
 use crate::edit_layout::{
     FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, HEADER_X_U, HEADER_Y_U, LABEL_X_U, ROW_H_U,
@@ -25,12 +25,14 @@ use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, ui_unit};
 use crate::theme::{ACCENT, SURFACE_0, SURFACE_3, TEXT, TEXT_DIM, WARNING};
 
-/// Dónde está el editor: escala, esquina del panel y `top_px` desde su borde superior.
+/// Dónde está el editor: escala, esquina del panel y `top_px` desde su borde superior (negativo
+/// si el panel se desplazó). Lo pintado y los clics se limitan a `panel_rect`.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Geometry {
     pub ppp: f32,
     pub n: u32,
     pub panel_min: Pos2,
+    pub panel_rect: Rect,
     pub top_px: i64,
     pub mode: Mode,
 }
@@ -109,7 +111,7 @@ pub(crate) fn interact(
                 button: PointerButton::Primary,
                 pressed: true,
                 ..
-            } if enabled && !editor.dragging() => {
+            } if enabled && !editor.dragging() && geo.panel_rect.contains(*pos) => {
                 let (x, y) = geo.rel_px(*pos);
                 if let Some(control) = slider_hit(geo.mode, x, y, geo.n) {
                     editor.begin(control, geo.value_at(x, control.max()));
@@ -159,6 +161,7 @@ pub(crate) fn show(
     target: EditTarget,
     transparent: bool,
     events: &[Event],
+    stored: &dyn Fn(EditTarget) -> Option<Rgba>,
 ) -> Output {
     let mut output = Output::default();
     let Some((rgba, hsl)) = editor.shown() else {
@@ -170,7 +173,7 @@ pub(crate) fn show(
     let u = ui_unit(geo.ppp);
     let cols = columns((TEXT_WIDTH_U * n) as f32, geo.ppp);
     let font = FontId::new(font_size_points(geo.ppp), FontFamily::Proportional);
-    let painter = ui.painter().clone();
+    let painter = ui.painter_at(geo.panel_rect);
     let text = |x: i64, y: i64, content: &str, color| {
         let shown = bar_text(&ctx, content, false, cols);
         painter.text(
@@ -254,11 +257,16 @@ pub(crate) fn show(
             editor.escape_hex();
         } else {
             let enter = events.iter().any(is_enter);
-            match editor.confirm_hex(mode, !enter) {
-                HexOutcome::Commit(commit) => output.commit = Some(commit),
-                HexOutcome::Invalid(_) if enter => response.request_focus(),
-                HexOutcome::Invalid(error) => output.notice = Some(hex_notice(&error).to_string()),
-                HexOutcome::Nothing | HexOutcome::Unchanged => {}
+            match editor.confirm_hex_checked(mode, !enter, stored) {
+                Resolved::Done(outcome) => match outcome {
+                    HexOutcome::Commit(commit) => output.commit = Some(commit),
+                    HexOutcome::Invalid(_) if enter => response.request_focus(),
+                    HexOutcome::Invalid(error) => {
+                        output.notice = Some(hex_notice(&error).to_string());
+                    }
+                    HexOutcome::Nothing | HexOutcome::Unchanged => {}
+                },
+                Resolved::Stale(reason) => output.notice = Some(stale_notice(reason).to_string()),
             }
         }
     }

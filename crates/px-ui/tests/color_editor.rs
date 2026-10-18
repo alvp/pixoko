@@ -1,5 +1,6 @@
 //! Tests del editor de color dentro de la ventana (specs/hito-2-editar-color.md: filas 2, 9, 11,
-//! 16, 17 y 18 de «Casos límite» en su parte de ventana, y el arrastre de los deslizadores con el
+//! 16 y 17 de «Casos límite» en su parte de ventana (la 18, ventana baja, la sustituyó
+//! specs/hito-2-panel-ventana-baja.md: ver `panel_baja.rs`), y el arrastre de los deslizadores con el
 //! ratón). Lo puro (`ColorEditor`, `edit_layout`, `gate_keys` sueltos) se prueba en
 //! `color_edit.rs`, `edit_layout.rs` y `shortcuts_gate.rs`; aquí se prueba que `show_editing`
 //! lo une bien a `egui`.
@@ -53,7 +54,7 @@ use px_ui::color_edit::{
 };
 use px_ui::edit_layout::{
     FIELD_H_U, FIELD_W_U, FIELD_X_U, HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, ROW_H_U,
-    TRACK_W_U, TRACK_X_U, control_row_u, editor_height_u, editor_layout, field_y_u, slider_hit,
+    TRACK_W_U, TRACK_X_U, control_row_u, field_y_u, panel_layout, slider_hit,
 };
 use px_ui::palette_grid::{
     self, CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U,
@@ -389,7 +390,8 @@ impl Banco {
     fn geo(&self) -> Geo {
         let mode = self.image.mode();
         let n = self.n();
-        let layout = editor_layout(mode, self.panel_h_px(), n as u32).expect("el editor cabe");
+        let layout = panel_layout(mode, self.panel_h_px(), n as u32, 0);
+        assert!(!layout.scrolling, "el bloque cabe sin desplazar");
         Geo {
             ppp: self.ppp(),
             n,
@@ -1329,104 +1331,18 @@ fn fila_17_tras_tab_los_atajos_vuelven() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fila 18: ventana baja
+// Ventana baja
 // ---------------------------------------------------------------------------------------------
-
-/// Alto de panel, en píxeles físicos, desde el que cabe el editor: `(41 + 14 + H)·n`.
-fn umbral_px(mode: Mode, n: i64) -> i64 {
-    (GRID_Y_U + PITCH_U + editor_height_u(mode)) * n
-}
-
-#[test]
-fn fila_18_con_240n_el_editor_se_oculta_y_con_241n_se_ve() {
-    for ppp in PPP_SIEMPRE {
-        let n = i64::from(text_scale(ppp));
-        let image = imagen_indexada_256();
-        assert_eq!(umbral_px(Mode::Indexed, n), 241 * n);
-
-        let mut bajo = Banco::con_alto_de_panel(ppp, 240 * n, image.clone(), ColorChoice::Entry(5));
-        let f = bajo.reposo();
-        assert!(f.salida.editor_hidden, "ppp {ppp}: 240n oculta el editor");
-        assert!(!f.pinta("editar índice 5"), "ppp {ppp}: sin cabecera");
-
-        let mut justo = Banco::con_alto_de_panel(ppp, 241 * n, image, ColorChoice::Entry(5));
-        let f = justo.reposo();
-        assert!(!f.salida.editor_hidden, "ppp {ppp}: 241n lo muestra");
-        assert!(f.pinta("editar índice 5"), "ppp {ppp}: con cabecera");
-    }
-}
+//
+// La fila 18 de la spec del editor (ocultar el editor por debajo de `(41 + 14 + H)·n`, con su
+// aviso `editor_hidden` y la cancelación del arrastre) la sustituye specs/hito-2-panel-ventana-baja.md:
+// el editor no se oculta nunca por la altura. Esos casos con ventana (el diseño con 241·n, 240·n,
+// 200·n y 100·n, el desplazamiento, el arrastre que no se cancela y la ausencia de avisos) están
+// en `panel_baja.rs`. Aquí queda lo que sigue siendo cierto sin la altura: sin destino no hay
+// editor.
 
 #[test]
-fn fila_18_el_umbral_depende_de_la_altura_de_cada_modo() {
-    for ppp in [1.0_f32, 2.0] {
-        for mode in MODOS {
-            let n = i64::from(text_scale(ppp));
-            let umbral = umbral_px(mode, n);
-            let choice = elecciones_de(mode)[2];
-            let image = imagen_de(mode);
-            for (alto, oculto) in [(umbral - 1, true), (umbral - n, true), (umbral, false)] {
-                let mut banco = Banco::con_alto_de_panel(ppp, alto, image.clone(), choice);
-                let f = banco.reposo();
-                assert_eq!(
-                    f.salida.editor_hidden, oculto,
-                    "ppp {ppp}, {mode:?}, panel de {alto} px (umbral {umbral})"
-                );
-            }
-        }
-    }
-}
-
-#[test]
-fn fila_18_oculto_la_rejilla_usa_todo_el_alto_y_visible_cede_sitio() {
-    for ppp in [1.0_f32, 2.0] {
-        let n = i64::from(text_scale(ppp));
-        let image = imagen_indexada_256();
-
-        // 240n: editor oculto y la rejilla con todo el alto (14 filas).
-        let filas = palette_grid::visible_rows(240 * n, n as u32);
-        assert_eq!(filas, 14);
-        let mut banco =
-            Banco::con_alto_de_panel(ppp, 240 * n, image.clone(), ColorChoice::Entry(5));
-        banco.reposo();
-        let ultima = (filas - 1) * COLUMNS;
-        let (x, y) = centro_de_muestra(n, ultima, 0);
-        banco.clic(x, y);
-        assert_eq!(
-            banco.elecciones(),
-            vec![ColorChoice::Entry(ultima as u8)],
-            "ppp {ppp}: la fila 14 (la última) se elige con el editor oculto"
-        );
-        banco.historial.clear();
-        let (x, y) = centro_de_muestra(n, filas * COLUMNS, 0);
-        banco.clic(x, y);
-        assert!(
-            banco.elecciones().is_empty(),
-            "ppp {ppp}: la fila 15 no se ve"
-        );
-
-        // 241n: el editor reserva su alto y la rejilla se queda con una sola fila.
-        let mut banco = Banco::con_alto_de_panel(ppp, 241 * n, image, ColorChoice::Entry(5));
-        let geo = banco.geo();
-        let reservado = 241 * n - geo.top_px;
-        assert_eq!(
-            palette_grid::visible_rows_reserved(241 * n, reservado, n as u32),
-            1
-        );
-        banco.reposo();
-        let (x, y) = centro_de_muestra(n, COLUMNS, 0);
-        banco.clic(x, y);
-        assert!(
-            banco.elecciones().is_empty(),
-            "ppp {ppp}: la segunda fila no se ve con el editor"
-        );
-        let (x, y) = centro_de_muestra(n, 0, 0);
-        banco.clic(x, y);
-        assert_eq!(banco.elecciones(), vec![ColorChoice::Entry(0)]);
-    }
-}
-
-#[test]
-fn fila_18_sin_destino_no_hay_editor_ni_aviso_aunque_el_panel_sea_bajo() {
+fn sin_destino_no_hay_editor_ni_commit_aunque_el_panel_sea_bajo() {
     let n = 1;
     let casos = [
         (imagen_f(), ColorChoice::Entry(200)),
@@ -1440,69 +1356,12 @@ fn fila_18_sin_destino_no_hay_editor_ni_aviso_aunque_el_panel_sea_bajo() {
             assert!(banco.actual().is_none(), "{choice:?} no tiene destino");
             let f = banco.reposo();
             assert!(
-                !f.salida.editor_hidden,
-                "{choice:?}, alto {alto}: sin destino no hay aviso"
-            );
-            assert!(
                 !f.pinta_algo_con("editar"),
                 "{choice:?}, alto {alto}: sin destino no hay editor"
             );
             assert_eq!(f.salida.commit, None);
+            assert_eq!(f.salida.notice, None);
         }
-    }
-}
-
-#[test]
-fn fila_18_el_aviso_persiste_mientras_siga_oculto_y_se_va_al_haber_sitio() {
-    let ppp = 1.0;
-    let image = imagen_f();
-    let mut banco = Banco::con_alto_de_panel(ppp, 240, image, ColorChoice::Entry(1));
-    for _ in 0..5 {
-        assert!(banco.reposo().salida.editor_hidden);
-    }
-    banco.pantalla = PANTALLA_ALTA;
-    banco.reposo();
-    let f = banco.reposo();
-    assert!(!f.salida.editor_hidden, "con sitio vuelve el editor");
-    assert!(f.pinta("editar índice 1"));
-}
-
-#[test]
-fn fila_18_un_arrastre_se_cancela_al_bajar_la_ventana_y_no_hay_paso() {
-    for ppp in [1.0_f32, 2.0] {
-        let mut banco = banco_f(ppp, 1);
-        let geo = banco.geo();
-        let y = geo.y_fila(Control::Red);
-        let x_a = geo.x_de_valor(128, Control::Red.max());
-        banco.mueve(x_a, y);
-        banco.pulsa(x_a, y);
-        assert!(banco.editor.dragging(), "ppp {ppp}: el arrastre empieza");
-        assert_eq!(
-            banco.editor.preview().map(|(destino, _)| destino),
-            Some(EditTarget::Entry(1))
-        );
-
-        // La ventana baja hasta que el editor no cabe.
-        let n = geo.n;
-        banco.pantalla = pantalla_para_panel(ppp, umbral_px(Mode::Indexed, n) - n);
-        let f = banco.reposo();
-        assert!(f.salida.editor_hidden, "ppp {ppp}");
-        assert!(
-            !banco.editor.dragging(),
-            "ppp {ppp}: el arrastre se cancela"
-        );
-        assert_eq!(banco.editor.preview(), None, "ppp {ppp}: sin provisional");
-        assert_eq!(f.salida.commit, None);
-
-        // Soltar después no da paso.
-        banco.suelta(x_a, y);
-        banco.reposo();
-        assert!(banco.commits().is_empty(), "ppp {ppp}: sin paso");
-        assert_eq!(
-            mostrado(&banco),
-            VERDE,
-            "ppp {ppp}: el color vuelve al guardado"
-        );
     }
 }
 

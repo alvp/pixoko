@@ -7,7 +7,7 @@ use px_core::{Command, Document, DocumentError, Pixel};
 use px_formats::write_png;
 use px_ui::color::{ColorChoice, SlotBank, initial_choice, pixel_for_choice_with};
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget};
-use px_ui::palette_grid::Scroll;
+use px_ui::palette_grid::{PanelView, Scroll};
 
 use crate::files::{
     FileError, MAX_FILE_BYTES, copy_path, describe_open, describe_report, file_label, load_png,
@@ -28,12 +28,17 @@ pub struct Session {
     pub choice: ColorChoice,
     /// Desplazamiento del panel de paletas; abrir un fichero lo reinicia.
     pub scroll: Scroll,
+    /// Estado del panel entre fotogramas (desplazamiento de todo el panel y «mostrar la elegida»);
+    /// abrir un fichero lo reinicia (specs/hito-2-panel-ventana-baja.md).
+    pub view: PanelView,
     /// Colores de las ranuras por modo; duran toda la sesión y no son del documento
     /// (specs/hito-2-editar-color.md).
     pub slots: SlotBank,
     /// Estado del editor de color; abrir un fichero lo reinicia.
     pub editor: ColorEditor,
     path: Option<PathBuf>,
+    /// Un `open` descartó el texto pendiente del campo hexadecimal y aún no se avisó.
+    discarded_text: bool,
     /// `state_id` del documento al abrir o guardar por última vez.
     saved_id: u64,
     /// Conversiones del fichero abierto, si las hubo: el primer `save` hace una copia.
@@ -50,11 +55,34 @@ impl Session {
             document,
             choice,
             scroll: Scroll::default(),
+            view: PanelView::default(),
             slots: SlotBank::new(),
             editor: ColorEditor::default(),
             path: None,
+            discarded_text: false,
             conversion: None,
         }
+    }
+
+    /// Cambia la elección por teclado; si cambió, el panel muestra su fila en el fotograma
+    /// siguiente.
+    pub fn set_choice_revealing(&mut self, choice: ColorChoice) {
+        if choice != self.choice {
+            self.choice = choice;
+            self.view.reveal = true;
+        }
+    }
+
+    /// Tras deshacer o rehacer: si la elección ya no es `before`, el panel muestra su fila.
+    pub fn reveal_if_choice_changed(&mut self, before: ColorChoice) {
+        if self.choice != before {
+            self.view.reveal = true;
+        }
+    }
+
+    /// Si un `open` descartó texto pendiente del campo, lo dice una sola vez.
+    pub fn take_discarded_text(&mut self) -> bool {
+        std::mem::take(&mut self.discarded_text)
     }
 
     /// `Pixel` del color activo con los colores de ranura de la sesión.
@@ -124,6 +152,8 @@ impl Session {
         self.conversion = (!read.report.is_empty()).then(|| describe_report(&read.report));
         self.choice = initial_choice(&read.image);
         self.scroll = Scroll::default();
+        self.view = PanelView::default();
+        self.discarded_text = self.editor.has_pending();
         self.editor.reset();
         self.document = Document::new(read.image);
         self.saved_id = self.document.state_id();
@@ -182,5 +212,7 @@ pub fn describe_saved(saved: &Saved) -> String {
 
 #[cfg(test)]
 mod edit_tests;
+#[cfg(test)]
+mod panel_tests;
 #[cfg(test)]
 mod tests;

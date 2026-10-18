@@ -262,6 +262,33 @@ pub fn hex_notice(error: &HexError) -> &'static str {
     }
 }
 
+/// Por qué se descarta un texto pendiente en vez de aplicarlo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StaleReason {
+    /// La entrada ya no existe (por ejemplo, tras deshacer un `Add`).
+    Gone,
+    /// El color guardado de la entrada cambió desde que se tecleó (deshacer, rehacer).
+    Changed,
+}
+
+/// Aviso de 5 s al descartar un texto pendiente.
+pub fn stale_notice(reason: StaleReason) -> &'static str {
+    match reason {
+        StaleReason::Gone => "texto descartado: la entrada ya no existe",
+        StaleReason::Changed => "texto descartado: el color cambió",
+    }
+}
+
+/// Aviso al abrir otro documento con texto pendiente.
+pub const DOCUMENT_CHANGED_NOTICE: &str = "texto descartado: se abrió otro documento";
+
+/// Resultado de resolver el texto pendiente comprobando que su destino sigue igual.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Resolved {
+    Done(HexOutcome),
+    Stale(StaleReason),
+}
+
 /// Un color a aplicar a un destino.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Commit {
@@ -442,6 +469,34 @@ impl ColorEditor {
                 HexOutcome::Invalid(error)
             }
         }
+    }
+
+    /// Hay texto pendiente (tecleado y aún sin confirmar ni revertir).
+    pub fn has_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// Como [`ColorEditor::confirm_hex`], pero solo si el destino del texto sigue existiendo y su
+    /// color guardado (`stored`) es el que había al teclear: si no, descarta el texto sin
+    /// `Commit` (`Stale`). Nada pendiente: `Done(Nothing)`.
+    pub fn confirm_hex_checked(
+        &mut self,
+        mode: Mode,
+        blur: bool,
+        stored: impl Fn(EditTarget) -> Option<Rgba>,
+    ) -> Resolved {
+        if let Some(pending) = &self.pending {
+            let reason = match stored(pending.target) {
+                None => Some(StaleReason::Gone),
+                Some(color) if color != pending.base => Some(StaleReason::Changed),
+                Some(_) => None,
+            };
+            if let Some(reason) = reason {
+                self.pending = None;
+                return Resolved::Stale(reason);
+            }
+        }
+        Resolved::Done(self.confirm_hex(mode, blur))
     }
 
     /// `Escape` en el campo: borra lo pendiente, sin aviso.

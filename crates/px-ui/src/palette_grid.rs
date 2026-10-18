@@ -228,6 +228,78 @@ impl Scroll {
     }
 }
 
+impl Scroll {
+    /// Mueve `first_row` lo mínimo para que `row` quede visible y lo limita a
+    /// `0..=max_first_row`; `rest` queda en 0 si se movió. Nada con `row ≥ total`.
+    pub fn reveal(&mut self, row: usize, total: usize, visible: usize) {
+        if row >= total {
+            return;
+        }
+        let visible = visible.max(1);
+        let before = self.first_row;
+        if row < self.first_row {
+            self.first_row = row;
+        } else if row >= self.first_row.saturating_add(visible) {
+            self.first_row = row + 1 - visible;
+        }
+        self.first_row = self.first_row.min(max_first_row(total, visible));
+        if self.first_row != before {
+            self.rest = 0;
+        }
+    }
+}
+
+/// Estado del panel entre fotogramas, además del de la rejilla ([`Scroll`]): el desplazamiento
+/// de todo el panel cuando no cabe (specs/hito-2-panel-ventana-baja.md) y lo que hace falta para
+/// mostrar la fila elegida.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PanelView {
+    /// Desplazamiento del panel entero, en píxeles físicos (múltiplo de `n`).
+    pub offset_px: i64,
+    /// Píxeles que aún no llegan a `n`.
+    pub rest_px: i64,
+    /// Filas visibles de la rejilla en el fotograma anterior.
+    pub last_visible: Option<usize>,
+    /// Hay que mostrar la fila elegida (cambió por teclado, deshacer o rehacer).
+    pub reveal: bool,
+}
+
+impl PanelView {
+    /// Desplaza `delta_px` (positivo: más abajo) de `n` en `n`, guardando el resto, y limita a
+    /// `0..=max_offset_px` (con el resto en 0 al recortar y en el máximo; en 0 se acumula, para
+    /// que los saltos de menos de `n` salgan de arriba).
+    pub fn scroll_by(&mut self, delta_px: i64, n: u32, max_offset_px: i64) {
+        let step = scale(n);
+        let pending = self.rest_px.saturating_add(delta_px);
+        let target = self
+            .offset_px
+            .saturating_add(pending.div_euclid(step).saturating_mul(step));
+        let max = max_offset_px.max(0);
+        self.rest_px = pending.rem_euclid(step);
+        self.offset_px = target.clamp(0, max);
+        if self.offset_px != target || self.offset_px == max {
+            self.rest_px = 0;
+        }
+    }
+}
+
+/// Indicador del desplazamiento del panel entero: `(y, alto)` relativos a la pista, que mide
+/// `panel_h_px`. Alto mínimo `2·n`. `None` si el panel cabe (`block_h_px ≤ panel_h_px`).
+pub fn panel_thumb(offset_px: i64, panel_h_px: i64, block_h_px: i64, n: u32) -> Option<(i64, i64)> {
+    if panel_h_px <= 0 || block_h_px <= panel_h_px {
+        return None;
+    }
+    let (track, block) = (i128::from(panel_h_px), i128::from(block_h_px));
+    let height = (track * track / block).max(i128::from(2 * scale(n)));
+    let max_offset = block - track;
+    let y = (track - height) * i128::from(offset_px.clamp(0, i64::try_from(max_offset).ok()?))
+        / max_offset;
+    Some((
+        i64::try_from(y.max(0)).ok()?,
+        i64::try_from(height.min(track)).ok()?,
+    ))
+}
+
 /// Indicador del desplazamiento: `(y, alto)` relativos a la pista, que mide `visible·14·n`.
 /// Alto mínimo `2·n`. `None` si no hace falta (`total ≤ visible`) o no se ve ninguna fila.
 pub fn thumb(first_row: usize, visible: usize, total: usize, n: u32) -> Option<(i64, i64)> {
