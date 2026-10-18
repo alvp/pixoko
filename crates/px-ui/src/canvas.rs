@@ -14,7 +14,7 @@ use egui::{
 use px_core::{Image, Rgba};
 
 use crate::texture::{to_rgba8, to_rgba8_with_entry};
-use crate::view::{Size, View, Zoom};
+use crate::view::{Size, View, ViewOp, Zoom};
 
 /// Fondo liso detrás de la imagen (el tablero de la transparencia queda para más adelante). Lo que
 /// se ve de un píxel transparente y de uno borrado en la superposición
@@ -110,6 +110,11 @@ pub struct Canvas {
     /// Última vista previa subida: entrada y color resuelto.
     previewing: Option<(u8, Rgba)>,
     preview_uploads: u32,
+    /// Operaciones de zoom pedidas desde fuera (menú, columna, atajos), que se aplican en el
+    /// siguiente `interact`, cuando se conoce el tamaño del lienzo.
+    requested: Vec<ViewOp>,
+    /// Las teclas `+`, `=`, `-` y `Home` ya no las trata el lienzo (las trata la capa de acciones).
+    view_keys_off: bool,
 }
 
 impl Canvas {
@@ -127,6 +132,24 @@ impl Canvas {
         self.error = None;
         self.gesture = Gesture::None;
         self.previewing = None;
+        self.requested.clear();
+    }
+
+    /// Pide una operación de zoom: se aplica en el siguiente [`Canvas::interact`], también a mitad
+    /// de un trazo (el trazo sigue y sus siguientes puntos usan la vista nueva).
+    pub fn request_view(&mut self, op: ViewOp) {
+        self.requested.push(op);
+    }
+
+    /// Zoom actual, o `None` si todavía no hay imagen mostrada.
+    pub fn zoom(&self) -> Option<Zoom> {
+        self.view.map(|view| view.zoom())
+    }
+
+    /// Con `false`, el lienzo ignora las teclas `+`, `=`, `-` y `Home` (la app las traduce a
+    /// acciones y las despacha con sus propios bloqueos). Por defecto, `true`.
+    pub fn set_view_keys(&mut self, enabled: bool) {
+        self.view_keys_off = !enabled;
     }
 
     /// Regenera la textura con el contenido de `image` **conservando la vista** (tras un trazo,
@@ -236,9 +259,16 @@ impl Canvas {
             u32::try_from(physical(rect.width())).unwrap_or(0),
             u32::try_from(physical(rect.height())).unwrap_or(0),
         );
+        // El puntero cuenta como «en el lienzo» solo si ninguna otra capa de egui (un desplegable
+        // del menú, una ventana) está encima: se pregunta a egui por el orden de capas, no solo a
+        // la geometría (specs/hito-2-menu-herramientas.md, decisión 6).
+        let layer = ui.layer_id();
+        let ctx = ui.ctx().clone();
+        let on_canvas =
+            |p: egui::Pos2| rect.contains(p) && ctx.layer_id_at(p).is_none_or(|top| top == layer);
         let pointer = ui
             .input(|i| i.pointer.hover_pos())
-            .filter(|p| rect.contains(*p))
+            .filter(|p| on_canvas(*p))
             .map(|p| (physical(p.x - rect.min.x), physical(p.y - rect.min.y)));
 
         let mut frame = Frame {
@@ -253,6 +283,9 @@ impl Canvas {
         };
 
         let mut view = self.view.unwrap_or_else(|| View::fit(viewport, size));
+        for op in std::mem::take(&mut self.requested) {
+            view.apply_op(op, viewport, size);
+        }
         let center = (
             i64::from(viewport.width) / 2,
             i64::from(viewport.height) / 2,
@@ -283,9 +316,11 @@ impl Canvas {
                     modifiers,
                     ..
                 } if !modifiers.command && !typing => match key {
-                    Key::Home => view = View::fit(viewport, size),
-                    Key::Plus | Key::Equals => zoom_step(&mut view, true, center),
-                    Key::Minus => zoom_step(&mut view, false, center),
+                    Key::Home if !self.view_keys_off => view = View::fit(viewport, size),
+                    Key::Plus | Key::Equals if !self.view_keys_off => {
+                        zoom_step(&mut view, true, center);
+                    }
+                    Key::Minus if !self.view_keys_off => zoom_step(&mut view, false, center),
                     Key::Escape if modifiers.is_none() => strokes.push(CanvasInput::Escape),
                     _ => {}
                 },
@@ -294,7 +329,7 @@ impl Canvas {
                     button,
                     pressed: true,
                     ..
-                } if self.gesture == Gesture::None && rect.contains(*pos) => {
+                } if self.gesture == Gesture::None && on_canvas(*pos) => {
                     self.gesture = match button {
                         PointerButton::Middle => Gesture::Pan(PointerButton::Middle),
                         PointerButton::Primary if space_down => {

@@ -126,6 +126,20 @@ impl Size {
     }
 }
 
+/// Operación de zoom pedida desde el menú, la columna o el teclado
+/// (specs/hito-2-menu-herramientas.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ViewOp {
+    /// Un nivel más, anclado en el centro del lienzo.
+    ZoomIn,
+    /// Un nivel menos, anclado en el centro del lienzo.
+    ZoomOut,
+    /// Mayor zoom entero con la imagen entera visible, centrada.
+    Fit,
+    /// Zoom ×1 anclado en el centro del lienzo.
+    Actual,
+}
+
 /// Rectángulo en coordenadas de pantalla.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScreenRect {
@@ -184,6 +198,22 @@ impl View {
 
     pub fn zoom_out(&mut self, anchor: (i64, i64)) {
         self.set_zoom(self.zoom.zoom_out(), anchor);
+    }
+
+    /// Aplica una [`ViewOp`] sobre un lienzo de `viewport` píxeles y una imagen de `image`, y deja
+    /// la vista con `clamp`. `ZoomIn`, `ZoomOut` y `Actual` anclan en el centro del lienzo.
+    pub fn apply_op(&mut self, op: ViewOp, viewport: Size, image: Size) {
+        let center = (
+            i64::from(viewport.width) / 2,
+            i64::from(viewport.height) / 2,
+        );
+        match op {
+            ViewOp::ZoomIn => self.zoom_in(center),
+            ViewOp::ZoomOut => self.zoom_out(center),
+            ViewOp::Actual => self.set_zoom(Zoom::ONE, center),
+            ViewOp::Fit => *self = View::fit(viewport, image),
+        }
+        self.clamp(viewport, image);
     }
 
     /// Desplaza el origen y hace `clamp`.

@@ -15,6 +15,8 @@ pub const SURFACE_2: Color32 = Color32::from_rgb(0x30, 0x30, 0x30);
 pub const SURFACE_3: Color32 = Color32::from_rgb(0x42, 0x42, 0x42);
 pub const TEXT: Color32 = Color32::from_rgb(0xe0, 0xe0, 0xe0);
 pub const TEXT_DIM: Color32 = Color32::from_rgb(0xa3, 0xa3, 0xa3);
+/// Texto de lo deshabilitado (menú y columna de herramientas).
+pub const TEXT_DISABLED: Color32 = Color32::from_rgb(0x6b, 0x6b, 0x6b);
 /// Selección y enlaces.
 pub const ACCENT: Color32 = Color32::from_rgb(0x39, 0xd0, 0xb2);
 /// Avisos (siempre con `NOTICE_PREFIX`: el color solo refuerza).
