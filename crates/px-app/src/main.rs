@@ -7,6 +7,7 @@ mod confirm;
 mod demo;
 mod dialogs;
 mod files;
+mod keys;
 mod licenses;
 mod session;
 mod title;
@@ -18,13 +19,13 @@ use std::time::Duration;
 use eframe::egui;
 use px_core::Document;
 use px_ui::canvas::Canvas;
-use px_ui::color::{choice_label_with, key_choice};
+use px_ui::color::key_choice;
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, gate_keys};
 use px_ui::texture::pixel_rgba;
-use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
+use px_ui::tool::{ToolAction, ToolEvent, ToolState, tool_action_for_key, tool_color_label};
 
 use crate::confirm::{
     Confirm, Confirmation, Request, close_warning, open_dialog_warning, open_warning,
@@ -34,6 +35,7 @@ use crate::dialogs::{
     open_gate, unavailable_notice,
 };
 use crate::files::{file_label, parse_args, pick_dropped};
+use crate::keys::select_tool;
 use crate::licenses::wants_licenses;
 use crate::session::{Session, describe_saved, describe_saved_dialog};
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
@@ -118,10 +120,7 @@ impl App {
     /// Hay un gesto en curso: un trazo del lápiz, la línea, o el arrastre de un deslizador del
     /// editor de color. Mientras dura se ignoran atajos, elecciones y ficheros.
     fn busy(&self) -> bool {
-        self.tools.busy()
-            || self.session.editor.dragging()
-            || self.session.ops.busy()
-            || self.dialogs.pending()
+        self.tools.busy() || self.session.busy() || self.dialogs.pending()
     }
 
     /// Abre `path` (del argumento, soltado o elegido en el diálogo). Con cambios sin guardar pide
@@ -327,7 +326,14 @@ impl App {
             }
             if let Some(action) = tool_action_for_key(*key, *modifiers) {
                 if let ToolAction::Select(_) = action {
-                    self.tools.apply_action(action);
+                    let busy = self.busy();
+                    let image = self
+                        .session
+                        .document
+                        .image(self.session.document.main_image());
+                    if let Some(text) = select_tool(&mut self.tools, action, busy, image) {
+                        self.notify(ctx, text);
+                    }
                 }
                 continue;
             }
@@ -462,6 +468,16 @@ impl eframe::App for App {
                 .tools
                 .canvas_input_with(&mut self.session.document, id, pixel, input);
             self.finish(&ctx, result);
+            for event in self.tools.take_events() {
+                match event {
+                    ToolEvent::Picked(picked) => {
+                        if let Some(text) = self.session.apply_pick(picked).notice {
+                            self.notify(&ctx, text);
+                        }
+                    }
+                    ToolEvent::Refused(error) => self.notify(&ctx, error.to_string()),
+                }
+            }
         }
         // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
         let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
@@ -500,7 +516,8 @@ impl eframe::App for App {
             zoom: canvas_info.zoom,
             hover: canvas_info.hover,
             color: image.and_then(|image| {
-                choice_label_with(
+                tool_color_label(
+                    self.tools.tool(),
                     image,
                     self.session.choice,
                     self.session.slots.get(image.mode()),

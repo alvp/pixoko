@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use px_core::{Command, Document, DocumentError, Pixel};
+use px_core::{Command, Document, DocumentError, Mode, Pixel};
 use px_formats::write_png;
 use px_ui::color::{ColorChoice, SlotBank, clamp_choice, initial_choice, pixel_for_choice_with};
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
@@ -11,6 +11,7 @@ use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_ops::{
     Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_fate, summary,
 };
+use px_ui::pick::{Picked, pick_notice};
 
 use crate::dialogs::with_png_extension;
 use crate::files::{
@@ -31,6 +32,13 @@ pub struct Saved {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PaletteOutcome {
     pub changed: bool,
+    pub notice: Option<String>,
+}
+
+/// Resultado de aplicar lo que eligió el cuentagotas: el aviso de 5 s, si lo hay (un color con
+/// alfa 0 se copia tal cual).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PickOutcome {
     pub notice: Option<String>,
 }
 
@@ -90,6 +98,40 @@ impl Session {
             self.choice = choice;
             self.view.reveal = true;
             self.ops.clear_range();
+        }
+    }
+
+    /// Un deslizador del editor o un arrastre de muestra en curso.
+    pub fn busy(&self) -> bool {
+        self.editor.dragging() || self.ops.busy()
+    }
+
+    /// Aplica lo que eligió el cuentagotas (specs/hito-2-cuentagotas-borrador.md, decisión 4).
+    /// Indexada: elige la entrada y la muestra en el panel; con una quita pendiente se ignora.
+    /// RGBA, Gray y GrayAlpha: escribe el color en la ranura activa de ese modo. Nunca modifica el
+    /// documento: ni paso de deshacer ni marca de modificado.
+    pub fn apply_pick(&mut self, picked: Picked) -> PickOutcome {
+        let Some(image) = self.document.image(self.document.main_image()) else {
+            return PickOutcome { notice: None };
+        };
+        let mode = image.mode();
+        let palette_len = image.palette().map_or(0, |palette| palette.len());
+        let applied = match (picked, mode, self.choice) {
+            (Picked::Entry(index), Mode::Indexed, _)
+                if usize::from(index) < palette_len && self.ops.removal().is_none() =>
+            {
+                self.set_choice_revealing(ColorChoice::Entry(index));
+                true
+            }
+            (
+                Picked::Color(color),
+                Mode::Rgba | Mode::Gray | Mode::GrayAlpha,
+                ColorChoice::Slot(slot),
+            ) => self.slots.get_mut(mode).set(slot, color),
+            _ => false,
+        };
+        PickOutcome {
+            notice: applied.then(|| pick_notice(&picked)).flatten(),
         }
     }
 
@@ -433,5 +475,7 @@ mod edit_tests;
 mod ops_tests;
 #[cfg(test)]
 mod panel_tests;
+#[cfg(test)]
+mod pick_tests;
 #[cfg(test)]
 mod tests;
