@@ -134,6 +134,8 @@ Cuando el lienzo muestre la transparencia con un damero (hito 3 o una unidad pro
 
 Un botón **«Fijar índice transparente»** en el editor de la paleta (el comando que fija `transparent_index` existe desde la unidad 10): permitiría elegir qué entrada usa el borrador sin depender de la regla de la primera entrada de alfa 0. No está en esta unidad.
 
+El **panel de paletas (11b)** debería marcar con una palabra («alfa 0») toda entrada cuyo alfa resuelto sea 0, no solo la que es el índice transparente del documento. En un PNG indexado con `tRNS` no hay `transparent_index`, y hoy el panel solo muestra el alfa dentro del hexadecimal (por ejemplo `#e52d2d00`), lo que hace difícil saber qué entrada usará el borrador (la primera de alfa 0, regla 2 de la decisión 2). No está en esta unidad.
+
 ## Fuera de alcance
 
 `Alt`+clic u otro cuentagotas temporal (decisión 6), cursor propio por herramienta, grosor del borrador, borrar con el botón derecho, damero de transparencia, superposición como textura y textura por regiones (unidad 14), pincel, rectángulo y elipse (hito 4), y que el cuentagotas elija de una capa o del compuesto (hito 3).
