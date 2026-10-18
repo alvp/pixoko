@@ -1062,6 +1062,8 @@ fn comprueba_propiedad_1(
 }
 
 proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
     #[test]
     fn propiedad_1_el_borrador_es_un_lapiz_transparente(
         image in imagenes(),
