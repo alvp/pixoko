@@ -11,16 +11,17 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 | 1 | **16** | Diálogos de archivo con `rfd` (abrir, guardar y guardar como) | `px-app` | `rfd` |
 | 2 | **17a** | Cuentagotas y borrador | `px-ui`, `px-app` | ninguna |
 | 3 | **17** | Menú, barra de herramientas y botones de zoom | `px-ui`, `px-app` | ninguna |
-| 4 | **18** | Diálogos modales y campos numéricos | `px-ui` | ninguna |
-| 5 | **19** | Nueva imagen | `px-app`, `px-core` | ninguna |
-| 6 | **20** | Convertir de modo | `px-app`, `px-ui` | ninguna |
-| 7 | **13b** | Chunks auxiliares del PNG en el informe de lectura | `px-formats`, `px-app` | ninguna |
-| 8 | **12** | Acceso por filas y bytes a `Image` (con `uses_index` y las limpiezas de API de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md)) | `px-core` | ninguna |
-| 9 | **13** | Escritor de PNG por flujo y lectura sin reserva anticipada | `px-formats` | ninguna |
-| 10 | **14a** | Zoom 1/2, 1/4 y 1/8, textura por regiones y medición del editor de color | `px-ui` | ninguna |
-| 11 | **14b** | Índices en la GPU con la paleta en un sombreador, **solo si la medición de 14a lo justifica** | `px-render` | `glow` y `egui_glow` como directas (ya en el árbol) |
-| 12 | **14c** | Tope de tramos del relleno y tope de memoria del peine | `px-core`, `px-raster` | ninguna |
-| 13 | **21** | Puerta del hito: abrir, editar y guardar un PNG real | `px-app`, `px-golden` | ninguna |
+| 4 | **17b** | Damero de transparencia **de fondo del lienzo** (unidad corta; solo pintado, no depende de la textura) | `px-ui` | ninguna |
+| 5 | **18** | Diálogos modales y campos numéricos | `px-ui` | ninguna |
+| 6 | **19** | Nueva imagen | `px-app`, `px-core` | ninguna |
+| 7 | **20** | Convertir de modo | `px-app`, `px-ui` | ninguna |
+| 8 | **13b** | Chunks auxiliares del PNG en el informe de lectura | `px-formats`, `px-app` | ninguna |
+| 9 | **12** | Acceso por filas y bytes a `Image` (con `uses_index` y las limpiezas de API de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md)) | `px-core` | ninguna |
+| 10 | **13** | Escritor de PNG por flujo y lectura sin reserva anticipada | `px-formats` | ninguna |
+| 11 | **14a** | Zoom 1/2, 1/4 y 1/8, textura por regiones, superposición del trazo como textura o sombreador (con el damero de la superposición del borrador) y medición del editor de color | `px-ui` | ninguna |
+| 12 | **14b** | Índices en la GPU con la paleta en un sombreador, **solo si la medición de 14a lo justifica** | `px-render` | `glow` y `egui_glow` como directas (ya en el árbol) |
+| 13 | **14c** | Tope de tramos del relleno y tope de memoria del peine | `px-core`, `px-raster` | ninguna |
+| 14 | **21** | Puerta del hito: abrir, editar y guardar un PNG real | `px-app`, `px-golden` | ninguna |
 
 ## Decisiones
 
@@ -42,6 +43,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 - **D8. Convertir** (20): el cuantizador es una unidad aparte, **fuera del hito 2 y anotada para el hito 4**; la interfaz solo explica `TooManyColors`. Para `drop_alpha` no hay fondo por defecto: se elige blanco, negro, el color activo o un hexadecimal.
 - **D9. Puerta** (21): la prueba va en `px-app` y `px-golden`, sin xvfb ni cambios en el CI (no `px-cli`, que no tiene código hasta el hito 8). **Unidad 13b:** la lectura de PNG lista en su informe los chunks auxiliares ignorados (`iCCP`, `gAMA`, `sRGB`, `pHYs`, texto…); con `iCCP`, `Ctrl`+`S` guarda una copia, como con las conversiones, y el título lo explica. El usuario probó a mano la puerta actual en Linux, macOS y Windows (todo bien) y la repetirá al final del hito.
 - **D10. Rellenos y memoria** (14c): tope de tramos del relleno con error claro y constante con nombre (sin hilo aparte), y tope de memoria del peine.
+- **D11. Damero de transparencia** (nota de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md), aprobada 2026-10-18). El damero **de fondo del lienzo** es la unidad **17b**, corta y tras la 17: solo cambia `Canvas::paint` (el fondo liso `BACKGROUND` pasa a damero) y la fila 10 de [`hito-2-cuentagotas-borrador.md`](hito-2-cuentagotas-borrador.md) para el fondo. El damero **de la superposición del borrador** va **dentro de la 14a**, junto a la superposición del trazo como textura o sombreador (medida del zigzag a 4096² en las notas de la 14): su forma depende de cómo la textura resuelva «borrar», y con formas por píxel empeoraría el retraso medido. Cada una tendrá su spec y su visto bueno.
 
 ## Notas para el hito 4
 
