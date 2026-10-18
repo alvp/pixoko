@@ -2,6 +2,7 @@
 //! barra de estado, el panel de paletas y el editor de color.
 
 pub mod canvas;
+pub mod chrome;
 pub mod color;
 pub mod color_edit;
 pub mod color_editor;

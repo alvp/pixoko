@@ -12,7 +12,7 @@ use crate::text::{
 use crate::theme::{NOTICE_PREFIX, SURFACE_1, SURFACE_3, TEXT, WARNING};
 
 /// Píxeles físicos de avance de un carácter en la escala 1 (la fuente es monoespaciada).
-const ADVANCE_PX: u32 = 7;
+pub const ADVANCE_PX: u32 = 7;
 /// Píxeles físicos de alto de una línea en la escala 1.
 const LINE_PX: u32 = 14;
 /// Margen de la barra, en píxeles de interfaz.

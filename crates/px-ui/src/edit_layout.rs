@@ -6,6 +6,7 @@
 
 use px_core::Mode;
 
+use crate::chrome::{MENU_H_U, toolbar_width_u};
 use crate::color_edit::{Control, controls};
 use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, visible_rows_reserved};
 use crate::status::bar_height_px;
@@ -175,8 +176,8 @@ pub fn min_panel_height_px(n: u32) -> i64 {
     (GRID_Y_U + PITCH_U + editor_height_u_max()) * scale(n)
 }
 
-/// Alto mínimo de la ventana en píxeles lógicos (puntos de egui): la barra de estado más el
-/// panel mínimo.
+/// Alto mínimo de la ventana en píxeles lógicos (puntos de egui): el menú, la barra de estado y
+/// el panel mínimo.
 pub fn min_window_height_pt(ppp: f32) -> f32 {
     let ppp = if ppp.is_finite() && ppp > 0.0 {
         ppp
@@ -184,13 +185,14 @@ pub fn min_window_height_pt(ppp: f32) -> f32 {
         1.0
     };
     let n = text_scale(ppp);
-    let physical = i64::from(bar_height_px(n)) + min_panel_height_px(n);
+    let physical = i64::from(bar_height_px(n)) + MENU_H_U * scale(n) + min_panel_height_px(n);
     physical as f32 / ppp
 }
 
-/// Ancho mínimo de la ventana en píxeles de interfaz: el panel más el lienzo mínimo.
+/// Ancho mínimo de la ventana en píxeles de interfaz: la columna de herramientas, el panel y el
+/// lienzo mínimo.
 pub fn min_window_width_u() -> i64 {
-    PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
+    toolbar_width_u() + PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
 }
 
 /// Ancho mínimo de la ventana en píxeles lógicos (puntos de egui).
