@@ -679,11 +679,11 @@ fn fila_3_el_editor_se_ve_siempre_y_la_rejilla_tiene_una_fila() {
 }
 
 #[test]
-fn fila_3_de_241n_a_240n_el_editor_y_la_rejilla_no_saltan() {
+fn fila_3_de_297n_a_296n_el_editor_y_la_rejilla_no_saltan() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
         let mut banco =
-            Banco::con_alto_de_panel(ppp, 241 * n, imagen_indexada_256(), ColorChoice::Entry(5));
+            Banco::con_alto_de_panel(ppp, 297 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let antes = banco.reposo();
         let cabecera_antes = antes
             .texto_pintado("editar índice 5")
@@ -691,9 +691,9 @@ fn fila_3_de_241n_a_240n_el_editor_y_la_rejilla_no_saltan() {
             .pos;
         assert!(!banco.disposicion().scrolling);
 
-        banco.alto_de_panel(240 * n);
+        banco.alto_de_panel(296 * n);
         let despues = banco.reposo();
-        assert!(banco.disposicion().scrolling, "ppp {ppp}: 240n desplaza");
+        assert!(banco.disposicion().scrolling, "ppp {ppp}: 296n desplaza");
         assert_eq!(banco.view.offset_px, 0);
         let cabecera_despues = despues
             .texto_pintado("editar índice 5")
@@ -774,7 +774,7 @@ fn fila_4_offset_px_siempre_es_multiplo_de_n_y_se_recorta_a_cero_y_al_maximo() {
         let mut banco =
             Banco::con_alto_de_panel(ppp, 200 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let max = banco.max_offset();
-        assert_eq!(max, 41 * n);
+        assert_eq!(max, 97 * n);
         let (x, y) = banco.sobre_el_texto();
         banco.mueve(x, y);
         // Subir con el desplazamiento a 0: se queda en 0.
@@ -864,20 +864,20 @@ fn fila_4_al_agrandar_hasta_el_bloque_offset_px_es_0_en_el_mismo_fotograma() {
             Banco::con_alto_de_panel(ppp, 200 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let (x, y) = banco.sobre_el_texto();
         banco.rueda_en(x, y, 100_000 * n);
-        assert_eq!(banco.view.offset_px, 41 * n);
+        assert_eq!(banco.view.offset_px, 97 * n);
 
         // Agrandar un poco: el máximo baja y el desplazamiento se recorta en el mismo fotograma.
         banco.alto_de_panel(220 * n);
         banco.reposo();
-        assert_eq!(banco.view.offset_px, 21 * n, "ppp {ppp}: 220n");
-        assert_eq!(banco.max_offset(), 21 * n);
+        assert_eq!(banco.view.offset_px, 77 * n, "ppp {ppp}: 220n");
+        assert_eq!(banco.max_offset(), 77 * n);
 
         // Hasta el bloque: 0 en el mismo fotograma, sin pista y con el editor en su sitio.
-        banco.alto_de_panel(241 * n);
+        banco.alto_de_panel(297 * n);
         let f = banco.reposo();
-        assert_eq!(banco.view.offset_px, 0, "ppp {ppp}: 241n");
+        assert_eq!(banco.view.offset_px, 0, "ppp {ppp}: 297n");
         assert!(!banco.disposicion().scrolling);
-        comprueba_barra(&f, &banco, &format!("ppp {ppp}, 241n"));
+        comprueba_barra(&f, &banco, &format!("ppp {ppp}, 297n"));
         let cabecera = f.texto_pintado("editar índice 5").expect("cabecera");
         assert!(cerca(
             cabecera.pos.y * ppp,
@@ -899,8 +899,8 @@ fn fila_4_la_barra_solo_se_pinta_con_desplazamiento_y_la_rejilla_no_pinta_la_suy
         for (alto, desplaza) in [
             (700 * n, false),
             (300 * n, false),
-            (241 * n, false),
-            (240 * n, true),
+            (297 * n, false),
+            (296 * n, true),
             (200 * n, true),
             (100 * n, true),
         ] {
@@ -1575,6 +1575,10 @@ fn reducir_y_agrandar_la_ventana_no_pierde_el_texto_pendiente() {
 // Fila 11: mostrar la elegida
 // ---------------------------------------------------------------------------------------------
 
+/// Alto de los botones de la unidad 11d con su margen (52 + 4 u), que la rejilla de indexadas
+/// ya no usa: para el mismo número de filas visibles hay que dar tanto panel de más.
+const BOTONES_U: i64 = 56;
+
 fn fila_de(entrada: usize) -> usize {
     entrada / COLUMNS
 }
@@ -1600,8 +1604,8 @@ fn banco_256(ppp: f32, panel_h_px: i64, entrada: u8, calentar: bool) -> Banco {
 fn fila_11_el_primer_fotograma_no_muestra_la_elegida() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // 400·n: 12 filas visibles de 16 y la elegida (200 → fila 12) fuera de la vista.
-        let mut banco = banco_256(ppp, 400 * n, 200, false);
+        // (400 + 56)·n: 12 filas visibles de 16 y la elegida (200 → fila 12) fuera de la vista.
+        let mut banco = banco_256(ppp, (400 + BOTONES_U) * n, 200, false);
         assert_eq!(banco.view, PanelView::default());
         banco.reposo();
         assert_eq!(banco.view.last_visible, Some(12), "ppp {ppp}");
@@ -1623,12 +1627,12 @@ fn fila_11_el_primer_fotograma_no_muestra_la_elegida() {
 fn fila_11_cambiar_el_numero_de_filas_visibles_muestra_la_elegida_con_el_minimo_movimiento() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, 400 * n, 200, true);
+        let mut banco = banco_256(ppp, (400 + BOTONES_U) * n, 200, true);
         assert_eq!(banco.scroll.first_row, 0);
         assert_eq!(banco.view.last_visible, Some(12));
 
-        // 300·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
-        banco.alto_de_panel(300 * n);
+        // (300 + 56)·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
+        banco.alto_de_panel((300 + BOTONES_U) * n);
         banco.reposo();
         assert_eq!(banco.view.last_visible, Some(5), "ppp {ppp}");
         assert_eq!(banco.scroll.first_row, 8, "ppp {ppp}: el mínimo movimiento");
@@ -1639,7 +1643,7 @@ fn fila_11_cambiar_el_numero_de_filas_visibles_muestra_la_elegida_con_el_minimo_
         assert_eq!(banco.scroll.first_row, 8);
 
         // Agrandar: 12 filas visibles; la elegida sigue a la vista.
-        banco.alto_de_panel(400 * n);
+        banco.alto_de_panel((400 + BOTONES_U) * n);
         banco.reposo();
         assert_eq!(banco.view.last_visible, Some(12));
         assert!(elegida_visible(&banco, 12), "ppp {ppp}");
@@ -1672,7 +1676,7 @@ fn fila_11_al_bajar_hasta_el_respaldo_la_elegida_sigue_a_la_vista() {
 fn fila_11_view_reveal_muestra_la_elegida_y_el_panel_lo_apaga() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, 400 * n, 200, true);
+        let mut banco = banco_256(ppp, (400 + BOTONES_U) * n, 200, true);
         assert_eq!(banco.scroll.first_row, 0);
         // Como las teclas 1 a 9, deshacer o rehacer: la sesión lo pone y el panel lo apaga.
         banco.view.reveal = true;
@@ -1717,7 +1721,7 @@ fn fila_11_view_reveal_con_una_eleccion_sin_muestra_no_mueve_nada_y_se_apaga() {
 #[test]
 fn fila_11_view_reveal_en_el_primer_fotograma_si_muestra_la_elegida() {
     let n = 1;
-    let mut banco = banco_256(1.0, 400 * n, 200, false);
+    let mut banco = banco_256(1.0, (400 + BOTONES_U) * n, 200, false);
     banco.view.reveal = true;
     banco.reposo();
     assert!(!banco.view.reveal);
@@ -1728,7 +1732,7 @@ fn fila_11_view_reveal_en_el_primer_fotograma_si_muestra_la_elegida() {
 fn fila_11_la_rueda_no_muestra_la_elegida() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, 300 * n, 0, true);
+        let mut banco = banco_256(ppp, (300 + BOTONES_U) * n, 0, true);
         assert_eq!(banco.view.last_visible, Some(5));
         let (x, y) = centro_de_muestra(n, 0, 0);
         banco.mueve(x, y);

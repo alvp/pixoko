@@ -3,15 +3,15 @@
 //! `min_inner_size` (alto y ancho). Sin ventana: son funciones puras. La parte de `px-ui`
 //! (`min_panel_height_px`, `min_window_height_pt`, `min_window_width_pt`) está en `crates/px-ui/tests/edit_layout.rs`.
 //!
-//! Los números esperados salen de la spec: 261, 208,8, 348, 261 y 261 puntos de alto a `ppp`
+//! Los números esperados salen de la spec: 317, 253,6, 422,67, 317 y 317 puntos de alto a `ppp`
 //! 1,0, 1,25, 1,5, 2,0 y 3,0 (±0,01); el ancho mínimo es 361, 288,8, 481,33, 361 y 361 puntos (fila 1b: panel
-//! de 233 u más 128 u de lienzo); el mayor alto no pasa de 384 (la mitad de 768) ni el mayor
+//! de 233 u más 128 u de lienzo); el mayor alto no pasa de 432 (el 60 % de 720; unidad 11d) ni el mayor
 //! ancho de 683 (la mitad de 1366).
 
 use super::*;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-const ALTOS: [f32; 5] = [261.0, 208.8, 348.0, 261.0, 261.0];
+const ALTOS: [f32; 5] = [317.0, 253.6, 422.67, 317.0, 317.0];
 const ANCHOS: [f32; 5] = [361.0, 288.8, 481.33, 361.0, 361.0];
 
 // `min_enabled`.
@@ -85,10 +85,10 @@ fn fila_1_min_inner_size_es_el_de_min_window_height_pt_y_width_pt() {
 }
 
 #[test]
-fn fila_1_ningun_minimo_pasa_de_la_mitad_de_768() {
+fn fila_1_ningun_minimo_pasa_del_60_por_ciento_de_720_de_alto_ni_de_la_mitad_de_1366_de_ancho() {
     for ppp in PPPS {
         let [ancho, alto] = min_inner_size(ppp, true).expect("activo");
-        assert!(alto <= 384.0, "ppp {ppp}: {alto} pt");
+        assert!(alto <= 432.0, "ppp {ppp}: {alto} pt");
         assert!(ancho <= 683.0, "ppp {ppp}: {ancho} pt");
         assert!(alto > 0.0 && ancho > 0.0);
         assert!(alto.is_finite() && ancho.is_finite());

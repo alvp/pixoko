@@ -7,7 +7,7 @@
 use px_core::Mode;
 
 use crate::color_edit::{Control, controls};
-use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, visible_rows_reserved};
+use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, visible_rows_reserved};
 use crate::status::bar_height_px;
 use crate::text::text_scale;
 
@@ -47,14 +47,108 @@ pub const BLOCK_GAP_U: i64 = 4;
 pub const MIN_CANVAS_WIDTH_U: i64 = 128;
 /// Líneas del aviso.
 pub const NOTICE_LINES: i64 = 2;
+/// Botones de la paleta (solo indexadas; specs/hito-2-paleta-operaciones.md): filas, alto, hueco
+/// entre filas, origen, ancho de los dos botones de la fila 1 y hueco entre ellos, y margen del
+/// texto dentro del botón.
+pub const BUTTON_ROWS: i64 = 3;
+pub const BUTTON_H_U: i64 = 16;
+pub const BUTTON_ROW_GAP_U: i64 = 2;
+pub const BUTTON_X_U: i64 = 4;
+pub const BUTTON_HALF_W_U: i64 = 110;
+pub const BUTTON_COL_GAP_U: i64 = 5;
+pub const BUTTON_FULL_W_U: i64 = TEXT_WIDTH_U;
+pub const BUTTON_TEXT_X_U: i64 = 6;
+pub const BUTTON_TEXT_Y_U: i64 = 1;
 /// Modos de imagen: la altura del editor depende de ellos.
 const MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
-/// Alto del editor del modo, en `u`: hasta el final del aviso más el margen inferior. Es el
-/// **único** sitio donde se calcula (specs/hito-2-panel-ventana-baja.md): todo lo demás cuelga de
-/// ella.
+/// Alto del editor del modo, en `u`: hasta el final del aviso más el margen inferior y, en
+/// indexadas, los botones con su margen. Es el **único** sitio donde se calcula
+/// (specs/hito-2-panel-ventana-baja.md): todo lo demás cuelga de ella.
 pub fn editor_height_u(mode: Mode) -> i64 {
+    let buttons = buttons_height_u(mode);
+    buttons_y_u(mode)
+        + if buttons > 0 {
+            buttons + BLOCK_GAP_U
+        } else {
+            0
+        }
+}
+
+/// Alto de los botones del modo, en `u`: 0 si no tiene.
+pub fn buttons_height_u(mode: Mode) -> i64 {
+    if mode == Mode::Indexed {
+        BUTTON_ROWS * BUTTON_H_U + (BUTTON_ROWS - 1) * BUTTON_ROW_GAP_U
+    } else {
+        0
+    }
+}
+
+/// Primera `y` de los botones, desde `top_px`: tras el aviso y un hueco.
+pub fn buttons_y_u(mode: Mode) -> i64 {
     notice_y_u(mode) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
+}
+
+/// Botones de la paleta. `Confirm` y `Cancel` ocupan el lugar de `Add` y `Remove` mientras hay
+/// una quita pendiente.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaletteButton {
+    Add,
+    Remove,
+    Confirm,
+    Cancel,
+    RotateLeft,
+    RotateRight,
+}
+
+/// Rectángulo `(x, y, ancho, alto)` del botón, en `u` desde la esquina del editor. `None` en los
+/// modos sin botones.
+pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64, i64)> {
+    if buttons_height_u(mode) == 0 {
+        return None;
+    }
+    let top = buttons_y_u(mode);
+    let second_col = BUTTON_X_U + BUTTON_HALF_W_U + BUTTON_COL_GAP_U;
+    let row = BUTTON_H_U + BUTTON_ROW_GAP_U;
+    Some(match button {
+        PaletteButton::Add | PaletteButton::Confirm => {
+            (BUTTON_X_U, top, BUTTON_HALF_W_U, BUTTON_H_U)
+        }
+        PaletteButton::Remove | PaletteButton::Cancel => {
+            (second_col, top, BUTTON_HALF_W_U, BUTTON_H_U)
+        }
+        PaletteButton::RotateLeft => (BUTTON_X_U, top + row, BUTTON_FULL_W_U, BUTTON_H_U),
+        PaletteButton::RotateRight => (BUTTON_X_U, top + 2 * row, BUTTON_FULL_W_U, BUTTON_H_U),
+    })
+}
+
+/// Botón bajo un punto en píxeles físicos, relativo a la esquina del editor. `removing`: hay una
+/// quita pendiente (la fila 1 es `Confirm` y `Cancel`).
+pub fn button_hit(
+    mode: Mode,
+    removing: bool,
+    x_px: i64,
+    y_px: i64,
+    n: u32,
+) -> Option<PaletteButton> {
+    let n = scale(n);
+    let (first, second) = if removing {
+        (PaletteButton::Confirm, PaletteButton::Cancel)
+    } else {
+        (PaletteButton::Add, PaletteButton::Remove)
+    };
+    [
+        first,
+        second,
+        PaletteButton::RotateLeft,
+        PaletteButton::RotateRight,
+    ]
+    .into_iter()
+    .find(|button| {
+        button_rect_u(mode, *button).is_some_and(|(x, y, w, h)| {
+            x_px >= x * n && x_px < (x + w) * n && y_px >= y * n && y_px < (y + h) * n
+        })
+    })
 }
 
 /// El mayor alto de editor entre los modos.
@@ -212,6 +306,28 @@ pub fn edges_u(mode: Mode) -> Vec<i64> {
         .filter_map(|c| control_row_u(mode, *c))
     {
         e.extend([row, row + ROW_H_U, row + 5, row + 9, row + 1, row + 13]);
+    }
+    for button in [
+        PaletteButton::Add,
+        PaletteButton::Remove,
+        PaletteButton::RotateLeft,
+        PaletteButton::RotateRight,
+    ] {
+        if let Some((x, y, w, h)) = button_rect_u(mode, button) {
+            e.extend([
+                x,
+                x + 1,
+                x + w - 1,
+                x + w,
+                x + BUTTON_TEXT_X_U,
+                y,
+                y + 1,
+                y + h - 1,
+                y + h,
+                y + BUTTON_TEXT_Y_U,
+                y + BUTTON_TEXT_Y_U + ROW_H_U,
+            ]);
+        }
     }
     e
 }
