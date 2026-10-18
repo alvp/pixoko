@@ -10,6 +10,7 @@ pub mod notice;
 pub mod palette_grid;
 pub mod palette_ops;
 pub mod palette_panel;
+pub mod pick;
 pub mod shortcuts;
 pub mod status;
 pub mod stroke;

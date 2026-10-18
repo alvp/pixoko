@@ -1,14 +1,16 @@
-//! Herramientas (lápiz, línea y relleno) como lógica pura (specs/hito-2-linea-relleno-app.md).
+//! Herramientas (lápiz, línea, relleno, cuentagotas y borrador) como lógica pura
+//! (specs/hito-2-linea-relleno-app.md y specs/hito-2-cuentagotas-borrador.md).
 //!
 //! Sin tipos de egui en la API de [`ToolState`]: quien dibuja traduce los eventos de egui a
 //! [`CanvasEvent`] / [`CanvasInput`] y las teclas a [`ToolAction`].
 
 use egui::{Key, Modifiers};
-use px_core::{Document, DocumentError, ImageId, Pixel, PixelEdit};
+use px_core::{Command, Document, DocumentError, Image, ImageId, Pixel, PixelEdit};
 use px_raster::{Line, draw_line, flood_fill};
 
 use crate::canvas::{CanvasEvent, CanvasInput};
-use crate::color::{ColorChoice, pixel_for_choice};
+use crate::color::{ColorChoice, SlotColors, choice_label_with, pixel_for_choice};
+use crate::pick::{Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable};
 use crate::stroke::Stroke;
 
 /// Herramienta activa.
@@ -69,6 +71,32 @@ pub fn status_text(tool: Tool, color: Option<&str>) -> String {
     }
 }
 
+/// Texto que acompaña a la herramienta en el título y la barra de estado: el color activo (con el
+/// cuentagotas, el valor que acaba de elegir) o, con el borrador, lo que escribe
+/// (`transparente`) o por qué no puede.
+pub fn tool_color_label(
+    tool: Tool,
+    image: &Image,
+    choice: ColorChoice,
+    slots: &SlotColors,
+) -> Option<String> {
+    match tool {
+        Tool::Eraser => Some(eraser_label(image).to_string()),
+        Tool::Pencil | Tool::Line | Tool::Fill | Tool::Dropper => {
+            choice_label_with(image, choice, slots)
+        }
+    }
+}
+
+/// Lo que un gesto pide a `px-app` además de cambiar el documento.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToolEvent {
+    /// El cuentagotas eligió un color.
+    Picked(Picked),
+    /// El borrador no puede con la imagen (aviso al pulsar).
+    Refused(EraseError),
+}
+
 /// Gesto en curso, desde `Begin` hasta `End`.
 #[derive(Debug, Default)]
 enum Gesture {
@@ -81,6 +109,12 @@ enum Gesture {
         stroke: Stroke,
         pixel: Pixel,
     },
+    /// Como el lápiz, con el valor de borrado de la imagen.
+    Erase {
+        stroke: Stroke,
+        pixel: Pixel,
+    },
+    Dropper(Dropper),
     Line {
         from: (i32, i32),
         to: (i32, i32),
@@ -95,6 +129,7 @@ enum Gesture {
 pub struct ToolState {
     tool: Tool,
     gesture: Gesture,
+    events: Vec<ToolEvent>,
 }
 
 impl ToolState {
@@ -110,6 +145,12 @@ impl ToolState {
     /// Cierto entre `Begin` y `End`, ambos incluidos, haya o no gesto real.
     pub fn busy(&self) -> bool {
         !matches!(self.gesture, Gesture::Idle)
+    }
+
+    /// Vacía y devuelve lo que los gestos piden a `px-app` (elecciones del cuentagotas y avisos del
+    /// borrador), en orden.
+    pub fn take_events(&mut self) -> Vec<ToolEvent> {
+        std::mem::take(&mut self.events)
     }
 
     /// `Select` cambia de herramienta solo en reposo. `Cancel` descarta una línea pendiente
@@ -153,7 +194,15 @@ impl ToolState {
             CanvasEvent::StrokeBegin(_) => Ok(false),
             CanvasEvent::StrokeMove(pos) => {
                 match &mut self.gesture {
-                    Gesture::Pencil { stroke, pixel } => stroke.move_to(pos, *pixel),
+                    Gesture::Pencil { stroke, pixel } | Gesture::Erase { stroke, pixel } => {
+                        stroke.move_to(pos, *pixel);
+                    }
+                    Gesture::Dropper(dropper) => {
+                        let picked = doc
+                            .image(image)
+                            .and_then(|target| dropper.visit(target, pos));
+                        self.events.extend(picked.map(ToolEvent::Picked));
+                    }
                     Gesture::Line { to, .. } => *to = pos,
                     _ => {}
                 }
@@ -161,10 +210,25 @@ impl ToolState {
             }
             CanvasEvent::StrokeEnd => match std::mem::take(&mut self.gesture) {
                 Gesture::Pencil { stroke, .. } => stroke.commit(doc, image),
+                Gesture::Erase { stroke, .. } => {
+                    let Some(target) = doc.image(image) else {
+                        return Ok(false);
+                    };
+                    let pixels: Vec<PixelEdit> = stroke
+                        .pixels()
+                        .iter()
+                        .copied()
+                        .filter(|edit| is_erasable(target, edit.x, edit.y))
+                        .collect();
+                    if pixels.is_empty() {
+                        return Ok(false);
+                    }
+                    doc.apply(Command::SetPixels { image, pixels })
+                }
                 Gesture::Line {
                     from, to, pixel, ..
                 } => draw_line(doc, image, from, to, pixel),
-                Gesture::Idle | Gesture::Waiting => Ok(false),
+                Gesture::Idle | Gesture::Waiting | Gesture::Dropper(_) => Ok(false),
             },
         }
     }
@@ -215,6 +279,27 @@ impl ToolState {
         let Some(target) = doc.image(image) else {
             return Ok(false);
         };
+        match self.tool {
+            Tool::Dropper => {
+                let mut dropper = Dropper::new();
+                self.events
+                    .extend(dropper.visit(target, pos).map(ToolEvent::Picked));
+                self.gesture = Gesture::Dropper(dropper);
+                return Ok(false);
+            }
+            Tool::Eraser => {
+                match eraser_pixel(target) {
+                    Ok(pixel) => {
+                        let mut stroke = Stroke::new(target.width(), target.height());
+                        stroke.move_to(pos, pixel);
+                        self.gesture = Gesture::Erase { stroke, pixel };
+                    }
+                    Err(error) => self.events.push(ToolEvent::Refused(error)),
+                }
+                return Ok(false);
+            }
+            Tool::Pencil | Tool::Line | Tool::Fill => {}
+        }
         let Some(pixel) = pixel else {
             return Ok(false);
         };
@@ -237,7 +322,6 @@ impl ToolState {
                 Ok(false)
             }
             Tool::Fill => flood_fill(doc, image, pos.0, pos.1, pixel),
-            // Sus gestos llegan en el commit siguiente (specs/hito-2-cuentagotas-borrador.md).
             Tool::Dropper | Tool::Eraser => Ok(false),
         }
     }
@@ -246,7 +330,9 @@ impl ToolState {
     /// lienzo (la misma que aplicará `draw_line`). Vacío en reposo y con el relleno.
     pub fn preview(&self) -> impl Iterator<Item = PixelEdit> + '_ {
         let pixels: Box<dyn Iterator<Item = PixelEdit> + '_> = match &self.gesture {
-            Gesture::Pencil { stroke, .. } => Box::new(stroke.pixels().iter().copied()),
+            Gesture::Pencil { stroke, .. } | Gesture::Erase { stroke, .. } => {
+                Box::new(stroke.pixels().iter().copied())
+            }
             Gesture::Line {
                 from,
                 to,

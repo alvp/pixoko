@@ -16,8 +16,10 @@ use px_core::{Image, Rgba};
 use crate::texture::{to_rgba8, to_rgba8_with_entry};
 use crate::view::{Size, View, Zoom};
 
-/// Fondo liso detrás de la imagen (el tablero de la transparencia queda para más adelante).
-const BACKGROUND: Color32 = Color32::from_gray(40);
+/// Fondo liso detrás de la imagen (el tablero de la transparencia queda para más adelante). Lo que
+/// se ve de un píxel transparente y de uno borrado en la superposición
+/// (specs/hito-2-cuentagotas-borrador.md, «Para el damero»).
+pub const BACKGROUND: Color32 = Color32::from_gray(40);
 
 /// Por qué no se puede mostrar la imagen.
 #[derive(Clone, Debug, PartialEq, Eq)]
