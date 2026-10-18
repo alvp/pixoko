@@ -22,10 +22,10 @@ La meta es reunir lo mejor de los editores de píxeles en uno solo, con cada fun
 | Área | Funciones | Hito |
 | --- | --- | --- |
 | Lienzo y color | Modos RGBA, indexado (hasta 256 colores) y escala de grises; alfa e índice transparente; editor de paletas (RGB, HSL, rangos de color, reordenar sin alterar la imagen); lienzos grandes | 1 y 2 |
-| Herramientas básicas | Lápiz, pincel, línea, rectángulo, elipse, relleno, cuentagotas, borrador, zoom y desplazamiento | 2 |
+| Herramientas básicas | Lápiz, línea, relleno, cuentagotas, borrador, zoom y desplazamiento | 2 |
 | Capas | Capas, grupos, opacidad, modos de mezcla, bloqueo | 3 |
 | Referencias | Imágenes de referencia con opacidad y posición, capas de referencia, varios documentos en pestañas | 3 y 6 |
-| Herramientas de pixel art | Trazo pixel perfect, formas y polígonos rellenos, contorno, degradados, sombreado, pincel propio, simetría, patrones, modo mosaico, selección y transformaciones | 4 |
+| Herramientas de pixel art | Pincel, rectángulo y elipse, trazo pixel perfect, formas y polígonos rellenos, contorno, degradados, sombreado, pincel propio, simetría, patrones, modo mosaico, selección y transformaciones | 4 |
 | Animación | Fotogramas, celdas, línea de tiempo, onion skin, etiquetas, vista previa, exportar GIF y hojas de sprites | 5 |
 | Formatos | PNG (indexado y color), GIF, `.aseprite` desde su especificación pública, IFF ILBM y ANIM, BMP, PCX | 1, 5 y 6 |
 | Estilo DPaint V (opcional) | Ciclo de color, stencil, pinceles de animación, perspectiva: solo lo que el manual liste y el corpus confirme | 7 |
@@ -54,9 +54,9 @@ Versión en texto de la hoja de ruta, para quien lea el documento exportado a Ma
 | --- | --- | --- |
 | 0 · Fundaciones | Repo, CLAUDE.md, CI en tres sistemas, cargo-deny | CI verde: Linux, Windows y macOS compilan |
 | 1 · Núcleo y formatos | Color (`Rgba`), paleta con índice transparente, imagen en modos RGBA, indexado y grises, documento y comandos con deshacer, PNG indexado y RGBA | Ida y vuelta de PNG sin pérdida en el corpus |
-| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno y paleta; conversión RGB y HSL, reordenar la paleta, conversión entre modos, lienzos grandes y panel de paletas | Abrir, editar y guardar un PNG real en tres sistemas |
+| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador y paleta; conversión RGB y HSL, reordenar la paleta, conversión entre modos, lienzos grandes y panel de paletas | Abrir, editar y guardar un PNG real en tres sistemas |
 | 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde |
-| 4 · Herramientas de pixel art | Formas, degradados, sombreado, simetría, selección | Dorados contra referencias |
+| 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección | Dorados contra referencias |
 | 5 · Animación | Fotogramas, línea de tiempo, onion skin, GIF | GIF y hojas de sprites verificados |
 | 6 · Más formatos | `.aseprite` desde su especificación, IFF, BMP, PCX | Corpus de ficheros ajenos se abre |
 | 7 · Estilo DPaint (opcional) | Ciclo de color, stencil, perspectiva, por caja negra | Casos del emulador en verde |
