@@ -137,40 +137,19 @@ pub fn key_choice(image: &Image, n: u8) -> Option<ColorChoice> {
 
 /// Color con el que se ve la muestra (el resuelto: el índice transparente tiene alfa 0).
 pub fn cell_color(image: &Image, cell: usize) -> Option<Rgba> {
-    let pixel = pixel_for_choice(image, choice_for_cell(image, cell)?)?;
-    pixel_rgba(image, pixel)
+    cell_color_with(image, cell, &SlotColors::defaults(image.mode()))
 }
 
 /// La muestra es transparente: en indexadas, el índice transparente de la paleta; en RGBA y
 /// gris con alfa, alfa 0; en gris, nunca.
 pub fn is_transparent_cell(image: &Image, cell: usize) -> bool {
-    if image.mode() == Mode::Indexed {
-        let transparent = image
-            .palette()
-            .and_then(|palette| palette.transparent_index());
-        return transparent.is_some_and(|index| usize::from(index) == cell);
-    }
-    cell_color(image, cell).is_some_and(|color| color.a == 0)
+    is_transparent_cell_with(image, cell, &SlotColors::defaults(image.mode()))
 }
 
 /// Línea 1 del panel: `índice 12 #ff8800` (color resuelto, así que la entrada transparente
 /// da `#rrggbb00`), `color 3 #ff0000`, `color 4 gris 96` o `color 9 gris 0 alfa 0`.
 pub fn cell_label(image: &Image, cell: usize) -> Option<String> {
-    let choice = choice_for_cell(image, cell)?;
-    let pixel = pixel_for_choice(image, choice)?;
-    let color = pixel_rgba(image, pixel)?;
-    Some(match (choice, pixel) {
-        (ColorChoice::Entry(index), _) => format!("índice {index} {color}"),
-        (ColorChoice::Slot(slot), Pixel::Rgba(color)) => format!("color {slot} {color}"),
-        (ColorChoice::Slot(slot), Pixel::Gray(gray)) => format!("color {slot} gris {gray}"),
-        (ColorChoice::Slot(slot), Pixel::GrayAlpha { gray, alpha: 255 }) => {
-            format!("color {slot} gris {gray}")
-        }
-        (ColorChoice::Slot(slot), Pixel::GrayAlpha { gray, alpha }) => {
-            format!("color {slot} gris {gray} alfa {alpha}")
-        }
-        (ColorChoice::Slot(slot), Pixel::Indexed(_)) => format!("color {slot} {color}"),
-    })
+    cell_label_with(image, cell, &SlotColors::defaults(image.mode()))
 }
 
 /// Línea 2 del panel: `cursor`, `activa` y `transparente` (las que apliquen, en ese orden,
@@ -192,16 +171,178 @@ pub fn info_flags(hover: bool, active: bool, transparent: bool) -> String {
 /// Texto del color activo para la barra de estado: `Slot` como `slot_label`; `Entry(i)` es
 /// `índice 12 #ff8800`, y la entrada transparente `índice 2 #00ff0000 transparente`.
 pub fn choice_label(image: &Image, choice: ColorChoice) -> Option<String> {
+    choice_label_with(image, choice, &SlotColors::defaults(image.mode()))
+}
+
+/// Colores de las nueve ranuras de un modo sin paleta (specs/hito-2-editar-color.md). Los
+/// valores por defecto son los de `pixel_for_slot`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SlotColors {
+    colors: [Rgba; SLOT_CELLS],
+}
+
+impl SlotColors {
+    pub fn defaults(mode: Mode) -> SlotColors {
+        let mut colors = [Rgba::TRANSPARENT; SLOT_CELLS];
+        for slot in 1..=SLOTS {
+            let gray = if slot == SLOTS { 255 } else { (slot - 1) * 32 };
+            colors[usize::from(slot - 1)] = match mode {
+                Mode::Rgba | Mode::Indexed => COLORS
+                    .get(usize::from(slot - 1))
+                    .copied()
+                    .unwrap_or(Rgba::TRANSPARENT),
+                Mode::Gray => Rgba::opaque(gray, gray, gray),
+                Mode::GrayAlpha if slot == SLOTS => Rgba::TRANSPARENT,
+                Mode::GrayAlpha => Rgba::opaque(gray, gray, gray),
+            };
+        }
+        SlotColors { colors }
+    }
+
+    /// Color de la ranura `slot` (1 a 9).
+    pub fn get(&self, slot: u8) -> Option<Rgba> {
+        let index = usize::from(slot.checked_sub(1)?);
+        self.colors.get(index).copied()
+    }
+
+    /// Cambia la ranura `slot` (1 a 9); `false` si no existe.
+    pub fn set(&mut self, slot: u8, color: Rgba) -> bool {
+        let Some(index) = slot.checked_sub(1) else {
+            return false;
+        };
+        match self.colors.get_mut(usize::from(index)) {
+            Some(entry) => {
+                *entry = color;
+                true
+            }
+            None => false,
+        }
+    }
+}
+
+/// Una tabla de ranuras por modo; indexadas comparte la de RGBA (no se usa).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SlotBank {
+    rgba: SlotColors,
+    gray: SlotColors,
+    gray_alpha: SlotColors,
+}
+
+impl SlotBank {
+    pub fn new() -> SlotBank {
+        SlotBank {
+            rgba: SlotColors::defaults(Mode::Rgba),
+            gray: SlotColors::defaults(Mode::Gray),
+            gray_alpha: SlotColors::defaults(Mode::GrayAlpha),
+        }
+    }
+
+    pub fn get(&self, mode: Mode) -> &SlotColors {
+        match mode {
+            Mode::Rgba | Mode::Indexed => &self.rgba,
+            Mode::Gray => &self.gray,
+            Mode::GrayAlpha => &self.gray_alpha,
+        }
+    }
+
+    pub fn get_mut(&mut self, mode: Mode) -> &mut SlotColors {
+        match mode {
+            Mode::Rgba | Mode::Indexed => &mut self.rgba,
+            Mode::Gray => &mut self.gray,
+            Mode::GrayAlpha => &mut self.gray_alpha,
+        }
+    }
+}
+
+impl Default for SlotBank {
+    fn default() -> SlotBank {
+        SlotBank::new()
+    }
+}
+
+/// Como [`pixel_for_choice`], pero con los colores de ranura de `slots`. En Gray el `Pixel` es
+/// `Gray(color.r)` y en GrayAlpha `GrayAlpha { gray: color.r, alpha: color.a }`: el editor
+/// garantiza `r = g = b` en esos modos.
+pub fn pixel_for_choice_with(
+    image: &Image,
+    choice: ColorChoice,
+    slots: &SlotColors,
+) -> Option<Pixel> {
+    let ColorChoice::Slot(slot) = choice else {
+        return pixel_for_choice(image, choice);
+    };
+    let color = slots.get(slot)?;
+    match image.mode() {
+        Mode::Rgba => Some(Pixel::Rgba(color)),
+        Mode::Gray => Some(Pixel::Gray(color.r)),
+        Mode::GrayAlpha => Some(Pixel::GrayAlpha {
+            gray: color.r,
+            alpha: color.a,
+        }),
+        Mode::Indexed => pixel_for_slot(image, slot),
+    }
+}
+
+/// Como [`cell_color`], con los colores de ranura de `slots`.
+pub fn cell_color_with(image: &Image, cell: usize, slots: &SlotColors) -> Option<Rgba> {
+    let pixel = pixel_for_choice_with(image, choice_for_cell(image, cell)?, slots)?;
+    pixel_rgba(image, pixel)
+}
+
+/// Como [`is_transparent_cell`], con los colores de ranura de `slots`.
+pub fn is_transparent_cell_with(image: &Image, cell: usize, slots: &SlotColors) -> bool {
+    if image.mode() == Mode::Indexed {
+        let transparent = image
+            .palette()
+            .and_then(|palette| palette.transparent_index());
+        return transparent.is_some_and(|index| usize::from(index) == cell);
+    }
+    cell_color_with(image, cell, slots).is_some_and(|color| color.a == 0)
+}
+
+/// Como [`cell_label`], con los colores de ranura de `slots`.
+pub fn cell_label_with(image: &Image, cell: usize, slots: &SlotColors) -> Option<String> {
+    let choice = choice_for_cell(image, cell)?;
+    let pixel = pixel_for_choice_with(image, choice, slots)?;
+    let color = pixel_rgba(image, pixel)?;
+    Some(match (choice, pixel) {
+        (ColorChoice::Entry(index), _) => format!("índice {index} {color}"),
+        (ColorChoice::Slot(slot), Pixel::Rgba(color)) => format!("color {slot} {color}"),
+        (ColorChoice::Slot(slot), Pixel::Gray(gray)) => format!("color {slot} gris {gray}"),
+        (ColorChoice::Slot(slot), Pixel::GrayAlpha { gray, alpha: 255 }) => {
+            format!("color {slot} gris {gray}")
+        }
+        (ColorChoice::Slot(slot), Pixel::GrayAlpha { gray, alpha }) => {
+            format!("color {slot} gris {gray} alfa {alpha}")
+        }
+        (ColorChoice::Slot(slot), Pixel::Indexed(_)) => format!("color {slot} {color}"),
+    })
+}
+
+/// Como [`choice_label`], con los colores de ranura de `slots`.
+pub fn choice_label_with(image: &Image, choice: ColorChoice, slots: &SlotColors) -> Option<String> {
     match choice {
-        ColorChoice::Slot(slot) => slot_label(image, slot),
+        ColorChoice::Slot(slot) => {
+            let what = match pixel_for_choice_with(image, choice, slots)? {
+                Pixel::Rgba(color) if color.a == 0 => "transparente".to_string(),
+                Pixel::Rgba(color) => color.to_string(),
+                Pixel::Indexed(index) => format!("índice {index}"),
+                Pixel::Gray(gray) => format!("gris {gray}"),
+                Pixel::GrayAlpha { alpha: 0, .. } => "transparente".to_string(),
+                Pixel::GrayAlpha { gray, .. } => format!("gris {gray}"),
+            };
+            Some(format!("color {slot} {what}"))
+        }
         ColorChoice::Entry(index) => {
             let cell = cell_of_choice(image, choice)?;
-            let label = cell_label(image, cell)?;
-            Some(if is_transparent_cell(image, usize::from(index)) {
-                format!("{label} transparente")
-            } else {
-                label
-            })
+            let label = cell_label_with(image, cell, slots)?;
+            Some(
+                if is_transparent_cell_with(image, usize::from(index), slots) {
+                    format!("{label} transparente")
+                } else {
+                    label
+                },
+            )
         }
     }
 }

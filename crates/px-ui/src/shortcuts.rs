@@ -67,3 +67,14 @@ pub fn file_action_for_key(key: Key, modifiers: Modifiers) -> Option<FileAction>
         FileAction::Save
     })
 }
+
+/// Eventos que pueden ver los atajos de teclado: todos, o ninguno si un campo de texto tiene el
+/// foco (`wants_keyboard`), para que teclear en él no cambie de herramienta, de color ni de
+/// vista (specs/hito-2-editar-color.md, decisión 11). Conserva el orden.
+pub fn gate_keys(events: &[egui::Event], wants_keyboard: bool) -> Vec<egui::Event> {
+    if wants_keyboard {
+        Vec::new()
+    } else {
+        events.to_vec()
+    }
+}

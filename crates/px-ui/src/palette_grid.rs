@@ -106,6 +106,12 @@ pub fn visible_rows(panel_h_px: i64, n: u32) -> usize {
     usize::try_from(available / (PITCH_U * n)).unwrap_or(usize::MAX)
 }
 
+/// Como [`visible_rows`], pero con `reserved_px` píxeles físicos al fondo del panel que la
+/// rejilla no usa (el editor de color). `visible_rows(h, n)` es `visible_rows_reserved(h, 0, n)`.
+pub fn visible_rows_reserved(panel_h_px: i64, reserved_px: i64, n: u32) -> usize {
+    visible_rows(panel_h_px.saturating_sub(reserved_px), n)
+}
+
 /// Mayor primera fila posible: `total − max(visible, 1)`, saturado.
 pub fn max_first_row(total: usize, visible: usize) -> usize {
     total.saturating_sub(visible.max(1))

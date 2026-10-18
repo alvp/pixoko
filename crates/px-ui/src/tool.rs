@@ -127,10 +127,23 @@ impl ToolState {
         choice: impl Into<ColorChoice>,
         event: CanvasEvent,
     ) -> Result<bool, DocumentError> {
+        let pixel = doc
+            .image(image)
+            .and_then(|target| pixel_for_choice(target, choice.into()));
+        self.canvas_event_with(doc, image, pixel, event)
+    }
+
+    /// Como [`ToolState::canvas_event`], con el `Pixel` ya calculado (`None`: no hay color
+    /// para esa elección, y un trazo que empieza no hace nada).
+    pub fn canvas_event_with(
+        &mut self,
+        doc: &mut Document,
+        image: ImageId,
+        pixel: Option<Pixel>,
+        event: CanvasEvent,
+    ) -> Result<bool, DocumentError> {
         match event {
-            CanvasEvent::StrokeBegin(pos) if !self.busy() => {
-                self.begin(doc, image, choice.into(), pos)
-            }
+            CanvasEvent::StrokeBegin(pos) if !self.busy() => self.begin(doc, image, pixel, pos),
             CanvasEvent::StrokeBegin(_) => Ok(false),
             CanvasEvent::StrokeMove(pos) => {
                 match &mut self.gesture {
@@ -168,18 +181,35 @@ impl ToolState {
         }
     }
 
+    /// Como [`ToolState::canvas_input`], con el `Pixel` ya calculado.
+    pub fn canvas_input_with(
+        &mut self,
+        doc: &mut Document,
+        image: ImageId,
+        pixel: Option<Pixel>,
+        input: CanvasInput,
+    ) -> Result<bool, DocumentError> {
+        match input {
+            CanvasInput::Stroke(event) => self.canvas_event_with(doc, image, pixel, event),
+            CanvasInput::Escape => {
+                self.apply_action(ToolAction::Cancel);
+                Ok(false)
+            }
+        }
+    }
+
     fn begin(
         &mut self,
         doc: &mut Document,
         image: ImageId,
-        choice: ColorChoice,
+        pixel: Option<Pixel>,
         pos: (i32, i32),
     ) -> Result<bool, DocumentError> {
         self.gesture = Gesture::Waiting;
         let Some(target) = doc.image(image) else {
             return Ok(false);
         };
-        let Some(pixel) = pixel_for_choice(target, choice) else {
+        let Some(pixel) = pixel else {
             return Ok(false);
         };
         let (width, height) = (target.width(), target.height());
