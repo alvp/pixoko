@@ -184,7 +184,7 @@ pub fn wants_licenses(args: &[std::ffi::OsString]) -> bool;
 
 ## Prueba manual
 
-`cargo run --release -p px-app`, en Linux, Windows y macOS, y a **1,0, 1,5 y 2,0** (Windows y macOS: ajustes de pantalla, 100 %, 150 % y 200 %; Linux con X11: `WINIT_X11_SCALE_FACTOR=1.5`; con Wayland, la escala del compositor). También 1,25 y 3,0 si se puede. Qué ver, con una lupa o una captura ampliada al 800 %:
+`cargo run --release -p px-app`, en Linux, Windows y macOS, y a **1,0, 1,5 y 2,0** (Windows y macOS: ajustes de pantalla, 100 %, 150 % y 200 %; Linux con X11, que se fuerza con `env -u WAYLAND_DISPLAY`: `WINIT_X11_SCALE_FACTOR=1.5`, que solo vale en X11; con Wayland, la escala la da el compositor; `GDK_SCALE` y `WINIT_UNIX_BACKEND` no afectan a la app). También 1,25 y 3,0 si se puede. Qué ver, con una lupa o una captura ampliada al 800 %:
 
 1. La barra de estado abajo, con `lápiz · color 1 #…` y `×N` y las coordenadas al mover el ratón sobre la imagen; **el título de la ventana dice lo mismo que antes**.
 2. **Nitidez:** cada trazo del texto mide un número entero de píxeles físicos y el mismo grosor en toda la línea; sin bordes grises ni trazos más gruesos unos que otros. A 1,5× el texto es el doble de grande que a 1,0× (n = 2): es lo decidido, no un fallo.

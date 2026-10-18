@@ -21,12 +21,13 @@ use px_core::Mode;
 use px_ui::color_edit::{Control, controls};
 use px_ui::edit_layout::{
     BLOCK_GAP_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, FIRST_ROW_Y_U, GROUP_GAP_U,
-    HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U, LABEL_X_U, NOTICE_LINES, PanelLayout,
-    ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_W_U,
-    VALUE_X_U, block_height_px, control_row_u, edges_u, editor_height_u, editor_height_u_max,
-    field_y_u, min_panel_height_px, min_window_height_pt, notice_y_u, panel_layout, slider_hit,
+    HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U, LABEL_X_U, MIN_CANVAS_WIDTH_U,
+    NOTICE_LINES, PanelLayout, ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U,
+    TRACK_X_U, VALUE_W_U, VALUE_X_U, block_height_px, control_row_u, edges_u, editor_height_u,
+    editor_height_u_max, field_y_u, min_panel_height_px, min_window_height_pt, min_window_width_pt,
+    min_window_width_u, notice_y_u, panel_layout, slider_hit,
 };
-use px_ui::palette_grid::{GRID_Y_U, PITCH_U, visible_rows, visible_rows_reserved};
+use px_ui::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, visible_rows, visible_rows_reserved};
 use px_ui::status::bar_height_px;
 use px_ui::text::text_scale;
 
@@ -315,6 +316,66 @@ fn fila_1_el_minimo_cabe_en_la_mitad_de_768_y_deja_una_fila_con_el_editor() {
         assert!(minimo > min_panel_height_px(n) as f32 / ppp, "ppp {ppp}");
     }
     assert!(mayor <= 384.0, "el mayor de los cinco mide {mayor} pt");
+}
+
+// Fila 1b: ancho mínimo (ancho del panel más 128 u de lienzo).
+
+#[test]
+fn fila_1b_min_window_width_u_es_el_panel_mas_128() {
+    assert_eq!(MIN_CANVAS_WIDTH_U, 128);
+    assert_eq!(PANEL_WIDTH_U, 233);
+    assert_eq!(min_window_width_u(), 361);
+    assert_eq!(min_window_width_u(), PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U);
+}
+
+#[test]
+fn fila_1b_min_window_width_pt_a_los_cinco_ppp() {
+    let esperado = [
+        (1.0f32, 361.0f32),
+        (1.25, 288.8),
+        (1.5, 481.33),
+        (2.0, 361.0),
+        (3.0, 361.0),
+    ];
+    for (ppp, puntos) in esperado {
+        let medido = min_window_width_pt(ppp);
+        assert!(
+            (medido - puntos).abs() <= 0.01,
+            "ppp {ppp}: {medido} pt y se esperaban {puntos}"
+        );
+        let n = text_scale(ppp) as f32;
+        let formula = min_window_width_u() as f32 * n / ppp;
+        assert!(
+            (medido - formula).abs() <= 0.001,
+            "ppp {ppp}: {medido} pt y la fórmula da {formula}"
+        );
+    }
+}
+
+#[test]
+fn fila_1b_el_ancho_minimo_deja_128_u_de_lienzo_y_cabe_en_la_mitad_de_1366() {
+    for ppp in PPPS {
+        let n = text_scale(ppp) as f32;
+        let minimo = min_window_width_pt(ppp);
+        let panel = PANEL_WIDTH_U as f32 * n / ppp;
+        assert!(minimo > panel, "ppp {ppp}: {minimo} pt no deja lienzo");
+        assert!(
+            (minimo - panel - MIN_CANVAS_WIDTH_U as f32 * n / ppp).abs() <= 0.001,
+            "ppp {ppp}: el lienzo mínimo no mide 128 u"
+        );
+        assert!(minimo <= 683.0, "ppp {ppp}: {minimo} pt");
+    }
+}
+
+#[test]
+fn fila_1b_min_window_width_pt_con_ppp_invalido_es_el_de_1() {
+    for ppp in [0.0f32, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let medido = min_window_width_pt(ppp);
+        assert!(
+            (medido - 361.0).abs() <= 0.001,
+            "ppp {ppp}: {medido} pt y se esperaban 361"
+        );
+    }
 }
 
 // Fila 2: una sola función para la altura del editor.

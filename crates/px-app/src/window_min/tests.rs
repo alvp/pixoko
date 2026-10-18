@@ -1,16 +1,18 @@
 //! Tests de `window_min` (specs/hito-2-panel-ventana-baja.md, fila 1 en su parte de `px-app`):
 //! `min_enabled` (la variable de entorno `PIXOKO_SIN_MINIMO`, solo para pruebas) y
-//! `min_inner_size`. Sin ventana: son funciones puras. La parte de `px-ui`
-//! (`min_panel_height_px`, `min_window_height_pt`) está en `crates/px-ui/tests/edit_layout.rs`.
+//! `min_inner_size` (alto y ancho). Sin ventana: son funciones puras. La parte de `px-ui`
+//! (`min_panel_height_px`, `min_window_height_pt`, `min_window_width_pt`) está en `crates/px-ui/tests/edit_layout.rs`.
 //!
 //! Los números esperados salen de la spec: 261, 208,8, 348, 261 y 261 puntos de alto a `ppp`
-//! 1,0, 1,25, 1,5, 2,0 y 3,0 (±0,01); el ancho mínimo es 1 punto; el mayor de los cinco no pasa
-//! de 384 (la mitad de 768).
+//! 1,0, 1,25, 1,5, 2,0 y 3,0 (±0,01); el ancho mínimo es 361, 288,8, 481,33, 361 y 361 puntos (fila 1b: panel
+//! de 233 u más 128 u de lienzo); el mayor alto no pasa de 384 (la mitad de 768) ni el mayor
+//! ancho de 683 (la mitad de 1366).
 
 use super::*;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 const ALTOS: [f32; 5] = [261.0, 208.8, 348.0, 261.0, 261.0];
+const ANCHOS: [f32; 5] = [361.0, 288.8, 481.33, 361.0, 361.0];
 
 // `min_enabled`.
 
@@ -53,12 +55,12 @@ fn fila_1_min_inner_size_desactivado_es_none_a_todos_los_ppp() {
 }
 
 #[test]
-fn fila_1_min_inner_size_activo_da_ancho_1_y_el_alto_de_la_spec() {
-    for (ppp, alto) in PPPS.into_iter().zip(ALTOS) {
-        let [ancho, medido] = min_inner_size(ppp, true).expect("activo: hay tamaño mínimo");
+fn fila_1_min_inner_size_activo_da_el_ancho_y_el_alto_de_la_spec() {
+    for ((ppp, alto), ancho) in PPPS.into_iter().zip(ALTOS).zip(ANCHOS) {
+        let [medido_ancho, medido] = min_inner_size(ppp, true).expect("activo: hay tamaño mínimo");
         assert!(
-            (ancho - 1.0).abs() <= 0.001,
-            "ppp {ppp}: el ancho mínimo es 1 punto y es {ancho}"
+            (medido_ancho - ancho).abs() <= 0.01,
+            "ppp {ppp}: {medido_ancho} pt de ancho y se esperaban {ancho}"
         );
         assert!(
             (medido - alto).abs() <= 0.01,
@@ -68,11 +70,15 @@ fn fila_1_min_inner_size_activo_da_ancho_1_y_el_alto_de_la_spec() {
 }
 
 #[test]
-fn fila_1_min_inner_size_es_el_de_min_window_height_pt() {
+fn fila_1_min_inner_size_es_el_de_min_window_height_pt_y_width_pt() {
     for ppp in PPPS {
-        let [_, alto] = min_inner_size(ppp, true).expect("activo");
+        let [ancho, alto] = min_inner_size(ppp, true).expect("activo");
         assert!(
             (alto - px_ui::edit_layout::min_window_height_pt(ppp)).abs() <= 0.001,
+            "ppp {ppp}"
+        );
+        assert!(
+            (ancho - px_ui::edit_layout::min_window_width_pt(ppp)).abs() <= 0.001,
             "ppp {ppp}"
         );
     }
@@ -83,6 +89,7 @@ fn fila_1_ningun_minimo_pasa_de_la_mitad_de_768() {
     for ppp in PPPS {
         let [ancho, alto] = min_inner_size(ppp, true).expect("activo");
         assert!(alto <= 384.0, "ppp {ppp}: {alto} pt");
+        assert!(ancho <= 683.0, "ppp {ppp}: {ancho} pt");
         assert!(alto > 0.0 && ancho > 0.0);
         assert!(alto.is_finite() && ancho.is_finite());
     }

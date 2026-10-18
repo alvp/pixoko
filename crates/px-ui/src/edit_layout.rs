@@ -7,7 +7,7 @@
 use px_core::Mode;
 
 use crate::color_edit::{Control, controls};
-use crate::palette_grid::{GRID_Y_U, PITCH_U, visible_rows_reserved};
+use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, visible_rows_reserved};
 use crate::status::bar_height_px;
 use crate::text::text_scale;
 
@@ -42,6 +42,9 @@ pub const FIELD_H_U: i64 = 18;
 pub const FIELD_PAD_U: i64 = 3;
 /// Hueco entre bloques (controles, campo y aviso) y margen inferior.
 pub const BLOCK_GAP_U: i64 = 4;
+/// Anchura mínima del lienzo en la ventana, en píxeles de interfaz
+/// (specs/hito-2-panel-ventana-baja.md).
+pub const MIN_CANVAS_WIDTH_U: i64 = 128;
 /// Líneas del aviso.
 pub const NOTICE_LINES: i64 = 2;
 /// Modos de imagen: la altura del editor depende de ellos.
@@ -89,6 +92,22 @@ pub fn min_window_height_pt(ppp: f32) -> f32 {
     let n = text_scale(ppp);
     let physical = i64::from(bar_height_px(n)) + min_panel_height_px(n);
     physical as f32 / ppp
+}
+
+/// Ancho mínimo de la ventana en píxeles de interfaz: el panel más el lienzo mínimo.
+pub fn min_window_width_u() -> i64 {
+    PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
+}
+
+/// Ancho mínimo de la ventana en píxeles lógicos (puntos de egui).
+pub fn min_window_width_pt(ppp: f32) -> f32 {
+    let ppp = if ppp.is_finite() && ppp > 0.0 {
+        ppp
+    } else {
+        1.0
+    };
+    let n = text_scale(ppp);
+    (min_window_width_u() * scale(n)) as f32 / ppp
 }
 
 /// Reparto vertical del panel: dónde va el editor y cuántas filas ve la rejilla.

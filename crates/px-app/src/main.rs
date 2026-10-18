@@ -48,7 +48,7 @@ struct App {
     confirm: Confirm,
     /// Fichero del argumento de la línea de comandos, pendiente de abrir en el primer fotograma.
     cli_path: Option<PathBuf>,
-    /// El mínimo de altura de la ventana está activo (`PIXOKO_SIN_MINIMO=1` lo desactiva).
+    /// El tamaño mínimo (alto y ancho) de la ventana está activo (`PIXOKO_SIN_MINIMO=1` lo desactiva).
     min_enabled: bool,
     /// Último mínimo enviado a la ventana, para enviar solo cuando cambia.
     min_sent: Option<[f32; 2]>,
