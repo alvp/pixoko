@@ -81,7 +81,7 @@ pub fn tool_color_label(
     slots: &SlotColors,
 ) -> Option<String> {
     match tool {
-        Tool::Eraser => Some(eraser_label(image).to_string()),
+        Tool::Eraser => Some(eraser_label(image)),
         Tool::Pencil | Tool::Line | Tool::Fill | Tool::Dropper => {
             choice_label_with(image, choice, slots)
         }

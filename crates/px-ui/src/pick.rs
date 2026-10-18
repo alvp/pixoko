@@ -24,41 +24,60 @@ impl fmt::Display for EraseError {
     }
 }
 
-/// Valor que escribe el borrador: `Indexed(t)` con el índice transparente `t`, el transparente
-/// canónico en RGBA (`(0, 0, 0, 0)`) y en GrayAlpha (`gris 0, alfa 0`).
+/// Entrada que usa el borrador en una imagen indexada: el índice transparente si está fijado
+/// y, si no, la primera entrada de la paleta con alfa guardado 0 (el `tRNS` de un PNG o lo que
+/// se edita con el editor de color).
+fn eraser_entry(image: &Image) -> Option<(u8, bool)> {
+    let palette = image.palette()?;
+    if let Some(index) = palette.transparent_index() {
+        return Some((index, false));
+    }
+    let first = palette.colors().iter().position(|color| color.a == 0)?;
+    Some((u8::try_from(first).ok()?, true))
+}
+
+/// Valor que escribe el borrador: en indexada, `Indexed(t)` con el índice transparente `t` o,
+/// si no está fijado, la primera entrada de alfa 0; en RGBA el transparente canónico
+/// (`(0, 0, 0, 0)`) y en GrayAlpha `gris 0, alfa 0`. Se calcula en cada llamada.
 pub fn eraser_pixel(image: &Image) -> Result<Pixel, EraseError> {
     match image.mode() {
         Mode::Rgba => Ok(Pixel::Rgba(Rgba::TRANSPARENT)),
         Mode::GrayAlpha => Ok(Pixel::GrayAlpha { gray: 0, alpha: 0 }),
-        Mode::Indexed => image
-            .palette()
-            .and_then(|palette| palette.transparent_index())
-            .map(Pixel::Indexed)
+        Mode::Indexed => eraser_entry(image)
+            .map(|(index, _)| Pixel::Indexed(index))
             .ok_or(EraseError::NoTransparentIndex),
         Mode::Gray => Err(EraseError::NoTransparency),
     }
 }
 
-/// Lo que acompaña a `borrador` en el título y la barra de estado: `transparente`, o el motivo
-/// por el que no puede.
-pub fn eraser_label(image: &Image) -> &'static str {
+/// Lo que acompaña a `borrador` en el título y la barra de estado: `transparente`,
+/// `transparente (entrada N)` si usa una entrada de alfa 0 sin índice transparente, o el
+/// motivo por el que no puede.
+pub fn eraser_label(image: &Image) -> String {
     match eraser_pixel(image) {
-        Ok(_) => "transparente",
-        Err(EraseError::NoTransparentIndex) => "sin índice transparente",
-        Err(EraseError::NoTransparency) => "sin transparencia",
+        Ok(_) => match eraser_entry(image) {
+            Some((index, true)) => format!("transparente (entrada {index})"),
+            _ => "transparente".to_string(),
+        },
+        Err(EraseError::NoTransparentIndex) => "sin índice transparente".to_string(),
+        Err(EraseError::NoTransparency) => "sin transparencia".to_string(),
     }
 }
 
-/// El borrador cambiaría ese píxel: falso si ya es transparente (alfa 0, o el índice
-/// transparente), si el borrador no puede con la imagen y si `(x, y)` cae fuera.
+/// El borrador cambiaría ese píxel: falso si ya es transparente (alfa 0 una vez resuelto, aunque
+/// su índice no sea el que escribe el borrador), si el borrador no puede con la imagen y si
+/// `(x, y)` cae fuera.
 pub fn is_erasable(image: &Image, x: u32, y: u32) -> bool {
-    let Ok(erase) = eraser_pixel(image) else {
+    if eraser_pixel(image).is_err() {
         return false;
-    };
-    match (image.get_pixel(x, y), erase) {
-        (Ok(Pixel::Rgba(color)), _) => color.a != 0,
-        (Ok(Pixel::GrayAlpha { alpha, .. }), _) => alpha != 0,
-        (Ok(Pixel::Indexed(index)), Pixel::Indexed(transparent)) => index != transparent,
+    }
+    match image.get_pixel(x, y) {
+        Ok(Pixel::Rgba(color)) => color.a != 0,
+        Ok(Pixel::GrayAlpha { alpha, .. }) => alpha != 0,
+        Ok(Pixel::Indexed(index)) => image
+            .palette()
+            .and_then(|palette| palette.resolved(index).ok())
+            .is_some_and(|color| color.a != 0),
         _ => false,
     }
 }
