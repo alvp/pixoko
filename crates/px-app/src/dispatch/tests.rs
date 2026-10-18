@@ -1422,3 +1422,280 @@ proptest! {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 17b, fila 13 (specs/hito-2-damero-lienzo.md): el despacho del fondo del lienzo
+// ---------------------------------------------------------------------------------------------
+//
+// `AppAction::CanvasBackground(b)` da `Dispatched::Background(b)` y no toca la sesión: ni
+// `state_id`, ni la historia, ni el indicador de modificado, ni la imagen, ni la elección, ni la
+// herramienta. No es zoom ni repite; solo la bloquean `dialog`, `modal` y `text_focus` (con
+// cualquier origen), no `gesture` ni `removal`. La parte pura de los bloqueos (`is_blocked` y
+// `enabled` con los 32 bloqueos) está en `px-ui/tests/background_menu.rs`.
+//
+// Suposición sobre las firmas: `Dispatched::Background` lleva el `CanvasBackground` elegido (los
+// derives de `Dispatched`, `Clone, Debug, PartialEq`, ya los tiene).
+
+use px_ui::background::CanvasBackground;
+
+const FONDOS: [CanvasBackground; 4] = [
+    CanvasBackground::Checker,
+    CanvasBackground::Black,
+    CanvasBackground::Gray,
+    CanvasBackground::White,
+];
+
+fn accion_de_fondo(b: CanvasBackground) -> AppAction {
+    AppAction::CanvasBackground(b)
+}
+
+/// Las sesiones de la fila: con historia y una edición deshecha, con una quita pendiente, con
+/// historia en una RGBA y sin historia.
+fn mundo_del_caso(caso: usize) -> (&'static str, Mundo) {
+    match caso {
+        0 => (
+            "indexada con historia y una edición deshecha",
+            Mundo::estandar(),
+        ),
+        1 => ("con una quita pendiente", mundo_con_quita_pendiente()),
+        2 => (
+            "RGBA con historia y un paso deshecho",
+            Mundo::nuevo(rgba(), 3, 1),
+        ),
+        _ => ("sin historia", Mundo::nuevo(rgba(), 0, 0)),
+    }
+}
+
+const CASOS_DE_LA_FILA_13: usize = 4;
+
+/// Lo que el despacho del fondo no debe tocar, además de la `Foto` de siempre: los bytes de la
+/// historia, el indicador de modificado y el gesto en curso.
+fn extras(mundo: &Mundo) -> (usize, bool, bool) {
+    (
+        mundo.session.document.history_bytes(),
+        mundo.session.modified(),
+        mundo.session.busy(),
+    )
+}
+
+#[test]
+fn fila_13_las_cuatro_acciones_con_cada_origen_dan_background_y_no_tocan_nada() {
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        for b in FONDOS {
+            for origin in ORIGENES {
+                let (nombre, mut mundo) = mundo_del_caso(caso);
+                let antes = mundo.foto();
+                let extras_antes = extras(&mundo);
+                assert_eq!(
+                    mundo.despacha(accion_de_fondo(b), origin),
+                    Dispatched::Background(b),
+                    "{nombre}: {b:?} con {origin:?}"
+                );
+                // La foto de la fila 3b de la 17: `state_id`, `can_undo`, `can_redo`, imagen,
+                // elección, herramienta, quita pendiente y gesto, iguales.
+                assert_eq!(mundo.foto(), antes, "{nombre}: {b:?} con {origin:?}");
+                assert_eq!(
+                    extras(&mundo),
+                    extras_antes,
+                    "{nombre}: {b:?} con {origin:?}"
+                );
+                assert_eq!(mundo.session.document.state_id(), antes.state_id);
+                assert_eq!(mundo.session.document.can_undo(), antes.can_undo);
+                assert_eq!(mundo.session.document.can_redo(), antes.can_redo);
+                assert_eq!(mundo.session.choice, antes.choice);
+                assert_eq!(mundo.tools.tool(), antes.tool);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_13_la_accion_no_marca_el_documento_como_modificado_ni_crea_paso() {
+    let (_, mut mundo) = mundo_del_caso(0);
+    assert!(mundo.session.document.can_undo(), "hay historia");
+    assert!(mundo.session.document.can_redo(), "y una edición deshecha");
+    let modificado = mundo.session.modified();
+    let bytes = mundo.session.document.history_bytes();
+    for b in FONDOS {
+        mundo.despacha(accion_de_fondo(b), Origin::Menu);
+    }
+    assert_eq!(mundo.session.modified(), modificado);
+    assert_eq!(mundo.session.document.history_bytes(), bytes);
+    assert!(
+        mundo.session.document.can_redo(),
+        "la edición deshecha se puede rehacer: no se ha creado ningún paso"
+    );
+    // Una sesión recién abierta sigue sin cambios.
+    let (_, mut nueva) = mundo_del_caso(3);
+    assert!(!nueva.session.modified());
+    nueva.despacha(accion_de_fondo(CanvasBackground::Black), Origin::Menu);
+    assert!(!nueva.session.modified());
+    assert!(!nueva.session.document.can_undo());
+}
+
+#[test]
+fn fila_13_no_es_zoom_ni_repite_y_el_despacho_no_da_view() {
+    for b in FONDOS {
+        let action = accion_de_fondo(b);
+        assert!(!action.is_zoom(), "{b:?}");
+        assert!(!action.ignores_repeat(), "{b:?}");
+        let (_, mut mundo) = mundo_del_caso(0);
+        let resultado = mundo.despacha(action, Origin::Key);
+        assert!(!matches!(resultado, Dispatched::View(_)), "{b:?}");
+        assert_ne!(resultado, Dispatched::Blocked);
+    }
+}
+
+#[test]
+fn fila_13_cada_bloqueo_solo_y_el_despacho_sin_bloqueos() {
+    // Bloqueada solo con `dialog`, con `modal` y con `text_focus`, con cualquier origen; no con
+    // `gesture` ni con `removal`.
+    let casos: [(&str, Locks, bool); 6] = [
+        ("ninguno", Locks::default(), false),
+        ("gesture", locks_con(|l| l.gesture = true), false),
+        ("removal", locks_con(|l| l.removal = true), false),
+        ("dialog", locks_con(|l| l.dialog = true), true),
+        ("modal", locks_con(|l| l.modal = true), true),
+        ("text_focus", locks_con(|l| l.text_focus = true), true),
+    ];
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        for b in FONDOS {
+            for (nombre, locks, bloqueada) in casos {
+                for origin in ORIGENES {
+                    let (sesion, mut mundo) = mundo_del_caso(caso);
+                    let antes = mundo.foto();
+                    let resultado = mundo.despacha_con(accion_de_fondo(b), origin, locks);
+                    let esperado = if bloqueada {
+                        Dispatched::Blocked
+                    } else {
+                        Dispatched::Background(b)
+                    };
+                    assert_eq!(
+                        resultado, esperado,
+                        "{sesion}: {b:?} con {nombre} y {origin:?}"
+                    );
+                    assert_eq!(mundo.foto(), antes, "{sesion}: {b:?} con {nombre}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_13_un_gesto_de_verdad_o_una_quita_pendiente_no_bloquean_el_fondo() {
+    // Con los bloqueos que saca `main` de un trazo, un deslizador, un arrastre de muestra o una
+    // quita pendiente (`Mundo::locks`), el fondo se despacha con los tres orígenes.
+    for gesto in GESTOS {
+        for b in FONDOS {
+            for origin in ORIGENES {
+                let mut mundo = mundo_con_gesto(gesto);
+                assert!(mundo.locks().gesture);
+                let antes = mundo.foto();
+                assert_eq!(
+                    mundo.despacha(accion_de_fondo(b), origin),
+                    Dispatched::Background(b),
+                    "{gesto:?} {b:?} {origin:?}"
+                );
+                assert_eq!(mundo.foto(), antes, "el gesto sigue en curso: {gesto:?}");
+                assert!(mundo.locks().gesture, "{gesto:?}");
+            }
+        }
+    }
+    for b in FONDOS {
+        for origin in ORIGENES {
+            let mut mundo = mundo_con_quita_pendiente();
+            assert!(mundo.locks().removal);
+            let antes = mundo.foto();
+            assert_eq!(
+                mundo.despacha(accion_de_fondo(b), origin),
+                Dispatched::Background(b)
+            );
+            assert_eq!(mundo.foto(), antes, "la quita sigue pendiente");
+            assert!(mundo.session.ops.removal().is_some());
+        }
+    }
+}
+
+#[test]
+fn fila_13_con_los_bloqueos_combinados_solo_cuentan_dialog_modal_y_text_focus() {
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        for bits in 0..32u8 {
+            let locks = Locks {
+                gesture: bits & 1 != 0,
+                dialog: bits & 2 != 0,
+                text_focus: bits & 4 != 0,
+                removal: bits & 8 != 0,
+                modal: bits & 16 != 0,
+            };
+            for b in FONDOS {
+                for origin in ORIGENES {
+                    let (sesion, mut mundo) = mundo_del_caso(caso);
+                    let antes = mundo.foto();
+                    let bloqueada = locks.dialog || locks.modal || locks.text_focus;
+                    let resultado = mundo.despacha_con(accion_de_fondo(b), origin, locks);
+                    assert_eq!(
+                        resultado == Dispatched::Blocked,
+                        bloqueada,
+                        "{sesion}: {b:?} con {locks:?} y {origin:?}"
+                    );
+                    if !bloqueada {
+                        assert_eq!(resultado, Dispatched::Background(b));
+                    }
+                    assert_eq!(mundo.foto(), antes);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_13_enabled_es_lo_contrario_de_blocked_con_el_origen_menu() {
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        for bits in 0..32u8 {
+            let locks = Locks {
+                gesture: bits & 1 != 0,
+                dialog: bits & 2 != 0,
+                text_focus: bits & 4 != 0,
+                removal: bits & 8 != 0,
+                modal: bits & 16 != 0,
+            };
+            for b in FONDOS {
+                for zoom in [None, Zoom::from_int(5)] {
+                    let (sesion, mut mundo) = mundo_del_caso(caso);
+                    let estado = mundo.estado_de_la_ui(zoom, locks);
+                    let habilitada = enabled(accion_de_fondo(b), &estado);
+                    let resultado = mundo.despacha_con(accion_de_fondo(b), Origin::Menu, locks);
+                    assert_eq!(
+                        habilitada,
+                        resultado != Dispatched::Blocked,
+                        "{sesion}: {b:?} con {locks:?} y zoom {zoom:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_13_las_acciones_anteriores_se_despachan_igual_que_antes_con_el_fondo_en_medio() {
+    // Intercalar acciones de fondo entre las demás no cambia lo que hacen: el resultado y el
+    // estado final son los mismos que sin ellas.
+    let secuencia = [
+        AppAction::SelectColor(2),
+        AppAction::Undo,
+        AppAction::ZoomIn,
+        AppAction::Redo,
+        AppAction::SelectTool(Tool::Line),
+    ];
+    let mut sin = Mundo::estandar();
+    let mut con = Mundo::estandar();
+    for (i, action) in secuencia.into_iter().enumerate() {
+        con.despacha(accion_de_fondo(FONDOS[i % 4]), Origin::Menu);
+        assert_eq!(
+            con.despacha(action, Origin::Key),
+            sin.despacha(action, Origin::Key),
+            "{action:?}"
+        );
+        assert_eq!(con.foto(), sin.foto(), "{action:?}");
+    }
+}

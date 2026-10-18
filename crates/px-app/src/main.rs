@@ -4,6 +4,8 @@
 //! argumento o arrastrando, y los guarda con `Ctrl`+`S` (specs/hito-2-abrir-guardar.md).
 
 mod confirm;
+#[cfg(test)]
+mod damero_guardado;
 mod demo;
 mod dialogs;
 mod dispatch;
