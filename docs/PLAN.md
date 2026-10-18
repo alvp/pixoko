@@ -164,9 +164,9 @@ Trabaja en el hito $ARGUMENTS de docs/PLAN.md.
 
 **Sesiones en paralelo.** Usa un `git worktree` por hito y una sesión de Claude Code en cada uno. Una vez cerrado el hito 2, los hitos 3 a 6 pueden solaparse.
 
-## Bucle de trabajo y coste
+## Bucle de trabajo
 
-Cada unidad sigue el mismo bucle, y el gasto de tokens se controla con unidades pequeñas, sesiones cortas y el modelo adecuado para cada tarea.
+Cada unidad sigue el mismo bucle.
 
 1. **Plan corto.** Pide a Claude un plan de la unidad antes de tocar código.
 2. **Especificación.** Una página en `specs/` con comportamiento, entradas, salidas y casos límite.
@@ -175,14 +175,6 @@ Cada unidad sigue el mismo bucle, y el gasto de tokens se controla con unidades 
 5. **Comprobaciones.** `cargo fmt`, `cargo clippy -- -D warnings` y `cargo test --workspace`.
 6. **Revisión** con `license-auditor` y una lectura humana del diff.
 7. **Commit** y sesión nueva para la siguiente unidad.
-
-**Control del gasto**
-
-- Mantén `CLAUDE.md` corto: se carga en cada sesión.
-- Una unidad por sesión. Al cerrarla, empieza otra (o usa `/clear`) en vez de arrastrar el contexto.
-- Modelo según la tarea: tests, formatos y código repetitivo con uno más barato (por ejemplo `model: sonnet` en el subagente); arquitectura y revisiones con el más capaz.
-- No hagas leer a Claude logs largos: resume el error o pega solo las líneas relevantes. Para dependencias, apunta a docs.rs.
-- Las tandas mecánicas (un lector de formato con su batería de tests) pueden ir con `claude -p` y el mismo `settings.json`; pruébalo antes en tu versión.
 
 ## Pruebas y referencias
 
@@ -230,7 +222,6 @@ El mayor riesgo es el alcance: un editor completo no tiene fin si no se acota co
 | Riesgo | Mitigación |
 | --- | --- |
 | Alcance sin fin | Hitos con puerta de salida; cada función con página de especificación; recortar antes de añadir |
-| Coste de tokens | Unidades pequeñas, sesiones cortas y modelo por tarea |
 | Aspecto pixel en egui | Tema y fuente propios; si no basta, lienzo y paneles críticos dibujados a mano |
 | Rendimiento con lienzos grandes y muchas capas | Compositor por regiones modificadas, GPU opcional y benchmarks en CI |
 | Código ajeno colado en el proyecto, que rompería la licencia MIT | Hook de guardia, especificaciones propias, `license-auditor` y revisión humana del diff |
