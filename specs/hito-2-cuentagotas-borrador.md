@@ -1,0 +1,144 @@
+# Hito 2 · Unidad 17a: cuentagotas y borrador
+
+Estado: **aprobada** (2026-10-18; decisiones 1 a 8 como están, con cinco añadidos del visto bueno que prevalecen sobre cualquier otra frase de la página: (1) el aviso de «no se puede» del borrador sale **también al elegirlo con `E`** (fila 11); (2) sección «Para el damero»; (3) fila 12 y su prueba: el cuentagotas no modifica el documento; (4) `Select` por teclado pasa por `App::busy()` completo, con la fila 13 y su prueba; (5) el único test anterior que cambia, el oráculo de la propiedad 5 de `px-ui/tests/tool.rs`, va en su **propio commit, antes de todo lo demás**, y si hubiera que tocar otro se para y se avisa). Cambios: `px-ui` y `px-app`. **No se toca `px-core` ni `px-raster`**: el borrador usa `Command::SetPixels` (vía `Stroke`), `Image::get_pixel` y `Palette::transparent_index`, y el cuentagotas solo lee. Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia.
+
+Referencias: decisión D1 de [`hito-2-reparto-cierre.md`](hito-2-reparto-cierre.md) (alcance de las dos herramientas). `Stroke`, un gesto un paso, superposición del trazo y su medida: [`hito-2-lapiz-deshacer.md`](hito-2-lapiz-deshacer.md) §2, §3 y §6. `ToolState`, `busy()`, `Escape`, `Notice` y `window_title`: [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md). `ColorChoice`, `Session.choice` y mostrar la fila elegida: [`hito-2-panel-paletas.md`](hito-2-panel-paletas.md) y [`hito-2-panel-ventana-baja.md`](hito-2-panel-ventana-baja.md). Ranuras por modo (`SlotBank`), `gate_keys` y texto pendiente: [`hito-2-editar-color.md`](hito-2-editar-color.md). Quita pendiente y rango: [`hito-2-paleta-operaciones.md`](hito-2-paleta-operaciones.md).
+
+## Objetivo
+
+Dos herramientas más con las teclas `I` y `E`. El **borrador** es el lápiz con el valor transparente del modo. El **cuentagotas** copia el color de un píxel al color activo. Ninguna toca `px-core`, y la lógica es pura y se prueba sin ventana.
+
+## Lo comprobado (y lo que no)
+
+- Hoy el lienzo no dibuja damero de transparencia: un píxel transparente se ve con el fondo liso `BACKGROUND` (gris 40), porque la textura lleva alfa 0 y el fondo se pinta debajo. `Canvas::paint` ya pinta, para un píxel de la superposición con alfa menor que 255, un rectángulo de `BACKGROUND` y encima el color si su alfa es mayor que 0. **Con alfa 0 solo queda el rectángulo de fondo: es exactamente lo que se verá tras borrar.**
+- `pixel_rgba(image, pixel)` da alfa 0 para `Indexed(t)` (con `t` el índice transparente: `Palette::resolved`), para `Rgba(0,0,0,0)` y para `GrayAlpha { alpha: 0, .. }`. La superposición del borrador es, pues, la del lápiz con ese color.
+- `Document::apply(SetPixels)` ya no crea paso si ningún píxel cambia (`Ok(false)`), como el lápiz.
+- **Medido (2026-10-18, en una copia fuera del repositorio, `--release`, una máquina, solo CPU: construir las formas con `paint` y teselarlas, sin GPU ni ventana; imagen indexada de 700×500 a ×1 con todos los píxeles visibles, mediana de 7 fotogramas, mismo método que la unidad 6):**
+
+  | Píxeles del trazo | 1 400 | 10 500 | 50 400 | 100 100 | 200 200 | 350 000 |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Superposición del borrador | 0,15 ms | 1,51 ms | 6,33 ms | 12,9 ms | 27,7 ms | 45,2 ms |
+
+  Lineal, ~0,13 µs por píxel, igual que el lápiz. **Alternativa descartada, regenerar la textura entera en cada movimiento** (`to_rgba8` + `ColorImage` + `set`, indexada, sin subida a la GPU): 1024² 8 ms, 2048² 30 ms, **4096² 126 ms, 6000² 279 ms por fotograma**, sin depender del tamaño del trazo (a 4096² son unos 8 fotogramas por segundo). No medido: debug, la GPU de una ventana real, ni otros modos.
+- **Límite anotado:** la superposición cabe en un fotograma de 16 ms hasta unos **100 000 píxeles visibles por trazo** y, con margen para la GPU y el resto de la app, el **umbral práctico es de ~50 000** (un garabato que cubre media pantalla); los píxeles fuera de la ventana casi no cuestan. No hay tope duro (como con el lápiz). La superposición como textura es de la unidad 14.
+- **Teclados no QWERTY:** `I` y `E` están en la misma tecla en QWERTY, QWERTZ y AZERTY y egui-winit 0.37 usa la tecla lógica con respaldo físico (ver la unidad 7). No probado en un teclado físico no QWERTY.
+
+## Decisiones (todas a confirmar; las que añaden algo a lo que pediste, marcadas con ⚠)
+
+1. **Teclas y título.** `tool_action_for_key`: **`I` ⇒ `Select(Dropper)`, `E` ⇒ `Select(Eraser)`**, solo sin ningún modificador (`Ctrl`+`I` y `Ctrl`+`E` no hacen nada). Sin choque con `P`, `L`, `F`, `Escape`, `1` a 9, `Z`, `Y`, `S`, `O`, ni con `Space`, `Home`, `+`, `-`, `=` del lienzo. `action_for_key` y `file_action_for_key` siguen dando `None` para ellas. `Tool::label`: `cuentagotas` y `borrador`. La herramienta sale en el título y en la barra de estado por `window_title` y `status_line`, sin cambiar `TitleInfo`. Lo que acompaña a la herramienta en esa línea lo da la función pura `tool_color_label(tool, image, choice, slots)`: con lápiz, línea, relleno y **cuentagotas**, el color activo (`color 3 #ff0000`, `índice 12 #ff8800`: tras elegir, es el valor elegido); con el **borrador**, lo que escribe (no usa el color activo): `transparente`, `sin índice transparente` (indexada sin él) o `sin transparencia` (Gray). Ejemplo: `borrador · transparente`.
+2. **Borrador = lápiz con el valor transparente.** Mismo `Stroke` (mismas posiciones, mismas líneas) y un solo `SetPixels` al soltar: **un paso por trazo**. El valor sale de `eraser_pixel(image)`, **calculado al pulsar** (no depende del color activo ni de la ranura):
+   - Indexada con índice transparente `t`: `Pixel::Indexed(t)`.
+   - Indexada sin índice transparente: no se puede.
+   - RGBA: `Rgba(0,0,0,0)`. GrayAlpha: `GrayAlpha { gray: 0, alpha: 0 }` (el transparente canónico del modo, el de la ranura 9).
+   - Gray: no se puede (sin alfa).
+   - **«No se puede»:** el `Begin` no abre gesto (queda `busy` hasta el `End`, como una ranura sin color) y ToolState emite `ToolEvent::Refused(error)`; `px-app` lo muestra como `Notice` de 5 s: `esta imagen no tiene índice transparente` o `el modo gris no tiene transparencia`. Se avisa **al pulsar** y **también al elegir el borrador con `E`** (fila 11): si el borrador no puede con la imagen actual (Gray, o indexada sin índice transparente) el aviso de 5 s sale en el momento de pulsar `E`, con los mismos textos, y la herramienta queda elegida (con otra imagen abierta después, el aviso de pulsar sigue siendo el que corresponde). Con un gesto en curso o un campo enfocado `E` no hace nada ni avisa. Lo decide la función pura `select_tool` de `px-app` (ver «Piezas»).
+   - ⚠ **Un trazo que no cambia nada no crea paso**, y «nada» incluye los píxeles que ya son transparentes: el borrador **omite** los de alfa 0 en RGBA y GrayAlpha (aunque su RGB oculto no sea 0, por ejemplo `(255,0,0,0)`, que es lo habitual en PNG reales) y los que ya valen `Indexed(t)`. Así pasar el borrador por fondo transparente no crea un paso ni marca el documento como modificado sin cambio visible. Alternativa: escribir siempre el canónico (limpia el RGB oculto, pero crea paso). La vista previa muestra todos los píxeles del trazo; los ya transparentes se ven igual.
+3. **Vista previa del borrador por superposición, sin regenerar la textura.** Mientras se arrastra, `ToolState::preview` da los píxeles del trazo con el valor de borrado y la app los pinta con el `paint` de hoy: alfa 0 ⇒ rectángulo de `BACKGROUND` sobre el píxel, que es lo que se verá al soltar (los píxeles borrados se ven borrados, no «un color encima»). Coste y límite: ver «Lo comprobado». **El documento y la textura no cambian hasta soltar**; al soltar, un solo `refresh` (como el lápiz). `BACKGROUND` pasa a `pub` en `canvas.rs` (aditivo) para que un test compruebe que superposición y fondo coinciden. **Cuando exista un damero de transparencia** (no está en esta unidad), la superposición con alfa 0 deberá pintarlo en vez del fondo liso: anotado para quien lo añada.
+4. **Cuentagotas.** `Begin(p)` elige el píxel `p`; cada `Move(q)` elige `q` **si cae dentro de la imagen y es otro píxel que el último visitado** (un `Move` al mismo píxel no repite); `End` termina (soltar, perder el foco o botón que egui ya no ve, como siempre). **No modifica el documento**: sin paso, sin `state_id` nuevo, sin marcarlo como modificado, y `Ctrl`+`Z` no lo toca. `canvas_event_with` da siempre `Ok(false)`; la elección sale por `ToolState::take_events()` como `ToolEvent::Picked(Picked)`, y `px-app` la aplica con `Session::apply_pick`:
+   - **Indexada:** `Picked::Entry(i)` con el índice del píxel ⇒ `set_choice_revealing(Entry(i))` (el panel la marca, el editor se sincroniza y la fila se muestra; borra el rango de rotación, como las teclas). Sin aviso, tampoco en la entrada transparente (el panel ya dice `transparente`).
+   - **RGBA, Gray y GrayAlpha:** `Picked::Color(Rgba)` con el valor **exacto** del píxel: `Rgba(c)` tal cual, `Gray(g)` ⇒ `(g, g, g, 255)`, `GrayAlpha { gray, alpha }` ⇒ `(gray, gray, gray, alpha)` (`r = g = b`, como exige el editor en esos modos). Se escribe en la ranura activa de ese modo (`slots.get_mut(mode).set(slot, color)`); `choice` no cambia. Un píxel con alfa 0 se copia **tal cual** (RGB incluido) y avisa 5 s: `píxel transparente copiado tal cual (#0a141e00)`.
+   - **Fuera de la imagen no hace nada** (ni elige, ni borra lo elegido). ⚠ Un arrastre que empieza fuera (en el margen del lienzo) y entra elige al entrar, como el lápiz dibuja la parte visible. ⚠ Con una **quita pendiente** el cuentagotas indexado se ignora, como las teclas 1 a 9 (la selección está fija en la entrada que se quita). Con texto pendiente en el campo hexadecimal valen las reglas de 11c (el clic en el lienzo le quita el foco; si el color base cambió, el texto se descarta con aviso).
+   - **La barra de estado muestra el valor elegido** por `tool_color_label`; el aviso del transparente lleva además el valor exacto con alfa.
+   - `Escape` no hace nada con el cuentagotas ni con el borrador (como con el lápiz: el trazo se aplica al soltar; lo elegido se queda).
+5. **Gesto en curso y teclado.** `busy()` va de `Begin` a `End`, con gesto real o sin él (unidad 7). `Select` se ignora con un gesto en curso; con un campo de texto enfocado `gate_keys` quita `I` y `E` como todo lo demás. ⚠ **Corrección de una desviación:** `handle_keys` de `main.rs` hoy solo mira `tools.busy()` para `Select`, y no `App::busy()` completo (deslizador del editor, arrastre de muestra, diálogo abierto), contra la decisión 6 de 11c. En esta unidad `Select` pasa por `App::busy()` (con un deslizador del editor pulsado, `P` no cambia de herramienta: fila 13); no hay test de unidades anteriores que cambie por ello. Para poder probarlo, `App::busy()` se apoya en `Session::busy()` (deslizador del editor o arrastre de muestra) y la decisión de cambiar de herramienta la toma la función pura `select_tool`.
+6. **Sin `Alt`+clic como cuentagotas temporal** (en KDE `Alt`+arrastrar mueve la ventana). **Pulido posible, con otra combinación**, a decidir con el teclado a mano: clic derecho (la unidad 6 lo dejó fuera), `Ctrl`+clic (en macOS ya es clic derecho) o mantener `I` pulsada. Fuera de esta unidad.
+7. **Lógica pura sin egui** (en `px-ui/src/pick.rs`, nuevo; `Tool` y `ToolState` siguen usando `egui::Key` y `Modifiers` solo como datos): píxel de borrado por modo, color elegido por modo y estado del arrastre del cuentagotas. `px-app` solo cablea.
+
+## Piezas
+
+```rust
+// px-ui/src/pick.rs (nuevo, sin egui)
+pub enum EraseError { NoTransparentIndex, NoTransparency }   // Display = el aviso de la decisión 2
+pub fn eraser_pixel(image: &Image) -> Result<Pixel, EraseError>;
+pub fn eraser_label(image: &Image) -> &'static str;          // "transparente" | "sin índice transparente" | "sin transparencia"
+pub fn is_erasable(image: &Image, x: u32, y: u32) -> bool;   // el borrador cambiaría ese píxel (falso si ya es transparente o fuera)
+pub enum Picked { Entry(u8), Color(Rgba) }
+pub fn picked_at(image: &Image, x: u32, y: u32) -> Option<Picked>;   // por modo; None fuera de la imagen
+pub fn pick_notice(picked: &Picked) -> Option<String>;               // solo Color con alfa 0
+pub struct Dropper { /* último píxel visitado */ }
+impl Dropper { pub fn new() -> Dropper; pub fn visit(&mut self, image: &Image, pos: (i32, i32)) -> Option<Picked>; }
+
+// px-ui/src/tool.rs (aditivo; lo que existe no cambia de firma ni de resultado)
+pub enum Tool { Pencil, Line, Fill, Dropper, Eraser }
+pub enum ToolEvent { Picked(Picked), Refused(EraseError) }
+impl ToolState { pub fn take_events(&mut self) -> Vec<ToolEvent>; }   // vacía la cola
+pub fn tool_color_label(tool: Tool, image: &Image, choice: ColorChoice, slots: &SlotColors) -> Option<String>;
+// ToolAction, tool_action_for_key, apply_action, busy, preview, canvas_event(_with), canvas_input(_with): mismas firmas.
+// El borrador ignora el `Pixel` que recibe canvas_event_with; el cuentagotas y el borrador no necesitan color activo.
+
+// px-app/src/session.rs
+pub struct PickOutcome { pub notice: Option<String> }
+impl Session { pub fn apply_pick(&mut self, picked: Picked) -> PickOutcome; }
+```
+
+```rust
+// px-app/src/keys.rs (nuevo)
+/// Aplica `Select`/`Cancel` de una tecla de herramienta. `busy`: App::busy() completo. Con `busy`
+/// no hace nada. Si la herramienta pasa a ser el borrador y la imagen no admite borrarla, devuelve
+/// el aviso (el texto de `EraseError`); en cualquier otro caso, `None`.
+pub fn select_tool(tools: &mut ToolState, action: ToolAction, busy: bool, image: Option<&Image>) -> Option<String>;
+// px-app/src/session.rs
+impl Session { pub fn busy(&self) -> bool; }   // editor.dragging() || ops.busy()
+```
+
+`main.rs`: `App::busy()` es `tools.busy() || session.busy() || dialogs.pending()`; `handle_keys` llama a `select_tool` con él y notifica su resultado. Tras cada `canvas_input_with`, recoge `take_events()`: `Picked` ⇒ `apply_pick` y `notify` si hay aviso; `Refused` ⇒ `notify(error.to_string())`. El título y la barra usan `tool_color_label`. La superposición, `finish` y `refresh` no cambian.
+
+## Casos límite
+
+Imagen RGBA de 8×8 azul opaco `(0,0,255,255)` salvo que se diga otra cosa. Eventos a mano a `ToolState::canvas_event_with`, sin ventana. `(x, y)`.
+
+| # | Entrada | Resultado |
+| --- | --- | --- |
+| 1 | **Teclas y rótulos.** `tool_action_for_key` con `I` y `E` sin modificadores; las dos con `SHIFT`, `ALT`, `CTRL`, `COMMAND`, `MAC_CMD` y `ctrl`+`command` a la vez; `action_for_key` y `file_action_for_key` con `I` y `E` (también con `command`); `Tool::label`; `status_text(Eraser, Some("transparente"))`; `tool_color_label` con cada herramienta | `Select(Dropper)` y `Select(Eraser)`; `None` en todo lo demás; `cuentagotas`, `borrador`, `borrador · transparente`. Lápiz, línea, relleno y cuentagotas dan el color activo (`color 3 #ff0000`); el borrador da `transparente` (RGBA, GrayAlpha, indexada con transparente), `sin índice transparente` o `sin transparencia` |
+| 2 | `eraser_pixel` en RGBA, GrayAlpha, indexada de 5 entradas con transparente 3, indexada sin transparente y Gray | `Ok(Rgba(0,0,0,0))`, `Ok(GrayAlpha{0,0})`, `Ok(Indexed(3))`, `Err(NoTransparentIndex)`, `Err(NoTransparency)`; los textos son `esta imagen no tiene índice transparente` y `el modo gris no tiene transparencia` |
+| 3 | **Borrador aplicado.** `Begin(1,1)`, `Move(5,1)`, `Move(5,3)`, sin `End`; después `End`. En RGBA, en GrayAlpha (gris 100 opaco) y en indexada (índice 0 azul, 1 transparente) | Antes del `End`: imagen igual a la copia, `can_undo` falso, `preview` = 7 píxeles `(1,1)…(5,1)`, `(5,2)`, `(5,3)` y todos con alfa 0 por `pixel_rgba`. `End`: `Ok(true)`, esos 7 píxeles en `Rgba(0,0,0,0)` / `GrayAlpha{0,0}` / `Indexed(1)`, el resto intacto, un paso; `undo` ⇒ igual a la copia, `redo` ⇒ igual a la editada |
+| 4 | **Borrador sin efecto.** (a) Zona ya transparente en RGBA, con píxeles `(0,0,0,0)` y `(255,0,0,0)`; (b) lo mismo tras un `undo` previo; (c) indexada sin transparente y Gray: `Begin(2,2)`, `Move(4,2)`, `End` | (a) `Ok(false)`, imagen intacta (el `(255,0,0,0)` sigue siéndolo), sin paso; (b) `can_redo` sigue a `true`; (c) `Ok(false)`, un solo `Refused` (en el `Begin`), `busy` de `Begin` a `End`, `preview` vacío y sin paso |
+| 5 | **Cuentagotas indexado.** Paleta de 6; fila 0 con índices `0…5`. `Begin(3,0)`, `Move(3,0)`, `Move(4,0)`, `Move(4,0)`, `Move(5,0)`, `End`, `Move(1,0)` | `take_events`: `Picked(Entry(3))`, `Picked(Entry(4))`, `Picked(Entry(5))`, uno por píxel nuevo y sin repetir; el `Move` tras el `End` no da nada; `Ok(false)` siempre; imagen, `state_id`, `can_undo`, `can_redo` e `history_bytes` intactos; `busy` de `Begin` a `End` |
+| 6 | **Cuentagotas en los otros modos:** clic en `Rgba(10,20,30,128)`, `Rgba(10,20,30,0)`, `Gray(96)`, `GrayAlpha{7,200}` y `GrayAlpha{7,0}` (cada uno en su imagen) | `Color(10,20,30,128)`, `Color(10,20,30,0)`, `Color(96,96,96,255)`, `Color(7,7,7,200)`, `Color(7,7,7,0)`: valor exacto, alfa incluido. `pick_notice`: solo en los de alfa 0, `píxel transparente copiado tal cual (#0a141e00)` y `(#07070700)` |
+| 7 | **Fuera y entrando.** `Begin(-1,0)`, `Begin(8,0)`, `Begin(0,8)`; `Begin(-3,2)`, `Move(2,2)`, `End`; `Begin(2,2)`, `Move(20,2)`, `Move(3,2)`, `End` | Los tres primeros: ningún evento, `busy` de `Begin` a `End`. El que entra elige `(2,2)`. El que sale no elige ni anula lo elegido, y al volver a otro píxel elige `(3,2)`; tras el `End`, `busy` falso y lo elegido se queda |
+| 8 | **Gesto y teclado.** Con un trazo del borrador en curso y con un arrastre del cuentagotas: `Select(Pencil)` y `Escape`; tras el `End`: `Select(Eraser)` y `Select(Dropper)`; `gate_keys` con `I` y `E` y un campo enfocado (banco de egui) | Durante el gesto `tool()` no cambia y `Escape` no hace nada (el borrador se aplica al soltar; lo elegido se queda); después sí cambia; con el campo enfocado `gate_keys` no deja pasar ni `I` ni `E` y la herramienta no cambia |
+| 9 | **Sesión** (`px-app`), `apply_pick`: (a) indexada de 12 entradas, `choice = Entry(2)`, rango de rotación marcado, `Entry(7)`; (b) lo mismo con una quita pendiente; (c) RGBA con `choice = Slot(3)`, `Color(10,20,30,128)`; (d) Gray con `Color(96,96,96,255)` y GrayAlpha con `Color(7,7,7,0)`; después, una edición previa y `Ctrl`+`Z` | (a) `choice = Entry(7)`, `view.reveal`, rango borrado, `active_pixel() = Indexed(7)`; (b) ignorado: `choice`, rango y quita intactos; (c) ranura 3 del banco RGBA = `(10,20,30,128)`, el resto de ranuras y de modos igual, `choice` igual, `active_pixel() = Rgba(10,20,30,128)`; (d) la ranura del modo, y aviso solo en el transparente. En todos `state_id`, `modified()`, `can_undo`, `can_redo` e imagen intactos; `Ctrl`+`Z` deshace la edición previa, no la elección |
+| 10 | **Superposición del borrador en el banco de egui** (como `tests/pencil.rs`): imagen RGBA 64×48 azul, `Begin` y `Move` sobre 20 píxeles visibles, varios fotogramas sin soltar; después `End` | Cada fotograma pinta, sobre la textura, un rectángulo del color de `BACKGROUND` por píxel pendiente (ningún otro color), sin `textures_delta` y con `preview_uploads` y textura igual; `to_rgba8` de la imagen, intacta. Tras `End` y `refresh`: una subida, esos píxeles con alfa 0, y el fondo que se ve es el de la superposición |
+| 11 | **Aviso al elegir el borrador** (`px-app`, `select_tool`, `busy` falso): `Select(Eraser)` con Gray, con indexada sin transparente, con RGBA y con indexada con transparente; `Select(Eraser)` otra vez con el borrador ya elegido; `Select(Pencil)` con Gray; `Select(Eraser)` con `busy` verdadero | Gray: `tool() = Eraser` y `Some("el modo gris no tiene transparencia")`; indexada sin: `Some("esta imagen no tiene índice transparente")`; RGBA e indexada con: `None`; repetir `E` repite el aviso; `Pencil` con Gray: `None`; con `busy`: `tool()` no cambia y `None`. Los textos son los de `EraseError` |
+| 12 | **El cuentagotas no modifica el documento** (`px-app`): sesión en cada modo con una edición previa (un paso) y, en otra, un `undo` hecho (`can_redo`); antes, otra recién abierta y sin cambios; arrastre de cuentagotas sobre toda la imagen aplicando cada `Picked` con `apply_pick` | `state_id()` igual, `modified()` igual (falso en la recién abierta, verdadero en la editada), `can_undo`, `can_redo` e `history_bytes` iguales, imagen igual; un `Ctrl`+`Z` posterior deshace la edición previa y no la elección |
+| 13 | **`Select` con `App::busy()` completo** (`px-app`): con el deslizador del editor pulsado (`editor.begin`), `select_tool(Select(Pencil))` desde el cuentagotas, y `Select(Eraser)` desde el lápiz; con un trazo de la herramienta en curso; con `busy` verdadero por un diálogo (el parámetro); y tras soltar el deslizador | `Session::busy()` es cierto durante el arrastre y falso al soltar; mientras tanto `tool()` no cambia y no hay aviso; tras soltar, sí cambia |
+
+## Propiedades (proptest)
+
+Imágenes de 1 a 16 de lado; posiciones `i32` arbitrarias con sesgo hacia dentro y los bordes.
+
+1. **Borrador = lápiz transparente.** En RGBA, GrayAlpha e indexada con transparente, para cualquier gesto: el trazo del borrador visita **las mismas posiciones** que el de un lápiz con `eraser_pixel`; tras `End` la imagen es la original con esos píxeles en el valor de borrado, **salvo** los que ya eran transparentes, que no se tocan; `Ok(true)` si y solo si alguno cambió, y entonces es un paso y `undo` deja la imagen exacta. `preview` es el conjunto visitado y el documento no cambia antes del `End`.
+2. **El cuentagotas no escribe y es exacto.** Con cualquier secuencia de gestos en cualquier modo: imagen, `state_id`, `can_undo`, `can_redo` e `history_bytes` intactos; hay un `Picked` por cada píxel **nuevo y dentro** que se visita y ninguno más; y aplicando cada `Picked` a una `Session`, `active_pixel()` es **exactamente** el `get_pixel` de ese píxel (`Indexed(i)` en indexada; `Rgba`, `Gray` o `GrayAlpha` iguales en los demás).
+3. **Teclas.** `tool_action_for_key` sobre `Key::ALL` por las 32 combinaciones de modificadores: sin pánico, y `Select` o `Cancel` solo sin modificadores y solo con `P`, `L`, `F`, `I`, `E` y `Escape`; `action_for_key` y `file_action_for_key` dan `None` para `I` y `E` en todas las combinaciones. **Sustituye a la propiedad 5 de la unidad 7** (su oráculo no conoce `I` ni `E`).
+4. **Herramienta estable con las cinco.** Con cualquier secuencia de eventos y acciones: `Select` no cambia `tool()` si `busy()` y la cambia si no; `busy()` es cierto exactamente entre un `Begin` y su `End`; `preview` está vacío en reposo y siempre con el cuentagotas; `take_events` está vacío en reposo tras vaciarlo. **Amplía la propiedad 6 de la unidad 7** sin tocarla (`HERRAMIENTAS` sigue con tres; la nueva usa las cinco).
+
+## Dónde van las pruebas
+
+`px-ui/tests/pick.rs` (fila 1 salvo `select_tool`, fila 2, propiedad 3 con la propiedad 5 de la unidad 7 adaptada en `tool.rs`), `px-ui/tests/eraser.rs` (filas 3 y 4, propiedad 1), `px-ui/tests/dropper.rs` (filas 5 a 8, propiedades 2 y 4), `px-ui/tests/eraser_canvas.rs` (fila 10, con el banco de `tests/pencil.rs` copiado) un módulo `px-app/src/session/pick_tests.rs` (filas 9 y 12 y la parte de sesión de la propiedad 2) y un módulo `px-app/src/keys.rs` con sus tests (filas 11 y 13). **Única prueba de una unidad anterior que cambia, en su propio commit antes de todo lo demás** (con el mínimo de código que la hace pasar: las variantes de `Tool`, sus rótulos y las dos teclas; los gestos de las herramientas nuevas llegan después): el oráculo de la propiedad 5 de `px-ui/tests/tool.rs` (sus dos versiones, por muestreo y exhaustiva) gana `I` y `E`; si alguna otra prueba hubiera que tocar, se para y se avisa.
+
+## Prueba manual (la hace el usuario; yo no hago capturas)
+
+1. Abrir un PNG RGBA con zonas transparentes y otras opacas. `E`: el título dice `borrador · transparente`. Arrastrar por la zona opaca: los píxeles se ven borrados mientras se arrastra y siguen así al soltar, sin parpadeo. `Ctrl`+`Z` los devuelve de un golpe; pasar el borrador por zona ya transparente no marca el documento como modificado.
+2. Un trazo grande (garabato de decenas de miles de píxeles) sobre una imagen de 4096² o más, en `--release`: se arrastra sin ir a trompicones hasta unos 50 000 píxeles visibles; anotar a partir de cuántos se nota.
+3. PNG indexado con índice transparente: lo mismo. PNG indexado sin él (la imagen de muestra): `E` ya da el aviso de 5 s al elegirlo, y arrastrar lo da otra vez y no cambia nada. PNG de grises: aviso del modo gris.
+4. `I` y clic en un píxel de una indexada: la entrada se marca en el panel y su fila se ve aunque estuviera fuera; arrastrar cambia la entrada en vivo; soltar la deja; `Ctrl`+`Z` no la toca; el título no pasa a modificado. En RGBA: el color de la ranura activa pasa a ser el del píxel (mirarlo en el editor, con el alfa); en un píxel transparente, el aviso con el valor. Clic fuera de la imagen: nada.
+5. Con un deslizador del editor pulsado, `I` o `E` no cambian de herramienta; con el campo hexadecimal enfocado, tampoco.
+
+## Para el damero
+
+Cuando el lienzo muestre la transparencia con un damero (hito 3 o una unidad propia), **la superposición del borrador deberá dibujar el damero** sobre el píxel y no el fondo liso `BACKGROUND`: hoy un píxel borrado se ve igual que uno transparente porque los dos son el fondo liso, y con damero dejarían de serlo. Quien añada el damero debe cambiar `Canvas::paint` (el rectángulo de fondo de los píxeles con alfa menor que 255), y la fila 10 (que compara con `BACKGROUND`) pasará a comparar con el damero.
+
+## Fuera de alcance
+
+`Alt`+clic u otro cuentagotas temporal (decisión 6), cursor propio por herramienta, grosor del borrador, borrar con el botón derecho, damero de transparencia, superposición como textura y textura por regiones (unidad 14), pincel, rectángulo y elipse (hito 4), y que el cuentagotas elija de una capa o del compuesto (hito 3).
+
+## Decisiones que necesito que confirmes
+
+1. **`I` y `E` sin modificadores** y `tool_color_label`: con el borrador la línea dice `borrador · transparente` (o el motivo por el que no puede), no el color activo.
+2. ⚠ **El borrador omite los píxeles ya transparentes** (alfa 0, y `Indexed(t)`): no crea paso ni marca modificado sobre fondo transparente. Alternativa: escribir siempre el canónico.
+3. **Avisos de «no se puede» al pulsar y al elegir con `E`**, con los textos `esta imagen no tiene índice transparente` y `el modo gris no tiene transparencia` (el segundo lo pongo yo).
+4. **Vista previa por superposición con alfa 0**, sin regenerar la textura: medida de arriba, umbral práctico ~50 000 píxeles visibles, sin tope duro. Regenerar la textura queda descartado (126 ms por fotograma a 4096²).
+5. ⚠ **Cuentagotas:** un arrastre que empieza fuera elige al entrar; con una quita pendiente se ignora (como las teclas 1 a 9); el transparente avisa con el valor exacto; `Escape` no hace nada.
+6. ⚠ **`Select` por teclado respeta `App::busy()` completo**, no solo el gesto de la herramienta (corrige una desviación de 11c, decisión 6).
+7. **`BACKGROUND` pasa a `pub`** en `canvas.rs` (aditivo) para la fila 10.
+8. **`Alt`+clic fuera**, con clic derecho, `Ctrl`+clic o mantener `I` como candidatos para un pulido posterior.
