@@ -1,7 +1,7 @@
 //! Conversión de una `Image` a bytes RGBA para subirla como textura
 //! (specs/hito-2-ventana.md, «De `Image` a textura»).
 
-use px_core::{Image, Pixel, Rgba};
+use px_core::{Image, Mode, Pixel, Rgba};
 
 /// Bytes RGBA de la imagen, `ancho · alto · 4`, fila a fila (la de arriba primero) y con alfa
 /// directo (no premultiplicado).
@@ -42,4 +42,42 @@ pub fn pixel_rgba(image: &Image, pixel: Pixel) -> Option<Rgba> {
         Pixel::Gray(g) => Some(Rgba::opaque(g, g, g)),
         Pixel::GrayAlpha { gray, alpha } => Some(Rgba::new(gray, gray, gray, alpha)),
     }
+}
+
+/// Como [`to_rgba8`], pero con la entrada `index` de la paleta valiendo `color`, sin clonar la
+/// imagen (vista previa de la edición de un color). El índice transparente sigue con alfa 0 y
+/// conserva el RGB de `color`. Si la imagen no es indexada o `index` no está en la paleta, es
+/// `to_rgba8(image)`. Sustituye por **índice**, no por color: las entradas duplicadas no se
+/// tocan.
+pub fn to_rgba8_with_entry(image: &Image, index: u8, color: Rgba) -> Vec<u8> {
+    let Some(palette) = image
+        .palette()
+        .filter(|palette| image.mode() == Mode::Indexed && usize::from(index) < palette.len())
+    else {
+        return to_rgba8(image);
+    };
+    // Tabla índice → color resuelto: una consulta por píxel en vez de una a la paleta.
+    let mut table = [Rgba::TRANSPARENT; 256];
+    for (slot, entry) in (0..=u8::MAX).zip(table.iter_mut()) {
+        if let Ok(resolved) = palette.resolved(slot) {
+            *entry = resolved;
+        }
+    }
+    table[usize::from(index)] = if palette.transparent_index() == Some(index) {
+        Rgba { a: 0, ..color }
+    } else {
+        color
+    };
+    let (width, height) = (image.width(), image.height());
+    let mut bytes = Vec::with_capacity(width as usize * height as usize * 4);
+    for y in 0..height {
+        for x in 0..width {
+            let color = match image.get_pixel(x, y) {
+                Ok(Pixel::Indexed(i)) => table[usize::from(i)],
+                _ => Rgba::TRANSPARENT,
+            };
+            bytes.extend_from_slice(&[color.r, color.g, color.b, color.a]);
+        }
+    }
+    bytes
 }

@@ -13,7 +13,7 @@ use egui::{
 };
 use px_core::{Image, Rgba};
 
-use crate::texture::to_rgba8;
+use crate::texture::{to_rgba8, to_rgba8_with_entry};
 use crate::view::{Size, View, Zoom};
 
 /// Fondo liso detrás de la imagen (el tablero de la transparencia queda para más adelante).
@@ -105,6 +105,9 @@ pub struct Canvas {
     error: Option<CanvasError>,
     gesture: Gesture,
     frame: Option<Frame>,
+    /// Última vista previa subida: entrada y color resuelto.
+    previewing: Option<(u8, Rgba)>,
+    preview_uploads: u32,
 }
 
 impl Canvas {
@@ -121,6 +124,7 @@ impl Canvas {
         self.view = None;
         self.error = None;
         self.gesture = Gesture::None;
+        self.previewing = None;
     }
 
     /// Regenera la textura con el contenido de `image` **conservando la vista** (tras un trazo,
@@ -129,6 +133,7 @@ impl Canvas {
     /// unidad 14.
     pub fn refresh(&mut self, ctx: &Context, image: &Image) {
         let same_size = self.size == Some(Size::new(image.width(), image.height()));
+        self.previewing = None;
         match &mut self.texture {
             Some(texture) if same_size => {
                 texture.set(color_image(image), TextureOptions::NEAREST);
@@ -136,6 +141,46 @@ impl Canvas {
             }
             _ => self.set_image(image),
         }
+    }
+
+    /// Vista previa de la edición de la entrada `index` de la paleta: regenera la textura con
+    /// esa entrada valiendo `color`, solo si el color resuelto cambió respecto a lo último
+    /// subido (specs/hito-2-editar-color.md, decisión 7). Sin textura o con otro tamaño no hace
+    /// nada. [`Canvas::end_preview`], [`Canvas::refresh`] y [`Canvas::set_image`] la deshacen.
+    pub fn preview_entry(&mut self, ctx: &Context, image: &Image, index: u8, color: Rgba) {
+        let same_size = self.size == Some(Size::new(image.width(), image.height()));
+        let Some(texture) = self.texture.as_mut().filter(|_| same_size) else {
+            return;
+        };
+        let resolved = if image.palette().and_then(|p| p.transparent_index()) == Some(index) {
+            Rgba { a: 0, ..color }
+        } else {
+            color
+        };
+        if self.previewing == Some((index, resolved)) {
+            return;
+        }
+        let bytes = to_rgba8_with_entry(image, index, color);
+        let size = [image.width() as usize, image.height() as usize];
+        texture.set(
+            ColorImage::from_rgba_unmultiplied(size, &bytes),
+            TextureOptions::NEAREST,
+        );
+        self.previewing = Some((index, resolved));
+        self.preview_uploads += 1;
+        ctx.request_repaint();
+    }
+
+    /// Devuelve la textura al contenido de `image` si hay una vista previa; si no, no hace nada.
+    pub fn end_preview(&mut self, ctx: &Context, image: &Image) {
+        if self.previewing.is_some() {
+            self.refresh(ctx, image);
+        }
+    }
+
+    /// Subidas de textura hechas por `preview_entry` desde que se creó el lienzo.
+    pub fn preview_uploads(&self) -> u32 {
+        self.preview_uploads
     }
 
     /// Textura de la imagen, una vez subida.
@@ -217,6 +262,8 @@ impl Canvas {
             )
         };
         let space_down = ui.input(|i| i.key_down(Key::Space));
+        // Con un campo de texto enfocado el teclado es suyo (specs/hito-2-editar-color.md, 11).
+        let typing = ui.ctx().text_edit_focused();
         let mut strokes = Vec::new();
         let events = ui.input(|i| i.events.clone());
         for event in &events {
@@ -233,7 +280,7 @@ impl Canvas {
                     pressed: true,
                     modifiers,
                     ..
-                } if !modifiers.command => match key {
+                } if !modifiers.command && !typing => match key {
                     Key::Home => view = View::fit(viewport, size),
                     Key::Plus | Key::Equals => zoom_step(&mut view, true, center),
                     Key::Minus => zoom_step(&mut view, false, center),
