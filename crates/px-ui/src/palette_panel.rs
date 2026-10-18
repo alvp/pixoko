@@ -11,13 +11,16 @@ use egui::{
 use px_core::{Image, Rgba};
 
 use crate::color::{
-    ColorChoice, cell_color, cell_count, cell_label, cell_of_choice, choice_for_cell, info_flags,
-    is_transparent_cell,
+    ColorChoice, SlotColors, cell_color_with, cell_count, cell_label_with, cell_of_choice,
+    choice_for_cell, info_flags, is_transparent_cell_with,
 };
+use crate::color_edit::{ColorEditor, Commit, EditTarget};
+use crate::color_editor::{self, Geometry};
+use crate::edit_layout::editor_layout;
 use crate::palette_grid::{
     GRID_X_U, GRID_Y_U, Grid, LINE_H_U, LINE1_Y_U, LINE2_Y_U, PANEL_WIDTH_U, PITCH_U,
     RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U, TEXT_X_U,
-    TRACK_W_U, TRACK_X_U, ring_rects, swatch_parts, thumb, total_rows, visible_rows,
+    TRACK_W_U, TRACK_X_U, ring_rects, swatch_parts, thumb, total_rows, visible_rows_reserved,
 };
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, text_scale, ui_unit};
@@ -70,10 +73,24 @@ impl Layout {
     }
 }
 
+/// Lo que pidió el panel con el editor en un fotograma.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PanelOutput {
+    /// Elección pedida por un clic en una muestra.
+    pub choice: Option<ColorChoice>,
+    /// Color a aplicar (soltar un deslizador o confirmar el hexadecimal).
+    pub commit: Option<Commit>,
+    /// Aviso de 5 s para la barra de estado (hexadecimal inválido al perder el foco).
+    pub notice: Option<String>,
+    /// Hay destino pero el panel es demasiado bajo para mostrar el editor.
+    pub editor_hidden: bool,
+}
+
 /// Pinta el panel a la izquierda de `ui` y devuelve la elección que pidió un clic (botón
 /// izquierdo pulsado sobre una muestra). `enabled` falso (gesto en curso): se ve y se
 /// desplaza, pero no elige. Hay que llamarla **después** de la barra de estado y **antes** del
-/// lienzo, que se queda con el rectángulo que sobra.
+/// lienzo, que se queda con el rectángulo que sobra. Sin editor de color: [`show_editing`] lo
+/// añade.
 pub fn show(
     ui: &mut Ui,
     image: &Image,
@@ -81,6 +98,35 @@ pub fn show(
     scroll: &mut Scroll,
     enabled: bool,
 ) -> Option<ColorChoice> {
+    let slots = SlotColors::defaults(image.mode());
+    show_panel(ui, image, choice, scroll, enabled, &slots, None).choice
+}
+
+/// Como [`show`], con el editor de color anclado al fondo del panel (specs/hito-2-editar-color.md).
+/// La rejilla usa la altura que queda; si no caben una fila y el editor, este se oculta
+/// (`editor_hidden`) y la rejilla usa todo el alto. El editor se pone al día antes
+/// (`ColorEditor::sync`); el panel no toca el documento: devuelve el color a aplicar.
+pub fn show_editing(
+    ui: &mut Ui,
+    image: &Image,
+    choice: ColorChoice,
+    scroll: &mut Scroll,
+    enabled: bool,
+    slots: &SlotColors,
+    editor: &mut ColorEditor,
+) -> PanelOutput {
+    show_panel(ui, image, choice, scroll, enabled, slots, Some(editor))
+}
+
+fn show_panel(
+    ui: &mut Ui,
+    image: &Image,
+    choice: ColorChoice,
+    scroll: &mut Scroll,
+    enabled: bool,
+    slots: &SlotColors,
+    mut editor: Option<&mut ColorEditor>,
+) -> PanelOutput {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
     let u = ui_unit(ppp);
@@ -99,10 +145,20 @@ pub fn show(
                 min: rect.min,
                 height_px: (rect.height() * ppp).round() as i64,
             };
+            let mode = image.mode();
+            let target = editor.as_ref().and_then(|_| EditTarget::of(image, choice));
+            let editor_layout =
+                target.and_then(|_| editor_layout(mode, layout.height_px, layout.n));
+            let reserved = editor_layout.map_or(0, |placed| placed.reserved_px);
+            let mut output = PanelOutput {
+                editor_hidden: target.is_some() && editor_layout.is_none(),
+                ..PanelOutput::default()
+            };
             let count = cell_count(image);
             let total = total_rows(count);
-            let visible = visible_rows(layout.height_px, layout.n);
+            let visible = visible_rows_reserved(layout.height_px, reserved, layout.n);
             scroll.clamp(total, visible);
+            let busy_editing = editor.as_ref().is_some_and(|editor| editor.dragging());
 
             let pointer = ui
                 .input(|i| i.pointer.hover_pos())
@@ -131,7 +187,7 @@ pub fn show(
                         button: PointerButton::Primary,
                         pressed: true,
                         ..
-                    } if enabled && rect.contains(*pos) => {
+                    } if enabled && !busy_editing && rect.contains(*pos) => {
                         let grid = Grid::new(layout.n, count, visible, scroll.first_row);
                         let (x, y) = layout.grid_px(*pos);
                         if let Some(cell) = grid.index_at(x, y) {
@@ -141,6 +197,38 @@ pub fn show(
                     _ => {}
                 }
             }
+            output.choice = picked;
+
+            let mut preview = None;
+            if let Some(editor) = editor.as_mut() {
+                match (target, editor_layout) {
+                    (Some(target), Some(placed)) => {
+                        let geometry = Geometry {
+                            ppp,
+                            n: layout.n,
+                            panel_min: rect.min,
+                            top_px: placed.top_px,
+                            mode,
+                        };
+                        let primary_down = ui.input(|i| i.pointer.primary_down());
+                        output.commit = color_editor::interact(
+                            &events,
+                            &geometry,
+                            editor,
+                            enabled,
+                            primary_down,
+                        );
+                        preview = editor.preview();
+                        let transparent = matches!(target, EditTarget::Entry(index)
+                            if image.palette().and_then(|p| p.transparent_index()) == Some(index));
+                        let shown =
+                            color_editor::show(ui, &geometry, editor, target, transparent, &events);
+                        output.commit = shown.commit.or(output.commit);
+                        output.notice = shown.notice;
+                    }
+                    _ => editor.cancel(),
+                }
+            }
 
             let grid = Grid::new(layout.n, count, visible, scroll.first_row);
             let hover = pointer.and_then(|p| {
@@ -148,9 +236,9 @@ pub fn show(
                 grid.index_at(x, y)
             });
             paint(
-                ui, &layout, image, choice, &grid, hover, scroll, total, visible,
+                ui, &layout, image, slots, choice, &grid, hover, preview, scroll, total, visible,
             );
-            picked
+            output
         })
         .inner
 }
@@ -160,9 +248,11 @@ fn paint(
     ui: &Ui,
     layout: &Layout,
     image: &Image,
+    slots: &SlotColors,
     choice: ColorChoice,
     grid: &Grid,
     hover: Option<usize>,
+    preview: Option<(EditTarget, Rgba)>,
     scroll: &Scroll,
     total: usize,
     visible: usize,
@@ -189,14 +279,14 @@ fn paint(
     // Información: la muestra bajo el cursor o, si no hay, la elegida.
     let shown = hover.or(active);
     let line1 = shown
-        .and_then(|cell| cell_label(image, cell))
+        .and_then(|cell| cell_label_with(image, cell, slots))
         .unwrap_or_default();
     let line2 = shown
         .map(|cell| {
             info_flags(
                 hover.is_some(),
                 Some(cell) == active,
-                is_transparent_cell(image, cell),
+                is_transparent_cell_with(image, cell, slots),
             )
         })
         .unwrap_or_default();
@@ -213,7 +303,18 @@ fn paint(
         let Some(cell) = grid.cell_rect(index) else {
             continue;
         };
-        let color = cell_color(image, index).unwrap_or(Rgba::TRANSPARENT);
+        let mut color = cell_color_with(image, index, slots).unwrap_or(Rgba::TRANSPARENT);
+        if let Some((target, provisional)) = preview
+            && edited_cell(target) == index
+        {
+            // La muestra editada se pinta con el color provisional (resuelto: la entrada
+            // transparente sigue con alfa 0).
+            let transparent = is_transparent_cell_with(image, index, slots);
+            color = Rgba {
+                a: if transparent { 0 } else { provisional.a },
+                ..provisional
+            };
+        }
         for (part, tone) in swatch_parts(n, color) {
             let part = ScreenRect {
                 x: cell.x + part.x,
@@ -256,6 +357,14 @@ fn paint(
             vec2(TRACK_W_U as f32 * ui_unit(ppp), height as f32 / ppp),
         );
         painter.rect_filled(bar, 0.0, TEXT_DIM);
+    }
+}
+
+/// Muestra del panel que corresponde al destino de la edición.
+fn edited_cell(target: EditTarget) -> usize {
+    match target {
+        EditTarget::Entry(index) => usize::from(index),
+        EditTarget::Slot(slot) => usize::from(slot).saturating_sub(1),
     }
 }
 

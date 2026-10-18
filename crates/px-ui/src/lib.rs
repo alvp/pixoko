@@ -4,6 +4,7 @@
 pub mod canvas;
 pub mod color;
 pub mod color_edit;
+pub mod color_editor;
 pub mod edit_layout;
 pub mod notice;
 pub mod palette_grid;
