@@ -8,6 +8,7 @@ mod demo;
 mod files;
 mod licenses;
 mod session;
+mod status_error;
 mod title;
 
 use std::path::{Path, PathBuf};
@@ -16,9 +17,10 @@ use std::time::Duration;
 use eframe::egui;
 use px_core::Document;
 use px_ui::canvas::Canvas;
-use px_ui::color::{choice_label, key_choice};
+use px_ui::color::{choice_label_with, key_choice};
+use px_ui::color_edit::EditTarget;
 use px_ui::notice::{NOTICE_SECS, Notice};
-use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
+use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, gate_keys};
 use px_ui::texture::pixel_rgba;
 use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
 
@@ -26,6 +28,7 @@ use crate::confirm::{Confirm, Confirmation, Request, close_warning, open_warning
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::licenses::wants_licenses;
 use crate::session::{Session, describe_saved};
+use crate::status_error::status_error;
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
 
 struct App {
@@ -45,6 +48,8 @@ struct App {
     confirm: Confirm,
     /// Fichero del argumento de la línea de comandos, pendiente de abrir en el primer fotograma.
     cli_path: Option<PathBuf>,
+    /// El panel es demasiado bajo para el editor de color (la barra de estado lo avisa).
+    editor_hidden: bool,
 }
 
 impl App {
@@ -63,6 +68,7 @@ impl App {
             notice: None,
             confirm: Confirm::new(),
             cli_path,
+            editor_hidden: false,
         }
     }
 
@@ -83,10 +89,16 @@ impl App {
         ctx.request_repaint_after(Duration::from_secs_f64(NOTICE_SECS));
     }
 
+    /// Hay un gesto en curso: un trazo del lápiz, la línea, o el arrastre de un deslizador del
+    /// editor de color. Mientras dura se ignoran atajos, elecciones y ficheros.
+    fn busy(&self) -> bool {
+        self.tools.busy() || self.session.editor.dragging()
+    }
+
     /// Abre `path` (del argumento o soltado). Con cambios sin guardar pide confirmación por
     /// repetición; con un trazo en curso se ignora. `ignored`: ficheros soltados de más.
     fn open_file(&mut self, ctx: &egui::Context, path: &Path, ignored: usize, from_cli: bool) {
-        if self.tools.busy() {
+        if self.busy() {
             self.notify(
                 ctx,
                 "se ignora el fichero: hay un trazo en curso".to_string(),
@@ -177,7 +189,7 @@ impl App {
                 continue;
             };
             if let Some(action) = file_action_for_key(*key, *modifiers) {
-                if !self.tools.busy() {
+                if !self.busy() {
                     self.save_file(ctx, action == FileAction::SaveAs);
                 }
                 continue;
@@ -188,7 +200,7 @@ impl App {
                 }
                 continue;
             }
-            if self.tools.busy() {
+            if self.busy() {
                 continue;
             }
             match action_for_key(*key, *modifiers) {
@@ -239,18 +251,33 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
         px_ui::status::show(ui, &self.status.0, self.status.1);
-        let busy = self.tools.busy();
+        self.session.sync_editor();
+        let enabled = !self.busy();
         let main = self.session.document.main_image();
-        if let Some(image) = self.session.document.image(main)
-            && let Some(choice) = px_ui::palette_panel::show(
+        let mut panel = None;
+        if let Some(image) = self.session.document.image(main) {
+            panel = Some(px_ui::palette_panel::show_editing(
                 ui,
                 image,
                 self.session.choice,
                 &mut self.session.scroll,
-                !busy,
-            )
-        {
-            self.session.choice = choice;
+                enabled,
+                self.session.slots.get(image.mode()),
+                &mut self.session.editor,
+            ));
+        }
+        if let Some(panel) = panel {
+            if let Some(choice) = panel.choice {
+                self.session.choice = choice;
+            }
+            if let Some(commit) = panel.commit {
+                let result = self.session.commit_edit(commit);
+                self.finish(&ctx, result);
+            }
+            if let Some(text) = panel.notice {
+                self.notify(&ctx, text);
+            }
+            self.editor_hidden = panel.editor_hidden;
         }
         self.handle_close(&ctx);
         if let Some(path) = self.cli_path.take() {
@@ -269,13 +296,26 @@ impl eframe::App for App {
 
         let id = self.session.document.main_image();
         for input in self.canvas.interact_ordered(ui) {
-            let result =
-                self.tools
-                    .canvas_input(&mut self.session.document, id, self.session.choice, input);
+            let pixel = self.session.active_pixel();
+            let result = self
+                .tools
+                .canvas_input_with(&mut self.session.document, id, pixel, input);
             self.finish(&ctx, result);
         }
-        let events = ui.input(|i| i.events.clone());
+        // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
+        let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
         self.handle_keys(&ctx, &events);
+
+        // Vista previa del color que se está editando: la textura la lleva el lienzo y vuelve al
+        // documento al soltar o cancelar.
+        if let Some(image) = self.session.document.image(id) {
+            match self.session.editor.preview() {
+                Some((EditTarget::Entry(index), color)) => {
+                    self.canvas.preview_entry(&ctx, image, index, color);
+                }
+                _ => self.canvas.end_preview(&ctx, image),
+            }
+        }
 
         let image = self.session.document.image(id);
         let overlay = self.tools.preview().filter_map(|edit| {
@@ -293,21 +333,36 @@ impl eframe::App for App {
         if notice.is_none() {
             self.notice = None;
         }
+        let canvas_error = canvas_info.error.map(|error| error.to_string());
         let info = TitleInfo {
             size: image.map(|image| (image.width(), image.height())),
             zoom: canvas_info.zoom,
             hover: canvas_info.hover,
-            color: image.and_then(|image| choice_label(image, self.session.choice)),
+            color: image.and_then(|image| {
+                choice_label_with(
+                    image,
+                    self.session.choice,
+                    self.session.slots.get(image.mode()),
+                )
+            }),
             can_undo: self.session.document.can_undo(),
             can_redo: self.session.document.can_redo(),
-            error: canvas_info.error.map(|error| error.to_string()).or(notice),
+            error: canvas_error.clone().or(notice.clone()),
         };
-        let status = (status_line(self.tools.tool(), &info), info.error.is_some());
+        let title = window_title(self.tools.tool(), &info);
+        // La barra, además, avisa de que el editor está oculto por falta de altura.
+        let status_info = TitleInfo {
+            error: status_error(canvas_error, notice, self.editor_hidden),
+            ..info
+        };
+        let status = (
+            status_line(self.tools.tool(), &status_info),
+            status_info.error.is_some(),
+        );
         if status != self.status {
             self.status = status;
             ctx.request_repaint();
         }
-        let title = window_title(self.tools.tool(), &info);
         let label = self.session.path().map(file_label);
         let title = title_with_file(label.as_deref(), self.session.modified(), &title);
         if title != self.title {

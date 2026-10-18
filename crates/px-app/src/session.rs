@@ -3,9 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
-use px_core::Document;
+use px_core::{Command, Document, DocumentError, Pixel};
 use px_formats::write_png;
-use px_ui::color::{ColorChoice, initial_choice};
+use px_ui::color::{ColorChoice, SlotBank, initial_choice, pixel_for_choice_with};
+use px_ui::color_edit::{ColorEditor, Commit, EditTarget};
 use px_ui::palette_grid::Scroll;
 
 use crate::files::{
@@ -27,6 +28,11 @@ pub struct Session {
     pub choice: ColorChoice,
     /// Desplazamiento del panel de paletas; abrir un fichero lo reinicia.
     pub scroll: Scroll,
+    /// Colores de las ranuras por modo; duran toda la sesión y no son del documento
+    /// (specs/hito-2-editar-color.md).
+    pub slots: SlotBank,
+    /// Estado del editor de color; abrir un fichero lo reinicia.
+    pub editor: ColorEditor,
     path: Option<PathBuf>,
     /// `state_id` del documento al abrir o guardar por última vez.
     saved_id: u64,
@@ -44,8 +50,49 @@ impl Session {
             document,
             choice,
             scroll: Scroll::default(),
+            slots: SlotBank::new(),
+            editor: ColorEditor::default(),
             path: None,
             conversion: None,
+        }
+    }
+
+    /// `Pixel` del color activo con los colores de ranura de la sesión.
+    pub fn active_pixel(&self) -> Option<Pixel> {
+        let image = self.document.image(self.document.main_image())?;
+        pixel_for_choice_with(image, self.choice, self.slots.get(image.mode()))
+    }
+
+    /// Pone al día el editor con el destino y el color guardado de la selección actual.
+    pub fn sync_editor(&mut self) {
+        let current = self
+            .document
+            .image(self.document.main_image())
+            .and_then(|image| {
+                let target = EditTarget::of(image, self.choice)?;
+                let color = target.stored(image, self.slots.get(image.mode()))?;
+                Some((target, color))
+            });
+        self.editor.sync(current);
+    }
+
+    /// Aplica un color del editor: `SetPaletteColor` en indexadas (`Ok(true)` si el documento
+    /// cambió, `Ok(false)` si el color era el mismo) o escribe la ranura de ese modo
+    /// (`Ok(false)`: no es del documento, ni deshace ni marca cambios).
+    pub fn commit_edit(&mut self, commit: Commit) -> Result<bool, DocumentError> {
+        let image = self.document.main_image();
+        match commit.target {
+            EditTarget::Entry(index) => self.document.apply(Command::SetPaletteColor {
+                image,
+                index,
+                color: commit.color,
+            }),
+            EditTarget::Slot(slot) => {
+                if let Some(mode) = self.document.image(image).map(|image| image.mode()) {
+                    self.slots.get_mut(mode).set(slot, commit.color);
+                }
+                Ok(false)
+            }
         }
     }
 
@@ -77,6 +124,7 @@ impl Session {
         self.conversion = (!read.report.is_empty()).then(|| describe_report(&read.report));
         self.choice = initial_choice(&read.image);
         self.scroll = Scroll::default();
+        self.editor.reset();
         self.document = Document::new(read.image);
         self.saved_id = self.document.state_id();
         self.path = Some(absolute);
@@ -132,5 +180,7 @@ pub fn describe_saved(saved: &Saved) -> String {
     }
 }
 
+#[cfg(test)]
+mod edit_tests;
 #[cfg(test)]
 mod tests;

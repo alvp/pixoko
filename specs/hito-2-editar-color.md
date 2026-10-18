@@ -11,7 +11,8 @@ Debajo de la rejilla del panel, un editor del color elegido: deslizadores RGB y 
 ## Lo comprobado (y lo que no)
 
 - `egui` 0.37.0: `Escape` pone `focused_widget = None` (`memory/mod.rs:598`), así que un `TextEdit` **pierde el foco también con `Escape`**: se distingue por el evento del mismo fotograma. `Context::egui_wants_keyboard_input()` existe. `Margin` es `i8` en **puntos enteros** y `TextEdit::frame` recibe un `Frame`: por eso el campo va con `Frame::NONE` y `Margin::ZERO` en un rectángulo interior que calculamos nosotros (a 1,5× un margen de 3 u no es un entero de puntos).
-- **No comprobado** (lo fija el banco de pruebas, como en 11a y 11b): que un clic fuera del campo (rejilla o lienzo) le quite el foco; la nitidez real del `TextEdit` a 1,25× y 1,5×; el coste de subir la textura entera por fotograma con un lienzo grande.
+- **Comprobado después, en el banco de egui sin ventana** (al implementar): un clic fuera del campo le quita el foco (al soltar el botón); `Tab` lo saca, pero el foco pasa al lienzo (`Sense::click_and_drag`), por eso la guarda es `text_edit_focused()`; `Intro` y `Escape` le quitan el foco. egui redondea el diseño a 1/32 de punto: la forma del texto del campo queda a menos de 0,03 px de un píxel físico y el teselado redondea el texto al píxel, así que los tests aceptan 0,05 px.
+- **No comprobado** (sigue siendo de la prueba manual): la nitidez real del campo en pantalla a 1,25× y 1,5×; el coste de subir la textura entera por fotograma con un lienzo grande; que soltar el botón fuera de la ventana llegue siempre (red de seguridad).
 
 ## Decisiones (todas a confirmar; las que cambian lo que pediste, marcadas con ⚠)
 
@@ -25,7 +26,7 @@ Debajo de la rejilla del panel, un editor del color elegido: deslizadores RGB y 
 8. **`Hsl` propio del editor** (`ColorEditor.hsl`), nunca recalculado desde el `Rgba` salvo en estos casos. **Se recalcula (`Hsl::from_rgba`)** cuando `sync(destino, color)` ve **otro destino**, o el mismo con **otro color guardado** (deshacer o rehacer de ese color, abrir, cualquier cambio externo), y siempre tras `reset` (abrir). **No se recalcula** tras su propia confirmación, ni tras un deshacer o rehacer que deja ese color igual (por ejemplo, un trazo). Al editar RGB o gris, el `Hsl` nuevo es `hsl_after_rgb(anterior, nuevo)`: el de `from_rgba`, salvo que el color sea gris (entonces conserva el **matiz** anterior) o negro o blanco (conserva también la **saturación** anterior), y sigue cumpliendo `hsl.to_rgba(a) == rgba` (comportamiento 6 de `hito-2-hsl.md`). Al editar H, S o L solo cambia ese campo y el `Rgba` sale de `Hsl::to_rgba(alfa)`. Así mover S o L por 0 (o L por 1) y volver recupera el color.
 9. **Entrada transparente.** Se edita su color guardado (`Ok(true)`, un paso). El editor y el campo muestran el **guardado** (`#0000ff`), no el resuelto (`#0000ff00`). Aviso de dos líneas en el editor: `aviso: entrada transparente` y `se guarda con alfa 0`. El aviso del hexadecimal inválido tras Intro (`aviso: ` + motivo, una línea) lo tapa mientras dure. Los textos son fijos, **no repiten lo que escribió el usuario** (no hace falta `replace_missing`), y todos caben en las 32 columnas de 11b.
 10. **Deshacer y rehacer con el editor abierto.** `choice` no cambia (11b: lo reinicia solo abrir), el fotograma siguiente `sync` actualiza valores y texto, y el `Hsl` se recalcula si el color de ese destino cambió (decisión 8). Con arrastre en curso se ignoran (decisión 6).
-11. **Teclado con el campo enfocado.** Mientras `egui_wants_keyboard_input()`: `px_ui::shortcuts::gate_keys(events, wants_keyboard)` (pura) devuelve los eventos para los atajos de `px-app` (todos si no hay foco de texto; ninguno si lo hay), así teclear `ff00ab` no cambia de herramienta (`f`), de color (`0` a `9`) ni de vista, y `Ctrl+Z` o `Ctrl+Y` con el campo enfocado no tocan el documento (el `TextEdit` tiene el suyo). `Canvas::interact_ordered` ignora entonces `Home`, `+`, `-` y `Escape`. **El cambio en `canvas.rs` es aditivo** (una guarda con `ctx.egui_wants_keyboard_input()`; sin foco de texto no cambia nada) y los tests de la unidad 2 pasan sin tocarse; si alguno no pasara, se para y se avisa. Al salir del campo (Intro, `Escape`, clic fuera, `Tab`) los atajos vuelven.
+11. **Teclado con el campo enfocado.** Mientras `Context::text_edit_focused()` (no `egui_wants_keyboard_input()`, que también es cierto si `Tab` pasa el foco al lienzo, comprobado en el banco): `px_ui::shortcuts::gate_keys(events, wants_keyboard)` (pura) devuelve los eventos para los atajos de `px-app` (todos si no hay foco de texto; ninguno si lo hay), así teclear `ff00ab` no cambia de herramienta (`f`), de color (`0` a `9`) ni de vista, y `Ctrl+Z` o `Ctrl+Y` con el campo enfocado no tocan el documento (el `TextEdit` tiene el suyo). `Canvas::interact_ordered` ignora entonces `Home`, `+`, `-` y `Escape`. **El cambio en `canvas.rs` es aditivo** (una guarda con `ctx.text_edit_focused()`; sin foco de texto no cambia nada) y los tests de la unidad 2 pasan sin tocarse; si alguno no pasara, se para y se avisa. Al salir del campo (Intro, `Escape`, clic fuera, `Tab`) los atajos vuelven.
 12. **Colocación.** El editor se **ancla al fondo del panel**, en posición estable: `top_px = ((alto_px − H·n) div n)·n` (múltiplo de `n` y calculado con el alto **redondeado** a píxeles físicos, no con el borde en puntos de egui), de modo que no se mueve al cambiar el número de entradas ni de filas. La **rejilla usa la altura restante**: `visible_rows_reserved(alto_px, reservado_px, n)`, función nueva con la altura reservada como parámetro; `visible_rows(alto, n)` se conserva con su firma y es `visible_rows_reserved(alto, 0, n)` (así los tests de 11b, que la llaman con dos argumentos, no cambian). Con `alto_px < (41 + 14 + H)·n` (no cabe una fila de rejilla más el editor) el **editor se oculta** y la rejilla usa todo el alto como en 11b; **nunca en silencio**: mientras esté oculto con un destino válido, la barra de estado dice `aviso: ventana baja: editor oculto` (`PanelOutput.editor_hidden`; un aviso o error más reciente tiene prioridad; función pura `status_error` en `px-app`). Si había un arrastre en curso, se cancela. Sin interruptor.
 
 ## Geometría (en `u`, `n = text_scale(ppp)` píxeles físicos por `u`; constantes `pub const` en `edit_layout.rs`, que es el único sitio)
@@ -109,10 +110,11 @@ impl ColorEditor {
     pub fn begin(&mut self, control: Control, value: u32) -> bool; // false sin destino o con arrastre en curso
     pub fn drag(&mut self, value: u32);
     pub fn release(&mut self) -> Option<Commit>;           // Some solo si el color cambió respecto al inicio
-    pub fn cancel(&mut self);
+    pub fn cancel(&mut self);                              // termina el arrastre y restaura; después drag/release no hacen nada
     pub fn dragging(&self) -> bool;
+    pub fn dragging_control(&self) -> Option<Control>;     // el deslizador que se arrastra
     pub fn preview(&self) -> Option<(EditTarget, Rgba)>;   // provisional mientras dure y no esté cancelado
-    pub fn shown(&self) -> Option<(Rgba, Hsl)>;            // provisional o guardado
+    pub fn shown(&self) -> Option<(Rgba, Hsl)>;            // provisional o guardado; None sin destino (tras `reset`)
     pub fn type_hex(&mut self, target: EditTarget, base: Rgba, text: String);
     pub fn hex_display(&self) -> Option<String>;           // el texto pendiente, si lo hay
     /// Intro (`blur` falso) o pérdida del foco (`blur` verdadero). Nada pendiente: `Nothing`.
@@ -120,6 +122,7 @@ impl ColorEditor {
     /// Inválido: con Intro conserva texto y aviso; con `blur` borra el texto (revierte).
     pub fn confirm_hex(&mut self, mode: Mode, blur: bool) -> HexOutcome;
     pub fn escape_hex(&mut self);                          // borra lo pendiente, sin aviso
+    /// Las dos líneas del aviso, **con** el prefijo `aviso: ` ya puesto (vacías si no hay aviso).
     pub fn notice(&self, transparent: bool) -> [String; 2];
 }
 ```
