@@ -11,7 +11,7 @@ use px_core::{Document, Image, Mode, Palette, Rgba};
 use px_ui::canvas::CanvasEvent;
 use px_ui::color_edit::Control;
 use px_ui::pick::{EraseError, eraser_pixel};
-use px_ui::tool::{Tool, ToolAction, ToolState};
+use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState};
 
 use crate::session::Session;
 
@@ -449,4 +449,134 @@ fn fila_13_con_varias_causas_a_la_vez_basta_con_una_para_bloquear() {
         Some(NO_INDEX_NOTICE)
     );
     assert_eq!(tools.tool(), Tool::Eraser);
+}
+
+// ---------------------------------------------------------------------------------------
+// Fila 16: la regla de la entrada de alfa 0 en el aviso de elegir el borrador.
+// ---------------------------------------------------------------------------------------
+
+/// La paleta de la fila 14: `[azul, rojo, (0,255,0,α0), azul claro, (9,9,9,α0)]`, sin
+/// `transparent_index`; `alfa_2` y `alfa_4` son el alfa guardado de las entradas 2 y 4.
+fn indexed_with_alpha_zero_entries(alfa_2: u8, alfa_4: u8) -> Image {
+    let palette = Palette::from_colors([
+        Rgba::opaque(0, 0, 255),
+        Rgba::opaque(255, 0, 0),
+        Rgba::new(0, 255, 0, alfa_2),
+        Rgba::opaque(100, 150, 255),
+        Rgba::new(9, 9, 9, alfa_4),
+    ])
+    .expect("paleta");
+    Image::new_indexed(8, 8, palette).expect("imagen indexada")
+}
+
+/// Caso 14(a): sin `transparent_index`, con las entradas 2 y 4 de alfa 0.
+fn case_14a() -> Image {
+    indexed_with_alpha_zero_entries(0, 0)
+}
+
+/// Caso 14(d): sin `transparent_index` y con solo la entrada 4 de alfa 0.
+fn case_14d() -> Image {
+    indexed_with_alpha_zero_entries(255, 0)
+}
+
+#[test]
+fn fila_16_borrador_con_el_caso_14a_elige_y_no_avisa() {
+    let mut tools = ToolState::new();
+
+    let notice = select(&mut tools, Tool::Eraser, false, &case_14a());
+
+    assert_eq!(tools.tool(), Tool::Eraser);
+    assert_eq!(notice, None, "hay una entrada de alfa 0: no avisa");
+}
+
+#[test]
+fn fila_16_borrador_con_el_caso_14d_elige_y_no_avisa() {
+    let mut tools = ToolState::new();
+
+    let notice = select(&mut tools, Tool::Eraser, false, &case_14d());
+
+    assert_eq!(tools.tool(), Tool::Eraser);
+    assert_eq!(notice, None, "solo la entrada 4 es de alfa 0: no avisa");
+}
+
+#[test]
+fn fila_16_repetir_e_con_entrada_de_alfa_0_no_avisa_ninguna_de_las_veces() {
+    let mut tools = tools_with(Tool::Eraser);
+    let image = case_14a();
+
+    assert_eq!(select(&mut tools, Tool::Eraser, false, &image), None);
+    assert_eq!(select(&mut tools, Tool::Eraser, false, &image), None);
+    assert_eq!(tools.tool(), Tool::Eraser);
+}
+
+#[test]
+fn fila_16_con_las_entradas_de_alfa_0_convertidas_en_opacas_avisa() {
+    // Los casos 14(a) y 14(d) con todas sus entradas de alfa 0 pasadas a alfa 255.
+    let image = indexed_with_alpha_zero_entries(255, 255);
+    let mut tools = ToolState::new();
+
+    let notice = select(&mut tools, Tool::Eraser, false, &image);
+
+    assert_eq!(tools.tool(), Tool::Eraser);
+    assert_eq!(notice.as_deref(), Some(NO_INDEX_NOTICE));
+}
+
+#[test]
+fn fila_16_una_sola_entrada_que_pasa_de_alfa_0_a_opaca_cambia_el_aviso() {
+    // Se calcula al elegir, no se guarda: la misma paleta, antes y después de editarla.
+    let mut tools = ToolState::new();
+
+    assert_eq!(select(&mut tools, Tool::Eraser, false, &case_14d()), None);
+    let editada = indexed_with_alpha_zero_entries(255, 255);
+    assert_eq!(
+        select(&mut tools, Tool::Eraser, false, &editada).as_deref(),
+        Some(NO_INDEX_NOTICE)
+    );
+}
+
+#[test]
+fn fila_16_con_busy_verdadero_y_entrada_de_alfa_0_tampoco_cambia_nada() {
+    let mut tools = ToolState::new();
+
+    let notice = select(&mut tools, Tool::Eraser, true, &case_14a());
+
+    assert_eq!(tools.tool(), Tool::Pencil);
+    assert_eq!(notice, None);
+}
+
+#[test]
+fn fila_16_el_aviso_de_pulsar_tampoco_sale_con_entrada_de_alfa_0() {
+    // Sin `Refused` ni en el `Begin` ni durante el trazo ni en el `End`.
+    for image in [case_14a(), case_14d()] {
+        let mut doc = Document::new(image);
+        let id = doc.main_image();
+        let mut tools = tools_with(Tool::Eraser);
+
+        for event in [
+            CanvasEvent::StrokeBegin((1, 1)),
+            CanvasEvent::StrokeMove((3, 1)),
+            CanvasEvent::StrokeEnd,
+        ] {
+            tools
+                .canvas_event_with(&mut doc, id, None, event)
+                .expect("evento");
+            assert!(tools.take_events().is_empty(), "sin Refused tras {event:?}");
+        }
+    }
+}
+
+#[test]
+fn fila_16_el_aviso_de_pulsar_sale_con_las_entradas_de_alfa_0_convertidas_en_opacas() {
+    let mut doc = Document::new(indexed_with_alpha_zero_entries(255, 255));
+    let id = doc.main_image();
+    let mut tools = tools_with(Tool::Eraser);
+
+    tools
+        .canvas_event_with(&mut doc, id, None, CanvasEvent::StrokeBegin((1, 1)))
+        .expect("pulsar");
+
+    assert_eq!(
+        tools.take_events(),
+        vec![ToolEvent::Refused(EraseError::NoTransparentIndex)]
+    );
 }
