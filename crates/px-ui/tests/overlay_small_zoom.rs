@@ -6,8 +6,11 @@
 //! las formas del fotograma por el teselador de egui (`Context::tessellate`, con los mismos
 //! ajustes que la app, suavizado de bordes incluido) y rasteriza **a mano** lo teselado en el centro
 //! de cada píxel físico del bloque de cada píxel pendiente: el color que se vería. Se compara con el
-//! color que debe verse (el de la superposición sobre la imagen, o sobre el fondo si su alfa es
-//! menor que 255, que es lo que sustituye al píxel al soltar). Se hace a las cinco escalas y con
+//! color que debe verse (el de la superposición sobre la imagen, o sobre el **damero de
+//! transparencia** si su alfa es menor que 255, que es lo que sustituye al píxel al soltar: desde
+//! la unidad 17b el fondo bajo la transparencia es el damero y no el gris liso; el rasterizador
+//! muestrea la textura 2×2 del damero con envoltura y sin filtro, como la GPU). Se hace a las
+//! cinco escalas y con
 //! zoom ×1, ×2 y ×3. El zoom de la vista se mide en **píxeles físicos** (`View` trabaja en ellos),
 //! así que a ×1 un píxel de imagen mide 1 píxel físico con cualquier `ppp` (1,0, 1,25, 1,5, 2,0 y
 //! 3,0), y a ×2 y ×3, 2 y 3.
@@ -22,7 +25,9 @@
 use egui::epaint::{ClippedPrimitive, Primitive, Vertex};
 use egui::{Color32, Pos2, Rect, TextureId, pos2};
 use px_core::{Image, Mode, Pixel, Rgba};
-use px_ui::canvas::{BACKGROUND, Canvas, CanvasInfo};
+use px_ui::canvas::{Canvas, CanvasInfo};
+use px_ui::palette_grid::{CHECK_A, CHECK_B};
+use px_ui::text::text_scale;
 use px_ui::view::ViewOp;
 
 mod common;
@@ -127,10 +132,30 @@ fn baricentricas(p: Pos2, a: Pos2, b: Pos2, c: Pos2) -> Option<[f32; 3]> {
     (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0).then_some([w0, w1, w2])
 }
 
+/// Color de un texel de la textura 2×2 del damero (por filas: A, B, B, A), con `NEAREST` y
+/// envoltura `Repeat`, en la coordenada de textura `(u, v)`.
+fn texel_del_damero(u: f32, v: f32) -> Visto {
+    let tx = (u * 2.0).floor().rem_euclid(2.0) as usize;
+    let ty = (v * 2.0).floor().rem_euclid(2.0) as usize;
+    let c = if (tx + ty).is_multiple_of(2) {
+        CHECK_A
+    } else {
+        CHECK_B
+    };
+    Visto::de_color(Color32::from_rgb(c.r, c.g, c.b))
+}
+
 /// Color que se ve en el punto `p` (puntos de egui) al pintar `primitivas` en orden. Las mallas
-/// con la textura de la imagen valen azul opaco por el tinte de sus vértices; las demás (rellenos
-/// y formas) usan el color de sus vértices tal cual (la textura es el píxel blanco de la fuente).
-fn rasteriza(primitivas: &[ClippedPrimitive], imagen: TextureId, p: Pos2) -> Visto {
+/// con la textura de la imagen valen azul opaco por el tinte de sus vértices; las del damero
+/// muestrean su textura 2×2 en el uv interpolado y la multiplican por el tinte; las demás
+/// (rellenos y formas) usan el color de sus vértices tal cual (la textura es el píxel blanco de la
+/// fuente).
+fn rasteriza(
+    primitivas: &[ClippedPrimitive],
+    imagen: TextureId,
+    damero: TextureId,
+    p: Pos2,
+) -> Visto {
     let mut visto = Visto::VACIO;
     for primitiva in primitivas {
         if !primitiva.clip_rect.contains(p) {
@@ -161,12 +186,24 @@ fn rasteriza(primitivas: &[ClippedPrimitive], imagen: TextureId, p: Pos2) -> Vis
             ];
             if let Some(w) = baricentricas(p, v[0].pos, v[1].pos, v[2].pos) {
                 let c = [color_de(v[0]), color_de(v[1]), color_de(v[2])];
-                let mezcla = Visto {
+                let mut mezcla = Visto {
                     r: w[0] * c[0].r + w[1] * c[1].r + w[2] * c[2].r,
                     g: w[0] * c[0].g + w[1] * c[1].g + w[2] * c[2].g,
                     b: w[0] * c[0].b + w[1] * c[1].b + w[2] * c[2].b,
                     a: w[0] * c[0].a + w[1] * c[1].a + w[2] * c[2].a,
                 };
+                if malla.texture_id == damero {
+                    // El color de la malla es el tinte; el del damero lo da el texel.
+                    let u = w[0] * v[0].uv.x + w[1] * v[1].uv.x + w[2] * v[2].uv.x;
+                    let t = w[0] * v[0].uv.y + w[1] * v[1].uv.y + w[2] * v[2].uv.y;
+                    let texel = texel_del_damero(u, t);
+                    mezcla = Visto {
+                        r: texel.r * mezcla.r,
+                        g: texel.g * mezcla.g,
+                        b: texel.b * mezcla.b,
+                        a: texel.a * mezcla.a,
+                    };
+                }
                 visto = visto.debajo_de(mezcla);
             }
         }
@@ -174,13 +211,22 @@ fn rasteriza(primitivas: &[ClippedPrimitive], imagen: TextureId, p: Pos2) -> Vis
     visto
 }
 
-/// Color que debe verse: el del píxel pendiente sobre la imagen azul (alfa 255) o sobre el fondo
-/// (alfa menor que 255: el píxel se sustituye).
-fn esperado(color: Rgba) -> Visto {
+/// Tono del damero en el píxel físico `(px, py)` con la esquina de la imagen en `origen` y la
+/// casilla de `cell` píxeles físicos, calculado aparte de la implementación: la casilla `(0, 0)`
+/// es A y alternan por paridad de `floor((px − ox)/cell) + floor((py − oy)/cell)`.
+fn tono_del_damero(px: i64, py: i64, origen: (i64, i64), cell: i64) -> Color32 {
+    let par = ((px - origen.0).div_euclid(cell) + (py - origen.1).div_euclid(cell)) % 2 == 0;
+    let c = if par { CHECK_A } else { CHECK_B };
+    Color32::from_rgb(c.r, c.g, c.b)
+}
+
+/// Color que debe verse: el del píxel pendiente sobre la imagen azul (alfa 255) o sobre el damero
+/// (alfa menor que 255: el píxel se sustituye), con `damero` el tono del damero en ese píxel físico.
+fn esperado(color: Rgba, damero: Color32) -> Visto {
     let base = if color.a == 255 {
         Visto::de_color(AZUL)
     } else {
-        Visto::de_color(BACKGROUND)
+        Visto::de_color(damero)
     };
     let a = f32::from(color.a) / 255.0;
     let sobre = Visto {
@@ -246,6 +292,11 @@ fn comprueba(ppp: f32, zoom: u32) -> Vec<String> {
     let overlay = superposicion();
     let (primitivas, info) = banco.pinta(&overlay);
     let imagen = banco.canvas.texture_id().expect("hay textura");
+    let damero = banco
+        .canvas
+        .checker_texture_id()
+        .expect("el damero tiene su textura");
+    let cell = 8 * i64::from(text_scale(ppp));
     let rect: Rect = info.image_rect.expect("hay imagen");
     let origen = (
         (rect.min.x * ppp).round() as i64,
@@ -256,13 +307,13 @@ fn comprueba(ppp: f32, zoom: u32) -> Vec<String> {
     assert_eq!(z, i64::from(zoom), "el zoom se mide en píxeles físicos");
     let mut fallos = Vec::new();
     for (x, y, color) in &overlay {
-        let esperado = esperado(*color);
         for dy in 0..z {
             for dx in 0..z {
                 let (px, py) = (
                     origen.0 + i64::from(*x) * z + dx,
                     origen.1 + i64::from(*y) * z + dy,
                 );
+                let esperado = esperado(*color, tono_del_damero(px, py, origen, cell));
                 // Un poco desplazado del centro exacto: en un vértice o una arista compartidos la GPU
                 // aplica una regla de desempate y cuenta el píxel una sola vez; aquí se evita el
                 // empate para no contarlo dos veces.
@@ -270,7 +321,7 @@ fn comprueba(ppp: f32, zoom: u32) -> Vec<String> {
                     (px as f32 + 0.5 + 0.0013) / ppp,
                     (py as f32 + 0.5 + 0.0007) / ppp,
                 );
-                let visto = rasteriza(&primitivas, imagen, centro);
+                let visto = rasteriza(&primitivas, imagen, damero, centro);
                 if !visto.cerca(esperado, 0.02) {
                     fallos.push(format!(
                         "ppp {ppp} ×{zoom} (píxel de {z} px físicos): el píxel de imagen ({x}, {y}) con {color:?} se ve {visto:?} en el píxel físico ({px}, {py}) y debía verse {esperado:?}"
@@ -291,13 +342,17 @@ fn los_pixeles_no_pendientes_se_ven_azules_con_cualquier_escala_y_zoom() {
             banco.con_zoom(zoom);
             let (primitivas, info) = banco.pinta(&[]);
             let imagen = banco.canvas.texture_id().expect("textura");
+            let damero = banco
+                .canvas
+                .checker_texture_id()
+                .expect("el damero tiene su textura");
             let rect = info.image_rect.expect("imagen");
             // Fuera de la diagonal de la malla de la imagen, donde dos triángulos se tocan.
             let centro = pos2(
                 (rect.min.x + rect.max.x) / 2.0 + 0.3,
                 (rect.min.y + rect.max.y) / 2.0 + 0.1,
             );
-            let visto = rasteriza(&primitivas, imagen, centro);
+            let visto = rasteriza(&primitivas, imagen, damero, centro);
             assert!(
                 visto.cerca(Visto::de_color(AZUL), 0.02),
                 "ppp {ppp} ×{zoom}: {visto:?}"

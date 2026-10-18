@@ -5,9 +5,13 @@
 //! a la herramienta, `refresh` si el documento cambió y `Canvas::paint` con la superposición de
 //! `ToolState::preview` convertida con `pixel_rgba`.
 //!
-//! Lo pintado se lee de las formas del fotograma (`Shape::Rect` y su relleno): el fotograma sin
-//! trazo da la base (el fondo del lienzo) y cada fotograma con trazo debe añadir un rectángulo de
-//! `BACKGROUND` por píxel pendiente, en el sitio de ese píxel, y ningún otro.
+//! Lo pintado se lee de las formas del fotograma: los rectángulos rellenos (`Shape::Rect`) y las
+//! mallas con la textura del damero (`Canvas::checker_texture_id`). Desde la unidad 17b un píxel
+//! borrado se ve como el damero de transparencia y no como el fondo liso: el fotograma sin trazo
+//! da la base (el fondo liso del lienzo y el cuadrilátero del damero de la imagen) y cada
+//! fotograma con trazo debe añadir **un cuadrilátero del damero** por píxel pendiente, en el sitio
+//! de ese píxel y sin tinte, y ningún rectángulo ni otra forma más (specs/hito-2-damero-lienzo.md,
+//! decisión 8 y fila 7; antes era un rectángulo de `BACKGROUND` por píxel).
 //!
 //! Cada cambio de estado del botón va en su propio fotograma (egui necesita uno por pulsación o
 //! soltado). 800×600 con 64×48 da zoom ×12 y las posiciones son enteras.
@@ -16,7 +20,7 @@ use std::collections::BTreeSet;
 
 use egui::{
     Color32, Context, Event, FullOutput, ImageData, Modifiers, PointerButton, Pos2, RawInput, Rect,
-    Shape, pos2, vec2,
+    Shape, TextureId, pos2, vec2,
 };
 use px_core::{Document, Image, ImageId, Mode, Pixel, PixelEdit, Rgba};
 use px_ui::canvas::{BACKGROUND, Canvas, CanvasInfo};
@@ -87,6 +91,39 @@ fn rectangulos(output: &FullOutput) -> Vec<(Rect, Color32)> {
     let mut salida = Vec::new();
     for clipped in &output.shapes {
         recoge_rectangulos(&clipped.shape, &mut salida);
+    }
+    salida
+}
+
+/// Mallas con la textura `textura` (la del damero), con su caja y su tinte (el color de sus
+/// vértices, que debe ser el mismo en todos). Aplana `Shape::Vec`.
+fn recoge_mallas(shape: &Shape, textura: TextureId, salida: &mut Vec<(Rect, Color32)>) {
+    match shape {
+        Shape::Mesh(malla) if malla.texture_id == textura => {
+            let mut caja = Rect::NOTHING;
+            for v in &malla.vertices {
+                caja.extend_with(v.pos);
+            }
+            let tinte = malla.vertices.first().expect("malla con vértices").color;
+            assert!(
+                malla.vertices.iter().all(|v| v.color == tinte),
+                "todos los vértices de una malla del damero llevan el mismo tinte"
+            );
+            salida.push((caja, tinte));
+        }
+        Shape::Vec(formas) => {
+            for forma in formas {
+                recoge_mallas(forma, textura, salida);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn mallas_del_damero(output: &FullOutput, textura: TextureId) -> Vec<(Rect, Color32)> {
+    let mut salida = Vec::new();
+    for clipped in &output.shapes {
+        recoge_mallas(&clipped.shape, textura, &mut salida);
     }
     salida
 }
@@ -190,6 +227,10 @@ struct Sesion {
     banco: Banco,
     /// Rectángulos del fotograma en reposo: el fondo del lienzo, sin superposición.
     base: Vec<(Rect, Color32)>,
+    /// Textura del damero y sus mallas del fotograma en reposo: el cuadrilátero del damero de
+    /// fondo de la imagen, sin superposición.
+    damero: TextureId,
+    base_damero: Vec<(Rect, Color32)>,
     /// `to_rgba8` de la imagen antes de empezar.
     bytes: Vec<u8>,
     rect: Rect,
@@ -206,10 +247,18 @@ impl Sesion {
         let reposo = banco.paso(vec![]);
         assert!(reposo.pendientes.is_empty());
         let base = rectangulos(&reposo.output);
+        let damero = banco
+            .canvas
+            .checker_texture_id()
+            .expect("el damero tiene su textura");
+        let base_damero = mallas_del_damero(&reposo.output, damero);
+        assert_eq!(base_damero.len(), 1, "un cuadrilátero de damero de fondo");
         let bytes = to_rgba8(banco.imagen());
         Sesion {
             banco,
             base,
+            damero,
+            base_damero,
             bytes,
             rect,
             zoom,
@@ -269,20 +318,31 @@ fn esquinas_esperadas(
 /// Lo que debe cumplir un fotograma con `n` píxeles pendientes y el botón aún abajo.
 fn comprueba_fotograma_con_trazo(s: &Sesion, f: &Fotograma, n: usize, etiqueta: &str) {
     let rects = rectangulos(&f.output);
+    let mallas = mallas_del_damero(&f.output, s.damero);
     assert_eq!(f.pendientes.len(), n, "{etiqueta}: píxeles pendientes");
+    // Antes: un rectángulo de `BACKGROUND` por píxel pendiente y la base intacta. Ahora la
+    // superposición del borrador (alfa 0) no añade ningún rectángulo: son cuadriláteros del damero.
     assert_eq!(
-        rects.len(),
-        s.base.len() + n,
-        "{etiqueta}: un rectángulo por píxel pendiente y nada más"
+        rects, s.base,
+        "{etiqueta}: la superposición no añade rectángulos (la base no cambia)"
     );
     assert_eq!(
-        rects[..s.base.len()],
-        s.base[..],
+        mallas.len(),
+        s.base_damero.len() + n,
+        "{etiqueta}: un cuadrilátero del damero por píxel pendiente y nada más"
+    );
+    assert_eq!(
+        mallas[..s.base_damero.len()],
+        s.base_damero[..],
         "{etiqueta}: la base no cambia"
     );
-    let extras = &rects[s.base.len()..];
+    let extras = &mallas[s.base_damero.len()..];
     for (rect, fill) in extras {
-        assert_eq!(*fill, BACKGROUND, "{etiqueta}: ningún otro color: {rect:?}");
+        assert_eq!(
+            *fill,
+            Color32::WHITE,
+            "{etiqueta}: ningún otro color (sin tinte): {rect:?}"
+        );
         assert!(
             (rect.width() - s.zoom as f32).abs() < 1e-3
                 && (rect.height() - s.zoom as f32).abs() < 1e-3,
@@ -314,7 +374,7 @@ fn el_fondo_del_lienzo_es_el_gris_40() {
 }
 
 #[test]
-fn fila_10_cada_fotograma_pinta_un_rectangulo_de_fondo_por_pixel_pendiente() {
+fn fila_10_cada_fotograma_pinta_un_cuadrilatero_del_damero_por_pixel_pendiente() {
     let mut s = Sesion::nueva();
     let texture = s.banco.canvas.texture_id().expect("la textura está subida");
     let subidas = s.banco.canvas.preview_uploads();
@@ -401,11 +461,16 @@ fn fila_10_tras_el_end_y_el_refresh_hay_una_sola_subida_con_esos_pixeles_transpa
         }
     }
 
-    // Sin superposición: solo la base. El fondo que se ve bajo esos píxeles es `BACKGROUND`, el
-    // mismo que pintaba la superposición.
+    // Sin superposición: solo la base. El fondo que se ve bajo esos píxeles es el damero de fondo
+    // de la imagen, el mismo que pintaba la superposición (y fuera de la imagen, `BACKGROUND`).
     let rects = rectangulos(&f.output);
     assert_eq!(rects, s.base, "sin superposición tras el End");
     assert_eq!(rects.first().map(|(_, fill)| *fill), Some(BACKGROUND));
+    assert_eq!(
+        mallas_del_damero(&f.output, s.damero),
+        s.base_damero,
+        "sin superposición tras el End: solo el damero de fondo"
+    );
     f.output.textures_delta.clear();
 
     // `to_rgba8` de la imagen: esos píxeles con alfa 0 y el resto como estaba.
