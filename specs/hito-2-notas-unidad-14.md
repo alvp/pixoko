@@ -14,6 +14,7 @@ Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unida
 
 ## API
 
+- **`Image::uses_index` (o un histograma de índices), aditivo en `px-core`**, para que quitar una entrada de la paleta no recorra los píxeles con `get_pixel` (≈ 1,3 s con 16384² y la entrada sin usar, estimado). [`hito-2-paleta-operaciones.md`](hito-2-paleta-operaciones.md), «Para la unidad 14».
 - **`screen_to_image_i32` conserva un parámetro `Size` sin usar** (`_image`, [`view.rs`](../crates/px-ui/src/view.rs)). Quitarlo toca las 14 llamadas de `crates/px-ui/tests/view_i32.rs` y la de `canvas.rs`. [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md), decisión 7.
 - **Campo propio `tool` en `TitleInfo`**, en vez de meter `status_text` dentro de `color`. Tocaría los 13 literales de los tests de la unidad 6. [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md), decisión 6.
 - **Acceso por filas (y bytes) a `Image`.** Unidad 12 del hito. [`hito-1-png.md`](hito-1-png.md), «Para el hito 2»; reparto en [`hito-2-hsl.md`](hito-2-hsl.md), «Reparto de las notas».

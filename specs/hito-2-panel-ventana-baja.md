@@ -2,6 +2,8 @@
 
 Estado: **aprobada** (2026-10-18; decisiones 2, 3, 6 y 7 de la propuesta, con los cambios del visto bueno incorporados al texto, que **prevalecen sobre cualquier otra frase de la página**: B sin aviso permanente en la barra; el mínimo se fija al empezar y se actualiza al cambiar `pixels_per_point`; variable de entorno `PIXOKO_SIN_MINIMO`; el texto pendiente del campo pertenece a un par (documento, entrada); «mostrar la elegida» solo en los casos de la decisión 5). **Sustituye a la decisión 12 de [`hito-2-editar-color.md`](hito-2-editar-color.md)** («con `alto_px < (41 + 14 + H)·n` el editor se oculta») y a su fila 18, que se han actualizado. La decisión 7 de la propuesta (aviso de la barra sin retraso) queda **sin objeto**: B no avisa. No toca `px-core` ni `px-raster`.
 
+**Actualización de la unidad 11d (2026-10-18), que prevalece:** el editor de **indexadas** suma el alto de los botones (`editor_height_u(Indexed)` = **242** en lugar de 186; RGBA 186, GrayAlpha 112 y Gray 94 no cambian). Las cifras normativas de esta página son ahora: bloque de indexadas y mínimo del panel **297·n** (antes 241·n), ventana mínima **317, 253,6, 422,67, 317 y 317 pt** a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0 (antes 261, 208,8, 348, 261 y 261), `top_px` con el panel a 700·n **458·n** (indexadas) y la regla de la prueba, **«la ventana mínima no pasa del 60 % de 720 puntos (432)»** en lugar de la mitad de 768. Las cifras de «Lo comprobado» (186, 240/241 px, 14 filas) son las de antes de los botones y se dejan como historia. Ver [`hito-2-paleta-operaciones.md`](hito-2-paleta-operaciones.md).
+
 ## Lo que se ve
 
 Al reducir la altura funciona, pero se siente brusco: salto cuando el editor aparece o desaparece, parpadeo al arrastrar el borde y retraso.
@@ -22,11 +24,11 @@ Con la lógica pura y el banco de egui sin ventana (`Context::run_ui`, sin GPU n
 
 Funciones puras en `px_ui::edit_layout`:
 
-- `min_panel_height_px(n) = (GRID_Y_U + PITCH_U + editor_height_u_max())·n`, sin literales (hoy 241·`n`).
+- `min_panel_height_px(n) = (GRID_Y_U + PITCH_U + editor_height_u_max())·n`, sin literales (hoy 297·`n`; 241·`n` antes de los botones de 11d).
 - `min_window_height_pt(ppp) = (bar_height_px(n) + min_panel_height_px(n)) / ppp`, con `n = text_scale(ppp)`. Es el mínimo en **píxeles lógicos** (los puntos de egui).
-- `editor_height_u_max()` es el mayor `editor_height_u` entre modos (hoy 186), no el del modo actual: abrir una imagen Gray no cambia el mínimo ni redimensiona la ventana.
+- `editor_height_u_max()` es el mayor `editor_height_u` entre modos (hoy 242, el de indexadas), no el del modo actual: abrir una imagen Gray no cambia el mínimo ni redimensiona la ventana.
 
-Mínimo de alto, en píxeles lógicos: **261** a `ppp` 1,0, **208,8** a 1,25, **348** a 1,5, **261** a 2,0 y **261** a 3,0. En una pantalla de 768 de alto lógico el peor (348) es el 45 % del alto: no es absurdo. Criterio de la prueba: el mayor de estos cinco no pasa de la mitad de 768 (384) y el menor no baja de lo que cabe una fila y el editor, `min_panel_height_px(n)/ppp`.
+Mínimo de alto, en píxeles lógicos: **317** a `ppp` 1,0, **253,6** a 1,25, **422,67** a 1,5, **317** a 2,0 y **317** a 3,0 (antes de 11d: 261, 208,8, 348, 261 y 261). El peor (422,67) es el 58,7 % de 720 (1080p al 150 %). Criterio de la prueba: el mayor de estos cinco no pasa del **60 % de 720 (432)** y el menor no baja de lo que cabe una fila y el editor, `min_panel_height_px(n)/ppp`.
 
 **Ancho mínimo** (ajuste del 2026-10-18; antes era 1 punto, sin restricción). Se calcula como el alto, en unidades de la maqueta: el ancho fijo del panel (`PANEL_WIDTH_U`, 233 u) más una anchura mínima de lienzo, `MIN_CANVAS_WIDTH_U = 128` u (constante nueva en `px_ui::edit_layout`). Funciones puras en el mismo módulo:
 
@@ -53,7 +55,7 @@ Si el panel mide menos que el bloque del modo, `block_height_px(mode, n) = (GRID
 
 ### Una sola función para la altura del editor
 
-`editor_height_u(mode)` es el único sitio: se **deriva** de la maqueta (`notice_y_u(mode) + NOTICE_LINES·ROW_H_U + BLOCK_GAP_U`, hoy 186, 112 y 94) en vez de llevar literales, y de ella cuelgan `editor_height_u_max`, `block_height_px`, `min_panel_height_px`, `min_window_height_pt` y `panel_layout` (que sustituye a `editor_layout`). La unidad 11d solo añade el alto de los botones al cálculo de `field_y_u` o `notice_y_u`. Un test fija 186, 112 y 94 mientras no haya botones.
+`editor_height_u(mode)` es el único sitio: se **deriva** de la maqueta (`notice_y_u(mode) + NOTICE_LINES·ROW_H_U + BLOCK_GAP_U`, hoy 242, 186, 112 y 94: indexadas con los botones de 11d, RGBA, GrayAlpha y Gray; la derivación suma `buttons_height_u`) en vez de llevar literales, y de ella cuelgan `editor_height_u_max`, `block_height_px`, `min_panel_height_px`, `min_window_height_pt` y `panel_layout` (que sustituye a `editor_layout`). La unidad 11d solo añade el alto de los botones al cálculo de `field_y_u` o `notice_y_u`. Un test fija 242, 186, 112 y 94 (con los botones de 11d, que suma `buttons_height_u` en indexadas).
 
 ### Texto pendiente del campo hexadecimal
 
@@ -73,10 +75,10 @@ El texto pendiente pertenece a un par **(documento, entrada)** y a un color base
 
 | # | Entrada | Esperado |
 | --- | --- | --- |
-| 1 | `min_panel_height_px(n)` para `n` = 1, 2, 3; `min_window_height_pt` a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0; `min_enabled`; `min_inner_size` | 241·`n`; 261, 208,8, 348, 261 y 261 pt (±0,01); ninguno pasa de 384 (la mitad de 768); `min_enabled(Some("1"))` falso y `None`, `Some("0")`, `Some("")` verdadero; `min_inner_size(ppp, false)` es `None` |
+| 1 | `min_panel_height_px(n)` para `n` = 1, 2, 3; `min_window_height_pt` a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0; `min_enabled`; `min_inner_size` | 297·`n`; 317, 253,6, 422,67, 317 y 317 pt (±0,01); ninguno pasa de 432 (60 % de 720); `min_enabled(Some("1"))` falso y `None`, `Some("0")`, `Some("")` verdadero; `min_inner_size(ppp, false)` es `None` |
 | 1b | `min_window_width_u`; `min_window_width_pt` a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0 (y con `ppp` no finito o ≤ 0); `min_inner_size(ppp, true)` y `(ppp, false)` | 361 u (233 + 128); 361, 288,8, 481,33, 361 y 361 pt (±0,01), `ppp` inválido como 1,0; ninguno pasa de 683 (la mitad de 1366); el lienzo mínimo es `128·n/ppp` pt (±0,001) y el ancho de `min_inner_size` es `min_window_width_pt`; con `enabled` falso es `None` (también el ancho), con `PIXOKO_SIN_MINIMO=1` vía `min_enabled` |
-| 2 | `editor_height_u` frente a la maqueta; después, una altura de botones simulada de 20 u | 186, 112 y 94 coinciden con la derivación; con 20 u más cambian `block_height_px`, el mínimo y `panel_layout` **sin tocar nada más** |
-| 3 | `panel_layout` y el banco, indexada, alto del panel 241·`n`, 240·`n`, 200·`n` y 100·`n`, a `ppp` 1,0 y 2,0 | el editor se ve siempre y la rejilla tiene 1 fila; con 241·`n` y con `offset_px = 0` a 240·`n` el `top_px` es 55·`n` (sin salto); `max_offset_px` = `((bloque − alto) div n)·n`; con `offset = max`, `top_px` = `alto − H·n` |
+| 2 | `editor_height_u` frente a la maqueta; después, una altura de botones simulada de 20 u | 242, 186, 112 y 94 coinciden con la derivación; con 20 u más cambian `block_height_px`, el mínimo y `panel_layout` **sin tocar nada más** |
+| 3 | `panel_layout` y el banco, indexada, alto del panel 241·`n`, 240·`n`, 200·`n` y 100·`n`, a `ppp` 1,0 y 2,0 | el editor se ve siempre y la rejilla tiene 1 fila; con 297·`n` (indexadas; 241·`n` en RGBA) y con `offset_px = 0` a 296·`n` el `top_px` es 55·`n` (sin salto); `max_offset_px` = `((bloque − alto) div n)·n`; con `offset = max`, `top_px` = `alto − H·n` |
 | 4 | `PanelView::scroll_by` con deltas sueltos, `rest_px` y los dos extremos; la rueda sobre el panel y sobre el editor en el banco con 200·`n`; volver a 241·`n` | `offset_px` múltiplo de `n` en `0..=max`; las filas de la rejilla no se mueven; con alto ≥ bloque, `offset_px` es 0 en el mismo fotograma; la barra de desplazamiento (indicador `panel_thumb`) solo se pinta con `scrolling` y la rejilla no pinta el suyo |
 | 5 | Alto de 200·`n` y `offset_px` > 0: clic en un deslizador, en el campo y fuera del rectángulo del panel; un arrastre y la ventana que baja | el control se halla con `y − offset_px`; fuera del panel no se golpea nada; todo lo pintado queda dentro del rectángulo del panel; el arrastre **no** se cancela por bajar la ventana |
 | 6 | Banco con alto de 200·`n`: lo devuelto por `show_editing_view` y el texto de la barra | sin aviso de «ventana baja» en ninguna parte (no existen `editor_hidden` ni `status_error`); el editor pinta su cabecera |
@@ -88,7 +90,7 @@ El texto pendiente pertenece a un par **(documento, entrada)** y a un color base
 
 ## Prueba manual (la haces tú, sin capturas)
 
-Con la app sin la variable y con un gestor de ventanas normal: reducir la altura con el ratón hasta que pare en el mínimo (261 pt a 1,0 y a 2,0; 348 pt a 1,5) y lo mismo con el ancho (361 pt a 1,0, 2,0 y 3,0; 481 pt a 1,5): el panel entero y un lienzo de 128 u de ancho, sin recortes: la rejilla enseña una fila y el editor entero, sin saltos, y se puede teclear en el campo mientras se arrastra el borde.
+Con la app sin la variable y con un gestor de ventanas normal: reducir la altura con el ratón hasta que pare en el mínimo (317 pt a 1,0 y a 2,0; 422,67 pt a 1,5) y lo mismo con el ancho (361 pt a 1,0, 2,0 y 3,0; 481 pt a 1,5): el panel entero y un lienzo de 128 u de ancho, sin recortes: la rejilla enseña una fila y el editor entero, sin saltos, y se puede teclear en el campo mientras se arrastra el borde.
 
 **Escala y servidor gráfico en Linux** (no afectan a la app `GDK_SCALE` ni `WINIT_UNIX_BACKEND`): winit 0.30 elige Wayland o X11 según `WAYLAND_DISPLAY` y `DISPLAY`; para forzar X11 se lanza con `env -u WAYLAND_DISPLAY cargo run --release -p px-app`. En X11 la escala se fuerza con `WINIT_X11_SCALE_FACTOR=1.5` (solo vale en X11); en Wayland la da el compositor (ajustes de pantalla).
 
