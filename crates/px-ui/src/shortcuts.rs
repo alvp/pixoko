@@ -50,22 +50,25 @@ pub fn action_for_key(key: Key, modifiers: Modifiers) -> Option<Action> {
 /// Lo que pide un atajo de fichero.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileAction {
+    Open,
     Save,
     SaveAs,
 }
 
-/// `command` + S (sin Alt): guardar; con Mayús, guardar como. `command` es Ctrl en Linux y
-/// Windows y Cmd en macOS (como en `action_for_key`; en macOS, Ctrl + S no hace nada). Función
-/// aparte de `action_for_key` para no alterar su contrato (specs/hito-2-abrir-guardar.md).
+/// `command` + S (sin Alt): guardar; con Mayús, guardar como. `command` + O (sin Mayús ni Alt):
+/// abrir. `command` es Ctrl en Linux y Windows y Cmd en macOS (como en `action_for_key`; en
+/// macOS, Ctrl + S y Ctrl + O no hacen nada). Función aparte de `action_for_key` para no alterar
+/// su contrato (specs/hito-2-abrir-guardar.md y specs/hito-2-dialogos-archivo.md).
 pub fn file_action_for_key(key: Key, modifiers: Modifiers) -> Option<FileAction> {
-    if key != Key::S || !modifiers.command || modifiers.alt {
+    if !modifiers.command || modifiers.alt {
         return None;
     }
-    Some(if modifiers.shift {
-        FileAction::SaveAs
-    } else {
-        FileAction::Save
-    })
+    match (key, modifiers.shift) {
+        (Key::S, false) => Some(FileAction::Save),
+        (Key::S, true) => Some(FileAction::SaveAs),
+        (Key::O, false) => Some(FileAction::Open),
+        _ => None,
+    }
 }
 
 /// Eventos que pueden ver los atajos de teclado: todos, o ninguno si un campo de texto tiene el

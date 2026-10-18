@@ -140,8 +140,9 @@ fn fila_22_en_macos_ctrl_solo_no_hace_nada() {
 
 #[test]
 fn fila_22_otras_teclas_con_command_no_son_atajo_de_fichero() {
-    // Fila 22: `P`, `Z` y `O` con `COMMAND` dan `None` (`Ctrl+O` es de la unidad 11).
-    for key in [Key::P, Key::Z, Key::O] {
+    // Fila 22: `P` y `Z` con `COMMAND` dan `None`. `O` con `COMMAND` es `Open` desde la unidad 16
+    // (`Ctrl+O` era «de la unidad 11»); con `Mayús` sigue sin ser atajo.
+    for key in [Key::P, Key::Z] {
         assert_eq!(
             file_action_for_key(key, Modifiers::COMMAND),
             None,
@@ -153,6 +154,46 @@ fn fila_22_otras_teclas_con_command_no_son_atajo_de_fichero() {
             "{key:?}"
         );
     }
+    assert_eq!(
+        file_action_for_key(Key::O, Modifiers::COMMAND),
+        Some(FileAction::Open)
+    );
+    assert_eq!(
+        file_action_for_key(Key::O, Modifiers::COMMAND | Modifiers::SHIFT),
+        None
+    );
+}
+
+#[test]
+fn fila_10_unidad_16_command_o_abre_y_solo_con_command_sin_mayus_ni_alt() {
+    // specs/hito-2-dialogos-archivo.md, fila 10: `Ctrl+O` (Linux y Windows) y `Cmd+O` (macOS)
+    // abren; `Ctrl+Mayús+O`, `Ctrl+Alt+O` y `O` sin modificador siguen dando `None`.
+    for command in [ctrl_command(), mac_command()] {
+        assert_eq!(
+            file_action_for_key(Key::O, command),
+            Some(FileAction::Open),
+            "{command:?}"
+        );
+        let con_mayus = Modifiers {
+            shift: true,
+            ..command
+        };
+        let con_alt = Modifiers {
+            alt: true,
+            ..command
+        };
+        assert_eq!(
+            file_action_for_key(Key::O, con_mayus),
+            None,
+            "{con_mayus:?}"
+        );
+        assert_eq!(file_action_for_key(Key::O, con_alt), None, "{con_alt:?}");
+    }
+    assert_eq!(file_action_for_key(Key::O, Modifiers::NONE), None);
+    // En macOS, `Ctrl` solo (sin `command`) no es atajo.
+    assert_eq!(file_action_for_key(Key::O, Modifiers::CTRL), None);
+    // `O` no cambia lo que `action_for_key` hace con ella.
+    assert_eq!(action_for_key(Key::O, Modifiers::COMMAND), None);
 }
 
 #[test]
@@ -173,11 +214,12 @@ fn fila_22_action_for_key_no_conoce_la_tecla_s() {
 }
 
 /// Recorrido exhaustivo: todas las teclas por las 32 combinaciones de modificadores.
-/// Solo `S` con `command` y sin `alt` da `Some`, y es `SaveAs` si y solo si hay `shift`.
+/// Solo `S` con `command` y sin `alt` da `Save` o `SaveAs` (esta si y solo si hay `shift`), y solo
+/// `O` con `command`, sin `shift` ni `alt`, da `Open` (unidad 16). Todo lo demás da `None`.
 #[test]
 fn fila_22_recorrido_de_todas_las_teclas_y_combinaciones() {
     assert!(Key::ALL.len() > 100, "Key::ALL incluye todas las teclas");
-    let mut guardados = 0;
+    let (mut guardados, mut abiertos) = (0, 0);
     for key in Key::ALL.iter().copied() {
         for mascara in 0..32u8 {
             let m = modificadores(mascara);
@@ -190,20 +232,34 @@ fn fila_22_recorrido_de_todas_las_teclas_y_combinaciones() {
                 } else {
                     FileAction::Save
                 })
+            } else if key == Key::O && m.command && !m.alt && !m.shift {
+                Some(FileAction::Open)
             } else {
                 None
             };
             assert_eq!(accion, esperado, "{key:?} con {m:?}");
 
-            // Lo dicho de otra manera: `Some` implica S + command sin alt.
+            // Lo dicho de otra manera: `Some` implica command sin alt y la tecla de su acción.
             if let Some(a) = accion {
-                guardados += 1;
-                assert_eq!(key, Key::S, "{key:?} con {m:?} dio {a:?}");
                 assert!(m.command && !m.alt, "{key:?} con {m:?} dio {a:?}");
-                assert_eq!(a == FileAction::SaveAs, m.shift, "{key:?} con {m:?}");
+                match a {
+                    FileAction::Open => {
+                        abiertos += 1;
+                        assert_eq!(key, Key::O, "{key:?} con {m:?} dio {a:?}");
+                        assert!(!m.shift, "{key:?} con {m:?} dio {a:?}");
+                    }
+                    FileAction::Save | FileAction::SaveAs => {
+                        guardados += 1;
+                        assert_eq!(key, Key::S, "{key:?} con {m:?} dio {a:?}");
+                        assert_eq!(a == FileAction::SaveAs, m.shift, "{key:?} con {m:?}");
+                    }
+                }
             }
         }
     }
-    // Con S hay 8 combinaciones de (ctrl, mac_cmd, shift) con command y sin alt: 4 de Save y 4 de SaveAs.
+    // Con S hay 8 combinaciones de (ctrl, mac_cmd, shift) con command y sin alt: 4 de Save y 4 de
+    // SaveAs. Con O, 4 de (ctrl, mac_cmd) con command y sin alt ni shift: todas de Open.
     assert_eq!(guardados, 8);
+    assert_eq!(abiertos, 4);
+    assert_eq!(guardados + abiertos, 12);
 }

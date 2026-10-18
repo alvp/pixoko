@@ -208,7 +208,13 @@ impl App {
             };
             if let Some(action) = file_action_for_key(*key, *modifiers) {
                 if !self.busy() {
-                    self.save_file(ctx, action == FileAction::SaveAs);
+                    match action {
+                        // Ctrl+O se conecta con el diálogo de abrir en la unidad 16.
+                        FileAction::Open => {}
+                        FileAction::Save | FileAction::SaveAs => {
+                            self.save_file(ctx, action == FileAction::SaveAs);
+                        }
+                    }
                 }
                 continue;
             }
