@@ -600,52 +600,6 @@ fn pool(mode: Mode) -> Vec<Pixel> {
     }
 }
 
-fn paleta_seis(transparente: u8) -> Palette {
-    let mut paleta =
-        Palette::from_colors((0..6).map(|i| rgba(10 * i, 20, 30, 255))).expect("paleta válida");
-    paleta
-        .set_transparent_index(Some(transparente))
-        .expect("existe");
-    paleta
-}
-
-/// Imagen de 1 a 16 de lado en uno de los tres modos con borrado, con fondo variado.
-fn imagenes() -> impl Strategy<Value = Image> {
-    (
-        prop::sample::select(vec![Mode::Rgba, Mode::GrayAlpha, Mode::Indexed]),
-        1u32..=16,
-        1u32..=16,
-        0u8..6,
-    )
-        .prop_flat_map(|(mode, w, h, t)| {
-            let celdas = usize::try_from(w * h).unwrap();
-            (
-                Just((mode, w, h, t)),
-                prop::collection::vec(any::<u8>(), celdas),
-            )
-        })
-        .prop_map(|((mode, w, h, t), celdas)| {
-            let pool = pool(mode);
-            let mut image = match mode {
-                Mode::Indexed => Image::new_indexed(w, h, paleta_seis(t)).unwrap(),
-                _ => Image::new(w, h, mode).unwrap(),
-            };
-            for y in 0..h {
-                for x in 0..w {
-                    let byte = celdas[usize::try_from(y * w + x).unwrap()];
-                    // Una parte de las casillas valen el primer valor, que no es transparente.
-                    let k = if byte < 64 {
-                        0
-                    } else {
-                        usize::from(byte) % pool.len()
-                    };
-                    image.set_pixel(x, y, pool[k]).unwrap();
-                }
-            }
-            image
-        })
-}
-
 /// Cualquier `i32`, con el interior de un lienzo de hasta 16 de lado y los extremos siempre
 /// presentes.
 fn coordenada() -> impl Strategy<Value = i32> {
@@ -661,31 +615,6 @@ fn coordenada() -> impl Strategy<Value = i32> {
 
 fn posicion() -> impl Strategy<Value = (i32, i32)> {
     (coordenada(), coordenada())
-}
-
-/// Lo que debe escribir el borrador en esa imagen, escrito aparte de `eraser_pixel`.
-fn borrado_esperado(image: &Image) -> Pixel {
-    match image.mode() {
-        Mode::Rgba => Pixel::Rgba(Rgba::TRANSPARENT),
-        Mode::GrayAlpha => Pixel::GrayAlpha { gray: 0, alpha: 0 },
-        Mode::Indexed => Pixel::Indexed(
-            image
-                .palette()
-                .and_then(Palette::transparent_index)
-                .expect("la imagen de la propiedad tiene índice transparente"),
-        ),
-        Mode::Gray => unreachable!("la propiedad no usa Gray"),
-    }
-}
-
-/// El píxel ya es transparente: alfa 0 (con cualquier RGB) o el índice transparente.
-fn ya_es_transparente(image: &Image, pixel: Pixel) -> bool {
-    match pixel {
-        Pixel::Rgba(color) => color.a == 0,
-        Pixel::GrayAlpha { alpha, .. } => alpha == 0,
-        Pixel::Indexed(i) => image.palette().and_then(Palette::transparent_index) == Some(i),
-        Pixel::Gray(_) => false,
-    }
 }
 
 /// Un paso previo en la historia: `0` nada, `1` un paso, `2` un paso deshecho (hay rehacer).
@@ -709,78 +638,6 @@ fn paso_previo(es: &mut Escena, variante: u8) {
     assert_eq!(es.doc.apply(comando), Ok(true));
     if variante == 2 {
         assert_eq!(es.doc.undo(), Ok(()));
-    }
-}
-
-// Propiedad 1.
-
-proptest! {
-    #[test]
-    fn propiedad_1_el_borrador_es_un_lapiz_transparente(
-        image in imagenes(),
-        previo in 0u8..=2,
-        a in posicion(),
-        movimientos in prop::collection::vec(posicion(), 0..=4),
-    ) {
-        let borrado = borrado_esperado(&image);
-        prop_assert_eq!(eraser_pixel(&image), Ok(borrado));
-
-        let mut borrador = Escena::nueva(image.clone());
-        let mut lapiz = Escena::con(image, Tool::Pencil);
-        lapiz.pixel = Some(borrado);
-        paso_previo(&mut borrador, previo);
-        paso_previo(&mut lapiz, previo);
-        let original = borrador.imagen().clone();
-        let historia0 = borrador.historia();
-        let state_id0 = borrador.doc.state_id();
-
-        let mut eventos = vec![begin(a.0, a.1)];
-        eventos.extend(movimientos.iter().map(|&(x, y)| mov(x, y)));
-        for evento in eventos {
-            prop_assert!(!borrador.ev(evento), "{:?} no cambia el documento", evento);
-            prop_assert!(!lapiz.ev(evento));
-            // Mismas posiciones que el lápiz con `eraser_pixel`, todas con el valor de borrado.
-            let vista = borrador.preview();
-            prop_assert_eq!(&vista, &lapiz.preview(), "{:?}", evento);
-            for edicion in &vista {
-                prop_assert_eq!(edicion.pixel, borrado);
-            }
-            // El documento no cambia antes del `End`.
-            prop_assert_eq!(borrador.imagen(), &original);
-            prop_assert_eq!(borrador.historia(), historia0);
-            prop_assert_eq!(borrador.doc.state_id(), state_id0);
-            prop_assert!(borrador.tool.busy());
-            prop_assert!(borrador.tool.take_events().is_empty());
-        }
-
-        let visitados: Vec<(u32, u32)> =
-            borrador.preview().iter().map(|e| (e.x, e.y)).collect();
-        let mut esperada = original.clone();
-        for &(x, y) in &visitados {
-            if !ya_es_transparente(&original, original.get_pixel(x, y).unwrap()) {
-                esperada.set_pixel(x, y, borrado).unwrap();
-            }
-        }
-
-        let cambio = borrador.ev(fin());
-        lapiz.ev(fin());
-        prop_assert!(!borrador.tool.busy());
-        prop_assert!(borrador.preview().is_empty());
-        prop_assert!(borrador.tool.take_events().is_empty());
-        prop_assert_eq!(borrador.imagen(), &esperada, "los que no eran transparentes, borrados");
-        prop_assert_eq!(cambio, esperada != original, "Ok(true) si y solo si alguno cambió");
-        if cambio {
-            // Es un paso y `undo` deja la imagen exacta.
-            prop_assert!(borrador.doc.can_undo());
-            prop_assert_eq!(borrador.doc.undo(), Ok(()));
-            prop_assert_eq!(borrador.imagen(), &original);
-            prop_assert_eq!(borrador.doc.can_undo(), historia0.0, "un solo paso");
-            prop_assert_eq!(borrador.doc.redo(), Ok(()));
-            prop_assert_eq!(borrador.imagen(), &esperada);
-        } else {
-            prop_assert_eq!(borrador.historia(), historia0, "sin paso y sin tocar el rehacer");
-            prop_assert_eq!(borrador.doc.state_id(), state_id0);
-        }
     }
 }
 
@@ -1011,13 +868,10 @@ fn fila_15_el_valor_se_recalcula_en_cada_pulsacion() {
     assert_eq!(es.imagen().get_pixel(2, 0), Ok(Pixel::Indexed(4)));
 }
 
-// Propiedad 1 ampliada: indexada con o sin `transparent_index` y con entradas de alfa 0.
-//
-// La propiedad 1 de arriba (paleta con `transparent_index` siempre fijado y toda opaca) se queda
-// como está. Esta la contiene y la amplía: paletas sin `transparent_index` con al menos una entrada
-// de alfa 0, y con entradas de alfa 0 además del índice transparente. El oráculo de «ya
-// transparente» es el valor resuelto con alfa 0 (`pixel_rgba`), no el índice; el valor de borrado
-// se calcula aparte de `eraser_pixel`, con las entradas guardadas.
+// Propiedad 1: el borrador es un lápiz transparente, en RGBA, GrayAlpha e indexada con o sin
+// `transparent_index` y con entradas de alfa 0 (o sin ellas). El oráculo de «ya transparente» es el
+// valor resuelto con alfa 0 (`pixel_rgba`), no el índice; el valor de borrado se calcula aparte de
+// `eraser_pixel`, con las entradas guardadas.
 
 /// Paleta de seis entradas: las de `mascara` (bit `i` para la entrada `i`) con alfa guardado 0 y
 /// el resto opacas; `transparente` fijado o no. Sin `transparente`, como mínimo la entrada `k`
@@ -1038,7 +892,7 @@ fn paleta_variada(transparente: Option<u8>, mascara: u8, k: u8) -> Palette {
 }
 
 /// Parámetros de una paleta indexada: `transparent_index` (o no), máscara de alfa 0 y `k`.
-fn paleta_ampliada() -> impl Strategy<Value = Palette> {
+fn paleta_indexada() -> impl Strategy<Value = Palette> {
     (
         prop_oneof![
             1 => Just(None),
@@ -1055,8 +909,8 @@ fn paleta_ampliada() -> impl Strategy<Value = Palette> {
 }
 
 /// Imagen de 1 a 16 de lado en uno de los tres modos con borrado, con fondo variado; en indexada,
-/// con la paleta de `paleta_ampliada` (los seis índices aparecen en el fondo).
-fn imagenes_ampliadas() -> impl Strategy<Value = Image> {
+/// con la paleta de `paleta_indexada` (los seis índices aparecen en el fondo).
+fn imagenes() -> impl Strategy<Value = Image> {
     (
         prop_oneof![
             1 => Just(Mode::Rgba),
@@ -1065,7 +919,7 @@ fn imagenes_ampliadas() -> impl Strategy<Value = Image> {
         ],
         1u32..=16,
         1u32..=16,
-        paleta_ampliada(),
+        paleta_indexada(),
     )
         .prop_flat_map(|(mode, w, h, paleta)| {
             let celdas = usize::try_from(w * h).unwrap();
@@ -1099,7 +953,7 @@ fn imagenes_ampliadas() -> impl Strategy<Value = Image> {
 /// Lo que debe escribir el borrador, escrito aparte de `eraser_pixel` y sin `Palette::get`: el
 /// índice transparente si lo hay; si no, la primera entrada de `colors()` con alfa 0. `None` si el
 /// borrador no puede con la imagen (indexada sin ninguna de las dos cosas).
-fn borrado_ampliado(image: &Image) -> Option<Pixel> {
+fn borrado_esperado(image: &Image) -> Option<Pixel> {
     match image.mode() {
         Mode::Rgba => Some(Pixel::Rgba(Rgba::TRANSPARENT)),
         Mode::GrayAlpha => Some(Pixel::GrayAlpha { gray: 0, alpha: 0 }),
@@ -1121,17 +975,17 @@ fn borrado_ampliado(image: &Image) -> Option<Pixel> {
 }
 
 /// El píxel ya es transparente: su valor resuelto tiene alfa 0, sea cual sea su índice.
-fn ya_es_transparente_resuelto(image: &Image, pixel: Pixel) -> bool {
+fn ya_es_transparente(image: &Image, pixel: Pixel) -> bool {
     pixel_rgba(image, pixel).expect("el píxel se ve").a == 0
 }
 
-fn comprueba_propiedad_1_ampliada(
+fn comprueba_propiedad_1(
     image: Image,
     previo: u8,
     a: (i32, i32),
     movimientos: &[(i32, i32)],
 ) -> Result<(), TestCaseError> {
-    let borrado = borrado_ampliado(&image);
+    let borrado = borrado_esperado(&image);
     // Las imágenes de esta propiedad siempre admiten el borrado: la paleta lleva índice
     // transparente o una entrada de alfa 0.
     let borrado = borrado.expect("la imagen admite el borrado");
@@ -1168,7 +1022,7 @@ fn comprueba_propiedad_1_ampliada(
     let visitados: Vec<(u32, u32)> = borrador.preview().iter().map(|e| (e.x, e.y)).collect();
     let mut esperada = original.clone();
     for &(x, y) in &visitados {
-        if !ya_es_transparente_resuelto(&original, original.get_pixel(x, y).unwrap()) {
+        if !ya_es_transparente(&original, original.get_pixel(x, y).unwrap()) {
             esperada.set_pixel(x, y, borrado).unwrap();
         }
     }
@@ -1209,19 +1063,19 @@ fn comprueba_propiedad_1_ampliada(
 
 proptest! {
     #[test]
-    fn propiedad_1_ampliada_el_borrador_es_un_lapiz_transparente_con_la_regla_de_alfa_0(
-        image in imagenes_ampliadas(),
+    fn propiedad_1_el_borrador_es_un_lapiz_transparente(
+        image in imagenes(),
         previo in 0u8..=2,
         a in posicion(),
         movimientos in prop::collection::vec(posicion(), 0..=4),
     ) {
-        comprueba_propiedad_1_ampliada(image, previo, a, &movimientos)?;
+        comprueba_propiedad_1(image, previo, a, &movimientos)?;
     }
 }
 
-/// Un fondo de las paletas ampliadas: cubre a mano lo que el azar puede tardar en dar.
+/// Un fondo de las paletas de la propiedad 1: cubre a mano lo que el azar puede tardar en dar.
 #[test]
-fn propiedad_1_ampliada_ejemplo_sin_transparent_index_con_la_entrada_1_de_alfa_0() {
+fn propiedad_1_ejemplo_sin_transparent_index_con_la_entrada_1_de_alfa_0() {
     let paleta = paleta_variada(None, 0b000010, 1);
     let mut image = Image::new_indexed(4, 1, paleta).expect("imagen válida");
     for (x, i) in [0u8, 1, 2, 5].into_iter().enumerate() {
