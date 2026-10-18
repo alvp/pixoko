@@ -425,6 +425,15 @@ impl Canvas {
                 error: self.error.clone(),
             };
         };
+        // Sin suavizado de bordes. Con él, egui teselaba un rectángulo de 1×1 píxel físico con todos
+        // sus vértices en el mismo punto (triángulos degenerados) y no pintaba nada: a ×1 la
+        // superposición del trazo no se veía. Toda la interfaz está alineada a la rejilla de
+        // píxeles físicos (múltiplos de `n`), así que el suavizado no aporta nada y sin él cada
+        // rectángulo cubre exactamente sus píxeles.
+        let ctx = ui.ctx();
+        if ctx.tessellation_options(|options| options.feathering) {
+            ctx.tessellation_options_mut(|options| options.feathering = false);
+        }
         let painter = ui.painter_at(frame.rect);
         painter.rect_filled(frame.rect, 0.0, BACKGROUND);
 

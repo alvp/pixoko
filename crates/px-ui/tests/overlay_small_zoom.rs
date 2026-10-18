@@ -153,7 +153,7 @@ fn rasteriza(primitivas: &[ClippedPrimitive], imagen: TextureId, p: Pos2) -> Vis
                 tinte
             }
         };
-        for triangulo in malla.indices.chunks_exact(3) {
+        for triangulo in malla.indices.as_chunks::<3>().0 {
             let v = [
                 &malla.vertices[triangulo[0] as usize],
                 &malla.vertices[triangulo[1] as usize],
