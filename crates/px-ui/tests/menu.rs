@@ -1,0 +1,646 @@
+//! Tests de la tabla del menú `px_ui::menu` (specs/hito-2-menu-herramientas.md, «Casos» filas 1 y 2
+//! y propiedad 1). Sin ventana: `MENUS`, `shortcut_for`, `shortcut_text` y `enabled` son lógica
+//! pura; solo la comprobación de que ningún rótulo pierde un carácter con la fuente real usa un
+//! `egui::Context` (sin GPU).
+//!
+//! - Fila 1: los cuatro menús con sus rótulos y acciones, el separador solo antes de `Salir`, los
+//!   atajos por `Platform::{Linux, Windows, Mac}` (`Salir` solo con `Ctrl+Q` en Linux; `Cmd` en
+//!   macOS y `Rehacer` = `Cmd+Mayús+Z`), los rótulos contra `INTERFACE_CHARSET`, ningún `?` por
+//!   `replace_missing` y ninguna acción repetida.
+//! - Fila 2: `enabled` de las 11 acciones de la tabla con historia vacía, solo deshacer, solo
+//!   rehacer y zoom `None`, `Zoom::MIN`, ×5 y `Zoom::MAX`.
+//! - Propiedad 1: tabla coherente (menú, botones de herramienta y botones de zoom).
+//!
+//! Suposiciones sobre las firmas de «Piezas» (derives no listados): `Shortcut`, `Menu` y
+//! `MenuItem` son `Clone, Copy, Debug, PartialEq, Eq`; `Platform`, `Origin` y `Locks` también.
+
+use egui::{Context, Key, Modifiers};
+use proptest::prelude::*;
+use px_ui::actions::{
+    AppAction, Locks, Origin, Platform, UiState, action_for_shortcut, enabled, is_blocked,
+};
+use px_ui::menu::{MENUS, Menu, MenuItem, Shortcut, shortcut_for, shortcut_text};
+use px_ui::text::{INTERFACE_CHARSET, install_fonts, printable, replace_missing};
+use px_ui::tool::Tool;
+use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
+use px_ui::view::Zoom;
+
+const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const HERRAMIENTAS: [Tool; 5] = [
+    Tool::Pencil,
+    Tool::Line,
+    Tool::Fill,
+    Tool::Dropper,
+    Tool::Eraser,
+];
+
+/// Las 11 acciones de la tabla, en el orden del menú.
+const ACCIONES_DE_LA_TABLA: [AppAction; 11] = [
+    AppAction::Open,
+    AppAction::Save,
+    AppAction::SaveAs,
+    AppAction::Quit,
+    AppAction::Undo,
+    AppAction::Redo,
+    AppAction::ZoomIn,
+    AppAction::ZoomOut,
+    AppAction::ZoomFit,
+    AppAction::ZoomActual,
+    AppAction::ShowLicenses,
+];
+
+/// Las entradas de todos los menús, aplanadas.
+fn entradas() -> Vec<MenuItem> {
+    MENUS.iter().flat_map(|m| m.items.iter().copied()).collect()
+}
+
+fn titulo(menu: &Menu) -> &'static str {
+    menu.title
+}
+
+fn atajo(key: Key, command: bool, shift: bool) -> Option<Shortcut> {
+    Some(Shortcut {
+        key,
+        command,
+        shift,
+    })
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 1: la tabla
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_1_cuatro_menus_en_orden_con_sus_titulos() {
+    let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
+    assert_eq!(titulos, ["Archivo", "Editar", "Ver", "Ayuda"]);
+}
+
+#[test]
+fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
+    let esperado: [(&str, Vec<(&str, AppAction)>); 4] = [
+        (
+            "Archivo",
+            vec![
+                ("Abrir…", AppAction::Open),
+                ("Guardar", AppAction::Save),
+                ("Guardar como…", AppAction::SaveAs),
+                ("Salir", AppAction::Quit),
+            ],
+        ),
+        (
+            "Editar",
+            vec![("Deshacer", AppAction::Undo), ("Rehacer", AppAction::Redo)],
+        ),
+        (
+            "Ver",
+            vec![
+                ("Acercar", AppAction::ZoomIn),
+                ("Alejar", AppAction::ZoomOut),
+                ("Ajustar a la ventana", AppAction::ZoomFit),
+                ("1:1", AppAction::ZoomActual),
+            ],
+        ),
+        ("Ayuda", vec![("Licencias", AppAction::ShowLicenses)]),
+    ];
+    for (menu, (titulo, items)) in MENUS.iter().zip(esperado) {
+        assert_eq!(menu.title, titulo);
+        let reales: Vec<(&str, AppAction)> =
+            menu.items.iter().map(|i| (i.label, i.action)).collect();
+        assert_eq!(reales, items, "menú {titulo}");
+    }
+}
+
+#[test]
+fn fila_1_el_separador_va_solo_antes_de_salir() {
+    for menu in MENUS.iter() {
+        for item in menu.items {
+            assert_eq!(
+                item.separator_before,
+                item.action == AppAction::Quit,
+                "{} / {}",
+                menu.title,
+                item.label
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_1_hay_once_entradas_y_ninguna_accion_se_repite() {
+    let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
+    assert_eq!(acciones.len(), 11);
+    for (i, a) in acciones.iter().enumerate() {
+        assert!(
+            !acciones[i + 1..].contains(a),
+            "la acción {a:?} aparece dos veces"
+        );
+    }
+    assert_eq!(acciones, ACCIONES_DE_LA_TABLA);
+}
+
+#[test]
+fn fila_1_ninguna_entrada_ni_titulo_esta_vacio_ni_repetido() {
+    let mut rotulos: Vec<&str> = MENUS.iter().map(titulo).collect();
+    rotulos.extend(entradas().iter().map(|i| i.label));
+    for (i, r) in rotulos.iter().enumerate() {
+        assert!(!r.is_empty());
+        assert!(!rotulos[i + 1..].contains(r), "rótulo repetido: {r}");
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 1: atajos por plataforma
+// ---------------------------------------------------------------------------------------------
+
+/// Texto del atajo de cada entrada, en el orden de `ACCIONES_DE_LA_TABLA`.
+fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
+    entradas()
+        .iter()
+        .map(|i| shortcut_for(i.action, platform).map(|s| shortcut_text(s, platform)))
+        .collect()
+}
+
+fn algunos(textos: [Option<&str>; 11]) -> Vec<Option<String>> {
+    textos.iter().map(|t| t.map(str::to_string)).collect()
+}
+
+#[test]
+fn fila_1_atajos_en_linux() {
+    assert_eq!(
+        textos_de_atajo(Platform::Linux),
+        algunos([
+            Some("Ctrl+O"),
+            Some("Ctrl+S"),
+            Some("Ctrl+Mayús+S"),
+            Some("Ctrl+Q"),
+            Some("Ctrl+Z"),
+            Some("Ctrl+Y"),
+            Some("+"),
+            Some("-"),
+            Some("Inicio"),
+            Some("Ctrl+1"),
+            None,
+        ])
+    );
+}
+
+#[test]
+fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
+    assert_eq!(
+        textos_de_atajo(Platform::Windows),
+        algunos([
+            Some("Ctrl+O"),
+            Some("Ctrl+S"),
+            Some("Ctrl+Mayús+S"),
+            None,
+            Some("Ctrl+Z"),
+            Some("Ctrl+Y"),
+            Some("+"),
+            Some("-"),
+            Some("Inicio"),
+            Some("Ctrl+1"),
+            None,
+        ])
+    );
+    assert_eq!(shortcut_for(AppAction::Quit, Platform::Windows), None);
+}
+
+#[test]
+fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
+    assert_eq!(
+        textos_de_atajo(Platform::Mac),
+        algunos([
+            Some("Cmd+O"),
+            Some("Cmd+S"),
+            Some("Cmd+Mayús+S"),
+            None,
+            Some("Cmd+Z"),
+            Some("Cmd+Mayús+Z"),
+            Some("+"),
+            Some("-"),
+            Some("Inicio"),
+            Some("Cmd+1"),
+            None,
+        ])
+    );
+    assert_eq!(shortcut_for(AppAction::Quit, Platform::Mac), None);
+}
+
+#[test]
+fn fila_1_licencias_no_tiene_atajo_en_ninguna_plataforma() {
+    for platform in PLATAFORMAS {
+        assert_eq!(shortcut_for(AppAction::ShowLicenses, platform), None);
+    }
+}
+
+#[test]
+fn fila_1_shortcut_for_da_la_tecla_y_los_modificadores_de_cada_entrada() {
+    for platform in PLATAFORMAS {
+        let redo = if platform == Platform::Mac {
+            atajo(Key::Z, true, true)
+        } else {
+            atajo(Key::Y, true, false)
+        };
+        let quit = (platform == Platform::Linux)
+            .then(|| atajo(Key::Q, true, false))
+            .flatten();
+        let esperado = [
+            (AppAction::Open, atajo(Key::O, true, false)),
+            (AppAction::Save, atajo(Key::S, true, false)),
+            (AppAction::SaveAs, atajo(Key::S, true, true)),
+            (AppAction::Quit, quit),
+            (AppAction::Undo, atajo(Key::Z, true, false)),
+            (AppAction::Redo, redo),
+            (AppAction::ZoomIn, atajo(Key::Plus, false, false)),
+            (AppAction::ZoomOut, atajo(Key::Minus, false, false)),
+            (AppAction::ZoomFit, atajo(Key::Home, false, false)),
+            (AppAction::ZoomActual, atajo(Key::Num1, true, false)),
+            (AppAction::ShowLicenses, None),
+        ];
+        for (action, shortcut) in esperado {
+            assert_eq!(
+                shortcut_for(action, platform),
+                shortcut,
+                "{action:?} en {platform:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_1_shortcut_text_de_cada_forma() {
+    // Con `command`: `Ctrl+` en Linux y Windows, `Cmd+` en macOS; con `shift`, `Mayús+`.
+    for (platform, command) in [
+        (Platform::Linux, "Ctrl"),
+        (Platform::Windows, "Ctrl"),
+        (Platform::Mac, "Cmd"),
+    ] {
+        assert_eq!(
+            shortcut_text(atajo(Key::O, true, false).unwrap(), platform),
+            format!("{command}+O")
+        );
+        assert_eq!(
+            shortcut_text(atajo(Key::S, true, true).unwrap(), platform),
+            format!("{command}+Mayús+S")
+        );
+        assert_eq!(
+            shortcut_text(atajo(Key::Num1, true, false).unwrap(), platform),
+            format!("{command}+1")
+        );
+        assert_eq!(
+            shortcut_text(atajo(Key::Z, true, true).unwrap(), platform),
+            format!("{command}+Mayús+Z")
+        );
+        // Sin `command` la tecla va sola, con su nombre en español o su signo.
+        assert_eq!(
+            shortcut_text(atajo(Key::Home, false, false).unwrap(), platform),
+            "Inicio"
+        );
+        assert_eq!(
+            shortcut_text(atajo(Key::Plus, false, false).unwrap(), platform),
+            "+"
+        );
+        assert_eq!(
+            shortcut_text(atajo(Key::Minus, false, false).unwrap(), platform),
+            "-"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 1: rótulos y fuente
+// ---------------------------------------------------------------------------------------------
+
+/// Todo el texto fijo del menú: títulos, rótulos y los atajos de cada plataforma.
+fn textos_fijos() -> Vec<String> {
+    let mut v: Vec<String> = MENUS.iter().map(|m| m.title.to_string()).collect();
+    for item in entradas() {
+        v.push(item.label.to_string());
+        for platform in PLATAFORMAS {
+            if let Some(s) = shortcut_for(item.action, platform) {
+                v.push(shortcut_text(s, platform));
+            }
+        }
+    }
+    v
+}
+
+#[test]
+fn fila_1_todo_el_texto_del_menu_esta_dentro_de_interface_charset() {
+    for texto in textos_fijos() {
+        for c in texto.chars() {
+            assert!(
+                INTERFACE_CHARSET.contains(c),
+                "{c:?} de {texto:?} no está en INTERFACE_CHARSET"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_1_ningun_rotulo_pierde_un_caracter_por_replace_missing() {
+    let tiene = |c: char| INTERFACE_CHARSET.contains(c);
+    for texto in textos_fijos() {
+        assert_eq!(replace_missing(&texto, tiene), texto);
+        assert!(!texto.contains('?'), "{texto:?} lleva un `?`");
+    }
+}
+
+#[test]
+fn fila_1_con_la_fuente_real_printable_no_cambia_ningun_rotulo() {
+    let ctx = Context::default();
+    install_fonts(&ctx);
+    // Los cambios de fuente se aplican al empezar el pase siguiente.
+    for _ in 0..2 {
+        ctx.run_ui(egui::RawInput::default(), |_| {})
+            .drop_without_applying_deltas();
+    }
+    for texto in textos_fijos() {
+        assert_eq!(printable(&ctx, &texto), texto);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 2: habilitación
+// ---------------------------------------------------------------------------------------------
+
+fn estado(can_undo: bool, can_redo: bool, zoom: Option<Zoom>) -> UiState {
+    UiState {
+        can_undo,
+        can_redo,
+        zoom,
+        tool: Tool::Pencil,
+        locks: Locks::default(),
+    }
+}
+
+fn x5() -> Option<Zoom> {
+    Zoom::from_int(5)
+}
+
+/// `enabled` de las 11 acciones de la tabla, en el orden de `ACCIONES_DE_LA_TABLA`.
+fn habilitadas(state: &UiState) -> Vec<bool> {
+    ACCIONES_DE_LA_TABLA
+        .iter()
+        .map(|a| enabled(*a, state))
+        .collect()
+}
+
+#[test]
+fn fila_2_con_la_historia_vacia_deshacer_y_rehacer_estan_deshabilitados() {
+    // Orden: Open, Save, SaveAs, Quit, Undo, Redo, ZoomIn, ZoomOut, ZoomFit, ZoomActual, Licencias.
+    assert_eq!(
+        habilitadas(&estado(false, false, x5())),
+        [
+            true, true, true, true, false, false, true, true, true, true, true
+        ]
+    );
+}
+
+#[test]
+fn fila_2_solo_can_undo_habilita_deshacer() {
+    assert_eq!(
+        habilitadas(&estado(true, false, x5())),
+        [
+            true, true, true, true, true, false, true, true, true, true, true
+        ]
+    );
+}
+
+#[test]
+fn fila_2_solo_can_redo_habilita_rehacer() {
+    assert_eq!(
+        habilitadas(&estado(false, true, x5())),
+        [
+            true, true, true, true, false, true, true, true, true, true, true
+        ]
+    );
+}
+
+#[test]
+fn fila_2_sin_imagen_mostrable_los_tres_de_zoom_y_1_a_1_estan_deshabilitados() {
+    assert_eq!(
+        habilitadas(&estado(true, true, None)),
+        [
+            true, true, true, true, true, true, false, false, false, false, true
+        ]
+    );
+}
+
+#[test]
+fn fila_2_en_zoom_min_alejar_y_1_a_1_estan_deshabilitados() {
+    // Hoy `Zoom::MIN` es ×1; la comparación usa la constante, no el número.
+    assert_eq!(
+        habilitadas(&estado(true, true, Some(Zoom::MIN))),
+        [
+            true, true, true, true, true, true, true, false, true, false, true
+        ]
+    );
+}
+
+#[test]
+fn fila_2_en_x5_todo_el_zoom_esta_habilitado() {
+    assert_eq!(habilitadas(&estado(true, true, x5())), [true; 11]);
+}
+
+#[test]
+fn fila_2_en_zoom_max_solo_acercar_esta_deshabilitado() {
+    assert_eq!(
+        habilitadas(&estado(true, true, Some(Zoom::MAX))),
+        [
+            true, true, true, true, true, true, false, true, true, true, true
+        ]
+    );
+    assert_eq!(Zoom::MAX, Zoom::from_int(64).expect("×64"));
+}
+
+#[test]
+fn fila_2_guardar_esta_habilitado_siempre_tambien_sin_cambios_ni_historia() {
+    for can_undo in [false, true] {
+        for can_redo in [false, true] {
+            for zoom in [None, Some(Zoom::MIN), x5(), Some(Zoom::MAX)] {
+                let state = estado(can_undo, can_redo, zoom);
+                assert!(enabled(AppAction::Save, &state), "{zoom:?}");
+                for action in [
+                    AppAction::Open,
+                    AppAction::SaveAs,
+                    AppAction::Quit,
+                    AppAction::ShowLicenses,
+                ] {
+                    assert!(enabled(action, &state), "{action:?} con {zoom:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_2_select_tool_solo_depende_del_bloqueo_tambien_la_herramienta_activa() {
+    for activa in HERRAMIENTAS {
+        let state = UiState {
+            tool: activa,
+            ..estado(false, false, None)
+        };
+        for tool in HERRAMIENTAS {
+            assert!(enabled(AppAction::SelectTool(tool), &state));
+        }
+    }
+}
+
+#[test]
+fn fila_2_zoom_in_es_falso_solo_en_x64_en_todos_los_niveles_enteros() {
+    for n in 1..=64u32 {
+        let zoom = Zoom::from_int(n).expect("nivel válido");
+        let state = estado(true, true, Some(zoom));
+        assert_eq!(enabled(AppAction::ZoomIn, &state), n != 64, "×{n}");
+        assert_eq!(
+            enabled(AppAction::ZoomOut, &state),
+            zoom > Zoom::MIN,
+            "×{n}"
+        );
+        assert_eq!(enabled(AppAction::ZoomActual, &state), n != 1, "×{n}");
+        assert!(enabled(AppAction::ZoomFit, &state), "×{n}");
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Propiedad 1: tabla coherente
+// ---------------------------------------------------------------------------------------------
+
+/// `Key` de la letra de un botón de herramienta.
+fn tecla_de(letra: char) -> Key {
+    match letra {
+        'P' => Key::P,
+        'L' => Key::L,
+        'F' => Key::F,
+        'I' => Key::I,
+        'E' => Key::E,
+        otra => panic!("letra de herramienta inesperada: {otra:?}"),
+    }
+}
+
+/// Las acciones de cada entrada de menú y de las dos tablas de la columna.
+fn acciones_de_menu_y_columna() -> Vec<AppAction> {
+    let mut v: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
+    v.extend(TOOL_BUTTONS.iter().map(|b| b.action));
+    v.extend(ZOOM_BUTTONS.iter().map(|b| b.action));
+    v
+}
+
+fn plataforma(i: u8) -> Platform {
+    PLATAFORMAS[usize::from(i) % 3]
+}
+
+fn estado_de(
+    can_undo: bool,
+    can_redo: bool,
+    zoom: Option<u32>,
+    tool: u8,
+    locks: [bool; 5],
+) -> UiState {
+    UiState {
+        can_undo,
+        can_redo,
+        zoom: zoom.and_then(Zoom::from_int),
+        tool: HERRAMIENTAS[usize::from(tool) % 5],
+        locks: Locks {
+            gesture: locks[0],
+            dialog: locks[1],
+            text_focus: locks[2],
+            removal: locks[3],
+            modal: locks[4],
+        },
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    #[test]
+    fn propiedad_1_enabled_implica_no_bloqueada_y_los_bloqueos_apagan_lo_que_toca(
+        can_undo: bool,
+        can_redo: bool,
+        zoom in prop::option::of(1u32..=64),
+        tool in 0u8..5,
+        locks in prop::array::uniform5(any::<bool>()),
+    ) {
+        let state = estado_de(can_undo, can_redo, zoom, tool, locks);
+        for action in acciones_de_menu_y_columna() {
+            let on = enabled(action, &state);
+            // `enabled` implica `!is_blocked(.., Origin::Menu)`.
+            if on {
+                prop_assert!(!is_blocked(action, state.locks, Origin::Menu), "{:?}", action);
+            }
+            // Con un diálogo abierto, falso en todas.
+            if state.locks.dialog {
+                prop_assert!(!on, "{:?} con diálogo", action);
+            }
+            // Con gesto o campo de texto, falso en todas salvo las cuatro de zoom.
+            if (state.locks.gesture || state.locks.text_focus) && !action.is_zoom() {
+                prop_assert!(!on, "{:?} con gesto o texto", action);
+            }
+            // Las acciones de zoom no se apagan por gesto, quita ni campo de texto (con el menú).
+            if action.is_zoom() {
+                let sin_nada_mas = !state.locks.dialog && !state.locks.modal;
+                if sin_nada_mas && state.zoom.is_some() {
+                    let por_nivel = match action {
+                        AppAction::ZoomIn => state.zoom < Some(Zoom::MAX),
+                        AppAction::ZoomOut => state.zoom > Some(Zoom::MIN),
+                        AppAction::ZoomActual => state.zoom != Some(Zoom::MIN),
+                        _ => true,
+                    };
+                    prop_assert_eq!(on, por_nivel, "{:?}", action);
+                }
+            }
+            // Ninguna entrada depende del origen: menú y botón bloquean igual.
+            for bits in 0..32u8 {
+                let locks = Locks {
+                    gesture: bits & 1 != 0,
+                    dialog: bits & 2 != 0,
+                    text_focus: bits & 4 != 0,
+                    removal: bits & 8 != 0,
+                    modal: bits & 16 != 0,
+                };
+                prop_assert_eq!(
+                    is_blocked(action, locks, Origin::Menu),
+                    is_blocked(action, locks, Origin::Button),
+                    "{:?} con {:?}", action, locks
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn propiedad_1_el_atajo_de_cada_entrada_traducido_da_su_accion(platform_i in 0u8..3) {
+        let platform = plataforma(platform_i);
+        for item in entradas() {
+            if let Some(shortcut) = shortcut_for(item.action, platform) {
+                let modifiers = Modifiers {
+                    alt: false,
+                    ctrl: shortcut.command && platform != Platform::Mac,
+                    shift: shortcut.shift,
+                    mac_cmd: shortcut.command && platform == Platform::Mac,
+                    command: shortcut.command,
+                };
+                prop_assert_eq!(
+                    action_for_shortcut(shortcut.key, modifiers, platform),
+                    Some(item.action),
+                    "{}", item.label
+                );
+            }
+        }
+        // Las letras de la columna son las teclas de herramienta.
+        for button in TOOL_BUTTONS.iter() {
+            let letra = button.key.expect("los botones de herramienta llevan letra");
+            prop_assert_eq!(
+                action_for_shortcut(tecla_de(letra), Modifiers::NONE, platform),
+                Some(button.action),
+                "{}", button.label
+            );
+        }
+        for button in ZOOM_BUTTONS.iter() {
+            prop_assert_eq!(button.key, None, "{}", button.label);
+        }
+    }
+}

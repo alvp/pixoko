@@ -6,6 +6,7 @@
 mod confirm;
 mod demo;
 mod dialogs;
+mod dispatch;
 mod files;
 mod keys;
 mod licenses;

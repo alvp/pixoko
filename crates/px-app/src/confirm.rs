@@ -91,6 +91,8 @@ pub fn close_warning() -> String {
 }
 
 #[cfg(test)]
+mod close_tests;
+#[cfg(test)]
 mod dialog_tests;
 #[cfg(test)]
 mod tests;
