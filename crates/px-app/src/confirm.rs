@@ -90,6 +90,13 @@ pub fn close_warning() -> String {
     )
 }
 
+/// La regla de cierre por repetición: sin cambios sin guardar se cierra a la primera; con ellos, la
+/// primera petición queda armada (y no cierra) y la segunda, dentro de `CONFIRM_SECS`, cierra.
+/// La usan `handle_close` (la `x` de la ventana y `Alt`+`F4`) y `Archivo → Salir` por igual.
+pub fn close_allowed(modified: bool, confirm: &mut Confirm, now: f64) -> bool {
+    !modified || confirm.request(Request::Close, now) == Confirmation::Confirmed
+}
+
 #[cfg(test)]
 mod close_tests;
 #[cfg(test)]

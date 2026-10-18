@@ -19,24 +19,27 @@ use std::time::Duration;
 
 use eframe::egui;
 use px_core::Document;
-use px_ui::canvas::Canvas;
-use px_ui::color::key_choice;
+use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
+use px_ui::canvas::{Canvas, CanvasInfo};
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
+use px_ui::licenses_view::show_licenses;
+use px_ui::menu::show_menu;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
-use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, gate_keys};
+use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::texture::pixel_rgba;
-use px_ui::tool::{ToolAction, ToolEvent, ToolState, tool_action_for_key, tool_color_label};
+use px_ui::tool::{ToolEvent, ToolState, tool_color_label};
+use px_ui::toolbar::{show_toolbar, zoom_label};
 
 use crate::confirm::{
-    Confirm, Confirmation, Request, close_warning, open_dialog_warning, open_warning,
+    Confirm, Confirmation, Request, close_allowed, close_warning, open_dialog_warning, open_warning,
 };
 use crate::dialogs::{
     DialogKind, Dialogs, Finished, IGNORED_FILE_WHILE_DIALOG, Outcome, RfdPicker, fallback_request,
     open_gate, unavailable_notice,
 };
+use crate::dispatch::{Dispatched, Targets, dispatch};
 use crate::files::{file_label, parse_args, pick_dropped};
-use crate::keys::select_tool;
 use crate::licenses::wants_licenses;
 use crate::session::{Session, describe_saved, describe_saved_dialog};
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
@@ -65,11 +68,19 @@ struct App {
     min_enabled: bool,
     /// Último mínimo enviado a la ventana, para enviar solo cuando cambia.
     min_sent: Option<[f32; 2]>,
+    /// Sistema para el que se compiló: decide los atajos que se muestran y los que valen.
+    platform: Platform,
+    /// El panel de licencias está abierto (sustituye al lienzo y es modal).
+    licenses_open: bool,
+    /// Primera línea visible del panel de licencias.
+    licenses_first: usize,
 }
 
 impl App {
     fn new(document: Document, cli_path: Option<PathBuf>) -> App {
         let mut canvas = Canvas::new();
+        // Las teclas de zoom las trata la capa de acciones, con sus propios bloqueos.
+        canvas.set_view_keys(false);
         if let Some(image) = document.image(document.main_image()) {
             canvas.set_image(image);
         }
@@ -90,6 +101,9 @@ impl App {
             cli_path,
             min_enabled: min_enabled(std::env::var(ENV_NO_MIN).ok().as_deref()),
             min_sent: None,
+            platform: Platform::current(),
+            licenses_open: false,
+            licenses_first: 0,
         }
     }
 
@@ -294,19 +308,38 @@ impl App {
             return;
         }
         self.dialogs.abandon();
-        if !self.session.modified() {
-            return;
-        }
         let now = ctx.input(|i| i.time);
-        if self.confirm.request(Request::Close, now) == Confirmation::Armed {
+        if !close_allowed(self.session.modified(), &mut self.confirm, now) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.notify(ctx, close_warning());
         }
     }
 
-    /// Atajos de teclado. Con un gesto en curso se ignoran (`Escape` ya llega en orden por
-    /// `Canvas::interact_ordered`, y la selección de herramienta la ignora `ToolState`).
-    fn handle_keys(&mut self, ctx: &egui::Context, frame: &eframe::Frame, events: &[egui::Event]) {
+    /// Bloqueos de este fotograma (specs/hito-2-menu-herramientas.md, «Piezas»).
+    fn locks(&self, ctx: &egui::Context) -> Locks {
+        Locks {
+            gesture: self.tools.busy() || self.session.busy(),
+            dialog: self.dialogs.pending(),
+            text_focus: ctx.text_edit_focused(),
+            removal: self.session.ops.removal().is_some(),
+            modal: self.licenses_open,
+        }
+    }
+
+    /// Lo que el menú y la columna necesitan para habilitarse.
+    fn ui_state(&self, ctx: &egui::Context) -> UiState {
+        UiState {
+            can_undo: self.session.document.can_undo(),
+            can_redo: self.session.document.can_redo(),
+            zoom: self.canvas.zoom(),
+            tool: self.tools.tool(),
+            locks: self.locks(ctx),
+        }
+    }
+
+    /// Traduce las teclas del fotograma a acciones. Un atajo de fichero o `Salir` mantenido
+    /// pulsado no repite: confirmaría solo. `Escape` no es una acción (lo ordena el lienzo).
+    fn key_actions(&self, events: &[egui::Event], out: &mut Vec<(AppAction, Origin)>) {
         for event in events {
             let egui::Event::Key {
                 key,
@@ -318,50 +351,51 @@ impl App {
             else {
                 continue;
             };
-            if let Some(action) = file_action_for_key(*key, *modifiers) {
-                // Un atajo mantenido pulsado no repite: confirmaría solo.
-                if !*repeat && !self.busy() {
-                    self.file_action(ctx, frame, action);
-                }
-                continue;
+            if let Some(action) = action_for_shortcut(*key, *modifiers, self.platform)
+                && !(*repeat && action.ignores_repeat())
+            {
+                out.push((action, Origin::Key));
             }
-            if let Some(action) = tool_action_for_key(*key, *modifiers) {
-                if let ToolAction::Select(_) = action {
-                    let busy = self.busy();
-                    let image = self
-                        .session
-                        .document
-                        .image(self.session.document.main_image());
-                    if let Some(text) = select_tool(&mut self.tools, action, busy, image) {
-                        self.notify(ctx, text);
-                    }
+        }
+    }
+
+    /// Despacha una acción venga de donde venga (menú, columna o atajo) y ejecuta lo que necesita
+    /// la ventana.
+    fn apply_action(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+        action: AppAction,
+        origin: Origin,
+    ) {
+        let locks = self.locks(ctx);
+        let result = dispatch(
+            action,
+            origin,
+            &mut Targets {
+                session: &mut self.session,
+                tools: &mut self.tools,
+                locks,
+            },
+        );
+        match result {
+            Dispatched::Blocked => {}
+            Dispatched::Done { refresh, notice } => {
+                self.finish::<std::convert::Infallible>(ctx, Ok(refresh));
+                if let Some(text) = notice {
+                    self.notify(ctx, text);
                 }
-                continue;
             }
-            if self.busy() {
-                continue;
+            Dispatched::File(file) => self.file_action(ctx, frame, file),
+            // La regla de cierre por repetición la aplica `handle_close` en el siguiente fotograma.
+            Dispatched::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Dispatched::View(op) => {
+                self.canvas.request_view(op);
+                ctx.request_repaint();
             }
-            match action_for_key(*key, *modifiers) {
-                Some(Action::Undo) if self.session.document.can_undo() => {
-                    let result = self.session.undo().map(|()| true);
-                    self.finish(ctx, result);
-                }
-                Some(Action::Redo) if self.session.document.can_redo() => {
-                    let result = self.session.redo().map(|()| true);
-                    self.finish(ctx, result);
-                }
-                // Con una quita pendiente la selección está fija en la entrada que se quita.
-                Some(Action::SelectColor(_)) if self.session.ops.removal().is_some() => {}
-                Some(Action::SelectColor(slot)) => {
-                    let image = self
-                        .session
-                        .document
-                        .image(self.session.document.main_image());
-                    if let Some(choice) = image.and_then(|image| key_choice(image, slot)) {
-                        self.session.set_choice_revealing(choice);
-                    }
-                }
-                _ => {}
+            Dispatched::Licenses(open) => {
+                self.licenses_open = open;
+                self.licenses_first = 0;
             }
         }
     }
@@ -403,7 +437,16 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
+        // Las acciones del fotograma, en este orden: menú, columna y atajos.
+        let mut actions: Vec<(AppAction, Origin)> = Vec::new();
+        let state = self.ui_state(&ctx);
+        if let Some(action) = show_menu(ui, &state, self.platform) {
+            actions.push((action, Origin::Menu));
+        }
         px_ui::status::show(ui, &self.status.0, self.status.1);
+        if let Some(action) = show_toolbar(ui, &state, &zoom_label(state.zoom)) {
+            actions.push((action, Origin::Button));
+        }
         self.session.normalize();
         if self.session.take_removal_cancelled() {
             self.notify(&ctx, REMOVAL_CANCELLED_NOTICE.to_string());
@@ -463,7 +506,13 @@ impl eframe::App for App {
         }
 
         let id = self.session.document.main_image();
-        for input in self.canvas.interact_ordered(ui) {
+        // Con el panel de licencias abierto el lienzo no interactúa.
+        let canvas_inputs = if self.licenses_open {
+            Vec::new()
+        } else {
+            self.canvas.interact_ordered(ui)
+        };
+        for input in canvas_inputs {
             let pixel = self.session.active_pixel();
             let result = self
                 .tools
@@ -482,7 +531,10 @@ impl eframe::App for App {
         }
         // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
         let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
-        self.handle_keys(&ctx, frame, &events);
+        self.key_actions(&events, &mut actions);
+        for (action, origin) in actions {
+            self.apply_action(&ctx, frame, action, origin);
+        }
 
         // Vista previa del color que se está editando: la textura la lleva el lienzo y vuelve al
         // documento al soltar o cancelar.
@@ -496,11 +548,23 @@ impl eframe::App for App {
         }
 
         let image = self.session.document.image(id);
-        let overlay = self.tools.preview().filter_map(|edit| {
-            let color = pixel_rgba(image?, edit.pixel)?;
-            Some((edit.x, edit.y, color))
-        });
-        let canvas_info = self.canvas.paint(ui, overlay);
+        let mut close_licenses = false;
+        let canvas_info = if self.licenses_open {
+            let output = show_licenses(ui, licenses::THIRD_PARTY, &mut self.licenses_first);
+            close_licenses = output.close;
+            CanvasInfo {
+                zoom: self.canvas.zoom().unwrap_or_default(),
+                hover: None,
+                image_rect: None,
+                error: None,
+            }
+        } else {
+            let overlay = self.tools.preview().filter_map(|edit| {
+                let color = pixel_rgba(image?, edit.pixel)?;
+                Some((edit.x, edit.y, color))
+            });
+            self.canvas.paint(ui, overlay)
+        };
 
         let now = ui.input(|i| i.time);
         let notice = self
@@ -540,6 +604,9 @@ impl eframe::App for App {
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
+        }
+        if close_licenses {
+            self.apply_action(&ctx, frame, AppAction::CloseLicenses, Origin::Button);
         }
     }
 }
