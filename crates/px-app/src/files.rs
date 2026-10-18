@@ -48,6 +48,8 @@ pub enum FileError {
     Unsaved,
     ReadOnly(PathBuf),
     Write(String),
+    /// Se añadió `.png` al nombre elegido y ese fichero ya existe.
+    Exists(PathBuf),
 }
 
 impl fmt::Display for FileError {
@@ -77,6 +79,9 @@ impl fmt::Display for FileError {
             FileError::Unsaved => write!(f, "hay cambios sin guardar"),
             FileError::ReadOnly(path) => write!(f, "{} es de solo lectura", path.display()),
             FileError::Write(msg) => write!(f, "no se pudo escribir: {msg}"),
+            FileError::Exists(path) => {
+                write!(f, "ya existe {}; elige otro nombre", file_label(path))
+            }
         }
     }
 }

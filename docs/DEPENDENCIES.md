@@ -10,6 +10,7 @@ Registro de lo que se incorpora al proyecto. Las dependencias de Cargo deben pas
 | [`png`](https://crates.io/crates/png) | 0.18.1 | MIT OR Apache-2.0 | dependencia de `px-formats` (y, a través de ella, de `px-app` desde la unidad 15) | Leer y escribir PNG (`specs/hito-1-png.md`; abrir y guardar en la app, `specs/hito-2-abrir-guardar.md`). Sin features: no tiene features por defecto y no se activan `zlib-rs`, `unstable` ni `benchmarks` |
 | [`eframe`](https://crates.io/crates/eframe) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-app` | Ventana, bucle de eventos y renderizador OpenGL (`specs/hito-2-ventana.md`). `default-features = false`; features `glow` y, solo en Linux, `x11` y `wayland`. No se activan `wgpu`, `accesskit`, `persistence`, `clipboard`, `links`, `system_fonts` ni `default_fonts` |
 | [`egui`](https://crates.io/crates/egui) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-ui` | Lienzo de `px-ui` y pruebas del lienzo sin ventana. `default-features = false`; la misma versión que usa `eframe`, fijada con `=` en las dos |
+| [`rfd`](https://crates.io/crates/rfd) | 0.17.2 | MIT | dependencia de `px-app` | Diálogos nativos de abrir y guardar, no bloqueantes (`specs/hito-2-dialogos-archivo.md`). `default-features = false`; en Linux, features `xdg-portal` y `wayland`; en Windows y macOS, ninguna. **Usa `unsafe`** (ver «Diálogos de archivo: `rfd`») |
 
 `proptest` deja 49 crates transitivos en `Cargo.lock`, de los cuales 32 se compilan con las features por defecto (`rand`, `tempfile`, `rustix`, `windows-sys`…); `serde` y `syn`, por ejemplo, solo figuran en el lockfile. Todos son solo para tests y no entran en los binarios (`cargo tree -p px-core -e normal` está vacío). `cargo deny check` los acepta.
 
@@ -89,3 +90,28 @@ Todos los crates del árbol tienen una licencia de `allow` o una disyunción con
 Sin `default_fonts`, la crate `epaint_default_fonts` (`(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`) **no entra** en el árbol, y por eso `deny.toml` no cambia. La fuente de la interfaz se decidió en la unidad 11a (`specs/hito-2-texto.md`): Departure Mono 1.500 (SIL OFL 1.1) cargada con `include_bytes!` desde `assets/fonts/`. No es una dependencia de Cargo: su origen, copyright, SHA-256 y licencia están en `docs/THIRD-PARTY.md`. Activar `default_fonts` exigiría una excepción de licencia solo para `epaint_default_fonts`; no se activa.
 
 `libfuzzer-sys` y su excepción NCSA siguen como antes; el aviso `license-exception-not-encountered` de `cargo deny` es esa excepción, que solo aplica al crate `fuzz/`, fuera del workspace.
+
+### Diálogos de archivo: `rfd` (`specs/hito-2-dialogos-archivo.md`)
+
+`rfd` 0.17.2 (2026-01-12), licencia **MIT**, fijada con `=` en `crates/px-app/Cargo.toml`. `Cargo.lock` gana **2 entradas** (`rfd` y `pollster`; de 317 a 319); el resto de su árbol ya estaba por `eframe`. La entrada ya existente de `dispatch2` 0.3.1 gana dos dependencias (`block2` y `libc`), porque `rfd` la usa con sus features por defecto; ninguna es una crate nueva. `cargo deny --locked check` da `advisories ok, bans ok, licenses ok, sources ok` sin tocar `deny.toml`. Árbol de `rfd` por sistema (`cargo tree -p rfd -e normal --target …`):
+
+| Sistema | Dependencias de `rfd` con la configuración de arriba |
+| --- | --- |
+| Linux | `libc`, `log`, `percent-encoding`, `pollster`, `raw-window-handle`; con la feature `wayland`, `wayland-client`, `wayland-protocols` y `wayland-backend` (con sus transitivas, que ya traía `eframe`) |
+| Windows | `log`, `raw-window-handle`, `windows-sys` |
+| macOS | `log`, `raw-window-handle`, `block2`, `dispatch2`, `objc2`, `objc2-app-kit`, `objc2-core-foundation`, `objc2-foundation` (ya traídas por `eframe`) |
+
+| Crate | Versión | Licencia |
+| --- | --- | --- |
+| `rfd` | 0.17.2 | MIT |
+| `pollster` | 0.4.0 | Apache-2.0 / MIT (disyunción, se usa MIT) |
+| `raw-window-handle` | 0.6.2 | MIT OR Apache-2.0 OR Zlib |
+| `percent-encoding`, `log`, `libc` | 2.3.2, 0.4.34, 0.2.191 | MIT OR Apache-2.0 |
+
+`Cargo.lock` también lista `js-sys`, `wasm-bindgen`, `wasm-bindgen-futures` y `web-sys` como dependencias de `rfd` en WebAssembly: no se compilan en Linux, Windows ni macOS.
+
+**`unsafe` en `rfd`.** El código de `rfd` usa `unsafe`: en Linux carga `libdbus-1.so.3` con `dlopen` en ejecución (`src/backend/xdg_desktop_portal/portal/ffi.rs` y `libdbus.rs`) y llama a la API de D-Bus por punteros; con la feature `wayland` obtiene el identificador de la ventana padre con `unsafe` (`window_identifier/mod.rs` y `wayland.rs`); en Windows y macOS llama a la API nativa (`windows-sys`, `objc2`). La regla de `CLAUDE.md` (`unsafe` prohibido salvo en `px-render`) es sobre **nuestro** código: `px-app` sigue con `unsafe_code = "forbid"` y no escribe ningún bloque `unsafe`. El `unsafe` de `rfd` es el de una dependencia aceptada por `cargo deny` y queda anotado aquí.
+
+**Requisitos en Linux (en ejecución, no en compilación).** `xdg-desktop-portal` con un backend de GTK, GNOME o KDE (el de wlroots solo no implementa la API que usa `rfd`) y `libdbus-1.so.3`. Si el portal falla, `rfd` cae a `zenity`; sin ninguno de los dos, Pixoko avisa en la barra de estado y arrastrar y soltar y `Ctrl`+`S` siguen funcionando. El CI no necesita paquetes nuevos (la biblioteca se carga en ejecución).
+
+**Sin comprobar:** la compilación en Windows y macOS la hace el CI en el primer *push*; en local solo se ha compilado en Linux.

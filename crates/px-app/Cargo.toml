@@ -17,6 +17,10 @@ eframe = { version = "=0.37.0", default-features = false, features = ["glow"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 eframe = { version = "=0.37.0", default-features = false, features = ["glow", "x11", "wayland"] }
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+rfd = { version = "=0.17.2", default-features = false }
 
 [dev-dependencies]
 proptest = "1.12.0"

@@ -5,6 +5,7 @@
 
 mod confirm;
 mod demo;
+mod dialogs;
 mod files;
 mod licenses;
 mod session;
@@ -25,10 +26,16 @@ use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, 
 use px_ui::texture::pixel_rgba;
 use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
 
-use crate::confirm::{Confirm, Confirmation, Request, close_warning, open_warning};
+use crate::confirm::{
+    Confirm, Confirmation, Request, close_warning, open_dialog_warning, open_warning,
+};
+use crate::dialogs::{
+    DialogKind, Dialogs, Finished, IGNORED_FILE_WHILE_DIALOG, Outcome, RfdPicker, fallback_request,
+    open_gate, unavailable_notice,
+};
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::licenses::wants_licenses;
-use crate::session::{Session, describe_saved};
+use crate::session::{Session, describe_saved, describe_saved_dialog};
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
@@ -47,6 +54,8 @@ struct App {
     notice: Option<Notice>,
     /// Confirmación por repetición al abrir o cerrar con cambios sin guardar.
     confirm: Confirm,
+    /// Diálogos de archivo (specs/hito-2-dialogos-archivo.md).
+    dialogs: Dialogs,
     /// Fichero del argumento de la línea de comandos, pendiente de abrir en el primer fotograma.
     cli_path: Option<PathBuf>,
     /// El tamaño mínimo (alto y ancho) de la ventana está activo (`PIXOKO_SIN_MINIMO=1` lo desactiva).
@@ -70,6 +79,11 @@ impl App {
             tools: ToolState::new(),
             notice: None,
             confirm: Confirm::new(),
+            dialogs: Dialogs::new(
+                Box::new(RfdPicker::new()),
+                cfg!(target_os = "linux"),
+                std::env::current_dir().ok(),
+            ),
             cli_path,
             min_enabled: min_enabled(std::env::var(ENV_NO_MIN).ok().as_deref()),
             min_sent: None,
@@ -104,21 +118,34 @@ impl App {
     /// Hay un gesto en curso: un trazo del lápiz, la línea, o el arrastre de un deslizador del
     /// editor de color. Mientras dura se ignoran atajos, elecciones y ficheros.
     fn busy(&self) -> bool {
-        self.tools.busy() || self.session.editor.dragging() || self.session.ops.busy()
+        self.tools.busy()
+            || self.session.editor.dragging()
+            || self.session.ops.busy()
+            || self.dialogs.pending()
     }
 
-    /// Abre `path` (del argumento o soltado). Con cambios sin guardar pide confirmación por
-    /// repetición; con un trazo en curso se ignora. `ignored`: ficheros soltados de más.
-    fn open_file(&mut self, ctx: &egui::Context, path: &Path, ignored: usize, from_cli: bool) {
+    /// Abre `path` (del argumento, soltado o elegido en el diálogo). Con cambios sin guardar pide
+    /// confirmación por repetición; con un gesto o un diálogo en curso se ignora. `ignored`:
+    /// ficheros soltados de más. `confirmed`: el descarte ya se confirmó (Ctrl+O con cambios).
+    fn open_file(
+        &mut self,
+        ctx: &egui::Context,
+        path: &Path,
+        ignored: usize,
+        from_cli: bool,
+        confirmed: bool,
+    ) {
         if self.busy() {
-            self.notify(
-                ctx,
-                "se ignora el fichero: hay un trazo en curso".to_string(),
-            );
+            let text = if self.dialogs.pending() {
+                IGNORED_FILE_WHILE_DIALOG
+            } else {
+                "se ignora el fichero: hay un trazo en curso"
+            };
+            self.notify(ctx, text.to_string());
             return;
         }
-        let mut discard = false;
-        if self.session.modified() {
+        let mut discard = confirmed;
+        if self.session.modified() && !confirmed {
             let now = ctx.input(|i| i.time);
             match self.confirm.request(Request::Open(path.to_path_buf()), now) {
                 Confirmation::Armed => {
@@ -132,6 +159,7 @@ impl App {
         match self.session.open(path, max_side, discard) {
             Ok(mut text) => {
                 self.confirm.clear();
+                self.dialogs.remember_dir(path);
                 if let Some(image) = self
                     .session
                     .document
@@ -174,16 +202,99 @@ impl App {
         match result {
             Ok(saved) => {
                 self.confirm.clear();
+                self.dialogs.remember_dir(&saved.path);
                 self.notify(ctx, describe_saved(&saved));
             }
             Err(error) => self.notify(ctx, error.to_string()),
         }
     }
 
+    /// Atajo de fichero: `Ctrl`+`O` abre el diálogo (con cambios, tras la confirmación por
+    /// repetición); `Ctrl`+`S` con ruta guarda y sin ella abre el diálogo de guardar;
+    /// `Ctrl`+`Mayús`+`S` abre el de guardar como.
+    fn file_action(&mut self, ctx: &egui::Context, frame: &eframe::Frame, action: FileAction) {
+        match action {
+            FileAction::Open => {
+                let now = ctx.input(|i| i.time);
+                match open_gate(self.session.modified(), &mut self.confirm, now) {
+                    None => self.notify(ctx, open_dialog_warning()),
+                    Some(discard) => self.begin_dialog(ctx, frame, DialogKind::Open, discard),
+                }
+            }
+            FileAction::Save if self.session.path().is_some() => self.save_file(ctx, false),
+            FileAction::Save => self.save_via_dialog(ctx, frame, DialogKind::Save),
+            FileAction::SaveAs => self.save_via_dialog(ctx, frame, DialogKind::SaveAs),
+        }
+    }
+
+    /// Guardar con diálogo. Si un diálogo anterior falló y su aviso sigue armado, esta segunda
+    /// pulsación guarda sin diálogo (`sin-titulo.png` o la copia, sin pisar nada).
+    fn save_via_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame, kind: DialogKind) {
+        let as_copy = kind == DialogKind::SaveAs;
+        let now = ctx.input(|i| i.time);
+        if self
+            .confirm
+            .confirm_armed(&Request::SaveFallback { as_copy }, now)
+        {
+            self.save_file(ctx, as_copy);
+            return;
+        }
+        self.begin_dialog(ctx, frame, kind, false);
+    }
+
+    fn begin_dialog(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+        kind: DialogKind,
+        discard: bool,
+    ) {
+        let now = ctx.input(|i| i.time);
+        let path = self.session.path().map(Path::to_path_buf);
+        let converted = self.session.converted();
+        if self
+            .dialogs
+            .begin(kind, discard, path.as_deref(), converted, now, Some(frame))
+        {
+            self.confirm.clear();
+            // El futuro empieza a ejecutarse al consultarlo: un fotograma ya.
+            ctx.request_repaint();
+        }
+    }
+
+    /// Resultado de un diálogo: abre o guarda la ruta elegida, o avisa de que no hay diálogo.
+    fn finish_dialog(&mut self, ctx: &egui::Context, finished: Finished) {
+        match finished.outcome {
+            Outcome::Cancelled => self.confirm.clear(),
+            Outcome::Unavailable => {
+                self.notify(ctx, unavailable_notice(finished.kind));
+                if let Some(request) = fallback_request(finished.kind) {
+                    let now = ctx.input(|i| i.time);
+                    self.confirm.request(request, now);
+                }
+            }
+            Outcome::Chosen(path) => match finished.kind {
+                DialogKind::Open => self.open_file(ctx, &path, 0, false, finished.discard),
+                DialogKind::Save | DialogKind::SaveAs => match self.session.save_to(&path) {
+                    Ok(saved) => {
+                        self.confirm.clear();
+                        self.dialogs.remember_dir(&saved.path);
+                        self.notify(ctx, describe_saved_dialog(&saved));
+                    }
+                    Err(error) => self.notify(ctx, error.to_string()),
+                },
+            },
+        }
+    }
+
     /// Cierre de la ventana con cambios sin guardar: el primero se cancela con aviso y el
-    /// segundo, en `CONFIRM_SECS`, cierra.
+    /// segundo, en `CONFIRM_SECS`, cierra. Un diálogo abierto se abandona.
     fn handle_close(&mut self, ctx: &egui::Context) {
-        if !ctx.input(|i| i.viewport().close_requested()) || !self.session.modified() {
+        if !ctx.input(|i| i.viewport().close_requested()) {
+            return;
+        }
+        self.dialogs.abandon();
+        if !self.session.modified() {
             return;
         }
         let now = ctx.input(|i| i.time);
@@ -195,11 +306,12 @@ impl App {
 
     /// Atajos de teclado. Con un gesto en curso se ignoran (`Escape` ya llega en orden por
     /// `Canvas::interact_ordered`, y la selección de herramienta la ignora `ToolState`).
-    fn handle_keys(&mut self, ctx: &egui::Context, events: &[egui::Event]) {
+    fn handle_keys(&mut self, ctx: &egui::Context, frame: &eframe::Frame, events: &[egui::Event]) {
         for event in events {
             let egui::Event::Key {
                 key,
                 pressed: true,
+                repeat,
                 modifiers,
                 ..
             } = event
@@ -207,14 +319,9 @@ impl App {
                 continue;
             };
             if let Some(action) = file_action_for_key(*key, *modifiers) {
-                if !self.busy() {
-                    match action {
-                        // Ctrl+O se conecta con el diálogo de abrir en la unidad 16.
-                        FileAction::Open => {}
-                        FileAction::Save | FileAction::SaveAs => {
-                            self.save_file(ctx, action == FileAction::SaveAs);
-                        }
-                    }
+                // Un atajo mantenido pulsado no repite: confirmaría solo.
+                if !*repeat && !self.busy() {
+                    self.file_action(ctx, frame, action);
                 }
                 continue;
             }
@@ -286,7 +393,7 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
         px_ui::status::show(ui, &self.status.0, self.status.1);
@@ -326,9 +433,16 @@ impl eframe::App for App {
                 self.apply_palette_op(&ctx, op, panel.op_unused);
             }
         }
+        let now = ctx.input(|i| i.time);
+        if let Some(finished) = self.dialogs.poll(now) {
+            self.finish_dialog(&ctx, finished);
+        }
+        if let Some(after) = self.dialogs.repaint_after() {
+            ctx.request_repaint_after(after);
+        }
         self.handle_close(&ctx);
         if let Some(path) = self.cli_path.take() {
-            self.open_file(&ctx, &path, 0, true);
+            self.open_file(&ctx, &path, 0, true, false);
         }
         let dropped: Vec<Option<PathBuf>> = ctx.input(|i| {
             i.raw
@@ -338,7 +452,7 @@ impl eframe::App for App {
                 .collect()
         });
         if let Some((path, ignored)) = pick_dropped(&dropped) {
-            self.open_file(&ctx, &path, ignored, false);
+            self.open_file(&ctx, &path, ignored, false, false);
         }
 
         let id = self.session.document.main_image();
@@ -351,7 +465,7 @@ impl eframe::App for App {
         }
         // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
         let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
-        self.handle_keys(&ctx, &events);
+        self.handle_keys(&ctx, frame, &events);
 
         // Vista previa del color que se está editando: la textura la lleva el lienzo y vuelve al
         // documento al soltar o cancelar.

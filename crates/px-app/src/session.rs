@@ -12,6 +12,7 @@ use px_ui::palette_ops::{
     Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_fate, summary,
 };
 
+use crate::dialogs::with_png_extension;
 use crate::files::{
     FileError, MAX_FILE_BYTES, copy_path, describe_open, describe_report, file_label, load_png,
     untitled_path, write_atomic,
@@ -337,6 +338,27 @@ impl Session {
         Ok(text)
     }
 
+    /// El fichero abierto se convierte al abrir: el primer `save` hace una copia.
+    pub fn converted(&self) -> bool {
+        self.conversion.is_some()
+    }
+
+    /// Guarda en la ruta elegida en un diálogo (specs/hito-2-dialogos-archivo.md, 4 y 5).
+    pub fn save_to(&mut self, chosen: &Path) -> Result<Saved, FileError> {
+        let dest = with_png_extension(chosen.to_path_buf());
+        // El sistema no preguntó por el nombre al que se añadió `.png`: no se pisa nada.
+        if dest != chosen && std::fs::symlink_metadata(&dest).is_ok() {
+            return Err(FileError::Exists(dest));
+        }
+        // Un PNG que se convierte al abrir no se sobrescribe: se guarda la copia.
+        if let (Some(path), Some(reason)) = (self.path.clone(), self.conversion.clone())
+            && same_file(&path, &dest)
+        {
+            return self.write_to(copy_path(&path), Some(reason));
+        }
+        self.write_to(dest, None)
+    }
+
     /// Guarda en la ruta del documento; sin ruta, en `untitled_path(new_dir)`. Si el fichero
     /// abierto se convierte al abrir, escribe una copia en vez de sobrescribirlo.
     pub fn save(&mut self, new_dir: &Path) -> Result<Saved, FileError> {
@@ -386,6 +408,25 @@ pub fn describe_saved(saved: &Saved) -> String {
     }
 }
 
+/// Mismo fichero: `canonicalize` y, si falla (no existe), `std::path::absolute`.
+fn same_file(a: &Path, b: &Path) -> bool {
+    let resolve = |path: &Path| std::fs::canonicalize(path).or_else(|_| std::path::absolute(path));
+    matches!((resolve(a), resolve(b)), (Ok(a), Ok(b)) if a == b)
+}
+
+/// Aviso al guardar con un diálogo: con copia por conversión, dice que el original no se tocó.
+pub fn describe_saved_dialog(saved: &Saved) -> String {
+    match &saved.copy_reason {
+        None => describe_saved(saved),
+        Some(_) => format!(
+            "el original se convirtió al abrir; guardado como {}",
+            file_label(&saved.path)
+        ),
+    }
+}
+
+#[cfg(test)]
+mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;
 #[cfg(test)]
