@@ -5,6 +5,7 @@ use egui::containers::menu::{MenuBar, MenuConfig, menu_style};
 use egui::{Button, Frame, Key, Panel, Sense, Style, Ui, vec2};
 
 use crate::actions::{AppAction, Platform, UiState, enabled};
+use crate::background::CanvasBackground;
 use crate::chrome::MENU_H_U;
 use crate::edit_layout::{BUTTON_H_U, BUTTON_TEXT_Y_U};
 use crate::status::ADVANCE_PX;
@@ -20,11 +21,20 @@ pub struct MenuItem {
     pub separator_before: bool,
 }
 
-/// Un menú de la barra: su título y sus entradas.
+/// Un submenú dentro de un desplegable: su rótulo y sus entradas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Submenu {
+    pub label: &'static str,
+    pub items: &'static [MenuItem],
+}
+
+/// Un menú de la barra: su título, sus entradas y sus submenús (que se pintan después de las
+/// entradas).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Menu {
     pub title: &'static str,
     pub items: &'static [MenuItem],
+    pub submenus: &'static [Submenu],
 }
 
 const fn item(label: &'static str, action: AppAction) -> MenuItem {
@@ -50,6 +60,7 @@ pub const MENUS: [Menu; 4] = [
                 separator_before: true,
             },
         ],
+        submenus: &[],
     },
     Menu {
         title: "Editar",
@@ -57,6 +68,7 @@ pub const MENUS: [Menu; 4] = [
             item("Deshacer", AppAction::Undo),
             item("Rehacer", AppAction::Redo),
         ],
+        submenus: &[],
     },
     Menu {
         title: "Ver",
@@ -66,12 +78,36 @@ pub const MENUS: [Menu; 4] = [
             item("Ajustar a la ventana", AppAction::ZoomFit),
             item("1:1", AppAction::ZoomActual),
         ],
+        submenus: &[Submenu {
+            label: "Fondo del lienzo",
+            items: &[
+                item(
+                    "Damero",
+                    AppAction::CanvasBackground(CanvasBackground::Checker),
+                ),
+                item(
+                    "Negro",
+                    AppAction::CanvasBackground(CanvasBackground::Black),
+                ),
+                item("Gris", AppAction::CanvasBackground(CanvasBackground::Gray)),
+                item(
+                    "Blanco",
+                    AppAction::CanvasBackground(CanvasBackground::White),
+                ),
+            ],
+        }],
     },
     Menu {
         title: "Ayuda",
         items: &[item("Licencias", AppAction::ShowLicenses)],
+        submenus: &[],
     },
 ];
+
+/// `true` si `action` es la del fondo `current`: la entrada del submenú que lleva la marca.
+pub fn background_checked(action: AppAction, current: CanvasBackground) -> bool {
+    action == AppAction::CanvasBackground(current)
+}
 
 /// Un atajo para mostrarlo: la tecla, si lleva `command` (`Ctrl` o `Cmd`) y si lleva `Mayús`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,14 +186,30 @@ pub fn popup_width_u(menu: &Menu, platform: Platform) -> i64 {
                 .map_or(0, |s| shortcut_text(s, platform).chars().count());
             item.label.chars().count() + 2 + shortcut
         })
+        .chain(
+            menu.submenus
+                .iter()
+                .map(|sub| sub.label.chars().count() + 2),
+        )
         .max()
         .unwrap_or(0) as i64;
     2 * PAD_X_U + widest * i64::from(ADVANCE_PX)
 }
 
-/// Pinta la barra en el borde superior de `ui` y devuelve la entrada elegida, si la hay. Hay que
-/// llamarla **antes** de lo que ocupa el resto de la ventana.
+/// Como [`show_menu_with_background`] con el fondo por defecto marcado.
 pub fn show_menu(ui: &mut Ui, state: &UiState, platform: Platform) -> Option<AppAction> {
+    show_menu_with_background(ui, state, platform, CanvasBackground::default())
+}
+
+/// Pinta la barra en el borde superior de `ui` y devuelve la entrada elegida, si la hay, con la
+/// marca del submenú de fondo en `background`. Hay que llamarla **antes** de lo que ocupa el
+/// resto de la ventana.
+pub fn show_menu_with_background(
+    ui: &mut Ui,
+    state: &UiState,
+    platform: Platform,
+    background: CanvasBackground,
+) -> Option<AppAction> {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
     let u = ui_unit(ppp);
@@ -197,6 +249,29 @@ pub fn show_menu(ui: &mut Ui, state: &UiState, platform: Platform) -> Option<App
                                     chosen = Some(item.action);
                                 }
                             }
+                            for submenu in menu.submenus {
+                                ui.menu_button(printable(&ctx, submenu.label), |ui| {
+                                    // Hueco de la marca (`· `) y del rótulo más largo.
+                                    let width = (2 * PAD_X_U
+                                        + (submenu_label_chars(submenu) + 2)
+                                            * i64::from(ADVANCE_PX))
+                                        as f32
+                                        * u;
+                                    ui.set_min_width(width);
+                                    ui.set_max_width(width);
+                                    for item in submenu.items {
+                                        let checked = match item.action {
+                                            AppAction::CanvasBackground(_) => {
+                                                background_checked(item.action, background)
+                                            }
+                                            _ => false,
+                                        };
+                                        if marked_entry(ui, &ctx, state, item, checked, width, u) {
+                                            chosen = Some(item.action);
+                                        }
+                                    }
+                                });
+                            }
                         });
                     }
                 });
@@ -222,5 +297,35 @@ fn menu_entry(
     if let Some(text) = shortcut {
         button = button.shortcut_text(printable(ctx, &text));
     }
+    ui.add_enabled(on, button).clicked()
+}
+
+/// Caracteres del rótulo más largo de las entradas de un submenú.
+fn submenu_label_chars(submenu: &Submenu) -> i64 {
+    submenu
+        .items
+        .iter()
+        .map(|item| item.label.chars().count())
+        .max()
+        .unwrap_or(0) as i64
+}
+
+/// Una fila de un submenú con marca: `· ` delante del rótulo de la activa (dos espacios si no, en
+/// la fuente monoespaciada el texto no se mueve) y la fila resaltada. Devuelve si se ha pulsado
+/// estando habilitada.
+fn marked_entry(
+    ui: &mut Ui,
+    ctx: &egui::Context,
+    state: &UiState,
+    item: &MenuItem,
+    checked: bool,
+    width: f32,
+    u: f32,
+) -> bool {
+    let on = enabled(item.action, state);
+    let text = format!("{} {}", if checked { '·' } else { ' ' }, item.label);
+    let button = Button::new(printable(ctx, &text))
+        .selected(checked)
+        .min_size(vec2(width, BUTTON_H_U as f32 * u));
     ui.add_enabled(on, button).clicked()
 }

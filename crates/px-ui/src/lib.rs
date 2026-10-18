@@ -1,9 +1,12 @@
 //! px-ui: modelo de vista del lienzo, conversión de imágenes, lienzo de egui, texto, tema y
 //! barra de estado, el panel de paletas, el editor de color, la capa de acciones (`actions`), el
-//! menú, la columna de herramientas y el panel de licencias.
+//! menú, la columna de herramientas, el panel de licencias y el damero de transparencia del lienzo
+//! con su fondo elegible (`checker`, `background`).
 
 pub mod actions;
+pub mod background;
 pub mod canvas;
+pub mod checker;
 pub mod chrome;
 pub mod color;
 pub mod color_edit;

@@ -6,6 +6,7 @@
 //! [`Dispatched`] y lo ejecuta `App`. Sin egui: se prueba sin ventana.
 
 use px_ui::actions::{AppAction, Locks, Origin, is_blocked};
+use px_ui::background::CanvasBackground;
 use px_ui::color::key_choice;
 use px_ui::shortcuts::FileAction;
 use px_ui::tool::{ToolAction, ToolState};
@@ -33,6 +34,9 @@ pub enum Dispatched {
     View(ViewOp),
     /// Abrir (`true`) o cerrar (`false`) el panel de licencias.
     Licenses(bool),
+    /// Elegir el fondo bajo la transparencia del lienzo: preferencia de la sesión, no toca el
+    /// documento.
+    Background(CanvasBackground),
 }
 
 /// Lo que `dispatch` puede tocar, con los bloqueos de este fotograma.
@@ -82,6 +86,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::ZoomActual => Dispatched::View(ViewOp::Actual),
         AppAction::ShowLicenses => Dispatched::Licenses(true),
         AppAction::CloseLicenses => Dispatched::Licenses(false),
+        AppAction::CanvasBackground(background) => Dispatched::Background(background),
         AppAction::SelectTool(tool) => {
             let image = session.document.image(session.document.main_image());
             Dispatched::Done {

@@ -4,6 +4,7 @@
 
 use egui::{Key, Modifiers};
 
+use crate::background::CanvasBackground;
 use crate::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
 use crate::tool::{Tool, ToolAction, tool_action_for_key};
 use crate::view::Zoom;
@@ -28,6 +29,8 @@ pub enum AppAction {
     SelectTool(Tool),
     /// Ranura de color, de 1 a 9.
     SelectColor(u8),
+    /// Fondo bajo la transparencia del lienzo: preferencia de la sesión, no del documento.
+    CanvasBackground(CanvasBackground),
 }
 
 impl AppAction {
@@ -98,7 +101,9 @@ pub struct Locks {
 /// En este orden: (1) `CloseLicenses` nunca; (2) con `modal`, todo salvo `Quit`; (3) con `dialog`,
 /// todo; (4) el zoom solo se bloquea con `text_focus` y desde el teclado (no modifica el
 /// documento: un gesto o una quita pendiente no lo paran); (5) el resto, con `gesture` o
-/// `text_focus`, y con `removal` solo `SelectColor`; (6) si no, nada.
+/// `text_focus`, y con `removal` solo `SelectColor`; (6) si no, nada. El fondo del lienzo
+/// (`CanvasBackground`) tampoco toca el documento: tras (1) a (3) solo lo bloquea `text_focus`, con
+/// cualquier origen; un gesto o una quita pendiente no.
 pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if action == AppAction::CloseLicenses {
         return false;
@@ -108,6 +113,9 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     }
     if locks.dialog {
         return true;
+    }
+    if matches!(action, AppAction::CanvasBackground(_)) {
+        return locks.text_focus;
     }
     if action.is_zoom() {
         return locks.text_focus && origin == Origin::Key;

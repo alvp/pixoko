@@ -23,9 +23,10 @@ use eframe::egui;
 use px_core::Document;
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
 use px_ui::canvas::{Canvas, CanvasInfo};
+use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::licenses_view::show_licenses;
-use px_ui::menu::show_menu;
+use px_ui::menu::show_menu_with_background;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::shortcuts::{FileAction, gate_keys};
@@ -83,6 +84,10 @@ impl App {
         let mut canvas = Canvas::new();
         // Las teclas de zoom las trata la capa de acciones, con sus propios bloqueos.
         canvas.set_view_keys(false);
+        // `PIXOKO_DAMERO_MALLA=1`: el damero con una malla de casillas en vez de la textura repetida.
+        canvas.set_checker_mesh(mesh_fallback_enabled(
+            std::env::var(ENV_MESH).ok().as_deref(),
+        ));
         if let Some(image) = document.image(document.main_image()) {
             canvas.set_image(image);
         }
@@ -399,6 +404,10 @@ impl App {
                 self.licenses_open = open;
                 self.licenses_first = 0;
             }
+            Dispatched::Background(background) => {
+                self.canvas.set_background(background);
+                ctx.request_repaint();
+            }
         }
     }
 
@@ -442,7 +451,9 @@ impl eframe::App for App {
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
         let state = self.ui_state(&ctx);
-        if let Some(action) = show_menu(ui, &state, self.platform) {
+        if let Some(action) =
+            show_menu_with_background(ui, &state, self.platform, self.canvas.background())
+        {
             actions.push((action, Origin::Menu));
         }
         px_ui::status::show(ui, &self.status.0, self.status.1);

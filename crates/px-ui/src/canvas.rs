@@ -7,18 +7,22 @@
 use std::error::Error;
 use std::fmt;
 
+use egui::epaint::Mesh;
 use egui::{
-    Color32, ColorImage, Context, Event, Key, PointerButton, Rect, Sense, TextureHandle,
+    Color32, ColorImage, Context, Event, Key, PointerButton, Rect, Sense, Shape, TextureHandle,
     TextureOptions, Ui, pos2, vec2,
 };
 use px_core::{Image, Rgba};
 
+use crate::background::{CanvasBackground, Fill, background_fill};
+use crate::checker::{self, Shade};
+use crate::text::text_scale;
 use crate::texture::{to_rgba8, to_rgba8_with_entry};
-use crate::view::{Size, View, ViewOp, Zoom};
+use crate::view::{ScreenRect, Size, View, ViewOp, Zoom};
 
-/// Fondo liso detrás de la imagen (el tablero de la transparencia queda para más adelante). Lo que
-/// se ve de un píxel transparente y de uno borrado en la superposición
-/// (specs/hito-2-cuentagotas-borrador.md, «Para el damero»).
+/// Fondo liso del lienzo fuera de la imagen, y el fondo «Gris» elegible bajo la transparencia
+/// (el de antes del damero). Dentro de la imagen, un píxel transparente o borrado se ve sobre el
+/// fondo elegido, por defecto el damero (specs/hito-2-damero-lienzo.md).
 pub const BACKGROUND: Color32 = Color32::from_gray(40);
 
 /// Por qué no se puede mostrar la imagen.
@@ -115,6 +119,12 @@ pub struct Canvas {
     requested: Vec<ViewOp>,
     /// Las teclas `+`, `=`, `-` y `Home` ya no las trata el lienzo (las trata la capa de acciones).
     view_keys_off: bool,
+    /// Qué se ve bajo la transparencia de la imagen: preferencia de la sesión, no del documento.
+    background: CanvasBackground,
+    /// Respaldo: el damero como una malla de casillas en vez de la textura repetida.
+    checker_mesh: bool,
+    /// Textura de 2×2 del damero, creada la primera vez que se pinta con ella.
+    checker: Option<TextureHandle>,
 }
 
 impl Canvas {
@@ -139,6 +149,32 @@ impl Canvas {
     /// de un trazo (el trazo sigue y sus siguientes puntos usan la vista nueva).
     pub fn request_view(&mut self, op: ViewOp) {
         self.requested.push(op);
+    }
+
+    /// Elige qué se ve bajo la transparencia. No toca el documento ni la imagen subida; abrir otra
+    /// imagen no lo restablece.
+    pub fn set_background(&mut self, background: CanvasBackground) {
+        self.background = background;
+    }
+
+    /// El fondo elegido bajo la transparencia.
+    pub fn background(&self) -> CanvasBackground {
+        self.background
+    }
+
+    /// Activa el respaldo por malla del damero (`PIXOKO_DAMERO_MALLA=1`).
+    pub fn set_checker_mesh(&mut self, enabled: bool) {
+        self.checker_mesh = enabled;
+    }
+
+    pub fn checker_mesh(&self) -> bool {
+        self.checker_mesh
+    }
+
+    /// Textura de 2×2 del damero, si ya se creó (no se crea con un fondo sólido ni con el
+    /// respaldo por malla).
+    pub fn checker_texture_id(&self) -> Option<egui::TextureId> {
+        self.checker.as_ref().map(TextureHandle::id)
     }
 
     /// Zoom actual, o `None` si todavía no hay imagen mostrada.
@@ -434,6 +470,19 @@ impl Canvas {
         if ctx.tessellation_options(|options| options.feathering) {
             ctx.tessellation_options_mut(|options| options.feathering = false);
         }
+        let fill = background_fill(self.background);
+        // La textura del damero se crea una vez, la primera vez que hay imagen que pintar con ella.
+        if fill == Fill::Checker
+            && !self.checker_mesh
+            && self.texture.is_some()
+            && self.checker.is_none()
+        {
+            self.checker = Some(ui.ctx().load_texture(
+                "px-checker",
+                checker_image(),
+                TextureOptions::NEAREST_REPEAT,
+            ));
+        }
         let painter = ui.painter_at(frame.rect);
         painter.rect_filled(frame.rect, 0.0, BACKGROUND);
 
@@ -447,12 +496,48 @@ impl Canvas {
         };
         let ppp = frame.ppp;
         let to_points = |p: (i64, i64)| frame.rect.min + vec2(p.0 as f32 / ppp, p.1 as f32 / ppp);
+        let rect_points = |r: ScreenRect| {
+            Rect::from_min_max(
+                to_points((r.x, r.y)),
+                to_points((r.x + r.width, r.y + r.height)),
+            )
+        };
 
         let placed = view.image_rect(size);
         let image_rect = Rect::from_min_size(
             to_points((placed.x, placed.y)),
             vec2(placed.width as f32 / ppp, placed.height as f32 / ppp),
         );
+
+        // Fondo bajo la transparencia: la parte de la imagen que cae en el lienzo, con los mismos
+        // enteros de píxel físico que la malla de la imagen. El damero está anclado a su esquina.
+        let cell = checker::cell_px(text_scale(ppp));
+        let origin = (placed.x, placed.y);
+        let checker_quad = |area: ScreenRect, painter: &egui::Painter| {
+            if let (Some(handle), Some(quad)) = (&self.checker, checker::quad(area, origin, cell)) {
+                let uv =
+                    Rect::from_min_max(pos2(quad.uv[0], quad.uv[1]), pos2(quad.uv[2], quad.uv[3]));
+                painter.image(handle.id(), rect_points(quad.rect), uv, Color32::WHITE);
+            }
+        };
+        if let Some(area) = checker::clip(placed, frame.viewport) {
+            match fill {
+                Fill::Solid(color) => {
+                    painter.rect_filled(rect_points(area), 0.0, color32(color));
+                }
+                Fill::Checker if self.checker_mesh => {
+                    painter.rect_filled(rect_points(area), 0.0, shade_color(Shade::A));
+                    let mut mesh = Mesh::default();
+                    for dark in checker::cells(area, origin, cell).filter(|c| c.shade == Shade::B) {
+                        mesh.add_colored_rect(rect_points(dark.rect), shade_color(Shade::B));
+                    }
+                    if !mesh.is_empty() {
+                        painter.add(Shape::mesh(mesh));
+                    }
+                }
+                Fill::Checker => checker_quad(area, &painter),
+            }
+        }
         painter.image(
             texture.id(),
             image_rect,
@@ -460,10 +545,16 @@ impl Canvas {
             Color32::WHITE,
         );
 
+        // Superposición. Con damero, dos pasadas: primero todo lo que va debajo (el damero
+        // recortado a cada píxel con alfa < 255, que sustituye al píxel al soltar) y después los
+        // colores, para no cambiar de textura en cada forma y partir la malla en una por píxel.
+        // Con un fondo sólido, una sola pasada: el sólido y encima el color.
         let (view_w, view_h) = (
             i64::from(frame.viewport.width),
             i64::from(frame.viewport.height),
         );
+        let mut colors: Vec<Shape> = Vec::new();
+        let mut cells_mesh = Mesh::default();
         for (x, y, color) in overlay {
             let min = view.image_to_screen(x, y);
             let max = view.image_to_screen(x.saturating_add(1), y.saturating_add(1));
@@ -471,14 +562,47 @@ impl Canvas {
                 continue;
             }
             let block = Rect::from_min_max(to_points(min), to_points(max));
-            if color.a < 255 {
-                painter.rect_filled(block, 0.0, BACKGROUND);
-            }
-            if color.a > 0 {
-                let color = Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
-                painter.rect_filled(block, 0.0, color);
+            let under = color.a < 255;
+            let top = (color.a > 0)
+                .then(|| Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a));
+            match fill {
+                Fill::Solid(solid) => {
+                    if under {
+                        painter.rect_filled(block, 0.0, color32(solid));
+                    }
+                    if let Some(top) = top {
+                        painter.rect_filled(block, 0.0, top);
+                    }
+                }
+                Fill::Checker => {
+                    if under {
+                        let area = ScreenRect {
+                            x: min.0,
+                            y: min.1,
+                            width: max.0 - min.0,
+                            height: max.1 - min.1,
+                        };
+                        if self.checker_mesh {
+                            for cell in checker::cells(area, origin, cell) {
+                                cells_mesh.add_colored_rect(
+                                    rect_points(cell.rect),
+                                    shade_color(cell.shade),
+                                );
+                            }
+                        } else {
+                            checker_quad(area, &painter);
+                        }
+                    }
+                    if let Some(top) = top {
+                        colors.push(Shape::rect_filled(block, 0.0, top));
+                    }
+                }
             }
         }
+        if !cells_mesh.is_empty() {
+            painter.add(Shape::mesh(cells_mesh));
+        }
+        painter.extend(colors);
 
         CanvasInfo {
             zoom: view.zoom(),
@@ -506,6 +630,19 @@ impl Canvas {
             TextureOptions::NEAREST,
         ));
     }
+}
+
+/// Textura de 2×2 del damero: `texels()` por filas.
+fn checker_image() -> ColorImage {
+    ColorImage::new([2, 2], checker::texels().map(color32).to_vec())
+}
+
+fn color32(color: Rgba) -> Color32 {
+    Color32::from_rgb(color.r, color.g, color.b)
+}
+
+fn shade_color(shade: Shade) -> Color32 {
+    color32(shade.color())
 }
 
 fn color_image(image: &Image) -> ColorImage {
