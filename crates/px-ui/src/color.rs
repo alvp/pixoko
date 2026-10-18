@@ -168,6 +168,40 @@ pub fn info_flags(hover: bool, active: bool, transparent: bool) -> String {
     shown.join(" · ")
 }
 
+/// Como [`info_flags`] con la bandera `rango` (la muestra está en el rango de rotación y no es
+/// la activa), entre `activa` y `transparente`.
+pub fn info_flags_range(hover: bool, active: bool, in_range: bool, transparent: bool) -> String {
+    let flags = [
+        (hover, "cursor"),
+        (active, "activa"),
+        (in_range && !active, "rango"),
+        (transparent, "transparente"),
+    ];
+    let shown: Vec<&str> = flags
+        .iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, name)| *name)
+        .collect();
+    shown.join(" · ")
+}
+
+/// Deja la elección válida para la imagen: en indexadas `Entry(min(i, len − 1))` (`Slot(n)` pasa
+/// a `Entry(n − 1)`); en los demás modos, igual si vale y si no la inicial.
+pub fn clamp_choice(image: &Image, choice: ColorChoice) -> ColorChoice {
+    match palette_len(image) {
+        Some(len) => {
+            let index = match choice {
+                ColorChoice::Entry(i) => usize::from(i),
+                ColorChoice::Slot(n) => usize::from(n).saturating_sub(1),
+            };
+            let last = len.saturating_sub(1);
+            ColorChoice::Entry(u8::try_from(index.min(last)).unwrap_or(u8::MAX))
+        }
+        None if pixel_for_choice(image, choice).is_some() => choice,
+        None => initial_choice(image),
+    }
+}
+
 /// Texto del color activo para la barra de estado: `Slot` como `slot_label`; `Entry(i)` es
 /// `índice 12 #ff8800`, y la entrada transparente `índice 2 #00ff0000 transparente`.
 pub fn choice_label(image: &Image, choice: ColorChoice) -> Option<String> {

@@ -8,6 +8,7 @@ pub mod color_editor;
 pub mod edit_layout;
 pub mod notice;
 pub mod palette_grid;
+pub mod palette_ops;
 pub mod palette_panel;
 pub mod shortcuts;
 pub mod status;

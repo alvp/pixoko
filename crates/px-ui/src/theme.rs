@@ -25,6 +25,13 @@ pub const RING_ACTIVE: Color32 = ACCENT;
 /// Anillo de la muestra bajo el cursor.
 pub const RING_HOVER: Color32 = TEXT;
 
+/// Anillo de las muestras del rango de rotación (1 u; la elegida lleva uno de 2 u).
+pub const RING_RANGE: Color32 = ACCENT;
+/// Anillo del destino de una quita pendiente.
+pub const RING_DEST: Color32 = WARNING;
+/// Barra que marca dónde caerá una muestra arrastrada.
+pub const DROP_MARK: Color32 = TEXT;
+
 /// Prefijo de texto de los avisos: no dependen solo del color.
 pub const NOTICE_PREFIX: &str = "aviso: ";
 

@@ -40,6 +40,16 @@ pub const RIGHT_LINE_X_U: i64 = 232;
 /// Grosor de los anillos de la muestra elegida y de la del cursor.
 pub const RING_ACTIVE_U: i64 = 2;
 pub const RING_HOVER_U: i64 = 1;
+/// Distancia que debe recorrer el puntero (en `u`) para que pulsar una muestra pase de clic a
+/// arrastre (specs/hito-2-paleta-operaciones.md).
+pub const DRAG_START_U: i64 = 4;
+/// Media separación entre muestras: la captura del destino de un arrastre llega hasta ahí.
+pub const DROP_HALF_GAP_U: i64 = GAP_U / 2;
+/// Anillo de las muestras del rango de rotación y del destino de una quita pendiente.
+pub const RING_RANGE_U: i64 = 1;
+pub const RING_DEST_U: i64 = 2;
+/// Ancho de la barra que marca el destino de un arrastre.
+pub const DROP_MARK_W_U: i64 = 2;
 /// Damero de las muestras con alfa.
 pub const CHECK_A: Rgba = Rgba::opaque(0x4a, 0x4a, 0x4a);
 pub const CHECK_B: Rgba = Rgba::opaque(0x6e, 0x6e, 0x6e);
@@ -75,6 +85,7 @@ pub fn edges_u() -> Vec<i64> {
         for origin in [GRID_X_U, GRID_Y_U] {
             let start = origin + step * PITCH_U;
             edges.extend([
+                start - RING_ACTIVE_U - 1,
                 start - RING_ACTIVE_U,
                 start - RING_HOVER_U,
                 start,
@@ -82,6 +93,7 @@ pub fn edges_u() -> Vec<i64> {
                 start + CELL_U,
                 start + CELL_U + RING_HOVER_U,
                 start + CELL_U + RING_ACTIVE_U,
+                start + CELL_U + RING_ACTIVE_U + 1,
             ]);
         }
     }
@@ -154,6 +166,31 @@ impl Grid {
             width: CELL_U * self.n,
             height: CELL_U * self.n,
         })
+    }
+
+    /// Destino de un arrastre bajo el punto `(x, y)`: el índice que tendrá la entrada movida. Cada
+    /// muestra captura su paso entero (con media separación por cada lado: no hay huecos
+    /// muertos); más allá del final de la última fila vale el último índice; fuera de la zona,
+    /// `None`.
+    pub fn drop_index(&self, x: i64, y: i64) -> Option<usize> {
+        let half = DROP_HALF_GAP_U * self.n;
+        let pitch = PITCH_U * self.n;
+        let (x, y) = (x.checked_add(half)?, y.checked_add(half)?);
+        if x < 0 || y < 0 {
+            return None;
+        }
+        let col = usize::try_from(x / pitch).ok()?;
+        let shown = usize::try_from(y / pitch).ok()?;
+        let rows_left = total_rows(self.count).saturating_sub(self.first_row);
+        if col >= COLUMNS || shown >= self.visible_rows.min(rows_left) {
+            return None;
+        }
+        let index = self
+            .first_row
+            .checked_add(shown)?
+            .checked_mul(COLUMNS)?
+            .checked_add(col)?;
+        Some(index.min(self.count.checked_sub(1)?))
     }
 
     /// Muestra bajo el punto `(x, y)`, o `None` en un hueco, fuera de la rejilla, en una fila
@@ -347,6 +384,23 @@ pub fn swatch_parts(n: u32, color: Rgba) -> Vec<(ScreenRect, Rgba)> {
         parts.push((whole, color));
     }
     parts
+}
+
+/// Barra que marca el destino de un arrastre junto a `cell`: en la separación de su izquierda
+/// (`after` falso) o de su derecha, centrada en ella, con la altura de un paso.
+pub fn drop_mark_rect(cell: ScreenRect, after: bool, n: u32) -> ScreenRect {
+    let n = scale(n);
+    let x = if after {
+        cell.x + cell.width + n
+    } else {
+        cell.x - (GAP_U - DROP_MARK_W_U / 2) * n
+    };
+    rect(
+        x,
+        cell.y - DROP_HALF_GAP_U * n,
+        DROP_MARK_W_U * n,
+        PITCH_U * n,
+    )
 }
 
 /// Anillo de `thickness` píxeles alrededor de `cell`: arriba, abajo, izquierda y derecha. Las

@@ -269,6 +269,8 @@ pub enum StaleReason {
     Gone,
     /// El color guardado de la entrada cambió desde que se tecleó (deshacer, rehacer).
     Changed,
+    /// La entrada cambió de índice (mover, quitar una anterior).
+    Moved,
 }
 
 /// Aviso de 5 s al descartar un texto pendiente.
@@ -276,6 +278,7 @@ pub fn stale_notice(reason: StaleReason) -> &'static str {
     match reason {
         StaleReason::Gone => "texto descartado: la entrada ya no existe",
         StaleReason::Changed => "texto descartado: el color cambió",
+        StaleReason::Moved => "texto descartado: la entrada se movió",
     }
 }
 
@@ -469,6 +472,16 @@ impl ColorEditor {
                 HexOutcome::Invalid(error)
             }
         }
+    }
+
+    /// Destino del texto pendiente, si lo hay.
+    pub fn pending_target(&self) -> Option<EditTarget> {
+        self.pending.as_ref().map(|pending| pending.target)
+    }
+
+    /// Descarta el texto pendiente sin aplicarlo. `true` si había.
+    pub fn discard_pending(&mut self) -> bool {
+        self.pending.take().is_some()
     }
 
     /// Hay texto pendiente (tecleado y aún sin confirmar ni revertir).
