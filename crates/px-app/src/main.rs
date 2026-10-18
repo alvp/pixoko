@@ -20,6 +20,7 @@ use px_ui::canvas::Canvas;
 use px_ui::color::{choice_label_with, key_choice};
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::notice::{NOTICE_SECS, Notice};
+use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, gate_keys};
 use px_ui::texture::pixel_rgba;
 use px_ui::tool::{ToolAction, ToolState, tool_action_for_key};
@@ -103,7 +104,7 @@ impl App {
     /// Hay un gesto en curso: un trazo del lápiz, la línea, o el arrastre de un deslizador del
     /// editor de color. Mientras dura se ignoran atajos, elecciones y ficheros.
     fn busy(&self) -> bool {
-        self.tools.busy() || self.session.editor.dragging()
+        self.tools.busy() || self.session.editor.dragging() || self.session.ops.busy()
     }
 
     /// Abre `path` (del argumento o soltado). Con cambios sin guardar pide confirmación por
@@ -143,6 +144,9 @@ impl App {
                 }
                 if self.session.take_discarded_text() {
                     text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
+                }
+                if self.session.take_removal_cancelled() {
+                    text = format!("{REMOVAL_CANCELLED_NOTICE} · {text}");
                 }
                 self.notify(ctx, text);
             }
@@ -219,17 +223,15 @@ impl App {
             }
             match action_for_key(*key, *modifiers) {
                 Some(Action::Undo) if self.session.document.can_undo() => {
-                    let before = self.session.choice;
-                    let result = self.session.document.undo().map(|()| true);
-                    self.session.reveal_if_choice_changed(before);
+                    let result = self.session.undo().map(|()| true);
                     self.finish(ctx, result);
                 }
                 Some(Action::Redo) if self.session.document.can_redo() => {
-                    let before = self.session.choice;
-                    let result = self.session.document.redo().map(|()| true);
-                    self.session.reveal_if_choice_changed(before);
+                    let result = self.session.redo().map(|()| true);
                     self.finish(ctx, result);
                 }
+                // Con una quita pendiente la selección está fija en la entrada que se quita.
+                Some(Action::SelectColor(_)) if self.session.ops.removal().is_some() => {}
                 Some(Action::SelectColor(slot)) => {
                     let image = self
                         .session
@@ -241,6 +243,19 @@ impl App {
                 }
                 _ => {}
             }
+        }
+    }
+
+    /// Aplica una edición de la paleta pedida por el panel y avisa del resultado.
+    fn apply_palette_op(&mut self, ctx: &egui::Context, op: PaletteOp, unused: bool) {
+        match self.session.apply_palette_op(op, unused) {
+            Ok(outcome) => {
+                self.finish::<std::convert::Infallible>(ctx, Ok(outcome.changed));
+                if let Some(text) = outcome.notice {
+                    self.notify(ctx, text);
+                }
+            }
+            Err(error) => self.notify(ctx, error.to_string()),
         }
     }
 
@@ -269,12 +284,16 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
         px_ui::status::show(ui, &self.status.0, self.status.1);
+        self.session.normalize();
+        if self.session.take_removal_cancelled() {
+            self.notify(&ctx, REMOVAL_CANCELLED_NOTICE.to_string());
+        }
         self.session.sync_editor();
         let enabled = !self.busy();
         let main = self.session.document.main_image();
         let mut panel = None;
         if let Some(image) = self.session.document.image(main) {
-            panel = Some(px_ui::palette_panel::show_editing_view(
+            panel = Some(px_ui::palette_panel::show_editing_ops(
                 ui,
                 image,
                 self.session.choice,
@@ -283,6 +302,7 @@ impl eframe::App for App {
                 enabled,
                 self.session.slots.get(image.mode()),
                 &mut self.session.editor,
+                &mut self.session.ops,
             ));
         }
         if let Some(panel) = panel {
@@ -295,6 +315,9 @@ impl eframe::App for App {
             }
             if let Some(text) = panel.notice {
                 self.notify(&ctx, text);
+            }
+            if let Some(op) = panel.op {
+                self.apply_palette_op(&ctx, op, panel.op_unused);
             }
         }
         self.handle_close(&ctx);
