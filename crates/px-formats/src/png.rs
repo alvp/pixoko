@@ -448,26 +448,11 @@ pub fn write_png(image: &Image) -> Result<Vec<u8>, PngError> {
         }
     }
 
-    let len = Image::byte_len(width, height, image.mode())
-        .map_err(|e| PngError::Encode(e.to_string()))?;
-    let mut data = Vec::new();
-    data.try_reserve_exact(len)
-        .map_err(|_| PngError::Encode("sin memoria para los píxeles".to_string()))?;
-    for y in 0..height {
-        for x in 0..width {
-            let pixel = image
-                .get_pixel(x, y)
-                .map_err(|e| PngError::Encode(e.to_string()))?;
-            match pixel {
-                Pixel::Rgba(c) => data.extend_from_slice(&[c.r, c.g, c.b, c.a]),
-                Pixel::Indexed(i) | Pixel::Gray(i) => data.push(i),
-                Pixel::GrayAlpha { gray, alpha } => data.extend_from_slice(&[gray, alpha]),
-            }
-        }
-    }
-
     let mut writer = encoder.write_header().map_err(encode_error)?;
-    writer.write_image_data(&data).map_err(encode_error)?;
+    // `bytes()` ya es lo que pide el codificador a 8 bits (filas sin relleno): no se copia.
+    writer
+        .write_image_data(image.bytes())
+        .map_err(encode_error)?;
     writer.finish().map_err(encode_error)?;
     Ok(out)
 }
