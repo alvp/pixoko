@@ -7,6 +7,8 @@ use std::io::Cursor;
 use png::{BitDepth, ColorType, Decoder, Encoder, Limits, Transformations};
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
 
+use crate::aux_chunks::{AuxReport, AuxScan};
+
 /// Memoria que se concede al crate `png` para sus propios búferes (filas y chunks).
 const CRATE_LIMIT_BYTES: usize = 64 << 20;
 
@@ -31,6 +33,8 @@ pub enum Conversion {
 pub struct PngRead {
     pub image: Image,
     pub report: Vec<Conversion>,
+    /// Chunks auxiliares que se ignoran (no cambian ningún valor de píxel ni el informe).
+    pub aux: AuxReport,
 }
 
 impl PngRead {
@@ -174,7 +178,7 @@ pub fn read_png(bytes: &[u8]) -> Result<PngRead, PngError> {
     let depth = info.bit_depth as u8;
     // tRNS se lee del fichero crudo: el crate descarta en silencio el que es demasiado
     // corto y recorta el de gris y RGB a un byte por muestra por debajo de 16 bits.
-    let trns = scan_chunks(bytes)?;
+    let (trns, aux) = scan_chunks(bytes)?;
     let plan = plan(info.color_type, depth, info.palette.as_deref(), trns)?;
 
     // Tamaño de la imagen y del búfer de muestras, antes de reservar nada.
@@ -194,7 +198,7 @@ pub fn read_png(bytes: &[u8]) -> Result<PngRead, PngError> {
 
     let report = report(&plan, depth);
     let image = build_image(width, height, depth, &plan, &raw, row_len)?;
-    Ok(PngRead { image, report })
+    Ok(PngRead { image, report, aux })
 }
 
 /// Valida PLTE y tRNS contra el tipo de color y decide cómo leer las muestras.
@@ -278,14 +282,16 @@ fn report(plan: &Plan, depth: u8) -> Vec<Conversion> {
     report
 }
 
-/// Recorre los chunks hasta IEND y devuelve los datos del tRNS previo al IDAT, si lo hay.
+/// Recorre los chunks hasta IEND y devuelve los datos del tRNS previo al IDAT, si lo hay, y el
+/// informe de los auxiliares ignorados.
 ///
 /// El IEND debe estar completo y acabar en el último byte. El crate no detecta ni los datos
 /// sobrantes ni un IEND cortado.
-fn scan_chunks(bytes: &[u8]) -> Result<Option<&[u8]>, PngError> {
+fn scan_chunks(bytes: &[u8]) -> Result<(Option<&[u8]>, AuxReport), PngError> {
     let truncated = || PngError::Decode("PNG truncado".to_string());
     let mut trns = None;
     let mut seen_idat = false;
+    let mut aux = AuxScan::default();
     // La firma ya la validó el crate.
     let mut pos = 8usize;
     loop {
@@ -302,12 +308,13 @@ fn scan_chunks(bytes: &[u8]) -> Result<Option<&[u8]>, PngError> {
             .and_then(|p| p.checked_add(length))
             .filter(|&end| end <= bytes.len())
             .ok_or_else(truncated)?;
+        aux.chunk(&header[4..8], &bytes[pos + 8..end - 4]);
         match &header[4..8] {
             b"IDAT" => seen_idat = true,
             b"tRNS" if !seen_idat && trns.is_none() => trns = Some(&bytes[pos + 8..end - 4]),
             b"IEND" => {
                 return if end == bytes.len() {
-                    Ok(trns)
+                    Ok((trns, aux.finish()))
                 } else {
                     Err(PngError::TrailingData)
                 };

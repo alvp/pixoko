@@ -289,7 +289,8 @@ fn fila_3_de_un_tipo_repetido_vale_el_primero() {
 #[test]
 fn fila_4_causas_segun_la_regla_de_d2() {
     use AuxChunk::*;
-    let casos: Vec<(&str, Vec<Vec<u8>>, Option<AuxChunk>)> = vec![
+    type Caso = (&'static str, Vec<Vec<u8>>, Option<AuxChunk>);
+    let casos: Vec<Caso> = vec![
         ("iCCP", vec![c_iccp()], Some(Icc)),
         ("iCCP + sRGB", vec![c_iccp(), c_srgb()], Some(Icc)),
         ("sRGB + iCCP", vec![c_srgb(), c_iccp()], Some(Icc)),
