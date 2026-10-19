@@ -92,27 +92,11 @@ pub fn to_rgba8_with_entry(image: &Image, index: u8, color: Rgba) -> Vec<u8> {
         return to_rgba8(image);
     };
     // Tabla índice → color resuelto: una consulta por píxel en vez de una a la paleta.
-    let mut table = [Rgba::TRANSPARENT; 256];
-    for (slot, entry) in (0..=u8::MAX).zip(table.iter_mut()) {
-        if let Ok(resolved) = palette.resolved(slot) {
-            *entry = resolved;
-        }
-    }
-    table[usize::from(index)] = if palette.transparent_index() == Some(index) {
-        Rgba { a: 0, ..color }
-    } else {
-        color
-    };
+    let table = resolved_table(Some(palette), Some((index, color)));
     let (width, height) = (image.width(), image.height());
     let mut bytes = Vec::with_capacity(width as usize * height as usize * 4);
-    for y in 0..height {
-        for x in 0..width {
-            let color = match image.get_pixel(x, y) {
-                Ok(Pixel::Indexed(i)) => table[usize::from(i)],
-                _ => Rgba::TRANSPARENT,
-            };
-            bytes.extend_from_slice(&[color.r, color.g, color.b, color.a]);
-        }
+    for &index in image.bytes() {
+        bytes.extend_from_slice(&table[usize::from(index)]);
     }
     bytes
 }
