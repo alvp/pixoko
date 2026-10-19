@@ -434,7 +434,7 @@ impl Banco {
                 )
             };
             let _ = canvas.interact_ordered(ui);
-            let _ = canvas.paint(ui, std::iter::empty());
+            let _ = canvas.paint(ui);
             resultado = Some(panel);
         });
         salida.textures_delta.clear();

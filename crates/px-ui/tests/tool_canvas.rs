@@ -93,7 +93,7 @@ impl Banco {
                     .map(CanvasInput::Stroke)
                     .collect()
             };
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some((eventos, info));
         });
         let (eventos, info) = resultado.expect("el lienzo se dibuja");

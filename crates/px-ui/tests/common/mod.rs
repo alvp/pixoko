@@ -10,6 +10,8 @@
 //! capturas de pantalla.
 #![allow(dead_code)]
 
+pub mod texturas;
+
 use egui::epaint::{ClippedShape, Shape};
 use egui::{
     Color32, Context, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelSource, MouseWheelUnit,

@@ -93,7 +93,7 @@ impl Banco {
             show(ui, texto, aviso);
             let rect_lienzo = ui.available_rect_before_wrap();
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some(Fotograma {
                 rect_lienzo,
                 entradas,

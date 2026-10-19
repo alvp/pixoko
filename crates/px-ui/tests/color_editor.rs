@@ -435,7 +435,7 @@ impl Banco {
                 palette_panel::show_editing(ui, image, *choice, scroll, enabled, slots, editor);
             let rect_lienzo = ui.available_rect_before_wrap();
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some((rect_lienzo, entradas, info, panel));
         });
         salida.textures_delta.clear();

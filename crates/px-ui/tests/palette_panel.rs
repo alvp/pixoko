@@ -171,7 +171,7 @@ impl Banco {
             let eleccion = palette_panel::show(ui, image, choice, scroll, enabled);
             let rect_lienzo = ui.available_rect_before_wrap();
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some((rect_lienzo, entradas, info, eleccion));
         });
         salida.textures_delta.clear();

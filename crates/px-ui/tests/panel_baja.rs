@@ -385,7 +385,7 @@ impl Banco {
             );
             let rect_lienzo = ui.available_rect_before_wrap();
             let _ = canvas.interact_ordered(ui);
-            let _ = canvas.paint(ui, std::iter::empty());
+            let _ = canvas.paint(ui);
             resultado = Some((rect_lienzo, panel));
         });
         salida.textures_delta.clear();

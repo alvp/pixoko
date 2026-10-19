@@ -320,7 +320,7 @@ impl Banco {
         let canvas = &mut self.canvas;
         fotograma(&self.ctx, PANTALLA, events, |ui| {
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some((info, entradas));
         });
         resultado.expect("el lienzo se dibuja")

@@ -230,7 +230,7 @@ impl Banco {
             );
             let r4 = ui.available_rect_before_wrap();
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             let rects = Rects {
                 menu: Rect::from_min_max(r0.min, Pos2::new(r0.max.x, r1.min.y)),
                 estado: Rect::from_min_max(Pos2::new(r1.min.x, r2.max.y), r1.max),
@@ -521,7 +521,7 @@ impl Referencia {
         let canvas = &mut self.canvas;
         fotograma(&self.ctx, self.pantalla, events, |ui| {
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some((info, entradas));
         });
         resultado.expect("se dibuja")

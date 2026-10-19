@@ -119,7 +119,7 @@ impl Banco {
                 boton_rect = respuesta.inner.rect;
             }
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some(Paso {
                 entradas,
                 info,
@@ -436,7 +436,7 @@ impl BancoConMenu {
         let formas = fotograma(&self.ctx, PANTALLA, events, |ui| {
             let accion = show_menu(ui, estado, Platform::Linux);
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, std::iter::empty());
+            let info = canvas.paint(ui);
             resultado = Some((accion, entradas, info));
         });
         let (accion, entradas, info) = resultado.expect("se dibuja");
