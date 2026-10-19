@@ -747,7 +747,9 @@ fn formas_y_vertices(ctx: &Context, output: &mut FullOutput) -> (usize, usize) {
 /// convertido y premultiplicado), con los píxeles `pendientes` ya escritos encima.
 fn textura_esperada(imagen: &Image, pendientes: &[(u32, u32, Rgba)]) -> Vec<Color32> {
     let mut texels: Vec<Color32> = to_rgba8(imagen)
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
         .collect();
     for &(x, y, c) in pendientes {

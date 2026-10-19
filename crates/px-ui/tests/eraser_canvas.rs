@@ -320,7 +320,9 @@ fn los_veinte() -> Vec<(u32, u32)> {
 /// la unidad 14a, premultiplicado) con los `pixeles` borrados (alfa 0: `Color32::TRANSPARENT`).
 fn textura_esperada(bytes: &[u8], pixeles: impl IntoIterator<Item = (u32, u32)>) -> Vec<Color32> {
     let mut texels: Vec<Color32> = bytes
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
         .collect();
     for (x, y) in pixeles {
@@ -529,7 +531,9 @@ fn fila_10_tras_el_end_y_el_refresh_la_textura_es_el_documento_con_esos_pixeles_
     }
     // La textura compuesta es `from_rgba_unmultiplied(to_rgba8(documento))`, píxel a píxel.
     let documento: Vec<Color32> = to_rgba8(s.banco.imagen())
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
         .collect();
     assert_eq!(f.textura.texels, documento, "la textura es el documento");
