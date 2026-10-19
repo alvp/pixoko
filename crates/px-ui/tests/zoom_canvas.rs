@@ -15,17 +15,20 @@
 //! - A7: un trazo a 1/4 va por la rejilla (múltiplos de 4), con un solo paso de deshacer.
 //! - A8: el menú y la columna con la escalera (`enabled`, `zoom_label`) y el rótulo cabe en la
 //!   columna a las cinco escalas con la fuente real y `MissingGlyphPolicy::Panic`.
-//! - A9: la superposición del trazo a zoom < 1 (rectángulos, mientras dure la textura única): solo
-//!   los píxeles con `x` e `y` múltiplos de `K`, cada uno de 1×1 píxel físico, sin formas de área
-//!   cero, con los cuatro fondos y con `set_checker_mesh(true)` (lo que activa
-//!   `PIXOKO_DAMERO_MALLA=1` en la app).
+//! - A9: la superposición del trazo a zoom < 1, reexpresada para la 14a-2 (la superposición es
+//!   parte de la textura de la baldosa, `Canvas::set_overlay`, no hay formas): se **ven** solo los
+//!   píxeles con `x` e `y` múltiplos de `K` (los demás no tienen píxel de pantalla propio), cada
+//!   uno de 1×1 píxel físico y con el color del oráculo de la 17b, muestreando la **textura
+//!   compuesta** de la baldosa (los `textures_delta` de cada fotograma); la superposición no añade
+//!   ninguna forma al fotograma, y ninguna forma es de área cero, con los cuatro fondos y con
+//!   `set_checker_mesh(true)` (lo que activa `PIXOKO_DAMERO_MALLA=1` en la app).
 //! - P1 (banco): `hover` y `StrokeBegin` de un puntero cualquiera son el oráculo con `round(v·ppp)`.
 //!
 //! Supuestos que la spec no fija del todo:
 //! - A9 no usa el contenido de la imagen azul de `overlay_small_zoom.rs`, sino un degradado con un
 //!   color distinto por posición: así el muestreo de la imagen (el texel `s·K` en el píxel de
 //!   pantalla `s`) es observable. El oráculo es el píxel `s·K` de la imagen **que construye la
-//!   prueba**, no el código bajo prueba.
+//!   prueba**, no el código bajo prueba; la imagen de A9 (256×192) cabe en una sola baldosa.
 //! - Los píxeles pendientes de A9 son, por cada `K`, las celdas `K×K` de la rejilla (filas 1 y 2 y
 //!   hasta 12 columnas) rellenas **enteras**: solo la esquina de cada celda se debe ver.
 //! - El rótulo de la columna (A8) cabe si su texto pintado es entero (sin recorte) y termina dentro
@@ -36,7 +39,10 @@
 use std::collections::{HashMap, HashSet};
 
 use egui::epaint::{ClippedPrimitive, ClippedShape, Primitive, Shape, Vertex};
-use egui::{Color32, Context, Event, Key, Modifiers, Pos2, Rect, TextureId, Vec2, pos2, vec2};
+use egui::{
+    Color32, Context, Event, Key, Modifiers, Pos2, RawInput, Rect, TextureId, TexturesDelta, Vec2,
+    pos2, vec2,
+};
 use proptest::prelude::*;
 use px_core::{Document, Image, Mode, Pixel, Rgba};
 use px_ui::actions::{AppAction, Locks, Origin, UiState, enabled, is_blocked};
@@ -590,8 +596,13 @@ struct Banco {
     ppp: f32,
     pantalla: Vec2,
     canvas: Canvas,
-    /// El contenido de la textura de la imagen, si la prueba lo necesita.
+    /// El documento (lo que `sync` y `set_overlay` reciben): no cambia en estas pruebas.
+    documento: Image,
+    /// Lo que la prueba sabe de la imagen (el oráculo), si la necesita.
     imagen: Option<Imagen>,
+    /// El contenido de las texturas tal como egui lo entrega a la GPU: se aplican los
+    /// `textures_delta` de **cada** fotograma, en orden.
+    compuestas: common::texturas::Texturas,
 }
 
 impl Banco {
@@ -603,7 +614,9 @@ impl Banco {
             ppp,
             pantalla,
             canvas,
+            documento: image.clone(),
             imagen: None,
+            compuestas: common::texturas::Texturas::new(),
         };
         for _ in 0..3 {
             banco.reposo();
@@ -626,15 +639,34 @@ impl Banco {
         self
     }
 
-    /// Un fotograma: `interact_ordered` y `paint` con la superposición dada.
+    /// Un fotograma, en el orden de la app: `interact_ordered`, `set_overlay` con la superposición
+    /// dada (el trazo pendiente entero; vacío la quita), `sync` y `paint`. Aplica los cambios de
+    /// textura del fotograma (completos y parciales) antes de devolver las formas.
     fn corre(&mut self, events: Vec<Event>, overlay: &[Pendiente]) -> Salida {
+        let entrada = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.pantalla)),
+            events,
+            ..RawInput::default()
+        };
         let mut resultado = None;
         let canvas = &mut self.canvas;
-        let formas = fotograma(&self.ctx, self.pantalla, events, |ui| {
+        let documento = &self.documento;
+        let mut salida = self.ctx.run_ui(entrada, |ui| {
             let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui, overlay.iter().copied());
+            canvas.set_overlay(ui.ctx(), documento, overlay);
+            canvas
+                .sync(ui.ctx(), documento)
+                .expect("el documento se carga");
+            let info = canvas.paint(ui);
             resultado = Some((info, entradas));
         });
+        // Sin los cambios de la fuente de egui (`Managed(0)`): el banco no pinta texto.
+        let mut delta: TexturesDelta = salida.textures_delta.clone();
+        delta.set.remove(&TextureId::Managed(0));
+        delta.free.remove(&TextureId::Managed(0));
+        self.compuestas.aplica(&delta);
+        salida.textures_delta.clear();
+        let formas = std::mem::take(&mut salida.shapes);
         let (info, entradas) = resultado.expect("el lienzo se dibuja");
         Salida {
             formas,
@@ -697,13 +729,19 @@ impl Banco {
         en_puntos(self.ppp, x, y)
     }
 
+    /// Las texturas para rasterizar: la **compuesta** de la baldosa 0 (la imagen de A9 cabe en una
+    /// sola baldosa, y con la superposición ya escrita en ella) y la del damero.
     fn texturas(&self) -> Texturas {
-        let imagen = self.imagen.as_ref().expect("el banco conoce la imagen");
+        let id = self.canvas.texture_id().expect("hay textura de la imagen");
+        let compuesta = self
+            .compuestas
+            .get(id)
+            .expect("la baldosa se subió y sus cambios se aplicaron");
         Texturas {
-            imagen: self.canvas.texture_id().expect("hay textura de la imagen"),
-            ancho: imagen.ancho as usize,
-            alto: imagen.alto as usize,
-            texels: imagen.texels(),
+            imagen: id,
+            ancho: compuesta.tamano[0],
+            alto: compuesta.tamano[1],
+            texels: compuesta.texels.clone(),
             damero: self.canvas.checker_texture_id(),
         }
     }
@@ -1029,7 +1067,7 @@ fn fila_a6_home_fit_y_request_view_dan_lo_de_a4() {
     }
 }
 
-/// La malla de la textura de la imagen (la única, con la textura entera de esta subunidad).
+/// La malla de la textura de la imagen (la de la única baldosa de una imagen pequeña).
 fn malla_de_la_imagen(banco: &Banco, formas: &[ClippedShape]) -> (Vec<Vertex>, Vec<u32>) {
     let id = banco.canvas.texture_id().expect("hay textura de la imagen");
     let mut mallas: Vec<(Vec<Vertex>, Vec<u32>)> = capas_de(formas)
@@ -1046,7 +1084,7 @@ fn malla_de_la_imagen(banco: &Banco, formas: &[ClippedShape]) -> (Vec<Vertex>, V
     assert_eq!(
         mallas.len(),
         1,
-        "con la textura única, una sola malla de la imagen"
+        "con una sola baldosa, una sola malla de la imagen"
     );
     mallas.remove(0)
 }
@@ -1586,6 +1624,29 @@ fn compara_con_el_oraculo(
     fallos
 }
 
+/// Resumen de la estructura de un fotograma (cada forma: tipo, textura, caja y vértices, a una
+/// milésima de punto). Dos fotogramas con la misma firma tienen las mismas formas: la
+/// superposición, que es parte de la textura de la baldosa, **no añade ni cambia ninguna** (ni
+/// rectángulos de color o de fondo por píxel pendiente, ni cuadriláteros del damero, ni mallas).
+fn firma(capas: &[Capa]) -> Vec<String> {
+    let milesimas = |r: Rect| {
+        [r.min.x, r.min.y, r.max.x, r.max.y].map(|c| (f64::from(c) * 1000.0).round() as i64)
+    };
+    capas
+        .iter()
+        .map(|capa| match capa {
+            Capa::Relleno { rect } => format!("relleno {:?}", milesimas(*rect)),
+            Capa::Malla {
+                textura, vertices, ..
+            } => format!(
+                "malla {textura:?} {:?} {} vértices",
+                milesimas(caja_pos(vertices)),
+                vertices.len()
+            ),
+        })
+        .collect()
+}
+
 /// Ninguna forma de área cero: ni rectángulos vacíos ni triángulos degenerados, antes y después de
 /// teselar.
 fn sin_formas_de_area_cero(
@@ -1640,6 +1701,8 @@ fn comprueba_a9(ppp: f32, k: i64, fondo: CanvasBackground, malla: bool, con_supe
     } else {
         Vec::new()
     };
+    // El fotograma de referencia (sin superposición) y el de la prueba, tras `set_overlay`.
+    let sin = banco.corre(vec![], &[]);
     let salida = banco.corre(vec![], &pendientes);
     let etiqueta = format!(
         "ppp {ppp} ×1/{k} fondo {fondo:?}{}{}",
@@ -1654,6 +1717,33 @@ fn comprueba_a9(ppp: f32, k: i64, fondo: CanvasBackground, malla: bool, con_supe
         salida.info.zoom.to_string(),
         format!("×1/{k}"),
         "{etiqueta}"
+    );
+    // La textura compuesta de la baldosa es la imagen con los píxeles pendientes escritos (el
+    // texel nuevo es el color pendiente premultiplicado; el viejo no está).
+    let imagen = banco.imagen.as_ref().expect("imagen del banco");
+    let mut texels = imagen.texels();
+    for &(x, y, c) in &pendientes {
+        texels[(y * imagen.ancho + x) as usize] =
+            Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a);
+    }
+    let compuesta = banco
+        .compuestas
+        .get(banco.canvas.texture_id().expect("hay textura"))
+        .expect("la baldosa se subió");
+    assert_eq!(
+        compuesta.tamano,
+        [imagen.ancho as usize, imagen.alto as usize],
+        "{etiqueta}"
+    );
+    assert!(
+        compuesta.texels == texels,
+        "{etiqueta}: la textura compuesta no es la imagen con los píxeles pendientes escritos"
+    );
+    // Ninguna forma de superposición: las formas son las del fotograma sin ella.
+    assert_eq!(
+        firma(&capas_de(&salida.formas)),
+        firma(&capas_de(&sin.formas)),
+        "{etiqueta}: la superposición no debe añadir ni cambiar ninguna forma"
     );
     let primitivas = banco.ctx.tessellate(salida.formas.clone(), ppp);
     sin_formas_de_area_cero(&salida.formas, &primitivas, ppp, &etiqueta);
@@ -1722,16 +1812,21 @@ fn fila_a9_los_pixeles_fuera_de_la_rejilla_no_dejan_ninguna_forma_visible() {
             let render = |banco: &mut Banco, overlay: &[Pendiente]| {
                 let salida = banco.corre(vec![], overlay);
                 let primitivas = banco.ctx.tessellate(salida.formas.clone(), ppp);
-                rasteriza(
+                let buffer = rasteriza(
                     &primitivas,
                     ppp,
                     viewport.width as usize,
                     viewport.height as usize,
                     &banco.texturas(),
-                )
+                );
+                (buffer, firma(&capas_de(&salida.formas)))
             };
-            let sin = render(&mut banco, &[]);
-            let con = render(&mut banco, &fuera);
+            let (sin, formas_sin) = render(&mut banco, &[]);
+            let (con, formas_con) = render(&mut banco, &fuera);
+            assert_eq!(
+                formas_sin, formas_con,
+                "ppp {ppp} ×1/{k}: la superposición no añade ninguna forma"
+            );
             for (i, (a, b)) in sin.pixeles.iter().zip(&con.pixeles).enumerate() {
                 assert!(
                     a.cerca(*b, TOLERANCIA),
