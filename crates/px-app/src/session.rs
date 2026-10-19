@@ -543,3 +543,5 @@ mod panel_tests;
 mod pick_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tiles_tests;
