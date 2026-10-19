@@ -58,7 +58,7 @@ Todo medido en una copia fuera del repositorio (crate de pruebas con `egui` 0.37
     - **Preferencia de la sesión, no del documento:** estado de `App` (vive en su `Canvas`: `Canvas::set_background` y `background`; abrir otra imagen **no** la restablece). No marca el documento como modificado, no crea paso, **no se guarda en disco todavía** (anotado para la unidad de ajustes del hito 8).
     - **Bloqueos como el zoom:** solo un diálogo abierto (y el panel modal de licencias, como todo salvo `Quit`); un gesto en curso o una quita pendiente **no** la bloquean; con un campo de texto enfocado el menú está deshabilitado como el resto (no hay tecla). `is_blocked` la trata aparte de `is_zoom`: con `text_focus` bloquea desde cualquier origen.
     - **Pintado:** con `Solid(c)` no se crea la textura del damero ni se dibuja el cuadrilátero repetido: un rectángulo de color `c` sobre `clip(image_rect)`; fuera de la imagen sigue el `BACKGROUND` liso. **Superposición** (borrador y alfa parcial): con `Checker`, las dos pasadas de la decisión 8; con `Solid(c)`, **una** pasada (el rectángulo de `c` por píxel y encima el de color, el comportamiento anterior a la 17b).
-    - **«Color…» (hexadecimal) no entra aquí:** anotado para la unidad 18 (campos numéricos y diálogos).
+    - **«Color…» (hexadecimal) no entra aquí:** anotado para la unidad 19b (corta, tras la 19; el campo hexadecimal y los diálogos son de la 18).
 13. **Coherencia con el panel de paletas** (ampliación 10): el color de cada casilla del lienzo y el de las casillas de la muestra transparente (`swatch_parts`) son **la misma pareja**: una prueba compara `Shade::color()` y `texels()` con las constantes `CHECK_A` y `CHECK_B` y con los rellenos de `swatch_parts` de una entrada de alfa 0.
 14. **A ×8 con `n = 1` la casilla coincide con el píxel de imagen** (ampliación 12): lo documentan la decisión 4 y la prueba manual; aceptado.
 
@@ -167,7 +167,7 @@ Se repite a `ppp` 1,0, 1,5 y 2,0 (casilla de 8, 16 y 16 píxeles físicos) y, si
 
 ## Fuera de alcance
 
-Damero o tamaño de casilla configurables, o con otros colores; **«Color…» (hexadecimal) para el fondo (unidad 18)**; **guardar la preferencia del fondo en disco (unidad de ajustes del hito 8)**; zooms 1/2, 1/4 y 1/8 y la superposición como textura o sombreador (14a, que tendrá que resolver «borrar» de nuevo); cambiar las muestras del panel de paletas; `px-app`; la exportación (el damero nunca se guarda).
+Damero o tamaño de casilla configurables, o con otros colores; **«Color…» (hexadecimal) para el fondo (unidad 19b)**; **guardar la preferencia del fondo en disco (unidad de ajustes del hito 8)**; zooms 1/2, 1/4 y 1/8 y la superposición como textura o sombreador (14a, que tendrá que resolver «borrar» de nuevo); cambiar las muestras del panel de paletas; `px-app`; la exportación (el damero nunca se guarda).
 
 ## Visto bueno (2026-10-19)
 

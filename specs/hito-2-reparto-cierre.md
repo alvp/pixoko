@@ -14,6 +14,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 | 4 | **17b** | Damero de transparencia **de fondo del lienzo** (unidad corta; solo pintado, no depende de la textura) | `px-ui` | ninguna |
 | 5 | **18** | Diálogos modales y campos numéricos | `px-ui` | ninguna |
 | 6 | **19** | Nueva imagen | `px-app`, `px-core` | ninguna |
+| 6b | **19b** | «Color…» del fondo del lienzo (unidad corta tras la 19: un diálogo con un campo hexadecimal, reutilizando el de la 11c y la infraestructura de la 18; nota de [`hito-2-damero-lienzo.md`](hito-2-damero-lienzo.md)) | `px-ui`, `px-app` | ninguna |
 | 7 | **20** | Convertir de modo | `px-app`, `px-ui` | ninguna |
 | 8 | **13b** | Chunks auxiliares del PNG en el informe de lectura | `px-formats`, `px-app` | ninguna |
 | 9 | **12** | Acceso por filas y bytes a `Image` (con `uses_index` y las limpiezas de API de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md)) | `px-core` | ninguna |
@@ -44,6 +45,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 - **D9. Puerta** (21): la prueba va en `px-app` y `px-golden`, sin xvfb ni cambios en el CI (no `px-cli`, que no tiene código hasta el hito 8). **Unidad 13b:** la lectura de PNG lista en su informe los chunks auxiliares ignorados (`iCCP`, `gAMA`, `sRGB`, `pHYs`, texto…); con `iCCP`, `Ctrl`+`S` guarda una copia, como con las conversiones, y el título lo explica. El usuario probó a mano la puerta actual en Linux, macOS y Windows (todo bien) y la repetirá al final del hito.
 - **D10. Rellenos y memoria** (14c): tope de tramos del relleno con error claro y constante con nombre (sin hilo aparte), y tope de memoria del peine.
 - **D11. Damero de transparencia** (nota de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md), aprobada 2026-10-18). El damero **de fondo del lienzo** es la unidad **17b**, corta y tras la 17: solo cambia `Canvas::paint` (el fondo liso `BACKGROUND` pasa a damero) y la fila 10 de [`hito-2-cuentagotas-borrador.md`](hito-2-cuentagotas-borrador.md) para el fondo. El damero **de la superposición del borrador** va **dentro de la 14a**, junto a la superposición del trazo como textura o sombreador (medida del zigzag a 4096² en las notas de la 14): su forma depende de cómo la textura resuelva «borrar», y con formas por píxel empeoraría el retraso medido. Cada una tendrá su spec y su visto bueno.
+- **D12. «Color…» del fondo del lienzo** (aprobada 2026-10-19, en la spec de la unidad 18): queda fuera de la 18 y es la unidad corta **19b**, tras la 19, con un diálogo de un campo hexadecimal. Cada una tendrá su spec y su visto bueno.
 
 ## Notas para el hito 4
 
