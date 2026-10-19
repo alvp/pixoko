@@ -1,4 +1,4 @@
-//! Lienzo de egui: pinta una `Image` con zoom entero y desplazamiento
+//! Lienzo de egui: pinta una `Image` con zoom (de 1/64 a ×64) y desplazamiento
 //! (specs/hito-2-ventana.md, «Lienzo»).
 //!
 //! La geometría vive en [`crate::view`] (sin tipos de egui); aquí solo se traducen las entradas
@@ -547,7 +547,7 @@ impl Canvas {
         painter.image(
             texture.id(),
             image_rect,
-            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+            image_uv(view.zoom(), placed, size),
             Color32::WHITE,
         );
 
@@ -562,8 +562,9 @@ impl Canvas {
         let mut colors: Vec<Shape> = Vec::new();
         let mut cells_mesh = Mesh::default();
         for (x, y, color) in overlay {
-            let min = view.image_to_screen(x, y);
-            let max = view.image_to_screen(x.saturating_add(1), y.saturating_add(1));
+            let Some((min, max)) = view.pixel_block(x, y) else {
+                continue;
+            };
             if max.0 <= 0 || max.1 <= 0 || min.0 >= view_w || min.1 >= view_h {
                 continue;
             }
@@ -636,6 +637,26 @@ impl Canvas {
             TextureOptions::NEAREST,
         ));
     }
+}
+
+/// uv de la imagen entera. Con zoom ≥ ×1, de 0 a 1. A 1/K el píxel de pantalla `s` muestra el
+/// texel `s·K` (esquina de la rejilla): el uv va desplazado `0,5 − K/2` texels, de modo que el
+/// centro de cada píxel de pantalla cae en el centro de un texel y no en un borde
+/// (specs/hito-2-zoom-baldosas.md, decisión 3).
+fn image_uv(zoom: Zoom, placed: ScreenRect, size: Size) -> Rect {
+    let Some(k) = zoom.shrink_factor() else {
+        return Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+    };
+    let axis = |screen: i64, texels: u32| {
+        let off = 0.5 - k as f64 / 2.0;
+        (
+            (off / f64::from(texels)) as f32,
+            ((screen as f64 * k as f64 + off) / f64::from(texels)) as f32,
+        )
+    };
+    let (u0, u1) = axis(placed.width, size.width);
+    let (v0, v1) = axis(placed.height, size.height);
+    Rect::from_min_max(pos2(u0, v0), pos2(u1, v1))
 }
 
 /// Textura de 2×2 del damero: `texels()` por filas.

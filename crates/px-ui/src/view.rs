@@ -13,8 +13,8 @@ pub const MIN_VISIBLE: u32 = 16;
 
 /// Nivel de zoom.
 ///
-/// La representación es privada (una fracción `num / den`): hoy solo hay enteros de 1 a 64, y
-/// añadir 1/2, 1/4 y 1/8 no cambia esta API pública.
+/// La representación es privada (una fracción `num / den`). La escalera es 1/64, 1/32, …, 1/2,
+/// ×1, ×2, …, ×64 (specs/hito-2-zoom-baldosas.md, decisión 2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Zoom {
     num: u32,
@@ -23,8 +23,8 @@ pub struct Zoom {
 
 impl Zoom {
     pub const ONE: Zoom = Zoom { num: 1, den: 1 };
-    /// Zoom mínimo: hoy 1.
-    pub const MIN: Zoom = Zoom::ONE;
+    /// Zoom mínimo: 1/64 (el mayor factor de alejamiento).
+    pub const MIN: Zoom = Zoom { num: 1, den: 64 };
     /// Zoom máximo: 64.
     pub const MAX: Zoom = Zoom { num: 64, den: 1 };
 
@@ -35,10 +35,38 @@ impl Zoom {
             .then_some(Zoom { num: n, den: 1 })
     }
 
-    /// Nivel siguiente (+1); satura en [`Zoom::MAX`].
+    /// `Some(1/k)` solo con `k` potencia de dos de 2 a 64.
+    pub fn shrink(k: u32) -> Option<Zoom> {
+        (k.is_power_of_two() && (2..=Zoom::MIN.den).contains(&k)).then_some(Zoom { num: 1, den: k })
+    }
+
+    /// Los 70 niveles, de menor a mayor.
+    pub fn levels() -> impl DoubleEndedIterator<Item = Zoom> + Clone {
+        let shrinks = (1..=6u32).rev().map(|e| Zoom {
+            num: 1,
+            den: 1 << e,
+        });
+        let integers = (1..=Zoom::MAX.num).map(|n| Zoom { num: n, den: 1 });
+        shrinks.chain(integers)
+    }
+
+    /// El factor `K` de un nivel `1/K` (de alejamiento), o `None` con zoom ≥ ×1: a ese nivel el
+    /// píxel de pantalla `s` muestra el píxel de imagen `s·K`.
+    pub fn shrink_factor(self) -> Option<u32> {
+        (self.den > 1).then_some(self.den)
+    }
+
+    /// Nivel siguiente (+1 en la escalera); satura en [`Zoom::MAX`].
     pub fn zoom_in(self) -> Zoom {
         if self >= Zoom::MAX {
             Zoom::MAX
+        } else if self.den > 2 {
+            Zoom {
+                num: 1,
+                den: self.den / 2,
+            }
+        } else if self.den == 2 {
+            Zoom::ONE
         } else {
             Zoom {
                 num: self.num + 1,
@@ -47,16 +75,29 @@ impl Zoom {
         }
     }
 
-    /// Nivel anterior (-1); satura en [`Zoom::MIN`].
+    /// Nivel anterior (-1 en la escalera); satura en [`Zoom::MIN`].
     pub fn zoom_out(self) -> Zoom {
         if self <= Zoom::MIN {
             Zoom::MIN
+        } else if self.den > 1 {
+            Zoom {
+                num: 1,
+                den: self.den * 2,
+            }
+        } else if self.num == 1 {
+            Zoom { num: 1, den: 2 }
         } else {
             Zoom {
                 num: self.num - 1,
                 den: 1,
             }
         }
+    }
+
+    /// Longitud en pantalla de `n` píxeles de imagen: `ceil(n · zoom)`. Con zoom ≥ ×1 es
+    /// [`Zoom::scale`]; a 1/K el último píxel de la rejilla también se ve.
+    pub fn extent(self, n: i64) -> i64 {
+        ceil_ratio(i128::from(n) * i128::from(self.num), i128::from(self.den))
     }
 
     /// Imagen → pantalla: `floor(n · zoom)`.
@@ -76,6 +117,12 @@ impl Zoom {
             i128::from(to.den) * i128::from(self.num),
         )
     }
+}
+
+/// `ceil(num / den)` con `den > 0`, saturado a `i64`.
+fn ceil_ratio(num: i128, den: i128) -> i64 {
+    let q = -((-num).div_euclid(den));
+    i64::try_from(q).unwrap_or(if q < 0 { i64::MIN } else { i64::MAX })
 }
 
 /// `floor(num / den)` con `den > 0`, saturado a `i64`.
@@ -158,13 +205,24 @@ pub struct View {
 }
 
 impl View {
-    /// Mayor zoom entero con la imagen entera visible (mínimo 1), centrada.
+    /// Mayor nivel de la escalera con la imagen entera visible, centrada. Si ni ×1 cabe, el mayor
+    /// nivel `1/K` que quepa y, si ni 1/64 cabe, el mínimo.
     pub fn fit(viewport: Size, image: Size) -> View {
         let fits = |dim: u32, view: u32| view.checked_div(dim).unwrap_or(u32::MAX);
         let best = fits(image.width, viewport.width).min(fits(image.height, viewport.height));
-        let zoom = Zoom::from_int(best.clamp(1, Zoom::MAX.num)).unwrap_or(Zoom::ONE);
+        let zoom = if best >= 1 {
+            Zoom::from_int(best.min(Zoom::MAX.num)).unwrap_or(Zoom::ONE)
+        } else {
+            Zoom::levels()
+                .rev()
+                .find(|zoom| {
+                    zoom.extent(i64::from(image.width)) <= i64::from(viewport.width)
+                        && zoom.extent(i64::from(image.height)) <= i64::from(viewport.height)
+                })
+                .unwrap_or(Zoom::MIN)
+        };
         let center =
-            |view: u32, dim: u32| (i64::from(view) - zoom.scale(i64::from(dim))).div_euclid(2);
+            |view: u32, dim: u32| (i64::from(view) - zoom.extent(i64::from(dim))).div_euclid(2);
         View {
             zoom,
             origin: (
@@ -229,7 +287,7 @@ impl View {
     /// en cada eje; si ese mínimo es 0 (lienzo o imagen vacíos) no mueve la vista.
     pub fn clamp(&mut self, viewport: Size, image: Size) {
         let axis = |origin: i64, view: u32, dim: u32| {
-            let extent = self.zoom.scale(i64::from(dim));
+            let extent = self.zoom.extent(i64::from(dim));
             let view = i64::from(view);
             let keep = i64::from(MIN_VISIBLE).min(extent).min(view);
             if keep == 0 {
@@ -249,8 +307,8 @@ impl View {
         ScreenRect {
             x: self.origin.0,
             y: self.origin.1,
-            width: self.zoom.scale(i64::from(image.width)),
-            height: self.zoom.scale(i64::from(image.height)),
+            width: self.zoom.extent(i64::from(image.width)),
+            height: self.zoom.extent(i64::from(image.height)),
         }
     }
 
@@ -282,6 +340,23 @@ impl View {
             i32::try_from(index).unwrap_or(if index < 0 { i32::MIN } else { i32::MAX })
         };
         (axis(p.0, self.origin.0), axis(p.1, self.origin.1))
+    }
+
+    /// Rectángulo `(mínimo, máximo)` en pantalla del bloque del píxel `(x, y)`: `zoom × zoom`
+    /// píxeles con zoom ≥ ×1; a 1/K, 1×1 píxel físico si `x` e `y` son múltiplos de `K` (los
+    /// únicos píxeles que se ven) y `None` si no lo son.
+    pub fn pixel_block(&self, x: u32, y: u32) -> Option<((i64, i64), (i64, i64))> {
+        match self.zoom.shrink_factor() {
+            None => Some((
+                self.image_to_screen(x, y),
+                self.image_to_screen(x.saturating_add(1), y.saturating_add(1)),
+            )),
+            Some(k) if x.is_multiple_of(k) && y.is_multiple_of(k) => {
+                let min = self.image_to_screen(x, y);
+                Some((min, (min.0.saturating_add(1), min.1.saturating_add(1))))
+            }
+            Some(_) => None,
+        }
     }
 
     /// Esquina superior izquierda, en pantalla, del bloque del píxel `(x, y)`.
