@@ -5,9 +5,9 @@
 
 use px_core::{Hsl, Image, ImageError, Mode, Palette, Pixel, Rgba};
 use px_ui::actions::Locks;
-use px_ui::color_edit::parse_hex;
 use px_ui::dialog::{
     Dialog, DialogKind, FieldId, FieldKind, FieldSpec, FormSpec, Modal, Rows, ShowWhen, Values,
+    resolve_hex,
 };
 use px_ui::number::parse_number;
 
@@ -495,13 +495,27 @@ pub fn build_new_images(
     Ok(NewImages { document, canvas })
 }
 
-/// Estado de `sync_form` entre fotogramas: el modo anterior y el aviso pendiente.
+/// Estado de `sync_form` entre fotogramas: el modo anterior, el aviso pendiente y la memoria del
+/// último texto inválido de un hexadecimal.
 #[derive(Default)]
 pub struct FormSync {
     mode: Option<Mode>,
-    notice: Option<&'static str>,
+    notice: Option<String>,
     /// Lo escrito cuando se puso el aviso: si cambia, el aviso se va.
     signature: String,
+    /// Lo que queda del texto inválido que el usuario escribió. El clic en el selector de modo
+    /// quita el foco al pulsar y el campo se revierte antes de que se vea el cambio de modo; esta
+    /// memoria dice que había un texto inválido. Se olvida si el usuario cambia otra cosa, escribe
+    /// un valor válido o cambia de modo.
+    invalid_seen: Option<InvalidSeen>,
+}
+
+/// Un texto inválido visto en el hexadecimal de `mode`, con lo que valía el campo y el formulario
+/// (sin los textos de color) en ese momento.
+struct InvalidSeen {
+    mode: Mode,
+    committed: Rgba,
+    shape: String,
 }
 
 fn signature(dialog: &Dialog) -> String {
@@ -520,14 +534,54 @@ fn signature(dialog: &Dialog) -> String {
     text
 }
 
+/// Tamaño y opciones de fondo, sin los textos de color: lo que el usuario cambia fuera del campo.
+fn shape(dialog: &Dialog) -> String {
+    let mut text = String::new();
+    for id in [FIELD_WIDTH, FIELD_HEIGHT] {
+        text.push_str(&dialog.text(id).unwrap_or_default());
+        text.push('|');
+    }
+    for mode in MODES {
+        text.push_str(&format!("{:?}|", dialog.chosen(bg_field(mode))));
+    }
+    text
+}
+
+/// El color del hexadecimal de un modo y si su texto pendiente no vale. Con un texto válido (aunque
+/// no esté confirmado) es el que daría `Crear`; con uno inválido, el último confirmado. Una sola
+/// regla, `resolve_hex`, la misma de la validez y de los valores del diálogo.
+fn read_color(dialog: &Dialog, mode: Mode) -> Option<(Rgba, bool)> {
+    let id = color_field(mode)?;
+    let committed = dialog.hex_committed(id)?;
+    let text = dialog.hex_pending(id).then(|| dialog.text(id)).flatten();
+    Some(match resolve_hex(text.as_deref(), mode, committed) {
+        Ok(color) => (color, false),
+        Err(_) => (committed, true),
+    })
+}
+
 /// El fondo que tiene el grupo de un modo, leído aunque el formulario sea inválido.
 fn read_background(dialog: &Dialog, mode: Mode) -> Option<Background> {
     let option = dialog.chosen(bg_field(mode))?;
-    let color = color_field(mode).map(|id| {
-        let text = dialog.text(id).unwrap_or_default();
-        parse_hex(&text, mode, DEFAULT_COLOR).unwrap_or(DEFAULT_COLOR)
-    });
-    background_of(mode, option, color)
+    background_of(
+        mode,
+        option,
+        read_color(dialog, mode).map(|(color, _)| color),
+    )
+}
+
+/// Si el modo tiene «Color…» elegido y su texto escrito no vale.
+fn has_invalid_text(dialog: &Dialog, mode: Mode) -> bool {
+    matches!(read_background(dialog, mode), Some(Background::Color(_)))
+        && read_color(dialog, mode).is_some_and(|(_, invalid)| invalid)
+}
+
+/// El color en ocho dígitos (`#rrggbbaa`): el alfa forma parte del valor.
+fn hex8(color: Rgba) -> String {
+    format!(
+        "#{:02x}{:02x}{:02x}{:02x}",
+        color.r, color.g, color.b, color.a
+    )
 }
 
 fn write_background(dialog: &mut Dialog, mode: Mode, background: Background) {
@@ -539,10 +593,7 @@ fn write_background(dialog: &mut Dialog, mode: Mode, background: Background) {
         index: option,
     });
     if let (Background::Color(color), Some(id)) = (background, color_field(mode)) {
-        let text = format!(
-            "#{:02x}{:02x}{:02x}{:02x}",
-            color.r, color.g, color.b, color.a
-        );
+        let text = hex8(color);
         dialog.event(px_ui::dialog::Event::Hex { field: id, text });
         dialog.event(px_ui::dialog::Event::HexConfirm {
             field: id,
@@ -563,6 +614,34 @@ fn current_report(dialog: &Dialog) -> Option<&str> {
         })
 }
 
+/// Al acabar el fotograma: recuerda el texto inválido del hexadecimal del modo actual, o conserva
+/// el recuerdo mientras nada cambie.
+fn remember_invalid(dialog: &Dialog, sync: &mut FormSync, mode: Mode) {
+    let id = color_field(mode);
+    if has_invalid_text(dialog, mode) {
+        sync.invalid_seen =
+            id.and_then(|id| dialog.hex_committed(id))
+                .map(|committed| InvalidSeen {
+                    mode,
+                    committed,
+                    shape: shape(dialog),
+                });
+        return;
+    }
+    let still = sync.invalid_seen.as_ref().is_some_and(|seen| {
+        let Some(id) = color_field(seen.mode) else {
+            return false;
+        };
+        seen.mode == mode
+            && seen.shape == shape(dialog)
+            && dialog.hex_committed(id) == Some(seen.committed)
+            && !dialog.hex_pending(id)
+    });
+    if !still {
+        sync.invalid_seen = None;
+    }
+}
+
 /// Pone el diálogo al día tras un fotograma: si cambió el modo, traslada el fondo (y avisa si no
 /// pudo); retira el aviso cuando cambia otro valor; y actualiza el informe. `true` si algo cambió
 /// que haya que pintar.
@@ -574,16 +653,26 @@ pub fn sync_form(dialog: &mut Dialog, sync: &mut FormSync) -> bool {
     let mut changed = false;
     match sync.mode {
         Some(previous) if previous != mode => {
+            let discarded = sync
+                .invalid_seen
+                .as_ref()
+                .is_some_and(|seen| seen.mode == previous)
+                || has_invalid_text(dialog, previous);
             sync.notice = match read_background(dialog, previous)
                 .map(|background| carry_background(previous, background, mode))
             {
                 Some(Carry::Kept(background)) => {
                     write_background(dialog, mode, background);
-                    None
+                    match background {
+                        Background::Color(color) if discarded => {
+                            Some(format!("Color no válido: pasa a {}", hex8(color)))
+                        }
+                        _ => None,
+                    }
                 }
                 Some(Carry::Reset { to, notice }) => {
                     write_background(dialog, mode, to);
-                    Some(notice)
+                    Some(notice.to_string())
                 }
                 None => None,
             };
@@ -605,10 +694,11 @@ pub fn sync_form(dialog: &mut Dialog, sync: &mut FormSync) -> bool {
             .and_then(|text| parse_number(&text, 1, u32::MAX).ok())
     };
     let size = side(FIELD_WIDTH).zip(side(FIELD_HEIGHT));
-    let report = report_text(size, mode, sync.notice);
+    let report = report_text(size, mode, sync.notice.as_deref());
     if current_report(dialog) != Some(report.as_str()) {
         changed |= dialog.set_report(FIELD_REPORT, report);
     }
+    remember_invalid(dialog, sync, mode);
     changed
 }
 
