@@ -2682,3 +2682,1094 @@ fn propiedad_4_session_new_image_con_unsaved_no_cambia_la_sesion_ni_el_lienzo() 
         assert_eq!(foto_de(&session), antes, "{mode:?}");
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Apéndice A1 (specs/hito-2-nueva-imagen.md): hexadecimal inválido al cambiar de modo.
+// Filas A1, A2, A5, A6 y A7 y propiedades 1, 2 y 3 (A3 y A4 son de banco y van en
+// `dialog_tests.rs`). En ROJO hasta la implementación (`Dialog::hex_committed`, `resolve_hex` y el
+// aviso nuevo de `sync_form`).
+//
+// Decisiones donde el apéndice no fija un detalle:
+// - El aviso nuevo es `Color no válido: pasa a #rrggbbaa` con **ocho dígitos siempre** (33
+//   caracteres, A1-1 y A6), también con alfa `ff`: `hex8`. El campo, en cambio, muestra el color
+//   con `hex_text` (`Rgba: Display`: seis dígitos si es opaco), como en toda la unidad; el apéndice
+//   escribe `#808080ff` para las dos cosas. Si la implementación usa `hex_text` en el aviso, solo
+//   cambia `hex8`.
+// - El camino (a) de la spec (el clic quita el foco al pulsar y el campo se revierte antes del
+//   fotograma del cambio) se modela con `HexConfirm { blur: true }` y su `sync_form`; el camino (b)
+//   (`Intro` con el texto inválido, que se queda), con `HexConfirm { blur: false }`. En los dos
+//   hay `sync_form` de reposo antes y después, como los fotogramas reales.
+// - «Líneas de aviso» del informe son las que no empiezan por `Memoria:`, `Paleta:` ni `aviso:`.
+// - El aviso de 5 s del título no se puede observar aquí: `sync_form` no recibe ningún medio de
+//   avisar. Se fija la firma (A7), que es lo que garantiza que el descarte no lance ninguno.
+// ---------------------------------------------------------------------------------------
+
+use px_ui::color_edit::{hex_text, parse_hex};
+use px_ui::dialog::resolve_hex;
+
+const ORIGENES: [Mode; 3] = [Mode::Rgba, Mode::GrayAlpha, Mode::Gray];
+const NO_VALIDO: &str = "Color no válido: pasa a ";
+const GRIS_CLARO: Rgba = Rgba::opaque(0xaa, 0xaa, 0xaa);
+const AZUL_OPACO: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
+
+/// `#rrggbbaa` siempre con ocho dígitos (la forma del aviso nuevo).
+fn hex8(c: Rgba) -> String {
+    format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a)
+}
+
+fn aviso_descartado(c: Rgba) -> String {
+    format!("{NO_VALIDO}{}", hex8(c))
+}
+
+/// Los últimos confirmados que admite cada modo de origen (A2).
+fn confirmados_de(from: Mode) -> Vec<Rgba> {
+    match from {
+        Mode::Rgba => vec![GRIS_CLARO, GRIS_MEDIO, AZUL_OPACO],
+        Mode::GrayAlpha => vec![GRIS_CLARO, GRIS_MEDIO],
+        Mode::Gray => vec![GRIS_CLARO],
+        Mode::Indexed => vec![],
+    }
+}
+
+/// Textos que no valen en `from` (`#ff0000` solo vale en RGBA).
+fn invalidos_de(from: Mode) -> Vec<&'static str> {
+    let mut textos = vec!["zz", "#12"];
+    if from != Mode::Rgba {
+        textos.push("#ff0000");
+    }
+    for texto in &textos {
+        assert!(
+            parse_hex(texto, from, GRIS_OPACO).is_err(),
+            "{from:?} {texto}"
+        );
+    }
+    textos
+}
+
+/// Un color que `from` admite, a partir de cuatro bytes cualesquiera.
+fn confirmable(from: Mode, color: [u8; 4]) -> Rgba {
+    let [r, g, b, a] = color;
+    match from {
+        Mode::Rgba => Rgba::new(r, g, b, a),
+        Mode::GrayAlpha => Rgba::new(g, g, g, a),
+        Mode::Gray => Rgba::opaque(g, g, g),
+        Mode::Indexed => panic!("Indexado no tiene «Color…»"),
+    }
+}
+
+fn lineas_de_aviso(d: &Dialog) -> Vec<String> {
+    lineas_del_informe(d)
+        .into_iter()
+        .filter(|l| {
+            !l.starts_with("Memoria:") && !l.starts_with("Paleta:") && !l.starts_with("aviso:")
+        })
+        .collect()
+}
+
+/// Un diálogo en `from` con «Color…» elegido, `confirmado` (si lo hay) confirmado y `texto` (si lo
+/// hay) escrito sin confirmar; un evento y un `sync_form` por paso, como el usuario.
+fn origen(from: Mode, confirmado: Option<Rgba>, texto: Option<&str>) -> (Dialog, FormSync) {
+    let mut d = dialogo(8192);
+    let mut sync = FormSync::default();
+    sync_form(&mut d, &mut sync);
+    paso(
+        &mut d,
+        &mut sync,
+        Event::Choice {
+            field: "modo",
+            index: indice_de_modo(from),
+        },
+    );
+    let id = id_color(from).expect("el modo tiene «Color…»");
+    paso(
+        &mut d,
+        &mut sync,
+        Event::Choice {
+            field: id_fondo(from),
+            index: indice_de_fondo(from, Tipo::Color).expect("«Color…»"),
+        },
+    );
+    if let Some(c) = confirmado {
+        paso(
+            &mut d,
+            &mut sync,
+            Event::Hex {
+                field: id,
+                text: hex8(c),
+            },
+        );
+        paso(
+            &mut d,
+            &mut sync,
+            Event::HexConfirm {
+                field: id,
+                blur: false,
+            },
+        );
+        assert_eq!(d.hex_committed(id), Some(c), "{from:?}: confirmado");
+    }
+    if let Some(texto) = texto {
+        paso(
+            &mut d,
+            &mut sync,
+            Event::Hex {
+                field: id,
+                text: texto.to_string(),
+            },
+        );
+        assert!(d.hex_pending(id));
+    }
+    assert!(d.is_shown(id), "{from:?}: el hexadecimal se ve");
+    assert!(
+        lineas_de_aviso(&d).is_empty(),
+        "{from:?}: la preparación no deja avisos; hay {:?}",
+        lineas_de_aviso(&d)
+    );
+    (d, sync)
+}
+
+fn reposo(d: &mut Dialog, sync: &mut FormSync) {
+    for _ in 0..2 {
+        sync_form(d, sync);
+    }
+}
+
+/// Los dos caminos de la spec hasta el fotograma del cambio de modo.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Camino {
+    /// (a) escribir y hacer clic en el modo: el clic quita el foco al pulsar y el campo se revierte.
+    Clic,
+    /// (b) `Intro` con el texto inválido (se queda) y luego el clic.
+    Intro,
+}
+
+const CAMINOS: [Camino; 2] = [Camino::Clic, Camino::Intro];
+
+fn hasta_el_cambio(d: &mut Dialog, sync: &mut FormSync, from: Mode, camino: Camino) {
+    let id = id_color(from).expect("color");
+    reposo(d, sync);
+    match camino {
+        Camino::Clic => {
+            paso(
+                d,
+                sync,
+                Event::HexConfirm {
+                    field: id,
+                    blur: true,
+                },
+            );
+            assert!(!d.hex_pending(id), "el clic revierte el campo");
+        }
+        Camino::Intro => {
+            paso(
+                d,
+                sync,
+                Event::HexConfirm {
+                    field: id,
+                    blur: false,
+                },
+            );
+            assert!(d.hex_pending(id), "Intro con un inválido lo deja pendiente");
+        }
+    }
+    reposo(d, sync);
+}
+
+fn cambia_de_modo(d: &mut Dialog, sync: &mut FormSync, to: Mode) {
+    paso(
+        d,
+        sync,
+        Event::Choice {
+            field: "modo",
+            index: indice_de_modo(to),
+        },
+    );
+}
+
+/// El fondo y el aviso al trasladar un fondo válido (el de D1b o ninguno).
+fn tras_trasladar(from: Mode, fondo: Background, to: Mode) -> (Background, Option<String>) {
+    match traslada(from, fondo, to) {
+        Visto::Kept(b) => (b, None),
+        Visto::Reset(b, aviso) => (b, Some(aviso)),
+    }
+}
+
+/// El fondo y el aviso al descartar un texto inválido con `ultimo` confirmado (A1-1 y A1-4): si
+/// viaja, el aviso nuevo; si no, solo el de D1b de ese color.
+fn tras_descartar(from: Mode, ultimo: Rgba, to: Mode) -> (Background, String) {
+    match traslada(from, Background::Color(ultimo), to) {
+        Visto::Kept(b) => (b, aviso_descartado(ultimo)),
+        Visto::Reset(b, aviso) => (b, aviso),
+    }
+}
+
+/// El estado del diálogo tras un traslado: informe, fondo, hexadecimal nuevo y ninguno viejo.
+fn comprueba_traslado(
+    d: &Dialog,
+    from: Mode,
+    to: Mode,
+    fondo: Background,
+    aviso: Option<&str>,
+    ctx: &str,
+) {
+    assert_eq!(
+        texto_del_informe(d),
+        report_text(Some((64, 64)), to, aviso),
+        "{ctx}: informe"
+    );
+    let lineas = lineas_de_aviso(d);
+    assert_eq!(
+        lineas,
+        aviso.map(str::to_string).into_iter().collect::<Vec<_>>(),
+        "{ctx}: líneas de aviso"
+    );
+    for linea in lineas_del_informe(d) {
+        assert!(linea.chars().count() <= 42, "{ctx}: {linea:?}");
+        assert!(en_el_juego(&linea), "{ctx}: {linea:?}");
+    }
+    assert!(
+        d.is_valid(),
+        "{ctx}: el formulario sale válido; {:?}",
+        d.reason()
+    );
+    let spec = spec_de(d).unwrap_or_else(|| panic!("{ctx}: sin valores válidos"));
+    assert_eq!(campos(&spec), (64, 64, to, fondo), "{ctx}");
+    // El hexadecimal del modo viejo no se ve.
+    if let Some(viejo) = id_color(from) {
+        assert!(!d.is_shown(viejo), "{ctx}: el hexadecimal viejo se ve");
+        assert_eq!(
+            d.validity(viejo),
+            None,
+            "{ctx}: el viejo no cuenta en la validez"
+        );
+    }
+    // El nuevo (si lo hay y es el fondo) muestra el color que viaja, válido y confirmado.
+    let values = d.values().expect("válido");
+    for otro in MODOS {
+        if let Some(id) = id_color(otro).filter(|_| otro != to) {
+            assert_eq!(values.get(id), None, "{ctx}: {id} en Values");
+        }
+    }
+    if let (Background::Color(color), Some(id)) = (fondo, id_color(to)) {
+        assert!(d.is_shown(id), "{ctx}: {id} se ve");
+        assert_eq!(d.validity(id), Some(Validity::Valid), "{ctx}");
+        assert!(
+            !d.hex_pending(id),
+            "{ctx}: el campo nuevo no conserva texto"
+        );
+        assert_eq!(d.hex_committed(id), Some(color), "{ctx}: confirmado");
+        assert_eq!(d.text(id), Some(hex_text(color)), "{ctx}: texto del campo");
+        assert_eq!(values.color(id), Some(color), "{ctx}: Values");
+    } else if let Some(id) = id_color(to) {
+        assert!(!d.is_shown(id), "{ctx}: {id} no debía verse");
+    }
+}
+
+/// `Crear` en el modo de origen: el color que entrega `Accept` sobre una copia.
+fn crear_color(d: &Dialog, from: Mode) -> Rgba {
+    match d.clone().event(Event::Accept) {
+        Reaction::Accepted(v) => v
+            .color(id_color(from).expect("color"))
+            .expect("el hexadecimal visible sale en los valores"),
+        otro => panic!("se esperaba Accepted y salió {otro:?}"),
+    }
+}
+
+// --- A1: sin válido previo ---
+
+#[test]
+fn fila_a1_texto_invalido_sin_valido_previo_viaja_como_808080ff_y_avisa() {
+    for from in ORIGENES {
+        for to in ORIGENES.into_iter().filter(|m| *m != from) {
+            for texto in invalidos_de(from) {
+                for camino in CAMINOS {
+                    let ctx = format!("{from:?} → {to:?} {texto:?} {camino:?}");
+                    let (mut d, mut sync) = origen(from, None, Some(texto));
+                    hasta_el_cambio(&mut d, &mut sync, from, camino);
+                    cambia_de_modo(&mut d, &mut sync, to);
+
+                    let aviso = aviso_descartado(GRIS_OPACO);
+                    assert_eq!(aviso, "Color no válido: pasa a #808080ff");
+                    assert_eq!(aviso.chars().count(), 33);
+                    comprueba_traslado(
+                        &d,
+                        from,
+                        to,
+                        Background::Color(GRIS_OPACO),
+                        Some(&aviso),
+                        &ctx,
+                    );
+                    let id = id_color(to).expect("color");
+                    assert_eq!(d.text(id), Some("#808080".to_string()), "{ctx}");
+                    // Y el aviso dura hasta que cambia otro valor.
+                    assert!(!sync_form(&mut d, &mut sync), "{ctx}: estable");
+                    assert!(lineas_de_aviso(&d).contains(&aviso), "{ctx}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a1_texto_invalido_sin_valido_previo_a_indexado_dice_indexado_sin_color() {
+    for from in ORIGENES {
+        for texto in invalidos_de(from) {
+            for camino in CAMINOS {
+                let ctx = format!("{from:?} → Indexado {texto:?} {camino:?}");
+                let (mut d, mut sync) = origen(from, None, Some(texto));
+                hasta_el_cambio(&mut d, &mut sync, from, camino);
+                cambia_de_modo(&mut d, &mut sync, Mode::Indexed);
+                comprueba_traslado(
+                    &d,
+                    from,
+                    Mode::Indexed,
+                    TRANSPARENTE,
+                    Some(AVISO_INDEXADO_SIN_COLOR),
+                    &ctx,
+                );
+                assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{ctx}");
+            }
+        }
+    }
+}
+
+// --- A2: con válido previo ---
+
+#[test]
+fn fila_a1_con_valido_previo_viaja_el_ultimo_confirmado_o_sale_solo_el_aviso_de_d1b() {
+    for from in ORIGENES {
+        for ultimo in confirmados_de(from) {
+            for to in MODOS.into_iter().filter(|m| *m != from) {
+                for texto in invalidos_de(from) {
+                    for camino in CAMINOS {
+                        let ctx = format!("{from:?} {ultimo:?} → {to:?} {texto:?} {camino:?}");
+                        let (mut d, mut sync) = origen(from, Some(ultimo), Some(texto));
+                        hasta_el_cambio(&mut d, &mut sync, from, camino);
+                        cambia_de_modo(&mut d, &mut sync, to);
+
+                        let (fondo, aviso) = tras_descartar(from, ultimo, to);
+                        comprueba_traslado(&d, from, to, fondo, Some(&aviso), &ctx);
+                        if ultimo != GRIS_OPACO {
+                            assert!(
+                                !texto_del_informe(&d).contains("#808080ff"),
+                                "{ctx}: nunca #808080ff si había un último confirmado"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a1_con_valido_previo_los_ejemplos_literales_de_la_spec() {
+    // (modo de origen, último confirmado, destino, aviso esperado)
+    let casos = [
+        (
+            Mode::Rgba,
+            GRIS_CLARO,
+            Mode::Gray,
+            "Color no válido: pasa a #aaaaaaff",
+        ),
+        (
+            Mode::Rgba,
+            GRIS_CLARO,
+            Mode::GrayAlpha,
+            "Color no válido: pasa a #aaaaaaff",
+        ),
+        (
+            Mode::Rgba,
+            GRIS_MEDIO,
+            Mode::GrayAlpha,
+            "Color no válido: pasa a #80808080",
+        ),
+        (
+            Mode::Rgba,
+            GRIS_MEDIO,
+            Mode::Gray,
+            "Color con alfa: pasa a Blanco",
+        ),
+        (
+            Mode::Rgba,
+            AZUL_OPACO,
+            Mode::GrayAlpha,
+            "Color no gris: pasa a Transparente",
+        ),
+        (
+            Mode::Rgba,
+            AZUL_OPACO,
+            Mode::Gray,
+            "Color no gris: pasa a Blanco",
+        ),
+        (
+            Mode::Rgba,
+            AZUL_OPACO,
+            Mode::Indexed,
+            "Indexado sin Color: pasa a Transparente",
+        ),
+        (
+            Mode::GrayAlpha,
+            GRIS_MEDIO,
+            Mode::Rgba,
+            "Color no válido: pasa a #80808080",
+        ),
+        (
+            Mode::GrayAlpha,
+            GRIS_MEDIO,
+            Mode::Gray,
+            "Color con alfa: pasa a Blanco",
+        ),
+        (
+            Mode::Gray,
+            GRIS_CLARO,
+            Mode::Rgba,
+            "Color no válido: pasa a #aaaaaaff",
+        ),
+        (
+            Mode::Gray,
+            GRIS_CLARO,
+            Mode::Indexed,
+            "Indexado sin Color: pasa a Transparente",
+        ),
+    ];
+    for (from, ultimo, to, aviso) in casos {
+        let (mut d, mut sync) = origen(from, Some(ultimo), Some("zz"));
+        hasta_el_cambio(&mut d, &mut sync, from, Camino::Clic);
+        cambia_de_modo(&mut d, &mut sync, to);
+        assert_eq!(
+            lineas_de_aviso(&d),
+            vec![aviso.to_string()],
+            "{from:?} {ultimo:?} → {to:?}"
+        );
+    }
+}
+
+// --- A5: texto válido sin confirmar, y el alfa ---
+
+#[test]
+fn fila_a1_texto_valido_sin_confirmar_viaja_con_el_alfa_que_daria_crear_y_sin_aviso_nuevo() {
+    let con_alfa = Rgba::new(0xaa, 0xaa, 0xaa, 0xcc);
+    // (modo de origen, último confirmado, texto, color que daría Crear)
+    let mut casos = Vec::new();
+    for from in [Mode::Rgba, Mode::GrayAlpha] {
+        for (texto, esperado) in [
+            ("bbbbbb", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+            ("bbb", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+            ("#bbbbbbdd", Rgba::new(0xbb, 0xbb, 0xbb, 0xdd)),
+            ("#bbb8", Rgba::new(0xbb, 0xbb, 0xbb, 0x88)),
+        ] {
+            casos.push((from, Some(con_alfa), texto, esperado));
+        }
+        // Sin confirmar nada antes: el alfa de partida es 255.
+        casos.push((from, None, "bbbbbb", Rgba::opaque(0xbb, 0xbb, 0xbb)));
+    }
+    for (texto, esperado) in [
+        ("bbbbbb", Rgba::opaque(0xbb, 0xbb, 0xbb)),
+        ("bbb", Rgba::opaque(0xbb, 0xbb, 0xbb)),
+        ("#bbbbbbff", Rgba::opaque(0xbb, 0xbb, 0xbb)),
+    ] {
+        casos.push((Mode::Gray, Some(GRIS_CLARO), texto, esperado));
+    }
+    for (from, confirmado, texto, esperado) in casos {
+        for to in MODOS.into_iter().filter(|m| *m != from) {
+            let ctx = format!("{from:?} {confirmado:?} {texto:?} → {to:?}");
+            let (mut d, mut sync) = origen(from, confirmado, Some(texto));
+            // Es lo que daría `Crear` en el modo de origen.
+            assert_eq!(crear_color(&d, from), esperado, "{ctx}: Crear");
+            reposo(&mut d, &mut sync);
+            cambia_de_modo(&mut d, &mut sync, to);
+
+            let (fondo, aviso) = tras_trasladar(from, Background::Color(esperado), to);
+            comprueba_traslado(&d, from, to, fondo, aviso.as_deref(), &ctx);
+            assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{ctx}");
+        }
+    }
+}
+
+#[test]
+fn fila_a1_el_alfa_del_ultimo_confirmado_viaja_en_el_campo_nuevo_con_seis_digitos() {
+    // `#aaaaaacc` confirmado y `bbbbbb` escrito: el campo de Gris con alfa dice `#bbbbbbcc`.
+    let (mut d, mut sync) = origen(
+        Mode::Rgba,
+        Some(Rgba::new(0xaa, 0xaa, 0xaa, 0xcc)),
+        Some("bbbbbb"),
+    );
+    cambia_de_modo(&mut d, &mut sync, Mode::GrayAlpha);
+    assert_eq!(d.text("color_gris_alfa"), Some("#bbbbbbcc".to_string()));
+    assert!(lineas_de_aviso(&d).is_empty());
+    // A Gris, el alfa < 255 reinicia con el aviso de siempre.
+    let (mut d, mut sync) = origen(
+        Mode::Rgba,
+        Some(Rgba::new(0xaa, 0xaa, 0xaa, 0xcc)),
+        Some("bbbbbb"),
+    );
+    cambia_de_modo(&mut d, &mut sync, Mode::Gray);
+    assert_eq!(lineas_de_aviso(&d), vec![AVISO_COLOR_CON_ALFA.to_string()]);
+    // Y de vuelta a RGBA con `Crear`: el mismo valor que viajó.
+    let (mut d, mut sync) = origen(
+        Mode::Rgba,
+        Some(Rgba::new(0xaa, 0xaa, 0xaa, 0xcc)),
+        Some("bbbbbb"),
+    );
+    cambia_de_modo(&mut d, &mut sync, Mode::GrayAlpha);
+    cambia_de_modo(&mut d, &mut sync, Mode::Rgba);
+    assert_eq!(
+        crear_color(&d, Mode::Rgba),
+        Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)
+    );
+}
+
+// --- A6: anchos ---
+
+#[test]
+fn fila_a1_los_avisos_caben_en_42_caracteres_y_estan_en_el_juego() {
+    for c in [
+        Rgba::opaque(255, 255, 255),
+        Rgba::new(0, 0, 0, 0),
+        GRIS_MEDIO,
+        GRIS_OPACO,
+        AZUL_OPACO,
+        Rgba::new(0xff, 0xff, 0xff, 0xfe),
+    ] {
+        let aviso = aviso_descartado(c);
+        assert_eq!(aviso.chars().count(), 33, "{aviso}");
+        assert!(en_el_juego(&aviso), "{aviso}");
+    }
+    for aviso in AVISOS {
+        assert!(aviso.chars().count() <= 42, "{aviso}");
+        assert!(en_el_juego(aviso), "{aviso}");
+    }
+}
+
+#[test]
+fn fila_a1_el_informe_con_tamano_que_avisa_e_indexado_cabe_en_4_lineas_de_42() {
+    let revisa = |d: &Dialog, to: Mode, ctx: &str| {
+        let lineas = lineas_del_informe(d);
+        assert!(lineas.len() <= 4, "{ctx}: {lineas:?}");
+        assert!(lineas[0].starts_with("Memoria:"), "{ctx}: {lineas:?}");
+        assert!(
+            lineas.iter().any(|l| l.starts_with("aviso: más de")),
+            "{ctx}: el tamaño avisa; {lineas:?}"
+        );
+        assert_eq!(
+            lineas.iter().any(|l| l.starts_with("Paleta:")),
+            to == Mode::Indexed,
+            "{ctx}"
+        );
+        assert_eq!(lineas_de_aviso(d).len(), 1, "{ctx}: {lineas:?}");
+        for linea in &lineas {
+            assert!(linea.chars().count() <= 42, "{ctx}: {linea:?}");
+            assert!(en_el_juego(linea), "{ctx}: {linea:?}");
+        }
+        // El aviso de fondo va el último, como en la fila 6.
+        assert_eq!(lineas.last(), lineas_de_aviso(d).last(), "{ctx}");
+    };
+    for from in ORIGENES {
+        for ultimo in confirmados_de(from) {
+            for to in MODOS.into_iter().filter(|m| *m != from) {
+                let ctx = format!("{from:?} {ultimo:?} → {to:?} con 5000 × 5000");
+                let (mut d, mut sync) = origen(from, Some(ultimo), Some("zz"));
+                for campo in ["ancho", "alto"] {
+                    paso(
+                        &mut d,
+                        &mut sync,
+                        Event::Number {
+                            field: campo,
+                            text: "5000".to_string(),
+                        },
+                    );
+                }
+                hasta_el_cambio(&mut d, &mut sync, from, Camino::Intro);
+                cambia_de_modo(&mut d, &mut sync, to);
+                revisa(&d, to, &ctx);
+            }
+        }
+    }
+    // Transparente a Gris (el quinto texto de D1b) con el tamaño que avisa.
+    let (mut d, mut sync) = dialogo_sincronizado(Mode::Rgba, TRANSPARENTE);
+    for campo in ["ancho", "alto"] {
+        paso(
+            &mut d,
+            &mut sync,
+            Event::Number {
+                field: campo,
+                text: "5000".to_string(),
+            },
+        );
+    }
+    cambia_de_modo(&mut d, &mut sync, Mode::Gray);
+    revisa(&d, Mode::Gray, "Transparente → Gris con 5000 × 5000");
+}
+
+// --- A7: vida, hueco único y silencio ---
+
+#[test]
+fn fila_a1_el_aviso_nuevo_se_va_al_cambiar_otro_valor_como_los_de_d1b() {
+    type Cambio = (&'static str, fn(&mut Dialog, &mut FormSync));
+    let cambios: [Cambio; 5] = [
+        ("ancho +", |d, s| {
+            paso(
+                d,
+                s,
+                Event::Step {
+                    field: "ancho",
+                    delta: 1,
+                },
+            );
+        }),
+        ("alto 10", |d, s| {
+            paso(
+                d,
+                s,
+                Event::Number {
+                    field: "alto",
+                    text: "10".to_string(),
+                },
+            );
+        }),
+        ("fondo Blanco", |d, s| {
+            paso(
+                d,
+                s,
+                Event::Choice {
+                    field: "fondo_gris_alfa",
+                    index: 1,
+                },
+            );
+        }),
+        ("hexadecimal nuevo", |d, s| {
+            paso(
+                d,
+                s,
+                Event::Hex {
+                    field: "color_gris_alfa",
+                    text: "#444444".to_string(),
+                },
+            );
+        }),
+        ("modo", |d, s| {
+            paso(
+                d,
+                s,
+                Event::Choice {
+                    field: "modo",
+                    index: 1,
+                },
+            );
+        }),
+    ];
+    for (nombre, cambia) in cambios {
+        let (mut d, mut sync) = origen(Mode::Rgba, None, Some("zz"));
+        hasta_el_cambio(&mut d, &mut sync, Mode::Rgba, Camino::Clic);
+        cambia_de_modo(&mut d, &mut sync, Mode::GrayAlpha);
+        assert_eq!(
+            lineas_de_aviso(&d),
+            vec![aviso_descartado(GRIS_OPACO)],
+            "{nombre}"
+        );
+        // Dura mientras no cambia nada.
+        reposo(&mut d, &mut sync);
+        assert_eq!(
+            lineas_de_aviso(&d),
+            vec![aviso_descartado(GRIS_OPACO)],
+            "{nombre}"
+        );
+        cambia(&mut d, &mut sync);
+        // Ni el nuevo ni el de D1b (el traslado de modo de un fondo válido no avisa).
+        assert!(
+            lineas_de_aviso(&d).is_empty(),
+            "{nombre}: {:?}",
+            lineas_de_aviso(&d)
+        );
+        assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{nombre}");
+    }
+}
+
+#[test]
+fn fila_a1_si_el_ultimo_confirmado_no_viaja_sale_solo_el_aviso_de_d1b_en_una_linea() {
+    for (to, aviso) in [
+        (Mode::GrayAlpha, AVISO_NO_GRIS_A_GRIS_ALFA),
+        (Mode::Gray, AVISO_NO_GRIS_A_GRIS),
+        (Mode::Indexed, AVISO_INDEXADO_SIN_COLOR),
+    ] {
+        for camino in CAMINOS {
+            let (mut d, mut sync) = origen(Mode::Rgba, Some(AZUL_OPACO), Some("zz"));
+            hasta_el_cambio(&mut d, &mut sync, Mode::Rgba, camino);
+            cambia_de_modo(&mut d, &mut sync, to);
+            assert_eq!(
+                lineas_de_aviso(&d),
+                vec![aviso.to_string()],
+                "{to:?} {camino:?}: un solo aviso, el de D1b"
+            );
+            assert!(
+                !texto_del_informe(&d).contains(NO_VALIDO),
+                "{to:?} {camino:?}"
+            );
+            assert!(lineas_del_informe(&d).len() <= 4);
+        }
+    }
+}
+
+#[test]
+fn fila_a1_un_texto_invalido_oculto_no_avisa() {
+    for from in ORIGENES {
+        let opciones: &[Tipo] = match from {
+            Mode::Gray => &[Tipo::Blanco, Tipo::Negro],
+            _ => &[Tipo::Transparente, Tipo::Blanco, Tipo::Negro],
+        };
+        for &tipo in opciones {
+            for to in MODOS.into_iter().filter(|m| *m != from) {
+                let ctx = format!("{from:?} {tipo:?} → {to:?}");
+                let (mut d, mut sync) = origen(from, None, Some("zz"));
+                let id = id_color(from).expect("color");
+                // La opción deja de ser «Color…»: el hexadecimal se oculta con basura dentro.
+                paso(
+                    &mut d,
+                    &mut sync,
+                    Event::Choice {
+                        field: id_fondo(from),
+                        index: indice_de_fondo(from, tipo).expect("opción"),
+                    },
+                );
+                assert!(!d.is_shown(id), "{ctx}");
+                assert!(d.hex_pending(id), "{ctx}: la basura sigue escrita");
+                reposo(&mut d, &mut sync);
+                cambia_de_modo(&mut d, &mut sync, to);
+
+                let fondo = match tipo {
+                    Tipo::Transparente => TRANSPARENTE,
+                    Tipo::Blanco => BLANCO,
+                    _ => NEGRO,
+                };
+                let (esperado, aviso) = tras_trasladar(from, fondo, to);
+                assert_eq!(
+                    lineas_de_aviso(&d),
+                    aviso.clone().into_iter().collect::<Vec<_>>(),
+                    "{ctx}"
+                );
+                assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{ctx}");
+                assert_eq!(
+                    campos(&spec_de(&d).expect("válido")),
+                    (64, 64, to, esperado),
+                    "{ctx}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a1_los_traslados_de_valores_validos_de_d1b_siguen_igual_y_sin_el_aviso_nuevo() {
+    for (nombre, fondo, origenes, casillas) in tabla_d1b() {
+        for from in origenes {
+            for (to, casilla) in DESTINOS.into_iter().zip(casillas) {
+                if from == to {
+                    continue;
+                }
+                let (mut d, mut sync) = dialogo_sincronizado(from, fondo);
+                cambia_de_modo(&mut d, &mut sync, to);
+                let (fondo_esperado, aviso) = match casilla {
+                    Igual => (fondo, None),
+                    Reinicia(a, aviso) => (a, Some(aviso)),
+                };
+                let ctx = format!("{nombre}: {from:?} → {to:?}");
+                assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{ctx}");
+                assert_eq!(
+                    texto_del_informe(&d),
+                    report_text(Some((64, 64)), to, aviso),
+                    "{ctx}"
+                );
+                assert_eq!(
+                    campos(&spec_de(&d).expect("válido")),
+                    (64, 64, to, fondo_esperado),
+                    "{ctx}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a1_sync_form_no_puede_lanzar_el_aviso_de_5_s_porque_no_recibe_como() {
+    // El aviso del título (`App::notify`) queda bajo el velo del modal (A1-4): el descarte solo
+    // puede decirse en el informe. `sync_form` solo recibe el diálogo y su estado y devuelve si hay
+    // algo que pintar; si ganase un parámetro para avisar, esta prueba dejaría de compilar.
+    let _: fn(&mut Dialog, &mut FormSync) -> bool = sync_form;
+    let (mut d, mut sync) = origen(Mode::Rgba, None, Some("zz"));
+    hasta_el_cambio(&mut d, &mut sync, Mode::Rgba, Camino::Clic);
+    let cambio = {
+        paso(
+            &mut d,
+            &mut sync,
+            Event::Choice {
+                field: "modo",
+                index: indice_de_modo(Mode::Gray),
+            },
+        );
+        sync_form(&mut d, &mut sync)
+    };
+    assert!(!cambio, "tras el traslado no queda nada por pintar");
+    assert_eq!(lineas_de_aviso(&d), vec![aviso_descartado(GRIS_OPACO)]);
+}
+
+// --- Propiedades ---
+
+const TEXTOS_A1: [&str; 17] = [
+    "zz",
+    "#12",
+    "",
+    "#ff0000",
+    "#808080",
+    "#80808080",
+    "#ff000080",
+    "bbb",
+    "#bbb8",
+    "bbbbbb",
+    "#bbbbbbdd",
+    " #bbbbbb ",
+    "#aabbcc",
+    "#12345",
+    "#ggg",
+    "#fff",
+    "bbbb",
+];
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Nunca se sustituye en silencio: con un texto inválido en un «Color…» visible, el informe
+    /// lleva exactamente un aviso (el nuevo o el de D1b), el campo nuevo es válido y vale el último
+    /// confirmado o su traslado de D1b; con un texto válido (o ninguno) no hay aviso nuevo y el
+    /// fondo es el de `Crear`. Los caminos (a) y (b) valen igual.
+    #[test]
+    fn propiedad_a1_1_nunca_se_sustituye_en_silencio(
+        desde in 0usize..3,
+        salto in 1usize..4,
+        con_confirmado in any::<bool>(),
+        color in any::<[u8; 4]>(),
+        texto in 0..=TEXTOS_A1.len(),
+        clic in any::<bool>(),
+    ) {
+        let from = ORIGENES[desde];
+        let to = MODOS[(indice_de_modo(from) + salto) % 4];
+        let confirmado = con_confirmado.then(|| confirmable(from, color));
+        let ultimo = confirmado.unwrap_or(GRIS_OPACO);
+        let texto = TEXTOS_A1.get(texto).copied();
+        let ctx = format!("{from:?} {confirmado:?} {texto:?} → {to:?} clic {clic}");
+        let (mut d, mut sync) = origen(from, confirmado, texto);
+        let lectura = match texto {
+            Some(texto) => parse_hex(texto, from, ultimo).ok(),
+            None => Some(ultimo),
+        };
+        match lectura {
+            None => {
+                let camino = if clic { Camino::Clic } else { Camino::Intro };
+                hasta_el_cambio(&mut d, &mut sync, from, camino);
+                cambia_de_modo(&mut d, &mut sync, to);
+                let (fondo, aviso) = tras_descartar(from, ultimo, to);
+                comprueba_traslado(&d, from, to, fondo, Some(&aviso), &ctx);
+            }
+            Some(color) => {
+                reposo(&mut d, &mut sync);
+                cambia_de_modo(&mut d, &mut sync, to);
+                let (fondo, aviso) = tras_trasladar(from, Background::Color(color), to);
+                comprueba_traslado(&d, from, to, fondo, aviso.as_deref(), &ctx);
+                prop_assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{}", ctx);
+            }
+        }
+    }
+}
+
+/// Un gesto de la propiedad 3 de la 19 o uno de los nuevos: `Intro`, la pérdida del foco y el
+/// cambio de modo con clic (que antes quita el foco al campo visible).
+#[derive(Clone, Debug)]
+enum GestoA1 {
+    Base(Gesto),
+    Intro,
+    PierdeFoco,
+    ClicModo(usize),
+}
+
+fn gesto_a1() -> impl Strategy<Value = GestoA1> {
+    prop_oneof![
+        4 => gesto().prop_map(GestoA1::Base),
+        1 => Just(GestoA1::Intro),
+        1 => Just(GestoA1::PierdeFoco),
+        2 => (0usize..4).prop_map(GestoA1::ClicModo),
+    ]
+}
+
+/// Aplica un gesto y devuelve el modo en que queda; el clic en el modo hace su `sync_form` del
+/// fotograma de la pulsación entre la pérdida del foco y el cambio.
+fn aplica_a1(d: &mut Dialog, sync: &mut FormSync, modo: usize, gesto: &GestoA1) -> usize {
+    let visible = id_color(MODOS[modo]).filter(|&id| d.is_shown(id));
+    match gesto {
+        GestoA1::Base(g) => aplica(d, modo, g),
+        GestoA1::Intro => {
+            if let Some(id) = visible {
+                d.event(Event::HexConfirm {
+                    field: id,
+                    blur: false,
+                });
+            }
+            modo
+        }
+        GestoA1::PierdeFoco => {
+            if let Some(id) = visible {
+                d.event(Event::HexConfirm {
+                    field: id,
+                    blur: true,
+                });
+            }
+            modo
+        }
+        GestoA1::ClicModo(i) => {
+            if let Some(id) = visible {
+                d.event(Event::HexConfirm {
+                    field: id,
+                    blur: true,
+                });
+                sync_form(d, sync);
+            }
+            d.event(Event::Choice {
+                field: "modo",
+                index: *i,
+            });
+            *i
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// El formulario sigue sano con las secuencias de la propiedad 3 de la 19 ampliadas con `Intro`,
+    /// la pérdida del foco y el cambio de modo con clic: el informe cabe (≤ 4 líneas de ≤ 42
+    /// caracteres dentro del juego), a lo sumo un aviso de fondo, ningún texto inválido en los
+    /// valores, y el aviso no sobrevive a un cambio de otro campo.
+    #[test]
+    fn propiedad_a1_2_el_formulario_sigue_sano(
+        gestos in prop::collection::vec(gesto_a1(), 0..=48),
+    ) {
+        let mut d = dialogo(8192);
+        let mut sync = FormSync::default();
+        sync_form(&mut d, &mut sync);
+        let mut modo = 0usize;
+        for (i, g) in gestos.iter().enumerate() {
+            let ctx = format!("paso {i}: {g:?}");
+            let antes = sin_informe(&d);
+            let modo_anterior = modo;
+            modo = aplica_a1(&mut d, &mut sync, modo, g);
+            let cambio = sin_informe(&d) != antes;
+            sync_form(&mut d, &mut sync);
+
+            comprueba_formulario(&d, modo, &ctx)?;
+            prop_assert!(!sync_form(&mut d, &mut sync), "{}: sync_form no es estable", ctx);
+            let avisos = lineas_de_aviso(&d);
+            prop_assert!(avisos.len() <= 1, "{}: {:?}", ctx, avisos);
+            for aviso in &avisos {
+                prop_assert!(
+                    AVISOS.contains(&aviso.as_str())
+                        || (aviso.starts_with(NO_VALIDO) && aviso.chars().count() == 33),
+                    "{}: aviso desconocido {:?}",
+                    ctx,
+                    aviso
+                );
+            }
+            // Ningún texto inválido en los valores: el hexadecimal visible es válido y sale.
+            if let Some(values) = d.values()
+                && let Some(id) = id_color(MODOS[modo]).filter(|&id| d.is_shown(id))
+            {
+                prop_assert_eq!(d.validity(id), Some(Validity::Valid), "{}", ctx);
+                prop_assert!(values.color(id).is_some(), "{}: {} sin color", ctx, id);
+            }
+            if cambio && modo == modo_anterior {
+                prop_assert!(avisos.is_empty(), "{}: el aviso sobrevive: {:?}", ctx, avisos);
+            }
+        }
+    }
+}
+
+const TEXTOS_P3: [&str; 24] = [
+    "bbb",
+    "#bbb",
+    "bbbb",
+    "#bbb8",
+    "bbbbbb",
+    "#bbbbbb",
+    "bbbbbbdd",
+    "#bbbbbbdd",
+    "  bbb ",
+    " #bbbbbb  ",
+    "  #bbbbbbdd",
+    "#808080",
+    "#80808080",
+    "#ff0000",
+    "#ff000080",
+    "#fff",
+    "#f00",
+    "",
+    "#",
+    "zz",
+    "#12",
+    "#12345",
+    "#ggg",
+    "bbbbbbbbb",
+];
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// El traslado y `Crear` leen lo mismo: si `resolve_hex` da `Ok(c)`, `Crear` da `c` y el
+    /// traslado lee `c`; si da `Err`, `Crear` se rechaza y el traslado lee el último confirmado y
+    /// avisa.
+    #[test]
+    fn propiedad_a1_3_traslado_y_crear_leen_lo_mismo(
+        desde in 0usize..3,
+        salto in 1usize..4,
+        con_confirmado in any::<bool>(),
+        color in any::<[u8; 4]>(),
+        texto in 0..TEXTOS_P3.len(),
+    ) {
+        let from = ORIGENES[desde];
+        let to = MODOS[(indice_de_modo(from) + salto) % 4];
+        let confirmado = con_confirmado.then(|| confirmable(from, color));
+        let ultimo = confirmado.unwrap_or(GRIS_OPACO);
+        let texto = TEXTOS_P3[texto];
+        let ctx = format!("{from:?} {confirmado:?} {texto:?} → {to:?}");
+        let (mut d, mut sync) = origen(from, confirmado, Some(texto));
+        let id = id_color(from).expect("color");
+        prop_assert_eq!(d.hex_committed(id), Some(ultimo), "{}", ctx);
+        match resolve_hex(Some(texto), from, ultimo) {
+            Ok(c) => {
+                prop_assert_eq!(crear_color(&d, from), c, "{}: Crear", ctx);
+                prop_assert_eq!(
+                    read_background(&d, from),
+                    Some(Background::Color(c)),
+                    "{}: lectura del traslado",
+                    ctx
+                );
+                reposo(&mut d, &mut sync);
+                cambia_de_modo(&mut d, &mut sync, to);
+                let (fondo, aviso) = tras_trasladar(from, Background::Color(c), to);
+                comprueba_traslado(&d, from, to, fondo, aviso.as_deref(), &ctx);
+                prop_assert!(!texto_del_informe(&d).contains(NO_VALIDO), "{}", ctx);
+            }
+            Err(_) => {
+                let rechazado = matches!(d.clone().event(Event::Accept), Reaction::Rejected(_));
+                prop_assert!(rechazado, "{}: Crear debía rechazarse", ctx);
+                prop_assert_eq!(
+                    read_background(&d, from),
+                    Some(Background::Color(ultimo)),
+                    "{}: lectura del traslado",
+                    ctx
+                );
+                hasta_el_cambio(&mut d, &mut sync, from, Camino::Intro);
+                cambia_de_modo(&mut d, &mut sync, to);
+                let (fondo, aviso) = tras_descartar(from, ultimo, to);
+                comprueba_traslado(&d, from, to, fondo, Some(&aviso), &ctx);
+            }
+        }
+    }
+}

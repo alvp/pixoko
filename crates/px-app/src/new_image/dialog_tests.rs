@@ -2472,3 +2472,423 @@ fn fila_11_nueva_imagen_el_anillo_de_foco_rodea_la_fila_de_cada_opcion_como_siem
         b.marcadores(&donde);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Apéndice A1 (specs/hito-2-nueva-imagen.md), filas A3 y A4: los dos caminos reales hasta el
+// cambio de modo, con un clic real de dos fotogramas (pulsar y soltar por separado) y, para A4,
+// también con `Tab` y el teclado. En ROJO hasta la implementación.
+//
+// - A3, camino (a): escribir `zz` (sin `Intro`) y hacer clic en el selector de modo. La lectura del
+//   código (`dialog_view.rs`, `draw_hex`) dice que el clic quita el foco al pulsar y el campo se
+//   revierte a su último confirmado **antes** del fotograma en que cambia el modo: `sync_form` ya no
+//   ve texto inválido pendiente. La prueba lo **registra** (`eprintln!`, visible con `--nocapture`, y
+//   en el mensaje de cada aserción) y exige esa lectura: si fuese errónea, hay que parar.
+// - A4, camino (b): escribir `zz`, `Intro` (el error y el foco se quedan) y luego clic en el modo
+//   (o `Tab` hasta el selector y `Espacio`): `typed` ya es falso, no hay reversión y `sync_form` sí ve
+//   el texto inválido pendiente.
+// - Lo que ve `sync_form` en cada fotograma se lee del estado del campo de origen al final de ese
+//   fotograma: `sync_form` solo escribe el grupo del modo nuevo, nunca el de origen.
+// - La preparación (el modo, «Color…» y el último confirmado) se deja con eventos directos sobre el
+//   `Dialog`, como las demás pruebas de la fila 11; lo que se prueba va con ratón y teclado reales.
+// - A la ventana mínima el cuerpo se desplaza: antes del clic se sube con la rueda (el selector de
+//   modo queda a la vista con el desplazamiento a 0) y, para ver el informe pintado, se baja.
+// ---------------------------------------------------------------------------------------------
+
+use px_core::Rgba;
+use px_ui::color_edit::hex_text;
+
+const GRIS_CLARO_A1: Rgba = Rgba::opaque(0xaa, 0xaa, 0xaa);
+const GRIS_MEDIO_A1: Rgba = Rgba::new(0x80, 0x80, 0x80, 0x80);
+const AZUL_A1: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
+const GRIS_POR_DEFECTO_A1: Rgba = Rgba::opaque(0x80, 0x80, 0x80);
+const NO_VALIDO_A1: &str = "Color no válido: pasa a ";
+
+/// Origen, último confirmado (o ninguno) y destino: con el aviso nuevo, con el de D1b de un color
+/// que no viaja, con Indexado y con el alfa.
+const CASOS_A1: [(Mode, Option<Rgba>, Mode); 5] = [
+    (Mode::Rgba, None, Mode::GrayAlpha),
+    (Mode::Gray, Some(GRIS_CLARO_A1), Mode::Rgba),
+    (Mode::Rgba, Some(AZUL_A1), Mode::GrayAlpha),
+    (Mode::GrayAlpha, None, Mode::Indexed),
+    (Mode::Rgba, Some(GRIS_MEDIO_A1), Mode::Gray),
+];
+
+fn hex8_a1(c: Rgba) -> String {
+    format!("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a)
+}
+
+fn etiqueta_a1(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Indexed => "Indexado",
+        Mode::Rgba => "RGBA",
+        Mode::GrayAlpha => "Gris con alfa",
+        Mode::Gray => "Gris",
+    }
+}
+
+fn modo_ix_a1(mode: Mode) -> usize {
+    match mode {
+        Mode::Indexed => 0,
+        Mode::Rgba => 1,
+        Mode::GrayAlpha => 2,
+        Mode::Gray => 3,
+    }
+}
+
+fn fondo_id_a1(mode: Mode) -> &'static str {
+    match mode {
+        Mode::Indexed => "fondo_indexado",
+        Mode::Rgba => "fondo_rgba",
+        Mode::GrayAlpha => "fondo_gris_alfa",
+        Mode::Gray => "fondo_gris",
+    }
+}
+
+fn color_id_a1(mode: Mode) -> Option<&'static str> {
+    match mode {
+        Mode::Indexed => None,
+        Mode::Rgba => Some("color_rgba"),
+        Mode::GrayAlpha => Some("color_gris_alfa"),
+        Mode::Gray => Some("color_gris"),
+    }
+}
+
+/// El índice de «Color…» en el grupo de fondo del modo.
+fn color_ix_a1(mode: Mode) -> usize {
+    if mode == Mode::Gray { 2 } else { 3 }
+}
+
+/// El fondo y el aviso que deja descartar un texto inválido con `ultimo` confirmado (A1-1 y A1-4).
+fn tras_descartar_a1(from: Mode, ultimo: Rgba, to: Mode) -> (Background, String) {
+    match carry_background(from, Background::Color(ultimo), to) {
+        Carry::Kept(fondo) => (fondo, format!("{NO_VALIDO_A1}{}", hex8_a1(ultimo))),
+        Carry::Reset { to: fondo, notice } => (fondo, notice.to_string()),
+    }
+}
+
+/// Modo `from` con «Color…» y `confirmado` ya confirmado, con eventos directos (la preparación no es
+/// lo que se prueba).
+fn prepara_a1(b: &mut Banco, from: Mode, confirmado: Option<Rgba>) {
+    let id = color_id_a1(from).expect("el modo tiene «Color…»");
+    b.dialogo_mut().event(Event::Choice {
+        field: "modo",
+        index: modo_ix_a1(from),
+    });
+    b.reposo();
+    b.dialogo_mut().event(Event::Choice {
+        field: fondo_id_a1(from),
+        index: color_ix_a1(from),
+    });
+    b.reposo();
+    if let Some(c) = confirmado {
+        let d = b.dialogo_mut();
+        d.event(Event::Hex {
+            field: id,
+            text: hex8_a1(c),
+        });
+        d.event(Event::HexConfirm {
+            field: id,
+            blur: false,
+        });
+        b.reposo();
+    }
+    assert!(b.dialogo().is_shown(id), "{}", b.describe());
+    assert_eq!(
+        b.dialogo().hex_committed(id),
+        Some(confirmado.unwrap_or(GRIS_POR_DEFECTO_A1))
+    );
+    let informe = texto_del_informe(b.dialogo());
+    assert!(
+        !hay_aviso_de_fondo(b) && !informe.contains(NO_VALIDO_A1),
+        "la preparación no deja avisos; informe {informe:?}"
+    );
+}
+
+/// Lo que ve `sync_form` del campo de origen y del modo en un fotograma.
+#[derive(Clone, Debug)]
+struct FotoA1 {
+    modo: Option<usize>,
+    pendiente: bool,
+    texto: Option<String>,
+    confirmado: Option<Rgba>,
+}
+
+fn foto_a1(b: &Banco, id: &'static str) -> FotoA1 {
+    let d = b.dialogo();
+    FotoA1 {
+        modo: d.chosen("modo"),
+        pendiente: d.hex_pending(id),
+        texto: d.text(id),
+        confirmado: d.hex_committed(id),
+    }
+}
+
+/// Sube el cuerpo del todo con la rueda (a la ventana mínima se desplaza; a 960 × 720 no hace nada).
+fn rueda_arriba_a1(b: &mut Banco) {
+    let layout = b.layout();
+    let n = n_de(b.ppp);
+    let pos = pos2(
+        (layout.body.x + 3 * n) as f32 / b.ppp,
+        (layout.body.y + layout.body.height / 2) as f32 / b.ppp,
+    );
+    b.fotograma(vec![mover(pos)]);
+    b.reposo();
+    for _ in 0..4 {
+        b.fotograma(vec![rueda_linea(true)]);
+    }
+    b.reposo();
+    assert_eq!(b.dialogo().scroll_u(), 0, "{}", b.describe());
+}
+
+/// Lleva el foco al hexadecimal, escribe `zz` y comprueba que sigue enfocado y con el texto pendiente.
+fn escribe_zz_a1(b: &mut Banco, id: &'static str) {
+    b.foco_hasta(FocusTarget::Field(id));
+    b.escribe("zz");
+    assert!(b.dialogo().hex_pending(id), "{}", b.describe());
+    assert_eq!(b.dialogo().text(id), Some("zz".to_string()));
+    assert!(matches!(
+        b.dialogo().validity(id),
+        Some(Validity::Invalid(_))
+    ));
+    assert_eq!(
+        b.foco_de_egui(),
+        Some(Banco::id_de(id)),
+        "el campo tiene el foco al escribir"
+    );
+}
+
+/// Clic real en el texto `buscado`: mover, pulsar y soltar en tres fotogramas distintos, y tres de
+/// reposo; una foto del campo `id` tras cada fotograma.
+fn clic_con_traza_a1(b: &mut Banco, buscado: &str, id: &'static str) -> Vec<FotoA1> {
+    let pos = b.centro_de(buscado);
+    let mut traza = Vec::new();
+    for eventos in [
+        vec![mover(pos)],
+        vec![boton(pos, true)],
+        vec![boton(pos, false)],
+        vec![],
+        vec![],
+        vec![],
+    ] {
+        b.fotograma(eventos);
+        traza.push(foto_a1(b, id));
+    }
+    traza
+}
+
+/// Una tecla y tres fotogramas de reposo, con la foto del campo `id` tras cada uno.
+fn tecla_con_traza_a1(b: &mut Banco, key: Key, id: &'static str) -> Vec<FotoA1> {
+    let mut traza = Vec::new();
+    b.fotograma(vec![tecla(key, Modifiers::NONE)]);
+    traza.push(foto_a1(b, id));
+    for _ in 0..3 {
+        b.fotograma(vec![]);
+        traza.push(foto_a1(b, id));
+    }
+    traza
+}
+
+/// El índice del fotograma en que cambió el modo (exactamente uno) respecto a `antes`.
+fn fotograma_del_cambio_a1(antes: Option<usize>, traza: &[FotoA1], ctx: &str) -> usize {
+    let mut previo = antes;
+    let mut cambios = Vec::new();
+    for (i, foto) in traza.iter().enumerate() {
+        if foto.modo != previo {
+            cambios.push(i);
+        }
+        previo = foto.modo;
+    }
+    assert_eq!(
+        cambios.len(),
+        1,
+        "{ctx}: el modo cambia una vez; traza {traza:?}"
+    );
+    cambios[0]
+}
+
+/// El resultado de A1 o A2 con el aviso, en el diálogo y pintado.
+fn comprueba_resultado_a1(b: &mut Banco, from: Mode, ultimo: Rgba, to: Mode, ctx: &str) {
+    let (fondo, aviso) = tras_descartar_a1(from, ultimo, to);
+    assert_eq!(
+        texto_del_informe(b.dialogo()),
+        report_text(Some((64, 64)), to, Some(&aviso)),
+        "{ctx}: informe"
+    );
+    assert!(aviso.chars().count() <= 42 && en_el_juego(&aviso), "{ctx}");
+    let spec = spec_del(b).unwrap_or_else(|| panic!("{ctx}: sin valores válidos"));
+    assert_eq!(
+        (spec.width, spec.height, spec.mode, spec.background),
+        (64, 64, to, fondo),
+        "{ctx}"
+    );
+    let viejo = color_id_a1(from).expect("color");
+    assert!(!b.dialogo().is_shown(viejo), "{ctx}: el viejo se ve");
+    if let (Background::Color(color), Some(id)) = (fondo, color_id_a1(to)) {
+        assert!(b.dialogo().is_shown(id), "{ctx}");
+        assert_eq!(b.dialogo().validity(id), Some(Validity::Valid), "{ctx}");
+        assert!(
+            !b.dialogo().hex_pending(id),
+            "{ctx}: sin texto en el campo nuevo"
+        );
+        assert_eq!(b.dialogo().text(id), Some(hex_text(color)), "{ctx}");
+        assert_eq!(b.dialogo().hex_committed(id), Some(color), "{ctx}");
+        assert_eq!(
+            b.dialogo().values().expect("válido").color(id),
+            Some(color),
+            "{ctx}"
+        );
+    }
+    assert!(!b.crear_deshabilitado(), "{ctx}: Crear");
+    // Pintado: a la ventana mínima el informe queda abajo del cuerpo.
+    if b.ventana == Ventana::Minima {
+        rueda_sobre_el_cuerpo(b, 3);
+    }
+    assert!(
+        b.ultimo.contiene(&aviso),
+        "{ctx}: falta {aviso:?} pintado; hay {:?}",
+        b.ultimo.lista()
+    );
+}
+
+#[test]
+fn fila_a3_camino_a_escribir_zz_y_clic_en_el_modo_el_campo_ya_esta_revertido_y_el_aviso_sale() {
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            for (from, confirmado, to) in CASOS_A1 {
+                let ultimo = confirmado.unwrap_or(GRIS_POR_DEFECTO_A1);
+                let ctx = format!("A3 ppp {ppp} {ventana:?} {from:?} {confirmado:?} → {to:?}");
+                let id = color_id_a1(from).expect("color");
+                let mut b = Banco::abierto(ppp, ventana, 16384);
+                prepara_a1(&mut b, from, confirmado);
+                escribe_zz_a1(&mut b, id);
+                if ventana == Ventana::Minima {
+                    rueda_arriba_a1(&mut b);
+                    assert!(
+                        b.dialogo().hex_pending(id),
+                        "{ctx}: la rueda no cambia el campo"
+                    );
+                }
+
+                let antes = b.dialogo().chosen("modo");
+                let traza = clic_con_traza_a1(&mut b, etiqueta_a1(to), id);
+                let cambio = fotograma_del_cambio_a1(antes, &traza, &ctx);
+                let visto = &traza[cambio];
+                eprintln!("{ctx}: en el fotograma {cambio} del clic sync_form ve {visto:?}");
+
+                // La lectura del código: el clic quitó el foco al pulsar y el campo se revirtió a su
+                // último confirmado antes (o en) el fotograma del cambio.
+                assert!(
+                    !visto.pendiente,
+                    "{ctx}: LECTURA ERRÓNEA, el texto inválido SIGUE pendiente en el fotograma del cambio; traza {traza:?}"
+                );
+                assert_eq!(
+                    visto.texto,
+                    Some(hex_text(ultimo)),
+                    "{ctx}: traza {traza:?}"
+                );
+                assert_eq!(visto.confirmado, Some(ultimo), "{ctx}");
+
+                // Aun así, el aviso sale y el resultado es el de A1 o A2.
+                comprueba_resultado_a1(&mut b, from, ultimo, to, &ctx);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a4_camino_b_zz_intro_y_clic_en_el_modo_el_texto_sigue_pendiente_y_el_aviso_sale() {
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            for (from, confirmado, to) in CASOS_A1 {
+                let ultimo = confirmado.unwrap_or(GRIS_POR_DEFECTO_A1);
+                let ctx = format!("A4 ppp {ppp} {ventana:?} {from:?} {confirmado:?} → {to:?}");
+                let id = color_id_a1(from).expect("color");
+                let mut b = Banco::abierto(ppp, ventana, 16384);
+                prepara_a1(&mut b, from, confirmado);
+                escribe_zz_a1(&mut b, id);
+                b.pulsa(Key::Enter);
+                // Intro con el texto inválido: el error y el foco se quedan; no se crea nada.
+                assert!(b.modal.is_open() && b.aceptados.is_empty(), "{ctx}");
+                assert!(b.dialogo().hex_pending(id), "{ctx}: el texto se queda");
+                assert_eq!(b.dialogo().text(id), Some("zz".to_string()), "{ctx}");
+                assert_eq!(
+                    b.foco_de_egui(),
+                    Some(Banco::id_de(id)),
+                    "{ctx}: el foco se queda en el campo"
+                );
+                if ventana == Ventana::Minima {
+                    rueda_arriba_a1(&mut b);
+                }
+
+                let antes = b.dialogo().chosen("modo");
+                let traza = clic_con_traza_a1(&mut b, etiqueta_a1(to), id);
+                let cambio = fotograma_del_cambio_a1(antes, &traza, &ctx);
+                let visto = &traza[cambio];
+                eprintln!("{ctx}: en el fotograma {cambio} del clic sync_form ve {visto:?}");
+
+                assert!(
+                    visto.pendiente,
+                    "{ctx}: LECTURA ERRÓNEA, el texto inválido NO sigue pendiente en el fotograma del cambio; traza {traza:?}"
+                );
+                assert_eq!(
+                    visto.texto,
+                    Some("zz".to_string()),
+                    "{ctx}: traza {traza:?}"
+                );
+                assert_eq!(visto.confirmado, Some(ultimo), "{ctx}");
+
+                comprueba_resultado_a1(&mut b, from, ultimo, to, &ctx);
+                // El campo del modo nuevo no conserva el texto.
+                if let Some(nuevo) = color_id_a1(to) {
+                    assert_ne!(b.dialogo().text(nuevo), Some("zz".to_string()), "{ctx}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a4_camino_b_con_tab_hasta_el_selector_y_cambio_con_el_teclado() {
+    let casos = [
+        (Mode::Rgba, None, Mode::GrayAlpha),
+        (Mode::Rgba, Some(AZUL_A1), Mode::Gray),
+        (Mode::Gray, Some(GRIS_CLARO_A1), Mode::Indexed),
+    ];
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            for (from, confirmado, to) in casos {
+                let ultimo = confirmado.unwrap_or(GRIS_POR_DEFECTO_A1);
+                let ctx =
+                    format!("A4 teclado ppp {ppp} {ventana:?} {from:?} {confirmado:?} → {to:?}");
+                let id = color_id_a1(from).expect("color");
+                let mut b = Banco::abierto(ppp, ventana, 16384);
+                prepara_a1(&mut b, from, confirmado);
+                escribe_zz_a1(&mut b, id);
+                b.pulsa(Key::Enter);
+                assert!(b.dialogo().hex_pending(id), "{ctx}: tras Intro");
+
+                // Tab hasta la opción del modo de destino: el texto sigue pendiente por el camino.
+                b.foco_hasta(FocusTarget::Option("modo", modo_ix_a1(to)));
+                assert!(
+                    b.dialogo().hex_pending(id),
+                    "{ctx}: Tab no revierte el texto tras Intro"
+                );
+                assert_eq!(b.dialogo().text(id), Some("zz".to_string()), "{ctx}");
+
+                // Espacio elige la opción enfocada.
+                let antes = b.dialogo().chosen("modo");
+                let traza = tecla_con_traza_a1(&mut b, Key::Space, id);
+                let cambio = fotograma_del_cambio_a1(antes, &traza, &ctx);
+                let visto = &traza[cambio];
+                eprintln!("{ctx}: en el fotograma {cambio} sync_form ve {visto:?}");
+                assert!(
+                    visto.pendiente,
+                    "{ctx}: LECTURA ERRÓNEA, el texto inválido NO sigue pendiente; traza {traza:?}"
+                );
+                assert_eq!(visto.texto, Some("zz".to_string()), "{ctx}");
+
+                comprueba_resultado_a1(&mut b, from, ultimo, to, &ctx);
+            }
+        }
+    }
+}

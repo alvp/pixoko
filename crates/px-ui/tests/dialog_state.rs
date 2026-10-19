@@ -47,10 +47,10 @@ use std::collections::HashSet;
 use proptest::prelude::*;
 use px_core::{Mode, Rgba};
 use px_ui::actions::Locks;
-use px_ui::color_edit::{hex_notice, parse_hex};
+use px_ui::color_edit::{HexError, hex_notice, parse_hex};
 use px_ui::dialog::{
     Dialog, DialogKind, Event, FieldKind, FieldSpec, FormSpec, Modal, Reaction, Rows, ShowWhen,
-    Validity, Value, Values,
+    Validity, Value, Values, resolve_hex,
 };
 use px_ui::dialog_keys::{FocusTarget, initial_focus};
 use px_ui::licenses_view::{LICENSES_FIELD, licenses_form};
@@ -3298,5 +3298,317 @@ fn fila_6_los_textos_de_la_lista_de_la_spec_caben_sin_recorte() {
         d.set_summary(Some(texto.to_string()));
         assert_eq!(d.reason(), Some(texto.to_string()), "summary {texto:?}");
         assert_eq!(d.summary(), Some(texto));
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Apéndice A1 de la unidad 19 (specs/hito-2-nueva-imagen.md): `Dialog::hex_committed` y
+// `resolve_hex`. En ROJO hasta que existan las dos piezas (aditivas, sin cambiar nada de la 18).
+// ---------------------------------------------------------------------------------------------
+
+const POR_DEFECTO: Rgba = Rgba::new(0x33, 0x66, 0x99, 0x80);
+
+#[test]
+fn fila_a1_hex_committed_nace_en_el_valor_por_defecto_del_campo() {
+    for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
+        let default = match mode {
+            Mode::Rgba => POR_DEFECTO,
+            Mode::GrayAlpha => Rgba::new(0x80, 0x80, 0x80, 0x40),
+            _ => Rgba::opaque(0x80, 0x80, 0x80),
+        };
+        let d = open(hex_form(mode, default));
+        assert_eq!(d.hex_committed("color"), Some(default), "{mode:?}");
+    }
+    // Un campo oculto existe y tiene su valor por defecto (el del formulario de la fila 3).
+    let d = dialog();
+    assert!(!d.is_shown("color"));
+    assert_eq!(
+        d.hex_committed("color"),
+        Some(Rgba::opaque(0x33, 0x66, 0x99))
+    );
+}
+
+#[test]
+fn fila_a1_hex_committed_sigue_al_ultimo_confirmado() {
+    let mut d = open(hex_form(Mode::Rgba, POR_DEFECTO));
+    // Intro con un válido de 6 dígitos: toma el alfa del confirmado.
+    hex(&mut d, "color", "#123456");
+    confirma(&mut d, "color", false);
+    assert_eq!(
+        d.hex_committed("color"),
+        Some(Rgba::new(0x12, 0x34, 0x56, 0x80))
+    );
+    // Pérdida del foco con un válido de 8 dígitos: el suyo.
+    hex(&mut d, "color", "#abcdef11");
+    confirma(&mut d, "color", true);
+    assert_eq!(
+        d.hex_committed("color"),
+        Some(Rgba::new(0xab, 0xcd, 0xef, 0x11))
+    );
+    // Tres dígitos: el alfa del último confirmado (0x11), no el de partida.
+    hex(&mut d, "color", "f00");
+    confirma(&mut d, "color", false);
+    assert_eq!(d.hex_committed("color"), Some(Rgba::new(0xff, 0, 0, 0x11)));
+    // `Accept` confirma el pendiente válido antes de entregarlo.
+    hex(&mut d, "color", "#00ff00ee");
+    assert!(matches!(d.event(Event::Accept), Reaction::Accepted(_)));
+    assert_eq!(d.hex_committed("color"), Some(Rgba::new(0, 0xff, 0, 0xee)));
+}
+
+#[test]
+fn fila_a1_hex_committed_con_texto_pendiente_sigue_el_confirmado() {
+    let confirmado = Rgba::new(0x12, 0x34, 0x56, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, POR_DEFECTO));
+    hex(&mut d, "color", "#123456");
+    confirma(&mut d, "color", false);
+    assert_eq!(d.hex_committed("color"), Some(confirmado));
+    // Pendiente inválido (escrito, con Intro, con pérdida del foco que revierte, con Escape).
+    hex(&mut d, "color", "zz");
+    assert!(d.hex_pending("color"));
+    assert_eq!(d.hex_committed("color"), Some(confirmado), "zz pendiente");
+    confirma(&mut d, "color", false);
+    assert!(d.hex_pending("color"));
+    assert_eq!(d.hex_committed("color"), Some(confirmado), "zz con Intro");
+    confirma(&mut d, "color", true);
+    assert!(!d.hex_pending("color"));
+    assert_eq!(d.hex_committed("color"), Some(confirmado), "zz revertido");
+    d.event(Event::HexRevert { field: "color" });
+    assert_eq!(d.hex_committed("color"), Some(confirmado), "tras Escape");
+    // Pendiente válido sin confirmar: sigue el confirmado, no el escrito.
+    hex(&mut d, "color", "#abcdef");
+    assert!(d.hex_pending("color"));
+    assert_eq!(
+        d.hex_committed("color"),
+        Some(confirmado),
+        "válido sin confirmar"
+    );
+    // El campo oculto conserva el suyo aunque se oculte con basura escrita.
+    let mut d = dialog();
+    elige(&mut d, "modo", 2);
+    hex(&mut d, "color", "#445566");
+    confirma(&mut d, "color", false);
+    hex(&mut d, "color", "zz");
+    elige(&mut d, "modo", 0);
+    assert!(!d.is_shown("color"));
+    assert_eq!(
+        d.hex_committed("color"),
+        Some(Rgba::opaque(0x44, 0x55, 0x66))
+    );
+}
+
+#[test]
+fn fila_a1_hex_committed_da_none_si_el_campo_no_existe() {
+    let d = dialog();
+    for id in ["", "nada", "Color", "color ", "color_rgba"] {
+        assert_eq!(d.hex_committed(id), None, "{id:?}");
+    }
+    let d = open(hex_form(Mode::Rgba, POR_DEFECTO));
+    assert_eq!(d.hex_committed("modo"), None);
+}
+
+#[test]
+fn fila_a1_hex_committed_da_none_si_el_campo_no_es_hexadecimal() {
+    let d = dialog();
+    for id in ["ancho", "alto", "modo", "opaco", "informe"] {
+        assert!(d.spec().fields.iter().any(|f| f.id == id), "{id} existe");
+        assert_eq!(d.hex_committed(id), None, "{id}");
+    }
+}
+
+#[test]
+fn fila_a1_hex_committed_no_cambia_el_dialogo() {
+    let mut d = open(hex_form(Mode::Rgba, POR_DEFECTO));
+    hex(&mut d, "color", "zz");
+    let antes = d.clone();
+    let _ = d.hex_committed("color");
+    let _ = d.hex_committed("nada");
+    assert_eq!(d, antes);
+}
+
+const TEXTOS_RESOLVE: [&str; 22] = [
+    "#abc",
+    "abc",
+    "#abcd",
+    "abcd",
+    "#aabbcc",
+    "aabbcc",
+    "#aabbccdd",
+    "aabbccdd",
+    "  #aabbcc  ",
+    " abc",
+    "#ABC",
+    "#fff",
+    "#808080",
+    "#80808080",
+    "#ff0000",
+    "#ff000080",
+    "",
+    "#",
+    "zz",
+    "#12",
+    "#12345",
+    "#aabbccddee",
+];
+
+const CONFIRMADOS_RESOLVE: [Rgba; 4] = [
+    Rgba::new(0x80, 0x80, 0x80, 0xff),
+    Rgba::new(0x33, 0x66, 0x99, 0xcc),
+    Rgba::new(0x80, 0x80, 0x80, 0x80),
+    Rgba::new(0, 0, 0, 0),
+];
+
+#[test]
+fn fila_a1_resolve_hex_sin_texto_da_el_confirmado() {
+    for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray, Mode::Indexed] {
+        for committed in CONFIRMADOS_RESOLVE {
+            assert_eq!(
+                resolve_hex(None, mode, committed),
+                Ok(committed),
+                "{mode:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_a1_resolve_hex_con_texto_es_parse_hex_con_el_confirmado() {
+    for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
+        for committed in CONFIRMADOS_RESOLVE {
+            for texto in TEXTOS_RESOLVE {
+                assert_eq!(
+                    resolve_hex(Some(texto), mode, committed),
+                    parse_hex(texto, mode, committed),
+                    "{mode:?} {committed:?} {texto:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_a1_resolve_hex_tres_y_seis_digitos_toman_el_alfa_del_confirmado_y_cuatro_y_ocho_el_suyo() {
+    let confirmado = Rgba::new(0x33, 0x66, 0x99, 0xcc);
+    for (texto, esperado) in [
+        ("bbb", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+        ("#bbb", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+        ("bbbbbb", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+        ("#bbbbbb", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+        ("#bbb8", Rgba::new(0xbb, 0xbb, 0xbb, 0x88)),
+        ("bbb8", Rgba::new(0xbb, 0xbb, 0xbb, 0x88)),
+        ("#bbbbbbdd", Rgba::new(0xbb, 0xbb, 0xbb, 0xdd)),
+        ("bbbbbbdd", Rgba::new(0xbb, 0xbb, 0xbb, 0xdd)),
+        ("  #bbbbbb  ", Rgba::new(0xbb, 0xbb, 0xbb, 0xcc)),
+        ("#BBBBBBDD", Rgba::new(0xbb, 0xbb, 0xbb, 0xdd)),
+    ] {
+        assert_eq!(
+            resolve_hex(Some(texto), Mode::Rgba, confirmado),
+            Ok(esperado),
+            "RGBA {texto:?}"
+        );
+        assert_eq!(
+            resolve_hex(Some(texto), Mode::GrayAlpha, confirmado),
+            Ok(esperado),
+            "Gris con alfa {texto:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_a1_resolve_hex_los_invalidos_dan_su_error() {
+    let c = Rgba::opaque(0x80, 0x80, 0x80);
+    for (texto, error) in [
+        ("", HexError::Empty),
+        ("#", HexError::Empty),
+        ("   ", HexError::Empty),
+        ("zz", HexError::Length(2)),
+        ("#12", HexError::Length(2)),
+        ("#12345", HexError::Length(5)),
+        ("#aabbcc1", HexError::Length(7)),
+        ("#ggg", HexError::Digit),
+        ("#aabbcg", HexError::Digit),
+    ] {
+        for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
+            assert_eq!(
+                resolve_hex(Some(texto), mode, c),
+                Err(error.clone()),
+                "{mode:?} {texto:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_a1_resolve_hex_aplica_las_reglas_de_gris_y_gris_con_alfa() {
+    let c = Rgba::new(0x80, 0x80, 0x80, 0xcc);
+    // Un color no gris no vale ni en Gris ni en Gris con alfa, y sí en RGBA.
+    assert_eq!(
+        resolve_hex(Some("#ff0000"), Mode::Rgba, c),
+        Ok(Rgba::new(0xff, 0, 0, 0xcc))
+    );
+    assert_eq!(
+        resolve_hex(Some("#ff0000"), Mode::GrayAlpha, c),
+        Err(HexError::NotGray)
+    );
+    assert_eq!(
+        resolve_hex(Some("#ff0000"), Mode::Gray, c),
+        Err(HexError::NotGray)
+    );
+    // Un gris con alfa vale en Gris con alfa y no en Gris (sin alfa).
+    assert_eq!(
+        resolve_hex(Some("#80808080"), Mode::GrayAlpha, c),
+        Ok(Rgba::new(0x80, 0x80, 0x80, 0x80))
+    );
+    assert_eq!(
+        resolve_hex(Some("#80808080"), Mode::Gray, c),
+        Err(HexError::NoAlpha)
+    );
+    assert_eq!(
+        resolve_hex(Some("#808080ff"), Mode::Gray, c),
+        Ok(Rgba::opaque(0x80, 0x80, 0x80))
+    );
+    // Con `None` no se mira el modo: el confirmado tal cual.
+    assert_eq!(resolve_hex(None, Mode::Gray, c), Ok(c));
+}
+
+#[test]
+fn fila_a1_resolve_hex_es_la_regla_que_usan_validez_y_valores_del_dialogo() {
+    // El dialogo y la función dan el mismo color y el mismo error para cada texto, con el último
+    // confirmado distinto del de partida.
+    for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
+        for texto in TEXTOS_RESOLVE {
+            let mut d = open(hex_form(mode, Rgba::opaque(0x80, 0x80, 0x80)));
+            hex(&mut d, "color", "#aaaaaa");
+            confirma(&mut d, "color", false);
+            let confirmado = d.hex_committed("color").expect("hexadecimal");
+            hex(&mut d, "color", texto);
+            match resolve_hex(Some(texto), mode, confirmado) {
+                Ok(color) => {
+                    assert_eq!(
+                        d.validity("color"),
+                        Some(Validity::Valid),
+                        "{mode:?} {texto:?}"
+                    );
+                    assert_eq!(color_aceptado(&d), color, "{mode:?} {texto:?}");
+                }
+                Err(error) => {
+                    assert_eq!(
+                        d.validity("color"),
+                        Some(Validity::Invalid(hex_notice(&error).to_string())),
+                        "{mode:?} {texto:?}"
+                    );
+                    assert!(matches!(
+                        d.clone().event(Event::Accept),
+                        Reaction::Rejected(_)
+                    ));
+                    // Con Intro el texto inválido se queda; con la pérdida del foco, revierte.
+                    confirma(&mut d, "color", false);
+                    assert_eq!(d.hex_committed("color"), Some(confirmado));
+                    assert!(d.hex_pending("color"), "{mode:?} {texto:?}");
+                    confirma(&mut d, "color", true);
+                    assert!(!d.hex_pending("color"), "{mode:?} {texto:?}");
+                    assert_eq!(d.hex_committed("color"), Some(confirmado));
+                }
+            }
+        }
     }
 }
