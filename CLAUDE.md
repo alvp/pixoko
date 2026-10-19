@@ -34,4 +34,9 @@
 - `cargo test`: siempre con `-q` y recortado, p. ej. `cargo test -q --workspace --locked 2>&1 | tail -40`.
 - `clippy` y `cargo deny`: solo errores y avisos nuevos; no pegues el log entero.
 - No pegues listas de tests ni logs completos; si algo falla, solo el test y el error.
+- Durante la unidad: `cargo check -p` y `cargo test -p -q` solo de los crates tocados. Workspace completo, clippy `-D warnings` y `cargo deny`, solo al cerrar.
+- Los commits de pruebas en rojo no tienen que compilar el workspace entero.
+- Las propiedades de proptest usan los casos que fije la spec; se puede bajar con `PROPTEST_CASES` al desarrollar, no al cerrar.
+- Los tests nuevos de un crate se añaden como módulos de un ejecutable de pruebas existente si es razonable (menos enlazados).
+- Tras `/clear`, la sesión se reanuda leyendo la spec de la unidad y `git log -6`.
 - Informe final, solo esto: commits, qué cambia respecto a la spec, riesgos y la lista de prueba manual.
