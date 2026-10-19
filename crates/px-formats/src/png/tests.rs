@@ -113,7 +113,7 @@ fn bytes_de_pasada(filas: u64, columnas: u64, bpp: u64) -> u64 {
         return 0;
     }
     let bits = columnas * bpp;
-    filas * (1 + (bits / 8 + u64::from(bits % 8 != 0)))
+    filas * (1 + bits.div_ceil(8))
 }
 
 /// Modelo: clasifica cada píxel en su pasada con la matriz y cuenta, por pasada, los píxeles y
@@ -201,7 +201,7 @@ proptest! {
         let r = inflated_len(ancho, alto, bpp, entrelazado);
         if !entrelazado {
             let bits = u128::from(ancho) * u128::from(bpp);
-            let exacto = u128::from(alto) * (1 + (bits + 7) / 8);
+            let exacto = u128::from(alto) * (1 + bits.div_ceil(8));
             prop_assert_eq!(r, u64::try_from(exacto).ok());
         }
     }

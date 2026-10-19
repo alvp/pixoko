@@ -222,7 +222,11 @@ fn previos(color: u8, prof: u8) -> Vec<Vec<u8>> {
 /// Los bytes de la imagen son los de «todo a cero»: con RGB (tipo 2) el alfa sale a 255.
 fn es_todo_cero(img: &Image, color: u8) -> bool {
     if color == 2 {
-        img.bytes().chunks_exact(4).all(|p| p == [0, 0, 0, 255])
+        img.bytes()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [0, 0, 0, 255])
     } else {
         img.bytes().iter().all(|&b| b == 0)
     }
@@ -353,6 +357,9 @@ fn fila5_cota_ajustada_con_z_a_8192() {
 // Fila 6: un solo color con el codificador por defecto.
 // ---------------------------------------------------------------------------------------
 
+/// Un constructor de imagen con su nombre, para los casos de `un_solo_color`.
+type Constructor = (&'static str, Box<dyn Fn() -> Image>);
+
 fn un_solo_color(lado: u32) {
     let paleta = Palette::from_colors([
         Rgba::opaque(1, 2, 3),
@@ -360,7 +367,7 @@ fn un_solo_color(lado: u32) {
         Rgba::opaque(7, 8, 9),
     ])
     .unwrap();
-    let constructores: [(&str, Box<dyn Fn() -> Image>); 4] = [
+    let constructores: [Constructor; 4] = [
         (
             "gris",
             Box::new(move || Image::filled(lado, lado, Pixel::Gray(77)).unwrap()),
