@@ -2624,3 +2624,911 @@ fn fila_11_un_cambio_de_ppp_no_mueve_el_foco_ni_el_texto_de_un_campo_con_foco() 
         banco.escribe("512");
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20b, parte 2: marcador redondo de las opciones y borde de la casilla
+// (specs/hito-2-motivo-y-marcadores.md, D5; filas 9, 10 y 11; propiedad 4)
+// ---------------------------------------------------------------------------------------------
+//
+// En ROJO hasta la implementación: `px_ui::dialog_view::TOGGLE_EDGE` todavía no existe (este
+// fichero no compila hasta entonces), `draw_toggle` pinta las opciones como cuadrados con `EDGE` y
+// `CONTRAST_PAIRS` tiene 10 pares.
+//
+// Lo que se lee del pintado: los círculos (`Shape::Circle`: centro, radio, relleno y trazo) y los
+// rectángulos (`Shape::Rect`) tal como los pinta `show_dialog`, sin comparar píxeles. El helper
+// `orden::pintura` solo trata un círculo como «relleno de caja» y descarta su trazo y su centro,
+// así que aquí hay un lector aparte (`marcas`) que sale del mismo `Vec<ClippedShape>`.
+//
+// Lo que fija D5 y se comprueba, a las cinco escalas y en 960 × 720 (a la mínima el cuerpo se
+// desplaza y parte de las filas queda recortada):
+// - Opción: un aro (círculo con trazo `TOGGLE_EDGE` de 1 u, relleno `FIELD_FILL`, diámetro exterior
+//   de 10 u = 2 · radio + trazo, centro en `x = PAD_U + 2 + 5 u` desde el borde del diálogo y en
+//   `y = rótulo + 7 u`); la elegida lleva además un punto `ACCENT` de 6 u de diámetro, concéntrico.
+//   Un punto por grupo, nunca más.
+// - Casilla: rectángulo de 10 u con trazo `TOGGLE_EDGE` de 1 u y relleno `FIELD_FILL`; marcada,
+//   un cuadrado `ACCENT` de 6 u centrado en la caja. Nunca un círculo en su fila.
+// - Anillo de foco: el de siempre (trazo `ACCENT` de 2 u, `Inside`, alrededor de la fila entera:
+//   `x = PAD_U`, `y = rótulo − 1 u`, `16 u` de alto y `18 u + 7 u · letras` de ancho), igual en
+//   opción y en casilla.
+// - Se admite que el aro y su relleno sean dos círculos (relleno debajo, aro encima, concéntricos)
+//   en vez de uno con relleno y trazo; no se fija el radio por separado, sino el diámetro exterior.
+
+use px_ui::dialog_view::{DIALOG_FILL, FIELD_FILL, TOGGLE_EDGE};
+
+mod marcas {
+    //! Círculos y rectángulos pintados, en orden de pintado, con su relleno y su trazo.
+
+    use egui::epaint::{ClippedShape, Shape};
+    use egui::{Color32, Pos2, Rect};
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Disco {
+        pub centro: Pos2,
+        pub radio: f32,
+        pub relleno: Color32,
+        /// `TRANSPARENT` y `0.0` si no tiene trazo visible.
+        pub trazo_color: Color32,
+        pub trazo_ancho: f32,
+        pub orden: usize,
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct Caja {
+        pub rect: Rect,
+        pub relleno: Color32,
+        pub trazo_color: Color32,
+        pub trazo_ancho: f32,
+    }
+
+    #[derive(Clone, Debug, Default)]
+    pub struct Marcas {
+        pub discos: Vec<Disco>,
+        pub cajas: Vec<Caja>,
+        siguiente: usize,
+    }
+
+    fn trazo(s: egui::Stroke) -> (Color32, f32) {
+        if s.width > 0.0 && s.color != Color32::TRANSPARENT {
+            (s.color, s.width)
+        } else {
+            (Color32::TRANSPARENT, 0.0)
+        }
+    }
+
+    fn recoge(shape: &Shape, fuera: &mut Marcas) {
+        match shape {
+            Shape::Circle(c) => {
+                let (trazo_color, trazo_ancho) = trazo(c.stroke);
+                fuera.discos.push(Disco {
+                    centro: c.center,
+                    radio: c.radius,
+                    relleno: c.fill,
+                    trazo_color,
+                    trazo_ancho,
+                    orden: fuera.siguiente,
+                });
+                fuera.siguiente += 1;
+            }
+            Shape::Rect(r) => {
+                let (trazo_color, trazo_ancho) = trazo(r.stroke);
+                fuera.cajas.push(Caja {
+                    rect: r.rect,
+                    relleno: r.fill,
+                    trazo_color,
+                    trazo_ancho,
+                });
+                fuera.siguiente += 1;
+            }
+            Shape::Vec(formas) => {
+                for forma in formas {
+                    recoge(forma, fuera);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn marcas_de(formas: &[ClippedShape]) -> Marcas {
+        let mut fuera = Marcas::default();
+        for clipped in formas {
+            recoge(&clipped.shape, &mut fuera);
+        }
+        fuera
+    }
+}
+
+use marcas::{Caja, Disco, Marcas, marcas_de};
+
+/// Un fotograma: lo pintado (textos, trazos y rellenos) y los círculos y rectángulos crudos.
+struct Escena {
+    p: Pintura,
+    m: Marcas,
+}
+
+impl Banco {
+    /// Como `fotograma`, pero devuelve las formas sin procesar (para leer círculos).
+    fn fotograma_crudo(&mut self, events: Vec<Event>) -> Vec<egui::epaint::ClippedShape> {
+        let pantalla = self.pantalla();
+        let mut reaccion = Reaction::None;
+        let formas = {
+            let Banco {
+                ctx,
+                dialog,
+                focus,
+                detras,
+                muestra_dialogo,
+                ..
+            } = &mut *self;
+            let muestra = *muestra_dialogo;
+            fotograma(ctx, pantalla, events, |ui| {
+                let c = ui.ctx().clone();
+                apply_scale(&c);
+                if let Some(d) = detras.as_mut() {
+                    dibuja_detras(&c, d, pantalla);
+                }
+                if muestra {
+                    reaccion = show_dialog(&c, dialog, focus);
+                }
+            })
+        };
+        if !matches!(reaccion, Reaction::None) {
+            self.reacciones.push(reaccion);
+        }
+        formas
+    }
+
+    /// Tres fotogramas de reposo y lo pintado en el último, con los círculos.
+    fn escena(&mut self) -> Escena {
+        self.fotograma_crudo(vec![]);
+        self.fotograma_crudo(vec![]);
+        let formas = self.fotograma_crudo(vec![]);
+        Escena {
+            p: pintura(&formas),
+            m: marcas_de(&formas),
+        }
+    }
+}
+
+/// Tolerancia de las medidas: 5 % de una `u` (el redondeo de píxeles de egui es mucho menor).
+fn cerca_u(a: f32, b: f32, u: f32) -> bool {
+    (a - b).abs() <= 0.05 * u
+}
+
+fn mismo_centro(a: Pos2, b: Pos2, u: f32) -> bool {
+    cerca_u(a.x, b.x, u) && cerca_u(a.y, b.y, u)
+}
+
+/// `x` (puntos) del centro de los marcadores: `PAD_U + 2 + 5 u` desde el borde del diálogo.
+fn x_marcas(b: &Banco) -> f32 {
+    en_puntos(
+        b.ppp,
+        b.rects().dialog.x + (px_ui::dialog_layout::PAD_U + 2 + 5) * b.n(),
+        0,
+    )
+    .x
+}
+
+/// Los aros (círculos con trazo `TOGGLE_EDGE`), de arriba abajo.
+fn aros(m: &Marcas) -> Vec<Disco> {
+    let mut v: Vec<Disco> = m
+        .discos
+        .iter()
+        .copied()
+        .filter(|d| d.trazo_color == TOGGLE_EDGE)
+        .collect();
+    v.sort_by(|a, b| a.centro.y.total_cmp(&b.centro.y));
+    v
+}
+
+/// Los puntos: círculos rellenos de `ACCENT`, de arriba abajo.
+fn puntos(m: &Marcas) -> Vec<Disco> {
+    let mut v: Vec<Disco> = m
+        .discos
+        .iter()
+        .copied()
+        .filter(|d| d.relleno == ACCENT)
+        .collect();
+    v.sort_by(|a, b| a.centro.y.total_cmp(&b.centro.y));
+    v
+}
+
+/// Las cajas de casilla: rectángulos con trazo `TOGGLE_EDGE` y de aspecto de caja de marca (hasta
+/// 20 u de lado; `TOGGLE_EDGE` es `TEXT_DIM` y otros trazos grandes, como el marco del diálogo,
+/// pueden tener ese color), de arriba abajo.
+fn casillas(m: &Marcas, u: f32) -> Vec<Caja> {
+    let mut v: Vec<Caja> = m
+        .cajas
+        .iter()
+        .copied()
+        .filter(|c| c.trazo_color == TOGGLE_EDGE)
+        .filter(|c| c.rect.width() <= 20.0 * u && c.rect.height() <= 20.0 * u)
+        .collect();
+    v.sort_by(|a, b| a.rect.center().y.total_cmp(&b.rect.center().y));
+    v
+}
+
+/// Las marcas cuadradas: rectángulos de relleno `ACCENT` y sin trazo, de como mucho 10 u, con el
+/// centro a menos de 5 u en vertical de `y`.
+fn marcas_cuadradas(m: &Marcas, u: f32, y: f32) -> Vec<Caja> {
+    m.cajas
+        .iter()
+        .copied()
+        .filter(|c| c.relleno == ACCENT && c.trazo_ancho == 0.0)
+        .filter(|c| c.rect.width() <= 10.0 * u + 0.05 && c.rect.height() <= 10.0 * u + 0.05)
+        .filter(|c| (c.rect.center().y - y).abs() <= 5.0 * u)
+        .collect()
+}
+
+/// El relleno de un aro: el suyo o, si no tiene, el del último círculo relleno anterior y concéntrico.
+fn relleno_de_aro(m: &Marcas, aro: &Disco) -> Color32 {
+    if aro.relleno != Color32::TRANSPARENT {
+        return aro.relleno;
+    }
+    m.discos
+        .iter()
+        .filter(|d| d.orden < aro.orden && d.relleno != Color32::TRANSPARENT)
+        .rfind(|d| (d.centro - aro.centro).length() < 0.01)
+        .map_or(Color32::TRANSPARENT, |d| d.relleno)
+}
+
+/// Opciones del grupo `modo` de `formulario()`: un aro por opción en su sitio, un único punto y solo
+/// en la elegida, ninguna opción cuadrada.
+fn afirma_opciones(b: &Banco, esc: &Escena, donde: &str) {
+    let u = b.u();
+    let opciones = opciones_de(&b.dialog, "modo");
+    let elegida = b.dialog.chosen("modo").expect("el grupo modo");
+    let aros = aros(&esc.m);
+    assert_eq!(
+        aros.len(),
+        opciones.len(),
+        "{donde}: un aro por opción; círculos pintados {:?}",
+        esc.m.discos
+    );
+    let x = x_marcas(b);
+    let todos_los_puntos = puntos(&esc.m);
+    for (i, opcion) in opciones.iter().enumerate() {
+        let aro = aros[i];
+        let y = texto_de(&esc.p, opcion).pos.y + 7.0 * u;
+        assert!(
+            cerca_u(aro.centro.x, x, u) && cerca_u(aro.centro.y, y, u),
+            "{donde}: el aro de {opcion:?} está en {:?} y debía estar en ({x}, {y})",
+            aro.centro
+        );
+        assert!(
+            cerca_u(2.0 * aro.radio + aro.trazo_ancho, 10.0 * u, u),
+            "{donde}: el aro de {opcion:?} mide {} de diámetro exterior y debía medir {}",
+            2.0 * aro.radio + aro.trazo_ancho,
+            10.0 * u
+        );
+        assert!(
+            cerca_u(aro.trazo_ancho, u, u),
+            "{donde}: el trazo del aro de {opcion:?} mide {} y debía medir 1 u = {u}",
+            aro.trazo_ancho
+        );
+        assert_eq!(
+            relleno_de_aro(&esc.m, &aro),
+            FIELD_FILL,
+            "{donde}: el aro de {opcion:?} se rellena con el color del campo"
+        );
+        let aqui: Vec<&Disco> = todos_los_puntos
+            .iter()
+            .filter(|p| mismo_centro(p.centro, aro.centro, u))
+            .collect();
+        assert_eq!(
+            aqui.len(),
+            usize::from(i == elegida),
+            "{donde}: la opción {i} (elegida: {elegida}) lleva {} puntos",
+            aqui.len()
+        );
+        if let Some(punto) = aqui.first() {
+            assert!(
+                cerca_u(2.0 * punto.radio, 6.0 * u, u),
+                "{donde}: el punto mide {} y debía medir {}",
+                2.0 * punto.radio,
+                6.0 * u
+            );
+            assert_eq!(punto.trazo_ancho, 0.0, "{donde}: el punto no lleva trazo");
+        }
+    }
+    assert_eq!(
+        todos_los_puntos.len(),
+        1,
+        "{donde}: exactamente un punto por grupo (el formulario tiene un grupo): {todos_los_puntos:?}"
+    );
+    // Ninguna opción se pinta con una caja cuadrada de borde.
+    for caja in casillas(&esc.m, u) {
+        for opcion in opciones {
+            let y = texto_de(&esc.p, opcion).pos.y + 7.0 * u;
+            assert!(
+                (caja.rect.center().y - y).abs() > 3.0 * u,
+                "{donde}: la opción {opcion:?} se pinta con un cuadrado de borde {:?}",
+                caja.rect
+            );
+        }
+    }
+}
+
+/// La casilla `opaco`: una caja de 10 u con borde `TOGGLE_EDGE`, marca cuadrada de 6 u solo si
+/// está marcada y ningún círculo en su fila.
+fn afirma_casilla(b: &Banco, esc: &Escena, donde: &str) {
+    let u = b.u();
+    let marcada = b.dialog.checked("opaco").expect("la casilla opaco");
+    let cajas = casillas(&esc.m, u);
+    assert_eq!(
+        cajas.len(),
+        1,
+        "{donde}: una caja con borde TOGGLE_EDGE; rectángulos de caja {:?}",
+        esc.m
+            .cajas
+            .iter()
+            .filter(|c| c.rect.width() <= 20.0 * u)
+            .collect::<Vec<_>>()
+    );
+    let caja = cajas[0];
+    let y = texto_de(&esc.p, "Opaco").pos.y + 7.0 * u;
+    let centro = caja.rect.center();
+    assert!(
+        cerca_u(caja.rect.width(), 10.0 * u, u) && cerca_u(caja.rect.height(), 10.0 * u, u),
+        "{donde}: la caja mide {:?} y debía ser un cuadrado de {}",
+        caja.rect.size(),
+        10.0 * u
+    );
+    assert!(
+        cerca_u(centro.x, x_marcas(b), u) && cerca_u(centro.y, y, u),
+        "{donde}: la caja está centrada en {centro:?}"
+    );
+    assert!(
+        cerca_u(caja.trazo_ancho, u, u),
+        "{donde}: el borde de la caja mide {} y debía medir {u}",
+        caja.trazo_ancho
+    );
+    assert_eq!(caja.relleno, FIELD_FILL, "{donde}: relleno de la caja");
+    let marcas = marcas_cuadradas(&esc.m, u, centro.y);
+    assert_eq!(
+        marcas.len(),
+        usize::from(marcada),
+        "{donde}: casilla marcada = {marcada}; marcas {marcas:?}"
+    );
+    if let Some(marca) = marcas.first() {
+        assert!(
+            cerca_u(marca.rect.width(), 6.0 * u, u) && cerca_u(marca.rect.height(), 6.0 * u, u),
+            "{donde}: la marca mide {:?} y debía ser un cuadrado de {}",
+            marca.rect.size(),
+            6.0 * u
+        );
+        assert!(
+            mismo_centro(marca.rect.center(), centro, u),
+            "{donde}: la marca está centrada en la caja"
+        );
+    }
+    assert!(
+        esc.m
+            .discos
+            .iter()
+            .all(|d| (d.centro.y - centro.y).abs() > 3.0 * u),
+        "{donde}: hay un círculo en la fila de la casilla: {:?}",
+        esc.m.discos
+    );
+}
+
+/// Todo lo pintado como marca (aro, punto, borde de la casilla y su marca) frente al relleno del
+/// campo y al del diálogo: al menos 3:1, con los colores que de verdad se pintan.
+fn afirma_contraste(esc: &Escena, u: f32, donde: &str) {
+    let mut colores: Vec<(&str, Color32)> = Vec::new();
+    colores.extend(aros(&esc.m).iter().map(|d| ("aro", d.trazo_color)));
+    colores.extend(puntos(&esc.m).iter().map(|d| ("punto", d.relleno)));
+    colores.extend(
+        casillas(&esc.m, u)
+            .iter()
+            .map(|c| ("borde de casilla", c.trazo_color)),
+    );
+    let y = casillas(&esc.m, u).first().map(|c| c.rect.center().y);
+    if let Some(y) = y {
+        colores.extend(
+            marcas_cuadradas(&esc.m, u, y)
+                .iter()
+                .map(|c| ("marca de casilla", c.relleno)),
+        );
+    }
+    assert!(
+        colores.iter().any(|(n, _)| *n == "aro")
+            && colores.iter().any(|(n, _)| *n == "borde de casilla"),
+        "{donde}: no se pinta ningún aro o ningún borde de casilla con TOGGLE_EDGE: {colores:?}"
+    );
+    for (nombre, color) in colores {
+        for fondo in [FIELD_FILL, DIALOG_FILL] {
+            let ratio = contrast_ratio(color, fondo);
+            assert!(
+                ratio >= MIN_MARCA,
+                "{donde}: {nombre} {color:?} sobre {fondo:?} da {ratio:.2} (< {MIN_MARCA})"
+            );
+        }
+    }
+}
+
+/// Medidas del anillo de foco de la fila `rotulo` con el foco en `objetivo`, relativas al rótulo
+/// (`x` desde `PAD_U`, `y` desde el rótulo, alto, ancho sin las letras y trazo, en u), tras comprobar que es
+/// el anillo de siempre y que contrasta.
+fn afirma_anillo(b: &mut Banco, objetivo: FocusTarget, rotulo: &str, donde: &str) -> [f32; 5] {
+    b.foco_hasta(objetivo);
+    let esc = b.escena();
+    let u = b.u();
+    let hay = anillos(&esc.p, u);
+    assert_eq!(
+        hay.len(),
+        1,
+        "{donde}: el foco en {objetivo:?} pinta {} anillos ACCENT de 2 u",
+        hay.len()
+    );
+    let anillo = hay[0];
+    let etiqueta = texto_de(&esc.p, rotulo);
+    let letras = rotulo.chars().count() as f32;
+    let x0 = en_puntos(
+        b.ppp,
+        b.rects().dialog.x + px_ui::dialog_layout::PAD_U * b.n(),
+        0,
+    )
+    .x;
+    assert!(
+        cerca_u(anillo.rect.min.x, x0, u)
+            && cerca_u(anillo.rect.min.y, etiqueta.pos.y - u, u)
+            && cerca_u(anillo.rect.height(), 16.0 * u, u)
+            && cerca_u(anillo.rect.width(), (18.0 + 7.0 * letras) * u, u),
+        "{donde}: el anillo de {objetivo:?} es {:?} y debía rodear la fila entera de {rotulo:?}",
+        anillo.rect
+    );
+    assert_eq!(anillo.color, ACCENT, "{donde}");
+    for fondo in [FIELD_FILL, DIALOG_FILL] {
+        assert!(
+            contrast_ratio(anillo.color, fondo) >= MIN_MARCA,
+            "{donde}: anillo sobre {fondo:?}"
+        );
+    }
+    // El marcador de la fila queda dentro del anillo.
+    let marcador = Rect::from_center_size(
+        pos2(x_marcas(b), etiqueta.pos.y + 7.0 * u),
+        Vec2::splat(10.0 * u),
+    );
+    assert!(
+        anillo.rect.contains_rect(marcador.shrink(0.01)),
+        "{donde}: el marcador {marcador:?} queda fuera del anillo {:?}",
+        anillo.rect
+    );
+    [
+        (anillo.rect.min.x - x0) / u,
+        (anillo.rect.min.y - etiqueta.pos.y) / u,
+        anillo.rect.height() / u,
+        anillo.rect.width() / u - 7.0 * letras,
+        anillo.ancho / u,
+    ]
+}
+
+fn con_opcion_y_casilla(ppp: f32, ventana: Ventana, elegida: usize, marcada: bool) -> Banco {
+    let mut banco = Banco::listo(ppp, ventana, open(formulario()));
+    banco.evento(Evento::Choice {
+        field: "modo",
+        index: elegida,
+    });
+    banco.evento(Evento::Check {
+        field: "opaco",
+        on: marcada,
+    });
+    banco.reposo();
+    banco
+}
+
+const ELEGIDAS: [usize; 3] = [0, 1, 2];
+
+// --- Fila 9 -----------------------------------------------------------------------------------
+
+#[test]
+fn fila_9_la_opcion_no_elegida_es_un_aro_de_10_u_sin_punto_y_con_el_relleno_del_campo() {
+    for ppp in PPPS {
+        let mut banco = Banco::listo(ppp, Ventana::Grande, open(formulario()));
+        let esc = banco.escena();
+        let u = banco.u();
+        // Por defecto es la primera: «Dos» y «Tres» son solo un aro.
+        assert_eq!(banco.dialog.chosen("modo"), Some(0));
+        let aros = aros(&esc.m);
+        assert_eq!(aros.len(), 3, "ppp {ppp}: tres aros; {:?}", esc.m.discos);
+        for aro in &aros[1..] {
+            assert!(
+                puntos(&esc.m)
+                    .iter()
+                    .all(|p| !mismo_centro(p.centro, aro.centro, u)),
+                "ppp {ppp}: una opción no elegida lleva punto"
+            );
+        }
+        afirma_opciones(&banco, &esc, &format!("ppp {ppp}"));
+    }
+}
+
+#[test]
+fn fila_9_la_opcion_elegida_lleva_su_aro_y_exactamente_un_punto_accent_de_6_u() {
+    for ppp in PPPS {
+        for elegida in ELEGIDAS {
+            let mut banco = con_opcion_y_casilla(ppp, Ventana::Grande, elegida, false);
+            let esc = banco.escena();
+            let donde = format!("ppp {ppp} elegida {elegida}");
+            afirma_opciones(&banco, &esc, &donde);
+            let u = banco.u();
+            let punto = puntos(&esc.m);
+            assert_eq!(punto.len(), 1, "{donde}");
+            assert!(
+                mismo_centro(punto[0].centro, aros(&esc.m)[elegida].centro, u),
+                "{donde}: el punto está sobre el aro de la opción elegida"
+            );
+            assert_eq!(punto[0].relleno, ACCENT, "{donde}");
+        }
+    }
+}
+
+#[test]
+fn fila_9_el_punto_sigue_a_la_opcion_elegida_con_eventos_uno_tras_otro() {
+    for ppp in PPPS {
+        let mut banco = Banco::listo(ppp, Ventana::Grande, open(formulario()));
+        for elegida in [2usize, 0, 1, 1, 2, 0] {
+            banco.evento(Evento::Choice {
+                field: "modo",
+                index: elegida,
+            });
+            let esc = banco.escena();
+            afirma_opciones(&banco, &esc, &format!("ppp {ppp} → {elegida}"));
+        }
+    }
+}
+
+#[test]
+fn fila_9_la_casilla_sigue_cuadrada_de_10_u_con_borde_toggle_edge_y_marca_cuadrada_de_6_u() {
+    for ppp in PPPS {
+        for marcada in [false, true, false] {
+            let mut banco = con_opcion_y_casilla(ppp, Ventana::Grande, 0, marcada);
+            let esc = banco.escena();
+            afirma_casilla(&banco, &esc, &format!("ppp {ppp} marcada {marcada}"));
+        }
+    }
+}
+
+#[test]
+fn fila_9_opcion_y_casilla_se_distinguen_por_la_forma_no_solo_por_el_color() {
+    for ppp in PPPS {
+        for (elegida, marcada) in [(0, false), (1, true), (2, true), (0, true)] {
+            let mut banco = con_opcion_y_casilla(ppp, Ventana::Grande, elegida, marcada);
+            let esc = banco.escena();
+            let u = banco.u();
+            let donde = format!("ppp {ppp} elegida {elegida} marcada {marcada}");
+            // Tres opciones = tres círculos con aro y ninguna caja en sus filas; una casilla = una
+            // caja con aro de rectángulo y ningún círculo en su fila.
+            assert_eq!(aros(&esc.m).len(), 3, "{donde}: las opciones son círculos");
+            assert_eq!(
+                casillas(&esc.m, u).len(),
+                1,
+                "{donde}: la casilla es un rectángulo"
+            );
+            let caja = casillas(&esc.m, u)[0];
+            for aro in aros(&esc.m) {
+                assert!(
+                    (aro.centro.y - caja.rect.center().y).abs() > 8.0 * u,
+                    "{donde}: el aro y la caja comparten fila"
+                );
+                // El aro no es un cuadrado: su diámetro exterior es el lado de la caja, pero su
+                // marcador es un círculo (no hay ningún rectángulo con su centro y su tamaño).
+                assert!(
+                    casillas(&esc.m, u).iter().all(|c| !mismo_centro(
+                        c.rect.center(),
+                        aro.centro,
+                        u
+                    )),
+                    "{donde}: la opción lleva además un rectángulo de borde"
+                );
+            }
+            // Y no hay opciones ni casilla «a medias»: sin ningún otro círculo con trazo.
+            let con_trazo: Vec<_> = esc
+                .m
+                .discos
+                .iter()
+                .filter(|d| d.trazo_ancho > 0.0)
+                .collect();
+            assert_eq!(con_trazo.len(), 3, "{donde}: {con_trazo:?}");
+        }
+    }
+}
+
+// --- Fila 10 ----------------------------------------------------------------------------------
+
+#[test]
+fn fila_10_el_aro_el_punto_el_borde_y_la_marca_superan_3_a_1_sobre_el_campo_y_sobre_el_dialogo() {
+    for ppp in PPPS {
+        for (elegida, marcada) in [(0, false), (1, true), (2, true)] {
+            let mut banco = con_opcion_y_casilla(ppp, Ventana::Grande, elegida, marcada);
+            let esc = banco.escena();
+            afirma_contraste(
+                &esc,
+                banco.u(),
+                &format!("ppp {ppp} elegida {elegida} marcada {marcada}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_10_el_anillo_de_foco_de_una_opcion_y_de_una_casilla_supera_3_a_1_sobre_campo_y_dialogo() {
+    for ppp in PPPS {
+        let mut banco = Banco::listo(ppp, Ventana::Grande, open(formulario()));
+        // `afirma_anillo` comprueba el color y el contraste en cada parada.
+        afirma_anillo(
+            &mut banco,
+            FocusTarget::Option("modo", 1),
+            "Dos",
+            &format!("ppp {ppp}"),
+        );
+        afirma_anillo(
+            &mut banco,
+            FocusTarget::Field("opaco"),
+            "Opaco",
+            &format!("ppp {ppp}"),
+        );
+    }
+}
+
+#[test]
+fn fila_10_toggle_edge_es_text_dim_y_esta_en_contrast_pairs_con_minimo_3_y_son_11_pares() {
+    assert_eq!(TOGGLE_EDGE, px_ui::theme::TEXT_DIM);
+    assert_eq!(CONTRAST_PAIRS.len(), 11, "los 10 de antes y el del aro");
+    let pares: Vec<_> = CONTRAST_PAIRS
+        .iter()
+        .filter(|&&(_, f, b, _)| f == TOGGLE_EDGE && b == FIELD_FILL)
+        .collect();
+    // `TEXT_DIM` sobre `FIELD_FILL` no estaba (solo sobre el diálogo y con 4,5): el par es nuevo.
+    assert_eq!(
+        pares.len(),
+        1,
+        "un único par TOGGLE_EDGE sobre FIELD_FILL: {pares:?}"
+    );
+    let &(nombre, _, _, minimo) = pares[0];
+    assert!(minimo >= MIN_MARCA, "{nombre}: la tabla pide {minimo}");
+    assert!(
+        contrast_ratio(TOGGLE_EDGE, FIELD_FILL) >= minimo,
+        "{nombre}: {} < {minimo}",
+        contrast_ratio(TOGGLE_EDGE, FIELD_FILL)
+    );
+    assert!(contrast_ratio(TOGGLE_EDGE, DIALOG_FILL) >= MIN_MARCA);
+    // Los diez de antes siguen: cada par de la tabla cumple su mínimo y el anillo y el texto están.
+    for &(nombre, f, b, minimo) in &CONTRAST_PAIRS {
+        assert!(contrast_ratio(f, b) >= minimo, "{nombre}");
+    }
+    for esperado in [
+        (ACCENT, FIELD_FILL, MIN_MARCA),
+        (ACCENT, DIALOG_FILL, MIN_MARCA),
+        (px_ui::theme::TEXT, FIELD_FILL, MIN_TEXTO),
+        (px_ui::theme::TEXT, DIALOG_FILL, MIN_TEXTO),
+    ] {
+        assert!(
+            CONTRAST_PAIRS
+                .iter()
+                .any(|&(_, f, b, m)| (f, b) == (esperado.0, esperado.1) && m >= esperado.2),
+            "falta el par {esperado:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_10_el_borde_pintado_de_opciones_y_casilla_esta_en_la_tabla_de_pares_con_su_fondo() {
+    for ppp in PPPS {
+        let mut banco = con_opcion_y_casilla(ppp, Ventana::Grande, 1, true);
+        let esc = banco.escena();
+        let u = banco.u();
+        let mut pintados: Vec<(Color32, Color32)> = Vec::new();
+        for aro in aros(&esc.m) {
+            pintados.push((aro.trazo_color, relleno_de_aro(&esc.m, &aro)));
+        }
+        for caja in casillas(&esc.m, u) {
+            pintados.push((caja.trazo_color, caja.relleno));
+        }
+        assert_eq!(pintados.len(), 4, "ppp {ppp}: tres aros y una caja");
+        for (frente, fondo) in pintados {
+            let en_tabla = CONTRAST_PAIRS
+                .iter()
+                .find(|&&(_, f, b, _)| f == frente && b == fondo);
+            let Some(&(nombre, _, _, minimo)) = en_tabla else {
+                panic!("ppp {ppp}: {frente:?} sobre {fondo:?} no está en CONTRAST_PAIRS");
+            };
+            assert!(minimo >= MIN_MARCA, "{nombre}: la tabla pide {minimo}");
+            assert!(contrast_ratio(frente, fondo) >= minimo, "{nombre}");
+        }
+    }
+}
+
+#[test]
+fn fila_10_el_banco_de_la_9_sigue_sin_fallos_con_circulos_y_mide_el_punto_y_la_marca() {
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            for (elegida, marcada) in [(0, false), (1, true), (2, true)] {
+                let mut banco = con_opcion_y_casilla(ppp, ventana, elegida, marcada);
+                let p = banco.reposo();
+                let inf = informe_de(&p);
+                let donde = format!("ppp {ppp} {ventana:?} elegida {elegida} marcada {marcada}");
+                assert!(inf.fallos.is_empty(), "{donde}: {:#?}", inf.fallos);
+                assert!(inf.comprobados >= 8, "{donde}: {}", inf.comprobados);
+                // El punto (círculo) y la marca (cuadrado) entran como «marca» sobre el campo.
+                assert!(
+                    inf.pares.iter().any(|(d, f, b, m)| d == "marca"
+                        && *f == ACCENT
+                        && *b == FIELD_FILL
+                        && *m == MIN_MARCA),
+                    "{donde}: no se comprueba ninguna marca sobre FIELD_FILL"
+                );
+            }
+        }
+    }
+}
+
+// --- Fila 11 ----------------------------------------------------------------------------------
+
+#[test]
+fn fila_11_el_anillo_de_foco_es_el_mismo_rectangulo_de_2_u_accent_en_opcion_y_casilla() {
+    for ppp in PPPS {
+        let mut banco = Banco::listo(ppp, Ventana::Grande, open(formulario()));
+        let donde = format!("ppp {ppp}");
+        let objetivos = [
+            (FocusTarget::Option("modo", 0), "Uno"),
+            (FocusTarget::Option("modo", 1), "Dos"),
+            (FocusTarget::Option("modo", 2), "Tres"),
+            (FocusTarget::Field("opaco"), "Opaco"),
+        ];
+        let medidas: Vec<[f32; 5]> = objetivos
+            .iter()
+            .map(|&(objetivo, rotulo)| afirma_anillo(&mut banco, objetivo, rotulo, &donde))
+            .collect();
+        for m in &medidas {
+            // x = PAD_U (0 desde PAD_U), y = rótulo − 1 u, alto 16 u, ancho 18 u + 7 u por letra y
+            // trazo de 2 u.
+            assert!(
+                m[0].abs() <= 0.05
+                    && (m[1] + 1.0).abs() <= 0.05
+                    && (m[2] - 16.0).abs() <= 0.05
+                    && (m[3] - 18.0).abs() <= 0.05
+                    && (m[4] - 2.0).abs() <= 0.05,
+                "{donde}: {m:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_11_clic_sobre_el_marcador_elige_la_opcion_y_alterna_la_casilla_como_hoy() {
+    for ppp in PPPS {
+        let mut banco = Banco::listo(ppp, Ventana::Grande, open(formulario()));
+        for k in [2usize, 1, 0, 2] {
+            let esc = banco.escena();
+            let centro = aros(&esc.m).get(k).expect("hay tres aros").centro;
+            banco.clic(centro);
+            assert_eq!(
+                banco.dialog.chosen("modo"),
+                Some(k),
+                "ppp {ppp}: clic en el aro {k}"
+            );
+            let esc = banco.escena();
+            afirma_opciones(&banco, &esc, &format!("ppp {ppp} tras clic en {k}"));
+        }
+        for esperado in [true, false, true] {
+            let esc = banco.escena();
+            let u = banco.u();
+            let centro = casillas(&esc.m, u)
+                .first()
+                .expect("hay una caja")
+                .rect
+                .center();
+            banco.clic(centro);
+            assert_eq!(banco.dialog.checked("opaco"), Some(esperado), "ppp {ppp}");
+            let esc = banco.escena();
+            afirma_casilla(
+                &banco,
+                &esc,
+                &format!("ppp {ppp} tras clic, marcada {esperado}"),
+            );
+        }
+        // Un clic en el rótulo hace lo mismo que en el marcador.
+        let p = banco.reposo();
+        banco.clic(centro_de(&p, "Dos"));
+        assert_eq!(banco.dialog.chosen("modo"), Some(1), "ppp {ppp}");
+        assert!(
+            banco.reacciones.is_empty(),
+            "ppp {ppp}: {:?}",
+            banco.reacciones
+        );
+    }
+}
+
+#[test]
+fn fila_11_tab_y_espacio_recorren_y_eligen_como_hoy_con_el_marcador_nuevo() {
+    for ppp in PPPS {
+        let mut banco = Banco::listo(ppp, Ventana::Grande, open(formulario()));
+        // El orden de foco: opción 0, 1, 2 y la casilla (el hexadecimal está oculto).
+        banco.foco_hasta(FocusTarget::Option("modo", 0));
+        for siguiente in [
+            FocusTarget::Option("modo", 1),
+            FocusTarget::Option("modo", 2),
+            FocusTarget::Field("opaco"),
+        ] {
+            banco.tab(false);
+            assert_eq!(banco.focus, Some(siguiente), "ppp {ppp}");
+        }
+        banco.tab(true);
+        assert_eq!(
+            banco.focus,
+            Some(FocusTarget::Option("modo", 2)),
+            "ppp {ppp}"
+        );
+
+        for k in [1usize, 2, 0] {
+            banco.foco_hasta(FocusTarget::Option("modo", k));
+            banco.pulsa(Key::Space, Modifiers::NONE);
+            assert_eq!(
+                banco.dialog.chosen("modo"),
+                Some(k),
+                "ppp {ppp}: Espacio en la opción {k}"
+            );
+            let esc = banco.escena();
+            afirma_opciones(&banco, &esc, &format!("ppp {ppp} tras Espacio en {k}"));
+        }
+        for esperado in [true, false] {
+            banco.foco_hasta(FocusTarget::Field("opaco"));
+            banco.pulsa(Key::Space, Modifiers::NONE);
+            assert_eq!(banco.dialog.checked("opaco"), Some(esperado), "ppp {ppp}");
+            let esc = banco.escena();
+            afirma_casilla(
+                &banco,
+                &esc,
+                &format!("ppp {ppp} tras Espacio, marcada {esperado}"),
+            );
+        }
+        assert!(
+            banco.reacciones.is_empty(),
+            "ppp {ppp}: {:?}",
+            banco.reacciones
+        );
+    }
+}
+
+// --- Propiedad 4 ------------------------------------------------------------------------------
+
+#[test]
+fn propiedad_4_un_marcador_por_estado_exhaustivo_en_los_cuatro_estados_y_las_cinco_escalas() {
+    // Opción elegida o no × casilla marcada o no: `elegida` recorre las tres opciones, así que cada
+    // opción se ve elegida y no elegida, con la casilla en cada estado (30 casos por ventana).
+    for ppp in PPPS {
+        for elegida in ELEGIDAS {
+            for marcada in [false, true] {
+                let mut banco = con_opcion_y_casilla(ppp, Ventana::Grande, elegida, marcada);
+                let donde = format!("ppp {ppp} elegida {elegida} marcada {marcada}");
+                let esc = banco.escena();
+                // Cada opción: un aro y, como mucho, un punto (uno en total); la casilla: un cuadrado.
+                afirma_opciones(&banco, &esc, &donde);
+                afirma_casilla(&banco, &esc, &donde);
+                assert!(puntos(&esc.m).len() <= 1, "{donde}");
+                // Contraste de lo pintado.
+                afirma_contraste(&esc, banco.u(), &donde);
+                // El anillo de foco, el mismo en las tres opciones y en la casilla.
+                let medidas: Vec<[f32; 5]> = [
+                    (FocusTarget::Option("modo", 0), "Uno"),
+                    (FocusTarget::Option("modo", 1), "Dos"),
+                    (FocusTarget::Option("modo", 2), "Tres"),
+                    (FocusTarget::Field("opaco"), "Opaco"),
+                ]
+                .iter()
+                .map(|&(objetivo, rotulo)| afirma_anillo(&mut banco, objetivo, rotulo, &donde))
+                .collect();
+                for m in &medidas[1..] {
+                    for (a, b) in m.iter().zip(&medidas[0]) {
+                        assert!((a - b).abs() <= 0.05, "{donde}: {medidas:?}");
+                    }
+                }
+                // Enfocar no cambia el marcador: mismo aro, mismo punto, misma caja.
+                let despues = banco.escena();
+                afirma_opciones(&banco, &despues, &donde);
+                afirma_casilla(&banco, &despues, &donde);
+            }
+        }
+    }
+}

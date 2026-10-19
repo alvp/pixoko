@@ -2593,3 +2593,630 @@ fn fila_8_20b_la_pista_esta_en_el_texto_y_no_solo_en_el_color() {
     let t = pie_de(&b).expect("pie");
     assert!(t.texto.trim().starts_with("error:"), "{:?}", t.texto);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20b, parte 2: marcador redondo de las opciones y borde de la casilla
+// (specs/hito-2-motivo-y-marcadores.md, D5; filas 9 a 11)
+// ---------------------------------------------------------------------------------------------
+//
+// En ROJO hasta la implementación: `px_ui::dialog_view::TOGGLE_EDGE` todavía no existe, y
+// `draw_toggle` pinta las opciones como cuadrados con `EDGE`.
+//
+// Se lee lo pintado en el último fotograma con las formas crudas (`Shape::Circle` y `Shape::Rect`),
+// que es donde están el centro, el radio y el trazo de un círculo (el `Pintado` de este banco solo
+// guarda textos y rellenos). El banco no guarda las formas, así que `crudas` ejecuta un fotograma
+// más de reposo sin eventos (menú aparte: solo el diálogo y su `sync`), con el mismo estado.
+//
+// Lo que fija D5, medido en 960 × 720 pt (a la mínima el cuerpo se desplaza y parte de las filas
+// queda recortada) y a las cinco escalas:
+// - Opción: un aro (círculo con trazo `TOGGLE_EDGE` de 1 u y relleno `FIELD_FILL`, diámetro exterior
+//   de 10 u = 2 · radio + trazo, centro en `x = PAD_U + 2 + 5 u` desde el borde del diálogo); la
+//   elegida lleva además un punto `ACCENT` de 6 u, concéntrico; **un** punto por grupo.
+// - Casilla: rectángulo de 10 u con trazo `TOGGLE_EDGE` de 1 u y relleno `FIELD_FILL`; marcada, un
+//   cuadrado `ACCENT` de 6 u centrado en la caja. Ningún círculo en su fila ni caja en la de un aro.
+// - Los grupos y las casillas que se esperan salen del propio diálogo (`is_shown`, `chosen`,
+//   `checked`), en el orden del formulario, que es el vertical.
+// - Contraste de aro, punto, borde y marca frente a `FIELD_FILL` y `DIALOG_FILL`: ≥ 3:1.
+// - Anillo de foco: trazo `ACCENT` de 2 u (el de siempre) alrededor de la fila entera (`x = PAD_U`,
+//   `y = rótulo − 1 u`, 16 u de alto, `18 u + 7 u · letras` de ancho), el mismo en opción y casilla.
+
+use px_ui::dialog_view::{DIALOG_FILL, FIELD_FILL, TOGGLE_EDGE};
+
+const ACENTO: Color32 = px_ui::theme::ACCENT;
+const MIN_MARCA_20B: f64 = 3.0;
+
+#[derive(Clone, Copy, Debug)]
+struct Disco {
+    centro: Pos2,
+    radio: f32,
+    relleno: Color32,
+    /// `TRANSPARENT` y `0.0` si no tiene trazo visible.
+    trazo_color: Color32,
+    trazo_ancho: f32,
+    orden: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Caja {
+    rect: Rect,
+    relleno: Color32,
+    trazo_color: Color32,
+    trazo_ancho: f32,
+}
+
+#[derive(Debug, Default)]
+struct Marcas {
+    discos: Vec<Disco>,
+    cajas: Vec<Caja>,
+}
+
+fn trazo_visible(s: eframe::egui::Stroke) -> (Color32, f32) {
+    if s.width > 0.0 && s.color != Color32::TRANSPARENT {
+        (s.color, s.width)
+    } else {
+        (Color32::TRANSPARENT, 0.0)
+    }
+}
+
+fn recoge_marcas(shape: &Shape, fuera: &mut Marcas, orden: &mut usize) {
+    match shape {
+        Shape::Circle(c) => {
+            let (trazo_color, trazo_ancho) = trazo_visible(c.stroke);
+            fuera.discos.push(Disco {
+                centro: c.center,
+                radio: c.radius,
+                relleno: c.fill,
+                trazo_color,
+                trazo_ancho,
+                orden: *orden,
+            });
+            *orden += 1;
+        }
+        Shape::Rect(r) => {
+            let (trazo_color, trazo_ancho) = trazo_visible(r.stroke);
+            fuera.cajas.push(Caja {
+                rect: r.rect,
+                relleno: r.fill,
+                trazo_color,
+                trazo_ancho,
+            });
+            *orden += 1;
+        }
+        Shape::Vec(formas) => {
+            for forma in formas {
+                recoge_marcas(forma, fuera, orden);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn marcas_de(formas: &[ClippedShape]) -> Marcas {
+    let mut fuera = Marcas::default();
+    let mut orden = 0;
+    for clipped in formas {
+        recoge_marcas(&clipped.shape, &mut fuera, &mut orden);
+    }
+    fuera
+}
+
+fn cerca_u(a: f32, b: f32, u: f32) -> bool {
+    (a - b).abs() <= 0.05 * u
+}
+
+fn mismo_centro(a: Pos2, b: Pos2, u: f32) -> bool {
+    cerca_u(a.x, b.x, u) && cerca_u(a.y, b.y, u)
+}
+
+/// Los aros (círculos con trazo `TOGGLE_EDGE`), de arriba abajo.
+fn aros(m: &Marcas) -> Vec<Disco> {
+    let mut v: Vec<Disco> = m
+        .discos
+        .iter()
+        .copied()
+        .filter(|d| d.trazo_color == TOGGLE_EDGE)
+        .collect();
+    v.sort_by(|a, b| a.centro.y.total_cmp(&b.centro.y));
+    v
+}
+
+/// Los puntos (círculos rellenos de `ACCENT`), de arriba abajo.
+fn puntos(m: &Marcas) -> Vec<Disco> {
+    let mut v: Vec<Disco> = m
+        .discos
+        .iter()
+        .copied()
+        .filter(|d| d.relleno == ACENTO)
+        .collect();
+    v.sort_by(|a, b| a.centro.y.total_cmp(&b.centro.y));
+    v
+}
+
+/// Las cajas de casilla: rectángulos con trazo `TOGGLE_EDGE` de hasta 20 u de lado (`TOGGLE_EDGE`
+/// es `TEXT_DIM` y otros trazos grandes, como el marco del diálogo, pueden tener ese color).
+fn casillas(m: &Marcas, u: f32) -> Vec<Caja> {
+    let mut v: Vec<Caja> = m
+        .cajas
+        .iter()
+        .copied()
+        .filter(|c| c.trazo_color == TOGGLE_EDGE)
+        .filter(|c| c.rect.width() <= 20.0 * u && c.rect.height() <= 20.0 * u)
+        .collect();
+    v.sort_by(|a, b| a.rect.center().y.total_cmp(&b.rect.center().y));
+    v
+}
+
+/// Las marcas cuadradas: rellenos `ACCENT` sin trazo de hasta 10 u con el centro a menos de 5 u en
+/// vertical de `y`.
+fn marcas_cuadradas(m: &Marcas, u: f32, y: f32) -> Vec<Caja> {
+    m.cajas
+        .iter()
+        .copied()
+        .filter(|c| c.relleno == ACENTO && c.trazo_ancho == 0.0)
+        .filter(|c| c.rect.width() <= 10.0 * u + 0.05 && c.rect.height() <= 10.0 * u + 0.05)
+        .filter(|c| (c.rect.center().y - y).abs() <= 5.0 * u)
+        .collect()
+}
+
+/// El relleno de un aro: el suyo o, si no tiene, el del último círculo relleno anterior y concéntrico.
+fn relleno_de_aro(m: &Marcas, aro: &Disco) -> Color32 {
+    if aro.relleno != Color32::TRANSPARENT {
+        return aro.relleno;
+    }
+    m.discos
+        .iter()
+        .filter(|d| d.orden < aro.orden && d.relleno != Color32::TRANSPARENT)
+        .rfind(|d| (d.centro - aro.centro).length() < 0.01)
+        .map_or(Color32::TRANSPARENT, |d| d.relleno)
+}
+
+/// Lo que se espera de los marcadores según el estado del diálogo, comparado con lo pintado en
+/// `formas` (ver la cabecera de la sección). Devuelve lo leído, para seguir con ello.
+fn afirma_marcadores(
+    dialog: &Dialog,
+    formas: &[ClippedShape],
+    ppp: f32,
+    dialogo_x_px: i64,
+    donde: &str,
+) -> Marcas {
+    let n = i64::from(text_scale(ppp));
+    let u = n as f32 / ppp;
+    let x = (dialogo_x_px + 15 * n) as f32 / ppp;
+    let m = marcas_de(formas);
+    let aros = aros(&m);
+    let puntos = puntos(&m);
+    let cajas = casillas(&m, u);
+
+    // Lo que hay que ver: grupos (ids, opciones, elegida) y casillas (marcada), en orden.
+    let mut grupos: Vec<(&str, usize, usize)> = Vec::new();
+    let mut checks: Vec<bool> = Vec::new();
+    for f in &dialog.spec().fields {
+        if !dialog.is_shown(f.id) {
+            continue;
+        }
+        match &f.kind {
+            px_ui::dialog::FieldKind::Choice { options, .. } => {
+                grupos.push((f.id, options.len(), dialog.chosen(f.id).expect("grupo")));
+            }
+            px_ui::dialog::FieldKind::Check { .. } => {
+                checks.push(dialog.checked(f.id).expect("casilla"));
+            }
+            _ => {}
+        }
+    }
+
+    // Opciones: un aro por opción, en su sitio y con las medidas de D5.
+    let total: usize = grupos.iter().map(|g| g.1).sum();
+    assert_eq!(
+        aros.len(),
+        total,
+        "{donde}: un aro por opción de los grupos {grupos:?}; círculos pintados {:?}",
+        m.discos
+    );
+    let mut primero = 0;
+    for &(id, opciones, elegida) in &grupos {
+        for i in 0..opciones {
+            let aro = aros[primero + i];
+            assert!(
+                cerca_u(aro.centro.x, x, u),
+                "{donde}: el aro {id}/{i} está en x = {} y debía estar en {x}",
+                aro.centro.x
+            );
+            assert!(
+                cerca_u(2.0 * aro.radio + aro.trazo_ancho, 10.0 * u, u),
+                "{donde}: el aro {id}/{i} mide {} de diámetro exterior y debía medir {}",
+                2.0 * aro.radio + aro.trazo_ancho,
+                10.0 * u
+            );
+            assert!(
+                cerca_u(aro.trazo_ancho, u, u),
+                "{donde}: el trazo del aro {id}/{i} mide {} y debía medir {u}",
+                aro.trazo_ancho
+            );
+            assert_eq!(
+                relleno_de_aro(&m, &aro),
+                FIELD_FILL,
+                "{donde}: el aro {id}/{i} se rellena con el color del campo"
+            );
+            let aqui: Vec<&Disco> = puntos
+                .iter()
+                .filter(|p| mismo_centro(p.centro, aro.centro, u))
+                .collect();
+            assert_eq!(
+                aqui.len(),
+                usize::from(i == elegida),
+                "{donde}: la opción {id}/{i} (elegida: {elegida}) lleva {} puntos",
+                aqui.len()
+            );
+            if let Some(punto) = aqui.first() {
+                assert!(
+                    cerca_u(2.0 * punto.radio, 6.0 * u, u),
+                    "{donde}: el punto de {id} mide {} y debía medir {}",
+                    2.0 * punto.radio,
+                    6.0 * u
+                );
+                assert_eq!(punto.trazo_ancho, 0.0, "{donde}: el punto no lleva trazo");
+            }
+        }
+        primero += opciones;
+    }
+    assert_eq!(
+        puntos.len(),
+        grupos.len(),
+        "{donde}: exactamente un punto por grupo ({grupos:?}): {puntos:?}"
+    );
+
+    // Casillas: una caja de 10 u por casilla, con su marca si está marcada.
+    assert_eq!(
+        cajas.len(),
+        checks.len(),
+        "{donde}: una caja con borde TOGGLE_EDGE por casilla; rectángulos de caja {:?}",
+        m.cajas
+            .iter()
+            .filter(|c| c.rect.width() <= 20.0 * u)
+            .collect::<Vec<_>>()
+    );
+    for (caja, marcada) in cajas.iter().zip(&checks) {
+        let centro = caja.rect.center();
+        assert!(
+            cerca_u(caja.rect.width(), 10.0 * u, u) && cerca_u(caja.rect.height(), 10.0 * u, u),
+            "{donde}: la caja mide {:?} y debía ser un cuadrado de {}",
+            caja.rect.size(),
+            10.0 * u
+        );
+        assert!(
+            cerca_u(centro.x, x, u),
+            "{donde}: la caja está centrada en x = {}, no en {x}",
+            centro.x
+        );
+        assert!(
+            cerca_u(caja.trazo_ancho, u, u),
+            "{donde}: el borde de la caja mide {} y debía medir {u}",
+            caja.trazo_ancho
+        );
+        assert_eq!(caja.relleno, FIELD_FILL, "{donde}: relleno de la caja");
+        let marcas = marcas_cuadradas(&m, u, centro.y);
+        assert_eq!(
+            marcas.len(),
+            usize::from(*marcada),
+            "{donde}: casilla marcada = {marcada}; marcas {marcas:?}"
+        );
+        if let Some(marca) = marcas.first() {
+            assert!(
+                cerca_u(marca.rect.width(), 6.0 * u, u) && cerca_u(marca.rect.height(), 6.0 * u, u),
+                "{donde}: la marca mide {:?} y debía ser un cuadrado de {}",
+                marca.rect.size(),
+                6.0 * u
+            );
+            assert!(
+                mismo_centro(marca.rect.center(), centro, u),
+                "{donde}: la marca está centrada en la caja"
+            );
+        }
+        // Opción y casilla se distinguen por la forma: ningún círculo en la fila de la caja.
+        assert!(
+            m.discos
+                .iter()
+                .all(|d| (d.centro.y - centro.y).abs() > 3.0 * u),
+            "{donde}: hay un círculo en la fila de una casilla: {:?}",
+            m.discos
+        );
+    }
+    for aro in &aros {
+        for caja in &cajas {
+            assert!(
+                (aro.centro.y - caja.rect.center().y).abs() > 3.0 * u,
+                "{donde}: un aro y una caja comparten fila"
+            );
+        }
+    }
+
+    // Contraste de lo pintado frente al campo y al diálogo.
+    let mut colores: Vec<(&str, Color32)> = Vec::new();
+    colores.extend(aros.iter().map(|d| ("aro", d.trazo_color)));
+    colores.extend(puntos.iter().map(|d| ("punto", d.relleno)));
+    colores.extend(cajas.iter().map(|c| ("borde de casilla", c.trazo_color)));
+    for caja in &cajas {
+        colores.extend(
+            marcas_cuadradas(&m, u, caja.rect.center().y)
+                .iter()
+                .map(|c| ("marca de casilla", c.relleno)),
+        );
+    }
+    for (nombre, color) in colores {
+        for fondo in [FIELD_FILL, DIALOG_FILL] {
+            let ratio = contrast_ratio(color, fondo);
+            assert!(
+                ratio >= MIN_MARCA_20B,
+                "{donde}: {nombre} {color:?} sobre {fondo:?} da {ratio:.2} (< {MIN_MARCA_20B})"
+            );
+        }
+    }
+    m
+}
+
+/// El anillo de foco de la fila de `rotulo` con el foco en `objetivo`: tras comprobar que es el de
+/// siempre (un trazo `ACCENT` de 2 u que rodea la fila entera, con el marcador dentro y con 3:1
+/// sobre el campo y el diálogo), devuelve sus medidas en u: `x` desde `PAD_U`, `y` desde el rótulo,
+/// alto, ancho sin las letras y trazo.
+fn afirma_anillo(
+    texto: &Pintado,
+    formas: &[ClippedShape],
+    ppp: f32,
+    dialogo_x_px: i64,
+    objetivo: FocusTarget,
+    rotulo: &str,
+    donde: &str,
+) -> [f32; 5] {
+    let n = i64::from(text_scale(ppp));
+    let u = n as f32 / ppp;
+    let m = marcas_de(formas);
+    let anillos: Vec<Caja> = m
+        .cajas
+        .iter()
+        .copied()
+        .filter(|c| {
+            c.trazo_color == ACENTO
+                && cerca_u(c.trazo_ancho, 2.0 * u, u)
+                && c.relleno == Color32::TRANSPARENT
+        })
+        .collect();
+    assert_eq!(
+        anillos.len(),
+        1,
+        "{donde}: el foco en {objetivo:?} pinta {} anillos ACCENT de 2 u: {anillos:?}",
+        anillos.len()
+    );
+    let anillo = anillos[0];
+    let etiqueta = texto
+        .exacto(rotulo)
+        .unwrap_or_else(|| panic!("{donde}: no se pinta {rotulo:?}; hay {:?}", texto.lista()));
+    let letras = rotulo.chars().count() as f32;
+    let x0 = (dialogo_x_px + 8 * n) as f32 / ppp;
+    assert!(
+        cerca_u(anillo.rect.min.x, x0, u)
+            && cerca_u(anillo.rect.min.y, etiqueta.pos.y - u, u)
+            && cerca_u(anillo.rect.height(), 16.0 * u, u)
+            && cerca_u(anillo.rect.width(), (18.0 + 7.0 * letras) * u, u),
+        "{donde}: el anillo de {objetivo:?} es {:?} y debía rodear la fila entera de {rotulo:?}",
+        anillo.rect
+    );
+    for fondo in [FIELD_FILL, DIALOG_FILL] {
+        assert!(
+            contrast_ratio(ACENTO, fondo) >= MIN_MARCA_20B,
+            "{donde}: anillo sobre {fondo:?}"
+        );
+    }
+    let marcador = Rect::from_center_size(
+        pos2(
+            (dialogo_x_px + 15 * n) as f32 / ppp,
+            etiqueta.pos.y + 7.0 * u,
+        ),
+        Vec2::splat(10.0 * u),
+    );
+    assert!(
+        anillo.rect.contains_rect(marcador.shrink(0.01)),
+        "{donde}: el marcador {marcador:?} queda fuera del anillo {:?}",
+        anillo.rect
+    );
+    [
+        (anillo.rect.min.x - x0) / u,
+        (anillo.rect.min.y - etiqueta.pos.y) / u,
+        anillo.rect.height() / u,
+        anillo.rect.width() / u - 7.0 * letras,
+        anillo.trazo_ancho / u,
+    ]
+}
+
+/// Medidas de anillo esperadas: `x` en `PAD_U` (0 desde `PAD_U`), `y` a 1 u sobre el rótulo, 16 u de
+/// alto, 18 u de ancho más 7 u por letra y 2 u de trazo.
+fn afirma_medidas_del_anillo(medidas: &[[f32; 5]], donde: &str) {
+    for m in medidas {
+        assert!(
+            m[0].abs() <= 0.05
+                && (m[1] + 1.0).abs() <= 0.05
+                && (m[2] - 16.0).abs() <= 0.05
+                && (m[3] - 18.0).abs() <= 0.05
+                && (m[4] - 2.0).abs() <= 0.05,
+            "{donde}: {m:?}"
+        );
+    }
+    for m in &medidas[1..] {
+        for (a, b) in m.iter().zip(&medidas[0]) {
+            assert!(
+                (a - b).abs() <= 0.05,
+                "{donde}: el anillo no es el mismo: {medidas:?}"
+            );
+        }
+    }
+}
+
+impl Banco {
+    /// Un fotograma más de reposo sin eventos, solo con el diálogo y su `sync`, y las formas crudas.
+    fn crudas(&mut self) -> Vec<ClippedShape> {
+        let size = pantalla(self.ppp, self.ventana);
+        let Banco {
+            ctx,
+            modal,
+            focus,
+            convert,
+            cuenta,
+            image,
+            ..
+        } = &mut *self;
+        ejecuta(ctx, size, vec![], |ui| {
+            let c = ui.ctx().clone();
+            apply_scale(&c);
+            if let Modal::Open(dialog) = modal {
+                let _ = show_dialog(&c, dialog, focus);
+                if let Some(sync) = convert.as_mut() {
+                    let historial = History {
+                        limit: 64 << 20,
+                        used: 0,
+                    };
+                    sync_convert(dialog, sync, image, 0, historial, cuenta);
+                }
+            }
+        })
+    }
+
+    /// Reposo y las comprobaciones de marcadores sobre lo pintado.
+    fn marcadores(&mut self, donde: &str) -> Marcas {
+        self.reposo();
+        let formas = self.crudas();
+        let x = self.layout().dialog.x;
+        afirma_marcadores(self.dialogo(), &formas, self.ppp, x, donde)
+    }
+
+    /// La casilla que se ve, si hay.
+    fn casilla_visible(&self) -> Option<&'static str> {
+        let d = self.dialogo();
+        d.spec()
+            .fields
+            .iter()
+            .find(|f| matches!(f.kind, px_ui::dialog::FieldKind::Check { .. }) && d.is_shown(f.id))
+            .map(|f| f.id)
+    }
+}
+
+#[test]
+fn fila_9_convertir_modo_pinta_aros_y_casillas_cuadradas_en_cada_destino_y_con_cada_clic() {
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        let destinos = destinos(Mode::Rgba);
+        b.marcadores(&format!("ppp {ppp} al abrir"));
+        for (k, destino) in destinos.into_iter().enumerate() {
+            // Clic real en el aro del destino (el primer grupo, de arriba abajo).
+            let formas = b.crudas();
+            let centro = aros(&marcas_de(&formas))[k].centro;
+            b.clic(centro);
+            b.reposo();
+            assert_eq!(
+                b.dialogo().chosen(FIELD_TARGET),
+                Some(k),
+                "ppp {ppp}: clic en el aro del destino {k}"
+            );
+            let donde = format!("ppp {ppp} destino {destino:?}");
+            b.marcadores(&donde);
+
+            // La casilla, si la hay, con clic real en su caja: marcada, marca cuadrada, y desmarcada.
+            if let Some(casilla) = b.casilla_visible() {
+                let u = b.u();
+                for esperado in [true, false] {
+                    let formas = b.crudas();
+                    let caja = casillas(&marcas_de(&formas), u)[0];
+                    b.clic(caja.rect.center());
+                    b.reposo();
+                    assert_eq!(
+                        b.dialogo().checked(casilla),
+                        Some(esperado),
+                        "{donde}: clic en la caja de {casilla}"
+                    );
+                    b.marcadores(&format!("{donde} casilla {esperado}"));
+                }
+            }
+
+            // El alfa (con destino Gris): un clic real en el aro de cada opción.
+            if destino == Mode::Gray {
+                for j in [4usize, 1, 0, 3, 2] {
+                    let formas = b.crudas();
+                    let centro = aros(&marcas_de(&formas))[3 + j].centro;
+                    b.clic(centro);
+                    b.reposo();
+                    assert_eq!(
+                        b.dialogo().chosen(FIELD_ALPHA),
+                        Some(j),
+                        "{donde}: clic en el aro {j} del alfa"
+                    );
+                    b.marcadores(&format!("{donde} alfa {j}"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_11_convertir_modo_el_anillo_de_foco_es_el_mismo_en_opcion_y_en_casilla() {
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        b.elige_destino(Mode::Gray);
+        let donde = format!("ppp {ppp}");
+        let objetivos = [
+            (FocusTarget::Option(FIELD_TARGET, 0), "Indexado"),
+            (FocusTarget::Option(FIELD_TARGET, 1), "Gris con alfa"),
+            (FocusTarget::Option(FIELD_TARGET, 2), "Gris"),
+            (FocusTarget::Field(FIELD_LUMA_GRAY), CASILLA),
+            (FocusTarget::Option(FIELD_ALPHA, 0), OPCIONES_DEL_ALFA[0]),
+            (FocusTarget::Option(FIELD_ALPHA, 4), OPCIONES_DEL_ALFA[4]),
+        ];
+        let mut medidas = Vec::new();
+        for (objetivo, rotulo) in objetivos {
+            b.foco_hasta(objetivo);
+            let formas = b.crudas();
+            let x = b.layout().dialog.x;
+            medidas.push(afirma_anillo(
+                &b.ultimo, &formas, ppp, x, objetivo, rotulo, &donde,
+            ));
+        }
+        afirma_medidas_del_anillo(&medidas, &donde);
+        // Enfocar no cambia el marcador.
+        b.marcadores(&donde);
+    }
+}
+
+#[test]
+fn fila_11_convertir_modo_tab_y_espacio_eligen_y_alternan_como_hoy_con_el_marcador_nuevo() {
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        for k in [1usize, 0, 2] {
+            b.foco_hasta(FocusTarget::Option(FIELD_TARGET, k));
+            b.pulsa(Key::Space);
+            assert_eq!(
+                b.dialogo().chosen(FIELD_TARGET),
+                Some(k),
+                "ppp {ppp}: Espacio en el destino {k}"
+            );
+            b.marcadores(&format!("ppp {ppp} Espacio en el destino {k}"));
+        }
+        // Con destino Gris: la casilla y una opción del alfa.
+        for esperado in [true, false] {
+            b.foco_hasta(FocusTarget::Field(FIELD_LUMA_GRAY));
+            b.pulsa(Key::Space);
+            assert_eq!(
+                b.dialogo().checked(FIELD_LUMA_GRAY),
+                Some(esperado),
+                "ppp {ppp}: Espacio en la casilla"
+            );
+            b.marcadores(&format!("ppp {ppp} Espacio en la casilla {esperado}"));
+        }
+        b.foco_hasta(FocusTarget::Option(FIELD_ALPHA, 3));
+        b.pulsa(Key::Space);
+        assert_eq!(b.dialogo().chosen(FIELD_ALPHA), Some(3), "ppp {ppp}");
+        b.marcadores(&format!("ppp {ppp} Espacio en el alfa 3"));
+        assert!(
+            b.aceptados.is_empty() && b.cancelados == 0,
+            "{}",
+            b.describe()
+        );
+    }
+}
