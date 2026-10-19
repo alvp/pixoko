@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use proptest::sample::select;
 use proptest::test_runner::TestCaseError;
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
-use px_formats::{Conversion, PngError, PngRead, read_png, write_png};
+use px_formats::{AuxChunk, Conversion, PngError, PngRead, read_png, write_png};
 
 // ---------------------------------------------------------------------------------------
 // Ayudante de corpus: CRC-32, Adler-32, deflate «stored», chunks y Adam7.
@@ -824,7 +824,22 @@ fn chunks_auxiliares_no_cambian_imagen_ni_informe() {
         con = con.antes(c);
     }
     let r = lee(&con.bytes());
-    assert_eq!(r, sin);
+    // Los auxiliares no cambian ni la imagen ni el informe de conversiones; solo `aux` los refleja.
+    assert_eq!(r.image, sin.image);
+    assert_eq!(r.report, sin.report);
+    assert!(sin.aux.found.is_empty());
+    assert_eq!(
+        r.aux.found,
+        [
+            AuxChunk::Icc,
+            AuxChunk::Srgb,
+            AuxChunk::Gamma,
+            AuxChunk::Physical,
+            AuxChunk::Text,
+            AuxChunk::Time,
+            AuxChunk::Other,
+        ]
+    );
     assert_eq!(pixeles(&r.image), [rgba(1, 2, 3, 255), rgba(4, 5, 6, 255)]);
 }
 

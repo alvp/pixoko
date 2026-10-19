@@ -20,7 +20,7 @@ use px_formats::{Conversion, read_png, write_png};
 use px_ui::color::{ColorChoice, initial_choice};
 use px_ui::palette_grid::Scroll;
 
-use crate::files::{FileError, MAX_FILE_BYTES, describe_open, load_png};
+use crate::files::{FileError, MAX_FILE_BYTES, describe_open, describe_open_aux, load_png};
 
 // ---------------------------------------------------------------------------------------
 // Ayudantes: directorio temporal, corpus, imágenes y PNG RGB de 1×1 hecho a mano.
@@ -300,7 +300,7 @@ fn fila_2_abrir_el_corpus() {
         assert!(text.contains(mode_label(image.mode())), "{name}: {text}");
         assert_eq!(
             text,
-            describe_open(&name, image, &expected.report),
+            describe_open_aux(&name, image, &expected.report, &expected.aux),
             "{name}"
         );
     }
