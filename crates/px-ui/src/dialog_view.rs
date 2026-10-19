@@ -31,6 +31,18 @@ use crate::theme::{
 /// Prefijo de los errores de validación: no dependen solo del color.
 pub const ERROR_PREFIX: &str = "error: ";
 
+pub use crate::dialog::MISSING_PREFIX;
+
+/// El texto del pie: una lista de requisitos pendientes (`falta: …`, `faltan N: …`) va tal cual y
+/// cualquier otro motivo, con `error: ` delante. Nunca pasa de 44 columnas.
+pub fn footer_text(reason: &str) -> String {
+    if crate::dialog::is_missing_list(reason) {
+        reason.to_string()
+    } else {
+        format!("{ERROR_PREFIX}{reason}")
+    }
+}
+
 /// Fondo del diálogo.
 pub const DIALOG_FILL: Color32 = SURFACE_1;
 /// Fondo de los campos y de las zonas de texto.
@@ -454,7 +466,7 @@ pub fn show_dialog(
                 painter.text(
                     scale.rect_of(layout.reason).min,
                     Align2::LEFT_TOP,
-                    printable(ctx, &format!("{ERROR_PREFIX}{reason}")),
+                    printable(ctx, &footer_text(&reason)),
                     font.clone(),
                     ERROR_FG,
                 );

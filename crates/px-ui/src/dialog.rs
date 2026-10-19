@@ -21,6 +21,28 @@ pub type FieldId = &'static str;
 
 /// Longitud máxima del motivo del conjunto (con `error: ` caben en las 44 columnas).
 pub const REASON_MAX_CHARS: usize = 37;
+/// Columnas del pie: el motivo con su prefijo (`error: ` o `falta: `) nunca pasa de aquí.
+pub const FOOTER_COLUMNS: usize = 44;
+/// Prefijo de una lista de requisitos pendientes: sustituye a `error: ` (no es un error).
+pub const MISSING_PREFIX: &str = "falta: ";
+/// Prefijo de la forma con cuenta de esa lista (`faltan 3: …`).
+pub const MISSING_COUNT_PREFIX: &str = "faltan ";
+
+/// Si un motivo es una lista de requisitos pendientes (lleva su propio prefijo, no `error: `).
+pub fn is_missing_list(reason: &str) -> bool {
+    reason.starts_with(MISSING_PREFIX) || reason.starts_with(MISSING_COUNT_PREFIX)
+}
+
+/// Recorta un motivo para que el pie entero quepa: 37 caracteres (más `error: `) o 44 si es una
+/// lista de pendientes (que lleva su propio prefijo).
+fn clip_reason(text: &str) -> String {
+    let max = if is_missing_list(text) {
+        FOOTER_COLUMNS
+    } else {
+        REASON_MAX_CHARS
+    };
+    text.chars().take(max).collect()
+}
 /// Caracteres máximos del texto pendiente de un hexadecimal que se guardan.
 const HEX_TEXT_MAX_CHARS: usize = 64;
 
@@ -359,6 +381,8 @@ pub struct Dialog {
     limit_notes: Vec<(FieldId, &'static str)>,
     /// Motivo externo que hace inválido el conjunto (`set_block`).
     block: Option<String>,
+    /// Resumen de varios requisitos (`set_summary`): sustituye a todo lo demás en `reason()`.
+    summary: Option<String>,
 }
 
 impl Dialog {
@@ -388,6 +412,7 @@ impl Dialog {
             focus_taken: false,
             limit_notes: Vec::new(),
             block: None,
+            summary: None,
         })
     }
 
@@ -500,28 +525,63 @@ impl Dialog {
         Values { entries }
     }
 
-    /// El motivo del primer campo visible inválido (`etiqueta: motivo`) o, con todos válidos, el de
-    /// la comprobación cruzada (recortado) y, por último, el motivo externo. `None` si todo vale.
+    /// El resumen, si lo hay; si no, el motivo del primer campo visible inválido
+    /// (`etiqueta: motivo`) o, con todos válidos, el de la comprobación cruzada (recortado) y, por
+    /// último, el motivo externo. `None` si todo vale.
     pub fn reason(&self) -> Option<String> {
+        if let Some(summary) = &self.summary {
+            return Some(summary.clone());
+        }
         for index in self.shown_indices() {
             if let Validity::Invalid(reason) = self.field_validity(index) {
                 let text = format!("{}: {}", self.spec.fields[index].label, reason);
-                return Some(text.chars().take(REASON_MAX_CHARS).collect());
+                return Some(clip_reason(&text));
             }
         }
         if let Some(check) = self.spec.check
             && let Some(text) = check(&self.collect_values())
         {
-            return Some(text.chars().take(REASON_MAX_CHARS).collect());
+            return Some(clip_reason(&text));
         }
         self.block.clone()
+    }
+
+    /// Los motivos de los campos visibles inválidos (`etiqueta: motivo`, en el orden de los
+    /// campos) y, con todos válidos, el de la comprobación cruzada; sin recortar. No incluye el
+    /// motivo externo ni el resumen.
+    pub fn problems(&self) -> Vec<String> {
+        let mut problems = Vec::new();
+        for index in self.shown_indices() {
+            if let Validity::Invalid(reason) = self.field_validity(index) {
+                problems.push(format!("{}: {}", self.spec.fields[index].label, reason));
+            }
+        }
+        if problems.is_empty()
+            && let Some(check) = self.spec.check
+            && let Some(text) = check(&self.collect_values())
+        {
+            problems.push(text);
+        }
+        problems
+    }
+
+    /// Pone (o quita, con `None`) un resumen de requisitos: mientras exista es el motivo del
+    /// conjunto, antes que los campos, la comprobación cruzada y el motivo externo. Lo usa quien ya
+    /// ha reunido esos motivos (`problems`) en una sola línea. Se recorta como el motivo externo.
+    pub fn set_summary(&mut self, summary: Option<String>) {
+        self.summary = summary.map(|text| clip_reason(&text));
+    }
+
+    /// El resumen, si lo hay.
+    pub fn summary(&self) -> Option<&str> {
+        self.summary.as_deref()
     }
 
     /// Pone (o quita, con `None`) un motivo externo: mientras exista, el conjunto no es válido,
     /// después de los campos y de la comprobación cruzada. Lo usa quien tiene datos que el
     /// formulario no ve (el informe de una conversión). Se recorta a 37 caracteres.
     pub fn set_block(&mut self, reason: Option<String>) {
-        self.block = reason.map(|text| text.chars().take(REASON_MAX_CHARS).collect());
+        self.block = reason.map(|text| clip_reason(&text));
     }
 
     /// El motivo externo, si lo hay.
