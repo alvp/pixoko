@@ -2215,7 +2215,7 @@ fn fila_7_20b_rgba_con_transparencia_a_gris_sigue_el_caso_de_la_prueba_manual() 
             b.ultimo.lista()
         );
         assert!(
-            b.ultimo.exacto(&error_del_campo(&corto)).is_some(),
+            b.ultimo.exacto(&error_del_campo(corto)).is_some(),
             "{}: el error del campo sigue junto al campo; hay {:?}",
             ctx("zz sin casilla"),
             b.ultimo.lista()
@@ -2238,7 +2238,7 @@ fn fila_7_20b_rgba_con_transparencia_a_gris_sigue_el_caso_de_la_prueba_manual() 
             b.ultimo.lista()
         );
         assert!(
-            b.ultimo.exacto(&error_del_campo(&corto)).is_some(),
+            b.ultimo.exacto(&error_del_campo(corto)).is_some(),
             "{}",
             ctx("zz con casilla")
         );
@@ -2286,7 +2286,7 @@ fn fila_7_20b_con_la_casilla_marcada_antes_de_escribir_zz_el_pie_es_solo_el_erro
         );
         assert!(!b.ultimo.contiene("falta:"), "ppp {ppp}");
         assert!(
-            b.ultimo.exacto(&error_del_campo(&corto)).is_some(),
+            b.ultimo.exacto(&error_del_campo(corto)).is_some(),
             "ppp {ppp}"
         );
         assert_eq!(b.dialogo().summary(), None, "ppp {ppp}");
