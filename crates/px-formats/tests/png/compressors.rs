@@ -134,7 +134,14 @@ fn lado(forma: Forma) -> u32 {
 /// Paleta de 16 entradas, algunas con alfa no trivial, para el indexado.
 fn paleta16() -> Vec<Rgba> {
     (0..16u8)
-        .map(|i| Rgba::new(i * 16, 255 - i * 9, i * 5 + 3, if i % 4 == 0 { 100 + i } else { 255 }))
+        .map(|i| {
+            Rgba::new(
+                i * 16,
+                255 - i * 9,
+                i * 5 + 3,
+                if i % 4 == 0 { 100 + i } else { 255 },
+            )
+        })
         .collect()
 }
 
@@ -144,7 +151,9 @@ fn patron(contenido: Contenido, x: usize, y: usize) -> usize {
         Contenido::UnColor => 5,
         // Franjas verticales de 16 y horizontales de 64 combinadas con bloques de 8×8 que se
         // repiten cada 128 píxeles.
-        Contenido::Patrones => (x / 16 + (y / 64) * 3 + usize::from((x % 128 < 8) && (y % 128 < 8)) * 7) % 16,
+        Contenido::Patrones => {
+            (x / 16 + (y / 64) * 3 + usize::from((x % 128 < 8) && (y % 128 < 8)) * 7) % 16
+        }
     }
 }
 
@@ -221,7 +230,9 @@ type Combinacion = (Forma, Contenido, Compresor, png::Filter);
 /// con la combinación que falle.
 fn en_paralelo(trabajos: &[Combinacion]) {
     let siguiente = AtomicUsize::new(0);
-    let hilos = thread::available_parallelism().map_or(4, |n| n.get()).min(8);
+    let hilos = thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(8);
     thread::scope(|s| {
         let manejadores: Vec<_> = (0..hilos)
             .map(|_| {
@@ -278,7 +289,10 @@ fn en_paralelo(trabajos: &[Combinacion]) {
                         }
                         let r = read_png(&bytes)
                             .unwrap_or_else(|e| panic!("{nombre}: rechazado: {e:?}"));
-                        assert!(r.image == *esperada, "{nombre}: la imagen leída es distinta");
+                        assert!(
+                            r.image == *esperada,
+                            "{nombre}: la imagen leída es distinta"
+                        );
                     }
                 })
             })
@@ -307,7 +321,12 @@ fn rejilla(niveles: &[u8]) -> Vec<Combinacion> {
                 }
             }
         }
-        trabajos.push((forma, Contenido::UnColor, Compresor::Z, png::Filter::NoFilter));
+        trabajos.push((
+            forma,
+            Contenido::UnColor,
+            Compresor::Z,
+            png::Filter::NoFilter,
+        ));
     }
     trabajos
 }

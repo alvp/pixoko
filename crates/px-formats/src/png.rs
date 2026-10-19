@@ -178,7 +178,7 @@ pub fn read_png(bytes: &[u8]) -> Result<PngRead, PngError> {
     let depth = info.bit_depth as u8;
     // tRNS se lee del fichero crudo: el crate descarta en silencio el que es demasiado
     // corto y recorta el de gris y RGB a un byte por muestra por debajo de 16 bits.
-    let (trns, aux) = scan_chunks(bytes)?;
+    let (trns, aux, idat_len) = scan_chunks(bytes)?;
     let plan = plan(info.color_type, depth, info.palette.as_deref(), trns)?;
 
     // Tamaño de la imagen y del búfer de muestras, antes de reservar nada.
@@ -189,6 +189,20 @@ pub fn read_png(bytes: &[u8]) -> Result<PngRead, PngError> {
         .filter(|&len| len <= Image::MAX_BYTES)
         .ok_or_else(too_large)?;
     let row_len = reader.output_line_size(width).ok_or_else(too_large)?;
+    // Antes de reservar: los datos comprimidos deben poder dar los bytes que declara la
+    // cabecera (las dimensiones del decodificador: las de fcTL si precede al IDAT).
+    let (frame_w, frame_h) = info
+        .frame_control
+        .map_or((width, height), |fc| (fc.width, fc.height));
+    let bits_per_pixel = u8::try_from(info.color_type.samples()).unwrap_or(u8::MAX) * depth;
+    let needed =
+        inflated_len(frame_w, frame_h, bits_per_pixel, info.interlaced).ok_or_else(too_large)?;
+    if !stream_is_plausible(needed, idat_len) {
+        return Err(PngError::Decode(format!(
+            "tamaño declarado inconsistente con el fichero: {idat_len} bytes de datos \
+             comprimidos para {needed} esperados"
+        )));
+    }
     let mut raw = Vec::new();
     raw.try_reserve_exact(raw_len).map_err(|_| too_large())?;
     raw.resize(raw_len, 0);
@@ -287,10 +301,11 @@ fn report(plan: &Plan, depth: u8) -> Vec<Conversion> {
 ///
 /// El IEND debe estar completo y acabar en el último byte. El crate no detecta ni los datos
 /// sobrantes ni un IEND cortado.
-fn scan_chunks(bytes: &[u8]) -> Result<(Option<&[u8]>, AuxReport), PngError> {
+fn scan_chunks(bytes: &[u8]) -> Result<(Option<&[u8]>, AuxReport, u64), PngError> {
     let truncated = || PngError::Decode("PNG truncado".to_string());
     let mut trns = None;
     let mut seen_idat = false;
+    let mut idat_len = 0u64;
     let mut aux = AuxScan::default();
     // La firma ya la validó el crate.
     let mut pos = 8usize;
@@ -310,11 +325,15 @@ fn scan_chunks(bytes: &[u8]) -> Result<(Option<&[u8]>, AuxReport), PngError> {
             .ok_or_else(truncated)?;
         aux.chunk(&header[4..8], &bytes[pos + 8..end - 4]);
         match &header[4..8] {
-            b"IDAT" => seen_idat = true,
+            b"IDAT" => {
+                seen_idat = true;
+                // Bytes presentes en el fichero (el chunk ya se comprobó entero arriba).
+                idat_len += bytes[pos + 8..end - 4].len() as u64;
+            }
             b"tRNS" if !seen_idat && trns.is_none() => trns = Some(&bytes[pos + 8..end - 4]),
             b"IEND" => {
                 return if end == bytes.len() {
-                    Ok((trns, aux.finish()))
+                    Ok((trns, aux.finish(), idat_len))
                 } else {
                     Err(PngError::TrailingData)
                 };
@@ -489,23 +508,47 @@ pub fn write_png(image: &Image) -> Result<Vec<u8>, PngError> {
     Ok(out)
 }
 
-/// Bytes que el flujo zlib debe producir para la imagen por defecto (spec de la unidad 13).
-// TODO(unidad 13): stub en rojo; la lógica llega con el commit de lógica.
-#[allow(dead_code)]
-fn inflated_len(
-    _width: u32,
-    _height: u32,
-    _bits_per_pixel: u8,
-    _interlaced: bool,
-) -> Option<u64> {
-    todo!("unidad 13: inflated_len")
+/// Un flujo DEFLATE no expande más de 1032 veces: una coincidencia de 258 bytes cuesta como
+/// mínimo 2 bits (≥ 1 de longitud y ≥ 1 de distancia), así que 8 bits dan como mucho 4 × 258.
+const MAX_DEFLATE_RATIO: u64 = 1032;
+
+/// Origen y paso `(x0, y0, dx, dy)` de cada una de las 7 pasadas de Adam7.
+const ADAM7: [(u32, u32, u32, u32); 7] = [
+    (0, 0, 8, 8),
+    (4, 0, 8, 8),
+    (0, 4, 4, 8),
+    (2, 0, 4, 4),
+    (0, 2, 2, 4),
+    (1, 0, 2, 2),
+    (0, 1, 1, 2),
+];
+
+/// Bytes que el flujo zlib debe producir para la imagen por defecto: por cada fila, un byte de
+/// filtro más las muestras empaquetadas; con Adam7, la suma de las pasadas no vacías. `None` si
+/// la cuenta desborda `u64`.
+fn inflated_len(width: u32, height: u32, bits_per_pixel: u8, interlaced: bool) -> Option<u64> {
+    let bpp = u64::from(bits_per_pixel);
+    let pass = |w: u64, h: u64| -> Option<u64> {
+        if w == 0 || h == 0 {
+            return Some(0);
+        }
+        h.checked_mul(w.checked_mul(bpp)?.div_ceil(8).checked_add(1)?)
+    };
+    if !interlaced {
+        return pass(u64::from(width), u64::from(height));
+    }
+    let mut total = 0u64;
+    for (x0, y0, dx, dy) in ADAM7 {
+        let w = width.saturating_sub(x0).div_ceil(dx);
+        let h = height.saturating_sub(y0).div_ceil(dy);
+        total = total.checked_add(pass(u64::from(w), u64::from(h))?)?;
+    }
+    Some(total)
 }
 
-/// `needed <= 1032 * idat_len`, sin desbordar (spec de la unidad 13).
-// TODO(unidad 13): stub en rojo; la lógica llega con el commit de lógica.
-#[allow(dead_code)]
-fn stream_is_plausible(_needed: u64, _idat_len: u64) -> bool {
-    todo!("unidad 13: stream_is_plausible")
+/// `needed <= 1032 * idat_len`, sin desbordar: ¿pueden `idat_len` bytes comprimidos dar `needed`?
+fn stream_is_plausible(needed: u64, idat_len: u64) -> bool {
+    needed <= idat_len.saturating_mul(MAX_DEFLATE_RATIO)
 }
 
 #[cfg(test)]

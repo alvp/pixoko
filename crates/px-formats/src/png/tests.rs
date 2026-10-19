@@ -24,13 +24,13 @@ use super::{inflated_len, stream_is_plausible};
 fn fila1_inflated_len_sin_entrelazar() {
     // (ancho, alto, bits por píxel, esperado)
     let casos: [(u32, u32, u8, Option<u64>); 7] = [
-        (1, 1, 8, Some(2)),                      // gris 8: 1 × (1 + 1)
-        (3, 2, 8, Some(8)),                      // gris 8: 2 × (1 + 3)
-        (1, 1, 32, Some(5)),                     // RGBA 8: 1 × (1 + 4)
-        (9, 2, 1, Some(6)),                      // gris 1 bit: 2 × (1 + ceil(9 / 8) = 2)
-        (2, 2, 48, Some(26)),                    // RGB 16: 2 × (1 + 12)
-        (8192, 8192, 32, Some(268_443_648)),     // RGBA 8: 8192 × (1 + 32768)
-        (u32::MAX, u32::MAX, 64, None),          // RGBA 16: desborda u64
+        (1, 1, 8, Some(2)),                  // gris 8: 1 × (1 + 1)
+        (3, 2, 8, Some(8)),                  // gris 8: 2 × (1 + 3)
+        (1, 1, 32, Some(5)),                 // RGBA 8: 1 × (1 + 4)
+        (9, 2, 1, Some(6)),                  // gris 1 bit: 2 × (1 + ceil(9 / 8) = 2)
+        (2, 2, 48, Some(26)),                // RGB 16: 2 × (1 + 12)
+        (8192, 8192, 32, Some(268_443_648)), // RGBA 8: 8192 × (1 + 32768)
+        (u32::MAX, u32::MAX, 64, None),      // RGBA 16: desborda u64
     ];
     for (ancho, alto, bpp, esperado) in casos {
         assert_eq!(
@@ -75,12 +75,12 @@ fn fila2_inflated_len_adam7() {
 fn fila3_stream_is_plausible() {
     // (needed, idat_len, esperado)
     let casos: [(u64, u64, bool); 6] = [
-        (1032, 1, true),                      // justo en el límite
-        (1033, 1, false),                     // la comparación es estricta
+        (1032, 1, true),  // justo en el límite
+        (1033, 1, false), // la comparación es estricta
         (0, 0, true),
         (1, 0, false),
-        (u64::MAX, u64::MAX, true),           // 1032 × idat desbordaría u64
-        (1032 << 32, 1 << 32, true),          // sin desbordar
+        (u64::MAX, u64::MAX, true),  // 1032 × idat desbordaría u64
+        (1032 << 32, 1 << 32, true), // sin desbordar
     ];
     for (needed, idat, esperado) in casos {
         assert_eq!(
@@ -143,7 +143,11 @@ fn modelo(ancho: u32, alto: u32, bpp: u8, entrelazado: bool) -> u64 {
             if pixeles[p] == 0 {
                 0
             } else {
-                assert_eq!(pixeles[p] % filas[p], 0, "pasada {p}: píxeles no rectangulares");
+                assert_eq!(
+                    pixeles[p] % filas[p],
+                    0,
+                    "pasada {p}: píxeles no rectangulares"
+                );
                 bytes_de_pasada(filas[p], pixeles[p] / filas[p], bpp)
             }
         })

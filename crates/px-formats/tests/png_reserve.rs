@@ -67,7 +67,8 @@ fn falso(ancho: u32, alto: u32, color: u8, entrelazado: bool) -> Vec<u8> {
 
 /// Valor en bytes de un campo de `/proc/self/status` (`VmHWM`, `VmRSS`; vienen en kB).
 fn campo(nombre: &str) -> u64 {
-    let status = fs::read_to_string("/proc/self/status").expect("no se pudo leer /proc/self/status");
+    let status =
+        fs::read_to_string("/proc/self/status").expect("no se pudo leer /proc/self/status");
     let linea = status
         .lines()
         .find_map(|l| l.strip_prefix(nombre)?.strip_prefix(':'))

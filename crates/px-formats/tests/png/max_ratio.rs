@@ -269,8 +269,15 @@ fn lee_con_z(
         Err(e) => panic!("{nombre} {ancho}x{alto} (Adam7: {entrelazado}): {e:?}"),
     };
     assert_eq!(r.image.mode(), modo, "{nombre}");
-    assert_eq!((r.image.width(), r.image.height()), (ancho, alto), "{nombre}");
-    assert!(es_todo_cero(&r.image, color), "{nombre}: hay bytes distintos de 0");
+    assert_eq!(
+        (r.image.width(), r.image.height()),
+        (ancho, alto),
+        "{nombre}"
+    );
+    assert!(
+        es_todo_cero(&r.image, color),
+        "{nombre}: hay bytes distintos de 0"
+    );
     assert!(r.report.is_empty(), "{nombre}: {:?}", r.report);
 }
 
@@ -318,7 +325,17 @@ fn fila5(lado: u32) {
     for (nombre, color, bpp, modo) in FORMAS_8_BITS {
         lee_con_z(nombre, lado, lado, 8, color, bpp, false, modo, minima);
     }
-    lee_con_z("gris 8 Adam7", lado, lado, 8, 0, 8, true, Mode::Gray, minima);
+    lee_con_z(
+        "gris 8 Adam7",
+        lado,
+        lado,
+        8,
+        0,
+        8,
+        true,
+        Mode::Gray,
+        minima,
+    );
 }
 
 #[test]
@@ -351,7 +368,15 @@ fn un_solo_color(lado: u32) {
         (
             "gris con alfa",
             Box::new(move || {
-                Image::filled(lado, lado, Pixel::GrayAlpha { gray: 77, alpha: 200 }).unwrap()
+                Image::filled(
+                    lado,
+                    lado,
+                    Pixel::GrayAlpha {
+                        gray: 77,
+                        alpha: 200,
+                    },
+                )
+                .unwrap()
             }),
         ),
         (
