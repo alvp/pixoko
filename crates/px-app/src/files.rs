@@ -311,7 +311,8 @@ fn aux_labels(aux: &AuxReport) -> Vec<&'static str> {
 }
 
 /// Aviso al abrir: nombre, tamaño, modo y, si hubo conversiones, cuáles y que `Ctrl+S` guardará
-/// una copia.
+/// una copia. Solo lo usan las pruebas (la app llama a `describe_open_aux`).
+#[cfg(test)]
 pub fn describe_open(name: &str, image: &Image, report: &[Conversion]) -> String {
     describe_open_aux(name, image, report, &AuxReport::default())
 }

@@ -446,7 +446,11 @@ fn fila_10_los_dos_grafx2_dicen_texto_y_otros_y_se_sobrescriben() {
         let saved = session.save(tmp.path()).expect("save");
         assert_eq!(saved.path, path, "{name}");
         assert_eq!(saved.copy_reason, None, "{name}");
-        assert_eq!(names(tmp.path()), [name.clone()], "{name}: sin copia");
+        assert_eq!(
+            names(tmp.path()),
+            std::slice::from_ref(&name),
+            "{name}: sin copia"
+        );
     }
 }
 
