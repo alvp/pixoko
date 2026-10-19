@@ -1,6 +1,6 @@
 //! Fila 11 de la unidad 17b (specs/hito-2-damero-lienzo.md): **el damero no está en el fichero
 //! guardado**. Es solo visualización: pintar el lienzo con cada fondo y con la superposición no
-//! cambia el documento, ni lo que sube a la textura de la imagen, ni los bytes de `write_png`.
+//! cambia el documento, ni lo que hay en la textura de la imagen, ni los bytes de `write_png`.
 //!
 //! Va en `px-app` y no en `px-ui/tests/` porque necesita `px-formats` (`write_png` y `read_png`),
 //! que `px-ui` no tiene como dependencia. Sin ventana: `egui::Context::run_ui` con `RawInput`
@@ -15,13 +15,26 @@
 //! - `read_png` de esos bytes devuelve la imagen original (la RGBA, idéntica; la indexada, con los
 //!   mismos píxeles RGBA: el formato guarda el índice transparente como alfa 0 de la paleta), con
 //!   alfa 0 donde era 0 y sin ningún gris `CHECK_A` ni `CHECK_B`;
-//! - `to_rgba8` de la imagen y la textura que sube el lienzo, intactas (la imagen se sube una sola
-//!   vez, con sus bytes), y el `state_id` del documento, igual.
+//! - `to_rgba8` de la imagen y el `state_id` del documento, intactos, también **durante** la
+//!   superposición;
+//! - la textura de la imagen, intacta: la **textura compuesta** (los deltas completos y parciales
+//!   que egui entrega, aplicados en orden) es `from_rgba_unmultiplied(to_rgba8(documento))` sin el
+//!   damero, con cada fondo y cada camino; la imagen se sube una sola vez (un único delta completo
+//!   y nada más mientras no hay superposición); con la superposición, fuera de los píxeles
+//!   pendientes la textura sigue siendo el documento; y al vaciarla (`sync`, o `refresh`) la
+//!   textura vuelve a ser el documento.
+//!
+//! Unidad 14a-2: la superposición ya no entra por `paint` sino por `Canvas::set_overlay`, llamado
+//! tras `interact` y antes de `sync` y `paint`; es parte de la textura y no hay formas extra.
 //!
 //! Suposición sobre «Piezas»: el fondo y el camino se eligen con `Canvas::set_background` y
 //! `Canvas::set_checker_mesh`.
 
-use eframe::egui::{ColorImage, Context, ImageData, Pos2, RawInput, Rect, TextureId, vec2};
+use std::collections::HashMap;
+
+use eframe::egui::{
+    Color32, ColorImage, Context, ImageData, Pos2, RawInput, Rect, TextureId, TexturesDelta, vec2,
+};
 use px_core::{Document, Image, Mode, Palette, Pixel, Rgba};
 use px_formats::{read_png, write_png};
 use px_ui::background::CanvasBackground;
@@ -96,26 +109,95 @@ fn superposicion() -> Vec<(u32, u32, Rgba)> {
     v
 }
 
-/// Un fotograma sin ventana: `interact` y `paint`. Devuelve lo subido a texturas.
+/// Lo que egui entrega a la GPU, aplicado en orden (completos y parciales, `free` incluidos): la
+/// textura compuesta de cada `TextureId`. (El ayudante equivalente de `px-ui/tests/common` no se
+/// puede usar desde `px-app`.)
+#[derive(Default)]
+struct Texturas {
+    mapa: HashMap<TextureId, ([usize; 2], Vec<Color32>)>,
+}
+
+impl Texturas {
+    fn aplica(&mut self, delta: &TexturesDelta) {
+        for (id, deltas) in &delta.set {
+            for delta in deltas {
+                let ImageData::Color(imagen) = &delta.image;
+                match delta.pos {
+                    None => {
+                        self.mapa.insert(*id, (imagen.size, imagen.pixels.clone()));
+                    }
+                    Some([x0, y0]) => {
+                        let (tamano, texels) = self
+                            .mapa
+                            .get_mut(id)
+                            .expect("un parche llega a una textura ya creada");
+                        let [w, h] = imagen.size;
+                        assert!(
+                            x0 + w <= tamano[0] && y0 + h <= tamano[1],
+                            "el parche {w}×{h} en ({x0}, {y0}) se sale de la textura {tamano:?}"
+                        );
+                        for y in 0..h {
+                            let destino = (y0 + y) * tamano[0] + x0;
+                            texels[destino..destino + w]
+                                .copy_from_slice(&imagen.pixels[y * w..(y + 1) * w]);
+                        }
+                    }
+                }
+            }
+        }
+        for id in &delta.free {
+            self.mapa.remove(id);
+        }
+    }
+
+    fn get(&self, id: TextureId) -> Option<&([usize; 2], Vec<Color32>)> {
+        self.mapa.get(&id)
+    }
+}
+
+/// Las subidas de un fotograma a la textura de la imagen (la baldosa 0, la única de estas
+/// imágenes): deltas completos (`pos == None`) y parciales.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Subidas {
+    completas: usize,
+    parciales: usize,
+}
+
+/// Un fotograma sin ventana, en el orden de la app: `interact` → `set_overlay` → `sync` → `paint`
+/// (con `overlay` vacío, `set_overlay` es `clear_overlay`). Aplica los deltas de texturas a
+/// `texturas` y devuelve lo subido a la textura de la imagen.
 fn fotograma(
     ctx: &Context,
     canvas: &mut Canvas,
+    documento: &Image,
     overlay: &[(u32, u32, Rgba)],
-) -> Vec<(TextureId, ImageData)> {
+    texturas: &mut Texturas,
+) -> Subidas {
     let input = RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(200.0, 150.0))),
         ..RawInput::default()
     };
     let mut output = ctx.run_ui(input, |ui| {
         canvas.interact(ui);
-        canvas.paint(ui, overlay.iter().copied());
+        canvas.set_overlay(ui.ctx(), documento, overlay);
+        canvas.sync(ui.ctx(), documento).expect("sync");
+        canvas.paint(ui);
     });
-    let mut subidas = Vec::new();
+    let imagen = canvas.texture_id().expect("textura de la imagen");
+    let mut subidas = Subidas::default();
     for (id, deltas) in &output.textures_delta.set {
+        if *id != imagen {
+            continue;
+        }
         for delta in deltas {
-            subidas.push((*id, delta.image.clone()));
+            if delta.is_whole() {
+                subidas.completas += 1;
+            } else {
+                subidas.parciales += 1;
+            }
         }
     }
+    texturas.aplica(&output.textures_delta);
     output.textures_delta.clear();
     subidas
 }
@@ -128,48 +210,132 @@ fn es_gris_del_damero(c: &[u8; 4]) -> bool {
             .any(|gris| (gris.r, gris.g, gris.b) == (r, g, b))
 }
 
+/// La textura de la imagen compuesta, píxel a píxel, frente a lo esperado; los `salvo` (píxeles de
+/// la superposición) se comprueban aparte.
+fn textura_es(
+    texturas: &Texturas,
+    canvas: &Canvas,
+    esperado: &[Color32],
+    salvo: &[(u32, u32, Rgba)],
+    contexto: &str,
+) {
+    let id = canvas.texture_id().expect("textura de la imagen");
+    let (tamano, texels) = texturas.get(id).expect("la textura existe");
+    assert_eq!(
+        *tamano,
+        [ANCHO as usize, ALTO as usize],
+        "{contexto}: tamaño"
+    );
+    for y in 0..ALTO {
+        for x in 0..ANCHO {
+            let i = (y * ANCHO + x) as usize;
+            // Con varios puntos en el mismo píxel gana el último, como al pintar el trazo.
+            let pendiente = salvo.iter().rev().find(|(px, py, _)| (*px, *py) == (x, y));
+            let debe = match pendiente {
+                Some((_, _, c)) => Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a),
+                None => esperado[i],
+            };
+            assert_eq!(texels[i], debe, "{contexto}: texel ({x}, {y})");
+        }
+    }
+}
+
 fn comprueba(nombre: &str, image: &Image) {
     let original = image.clone();
     let doc = Document::new(image.clone());
+    let documento = doc.image(doc.main_image()).expect("imagen del documento");
     let state_id = doc.state_id();
     let bytes_de_la_imagen = to_rgba8(image);
     let png_antes = write_png(image).expect("PNG antes");
 
     let ctx = Context::default();
+    let mut texturas = Texturas::default();
     let mut canvas = Canvas::new();
-    canvas.set_image(image);
-    let esperado =
-        ColorImage::from_rgba_unmultiplied([ANCHO as usize, ALTO as usize], &bytes_de_la_imagen);
-    let mut subidas_de_la_imagen = 0;
+    canvas.set_image(documento);
+    let esperado: Vec<Color32> =
+        ColorImage::from_rgba_unmultiplied([ANCHO as usize, ALTO as usize], &bytes_de_la_imagen)
+            .pixels;
     let overlay = superposicion();
+    let vacia: &[(u32, u32, Rgba)] = &[];
+
+    // Sin superposición: la imagen se sube una sola vez (un único delta completo) y después, con
+    // cada fondo y cada camino, no se sube nada; la textura es la imagen, sin el damero.
+    let mut subidas_de_la_imagen = Subidas::default();
     for (fondo, malla) in MODOS {
         canvas.set_background(fondo);
         canvas.set_checker_mesh(malla);
-        for con_superposicion in [false, true] {
-            for _ in 0..2 {
-                let vacia: &[(u32, u32, Rgba)] = &[];
-                let subidas = fotograma(
-                    &ctx,
-                    &mut canvas,
-                    if con_superposicion { &overlay } else { vacia },
-                );
-                let imagen = canvas.texture_id().expect("textura de la imagen");
-                for (id, datos) in subidas {
-                    if id == imagen {
-                        subidas_de_la_imagen += 1;
-                        let ImageData::Color(color) = datos;
-                        assert_eq!(
-                            color.pixels, esperado.pixels,
-                            "{nombre}: lo que sube el lienzo es la imagen, sin el damero"
-                        );
-                    }
-                }
-            }
+        for _ in 0..2 {
+            let subidas = fotograma(&ctx, &mut canvas, documento, vacia, &mut texturas);
+            subidas_de_la_imagen.completas += subidas.completas;
+            subidas_de_la_imagen.parciales += subidas.parciales;
+            textura_es(
+                &texturas,
+                &canvas,
+                &esperado,
+                &[],
+                &format!("{nombre}: {fondo:?} malla {malla}, sin superposición"),
+            );
         }
     }
     assert_eq!(
-        subidas_de_la_imagen, 1,
-        "{nombre}: la imagen se sube una sola vez con todos los fondos y superposiciones"
+        subidas_de_la_imagen,
+        Subidas {
+            completas: 1,
+            parciales: 0
+        },
+        "{nombre}: la imagen se sube una sola vez con todos los fondos"
+    );
+
+    // Con la superposición del borrador (alfa 0) y del lápiz (alfa parcial): el documento no
+    // cambia y, fuera de los píxeles pendientes, la textura sigue siendo el documento; los
+    // pendientes llevan su color (premultiplicado).
+    for (fondo, malla) in MODOS {
+        canvas.set_background(fondo);
+        canvas.set_checker_mesh(malla);
+        for _ in 0..2 {
+            fotograma(&ctx, &mut canvas, documento, &overlay, &mut texturas);
+            textura_es(
+                &texturas,
+                &canvas,
+                &esperado,
+                &overlay,
+                &format!("{nombre}: {fondo:?} malla {malla}, con superposición"),
+            );
+            assert_eq!(doc.state_id(), state_id, "{nombre}: state_id durante");
+            assert_eq!(
+                to_rgba8(documento),
+                bytes_de_la_imagen,
+                "{nombre}: documento durante"
+            );
+        }
+    }
+
+    // Al vaciarla, `sync` regenera los bloques tocados desde el documento: la textura vuelve a ser
+    // `from_rgba_unmultiplied(to_rgba8(documento))`; y lo mismo con `refresh`.
+    fotograma(&ctx, &mut canvas, documento, vacia, &mut texturas);
+    textura_es(
+        &texturas,
+        &canvas,
+        &esperado,
+        &[],
+        &format!("{nombre}: tras vaciar la superposición y sync"),
+    );
+    fotograma(&ctx, &mut canvas, documento, &overlay, &mut texturas);
+    canvas.clear_overlay();
+    canvas.refresh(&ctx, documento);
+    fotograma(&ctx, &mut canvas, documento, vacia, &mut texturas);
+    textura_es(
+        &texturas,
+        &canvas,
+        &esperado,
+        &[],
+        &format!("{nombre}: tras la superposición y refresh"),
+    );
+    // En reposo no se sube nada más.
+    assert_eq!(
+        fotograma(&ctx, &mut canvas, documento, vacia, &mut texturas),
+        Subidas::default(),
+        "{nombre}: en reposo, cero subidas"
     );
 
     // El PNG: los mismos bytes antes y después, y leídos de vuelta son la imagen original.
