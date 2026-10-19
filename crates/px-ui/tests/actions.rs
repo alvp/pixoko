@@ -974,3 +974,172 @@ fn fila_9_n_con_ctrl_o_mac_cmd_pero_sin_command_no_es_el_atajo() {
         assert_eq!(action_for_shortcut(Key::N, cmd_solo, platform), None);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20: `AppAction::ConvertMode` (specs/hito-2-convertir-modo.md, fila 10, capa de acciones)
+// ---------------------------------------------------------------------------------------------
+//
+// Sin atajo en ninguna plataforma (ninguna tecla con ninguna combinación la produce), no repite
+// (`ignores_repeat` falso), abre un diálogo (`opens_dialog`) y la frenan los cinco bloqueos, también
+// `removal` (regla literal de la 18), con los tres orígenes. El zoom y el resto no cambian. Las
+// pruebas de la 17 y la 19 que enumeran listas fijas de acciones no la incluyen y no cambian.
+
+#[test]
+fn fila_10_convertir_modo_no_tiene_atajo_en_ninguna_plataforma() {
+    for platform in PLATAFORMAS {
+        assert_eq!(
+            shortcut_for(AppAction::ConvertMode, platform),
+            None,
+            "{platform:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_10_ninguna_tecla_con_ninguna_combinacion_da_convertir_modo() {
+    assert!(!Key::ALL.is_empty());
+    for platform in PLATAFORMAS {
+        for &key in Key::ALL {
+            for bits in 0..32 {
+                let m = modificadores(bits);
+                assert_ne!(
+                    action_for_shortcut(key, m, platform),
+                    Some(AppAction::ConvertMode),
+                    "{key:?} con {m:?} en {platform:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_10_convertir_modo_no_repite_con_la_tecla_mantenida_y_las_demas_siguen_igual() {
+    assert!(!AppAction::ConvertMode.ignores_repeat());
+    let mut todas = todas_las_acciones();
+    todas.push(AppAction::NewImage);
+    todas.push(AppAction::ConvertMode);
+    for action in todas {
+        let esperado = matches!(
+            action,
+            AppAction::Open
+                | AppAction::Save
+                | AppAction::SaveAs
+                | AppAction::Quit
+                | AppAction::NewImage
+        );
+        assert_eq!(action.ignores_repeat(), esperado, "{action:?}");
+    }
+}
+
+#[test]
+fn fila_10_convertir_modo_abre_un_dialogo_y_no_es_zoom() {
+    assert!(AppAction::ConvertMode.opens_dialog());
+    assert!(!AppAction::ConvertMode.is_zoom());
+    let mut todas = todas_las_acciones();
+    todas.push(AppAction::NewImage);
+    todas.push(AppAction::ConvertMode);
+    for action in todas {
+        let esperado = matches!(
+            action,
+            AppAction::ShowLicenses | AppAction::NewImage | AppAction::ConvertMode
+        );
+        assert_eq!(action.opens_dialog(), esperado, "{action:?}");
+    }
+}
+
+#[test]
+fn fila_10_is_blocked_de_convertir_modo_la_frena_cada_bloqueo_con_cualquier_origen() {
+    for origin in ORIGENES {
+        assert!(
+            !is_blocked(AppAction::ConvertMode, Locks::default(), origin),
+            "{origin:?} sin bloqueos"
+        );
+        for (nombre, locks) in [
+            ("gesture", solo(|l| l.gesture = true)),
+            ("dialog", solo(|l| l.dialog = true)),
+            ("text_focus", solo(|l| l.text_focus = true)),
+            // Regla literal de la 18: la quita pendiente también frena abrir un diálogo.
+            ("removal", solo(|l| l.removal = true)),
+            ("modal", solo(|l| l.modal = true)),
+        ] {
+            assert!(
+                is_blocked(AppAction::ConvertMode, locks, origin),
+                "{nombre}, {origin:?}"
+            );
+        }
+    }
+    for bits in 1..32u8 {
+        for origin in ORIGENES {
+            assert!(
+                is_blocked(AppAction::ConvertMode, bloqueos(bits), origin),
+                "{bits:05b}, {origin:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_10_enabled_de_convertir_modo_es_lo_contrario_de_is_blocked_con_origen_menu() {
+    for zoom in [None, zoom_x5()] {
+        for bits in 0..32u8 {
+            let locks = bloqueos(bits);
+            let state = estado(zoom, locks);
+            assert_eq!(
+                enabled(AppAction::ConvertMode, &state),
+                !is_blocked(AppAction::ConvertMode, locks, Origin::Menu),
+                "{bits:05b}, zoom {zoom:?}"
+            );
+        }
+    }
+    // Sin historia ni zoom, con todo en reposo, sigue habilitada.
+    let state = UiState {
+        can_undo: false,
+        can_redo: false,
+        zoom: None,
+        tool: Tool::Pencil,
+        locks: Locks::default(),
+    };
+    assert!(enabled(AppAction::ConvertMode, &state));
+}
+
+#[test]
+fn fila_10_con_el_dialogo_abierto_solo_pasa_quit_y_convertir_modo_queda_bloqueada() {
+    let modal = solo(|l| l.modal = true);
+    for origin in ORIGENES {
+        assert!(
+            is_blocked(AppAction::ConvertMode, modal, origin),
+            "{origin:?}"
+        );
+        // `Quit` sigue pasando con el diálogo abierto (regla (2) de la 18).
+        assert!(!is_blocked(AppAction::Quit, modal, origin), "{origin:?}");
+    }
+}
+
+#[test]
+fn fila_10_el_zoom_no_cambia_con_la_accion_nueva() {
+    // El zoom solo se bloquea con `text_focus` desde el teclado; un gesto o una quita pendiente no
+    // lo paran (y sí paran `ConvertMode`).
+    for zoom in ZOOMS {
+        for origin in ORIGENES {
+            assert!(!is_blocked(zoom, solo(|l| l.gesture = true), origin));
+            assert!(!is_blocked(zoom, solo(|l| l.removal = true), origin));
+            assert_eq!(
+                is_blocked(zoom, solo(|l| l.text_focus = true), origin),
+                origin == Origin::Key,
+                "{zoom:?}, {origin:?}"
+            );
+        }
+    }
+    for origin in ORIGENES {
+        assert!(is_blocked(
+            AppAction::ConvertMode,
+            solo(|l| l.gesture = true),
+            origin
+        ));
+        assert!(is_blocked(
+            AppAction::ConvertMode,
+            solo(|l| l.removal = true),
+            origin
+        ));
+    }
+}

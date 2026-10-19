@@ -499,6 +499,8 @@ pub fn describe_saved_dialog(saved: &Saved) -> String {
 }
 
 #[cfg(test)]
+mod convert_tests;
+#[cfg(test)]
 mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;

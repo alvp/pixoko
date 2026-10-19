@@ -2531,3 +2531,358 @@ fn fila_9_quit_con_el_dialogo_abierto_lo_abandona_y_sigue_la_regla_de_cierre() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20: «Convertir modo» (specs/hito-2-convertir-modo.md, fila 10, parte de `dispatch`)
+// ---------------------------------------------------------------------------------------------
+//
+// - `Dispatched::ConvertMode` desde el menú (la entrada `Imagen → Convertir modo…`) y el botón, con
+//   cualquier origen y con una imagen de cada uno de los cuatro modos: la misma acción, el mismo
+//   resultado y nada tocado (lo ejecuta `App`, como `NewImage`). Sin atajo: ninguna tecla la da.
+// - Los cinco bloqueos (`gesture`, `dialog`, `text_focus`, `removal`, `modal`) la bloquean con
+//   cualquier origen y con cualquier modo, y `enabled` es falso exactamente donde `dispatch` da
+//   `Blocked`; un gesto de verdad y una quita pendiente también.
+// - Con el diálogo de convertir abierto todo está bloqueado salvo `Quit`, que lo abandona sin
+//   convertir nada y sigue la regla de cierre de siempre.
+// - El zoom no cambia.
+//
+// Suposición: `Dispatched::ConvertMode` es una variante sin datos. `open_convert_mode(modal, from,
+// locks)` es la de «Piezas».
+
+use crate::convert_mode::open_convert_mode;
+
+/// Una sesión por modo de la imagen, sin quita pendiente.
+fn mundos_de_cada_modo() -> Vec<(&'static str, Mundo)> {
+    vec![
+        ("indexada", Mundo::estandar()),
+        ("RGBA con historia", Mundo::nuevo(rgba(), 3, 1)),
+        ("gris", Mundo::nuevo(gris(), 2, 0)),
+        (
+            "gris con alfa sin historia",
+            Mundo::nuevo(gris_alfa(), 0, 0),
+        ),
+    ]
+}
+
+fn modo_de(mundo: &Mundo) -> Mode {
+    mundo.imagen().mode()
+}
+
+#[test]
+fn fila_10_convertir_modo_da_dispatched_convert_mode_con_cada_origen_y_cada_modo_sin_tocar_nada() {
+    for (nombre, mut mundo) in mundos_de_cada_modo() {
+        for origin in ORIGENES {
+            let antes = (mundo.foto(), extras(&mundo));
+            let resultado = mundo.despacha(AppAction::ConvertMode, origin);
+            assert_eq!(resultado, Dispatched::ConvertMode, "{nombre}, {origin:?}");
+            assert!(
+                !matches!(resultado, Dispatched::View(_)),
+                "{nombre}: no es zoom"
+            );
+            assert_eq!(
+                (mundo.foto(), extras(&mundo)),
+                antes,
+                "{nombre}, {origin:?}: despachar no toca nada (lo hace App)"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_10_la_entrada_del_menu_imagen_da_dispatched_convert_mode() {
+    let menu = MENUS
+        .iter()
+        .find(|m| m.title == "Imagen")
+        .expect("el menú tiene «Imagen»");
+    let entrada = menu
+        .items
+        .iter()
+        .find(|item| item.label == "Convertir modo…")
+        .expect("Imagen tiene «Convertir modo…»");
+    assert_eq!(entrada.action, AppAction::ConvertMode);
+    for (nombre, mut mundo) in mundos_de_cada_modo() {
+        let antes = mundo.foto();
+        let por_menu = mundo.despacha(entrada.action, Origin::Menu);
+        assert_eq!(por_menu, Dispatched::ConvertMode, "{nombre}");
+        assert_eq!(mundo.foto(), antes, "{nombre}");
+    }
+    // El botón (la misma acción) da lo mismo.
+    let mut por_menu = Mundo::estandar();
+    let mut por_boton = Mundo::estandar();
+    let a = por_menu.despacha(entrada.action, Origin::Menu);
+    let b = por_boton.despacha(AppAction::ConvertMode, Origin::Button);
+    assert_eq!(a, b);
+    assert_eq!(por_menu.foto(), por_boton.foto());
+}
+
+#[test]
+fn fila_10_ninguna_tecla_con_ninguna_combinacion_da_convertir_modo() {
+    for plataforma in PLATAFORMAS_DE_LA_19 {
+        for &tecla in Key::ALL {
+            for bits in 0..32u8 {
+                let m = modificadores_de_bits(bits);
+                assert_ne!(
+                    action_for_shortcut(tecla, m, plataforma),
+                    Some(AppAction::ConvertMode),
+                    "{plataforma:?}, {tecla:?}, {bits:05b}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_10_cada_bloqueo_bloquea_convertir_modo_con_cada_origen_y_cada_modo_sin_tocar_nada() {
+    for (nombre_mundo, mut mundo) in mundos_de_cada_modo() {
+        for (nombre, locks) in bloqueos_de_uno_en_uno() {
+            for origin in ORIGENES {
+                let antes = (mundo.foto(), extras(&mundo));
+                assert_eq!(
+                    mundo.despacha_con(AppAction::ConvertMode, origin, locks),
+                    Dispatched::Blocked,
+                    "{nombre_mundo}, {nombre}, {origin:?}"
+                );
+                assert!(
+                    is_blocked(AppAction::ConvertMode, locks, origin),
+                    "{nombre}"
+                );
+                assert_eq!(
+                    (mundo.foto(), extras(&mundo)),
+                    antes,
+                    "{nombre_mundo}, {nombre}, {origin:?}: bloqueada no toca nada"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_10_con_las_32_combinaciones_de_bloqueos_solo_pasa_sin_ninguno() {
+    for bits in 0..32u8 {
+        let locks = Locks {
+            gesture: bits & 1 != 0,
+            dialog: bits & 2 != 0,
+            text_focus: bits & 4 != 0,
+            removal: bits & 8 != 0,
+            modal: bits & 16 != 0,
+        };
+        for origin in ORIGENES {
+            let mut mundo = Mundo::estandar();
+            let esperado = if bits == 0 {
+                Dispatched::ConvertMode
+            } else {
+                Dispatched::Blocked
+            };
+            assert_eq!(
+                mundo.despacha_con(AppAction::ConvertMode, origin, locks),
+                esperado,
+                "{bits:05b}, {origin:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_10_enabled_es_falso_exactamente_donde_dispatch_da_blocked_con_origen_menu() {
+    for zoom in [None, Zoom::from_int(5)] {
+        for bits in 0..32u8 {
+            let locks = Locks {
+                gesture: bits & 1 != 0,
+                dialog: bits & 2 != 0,
+                text_focus: bits & 4 != 0,
+                removal: bits & 8 != 0,
+                modal: bits & 16 != 0,
+            };
+            let mut mundo = Mundo::estandar();
+            let estado = mundo.estado_de_la_ui(zoom, locks);
+            let bloqueada = mundo.despacha_con(AppAction::ConvertMode, Origin::Menu, locks)
+                == Dispatched::Blocked;
+            assert_eq!(
+                enabled(AppAction::ConvertMode, &estado),
+                !bloqueada,
+                "{bits:05b}, zoom {zoom:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_10_un_gesto_de_verdad_o_una_quita_pendiente_bloquean_convertir_modo() {
+    // Un trazo en curso.
+    let mut mundo = Mundo::estandar();
+    empieza_un_trazo(&mut mundo);
+    let antes = mundo.foto();
+    assert_eq!(
+        mundo.despacha(AppAction::ConvertMode, Origin::Menu),
+        Dispatched::Blocked,
+        "trazo"
+    );
+    assert_eq!(mundo.foto(), antes);
+    assert!(!enabled(
+        AppAction::ConvertMode,
+        &mundo.estado_de_la_ui(Zoom::from_int(5), mundo.locks())
+    ));
+
+    // El deslizador del editor.
+    let mut mundo = Mundo::estandar();
+    pulsa_el_deslizador(&mut mundo);
+    assert_eq!(
+        mundo.despacha(AppAction::ConvertMode, Origin::Button),
+        Dispatched::Blocked,
+        "deslizador"
+    );
+
+    // El arrastre de una muestra.
+    let mut mundo = Mundo::estandar();
+    arrastra_una_muestra(&mut mundo);
+    assert_eq!(
+        mundo.despacha(AppAction::ConvertMode, Origin::Menu),
+        Dispatched::Blocked,
+        "arrastre de muestra"
+    );
+
+    // Una quita de paleta pendiente: abrir un diálogo también se bloquea (regla literal de la 18).
+    let mut mundo = mundo_con_quita_pendiente();
+    assert!(mundo.locks().removal);
+    let antes = (mundo.foto(), extras(&mundo));
+    for origin in ORIGENES {
+        assert_eq!(
+            mundo.despacha(AppAction::ConvertMode, origin),
+            Dispatched::Blocked,
+            "quita pendiente, {origin:?}"
+        );
+    }
+    assert_eq!((mundo.foto(), extras(&mundo)), antes);
+    assert!(!enabled(
+        AppAction::ConvertMode,
+        &mundo.estado_de_la_ui(Zoom::from_int(5), mundo.locks())
+    ));
+}
+
+#[test]
+fn fila_10_con_el_dialogo_de_convertir_abierto_todo_esta_bloqueado_salvo_quit() {
+    for (nombre_mundo, mut mundo) in mundos_de_cada_modo() {
+        let mut modal = Modal::default();
+        assert!(open_convert_mode(
+            &mut modal,
+            modo_de(&mundo),
+            mundo.locks()
+        ));
+        assert_eq!(modal.kind(), Some(ModalKind::ConvertMode), "{nombre_mundo}");
+        let locks = con_modal(&mundo);
+        assert!(locks.modal);
+
+        let antes = (mundo.foto(), extras(&mundo));
+        for action in todas_las_acciones()
+            .into_iter()
+            .chain([AppAction::NewImage, AppAction::ConvertMode])
+        {
+            for origin in ORIGENES {
+                let esperado = match action {
+                    AppAction::Quit => Dispatched::Quit,
+                    // `CloseLicenses` no es de este diálogo, pero la regla (1) la deja pasar siempre.
+                    AppAction::CloseLicenses => Dispatched::Licenses(false),
+                    _ => Dispatched::Blocked,
+                };
+                assert_eq!(
+                    mundo.despacha_con(action, origin, locks),
+                    esperado,
+                    "{nombre_mundo}, {action:?}, {origin:?}"
+                );
+            }
+        }
+        assert_eq!(
+            (mundo.foto(), extras(&mundo)),
+            antes,
+            "{nombre_mundo}: con el diálogo abierto el documento no cambia"
+        );
+    }
+}
+
+#[test]
+fn fila_10_un_dialogo_abierto_no_deja_abrir_otro_ni_otro_convertir_modo() {
+    let mundo = Mundo::estandar();
+    let mut modal = Modal::default();
+    assert!(open_convert_mode(&mut modal, Mode::Indexed, mundo.locks()));
+    let antes = modal.clone();
+    assert!(
+        !open_convert_mode(&mut modal, Mode::Rgba, mundo.locks()),
+        "ya hay uno abierto"
+    );
+    assert_eq!(modal, antes, "no cambia el diálogo abierto");
+    assert!(!abre_licencias(&mut modal));
+    assert!(!open_new_image(&mut modal, 16384, mundo.locks()));
+    assert_eq!(modal.kind(), Some(ModalKind::ConvertMode));
+}
+
+#[test]
+fn fila_10_cada_bloqueo_impide_abrir_el_dialogo_de_convertir_modo() {
+    for modo in [Mode::Indexed, Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
+        for (nombre, locks) in bloqueos_de_uno_en_uno() {
+            let mut modal = Modal::default();
+            assert!(
+                !open_convert_mode(&mut modal, modo, locks),
+                "{modo:?}, {nombre}"
+            );
+            assert!(!modal.is_open(), "{modo:?}, {nombre}");
+        }
+        let mut modal = Modal::default();
+        assert!(open_convert_mode(&mut modal, modo, Locks::default()));
+    }
+}
+
+#[test]
+fn fila_10_quit_con_el_dialogo_abierto_lo_abandona_y_sigue_la_regla_de_cierre() {
+    for modified in [false, true] {
+        let mut mundo = Mundo::estandar();
+        let mut modal = Modal::default();
+        let mut confirm = Confirm::new();
+        assert!(open_convert_mode(&mut modal, Mode::Indexed, mundo.locks()));
+        let locks = con_modal(&mundo);
+
+        // `Quit` pasa con el diálogo abierto, con cualquier origen.
+        for origin in ORIGENES {
+            assert_eq!(
+                mundo.despacha_con(AppAction::Quit, origin, locks),
+                Dispatched::Quit,
+                "{origin:?}"
+            );
+        }
+        // `App` lo abandona sin reacción y pregunta a la regla de cierre.
+        let antes = (mundo.foto(), extras(&mundo));
+        assert!(modal.abandon());
+        assert!(!modal.is_open());
+        let cierra = close_allowed(modified, &mut confirm, 0.0);
+        assert_eq!(cierra, !modified, "primera petición, modified {modified}");
+        if modified {
+            assert!(close_allowed(true, &mut confirm, 1.0), "la segunda cierra");
+        }
+        assert_eq!(
+            (mundo.foto(), extras(&mundo)),
+            antes,
+            "no se convirtió nada: la sesión es la de antes"
+        );
+    }
+}
+
+#[test]
+fn fila_10_el_zoom_no_cambia_con_la_accion_nueva() {
+    // Los cuatro zooms siguen dando `View` con cualquier origen salvo `text_focus` desde el teclado,
+    // y no los paran ni un gesto ni una quita pendiente (sí paran `ConvertMode`).
+    for (accion, op) in ZOOMS {
+        for origin in ORIGENES {
+            let mut mundo = Mundo::estandar();
+            assert_eq!(
+                mundo.despacha_con(accion, origin, locks_con(|l| l.removal = true)),
+                Dispatched::View(op),
+                "{accion:?}, {origin:?}"
+            );
+            assert_eq!(
+                mundo.despacha_con(accion, origin, locks_con(|l| l.gesture = true)),
+                Dispatched::View(op),
+                "{accion:?}, {origin:?}"
+            );
+        }
+    }
+    assert!(!AppAction::ConvertMode.is_zoom());
+}

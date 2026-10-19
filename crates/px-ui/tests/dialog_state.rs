@@ -2581,3 +2581,321 @@ fn fila_12_e3_set_limit_note_da_false_si_el_campo_no_existe_o_no_es_numerico() {
     }
     assert!(d.set_limit_note("ancho", Some("nota")), "el numérico sí");
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20 (specs/hito-2-convertir-modo.md, D6 y fila 12): dos ampliaciones aditivas del motor
+// ---------------------------------------------------------------------------------------------
+//
+// - E1: `Dialog::set_block(Option<String>)` y `Dialog::block() -> Option<&str>`: un motivo externo,
+//   recortado a 37 caracteres, que hace inválido el conjunto **después** de los campos y del
+//   `check` (`reason()` los da en ese orden; `is_valid` y `values()` lo respetan; `Accept` con
+//   motivo da `Rejected`; sin motivo, todo es como hoy).
+// - E2: `Dialog::checked(id) -> Option<bool>` pasa de `pub(crate)` a `pub`.
+// - Más `DialogKind::ConvertMode`.
+//
+// Ninguna prueba anterior de este fichero cambia (esta sección solo añade). Suposición: `block()`
+// devuelve el motivo ya recortado a 37 caracteres (la spec dice «un motivo externo, recortado a
+// 37»), y `set_block(None)` deja el diálogo `==` al de antes (el motivo forma parte de su estado).
+
+fn check_20_prohibe_el_siete(values: &Values) -> Option<String> {
+    (values.number("ancho") == Some(7)).then(|| "el ancho no puede ser 7".to_string())
+}
+
+/// `ancho` (1 a 100, por defecto 64), una casilla `opaco`, un grupo `modo` y un `check` que
+/// rechaza el ancho 7.
+fn spec_20() -> FormSpec {
+    FormSpec {
+        check: Some(check_20_prohibe_el_siete),
+        ..spec_con(vec![
+            numerico("ancho", "Ancho", 1, 100, 64),
+            campo("opaco", "Opaco", FieldKind::Check { default: false }),
+            campo(
+                "modo",
+                "Modo",
+                FieldKind::Choice {
+                    options: MODOS_19,
+                    default: 0,
+                },
+            ),
+        ])
+    }
+}
+
+fn dialogo_20() -> Dialog {
+    Dialog::new(DialogKind::ConvertMode, spec_20()).expect("spec válida")
+}
+
+fn casilla(d: &mut Dialog, field: &'static str, on: bool) {
+    assert_eq!(d.event(Event::Check { field, on }), Reaction::None);
+}
+
+// --- E1: set_block y block ---
+
+#[test]
+fn fila_12_set_block_sin_motivo_el_dialogo_valido_no_tiene_block() {
+    let d = dialogo_20();
+    assert_eq!(d.block(), None);
+    assert_eq!(d.reason(), None);
+    assert!(d.is_valid());
+    assert!(d.values().is_some());
+}
+
+#[test]
+fn fila_12_set_block_con_motivo_hace_invalido_un_dialogo_valido() {
+    let mut d = dialogo_20();
+    d.set_block(Some("no cabe".to_string()));
+    assert_eq!(d.block(), Some("no cabe"));
+    assert_eq!(d.reason(), Some("no cabe".to_string()));
+    assert!(!d.is_valid());
+    assert_eq!(d.values(), None);
+}
+
+#[test]
+fn fila_12_set_block_none_deja_todo_como_antes() {
+    let antes = dialogo_20();
+    let valores = antes.values();
+    let mut d = antes.clone();
+    d.set_block(Some("no cabe".to_string()));
+    assert!(!d.is_valid());
+    d.set_block(None);
+    assert_eq!(d.block(), None);
+    assert_eq!(d.reason(), None);
+    assert!(d.is_valid());
+    assert_eq!(d.values(), valores);
+    assert_eq!(d, antes, "el diálogo vuelve a ser el de antes");
+    // Y `None` sobre un diálogo sin motivo no cambia nada.
+    let mut otro = antes.clone();
+    otro.set_block(None);
+    assert_eq!(otro, antes);
+}
+
+#[test]
+fn fila_12_set_block_se_puede_cambiar_y_el_ultimo_motivo_gana() {
+    let mut d = dialogo_20();
+    d.set_block(Some("uno".to_string()));
+    d.set_block(Some("dos".to_string()));
+    assert_eq!(d.block(), Some("dos"));
+    assert_eq!(d.reason(), Some("dos".to_string()));
+}
+
+#[test]
+fn fila_12_set_block_recorta_a_37_caracteres() {
+    for (texto, esperado) in [
+        ("x".repeat(36), "x".repeat(36)),
+        ("x".repeat(37), "x".repeat(37)),
+        ("x".repeat(38), "x".repeat(37)),
+        ("x".repeat(200), "x".repeat(37)),
+        // Se cuentan caracteres, no bytes.
+        ("ñ".repeat(50), "ñ".repeat(37)),
+        ("…".repeat(80), "…".repeat(37)),
+    ] {
+        let mut d = dialogo_20();
+        d.set_block(Some(texto.clone()));
+        let motivo = d.reason().expect("hay motivo");
+        assert_eq!(
+            motivo,
+            esperado,
+            "texto de {} caracteres",
+            texto.chars().count()
+        );
+        assert_eq!(motivo.chars().count(), esperado.chars().count());
+        assert!(motivo.chars().count() <= 37);
+        assert_eq!(
+            d.block(),
+            Some(esperado.as_str()),
+            "block() lo da recortado"
+        );
+        assert!(!d.is_valid());
+    }
+}
+
+#[test]
+fn fila_12_reason_da_primero_el_campo_invalido_luego_el_check_y_por_ultimo_el_motivo_externo() {
+    let mut d = dialogo_20();
+    d.set_block(Some("motivo externo".to_string()));
+
+    // El campo inválido gana al check y al motivo externo.
+    numero(&mut d, "ancho", "0");
+    assert_eq!(d.reason(), Some("Ancho: mínimo 1".to_string()));
+    assert_eq!(d.values(), None);
+
+    // Con el campo válido pero con el ancho que rechaza el `check`: gana el `check`.
+    numero(&mut d, "ancho", "7");
+    assert_eq!(d.validity("ancho"), Some(Validity::Valid));
+    assert_eq!(d.reason(), Some("el ancho no puede ser 7".to_string()));
+    assert_eq!(d.values(), None);
+
+    // Con el `check` satisfecho queda el motivo externo.
+    numero(&mut d, "ancho", "8");
+    assert_eq!(d.reason(), Some("motivo externo".to_string()));
+    assert_eq!(d.values(), None);
+
+    // Sin el motivo externo, todo vale.
+    d.set_block(None);
+    assert_eq!(d.reason(), None);
+    assert!(d.values().is_some());
+}
+
+#[test]
+fn fila_12_el_motivo_externo_no_oculta_el_error_de_un_campo_ni_el_del_check_al_quitarlo() {
+    let mut d = dialogo_20();
+    numero(&mut d, "ancho", "7");
+    d.set_block(Some("motivo externo".to_string()));
+    assert_eq!(d.reason(), Some("el ancho no puede ser 7".to_string()));
+    d.set_block(None);
+    assert_eq!(d.reason(), Some("el ancho no puede ser 7".to_string()));
+}
+
+#[test]
+fn fila_12_accept_con_motivo_externo_da_rejected_y_no_toca_el_estado() {
+    let mut d = dialogo_20();
+    numero(&mut d, "ancho", "50");
+    casilla(&mut d, "opaco", true);
+    d.set_block(Some("no cabe".to_string()));
+    let antes = d.clone();
+    assert_eq!(
+        d.event(Event::Accept),
+        Reaction::Rejected("no cabe".to_string())
+    );
+    assert_eq!(d, antes, "un Accept rechazado no cambia nada");
+    // Mientras haya motivo, sigue rechazando.
+    assert_eq!(
+        d.event(Event::Accept),
+        Reaction::Rejected("no cabe".to_string())
+    );
+    // `Cancelar` no depende del motivo.
+    assert_eq!(d.event(Event::Cancel), Reaction::Cancelled);
+}
+
+#[test]
+fn fila_12_accept_sin_motivo_externo_entrega_los_valores_como_hoy() {
+    let mut d = dialogo_20();
+    numero(&mut d, "ancho", "50");
+    d.set_block(Some("no cabe".to_string()));
+    d.set_block(None);
+    let esperado = d.values().expect("valores");
+    match d.event(Event::Accept) {
+        Reaction::Accepted(valores) => {
+            assert_eq!(valores, esperado);
+            assert_eq!(valores.number("ancho"), Some(50));
+        }
+        otra => panic!("se esperaba Accepted y salió {otra:?}"),
+    }
+}
+
+#[test]
+fn fila_12_accept_con_motivo_no_confirma_el_hexadecimal_pendiente() {
+    let mut d = open(spec_con(vec![campo(
+        "color",
+        "Color",
+        FieldKind::Hex {
+            mode: Mode::Rgba,
+            default: Rgba::opaque(1, 2, 3),
+        },
+    )]));
+    hex(&mut d, "color", "#ff0000");
+    assert!(d.hex_pending("color"));
+    d.set_block(Some("no cabe".to_string()));
+    assert_eq!(
+        d.event(Event::Accept),
+        Reaction::Rejected("no cabe".to_string())
+    );
+    assert!(d.hex_pending("color"), "el texto sigue pendiente");
+}
+
+#[test]
+fn fila_12_set_block_no_cambia_el_alto_ni_los_campos_ni_los_valores_de_los_campos() {
+    let mut d = dialogo_20();
+    let alto = d.content_h_u();
+    let spec = d.spec().clone();
+    let texto = d.text("ancho");
+    d.set_block(Some("no cabe".to_string()));
+    assert_eq!(d.content_h_u(), alto);
+    assert_eq!(d.spec(), &spec);
+    assert_eq!(d.text("ancho"), texto);
+    assert_eq!(d.validity("ancho"), Some(Validity::Valid));
+}
+
+#[test]
+fn fila_12_set_block_sobre_un_modal_abierto_funciona_y_accept_lo_rechaza() {
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::ConvertMode, spec_20(), Locks::default()));
+    match &mut modal {
+        Modal::Open(d) => d.set_block(Some("calculando el informe".to_string())),
+        Modal::Closed => panic!("abierto"),
+    }
+    assert_eq!(
+        modal.event(Event::Accept),
+        Reaction::Rejected("calculando el informe".to_string())
+    );
+    assert!(modal.is_open(), "un Accept rechazado no cierra");
+    match &mut modal {
+        Modal::Open(d) => d.set_block(None),
+        Modal::Closed => panic!("abierto"),
+    }
+    assert!(matches!(modal.event(Event::Accept), Reaction::Accepted(_)));
+    assert!(!modal.is_open());
+}
+
+// --- E2: checked pública ---
+
+#[test]
+fn fila_12_checked_es_publica_y_lee_las_casillas() {
+    let mut d = dialogo_20();
+    assert_eq!(d.checked("opaco"), Some(false));
+    casilla(&mut d, "opaco", true);
+    assert_eq!(d.checked("opaco"), Some(true));
+    casilla(&mut d, "opaco", false);
+    assert_eq!(d.checked("opaco"), Some(false));
+}
+
+#[test]
+fn fila_12_checked_da_none_si_no_existe_o_no_es_una_casilla() {
+    let d = dialogo_20();
+    for id in ["ancho", "modo", "inexistente", ""] {
+        assert_eq!(d.checked(id), None, "{id:?}");
+    }
+}
+
+#[test]
+fn fila_12_checked_lee_las_casillas_de_un_dialogo_invalido() {
+    let mut d = dialogo_20();
+    casilla(&mut d, "opaco", true);
+    // Campo inválido.
+    numero(&mut d, "ancho", "0");
+    assert!(!d.is_valid());
+    assert_eq!(d.values(), None);
+    assert_eq!(d.checked("opaco"), Some(true));
+    // `check` que falla.
+    numero(&mut d, "ancho", "7");
+    assert!(!d.is_valid());
+    assert_eq!(d.checked("opaco"), Some(true));
+    // Motivo externo.
+    numero(&mut d, "ancho", "8");
+    d.set_block(Some("no cabe".to_string()));
+    assert!(!d.is_valid());
+    assert_eq!(d.checked("opaco"), Some(true));
+    casilla(&mut d, "opaco", false);
+    assert_eq!(d.checked("opaco"), Some(false));
+}
+
+// --- DialogKind::ConvertMode ---
+
+#[test]
+fn fila_12_dialog_kind_convert_mode_es_un_tipo_nuevo() {
+    let d = dialogo_20();
+    assert_eq!(d.kind(), DialogKind::ConvertMode);
+    for otro in [DialogKind::Licenses, DialogKind::Demo, DialogKind::NewImage] {
+        assert_ne!(DialogKind::ConvertMode, otro);
+    }
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::ConvertMode, spec_20(), Locks::default()));
+    assert_eq!(modal.kind(), Some(DialogKind::ConvertMode));
+    assert!(
+        !modal.close_kind(DialogKind::NewImage),
+        "solo cierra el tipo pedido"
+    );
+    assert!(modal.is_open());
+    assert!(modal.close_kind(DialogKind::ConvertMode));
+    assert!(!modal.is_open());
+}

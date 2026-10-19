@@ -774,3 +774,178 @@ fn fila_9_enabled_de_nueva_imagen_esta_deshabilitado_con_cada_bloqueo() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20: «Imagen → Convertir modo…» (specs/hito-2-convertir-modo.md, fila 10, parte del menú)
+// ---------------------------------------------------------------------------------------------
+//
+// La tabla ya está adaptada en las pruebas de la fila 1 (cinco menús, rótulos, orden y texto de los
+// atajos): aquí el menú `Imagen` por sí solo, la falta de atajo de `ConvertMode`, su `enabled` con
+// los cinco bloqueos y el ancho de los desplegables (`Imagen` mide 131 u; `Ver`, 208, sigue siendo
+// el más ancho).
+
+use px_ui::menu::popup_width_u;
+
+fn menu_imagen() -> Menu {
+    *MENUS
+        .iter()
+        .find(|m| m.title == "Imagen")
+        .expect("la barra tiene el menú Imagen")
+}
+
+#[test]
+fn fila_10_imagen_es_el_tercer_menu_entre_editar_y_ver_con_una_sola_entrada() {
+    let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
+    assert_eq!(titulos.iter().position(|t| *t == "Imagen"), Some(2));
+    assert_eq!(titulos[1], "Editar");
+    assert_eq!(titulos[3], "Ver");
+
+    let imagen = menu_imagen();
+    assert_eq!(imagen.items.len(), 1, "una sola entrada");
+    let entrada = imagen.items[0];
+    assert_eq!(entrada.label, "Convertir modo…");
+    assert_eq!(entrada.action, AppAction::ConvertMode);
+    assert!(!entrada.separator_before, "sin separador");
+    assert!(imagen.submenus.is_empty(), "sin submenús");
+}
+
+#[test]
+fn fila_10_convertir_modo_esta_una_sola_vez_en_la_barra_y_solo_en_imagen() {
+    let veces: Vec<&str> = MENUS
+        .iter()
+        .filter(|m| m.items.iter().any(|i| i.action == AppAction::ConvertMode))
+        .map(titulo)
+        .collect();
+    assert_eq!(veces, ["Imagen"]);
+    let total = entradas()
+        .iter()
+        .filter(|i| i.action == AppAction::ConvertMode)
+        .count();
+    assert_eq!(total, 1);
+    // Ningún submenú la repite.
+    for menu in MENUS.iter() {
+        for sub in menu.submenus {
+            assert!(
+                sub.items.iter().all(|i| i.action != AppAction::ConvertMode),
+                "{}",
+                sub.label
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_10_convertir_modo_no_tiene_atajo_ni_texto_de_atajo_en_las_tres_plataformas() {
+    for platform in PLATAFORMAS {
+        assert_eq!(
+            shortcut_for(AppAction::ConvertMode, platform),
+            None,
+            "{platform:?}"
+        );
+    }
+    // Y en la tabla del menú, la posición de la entrada nueva no lleva texto de atajo.
+    for platform in PLATAFORMAS {
+        let posicion = entradas()
+            .iter()
+            .position(|i| i.action == AppAction::ConvertMode)
+            .expect("la entrada existe");
+        assert_eq!(textos_de_atajo(platform)[posicion], None, "{platform:?}");
+    }
+}
+
+#[test]
+fn fila_10_enabled_de_convertir_modo_no_depende_de_la_historia_ni_del_zoom() {
+    for can_undo in [false, true] {
+        for can_redo in [false, true] {
+            for zoom in [
+                None,
+                Zoom::from_int(1),
+                x5(),
+                Some(Zoom::MIN),
+                Some(Zoom::MAX),
+            ] {
+                let state = estado(can_undo, can_redo, zoom);
+                assert!(
+                    enabled(AppAction::ConvertMode, &state),
+                    "undo {can_undo}, redo {can_redo}, zoom {zoom:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_10_enabled_de_convertir_modo_esta_deshabilitado_con_cada_uno_de_los_cinco_bloqueos() {
+    for (nombre, locks) in [
+        (
+            "gesture",
+            Locks {
+                gesture: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "dialog",
+            Locks {
+                dialog: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "text_focus",
+            Locks {
+                text_focus: true,
+                ..Locks::default()
+            },
+        ),
+        // Regla literal de la 18: la quita pendiente también frena abrir un diálogo.
+        (
+            "removal",
+            Locks {
+                removal: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "modal",
+            Locks {
+                modal: true,
+                ..Locks::default()
+            },
+        ),
+    ] {
+        let state = UiState {
+            locks,
+            ..estado(true, true, x5())
+        };
+        assert!(!enabled(AppAction::ConvertMode, &state), "{nombre}");
+        assert!(
+            is_blocked(AppAction::ConvertMode, locks, Origin::Menu),
+            "{nombre}"
+        );
+    }
+    // Sin bloqueos, habilitada.
+    assert!(enabled(AppAction::ConvertMode, &estado(true, true, x5())));
+}
+
+#[test]
+fn fila_10_el_desplegable_de_imagen_mide_131_u_y_el_de_ver_208_el_mas_ancho() {
+    for platform in PLATAFORMAS {
+        assert_eq!(popup_width_u(&menu_imagen(), platform), 131, "{platform:?}");
+        let ver = MENUS.iter().find(|m| m.title == "Ver").expect("Ver");
+        assert_eq!(popup_width_u(ver, platform), 208, "{platform:?}");
+        assert!(
+            popup_width_u(&menu_imagen(), platform) < popup_width_u(ver, platform),
+            "{platform:?}: Imagen es más estrecho que Ver"
+        );
+        // `Ver` sigue siendo el más ancho de los cinco.
+        for menu in MENUS.iter().filter(|m| m.title != "Ver") {
+            assert!(
+                popup_width_u(menu, platform) < 208,
+                "{platform:?}: {} mide {}",
+                menu.title,
+                popup_width_u(menu, platform)
+            );
+        }
+    }
+}
