@@ -53,6 +53,8 @@ pub const BUTTON_FILL: Color32 = SURFACE_2;
 pub const BUTTON_HOVER_FILL: Color32 = SURFACE_3;
 /// Borde de un campo, un botón o una marca.
 pub const EDGE: Color32 = SURFACE_3;
+/// Aro de una opción y borde de una casilla (≥ 3:1 sobre el campo; `EDGE` solo da 1,73).
+pub const TOGGLE_EDGE: Color32 = TEXT_DIM;
 /// Anillo del foco y marca de lo elegido.
 pub const FOCUS_RING: Color32 = ACCENT;
 /// Color de los errores de validación.
@@ -67,7 +69,7 @@ const MIN_MARK: f64 = 3.0;
 
 /// Los pares (nombre, color, fondo, mínimo) que se pintan en un diálogo: de aquí salen los colores
 /// que usa el pintado. Solo el texto deshabilitado (`TEXT_DISABLED`) queda exento.
-pub const CONTRAST_PAIRS: [(&str, Color32, Color32, f64); 10] = [
+pub const CONTRAST_PAIRS: [(&str, Color32, Color32, f64); 11] = [
     ("texto sobre el diálogo", TEXT, DIALOG_FILL, MIN_TEXT),
     (
         "texto tenue sobre el diálogo",
@@ -85,6 +87,13 @@ pub const CONTRAST_PAIRS: [(&str, Color32, Color32, f64); 10] = [
         MIN_TEXT,
     ),
     ("anillo sobre un campo", FOCUS_RING, FIELD_FILL, MIN_MARK),
+    // `TEXT_DIM` pide 4,5 (regla de la 18 para ese color); sobre el campo da 6,9.
+    (
+        "borde de opción y casilla sobre un campo",
+        TOGGLE_EDGE,
+        FIELD_FILL,
+        MIN_TEXT,
+    ),
     ("anillo sobre el diálogo", FOCUS_RING, DIALOG_FILL, MIN_MARK),
     ("anillo sobre un botón", FOCUS_RING, BUTTON_FILL, MIN_MARK),
     (
@@ -981,6 +990,7 @@ fn draw_toggle(
     marked: bool,
     target: FocusTarget,
     span_u: (i64, i64),
+    round: bool,
     items: &mut Vec<Item>,
 ) -> bool {
     let scale = origin.scale;
@@ -994,24 +1004,39 @@ fn draw_toggle(
         id,
         span_u: Some(span_u),
     });
-    painter.rect(
-        origin.rect_u(PAD_U + 2, y_u + 3, BOX_U, BOX_U),
-        0.0,
-        FIELD_FILL,
-        Stroke::new(scale.u(), EDGE),
-        StrokeKind::Inside,
-    );
-    if marked {
-        painter.rect_filled(
-            origin.rect_u(
-                PAD_U + 2 + (BOX_U - MARK_U) / 2,
-                y_u + 3 + (BOX_U - MARK_U) / 2,
-                MARK_U,
-                MARK_U,
-            ),
-            0.0,
-            FOCUS_RING,
+    let marker = origin.rect_u(PAD_U + 2, y_u + 3, BOX_U, BOX_U);
+    if round {
+        // Una opción excluyente: aro de 10 u de diámetro exterior y, si es la elegida, un punto.
+        let radius = (BOX_U as f32 / 2.0 - 0.5) * scale.u();
+        painter.circle(
+            marker.center(),
+            radius,
+            FIELD_FILL,
+            Stroke::new(scale.u(), TOGGLE_EDGE),
         );
+        if marked {
+            painter.circle_filled(marker.center(), MARK_U as f32 / 2.0 * scale.u(), FOCUS_RING);
+        }
+    } else {
+        painter.rect(
+            marker,
+            0.0,
+            FIELD_FILL,
+            Stroke::new(scale.u(), TOGGLE_EDGE),
+            StrokeKind::Inside,
+        );
+        if marked {
+            painter.rect_filled(
+                origin.rect_u(
+                    PAD_U + 2 + (BOX_U - MARK_U) / 2,
+                    y_u + 3 + (BOX_U - MARK_U) / 2,
+                    MARK_U,
+                    MARK_U,
+                ),
+                0.0,
+                FOCUS_RING,
+            );
+        }
     }
     painter.text(
         origin.pos_u(PAD_U + 2 + BOX_U + 4, y_u + 1),
@@ -1052,6 +1077,7 @@ fn draw_check(
         on,
         FocusTarget::Field(spec.id),
         span,
+        false,
         items,
     ) {
         pending.push(Event::Check {
@@ -1092,6 +1118,7 @@ fn draw_choice(
             i == selected,
             FocusTarget::Option(spec.id, i),
             (y, y + CHOICE_ROW_H_U),
+            true,
             items,
         ) {
             pending.push(Event::Choice {
