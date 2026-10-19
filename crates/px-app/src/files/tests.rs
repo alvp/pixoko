@@ -746,6 +746,22 @@ fn los_errores_se_muestran_en_texto_no_vacio() {
     }
 }
 
+/// Unidad 14a-2 (decisión 9): el rechazo ya no depende de una textura de la GPU (el lado
+/// máximo es `Canvas::MAX_SIDE`), así que el texto deja de hablar de «una textura».
+#[test]
+fn too_large_to_show_habla_del_lado_maximo_mostrable_y_no_de_una_textura() {
+    let error = FileError::TooLargeToShow {
+        width: 20000,
+        height: 3,
+        max_side: 16384,
+    };
+    assert_eq!(
+        error.to_string(),
+        "la imagen de 20000×3 supera el lado máximo mostrable (16384)"
+    );
+    assert!(!error.to_string().contains("textura"));
+}
+
 // ---------------------------------------------------------------------------------------
 // Propiedad 4: un fallo de write_atomic no destruye el contenido anterior.
 // ---------------------------------------------------------------------------------------
