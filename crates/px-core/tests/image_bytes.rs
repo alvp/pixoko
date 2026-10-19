@@ -84,13 +84,17 @@ fn pixel_de_ejemplo(mode: Mode, k: usize) -> Pixel {
             k8.wrapping_mul(7).wrapping_add(1),
             k8.wrapping_mul(3),
             255 - k8,
-            if k % 3 == 0 { 0 } else { k8.wrapping_mul(5) },
+            if k.is_multiple_of(3) {
+                0
+            } else {
+                k8.wrapping_mul(5)
+            },
         )),
         Mode::Indexed => Pixel::Indexed((k % 3) as u8),
         Mode::Gray => Pixel::Gray(k8.wrapping_mul(11)),
         Mode::GrayAlpha => Pixel::GrayAlpha {
             gray: k8.wrapping_mul(11),
-            alpha: if k % 2 == 0 { 0 } else { k8 },
+            alpha: if k.is_multiple_of(2) { 0 } else { k8 },
         },
     }
 }
@@ -228,7 +232,7 @@ fn fila_03_rows_es_la_secuencia_de_row() {
         }
 
         // `.rev()` empieza por la última.
-        assert_eq!(img.rows().rev().next(), img.row(1), "{mode:?}");
+        assert_eq!(img.rows().next_back(), img.row(1), "{mode:?}");
         let al_reves: Vec<&[u8]> = img.rows().rev().collect();
         assert_eq!(al_reves, vec![img.row(1).unwrap(), img.row(0).unwrap()]);
 
@@ -551,9 +555,10 @@ fn fila_11_from_bytes_indexed_indices_paleta_y_longitud() {
             height: 2
         })
     );
+    // Indexado es un byte por píxel: 16385 × 16384 cabe, hay que desbordar de verdad.
     assert!(es_too_large(Image::from_bytes_indexed(
-        16385,
-        16384,
+        u32::MAX,
+        u32::MAX,
         Palette::new(),
         vec![]
     )));
@@ -694,7 +699,7 @@ proptest! {
         prop_assert_eq!(img.rows().len(), h as usize);
         let filas: Vec<&[u8]> = img.rows().collect();
         prop_assert_eq!(filas.concat(), esperados);
-        prop_assert_eq!(img.rows().rev().next(), img.row(h - 1));
+        prop_assert_eq!(img.rows().next_back(), img.row(h - 1));
 
         for y in 0..h {
             for x in 0..w {

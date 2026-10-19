@@ -15,7 +15,9 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn bytes_per_pixel(self) -> usize {
+    /// Bytes que ocupa un píxel en el almacenamiento de [`Image`]: RGBA 4, grises con alfa 2,
+    /// indexado y grises 1. Ver la tabla de [`Image::bytes`].
+    pub fn bytes_per_pixel(self) -> usize {
         match self {
             Mode::Rgba => 4,
             Mode::GrayAlpha => 2,
@@ -142,11 +144,6 @@ impl Image {
             data,
             palette,
         }
-    }
-
-    /// Los bytes de los píxeles, fila a fila, tal como los describe el tipo.
-    pub(crate) fn raw(&self) -> &[u8] {
-        &self.data
     }
 
     /// Bytes de píxeles más 4 por entrada de paleta: lo que ocupa la imagen en la historia.
@@ -310,6 +307,217 @@ impl Image {
         true
     }
 
+    /// Bytes que ocupa una fila: `width × bytes_per_pixel`. Como no hay relleno entre filas, es
+    /// también el paso entre una fila y la siguiente en [`Image::bytes`].
+    pub fn row_len(&self) -> usize {
+        // El producto cabe: `byte_len` lo comprobó al crear la imagen.
+        self.width as usize * self.mode.bytes_per_pixel()
+    }
+
+    /// Los bytes de los píxeles, de solo lectura y sin copiar. Su longitud es exactamente
+    /// `Image::byte_len(width, height, mode)`.
+    ///
+    /// Formato: filas de arriba abajo y, dentro de una fila, de izquierda a derecha, **sin relleno
+    /// entre filas**. El píxel `(x, y)` empieza en `(y × width + x) × bytes_per_pixel`. Cada canal
+    /// es de 8 bits, así que no hay orden de bytes que elegir.
+    ///
+    /// | Modo | Bytes por píxel | Orden |
+    /// | --- | --- | --- |
+    /// | `Rgba` | 4 | `r, g, b, a`; alfa directo, no premultiplicado; con `a = 0` el RGB se conserva tal cual |
+    /// | `Indexed` | 1 | el índice; siempre menor que `palette().len()`; el índice transparente no se resuelve |
+    /// | `Gray` | 1 | `gray` (opaco) |
+    /// | `GrayAlpha` | 2 | `gray, alpha` |
+    pub fn bytes(&self) -> &[u8] {
+        &self.data
+    }
+
+    /// La fila `y` (`row_len()` bytes, formato de [`Image::bytes`]), o `None` si `y >= height`.
+    /// No hace pánico, tampoco con `u32::MAX`.
+    pub fn row(&self, y: u32) -> Option<&[u8]> {
+        if y >= self.height {
+            return None;
+        }
+        let len = self.row_len();
+        let at = y as usize * len;
+        self.data.get(at..at + len)
+    }
+
+    /// Las `height` filas, de arriba abajo, cada una como en [`Image::row`].
+    pub fn rows(&self) -> impl ExactSizeIterator<Item = &[u8]> + DoubleEndedIterator + Clone {
+        // `row_len() >= 1` porque `width >= 1`: `chunks_exact` no entra en pánico.
+        self.data.chunks_exact(self.row_len())
+    }
+
+    /// Imagen de un modo que no necesita paleta con todos los píxeles iguales a `pixel` (guardado
+    /// tal cual, sin normalizar). Con `Pixel::Indexed(_)` usa [`Image::filled_indexed`].
+    ///
+    /// Errores, en este orden: `ZeroSize` y `TooLarge` (también si no se pudo reservar) y
+    /// `PaletteRequired`. Equivale a [`Image::new`] más `set_pixel` en cada píxel.
+    pub fn filled(width: u32, height: u32, pixel: Pixel) -> Result<Image, ImageError> {
+        let len = Image::byte_len(width, height, pixel.mode())?;
+        if pixel.mode() == Mode::Indexed {
+            return Err(ImageError::PaletteRequired);
+        }
+        Image::with_pixel(width, height, len, pixel, None)
+    }
+
+    /// Imagen indexada con todos los píxeles en `index`.
+    ///
+    /// Errores, en este orden: `ZeroSize` y `TooLarge`, `EmptyPalette` e
+    /// `IndexNotInPalette { index, len }` si `index >= palette.len()`.
+    pub fn filled_indexed(
+        width: u32,
+        height: u32,
+        palette: Palette,
+        index: u8,
+    ) -> Result<Image, ImageError> {
+        let len = Image::byte_len(width, height, Mode::Indexed)?;
+        if palette.is_empty() {
+            return Err(ImageError::EmptyPalette);
+        }
+        if usize::from(index) >= palette.len() {
+            return Err(ImageError::IndexNotInPalette {
+                index,
+                len: palette.len(),
+            });
+        }
+        Image::with_pixel(width, height, len, Pixel::Indexed(index), Some(palette))
+    }
+
+    /// Reserva `len` bytes y los llena repitiendo el píxel: un `memset` con un byte y, con más,
+    /// copias que doblan lo ya escrito. Quien llama ya comprobó `len` y, en indexado, el índice.
+    fn with_pixel(
+        width: u32,
+        height: u32,
+        len: usize,
+        pixel: Pixel,
+        palette: Option<Palette>,
+    ) -> Result<Image, ImageError> {
+        let (pattern, size) = match pixel {
+            Pixel::Rgba(c) => ([c.r, c.g, c.b, c.a], 4),
+            Pixel::GrayAlpha { gray, alpha } => ([gray, alpha, 0, 0], 2),
+            Pixel::Indexed(v) | Pixel::Gray(v) => ([v, 0, 0, 0], 1),
+        };
+        let mut data = Vec::new();
+        data.try_reserve_exact(len)
+            .map_err(|_| ImageError::TooLarge { width, height })?;
+        if size == 1 {
+            data.resize(len, pattern[0]);
+        } else {
+            data.extend_from_slice(&pattern[..size]);
+            while data.len() < len {
+                let more = data.len().min(len - data.len());
+                data.extend_from_within(..more);
+            }
+        }
+        Ok(Image {
+            width,
+            height,
+            mode: pixel.mode(),
+            data,
+            palette,
+        })
+    }
+
+    /// Copia de la imagen que no aborta el proceso si falta memoria: `TooLarge` si la reserva
+    /// falla. Es igual a `clone()` y no comparte memoria con el original.
+    pub fn try_clone(&self) -> Result<Image, ImageError> {
+        let mut data = Vec::new();
+        data.try_reserve_exact(self.data.len())
+            .map_err(|_| ImageError::TooLarge {
+                width: self.width,
+                height: self.height,
+            })?;
+        data.extend_from_slice(&self.data);
+        Ok(Image {
+            width: self.width,
+            height: self.height,
+            mode: self.mode,
+            data,
+            palette: self.palette.clone(),
+        })
+    }
+
+    /// Imagen a partir de sus bytes (formato de [`Image::bytes`]) en un modo que no necesita
+    /// paleta; con `Mode::Indexed` usa [`Image::from_bytes_indexed`]. Toma el `Vec` sin copiarlo.
+    ///
+    /// **Quien llama debe haber reservado `data` con `try_reserve` (o `try_reserve_exact`)**, no con
+    /// `vec![..]` ni con un `resize` a ciegas: una reserva que aborta el proceso no se puede
+    /// convertir en `Err`.
+    ///
+    /// Errores, en este orden: `ZeroSize` y `TooLarge` (antes de mirar `data`), `PaletteRequired`
+    /// (modo indexado) y `WrongLength { expected, found }` si `data.len()` no es
+    /// `Image::byte_len`. Con un error el `Vec` se descarta.
+    pub fn from_bytes(
+        width: u32,
+        height: u32,
+        mode: Mode,
+        data: Vec<u8>,
+    ) -> Result<Image, ImageError> {
+        let len = Image::byte_len(width, height, mode)?;
+        if mode == Mode::Indexed {
+            return Err(ImageError::PaletteRequired);
+        }
+        if data.len() != len {
+            return Err(ImageError::WrongLength {
+                expected: len,
+                found: data.len(),
+            });
+        }
+        Ok(Image {
+            width,
+            height,
+            mode,
+            data,
+            palette: None,
+        })
+    }
+
+    /// Como [`Image::from_bytes`] para una imagen indexada: cada byte es un índice y debe ser
+    /// menor que `palette.len()`. Toma el `Vec` sin copiarlo; **quien llama debe haberlo reservado
+    /// con `try_reserve` (o `try_reserve_exact`)**, como en `from_bytes`.
+    ///
+    /// Errores, en este orden: `ZeroSize` y `TooLarge` (antes de mirar `data`),
+    /// `WrongLength { expected, found }`, `EmptyPalette` e `IndexNotInPalette { index, len }`, con
+    /// el **mayor** índice encontrado. Con un error el `Vec` se descarta.
+    pub fn from_bytes_indexed(
+        width: u32,
+        height: u32,
+        palette: Palette,
+        data: Vec<u8>,
+    ) -> Result<Image, ImageError> {
+        let len = Image::byte_len(width, height, Mode::Indexed)?;
+        if data.len() != len {
+            return Err(ImageError::WrongLength {
+                expected: len,
+                found: data.len(),
+            });
+        }
+        if palette.is_empty() {
+            return Err(ImageError::EmptyPalette);
+        }
+        if let Some(&index) = data.iter().max()
+            && usize::from(index) >= palette.len()
+        {
+            return Err(ImageError::IndexNotInPalette {
+                index,
+                len: palette.len(),
+            });
+        }
+        Ok(Image {
+            width,
+            height,
+            mode: Mode::Indexed,
+            data,
+            palette: Some(palette),
+        })
+    }
+
+    /// Algún píxel vale `index`. Siempre `false` si la imagen no es indexada.
+    pub fn uses_index(&self, index: u8) -> bool {
+        self.mode == Mode::Indexed && self.data.contains(&index)
+    }
+
     pub fn width(&self) -> u32 {
         self.width
     }
@@ -416,6 +624,8 @@ pub enum ImageError {
     ModeMismatch { expected: Mode, found: Mode },
     /// `Pixel::Indexed(index)` con `index` mayor o igual que la longitud de la paleta.
     IndexNotInPalette { index: u8, len: usize },
+    /// `Image::from_bytes` con una cantidad de bytes distinta de la que pide el tamaño.
+    WrongLength { expected: usize, found: usize },
 }
 
 impl fmt::Display for ImageError {
@@ -451,6 +661,9 @@ impl fmt::Display for ImageError {
                 f,
                 "píxel de modo {found:?} en una imagen de modo {expected:?}"
             ),
+            ImageError::WrongLength { expected, found } => {
+                write!(f, "{found} bytes de píxeles en vez de {expected}")
+            }
             ImageError::IndexNotInPalette { index, len } => {
                 write!(f, "índice {index} fuera de una paleta de {len} colores")
             }

@@ -122,7 +122,7 @@ pub fn convert_image(
     if image.mode() == target {
         let mut data = Vec::new();
         data.try_reserve_exact(len).map_err(|_| too_large())?;
-        data.extend_from_slice(image.raw());
+        data.extend_from_slice(image.bytes());
         let palette = image.palette().cloned();
         return Ok(Conversion {
             image: Image::from_raw(width, height, target, data, palette),
@@ -204,7 +204,7 @@ impl<'a> Pixels<'a> {
         }
         Pixels {
             mode: image.mode(),
-            bytes: image.raw(),
+            bytes: image.bytes(),
             at: 0,
             table,
         }
