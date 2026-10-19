@@ -2,7 +2,7 @@
 
 Una línea por spec. Lee este índice y **solo las specs que la unidad cite expresamente**; no abras las demás «por si acaso». Las specs grandes (más de 150 líneas) se leen por secciones: «Casos», «Piezas» y «Visto bueno» suelen bastar. Al añadir una spec, añade su fila aquí en el mismo commit.
 
-Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *notas* = sin tests ni comportamiento propio. Crates tocados: sacados del historial de commits de la unidad (sin `docs/` ni `Cargo`).
+Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *pendiente de visto bueno* = spec escrita, sin código; *notas* = sin tests ni comportamiento propio. Crates tocados: sacados del historial de commits de la unidad (sin `docs/` ni `Cargo`).
 
 ## Hito 0
 
@@ -55,3 +55,4 @@ Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *notas* = sin
 | [hito-2-convertir-modo.md](hito-2-convertir-modo.md) | 2.20 | aprobada | `Imagen → Convertir modo…`: informe de `convert_image` sin tocar el documento, permisos explícitos, fondo del alfa elegido, un paso de deshacer; menú `Imagen` nuevo | px-app, px-ui |
 | [hito-2-motivo-y-marcadores.md](hito-2-motivo-y-marcadores.md) | 2.20b | aprobada | Motivo de bloqueo con todos los requisitos pendientes en una línea de 37 caracteres; opciones excluyentes redondas (aro y punto) distintas de las casillas | px-app, px-ui |
 | [hito-2-chunks-auxiliares.md](hito-2-chunks-auxiliares.md) | 2.13b | aprobada | Informe de los chunks auxiliares ignorados del PNG (`PngRead.aux`); con `iCCP` (o color no sRGB) `Ctrl+S` guarda una copia y el aviso lo explica; el resto solo se informa | px-formats, px-app |
+| [hito-2-image-filas-bytes.md](hito-2-image-filas-bytes.md) | 2.12 | aprobada | Acceso de solo lectura a los bytes y filas de `Image`; `filled`, `filled_indexed`, `try_clone`, `from_bytes` y `uses_index` sin romper invariantes; medidas y seis migraciones (`write_png`, `read_png`, `to_rgba8`, `to_rgba8_with_entry`, `uses_entry`, relleno de Nueva imagen) | px-core, px-formats, px-ui, px-app |
