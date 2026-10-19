@@ -12,6 +12,7 @@ mod dispatch;
 mod files;
 mod keys;
 mod licenses;
+mod new_image;
 mod session;
 mod title;
 mod window_min;

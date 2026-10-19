@@ -2182,3 +2182,352 @@ proptest! {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19: «Nueva imagen» (specs/hito-2-nueva-imagen.md, fila 9, parte de `dispatch`)
+// ---------------------------------------------------------------------------------------------
+//
+// - `Dispatched::NewImage` desde el menú, el botón y el atajo (`Ctrl+N`, `Cmd+N` en macOS): la
+//   misma acción, el mismo resultado y nada tocado (lo ejecuta `App`, como `Licenses`).
+// - Los cinco bloqueos (`gesture`, `dialog`, `text_focus`, `removal`, `modal`) la bloquean con
+//   cualquier origen y `enabled` es falso exactamente donde `dispatch` da `Blocked`; un gesto de
+//   verdad y una quita pendiente también.
+// - Con el diálogo de nueva imagen abierto todo está bloqueado salvo `Quit`, que lo abandona sin
+//   crear nada y sigue la regla de cierre de siempre.
+//
+// Suposición: `Dispatched::NewImage` es una variante sin datos (`Clone, Debug, PartialEq` ya los
+// tiene `Dispatched`).
+
+use crate::new_image::open_new_image;
+
+/// Las sesiones sin quita pendiente de la fila 13 (la quita bloquea esta acción y se prueba aparte).
+fn mundos_sin_quita() -> Vec<(&'static str, Mundo)> {
+    vec![
+        (
+            "indexada con historia y una edición deshecha",
+            Mundo::estandar(),
+        ),
+        (
+            "RGBA con historia y un paso deshecho",
+            Mundo::nuevo(rgba(), 3, 1),
+        ),
+        ("sin historia", Mundo::nuevo(rgba(), 0, 0)),
+    ]
+}
+
+fn command_de(plataforma: Platform) -> Modifiers {
+    if plataforma == Platform::Mac {
+        Modifiers {
+            mac_cmd: true,
+            command: true,
+            ..Modifiers::NONE
+        }
+    } else {
+        Modifiers {
+            ctrl: true,
+            command: true,
+            ..Modifiers::NONE
+        }
+    }
+}
+
+const PLATAFORMAS_DE_LA_19: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+
+/// Cada uno de los cinco bloqueos, solo.
+fn bloqueos_de_uno_en_uno() -> [(&'static str, Locks); 5] {
+    [
+        ("gesture", locks_con(|l| l.gesture = true)),
+        ("dialog", locks_con(|l| l.dialog = true)),
+        ("text_focus", locks_con(|l| l.text_focus = true)),
+        ("removal", locks_con(|l| l.removal = true)),
+        ("modal", locks_con(|l| l.modal = true)),
+    ]
+}
+
+#[test]
+fn fila_9_nueva_imagen_da_dispatched_new_image_con_cada_origen_y_no_toca_nada() {
+    for (nombre, mut mundo) in mundos_sin_quita() {
+        for origin in ORIGENES {
+            let antes = (mundo.foto(), extras(&mundo));
+            let resultado = mundo.despacha(AppAction::NewImage, origin);
+            assert_eq!(resultado, Dispatched::NewImage, "{nombre}, {origin:?}");
+            assert!(
+                !matches!(resultado, Dispatched::View(_)),
+                "{nombre}: no es zoom"
+            );
+            assert_eq!(
+                (mundo.foto(), extras(&mundo)),
+                antes,
+                "{nombre}, {origin:?}: despachar no toca nada (lo hace App)"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_9_menu_boton_y_atajo_dan_la_misma_accion_y_el_mismo_dispatched() {
+    // El menú: la entrada «Nueva imagen…» de la tabla.
+    let entrada = MENUS
+        .iter()
+        .flat_map(|m| m.items.iter())
+        .find(|item| item.label == "Nueva imagen…")
+        .expect("el menú tiene «Nueva imagen…»");
+    assert_eq!(entrada.action, AppAction::NewImage);
+
+    for plataforma in PLATAFORMAS_DE_LA_19 {
+        // El atajo: `command`+`N`.
+        let atajo = action_for_shortcut(Key::N, command_de(plataforma), plataforma);
+        assert_eq!(atajo, Some(AppAction::NewImage), "{plataforma:?}");
+
+        let mut por_menu = Mundo::estandar();
+        let mut por_atajo = Mundo::estandar();
+        let mut por_boton = Mundo::estandar();
+        let a = por_menu.despacha(entrada.action, Origin::Menu);
+        let b = por_atajo.despacha(atajo.expect("hay atajo"), Origin::Key);
+        let c = por_boton.despacha(AppAction::NewImage, Origin::Button);
+        assert_eq!(a, Dispatched::NewImage, "{plataforma:?}");
+        assert_eq!(a, b, "{plataforma:?}: menú y atajo");
+        assert_eq!(a, c, "{plataforma:?}: menú y botón");
+        assert_eq!(por_menu.foto(), por_atajo.foto());
+        assert_eq!(por_menu.foto(), por_boton.foto());
+    }
+}
+
+#[test]
+fn fila_9_la_tecla_n_solo_da_nueva_imagen_con_command_sin_mayus_ni_alt() {
+    for plataforma in PLATAFORMAS_DE_LA_19 {
+        for bits in 0..32u8 {
+            let m = modificadores_de_bits(bits);
+            let esperado = m.command && !m.shift && !m.alt;
+            let accion = action_for_shortcut(Key::N, m, plataforma);
+            assert_eq!(
+                accion == Some(AppAction::NewImage),
+                esperado,
+                "{plataforma:?}, modificadores {bits:05b}: {accion:?}"
+            );
+            // Y con la tecla que la lleva a `dispatch` pasa lo mismo.
+            if let Some(accion) = accion {
+                let mut mundo = Mundo::estandar();
+                let r = mundo.despacha(accion, Origin::Key);
+                assert_eq!(r == Dispatched::NewImage, esperado, "{bits:05b}");
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_9_cada_bloqueo_solo_bloquea_nueva_imagen_con_cualquier_origen_y_no_toca_nada() {
+    for (nombre, locks) in bloqueos_de_uno_en_uno() {
+        for origin in ORIGENES {
+            let mut mundo = Mundo::estandar();
+            let antes = (mundo.foto(), extras(&mundo));
+            assert_eq!(
+                mundo.despacha_con(AppAction::NewImage, origin, locks),
+                Dispatched::Blocked,
+                "{nombre}, {origin:?}"
+            );
+            assert!(is_blocked(AppAction::NewImage, locks, origin), "{nombre}");
+            assert_eq!(
+                (mundo.foto(), extras(&mundo)),
+                antes,
+                "{nombre}, {origin:?}: un NewImage bloqueado no toca nada"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_9_con_las_32_combinaciones_de_bloqueos_solo_pasa_sin_ninguno() {
+    for bits in 0..32u8 {
+        let locks = Locks {
+            gesture: bits & 1 != 0,
+            dialog: bits & 2 != 0,
+            text_focus: bits & 4 != 0,
+            removal: bits & 8 != 0,
+            modal: bits & 16 != 0,
+        };
+        for origin in ORIGENES {
+            let mut mundo = Mundo::estandar();
+            let esperado = if bits == 0 {
+                Dispatched::NewImage
+            } else {
+                Dispatched::Blocked
+            };
+            assert_eq!(
+                mundo.despacha_con(AppAction::NewImage, origin, locks),
+                esperado,
+                "{bits:05b}, {origin:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_9_enabled_es_falso_exactamente_donde_dispatch_da_blocked_con_origen_menu() {
+    for zoom in [None, Zoom::from_int(5)] {
+        for bits in 0..32u8 {
+            let locks = Locks {
+                gesture: bits & 1 != 0,
+                dialog: bits & 2 != 0,
+                text_focus: bits & 4 != 0,
+                removal: bits & 8 != 0,
+                modal: bits & 16 != 0,
+            };
+            let mut mundo = Mundo::estandar();
+            let estado = mundo.estado_de_la_ui(zoom, locks);
+            let bloqueada =
+                mundo.despacha_con(AppAction::NewImage, Origin::Menu, locks) == Dispatched::Blocked;
+            assert_eq!(
+                enabled(AppAction::NewImage, &estado),
+                !bloqueada,
+                "{bits:05b}, zoom {zoom:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_9_un_gesto_de_verdad_o_una_quita_pendiente_bloquean_nueva_imagen() {
+    // Un trazo en curso.
+    let mut mundo = Mundo::estandar();
+    empieza_un_trazo(&mut mundo);
+    let antes = mundo.foto();
+    assert_eq!(
+        mundo.despacha(AppAction::NewImage, Origin::Menu),
+        Dispatched::Blocked,
+        "trazo"
+    );
+    assert_eq!(mundo.foto(), antes);
+    assert!(!enabled(
+        AppAction::NewImage,
+        &mundo.estado_de_la_ui(Zoom::from_int(5), mundo.locks())
+    ));
+
+    // El deslizador del editor.
+    let mut mundo = Mundo::estandar();
+    pulsa_el_deslizador(&mut mundo);
+    assert_eq!(
+        mundo.despacha(AppAction::NewImage, Origin::Key),
+        Dispatched::Blocked,
+        "deslizador"
+    );
+
+    // El arrastre de una muestra.
+    let mut mundo = Mundo::estandar();
+    arrastra_una_muestra(&mut mundo);
+    assert_eq!(
+        mundo.despacha(AppAction::NewImage, Origin::Button),
+        Dispatched::Blocked,
+        "arrastre de muestra"
+    );
+
+    // Una quita de paleta pendiente: abrir un diálogo también se bloquea (regla literal de la 18).
+    let mut mundo = mundo_con_quita_pendiente();
+    assert!(mundo.locks().removal);
+    let antes = (mundo.foto(), extras(&mundo));
+    for origin in ORIGENES {
+        assert_eq!(
+            mundo.despacha(AppAction::NewImage, origin),
+            Dispatched::Blocked,
+            "quita pendiente, {origin:?}"
+        );
+    }
+    assert_eq!((mundo.foto(), extras(&mundo)), antes);
+    assert!(!enabled(
+        AppAction::NewImage,
+        &mundo.estado_de_la_ui(Zoom::from_int(5), mundo.locks())
+    ));
+}
+
+#[test]
+fn fila_9_con_el_dialogo_de_nueva_imagen_abierto_todo_esta_bloqueado_salvo_quit() {
+    let mut mundo = Mundo::estandar();
+    let mut modal = Modal::default();
+    assert!(open_new_image(&mut modal, 16384, mundo.locks()));
+    assert_eq!(modal.kind(), Some(ModalKind::NewImage));
+    let locks = con_modal(&mundo);
+    assert!(locks.modal);
+
+    let antes = (mundo.foto(), extras(&mundo));
+    for action in todas_las_acciones()
+        .into_iter()
+        .chain([AppAction::NewImage])
+    {
+        for origin in ORIGENES {
+            let esperado = match action {
+                AppAction::Quit => Dispatched::Quit,
+                // `CloseLicenses` no es de este diálogo, pero la regla (1) la deja pasar siempre.
+                AppAction::CloseLicenses => Dispatched::Licenses(false),
+                _ => Dispatched::Blocked,
+            };
+            assert_eq!(
+                mundo.despacha_con(action, origin, locks),
+                esperado,
+                "{action:?}, {origin:?}"
+            );
+        }
+    }
+    assert_eq!(
+        (mundo.foto(), extras(&mundo)),
+        antes,
+        "con el diálogo abierto el documento no cambia"
+    );
+}
+
+#[test]
+fn fila_9_un_dialogo_abierto_no_deja_abrir_otro_ni_otra_nueva_imagen() {
+    let mundo = Mundo::estandar();
+    let mut modal = Modal::default();
+    assert!(open_new_image(&mut modal, 16384, mundo.locks()));
+    assert!(
+        !open_new_image(&mut modal, 16384, mundo.locks()),
+        "ya hay uno abierto"
+    );
+    assert!(!abre_licencias(&mut modal));
+    assert_eq!(modal.kind(), Some(ModalKind::NewImage));
+}
+
+#[test]
+fn fila_9_cada_bloqueo_impide_abrir_el_dialogo_de_nueva_imagen() {
+    for (nombre, locks) in bloqueos_de_uno_en_uno() {
+        let mut modal = Modal::default();
+        assert!(!open_new_image(&mut modal, 16384, locks), "{nombre}");
+        assert!(!modal.is_open(), "{nombre}");
+    }
+    let mut modal = Modal::default();
+    assert!(open_new_image(&mut modal, 16384, Locks::default()));
+}
+
+#[test]
+fn fila_9_quit_con_el_dialogo_abierto_lo_abandona_y_sigue_la_regla_de_cierre() {
+    for modified in [false, true] {
+        let mut mundo = Mundo::estandar();
+        let mut modal = Modal::default();
+        let mut confirm = Confirm::new();
+        assert!(open_new_image(&mut modal, 16384, mundo.locks()));
+        let locks = con_modal(&mundo);
+
+        // `Quit` pasa con el diálogo abierto, con cualquier origen.
+        for origin in ORIGENES {
+            assert_eq!(
+                mundo.despacha_con(AppAction::Quit, origin, locks),
+                Dispatched::Quit,
+                "{origin:?}"
+            );
+        }
+        // `App` lo abandona sin reacción y pregunta a la regla de cierre.
+        let antes = (mundo.foto(), extras(&mundo));
+        assert!(modal.abandon());
+        assert!(!modal.is_open());
+        let cierra = close_allowed(modified, &mut confirm, 0.0);
+        assert_eq!(cierra, !modified, "primera petición, modified {modified}");
+        if modified {
+            assert!(close_allowed(true, &mut confirm, 1.0), "la segunda cierra");
+        }
+        assert_eq!(
+            (mundo.foto(), extras(&mundo)),
+            antes,
+            "no se creó nada: la sesión es la de antes"
+        );
+    }
+}

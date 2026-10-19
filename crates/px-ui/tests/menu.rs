@@ -651,3 +651,119 @@ proptest! {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19: «Nueva imagen…» (specs/hito-2-nueva-imagen.md, fila 9, parte del menú)
+// ---------------------------------------------------------------------------------------------
+//
+// El menú ya está adaptado en las pruebas de la fila 1 (rótulos, orden y texto de los atajos): aquí
+// solo `shortcut_for` y `shortcut_text` de la acción nueva por plataforma y su `enabled`.
+
+#[test]
+fn fila_9_shortcut_for_nueva_imagen_es_command_n_en_las_tres_plataformas() {
+    for (platform, texto) in [
+        (Platform::Linux, "Ctrl+N"),
+        (Platform::Windows, "Ctrl+N"),
+        (Platform::Mac, "Cmd+N"),
+    ] {
+        let shortcut = shortcut_for(AppAction::NewImage, platform)
+            .unwrap_or_else(|| panic!("{platform:?}: Nueva imagen… tiene atajo"));
+        assert_eq!(
+            shortcut,
+            atajo(Key::N, true, false).unwrap(),
+            "{platform:?}"
+        );
+        assert_eq!(shortcut_text(shortcut, platform), texto, "{platform:?}");
+    }
+}
+
+#[test]
+fn fila_9_nueva_imagen_esta_en_archivo_la_primera_con_su_accion() {
+    let archivo = MENUS
+        .iter()
+        .find(|m| m.title == "Archivo")
+        .expect("Archivo");
+    let primera = archivo.items.first().expect("Archivo tiene entradas");
+    assert_eq!(primera.label, "Nueva imagen…");
+    assert_eq!(primera.action, AppAction::NewImage);
+    assert!(!primera.separator_before);
+    // En ningún otro menú.
+    let veces = MENUS
+        .iter()
+        .flat_map(|m| m.items.iter())
+        .filter(|item| item.action == AppAction::NewImage)
+        .count();
+    assert_eq!(veces, 1);
+}
+
+#[test]
+fn fila_9_enabled_de_nueva_imagen_no_depende_de_la_historia_ni_del_zoom() {
+    for can_undo in [false, true] {
+        for can_redo in [false, true] {
+            for zoom in [
+                None,
+                Zoom::from_int(1),
+                x5(),
+                Some(Zoom::MIN),
+                Some(Zoom::MAX),
+            ] {
+                let state = estado(can_undo, can_redo, zoom);
+                assert!(
+                    enabled(AppAction::NewImage, &state),
+                    "undo {can_undo}, redo {can_redo}, zoom {zoom:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_9_enabled_de_nueva_imagen_esta_deshabilitado_con_cada_bloqueo() {
+    for (nombre, locks) in [
+        (
+            "gesture",
+            Locks {
+                gesture: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "dialog",
+            Locks {
+                dialog: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "text_focus",
+            Locks {
+                text_focus: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "removal",
+            Locks {
+                removal: true,
+                ..Locks::default()
+            },
+        ),
+        (
+            "modal",
+            Locks {
+                modal: true,
+                ..Locks::default()
+            },
+        ),
+    ] {
+        let state = UiState {
+            locks,
+            ..estado(true, true, x5())
+        };
+        assert!(!enabled(AppAction::NewImage, &state), "{nombre}");
+        assert!(
+            is_blocked(AppAction::NewImage, locks, Origin::Menu),
+            "{nombre}"
+        );
+    }
+}

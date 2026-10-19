@@ -320,4 +320,6 @@ pub fn unavailable_notice(kind: DialogKind) -> String {
 }
 
 #[cfg(test)]
+mod new_gate_tests;
+#[cfg(test)]
 mod tests;

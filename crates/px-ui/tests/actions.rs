@@ -802,3 +802,175 @@ fn fila_3b_num1_con_mayus_alt_o_combinados_da_none() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19: `AppAction::NewImage` (specs/hito-2-nueva-imagen.md, fila 9, parte de la capa de acciones)
+// ---------------------------------------------------------------------------------------------
+//
+// `ignores_repeat`, `opens_dialog`, `is_blocked`, `enabled`, `shortcut_for` y `action_for_shortcut`
+// con la acción nueva. Las pruebas de la 17 que enumeran listas fijas de acciones no la incluyen y
+// no cambian; las dos que sí cambian (el oráculo de `action_for_shortcut` y la cuenta de atajos
+// mostrados) ya están adaptadas.
+
+#[test]
+fn fila_9_nueva_imagen_no_repite_con_la_tecla_mantenida() {
+    assert!(AppAction::NewImage.ignores_repeat());
+    // Y la lista completa pasa a ser las cuatro de fichero y esta.
+    let mut todas = todas_las_acciones();
+    todas.push(AppAction::NewImage);
+    for action in todas {
+        let esperado = matches!(
+            action,
+            AppAction::Open
+                | AppAction::Save
+                | AppAction::SaveAs
+                | AppAction::Quit
+                | AppAction::NewImage
+        );
+        assert_eq!(action.ignores_repeat(), esperado, "{action:?}");
+    }
+}
+
+#[test]
+fn fila_9_nueva_imagen_abre_un_dialogo_y_no_es_zoom() {
+    assert!(AppAction::NewImage.opens_dialog());
+    assert!(!AppAction::NewImage.is_zoom());
+    let mut todas = todas_las_acciones();
+    todas.push(AppAction::NewImage);
+    for action in todas {
+        let esperado = matches!(action, AppAction::ShowLicenses | AppAction::NewImage);
+        assert_eq!(action.opens_dialog(), esperado, "{action:?}");
+    }
+}
+
+#[test]
+fn fila_9_is_blocked_de_nueva_imagen_la_frena_cualquier_bloqueo_con_cualquier_origen() {
+    for origin in ORIGENES {
+        assert!(
+            !is_blocked(AppAction::NewImage, Locks::default(), origin),
+            "{origin:?} sin bloqueos"
+        );
+        for (nombre, locks) in [
+            ("gesture", solo(|l| l.gesture = true)),
+            ("dialog", solo(|l| l.dialog = true)),
+            ("text_focus", solo(|l| l.text_focus = true)),
+            // Regla literal de la 18: la quita pendiente también frena abrir un diálogo.
+            ("removal", solo(|l| l.removal = true)),
+            ("modal", solo(|l| l.modal = true)),
+        ] {
+            assert!(
+                is_blocked(AppAction::NewImage, locks, origin),
+                "{nombre}, {origin:?}"
+            );
+        }
+    }
+    for bits in 1..32u8 {
+        for origin in ORIGENES {
+            assert!(
+                is_blocked(AppAction::NewImage, bloqueos(bits), origin),
+                "{bits:05b}, {origin:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_9_enabled_de_nueva_imagen_es_lo_contrario_de_is_blocked_con_origen_menu() {
+    for zoom in [None, zoom_x5()] {
+        for bits in 0..32u8 {
+            let locks = bloqueos(bits);
+            let state = estado(zoom, locks);
+            assert_eq!(
+                enabled(AppAction::NewImage, &state),
+                !is_blocked(AppAction::NewImage, locks, Origin::Menu),
+                "{bits:05b}, zoom {zoom:?}"
+            );
+        }
+    }
+    // Sin historia ni zoom, con todo en reposo, sigue habilitada.
+    let state = UiState {
+        can_undo: false,
+        can_redo: false,
+        zoom: None,
+        tool: Tool::Pencil,
+        locks: Locks::default(),
+    };
+    assert!(enabled(AppAction::NewImage, &state));
+}
+
+#[test]
+fn fila_9_shortcut_for_de_nueva_imagen_va_y_vuelve_por_action_for_shortcut() {
+    for platform in PLATAFORMAS {
+        let shortcut = shortcut_for(AppAction::NewImage, platform).expect("tiene atajo");
+        assert_eq!(
+            shortcut,
+            Shortcut {
+                key: Key::N,
+                command: true,
+                shift: false
+            },
+            "{platform:?}"
+        );
+        assert_eq!(
+            action_for_shortcut(shortcut.key, pulsado(shortcut, platform), platform),
+            Some(AppAction::NewImage),
+            "{platform:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola_no() {
+    for platform in PLATAFORMAS {
+        let command = modificadores_command(platform == Platform::Mac);
+        assert_eq!(
+            action_for_shortcut(Key::N, command, platform),
+            Some(AppAction::NewImage),
+            "command+N en {platform:?}"
+        );
+        let command_mayus = Modifiers {
+            shift: true,
+            ..command
+        };
+        let command_alt = Modifiers {
+            alt: true,
+            ..command
+        };
+        let command_mayus_alt = Modifiers {
+            shift: true,
+            alt: true,
+            ..command
+        };
+        for (nombre, m) in [
+            ("N sola", Modifiers::NONE),
+            ("Mayús+N", Modifiers::SHIFT),
+            ("Alt+N", Modifiers::ALT),
+            ("command+Mayús+N", command_mayus),
+            ("command+Alt+N", command_alt),
+            ("command+Mayús+Alt+N", command_mayus_alt),
+        ] {
+            assert_eq!(
+                action_for_shortcut(Key::N, m, platform),
+                None,
+                "{nombre} en {platform:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_9_n_con_ctrl_o_mac_cmd_pero_sin_command_no_es_el_atajo() {
+    // `command` es lo que cuenta: en macOS, `Ctrl` solo no lo activa.
+    let ctrl_solo = Modifiers {
+        ctrl: true,
+        ..Modifiers::NONE
+    };
+    let cmd_solo = Modifiers {
+        mac_cmd: true,
+        ..Modifiers::NONE
+    };
+    for platform in PLATAFORMAS {
+        assert_eq!(action_for_shortcut(Key::N, ctrl_solo, platform), None);
+        assert_eq!(action_for_shortcut(Key::N, cmd_solo, platform), None);
+    }
+}

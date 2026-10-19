@@ -2037,3 +2037,547 @@ fn propiedad_2_los_ocultos_conservan_lo_escrito_en_una_secuencia_fija() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19 (specs/hito-2-nueva-imagen.md, D9 y fila 12): tres ampliaciones aditivas del motor
+// ---------------------------------------------------------------------------------------------
+//
+// - E1: `shown_when` transitivo (un campo con el control oculto está oculto aunque el control
+//   conserve la opción que lo muestra).
+// - E2: `Dialog::set_report(id, texto) -> bool`, el texto de un campo `ReadOnly`.
+// - E3: `Dialog::set_limit_note(id, nota) -> bool`, el `Above { max }` de un numérico pasa a decir
+//   `máximo N (nota)`.
+// - Más `DialogKind::NewImage`.
+//
+// Ninguna prueba anterior de este fichero cambia (esta sección solo añade). Suposición: el texto
+// de un campo `ReadOnly` se lee de `Dialog::spec()` (el `FieldKind::ReadOnly { text, .. }` del
+// campo): `set_report` lo cambia ahí, que es donde `content_h_u` lo mide. Se usan los ayudantes de
+// arriba (`open`, `campo`, `numerico`, `spec_con`, `numero`, `elige`, `hex`).
+
+const MODOS_19: &[&str] = &["Uno", "Dos", "Tres"];
+const FONDOS_19: &[&str] = &["Transparente", "Blanco", "Negro", "Color…"];
+
+fn campo_si(
+    id: &'static str,
+    label: &'static str,
+    kind: FieldKind,
+    control: &'static str,
+    opcion: usize,
+) -> FieldSpec {
+    FieldSpec {
+        id,
+        label,
+        kind,
+        shown_when: Some(ShowWhen {
+            field: control,
+            choice: opcion,
+        }),
+    }
+}
+
+/// `modo` (por defecto la opción 1) → `fondo` (se ve con `modo` = 1) → `color` (se ve con
+/// `fondo` = 3) → `informe`: la cadena de dos niveles del formulario de nueva imagen.
+fn spec_en_cadena() -> FormSpec {
+    spec_con(vec![
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: MODOS_19,
+                default: 1,
+            },
+        ),
+        campo_si(
+            "fondo",
+            "Fondo",
+            FieldKind::Choice {
+                options: FONDOS_19,
+                default: 0,
+            },
+            "modo",
+            1,
+        ),
+        campo_si(
+            "color",
+            "Color",
+            FieldKind::Hex {
+                mode: Mode::Rgba,
+                default: Rgba::opaque(0x80, 0x80, 0x80),
+            },
+            "fondo",
+            3,
+        ),
+        campo(
+            "informe",
+            "Informe",
+            FieldKind::ReadOnly {
+                text: "uno".to_string(),
+                rows: Rows::Fixed(4),
+            },
+        ),
+    ])
+}
+
+fn en_cadena() -> Dialog {
+    open(spec_en_cadena())
+}
+
+// --- E1 ---
+
+#[test]
+fn fila_12_e1_la_cadena_de_ejemplo_es_una_spec_valida() {
+    spec_en_cadena().validate().expect("spec válida");
+    assert!(Dialog::new(DialogKind::NewImage, spec_en_cadena()).is_ok());
+}
+
+#[test]
+fn fila_12_e1_un_campo_con_el_control_oculto_esta_oculto_aunque_el_control_valga_la_opcion() {
+    let mut d = en_cadena();
+    // Inicio: modo = 1 → fondo se ve; fondo = 0 → color no.
+    assert!(d.is_shown("fondo"));
+    assert!(!d.is_shown("color"));
+    elige(&mut d, "fondo", 3);
+    assert!(d.is_shown("color"), "fondo = 3 con el modo que lo muestra");
+
+    // Se oculta el control (`fondo`): `color` también, aunque `fondo` siga valiendo 3.
+    elige(&mut d, "modo", 0);
+    assert!(!d.is_shown("fondo"));
+    assert!(
+        !d.is_shown("color"),
+        "el control de color (fondo) está oculto: color también"
+    );
+
+    // Y vuelven juntos al volver el modo.
+    elige(&mut d, "modo", 1);
+    assert!(d.is_shown("fondo"));
+    assert!(d.is_shown("color"), "fondo conservaba el 3");
+}
+
+#[test]
+fn fila_12_e1_la_visibilidad_de_cada_combinacion_de_modo_y_fondo() {
+    for modo in 0..3 {
+        for fondo in 0..4 {
+            let mut d = en_cadena();
+            elige(&mut d, "modo", modo);
+            elige(&mut d, "fondo", fondo);
+            assert!(d.is_shown("modo"), "modo {modo}, fondo {fondo}");
+            assert!(d.is_shown("informe"), "modo {modo}, fondo {fondo}");
+            assert_eq!(d.is_shown("fondo"), modo == 1, "modo {modo}, fondo {fondo}");
+            assert_eq!(
+                d.is_shown("color"),
+                modo == 1 && fondo == 3,
+                "modo {modo}, fondo {fondo}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_12_e1_un_campo_oculto_por_transitividad_conserva_lo_escrito() {
+    let mut d = en_cadena();
+    elige(&mut d, "fondo", 3);
+    hex(&mut d, "color", "#12345");
+    for modo in [0, 2, 1, 0, 1] {
+        elige(&mut d, "modo", modo);
+        assert_eq!(
+            d.text("color"),
+            Some("#12345".to_string()),
+            "modo {modo}: lo escrito se conserva oculto"
+        );
+    }
+    assert!(d.hex_pending("color"));
+}
+
+#[test]
+fn fila_12_e1_lo_oculto_por_transitividad_no_cuenta_en_validez_valores_ni_foco() {
+    let mut d = en_cadena();
+    elige(&mut d, "fondo", 3);
+    hex(&mut d, "color", "zz");
+    assert!(!d.is_valid(), "con el hexadecimal visible e inválido");
+    assert!(d.any_hex_pending());
+    let alto_visible = d.content_h_u();
+
+    elige(&mut d, "modo", 0);
+    // Ya no cuenta: ni la validez, ni el pendiente, ni el motivo.
+    assert!(d.is_valid(), "{:?}", d.reason());
+    assert_eq!(d.reason(), None);
+    assert!(!d.any_hex_pending());
+    assert_eq!(d.validity("fondo"), None);
+    assert_eq!(d.validity("color"), None);
+
+    // Ni los valores, ni lo que entrega `Accept`.
+    let values = d.values().expect("valores");
+    assert_eq!(values.choice("modo"), Some(0));
+    assert_eq!(values.get("fondo"), None);
+    assert_eq!(values.get("color"), None);
+    match d.clone().event(Event::Accept) {
+        Reaction::Accepted(v) => {
+            assert_eq!(v.get("fondo"), None);
+            assert_eq!(v.get("color"), None);
+        }
+        r => panic!("se esperaba Accepted y salió {r:?}"),
+    }
+
+    // Ni el orden de foco, ni el alto del contenido.
+    let orden = px_ui::dialog_keys::focus_order(&d);
+    for &objetivo in &orden {
+        match objetivo {
+            FocusTarget::Field(id)
+            | FocusTarget::Option(id, _)
+            | FocusTarget::Minus(id)
+            | FocusTarget::Plus(id)
+            | FocusTarget::Zone(id) => {
+                assert!(
+                    d.is_shown(id),
+                    "{objetivo:?} está oculto y está en el orden"
+                )
+            }
+            FocusTarget::Accept | FocusTarget::Cancel => {}
+        }
+    }
+    assert!(!orden.contains(&FocusTarget::Field("color")));
+    assert!(!orden.contains(&FocusTarget::Option("fondo", 0)));
+    assert!(d.content_h_u() < alto_visible);
+}
+
+#[test]
+fn fila_12_e1_una_cadena_de_cuatro_niveles_se_oculta_entera_con_el_primer_control() {
+    const SI_NO: &[&str] = &["No", "Si"];
+    let eleccion = |default| FieldKind::Choice {
+        options: SI_NO,
+        default,
+    };
+    let spec = spec_con(vec![
+        campo("a", "A", eleccion(1)),
+        campo_si("b", "B", eleccion(1), "a", 1),
+        campo_si("c", "C", eleccion(1), "b", 1),
+        campo_si("d", "D", eleccion(1), "c", 1),
+    ]);
+    spec.validate().expect("spec válida");
+    let mut d = open(spec);
+    for id in ["a", "b", "c", "d"] {
+        assert!(d.is_shown(id), "todo a 1: {id} se ve");
+    }
+    elige(&mut d, "a", 0);
+    assert!(d.is_shown("a"));
+    for id in ["b", "c", "d"] {
+        assert!(!d.is_shown(id), "a = 0 oculta {id} aunque valga 1");
+    }
+    elige(&mut d, "a", 1);
+    elige(&mut d, "c", 0);
+    assert!(d.is_shown("b") && d.is_shown("c"));
+    assert!(!d.is_shown("d"), "c = 0 oculta d");
+}
+
+#[test]
+fn fila_12_e1_con_el_control_visible_todo_sigue_como_antes() {
+    // El caso de un solo nivel de la unidad 18 no cambia: oculto solo si la opción no vale.
+    let mut d = dialog();
+    assert!(!d.is_shown("color"));
+    elige(&mut d, "modo", 2);
+    assert!(d.is_shown("color"));
+    elige(&mut d, "modo", 1);
+    assert!(!d.is_shown("color"));
+}
+
+#[test]
+fn fila_12_dialog_kind_new_image_abre_un_dialogo_y_se_cierra_por_su_tipo() {
+    let d = Dialog::new(DialogKind::NewImage, spec_en_cadena()).expect("spec válida");
+    assert_eq!(d.kind(), DialogKind::NewImage);
+    assert_ne!(DialogKind::NewImage, DialogKind::Licenses);
+    assert_ne!(DialogKind::NewImage, DialogKind::Demo);
+
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::NewImage, spec_en_cadena(), Locks::default()));
+    assert_eq!(modal.kind(), Some(DialogKind::NewImage));
+    assert!(!modal.close_kind(DialogKind::Licenses), "es de otro tipo");
+    assert!(modal.is_open());
+    assert!(modal.close_kind(DialogKind::NewImage));
+    assert!(!modal.is_open());
+}
+
+// --- E2 ---
+
+/// El texto de un campo `ReadOnly`, leído de la spec del diálogo.
+fn texto_del_informe_de(d: &Dialog, id: &str) -> Option<String> {
+    d.spec().fields.iter().find_map(|f| match &f.kind {
+        FieldKind::ReadOnly { text, .. } if f.id == id => Some(text.clone()),
+        _ => None,
+    })
+}
+
+/// Un informe con `lineas` líneas «linea N».
+fn lineas(n: usize) -> String {
+    (1..=n)
+        .map(|i| format!("linea {i}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn fila_12_e2_set_report_cambia_el_texto_de_un_read_only() {
+    let mut d = en_cadena();
+    assert_eq!(texto_del_informe_de(&d, "informe"), Some("uno".to_string()));
+    assert!(d.set_report("informe", "otro texto".to_string()));
+    assert_eq!(
+        texto_del_informe_de(&d, "informe"),
+        Some("otro texto".to_string())
+    );
+    assert!(d.set_report("informe", String::new()));
+    assert_eq!(texto_del_informe_de(&d, "informe"), Some(String::new()));
+}
+
+#[test]
+fn fila_12_e2_set_report_cambia_el_alto_del_contenido_con_el_numero_de_lineas() {
+    let mut d = en_cadena();
+    let una = d.content_h_u();
+    // 14 u por fila hasta las 4 de `Rows::Fixed(4)`; una vacía cuenta como una línea.
+    for (n, extra) in [(1, 0), (2, 14), (3, 28), (4, 42), (5, 42), (9, 42)] {
+        assert!(d.set_report("informe", lineas(n)));
+        assert_eq!(d.content_h_u(), una + extra, "{n} líneas");
+    }
+    assert!(d.set_report("informe", String::new()));
+    assert_eq!(d.content_h_u(), una, "vacío mide como una línea");
+    assert!(d.set_report("informe", lineas(3)));
+    assert!(d.set_report("informe", "uno".to_string()));
+    assert_eq!(d.content_h_u(), una, "vuelve al alto de una línea");
+}
+
+#[test]
+fn fila_12_e2_set_report_no_cambia_valores_validez_ni_los_demas_campos() {
+    let mut d = en_cadena();
+    elige(&mut d, "fondo", 3);
+    hex(&mut d, "color", "#abc");
+    let valores = d.values();
+    let motivo = d.reason();
+    let color = d.text("color");
+    let visibles: Vec<bool> = ["modo", "fondo", "color", "informe"]
+        .iter()
+        .map(|id| d.is_shown(id))
+        .collect();
+    assert!(d.set_report("informe", lineas(3)));
+    assert_eq!(d.values(), valores);
+    assert_eq!(d.reason(), motivo);
+    assert_eq!(d.text("color"), color);
+    let ahora: Vec<bool> = ["modo", "fondo", "color", "informe"]
+        .iter()
+        .map(|id| d.is_shown(id))
+        .collect();
+    assert_eq!(ahora, visibles);
+}
+
+#[test]
+fn fila_12_e2_set_report_da_false_si_el_campo_no_existe_o_no_es_read_only_y_no_cambia_nada() {
+    let mut d = open(spec_con(vec![
+        numerico("ancho", "Ancho", 1, 100, 64),
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: MODOS_19,
+                default: 0,
+            },
+        ),
+        campo("opaco", "Opaco", FieldKind::Check { default: false }),
+        campo(
+            "color",
+            "Color",
+            FieldKind::Hex {
+                mode: Mode::Rgba,
+                default: Rgba::opaque(1, 2, 3),
+            },
+        ),
+        campo(
+            "informe",
+            "Informe",
+            FieldKind::ReadOnly {
+                text: "uno".to_string(),
+                rows: Rows::Fixed(2),
+            },
+        ),
+    ]));
+    let antes = d.clone();
+    for id in ["inexistente", "ancho", "modo", "opaco", "color", ""] {
+        assert!(!d.set_report(id, "x".to_string()), "{id:?}");
+        assert_eq!(d, antes, "{id:?}: no cambió nada");
+    }
+    assert!(d.set_report("informe", "x".to_string()), "el ReadOnly sí");
+    assert_ne!(d, antes);
+}
+
+// --- E3 ---
+
+fn dos_numericos() -> Dialog {
+    open(spec_con(vec![
+        numerico("ancho", "Ancho", 1, 4096, 64),
+        numerico("alto", "Alto", 1, 4096, 64),
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: MODOS_19,
+                default: 0,
+            },
+        ),
+    ]))
+}
+
+fn invalido(texto: &str) -> Option<Validity> {
+    Some(Validity::Invalid(texto.to_string()))
+}
+
+#[test]
+fn fila_12_e3_set_limit_note_cambia_el_texto_de_above_a_maximo_n_nota() {
+    let mut d = dos_numericos();
+    numero(&mut d, "ancho", "4097");
+    assert_eq!(d.validity("ancho"), invalido("máximo 4096"), "sin nota");
+    assert_eq!(d.reason(), Some("Ancho: máximo 4096".to_string()));
+
+    assert!(d.set_limit_note("ancho", Some("tarjeta gráfica")));
+    assert_eq!(
+        d.validity("ancho"),
+        invalido("máximo 4096 (tarjeta gráfica)")
+    );
+    assert_eq!(
+        d.reason(),
+        Some("Ancho: máximo 4096 (tarjeta gráfica)".to_string())
+    );
+
+    assert!(d.set_limit_note("ancho", Some("otra nota")));
+    assert_eq!(d.validity("ancho"), invalido("máximo 4096 (otra nota)"));
+}
+
+#[test]
+fn fila_12_e3_none_devuelve_el_texto_de_siempre_y_restaura_el_dialogo() {
+    let original = dos_numericos();
+    let mut d = original.clone();
+    assert!(d.set_limit_note("ancho", Some("tarjeta gráfica")));
+    assert_ne!(d, original, "la nota se guarda");
+    numero(&mut d, "ancho", "4097");
+    assert_eq!(
+        d.validity("ancho"),
+        invalido("máximo 4096 (tarjeta gráfica)")
+    );
+    assert!(d.set_limit_note("ancho", None));
+    assert_eq!(d.validity("ancho"), invalido("máximo 4096"));
+    numero(&mut d, "ancho", "64");
+    assert_eq!(
+        d, original,
+        "sin nota y con el texto inicial es el de partida"
+    );
+}
+
+#[test]
+fn fila_12_e3_solo_afecta_al_campo_pedido() {
+    let mut d = dos_numericos();
+    assert!(d.set_limit_note("ancho", Some("tarjeta gráfica")));
+    numero(&mut d, "alto", "4097");
+    assert_eq!(
+        d.validity("alto"),
+        invalido("máximo 4096"),
+        "alto no tiene nota"
+    );
+    assert!(d.set_limit_note("alto", Some("tarjeta gráfica")));
+    assert_eq!(
+        d.validity("alto"),
+        invalido("máximo 4096 (tarjeta gráfica)")
+    );
+    assert_eq!(
+        d.reason(),
+        Some("Alto: máximo 4096 (tarjeta gráfica)".to_string())
+    );
+}
+
+#[test]
+fn fila_12_e3_los_demas_errores_no_cambian_con_nota() {
+    let mut d = dos_numericos();
+    assert!(d.set_limit_note("ancho", Some("tarjeta gráfica")));
+    for (texto, esperado) in [
+        ("0", invalido("mínimo 1")),
+        ("", invalido("escribe un número")),
+        ("abc", invalido("solo dígitos 0-9")),
+        ("12345678901", invalido("máximo 10 cifras")),
+        ("1", Some(Validity::Valid)),
+        ("4096", Some(Validity::Valid)),
+        ("4097", invalido("máximo 4096 (tarjeta gráfica)")),
+        ("99999999", invalido("máximo 4096 (tarjeta gráfica)")),
+    ] {
+        numero(&mut d, "ancho", texto);
+        assert_eq!(d.validity("ancho"), esperado, "texto {texto:?}");
+    }
+}
+
+#[test]
+fn fila_12_e3_la_nota_sobrevive_a_los_eventos_del_campo() {
+    let mut d = dos_numericos();
+    assert!(d.set_limit_note("ancho", Some("tarjeta gráfica")));
+    numero(&mut d, "ancho", "5000");
+    assert_eq!(
+        d.validity("ancho"),
+        invalido("máximo 4096 (tarjeta gráfica)")
+    );
+    // `+` y `−` desde un valor inválido dejan el valor por defecto (válido).
+    assert_eq!(
+        d.event(Event::Step {
+            field: "ancho",
+            delta: 1
+        }),
+        Reaction::None
+    );
+    assert_eq!(d.validity("ancho"), Some(Validity::Valid));
+    numero(&mut d, "ancho", "5000");
+    assert_eq!(
+        d.validity("ancho"),
+        invalido("máximo 4096 (tarjeta gráfica)"),
+        "la nota seguía puesta"
+    );
+}
+
+#[test]
+fn fila_12_e3_no_cambia_el_alto_ni_los_valores() {
+    let mut d = dos_numericos();
+    let alto = d.content_h_u();
+    let valores = d.values();
+    assert!(d.set_limit_note("ancho", Some("tarjeta gráfica")));
+    assert_eq!(d.content_h_u(), alto);
+    assert_eq!(d.values(), valores);
+}
+
+#[test]
+fn fila_12_e3_set_limit_note_da_false_si_el_campo_no_existe_o_no_es_numerico() {
+    let mut d = open(spec_con(vec![
+        numerico("ancho", "Ancho", 1, 4096, 64),
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: MODOS_19,
+                default: 0,
+            },
+        ),
+        campo("opaco", "Opaco", FieldKind::Check { default: false }),
+        campo(
+            "color",
+            "Color",
+            FieldKind::Hex {
+                mode: Mode::Rgba,
+                default: Rgba::opaque(1, 2, 3),
+            },
+        ),
+        campo(
+            "informe",
+            "Informe",
+            FieldKind::ReadOnly {
+                text: "uno".to_string(),
+                rows: Rows::Fixed(2),
+            },
+        ),
+    ]));
+    let antes = d.clone();
+    for id in ["inexistente", "modo", "opaco", "color", "informe", ""] {
+        assert!(!d.set_limit_note(id, Some("nota")), "{id:?} con nota");
+        assert!(!d.set_limit_note(id, None), "{id:?} sin nota");
+        assert_eq!(d, antes, "{id:?}: no cambió nada");
+    }
+    assert!(d.set_limit_note("ancho", Some("nota")), "el numérico sí");
+}

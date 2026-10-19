@@ -472,6 +472,8 @@ mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;
 #[cfg(test)]
+mod new_image_tests;
+#[cfg(test)]
 mod ops_tests;
 #[cfg(test)]
 mod panel_tests;

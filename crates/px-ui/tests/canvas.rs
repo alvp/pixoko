@@ -349,3 +349,251 @@ fn sin_imagen_se_pinta_el_fondo_sin_fallar() {
     assert!(f.info.image_rect.is_none());
     assert!(f.info.error.is_none());
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19: `Canvas::set_owned_image` (specs/hito-2-nueva-imagen.md, D4 y fila 12)
+// ---------------------------------------------------------------------------------------------
+//
+// `set_owned_image(Image)` es `set_image` sin clonar: deja el mismo estado (vista al ajuste, textura
+// pendiente de subir, gesto en nada, zoom pedido y vista previa descartados) y `set_image` pasa a
+// clonar y delegar. Las pruebas de arriba (la 18 y el lienzo) no cambian.
+//
+// Que `set_owned_image` no clona no se puede observar desde fuera (no hay un contador de copias):
+// se prueba que da exactamente lo mismo que `set_image` en todo lo observable (la información del
+// fotograma, la textura subida byte a byte, la vista, el gesto y el error de tamaño).
+
+use px_ui::canvas::CanvasEvent;
+use px_ui::view::ViewOp;
+
+fn imagen_distinta() -> Image {
+    let mut image = Image::new(200, 100, Mode::Rgba).expect("imagen válida");
+    image
+        .set_pixel(199, 99, Pixel::Rgba(Rgba::opaque(0, 255, 0)))
+        .expect("dentro");
+    image
+}
+
+/// Un fotograma que solo llama a `interact` y devuelve sus eventos de trazo.
+fn interactua(banco: &mut Banco, events: Vec<Event>) -> Vec<CanvasEvent> {
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+        events,
+        ..RawInput::default()
+    };
+    let mut eventos = Vec::new();
+    let mut salida = banco.ctx.run_ui(input, |ui| {
+        eventos = banco.canvas.interact(ui);
+    });
+    salida.textures_delta.clear();
+    eventos
+}
+
+fn pulsa_el_boton_primario(pos: Pos2, pressed: bool) -> Event {
+    Event::PointerButton {
+        pos,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    }
+}
+
+#[test]
+fn fila_12_set_owned_image_sube_la_misma_textura_y_da_la_misma_informacion_que_set_image() {
+    let mut con_set = Banco::nuevo();
+    con_set.canvas.set_image(&imagen_de_prueba());
+    let mut con_owned = Banco::nuevo();
+    con_owned.canvas.set_owned_image(imagen_de_prueba());
+
+    let mut a = con_set.fotograma(vec![], None);
+    let mut b = con_owned.fotograma(vec![], None);
+    assert_eq!(a.info, b.info);
+
+    let ta = con_set.canvas.texture_id().expect("textura de set_image");
+    let tb = con_owned
+        .canvas
+        .texture_id()
+        .expect("textura de set_owned_image");
+    let da = a
+        .output
+        .textures_delta
+        .set
+        .get(&ta)
+        .expect("sube set_image");
+    let db = b
+        .output
+        .textures_delta
+        .set
+        .get(&tb)
+        .expect("sube set_owned_image");
+    assert!(da == db, "la textura subida es byte a byte la misma");
+    Banco::limpiar(&mut a);
+    Banco::limpiar(&mut b);
+}
+
+#[test]
+fn fila_12_set_owned_image_deja_la_textura_pendiente_hasta_el_primer_fotograma() {
+    for owned in [false, true] {
+        let mut banco = Banco::nuevo();
+        // Con una imagen ya subida delante: el reemplazo la deja pendiente de nuevo.
+        banco.canvas.set_image(&imagen_de_prueba());
+        let mut f = banco.fotograma(vec![], None);
+        Banco::limpiar(&mut f);
+        let antigua = banco.canvas.texture_id().expect("subida");
+
+        if owned {
+            banco.canvas.set_owned_image(imagen_distinta());
+        } else {
+            banco.canvas.set_image(&imagen_distinta());
+        }
+        assert!(
+            banco.canvas.texture_id().is_none(),
+            "owned {owned}: la textura vieja ya no está y la nueva espera al fotograma"
+        );
+
+        let mut f = banco.fotograma(vec![], None);
+        let nueva = banco.canvas.texture_id().expect("subida en este fotograma");
+        assert_ne!(nueva, antigua, "owned {owned}");
+        assert!(
+            f.output.textures_delta.set.contains_key(&nueva),
+            "owned {owned}: se sube en el primer fotograma"
+        );
+        Banco::limpiar(&mut f);
+        let mut f = banco.fotograma(vec![], None);
+        assert!(
+            !f.output.textures_delta.set.contains_key(&nueva),
+            "owned {owned}: una sola subida"
+        );
+        Banco::limpiar(&mut f);
+    }
+}
+
+#[test]
+fn fila_12_set_owned_image_devuelve_la_vista_al_ajuste_y_descarta_el_zoom_pedido() {
+    // La referencia: un lienzo nuevo con la imagen B (vista al ajuste).
+    let mut referencia = Banco::nuevo();
+    referencia.canvas.set_image(&imagen_distinta());
+    let mut r = referencia.fotograma(vec![], None);
+    Banco::limpiar(&mut r);
+
+    for owned in [false, true] {
+        let mut banco = Banco::nuevo();
+        banco.canvas.set_image(&imagen_de_prueba());
+        let mut f = banco.fotograma(vec![], None);
+        Banco::limpiar(&mut f);
+        // Aleja con la rueda: la vista deja de ser la de ajuste.
+        let centro = pos2(400.0, 300.0);
+        let mut f = banco.fotograma(vec![Event::PointerMoved(centro), rueda(false)], None);
+        Banco::limpiar(&mut f);
+        let ajuste_a = {
+            let mut fresco = Banco::nuevo();
+            fresco.canvas.set_image(&imagen_de_prueba());
+            let mut f = fresco.fotograma(vec![], None);
+            Banco::limpiar(&mut f);
+            f.info.zoom
+        };
+        assert_ne!(
+            f.info.zoom, ajuste_a,
+            "owned {owned}: la rueda cambió el zoom"
+        );
+
+        // Y un zoom pedido que aún no se aplicó.
+        banco.canvas.request_view(ViewOp::ZoomIn);
+        if owned {
+            banco.canvas.set_owned_image(imagen_distinta());
+        } else {
+            banco.canvas.set_image(&imagen_distinta());
+        }
+        let mut f = banco.fotograma(vec![], None);
+        Banco::limpiar(&mut f);
+        // El puntero sigue sobre el lienzo (hay `hover`): se compara lo que fija la vista.
+        assert_eq!(f.info.zoom, r.info.zoom, "owned {owned}: al ajuste");
+        assert_eq!(
+            f.info.image_rect, r.info.image_rect,
+            "owned {owned}: centrada como en un lienzo nuevo"
+        );
+        assert_eq!(f.info.error, r.info.error, "owned {owned}");
+        assert_eq!(
+            banco.canvas.zoom(),
+            referencia.canvas.zoom(),
+            "owned {owned}"
+        );
+    }
+}
+
+#[test]
+fn fila_12_set_owned_image_deja_el_gesto_en_nada() {
+    for owned in [false, true] {
+        let mut banco = Banco::nuevo();
+        banco.canvas.set_image(&imagen_de_prueba());
+        interactua(&mut banco, vec![]);
+        // Un trazo en curso: pulsado dentro del lienzo y sin soltar.
+        let p = pos2(400.0, 300.0);
+        let eventos = interactua(
+            &mut banco,
+            vec![Event::PointerMoved(p), pulsa_el_boton_primario(p, true)],
+        );
+        assert!(
+            eventos
+                .iter()
+                .any(|e| matches!(e, CanvasEvent::StrokeBegin(_))),
+            "owned {owned}: el trazo empezó: {eventos:?}"
+        );
+
+        if owned {
+            banco.canvas.set_owned_image(imagen_distinta());
+        } else {
+            banco.canvas.set_image(&imagen_distinta());
+        }
+        // Con el gesto en nada, mover el puntero (el botón sigue pulsado) no continúa el trazo.
+        let eventos = interactua(&mut banco, vec![Event::PointerMoved(pos2(410.0, 310.0))]);
+        assert!(
+            eventos.is_empty(),
+            "owned {owned}: el gesto debía perderse y salió {eventos:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_12_set_owned_image_tambien_da_el_error_de_textura_maxima_como_set_image() {
+    // 1024 es el mínimo que admite el atlas de fuentes de egui; la imagen lo supera en ancho.
+    let ancha = || Image::new(1025, 2, Mode::Rgba).expect("imagen válida");
+    let mut con_set = Banco::nuevo();
+    con_set.canvas.set_image(&ancha());
+    let mut con_owned = Banco::nuevo();
+    con_owned.canvas.set_owned_image(ancha());
+    let mut a = con_set.fotograma(vec![], Some(1024));
+    let mut b = con_owned.fotograma(vec![], Some(1024));
+    Banco::limpiar(&mut a);
+    Banco::limpiar(&mut b);
+    assert_eq!(a.info, b.info);
+    assert_eq!(
+        b.info.error,
+        Some(CanvasError::TooLarge {
+            width: 1025,
+            height: 2,
+            max: 1024
+        })
+    );
+    assert!(b.info.image_rect.is_none());
+    assert!(
+        con_owned.canvas.texture_id().is_none(),
+        "no se sube ninguna textura"
+    );
+}
+
+#[test]
+fn fila_12_set_owned_image_en_un_lienzo_nuevo_pinta_la_imagen_y_set_image_no_consume_la_suya() {
+    let mut banco = Banco::nuevo();
+    banco.canvas.set_owned_image(imagen_de_prueba());
+    let mut f = banco.fotograma(vec![], None);
+    Banco::limpiar(&mut f);
+    assert!(f.info.image_rect.is_some());
+    assert!(f.info.error.is_none());
+
+    // `set_image` sigue tomando una referencia: la imagen del que llama queda intacta y usable.
+    let imagen = imagen_de_prueba();
+    let mut otro = Banco::nuevo();
+    otro.canvas.set_image(&imagen);
+    otro.canvas.set_image(&imagen);
+    assert_eq!(imagen, imagen_de_prueba());
+}

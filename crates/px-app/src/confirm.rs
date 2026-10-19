@@ -102,4 +102,6 @@ mod close_tests;
 #[cfg(test)]
 mod dialog_tests;
 #[cfg(test)]
+mod new_tests;
+#[cfg(test)]
 mod tests;
