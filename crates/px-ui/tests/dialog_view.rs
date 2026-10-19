@@ -694,10 +694,10 @@ fn aceptar_deshabilitado(p: &Pintura, dialog: &Dialog) -> bool {
 
 fn opciones_de(dialog: &Dialog, id: &str) -> &'static [&'static str] {
     for f in &dialog.spec().fields {
-        if f.id == id {
-            if let FieldKind::Choice { options, .. } = &f.kind {
-                return options;
-            }
+        if f.id == id
+            && let FieldKind::Choice { options, .. } = &f.kind
+        {
+            return options;
         }
     }
     panic!("no hay un grupo de opciones {id:?}");
@@ -1511,8 +1511,15 @@ fn fila_10_intro_acepta_con_todo_valido_y_con_errores_no_y_la_repeticion_no_acep
         );
         assert_eq!(banco.dialog.text("ancho"), Some("abc".into()), "ppp {ppp}");
 
-        // Una repetición de teclado (`Intro` mantenida) no acepta.
+        // Una repetición de teclado (`Intro` mantenida) no acepta. egui decide qué es una
+        // repetición por si la tecla ya estaba pulsada (ignora el `repeat` que se le da), así que
+        // se reproduce de verdad: la tecla se pulsa antes de que exista el diálogo (en el menú) y
+        // sigue pulsada cuando este sale.
         let mut banco = Banco::listo(ppp, Ventana::Minima, open(formulario()));
+        banco.muestra_dialogo = false;
+        banco.fotograma(vec![tecla(Key::Enter, Modifiers::NONE)]);
+        banco.muestra_dialogo = true;
+        banco.reposo();
         banco.reacciones.clear();
         let repeticion = Event::Key {
             key: Key::Enter,
@@ -2484,6 +2491,14 @@ fn fila_11_escape_con_un_hexadecimal_pendiente_lo_revierte_y_el_siguiente_cancel
             "ppp {ppp}: revertido"
         );
 
+        // Se suelta la tecla (si no, egui toma la siguiente pulsación por una repetición).
+        banco.fotograma(vec![Event::Key {
+            key: Key::Escape,
+            physical_key: Some(Key::Escape),
+            pressed: false,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }]);
         banco.pulsa(Key::Escape, Modifiers::NONE);
         assert_eq!(
             canceladas(&banco.reacciones),

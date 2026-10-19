@@ -42,6 +42,12 @@ impl AppAction {
         )
     }
 
+    /// Las acciones que abren un diálogo modal (hoy, solo las licencias; la 19 y la 20 añaden las
+    /// suyas): no se abren con un gesto en curso ni con una quita pendiente.
+    pub fn opens_dialog(self) -> bool {
+        matches!(self, AppAction::ShowLicenses)
+    }
+
     /// Las cuatro acciones de zoom, que no modifican el documento.
     pub fn is_zoom(self) -> bool {
         matches!(
@@ -92,7 +98,7 @@ pub struct Locks {
     pub text_focus: bool,
     /// Una quita de la paleta pendiente de confirmar.
     pub removal: bool,
-    /// El panel de licencias abierto.
+    /// Un diálogo modal abierto.
     pub modal: bool,
 }
 
@@ -101,7 +107,7 @@ pub struct Locks {
 /// En este orden: (1) `CloseLicenses` nunca; (2) con `modal`, todo salvo `Quit`; (3) con `dialog`,
 /// todo; (4) el zoom solo se bloquea con `text_focus` y desde el teclado (no modifica el
 /// documento: un gesto o una quita pendiente no lo paran); (5) el resto, con `gesture` o
-/// `text_focus`, y con `removal` solo `SelectColor`; (6) si no, nada. El fondo del lienzo
+/// `text_focus`, y con `removal` solo `SelectColor` y las que abren un diálogo; (6) si no, nada. El fondo del lienzo
 /// (`CanvasBackground`) tampoco toca el documento: tras (1) a (3) solo lo bloquea `text_focus`, con
 /// cualquier origen; un gesto o una quita pendiente no.
 pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
@@ -123,7 +129,13 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && matches!(action, AppAction::SelectColor(_))
+    locks.removal && (matches!(action, AppAction::SelectColor(_)) || action.opens_dialog())
+}
+
+/// Si se puede abrir un diálogo modal: ni un gesto en curso, ni una quita pendiente, ni un diálogo
+/// de archivo, ni un campo de texto enfocado, ni otro modal.
+pub fn can_open_dialog(locks: Locks) -> bool {
+    !(locks.gesture || locks.dialog || locks.text_focus || locks.removal || locks.modal)
 }
 
 /// Lo que la interfaz necesita saber para habilitar o deshabilitar el menú y la columna.

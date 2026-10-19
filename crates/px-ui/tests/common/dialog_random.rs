@@ -111,7 +111,7 @@ pub fn form_recipe() -> impl Strategy<Value = FormRecipe> {
 pub fn check_suma(values: &Values) -> Option<String> {
     let suma: u64 = IDS
         .iter()
-        .filter_map(|id| values.number(*id))
+        .filter_map(|id| values.number(id))
         .map(u64::from)
         .sum();
     (suma % 2 == 1).then(|| "suma impar".to_string())

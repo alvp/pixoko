@@ -1806,10 +1806,11 @@ fn comprueba_estado(d: &Dialog, spec: &FormSpec, m: &Modelo) -> Result<(), TestC
                 }
             }
         }
-        if vis[i] && primero_invalido.is_none() {
-            if let Some(motivo) = invalido {
-                primero_invalido = Some((i, motivo));
-            }
+        if vis[i]
+            && primero_invalido.is_none()
+            && let Some(motivo) = invalido
+        {
+            primero_invalido = Some((i, motivo));
         }
     }
     // Los ids que no existen nunca son nada.
@@ -1886,7 +1887,7 @@ fn comprueba_estado(d: &Dialog, spec: &FormSpec, m: &Modelo) -> Result<(), TestC
 fn valores_iguales(a: &Values, b: &Values, pendiente: &[bool]) -> bool {
     IDS.iter()
         .enumerate()
-        .all(|(i, id)| pendiente.get(i).copied().unwrap_or(false) || a.get(*id) == b.get(*id))
+        .all(|(i, id)| pendiente.get(i).copied().unwrap_or(false) || a.get(id) == b.get(id))
 }
 
 fn ejecuta(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseError> {
@@ -1914,12 +1915,9 @@ fn ejecuta(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseEr
         let valido_antes = antes.is_valid();
         let motivo_antes = antes.reason();
         let valores_antes = antes.values();
-        let textos_antes: Vec<Option<String>> = IDS.iter().map(|id| antes.text(*id)).collect();
-        let pendiente_antes: Vec<bool> = IDS
-            .iter()
-            .take(n)
-            .map(|id| antes.hex_pending(*id))
-            .collect();
+        let textos_antes: Vec<Option<String>> = IDS.iter().map(|id| antes.text(id)).collect();
+        let pendiente_antes: Vec<bool> =
+            IDS.iter().take(n).map(|id| antes.hex_pending(id)).collect();
         let visibles_antes = model.visibles(&spec);
 
         let Some(evento) = evento else {
