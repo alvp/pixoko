@@ -5,7 +5,7 @@
 use px_core::{Mode, Rgba};
 
 use crate::actions::{Locks, can_open_dialog};
-use crate::color_edit::{hex_notice, hex_text, parse_hex};
+use crate::color_edit::{HexError, hex_notice, hex_text, parse_hex};
 use crate::dialog_keys::{FocusTarget, initial_focus};
 use crate::dialog_layout::{
     BLOCK_GAP_U, CHOICE_GAP_U, CHOICE_ROW_H_U, ERROR_H_U, FIELD_H_U, FILL_CONTENT_H_U, PAD_U,
@@ -480,7 +480,7 @@ impl Dialog {
                     committed,
                     pending: Some(text),
                 },
-            ) => match parse_hex(text, *mode, *committed) {
+            ) => match resolve_hex(Some(text), *mode, *committed) {
                 Ok(_) => Validity::Valid,
                 Err(error) => Validity::Invalid(hex_notice(&error).to_string()),
             },
@@ -511,7 +511,7 @@ impl Dialog {
                 (_, FieldState::Check(on)) => Value::Check(*on),
                 (FieldKind::Hex { mode, .. }, FieldState::Hex { committed, pending }) => {
                     match pending {
-                        Some(text) => match parse_hex(text, *mode, *committed) {
+                        Some(text) => match resolve_hex(Some(text), *mode, *committed) {
                             Ok(color) => Value::Color(color),
                             Err(_) => continue,
                         },
@@ -605,6 +605,16 @@ impl Dialog {
             FieldState::Hex { committed, pending } => {
                 Some(pending.clone().unwrap_or_else(|| hex_text(*committed)))
             }
+            _ => None,
+        }
+    }
+
+    /// El último color confirmado de un hexadecimal (nace en el valor por defecto del campo); un
+    /// texto pendiente, válido o no, no lo cambia. `None` si el campo no existe o no es
+    /// hexadecimal.
+    pub fn hex_committed(&self, id: FieldId) -> Option<Rgba> {
+        match &self.states[self.index_of(id)?] {
+            FieldState::Hex { committed, .. } => Some(*committed),
             _ => None,
         }
     }
@@ -847,7 +857,7 @@ impl Dialog {
         let Some(text) = pending.as_ref() else {
             return;
         };
-        match parse_hex(text, mode, *committed) {
+        match resolve_hex(Some(text), mode, *committed) {
             Ok(color) => {
                 *committed = color;
                 *pending = None;
@@ -857,6 +867,16 @@ impl Dialog {
             Err(_) if blur => *pending = None,
             Err(_) => {}
         }
+    }
+}
+
+/// El valor de un hexadecimal: sin texto es el último confirmado; con texto, `parse_hex` con ese
+/// confirmado como color actual (de él sale el alfa de 3 y 6 dígitos). La usan la validez, los
+/// valores de `Crear`, la confirmación y el traslado de fondo de Nueva imagen: una sola regla.
+pub fn resolve_hex(text: Option<&str>, mode: Mode, committed: Rgba) -> Result<Rgba, HexError> {
+    match text {
+        None => Ok(committed),
+        Some(text) => parse_hex(text, mode, committed),
     }
 }
 
