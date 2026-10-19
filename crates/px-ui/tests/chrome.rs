@@ -153,11 +153,11 @@ fn ancho_de_desplegable_u(items: &[px_ui::menu::MenuItem], platform: Platform) -
 }
 
 #[test]
-fn fila_7_los_titulos_del_menu_suman_195_u_y_caben_con_su_margen_en_el_ancho_minimo() {
+fn fila_7_los_titulos_del_menu_suman_249_u_y_caben_con_su_margen_en_el_ancho_minimo() {
     let anchos: Vec<i64> = MENUS.iter().map(|m| ancho_de_titulo_u(m.title)).collect();
-    assert_eq!(anchos, [61, 54, 33, 47]);
+    assert_eq!(anchos, [61, 54, 54, 33, 47]);
     let total: i64 = anchos.iter().sum();
-    assert_eq!(total, 195);
+    assert_eq!(total, 249);
     assert!(4 + total < min_window_width_u());
 }
 

@@ -172,23 +172,26 @@ fn fila_12_ver_gana_un_submenu_fondo_del_lienzo_con_las_cuatro_opciones_en_orden
 }
 
 #[test]
-fn fila_12_el_resto_de_menus_no_tiene_submenus_y_siguen_siendo_cuatro_en_orden() {
+fn fila_12_el_resto_de_menus_no_tiene_submenus_y_son_cinco_en_orden() {
     let titulos: Vec<&str> = MENUS.iter().map(|m| m.title).collect();
-    assert_eq!(titulos, ["Archivo", "Editar", "Ver", "Ayuda"]);
-    for titulo in ["Archivo", "Editar", "Ayuda"] {
+    assert_eq!(titulos, ["Archivo", "Editar", "Imagen", "Ver", "Ayuda"]);
+    for titulo in ["Archivo", "Editar", "Imagen", "Ayuda"] {
         assert!(el_menu(titulo).submenus.is_empty(), "{titulo}");
     }
 }
 
 #[test]
-fn fila_12_menu_items_son_las_11_entradas_de_la_17_y_nueva_imagen_de_la_19() {
+fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_convertir_de_la_20() {
     let acciones: Vec<AppAction> = MENUS
         .iter()
         .flat_map(|m| m.items.iter().map(|i| i.action))
         .collect();
-    // `Nueva imagen…` (unidad 19) es la primera; las otras 11 son las de la 17, sin cambios.
+    // `Nueva imagen…` (unidad 19) es la primera y `Convertir modo…` (unidad 20) va tras
+    // `Rehacer`; las otras 11 son las de la 17, sin cambios.
     let mut esperado = vec![AppAction::NewImage];
-    esperado.extend(ACCIONES_DE_LA_TABLA);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[..6]);
+    esperado.push(AppAction::ConvertMode);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[6..]);
     assert_eq!(acciones, esperado);
     // Ninguna acción del fondo cuela en `items`.
     for b in FONDOS {
@@ -209,6 +212,10 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_y_nueva_imagen_de_la_19() {
     assert_eq!(
         rotulos_y_acciones(el_menu("Editar").items),
         [("Deshacer", AppAction::Undo), ("Rehacer", AppAction::Redo)]
+    );
+    assert_eq!(
+        rotulos_y_acciones(el_menu("Imagen").items),
+        [("Convertir modo…", AppAction::ConvertMode)]
     );
     assert_eq!(
         rotulos_y_acciones(el_menu("Ayuda").items),

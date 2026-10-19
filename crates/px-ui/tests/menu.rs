@@ -3,7 +3,7 @@
 //! pura; solo la comprobación de que ningún rótulo pierde un carácter con la fuente real usa un
 //! `egui::Context` (sin GPU).
 //!
-//! - Fila 1: los cuatro menús con sus rótulos y acciones, el separador solo antes de `Salir`, los
+//! - Fila 1: los cinco menús (con `Imagen` de la unidad 20) con sus rótulos y acciones, el separador solo antes de `Salir`, los
 //!   atajos por `Platform::{Linux, Windows, Mac}` (`Salir` solo con `Ctrl+Q` en Linux; `Cmd` en
 //!   macOS y `Rehacer` = `Cmd+Mayús+Z`), los rótulos contra `INTERFACE_CHARSET`, ningún `?` por
 //!   `replace_missing` y ninguna acción repetida.
@@ -71,14 +71,14 @@ fn atajo(key: Key, command: bool, shift: bool) -> Option<Shortcut> {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_cuatro_menus_en_orden_con_sus_titulos() {
+fn fila_1_cinco_menus_en_orden_con_sus_titulos() {
     let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
-    assert_eq!(titulos, ["Archivo", "Editar", "Ver", "Ayuda"]);
+    assert_eq!(titulos, ["Archivo", "Editar", "Imagen", "Ver", "Ayuda"]);
 }
 
 #[test]
 fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
-    let esperado: [(&str, Vec<(&str, AppAction)>); 4] = [
+    let esperado: [(&str, Vec<(&str, AppAction)>); 5] = [
         (
             "Archivo",
             vec![
@@ -93,6 +93,7 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
             "Editar",
             vec![("Deshacer", AppAction::Undo), ("Rehacer", AppAction::Redo)],
         ),
+        ("Imagen", vec![("Convertir modo…", AppAction::ConvertMode)]),
         (
             "Ver",
             vec![
@@ -128,18 +129,21 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 }
 
 #[test]
-fn fila_1_hay_doce_entradas_y_ninguna_accion_se_repite() {
+fn fila_1_hay_trece_entradas_y_ninguna_accion_se_repite() {
     let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 12);
+    assert_eq!(acciones.len(), 13);
     for (i, a) in acciones.iter().enumerate() {
         assert!(
             !acciones[i + 1..].contains(a),
             "la acción {a:?} aparece dos veces"
         );
     }
-    // `Nueva imagen…` (unidad 19) es la primera; las otras 11 siguen siendo las de la 17.
+    // `Nueva imagen…` (unidad 19) es la primera y `Convertir modo…` (unidad 20) va tras
+    // `Rehacer`; las otras 11 siguen siendo las de la 17.
     let mut esperado = vec![AppAction::NewImage];
-    esperado.extend(ACCIONES_DE_LA_TABLA);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[..6]);
+    esperado.push(AppAction::ConvertMode);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[6..]);
     assert_eq!(acciones, esperado);
 }
 
@@ -165,7 +169,7 @@ fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 12]) -> Vec<Option<String>> {
+fn algunos(textos: [Option<&str>; 13]) -> Vec<Option<String>> {
     textos.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -181,6 +185,7 @@ fn fila_1_atajos_en_linux() {
             Some("Ctrl+Q"),
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
+            None,
             Some("+"),
             Some("-"),
             Some("Inicio"),
@@ -202,6 +207,7 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             None,
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
+            None,
             Some("+"),
             Some("-"),
             Some("Inicio"),
@@ -224,6 +230,7 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             None,
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
+            None,
             Some("+"),
             Some("-"),
             Some("Inicio"),

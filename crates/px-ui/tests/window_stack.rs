@@ -380,12 +380,12 @@ fn titulo<'a>(f: &'a Fot, ppp: f32, n: i64, nombre: &str) -> &'a common::Texto {
 }
 
 #[test]
-fn fila_7_el_menu_pinta_sus_cuatro_titulos_dentro_de_su_barra_y_caben_en_el_ancho_minimo() {
+fn fila_7_el_menu_pinta_sus_cinco_titulos_dentro_de_su_barra_y_caben_en_el_ancho_minimo() {
     for ppp in PPPS {
         let n = n_de(ppp);
         let mut banco = Banco::nuevo(ppp, ventanas(ppp)[1], indexada());
         let f = banco.reposo();
-        for nombre in ["Archivo", "Editar", "Ver", "Ayuda"] {
+        for nombre in ["Archivo", "Editar", "Imagen", "Ver", "Ayuda"] {
             let t = titulo(&f, ppp, n, nombre);
             let r = t.rect();
             assert!(
@@ -407,9 +407,9 @@ fn fila_7_el_menu_pinta_sus_cuatro_titulos_dentro_de_su_barra_y_caben_en_el_anch
             "ppp {ppp}: y = {}",
             archivo.pos.y * ppp
         );
-        // El último título termina antes de 4 + 195 u más la separación entre botones.
+        // El último título termina antes de 4 + 249 u más la separación entre botones.
         let ayuda = titulo(&f, ppp, n, "Ayuda");
-        assert!(ayuda.rect().max.x * ppp <= ((4 + 195) * n) as f32 + 4.0 * n as f32);
+        assert!(ayuda.rect().max.x * ppp <= ((4 + 249) * n) as f32 + 4.0 * n as f32);
     }
 }
 
