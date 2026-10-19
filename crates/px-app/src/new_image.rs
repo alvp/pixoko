@@ -528,7 +528,7 @@ fn signature(dialog: &Dialog) -> String {
         text.push_str(&format!("{:?}|", dialog.chosen(bg_field(mode))));
         if let Some(id) = color_field(mode) {
             text.push_str(&dialog.text(id).unwrap_or_default());
-            text.push('|');
+            text.push_str(if dialog.hex_pending(id) { "*|" } else { "|" });
         }
     }
     text
