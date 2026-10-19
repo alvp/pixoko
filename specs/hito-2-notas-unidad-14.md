@@ -26,8 +26,18 @@ Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unida
 
 ## PNG
 
-- **Escritor por flujo.** `write_png` sobre un `impl Write`, fila a fila: la unidad 12 ya quitó la copia de la imagen (a 8192² RGBA, −257 MiB); el pico baja ahora a la `Image` más una fila más el codificador. Tiene el acceso por filas (`Image::row`). [`hito-1-png.md`](hito-1-png.md), «Para el hito 2».
-- **Lectura sin reserva anticipada.** `read_png` reserva hasta 1 GiB antes de saber si el IDAT trae datos (un fichero de ~70 bytes truncado cuesta 1 GiB de RSS). Comprobar el tamaño real antes de reservar, o leer por flujo. [`hito-1-png.md`](hito-1-png.md), «Para el hito 2»; medida en [`hito-1-fuzz.md`](hito-1-fuzz.md).
+- **Escritor por flujo: pospuesto** (decisión del 2026-10-19; retomar si hay un caso real de falta de memoria al guardar). `write_png_to<W: Write>` sobre un `impl Write` con `Image::rows()`, y `write_atomic_with` en `px-app` para escribir directo al temporal. Medido en la unidad 13 (release, Linux; prototipo con el codificador por flujo del crate `png`, IDAT de 64 KiB, `BufWriter` de 256 KiB, `sync_all` y `rename` como `write_atomic`; pico = RSS máximo menos RSS antes; mejor de 3):
+
+  | Imagen | Fichero | `write_png` | `write_atomic` | Total hoy → flujo | Pico hoy → flujo |
+  | --- | --- | --- | --- | --- | --- |
+  | RGBA 8192², plana | 0,40 MiB | 320 ms | 16 ms | 337 → 338 ms | +1,0 → +0,7 MiB |
+  | RGBA 8192², ruido | 219,8 MiB | 7407 ms | 130 ms | 7549 → 7361 ms | +439 → +0,5 MiB |
+  | Indexado 6000², plano | 0,06 MiB | 46 ms | 4 ms | 50 → 50 ms | +0,5 → +0,6 MiB |
+  | Indexado 6000², ruido | 34,3 MiB | 622 ms | 36 ms | 657 → 652 ms | +70 → +0,6 MiB |
+  | RGBA 16384² (el límite, 1 GiB), ruido (una medida) | 879 MiB | 29 888 ms | 1022 ms | 30 910 → 29 802 ms | +1758 → +0,8 MiB |
+
+  Ni ahorra tiempo (domina el deflate) ni memoria con contenido que comprime (la salida cabe en 1 MiB): solo quita el `Vec` de salida, que con datos que no comprimen pesa ≈ 2× el fichero. **Por qué se pospone:** la ganancia es solo con imágenes que no comprimen y de ≤ 440 MiB a los tamaños que la app abre hoy (2²⁶ píxeles); toca la ruta de guardado (`Session::write_to`, `write_atomic`) y un oráculo de la unidad 16 (`dialog_tests::fila_5_la_eleccion_sobrescribe_un_png_existente_entero` compara los bytes del fichero con los de `write_png`, y con el flujo ya no coinciden: IDAT de ≤ 64 KiB y un IDAT final de 6 bytes por el vaciado de sincronización del crate, +18 bytes). Diseño ya probado en un prototipo (`PngError::Io(String)` nueva para distinguir un disco lleno de un rechazo del codificador; un destino de solo lectura se rechazaría antes de comprimir) y 2959 de 2960 pruebas del workspace en verde.
+- **Lectura sin reserva anticipada: hecha en la unidad 13** ([`hito-2-png-flujo.md`](hito-2-png-flujo.md)): no por flujo, sino con una cota (DEFLATE no expande más de 1032×) que rechaza antes de reservar. Queda la amplificación proporcional al fichero (un fichero de N bytes puede costar hasta 1032·N de reserva). [`hito-1-png.md`](hito-1-png.md), «Para el hito 2»; medida en [`hito-1-fuzz.md`](hito-1-fuzz.md).
 
 ## Idea de diseño: paleta en el sombreador
 
