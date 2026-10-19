@@ -5,7 +5,7 @@ use std::fmt;
 use std::io::Cursor;
 
 use png::{BitDepth, ColorType, Decoder, Encoder, Limits, Transformations};
-use px_core::{Image, Mode, Palette, Pixel, Rgba};
+use px_core::{Image, Mode, Palette, Rgba};
 
 use crate::aux_chunks::{AuxReport, AuxScan};
 
@@ -197,7 +197,7 @@ pub fn read_png(bytes: &[u8]) -> Result<PngRead, PngError> {
     reader.finish().map_err(decode_error)?;
 
     let report = report(&plan, depth);
-    let image = build_image(width, height, depth, &plan, &raw, row_len)?;
+    let image = build_image(width, height, depth, &plan, raw, row_len)?;
     Ok(PngRead { image, report, aux })
 }
 
@@ -349,69 +349,101 @@ fn scale(value: u16, depth: u8) -> u8 {
     u8::try_from(scaled).unwrap_or(u8::MAX)
 }
 
+/// Construye la imagen desde las muestras decodificadas. Con 8 bits y un diseño que ya es el de
+/// `Image` (RGBA, gris, gris con alfa o indexado, filas sin relleno) `raw` es el vector de la
+/// imagen y pasa a `Image::from_bytes` sin copiarse; si no, se reserva otro con
+/// `try_reserve_exact` y se llena muestra a muestra.
 fn build_image(
     width: u32,
     height: u32,
     depth: u8,
     plan: &Plan,
-    raw: &[u8],
+    raw: Vec<u8>,
     row_len: usize,
 ) -> Result<Image, PngError> {
     let image_error = |e: px_core::ImageError| PngError::Decode(e.to_string());
-    let mut image = match plan {
-        Plan::Indexed(palette) => Image::new_indexed(width, height, palette.clone()),
-        other => Image::new(width, height, other.mode()),
-    }
-    .map_err(image_error)?;
+    let mode = plan.mode();
+    let len = Image::byte_len(width, height, mode).map_err(image_error)?;
     let channels = plan.channels();
-    if row_len == 0 || raw.len() / row_len != usize::try_from(height).unwrap_or(usize::MAX) {
-        return Err(PngError::Decode("tamaño de imagen inesperado".to_string()));
-    }
+    let w = usize::try_from(width).unwrap_or(usize::MAX);
+    let rows = usize::try_from(height).unwrap_or(usize::MAX);
+    let bad_size = || PngError::Decode("tamaño de imagen inesperado".to_string());
 
-    for (y, row) in (0..height).zip(raw.chunks_exact(row_len)) {
-        for x in 0..width {
-            let first = usize::try_from(x).unwrap_or(usize::MAX) * channels;
-            let s = |c: usize| sample(row, depth, first + c);
-            let pixel = match plan {
-                Plan::Indexed(palette) => {
-                    let index = u8::try_from(s(0)).unwrap_or(u8::MAX);
-                    if usize::from(index) >= palette.len() {
-                        return Err(PngError::PaletteIndexOutOfRange {
-                            index,
-                            len: palette.len(),
-                        });
-                    }
-                    Pixel::Indexed(index)
-                }
-                Plan::Gray { key: None } => Pixel::Gray(scale(s(0), depth)),
-                Plan::Gray { key: Some(key) } => Pixel::GrayAlpha {
-                    gray: scale(s(0), depth),
-                    alpha: if s(0) == *key { 0 } else { 255 },
-                },
-                Plan::GrayAlpha => Pixel::GrayAlpha {
-                    gray: scale(s(0), depth),
-                    alpha: scale(s(1), depth),
-                },
-                Plan::Rgb { key } => {
-                    let rgb = [s(0), s(1), s(2)];
-                    Pixel::Rgba(Rgba::new(
-                        scale(rgb[0], depth),
-                        scale(rgb[1], depth),
-                        scale(rgb[2], depth),
-                        if *key == Some(rgb) { 0 } else { 255 },
-                    ))
-                }
-                Plan::Rgba => Pixel::Rgba(Rgba::new(
-                    scale(s(0), depth),
-                    scale(s(1), depth),
-                    scale(s(2), depth),
-                    scale(s(3), depth),
-                )),
-            };
-            image.set_pixel(x, y, pixel).map_err(image_error)?;
+    let identity = depth == 8
+        && matches!(
+            plan,
+            Plan::Indexed(_) | Plan::Gray { key: None } | Plan::GrayAlpha | Plan::Rgba
+        )
+        && row_len == w.saturating_mul(channels)
+        && raw.len() == len;
+    let data = if identity {
+        raw
+    } else {
+        let mut data = Vec::new();
+        data.try_reserve_exact(len)
+            .map_err(|_| image_error(px_core::ImageError::TooLarge { width, height }))?;
+        if row_len == 0 || raw.len() / row_len != rows {
+            return Err(bad_size());
         }
+        for row in raw.chunks_exact(row_len) {
+            for x in 0..w {
+                let first = x * channels;
+                let s = |c: usize| sample(row, depth, first + c);
+                match plan {
+                    Plan::Indexed(palette) => {
+                        let index = u8::try_from(s(0)).unwrap_or(u8::MAX);
+                        if usize::from(index) >= palette.len() {
+                            return Err(PngError::PaletteIndexOutOfRange {
+                                index,
+                                len: palette.len(),
+                            });
+                        }
+                        data.push(index);
+                    }
+                    Plan::Gray { key: None } => data.push(scale(s(0), depth)),
+                    Plan::Gray { key: Some(key) } => data.extend_from_slice(&[
+                        scale(s(0), depth),
+                        if s(0) == *key { 0 } else { 255 },
+                    ]),
+                    Plan::GrayAlpha => {
+                        data.extend_from_slice(&[scale(s(0), depth), scale(s(1), depth)]);
+                    }
+                    Plan::Rgb { key } => {
+                        let rgb = [s(0), s(1), s(2)];
+                        data.extend_from_slice(&[
+                            scale(rgb[0], depth),
+                            scale(rgb[1], depth),
+                            scale(rgb[2], depth),
+                            if *key == Some(rgb) { 0 } else { 255 },
+                        ]);
+                    }
+                    Plan::Rgba => data.extend_from_slice(&[
+                        scale(s(0), depth),
+                        scale(s(1), depth),
+                        scale(s(2), depth),
+                        scale(s(3), depth),
+                    ]),
+                }
+            }
+        }
+        data
+    };
+
+    match plan {
+        Plan::Indexed(palette) => {
+            // El primer índice fuera de la paleta, en orden de lectura (el error de siempre);
+            // `from_bytes_indexed` lo vuelve a comprobar con el mayor.
+            if let Some(&index) = data.iter().find(|&&b| usize::from(b) >= palette.len()) {
+                return Err(PngError::PaletteIndexOutOfRange {
+                    index,
+                    len: palette.len(),
+                });
+            }
+            Image::from_bytes_indexed(width, height, palette.clone(), data)
+        }
+        _ => Image::from_bytes(width, height, mode, data),
     }
-    Ok(image)
+    .map_err(image_error)
 }
 
 /// Escribe un PNG a 8 bits, sin entrelazar, con el tipo de color que corresponde al modo.
