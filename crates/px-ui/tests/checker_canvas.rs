@@ -8,38 +8,38 @@
 //!   arrastrar la vista 7 y 13 píxeles físicos).
 //! - Fila 6: capas, textura 2×2, una sola subida, imagen de 2048×64 a ×64, `TooLarge` y documento
 //!   intacto.
-//! - Fila 7: superposición con damero, en dos pasadas, antes y después de soltar.
+//! - Fila 7: superposición con damero (sin formas propias), antes y después de soltar.
 //! - Fila 8: límites (1×1 a ×64, vista en el extremo, lienzo de 1×1 píxel físico, sin imagen y
-//!   texturas máximas).
-//! - Fila 14: superposición con cada fondo sólido (una sola pasada) y cambio de fondo a mitad de
-//!   trazo.
+//!   una imagen de 1025 de ancho con textura máxima de 1024, que se pinta en dos baldosas).
+//! - Fila 14: superposición con cada fondo sólido y cambio de fondo a mitad de trazo.
 //! - Fila 15 (lienzo): respaldo por malla en los bancos de las filas 5 y 7.
 //! - Propiedad 2: pintar no cambia la conversión pantalla-imagen (24 casos).
 //! - Propiedad 3: lo que se ve es el oráculo puro, con los cuatro fondos y los dos caminos
 //!   (24 casos).
 //!
-//! El banco es el de `overlay_small_zoom.rs`: `Canvas::interact` y `Canvas::paint` dentro de
+//! El banco es el de `overlay_small_zoom.rs`: `Canvas::interact`, `Canvas::set_overlay`,
+//! `Canvas::sync` y `Canvas::paint` (el orden de un fotograma de la app) dentro de
 //! `Context::run_ui` con `RawInput` sintético, lo pintado pasa por el teselador de egui
 //! (`Context::tessellate`, con los ajustes de la app) y se rasteriza **a mano** en el centro de cada
 //! píxel físico (tolerancia 0,02 por canal y centro desplazado `+0,0013` y `+0,0007`, como allí; la
 //! GPU aplica una regla de desempate en las aristas compartidas y aquí se evita el empate). El
-//! rasterizador de esta versión pinta **todo el lienzo** en un búfer y muestrea: la textura de la
-//! imagen (con su contenido conocido: el oráculo de la prueba), la textura 2×2 del damero (`A, B,
-//! B, A` con envoltura y sin filtro, como la GPU) y, para el modo malla, los vértices coloreados
-//! sin textura.
+//! rasterizador de esta versión pinta **todo el lienzo** en un búfer y muestrea: la textura de cada
+//! baldosa de la imagen **tal como la deja egui** (el banco aplica en orden los `textures_delta`
+//! de cada fotograma con `common::texturas::Texturas`, y la superposición del trazo va dentro de
+//! esa textura), la textura 2×2 del damero (`A, B, B, A` con envoltura y sin filtro, como la GPU)
+//! y, para el modo malla, los vértices coloreados sin textura.
 //!
 //! Suposiciones (las filas no las fijan; la spec las deja a «Piezas»):
 //! - El cuadrilátero del damero va sin tinte (vértices blancos), como ya exige el
-//!   `eraser_canvas.rs` adaptado.
-//! - Con un fondo sólido, la superposición va **por píxel**: el rectángulo de `c` y justo detrás
-//!   el de color (una sola pasada, fila 14). Con el damero (textura), los cuadriláteros van todos
-//!   antes que los rectángulos de color (dos pasadas); entre píxeles el orden no se exige.
+//!   `eraser_canvas.rs` adaptado, y va **debajo** de las mallas de las baldosas.
+//! - No hay ninguna forma de superposición: tras el fondo y el damero de la imagen solo hay una
+//!   malla (un cuadrilátero blanco) por baldosa visible, y ninguna forma tiene área cero.
 //! - En modo malla solo se comprueba la estructura del fondo de la imagen (rectángulo `CHECK_A` y
 //!   una malla de casillas `CHECK_B`); la superposición se comprueba por lo que se ve.
 //! - El origen del damero es la esquina del rectángulo de la imagen en píxeles físicos, redondeada
 //!   desde `CanvasInfo::image_rect`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use egui::epaint::{ClippedPrimitive, ClippedShape, ImageDelta, Primitive, Shape, Vertex};
 use egui::{
@@ -58,6 +58,7 @@ use px_ui::tool::{Tool, ToolAction, ToolState};
 use px_ui::view::{MIN_VISIBLE, ScreenRect, Size, ViewOp};
 
 mod common;
+use common::texturas::Texturas;
 use common::{PPPS, boton_de, contexto, en_puntos, mover, rueda_linea, tecla};
 
 const PANTALLA: Vec2 = vec2(400.0, 300.0);
@@ -223,6 +224,18 @@ impl Imagen {
             .map(|c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a))
             .collect()
     }
+
+    /// Los texels que debe tener la textura mientras dura la superposición: la imagen con los
+    /// píxeles pendientes escritos encima (el color pendiente sustituye al de la imagen; el alfa 0
+    /// del borrador es el texel transparente).
+    fn texels_con(&self, overlay: &[Pendiente]) -> Vec<Color32> {
+        let mut texels = self.texels();
+        for &(x, y, c) in overlay {
+            texels[(y * self.ancho + x) as usize] =
+                Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a);
+        }
+        texels
+    }
 }
 
 fn imagen_transparente() -> Imagen {
@@ -267,12 +280,12 @@ fn baricentricas(p: (f64, f64), a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> 
     (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0).then_some([w0, w1, w2])
 }
 
-/// Texturas conocidas para el muestreo.
-struct Texturas {
-    imagen: TextureId,
-    ancho: usize,
-    alto: usize,
-    texels: Vec<Color32>,
+/// Las texturas que el rasterizador sabe muestrear.
+struct Fuentes<'a> {
+    /// Las texturas de las baldosas de la imagen (en el orden de `Canvas::texture_ids`).
+    baldosas: Vec<TextureId>,
+    /// Su contenido compuesto: lo que egui entregó a la GPU, subidas parciales incluidas.
+    texturas: &'a Texturas,
     /// Textura 2×2 del damero, si el lienzo la ha creado.
     damero: Option<TextureId>,
 }
@@ -305,15 +318,16 @@ impl Buffer {
 }
 
 /// Pinta `primitivas`, en orden, en un búfer de `ancho × alto` píxeles físicos. Cada píxel se
-/// muestrea en su centro (algo desplazado). Las mallas con la textura de la imagen muestrean su
-/// contenido conocido; las del damero, la textura 2×2; las demás (rellenos, formas y mallas de
-/// colores de vértice) usan el color de sus vértices (la textura es el píxel blanco de la fuente).
+/// muestrea en su centro (algo desplazado). Las mallas de una baldosa muestrean, por su uv
+/// interpolado, el texel de su textura compuesta (`Texturas::muestrea`: `NEAREST`, sin
+/// envoltura); las del damero, la textura 2×2; las demás (rellenos, formas y mallas de colores de
+/// vértice) usan el color de sus vértices (la textura es el píxel blanco de la fuente).
 fn rasteriza(
     primitivas: &[ClippedPrimitive],
     ppp: f32,
     ancho: usize,
     alto: usize,
-    tex: &Texturas,
+    tex: &Fuentes,
 ) -> Buffer {
     let ppp = f64::from(ppp);
     let mut pixeles = vec![Visto::VACIO; ancho * alto];
@@ -324,7 +338,7 @@ fn rasteriza(
         let clip = primitiva.clip_rect;
         let (cx0, cy0) = (f64::from(clip.min.x) * ppp, f64::from(clip.min.y) * ppp);
         let (cx1, cy1) = (f64::from(clip.max.x) * ppp, f64::from(clip.max.y) * ppp);
-        let es_imagen = malla.texture_id == tex.imagen;
+        let es_imagen = tex.baldosas.contains(&malla.texture_id);
         let es_damero = tex.damero == Some(malla.texture_id);
         for triangulo in malla.indices.as_chunks::<3>().0 {
             let v = [
@@ -411,11 +425,11 @@ fn rasteriza(
                                 + w[1] * f64::from(v[1].uv.y)
                                 + w[2] * f64::from(v[2].uv.y);
                             let texel = if es_imagen {
-                                let tx = ((u * tex.ancho as f64).floor().max(0.0) as usize)
-                                    .min(tex.ancho - 1);
-                                let ty = ((t * tex.alto as f64).floor().max(0.0) as usize)
-                                    .min(tex.alto - 1);
-                                Visto::de_color(tex.texels[ty * tex.ancho + tx])
+                                let texel = tex
+                                    .texturas
+                                    .muestrea(malla.texture_id, u, t)
+                                    .expect("la baldosa tiene contenido");
+                                Visto::de_color(texel)
                             } else {
                                 texel_del_damero(u, t)
                             };
@@ -520,8 +534,9 @@ fn rect_en_puntos(a: ScreenRect, ppp: f32) -> Rect {
 // El banco
 // ---------------------------------------------------------------------------------------------
 
-/// Lo que dejó un fotograma. Los cambios de textura ya están limpiados (egui entra en pánico si
-/// se sueltan sin aplicar) y copiados en `subidas` y `liberadas`.
+/// Lo que dejó un fotograma. Los cambios de textura ya están aplicados a `Banco::texturas` y
+/// limpiados (egui entra en pánico si se sueltan sin aplicar) y copiados en `subidas` y
+/// `liberadas`.
 struct Salida {
     formas: Vec<ClippedShape>,
     subidas: Vec<(TextureId, ImageDelta)>,
@@ -596,8 +611,14 @@ struct Banco {
     ppp: f32,
     pantalla: Vec2,
     canvas: Canvas,
-    /// El contenido que debe tener la textura de la imagen.
+    /// El contenido que debe tener la imagen del documento (el oráculo de la prueba).
     imagen: Imagen,
+    /// Esa misma imagen como `px_core::Image`: el documento con el que se llama a `set_overlay` y
+    /// `sync`.
+    documento: Image,
+    /// El contenido de las texturas tal como egui lo entrega a la GPU, con los cambios de **cada**
+    /// fotograma aplicados en orden.
+    texturas: Texturas,
 }
 
 impl Banco {
@@ -612,13 +633,16 @@ impl Banco {
         let mut canvas = Canvas::new();
         canvas.set_background(fondo);
         canvas.set_checker_mesh(malla);
-        canvas.set_image(&imagen.image());
+        let documento = imagen.image();
+        canvas.set_image(&documento);
         Banco {
             ctx: contexto(ppp),
             ppp,
             pantalla,
             canvas,
             imagen,
+            documento,
+            texturas: Texturas::new(),
         }
     }
 
@@ -663,6 +687,13 @@ impl Banco {
             }
         }
         let liberadas = output.textures_delta.free.iter().copied().collect();
+        // El contenido compuesto de las texturas del lienzo; la fuente de egui (`Managed(0)`) no
+        // interesa (el banco no pinta texto) y sus parches llegarían a una textura que el banco no
+        // vio crear.
+        let mut del_lienzo = output.textures_delta.clone();
+        del_lienzo.set.remove(&TextureId::default());
+        del_lienzo.free.retain(|id| *id != TextureId::default());
+        self.texturas.aplica(&del_lienzo);
         output.textures_delta.clear();
         Salida {
             formas: std::mem::take(&mut output.shapes),
@@ -673,7 +704,8 @@ impl Banco {
         }
     }
 
-    /// `interact` y `paint` con la superposición dada (lo que hace la app, sin herramienta).
+    /// Un fotograma de la app, sin herramienta: `interact`, `set_overlay` con la superposición dada
+    /// (el trazo pendiente entero; vacía, la quita), `sync` con el documento y `paint`.
     fn corre(&mut self, events: Vec<Event>, overlay: &[Pendiente]) -> Salida {
         self.corre_max(events, overlay, None)
     }
@@ -684,9 +716,17 @@ impl Banco {
         overlay: &[Pendiente],
         max: Option<usize>,
     ) -> Salida {
+        let documento = self.documento.clone();
         self.corre_con(events, max, |canvas, ui| {
             let trazo = canvas.interact(ui);
-            let info = canvas.paint(ui, overlay.iter().copied());
+            canvas.set_overlay(ui.ctx(), &documento, overlay);
+            // Sin imagen cargada (o con error) no hay nada que sincronizar.
+            if canvas.texture_id().is_some() {
+                canvas
+                    .sync(ui.ctx(), &documento)
+                    .expect("el documento se carga");
+            }
+            let info = canvas.paint(ui);
             (trazo, Some(info))
         })
     }
@@ -721,12 +761,12 @@ impl Banco {
         }
     }
 
-    fn texturas(&self) -> Texturas {
-        Texturas {
-            imagen: self.canvas.texture_id().expect("hay textura de la imagen"),
-            ancho: self.imagen.ancho as usize,
-            alto: self.imagen.alto as usize,
-            texels: self.imagen.texels(),
+    /// Las texturas que el rasterizador muestrea: las baldosas (con su contenido compuesto) y el
+    /// damero.
+    fn fuentes(&self) -> Fuentes<'_> {
+        Fuentes {
+            baldosas: self.canvas.texture_ids(),
+            texturas: &self.texturas,
             damero: self.canvas.checker_texture_id(),
         }
     }
@@ -745,12 +785,11 @@ impl Banco {
             self.ppp,
             viewport.width as usize,
             viewport.height as usize,
-            &self.texturas(),
+            &self.fuentes(),
         );
         let geom = self.geom(salida.info());
         Escena {
             salida,
-            primitivas,
             buffer,
             geom,
         }
@@ -803,22 +842,27 @@ impl Banco {
         }
     }
 
-    /// Como `Canvas::refresh` y deja anotado el contenido que debe tener la textura.
+    /// Suelta la superposición (si la hay) y llama a `Canvas::refresh` con la imagen nueva, como
+    /// la app al aplicar un trazo; deja anotado el contenido que debe tener el documento.
     fn refresca(&mut self, imagen: Imagen) {
-        self.canvas.refresh(&self.ctx, &imagen.image());
+        let documento = imagen.image();
+        self.canvas.set_overlay(&self.ctx, &documento, &[]);
+        self.canvas.refresh(&self.ctx, &documento);
         self.imagen = imagen;
+        self.documento = documento;
     }
 
     fn pone_imagen(&mut self, imagen: Imagen) {
-        self.canvas.set_image(&imagen.image());
+        let documento = imagen.image();
+        self.canvas.set_image(&documento);
         self.imagen = imagen;
+        self.documento = documento;
     }
 }
 
 /// Un fotograma teselado y rasterizado.
 struct Escena {
     salida: Salida,
-    primitivas: Vec<ClippedPrimitive>,
     buffer: Buffer,
     geom: Geom,
 }
@@ -948,15 +992,16 @@ fn area_de_malla(vertices: &[Vertex], indices: &[u32], ppp: f32) -> f64 {
         .sum()
 }
 
-/// Comprueba las capas anteriores a la malla de la imagen según el fondo y el camino, y devuelve
-/// el índice de la malla de la imagen:
+/// Comprueba todo lo pintado según el fondo y el camino, y devuelve el índice de la primera malla
+/// de baldosa:
 /// - `BACKGROUND` en todo el lienzo;
 /// - `Checker` con textura: el cuadrilátero del damero (`quad(clip(imagen))`);
 /// - `Checker` con malla: rectángulo `CHECK_A` y **una** malla de colores de vértice con las casillas
 ///   `CHECK_B`, sin textura del damero;
 /// - un sólido: un rectángulo de ese color sobre `clip(imagen)`;
 ///
-/// y, después, la malla de la imagen (una sola, con la textura de la imagen).
+/// y, después, las mallas de las baldosas visibles y **nada más** (`comprueba_baldosas`): el
+/// fotograma, con o sin superposición, no tiene ninguna forma de superposición.
 fn comprueba_base(
     banco: &Banco,
     salida: &Salida,
@@ -966,7 +1011,7 @@ fn comprueba_base(
 ) -> usize {
     let capas = salida.capas();
     let g = banco.geom(salida.info());
-    let imagen = banco.canvas.texture_id().expect("textura de la imagen");
+    let baldosas = banco.canvas.texture_ids();
     match &capas[0] {
         Capa::Relleno { rect, color } => {
             assert_eq!(*color, BACKGROUND, "{etiqueta}: el fondo liso");
@@ -988,7 +1033,10 @@ fn comprueba_base(
                     .canvas
                     .checker_texture_id()
                     .unwrap_or_else(|| panic!("{etiqueta}: hay textura del damero"));
-                assert_ne!(damero, imagen, "{etiqueta}: texturas distintas");
+                assert!(
+                    !baldosas.contains(&damero),
+                    "{etiqueta}: el damero no es una baldosa"
+                );
                 let Capa::Malla { textura, .. } = &capas[i] else {
                     panic!(
                         "{etiqueta}: la segunda capa es el damero y hay {:?}",
@@ -1029,7 +1077,10 @@ fn comprueba_base(
                     else {
                         panic!("{etiqueta}: una malla de casillas B y hay {:?}", capas[i]);
                     };
-                    assert_ne!(*textura, imagen, "{etiqueta}");
+                    assert!(
+                        !baldosas.contains(textura),
+                        "{etiqueta}: las casillas no usan una baldosa"
+                    );
                     assert!(
                         vertices.iter().all(|v| v.color == gris(CHECK_B)),
                         "{etiqueta}: colores de vértice CHECK_B"
@@ -1065,194 +1116,105 @@ fn comprueba_base(
             }
         }
     }
-    match &capas[i] {
-        Capa::Malla { textura, .. } => {
-            assert_eq!(*textura, imagen, "{etiqueta}: la malla de la imagen");
-        }
-        otra => panic!("{etiqueta}: la malla de la imagen y hay {otra:?}"),
-    }
-    let con_la_imagen = capas
-        .iter()
-        .filter(|c| matches!(c, Capa::Malla { textura, .. } if *textura == imagen))
-        .count();
-    assert_eq!(con_la_imagen, 1, "{etiqueta}: una sola malla con la imagen");
+    comprueba_baldosas(banco, &g, &capas, i, etiqueta);
     i
 }
 
-/// Esquina, tamaño y valor de una pieza de la superposición, en píxeles físicos, para comparar sin
-/// importar el orden.
-type Pieza = (i64, i64, i64, i64, [u32; 4]);
-
-fn pieza_de_caja(r: Rect, ppp: f32, extra: [u32; 4]) -> Pieza {
-    (
-        (r.min.x * ppp).round() as i64,
-        (r.min.y * ppp).round() as i64,
-        (r.width() * ppp).round() as i64,
-        (r.height() * ppp).round() as i64,
-        extra,
-    )
+fn es_de_baldosa(capa: &Capa, baldosas: &[TextureId]) -> bool {
+    matches!(capa, Capa::Malla { textura, .. } if baldosas.contains(textura))
 }
 
-fn color_bits(c: Color32) -> [u32; 4] {
-    [
-        u32::from(c.r()),
-        u32::from(c.g()),
-        u32::from(c.b()),
-        u32::from(c.a()),
-    ]
-}
-
-fn color_del_pixel(color: Rgba) -> Color32 {
-    Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a)
-}
-
-/// La superposición (capas posteriores a la malla de la imagen) según el fondo.
-///
-/// Con `Checker` y textura: primera pasada, un cuadrilátero `quad(bloque)` por píxel con alfa menor
-/// que 255 y ninguno con alfa 255; segunda pasada, un rectángulo de color por píxel con alfa mayor
-/// que 0; los cuadriláteros van **todos antes** que los rectángulos de color y no hay ningún
-/// rectángulo de `BACKGROUND`. Con un sólido: una sola pasada, por píxel el rectángulo del fondo
-/// (si alfa < 255) y justo detrás el de color (si alfa > 0), sin ningún cuadrilátero del damero.
-fn comprueba_superposicion(
-    banco: &Banco,
-    g: &Geom,
-    despues_de_la_imagen: &[Capa],
-    overlay: &[Pendiente],
-    fondo: CanvasBackground,
-    malla: bool,
-    etiqueta: &str,
-) {
-    let ppp = g.ppp;
-    for capa in despues_de_la_imagen {
-        // Con el sólido `Gray` el rectángulo de fondo vale lo mismo que `BACKGROUND`: legítimo.
-        if fondo == CanvasBackground::Checker
-            && let Capa::Relleno { color, .. } = capa
-        {
-            assert_ne!(
-                *color, BACKGROUND,
-                "{etiqueta}: ningún rectángulo de BACKGROUND en la superposición"
-            );
-        }
-    }
-    let mut colores: Vec<Pieza> = overlay
+/// Lo que hay desde `desde`: solo las mallas de las baldosas visibles (un cuadrilátero blanco por
+/// baldosa, cada textura una sola vez; al menos una si algo de la imagen cae en el lienzo) y
+/// **ninguna otra forma**: ni rectángulos de color o de fondo por píxel pendiente, ni cuadriláteros
+/// del damero por píxel, ni mallas de superposición. Ninguna forma de todo el fotograma tiene
+/// área cero (la regresión `b702d8e`: a ×1 la superposición de 1×1 píxel físico no se veía; ahora
+/// no hay formas que se degeneren y el píxel va en la textura).
+fn comprueba_baldosas(banco: &Banco, g: &Geom, capas: &[Capa], desde: usize, etiqueta: &str) {
+    let baldosas = banco.canvas.texture_ids();
+    let propias = &capas[desde..];
+    let n = propias
         .iter()
-        .filter(|(_, _, c)| c.a > 0)
-        .map(|&(x, y, c)| {
-            let b = g.bloque(x, y);
-            (b.x, b.y, b.width, b.height, color_bits(color_del_pixel(c)))
-        })
-        .collect();
-    colores.sort_unstable();
-    match (fondo, malla) {
-        (CanvasBackground::Checker, false) => {
-            let damero = banco
-                .canvas
-                .checker_texture_id()
-                .expect("textura del damero");
-            let n_cuadrilateros = despues_de_la_imagen
-                .iter()
-                .take_while(|c| matches!(c, Capa::Malla { textura, .. } if *textura == damero))
-                .count();
-            // Los rectángulos de color vienen después de todos los cuadriláteros y no hay más
-            // mallas del damero entre ellos.
-            let resto = &despues_de_la_imagen[n_cuadrilateros..];
-            assert!(
-                resto.iter().all(|c| matches!(c, Capa::Relleno { .. })),
-                "{etiqueta}: tras los cuadriláteros solo hay rectángulos de color: {resto:?}"
-            );
-            let mut esperados: Vec<Pieza> = Vec::new();
-            let mut reales: Vec<Pieza> = Vec::new();
-            for &(x, y, c) in overlay {
-                if c.a < 255 {
-                    let b = g.bloque(x, y);
-                    let q = g.cuadrilatero(b).expect("bloque no vacío");
-                    esperados.push((b.x, b.y, b.width, b.height, q.uv.map(f32::to_bits)));
+        .take_while(|c| es_de_baldosa(c, &baldosas))
+        .count();
+    assert_eq!(
+        n,
+        propias.len(),
+        "{etiqueta}: tras el fondo solo hay mallas de baldosas (ninguna forma de superposición) y sobra {:?}",
+        &propias[n..]
+    );
+    if g.recorte().is_some() {
+        assert!(
+            n >= 1,
+            "{etiqueta}: la imagen visible se pinta con sus baldosas"
+        );
+    }
+    let mut distintas = HashSet::new();
+    for capa in propias {
+        let Capa::Malla {
+            textura,
+            vertices,
+            indices,
+        } = capa
+        else {
+            unreachable!("ya comprobado")
+        };
+        assert!(
+            distintas.insert(*textura),
+            "{etiqueta}: una malla por baldosa visible"
+        );
+        assert_eq!(vertices.len(), 4, "{etiqueta}: un cuadrilátero por baldosa");
+        assert_eq!(indices.len(), 6, "{etiqueta}: 6 índices");
+        assert!(
+            vertices.iter().all(|v| v.color == Color32::WHITE),
+            "{etiqueta}: la baldosa va sin tinte"
+        );
+    }
+    sin_formas_de_area_cero(capas, etiqueta);
+}
+
+/// Ningún rectángulo ni triángulo de las capas tiene área cero.
+fn sin_formas_de_area_cero(capas: &[Capa], etiqueta: &str) {
+    for capa in capas {
+        match capa {
+            Capa::Relleno { rect, .. } => assert!(
+                rect.width() > 0.0 && rect.height() > 0.0,
+                "{etiqueta}: rectángulo de área cero {rect:?}"
+            ),
+            Capa::Malla {
+                vertices, indices, ..
+            } => {
+                for t in indices.as_chunks::<3>().0 {
+                    let [a, b, c] = t.map(|i| vertices[i as usize].pos);
+                    let cruz = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+                    assert!(
+                        cruz != 0.0,
+                        "{etiqueta}: triángulo degenerado {a:?} {b:?} {c:?}"
+                    );
                 }
             }
-            for capa in &despues_de_la_imagen[..n_cuadrilateros] {
-                let Capa::Malla {
-                    vertices, indices, ..
-                } = capa
-                else {
-                    unreachable!()
-                };
-                assert_eq!(vertices.len(), 4, "{etiqueta}: 4 vértices");
-                assert_eq!(indices.len(), 6, "{etiqueta}: 6 índices");
-                assert!(
-                    vertices.iter().all(|v| v.color == Color32::WHITE),
-                    "{etiqueta}: sin tinte"
-                );
-                reales.push(pieza_de_caja(
-                    caja(vertices),
-                    ppp,
-                    caja_uv(vertices).map(f32::to_bits),
-                ));
-            }
-            esperados.sort_unstable();
-            reales.sort_unstable();
-            assert_eq!(
-                reales, esperados,
-                "{etiqueta}: un cuadrilátero del damero por píxel con alfa < 255, con los uv de `quad`"
-            );
-            let mut rects: Vec<Pieza> = resto
-                .iter()
-                .map(|c| {
-                    let Capa::Relleno { rect, color } = c else {
-                        unreachable!()
-                    };
-                    pieza_de_caja(*rect, ppp, color_bits(*color))
-                })
-                .collect();
-            rects.sort_unstable();
-            assert_eq!(
-                rects, colores,
-                "{etiqueta}: un rectángulo de color por píxel con alfa > 0"
-            );
-        }
-        (CanvasBackground::Checker, true) => {
-            // Modo malla: la superposición se comprueba por lo que se ve. Sin textura del damero.
-            assert!(
-                !despues_de_la_imagen.iter().any(|c| matches!(
-                    c,
-                    Capa::Malla { textura, .. } if Some(*textura) == banco.canvas.checker_texture_id()
-                )),
-                "{etiqueta}: sin cuadriláteros de textura en modo malla"
-            );
-        }
-        (solido, _) => {
-            // Una sola pasada, por píxel y en orden.
-            let c = fondo_en(solido, 0, 0, (0, 0), 8);
-            let mut esperado: Vec<Pieza> = Vec::new();
-            for &(x, y, color) in overlay {
-                let b = g.bloque(x, y);
-                if color.a < 255 {
-                    esperado.push((b.x, b.y, b.width, b.height, color_bits(c)));
-                }
-                if color.a > 0 {
-                    esperado.push((
-                        b.x,
-                        b.y,
-                        b.width,
-                        b.height,
-                        color_bits(color_del_pixel(color)),
-                    ));
-                }
-            }
-            let reales: Vec<Pieza> = despues_de_la_imagen
-                .iter()
-                .map(|capa| match capa {
-                    Capa::Relleno { rect, color } => pieza_de_caja(*rect, ppp, color_bits(*color)),
-                    otra => panic!(
-                        "{etiqueta}: con un fondo sólido la superposición son rectángulos y hay {otra:?}"
-                    ),
-                })
-                .collect();
-            assert_eq!(
-                reales, esperado,
-                "{etiqueta}: una sola pasada: por píxel el rectángulo del fondo y encima el de color"
-            );
         }
     }
+}
+
+/// El contenido compuesto de la única baldosa de la imagen es el de la imagen del documento con
+/// los píxeles pendientes escritos encima (sin ellos, el documento): lo que la GPU muestrea.
+fn comprueba_textura(banco: &Banco, overlay: &[Pendiente], etiqueta: &str) {
+    let ids = banco.canvas.texture_ids();
+    assert_eq!(ids.len(), 1, "{etiqueta}: una sola baldosa");
+    let textura = banco
+        .texturas
+        .get(ids[0])
+        .expect("la baldosa tiene contenido");
+    assert_eq!(
+        textura.tamano,
+        [banco.imagen.ancho as usize, banco.imagen.alto as usize],
+        "{etiqueta}: tamaño de la textura"
+    );
+    assert!(
+        textura.texels == banco.imagen.texels_con(overlay),
+        "{etiqueta}: la textura compuesta no es el documento con la superposición escrita"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1365,17 +1327,6 @@ fn indexada() -> Image {
     image
 }
 
-/// Las comprobaciones de un fotograma en reposo con el damero por textura: capas en orden, un solo
-/// cuadrilátero con la textura del damero y nada más (sin superposición).
-fn comprueba_reposo(banco: &Banco, salida: &Salida, etiqueta: &str) {
-    let i = comprueba_base(banco, salida, CanvasBackground::Checker, false, etiqueta);
-    assert_eq!(
-        salida.capas().len(),
-        i + 1,
-        "{etiqueta}: fondo, damero e imagen y nada más"
-    );
-}
-
 #[test]
 fn fila_6_el_primer_fotograma_pinta_fondo_damero_e_imagen_en_ese_orden() {
     for ppp in PPPS {
@@ -1389,7 +1340,8 @@ fn fila_6_el_primer_fotograma_pinta_fondo_damero_e_imagen_en_ese_orden() {
         assert_eq!(banco.canvas.checker_texture_id(), None, "antes de pintar");
         let salida = banco.corre(vec![], &[]);
         assert!(banco.canvas.checker_texture_id().is_some());
-        comprueba_reposo(&banco, &salida, &format!("ppp {ppp} primer fotograma"));
+        let etiqueta = format!("ppp {ppp} primer fotograma");
+        comprueba_base(&banco, &salida, CanvasBackground::Checker, false, &etiqueta);
         // Mientras las cuenta: tres capas, una malla de la textura del damero, otra de la imagen.
         let capas = salida.capas();
         assert_eq!(capas.len(), 3);
@@ -1456,7 +1408,13 @@ fn fila_6_el_damero_conserva_su_textura_con_pan_zoom_refresh_set_image_y_preview
         false,
     );
     let primero = banco.corre(vec![], &[]);
-    comprueba_reposo(&banco, &primero, "primer fotograma");
+    comprueba_base(
+        &banco,
+        &primero,
+        CanvasBackground::Checker,
+        false,
+        "primer fotograma",
+    );
     let damero = banco
         .canvas
         .checker_texture_id()
@@ -1475,7 +1433,7 @@ fn fila_6_el_damero_conserva_su_textura_con_pan_zoom_refresh_set_image_y_preview
             !salida.liberadas.contains(&damero),
             "{etiqueta}: no se libera"
         );
-        comprueba_reposo(banco, salida, etiqueta);
+        comprueba_base(banco, salida, CanvasBackground::Checker, false, etiqueta);
     };
 
     // Un `pan`.
@@ -1492,6 +1450,7 @@ fn fila_6_el_damero_conserva_su_textura_con_pan_zoom_refresh_set_image_y_preview
     let salida = banco.corre(vec![], &[]);
     revisa(&banco, &salida, "refresh");
     assert_eq!(salida.subidas_de(imagen).len(), 1, "refresh sube la imagen");
+    comprueba_textura(&banco, &[], "refresh");
     // `set_image` con otra imagen (otro tamaño): otra textura de la imagen, el mismo damero.
     banco.pone_imagen(Imagen::uniforme(40, 30, TRANSPARENTE));
     let salida = banco.corre(vec![], &[]);
@@ -1500,6 +1459,7 @@ fn fila_6_el_damero_conserva_su_textura_con_pan_zoom_refresh_set_image_y_preview
     // `preview_entry` sobre una indexada.
     let indexada = indexada();
     banco.canvas.set_image(&indexada);
+    banco.documento = indexada.clone();
     banco.imagen = Imagen {
         ancho: 64,
         alto: 48,
@@ -1563,22 +1523,24 @@ fn fila_6_con_una_imagen_de_2048x64_a_x64_el_damero_no_mide_mas_que_el_lienzo() 
 
 #[test]
 fn fila_6_con_too_large_no_hay_damero_ni_textura_del_damero_solo_el_fondo() {
+    // `TooLarge` ya no depende de la textura máxima de la GPU: solo de un lado mayor que
+    // `Canvas::MAX_SIDE` (16384).
     for ppp in PPPS {
         let mut banco = Banco::sin_calentar(
             PANTALLA,
             ppp,
-            Imagen::uniforme(1025, 2, TRANSPARENTE),
+            Imagen::uniforme(16385, 1, TRANSPARENTE),
             CanvasBackground::Checker,
             false,
         );
         for k in 0..3 {
-            let salida = banco.corre_max(vec![], &[], Some(1024));
+            let salida = banco.corre(vec![], &[]);
             assert_eq!(
                 salida.info().error,
                 Some(CanvasError::TooLarge {
-                    width: 1025,
-                    height: 2,
-                    max: 1024
+                    width: 16385,
+                    height: 1,
+                    max: 16384
                 }),
                 "ppp {ppp} fotograma {k}"
             );
@@ -1595,8 +1557,8 @@ fn fila_6_con_too_large_no_hay_damero_ni_textura_del_damero_solo_el_fondo() {
                 "sin textura del damero"
             );
             assert_eq!(banco.canvas.texture_id(), None);
-            // Con otro lado máximo de textura egui rehace el atlas de la fuente (`Managed(0)`),
-            // pero no se sube ninguna textura del lienzo.
+            // El primer fotograma de egui sube el atlas de la fuente (`Managed(0)`), pero no se
+            // sube ninguna textura del lienzo.
             assert!(
                 salida
                     .subidas
@@ -1632,14 +1594,23 @@ fn fila_6_el_documento_la_textura_de_la_imagen_y_el_state_id_quedan_intactos() {
     // Lo que sube el lienzo es la imagen, intacta: los mismos bytes que `to_rgba8`.
     let esperado = egui::ColorImage::from_rgba_unmultiplied([64, 48], &bytes);
     assert_eq!(color.pixels, esperado.pixels);
-    // Varios fotogramas con superposición y con cada fondo no tocan nada.
+    // Con la superposición la textura es el documento con esos píxeles escritos, y varios
+    // fotogramas con cada fondo no la tocan (la superposición ya está en la textura).
+    let overlay = bloques();
+    banco.corre(vec![], &overlay);
+    comprueba_textura(&banco, &overlay, "con la superposición");
     for fondo in FONDOS {
         banco.canvas.set_background(fondo);
         for _ in 0..2 {
-            let salida = banco.corre(vec![], &bloques());
+            let salida = banco.corre(vec![], &overlay);
             assert!(salida.subidas_de(textura).is_empty(), "{fondo:?}");
         }
+        comprueba_textura(&banco, &overlay, &format!("{fondo:?}"));
     }
+    // Al quitarla (y `sync`), la textura vuelve a ser el documento, byte a byte.
+    banco.corre(vec![], &[]);
+    comprueba_textura(&banco, &[], "tras quitar la superposición");
+    assert!(banco.texturas.get(textura).expect("textura").texels == esperado.pixels);
     assert_eq!(to_rgba8(doc.image(id).expect("imagen")), bytes);
     assert_eq!(doc.state_id(), state_id);
     assert!(!doc.can_undo());
@@ -1649,7 +1620,10 @@ fn fila_6_el_documento_la_textura_de_la_imagen_y_el_state_id_quedan_intactos() {
 // Fila 7: la superposición con el damero
 // ---------------------------------------------------------------------------------------------
 
-/// Fila 7 (y 14 y 15 con otro fondo o camino): el banco de bloques de `overlay_small_zoom.rs`.
+/// Fila 7 (y 14 y 15 con otro fondo o camino): el banco de bloques de `overlay_small_zoom.rs`. La
+/// superposición va en la textura de la baldosa: no hay ninguna forma de superposición
+/// (`comprueba_base`) y cada píxel físico se ve como el oráculo (`fallos`), a ×1 también los de
+/// 1×1 píxel físico.
 fn bloques_con(ppp: f32, zoom: u32, fondo: CanvasBackground, malla: bool) {
     let etiqueta = format!("ppp {ppp} ×{zoom} {fondo:?} malla={malla}");
     let mut banco = Banco::nuevo_con(ppp, imagen_azul(), fondo, malla);
@@ -1662,39 +1636,14 @@ fn bloques_con(ppp: f32, zoom: u32, fondo: CanvasBackground, malla: bool) {
         i64::from(zoom),
         "{etiqueta}: el zoom se mide en píxeles físicos"
     );
-    let i = comprueba_base(&banco, &escena.salida, fondo, malla, &etiqueta);
-    let capas = escena.salida.capas();
-    comprueba_superposicion(
-        &banco,
-        &g,
-        &capas[i + 1..],
-        &overlay,
-        fondo,
-        malla,
-        &etiqueta,
-    );
-    // Teselado: con el damero por textura, como mucho dos mallas de superposición (todos los
-    // cuadriláteros y todos los rectángulos de color).
-    if fondo == CanvasBackground::Checker && !malla {
-        let imagen = banco.canvas.texture_id().expect("textura");
-        let en_la_imagen = escena
-            .primitivas
-            .iter()
-            .position(|p| matches!(&p.primitive, Primitive::Mesh(m) if m.texture_id == imagen))
-            .expect("malla de la imagen teselada");
-        assert!(
-            escena.primitivas.len() - en_la_imagen - 1 <= 2,
-            "{etiqueta}: como mucho 2 mallas de superposición, hay {}",
-            escena.primitivas.len() - en_la_imagen - 1
-        );
-    }
-    // Lo que se ve en cada píxel físico (a ×1, también los de 1×1 píxel físico).
+    comprueba_base(&banco, &escena.salida, fondo, malla, &etiqueta);
+    comprueba_textura(&banco, &overlay, &etiqueta);
     let f = fallos(&escena, &banco.imagen, &overlay, fondo);
     sin_fallos(&f, &etiqueta);
 }
 
 #[test]
-fn fila_7_la_superposicion_es_un_cuadrilatero_por_pixel_con_alfa_menor_que_255_y_se_ve_exacta() {
+fn fila_7_la_superposicion_no_tiene_formas_propias_y_se_ve_exacta() {
     for ppp in PPPS {
         for zoom in 1..=3 {
             bloques_con(ppp, zoom, CanvasBackground::Checker, false);
@@ -1704,13 +1653,22 @@ fn fila_7_la_superposicion_es_un_cuadrilatero_por_pixel_con_alfa_menor_que_255_y
 
 #[test]
 fn fila_7_a_x1_se_ven_los_pixeles_de_1x1_pixel_fisico_con_cualquier_escala() {
-    // El fallo de `b702d8e`: a ×1 la superposición de 1×1 píxel físico no se veía.
+    // El fallo de `b702d8e`: a ×1 la superposición de 1×1 píxel físico no se veía. Con la
+    // superposición en la textura se reexpresa así: no hay formas que se degeneren y cada píxel
+    // pendiente se ve.
     for ppp in PPPS {
         let mut banco = Banco::nuevo(ppp, imagen_azul());
         banco.con_zoom(1);
         let overlay = bloques();
         let escena = banco.escena(&overlay);
         assert_eq!(escena.geom.z, 1);
+        comprueba_base(
+            &banco,
+            &escena.salida,
+            CanvasBackground::Checker,
+            false,
+            &format!("ppp {ppp} ×1"),
+        );
         let f = fallos(&escena, &banco.imagen, &overlay, CanvasBackground::Checker);
         sin_fallos(&f, &format!("ppp {ppp} ×1"));
         // Y los 24 píxeles pendientes no se ven como la imagen azul que hay debajo.
@@ -1726,12 +1684,12 @@ fn fila_7_a_x1_se_ven_los_pixeles_de_1x1_pixel_fisico_con_cualquier_escala() {
 }
 
 #[test]
-fn fila_7_con_solo_pixeles_opacos_no_hay_cuadrilateros_en_la_superposicion() {
+fn fila_7_con_solo_pixeles_opacos_no_hay_formas_en_la_superposicion_y_se_ven_opacos() {
     for ppp in PPPS {
         let mut banco = Banco::nuevo(ppp, imagen_azul());
         let overlay: Vec<Pendiente> = (0..6).map(|x| (10 + x, 4, ROJO)).collect();
-        let salida = banco.corre(vec![], &overlay);
-        let capas = salida.capas();
+        let escena = banco.escena(&overlay);
+        let capas = escena.salida.capas();
         let damero = banco
             .canvas
             .checker_texture_id()
@@ -1744,23 +1702,38 @@ fn fila_7_con_solo_pixeles_opacos_no_hay_cuadrilateros_en_la_superposicion() {
             cuadrilateros, 1,
             "ppp {ppp}: solo el damero de fondo de la imagen"
         );
-        let i = comprueba_base(&banco, &salida, CanvasBackground::Checker, false, "opacos");
-        let g = banco.geom(salida.info());
-        comprueba_superposicion(
+        // Fondo, damero y la baldosa: ningún rectángulo de color por píxel.
+        let i = comprueba_base(
             &banco,
-            &g,
-            &capas[i + 1..],
-            &overlay,
+            &escena.salida,
             CanvasBackground::Checker,
             false,
             "opacos",
         );
-        assert_eq!(capas.len() - i - 1, 6, "un rectángulo de color por píxel");
+        assert_eq!(capas.len(), i + 1, "ppp {ppp}: la baldosa y nada más");
+        let f = fallos(&escena, &banco.imagen, &overlay, CanvasBackground::Checker);
+        sin_fallos(&f, &format!("ppp {ppp} opacos"));
+        // Cada píxel pendiente se ve rojo opaco, sin el damero.
+        let rojo = Visto::de_color(gris(ROJO));
+        for &(x, y, _) in &overlay {
+            let b = escena.geom.bloque(x, y);
+            for py in b.y..b.y + b.height {
+                for px in b.x..b.x + b.width {
+                    let visto = escena.buffer.en(px, py);
+                    assert!(
+                        visto.cerca(rojo, TOLERANCIA),
+                        "({px}, {py}) se ve {visto:?}"
+                    );
+                }
+            }
+        }
     }
 }
 
 /// El trazo del borrador de la fila 10 de la 17a: veinte píxeles de alfa 0 sobre una imagen azul,
-/// varios fotogramas, `End` (la imagen cambia) y `refresh`.
+/// varios fotogramas, `End` (la imagen cambia) y `refresh`. El borrador deja ver el fondo
+/// elegido: se mira muestreando la textura (cada píxel pendiente es transparente) y, tras
+/// rasterizar, el color de cada píxel borrado es el mismo antes y después de soltar.
 fn trazo_del_borrador(ppp: f32, fondo: CanvasBackground, malla: bool) {
     let etiqueta = format!("ppp {ppp} {fondo:?} malla={malla}");
     let mut banco = Banco::nuevo_con(ppp, imagen_azul(), fondo, malla);
@@ -1773,27 +1746,14 @@ fn trazo_del_borrador(ppp: f32, fondo: CanvasBackground, malla: bool) {
             .map(|&(x, y)| (x, y, TRANSPARENTE))
             .collect()
     };
-    // Cada fotograma añade un píxel; la superposición no sube nada.
+    // Cada fotograma añade un píxel: la textura lo lleva transparente y no hay formas nuevas.
     for n in 1..=20 {
         let overlay = overlay_de(n);
         let salida = banco.corre(vec![], &overlay);
-        assert!(
-            salida.subidas.is_empty(),
-            "{etiqueta}: {n} píxeles, sin subidas"
-        );
-        let i = comprueba_base(&banco, &salida, fondo, malla, &etiqueta);
-        let g = banco.geom(salida.info());
-        comprueba_superposicion(
-            &banco,
-            &g,
-            &salida.capas()[i + 1..],
-            &overlay,
-            fondo,
-            malla,
-            &etiqueta,
-        );
+        comprueba_base(&banco, &salida, fondo, malla, &etiqueta);
+        comprueba_textura(&banco, &overlay, &format!("{etiqueta}: {n} píxeles"));
     }
-    // Varios fotogramas más con los veinte, sin cambios.
+    // Varios fotogramas más con los veinte, sin cambios: no hay nada nuevo que subir.
     let overlay = overlay_de(20);
     for _ in 0..3 {
         let salida = banco.corre(vec![], &overlay);
@@ -1817,6 +1777,8 @@ fn trazo_del_borrador(ppp: f32, fondo: CanvasBackground, malla: bool) {
     );
     assert_eq!(tras_soltar.salida.subidas_de(texto_imagen).len(), 1);
     assert_eq!(banco.canvas.checker_texture_id(), damero_antes);
+    comprueba_base(&banco, &tras_soltar.salida, fondo, malla, &etiqueta);
+    comprueba_textura(&banco, &[], &format!("{etiqueta}: tras soltar"));
     let f = fallos(&tras_soltar, &banco.imagen, &[], fondo);
     sin_fallos(&f, &format!("{etiqueta}: tras soltar"));
 
@@ -2030,6 +1992,8 @@ fn fila_8_sin_imagen_solo_se_pinta_el_fondo_sin_fallo_ni_textura_del_damero() {
             pantalla: PANTALLA,
             canvas: Canvas::new(),
             imagen: Imagen::uniforme(1, 1, TRANSPARENTE),
+            documento: Imagen::uniforme(1, 1, TRANSPARENTE).image(),
+            texturas: Texturas::new(),
         };
         for k in 0..3 {
             let salida = banco.corre(
@@ -2049,29 +2013,52 @@ fn fila_8_sin_imagen_solo_se_pinta_el_fondo_sin_fallo_ni_textura_del_damero() {
 }
 
 #[test]
-fn fila_8_con_la_textura_maxima_de_1024_y_una_imagen_de_1025_de_ancho_solo_se_pinta_el_fondo() {
+fn fila_8_con_la_textura_maxima_de_1024_y_una_imagen_de_1025_de_ancho_se_pinta_en_dos_baldosas() {
+    // Antes `TooLarge` y solo el fondo; ahora la imagen se abre y se pinta en dos baldosas (de 1024×2
+    // y de 1×2) con el damero debajo. El lienzo es lo bastante ancho para que Ajustar dé ×1 y se
+    // vea entera, y la superposición cruza la unión de las dos baldosas.
+    let imagen = Imagen::uniforme(1025, 2, ROJO)
+        .con(1023, 0, ROJO_MEDIO)
+        .con(1023, 1, TRANSPARENTE)
+        .con(1024, 0, AZUL)
+        .con(1024, 1, ROJO_MEDIO);
     let mut banco = Banco::sin_calentar(
-        PANTALLA,
+        vec2(1100.0, 300.0),
         1.0,
-        Imagen::uniforme(1025, 2, TRANSPARENTE),
+        imagen,
         CanvasBackground::Checker,
         false,
     );
+    let mut overlay = bloques();
+    overlay.extend([
+        (1022, 0, AZUL),
+        (1023, 0, TRANSPARENTE),
+        (1024, 0, ROJO_MEDIO),
+        (1024, 1, TRANSPARENTE),
+    ]);
+    let mut ultima = None;
     for _ in 0..2 {
-        let salida = banco.corre_max(vec![], &bloques(), Some(1024));
-        assert!(matches!(
-            salida.info().error,
-            Some(CanvasError::TooLarge { max: 1024, .. })
-        ));
-        assert_eq!(salida.capas().len(), 1);
-        assert_eq!(banco.canvas.checker_texture_id(), None);
-        assert!(
-            salida
-                .subidas
-                .iter()
-                .all(|(id, _)| *id == TextureId::default())
-        );
+        let salida = banco.corre_max(vec![], &overlay, Some(1024));
+        assert_eq!(salida.info().error, None, "se abre sin error");
+        ultima = Some(salida);
     }
+    let salida = ultima.expect("dos fotogramas");
+    let ids = banco.canvas.texture_ids();
+    assert_eq!(ids.len(), 2, "dos baldosas de 1024 de lado como mucho");
+    let tamanos: Vec<[usize; 2]> = ids
+        .iter()
+        .map(|id| banco.texturas.get(*id).expect("contenido").tamano)
+        .collect();
+    assert_eq!(tamanos, [[1024, 2], [1, 2]], "tamaños recortados");
+    let i = comprueba_base(&banco, &salida, CanvasBackground::Checker, false, "1025×2");
+    assert_eq!(salida.capas().len(), i + 2, "una malla por baldosa");
+    let escena = banco.rasteriza_salida(salida);
+    assert_eq!(escena.geom.z, 1, "Ajustar da ×1");
+    assert_eq!(escena.geom.ancho, 1025);
+    // Cada píxel físico es el oráculo: incluida la unión de las baldosas, sin huecos ni solapes
+    // (un hueco dejaría ver el damero bajo el rojo; un solape compondría dos veces el alfa).
+    let f = fallos(&escena, &banco.imagen, &overlay, CanvasBackground::Checker);
+    sin_fallos(&f, "1025×2 con textura máxima de 1024");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2079,7 +2066,7 @@ fn fila_8_con_la_textura_maxima_de_1024_y_una_imagen_de_1025_de_ancho_solo_se_pi
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_14_con_un_fondo_solido_la_superposicion_es_una_sola_pasada_y_se_ve_exacta() {
+fn fila_14_con_un_fondo_solido_la_superposicion_no_tiene_formas_propias_y_se_ve_exacta() {
     for fondo in SOLIDOS {
         for ppp in PPPS {
             for zoom in 1..=3 {
@@ -2100,7 +2087,7 @@ fn fila_14_con_un_fondo_solido_no_se_crea_la_textura_del_damero() {
             assert_eq!(
                 salida.subidas.len(),
                 salida.subidas_de(imagen).len(),
-                "{fondo:?}: solo se sube la imagen"
+                "{fondo:?}: solo se sube la baldosa de la imagen"
             );
         }
         assert_eq!(banco.canvas.background(), fondo);
@@ -2153,8 +2140,9 @@ impl Trazo {
         trazo
     }
 
-    /// Un fotograma como el de la app: eventos del lienzo a la herramienta, `refresh` si el
-    /// documento cambió y `paint` con la superposición de `ToolState::preview`.
+    /// Un fotograma como el de la app: eventos del lienzo a la herramienta, `set_overlay` con la
+    /// superposición de `ToolState::preview`, `refresh` si el documento cambió (si no, `sync`) y
+    /// `paint`.
     fn fotograma(&mut self, events: Vec<Event>) -> Salida {
         let doc = &mut self.doc;
         let tool = &mut self.tool;
@@ -2167,14 +2155,17 @@ impl Trazo {
                     .expect("el borrador no falla");
             }
             let image = doc.image(id).expect("hay imagen");
-            if cambio {
-                canvas.refresh(ui.ctx(), image);
-            }
             let overlay: Vec<Pendiente> = tool
                 .preview()
                 .filter_map(|e| Some((e.x, e.y, pixel_rgba(image, e.pixel)?)))
                 .collect();
-            let info = canvas.paint(ui, overlay);
+            canvas.set_overlay(ui.ctx(), image, &overlay);
+            if cambio {
+                canvas.refresh(ui.ctx(), image);
+            } else {
+                canvas.sync(ui.ctx(), image).expect("el documento se carga");
+            }
+            let info = canvas.paint(ui);
             (vec![], Some(info))
         })
     }
@@ -2193,6 +2184,15 @@ impl Trazo {
             .preview()
             .filter_map(|e| Some((e.x, e.y, pixel_rgba(image, e.pixel)?)))
             .collect()
+    }
+
+    /// Rasteriza el fotograma y comprueba que cada píxel físico se ve como el oráculo: la imagen
+    /// azul del documento (que no cambia hasta soltar) con los píxeles pendientes borrados sobre
+    /// el fondo.
+    fn se_ve_como_el_oraculo(&self, salida: Salida, fondo: CanvasBackground, etiqueta: &str) {
+        let escena = self.banco.rasteriza_salida(salida);
+        let f = fallos(&escena, &self.banco.imagen, &self.pendientes(), fondo);
+        sin_fallos(&f, etiqueta);
     }
 }
 
@@ -2217,25 +2217,16 @@ fn fila_14_cambiar_de_fondo_a_mitad_de_trazo_cambia_el_siguiente_fotograma_sin_t
         .checker_texture_id()
         .expect("textura del damero");
 
-    // Con el damero: un cuadrilátero por píxel pendiente.
+    // Con el damero: sin formas de superposición y los cinco píxeles borrados dejan ver el damero.
     let salida = t.fotograma(vec![]);
-    let i = comprueba_base(
+    comprueba_base(
         &t.banco,
         &salida,
         CanvasBackground::Checker,
         false,
         "damero",
     );
-    let g = t.banco.geom(salida.info());
-    comprueba_superposicion(
-        &t.banco,
-        &g,
-        &salida.capas()[i + 1..],
-        &t.pendientes(),
-        CanvasBackground::Checker,
-        false,
-        "damero",
-    );
+    t.se_ve_como_el_oraculo(salida, CanvasBackground::Checker, "damero");
 
     // Cambia el fondo a mitad de trazo: el siguiente fotograma ya es el sólido.
     for fondo in [
@@ -2246,17 +2237,8 @@ fn fila_14_cambiar_de_fondo_a_mitad_de_trazo_cambia_el_siguiente_fotograma_sin_t
         t.banco.canvas.set_background(fondo);
         assert_eq!(t.banco.canvas.background(), fondo);
         let salida = t.fotograma(vec![]);
-        let i = comprueba_base_con_damero_existente(&t.banco, &salida, fondo);
-        let g = t.banco.geom(salida.info());
-        comprueba_superposicion(
-            &t.banco,
-            &g,
-            &salida.capas()[i + 1..],
-            &t.pendientes(),
-            fondo,
-            false,
-            &format!("{fondo:?} a mitad de trazo"),
-        );
+        comprueba_base_con_damero_existente(&t.banco, &salida, fondo);
+        t.se_ve_como_el_oraculo(salida, fondo, &format!("{fondo:?} a mitad de trazo"));
         // El trazo sigue: el documento, la herramienta y la superposición, como estaban.
         assert!(t.tool.busy());
         assert_eq!(t.tool.tool(), Tool::Eraser);
@@ -2275,37 +2257,23 @@ fn fila_14_cambiar_de_fondo_a_mitad_de_trazo_cambia_el_siguiente_fotograma_sin_t
     let salida = t.fotograma(vec![mover_a(t.centro(16, 5))]);
     assert_eq!(t.banco.canvas.checker_texture_id(), Some(damero));
     assert!(salida.subidas_de(damero).is_empty(), "no se vuelve a subir");
-    let i = comprueba_base(
+    comprueba_base(
         &t.banco,
         &salida,
         CanvasBackground::Checker,
         false,
         "de vuelta",
     );
-    let g = t.banco.geom(salida.info());
-    comprueba_superposicion(
-        &t.banco,
-        &g,
-        &salida.capas()[i + 1..],
-        &t.pendientes(),
-        CanvasBackground::Checker,
-        false,
-        "de vuelta",
-    );
+    t.se_ve_como_el_oraculo(salida, CanvasBackground::Checker, "de vuelta");
     assert_eq!(t.pendientes().len(), 7);
     assert_eq!(t.doc.state_id(), state_id);
 }
 
 /// Como `comprueba_base` para un sólido cuando la textura del damero ya existe de antes (no se
 /// vuelve a crear, pero tampoco se usa): sin la comprobación de que no existe.
-fn comprueba_base_con_damero_existente(
-    banco: &Banco,
-    salida: &Salida,
-    fondo: CanvasBackground,
-) -> usize {
+fn comprueba_base_con_damero_existente(banco: &Banco, salida: &Salida, fondo: CanvasBackground) {
     let capas = salida.capas();
     let g = banco.geom(salida.info());
-    let imagen = banco.canvas.texture_id().expect("textura de la imagen");
     let damero = banco
         .canvas
         .checker_texture_id()
@@ -2325,22 +2293,28 @@ fn comprueba_base_con_damero_existente(
     };
     assert_eq!(*color, fondo_en(fondo, 0, 0, (0, 0), 8));
     assert!(casi(*rect, rect_en_puntos(area, g.ppp)));
-    assert!(matches!(&capas[2], Capa::Malla { textura, .. } if *textura == imagen));
-    2
+    comprueba_baldosas(banco, &g, &capas, 2, &format!("{fondo:?}"));
 }
 
 #[test]
 fn fila_14_volver_a_checker_crea_la_textura_del_damero_una_sola_vez() {
     let mut banco =
         Banco::sin_calentar(PANTALLA, 1.0, imagen_azul(), CanvasBackground::Black, false);
+    let imagen = banco.canvas.texture_id().expect("textura de la imagen");
     for k in 0..3 {
         let salida = banco.corre(vec![], &bloques());
         assert_eq!(banco.canvas.checker_texture_id(), None);
-        assert_eq!(
-            salida.subidas.len(),
-            usize::from(k == 0),
-            "solo la imagen, una vez"
-        );
+        if k == 0 {
+            // La carga de la baldosa y los bloques de la superposición: solo la imagen.
+            assert!(!salida.subidas.is_empty());
+            assert_eq!(
+                salida.subidas.len(),
+                salida.subidas_de(imagen).len(),
+                "solo la baldosa de la imagen"
+            );
+        } else {
+            assert!(salida.subidas.is_empty(), "nada nuevo que subir");
+        }
     }
     banco.canvas.set_background(CanvasBackground::Checker);
     let salida = banco.corre(vec![], &bloques());
@@ -2447,10 +2421,10 @@ fn fila_15_en_modo_malla_no_hay_textura_del_damero_ni_subida_en_ningun_fotograma
     );
     let primero = banco.corre(vec![], &bloques());
     assert_eq!(banco.canvas.checker_texture_id(), None);
-    // Solo la imagen se sube.
+    // Solo se sube la baldosa de la imagen (la carga y los bloques de la superposición).
     let textura = banco.canvas.texture_id().expect("textura de la imagen");
-    assert_eq!(primero.subidas.len(), 1);
-    assert_eq!(primero.subidas_de(textura).len(), 1);
+    assert!(!primero.subidas.is_empty());
+    assert_eq!(primero.subidas.len(), primero.subidas_de(textura).len());
     for _ in 0..3 {
         let f = banco.corre(vec![], &bloques());
         assert!(f.subidas.is_empty());
@@ -2471,7 +2445,13 @@ fn fila_15_al_desactivar_el_modo_malla_vuelve_el_camino_de_la_textura() {
         .checker_texture_id()
         .expect("vuelve la textura");
     assert_eq!(salida.subidas_de(damero).len(), 1, "una subida");
-    comprueba_reposo(&banco, &salida, "tras desactivar");
+    comprueba_base(
+        &banco,
+        &salida,
+        CanvasBackground::Checker,
+        false,
+        "tras desactivar",
+    );
     // Activarlo de nuevo no crea otra textura ni sube nada; el camino de la malla vuelve.
     banco.canvas.set_checker_mesh(true);
     let salida = banco.corre(vec![], &[]);
@@ -2489,7 +2469,13 @@ fn fila_15_al_desactivar_el_modo_malla_vuelve_el_camino_de_la_textura() {
     let salida = banco.corre(vec![], &[]);
     assert!(salida.subidas.is_empty(), "no se vuelve a subir");
     assert_eq!(banco.canvas.checker_texture_id(), Some(damero));
-    comprueba_reposo(&banco, &salida, "desactivado otra vez");
+    comprueba_base(
+        &banco,
+        &salida,
+        CanvasBackground::Checker,
+        false,
+        "desactivado otra vez",
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2695,17 +2681,8 @@ proptest! {
             "ppp {} ×{} {:?} malla={} desplazo {:?}: {}",
             c.ppp, c.zoom, c.fondo, c.malla, c.desplazo, f.resumen()
         );
-        // Y las capas del fondo de la imagen según el fondo y el camino.
-        let i = comprueba_base(&banco, &escena.salida, c.fondo, c.malla, "propiedad 3");
-        let capas = escena.salida.capas();
-        comprueba_superposicion(
-            &banco,
-            &escena.geom,
-            &capas[i + 1..],
-            &c.overlay,
-            c.fondo,
-            c.malla,
-            "propiedad 3",
-        );
+        // Y las capas según el fondo y el camino: sin formas de superposición.
+        comprueba_base(&banco, &escena.salida, c.fondo, c.malla, "propiedad 3");
+        comprueba_textura(&banco, &c.overlay, "propiedad 3");
     }
 }
