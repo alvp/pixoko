@@ -21,6 +21,7 @@ Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unida
 - **`screen_to_image_i32` conserva un parámetro `Size` sin usar** (`_image`, [`view.rs`](../crates/px-ui/src/view.rs)). Quitarlo toca las 14 llamadas de `crates/px-ui/tests/view_i32.rs` y la de `canvas.rs`. [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md), decisión 7.
 - **Campo propio `tool` en `TitleInfo`**, en vez de meter `status_text` dentro de `color`. Tocaría los 13 literales de los tests de la unidad 6. [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md), decisión 6.
 - **Acceso por filas (y bytes) a `Image`.** Unidad 12 del hito. [`hito-1-png.md`](hito-1-png.md), «Para el hito 2»; reparto en [`hito-2-hsl.md`](hito-2-hsl.md), «Reparto de las notas».
+- **`Image::filled(width, height, pixel)` e `Image::try_clone()`, aditivos en `px-core`**, candidatos de la unidad 12 para abaratar la creación de lienzos grandes: la unidad 19 (nueva imagen) rellena con `set_pixel` y construye dos imágenes (≈ 0,9 s a 8192² RGBA con fondo blanco, medido en release; ≈ 0,15 s con estas dos). `px-core` no se tocó en la 19 por decisión del 2026-10-19. [`hito-2-nueva-imagen.md`](hito-2-nueva-imagen.md), D10.
 
 ## PNG
 
