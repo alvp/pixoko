@@ -6,12 +6,14 @@
 
 use egui::{Key, Modifiers};
 use px_core::{Command, Document, DocumentError, Image, ImageId, Pixel, PixelEdit};
-use px_raster::{Line, draw_line, flood_fill};
+use px_raster::{Line, fill_command, line_command};
 
 use crate::canvas::{CanvasEvent, CanvasInput};
 use crate::color::{ColorChoice, SlotColors, choice_label_with, pixel_for_choice};
+use crate::dirty::{Change, dirty_of};
 use crate::pick::{Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable};
 use crate::stroke::Stroke;
+use crate::view::Size;
 
 /// Herramienta activa.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -130,6 +132,7 @@ pub struct ToolState {
     tool: Tool,
     gesture: Gesture,
     events: Vec<ToolEvent>,
+    changes: Vec<Change>,
 }
 
 impl ToolState {
@@ -151,6 +154,33 @@ impl ToolState {
     /// borrador), en orden.
     pub fn take_events(&mut self) -> Vec<ToolEvent> {
         std::mem::take(&mut self.events)
+    }
+
+    /// Vacía y devuelve los cambios aplicados al documento desde la última vez, en orden: el
+    /// `state_id` que dejó cada `apply` y los bloques que tocó (para el registro de la sesión y la
+    /// región sucia del lienzo).
+    pub fn take_changes(&mut self) -> Vec<Change> {
+        std::mem::take(&mut self.changes)
+    }
+
+    /// Aplica `command` y, si cambió algo, anota su región.
+    fn apply(&mut self, doc: &mut Document, command: Command) -> Result<bool, DocumentError> {
+        let image = match &command {
+            Command::SetPixels { image, .. } | Command::FillSpans { image, .. } => Some(*image),
+            _ => None,
+        };
+        let size = image
+            .and_then(|id| doc.image(id))
+            .map(|target| Size::new(target.width(), target.height()));
+        let blocks = size.map(|size| dirty_of(&command, size));
+        let changed = doc.apply(command)?;
+        if changed && let Some(blocks) = blocks {
+            self.changes.push(Change {
+                state: doc.state_id(),
+                blocks,
+            });
+        }
+        Ok(changed)
     }
 
     /// `Select` cambia de herramienta solo en reposo. `Cancel` descarta una línea pendiente
@@ -209,7 +239,13 @@ impl ToolState {
                 Ok(false)
             }
             CanvasEvent::StrokeEnd => match std::mem::take(&mut self.gesture) {
-                Gesture::Pencil { stroke, .. } => stroke.commit(doc, image),
+                Gesture::Pencil { stroke, .. } => {
+                    if stroke.is_empty() {
+                        return Ok(false);
+                    }
+                    let pixels = stroke.into_pixels();
+                    self.apply(doc, Command::SetPixels { image, pixels })
+                }
                 Gesture::Erase { stroke, .. } => {
                     let Some(target) = doc.image(image) else {
                         return Ok(false);
@@ -223,11 +259,14 @@ impl ToolState {
                     if pixels.is_empty() {
                         return Ok(false);
                     }
-                    doc.apply(Command::SetPixels { image, pixels })
+                    self.apply(doc, Command::SetPixels { image, pixels })
                 }
                 Gesture::Line {
                     from, to, pixel, ..
-                } => draw_line(doc, image, from, to, pixel),
+                } => match line_command(doc, image, from, to, pixel)? {
+                    Some(command) => self.apply(doc, command),
+                    None => Ok(false),
+                },
                 Gesture::Idle | Gesture::Waiting | Gesture::Dropper(_) => Ok(false),
             },
         }
@@ -321,7 +360,10 @@ impl ToolState {
                 };
                 Ok(false)
             }
-            Tool::Fill => flood_fill(doc, image, pos.0, pos.1, pixel),
+            Tool::Fill => match fill_command(doc, image, pos.0, pos.1, pixel)? {
+                Some(command) => self.apply(doc, command),
+                None => Ok(false),
+            },
             Tool::Dropper | Tool::Eraser => Ok(false),
         }
     }

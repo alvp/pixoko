@@ -1,7 +1,11 @@
 //! Conversión de una `Image` a bytes RGBA para subirla como textura
 //! (specs/hito-2-ventana.md, «De `Image` a textura»).
 
+use egui::Color32;
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
+
+use crate::canvas::CanvasError;
+use crate::tiles::{TileAlloc, TileRect};
 
 /// Bytes RGBA de la imagen, `ancho · alto · 4`, fila a fila (la de arriba primero) y con alfa
 /// directo (no premultiplicado).
@@ -99,4 +103,117 @@ pub fn to_rgba8_with_entry(image: &Image, index: u8, color: Rgba) -> Vec<u8> {
         bytes.extend_from_slice(&table[usize::from(index)]);
     }
     bytes
+}
+
+/// Los píxeles del rectángulo `rect` (recortado a la imagen) como `Color32` premultiplicado,
+/// por filas: lo mismo que recortar `ColorImage::from_rgba_unmultiplied(to_rgba8(image))`, sin el
+/// `Vec` intermedio de `to_rgba8` ni clonar la imagen. Fuera de la imagen, vacío.
+pub fn tile_pixels(image: &Image, rect: TileRect) -> Vec<Color32> {
+    let mut out = Vec::new();
+    fill_tile(image, rect, None, &mut out);
+    out
+}
+
+/// Como [`tile_pixels`], con la entrada `index` de la paleta valiendo `color` (vista previa de
+/// la edición de un color; los bytes de [`to_rgba8_with_entry`]).
+pub fn tile_pixels_with_entry(
+    image: &Image,
+    rect: TileRect,
+    index: u8,
+    color: Rgba,
+) -> Vec<Color32> {
+    let mut out = Vec::new();
+    fill_tile(image, rect, Some((index, color)), &mut out);
+    out
+}
+
+/// Como [`tile_pixels`], pidiendo el búfer a `alloc` (`Err(OutOfMemory)` si no hay).
+pub fn try_tile_pixels(
+    image: &Image,
+    rect: TileRect,
+    alloc: &mut dyn TileAlloc,
+) -> Result<Vec<Color32>, CanvasError> {
+    try_fill(image, rect, None, alloc)
+}
+
+/// Como [`tile_pixels_with_entry`], pidiendo el búfer a `alloc`.
+pub fn try_tile_pixels_with_entry(
+    image: &Image,
+    rect: TileRect,
+    index: u8,
+    color: Rgba,
+    alloc: &mut dyn TileAlloc,
+) -> Result<Vec<Color32>, CanvasError> {
+    try_fill(image, rect, Some((index, color)), alloc)
+}
+
+fn try_fill(
+    image: &Image,
+    rect: TileRect,
+    entry: Option<(u8, Rgba)>,
+    alloc: &mut dyn TileAlloc,
+) -> Result<Vec<Color32>, CanvasError> {
+    let Some(clipped) = clip_to_image(image, rect) else {
+        return Ok(Vec::new());
+    };
+    let len = clipped.width as usize * clipped.height as usize;
+    let mut out = alloc.pixels(len).ok_or(CanvasError::OutOfMemory)?;
+    fill_tile(image, clipped, entry, &mut out);
+    Ok(out)
+}
+
+fn clip_to_image(image: &Image, rect: TileRect) -> Option<TileRect> {
+    rect.intersect(&TileRect {
+        x: 0,
+        y: 0,
+        width: image.width(),
+        height: image.height(),
+    })
+}
+
+/// Añade a `out` los píxeles del recorte de `rect`; el búfer ya viene con la capacidad (o crece).
+fn fill_tile(image: &Image, rect: TileRect, entry: Option<(u8, Rgba)>, out: &mut Vec<Color32>) {
+    let Some(rect) = clip_to_image(image, rect) else {
+        return;
+    };
+    let (x0, w) = (rect.x as usize, rect.width as usize);
+    out.reserve_exact(w * rect.height as usize);
+    let table = (image.mode() == Mode::Indexed).then(|| {
+        let replace = entry.filter(|(index, _)| {
+            image
+                .palette()
+                .is_some_and(|palette| usize::from(*index) < palette.len())
+        });
+        resolved_table(image.palette(), replace)
+            .map(|c| Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]))
+    });
+    for y in rect.y..rect.y + rect.height {
+        let Some(row) = image.row(y) else {
+            break;
+        };
+        match image.mode() {
+            Mode::Rgba => {
+                for px in row[x0 * 4..(x0 + w) * 4].as_chunks::<4>().0 {
+                    out.push(Color32::from_rgba_unmultiplied(px[0], px[1], px[2], px[3]));
+                }
+            }
+            Mode::Gray => {
+                for &g in &row[x0..x0 + w] {
+                    out.push(Color32::from_rgba_unmultiplied(g, g, g, 255));
+                }
+            }
+            Mode::GrayAlpha => {
+                for px in row[x0 * 2..(x0 + w) * 2].as_chunks::<2>().0 {
+                    out.push(Color32::from_rgba_unmultiplied(px[0], px[0], px[0], px[1]));
+                }
+            }
+            Mode::Indexed => {
+                if let Some(table) = &table {
+                    for &index in &row[x0..x0 + w] {
+                        out.push(table[usize::from(index)]);
+                    }
+                }
+            }
+        }
+    }
 }

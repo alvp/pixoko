@@ -64,6 +64,11 @@ impl Stroke {
         &self.pixels
     }
 
+    /// Los píxeles pendientes, sin copiarlos.
+    pub fn into_pixels(self) -> Vec<PixelEdit> {
+        self.pixels
+    }
+
     pub fn is_empty(&self) -> bool {
         self.pixels.is_empty()
     }

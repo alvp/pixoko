@@ -4,6 +4,7 @@
 //! La geometría vive en [`crate::view`] (sin tipos de egui); aquí solo se traducen las entradas
 //! de egui a operaciones de [`View`] y el resultado a un rectángulo y una textura.
 
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 
@@ -16,8 +17,10 @@ use px_core::{Image, Rgba};
 
 use crate::background::{CanvasBackground, Fill, background_fill};
 use crate::checker::{self, Shade};
+use crate::dirty::BlockSet;
 use crate::text::text_scale;
-use crate::texture::{to_rgba8, to_rgba8_with_entry};
+use crate::texture::{try_tile_pixels, try_tile_pixels_with_entry};
+use crate::tiles::{BLOCK, SystemTileAlloc, TileAlloc, TileRect, Tiling, block_rect, tile_side};
 use crate::view::{ScreenRect, Size, View, ViewOp, Zoom};
 
 /// Fondo liso del lienzo fuera de la imagen, y el fondo «Gris» elegible bajo la transparencia
@@ -28,8 +31,10 @@ pub const BACKGROUND: Color32 = Color32::from_gray(40);
 /// Por qué no se puede mostrar la imagen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CanvasError {
-    /// La imagen no cabe en una textura de la GPU (dividirla en teselas es de la unidad 14).
+    /// Un lado de la imagen supera [`Canvas::MAX_SIDE`].
     TooLarge { width: u32, height: u32, max: usize },
+    /// No hay memoria para construir las baldosas.
+    OutOfMemory,
 }
 
 impl fmt::Display for CanvasError {
@@ -37,8 +42,9 @@ impl fmt::Display for CanvasError {
         match self {
             CanvasError::TooLarge { width, height, max } => write!(
                 f,
-                "la imagen de {width}×{height} supera el lado máximo de textura ({max})"
+                "la imagen de {width}×{height} supera el lado máximo mostrable ({max})"
             ),
+            CanvasError::OutOfMemory => write!(f, "sin memoria para mostrar la imagen"),
         }
     }
 }
@@ -99,18 +105,43 @@ struct Frame {
     hover: Option<(u32, u32)>,
 }
 
-/// Estado del lienzo: la imagen, su textura y la vista.
+/// Una baldosa: su textura y lo que falta por subir.
+struct Tile {
+    texture: TextureHandle,
+    rect: TileRect,
+    /// Bloques (de la rejilla de la imagen) que cortan la baldosa y aún no están al día.
+    dirty: BlockSet,
+    /// La textura lleva la vista previa del valor vigente.
+    previewed: bool,
+    /// La textura lleva (o llevó) una vista previa: al terminarla hay que regenerarla.
+    tainted: bool,
+}
+
+/// Copias de trabajo de la superposición del trazo: una por bloque de 64×64 tocado, creada desde
+/// el documento con los píxeles pendientes escritos.
+#[derive(Default)]
+struct Overlay {
+    /// El trazo pendiente ya escrito (para escribir solo lo nuevo).
+    pending: Vec<(u32, u32, Rgba)>,
+    /// Bloque `(bx, by)` → sus píxeles (`ancho · alto` del bloque recortado a la imagen).
+    blocks: HashMap<(u32, u32), Vec<Color32>>,
+}
+
+/// Estado del lienzo: la imagen en baldosas, la superposición y la vista.
 #[derive(Default)]
 pub struct Canvas {
-    /// Imagen aún sin subir: la subida espera al primer fotograma, que es cuando egui sabe el
-    /// lado máximo de textura de la GPU.
+    /// Imagen aún sin cargar (`set_image`): se construye en el primer fotograma.
     pending: Option<Image>,
-    texture: Option<TextureHandle>,
+    /// Lado de baldosa inyectado (pruebas).
+    tile_side_override: Option<usize>,
+    tiles: Vec<Tile>,
+    tiling: Option<Tiling>,
     size: Option<Size>,
     view: Option<View>,
     error: Option<CanvasError>,
     gesture: Gesture,
     frame: Option<Frame>,
+    overlay: Overlay,
     /// Última vista previa subida: entrada y color resuelto.
     previewing: Option<(u8, Rgba)>,
     preview_uploads: u32,
@@ -132,23 +163,108 @@ impl Canvas {
         Canvas::default()
     }
 
-    /// Cambia la imagen mostrada. La textura se sube entera en el siguiente `show` y la vista
-    /// vuelve al ajuste.
+    /// Lado máximo de imagen que se muestra: con el tope de 2²⁶ píxeles de apertura evita imágenes
+    /// de 2²⁶×1 con miles de baldosas (specs/hito-2-zoom-baldosas.md, decisión 9).
+    pub const MAX_SIDE: usize = 16384;
+
+    /// Un lienzo con el lado de baldosa inyectado (pruebas con imágenes pequeñas); se acota al
+    /// lado máximo de textura del contexto.
+    pub fn with_tile_side(side: usize) -> Canvas {
+        Canvas {
+            tile_side_override: Some(side.max(1)),
+            ..Canvas::default()
+        }
+    }
+
+    /// Cambia la imagen mostrada (compatibilidad: clona la imagen). Las baldosas se construyen en
+    /// el siguiente `interact` y la vista vuelve al ajuste. La app usa [`Canvas::load`].
     pub fn set_image(&mut self, image: &Image) {
         self.set_owned_image(image.clone());
     }
 
-    /// Como [`Canvas::set_image`], pero con una imagen ya construida (no se clona: quien la crea
-    /// ya reservó su memoria, specs/hito-2-nueva-imagen.md, D4).
+    /// Como [`Canvas::set_image`], pero con una imagen ya construida (no se clona).
     pub fn set_owned_image(&mut self, image: Image) {
+        self.clear_state();
         self.size = Some(Size::new(image.width(), image.height()));
         self.pending = Some(image);
-        self.texture = None;
+    }
+
+    /// Olvida la imagen actual (baldosas, vista, gesto, superposición y vista previa).
+    fn clear_state(&mut self) {
+        self.tiles.clear();
+        self.tiling = None;
+        self.size = None;
         self.view = None;
         self.error = None;
         self.gesture = Gesture::None;
         self.previewing = None;
+        self.overlay = Overlay::default();
         self.requested.clear();
+        self.pending = None;
+    }
+
+    /// Carga `image` como la imagen del lienzo: crea **todas** las baldosas desde las filas y
+    /// solo instala si salen todas. Con un error (`TooLarge`, `OutOfMemory`) el lienzo anterior
+    /// queda intacto y no queda ninguna textura nueva viva. La vista vuelve al ajuste en el
+    /// siguiente `interact`.
+    pub fn load(&mut self, ctx: &Context, image: &Image) -> Result<(), CanvasError> {
+        self.load_with(ctx, image, &mut SystemTileAlloc)
+    }
+
+    /// Como [`Canvas::load`], con el asignador de los búferes de baldosa a la vista.
+    pub fn load_with(
+        &mut self,
+        ctx: &Context,
+        image: &Image,
+        alloc: &mut dyn TileAlloc,
+    ) -> Result<(), CanvasError> {
+        let (width, height) = (image.width(), image.height());
+        if width as usize > Canvas::MAX_SIDE || height as usize > Canvas::MAX_SIDE {
+            return Err(CanvasError::TooLarge {
+                width,
+                height,
+                max: Canvas::MAX_SIDE,
+            });
+        }
+        let size = Size::new(width, height);
+        let max_side = ctx.input(|i| i.max_texture_side);
+        let side = self
+            .tile_side_override
+            .map_or_else(|| tile_side(max_side), |side| side.min(max_side).max(1));
+        let tiling = Tiling::new(size, side);
+        // Primero todos los búferes: si alguno falla no se ha creado ninguna textura.
+        let mut images = Vec::new();
+        images
+            .try_reserve_exact(tiling.len())
+            .map_err(|_| CanvasError::OutOfMemory)?;
+        for index in 0..tiling.len() {
+            let rect = tiling.rect(index);
+            let pixels = try_tile_pixels(image, rect, alloc)?;
+            images.push(ColorImage::new(
+                [rect.width as usize, rect.height as usize],
+                pixels,
+            ));
+        }
+        let mut tiles = Vec::with_capacity(images.len());
+        for (index, color_image) in images.into_iter().enumerate() {
+            tiles.push(Tile {
+                texture: ctx.load_texture(
+                    format!("px-image-{index}"),
+                    color_image,
+                    TextureOptions::NEAREST,
+                ),
+                rect: tiling.rect(index),
+                dirty: BlockSet::new(width, height),
+                previewed: false,
+                tainted: false,
+            });
+        }
+        self.clear_state();
+        self.size = Some(size);
+        self.tiling = Some(tiling);
+        self.tiles = tiles;
+        ctx.request_repaint();
+        Ok(())
     }
 
     /// Pide una operación de zoom: se aplica en el siguiente [`Canvas::interact`], también a mitad
@@ -194,69 +310,330 @@ impl Canvas {
         self.view_keys_off = !enabled;
     }
 
-    /// Regenera la textura con el contenido de `image` **conservando la vista** (tras un trazo,
-    /// un deshacer o un rehacer). Si la imagen tiene otro tamaño o aún no hay textura, se
-    /// comporta como [`Canvas::set_image`]. La textura se sube entera: las regiones son de la
-    /// unidad 14.
+    /// Regenera las baldosas con el contenido de `image` **conservando la vista** (compatibilidad:
+    /// `invalidate_all` + `sync`). Si la imagen tiene otro tamaño o aún no hay baldosas, se
+    /// comporta como [`Canvas::set_image`].
     pub fn refresh(&mut self, ctx: &Context, image: &Image) {
-        let same_size = self.size == Some(Size::new(image.width(), image.height()));
-        self.previewing = None;
-        match &mut self.texture {
-            Some(texture) if same_size => {
-                texture.set(color_image(image), TextureOptions::NEAREST);
-                ctx.request_repaint();
-            }
-            _ => self.set_image(image),
+        if !self.matches(image) {
+            self.set_image(image);
+            return;
+        }
+        self.invalidate_all();
+        // Si falla la reserva las baldosas siguen sucias y se reintenta en el siguiente `sync`.
+        let _ = self.sync(ctx, image);
+    }
+
+    /// `image` es la imagen que tienen las baldosas (mismo tamaño).
+    fn matches(&self, image: &Image) -> bool {
+        !self.tiles.is_empty() && self.size == Some(Size::new(image.width(), image.height()))
+    }
+
+    /// Marca como sucios los bloques de `blocks` (lo que cambió en el documento). No sube nada: lo
+    /// hace [`Canvas::sync`]. Si hay una superposición viva se descarta antes: sus copias de
+    /// trabajo ya no valen y sus bloques se regeneran desde el documento.
+    pub fn invalidate(&mut self, blocks: &BlockSet) {
+        let Some(size) = self.size else {
+            return;
+        };
+        if blocks.size() != size {
+            self.invalidate_all();
+            return;
+        }
+        self.release_overlay();
+        for tile in &mut self.tiles {
+            let mut part = blocks.clone();
+            part.clip(tile.rect);
+            tile.dirty.union(&part);
         }
     }
 
-    /// Vista previa de la edición de la entrada `index` de la paleta: regenera la textura con
-    /// esa entrada valiendo `color`, solo si el color resuelto cambió respecto a lo último
-    /// subido (specs/hito-2-editar-color.md, decisión 7). Sin textura o con otro tamaño no hace
-    /// nada. [`Canvas::end_preview`], [`Canvas::refresh`] y [`Canvas::set_image`] la deshacen.
-    pub fn preview_entry(&mut self, ctx: &Context, image: &Image, index: u8, color: Rgba) {
-        let same_size = self.size == Some(Size::new(image.width(), image.height()));
-        let Some(texture) = self.texture.as_mut().filter(|_| same_size) else {
+    /// Marca toda la imagen como sucia.
+    pub fn invalidate_all(&mut self) {
+        let Some(size) = self.size else {
             return;
         };
+        self.release_overlay();
+        for tile in &mut self.tiles {
+            tile.dirty = full_of(size, tile.rect);
+        }
+    }
+
+    /// Sube desde el documento los bloques sucios de las baldosas **visibles** (las demás los
+    /// conservan hasta que se vean). Si todos los bloques de una baldosa están sucios, una sola
+    /// subida de la baldosa entera; si no, una por serie de bloques contiguos (`BlockSet::runs`).
+    pub fn sync(&mut self, ctx: &Context, image: &Image) -> Result<(), CanvasError> {
+        self.sync_with(ctx, image, &mut SystemTileAlloc)
+    }
+
+    /// Como [`Canvas::sync`], con el asignador de los búferes a la vista. Con un error las
+    /// baldosas sin terminar siguen sucias.
+    pub fn sync_with(
+        &mut self,
+        ctx: &Context,
+        image: &Image,
+        alloc: &mut dyn TileAlloc,
+    ) -> Result<(), CanvasError> {
+        if !self.matches(image) {
+            return Ok(());
+        }
+        let size = self.size.unwrap_or(Size::new(0, 0));
+        for index in 0..self.tiles.len() {
+            if self.tiles[index].dirty.is_empty() || !self.tile_visible(index) {
+                continue;
+            }
+            let rect = self.tiles[index].rect;
+            let runs = if self.tiles[index].dirty.len() == blocks_in(rect) {
+                vec![rect]
+            } else {
+                self.tiles[index].dirty.runs(rect)
+            };
+            for run in runs {
+                let pixels = try_tile_pixels(image, run, alloc)?;
+                let patch = ColorImage::new([run.width as usize, run.height as usize], pixels);
+                let tile = &mut self.tiles[index];
+                if run == rect {
+                    tile.texture.set(patch, TextureOptions::NEAREST);
+                } else {
+                    tile.texture.set_partial(
+                        [(run.x - rect.x) as usize, (run.y - rect.y) as usize],
+                        patch,
+                        TextureOptions::NEAREST,
+                    );
+                }
+            }
+            let tile = &mut self.tiles[index];
+            tile.dirty = BlockSet::new(size.width, size.height);
+            tile.previewed = false;
+            ctx.request_repaint();
+        }
+        Ok(())
+    }
+
+    /// La baldosa `index` corta el lienzo del último `interact` (todas, si aún no hubo uno).
+    fn tile_visible(&self, index: usize) -> bool {
+        match (&self.tiling, self.view, self.frame) {
+            (Some(tiling), Some(view), Some(frame)) => tiling.visible(index, &view, frame.viewport),
+            _ => true,
+        }
+    }
+
+    /// Bloques sucios pendientes de subir, sumados de todas las baldosas.
+    pub fn pending_blocks(&self) -> usize {
+        self.tiles.iter().map(|tile| tile.dirty.len()).sum()
+    }
+
+    /// Bloques de 64×64 con copia de trabajo de la superposición.
+    pub fn overlay_blocks(&self) -> usize {
+        self.overlay.blocks.len()
+    }
+
+    /// Número de baldosas.
+    pub fn tile_count(&self) -> usize {
+        self.tiles.len()
+    }
+
+    /// Rectángulo de la baldosa `index` en la imagen.
+    pub fn tile_rect(&self, index: usize) -> TileRect {
+        self.tiles[index].rect
+    }
+
+    /// Lado de baldosa de la imagen cargada (0 sin imagen).
+    pub fn tile_side(&self) -> usize {
+        self.tiling.map_or(0, |tiling| tiling.side())
+    }
+
+    /// El trazo pendiente `pixels` (el **entero**, con el color que tendrá cada píxel en la
+    /// imagen; el borrador pasa alfa 0) como parte de la textura, a `image` (el documento, que no
+    /// cambia hasta soltar). Se escriben solo los píxeles nuevos si lo anterior es su prefijo
+    /// (lápiz y borrador); si no (la goma elástica de la línea), los bloques de lo anterior
+    /// vuelven al documento y se escriben los nuevos. Vacío es [`Canvas::clear_overlay`].
+    pub fn set_overlay(&mut self, ctx: &Context, image: &Image, pixels: &[(u32, u32, Rgba)]) {
+        if pixels.is_empty() {
+            self.clear_overlay();
+            return;
+        }
+        let Some(size) = self.size.filter(|_| self.matches(image)) else {
+            return;
+        };
+        let known = self.overlay.pending.len();
+        let prefix = pixels.len() >= known && pixels[..known] == self.overlay.pending[..];
+        let start = if prefix {
+            known
+        } else {
+            let keep: HashSet<(u32, u32)> = pixels
+                .iter()
+                .filter(|(x, y, _)| *x < size.width && *y < size.height)
+                .map(|(x, y, _)| (x / BLOCK, y / BLOCK))
+                .collect();
+            let old: Vec<(u32, u32)> = self.overlay.blocks.keys().copied().collect();
+            self.overlay.blocks.clear();
+            self.overlay.pending.clear();
+            for (bx, by) in old.into_iter().filter(|block| !keep.contains(block)) {
+                let rect = block_rect(bx, by, size);
+                self.put(rect, crate::texture::tile_pixels(image, rect));
+            }
+            0
+        };
+        let mut touched: HashSet<(u32, u32)> = HashSet::new();
+        for &(x, y, color) in &pixels[start..] {
+            if x >= size.width || y >= size.height {
+                continue;
+            }
+            let block = (x / BLOCK, y / BLOCK);
+            let rect = block_rect(block.0, block.1, size);
+            let buffer = self
+                .overlay
+                .blocks
+                .entry(block)
+                .or_insert_with(|| crate::texture::tile_pixels(image, rect));
+            buffer[(y - rect.y) as usize * rect.width as usize + (x - rect.x) as usize] =
+                Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
+            touched.insert(block);
+        }
+        self.overlay.pending.extend_from_slice(&pixels[start..]);
+        for (bx, by) in touched {
+            let rect = block_rect(bx, by, size);
+            if let Some(buffer) = self.overlay.blocks.get(&(bx, by)) {
+                self.put(rect, buffer.clone());
+            }
+        }
+        ctx.request_repaint();
+    }
+
+    /// Descarta la superposición: las copias de trabajo se liberan y sus bloques quedan sucios
+    /// (se regeneran desde el documento en el siguiente [`Canvas::sync`], que ya incluye el
+    /// trazo si se aplicó).
+    pub fn clear_overlay(&mut self) {
+        self.release_overlay();
+    }
+
+    fn release_overlay(&mut self) {
+        let Some(size) = self.size else {
+            return;
+        };
+        let blocks: Vec<(u32, u32)> = self.overlay.blocks.keys().copied().collect();
+        self.overlay = Overlay::default();
+        for (bx, by) in blocks {
+            let rect = block_rect(bx, by, size);
+            for tile in &mut self.tiles {
+                if tile.rect.intersect(&rect).is_some() {
+                    tile.dirty.insert(bx, by);
+                }
+            }
+        }
+    }
+
+    /// Sube `pixels` (el contenido de `region`, por filas) a cada baldosa que corta la región, y
+    /// da por al día los bloques de la región en esas baldosas.
+    fn put(&mut self, region: TileRect, pixels: Vec<Color32>) {
+        for tile in &mut self.tiles {
+            let Some(part) = tile.rect.intersect(&region) else {
+                continue;
+            };
+            let mut patch = Vec::with_capacity(part.width as usize * part.height as usize);
+            for y in part.y..part.y + part.height {
+                let row = (y - region.y) as usize * region.width as usize;
+                let from = row + (part.x - region.x) as usize;
+                patch.extend_from_slice(&pixels[from..from + part.width as usize]);
+            }
+            tile.texture.set_partial(
+                [
+                    (part.x - tile.rect.x) as usize,
+                    (part.y - tile.rect.y) as usize,
+                ],
+                ColorImage::new([part.width as usize, part.height as usize], patch),
+                TextureOptions::NEAREST,
+            );
+            let (bx, by) = (region.x / BLOCK, region.y / BLOCK);
+            tile.dirty.remove(bx, by);
+        }
+    }
+
+    /// Vista previa de la edición de la entrada `index` de la paleta: reconstruye con esa entrada
+    /// valiendo `color` las baldosas **visibles** (las demás, al verse) y sube cada una, solo si el
+    /// color resuelto cambió respecto a lo último subido o la baldosa aún no lleva la vista previa
+    /// (specs/hito-2-editar-color.md, decisión 7). Sin baldosas o con otro tamaño no hace nada.
+    /// [`Canvas::end_preview`], [`Canvas::refresh`] y [`Canvas::set_image`] la deshacen.
+    pub fn preview_entry(&mut self, ctx: &Context, image: &Image, index: u8, color: Rgba) {
+        if !self.matches(image) {
+            return;
+        }
+        let size = self.size.unwrap_or(Size::new(0, 0));
         let resolved = if image.palette().and_then(|p| p.transparent_index()) == Some(index) {
             Rgba { a: 0, ..color }
         } else {
             color
         };
-        if self.previewing == Some((index, resolved)) {
+        let changed = self.previewing != Some((index, resolved));
+        if changed {
+            for tile in &mut self.tiles {
+                tile.previewed = false;
+            }
+        }
+        for i in 0..self.tiles.len() {
+            if self.tiles[i].previewed || !self.tile_visible(i) {
+                continue;
+            }
+            let rect = self.tiles[i].rect;
+            let Ok(pixels) =
+                try_tile_pixels_with_entry(image, rect, index, color, &mut SystemTileAlloc)
+            else {
+                continue;
+            };
+            let tile = &mut self.tiles[i];
+            tile.texture.set(
+                ColorImage::new([rect.width as usize, rect.height as usize], pixels),
+                TextureOptions::NEAREST,
+            );
+            tile.previewed = true;
+            tile.tainted = true;
+            tile.dirty = BlockSet::new(size.width, size.height);
+            ctx.request_repaint();
+        }
+        if changed {
+            self.previewing = Some((index, resolved));
+            self.preview_uploads += 1;
+        }
+    }
+
+    /// Devuelve las baldosas tocadas por la vista previa al contenido de `image` (las visibles
+    /// ya; las demás, al verse). Sin vista previa, no hace nada.
+    pub fn end_preview(&mut self, ctx: &Context, image: &Image) {
+        if self.previewing.is_none() && self.tiles.iter().all(|tile| !tile.tainted) {
             return;
         }
-        let bytes = to_rgba8_with_entry(image, index, color);
-        let size = [image.width() as usize, image.height() as usize];
-        texture.set(
-            ColorImage::from_rgba_unmultiplied(size, &bytes),
-            TextureOptions::NEAREST,
-        );
-        self.previewing = Some((index, resolved));
-        self.preview_uploads += 1;
-        ctx.request_repaint();
-    }
-
-    /// Devuelve la textura al contenido de `image` si hay una vista previa; si no, no hace nada.
-    pub fn end_preview(&mut self, ctx: &Context, image: &Image) {
-        if self.previewing.is_some() {
-            self.refresh(ctx, image);
+        self.previewing = None;
+        let Some(size) = self.size else {
+            return;
+        };
+        for tile in &mut self.tiles {
+            if tile.tainted {
+                tile.dirty = full_of(size, tile.rect);
+                tile.tainted = false;
+                tile.previewed = false;
+            }
         }
+        let _ = self.sync(ctx, image);
     }
 
-    /// Subidas de textura hechas por `preview_entry` desde que se creó el lienzo.
+    /// Subidas de textura hechas por `preview_entry` desde que se creó el lienzo (una por cambio de
+    /// valor).
     pub fn preview_uploads(&self) -> u32 {
         self.preview_uploads
     }
 
-    /// Textura de la imagen, una vez subida.
+    /// Textura de la primera baldosa, una vez cargada.
     pub fn texture_id(&self) -> Option<egui::TextureId> {
-        self.texture.as_ref().map(TextureHandle::id)
+        self.tiles.first().map(|tile| tile.texture.id())
+    }
+
+    /// Las texturas de todas las baldosas, por filas.
+    pub fn texture_ids(&self) -> Vec<egui::TextureId> {
+        self.tiles.iter().map(|tile| tile.texture.id()).collect()
     }
 
     /// Dibuja el lienzo en todo el espacio libre de `ui` y procesa sus entradas: [`interact`]
-    /// y [`paint`] seguidos, sin superposición y sin los eventos de trazo.
+    /// y [`paint`] seguidos, sin los eventos de trazo.
     ///
     /// Rueda o pellizco: un paso de zoom por evento, anclado al cursor. Arrastre con el botón
     /// central, o con espacio y el izquierdo: desplazamiento. `Home`: ajuste. `+` y `-`: zoom
@@ -266,7 +643,7 @@ impl Canvas {
     /// [`paint`]: Canvas::paint
     pub fn show(&mut self, ui: &mut Ui) -> CanvasInfo {
         self.interact(ui);
-        self.paint(ui, std::iter::empty())
+        self.paint(ui)
     }
 
     /// Primera mitad de [`Canvas::show`]: sube la textura si falta, reserva el espacio, procesa
@@ -319,7 +696,7 @@ impl Canvas {
             ppp,
             hover: None,
         };
-        let (Some(_), Some(size)) = (&self.texture, self.size) else {
+        let (false, Some(size)) = (self.tiles.is_empty(), self.size) else {
             self.frame = Some(frame);
             return Vec::new();
         };
@@ -454,11 +831,7 @@ impl Canvas {
     /// sobre el fondo y no sobre la imagen, porque el resultado reemplaza el píxel.
     ///
     /// Si no hubo `interact` antes en el fotograma, no pinta nada.
-    pub fn paint(
-        &mut self,
-        ui: &mut Ui,
-        overlay: impl IntoIterator<Item = (u32, u32, Rgba)>,
-    ) -> CanvasInfo {
+    pub fn paint(&mut self, ui: &mut Ui) -> CanvasInfo {
         let Some(frame) = self.frame else {
             return CanvasInfo {
                 zoom: Zoom::default(),
@@ -480,7 +853,7 @@ impl Canvas {
         // La textura del damero se crea una vez, la primera vez que hay imagen que pintar con ella.
         if fill == Fill::Checker
             && !self.checker_mesh
-            && self.texture.is_some()
+            && !self.tiles.is_empty()
             && self.checker.is_none()
         {
             self.checker = Some(ui.ctx().load_texture(
@@ -492,7 +865,7 @@ impl Canvas {
         let painter = ui.painter_at(frame.rect);
         painter.rect_filled(frame.rect, 0.0, BACKGROUND);
 
-        let (Some(texture), Some(size), Some(view)) = (&self.texture, self.size, self.view) else {
+        let (Some(tiling), Some(size), Some(view)) = (self.tiling, self.size, self.view) else {
             return CanvasInfo {
                 zoom: Zoom::default(),
                 hover: None,
@@ -544,72 +917,20 @@ impl Canvas {
                 Fill::Checker => checker_quad(area, &painter),
             }
         }
-        painter.image(
-            texture.id(),
-            image_rect,
-            image_uv(view.zoom(), placed, size),
-            Color32::WHITE,
-        );
-
-        // Superposición. Con damero, dos pasadas: primero todo lo que va debajo (el damero
-        // recortado a cada píxel con alfa < 255, que sustituye al píxel al soltar) y después los
-        // colores, para no cambiar de textura en cada forma y partir la malla en una por píxel.
-        // Con un fondo sólido, una sola pasada: el sólido y encima el color.
-        let (view_w, view_h) = (
-            i64::from(frame.viewport.width),
-            i64::from(frame.viewport.height),
-        );
-        let mut colors: Vec<Shape> = Vec::new();
-        let mut cells_mesh = Mesh::default();
-        for (x, y, color) in overlay {
-            let Some((min, max)) = view.pixel_block(x, y) else {
-                continue;
-            };
-            if max.0 <= 0 || max.1 <= 0 || min.0 >= view_w || min.1 >= view_h {
+        // Las baldosas visibles, cada una con su cuadrilátero entero y su uv. La superposición del
+        // trazo ya va en las texturas (sobre el damero o el fondo elegido, que está debajo).
+        for (index, tile) in self.tiles.iter().enumerate() {
+            if !tiling.visible(index, &view, frame.viewport) {
                 continue;
             }
-            let block = Rect::from_min_max(to_points(min), to_points(max));
-            let under = color.a < 255;
-            let top = (color.a > 0)
-                .then(|| Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a));
-            match fill {
-                Fill::Solid(solid) => {
-                    if under {
-                        painter.rect_filled(block, 0.0, color32(solid));
-                    }
-                    if let Some(top) = top {
-                        painter.rect_filled(block, 0.0, top);
-                    }
-                }
-                Fill::Checker => {
-                    if under {
-                        let area = ScreenRect {
-                            x: min.0,
-                            y: min.1,
-                            width: max.0 - min.0,
-                            height: max.1 - min.1,
-                        };
-                        if self.checker_mesh {
-                            for cell in checker::cells(area, origin, cell) {
-                                cells_mesh.add_colored_rect(
-                                    rect_points(cell.rect),
-                                    shade_color(cell.shade),
-                                );
-                            }
-                        } else {
-                            checker_quad(area, &painter);
-                        }
-                    }
-                    if let Some(top) = top {
-                        colors.push(Shape::rect_filled(block, 0.0, top));
-                    }
-                }
-            }
+            let [u0, v0, u1, v1] = tiling.uv(index, &view);
+            painter.image(
+                tile.texture.id(),
+                rect_points(tiling.screen_rect(index, &view)),
+                Rect::from_min_max(pos2(u0, v0), pos2(u1, v1)),
+                Color32::WHITE,
+            );
         }
-        if !cells_mesh.is_empty() {
-            painter.add(Shape::mesh(cells_mesh));
-        }
-        painter.extend(colors);
 
         CanvasInfo {
             zoom: view.zoom(),
@@ -619,44 +940,21 @@ impl Canvas {
         }
     }
 
+    /// Construye las baldosas de una imagen puesta con `set_image`, en el primer fotograma.
     fn upload_if_pending(&mut self, ui: &Ui) {
         let Some(image) = self.pending.take() else {
             return;
         };
-        let max = ui.input(|i| i.max_texture_side);
-        let (width, height) = (image.width(), image.height());
-        // `load_texture` no admite imágenes mayores que el lado máximo: se comprueba antes.
-        if width as usize > max || height as usize > max {
-            self.error = Some(CanvasError::TooLarge { width, height, max });
-            return;
+        // Las operaciones de zoom pedidas entre `set_image` y este fotograma valen para la imagen
+        // nueva: `load_with` las descartaría como las de la imagen anterior.
+        let requested = std::mem::take(&mut self.requested);
+        if let Err(error) = self.load_with(ui.ctx(), &image, &mut SystemTileAlloc) {
+            self.clear_state();
+            self.size = Some(Size::new(image.width(), image.height()));
+            self.error = Some(error);
         }
-        // Sin suavizado al ampliar ni al reducir, y sin mipmaps.
-        self.texture = Some(ui.ctx().load_texture(
-            "px-image",
-            color_image(&image),
-            TextureOptions::NEAREST,
-        ));
+        self.requested = requested;
     }
-}
-
-/// uv de la imagen entera. Con zoom ≥ ×1, de 0 a 1. A 1/K el píxel de pantalla `s` muestra el
-/// texel `s·K` (esquina de la rejilla): el uv va desplazado `0,5 − K/2` texels, de modo que el
-/// centro de cada píxel de pantalla cae en el centro de un texel y no en un borde
-/// (specs/hito-2-zoom-baldosas.md, decisión 3).
-fn image_uv(zoom: Zoom, placed: ScreenRect, size: Size) -> Rect {
-    let Some(k) = zoom.shrink_factor() else {
-        return Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-    };
-    let axis = |screen: i64, texels: u32| {
-        let off = 0.5 - k as f64 / 2.0;
-        (
-            (off / f64::from(texels)) as f32,
-            ((screen as f64 * k as f64 + off) / f64::from(texels)) as f32,
-        )
-    };
-    let (u0, u1) = axis(placed.width, size.width);
-    let (v0, v1) = axis(placed.height, size.height);
-    Rect::from_min_max(pos2(u0, v0), pos2(u1, v1))
 }
 
 /// Textura de 2×2 del damero: `texels()` por filas.
@@ -672,11 +970,19 @@ fn shade_color(shade: Shade) -> Color32 {
     color32(shade.color())
 }
 
-fn color_image(image: &Image) -> ColorImage {
-    ColorImage::from_rgba_unmultiplied(
-        [image.width() as usize, image.height() as usize],
-        &to_rgba8(image),
-    )
+/// Todos los bloques de la imagen que cortan `rect`.
+fn full_of(size: Size, rect: TileRect) -> BlockSet {
+    let mut set = BlockSet::full(size.width, size.height);
+    set.clip(rect);
+    set
+}
+
+/// Bloques de la rejilla de la imagen que cortan `rect`.
+fn blocks_in(rect: TileRect) -> usize {
+    let block = u64::from(BLOCK);
+    let cols = rect.right().div_ceil(block) - u64::from(rect.x) / block;
+    let rows = rect.bottom().div_ceil(block) - u64::from(rect.y) / block;
+    (cols * rows) as usize
 }
 
 fn zoom_step(view: &mut View, zoom_in: bool, anchor: (i64, i64)) {
