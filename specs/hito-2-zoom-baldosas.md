@@ -211,7 +211,7 @@ Banco desechable fuera del repositorio (ya borrado): `Canvas` real en release co
 | `set_overlay` con el mismo trazo (sin píxeles nuevos) | 0,1 ms |
 | soltar (`set_overlay(&[])` + `sync` sin sucios) | 7 µs |
 
-Sumando la subida medida (≈ 2,3 ms por baldosa), el arrastre del editor de color a 8192² indexado queda en ≈ 13 ms a zoom de trabajo (4 baldosas: cabe en un fotograma de 16 ms) y ≈ 74 ms con la imagen entera visible, el caso que decide la 14b (hoy ≈ 128 ms); con 6000² (9 baldosas) ≈ 40 ms. Es una **estimación**; la cifra que cuenta es la del paso 6 de la prueba manual.
+Sumando la subida medida (≈ 2,3 ms por baldosa), el arrastre del editor de color a 8192² indexado queda en ≈ 17,5 ms a zoom de trabajo con 4 baldosas visibles (8,3 ms de CPU + 4 × 2,3 ms de subida: justo por encima de un fotograma de 16 ms; con 1 o 2 baldosas, ≈ 4 a 9 ms) y ≈ 74 ms con la imagen entera visible, el caso que decide la 14b (hoy ≈ 128 ms); con 6000² (9 baldosas) ≈ 40 ms. Es una **estimación**; la cifra que cuenta es la del paso 6 de la prueba manual.
 
 ## Fuera de alcance
 
