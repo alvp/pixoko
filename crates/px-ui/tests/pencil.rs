@@ -8,9 +8,12 @@
 //! el rectángulo de la imagen del primer fotograma, en el centro de cada píxel: 800×600 con
 //! 64×48 da zoom ×12 y las posiciones son enteras.
 //!
-//! Además de las filas, aquí se prueba que `show` sigue pintando igual, que `paint` con
-//! superposición añade rectángulos sin subir la textura, y que `refresh` conserva la vista y
-//! deja la textura al día.
+//! Además de las filas, aquí se prueba que `show` sigue pintando igual, que la superposición del
+//! trazo (`set_overlay`, tras `interact` y antes de `paint`) se ve en la **textura** y no añade
+//! ninguna forma, y que `refresh` conserva la vista y deja la textura al día. Desde la unidad 14a-2
+//! el banco aplica en orden los `textures_delta` de cada fotograma con
+//! `common::texturas::Texturas` (la textura compuesta) y el fotograma es el de la app: `interact`,
+//! `set_overlay`, `sync` y `paint`.
 //!
 //! El soltar perdido de la fila 16 no se puede fabricar solo con `RawInput` (egui solo baja el
 //! botón con un evento de soltar): se baja con `InputState::pointer` dentro del fotograma, antes
@@ -26,7 +29,11 @@ use egui::{
 use px_core::{Document, Image, Mode, Pixel, Rgba};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo};
 use px_ui::stroke::Stroke;
+use px_ui::texture::to_rgba8;
 use px_ui::view::Zoom;
+
+mod common;
+use common::texturas::{Textura, Texturas};
 
 const SCREEN: Vec2 = vec2(800.0, 600.0);
 const ANCHO: u32 = 64;
@@ -51,6 +58,11 @@ fn imagen_de_prueba() -> Image {
 struct Banco {
     ctx: Context,
     canvas: Canvas,
+    /// El documento que el lienzo muestra (la imagen con la que se llama a `set_overlay` y
+    /// `sync`). Las pruebas que cambian la imagen la actualizan aquí.
+    imagen: Image,
+    /// Contenido de cada textura, compuesto en orden con los `textures_delta` de cada fotograma.
+    texturas: Texturas,
 }
 
 struct Fotograma {
@@ -64,11 +76,21 @@ impl Banco {
         Banco {
             ctx: Context::default(),
             canvas: Canvas::new(),
+            imagen: imagen_de_prueba(),
+            texturas: Texturas::new(),
         }
     }
 
-    /// Ejecuta un fotograma: `antes` (si lo hay) corre dentro del fotograma, antes de `interact`;
-    /// luego `interact`, y `paint` con la superposición dada. No limpia los cambios de textura.
+    /// La textura compuesta de la baldosa 0 (la única de estas imágenes).
+    fn textura(&self) -> &Textura {
+        let id = self.canvas.texture_id().expect("la textura está subida");
+        self.texturas.get(id).expect("se ha subido su contenido")
+    }
+
+    /// Ejecuta un fotograma como el de la app: `antes` (si lo hay) corre dentro del fotograma,
+    /// antes de `interact`; luego `interact`, `set_overlay` con la superposición dada (el trazo
+    /// pendiente entero; vacía la quita), `sync` y `paint`. Aplica los `textures_delta` a
+    /// `texturas` y no los limpia (quien llama los mira y los limpia).
     fn fotograma(
         &mut self,
         events: Vec<Event>,
@@ -82,14 +104,18 @@ impl Banco {
         };
         let mut resultado = None;
         let canvas = &mut self.canvas;
+        let imagen = &self.imagen;
         let output = self.ctx.run_ui(input, |ui| {
             if let Some(antes) = antes {
                 antes(ui);
             }
             let eventos = canvas.interact(ui);
-            let info = canvas.paint(ui, overlay.iter().copied());
+            canvas.set_overlay(ui.ctx(), imagen, &overlay);
+            canvas.sync(ui.ctx(), imagen).expect("sync");
+            let info = canvas.paint(ui);
             resultado = Some((eventos, info));
         });
+        self.texturas.aplica(&output.textures_delta);
         let (eventos, info) = resultado.expect("el lienzo se dibuja");
         Fotograma {
             output,
@@ -98,8 +124,8 @@ impl Banco {
         }
     }
 
-    /// Un fotograma sin superposición y con los cambios de textura ya limpiados (egui entra en
-    /// pánico si se sueltan sin aplicar).
+    /// Un fotograma sin superposición y con los cambios de textura ya aplicados y limpiados (egui
+    /// entra en pánico si se sueltan sin aplicar).
     fn paso(&mut self, events: Vec<Event>) -> Fotograma {
         let mut f = self.fotograma(events, vec![], None);
         f.output.textures_delta.clear();
@@ -118,6 +144,7 @@ impl Banco {
         let output = self.ctx.run_ui(input, |ui| {
             info = Some(canvas.show(ui));
         });
+        self.texturas.aplica(&output.textures_delta);
         (output, info.expect("el lienzo se dibuja"))
     }
 }
@@ -716,13 +743,39 @@ fn formas_y_vertices(ctx: &Context, output: &mut FullOutput) -> (usize, usize) {
     (formas, vertices)
 }
 
+/// Lo que la textura debe contener para `imagen` (el oráculo de la unidad 14a: el documento
+/// convertido y premultiplicado), con los píxeles `pendientes` ya escritos encima.
+fn textura_esperada(imagen: &Image, pendientes: &[(u32, u32, Rgba)]) -> Vec<Color32> {
+    let mut texels: Vec<Color32> = to_rgba8(imagen)
+        .chunks_exact(4)
+        .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
+        .collect();
+    for &(x, y, c) in pendientes {
+        texels[(y * ANCHO + x) as usize] = Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a);
+    }
+    texels
+}
+
 #[test]
-fn paint_con_superposicion_pinta_rectangulos_extra_y_no_sube_la_textura() {
+fn paint_con_superposicion_la_ve_en_la_textura_sin_formas_extra_ni_cambiar_la_imagen() {
+    // Antes: `paint` con superposición añadía rectángulos y no subía la textura. Ahora la
+    // superposición va por `set_overlay`: lo que se conserva es que es visible mientras dura el
+    // trazo, que la imagen (el documento) no cambia y que al quitarla todo vuelve a lo de antes.
     let mut s = Sesion::nueva();
     let texture = s.banco.canvas.texture_id().expect("la textura está subida");
+    let original = imagen_de_prueba();
+    assert_eq!(
+        s.banco.textura().texels,
+        textura_esperada(&original, &[]),
+        "antes del trazo, la textura es el documento"
+    );
 
     let mut sin = s.banco.fotograma(vec![], vec![], None);
     let (formas_sin, vertices_sin) = formas_y_vertices(&s.banco.ctx, &mut sin.output);
+    assert!(
+        sin.output.textures_delta.set.is_empty(),
+        "en reposo, nada se sube"
+    );
     sin.output.textures_delta.clear();
 
     // Dos píxeles opacos y uno semitransparente (que además lleva el fondo debajo).
@@ -731,26 +784,73 @@ fn paint_con_superposicion_pinta_rectangulos_extra_y_no_sube_la_textura() {
         (2, 1, Rgba::opaque(255, 0, 0)),
         (3, 1, Rgba::new(255, 0, 0, 128)),
     ];
-    let mut con = s.banco.fotograma(vec![], overlay, None);
+    let mut con = s.banco.fotograma(vec![], overlay.clone(), None);
     let (formas_con, vertices_con) = formas_y_vertices(&s.banco.ctx, &mut con.output);
-    assert!(
-        !con.output.textures_delta.set.contains_key(&texture),
-        "pintar la superposición no sube la imagen"
+
+    // Ninguna forma extra: ni rectángulos ni mallas de superposición.
+    assert_eq!(
+        (formas_con, vertices_con),
+        (formas_sin, vertices_sin),
+        "la superposición no añade formas"
     );
+    // Se sube solo por bloques (deltas parciales) y solo la textura del lienzo.
+    assert!(
+        con.output
+            .textures_delta
+            .set
+            .keys()
+            .all(|id| *id == texture),
+        "solo se sube la textura del lienzo"
+    );
+    let deltas = con
+        .output
+        .textures_delta
+        .set
+        .get(&texture)
+        .expect("el fotograma en que cambia la superposición sube sus bloques");
+    for delta in deltas {
+        let ImageData::Color(color) = &delta.image;
+        let [x0, y0] = delta.pos.expect("un delta parcial, no la textura entera");
+        assert!(
+            x0 + color.size[0] <= ANCHO as usize && y0 + color.size[1] <= ALTO as usize,
+            "el delta {:?} en {:?} cabe en la baldosa",
+            color.size,
+            (x0, y0)
+        );
+    }
     con.output.textures_delta.clear();
 
-    assert!(
-        formas_con > formas_sin || vertices_con > vertices_sin,
-        "formas {formas_sin} -> {formas_con}, vértices {vertices_sin} -> {vertices_con}"
+    // La superposición se ve: la textura compuesta lleva los píxeles pendientes (premultiplicados)
+    // y el resto de la imagen es el documento.
+    assert_eq!(
+        s.banco.textura().texels,
+        textura_esperada(&original, &overlay)
     );
+    let texel = |x: usize, y: usize| s.banco.textura().texel(x, y).expect("dentro");
+    assert_eq!(texel(1, 1), Color32::from_rgba_unmultiplied(255, 0, 0, 255));
+    assert_eq!(texel(3, 1), Color32::from_rgba_unmultiplied(255, 0, 0, 128));
+    assert_eq!(texel(0, 0), Color32::from_rgb(255, 0, 0), "el resto sigue");
+    assert_eq!(texel(63, 47), Color32::from_rgb(0, 0, 255));
+    // La imagen no cambia: la superposición no toca el documento.
+    assert_eq!(s.banco.imagen, original);
     // La vista y la información son las mismas con y sin superposición.
     assert_eq!(con.info, sin.info);
 
-    // Sin superposición vuelve a lo de antes.
+    // El mismo trazo en el fotograma siguiente: no hay píxeles nuevos y no se sube nada.
+    let mut igual = s.banco.fotograma(vec![], overlay, None);
+    assert!(
+        igual.output.textures_delta.set.is_empty(),
+        "solo se sube en el fotograma en que cambia"
+    );
+    igual.output.textures_delta.clear();
+
+    // Sin superposición vuelve a lo de antes: las mismas formas y la textura es el documento.
     let mut otra = s.banco.fotograma(vec![], vec![], None);
     let (formas_otra, vertices_otra) = formas_y_vertices(&s.banco.ctx, &mut otra.output);
     otra.output.textures_delta.clear();
     assert_eq!((formas_otra, vertices_otra), (formas_sin, vertices_sin));
+    assert_eq!(s.banco.textura().texels, textura_esperada(&original, &[]));
+    assert_eq!(s.banco.imagen, original);
 }
 
 #[test]
@@ -770,6 +870,7 @@ fn refresh_conserva_la_vista_y_deja_la_textura_al_dia() {
     imagen
         .set_pixel(5, 5, Pixel::Rgba(Rgba::opaque(0, 255, 0)))
         .expect("dentro");
+    banco.imagen = imagen.clone();
     banco.canvas.refresh(&banco.ctx, &imagen);
 
     // El fotograma siguiente lleva el contenido nuevo de la misma textura.
@@ -792,6 +893,11 @@ fn refresh_conserva_la_vista_y_deja_la_textura_al_dia() {
     assert_eq!(en(0, 0), Color32::from_rgb(255, 0, 0), "el resto sigue");
     assert_eq!(en(63, 47), Color32::from_rgb(0, 0, 255));
     f.output.textures_delta.clear();
+    assert_eq!(
+        banco.textura().texels,
+        textura_esperada(&imagen, &[]),
+        "la textura compuesta es el documento"
+    );
 
     // Y los fotogramas posteriores ya no la vuelven a subir.
     let mut f = banco.fotograma(vec![], vec![], None);
@@ -811,6 +917,7 @@ fn refresh_con_otro_tamano_se_comporta_como_set_image() {
 
     // 32×24 en 800×600: el ajuste es ×25 y la vista vuelve a él.
     let pequena = Image::new(32, 24, Mode::Rgba).expect("imagen válida");
+    banco.imagen = pequena.clone();
     banco.canvas.refresh(&banco.ctx, &pequena);
     let f = banco.paso(vec![]);
     assert!(banco.canvas.texture_id().is_some());
