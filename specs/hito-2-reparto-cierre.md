@@ -15,7 +15,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 | 5 | **18** | Diálogos modales y campos numéricos | `px-ui` | ninguna |
 | 6 | **19** | Nueva imagen (la spec, aprobada el 2026-10-19, no toca `px-core`: [`hito-2-nueva-imagen.md`](hito-2-nueva-imagen.md), D10) | `px-app`, `px-ui` | ninguna |
 | 6b | **19b** | «Color…» del fondo del lienzo (unidad corta tras la 19: un diálogo con un campo hexadecimal, reutilizando el de la 11c y la infraestructura de la 18; nota de [`hito-2-damero-lienzo.md`](hito-2-damero-lienzo.md)) | `px-ui`, `px-app` | ninguna |
-| 7 | **20** | Convertir de modo | `px-app`, `px-ui` | ninguna |
+| 7 | **20** | Convertir de modo (spec: [`hito-2-convertir-modo.md`](hito-2-convertir-modo.md); menú `Imagen` nuevo, sin tocar `px-core`) | `px-app`, `px-ui` | ninguna |
 | 8 | **13b** | Chunks auxiliares del PNG en el informe de lectura | `px-formats`, `px-app` | ninguna |
 | 9 | **12** | Acceso por filas y bytes a `Image` (con `uses_index` y las limpiezas de API de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md)) | `px-core` | ninguna |
 | 10 | **13** | Escritor de PNG por flujo y lectura sin reserva anticipada | `px-formats` | ninguna |

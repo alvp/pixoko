@@ -52,3 +52,4 @@ Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *notas* = sin
 | [hito-2-damero-lienzo.md](hito-2-damero-lienzo.md) | 2.17b | aprobada | Damero de dos grises bajo la transparencia y fondo del lienzo elegible | px-app, px-ui |
 | [hito-2-dialogos-modales.md](hito-2-dialogos-modales.md) | 2.18 | en curso | Formulario como datos, estado puro de diálogos y campos numéricos; foco inicial con clic | px-app, px-ui |
 | [hito-2-nueva-imagen.md](hito-2-nueva-imagen.md) | 2.19 | en curso | `Archivo → Nueva imagen…` (`Ctrl/Cmd+N`): fondo por modo, paleta inicial de 32 colores, reserva previa de memoria y límite de la GPU | px-app, px-ui |
+| [hito-2-convertir-modo.md](hito-2-convertir-modo.md) | 2.20 | aprobada | `Imagen → Convertir modo…`: informe de `convert_image` sin tocar el documento, permisos explícitos, fondo del alfa elegido, un paso de deshacer; menú `Imagen` nuevo | px-app, px-ui |
