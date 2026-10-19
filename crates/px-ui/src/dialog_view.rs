@@ -126,6 +126,16 @@ impl Scale {
     }
 }
 
+/// Intentos de pedir el foco inicial en fotogramas sin puntero antes de rendirse.
+const MAX_FOCUS_TRIES: u8 = 3;
+
+/// El foco inicial pedido y aún sin confirmar por egui.
+#[derive(Clone, Copy)]
+struct PendingFocus {
+    target: FocusTarget,
+    tries: u8,
+}
+
 /// Un elemento al que se puede dar el foco, con dónde está (para el foco y el desplazamiento).
 struct Item {
     target: FocusTarget,
@@ -233,7 +243,20 @@ pub fn show_dialog(
     let body_h_u = layout.body.height / n;
     let blocks = blocks(dialog, body_h_u);
 
+    // Foco inicial: un clic o una pulsación en el fotograma le quita el foco a todo widget que no
+    // está bajo el puntero justo al crearlo, y un diálogo abierto con un clic se pinta por
+    // primera vez en el fotograma de ese clic. Por eso la petición queda pendiente y se repite
+    // en los fotogramas sin puntero hasta que egui confirma el foco (al final del fotograma).
+    let pending_id = Id::unique("pixoko-dialog-initial-focus");
     if let Some(target) = dialog.take_focus_request() {
+        ctx.data_mut(|data| data.insert_temp(pending_id, Some(PendingFocus { target, tries: 0 })));
+    }
+    let focus_pending: Option<PendingFocus> = ctx.data(|data| data.get_temp(pending_id)).flatten();
+    let pointer_active =
+        ctx.input(|input| input.pointer.any_click() || input.pointer.any_pressed());
+    if let Some(PendingFocus { target, .. }) = focus_pending
+        && !pointer_active
+    {
         ctx.memory_mut(|memory| memory.request_focus(widget_id(target)));
     }
 
@@ -481,6 +504,16 @@ pub fn show_dialog(
     // El foco de este fotograma y, si cambió, el elemento a la vista.
     let focused_id = ctx.memory(|memory| memory.focused());
     let new_focus = focused_id.and_then(|id| items.iter().find(|i| i.id == id));
+    if let Some(PendingFocus { target, tries }) = focus_pending {
+        // Cumplida si algún elemento del diálogo tiene el foco (el pedido o el que el usuario eligió
+        // antes); si no, se reintenta en el siguiente fotograma, como mucho `MAX_FOCUS_TRIES` veces.
+        let tries = tries + u8::from(!pointer_active);
+        if new_focus.is_some() || tries >= MAX_FOCUS_TRIES {
+            ctx.data_mut(|data| data.insert_temp(pending_id, None::<PendingFocus>));
+        } else {
+            ctx.data_mut(|data| data.insert_temp(pending_id, Some(PendingFocus { target, tries })));
+        }
+    }
     let new_target = new_focus.map(|item| item.target);
     if new_target != *focus {
         if let Some(Item {
