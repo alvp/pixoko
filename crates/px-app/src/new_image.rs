@@ -430,29 +430,25 @@ pub trait ImageAlloc {
     fn probe(&mut self, bytes: usize) -> bool;
 }
 
-/// La reserva real: `Image::new` / `new_indexed` (`try_reserve_exact`) y rellenar con `set_pixel`.
+/// La reserva real: `Image::filled` / `filled_indexed` (`try_reserve_exact`), con el fondo ya
+/// escrito sin recorrer los píxeles uno a uno.
 pub struct SystemAlloc;
 
 impl ImageAlloc for SystemAlloc {
     fn image(&mut self, spec: &NewImageSpec) -> Result<Image, ImageError> {
-        let mut image = match spec.mode {
-            Mode::Indexed => Image::new_indexed(spec.width, spec.height, initial_palette())?,
-            mode => Image::new(spec.width, spec.height, mode)?,
-        };
+        // Primero el tamaño, como en `Image::new`: con un tamaño inválido gana a un fondo inválido.
+        Image::byte_len(spec.width, spec.height, spec.mode)?;
         let pixel =
             background_pixel(spec.mode, spec.background).ok_or(ImageError::ModeMismatch {
                 expected: spec.mode,
                 found: spec.mode,
             })?;
-        // Una imagen nueva está a ceros: solo se rellena si el fondo no es ese.
-        if image.get_pixel(0, 0)? != pixel {
-            for y in 0..spec.height {
-                for x in 0..spec.width {
-                    image.set_pixel(x, y, pixel)?;
-                }
+        match pixel {
+            Pixel::Indexed(index) => {
+                Image::filled_indexed(spec.width, spec.height, initial_palette(), index)
             }
+            pixel => Image::filled(spec.width, spec.height, pixel),
         }
-        Ok(image)
     }
 
     fn probe(&mut self, bytes: usize) -> bool {
