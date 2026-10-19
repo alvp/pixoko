@@ -488,3 +488,25 @@ pub fn write_png(image: &Image) -> Result<Vec<u8>, PngError> {
     writer.finish().map_err(encode_error)?;
     Ok(out)
 }
+
+/// Bytes que el flujo zlib debe producir para la imagen por defecto (spec de la unidad 13).
+// TODO(unidad 13): stub en rojo; la lógica llega con el commit de lógica.
+#[allow(dead_code)]
+fn inflated_len(
+    _width: u32,
+    _height: u32,
+    _bits_per_pixel: u8,
+    _interlaced: bool,
+) -> Option<u64> {
+    todo!("unidad 13: inflated_len")
+}
+
+/// `needed <= 1032 * idat_len`, sin desbordar (spec de la unidad 13).
+// TODO(unidad 13): stub en rojo; la lógica llega con el commit de lógica.
+#[allow(dead_code)]
+fn stream_is_plausible(_needed: u64, _idat_len: u64) -> bool {
+    todo!("unidad 13: stream_is_plausible")
+}
+
+#[cfg(test)]
+mod tests;

@@ -19,6 +19,12 @@ use px_formats::{AuxChunk, Conversion, PngError, PngRead, read_png, write_png};
 
 #[path = "png/aux_chunks.rs"]
 mod aux_chunks;
+// Unidad 13 (cota de lectura). Estos dos módulos SÍ usan el crate `png` (compressors.rs como
+// codificador); la cabecera de este fichero dice «sin `png`» solo del corpus de la unidad 5.
+#[path = "png/compressors.rs"]
+mod compressors;
+#[path = "png/max_ratio.rs"]
+mod max_ratio;
 
 // ---------------------------------------------------------------------------------------
 // Ayudante de corpus: CRC-32, Adler-32, deflate «stored», chunks y Adam7.
