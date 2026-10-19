@@ -26,7 +26,7 @@
 4. Si una prueba anterior necesita más que cambiar cifras: párate y avísame.
 5. **Commits separados, en este orden:** spec; adaptación de pruebas anteriores
    (el mensaje explica qué comprobaba cada una); pruebas; lógica; px-app.
-6. **Cierre:** `cargo fmt`, `cargo clippy --workspace -- -D warnings`,
+6. **Cierre:** `cargo fmt`, `cargo clippy --workspace --all-targets --locked -- -D warnings`,
    `cargo test --workspace --locked` y `cargo deny check`; después, el `license-auditor`
    una sola vez, sobre el rango de commits de la unidad.
 7. **Prueba manual:** la hago yo. Al terminar me das una lista de pasos.
