@@ -1,7 +1,7 @@
 //! Conversión de una `Image` a bytes RGBA para subirla como textura
 //! (specs/hito-2-ventana.md, «De `Image` a textura»).
 
-use px_core::{Image, Mode, Pixel, Rgba};
+use px_core::{Image, Mode, Palette, Pixel, Rgba};
 
 /// Bytes RGBA de la imagen, `ancho · alto · 4`, fila a fila (la de arriba primero) y con alfa
 /// directo (no premultiplicado).
@@ -12,21 +12,56 @@ use px_core::{Image, Mode, Pixel, Rgba};
 /// - Gris: `(g, g, g, 255)`. Gris con alfa: `(g, g, g, a)`.
 ///
 /// Reserva `4 · ancho · alto` bytes: quien la llame comprueba antes que el tamaño cabe en una
-/// textura. Usa `get_pixel` hasta que `Image` dé acceso por bytes (unidad 12 del hito 2).
+/// textura. Recorre `Image::bytes`; `pixel_rgba` es la misma conversión para un solo píxel.
 pub fn to_rgba8(image: &Image) -> Vec<u8> {
     let (width, height) = (image.width(), image.height());
     let mut bytes = Vec::with_capacity(width as usize * height as usize * 4);
-    for y in 0..height {
-        for x in 0..width {
-            let pixel = image
-                .get_pixel(x, y)
-                .expect("las coordenadas del bucle están dentro de la imagen");
-            let color =
-                pixel_rgba(image, pixel).expect("un píxel indexado está en la paleta de su imagen");
-            bytes.extend_from_slice(&[color.r, color.g, color.b, color.a]);
+    match image.mode() {
+        Mode::Rgba => bytes.extend_from_slice(image.bytes()),
+        Mode::Gray => {
+            for &gray in image.bytes() {
+                bytes.extend_from_slice(&[gray, gray, gray, 255]);
+            }
+        }
+        Mode::GrayAlpha => {
+            for pixel in image.bytes().as_chunks::<2>().0 {
+                bytes.extend_from_slice(&[pixel[0], pixel[0], pixel[0], pixel[1]]);
+            }
+        }
+        Mode::Indexed => {
+            let table = resolved_table(image.palette(), None);
+            for &index in image.bytes() {
+                bytes.extend_from_slice(&table[usize::from(index)]);
+            }
         }
     }
     bytes
+}
+
+/// Color resuelto de cada índice como bytes RGBA (los que no están en la paleta, a ceros),
+/// con `replace` en lugar de la entrada que dice: el índice transparente sigue con alfa 0 y
+/// conserva el RGB del color nuevo.
+fn resolved_table(palette: Option<&Palette>, replace: Option<(u8, Rgba)>) -> [[u8; 4]; 256] {
+    let mut table = [[0u8; 4]; 256];
+    let Some(palette) = palette else {
+        return table;
+    };
+    for (slot, index) in table.iter_mut().zip(0..=u8::MAX) {
+        let color = match replace {
+            Some((target, color)) if target == index => {
+                if palette.transparent_index() == Some(index) {
+                    Some(Rgba { a: 0, ..color })
+                } else {
+                    Some(color)
+                }
+            }
+            _ => palette.resolved(index).ok(),
+        };
+        if let Some(color) = color {
+            *slot = [color.r, color.g, color.b, color.a];
+        }
+    }
+    table
 }
 
 /// Color con el que se ve `pixel` en `image`: el de la paleta para un índice (`None` si no está
