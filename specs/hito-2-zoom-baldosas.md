@@ -198,6 +198,21 @@ Orden de cada subunidad, un commit por paso, con `cargo fmt`, clippy `-D warning
 7. Abrir una imagen más ancha que el lado de textura de tu GPU, si tienes una con límite bajo (si no, anótalo): se muestra en baldosas.
 8. Un PNG de 16384×4096: se abre; de 16385 de ancho: se rechaza con el mensaje nuevo.
 
+## Medida con el código real (14a-2, solo CPU)
+
+Banco desechable fuera del repositorio (ya borrado): `Canvas` real en release con egui 0.37 **sin GL** (no hay GPU ni ventana: solo lo que gasta el hilo de la interfaz), imagen **8192² indexada** de 32 colores con ruido, lienzo de 1600×900. Lo que **no** mide: la subida a la GPU (`tex_image_2d`, ~2,3 ms por baldosa de 2048² en esta máquina según las medidas de arriba) ni nada en otra GPU; eso es de tu prueba manual.
+
+| Operación | CPU (mediana) |
+| --- | --- |
+| `Canvas::load` + primer fotograma (16 baldosas) | 54 ms |
+| `preview_entry`, imagen entera visible (16 baldosas) | **36,8 ms** (hoy, camino anterior: 105 ms de CPU) |
+| `preview_entry` a ×1 y ×2 (de 1 a 4 baldosas visibles) | **8,3 y 8,4 ms** (≈ 2,1 ms por baldosa visible) |
+| `set_overlay`, 100 000 píxeles de golpe | 3,8 ms |
+| `set_overlay` con el mismo trazo (sin píxeles nuevos) | 0,1 ms |
+| soltar (`set_overlay(&[])` + `sync` sin sucios) | 7 µs |
+
+Sumando la subida medida (≈ 2,3 ms por baldosa), el arrastre del editor de color a 8192² indexado queda en ≈ 13 ms a zoom de trabajo (4 baldosas: cabe en un fotograma de 16 ms) y ≈ 74 ms con la imagen entera visible, el caso que decide la 14b (hoy ≈ 128 ms); con 6000² (9 baldosas) ≈ 40 ms. Es una **estimación**; la cifra que cuenta es la del paso 6 de la prueba manual.
+
 ## Fuera de alcance
 
 14b (índices en la GPU), 14c (topes de relleno y memoria del peine), el escritor de PNG por flujo, promedio o mipmaps al alejar, texturas virtuales o por demanda, guardar el nivel de zoom, retirar `set_image`/`set_owned_image`/`screen_to_image_i32`/`TitleInfo.tool` (limpieza D13), 16384² (no se mide: el tope de apertura sigue en 2²⁶ píxeles) y selección o capas.
