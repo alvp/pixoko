@@ -32,6 +32,8 @@ La lectura de ficheros **válidos** ya está en el suelo (el pico es la imagen y
 
 En la app el daño ya está acotado por `png_dimensions` + `check_fits` (2²⁶ píxeles, 256 MiB como mucho, ~50 ms); sin esa defensa (el fuzzer y la CLI del hito 8) son hasta 1 GiB y 330 ms por un fichero de 66 bytes. La comprobación no cuesta nada medible a los ficheros válidos (aritmética sobre números que `read_png` ya tiene). Con la cota, el fuzzer del prototipo (120 s, 3,1 millones de ejecuciones, sin hallazgos) subió de **1478 MiB** de RSS máximo (la ejecución de la unidad 1.x) a **533 MiB**.
 
+**Cifras finales (código final, mismas condiciones, mejor de 3).** Ficheros falsos de 66 bytes: gris 8 de 32768×32768, 0,0 ms y +0,3 MiB (antes 374 ms y +1024 MiB); RGBA 8 de 16384×16384, 0,0 ms y +0,2 MiB (antes ≈ 326 ms y +1024 MiB); RGBA 8192² y gris 8192², 0,0 ms y +0,2 MiB (antes 87 ms y +256 MiB para RGBA). Fichero válido (RGBA 8192² de un solo color, 268 070 bytes): **106 ms antes y 107 ms después**, +256 MiB en los dos: la comprobación no cuesta nada medible. Los 21 PNG (17 de `png-aux` y 4 de `golden/png`) se leen sin error. Pruebas `#[ignore]` en release (8192² y rejilla completa): 3 pasan en 1,2 s. Fuzzer, 60 s con el código final: 1,7 millones de ejecuciones, sin hallazgos, RSS máximo 543 MiB (antes 1478 MiB).
+
 **Lectura por flujo (reservar a medida que llegan las filas): no.** La cota deja la amplificación en 1032× y un fichero legítimo necesita la imagen entera de todos modos; Adam7 obliga a tenerla completa. Fuera de alcance.
 
 ## La cota
