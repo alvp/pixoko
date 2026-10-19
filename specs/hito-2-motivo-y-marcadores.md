@@ -46,7 +46,7 @@ Los motivos imposibles (`calculando el informe`, `más de 256 colores: sin cuant
 // px-ui/src/dialog.rs (aditivas; D3-A)
 impl Dialog { pub fn problems(&self) -> Vec<String>; pub fn set_summary(&mut self, s: Option<String>); pub fn summary(&self) -> Option<&str>; }
 // px-ui/src/dialog_view.rs: aro y punto en las opciones; const TOGGLE_EDGE: Color32 = TEXT_DIM (aro y borde de casilla);
-//   CONTRAST_PAIRS: [_; 11] (+ "borde de opción y casilla sobre un campo", TOGGLE_EDGE, FIELD_FILL, MIN_MARK);
+//   CONTRAST_PAIRS: [_; 11] (+ "borde de opción y casilla sobre un campo", TOGGLE_EDGE, FIELD_FILL, MIN_TEXT);
 //   pub const MISSING_PREFIX: &str = "falta: ";  pub fn footer_text(reason: &str) -> String  // MISSING_PREFIX o `faltan ` (la forma con cuenta) → tal cual; si no, ERROR_PREFIX + motivo; ≤ 44 columnas
 // px-ui/src/dialog.rs: el recorte de motivos es 37, o 44 con MISSING_PREFIX (REASON_MAX_CHARS sigue siendo 37).
 
@@ -71,7 +71,7 @@ pub fn block_reason(..) -> Option<String>;   // misma firma: el texto de D2 (val
 | 7 | **Diálogo real, el caso de la prueba manual.** RGBA con transparencia y color → Gris: abrir con un clic; sin marcar nada; marcar la casilla; elegir blanco; volver a «No perder el alfa»; hexadecimal `zz` con la casilla sin marcar | Pie `falta: perder el color; fondo del alfa`; tras la casilla `falta: elegir el fondo del alfa`; tras el fondo, sin motivo y `Aceptar` activo; con `zz` y sin casilla `falta: perder el color; fondo válido` **y** el error del campo (`Color: …`) sigue junto al campo; con la casilla marcada y `zz`, `error: Color: …`; el cambio se ve **en el fotograma siguiente** al evento |
 | 8 | **Encaje del texto, medido.** Todos los pies de D2 y el **más largo posible** (un motivo recortado a 37 con `error: `, y la lista más larga de dos con `falta: `), con `footer_text`, a las cinco escalas, en la ventana mínima y en 960 × 720 | `footer_text` ≤ 44 columnas; el texto pintado mide como mucho `layout.reason.width` (44 × 7 u × n), sin recorte ni solapamiento con los botones; la pista `falta:` o `error:` está siempre en el texto (no depende solo del color); ≥ 4,5:1 (`ERROR_FG` sobre `DIALOG_FILL`); sin glifo ausente |
 | 9 | **Marcador.** Nueva imagen, Convertir modo y el diálogo de prueba, a las cinco escalas: opción elegida, no elegida, casilla marcada y sin marcar | Opciones: un aro redondo (centro y ancho = 10 u) sin relleno de punto si no elegida y con **un** punto `ACCENT` de 6 u si elegida; exactamente un punto por grupo; casillas: cuadrado de 10 u con borde `TOGGLE_EDGE` y marca cuadrada de 6 u; opción y casilla **distinguibles** por forma, no solo por color |
-| 10 | **Contraste.** El aro, el punto y el anillo de foco contra `FIELD_FILL` y `DIALOG_FILL`, a las cinco escalas | ≥ 3:1 los tres (`TEXT_DIM` 7,x; `ACCENT` 8,98), también el borde de la casilla; `TOGGLE_EDGE` está en `CONTRAST_PAIRS` con mínimo 3,0; el banco de la 9 sigue sin fallos |
+| 10 | **Contraste.** El aro, el punto y el anillo de foco contra `FIELD_FILL` y `DIALOG_FILL`, a las cinco escalas | ≥ 3:1 los tres (`TEXT_DIM` 7,x; `ACCENT` 8,98), también el borde de la casilla; `TOGGLE_EDGE` está en `CONTRAST_PAIRS` con mínimo 4,5 (ver la aclaración de la parte 2); el banco de la 9 sigue sin fallos |
 | 11 | **Foco y entrada.** `Tab`, flechas y clic sobre opciones y casillas | El anillo de foco es el rectángulo de 2 u `ACCENT` de siempre, igual en opción y casilla; clic y teclado eligen como hoy; nada cambia en `Event` ni en el orden de foco |
 | 12 | **Lo anterior no cambia.** Todo el espacio de trabajo | Verde salvo las pruebas de D6, que ya van adaptadas; la geometría y `FOOTER_H_U` idénticos |
 
@@ -85,6 +85,10 @@ pub fn block_reason(..) -> Option<String>;   // misma firma: el texto de D2 (val
 ## Aclaraciones al escribir las pruebas (parte 1)
 
 `missing_text(&[Missing::Value])` solo (no se usa en el diálogo) da `falta: fondo válido`. La forma con cuenta (`faltan N: …`) es también una lista: `footer_text` la deja tal cual y el recorte es de 44. `pending` da una lista vacía con un análisis imposible, también con `value_problem = true`. `Value` entra en `pending` si `value_problem` o si el fondo elegido es «color activo» y no hay activo o tiene alfa < 255 (así `block_reason`, que pasa `false`, da `falta: perder el color; fondo válido`). `Missing` deriva `Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord`; `missing_text` espera listas ya ordenadas (las de `pending`). `summary()` devuelve el texto ya recortado, como `block()`; `set_block(None)` no quita el resumen. Un clic en la casilla con el hexadecimal con foco lo deja sin foco y revierte el texto sin confirmar (regla de la 11c): el caso «casilla marcada y `zz`» se prueba marcando la casilla antes de escribir.
+
+## Aclaración al escribir las pruebas (parte 2)
+
+El par nuevo de `CONTRAST_PAIRS` va con **mínimo 4,5** y no 3,0: la prueba `fila_9_cada_par_de_la_tabla_cumple_su_minimo` (18) exige 4,5 a todo par cuyo primer color sea `TEXT_DIM`, y `TEXT_DIM` sobre `FIELD_FILL` da 6,9:1, así que lo cumple con margen (más estricto que el 3:1 pedido). Así no cambia ninguna prueba anterior. Las pruebas nuevas exigen «mínimo ≥ 3,0». Las del marcador se hacen a las cinco escalas en 960 × 720; a la ventana mínima el cuerpo se desplaza y parte de las filas queda recortada, así que ahí no se miden.
 
 ## Dónde van las pruebas y orden de trabajo
 
