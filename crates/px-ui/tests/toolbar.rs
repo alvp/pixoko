@@ -491,12 +491,15 @@ fn con_un_dialogo_abierto_o_el_panel_de_licencias_nada_responde() {
 }
 
 #[test]
-fn sin_imagen_el_zoom_no_responde_y_en_x1_solo_acercar_y_ajustar() {
+fn sin_imagen_el_zoom_no_responde_y_en_el_minimo_solo_alejar_esta_apagado() {
     let banco = Banco::nuevo(1.0, estado(Tool::Pencil, None, Locks::default()));
     assert_eq!(responden(&banco), ([true; 5], [false; 4]));
     let banco = Banco::nuevo(1.0, estado(Tool::Pencil, Some(Zoom::MIN), Locks::default()));
-    // Acercar, Alejar, Ajustar y 1:1: `Alejar` y `1:1` están deshabilitados en el mínimo.
-    assert_eq!(responden(&banco), ([true; 5], [true, false, true, false]));
+    // Acercar, Alejar, Ajustar y 1:1: en el mínimo (1/64) solo `Alejar` está deshabilitado.
+    assert_eq!(responden(&banco), ([true; 5], [true, false, true, true]));
+    // En ×1 (el mínimo de antes) `Alejar` ya vale (baja a 1/2) y `1:1` no.
+    let banco = Banco::nuevo(1.0, estado(Tool::Pencil, Zoom::from_int(1), Locks::default()));
+    assert_eq!(responden(&banco), ([true; 5], [true, true, true, false]));
 }
 
 #[test]

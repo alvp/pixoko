@@ -1982,6 +1982,9 @@ fn fila_8_con_un_lienzo_de_1x1_pixel_fisico_no_hay_panico_y_el_recorte_es_none_o
             false,
         );
         assert_eq!(banco.viewport(), Size::new(1, 1), "ppp {ppp}");
+        // Ajustar da ahora 1/K en un lienzo de 1×1 (el rasterizador del banco es el de los zooms
+        // enteros): se pide ×1, el zoom en el que esta prueba se escribió.
+        banco.canvas.request_view(ViewOp::Actual);
         for _ in 0..3 {
             banco.corre(vec![], &[]);
         }

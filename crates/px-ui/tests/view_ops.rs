@@ -48,6 +48,15 @@ fn vista(n: u32, desplazamiento: (i64, i64)) -> View {
     v
 }
 
+/// Vista en el zoom mínimo (1/64), anclada en el centro, con `clamp` y desplazada.
+fn vista_minima(desplazamiento: (i64, i64)) -> View {
+    let mut v = View::fit(LIENZO, IMAGEN);
+    v.set_zoom(Zoom::MIN, CENTRO);
+    v.clamp(LIENZO, IMAGEN);
+    v.pan(desplazamiento.0, desplazamiento.1, LIENZO, IMAGEN);
+    v
+}
+
 fn con_clamp(mut v: View) -> View {
     v.clamp(LIENZO, IMAGEN);
     v
@@ -114,9 +123,17 @@ fn fila_6_acercar_alejar_y_actual_no_mueven_el_pixel_bajo_el_centro() {
         let pixel = antes.screen_to_image_i32(CENTRO, IMAGEN);
         for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual] {
             let despues = aplica(antes, op);
+            // Con zoom ≥ ×1 el píxel es el mismo; a 1/K sube a la rejilla del nivel
+            // (specs/hito-2-zoom-baldosas.md, decisión 4).
+            let k = if despues.zoom() < Zoom::ONE {
+                i32::try_from(despues.zoom().unscale(1)).expect("K pequeño")
+            } else {
+                1
+            };
+            let esperado = (pixel.0.div_euclid(k) * k, pixel.1.div_euclid(k) * k);
             assert_eq!(
                 despues.screen_to_image_i32(CENTRO, IMAGEN),
-                pixel,
+                esperado,
                 "{nombre}: {op:?} movió el píxel bajo el centro"
             );
         }
@@ -141,7 +158,7 @@ fn fila_6_acercar_y_alejar_dan_un_paso_de_zoom() {
 }
 
 #[test]
-fn fila_6_fit_es_view_fit_centrado_y_el_mayor_entero_que_cabe() {
+fn fila_6_fit_es_view_fit_centrado_y_el_mayor_nivel_que_cabe() {
     let esperado = View::fit(LIENZO, IMAGEN);
     // 700×500 con 64×48: ×10 (640×480), centrada en (30, 10).
     assert_eq!(esperado.zoom(), zoom(10));
@@ -167,7 +184,7 @@ fn fila_6_x64_sigue_en_x64_con_acercar() {
 #[test]
 fn fila_6_alejar_en_zoom_min_no_cambia_nada() {
     for d in [(0, 0), (7, -5), (-45, -40), (900, 700)] {
-        let antes = vista(1, d);
+        let antes = vista_minima(d);
         assert_eq!(antes.zoom(), Zoom::MIN);
         assert_eq!(aplica(antes, ViewOp::ZoomOut), antes, "{d:?}");
     }
@@ -421,8 +438,8 @@ fn fila_6_request_view_fit_deja_la_imagen_centrada_en_el_lienzo() {
 fn fila_6_en_zoom_min_y_max_las_peticiones_que_no_caben_no_cambian_nada() {
     let mut banco = Banco::nuevo(1.0);
     banco.info(vec![]);
-    for _ in 0..5 {
-        banco.canvas.request_view(ViewOp::Actual);
+    for _ in 0..80 {
+        banco.canvas.request_view(ViewOp::ZoomOut);
         banco.info(vec![]);
     }
     assert_eq!(banco.canvas.zoom(), Some(Zoom::MIN));

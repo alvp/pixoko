@@ -652,10 +652,15 @@ fn fila_9_en_las_cuatro_esquinas_del_lienzo_y_un_pixel_fuera() {
         let (w, h) = (lienzo.width, lienzo.height);
         let imagen = rgba(1024, 1024);
         let mut banco = Banco::nuevo(ppp, ventana, imagen.clone());
+        // Ajustar da ahora un nivel 1/K para esta imagen: se pasa a ×1, que es el zoom en el que la
+        // imagen cubre el lienzo entero.
+        banco.canvas.request_view(ViewOp::Actual);
         let f0 = banco.reposo();
         let (origen, z) = imagen_en_el_lienzo(&f0, ppp);
         assert_eq!(z, 1, "ppp {ppp}");
         let mut referencia = Referencia::nuevo(ppp, (w, h), &imagen);
+        referencia.canvas.request_view(ViewOp::Actual);
+        referencia.fotograma(vec![]);
         let (ox, oy) = (340 * n, 16 * n);
 
         for (x, y) in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)] {

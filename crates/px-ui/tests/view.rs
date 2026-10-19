@@ -4,10 +4,12 @@
 //!
 //! 1. Niveles: `from_int`, `zoom_in`/`zoom_out` con saturación, orden y `Display`.
 //! 2. `scale`, `unscale` y `rescale` frente a un modelo con `i128` y `div_euclid`.
-//! 3. Ida y vuelta exacta pantalla <-> imagen para TODOS los zooms enteros de 1 a 64.
+//! 3. Ida y vuelta exacta pantalla <-> imagen para TODOS los zooms enteros de 1 a 64 (los
+//!    fraccionarios 1/2 a 1/64, por rejilla, son de `zoom_ladder.rs`).
 //! 4. Teselado sin huecos ni solapes y `image_rect`.
 //! 5. Ancla: el bloque bajo el ancla se conserva al cambiar de zoom (también fuera de la imagen).
-//! 6. `fit`: mayor zoom entero que cabe, imagen centrada, determinista.
+//! 6. `fit`: mayor nivel de la escalera que cabe (entero y, si no cabe a ×1, fraccionario),
+//!    imagen centrada, determinista.
 //! 7. Clamp: visibilidad mínima, idempotencia, no mueve lo que ya cumple, `pan`.
 //! 8. Sin pánico ni desbordamiento con tamaños hasta 2^30 por eje y coordenadas hasta ±2^40.
 //!
@@ -48,26 +50,41 @@ fn zoom(n: u32) -> Zoom {
     Zoom::from_int(n).unwrap_or_else(|| panic!("el zoom {n} debería existir"))
 }
 
-/// Factor entero de un zoom (hoy solo hay zooms enteros).
+/// Factor entero de un zoom entero (solo para las pruebas que fijan zooms de ×1 a ×64).
 fn factor(z: Zoom) -> i64 {
     z.scale(1)
+}
+
+/// Fracción `(num, den)` de un nivel de la escalera: `(n, 1)` desde ×1 y `(1, K)` a 1/K.
+fn fraccion(z: Zoom) -> (i128, i128) {
+    if z >= Zoom::ONE {
+        (i128::from(z.scale(1)), 1)
+    } else {
+        (1, i128::from(z.unscale(1)))
+    }
+}
+
+/// Longitud en pantalla de `n` píxeles de imagen según el modelo: `ceil(n · num / den)`.
+fn extension(z: Zoom, n: i128) -> i128 {
+    let (num, den) = fraccion(z);
+    (n * num + den - 1).div_euclid(den)
 }
 
 fn tam(width: u32, height: u32) -> Size {
     Size::new(width, height)
 }
 
-/// Índice de bloque en un eje según el modelo: floor((p - origen) / z).
-fn indice_modelo(p: i64, origen: i64, z: i64) -> i128 {
-    (p as i128 - origen as i128).div_euclid(z as i128)
+/// Índice de píxel de imagen en un eje según el modelo: floor((p - origen) · den / num).
+fn indice_modelo(p: i64, origen: i64, z: Zoom) -> i128 {
+    let (num, den) = fraccion(z);
+    ((p as i128 - origen as i128) * den).div_euclid(num)
 }
 
 /// Modelo de `screen_to_image`: `None` si el bloque cae fuera de la imagen.
 fn pixel_modelo(v: &View, p: (i64, i64), img: Size) -> Option<(u32, u32)> {
-    let z = factor(v.zoom());
     let (ox, oy) = v.origin();
-    let ix = indice_modelo(p.0, ox, z);
-    let iy = indice_modelo(p.1, oy, z);
+    let ix = indice_modelo(p.0, ox, v.zoom());
+    let iy = indice_modelo(p.1, oy, v.zoom());
     if (0..img.width as i128).contains(&ix) && (0..img.height as i128).contains(&iy) {
         Some((ix as u32, iy as u32))
     } else {
@@ -92,10 +109,9 @@ fn eje_cumple(origen: i64, ext: i128, viewport: u32) -> bool {
 }
 
 fn cumple_visibilidad(v: &View, vp: Size, img: Size) -> bool {
-    let z = factor(v.zoom()) as i128;
     let (ox, oy) = v.origin();
-    eje_cumple(ox, img.width as i128 * z, vp.width)
-        && eje_cumple(oy, img.height as i128 * z, vp.height)
+    eje_cumple(ox, extension(v.zoom(), img.width as i128), vp.width)
+        && eje_cumple(oy, extension(v.zoom(), img.height as i128), vp.height)
 }
 
 /// Operaciones que se encadenan a partir de `View::fit` para obtener vistas con origen y zoom
@@ -270,35 +286,53 @@ fn comprobar_geometria(
     Ok(())
 }
 
-/// Propiedad 5: el bloque bajo el ancla se conserva (con el modelo en `i128`).
+/// Propiedad 5: el píxel bajo el ancla se conserva (con el modelo en `i128`). Con zoom ≥ ×1 es
+/// exacto, como siempre; si el nivel nuevo es `1/K`, el píxel sube a la rejilla del nivel
+/// (`floor(i / K) · K`; specs/hito-2-zoom-baldosas.md, decisión 4). Con `K = 1` es la misma
+/// igualdad de antes.
 fn comprobar_ancla(
     antes: &View,
     despues: &View,
     ancla: (i64, i64),
     img: Size,
 ) -> Result<(), TestCaseError> {
-    let (za, zd) = (factor(antes.zoom()), factor(despues.zoom()));
+    let rejilla = if despues.zoom() < Zoom::ONE {
+        fraccion(despues.zoom()).1
+    } else {
+        1
+    };
+    let esperado = |i: i128| i.div_euclid(rejilla) * rejilla;
+    let ix = esperado(indice_modelo(ancla.0, antes.origin().0, antes.zoom()));
+    let iy = esperado(indice_modelo(ancla.1, antes.origin().1, antes.zoom()));
     prop_assert_eq!(
-        indice_modelo(ancla.0, antes.origin().0, za),
-        indice_modelo(ancla.0, despues.origin().0, zd),
+        ix,
+        indice_modelo(ancla.0, despues.origin().0, despues.zoom()),
         "eje x: ancla {:?}, antes {:?}, después {:?}",
         ancla,
         antes,
         despues
     );
     prop_assert_eq!(
-        indice_modelo(ancla.1, antes.origin().1, za),
-        indice_modelo(ancla.1, despues.origin().1, zd),
+        iy,
+        indice_modelo(ancla.1, despues.origin().1, despues.zoom()),
         "eje y: ancla {:?}, antes {:?}, después {:?}",
         ancla,
         antes,
         despues
     );
-    // Mismo índice implica mismo estado dentro/fuera y mismo píxel.
+    // Mismo índice implica mismo estado dentro/fuera y mismo píxel (el índice esperado, si cae
+    // dentro de la imagen).
+    let dentro = (0..img.width as i128).contains(&ix) && (0..img.height as i128).contains(&iy);
     prop_assert_eq!(
-        antes.screen_to_image(ancla, img),
-        despues.screen_to_image(ancla, img)
+        despues.screen_to_image(ancla, img),
+        dentro.then_some((ix as u32, iy as u32))
     );
+    if rejilla == 1 {
+        prop_assert_eq!(
+            antes.screen_to_image(ancla, img),
+            despues.screen_to_image(ancla, img)
+        );
+    }
     Ok(())
 }
 
@@ -330,15 +364,17 @@ fn comprobar_fit(vp: Size, img: Size) -> Result<(), TestCaseError> {
     let v = View::fit(vp, img);
     prop_assert_eq!(v, View::fit(vp, img), "fit debe ser determinista");
 
-    // Modelo: el mayor z <= 64 con ancho·z <= viewport.ancho y alto·z <= viewport.alto.
-    let cabe = |z: i128| {
-        img.width as i128 * z <= vp.width as i128 && img.height as i128 * z <= vp.height as i128
+    // Modelo: el mayor nivel de la escalera con ceil(ancho·z) <= viewport.ancho y
+    // ceil(alto·z) <= viewport.alto; si ninguno cabe, el mínimo.
+    let cabe = |z: Zoom| {
+        extension(z, img.width as i128) <= vp.width as i128
+            && extension(z, img.height as i128) <= vp.height as i128
     };
-    let esperado = (1..=64i128).rev().find(|&z| cabe(z));
-    let z = factor(v.zoom());
+    let esperado = Zoom::levels().rev().find(|&z| cabe(z));
+    let z = v.zoom();
     prop_assert_eq!(
-        z as i128,
-        esperado.unwrap_or(1),
+        z,
+        esperado.unwrap_or(Zoom::MIN),
         "zoom de fit para {:?} en {:?}",
         img,
         vp
@@ -347,8 +383,8 @@ fn comprobar_fit(vp: Size, img: Size) -> Result<(), TestCaseError> {
     // Centrada: los márgenes a ambos lados difieren como mucho en 1 px por eje.
     let (ox, oy) = v.origin();
     for (o, ext, viewport) in [
-        (ox, img.width as i128 * z as i128, vp.width),
-        (oy, img.height as i128 * z as i128, vp.height),
+        (ox, extension(z, img.width as i128), vp.width),
+        (oy, extension(z, img.height as i128), vp.height),
     ] {
         let izquierda = o as i128;
         let derecha = viewport as i128 - o as i128 - ext;
@@ -380,9 +416,11 @@ fn from_int_solo_de_1_a_64() {
 
 #[test]
 fn constantes_de_zoom() {
-    assert_eq!(Zoom::MIN, Zoom::ONE);
+    // El mínimo es 1/64 (antes ×1): `scale(1)` baja a 0 y `unscale(1)` da 64.
+    assert_eq!(Zoom::MIN, Zoom::shrink(64).expect("1/64"));
+    assert_eq!(Zoom::MIN.unscale(1), 64);
     assert_eq!(Zoom::ONE.scale(1), 1);
-    assert_eq!(Zoom::MIN.scale(1), 1);
+    assert_eq!(Zoom::MIN.scale(1), 0);
     assert_eq!(Zoom::MAX.scale(1), 64);
     assert_eq!(Zoom::from_int(1), Some(Zoom::ONE));
     assert_eq!(Zoom::from_int(64), Some(Zoom::MAX));
@@ -391,7 +429,8 @@ fn constantes_de_zoom() {
 
 #[test]
 fn zoom_in_sube_de_uno_en_uno_y_satura() {
-    let mut z = Zoom::MIN;
+    // Los niveles enteros, desde ×1 (el mínimo de antes).
+    let mut z = Zoom::ONE;
     for n in 1..64u32 {
         assert_eq!(z, zoom(n));
         z = z.zoom_in();
@@ -410,9 +449,10 @@ fn zoom_out_baja_de_uno_en_uno_y_satura() {
         z = z.zoom_out();
         assert_eq!(z, zoom(n - 1), "zoom_out de ×{n}");
     }
-    assert_eq!(z, Zoom::MIN);
+    // Los niveles enteros acaban en ×1 (el mínimo de antes); el mínimo de ahora sigue saturando.
+    assert_eq!(z, Zoom::ONE);
     assert_eq!(Zoom::MIN.zoom_out(), Zoom::MIN);
-    assert_eq!(Zoom::ONE.zoom_out().zoom_out(), Zoom::ONE);
+    assert_eq!(Zoom::MIN.zoom_out().zoom_out(), Zoom::MIN);
 }
 
 #[test]
@@ -838,6 +878,7 @@ fn zoom_in_y_zoom_out_ejemplos() {
     max.zoom_in((17, -4));
     assert_eq!(max, antes);
     let mut min = View::fit(tam(8, 8), img);
+    min.set_zoom(Zoom::MIN, (0, 0));
     assert_eq!(min.zoom(), Zoom::MIN);
     let antes = min;
     min.zoom_out((17, -4));
@@ -934,9 +975,9 @@ fn fit_ejemplos() {
     let v = View::fit(tam(100, 100), tam(30, 50));
     assert_eq!((v.zoom(), v.origin()), (zoom(2), (20, 0)));
 
-    // No cabe ni a zoom 1: zoom 1 y centrada (la diferencia -54 y -38 es par).
+    // No cabe ni a zoom 1: el mayor nivel 1/K que quepa (1/8: 8×6 píxeles) y centrada.
     let v = View::fit(tam(10, 10), tam(64, 48));
-    assert_eq!((v.zoom(), v.origin()), (Zoom::ONE, (-27, -19)));
+    assert_eq!((Some(v.zoom()), v.origin()), (Zoom::shrink(8), (1, 2)));
 
     // Tope en 64.
     let v = View::fit(tam(1000, 1000), tam(1, 1));
@@ -952,14 +993,15 @@ fn fit_ejemplos() {
     let v = View::fit(tam(1, 1), tam(1, 1));
     assert_eq!((v.zoom(), v.origin()), (Zoom::ONE, (0, 0)));
 
-    // Viewport de 1 px y una imagen de 3x3: zoom 1 y origen -1.
+    // Viewport de 1 px y una imagen de 3x3: 1/4 (ocupa 1 px) y origen 0.
     let v = View::fit(tam(1, 1), tam(3, 3));
-    assert_eq!((v.zoom(), v.origin()), (Zoom::ONE, (-1, -1)));
+    assert_eq!((Some(v.zoom()), v.origin()), (Zoom::shrink(4), (0, 0)));
 
-    // Viewport de 0 px: zoom 1 y centrada con diferencia de como mucho 1.
+    // Viewport de 0 px: no cabe nada, así que el mínimo (1/64, 1 px), centrado con diferencia
+    // de como mucho 1.
     let v = View::fit(tam(0, 0), tam(5, 5));
-    assert_eq!(v.zoom(), Zoom::ONE);
-    assert!([-3, -2].contains(&v.origin().0) && [-3, -2].contains(&v.origin().1));
+    assert_eq!(v.zoom(), Zoom::MIN);
+    assert!([-1, 0].contains(&v.origin().0) && [-1, 0].contains(&v.origin().1));
 
     // Ajuste exacto en un eje y holgado en el otro.
     let v = View::fit(tam(64, 640), tam(64, 48));
@@ -970,24 +1012,23 @@ fn fit_ejemplos() {
 #[test]
 fn fit_cada_zoom_con_la_imagen_justa() {
     // Una imagen de 3x2 en un viewport de 3z x 2z da exactamente z, y en uno de una unidad menos
-    // en un eje da z - 1 (con mínimo 1).
+    // en un eje da el nivel anterior de la escalera (z - 1, o 1/2 desde ×1).
     let img = tam(3, 2);
+    let anterior = |n: u32| {
+        if n == 1 {
+            Zoom::shrink(2).expect("1/2")
+        } else {
+            zoom(n - 1)
+        }
+    };
     for n in 1..=64u32 {
         let v = View::fit(tam(3 * n, 2 * n), img);
         assert_eq!(v.zoom(), zoom(n), "viewport justo para ×{n}");
         assert_eq!(v.origin(), (0, 0));
         let v = View::fit(tam(3 * n - 1, 2 * n), img);
-        assert_eq!(
-            v.zoom(),
-            zoom((n - 1).max(1)),
-            "falta 1 px de ancho para ×{n}"
-        );
+        assert_eq!(v.zoom(), anterior(n), "falta 1 px de ancho para ×{n}");
         let v = View::fit(tam(3 * n, 2 * n - 1), img);
-        assert_eq!(
-            v.zoom(),
-            zoom((n - 1).max(1)),
-            "falta 1 px de alto para ×{n}"
-        );
+        assert_eq!(v.zoom(), anterior(n), "falta 1 px de alto para ×{n}");
     }
 }
 
@@ -1229,8 +1270,10 @@ proptest! {
         let mut inicio = vista(vp, img, &ops);
         inicio.clamp(vp, img);
         let (ox, oy) = inicio.origin();
-        let z = factor(inicio.zoom()) as i128;
-        let (ext_x, ext_y) = (iw as i128 * z, ih as i128 * z);
+        let (ext_x, ext_y) = (
+            extension(inicio.zoom(), iw as i128),
+            extension(inicio.zoom(), ih as i128),
+        );
         let (dx, dy) = d;
 
         let mut v = inicio;
@@ -1357,15 +1400,19 @@ proptest! {
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
 
-        // fit: zoom en [1, 64], centrada y determinista.
+        // fit: nivel de la escalera, centrada y determinista.
         comprobar_fit(vp, img)?;
 
         // Una vista con origen y zoom arbitrarios (set_zoom no acota, así que el origen puede
         // quedar muy lejos del viewport).
         let v = vista(vp, img, &ops);
-        let z = factor(v.zoom());
-        prop_assert!((1..=64).contains(&z));
-        comprobar_geometria(&v, img, pix, desv, lejos)?;
+        let z = v.zoom();
+        prop_assert!(Zoom::MIN <= z && z <= Zoom::MAX);
+        // La geometría por bloques de `comprobar_geometria` es la de los zooms enteros; los
+        // fraccionarios (por rejilla) los cubre `zoom_ladder.rs`.
+        if z >= Zoom::ONE {
+            comprobar_geometria(&v, img, pix, desv, lejos)?;
+        }
 
         // Ancla en cualquier punto, dentro o fuera, con todos los zooms.
         comprobar_ancla_en_todos_los_zooms(&v, ancla, img)?;

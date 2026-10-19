@@ -203,7 +203,7 @@ fn la_rueda_cambia_el_zoom_en_uno_y_no_mueve_el_pixel_bajo_el_cursor() {
 }
 
 #[test]
-fn el_zoom_se_detiene_en_1_y_en_64() {
+fn el_zoom_se_detiene_en_el_minimo_y_en_64() {
     let mut banco = Banco::nuevo();
     banco.canvas.set_image(&imagen_de_prueba());
     banco.fotograma(vec![], None).output.textures_delta.clear();

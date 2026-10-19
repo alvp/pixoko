@@ -443,12 +443,24 @@ fn fila_2_sin_imagen_mostrable_los_tres_de_zoom_y_1_a_1_estan_deshabilitados() {
 }
 
 #[test]
-fn fila_2_en_zoom_min_alejar_y_1_a_1_estan_deshabilitados() {
-    // Hoy `Zoom::MIN` es ×1; la comparación usa la constante, no el número.
+fn fila_2_en_zoom_min_solo_alejar_esta_deshabilitado() {
+    // `Zoom::MIN` es 1/64 (antes ×1): ahí `Alejar` sigue deshabilitado, pero `1:1` ya vale
+    // (el zoom no es ×1). La comparación usa la constante, no el número.
     assert_eq!(
         habilitadas(&estado(true, true, Some(Zoom::MIN))),
         [
-            true, true, true, true, true, true, true, false, true, false, true
+            true, true, true, true, true, true, true, false, true, true, true
+        ]
+    );
+}
+
+#[test]
+fn fila_2_en_x1_alejar_esta_habilitado_y_1_a_1_no() {
+    // El estado que antes era el mínimo: ahora hay un nivel por debajo (1/2).
+    assert_eq!(
+        habilitadas(&estado(true, true, Zoom::from_int(1))),
+        [
+            true, true, true, true, true, true, true, true, true, false, true
         ]
     );
 }
@@ -601,7 +613,7 @@ proptest! {
                     let por_nivel = match action {
                         AppAction::ZoomIn => state.zoom < Some(Zoom::MAX),
                         AppAction::ZoomOut => state.zoom > Some(Zoom::MIN),
-                        AppAction::ZoomActual => state.zoom != Some(Zoom::MIN),
+                        AppAction::ZoomActual => state.zoom != Zoom::from_int(1),
                         _ => true,
                     };
                     prop_assert_eq!(on, por_nivel, "{:?}", action);
