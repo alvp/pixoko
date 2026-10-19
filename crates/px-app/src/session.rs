@@ -15,8 +15,8 @@ use px_ui::pick::{Picked, pick_notice};
 
 use crate::dialogs::with_png_extension;
 use crate::files::{
-    FileError, MAX_FILE_BYTES, copy_path, describe_open, describe_report, file_label, load_png,
-    untitled_path, write_atomic,
+    FileError, MAX_FILE_BYTES, aux_cause, copy_path, describe_open_aux, describe_report,
+    file_label, is_aux_cause, load_png, untitled_path, write_atomic,
 };
 use crate::new_image::BLACK_INDEX;
 
@@ -383,8 +383,16 @@ impl Session {
         }
         let read = load_png(path, MAX_FILE_BYTES, max_side)?;
         let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-        let text = describe_open(&file_label(&absolute), &read.image, &read.report);
-        let conversion = (!read.report.is_empty()).then(|| describe_report(&read.report));
+        let text = describe_open_aux(&file_label(&absolute), &read.image, &read.report, &read.aux);
+        // La razón de la copia: las conversiones y, al final, la causa de los auxiliares.
+        let mut reason = describe_report(&read.report);
+        if let Some(cause) = read.aux.appearance {
+            if !reason.is_empty() {
+                reason.push_str(", ");
+            }
+            reason.push_str(aux_cause(cause));
+        }
+        let conversion = (!reason.is_empty()).then_some(reason);
         let choice = initial_choice(&read.image);
         self.replace_document(read.image, choice, Some(absolute), conversion);
         Ok(text)
@@ -492,6 +500,7 @@ pub fn describe_saved(saved: &Saved) -> String {
     let name = file_label(&saved.path);
     match &saved.copy_reason {
         None => format!("guardado {name}"),
+        Some(reason) if is_aux_cause(reason) => format!("{reason}; guardado como {name}"),
         Some(reason) => format!(
             "guardado como {name}: el original se convierte al abrir ({reason}) y no se sobrescribe"
         ),
@@ -508,6 +517,7 @@ fn same_file(a: &Path, b: &Path) -> bool {
 pub fn describe_saved_dialog(saved: &Saved) -> String {
     match &saved.copy_reason {
         None => describe_saved(saved),
+        Some(reason) if is_aux_cause(reason) => describe_saved(saved),
         Some(_) => format!(
             "el original se convirtió al abrir; guardado como {}",
             file_label(&saved.path)

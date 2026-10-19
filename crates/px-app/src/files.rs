@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use px_core::{Image, Mode};
-use px_formats::{Conversion, PngError, PngRead, png_dimensions, read_png};
+use px_formats::{AuxChunk, AuxReport, Conversion, PngError, PngRead, png_dimensions, read_png};
 
 /// Tope del fichero de entrada. TEMPORAL hasta la unidad 14.
 pub const MAX_FILE_BYTES: u64 = 256 << 20;
@@ -266,9 +266,65 @@ pub fn describe_report(report: &[Conversion]) -> String {
         .join(", ")
 }
 
+/// Coletilla de las causas que fuerzan una copia (specs/hito-2-chunks-auxiliares.md, D4).
+const COPY_TAIL: &str = "; Ctrl+S guardará una copia";
+
+/// Causas por las que guardar sobre el original perdería algo que se ve distinto.
+const AUX_CAUSES: [AuxChunk; 5] = [
+    AuxChunk::Animation,
+    AuxChunk::Icc,
+    AuxChunk::CodePoints,
+    AuxChunk::Gamma,
+    AuxChunk::Chromaticities,
+];
+
+/// Texto de una causa de `AuxReport::appearance`; cualquier otro chunk, `chunk ignorado`.
+pub fn aux_cause(chunk: AuxChunk) -> &'static str {
+    match chunk {
+        AuxChunk::Animation => "APNG: solo el 1.er fotograma",
+        AuxChunk::Icc => "perfil de color ICC ignorado",
+        AuxChunk::CodePoints => "espacio de color cICP ignorado",
+        AuxChunk::Gamma => "gamma no sRGB ignorada",
+        AuxChunk::Chromaticities => "primarios no sRGB ignorados",
+        _ => "chunk ignorado",
+    }
+}
+
+/// `true` si `reason` es exactamente una de las causas (sin conversiones): se avisa en la forma corta.
+pub(crate) fn is_aux_cause(reason: &str) -> bool {
+    AUX_CAUSES.iter().any(|&chunk| aux_cause(chunk) == reason)
+}
+
+/// Rótulos de los chunks que el aviso nombra, en el orden de `AuxChunk`: `Animation` solo si no es
+/// ya la causa (el color, la resolución y la fecha se quedan en `AuxReport`).
+fn aux_labels(aux: &AuxReport) -> Vec<&'static str> {
+    aux.found
+        .iter()
+        .filter_map(|&chunk| match chunk {
+            AuxChunk::Text => Some("texto"),
+            AuxChunk::Exif => Some("Exif"),
+            AuxChunk::Animation if aux.appearance != Some(AuxChunk::Animation) => Some("animación"),
+            AuxChunk::Other => Some("otros"),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Aviso al abrir: nombre, tamaño, modo y, si hubo conversiones, cuáles y que `Ctrl+S` guardará
 /// una copia.
 pub fn describe_open(name: &str, image: &Image, report: &[Conversion]) -> String {
+    describe_open_aux(name, image, report, &AuxReport::default())
+}
+
+/// `describe_open` con los chunks auxiliares ignorados: con una causa de copia, va delante
+/// (`{causa}; Ctrl+S guardará una copia · …`) y sustituye la coletilla de las conversiones; los
+/// chunks de texto, Exif, animación y otros se nombran al final (` · ignorados: texto, Exif`).
+pub fn describe_open_aux(
+    name: &str,
+    image: &Image,
+    report: &[Conversion],
+    aux: &AuxReport,
+) -> String {
     let mode = match image.mode() {
         Mode::Indexed => "indexado",
         Mode::Gray => "gris",
@@ -281,15 +337,20 @@ pub fn describe_open(name: &str, image: &Image, report: &[Conversion]) -> String
         image.height()
     );
     if !report.is_empty() {
-        text.push_str(&format!(
-            " · convertido: {} · Ctrl+S guardará una copia",
-            describe_report(report)
-        ));
+        text.push_str(&format!(" · convertido: {}", describe_report(report)));
+        if aux.appearance.is_none() {
+            text.push_str(" · Ctrl+S guardará una copia");
+        }
     }
-    text
+    let labels = aux_labels(aux);
+    if !labels.is_empty() {
+        text.push_str(&format!(" · ignorados: {}", labels.join(", ")));
+    }
+    match aux.appearance {
+        Some(cause) => format!("{}{COPY_TAIL} · {text}", aux_cause(cause)),
+        None => text,
+    }
 }
 
-#[cfg(test)]
-mod aux_tests;
 #[cfg(test)]
 mod tests;
