@@ -854,22 +854,41 @@ fn is_single_normal_component(name: &str) -> bool {
     )
 }
 
-/// ¿Es `name` un nombre de fichero válido? (oráculo de la propiedad 7)
-fn valid_file_name(name: &str) -> bool {
-    !name.is_empty() && name != "." && name != ".."
+/// Nombres de dispositivo de Windows: reservados con o sin extensión y sin distinguir
+/// mayúsculas (`CON.png`, `com1.tar.gz`).
+fn is_windows_device_name(name: &str) -> bool {
+    let base = name.split('.').next().unwrap_or("").trim_end_matches(' ');
+    let base = base.to_ascii_uppercase();
+    matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ["COM", "LPT"].iter().any(|prefix| {
+            base.strip_prefix(prefix)
+                .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+        })
 }
 
-/// Nombres de fichero válidos en Unix: espacios, Unicode, sin extensión, `.PNG`, con punto al
-/// principio...
+/// ¿Es `name` un nombre de fichero válido en todas las plataformas? (oráculo de la propiedad 7)
+/// Un único componente normal de ruta; sin `< > : " / \ | ? *` ni caracteres de control; sin
+/// nombre de dispositivo de Windows; sin punto ni espacio al final.
+fn valid_file_name(name: &str) -> bool {
+    is_single_normal_component(name)
+        && !name.chars().any(|c| {
+            c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
+        })
+        && !name.ends_with(['.', ' '])
+        && !is_windows_device_name(name)
+}
+
+/// Nombres de fichero válidos en todas las plataformas: espacios (no al final), Unicode, sin
+/// extensión, `.PNG`, empezando por punto... Los que solo valen en Unix (`a.`, `C:.png`) los
+/// cubre `copy_path_con_nombres_validos_solo_en_unix`.
 fn file_name() -> impl Strategy<Value = String> {
     (
-        "[^/\\x00]{0,20}",
+        "[^<>:\"/\\\\|?*\\x00-\\x1f\\x7f]{0,20}",
         prop_oneof![
             Just(""),
             Just(".png"),
             Just(".PNG"),
             Just(".tar.gz"),
-            Just("."),
             Just(".png.png"),
         ],
     )
@@ -968,6 +987,67 @@ fn windows_c_dos_puntos_png_no_cuelga_de_la_carpeta() {
     assert_ne!(tmp.path().join("C:.png").parent(), Some(tmp.path()));
 }
 
+/// Nombres válidos en Unix pero no en Windows: `copy_path` los trata igual que a los demás. Es
+/// lo que cubría el generador antes de limitarse a nombres válidos en todas partes.
+#[cfg(unix)]
+#[test]
+fn copy_path_con_nombres_validos_solo_en_unix() {
+    for name in [
+        "a.",
+        "a ",
+        "C:",
+        "C:.png",
+        "a:b.png",
+        "a.png:stream",
+        "a<b>.png",
+        "a?b*.png",
+        "CON.png",
+    ] {
+        let tmp = TmpDir::new();
+        let original = tmp.path().join(name);
+        assert_eq!(original.parent(), Some(tmp.path()), "{name:?}");
+        fs::write(&original, b"original").expect("escribir el original");
+        let copy = copy_path(&original);
+        assert_eq!(copy.parent(), Some(tmp.path()), "{name:?}");
+        assert!(copy.to_string_lossy().ends_with(".png"), "{copy:?}");
+        assert!(!copy.exists(), "{copy:?}");
+        assert_ne!(copy, original);
+        assert_eq!(fs::read(&original).unwrap(), b"original".to_vec());
+    }
+}
+
+/// `copy_path` no entra en pánico con nombres raros ni con la ruta vacía, y siempre da un
+/// nombre libre que termina en `.png`. No escribe nada: solo mira si existe el candidato.
+#[test]
+fn copy_path_no_entra_en_panico_con_nombres_raros() {
+    for name in [
+        "a.png:stream",
+        "C:",
+        "CON.png",
+        "NUL",
+        "C:.png",
+        ".",
+        "..",
+        "",
+        "a.",
+    ] {
+        let copy = copy_path(Path::new(name));
+        assert!(
+            copy.to_string_lossy().ends_with(".png"),
+            "{name:?}: {copy:?}"
+        );
+        assert!(!copy.exists(), "{name:?}: {copy:?}");
+    }
+    let tmp = TmpDir::new();
+    for name in ["a.png:stream", "C:", "CON.png"] {
+        let copy = copy_path(&tmp.path().join(name));
+        assert!(
+            copy.to_string_lossy().ends_with(".png"),
+            "{name:?}: {copy:?}"
+        );
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
@@ -975,6 +1055,9 @@ proptest! {
     fn propiedad_7_copy_path(name in file_name(), existing in 0usize..=5) {
         let tmp = TmpDir::new();
         let original = tmp.path().join(&name);
+        // Nunca se escribe fuera de la carpeta temporal: con un nombre que no sea un único
+        // componente normal, `join` podría sustituirla (`C:.png` en Windows).
+        prop_assert_eq!(original.parent(), Some(tmp.path()), "carpeta de {:?}", name);
         // Un sistema de ficheros puede rechazar un nombre generado (macOS devuelve `EILSEQ`
         // con algunos Unicode): eso no dice nada de `copy_path`, así que se descarta el caso.
         prop_assume!(fs::write(&original, b"original").is_ok());
