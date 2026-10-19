@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use eframe::egui;
-use px_core::Document;
+use px_core::{Document, DocumentError};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
 use px_ui::canvas::Canvas;
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
@@ -43,6 +43,11 @@ use crate::confirm::{
     Confirm, Confirmation, Request, close_allowed, close_warning, new_warning, open_dialog_warning,
     open_warning,
 };
+use crate::convert_mode::{
+    Analysis, CONVERTING_NOTICE, ConvertModeError, ConvertSync, History, PendingConvert, Plan,
+    Start, SystemAnalyzer, convert_memory_notice, describe_converted, open_convert_mode,
+    plan_from_values, reserve_for_convert, start_convert, sync_convert,
+};
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
     DialogKind, Dialogs, Finished, Outcome, RfdPicker, fallback_request, ignored_file_notice,
@@ -58,6 +63,16 @@ use crate::new_image::{
 use crate::session::{Session, describe_saved, describe_saved_dialog};
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
+
+/// Una conversión que espera su fotograma tras `Aceptar` (specs/hito-2-convertir-modo.md, D5).
+struct PendingConversion {
+    pending: PendingConvert,
+    /// El informe vigente al aceptar, para el aviso de 5 s.
+    analysis: Option<Analysis>,
+    /// Fotogramas que se dejan pasar antes de contar: el aviso se pinta un fotograma después de
+    /// ponerlo (la barra de estado va un fotograma por detrás).
+    skip: u8,
+}
 
 struct App {
     session: Session,
@@ -93,6 +108,10 @@ struct App {
     /// Con el diálogo de nueva imagen abierto: su traslado de fondo y si el descarte de los
     /// cambios sin guardar ya se confirmó (specs/hito-2-nueva-imagen.md, D6 y D8).
     new_image: Option<(FormSync, bool)>,
+    /// Con el diálogo de convertir modo abierto: su informe y su espera.
+    convert: Option<ConvertSync>,
+    /// Una conversión de una imagen grande que espera su fotograma: la entrada está bloqueada.
+    pending_convert: Option<PendingConversion>,
 }
 
 impl App {
@@ -129,6 +148,8 @@ impl App {
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
             new_image: None,
+            convert: None,
+            pending_convert: None,
         }
     }
 
@@ -160,7 +181,11 @@ impl App {
     /// Hay un gesto en curso: un trazo del lápiz, la línea, o el arrastre de un deslizador del
     /// editor de color. Mientras dura se ignoran atajos, elecciones y ficheros.
     fn busy(&self) -> bool {
-        self.tools.busy() || self.session.busy() || self.dialogs.pending() || self.modal.is_open()
+        self.tools.busy()
+            || self.session.busy()
+            || self.dialogs.pending()
+            || self.modal.is_open()
+            || self.pending_convert.is_some()
     }
 
     /// Abre `path` (del argumento, soltado o elegido en el diálogo). Con cambios sin guardar pide
@@ -175,7 +200,10 @@ impl App {
         confirmed: bool,
     ) {
         if self.busy() {
-            let text = ignored_file_notice(self.dialogs.pending(), self.modal.is_open());
+            let text = ignored_file_notice(
+                self.dialogs.pending(),
+                self.modal.is_open() || self.pending_convert.is_some(),
+            );
             self.notify(ctx, text.to_string());
             return;
         }
@@ -331,6 +359,7 @@ impl App {
         self.dialogs.abandon();
         // Un diálogo modal se abandona sin aplicar nada, como uno de archivo.
         self.modal.abandon();
+        self.pending_convert = None;
         let now = ctx.input(|i| i.time);
         if !close_allowed(self.session.modified(), &mut self.confirm, now) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -345,7 +374,7 @@ impl App {
             dialog: self.dialogs.pending(),
             text_focus: ctx.text_edit_focused(),
             removal: self.session.ops.removal().is_some(),
-            modal: self.modal.is_open(),
+            modal: self.modal.is_open() || self.pending_convert.is_some(),
         }
     }
 
@@ -417,6 +446,7 @@ impl App {
                 ctx.request_repaint();
             }
             Dispatched::NewImage => self.begin_new_image(ctx),
+            Dispatched::ConvertMode => self.begin_convert_mode(ctx),
             Dispatched::Licenses(true) => {
                 let locks = self.locks(ctx);
                 if self.modal.open(
@@ -498,6 +528,115 @@ impl App {
         self.notify(ctx, text);
     }
 
+    /// `Imagen → Convertir modo…`: abre el diálogo con el modo y el color activo de ahora.
+    fn begin_convert_mode(&mut self, ctx: &egui::Context) {
+        let main = self.session.document.main_image();
+        let Some(image) = self.session.document.image(main) else {
+            return;
+        };
+        let from = image.mode();
+        let active = self
+            .session
+            .active_pixel()
+            .and_then(|pixel| pixel_rgba(image, pixel));
+        let state_id = self.session.document.state_id();
+        let locks = self.locks(ctx);
+        if open_convert_mode(&mut self.modal, from, locks) {
+            self.modal_focus = None;
+            self.convert = Some(ConvertSync::new(from, state_id, active));
+        }
+    }
+
+    /// El diálogo de convertir se aceptó: con una imagen grande avisa «Convirtiendo…» y convierte
+    /// unos fotogramas después; si no, convierte ya.
+    fn finish_convert(&mut self, ctx: &egui::Context, values: &px_ui::dialog::Values) {
+        let Some(sync) = self.convert.take() else {
+            return;
+        };
+        let main = self.session.document.main_image();
+        let Some(image) = self.session.document.image(main) else {
+            return;
+        };
+        let from = image.mode();
+        let pixels = u64::from(image.width()) * u64::from(image.height());
+        let Some(plan) = plan_from_values(values, from, sync.active()) else {
+            return;
+        };
+        let analysis = sync.analysis().cloned();
+        match start_convert(plan, pixels) {
+            Start::Now(plan) => self.run_convert(ctx, plan, analysis.as_ref()),
+            Start::Later(pending) => {
+                self.pending_convert = Some(PendingConversion {
+                    pending,
+                    analysis,
+                    skip: 1,
+                });
+                self.notify(ctx, CONVERTING_NOTICE.to_string());
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    /// Cuenta un fotograma de una conversión en espera y la ejecuta en el que toca.
+    fn advance_convert(&mut self, ctx: &egui::Context) {
+        let Some(waiting) = &mut self.pending_convert else {
+            return;
+        };
+        if waiting.skip > 0 {
+            waiting.skip -= 1;
+            ctx.request_repaint();
+            return;
+        }
+        match waiting.pending.tick() {
+            Some(plan) => {
+                debug_assert_eq!(waiting.pending.plan(), plan);
+                let analysis = waiting.analysis.take();
+                self.pending_convert = None;
+                self.run_convert(ctx, plan, analysis.as_ref());
+            }
+            None => ctx.request_repaint(),
+        }
+    }
+
+    /// Reserva la memoria que hará falta y convierte como un paso de la historia; con un fallo,
+    /// aviso de 5 s y todo queda como estaba.
+    fn run_convert(&mut self, ctx: &egui::Context, plan: Plan, analysis: Option<&Analysis>) {
+        let main = self.session.document.main_image();
+        let Some(image) = self.session.document.image(main) else {
+            return;
+        };
+        let (width, height) = (image.width(), image.height());
+        if let Err(ConvertModeError::Memory { bytes }) =
+            reserve_for_convert(image, plan.target, &mut SystemAlloc)
+        {
+            self.notify(
+                ctx,
+                convert_memory_notice(width, height, plan.target, bytes),
+            );
+            return;
+        }
+        match self.session.convert_mode(plan.target, plan.allowed) {
+            Ok(changed) => {
+                self.finish::<std::convert::Infallible>(ctx, Ok(changed));
+                if changed {
+                    self.notify(ctx, describe_converted(plan.target, analysis));
+                }
+            }
+            Err(DocumentError::OutOfMemory | DocumentError::Convert(_)) => {
+                self.notify(
+                    ctx,
+                    convert_memory_notice(
+                        width,
+                        height,
+                        plan.target,
+                        u64::from(width) * u64::from(height) * 4,
+                    ),
+                );
+            }
+            Err(error) => self.notify(ctx, error.to_string()),
+        }
+    }
+
     /// Aplica una edición de la paleta pedida por el panel y avisa del resultado.
     fn apply_palette_op(&mut self, ctx: &egui::Context, op: PaletteOp, unused: bool) {
         match self.session.apply_palette_op(op, unused) {
@@ -544,6 +683,7 @@ impl App {
         let Modal::Open(dialog) = &mut self.modal else {
             // Cerrado por `Quit` o por la ventana: el estado de nueva imagen se va con él.
             self.new_image = None;
+            self.convert = None;
             return;
         };
         let kind = dialog.kind();
@@ -554,6 +694,22 @@ impl App {
         {
             ctx.request_repaint();
         }
+        if kind == ModalKind::ConvertMode
+            && let Some(sync) = &mut self.convert
+            && let Some(image) = self
+                .session
+                .document
+                .image(self.session.document.main_image())
+        {
+            let history = History {
+                limit: self.session.document.history_limit(),
+                used: self.session.document.history_bytes(),
+            };
+            let state_id = self.session.document.state_id();
+            if sync_convert(dialog, sync, image, state_id, history, &mut SystemAnalyzer) {
+                ctx.request_repaint();
+            }
+        }
         if !matches!(reaction, Reaction::Accepted(_) | Reaction::Cancelled) {
             return;
         }
@@ -562,6 +718,13 @@ impl App {
         self.modal_focus = None;
         if kind == ModalKind::Demo {
             self.notify(ctx, demo_notice(&reaction));
+        }
+        if kind == ModalKind::ConvertMode {
+            if let Reaction::Accepted(values) = &reaction {
+                self.finish_convert(ctx, values);
+            } else {
+                self.convert = None;
+            }
         }
         if kind == ModalKind::NewImage {
             let discard = self.new_image.take().is_some_and(|(_, discard)| discard);
@@ -576,6 +739,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
+        self.advance_convert(&ctx);
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
         let state = self.ui_state(&ctx);

@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use px_core::{Command, Document, DocumentError, Image, Mode, Pixel};
+use px_core::{Allowed, Command, Document, DocumentError, Image, Mode, Pixel};
 use px_formats::write_png;
 use px_ui::color::{ColorChoice, SlotBank, clamp_choice, initial_choice, pixel_for_choice_with};
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
@@ -134,6 +134,23 @@ impl Session {
         PickOutcome {
             notice: applied.then(|| pick_notice(&picked)).flatten(),
         }
+    }
+
+    /// Convierte la imagen principal a `target` como **un** paso de la historia (specs/hito-2-convertir-modo.md,
+    /// D5). `Ok(true)` si cambió algo; con un error el documento queda intacto. Tras convertir,
+    /// la elección de color se ajusta al modo nuevo como tras deshacer o rehacer.
+    pub fn convert_mode(&mut self, target: Mode, allowed: Allowed) -> Result<bool, DocumentError> {
+        let image = self.document.main_image();
+        let before = self.choice;
+        let changed = self.document.apply(Command::ConvertMode {
+            image,
+            target,
+            allowed,
+        })?;
+        if changed {
+            self.after_history_move(before);
+        }
+        Ok(changed)
     }
 
     /// Deshace un paso y deja la selección válida para la paleta resultante.

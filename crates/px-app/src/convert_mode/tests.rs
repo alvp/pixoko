@@ -19,8 +19,7 @@
 //!   Gris con alfa · Gris». Se supone que cada opción se llama como el modo, igual que en la 19
 //!   (`Indexado`, `RGBA`, `Gris con alfa`, `Gris`). Es lo que el banco de egui pulsa.
 //! - `#ffff` es el 4 dígitos `rgba` con `a = f` → `Rgba::from_hex` lo lee como `(255,255,255,255)`:
-//!   **opaco**. La fila 4 lo lista entre los que «tienen alfa < 255»; como el `check` solo ve el
-//!   `Rgba` ya leído, aquí vale (como `#fff`) y el de alfa menor es `#fff8`. Se pide confirmar.
+//!   **opaco** (la spec lo aclara); el de alfa menor es `#fff8`.
 //! - Derives no listados: `AlphaChoice`, `Permissions`, `Needs`, `PaletteInfo` e `History` solo se
 //!   construyen y se les leen los campos (nunca se comparan ni se imprimen enteros, salvo
 //!   `PaletteInfo` dentro de `Analysis`, que es `PartialEq` y `Debug`). `SystemAnalyzer` es una
@@ -39,10 +38,12 @@
 //!   línea distinta de las demás y que respete juego y longitud.
 //! - Un fondo hexadecimal o activo con alfa < 255 y con alfa en juego: `block_reason` no tiene texto
 //!   fijado para el hexadecimal (el `check` del formulario lo rechaza antes): no se prueba.
-//! - Un color activo inválido cuando el alfa **no** se pierde no estorba (spec 9: un permiso que no
-//!   hace falta no cambia el resultado); lo que haría `plan_from_values` ahí no se prueba.
+//! - Un fondo «color activo» no opaco o sin color se rechaza siempre que esté elegido, se pierda el
+//!   alfa o no (la spec lo aclara: no se deja `Aceptar` activo sin `Plan`).
 //! - Durante la espera de un cálculo, el valor que devuelve `sync_convert` en los fotogramas
 //!   intermedios no se prueba (solo el del fotograma del cambio y el del cálculo).
+
+#![allow(clippy::needless_range_loop)]
 
 use super::*;
 
@@ -1034,14 +1035,15 @@ fn fila_3_needs_pide_color_y_alfa_solo_cuando_hay_pixeles_perdidos() {
 }
 
 #[test]
-fn fila_3_exact_no_tiene_motivo_con_cualquier_permiso_marcado() {
+fn fila_3_exact_no_tiene_motivo_con_cualquier_permiso_marcado_salvo_un_activo_no_opaco() {
     for (nombre, analysis) in analisis_de_la_fila_3().into_iter().take(2) {
         for luma in [false, true] {
             for alfa in 0..5 {
                 for activo in activos() {
                     assert_eq!(
                         block_reason(Some(&analysis), &permisos(luma, alfa, ROJO), activo),
-                        None,
+                        // Solo un fondo «color activo» no opaco estorba, haga falta el alfa o no.
+                        motivo_esperado(Some(&analysis), luma, alfa, activo),
                         "{nombre}, luma {luma}, alfa {}, activo {activo:?}",
                         NOMBRES_DE_ALFA[alfa]
                     );
@@ -1064,7 +1066,8 @@ fn fila_3_lossy_de_solo_color_pide_la_casilla_y_nada_mas() {
             );
             assert_eq!(
                 block_reason(Some(&analysis), &permisos(true, alfa, ROJO), activo),
-                None,
+                // El fondo no hace falta, salvo que sea un «color activo» no opaco.
+                motivo_esperado(Some(&analysis), true, alfa, activo),
                 "alfa {}: el fondo no hace falta",
                 NOMBRES_DE_ALFA[alfa]
             );
@@ -2627,7 +2630,7 @@ fn fila_6_con_2_a_la_22_pixeles_se_calcula_en_el_mismo_fotograma() {
 #[test]
 fn fila_6_por_encima_de_2_a_la_22_la_llamada_llega_wait_frames_fotogramas_despues() {
     let mut m = Montaje::nuevo(Mode::Gray, gris_vacia(2048, 2049));
-    assert!(2048u64 * 2049 > SYNC_PIXELS);
+    const { assert!(2048u64 * 2049 > SYNC_PIXELS) };
     let mut fotogramas = 0usize;
     // Del fotograma del cambio (el primero) al anterior al cálculo: «Calculando».
     for fotograma in 0..WAIT_FRAMES {

@@ -36,6 +36,8 @@ pub enum Dispatched {
     Licenses(bool),
     /// `Nueva imagen…`: la ejecuta `App` (confirmación, diálogo y creación).
     NewImage,
+    /// `Convertir modo…`: la ejecuta `App` (diálogo, informe y conversión).
+    ConvertMode,
     /// Elegir el fondo bajo la transparencia del lienzo: preferencia de la sesión, no toca el
     /// documento.
     Background(CanvasBackground),
@@ -63,6 +65,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
     let Targets { session, tools, .. } = targets;
     match action {
         AppAction::NewImage => Dispatched::NewImage,
+        AppAction::ConvertMode => Dispatched::ConvertMode,
         AppAction::Open => Dispatched::File(FileAction::Open),
         AppAction::Save => Dispatched::File(FileAction::Save),
         AppAction::SaveAs => Dispatched::File(FileAction::SaveAs),
