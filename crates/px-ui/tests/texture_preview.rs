@@ -12,25 +12,26 @@
 //! Cómo se lee la textura: `egui` no deja leer el contenido de una textura desde el `Context`
 //! (`Context::tex_manager` solo guarda metadatos: nombre, tamaño y bytes por píxel). Lo que sí
 //! se ve es el `TexturesDelta` de cada fotograma (`FullOutput::textures_delta`): lo que `egui`
-//! entregaría a la GPU. El banco lo acumula (`texturas`: el último contenido completo de cada
-//! `TextureId`) y así se puede comparar el contenido de la textura del lienzo con el esperado, y
-//! contar cuántos deltas llegaron en un fotograma (cero = no se subió nada). Los píxeles de un
-//! `ColorImage` son `Color32` con alfa premultiplicado, así que la comparación se hace contra
+//! entregaría a la GPU. El banco los aplica **en orden** con `common::texturas::Texturas` (el
+//! ayudante de la unidad 14a: componen la textura con deltas completos y parciales, y una textura
+//! por baldosa) y así se puede comparar el contenido de la textura del lienzo con el esperado, y
+//! contar cuántos deltas llegaron en un fotograma (cero = no se subió nada). Con las imágenes de
+//! este fichero (una sola baldosa, visible entera) `texture_id()` es la textura de la única
+//! baldosa y un cambio de valor sigue siendo un delta completo. Los píxeles de un `ColorImage`
+//! son `Color32` con alfa premultiplicado, así que la comparación se hace contra
 //! `ColorImage::from_rgba_unmultiplied` de los bytes esperados (un píxel de alfa 0 pierde su RGB
 //! en la textura: por eso la fila 13 mira los bytes de `to_rgba8_with_entry` y, aparte, el alfa
 //! del píxel de la textura).
 
-use std::collections::HashMap;
-
-use egui::{
-    Color32, ColorImage, Context, FullOutput, ImageData, Pos2, RawInput, Rect, TextureId, Vec2,
-    vec2,
-};
+use egui::{Color32, ColorImage, Context, FullOutput, Pos2, RawInput, Rect, Vec2, vec2};
 use proptest::collection::vec;
 use proptest::prelude::*;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::canvas::Canvas;
 use px_ui::texture::{to_rgba8, to_rgba8_with_entry};
+
+mod common;
+use common::texturas::Texturas;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba
@@ -361,8 +362,8 @@ const PANTALLA: Vec2 = vec2(800.0, 600.0);
 struct Banco {
     ctx: Context,
     canvas: Canvas,
-    /// Último contenido completo conocido de cada textura, acumulado de los `TexturesDelta`.
-    texturas: HashMap<TextureId, Vec<Color32>>,
+    /// Contenido de cada textura, compuesto en orden con los `TexturesDelta` de cada fotograma.
+    texturas: Texturas,
     /// Deltas que llegaron en el último fotograma para la textura del lienzo.
     deltas_ultimo: usize,
 }
@@ -373,7 +374,7 @@ impl Banco {
         let mut banco = Banco {
             ctx: Context::default(),
             canvas: Canvas::new(),
-            texturas: HashMap::new(),
+            texturas: Texturas::new(),
             deltas_ultimo: 0,
         };
         banco.canvas.set_image(imagen);
@@ -401,14 +402,15 @@ impl Banco {
         self.deltas_ultimo = 0;
         for (textura, deltas) in &salida.textures_delta.set {
             for delta in deltas {
+                // Una sola baldosa con la imagen entera visible: cada cambio de valor reconstruye
+                // y sube la baldosa entera (un delta completo), como antes de las baldosas.
                 assert_eq!(delta.pos, None, "el lienzo sube la textura entera");
-                let ImageData::Color(imagen) = &delta.image;
-                self.texturas.insert(*textura, imagen.pixels.clone());
                 if Some(*textura) == id {
                     self.deltas_ultimo += 1;
                 }
             }
         }
+        self.texturas.aplica(&salida.textures_delta);
         // `egui` entra en pánico si se sueltan los cambios sin aplicar.
         salida.textures_delta.clear();
     }
@@ -417,8 +419,9 @@ impl Banco {
     fn textura(&self) -> Vec<Color32> {
         let id = self.canvas.texture_id().expect("la textura está subida");
         self.texturas
-            .get(&id)
+            .get(id)
             .expect("se ha subido su contenido")
+            .texels
             .clone()
     }
 
