@@ -3,7 +3,7 @@
 //! pasa a una entrada con cada operación, la selección resultante, el destino por defecto de una
 //! quita, el estado del arrastre y de la quita pendiente y los textos.
 
-use px_core::{Image, Palette, Pixel};
+use px_core::{Image, Palette};
 
 use crate::edit_layout::PaletteButton;
 use crate::palette_grid::DRAG_START_U;
@@ -123,11 +123,10 @@ pub fn default_destination(palette: &Palette, index: u8) -> Option<u8> {
     u8::try_from(old).ok()
 }
 
-/// Algún píxel usa la entrada `index`. Recorre la imagen con `get_pixel` y se corta en el primero
-/// (con la entrada sin usar, un recorrido completo; ver «Para la unidad 14»).
+/// Algún píxel usa la entrada `index` (`Image::uses_index`: una búsqueda por bytes, sin
+/// construir un `Pixel` por píxel).
 pub fn uses_entry(image: &Image, index: u8) -> bool {
-    (0..image.height())
-        .any(|y| (0..image.width()).any(|x| image.get_pixel(x, y) == Ok(Pixel::Indexed(index))))
+    image.uses_index(index)
 }
 
 /// Aviso de una quita pendiente.
