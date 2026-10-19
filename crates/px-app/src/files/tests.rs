@@ -9,7 +9,7 @@ use super::*;
 
 use std::ffi::OsString;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 #[cfg(unix)]
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -844,6 +844,21 @@ proptest! {
 // Propiedad 7: nombres de copia.
 // ---------------------------------------------------------------------------------------
 
+/// ¿Es `name` un único componente normal de ruta en esta plataforma? En Windows `C:.png` no lo
+/// es (empieza por un prefijo de unidad) y `dir.join("C:.png")` deja de colgar de `dir`.
+fn is_single_normal_component(name: &str) -> bool {
+    let mut components = Path::new(name).components();
+    matches!(
+        (components.next(), components.next()),
+        (Some(Component::Normal(_)), None)
+    )
+}
+
+/// ¿Es `name` un nombre de fichero válido? (oráculo de la propiedad 7)
+fn valid_file_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".."
+}
+
 /// Nombres de fichero válidos en Unix: espacios, Unicode, sin extensión, `.PNG`, con punto al
 /// principio...
 fn file_name() -> impl Strategy<Value = String> {
@@ -859,9 +874,98 @@ fn file_name() -> impl Strategy<Value = String> {
         ],
     )
         .prop_map(|(stem, ext)| format!("{stem}{ext}"))
-        .prop_filter("nombre de fichero válido", |name| {
-            !name.is_empty() && name != "." && name != ".."
-        })
+        .prop_filter("nombre de fichero válido", |name| valid_file_name(name))
+}
+
+/// Regresión del CI de Windows (`name = "C:.png"`): un nombre con prefijo de unidad no es un
+/// nombre de fichero válido, y el oráculo de la propiedad 7 no puede aceptarlo.
+#[test]
+fn regresion_c_dos_puntos_png_no_es_nombre_valido() {
+    assert!(!valid_file_name("C:.png"));
+}
+
+#[test]
+fn nombres_invalidos_en_alguna_plataforma_se_rechazan() {
+    for name in [
+        "",
+        ".",
+        "..",
+        "C:",
+        "C:.png",
+        "a:b.png",
+        "a.png:stream",
+        "a/b.png",
+        "a/",
+        "a\\b.png",
+        "a<b.png",
+        "a>b.png",
+        "a\"b.png",
+        "a|b.png",
+        "a?b.png",
+        "a*b.png",
+        "a\u{1}b.png",
+        "a\0b.png",
+        "a\u{7f}b.png",
+        "CON",
+        "con.png",
+        "Prn",
+        "AUX.tar.gz",
+        "nul",
+        "COM1",
+        "com9.png",
+        "LPT1",
+        "lpt9.png",
+        "a.",
+        "a.png.",
+        "a ",
+        "a.png ",
+    ] {
+        assert!(!valid_file_name(name), "{name:?} no es un nombre válido");
+    }
+}
+
+#[test]
+fn nombres_validos_en_todas_las_plataformas_se_aceptan() {
+    for name in [
+        "a",
+        "a.png",
+        "A.PNG",
+        ".png",
+        "..png",
+        "x.tar.gz",
+        "a b.png",
+        " a.png",
+        "ñandú.png",
+        "日本.png",
+        "COM0.png",
+        "COM10.png",
+        "CONSOLA.png",
+        "LPT.png",
+        "auxiliar",
+        "a-b_c.png",
+    ] {
+        assert!(valid_file_name(name), "{name:?} es un nombre válido");
+    }
+}
+
+#[test]
+fn un_unico_componente_normal_es_un_nombre_de_una_pieza() {
+    for name in ["a", "a.png", ".png", "a b.png"] {
+        assert!(is_single_normal_component(name), "{name:?}");
+    }
+    for name in ["", ".", "..", "a/b.png", "/a.png", "./a.png"] {
+        assert!(!is_single_normal_component(name), "{name:?}");
+    }
+}
+
+/// En Windows `C:.png` es un prefijo de unidad más `.png`: `join` sustituye la carpeta.
+#[cfg(windows)]
+#[test]
+fn windows_c_dos_puntos_png_no_cuelga_de_la_carpeta() {
+    let tmp = TmpDir::new();
+    assert!(!is_single_normal_component("C:.png"));
+    assert!(is_single_normal_component("a.png"));
+    assert_ne!(tmp.path().join("C:.png").parent(), Some(tmp.path()));
 }
 
 proptest! {
