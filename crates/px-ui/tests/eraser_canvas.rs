@@ -2,16 +2,19 @@
 //! cuentagotas-borrador.md, decisión 3 y fila 10 de «Casos límite»): el mismo banco que
 //! `tests/pencil.rs` (un `egui::Context` con `RawInput` sintético), copiado y no modificado, pero
 //! con una `ToolState` con el borrador, como hace la app: `Canvas::interact_ordered`, los eventos
-//! a la herramienta, `refresh` si el documento cambió y `Canvas::paint` con la superposición de
-//! `ToolState::preview` convertida con `pixel_rgba`.
+//! a la herramienta, `Canvas::set_overlay` con la superposición de `ToolState::preview`
+//! convertida con `pixel_rgba` (alfa 0 en el borrador), `refresh` si el documento cambió (o `sync`
+//! si no) y `Canvas::paint`.
 //!
-//! Lo pintado se lee de las formas del fotograma: los rectángulos rellenos (`Shape::Rect`) y las
-//! mallas con la textura del damero (`Canvas::checker_texture_id`). Desde la unidad 17b un píxel
-//! borrado se ve como el damero de transparencia y no como el fondo liso: el fotograma sin trazo
-//! da la base (el fondo liso del lienzo y el cuadrilátero del damero de la imagen) y cada
-//! fotograma con trazo debe añadir **un cuadrilátero del damero** por píxel pendiente, en el sitio
-//! de ese píxel y sin tinte, y ningún rectángulo ni otra forma más (specs/hito-2-damero-lienzo.md,
-//! decisión 8 y fila 7; antes era un rectángulo de `BACKGROUND` por píxel).
+//! Qué se ve se lee de la **textura compuesta** (unidad 14a-2, specs/hito-2-zoom-baldosas.md,
+//! decisión 7): el banco aplica en orden los `textures_delta` de cada fotograma con
+//! `common::texturas::Texturas` y guarda en cada `Fotograma` la textura de la baldosa 0 tal como
+//! quedó en ese fotograma. Un píxel borrado vale `Color32::TRANSPARENT` (alfa 0) en esa textura y
+//! la GPU lo compone sobre lo que hay debajo (el damero de transparencia o el fondo elegido, que
+//! se dibuja **bajo** las baldosas); por eso no hay ninguna forma de superposición: el fotograma
+//! con trazo debe dar exactamente las mismas formas que el de reposo (specs/hito-2-damero-
+//! lienzo.md, decisión 8 y fila 7, afirmaban antes un cuadrilátero del damero por píxel
+//! pendiente; la unidad 14a-2 lo sustituye por la textura).
 //!
 //! Cada cambio de estado del botón va en su propio fotograma (egui necesita uno por pulsación o
 //! soltado). 800×600 con 64×48 da zoom ×12 y las posiciones son enteras.
@@ -22,6 +25,8 @@ use egui::{
     Color32, Context, Event, FullOutput, ImageData, Modifiers, PointerButton, Pos2, RawInput, Rect,
     Shape, TextureId, pos2, vec2,
 };
+mod common;
+use common::texturas::{Textura, Texturas};
 use px_core::{Document, Image, ImageId, Mode, Pixel, PixelEdit, Rgba};
 use px_ui::canvas::{BACKGROUND, Canvas, CanvasInfo};
 use px_ui::texture::{pixel_rgba, to_rgba8};
@@ -131,6 +136,8 @@ fn mallas_del_damero(output: &FullOutput, textura: TextureId) -> Vec<(Rect, Colo
 /// Lo que el fotograma dejó: formas, cambios de textura y lo que hizo la herramienta.
 struct Fotograma {
     output: FullOutput,
+    /// La textura de la baldosa 0 compuesta con los `textures_delta` hasta este fotograma.
+    textura: Textura,
     info: CanvasInfo,
     /// `Ok(true)` de algún evento del fotograma: el documento cambió.
     cambio: bool,
@@ -145,6 +152,8 @@ struct Banco {
     doc: Document,
     id: ImageId,
     tool: ToolState,
+    /// Contenido de cada textura, compuesto en orden con los `textures_delta` de cada fotograma.
+    texturas: Texturas,
 }
 
 impl Banco {
@@ -163,6 +172,7 @@ impl Banco {
             doc,
             id,
             tool,
+            texturas: Texturas::new(),
         }
     }
 
@@ -170,8 +180,10 @@ impl Banco {
         self.doc.image(self.id).expect("hay imagen")
     }
 
-    /// Un fotograma como el de la app. Los cambios de textura se devuelven en `output` (quien
-    /// llama decide si los mira y los limpia: egui entra en pánico si se sueltan sin aplicar).
+    /// Un fotograma como el de la app (`interact`, eventos y `apply`, `set_overlay`, `refresh` o
+    /// `sync`, `paint`). Los cambios de textura se aplican a `texturas` y se devuelven también en
+    /// `output` (quien llama decide si los mira y los limpia: egui entra en pánico si se sueltan
+    /// sin aplicar).
     fn fotograma(&mut self, events: Vec<Event>) -> Fotograma {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
@@ -184,6 +196,7 @@ impl Banco {
             doc,
             id,
             tool,
+            texturas,
         } = self;
         let mut resultado = None;
         let output = ctx.run_ui(input, |ui| {
@@ -194,20 +207,33 @@ impl Banco {
                     .expect("el borrador no falla");
             }
             let image = doc.image(*id).expect("hay imagen");
-            if cambio {
-                canvas.refresh(ui.ctx(), image);
-            }
             let pendientes: Vec<PixelEdit> = tool.preview().collect();
             let overlay: Vec<(u32, u32, Rgba)> = pendientes
                 .iter()
                 .filter_map(|e| Some((e.x, e.y, pixel_rgba(image, e.pixel)?)))
                 .collect();
-            let info = canvas.paint(ui, overlay);
+            // El trazo pendiente entero, después de `interact` y antes de `paint`; al soltar queda
+            // vacío y los bloques que tocó se regeneran desde el documento en `sync` o `refresh`.
+            canvas.set_overlay(ui.ctx(), image, &overlay);
+            if cambio {
+                canvas.refresh(ui.ctx(), image);
+            } else {
+                canvas.sync(ui.ctx(), image).expect("sync");
+            }
+            let info = canvas.paint(ui);
             resultado = Some((info, cambio, pendientes));
         });
+        texturas.aplica(&output.textures_delta);
+        let textura = self
+            .canvas
+            .texture_id()
+            .and_then(|id| self.texturas.get(id))
+            .cloned()
+            .unwrap_or_default();
         let (info, cambio, pendientes) = resultado.expect("el lienzo se dibuja");
         Fotograma {
             output,
+            textura,
             info,
             cambio,
             pendientes,
@@ -290,80 +316,100 @@ fn los_veinte() -> Vec<(u32, u32)> {
         .collect()
 }
 
-/// Esquinas (redondeadas) de los rectángulos de `extras`, para comparar sin importar el orden.
-fn esquinas(extras: &[(Rect, Color32)]) -> BTreeSet<(i32, i32)> {
-    extras
-        .iter()
-        .map(|(rect, _)| (rect.min.x.round() as i32, rect.min.y.round() as i32))
-        .collect()
+/// Lo que debe haber en la textura de la baldosa: `to_rgba8` de la imagen original (el oráculo de
+/// la unidad 14a, premultiplicado) con los `pixeles` borrados (alfa 0: `Color32::TRANSPARENT`).
+fn textura_esperada(bytes: &[u8], pixeles: impl IntoIterator<Item = (u32, u32)>) -> Vec<Color32> {
+    let mut texels: Vec<Color32> = bytes
+        .chunks_exact(4)
+        .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
+        .collect();
+    for (x, y) in pixeles {
+        texels[(y * ANCHO + x) as usize] = Color32::TRANSPARENT;
+    }
+    texels
 }
 
-/// Esquinas que debe tener la superposición de los píxeles dados con la vista de `rect` y `zoom`.
-fn esquinas_esperadas(
-    rect: Rect,
-    zoom: i64,
-    pixeles: impl IntoIterator<Item = (u32, u32)>,
-) -> BTreeSet<(i32, i32)> {
-    pixeles
-        .into_iter()
-        .map(|(x, y)| {
-            (
-                (rect.min.x + x as f32 * zoom as f32).round() as i32,
-                (rect.min.y + y as f32 * zoom as f32).round() as i32,
-            )
-        })
-        .collect()
+/// Lo que se subió en el fotograma: solo la textura del lienzo (la baldosa), con deltas parciales
+/// (bloques) que caben en ella, y sin liberar ninguna textura. Con `hay_cambio` falso, nada.
+fn comprueba_subidas(output: &FullOutput, textura: TextureId, hay_cambio: bool, etiqueta: &str) {
+    assert!(
+        output.textures_delta.free.is_empty(),
+        "{etiqueta}: sin textures_delta.free"
+    );
+    if !hay_cambio {
+        assert!(
+            output.textures_delta.set.is_empty(),
+            "{etiqueta}: sin cambios no se sube nada"
+        );
+        return;
+    }
+    for (id, deltas) in &output.textures_delta.set {
+        assert_eq!(
+            *id, textura,
+            "{etiqueta}: solo se sube la textura del lienzo"
+        );
+        for delta in deltas {
+            let ImageData::Color(color) = &delta.image;
+            let [x0, y0] = delta.pos.unwrap_or_else(|| {
+                panic!("{etiqueta}: la superposición sube bloques, no la entera")
+            });
+            assert!(
+                x0 + color.size[0] <= ANCHO as usize && y0 + color.size[1] <= ALTO as usize,
+                "{etiqueta}: el delta {:?} en {:?} cabe en la baldosa",
+                color.size,
+                (x0, y0)
+            );
+        }
+    }
 }
 
-/// Lo que debe cumplir un fotograma con `n` píxeles pendientes y el botón aún abajo.
-fn comprueba_fotograma_con_trazo(s: &Sesion, f: &Fotograma, n: usize, etiqueta: &str) {
+/// Lo que debe cumplir un fotograma con `n` píxeles pendientes y el botón aún abajo. `nuevo` es
+/// que este fotograma añadió píxeles (y por tanto sube bloques).
+fn comprueba_fotograma_con_trazo(s: &Sesion, f: &Fotograma, n: usize, nuevo: bool, etiqueta: &str) {
     let rects = rectangulos(&f.output);
     let mallas = mallas_del_damero(&f.output, s.damero);
     assert_eq!(f.pendientes.len(), n, "{etiqueta}: píxeles pendientes");
-    // Antes: un rectángulo de `BACKGROUND` por píxel pendiente y la base intacta. Ahora la
-    // superposición del borrador (alfa 0) no añade ningún rectángulo: son cuadriláteros del damero.
+    let esperados = &los_veinte()[..n];
+    let pendientes: Vec<(u32, u32)> = f.pendientes.iter().map(|e| (e.x, e.y)).collect();
+    assert_eq!(
+        pendientes, esperados,
+        "{etiqueta}: el trazo entero, en el orden del lápiz"
+    );
+    // Antes: un cuadrilátero del damero por píxel pendiente (y antes un rectángulo de `BACKGROUND`)
+    // sobre la base. Ahora la superposición no es una forma: el fotograma con trazo da las mismas
+    // formas que el de reposo, y el borrado se ve en la textura.
     assert_eq!(
         rects, s.base,
         "{etiqueta}: la superposición no añade rectángulos (la base no cambia)"
     );
     assert_eq!(
-        mallas.len(),
-        s.base_damero.len() + n,
-        "{etiqueta}: un cuadrilátero del damero por píxel pendiente y nada más"
+        mallas, s.base_damero,
+        "{etiqueta}: ni cuadriláteros del damero por píxel pendiente: solo el damero de fondo"
+    );
+    // La vista previa del borrador muestra los píxeles borrados: la textura compuesta lleva cada
+    // píxel pendiente transparente (alfa 0) y el resto de la imagen como estaba.
+    assert_eq!(
+        f.textura.tamano,
+        [ANCHO as usize, ALTO as usize],
+        "{etiqueta}: tamaño de la textura"
     );
     assert_eq!(
-        mallas[..s.base_damero.len()],
-        s.base_damero[..],
-        "{etiqueta}: la base no cambia"
+        f.textura.texels,
+        textura_esperada(&s.bytes, esperados.iter().copied()),
+        "{etiqueta}: la textura es la imagen con los píxeles pendientes transparentes"
     );
-    let extras = &mallas[s.base_damero.len()..];
-    for (rect, fill) in extras {
+    for &(x, y) in esperados {
+        let texel = f.textura.texel(x as usize, y as usize).expect("dentro");
         assert_eq!(
-            *fill,
-            Color32::WHITE,
-            "{etiqueta}: ningún otro color (sin tinte): {rect:?}"
+            texel,
+            Color32::TRANSPARENT,
+            "{etiqueta}: ({x}, {y}) borrado"
         );
-        assert!(
-            (rect.width() - s.zoom as f32).abs() < 1e-3
-                && (rect.height() - s.zoom as f32).abs() < 1e-3,
-            "{etiqueta}: un rectángulo de zoom × zoom, no {rect:?}"
-        );
+        assert_eq!(texel.a(), 0, "{etiqueta}: ({x}, {y}) con alfa 0");
     }
-    let rect_imagen = f.info.image_rect.expect("hay imagen");
-    assert_eq!(
-        esquinas(extras),
-        esquinas_esperadas(rect_imagen, s.zoom, f.pendientes.iter().map(|e| (e.x, e.y))),
-        "{etiqueta}: cada rectángulo está sobre su píxel"
-    );
-    // Sin subir nada: ni la textura ni la vista previa de la paleta.
-    assert!(
-        f.output.textures_delta.set.is_empty(),
-        "{etiqueta}: sin textures_delta.set"
-    );
-    assert!(
-        f.output.textures_delta.free.is_empty(),
-        "{etiqueta}: sin textures_delta.free"
-    );
+    // Solo se suben bloques de la textura, y solo en el fotograma en que cambia.
+    let textura = s.banco.canvas.texture_id().expect("la textura está subida");
+    comprueba_subidas(&f.output, textura, nuevo, etiqueta);
 }
 
 // Fila 10.
@@ -374,7 +420,7 @@ fn el_fondo_del_lienzo_es_el_gris_40() {
 }
 
 #[test]
-fn fila_10_cada_fotograma_pinta_un_cuadrilatero_del_damero_por_pixel_pendiente() {
+fn fila_10_cada_fotograma_muestra_en_la_textura_los_pixeles_pendientes_borrados_sin_formas_extra() {
     let mut s = Sesion::nueva();
     let texture = s.banco.canvas.texture_id().expect("la textura está subida");
     let subidas = s.banco.canvas.preview_uploads();
@@ -382,21 +428,29 @@ fn fila_10_cada_fotograma_pinta_un_cuadrilatero_del_damero_por_pixel_pendiente()
 
     let mut fotogramas = s.arrastra_sin_soltar();
     // El primero (mover sin pulsar) no tiene nada pendiente; el segundo es la pulsación.
-    let sin_pulsar = fotogramas.remove(0);
+    let mut sin_pulsar = fotogramas.remove(0);
     assert!(sin_pulsar.pendientes.is_empty());
     assert_eq!(rectangulos(&sin_pulsar.output), s.base);
+    assert_eq!(
+        sin_pulsar.textura.texels,
+        textura_esperada(&s.bytes, []),
+        "sin trazo, la textura es el documento"
+    );
+    comprueba_subidas(&sin_pulsar.output, texture, false, "sin pulsar");
+    sin_pulsar.output.textures_delta.clear();
 
     for (i, f) in fotogramas.iter_mut().enumerate() {
         let pendientes = i + 1;
-        comprueba_fotograma_con_trazo(&s, f, pendientes, &format!("fotograma {pendientes}"));
+        comprueba_fotograma_con_trazo(&s, f, pendientes, true, &format!("fotograma {pendientes}"));
         f.output.textures_delta.clear();
     }
     assert_eq!(fotogramas.len(), 20, "veinte píxeles visibles");
 
-    // Varios fotogramas más sin soltar ni mover: el trazo sigue y la superposición, igual.
+    // Varios fotogramas más sin soltar ni mover: el trazo sigue y la superposición, igual (la
+    // textura lleva los veinte y ya no sube nada).
     for k in 0..4 {
         let mut f = s.banco.fotograma(vec![]);
-        comprueba_fotograma_con_trazo(&s, &f, 20, &format!("reposo {k}"));
+        comprueba_fotograma_con_trazo(&s, &f, 20, false, &format!("reposo {k}"));
         assert!(!f.cambio);
         f.output.textures_delta.clear();
     }
@@ -414,17 +468,31 @@ fn fila_10_cada_fotograma_pinta_un_cuadrilatero_del_damero_por_pixel_pendiente()
 fn fila_10_la_superposicion_es_el_trazo_entero_en_el_orden_del_lapiz() {
     let mut s = Sesion::nueva();
     let mut fotogramas = s.arrastra_sin_soltar();
+    // Cada fotograma lleva el trazo entero hasta ese momento: un prefijo del orden del lápiz.
+    for (i, f) in fotogramas.iter().enumerate().skip(1) {
+        let hasta: Vec<(u32, u32)> = f.pendientes.iter().map(|e| (e.x, e.y)).collect();
+        assert_eq!(hasta, los_veinte()[..i], "fotograma {i}: prefijo del trazo");
+    }
     let ultimo = fotogramas.last_mut().expect("hay fotogramas");
-    ultimo.output.textures_delta.clear();
     let pendientes: Vec<(u32, u32)> = ultimo.pendientes.iter().map(|e| (e.x, e.y)).collect();
     assert_eq!(pendientes, los_veinte());
     for edicion in &ultimo.pendientes {
         assert_eq!(edicion.pixel, Pixel::Rgba(Rgba::TRANSPARENT));
     }
+    // Y la textura compuesta del último fotograma lleva todos los píxeles pendientes (los veinte,
+    // transparentes) y nada más.
+    assert_eq!(
+        ultimo.textura.texels,
+        textura_esperada(&s.bytes, los_veinte()),
+        "la textura lleva el trazo entero"
+    );
+    for f in &mut fotogramas {
+        f.output.textures_delta.clear();
+    }
 }
 
 #[test]
-fn fila_10_tras_el_end_y_el_refresh_hay_una_sola_subida_con_esos_pixeles_transparentes() {
+fn fila_10_tras_el_end_y_el_refresh_la_textura_es_el_documento_con_esos_pixeles_transparentes() {
     let mut s = Sesion::nueva();
     let texture = s.banco.canvas.texture_id().expect("la textura está subida");
     for mut f in s.arrastra_sin_soltar() {
@@ -437,22 +505,21 @@ fn fila_10_tras_el_end_y_el_refresh_hay_una_sola_subida_con_esos_pixeles_transpa
     assert!(f.cambio, "End da Ok(true)");
     assert!(f.pendientes.is_empty(), "nada pendiente tras el End");
     assert!(!s.banco.tool.busy());
-    let subidas = f
-        .output
-        .textures_delta
-        .set
-        .get(&texture)
-        .expect("la textura se actualiza");
-    assert_eq!(subidas.len(), 1, "una sola subida");
-    assert_eq!(f.output.textures_delta.set.len(), 1, "y de nada más");
-    let delta = &subidas[0];
-    assert!(delta.is_whole(), "se regenera la textura completa");
-    let ImageData::Color(color) = &delta.image;
-    assert_eq!(color.size, [ANCHO as usize, ALTO as usize]);
+    // Antes: «una sola subida» entera (`delta.is_whole()`). Ahora se afirma el resultado: lo único
+    // que se sube es la textura del lienzo y, compuesta, es el documento ya con el borrado.
+    assert!(
+        f.output.textures_delta.set.contains_key(&texture),
+        "la textura se actualiza"
+    );
+    assert!(
+        f.output.textures_delta.set.keys().all(|id| *id == texture),
+        "y de nada más"
+    );
+    assert_eq!(f.textura.tamano, [ANCHO as usize, ALTO as usize]);
     let veinte: BTreeSet<(u32, u32)> = los_veinte().into_iter().collect();
     for y in 0..ALTO {
         for x in 0..ANCHO {
-            let pintado = color.pixels[(y * ANCHO + x) as usize];
+            let pintado = f.textura.texel(x as usize, y as usize).expect("dentro");
             if veinte.contains(&(x, y)) {
                 assert_eq!(pintado.a(), 0, "({x}, {y}) transparente en la textura");
             } else {
@@ -460,9 +527,16 @@ fn fila_10_tras_el_end_y_el_refresh_hay_una_sola_subida_con_esos_pixeles_transpa
             }
         }
     }
+    // La textura compuesta es `from_rgba_unmultiplied(to_rgba8(documento))`, píxel a píxel.
+    let documento: Vec<Color32> = to_rgba8(s.banco.imagen())
+        .chunks_exact(4)
+        .map(|p| Color32::from_rgba_unmultiplied(p[0], p[1], p[2], p[3]))
+        .collect();
+    assert_eq!(f.textura.texels, documento, "la textura es el documento");
 
     // Sin superposición: solo la base. El fondo que se ve bajo esos píxeles es el damero de fondo
-    // de la imagen, el mismo que pintaba la superposición (y fuera de la imagen, `BACKGROUND`).
+    // de la imagen, el mismo que se ve a través de los texels de alfa 0 (y fuera de la imagen,
+    // `BACKGROUND`).
     let rects = rectangulos(&f.output);
     assert_eq!(rects, s.base, "sin superposición tras el End");
     assert_eq!(rects.first().map(|(_, fill)| *fill), Some(BACKGROUND));
@@ -488,17 +562,19 @@ fn fila_10_tras_el_end_y_el_refresh_hay_una_sola_subida_con_esos_pixeles_transpa
     }
     assert!(s.banco.doc.can_undo(), "un paso");
 
-    // Y los fotogramas siguientes ya no suben nada.
+    // Y los fotogramas siguientes ya no suben nada y la textura no cambia.
     let mut siguiente = s.banco.fotograma(vec![]);
     assert!(siguiente.output.textures_delta.set.is_empty());
     assert_eq!(rectangulos(&siguiente.output), s.base);
+    assert_eq!(siguiente.textura.texels, documento);
     siguiente.output.textures_delta.clear();
 }
 
 #[test]
-fn fila_10_el_trazo_de_un_borrador_que_no_cambia_nada_no_sube_la_textura() {
-    // Sobre píxeles ya transparentes, la superposición se pinta igual pero al soltar no hay
-    // `Ok(true)`, no hay `refresh` y no hay subida.
+fn fila_10_el_trazo_de_un_borrador_que_no_cambia_nada_deja_documento_y_textura_como_estaban() {
+    // Sobre píxeles ya transparentes, la superposición se ve igual (borrar lo ya transparente no
+    // cambia lo visible) y al soltar no hay `Ok(true)` ni `refresh`: el documento no cambia y la
+    // textura vuelve a ser el documento (los bloques de la superposición se regeneran).
     let mut s = Sesion::nueva();
     // Primero se borra la fila 5 (de `PRIMERO` a `ULTIMO`) y se suelta.
     for mut f in s.arrastra_sin_soltar() {
@@ -508,15 +584,55 @@ fn fila_10_el_trazo_de_un_borrador_que_no_cambia_nada_no_sube_la_textura() {
     let mut f = s.banco.fotograma(vec![izquierdo(ultimo, false)]);
     f.output.textures_delta.clear();
     assert!(f.cambio);
+    let borrada = textura_esperada(&s.bytes, los_veinte());
+    assert_eq!(f.textura.texels, borrada, "la fila 5 borrada");
+    let bytes_borrada = to_rgba8(s.banco.imagen());
+    let state_id = s.banco.doc.state_id();
 
-    // Segundo trazo por los mismos píxeles.
+    // Segundo trazo por los mismos píxeles: durante el gesto la textura se ve igual.
     let inicio = s.pos(PRIMERO, FILA);
-    s.banco.paso(vec![mover(inicio)]);
-    s.banco.paso(vec![izquierdo(inicio, true)]);
+    let f = s.banco.paso(vec![mover(inicio)]);
+    assert_eq!(f.textura.texels, borrada);
+    let f = s.banco.paso(vec![izquierdo(inicio, true)]);
+    assert_eq!(f.pendientes.len(), 1, "el borrador pinta la superposición");
+    assert_eq!(
+        f.textura.texels, borrada,
+        "borrar lo transparente no cambia lo visible"
+    );
     let medio = s.pos(PRIMERO + 5, FILA);
-    s.banco.paso(vec![mover(medio)]);
+    let f = s.banco.paso(vec![mover(medio)]);
+    assert!(!f.pendientes.is_empty());
+    assert_eq!(f.textura.texels, borrada, "ni durante el trazo");
+    assert_eq!(
+        to_rgba8(s.banco.imagen()),
+        bytes_borrada,
+        "el documento no cambia"
+    );
+
     let mut f = s.banco.fotograma(vec![izquierdo(medio, false)]);
     assert!(!f.cambio, "ya estaban transparentes");
-    assert!(f.output.textures_delta.set.is_empty(), "sin subida");
+    assert!(f.pendientes.is_empty(), "nada pendiente tras el End");
+    // Al terminar, la textura vuelve a ser el documento (que no cambió).
+    assert_eq!(
+        to_rgba8(s.banco.imagen()),
+        bytes_borrada,
+        "documento como estaba"
+    );
+    assert_eq!(s.banco.doc.state_id(), state_id, "ni un paso nuevo");
+    assert_eq!(f.textura.texels, borrada, "la textura es el documento");
+    assert_eq!(
+        f.textura.texels,
+        textura_esperada(&bytes_borrada, []),
+        "y es from_rgba_unmultiplied(to_rgba8(documento))"
+    );
     f.output.textures_delta.clear();
+
+    // En reposo, nada más se sube.
+    let mut reposo = s.banco.fotograma(vec![]);
+    assert!(
+        reposo.output.textures_delta.set.is_empty(),
+        "reposo: sin subidas"
+    );
+    assert_eq!(reposo.textura.texels, borrada);
+    reposo.output.textures_delta.clear();
 }
