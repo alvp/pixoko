@@ -408,8 +408,10 @@ fn activos() -> [Option<Rgba>; 4] {
 const PENDIENTE: &str = "calculando el informe";
 const SIN_CUANTIZADOR: &str = "más de 256 colores: sin cuantizador";
 const NO_CABE: &str = "la imagen convertida no cabe";
-const FALTA_COLOR: &str = "falta permitir perder el color";
-const ELIGE_FONDO: &str = "elige el fondo para el alfa";
+const FALTA_COLOR: &str = "falta: permitir perder el color";
+const ELIGE_FONDO: &str = "falta: elegir el fondo del alfa";
+const FALTA_AMBOS: &str = "falta: perder el color; fondo del alfa";
+const FALTA_COLOR_Y_VALOR: &str = "falta: perder el color; fondo válido";
 
 const INFORME_CALCULANDO: &str = "Calculando el informe…";
 const INFORME_EXACTO: &str = "Sin pérdidas: la conversión es exacta.";
@@ -991,10 +993,20 @@ fn motivo_esperado(
         Analysis::Exact { .. } => ConversionReport::default(),
         Analysis::Lossy(report) => *report,
     };
-    if report.color_lost > 0 && !luma {
+    let falta_color = report.color_lost > 0 && !luma;
+    let falta_fondo = report.alpha_lost > 0 && alfa == 0;
+    // Un fondo «color activo» sin color o con alfa es un valor inválido.
+    let valor_malo = alfa == 3 && activo.is_none_or(|c| c.a < 255);
+    if falta_color && falta_fondo {
+        return Some(FALTA_AMBOS.to_string());
+    }
+    if falta_color && valor_malo {
+        return Some(FALTA_COLOR_Y_VALOR.to_string());
+    }
+    if falta_color {
         return Some(FALTA_COLOR.to_string());
     }
-    if report.alpha_lost > 0 && alfa == 0 {
+    if falta_fondo {
         return Some(ELIGE_FONDO.to_string());
     }
     // Un fondo «color activo» no opaco se rechaza siempre que esté elegido, haga falta el alfa o no.
@@ -1058,9 +1070,15 @@ fn fila_3_lossy_de_solo_color_pide_la_casilla_y_nada_mas() {
     let analysis = perdida(2, 0);
     for alfa in 0..5 {
         for activo in activos() {
+            // Un fondo «color activo» sin color o con alfa se suma como valor inválido.
+            let esperado = if alfa == 3 && activo.is_none_or(|c| c.a < 255) {
+                FALTA_COLOR_Y_VALOR
+            } else {
+                FALTA_COLOR
+            };
             assert_eq!(
                 block_reason(Some(&analysis), &permisos(false, alfa, ROJO), activo),
-                Some(FALTA_COLOR.to_string()),
+                Some(esperado.to_string()),
                 "alfa {}",
                 NOMBRES_DE_ALFA[alfa]
             );
@@ -1106,16 +1124,16 @@ fn fila_3_lossy_de_solo_alfa_pide_el_fondo_y_un_fondo_opaco_lo_cubre() {
 }
 
 #[test]
-fn fila_3_lossy_de_color_y_alfa_pide_los_dos_y_el_color_va_primero() {
+fn fila_3_lossy_de_color_y_alfa_lista_los_dos_y_cada_permiso_quita_el_suyo() {
     let analysis = perdida(2, 3);
-    // Ni casilla ni fondo: sale el del color.
+    // Ni casilla ni fondo: salen los dos, en el orden color y fondo.
     assert_eq!(
         block_reason(
             Some(&analysis),
             &permisos(false, 0, ROJO),
             Some(ACTIVO_OPACO)
         ),
-        Some(FALTA_COLOR.to_string())
+        Some(FALTA_AMBOS.to_string())
     );
     // Con la casilla y sin fondo: el fondo.
     assert_eq!(
@@ -1289,7 +1307,8 @@ fn fila_3_matriz_completa_contra_el_oraculo_del_orden_de_d4() {
                         NOMBRES_DE_ALFA[alfa]
                     );
                     if let Some(texto) = real {
-                        assert!(texto.chars().count() <= 37, "{texto:?}");
+                        let limite = if texto.starts_with("falta: ") { 44 } else { 37 };
+                        assert!(texto.chars().count() <= limite, "{texto:?}");
                         assert!(en_el_juego(&texto), "{texto:?}");
                     }
                     comprobados += 1;
@@ -2555,7 +2574,7 @@ fn fila_6_cambiar_casillas_fondo_o_hexadecimal_no_llama_al_analizador() {
     m.sincroniza();
     let base = m.llamadas();
     assert_eq!(base, 3);
-    assert_eq!(m.dialogo().block(), Some(FALTA_COLOR));
+    assert_eq!(m.dialogo().block(), Some(FALTA_AMBOS));
     marca(m.dialogo_mut(), "luma_gris", true);
     assert!(m.sincroniza());
     assert_eq!(m.dialogo().block(), Some(ELIGE_FONDO));
@@ -3132,7 +3151,9 @@ proptest! {
             from, target, allowed, motivo, resultado
         );
         if let Some(texto) = motivo {
-            prop_assert!(texto.chars().count() <= 37, "{}", texto);
+            // El pie entero mide 44 columnas: 37 tras `error: ` y 44 con `falta: ` en su lugar.
+            let limite = if texto.starts_with("falta: ") { 44 } else { 37 };
+            prop_assert!(texto.chars().count() <= limite, "{}", texto);
             prop_assert!(en_el_juego(&texto), "{}", texto);
         }
     }

@@ -12,7 +12,7 @@
 //!   clic del menú).
 //! - El informe cambia al cambiar de destino y **solo** entonces se vuelve a calcular.
 //! - Con un destino que necesita permiso, `Aceptar` se pinta atenuado y el motivo del pie es visible
-//!   (`error: falta permitir perder el color`); marcar la casilla lo activa.
+//!   (`falta: permitir perder el color`, sin `error:`); marcar la casilla lo activa.
 //! - El grupo del alfa y el hexadecimal solo se ven con destino Gris (y el hexadecimal solo con su
 //!   opción); los errores del hexadecimal (`#12`, `zz`, `#ff000080`).
 //! - `Aceptar` con y sin motivo, `Intro`, `Escape`, `Cancelar` y `Tab`.
@@ -1032,13 +1032,13 @@ fn fila_11_con_un_destino_que_necesita_permiso_aceptar_esta_atenuado_con_el_moti
                 b.elige_destino(Mode::GrayAlpha);
                 assert!(b.aceptar_deshabilitado(), "{contexto}: falta el permiso");
                 assert!(
-                    b.ultimo.contiene("error: falta permitir perder el color"),
+                    b.ultimo.contiene("falta: permitir perder el color"),
                     "{contexto}: el motivo del pie es visible; hay {:?}",
                     b.ultimo.lista()
                 );
                 assert_eq!(
                     b.dialogo().block(),
-                    Some("falta permitir perder el color"),
+                    Some("falta: permitir perder el color"),
                     "{contexto}"
                 );
 
@@ -1063,7 +1063,7 @@ fn fila_11_con_un_destino_que_necesita_permiso_aceptar_esta_atenuado_con_el_moti
                 b.clic_en(CASILLA);
                 assert!(b.aceptar_deshabilitado(), "{contexto}");
                 assert!(
-                    b.ultimo.contiene("error: falta permitir perder el color"),
+                    b.ultimo.contiene("falta: permitir perder el color"),
                     "{contexto}"
                 );
             }
@@ -1079,9 +1079,9 @@ fn fila_11_gris_pide_la_casilla_y_el_fondo_y_cada_opcion_del_alfa_lo_cubre() {
         b.elige_destino(Mode::Gray);
         assert!(b.aceptar_deshabilitado(), "{}", contexto("sin nada"));
         assert!(
-            b.ultimo.contiene("error: falta permitir perder el color"),
+            b.ultimo.contiene("falta: perder el color; fondo del alfa"),
             "{}: {:?}",
-            contexto("falta la casilla"),
+            contexto("faltan la casilla y el fondo"),
             b.ultimo.lista()
         );
 
@@ -1092,7 +1092,7 @@ fn fila_11_gris_pide_la_casilla_y_el_fondo_y_cada_opcion_del_alfa_lo_cubre() {
             contexto("con la casilla y sin fondo")
         );
         assert!(
-            b.ultimo.contiene("error: elige el fondo para el alfa"),
+            b.ultimo.contiene("falta: elegir el fondo del alfa"),
             "{}: {:?}",
             contexto("falta el fondo"),
             b.ultimo.lista()
@@ -1123,7 +1123,7 @@ fn fila_11_gris_pide_la_casilla_y_el_fondo_y_cada_opcion_del_alfa_lo_cubre() {
         // «No perder el alfa» vuelve a pedir el fondo.
         b.clic_en("No perder el alfa");
         assert!(b.aceptar_deshabilitado());
-        assert!(b.ultimo.contiene("error: elige el fondo para el alfa"));
+        assert!(b.ultimo.contiene("falta: elegir el fondo del alfa"));
     }
 }
 
@@ -1837,7 +1837,9 @@ fn fila_11_a_la_minima_la_rueda_desplaza_el_cuerpo_y_titulo_pie_y_botones_no_se_
             assert!(b.ultimo.exacto("Cancelar").is_some(), "{contexto}");
             // El motivo del pie sigue visible con el cuerpo desplazado.
             assert!(
-                b.ultimo.contiene("error: ") || !b.aceptar_deshabilitado(),
+                b.ultimo.contiene("error: ")
+                    || b.ultimo.contiene("falta: ")
+                    || !b.aceptar_deshabilitado(),
                 "{contexto}: si Aceptar está atenuado, el motivo se ve"
             );
         }
@@ -1853,7 +1855,7 @@ fn fila_11_a_la_minima_el_motivo_y_los_botones_se_ven_con_el_cuerpo_al_final() {
         rueda_sobre_el_cuerpo(&mut b, 3);
         assert!(b.dialogo().scroll_u() > 0, "ppp {ppp}");
         assert!(
-            b.ultimo.contiene("error: falta permitir perder el color"),
+            b.ultimo.contiene("falta: permitir perder el color"),
             "ppp {ppp}: el motivo del pie; hay {:?}",
             b.ultimo.lista()
         );
