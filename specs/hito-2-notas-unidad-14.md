@@ -1,6 +1,6 @@
 # Hito 2 · Unidad 14: notas pendientes (consolidación)
 
-Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unidad 14 se escribirá su spec propia, que enlazará con esta página. Cada punto remite a la spec donde se anotó, que sigue siendo la fuente.
+Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unidad 14 se escribirá su spec propia, que enlazará con esta página. La spec de la 14a (zoom de alejamiento, baldosas, superposición y vista previa) es [`hito-2-zoom-baldosas.md`](hito-2-zoom-baldosas.md), pendiente de visto bueno. Cada punto remite a la spec donde se anotó, que sigue siendo la fuente.
 
 ## Rellenos
 
