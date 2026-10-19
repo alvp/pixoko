@@ -22,10 +22,13 @@ use std::time::Duration;
 use eframe::egui;
 use px_core::Document;
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
-use px_ui::canvas::{Canvas, CanvasInfo};
+use px_ui::canvas::Canvas;
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
-use px_ui::licenses_view::show_licenses;
+use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
+use px_ui::dialog_keys::FocusTarget;
+use px_ui::dialog_view::show_dialog;
+use px_ui::licenses_view::licenses_form;
 use px_ui::menu::show_menu_with_background;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
@@ -37,8 +40,9 @@ use px_ui::toolbar::{show_toolbar, zoom_label};
 use crate::confirm::{
     Confirm, Confirmation, Request, close_allowed, close_warning, open_dialog_warning, open_warning,
 };
+use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
-    DialogKind, Dialogs, Finished, IGNORED_FILE_WHILE_DIALOG, Outcome, RfdPicker, fallback_request,
+    DialogKind, Dialogs, Finished, Outcome, RfdPicker, fallback_request, ignored_file_notice,
     open_gate, unavailable_notice,
 };
 use crate::dispatch::{Dispatched, Targets, dispatch};
@@ -73,10 +77,12 @@ struct App {
     min_sent: Option<[f32; 2]>,
     /// Sistema para el que se compiló: decide los atajos que se muestran y los que valen.
     platform: Platform,
-    /// El panel de licencias está abierto (sustituye al lienzo y es modal).
-    licenses_open: bool,
-    /// Primera línea visible del panel de licencias.
-    licenses_first: usize,
+    /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
+    modal: Modal,
+    /// El elemento enfocado del diálogo modal.
+    modal_focus: Option<FocusTarget>,
+    /// Abrir el diálogo de prueba en el primer fotograma (`PIXOKO_DIALOGO_PRUEBA=1`).
+    demo_pending: bool,
 }
 
 impl App {
@@ -109,8 +115,9 @@ impl App {
             min_enabled: min_enabled(std::env::var(ENV_NO_MIN).ok().as_deref()),
             min_sent: None,
             platform: Platform::current(),
-            licenses_open: false,
-            licenses_first: 0,
+            modal: Modal::Closed,
+            modal_focus: None,
+            demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
         }
     }
 
@@ -142,7 +149,7 @@ impl App {
     /// Hay un gesto en curso: un trazo del lápiz, la línea, o el arrastre de un deslizador del
     /// editor de color. Mientras dura se ignoran atajos, elecciones y ficheros.
     fn busy(&self) -> bool {
-        self.tools.busy() || self.session.busy() || self.dialogs.pending()
+        self.tools.busy() || self.session.busy() || self.dialogs.pending() || self.modal.is_open()
     }
 
     /// Abre `path` (del argumento, soltado o elegido en el diálogo). Con cambios sin guardar pide
@@ -157,11 +164,7 @@ impl App {
         confirmed: bool,
     ) {
         if self.busy() {
-            let text = if self.dialogs.pending() {
-                IGNORED_FILE_WHILE_DIALOG
-            } else {
-                "se ignora el fichero: hay un trazo en curso"
-            };
+            let text = ignored_file_notice(self.dialogs.pending(), self.modal.is_open());
             self.notify(ctx, text.to_string());
             return;
         }
@@ -315,6 +318,8 @@ impl App {
             return;
         }
         self.dialogs.abandon();
+        // Un diálogo modal se abandona sin aplicar nada, como uno de archivo.
+        self.modal.abandon();
         let now = ctx.input(|i| i.time);
         if !close_allowed(self.session.modified(), &mut self.confirm, now) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -329,7 +334,7 @@ impl App {
             dialog: self.dialogs.pending(),
             text_focus: ctx.text_edit_focused(),
             removal: self.session.ops.removal().is_some(),
-            modal: self.licenses_open,
+            modal: self.modal.is_open(),
         }
     }
 
@@ -400,9 +405,19 @@ impl App {
                 self.canvas.request_view(op);
                 ctx.request_repaint();
             }
-            Dispatched::Licenses(open) => {
-                self.licenses_open = open;
-                self.licenses_first = 0;
+            Dispatched::Licenses(true) => {
+                let locks = self.locks(ctx);
+                if self.modal.open(
+                    ModalKind::Licenses,
+                    licenses_form(licenses::THIRD_PARTY),
+                    locks,
+                ) {
+                    self.modal_focus = None;
+                }
+            }
+            // Solo cierra el diálogo de Licencias, nunca otro.
+            Dispatched::Licenses(false) => {
+                self.modal.close_kind(ModalKind::Licenses);
             }
             Dispatched::Background(background) => {
                 self.canvas.set_background(background);
@@ -440,6 +455,33 @@ impl App {
             }
             Ok(false) => {}
             Err(error) => self.notify(ctx, error.to_string()),
+        }
+    }
+}
+
+impl App {
+    /// Pinta el diálogo modal, si lo hay, y aplica su respuesta. Va el último del fotograma: los
+    /// bloqueos ya se leyeron al principio y el cierre se aplica al final.
+    fn show_modal(&mut self, ctx: &egui::Context) {
+        if self.demo_pending {
+            self.demo_pending = false;
+            let locks = self.locks(ctx);
+            self.modal.open(ModalKind::Demo, demo_form(), locks);
+            self.modal_focus = None;
+        }
+        let Modal::Open(dialog) = &mut self.modal else {
+            return;
+        };
+        let kind = dialog.kind();
+        let reaction = show_dialog(ctx, dialog, &mut self.modal_focus);
+        if !matches!(reaction, Reaction::Accepted(_) | Reaction::Cancelled) {
+            return;
+        }
+        // `Cerrar` y `Escape` de Licencias solo cierran; el de prueba avisa y no toca nada más.
+        self.modal.abandon();
+        self.modal_focus = None;
+        if kind == ModalKind::Demo {
+            self.notify(ctx, demo_notice(&reaction));
         }
     }
 }
@@ -519,8 +561,8 @@ impl eframe::App for App {
         }
 
         let id = self.session.document.main_image();
-        // Con el panel de licencias abierto el lienzo no interactúa.
-        let canvas_inputs = if self.licenses_open {
+        // Con un diálogo modal abierto el lienzo no interactúa.
+        let canvas_inputs = if self.modal.is_open() {
             Vec::new()
         } else {
             self.canvas.interact_ordered(ui)
@@ -561,23 +603,11 @@ impl eframe::App for App {
         }
 
         let image = self.session.document.image(id);
-        let mut close_licenses = false;
-        let canvas_info = if self.licenses_open {
-            let output = show_licenses(ui, licenses::THIRD_PARTY, &mut self.licenses_first);
-            close_licenses = output.close;
-            CanvasInfo {
-                zoom: self.canvas.zoom().unwrap_or_default(),
-                hover: None,
-                image_rect: None,
-                error: None,
-            }
-        } else {
-            let overlay = self.tools.preview().filter_map(|edit| {
-                let color = pixel_rgba(image?, edit.pixel)?;
-                Some((edit.x, edit.y, color))
-            });
-            self.canvas.paint(ui, overlay)
-        };
+        let overlay = self.tools.preview().filter_map(|edit| {
+            let color = pixel_rgba(image?, edit.pixel)?;
+            Some((edit.x, edit.y, color))
+        });
+        let canvas_info = self.canvas.paint(ui, overlay);
 
         let now = ui.input(|i| i.time);
         let notice = self
@@ -618,9 +648,7 @@ impl eframe::App for App {
                 .send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
         }
-        if close_licenses {
-            self.apply_action(&ctx, frame, AppAction::CloseLicenses, Origin::Button);
-        }
+        self.show_modal(&ctx);
     }
 }
 

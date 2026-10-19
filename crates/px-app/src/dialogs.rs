@@ -16,6 +16,18 @@ pub const UNAVAILABLE_SECS: f64 = 0.5;
 pub const REPAINT_EVERY: Duration = Duration::from_millis(100);
 /// Aviso al soltar un fichero con un diálogo abierto.
 pub const IGNORED_FILE_WHILE_DIALOG: &str = "se ignora el fichero: hay un diálogo abierto";
+/// Aviso al soltar un fichero con un trazo en curso.
+pub const IGNORED_FILE_WHILE_STROKE: &str = "se ignora el fichero: hay un trazo en curso";
+
+/// El aviso de un fichero soltado (o abierto) que se ignora: con un diálogo de archivo o uno modal
+/// abierto, el del diálogo; si no, el del trazo en curso.
+pub fn ignored_file_notice(file_dialog: bool, modal: bool) -> &'static str {
+    if file_dialog || modal {
+        IGNORED_FILE_WHILE_DIALOG
+    } else {
+        IGNORED_FILE_WHILE_STROKE
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DialogKind {

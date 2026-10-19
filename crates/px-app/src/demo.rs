@@ -2,6 +2,8 @@
 //! (abrir PNG es la unidad 15 del hito 2).
 
 use px_core::{Image, Mode, Pixel, Rgba};
+use px_ui::color_edit::hex_text;
+use px_ui::dialog::{FieldKind, FieldSpec, FormSpec, Reaction, Rows, ShowWhen, Value};
 
 pub const WIDTH: u32 = 64;
 pub const HEIGHT: u32 = 48;
@@ -31,6 +33,119 @@ fn demo_color(x: u32, y: u32) -> Rgba {
     let (r, g, b) = (x * 4, y * 5, if checker { 200 } else { 60 });
     let alpha = if x == y { 128 } else { 255 };
     Rgba::new(r as u8, g as u8, b, alpha)
+}
+
+/// Variable de entorno que abre el diálogo de prueba al arrancar (`PIXOKO_DIALOGO_PRUEBA=1`).
+pub const ENV_DEMO_DIALOG: &str = "PIXOKO_DIALOGO_PRUEBA";
+
+/// Si la variable pide el diálogo de prueba: solo el valor `1`.
+pub fn demo_dialog_enabled(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
+/// El formulario del diálogo de prueba (specs/hito-2-dialogos-modales.md, decisión 10): dos
+/// numéricos, un grupo de cuatro opciones, una casilla, un hexadecimal que solo se muestra con la
+/// última opción y un informe. No toca el documento: sirve para probar las piezas a mano.
+pub fn demo_form() -> FormSpec {
+    FormSpec {
+        title: "Diálogo de prueba",
+        accept: "Aceptar",
+        cancel: Some("Cancelar"),
+        fields: vec![
+            FieldSpec {
+                id: "ancho",
+                label: "Ancho",
+                kind: FieldKind::Number {
+                    min: 1,
+                    max: 8192,
+                    default: 64,
+                },
+                shown_when: None,
+            },
+            FieldSpec {
+                id: "limite",
+                label: "Límite",
+                kind: FieldKind::Number {
+                    min: 0,
+                    max: u32::MAX,
+                    default: 1000,
+                },
+                shown_when: None,
+            },
+            FieldSpec {
+                id: "modo",
+                label: "Modo",
+                kind: FieldKind::Choice {
+                    options: &["Uno", "Dos", "Tres", "Con color"],
+                    default: 0,
+                },
+                shown_when: None,
+            },
+            FieldSpec {
+                id: "color",
+                label: "Color",
+                kind: FieldKind::Hex {
+                    mode: Mode::Rgba,
+                    default: Rgba::opaque(0x33, 0x66, 0x99),
+                },
+                shown_when: Some(ShowWhen {
+                    field: "modo",
+                    choice: 3,
+                }),
+            },
+            FieldSpec {
+                id: "opaco",
+                label: "Opaco",
+                kind: FieldKind::Check { default: false },
+                shown_when: None,
+            },
+            FieldSpec {
+                id: "informe",
+                label: "Informe",
+                kind: FieldKind::ReadOnly {
+                    text: "Diálogo de prueba de las piezas de la unidad 18. No modifica el \
+                           documento ni escribe ningún fichero: al cerrarlo, la barra de \
+                           estado dice lo que se aceptó o que se canceló."
+                        .to_string(),
+                    rows: Rows::Fixed(4),
+                },
+                shown_when: None,
+            },
+        ],
+        check: None,
+    }
+}
+
+/// El aviso de la barra al cerrar el diálogo de prueba: lo aceptado (rótulo y valor de cada campo
+/// visible), «cancelado» o el motivo de un rechazo. Pura: no recibe la sesión, así que no puede
+/// tocar el documento.
+pub fn demo_notice(reaction: &Reaction) -> String {
+    match reaction {
+        Reaction::Cancelled => "diálogo de prueba cancelado".to_string(),
+        Reaction::Rejected(reason) => format!("diálogo de prueba sin aceptar: {reason}"),
+        Reaction::None => "diálogo de prueba abierto".to_string(),
+        Reaction::Accepted(values) => {
+            let spec = demo_form();
+            let parts: Vec<String> = spec
+                .fields
+                .iter()
+                .filter_map(|field| {
+                    let value = values.get(field.id)?;
+                    let text = match (value, &field.kind) {
+                        (Value::Number(n), _) => n.to_string(),
+                        (Value::Choice(i), FieldKind::Choice { options, .. }) => {
+                            options.get(*i).copied().unwrap_or("?").to_string()
+                        }
+                        (Value::Check(on), _) => if *on { "sí" } else { "no" }.to_string(),
+                        (Value::Color(color), _) => hex_text(*color),
+                        _ => return None,
+                    };
+                    Some(format!("{} {text}", field.label))
+                })
+                .collect();
+            format!("diálogo de prueba aceptado: {}", parts.join(", "))
+        }
+    }
 }
 
 #[cfg(test)]
