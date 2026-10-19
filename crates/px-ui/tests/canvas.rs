@@ -3,12 +3,15 @@
 
 use egui::epaint::Primitive;
 use egui::{
-    Context, Event, FullOutput, Key, Modifiers, MouseWheelUnit, PointerButton, Pos2, RawInput,
-    Rect, TextureFilter, TouchPhase, Vec2, pos2, vec2,
+    Color32, Context, Event, FullOutput, Key, Modifiers, MouseWheelUnit, PointerButton, Pos2,
+    RawInput, Rect, TextureFilter, TextureId, TexturesDelta, TouchPhase, Vec2, pos2, vec2,
 };
 use px_core::{Image, Mode, Pixel, Rgba};
 use px_ui::canvas::{Canvas, CanvasError, CanvasInfo};
 use px_ui::view::Zoom;
+
+mod common;
+use common::texturas::{Texturas, texel_de};
 
 const SCREEN: Vec2 = vec2(800.0, 600.0);
 
@@ -27,6 +30,8 @@ fn imagen_de_prueba() -> Image {
 struct Banco {
     ctx: Context,
     canvas: Canvas,
+    /// El contenido de las texturas, para las pruebas que lo miran (`aplica`).
+    texturas: Texturas,
 }
 
 struct Fotograma {
@@ -39,7 +44,18 @@ impl Banco {
         Banco {
             ctx: Context::default(),
             canvas: Canvas::new(),
+            texturas: Texturas::new(),
         }
+    }
+
+    /// Aplica a `texturas` los cambios de textura de un fotograma (antes de `limpiar`), sin los de
+    /// la fuente de egui. Las pruebas que miran el contenido de las baldosas lo llaman con
+    /// **cada** fotograma, en orden.
+    fn aplica(&mut self, fotograma: &Fotograma) {
+        let mut delta: TexturesDelta = fotograma.output.textures_delta.clone();
+        delta.set.remove(&TextureId::Managed(0));
+        delta.free.remove(&TextureId::Managed(0));
+        self.texturas.aplica(&delta);
     }
 
     /// Ejecuta un fotograma con los eventos dados y devuelve su salida y la información del
@@ -286,34 +302,170 @@ fn el_arrastre_con_el_boton_central_desplaza_la_imagen() {
     assert!(cerca(despues.width(), antes.width()), "el zoom no cambia");
 }
 
+// ---------------------------------------------------------------------------------------------
+// Unidad 14a-2: la imagen ya no depende del lado máximo de textura (specs/hito-2-zoom-baldosas.md,
+// decisiones 5 y 9). Con una textura máxima de 1024, la imagen de 1025×2 se pinta en 2 baldosas
+// (antes: `CanvasError::TooLarge { max: 1024 }`); `TooLarge` solo queda para un lado mayor de
+// `Canvas::MAX_SIDE` (16384, `max = 16384`).
+// ---------------------------------------------------------------------------------------------
+
+/// Píxeles con color de la imagen ancha, que distinguen las dos baldosas (de 1024 y de 1 columna).
+const PIXELES_DE_LA_ANCHA: [((u32, u32), Rgba); 5] = [
+    ((0, 0), Rgba::opaque(255, 0, 0)),
+    ((1023, 0), Rgba::opaque(200, 100, 50)),
+    ((1023, 1), Rgba::opaque(0, 0, 255)),
+    ((1024, 0), Rgba::opaque(0, 255, 0)),
+    ((1024, 1), Rgba::new(10, 20, 30, 128)),
+];
+
+/// Imagen RGBA de 1025×2: un píxel más ancha que una textura de 1024.
+fn imagen_ancha() -> Image {
+    let mut image = Image::new(1025, 2, Mode::Rgba).expect("imagen válida");
+    for ((x, y), color) in PIXELES_DE_LA_ANCHA {
+        image.set_pixel(x, y, Pixel::Rgba(color)).expect("dentro");
+    }
+    image
+}
+
+/// El texel que debe tener el píxel `(x, y)` de la imagen ancha en su baldosa.
+fn texel_de_la_ancha(x: u32, y: u32) -> Color32 {
+    let color = PIXELES_DE_LA_ANCHA
+        .iter()
+        .find(|(p, _)| *p == (x, y))
+        .map_or(Rgba::new(0, 0, 0, 0), |(_, c)| *c);
+    texel_de(color.r, color.g, color.b, color.a)
+}
+
+/// Las dos baldosas de la imagen ancha: la primera es `texture_id()`, y la textura compuesta de
+/// cada una es la imagen recortada (1024×2 y 1×2), idéntica a la que daría el documento.
+fn comprueba_las_dos_baldosas(banco: &Banco, etiqueta: &str) {
+    let ids = banco.canvas.texture_ids();
+    assert_eq!(ids.len(), 2, "{etiqueta}: dos baldosas");
+    assert_eq!(
+        banco.canvas.texture_id(),
+        Some(ids[0]),
+        "{etiqueta}: `texture_id()` es la primera baldosa"
+    );
+    assert_ne!(ids[0], ids[1], "{etiqueta}");
+    for (baldosa, (tamano, x0)) in [([1024, 2], 0u32), ([1, 2], 1024)].into_iter().enumerate() {
+        let textura = banco
+            .texturas
+            .get(ids[baldosa])
+            .unwrap_or_else(|| panic!("{etiqueta}: la baldosa {baldosa} se subió"));
+        assert_eq!(
+            textura.tamano, tamano,
+            "{etiqueta}: la baldosa {baldosa} es la imagen recortada"
+        );
+        for y in 0..2usize {
+            for x in 0..tamano[0] {
+                assert_eq!(
+                    textura.texel(x, y),
+                    Some(texel_de_la_ancha(x0 + x as u32, y as u32)),
+                    "{etiqueta}: texel ({x}, {y}) de la baldosa {baldosa}"
+                );
+            }
+        }
+    }
+}
+
+/// El píxel de imagen bajo el píxel físico `dx` (desde el borde izquierdo de la imagen) y la
+/// primera fila de pantalla de la imagen, con el puntero ahí (a `ppp` 1: un punto = un píxel).
+fn hover_en(banco: &mut Banco, rect: Rect, dx: f32) -> Option<(u32, u32)> {
+    let pos = pos2(rect.min.x + dx + 0.5, rect.min.y + 0.5);
+    let mut f = banco.fotograma(vec![Event::PointerMoved(pos)], Some(1024));
+    Banco::limpiar(&mut f);
+    f.info.hover
+}
+
 #[test]
-fn una_imagen_mayor_que_la_textura_maxima_da_error_y_no_se_pinta() {
+fn una_imagen_mas_ancha_que_la_textura_maxima_se_abre_y_se_pinta_en_dos_baldosas() {
     let mut banco = Banco::nuevo();
     // 1024 es el mínimo que admite el atlas de fuentes de egui; la imagen lo supera en ancho.
-    let ancha = Image::new(1025, 2, Mode::Rgba).expect("imagen válida");
-    banco.canvas.set_image(&ancha);
+    banco.canvas.set_image(&imagen_ancha());
     let mut f = banco.fotograma(vec![], Some(1024));
-    assert!(
-        banco.canvas.texture_id().is_none(),
-        "no se sube ninguna textura"
-    );
+    banco.aplica(&f);
     Banco::limpiar(&mut f);
-    assert_eq!(
-        f.info.error,
-        Some(CanvasError::TooLarge {
-            width: 1025,
-            height: 2,
-            max: 1024
-        })
-    );
-    assert!(f.info.image_rect.is_none());
-    assert!(f.info.hover.is_none());
-    let _ = f.info.error.as_ref().map(ToString::to_string);
+    assert_eq!(f.info.error, None, "ya no hay error de textura máxima");
+    let rect = f.info.image_rect.expect("la imagen se pinta");
+    comprueba_las_dos_baldosas(&banco, "tras el primer fotograma");
 
-    // Un fotograma posterior sigue sin pintarla ni fallar.
+    // `hover` funciona en las dos mitades. Con la imagen ajustada a 1/2 (800×600 no admite
+    // 1025 píxeles a ×1), el píxel de pantalla `s` es el píxel de imagen `2·s`: el 511 está en la
+    // primera baldosa (x = 1022) y el 512 en la segunda (x = 1024).
+    assert_eq!(f.info.zoom.to_string(), "×1/2");
+    assert_eq!(hover_en(&mut banco, rect, 10.0), Some((20, 0)));
+    assert_eq!(hover_en(&mut banco, rect, 511.0), Some((1022, 0)));
+    assert_eq!(hover_en(&mut banco, rect, 512.0), Some((1024, 0)));
+
+    // Un fotograma posterior sigue pintándola y sin fallar: con rueda y `Home` no hay error, la
+    // imagen y las baldosas son las mismas y no se vuelve a subir nada.
+    let ids = banco.canvas.texture_ids();
     let mut f = banco.fotograma(vec![rueda(true), tecla(Key::Home)], Some(1024));
+    banco.aplica(&f);
+    assert!(
+        ids.iter()
+            .all(|id| !f.output.textures_delta.set.contains_key(id)),
+        "las baldosas no se vuelven a subir"
+    );
     Banco::limpiar(&mut f);
-    assert!(f.info.error.is_some());
+    assert_eq!(f.info.error, None);
+    assert!(f.info.image_rect.is_some());
+    assert_eq!(banco.canvas.texture_ids(), ids);
+    // `Home` solo: de vuelta al ajuste y a la misma imagen centrada.
+    let mut f = banco.fotograma(vec![tecla(Key::Home)], Some(1024));
+    banco.aplica(&f);
+    Banco::limpiar(&mut f);
+    assert_eq!(f.info.error, None);
+    assert_eq!(f.info.zoom.to_string(), "×1/2");
+    assert_eq!(f.info.image_rect, Some(rect));
+    comprueba_las_dos_baldosas(&banco, "tras la rueda y Home");
+}
+
+#[test]
+fn una_imagen_con_un_lado_mayor_de_16384_da_error_y_no_se_pinta() {
+    // El error por tamaño sigue existiendo, ahora por `Canvas::MAX_SIDE` (16384) y no por la
+    // textura máxima de la GPU: 16385×1 RGBA son ~64 KiB, y da lo mismo con 1024 que con 2048.
+    let esperado = CanvasError::TooLarge {
+        width: 16385,
+        height: 1,
+        max: 16384,
+    };
+    let larga = || Image::new(16385, 1, Mode::Rgba).expect("imagen válida");
+    for max_texture_side in [None, Some(1024)] {
+        let mut con_set = Banco::nuevo();
+        con_set.canvas.set_image(&larga());
+        let mut con_owned = Banco::nuevo();
+        con_owned.canvas.set_owned_image(larga());
+        for banco in [&mut con_set, &mut con_owned] {
+            let mut f = banco.fotograma(vec![], max_texture_side);
+            banco.aplica(&f);
+            Banco::limpiar(&mut f);
+            assert_eq!(
+                banco.canvas.texture_id(),
+                None,
+                "{max_texture_side:?}: no se sube ninguna textura"
+            );
+            assert!(banco.canvas.texture_ids().is_empty());
+            assert_eq!(f.info.error, Some(esperado.clone()), "{max_texture_side:?}");
+            assert!(f.info.image_rect.is_none());
+            assert!(f.info.hover.is_none());
+            let _ = f.info.error.as_ref().map(ToString::to_string);
+
+            // Un fotograma posterior sigue sin pintarla ni fallar.
+            let mut f = banco.fotograma(vec![rueda(true), tecla(Key::Home)], max_texture_side);
+            banco.aplica(&f);
+            Banco::limpiar(&mut f);
+            assert_eq!(f.info.error, Some(esperado.clone()), "{max_texture_side:?}");
+            assert!(f.info.image_rect.is_none());
+            assert_eq!(banco.canvas.texture_id(), None);
+        }
+        // `set_image` y `set_owned_image` dan lo mismo.
+        let mut a = con_set.fotograma(vec![], max_texture_side);
+        let mut b = con_owned.fotograma(vec![], max_texture_side);
+        Banco::limpiar(&mut a);
+        Banco::limpiar(&mut b);
+        assert_eq!(a.info, b.info);
+    }
 }
 
 #[test]
@@ -554,31 +706,24 @@ fn fila_12_set_owned_image_deja_el_gesto_en_nada() {
 }
 
 #[test]
-fn fila_12_set_owned_image_tambien_da_el_error_de_textura_maxima_como_set_image() {
-    // 1024 es el mínimo que admite el atlas de fuentes de egui; la imagen lo supera en ancho.
-    let ancha = || Image::new(1025, 2, Mode::Rgba).expect("imagen válida");
+fn fila_12_set_owned_image_tambien_pinta_la_imagen_de_1025x2_en_dos_baldosas_como_set_image() {
+    // Antes: los dos daban `TooLarge { max: 1024 }` con una textura máxima de 1024. Ahora la
+    // imagen se abre y se pinta en 2 baldosas, y `set_image` y `set_owned_image` dan lo mismo.
     let mut con_set = Banco::nuevo();
-    con_set.canvas.set_image(&ancha());
+    con_set.canvas.set_image(&imagen_ancha());
     let mut con_owned = Banco::nuevo();
-    con_owned.canvas.set_owned_image(ancha());
+    con_owned.canvas.set_owned_image(imagen_ancha());
     let mut a = con_set.fotograma(vec![], Some(1024));
     let mut b = con_owned.fotograma(vec![], Some(1024));
+    con_set.aplica(&a);
+    con_owned.aplica(&b);
     Banco::limpiar(&mut a);
     Banco::limpiar(&mut b);
     assert_eq!(a.info, b.info);
-    assert_eq!(
-        b.info.error,
-        Some(CanvasError::TooLarge {
-            width: 1025,
-            height: 2,
-            max: 1024
-        })
-    );
-    assert!(b.info.image_rect.is_none());
-    assert!(
-        con_owned.canvas.texture_id().is_none(),
-        "no se sube ninguna textura"
-    );
+    assert_eq!(b.info.error, None);
+    assert!(b.info.image_rect.is_some());
+    comprueba_las_dos_baldosas(&con_set, "set_image");
+    comprueba_las_dos_baldosas(&con_owned, "set_owned_image");
 }
 
 #[test]
