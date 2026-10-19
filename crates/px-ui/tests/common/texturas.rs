@@ -51,10 +51,17 @@ impl Texturas {
                         );
                     }
                     Some([x0, y0]) => {
-                        let textura = self
-                            .mapa
-                            .get_mut(id)
-                            .expect("un parche llega a una textura ya creada");
+                        // El atlas de la fuente de egui (`Managed(0)`) se crea en los
+                        // fotogramas de calentamiento de `contexto()`, cuyos deltas se
+                        // descartan: sus parches no se siguen (no es del lienzo).
+                        let Some(textura) = self.mapa.get_mut(id) else {
+                            assert_eq!(
+                                *id,
+                                TextureId::Managed(0),
+                                "un parche llega a una textura ya creada"
+                            );
+                            continue;
+                        };
                         let [w, h] = imagen.size;
                         assert!(
                             x0 + w <= textura.tamano[0] && y0 + h <= textura.tamano[1],
