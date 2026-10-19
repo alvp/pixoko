@@ -2899,3 +2899,404 @@ fn fila_12_dialog_kind_convert_mode_es_un_tipo_nuevo() {
     assert!(modal.close_kind(DialogKind::ConvertMode));
     assert!(!modal.is_open());
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20b (specs/hito-2-motivo-y-marcadores.md, D3-A y fila 6): tres ampliaciones aditivas del
+// motor. En ROJO hasta que existan `Dialog::problems`, `Dialog::set_summary` y `Dialog::summary`.
+// ---------------------------------------------------------------------------------------------
+//
+// - `problems() -> Vec<String>`: los motivos de los campos visibles inválidos y del `check`, en el
+//   orden de hoy y **sin recortar**; no incluye el motivo externo ni el resumen.
+// - `set_summary(Option<String>)` y `summary() -> Option<&str>`: con resumen, `reason()` lo da
+//   **antes que todo** (campos, `check` y `set_block`), el conjunto es inválido y `Accept` da
+//   `Rejected`. Recorte: 37 caracteres, o 44 si el texto empieza por `falta: ` (también en
+//   `set_block`). `set_summary(None)` deja el diálogo `==` al de antes. `set_block` sigue como está.
+//
+// Suposiciones (la spec no las fija): `summary()` devuelve el texto ya recortado (como `block()`);
+// con dos campos inválidos `problems()` los lista a los dos, en el orden de los campos; con un
+// campo inválido y un `check` que falla a la vez no se prueba si el `check` entra en la lista (hoy
+// no se llama con un campo inválido); `set_block(None)` no quita el resumen; el recorte a 44 solo
+// se prueba en `set_block` y `set_summary`, no en el texto del `check` ni en el del campo.
+
+const FALTA_DOS: &str = "falta: perder el color; fondo del alfa";
+
+fn problemas(d: &Dialog) -> Vec<String> {
+    d.problems()
+}
+
+/// Dos numéricos válidos por defecto, un grupo que oculta un hexadecimal y un `check` opcional.
+fn spec_20b(check: Option<fn(&Values) -> Option<String>>) -> FormSpec {
+    FormSpec {
+        check,
+        ..spec_con(vec![
+            numerico("ancho", "Ancho", 1, 100, 64),
+            numerico("alto", "Alto", 1, 100, 64),
+            campo(
+                "modo",
+                "Modo",
+                FieldKind::Choice {
+                    options: MODOS_19,
+                    default: 0,
+                },
+            ),
+            FieldSpec {
+                id: "color",
+                label: "Color",
+                kind: FieldKind::Hex {
+                    mode: Mode::Rgba,
+                    default: Rgba::opaque(0x80, 0x80, 0x80),
+                },
+                shown_when: Some(ShowWhen {
+                    field: "modo",
+                    choice: 1,
+                }),
+            },
+        ])
+    }
+}
+
+fn dialogo_20b(check: Option<fn(&Values) -> Option<String>>) -> Dialog {
+    Dialog::new(DialogKind::ConvertMode, spec_20b(check)).expect("spec válida")
+}
+
+fn check_largo_20b(_: &Values) -> Option<String> {
+    Some("x".repeat(100))
+}
+
+#[test]
+fn fila_6_problems_de_un_dialogo_valido_esta_vacio() {
+    assert_eq!(problemas(&dialogo_20b(None)), Vec::<String>::new());
+    assert_eq!(problemas(&dialog()), Vec::<String>::new());
+    // Un `check` que no falla tampoco añade nada.
+    assert!(problemas(&dialogo_20b(Some(check_nunca))).is_empty());
+}
+
+#[test]
+fn fila_6_problems_con_un_campo_invalido_da_su_motivo_el_mismo_de_reason() {
+    let mut d = dialogo_20b(None);
+    numero(&mut d, "ancho", "0");
+    assert_eq!(problemas(&d), vec!["Ancho: mínimo 1".to_string()]);
+    assert_eq!(d.reason(), Some("Ancho: mínimo 1".to_string()));
+    // Un hexadecimal visible inválido.
+    let mut d = dialogo_20b(None);
+    elige(&mut d, "modo", 1);
+    hex(&mut d, "color", "zz");
+    let lista = problemas(&d);
+    assert_eq!(lista.len(), 1, "{lista:?}");
+    assert!(lista[0].starts_with("Color: "), "{lista:?}");
+    assert_eq!(Some(lista[0].clone()), d.reason());
+}
+
+#[test]
+fn fila_6_problems_lista_todos_los_campos_invalidos_en_el_orden_de_los_campos() {
+    let mut d = dialogo_20b(None);
+    elige(&mut d, "modo", 1);
+    hex(&mut d, "color", "zz");
+    numero(&mut d, "alto", "0");
+    numero(&mut d, "ancho", "0");
+    let lista = problemas(&d);
+    assert_eq!(lista.len(), 3, "{lista:?}");
+    assert_eq!(lista[0], "Ancho: mínimo 1");
+    assert_eq!(lista[1], "Alto: mínimo 1");
+    assert!(lista[2].starts_with("Color: "), "{lista:?}");
+    // El primero es el que da `reason()` sin resumen.
+    assert_eq!(d.reason(), Some(lista[0].clone()));
+}
+
+#[test]
+fn fila_6_problems_no_cuenta_un_campo_oculto_aunque_tenga_algo_invalido_escrito() {
+    let mut d = dialogo_20b(None);
+    elige(&mut d, "modo", 1);
+    hex(&mut d, "color", "zz");
+    assert_eq!(problemas(&d).len(), 1);
+    elige(&mut d, "modo", 0);
+    assert!(!d.is_shown("color"));
+    assert!(problemas(&d).is_empty());
+    assert!(d.is_valid());
+}
+
+#[test]
+fn fila_6_problems_da_el_motivo_del_check_sin_recortar() {
+    let d = dialogo_20b(Some(check_largo_20b));
+    assert_eq!(problemas(&d), vec!["x".repeat(100)]);
+    // `reason()` sigue recortándolo a 37 como hoy.
+    assert_eq!(d.reason(), Some("x".repeat(37)));
+}
+
+#[test]
+fn fila_6_problems_no_incluye_el_motivo_externo_ni_el_resumen() {
+    let mut d = dialogo_20b(None);
+    d.set_block(Some("calculando el informe".to_string()));
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert!(problemas(&d).is_empty());
+    // Con un campo inválido, solo el del campo.
+    numero(&mut d, "ancho", "0");
+    assert_eq!(problemas(&d), vec!["Ancho: mínimo 1".to_string()]);
+}
+
+#[test]
+fn fila_6_problems_no_cambia_el_dialogo() {
+    let mut d = dialogo_20b(None);
+    numero(&mut d, "ancho", "0");
+    let antes = d.clone();
+    let _ = problemas(&d);
+    assert_eq!(d, antes);
+}
+
+#[test]
+fn fila_6_summary_sin_poner_nada_es_none_y_set_summary_lo_guarda() {
+    let mut d = dialogo_20b(None);
+    assert_eq!(d.summary(), None);
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert_eq!(d.summary(), Some(FALTA_DOS));
+    d.set_summary(Some("falta: otra cosa".to_string()));
+    assert_eq!(d.summary(), Some("falta: otra cosa"), "el último gana");
+}
+
+#[test]
+fn fila_6_con_resumen_reason_es_el_resumen_y_el_dialogo_es_invalido() {
+    let mut d = dialogo_20b(None);
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert_eq!(d.reason(), Some(FALTA_DOS.to_string()));
+    assert!(!d.is_valid());
+    assert_eq!(d.values(), None);
+    // El resumen no es un motivo externo.
+    assert_eq!(d.block(), None);
+}
+
+#[test]
+fn fila_6_el_resumen_va_antes_que_el_campo_invalido_el_check_y_el_motivo_externo() {
+    // Campo inválido.
+    let mut d = dialogo_20b(None);
+    d.set_block(Some("calculando el informe".to_string()));
+    numero(&mut d, "ancho", "0");
+    assert_eq!(d.reason(), Some("Ancho: mínimo 1".to_string()));
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert_eq!(d.reason(), Some(FALTA_DOS.to_string()));
+    // Y el motivo del campo sigue estando en `problems()`.
+    assert_eq!(problemas(&d), vec!["Ancho: mínimo 1".to_string()]);
+    d.set_summary(None);
+    assert_eq!(d.reason(), Some("Ancho: mínimo 1".to_string()));
+
+    // `check` que falla.
+    let mut d = dialogo_20b(Some(check_largo_20b));
+    d.set_block(Some("motivo externo".to_string()));
+    assert_eq!(d.reason(), Some("x".repeat(37)));
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert_eq!(d.reason(), Some(FALTA_DOS.to_string()));
+
+    // Solo motivo externo.
+    let mut d = dialogo_20b(None);
+    d.set_block(Some("motivo externo".to_string()));
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert_eq!(d.reason(), Some(FALTA_DOS.to_string()));
+    assert_eq!(d.block(), Some("motivo externo"));
+}
+
+#[test]
+fn fila_6_accept_con_resumen_da_rejected_con_el_resumen_y_no_toca_el_estado() {
+    let mut d = dialogo_20b(None);
+    numero(&mut d, "ancho", "50");
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    let antes = d.clone();
+    assert_eq!(
+        d.event(Event::Accept),
+        Reaction::Rejected(FALTA_DOS.to_string())
+    );
+    assert_eq!(d, antes, "un Accept rechazado no cambia nada");
+    // Con un campo inválido a la vez, el resumen sigue ganando.
+    numero(&mut d, "ancho", "0");
+    assert_eq!(
+        d.event(Event::Accept),
+        Reaction::Rejected(FALTA_DOS.to_string())
+    );
+    // Sin resumen y con todo válido, se acepta.
+    numero(&mut d, "ancho", "50");
+    d.set_summary(None);
+    assert!(matches!(d.event(Event::Accept), Reaction::Accepted(_)));
+}
+
+#[test]
+fn fila_6_accept_con_resumen_a_traves_del_modal_no_cierra() {
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::ConvertMode, spec_20b(None), Locks::default()));
+    match &mut modal {
+        Modal::Open(d) => d.set_summary(Some(FALTA_DOS.to_string())),
+        Modal::Closed => panic!("abierto"),
+    }
+    assert_eq!(
+        modal.event(Event::Accept),
+        Reaction::Rejected(FALTA_DOS.to_string())
+    );
+    assert!(modal.is_open());
+    match &mut modal {
+        Modal::Open(d) => d.set_summary(None),
+        Modal::Closed => panic!("abierto"),
+    }
+    assert!(matches!(modal.event(Event::Accept), Reaction::Accepted(_)));
+}
+
+#[test]
+fn fila_6_set_summary_none_deja_el_dialogo_igual_al_de_antes() {
+    // Sobre un diálogo virgen.
+    let antes = dialogo_20b(None);
+    let mut d = antes.clone();
+    d.set_summary(None);
+    assert_eq!(d, antes);
+    // Tras poner y quitar un resumen.
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    assert_ne!(d, antes, "el resumen forma parte del estado");
+    d.set_summary(None);
+    assert_eq!(d, antes);
+    assert_eq!(d.summary(), None);
+    assert_eq!(d.reason(), None);
+    assert_eq!(d.values(), antes.values());
+    // Con un campo inválido y un motivo externo de por medio.
+    let mut antes = dialogo_20b(None);
+    numero(&mut antes, "alto", "0");
+    antes.set_block(Some("calculando el informe".to_string()));
+    let mut d = antes.clone();
+    d.set_summary(Some("falta: algo".to_string()));
+    d.set_summary(None);
+    assert_eq!(d, antes);
+}
+
+#[test]
+fn fila_6_set_block_sigue_como_esta_con_y_sin_resumen() {
+    let mut d = dialogo_20b(None);
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    // Poner y cambiar el motivo externo no toca el resumen y el resumen no toca `block()`.
+    d.set_block(Some("no cabe".to_string()));
+    assert_eq!(d.block(), Some("no cabe"));
+    assert_eq!(d.summary(), Some(FALTA_DOS));
+    assert_eq!(d.reason(), Some(FALTA_DOS.to_string()));
+    // Quitar el resumen deja el motivo externo.
+    d.set_summary(None);
+    assert_eq!(d.block(), Some("no cabe"));
+    assert_eq!(d.reason(), Some("no cabe".to_string()));
+    // Quitar el motivo externo con un resumen puesto no quita el resumen.
+    d.set_summary(Some(FALTA_DOS.to_string()));
+    d.set_block(None);
+    assert_eq!(d.block(), None);
+    assert_eq!(d.summary(), Some(FALTA_DOS));
+    assert_eq!(d.reason(), Some(FALTA_DOS.to_string()));
+    d.set_summary(None);
+    assert_eq!(d.reason(), None);
+}
+
+#[test]
+fn fila_6_el_resumen_se_recorta_a_37_o_a_44_si_empieza_por_falta() {
+    for (texto, esperado) in [
+        // Sin el prefijo `falta: `, como hoy: 37.
+        ("x".repeat(36), "x".repeat(36)),
+        ("x".repeat(37), "x".repeat(37)),
+        ("x".repeat(38), "x".repeat(37)),
+        ("x".repeat(200), "x".repeat(37)),
+        ("ñ".repeat(50), "ñ".repeat(37)),
+        // Con `falta: `, 44 en total (el pie lleva ese prefijo en lugar de `error: `).
+        (
+            format!("falta: {}", "x".repeat(30)),
+            format!("falta: {}", "x".repeat(30)),
+        ),
+        (
+            format!("falta: {}", "x".repeat(37)),
+            format!("falta: {}", "x".repeat(37)),
+        ),
+        (
+            format!("falta: {}", "x".repeat(38)),
+            format!("falta: {}", "x".repeat(37)),
+        ),
+        (
+            format!("falta: {}", "x".repeat(200)),
+            format!("falta: {}", "x".repeat(37)),
+        ),
+        (
+            format!("falta: {}", "ñ".repeat(60)),
+            format!("falta: {}", "ñ".repeat(37)),
+        ),
+        // La forma con cuenta (`faltan N: `) también es una lista: 44 en total.
+        (
+            format!("faltan 3: {}", "x".repeat(60)),
+            format!("faltan 3: {}", "x".repeat(34)),
+        ),
+        // `falta:` sin espacio no es el prefijo: 37.
+        (
+            format!("falta:{}", "x".repeat(60)),
+            format!("falta:{}", "x".repeat(31)),
+        ),
+        (
+            format!("Falta: {}", "x".repeat(60)),
+            format!("Falta: {}", "x".repeat(30)),
+        ),
+    ] {
+        let mut d = dialogo_20b(None);
+        d.set_summary(Some(texto.clone()));
+        let motivo = d.reason().expect("hay motivo");
+        assert_eq!(
+            motivo,
+            esperado,
+            "texto de {} caracteres",
+            texto.chars().count()
+        );
+        assert_eq!(
+            d.summary(),
+            Some(esperado.as_str()),
+            "summary() lo da recortado"
+        );
+        assert!(!d.is_valid());
+    }
+}
+
+#[test]
+fn fila_6_set_block_tambien_recorta_a_44_si_empieza_por_falta() {
+    for (texto, esperado) in [
+        (
+            format!("falta: {}", "x".repeat(30)),
+            format!("falta: {}", "x".repeat(30)),
+        ),
+        (
+            format!("falta: {}", "x".repeat(37)),
+            format!("falta: {}", "x".repeat(37)),
+        ),
+        (
+            format!("falta: {}", "x".repeat(38)),
+            format!("falta: {}", "x".repeat(37)),
+        ),
+        (
+            format!("falta: {}", "ñ".repeat(60)),
+            format!("falta: {}", "ñ".repeat(37)),
+        ),
+        // Como hoy sin el prefijo.
+        ("x".repeat(38), "x".repeat(37)),
+        (
+            format!("faltan 3: {}", "x".repeat(60)),
+            format!("faltan 3: {}", "x".repeat(34)),
+        ),
+    ] {
+        let mut d = dialogo_20b(None);
+        d.set_block(Some(texto.clone()));
+        assert_eq!(d.block(), Some(esperado.as_str()), "{texto:?}");
+        assert_eq!(d.reason(), Some(esperado.clone()));
+        assert!(esperado.chars().count() <= 44);
+    }
+}
+
+#[test]
+fn fila_6_los_textos_de_la_lista_de_la_spec_caben_sin_recorte() {
+    for texto in [
+        "falta: permitir perder el color",
+        "falta: elegir el fondo del alfa",
+        "falta: perder el color; fondo del alfa",
+        "falta: perder el color; fondo válido",
+        "falta: fondo del alfa; fondo válido",
+        "faltan 3: color, fondo, valor",
+    ] {
+        let mut d = dialogo_20b(None);
+        d.set_block(Some(texto.to_string()));
+        assert_eq!(d.reason(), Some(texto.to_string()), "block {texto:?}");
+        let mut d = dialogo_20b(None);
+        d.set_summary(Some(texto.to_string()));
+        assert_eq!(d.reason(), Some(texto.to_string()), "summary {texto:?}");
+        assert_eq!(d.summary(), Some(texto));
+    }
+}

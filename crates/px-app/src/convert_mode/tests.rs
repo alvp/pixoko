@@ -3753,3 +3753,959 @@ fn fila_12_medicion_de_informe_apply_y_refresco_a_4096_y_8192() {
         println!("{lado}²: apply {apply:?}, refresco (to_rgba8) {refresco:?}, undo {deshacer:?}");
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Unidad 20b, parte 1 (specs/hito-2-motivo-y-marcadores.md): el motivo del pie lista todo lo que
+// falta. Filas 1 a 5 y propiedades 1 a 3. En ROJO hasta que existan `Missing`, `missing_text`,
+// `pending`, `footer_text`, `Dialog::problems`, `Dialog::set_summary` y `Dialog::summary`.
+//
+// **Suposiciones y ambigüedades** (la spec no fija un detalle; se elige lo más literal):
+// - `Missing` es `Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord` (la spec dice «con Ord»).
+// - `missing_text` solo recibe listas **ordenadas** (color, fondo, valor) y sin repetidos, como las
+//   que da `pending`; no se prueba qué hace con una lista desordenada.
+// - `missing_text(&[Value])` (un valor inválido solo) no tiene texto fijado en D2 (en el diálogo el
+//   pie pinta el motivo del campo con `error: `), pero la propiedad 1 exige que toda lista no vacía
+//   empiece por `falta: ` o `faltan N: `. Solo se exige `falta: ` + el rótulo `fondo válido`.
+// - `faltan 3: color, fondo, valor` es la forma con cuenta de la lista: como `falta: `, va sin
+//   `error: ` delante (`footer_text` lo deja tal cual: aclaración del visto bueno). La fila 8 no lo
+//   pinta (en el diálogo no es alcanzable).
+// - `pending` con un análisis imposible (`TooManyColors`, `TooLarge`) da una lista vacía **también**
+//   con `value_problem = true`: «imposibles → no entran».
+// - En `pending`, `Value` entra si `value_problem` o si el fondo elegido es «color activo» y el
+//   activo no existe o tiene alfa (así `block_reason`, que pasa `false`, da `fondo válido`).
+// - Propiedad 3: la frase literal «`summary` es `Some` ⇔ `!is_valid`» contradice D3 (con un solo
+//   pendiente el pie sale de `set_block`, sin resumen, y `Aceptar` está atenuado). Se prueba que
+//   hay resumen **exactamente** cuando hay ≥ 2 pendientes y `problems()` no está vacío; que un
+//   resumen implica `!is_valid`, `reason()` igual al resumen y `Accept` rechazado; que un diálogo
+//   inválido sin resumen tiene su causa en `block()` o en `problems()`; y que `values()` es
+//   `Some` ⇔ no hay resumen, ni `block()`, ni `problems()`.
+// ---------------------------------------------------------------------------------------
+
+const FALTA_FONDO_Y_VALOR: &str = "falta: fondo del alfa; fondo válido";
+const FALTAN_TRES: &str = "faltan 3: color, fondo, valor";
+
+/// Las 8 listas ordenadas y sin repetidos de `{Luma, AlphaBackground, Value}`, la vacía primero.
+fn listas_de_missing() -> Vec<Vec<Missing>> {
+    let todos = [Missing::Luma, Missing::AlphaBackground, Missing::Value];
+    (0..8u8)
+        .map(|mascara| {
+            todos
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| mascara & (1 << i) != 0)
+                .map(|(_, m)| *m)
+                .collect()
+        })
+        .collect()
+}
+
+/// El rótulo corto de cada pendiente, tal como sale en la lista de dos.
+fn rotulo_corto(m: Missing) -> &'static str {
+    match m {
+        Missing::Luma => "perder el color",
+        Missing::AlphaBackground => "fondo del alfa",
+        Missing::Value => "fondo válido",
+    }
+}
+
+/// Cuántos requisitos dice un motivo: 0 sin motivo, N en `faltan N: `, los separados por `; ` tras
+/// `falta: ` y 1 en un valor inválido o un imposible.
+fn requisitos_del_texto(texto: Option<&str>) -> usize {
+    match texto {
+        None => 0,
+        Some(t) if t.starts_with("falta: ") => t.split(';').count(),
+        Some(t) if t.starts_with("faltan ") => t["faltan ".len()..]
+            .split(':')
+            .next()
+            .and_then(|n| n.parse().ok())
+            .expect("faltan N: …"),
+        Some(_) => 1,
+    }
+}
+
+fn es_imposible(analysis: &Analysis) -> bool {
+    matches!(analysis, Analysis::TooManyColors | Analysis::TooLarge)
+}
+
+fn activo_malo(active: Option<Rgba>) -> bool {
+    active.is_none_or(|c| c.a < 255)
+}
+
+// --- Fila 1: un pendiente ---
+
+#[test]
+fn fila_1_20b_missing_text_de_uno_es_el_rotulo_largo_con_falta_y_sin_error() {
+    assert_eq!(
+        missing_text(&[Missing::Luma]),
+        Some("falta: permitir perder el color".to_string())
+    );
+    assert_eq!(
+        missing_text(&[Missing::AlphaBackground]),
+        Some("falta: elegir el fondo del alfa".to_string())
+    );
+    assert_eq!(FALTA_COLOR, "falta: permitir perder el color");
+    assert_eq!(ELIGE_FONDO, "falta: elegir el fondo del alfa");
+    for texto in [FALTA_COLOR, ELIGE_FONDO] {
+        assert_eq!(texto.chars().count(), 31);
+        assert!(!texto.contains("error"), "{texto:?}");
+    }
+}
+
+#[test]
+fn fila_1_20b_block_reason_de_solo_color_y_de_solo_fondo_da_los_literales() {
+    for activo in activos() {
+        // Solo color: el alfa no se pierde (o se cubre con un fondo opaco).
+        assert_eq!(
+            block_reason(Some(&perdida(2, 0)), &permisos(false, 1, ROJO), activo),
+            Some(FALTA_COLOR.to_string())
+        );
+        assert_eq!(
+            block_reason(Some(&perdida(2, 3)), &permisos(false, 2, ROJO), activo),
+            Some(FALTA_COLOR.to_string())
+        );
+        // Solo fondo: la casilla está marcada.
+        assert_eq!(
+            block_reason(Some(&perdida(0, 3)), &permisos(false, 0, ROJO), activo),
+            Some(ELIGE_FONDO.to_string())
+        );
+        assert_eq!(
+            block_reason(Some(&perdida(2, 3)), &permisos(true, 0, ROJO), activo),
+            Some(ELIGE_FONDO.to_string())
+        );
+    }
+}
+
+#[test]
+fn fila_1_20b_un_valor_invalido_solo_conserva_el_texto_de_hoy_sin_falta() {
+    let analisis = perdida(0, 1);
+    assert_eq!(
+        block_reason(Some(&analisis), &permisos(false, 3, ROJO), None),
+        Some("no hay color activo".to_string())
+    );
+    assert_eq!(
+        block_reason(
+            Some(&analisis),
+            &permisos(false, 3, ROJO),
+            Some(ACTIVO_CON_ALFA)
+        ),
+        Some("el color activo #ff000080 tiene alfa".to_string())
+    );
+    assert_eq!(
+        block_reason(
+            Some(&analisis),
+            &permisos(true, 3, ROJO),
+            Some(ACTIVO_TRANSPARENTE)
+        ),
+        Some("el color activo #00000000 tiene alfa".to_string())
+    );
+    // Ninguno lleva `falta: ` (el pie les pone `error: `).
+    for activo in [None, Some(ACTIVO_CON_ALFA), Some(ACTIVO_TRANSPARENTE)] {
+        let motivo =
+            block_reason(Some(&exacta()), &permisos(true, 3, ROJO), activo).expect("hay motivo");
+        assert!(!motivo.starts_with("falta"), "{motivo:?}");
+        assert!(motivo.chars().count() <= 37, "{motivo:?}");
+    }
+}
+
+#[test]
+fn fila_1_20b_el_campo_hexadecimal_ilegible_con_la_casilla_marcada_es_solo_el_valor() {
+    for from in [Mode::Rgba, Mode::Indexed] {
+        let mut m = Montaje::nuevo(from, imagen_de_modo(from));
+        m.sincroniza();
+        m.elige_destino(2);
+        m.sincroniza();
+        marca(m.dialogo_mut(), "luma_gris", true);
+        elige(m.dialogo_mut(), "alfa_gris", 4);
+        escribe_hex(m.dialogo_mut(), "zz");
+        m.sincroniza();
+        let motivo = m.dialogo().reason().expect("hay motivo");
+        assert!(motivo.starts_with("Color: "), "{from:?}: {motivo:?}");
+        assert_eq!(m.dialogo().summary(), None, "{from:?}: un solo pendiente");
+        assert_eq!(m.dialogo().block(), None, "{from:?}");
+        assert_eq!(m.dialogo().problems(), vec![motivo], "{from:?}");
+    }
+}
+
+// --- Fila 2: dos pendientes ---
+
+#[test]
+fn fila_2_20b_color_y_fondo_dan_la_lista_de_dos_y_cada_cosa_vuelve_al_de_uno() {
+    for (nombre, analisis) in [("Lossy 2/3", perdida(2, 3)), ("Lossy 1/1", perdida(1, 1))] {
+        let activo = Some(ACTIVO_OPACO);
+        assert_eq!(
+            block_reason(Some(&analisis), &permisos(false, 0, ROJO), activo),
+            Some(FALTA_AMBOS.to_string()),
+            "{nombre}"
+        );
+        // Marcar el permiso quita el color.
+        assert_eq!(
+            block_reason(Some(&analisis), &permisos(true, 0, ROJO), activo),
+            Some(ELIGE_FONDO.to_string()),
+            "{nombre}"
+        );
+        // Elegir un fondo opaco quita el fondo.
+        for alfa in 1..5 {
+            assert_eq!(
+                block_reason(Some(&analisis), &permisos(false, alfa, ROJO), activo),
+                Some(FALTA_COLOR.to_string()),
+                "{nombre}, alfa {}",
+                NOMBRES_DE_ALFA[alfa]
+            );
+        }
+        // Las dos cosas: nada.
+        assert_eq!(
+            block_reason(Some(&analisis), &permisos(true, 1, ROJO), activo),
+            None,
+            "{nombre}"
+        );
+    }
+    assert_eq!(FALTA_AMBOS, "falta: perder el color; fondo del alfa");
+    assert_eq!(FALTA_AMBOS.chars().count(), 38);
+}
+
+#[test]
+fn fila_2_20b_color_y_un_fondo_activo_invalido_dan_color_y_fondo_valido() {
+    for analisis in [perdida(2, 0), perdida(2, 1), perdida(1, 3)] {
+        for activo in [None, Some(ACTIVO_CON_ALFA), Some(ACTIVO_TRANSPARENTE)] {
+            assert_eq!(
+                block_reason(Some(&analisis), &permisos(false, 3, ROJO), activo),
+                Some(FALTA_COLOR_Y_VALOR.to_string()),
+                "{analisis:?}, activo {activo:?}"
+            );
+            // Con el permiso, vuelve al valor solo (el texto de hoy, sin `falta: `).
+            let solo = block_reason(Some(&analisis), &permisos(true, 3, ROJO), activo)
+                .expect("sigue el valor inválido");
+            assert!(!solo.starts_with("falta"), "{solo:?}");
+        }
+        // Con un activo opaco, solo el color.
+        assert_eq!(
+            block_reason(
+                Some(&analisis),
+                &permisos(false, 3, ROJO),
+                Some(ACTIVO_OPACO)
+            ),
+            Some(FALTA_COLOR.to_string())
+        );
+    }
+}
+
+#[test]
+fn fila_2_20b_en_el_dialogo_de_rgba_y_de_indexado_a_gris_sin_nada_dice_color_y_fondo() {
+    for from in [Mode::Rgba, Mode::Indexed] {
+        let mut m = Montaje::nuevo(from, imagen_de_modo(from));
+        m.sincroniza();
+        m.elige_destino(2);
+        m.sincroniza();
+        assert_eq!(m.sync.analysis(), Some(&perdida(2, 1)), "{from:?}");
+        assert_eq!(m.dialogo().block(), Some(FALTA_AMBOS), "{from:?}");
+        assert_eq!(
+            m.dialogo().reason(),
+            Some(FALTA_AMBOS.to_string()),
+            "{from:?}"
+        );
+        // Sin campo inválido, no hace falta resumen.
+        assert_eq!(m.dialogo().summary(), None, "{from:?}");
+        assert!(m.accept_rechazado());
+
+        // Un fondo elegido vuelve al de uno: el color.
+        elige(m.dialogo_mut(), "alfa_gris", 1);
+        m.sincroniza();
+        assert_eq!(
+            m.dialogo().reason(),
+            Some(FALTA_COLOR.to_string()),
+            "{from:?}"
+        );
+        // La casilla marcada y sin fondo: el fondo.
+        elige(m.dialogo_mut(), "alfa_gris", 0);
+        marca(m.dialogo_mut(), "luma_gris", true);
+        m.sincroniza();
+        assert_eq!(
+            m.dialogo().reason(),
+            Some(ELIGE_FONDO.to_string()),
+            "{from:?}"
+        );
+        elige(m.dialogo_mut(), "alfa_gris", 2);
+        m.sincroniza();
+        assert_eq!(m.dialogo().reason(), None, "{from:?}");
+        assert!(!m.accept_rechazado());
+    }
+}
+
+#[test]
+fn fila_2_20b_hexadecimal_invalido_con_la_casilla_sin_marcar_es_color_y_fondo_valido() {
+    for from in [Mode::Rgba, Mode::Indexed] {
+        for texto in ["zz", "#ff000080"] {
+            let ctx = format!("{from:?}, {texto:?}");
+            let mut m = Montaje::nuevo(from, imagen_de_modo(from));
+            m.sincroniza();
+            m.elige_destino(2);
+            elige(m.dialogo_mut(), "alfa_gris", 4);
+            escribe_hex(m.dialogo_mut(), texto);
+            m.sincroniza();
+            // El pendiente de la casilla va en el motivo externo; el resumen suma el valor.
+            assert_eq!(m.dialogo().block(), Some(FALTA_COLOR), "{ctx}");
+            assert_eq!(m.dialogo().summary(), Some(FALTA_COLOR_Y_VALOR), "{ctx}");
+            assert_eq!(
+                m.dialogo().reason(),
+                Some(FALTA_COLOR_Y_VALOR.to_string()),
+                "{ctx}"
+            );
+            assert!(m.accept_rechazado(), "{ctx}");
+            // El detalle del valor sigue en el motor.
+            let problemas = m.dialogo().problems();
+            assert_eq!(problemas.len(), 1, "{ctx}: {problemas:?}");
+            assert!(problemas[0].starts_with("Color: "), "{ctx}: {problemas:?}");
+
+            // Marcar el permiso vuelve al valor solo: el motivo del campo, sin resumen.
+            marca(m.dialogo_mut(), "luma_gris", true);
+            m.sincroniza();
+            assert_eq!(m.dialogo().summary(), None, "{ctx}");
+            assert_eq!(m.dialogo().block(), None, "{ctx}");
+            assert_eq!(m.dialogo().reason(), Some(problemas[0].clone()), "{ctx}");
+
+            // Desmarcar vuelve al resumen; arreglar el hexadecimal, al motivo de uno.
+            marca(m.dialogo_mut(), "luma_gris", false);
+            m.sincroniza();
+            assert_eq!(m.dialogo().summary(), Some(FALTA_COLOR_Y_VALOR), "{ctx}");
+            escribe_hex(m.dialogo_mut(), "#ff0000");
+            m.sincroniza();
+            assert_eq!(m.dialogo().summary(), None, "{ctx}");
+            assert_eq!(m.dialogo().reason(), Some(FALTA_COLOR.to_string()), "{ctx}");
+        }
+    }
+}
+
+#[test]
+fn fila_2_20b_un_color_activo_con_alfa_sin_la_casilla_es_color_y_fondo_valido_sin_resumen() {
+    for from in [Mode::Rgba, Mode::Indexed] {
+        let mut m = Montaje::nuevo(from, imagen_de_modo(from));
+        m.sync = ConvertSync::new(from, 0, Some(ACTIVO_CON_ALFA));
+        m.sincroniza();
+        m.elige_destino(2);
+        elige(m.dialogo_mut(), "alfa_gris", 3);
+        m.sincroniza();
+        // Ningún campo es inválido: no hay resumen y el texto sale de `block_reason`.
+        assert!(m.dialogo().problems().is_empty(), "{from:?}");
+        assert_eq!(m.dialogo().summary(), None, "{from:?}");
+        assert_eq!(m.dialogo().block(), Some(FALTA_COLOR_Y_VALOR), "{from:?}");
+        assert_eq!(
+            m.dialogo().reason(),
+            Some(FALTA_COLOR_Y_VALOR.to_string()),
+            "{from:?}"
+        );
+        // Con la casilla, vuelve al texto de hoy del valor.
+        marca(m.dialogo_mut(), "luma_gris", true);
+        m.sincroniza();
+        assert_eq!(
+            m.dialogo().reason(),
+            Some("el color activo #ff000080 tiene alfa".to_string()),
+            "{from:?}"
+        );
+    }
+}
+
+// --- Fila 3: tres y recuento ---
+
+#[test]
+fn fila_3_20b_las_siete_listas_no_vacias_dan_los_textos_de_d2_y_la_vacia_none() {
+    let listas = listas_de_missing();
+    assert_eq!(listas.len(), 8);
+    assert_eq!(missing_text(&listas[0]), None);
+    assert_eq!(missing_text(&[]), None);
+    let esperados: [(&[Missing], &str); 6] = [
+        (&[Missing::Luma], FALTA_COLOR),
+        (&[Missing::AlphaBackground], ELIGE_FONDO),
+        (&[Missing::Luma, Missing::AlphaBackground], FALTA_AMBOS),
+        (&[Missing::Luma, Missing::Value], FALTA_COLOR_Y_VALOR),
+        (
+            &[Missing::AlphaBackground, Missing::Value],
+            FALTA_FONDO_Y_VALOR,
+        ),
+        (
+            &[Missing::Luma, Missing::AlphaBackground, Missing::Value],
+            FALTAN_TRES,
+        ),
+    ];
+    for (lista, texto) in esperados {
+        assert_eq!(missing_text(lista), Some(texto.to_string()), "{lista:?}");
+    }
+    // Un valor inválido solo: empieza por `falta: ` y dice el rótulo del valor (ver suposiciones).
+    let solo = missing_text(&[Missing::Value]).expect("no vacía");
+    assert!(solo.starts_with("falta: "), "{solo:?}");
+    assert!(solo.contains("fondo válido"), "{solo:?}");
+}
+
+#[test]
+fn fila_3_20b_los_textos_de_d2_miden_lo_que_dice_la_tabla() {
+    for (texto, largo) in [
+        (FALTA_COLOR, 31),
+        (ELIGE_FONDO, 31),
+        (FALTA_AMBOS, 38),
+        (FALTA_COLOR_Y_VALOR, 36),
+        (FALTA_FONDO_Y_VALOR, 35),
+        (FALTAN_TRES, 29),
+    ] {
+        assert_eq!(texto.chars().count(), largo, "{texto:?}");
+    }
+}
+
+#[test]
+fn fila_3_20b_todo_texto_de_la_lista_cabe_en_el_pie_de_44_columnas_y_en_el_juego() {
+    for lista in listas_de_missing() {
+        let Some(texto) = missing_text(&lista) else {
+            assert!(lista.is_empty());
+            continue;
+        };
+        assert!(texto.chars().count() <= 44, "{lista:?}: {texto:?}");
+        assert!(en_el_juego(&texto), "{lista:?}: {texto:?}");
+        let pie = px_ui::dialog_view::footer_text(&texto);
+        assert!(pie.chars().count() <= 44, "{lista:?}: {pie:?}");
+        assert!(en_el_juego(&pie), "{pie:?}");
+        assert_eq!(pie, texto, "una lista (`falta: ` o `faltan N: `) va tal cual");
+    }
+}
+
+#[test]
+fn fila_3_20b_footer_text_pone_error_solo_a_lo_que_no_empieza_por_falta() {
+    assert_eq!(px_ui::dialog_view::MISSING_PREFIX, "falta: ");
+    assert_eq!(
+        px_ui::dialog_view::footer_text("falta: permitir perder el color"),
+        "falta: permitir perder el color"
+    );
+    assert_eq!(
+        px_ui::dialog_view::footer_text("no hay color activo"),
+        format!("{}no hay color activo", px_ui::dialog_view::ERROR_PREFIX)
+    );
+    assert_eq!(
+        px_ui::dialog_view::footer_text("Color: el fondo no lleva alfa"),
+        "error: Color: el fondo no lleva alfa"
+    );
+    assert_eq!(
+        px_ui::dialog_view::footer_text(FALTAN_TRES),
+        FALTAN_TRES,
+        "la forma con cuenta también es una lista"
+    );
+    // El motivo más largo sin `falta: ` (37) con su `error: ` llena las 44 columnas.
+    let largo = "m".repeat(37);
+    assert_eq!(px_ui::dialog_view::footer_text(&largo).chars().count(), 44);
+}
+
+// --- Fila 4: orden fijo de `pending` ---
+
+/// Lo que debe dar `pending`, escrito aparte: color, fondo y valor, en ese orden.
+fn pendientes_esperados(
+    analysis: &Analysis,
+    luma: bool,
+    alfa: usize,
+    activo: Option<Rgba>,
+    value_problem: bool,
+) -> Vec<Missing> {
+    if es_imposible(analysis) {
+        return Vec::new();
+    }
+    let (color, fondo) = match analysis {
+        Analysis::Lossy(r) => (r.color_lost > 0, r.alpha_lost > 0),
+        _ => (false, false),
+    };
+    let mut v = Vec::new();
+    if color && !luma {
+        v.push(Missing::Luma);
+    }
+    if fondo && alfa == 0 {
+        v.push(Missing::AlphaBackground);
+    }
+    if value_problem || (alfa == 3 && activo_malo(activo)) {
+        v.push(Missing::Value);
+    }
+    v
+}
+
+#[test]
+fn fila_4_20b_pending_en_todas_las_combinaciones_sigue_el_orden_y_el_oraculo() {
+    let mut comprobados = 0;
+    for (nombre, analysis) in analisis_de_la_fila_3() {
+        for luma in [false, true] {
+            for alfa in 0..5 {
+                for activo in activos() {
+                    for value_problem in [false, true] {
+                        let ctx = format!(
+                            "{nombre}, luma {luma}, alfa {}, activo {activo:?}, valor {value_problem}",
+                            NOMBRES_DE_ALFA[alfa]
+                        );
+                        let real = pending(
+                            &analysis,
+                            &permisos(luma, alfa, ROJO),
+                            activo,
+                            value_problem,
+                        );
+                        assert_eq!(
+                            real,
+                            pendientes_esperados(&analysis, luma, alfa, activo, value_problem),
+                            "{ctx}"
+                        );
+                        // Ordenada y sin repetidos.
+                        assert!(real.windows(2).all(|w| w[0] < w[1]), "{ctx}: {real:?}");
+                        assert!(real.len() <= 3, "{ctx}");
+                        comprobados += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(comprobados, 7 * 2 * 5 * 4 * 2);
+}
+
+#[test]
+fn fila_4_20b_pending_esta_vacio_si_y_solo_si_la_20_diria_none_salvo_los_imposibles() {
+    for (nombre, analysis) in analisis_de_la_fila_3() {
+        for luma in [false, true] {
+            for alfa in 0..5 {
+                for activo in activos() {
+                    let ctx = format!(
+                        "{nombre}, luma {luma}, alfa {}, activo {activo:?}",
+                        NOMBRES_DE_ALFA[alfa]
+                    );
+                    let lista = pending(&analysis, &permisos(luma, alfa, ROJO), activo, false);
+                    let motivo = block_reason(Some(&analysis), &permisos(luma, alfa, ROJO), activo);
+                    if es_imposible(&analysis) {
+                        assert!(lista.is_empty(), "{ctx}");
+                        assert!(motivo.is_some(), "{ctx}: el imposible tiene su motivo solo");
+                    } else {
+                        assert_eq!(lista.is_empty(), motivo.is_none(), "{ctx}");
+                        assert_eq!(
+                            motivo,
+                            motivo_esperado(Some(&analysis), luma, alfa, activo),
+                            "{ctx}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_4_20b_value_problem_añade_solo_el_valor_al_final_y_los_imposibles_siguen_solos() {
+    let lossy = perdida(2, 0);
+    let con = pending(&lossy, &permisos(false, 1, ROJO), Some(ACTIVO_OPACO), true);
+    assert_eq!(con, vec![Missing::Luma, Missing::Value]);
+    let sin = pending(&lossy, &permisos(false, 1, ROJO), Some(ACTIVO_OPACO), false);
+    assert_eq!(sin, vec![Missing::Luma]);
+    let ya = pending(&lossy, &permisos(true, 1, ROJO), Some(ACTIVO_OPACO), true);
+    assert_eq!(ya, vec![Missing::Value]);
+    for imposible in [Analysis::TooManyColors, Analysis::TooLarge] {
+        for vp in [false, true] {
+            assert_eq!(
+                pending(&imposible, &permisos(false, 0, ROJO), None, vp),
+                Vec::<Missing>::new()
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_4_20b_missing_es_ord_en_el_orden_color_fondo_valor() {
+    assert!(Missing::Luma < Missing::AlphaBackground);
+    assert!(Missing::AlphaBackground < Missing::Value);
+    let mut v = vec![Missing::Value, Missing::Luma, Missing::AlphaBackground];
+    v.sort();
+    assert_eq!(
+        v,
+        vec![Missing::Luma, Missing::AlphaBackground, Missing::Value]
+    );
+}
+
+// --- Fila 5: oráculo nuevo de `block_reason` ---
+
+/// El motivo de D2 por tabla de (color, fondo, valor), escrito aparte de `pending` y de
+/// `missing_text`.
+fn motivo_por_tabla(
+    analysis: Option<&Analysis>,
+    luma: bool,
+    alfa: usize,
+    activo: Option<Rgba>,
+) -> Option<String> {
+    let Some(analysis) = analysis else {
+        return Some("calculando el informe".to_string());
+    };
+    let (color, fondo) = match analysis {
+        Analysis::TooManyColors => return Some("más de 256 colores: sin cuantizador".to_string()),
+        Analysis::TooLarge => return Some("la imagen convertida no cabe".to_string()),
+        Analysis::Lossy(r) => (r.color_lost > 0 && !luma, r.alpha_lost > 0 && alfa == 0),
+        Analysis::Exact { .. } => (false, false),
+    };
+    let valor = alfa == 3 && activo_malo(activo);
+    match (color, fondo, valor) {
+        (false, false, false) => None,
+        (true, false, false) => Some("falta: permitir perder el color".to_string()),
+        (false, true, false) => Some("falta: elegir el fondo del alfa".to_string()),
+        (true, true, false) => Some("falta: perder el color; fondo del alfa".to_string()),
+        (true, false, true) => Some("falta: perder el color; fondo válido".to_string()),
+        (false, false, true) => Some(match activo {
+            None => "no hay color activo".to_string(),
+            Some(c) => format!(
+                "el color activo #{:02x}{:02x}{:02x}{:02x} tiene alfa",
+                c.r, c.g, c.b, c.a
+            ),
+        }),
+        // El fondo y el valor no coexisten: un valor inválido solo existe con un fondo elegido.
+        (_, true, true) => unreachable!("fondo pendiente y fondo inválido a la vez"),
+    }
+}
+
+#[test]
+fn fila_5_20b_block_reason_coincide_con_el_oraculo_nuevo_en_toda_la_matriz() {
+    let mut comprobados = 0;
+    for (nombre, analysis) in analisis_de_la_fila_3() {
+        for luma in [false, true] {
+            for alfa in 0..5 {
+                for activo in activos() {
+                    let ctx = format!(
+                        "{nombre}, luma {luma}, alfa {}, activo {activo:?}",
+                        NOMBRES_DE_ALFA[alfa]
+                    );
+                    let real = block_reason(Some(&analysis), &permisos(luma, alfa, ROJO), activo);
+                    let esperado = motivo_por_tabla(Some(&analysis), luma, alfa, activo);
+                    assert_eq!(real, esperado, "{ctx}");
+                    // `None` si y solo si la 20 lo decía.
+                    assert_eq!(
+                        real.is_none(),
+                        motivo_esperado(Some(&analysis), luma, alfa, activo).is_none(),
+                        "{ctx}"
+                    );
+                    comprobados += 1;
+                }
+            }
+        }
+    }
+    for luma in [false, true] {
+        for alfa in 0..5 {
+            for activo in activos() {
+                assert_eq!(
+                    block_reason(None, &permisos(luma, alfa, ROJO), activo),
+                    motivo_por_tabla(None, luma, alfa, activo)
+                );
+                comprobados += 1;
+            }
+        }
+    }
+    assert_eq!(comprobados, 7 * 2 * 5 * 4 + 2 * 5 * 4);
+}
+
+#[test]
+fn fila_5_20b_con_un_pendiente_igual_que_la_20_y_con_dos_el_texto_de_dos() {
+    for (_, analysis) in analisis_de_la_fila_3() {
+        for luma in [false, true] {
+            for alfa in 0..5 {
+                for activo in activos() {
+                    let perms = permisos(luma, alfa, ROJO);
+                    let lista = pending(&analysis, &perms, activo, false);
+                    let motivo = block_reason(Some(&analysis), &perms, activo);
+                    match lista.len() {
+                        0 | 1 if es_imposible(&analysis) => {}
+                        0 => assert_eq!(motivo, None),
+                        1 => {
+                            // Con uno, el motivo es el rótulo largo o el valor de hoy.
+                            let texto = motivo.expect("hay motivo");
+                            match lista[0] {
+                                Missing::Luma => assert_eq!(texto, FALTA_COLOR),
+                                Missing::AlphaBackground => assert_eq!(texto, ELIGE_FONDO),
+                                Missing::Value => {
+                                    assert!(!texto.starts_with("falta"), "{texto:?}")
+                                }
+                            }
+                        }
+                        _ => assert_eq!(motivo, missing_text(&lista)),
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_5_20b_nunca_hay_dos_motivos_mezclados() {
+    let conocidos = [
+        FALTA_COLOR,
+        ELIGE_FONDO,
+        FALTA_AMBOS,
+        FALTA_COLOR_Y_VALOR,
+        PENDIENTE,
+        SIN_CUANTIZADOR,
+        NO_CABE,
+        "no hay color activo",
+    ];
+    for (_, analysis) in analisis_de_la_fila_3() {
+        for luma in [false, true] {
+            for alfa in 0..5 {
+                for activo in activos() {
+                    let Some(texto) =
+                        block_reason(Some(&analysis), &permisos(luma, alfa, ROJO), activo)
+                    else {
+                        continue;
+                    };
+                    let es_valor_activo =
+                        texto.starts_with("el color activo #") && texto.ends_with(" tiene alfa");
+                    assert!(
+                        es_valor_activo || conocidos.contains(&texto.as_str()),
+                        "texto desconocido: {texto:?}"
+                    );
+                    // Un `falta: …` no arrastra un motivo de otra clase ni un `error`.
+                    if texto.starts_with("falta: ") {
+                        for ajeno in ["error", "no hay color", "tiene alfa", "calculando", "256"] {
+                            assert!(!texto.contains(ajeno), "{texto:?} contiene {ajeno:?}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// --- Propiedad 1 ---
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Para cualquier lista sin repetidos de `Missing` (0 a 3): `missing_text` es `None` si y solo
+    /// si está vacía; si no, empieza por `falta: ` o `faltan N: `, mide como mucho 44 columnas, está
+    /// en el juego y contiene el rótulo de **cada** pendiente en el orden fijo, o la forma con
+    /// cuenta de N (nunca omite uno sin decirlo).
+    #[test]
+    fn propiedad_1_el_texto_dice_todo_y_cabe(
+        lista in prop::sample::subsequence(
+            vec![Missing::Luma, Missing::AlphaBackground, Missing::Value],
+            0..=3usize,
+        ),
+    ) {
+        let texto = missing_text(&lista);
+        prop_assert_eq!(texto.is_none(), lista.is_empty());
+        let Some(texto) = texto else { return Ok(()); };
+        prop_assert!(texto.chars().count() <= 44, "{}", texto);
+        prop_assert!(en_el_juego(&texto), "{}", texto);
+        let pie = px_ui::dialog_view::footer_text(&texto);
+        prop_assert!(pie.chars().count() <= 44, "{}", pie);
+
+        if texto.starts_with("faltan ") {
+            // La forma con cuenta dice N y las palabras de cada pendiente, en orden.
+            prop_assert_eq!(
+                texto.starts_with(&format!("faltan {}: ", lista.len())),
+                true,
+                "{}", texto
+            );
+            let mut desde = 0;
+            for palabra in ["color", "fondo", "valor"].iter().take(lista.len()) {
+                let hallada = texto[desde..].find(palabra);
+                prop_assert!(hallada.is_some(), "{} no dice {}", texto, palabra);
+                desde += hallada.unwrap_or(0) + palabra.len();
+            }
+        } else {
+            prop_assert!(texto.starts_with("falta: "), "{}", texto);
+            // El rótulo de cada pendiente, en el orden fijo.
+            let mut desde = 0;
+            for m in &lista {
+                let rotulo = rotulo_corto(*m);
+                let hallado = texto[desde..].find(rotulo);
+                prop_assert!(hallado.is_some(), "{} no dice {:?}", texto, rotulo);
+                desde += hallado.unwrap_or(0) + rotulo.len();
+            }
+        }
+    }
+}
+
+// --- Propiedad 2 ---
+
+/// `apply` acepta la conversión con ese `Allowed` en una copia de la imagen.
+fn apply_acepta(image: &Image, target: Mode, allowed: Allowed) -> bool {
+    let mut documento = Document::new(image.clone());
+    let id = documento.main_image();
+    documento
+        .apply(Command::ConvertMode {
+            image: id,
+            target,
+            allowed,
+        })
+        .is_ok()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Para imágenes aleatorias de hasta 6 × 6, cualquier destino, permisos y color activo:
+    /// `block_reason` es `None` si y solo si `Command::ConvertMode` da `Ok` (lo de la 20), y el
+    /// número de requisitos del texto es el de los que **realmente faltan**, medidos con `apply`
+    /// (sin `needs`): el color falta si sin la casilla falla y con ella y con fondo pasa; el fondo
+    /// falta si sin fondo falla y con él pasa.
+    #[test]
+    fn propiedad_2_aceptar_y_la_lista_coinciden_con_apply(
+        semilla in estrategia_de_semilla(),
+        destino in 0usize..3,
+        luma in any::<bool>(),
+        alfa in 0usize..5,
+        hex in 0usize..4,
+        activo in 0usize..4,
+    ) {
+        let image = imagen_de_semilla(&semilla);
+        let target = destinos(image.mode())[destino];
+        let analysis = analyze(&image, target);
+        let activo = activos()[activo];
+        let perms = permisos(luma, alfa, HEXES_OPACOS[hex]);
+        let motivo = block_reason(Some(&analysis), &perms, activo);
+
+        if let Some(allowed) = allowed_of(&perms, activo) {
+            let acepta = apply_acepta(&image, target, allowed);
+            prop_assert_eq!(motivo.is_none(), acepta, "motivo {:?}, allowed {:?}", motivo, allowed);
+        } else {
+            prop_assert!(motivo.is_some(), "un fondo no opaco no puede dejar Aceptar activo");
+        }
+
+        // Los requisitos que realmente faltan, con `apply` como juez.
+        let blanco = Some([255, 255, 255]);
+        let color_hace_falta = !apply_acepta(&image, target, Allowed { luma: false, drop_alpha: blanco })
+            && apply_acepta(&image, target, Allowed { luma: true, drop_alpha: blanco });
+        let fondo_hace_falta = !apply_acepta(&image, target, Allowed { luma: true, drop_alpha: None })
+            && apply_acepta(&image, target, Allowed { luma: true, drop_alpha: blanco });
+        let falta_color = color_hace_falta && !perms.luma;
+        let falta_fondo = fondo_hace_falta && perms.alpha == AlphaChoice::Keep;
+        let falta_valor = !es_imposible(&analysis) && alfa == 3 && activo_malo(activo);
+        let reales = usize::from(falta_color) + usize::from(falta_fondo) + usize::from(falta_valor);
+
+        if es_imposible(&analysis) {
+            prop_assert!(motivo.is_some());
+            prop_assert!(pending(&analysis, &perms, activo, false).is_empty());
+        } else {
+            prop_assert_eq!(
+                requisitos_del_texto(motivo.as_deref()),
+                reales,
+                "{:?} a {:?}: motivo {:?}", image.mode(), target, motivo
+            );
+            prop_assert_eq!(
+                pending(&analysis, &perms, activo, false).len(),
+                reales,
+                "pending de {:?} a {:?}", image.mode(), target
+            );
+        }
+        if let Some(texto) = motivo {
+            let limite = if texto.starts_with("falta: ") { 44 } else { 37 };
+            prop_assert!(texto.chars().count() <= limite, "{}", texto);
+            prop_assert!(en_el_juego(&texto), "{}", texto);
+        }
+    }
+}
+
+// --- Propiedad 3 ---
+
+/// Las invariantes del resumen tras un gesto y su `sync_convert`.
+fn comprueba_resumen(
+    d: &Dialog,
+    m: &Modelo,
+    sync: &ConvertSync,
+    activo: Option<Rgba>,
+    ctx: &str,
+) -> Result<(), TestCaseError> {
+    let Some(analysis) = sync.analysis() else {
+        return Err(TestCaseError::fail(format!("{ctx}: sin informe")));
+    };
+    let problemas = d.problems();
+    let hay_problema = m.invalido_de_campo() || m.falla_el_check();
+    prop_assert_eq!(
+        !problemas.is_empty(),
+        hay_problema,
+        "{}: problems {:?}",
+        ctx,
+        problemas
+    );
+
+    // El resumen esperado, con el modelo escrito aparte.
+    let perms = m.permisos();
+    let need = needs(analysis);
+    let imposible = es_imposible(analysis);
+    let mut lista = Vec::new();
+    if !imposible && need.luma && !perms.luma {
+        lista.push(Missing::Luma);
+    }
+    if !imposible && need.alpha && perms.alpha == AlphaChoice::Keep {
+        lista.push(Missing::AlphaBackground);
+    }
+    let activo_invalido = perms.alpha == AlphaChoice::Active && activo_malo(activo);
+    if !imposible && (hay_problema || activo_invalido) {
+        lista.push(Missing::Value);
+    }
+    let esperado = if lista.len() >= 2 && hay_problema {
+        missing_text(&lista)
+    } else {
+        None
+    };
+    prop_assert_eq!(
+        d.summary().map(str::to_string),
+        esperado,
+        "{}: resumen",
+        ctx
+    );
+
+    match d.summary() {
+        Some(resumen) => {
+            prop_assert!(!d.is_valid(), "{}: resumen con Aceptar activo", ctx);
+            prop_assert_eq!(d.reason(), Some(resumen.to_string()), "{}", ctx);
+            prop_assert!(
+                !problemas.is_empty(),
+                "{}: resumen sin problema de campo",
+                ctx
+            );
+            prop_assert_eq!(d.values(), None, "{}", ctx);
+            prop_assert_eq!(
+                d.clone().event(Event::Accept),
+                Reaction::Rejected(resumen.to_string()),
+                "{}",
+                ctx
+            );
+        }
+        None => {
+            // Sin resumen, el diálogo es inválido solo por su motivo externo o por un problema.
+            let causa = d.block().is_some() || !problemas.is_empty();
+            prop_assert_eq!(d.is_valid(), !causa, "{}: validez", ctx);
+        }
+    }
+    // `values()` es `Some` si y solo si no hay resumen ni ninguna otra causa.
+    let limpio = d.summary().is_none() && d.block().is_none() && problemas.is_empty();
+    prop_assert_eq!(d.values().is_some(), limpio, "{}: values", ctx);
+    prop_assert_eq!(d.reason().is_none(), limpio, "{}: reason", ctx);
+    Ok(())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Para secuencias de 0 a 48 eventos (destino, casilla, alfa, hexadecimal válido e inválido) con
+    /// `sync_convert` tras cada una y desde los cuatro orígenes: hay resumen exactamente con ≥ 2
+    /// pendientes y un problema de campo; un resumen nunca convive con `Aceptar` activo; y
+    /// `values()` es `Some` si y solo si no hay resumen, motivo externo ni problema.
+    #[test]
+    fn propiedad_3_el_resumen_nunca_contradice_a_la_validez(
+        gestos in prop::collection::vec(gesto(), 0..=48),
+        activo in 0usize..4,
+    ) {
+        let activo = activos()[activo];
+        for from in MODOS {
+            let image = imagen_de_modo(from);
+            let mut modal = Modal::default();
+            prop_assert!(open_convert_mode(&mut modal, from, Locks::default()));
+            let Modal::Open(d) = &mut modal else {
+                return Err(TestCaseError::fail("cerrado"));
+            };
+            let mut sync = ConvertSync::new(from, 0, activo);
+            let mut analizador = SystemAnalyzer;
+            let mut m = Modelo::nuevo(from);
+            let historial = History { limit: 64 * MIB, used: 0 };
+            sync_convert(d, &mut sync, &image, 0, historial, &mut analizador);
+            comprueba_resumen(d, &m, &sync, activo, &format!("{from:?}, al abrir"))?;
+            for (i, g) in gestos.iter().enumerate() {
+                let ctx = format!("{from:?}, paso {i}: {g:?}");
+                aplica(d, &mut m, g);
+                let historial = History { limit: 64 * MIB, used: 0 };
+                sync_convert(d, &mut sync, &image, 0, historial, &mut analizador);
+                comprueba_resumen(d, &m, &sync, activo, &ctx)?;
+            }
+        }
+    }
+}

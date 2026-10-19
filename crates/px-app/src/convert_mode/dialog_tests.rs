@@ -2074,3 +2074,522 @@ fn fila_11_ningun_estado_del_dialogo_pinta_un_glifo_ausente() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 20b, parte 1 (specs/hito-2-motivo-y-marcadores.md): filas 7 y 8. En ROJO hasta que
+// existan `Dialog::problems`, `Dialog::set_summary`, `Dialog::summary`, `footer_text` y el
+// resumen de `sync_convert`.
+//
+// - Fila 7: el caso de la prueba manual con clics reales. El pie se lee del texto pintado en el
+//   rectángulo del motivo (`layout.reason`), no de `Dialog::reason()`. El cambio tras un clic se ve
+//   **en el fotograma siguiente** al del clic (`clic_y_siguiente`: mover, pulsar, soltar y un
+//   fotograma más).
+// - Fila 8: ancho medido del pie a las cinco escalas, en la ventana mínima y en 960 × 720. Los pies
+//   fijados se pintan quitando `ConvertSync` del banco (`convert = None`) y poniendo el motivo con
+//   `set_block` o `set_summary`; los reales salen de `sync_convert` con eventos sobre el diálogo.
+//
+// **Suposiciones y ambigüedades:**
+// - Un clic en la casilla de la fila 7 con el hexadecimal con foco hace perder el foco al campo y
+//   revierte el texto ilegible (regla de 11c); por eso el paso «con la casilla marcada y `zz`» se
+//   hace con eventos directos sobre la casilla (sin mover el foco) o marcando la casilla antes de
+//   escribir.
+// - El pie «más largo posible» se prueba con tres textos: un motivo de 37 con `error: ` (44 en
+//   total), la lista más larga de dos con `falta: ` (la de color y fondo, 38) y el límite físico
+//   de `falta: ` + 37 caracteres (44), aunque ningún texto real lo alcance.
+// - `faltan 3: color, fondo, valor` no se pinta (en el diálogo no es alcanzable y `footer_text` le
+//   pondría `error: `, ver `tests.rs`).
+// ---------------------------------------------------------------------------------------------
+
+const FALTA_AMBOS_20B: &str = "falta: perder el color; fondo del alfa";
+const FALTA_COLOR_20B: &str = "falta: permitir perder el color";
+const ELIGE_FONDO_20B: &str = "falta: elegir el fondo del alfa";
+const FALTA_COLOR_Y_VALOR_20B: &str = "falta: perder el color; fondo válido";
+
+/// El texto pintado en el rectángulo del motivo (el pie), si lo hay.
+fn pie_de(b: &Banco) -> Option<Texto> {
+    let r = b.layout().reason;
+    let ppp = b.ppp;
+    b.ultimo
+        .visibles()
+        .find(|t| {
+            (t.pos.x * ppp - r.x as f32).abs() < 1.5 && (t.pos.y * ppp - r.y as f32).abs() < 1.5
+        })
+        .cloned()
+}
+
+fn pie_texto(b: &Banco) -> Option<String> {
+    pie_de(b).map(|t| t.texto.trim().to_string())
+}
+
+/// Un clic real sobre el texto `buscado` y **un** fotograma más: el siguiente al del evento.
+fn clic_y_siguiente(b: &mut Banco, buscado: &str) {
+    let centro = b.centro_de(buscado);
+    b.clic(centro);
+    b.fotograma(vec![]);
+}
+
+fn error_del_campo(corto: &str) -> String {
+    format!("{ERROR_PREFIX}{corto}")
+}
+
+#[test]
+fn fila_7_20b_rgba_con_transparencia_a_gris_sigue_el_caso_de_la_prueba_manual() {
+    let corto = hex_notice(&HexError::Length(2));
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        let ctx = |paso: &str| format!("ppp {ppp}: {paso}");
+
+        // Gris, sin marcar nada: faltan el color y el fondo, sin `error:`.
+        b.elige_destino(Mode::Gray);
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_AMBOS_20B),
+            "{}: {:?}",
+            ctx("sin nada"),
+            b.ultimo.lista()
+        );
+        assert!(b.aceptar_deshabilitado(), "{}", ctx("sin nada"));
+        assert!(!b.ultimo.contiene(ERROR_PREFIX), "{}", ctx("sin nada"));
+
+        // La casilla: queda el fondo, en el fotograma siguiente al clic.
+        clic_y_siguiente(&mut b, CASILLA);
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(ELIGE_FONDO_20B),
+            "{}: {:?}",
+            ctx("casilla"),
+            b.ultimo.lista()
+        );
+        assert!(b.aceptar_deshabilitado(), "{}", ctx("casilla"));
+
+        // Un fondo: sin motivo y Aceptar activo, también en el fotograma siguiente.
+        clic_y_siguiente(&mut b, "Fondo blanco");
+        assert_eq!(
+            pie_texto(&b),
+            None,
+            "{}: {:?}",
+            ctx("blanco"),
+            b.ultimo.lista()
+        );
+        assert!(!b.aceptar_deshabilitado(), "{}", ctx("blanco"));
+        assert_eq!(b.dialogo().reason(), None, "{}", ctx("blanco"));
+        assert!(!b.ultimo.contiene("falta:") && !b.ultimo.contiene(ERROR_PREFIX));
+
+        // Volver a «No perder el alfa»: otra vez el fondo.
+        clic_y_siguiente(&mut b, "No perder el alfa");
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(ELIGE_FONDO_20B),
+            "{}",
+            ctx("sin fondo")
+        );
+        assert!(b.aceptar_deshabilitado(), "{}", ctx("sin fondo"));
+
+        // Desmarcar la casilla con el fondo ya cubierto: solo el color.
+        clic_y_siguiente(&mut b, "Fondo negro");
+        assert_eq!(pie_texto(&b), None, "{}", ctx("negro"));
+        clic_y_siguiente(&mut b, CASILLA);
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_COLOR_20B),
+            "{}",
+            ctx("sin casilla")
+        );
+
+        // Hexadecimal ilegible con la casilla sin marcar: color y fondo válido; el error del campo
+        // sigue junto al campo.
+        clic_y_siguiente(&mut b, "Fondo: un color hexadecimal");
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_COLOR_20B),
+            "{}: el hexadecimal por defecto vale",
+            ctx("hexadecimal")
+        );
+        b.foco_hasta(FocusTarget::Field("fondo_hex"));
+        b.escribe("zz");
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_COLOR_Y_VALOR_20B),
+            "{}: {:?}",
+            ctx("zz sin casilla"),
+            b.ultimo.lista()
+        );
+        assert!(
+            b.ultimo.exacto(&error_del_campo(&corto)).is_some(),
+            "{}: el error del campo sigue junto al campo; hay {:?}",
+            ctx("zz sin casilla"),
+            b.ultimo.lista()
+        );
+        assert!(
+            !b.ultimo.contiene(&format!("{ERROR_PREFIX}Color:")),
+            "{}: el detalle no va en el pie",
+            ctx("zz sin casilla")
+        );
+        assert!(b.aceptar_deshabilitado(), "{}", ctx("zz sin casilla"));
+        assert_eq!(b.dialogo().summary(), Some(FALTA_COLOR_Y_VALOR_20B));
+
+        // La casilla marcada con eventos directos (sin mover el foco): solo el valor, con `error:`.
+        b.marca("luma_gris", true);
+        assert_eq!(
+            pie_texto(&b),
+            Some(format!("{ERROR_PREFIX}Color: {corto}")),
+            "{}: {:?}",
+            ctx("zz con casilla"),
+            b.ultimo.lista()
+        );
+        assert!(
+            b.ultimo.exacto(&error_del_campo(&corto)).is_some(),
+            "{}",
+            ctx("zz con casilla")
+        );
+        assert_eq!(b.dialogo().summary(), None, "{}", ctx("zz con casilla"));
+        assert!(b.aceptar_deshabilitado());
+
+        // Y desmarcarla vuelve al resumen.
+        b.marca("luma_gris", false);
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_COLOR_Y_VALOR_20B),
+            "{}",
+            ctx("otra vez")
+        );
+
+        // Arreglar el hexadecimal deja el color; con la casilla, nada.
+        b.escribe("#ff0000");
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_COLOR_20B),
+            "{}",
+            ctx("arreglado")
+        );
+        b.marca("luma_gris", true);
+        assert_eq!(pie_texto(&b), None, "{}", ctx("todo cubierto"));
+        assert!(!b.aceptar_deshabilitado(), "{}", ctx("todo cubierto"));
+    }
+}
+
+#[test]
+fn fila_7_20b_con_la_casilla_marcada_antes_de_escribir_zz_el_pie_es_solo_el_error_del_valor() {
+    let corto = hex_notice(&HexError::Length(2));
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        b.elige_destino(Mode::Gray);
+        clic_y_siguiente(&mut b, CASILLA);
+        clic_y_siguiente(&mut b, "Fondo: un color hexadecimal");
+        b.foco_hasta(FocusTarget::Field("fondo_hex"));
+        b.escribe("zz");
+        assert_eq!(
+            pie_texto(&b),
+            Some(format!("{ERROR_PREFIX}Color: {corto}")),
+            "ppp {ppp}: {:?}",
+            b.ultimo.lista()
+        );
+        assert!(!b.ultimo.contiene("falta:"), "ppp {ppp}");
+        assert!(
+            b.ultimo.exacto(&error_del_campo(&corto)).is_some(),
+            "ppp {ppp}"
+        );
+        assert_eq!(b.dialogo().summary(), None, "ppp {ppp}");
+        assert!(b.aceptar_deshabilitado());
+    }
+}
+
+#[test]
+fn fila_7_20b_el_hexadecimal_con_alfa_sin_la_casilla_tambien_da_color_y_fondo_valido() {
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        b.elige_destino(Mode::Gray);
+        clic_y_siguiente(&mut b, "Fondo: un color hexadecimal");
+        b.foco_hasta(FocusTarget::Field("fondo_hex"));
+        b.escribe("#ff000080");
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some(FALTA_COLOR_Y_VALOR_20B),
+            "ppp {ppp}: {:?}",
+            b.ultimo.lista()
+        );
+        assert!(b.aceptar_deshabilitado(), "ppp {ppp}");
+        b.marca("luma_gris", true);
+        assert_eq!(
+            pie_texto(&b).as_deref(),
+            Some("error: Color: el fondo no lleva alfa"),
+            "ppp {ppp}"
+        );
+    }
+}
+
+#[test]
+fn fila_7_20b_gris_con_alfa_desde_rgba_solo_pide_el_color_y_no_hay_resumen() {
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        b.elige_destino(Mode::GrayAlpha);
+        assert_eq!(pie_texto(&b).as_deref(), Some(FALTA_COLOR_20B), "ppp {ppp}");
+        assert_eq!(b.dialogo().summary(), None, "ppp {ppp}");
+        clic_y_siguiente(&mut b, CASILLA);
+        assert_eq!(pie_texto(&b), None, "ppp {ppp}");
+        assert!(!b.aceptar_deshabilitado(), "ppp {ppp}");
+    }
+}
+
+// --- Fila 8: encaje del texto ---
+
+/// Un rectángulo en píxeles físicos pasado a puntos.
+fn rect_en_puntos(r: px_ui::view::ScreenRect, ppp: f32) -> Rect {
+    Rect::from_min_size(
+        pos2(r.x as f32 / ppp, r.y as f32 / ppp),
+        vec2(r.width as f32 / ppp, r.height as f32 / ppp),
+    )
+}
+
+/// Comprueba el pie pintado de `b`: es `footer_text(motivo)`, mide como mucho 44 columnas, cabe en
+/// `layout.reason.width`, no se recorta ni toca los botones y lleva su pista (`falta:` o `error:`).
+fn comprueba_pie(b: &Banco, motivo: &str, ctx: &str) {
+    let esperado = px_ui::dialog_view::footer_text(motivo);
+    assert!(esperado.chars().count() <= 44, "{ctx}: {esperado:?}");
+    assert!(
+        esperado.starts_with("falta: ") || esperado.starts_with(ERROR_PREFIX),
+        "{ctx}: la pista textual falta en {esperado:?}"
+    );
+    assert!(en_el_juego(&esperado), "{ctx}: {esperado:?}");
+    let t = pie_de(b).unwrap_or_else(|| {
+        panic!(
+            "{ctx}: no se pinta el pie {esperado:?}; hay {:?}",
+            b.ultimo.lista()
+        )
+    });
+    assert_eq!(t.texto.trim(), esperado, "{ctx}");
+
+    let layout = b.layout();
+    let n = n_de(b.ppp);
+    assert_eq!(
+        layout.reason.width,
+        308 * n,
+        "{ctx}: el pie mide 44 columnas de 7 u"
+    );
+    let ancho_px = t.tamano.x * b.ppp;
+    assert!(
+        ancho_px <= layout.reason.width as f32 + 0.5,
+        "{ctx}: {esperado:?} mide {ancho_px} px y el pie {} px",
+        layout.reason.width
+    );
+    // Sin recorte.
+    assert!(
+        t.clip.expand(0.5).contains_rect(t.rect()),
+        "{ctx}: {esperado:?} queda recortado ({:?} en {:?})",
+        t.rect(),
+        t.clip
+    );
+    // Sin solapamiento con los botones.
+    let zona = t.rect();
+    for boton in [Some(layout.accept), layout.cancel].into_iter().flatten() {
+        assert!(
+            !zona.intersect(rect_en_puntos(boton, b.ppp)).is_positive(),
+            "{ctx}: {esperado:?} toca un botón"
+        );
+    }
+    // Contraste.
+    assert!(
+        contrast_ratio(
+            px_ui::dialog_view::ERROR_FG,
+            px_ui::dialog_view::DIALOG_FILL
+        ) >= MIN_TEXTO
+    );
+    comprueba_contraste(b, ctx);
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Via {
+    Bloque,
+    Resumen,
+}
+
+/// Los pies de D2 y los más largos posibles, y por dónde llegan al diálogo.
+fn pies_fijados() -> Vec<(String, Via)> {
+    vec![
+        (FALTA_COLOR_20B.to_string(), Via::Bloque),
+        (ELIGE_FONDO_20B.to_string(), Via::Bloque),
+        (FALTA_AMBOS_20B.to_string(), Via::Resumen),
+        (FALTA_COLOR_Y_VALOR_20B.to_string(), Via::Resumen),
+        (
+            "falta: fondo del alfa; fondo válido".to_string(),
+            Via::Resumen,
+        ),
+        ("no hay color activo".to_string(), Via::Bloque),
+        (
+            "el color activo #ff000080 tiene alfa".to_string(),
+            Via::Bloque,
+        ),
+        (
+            "más de 256 colores: sin cuantizador".to_string(),
+            Via::Bloque,
+        ),
+        ("la imagen convertida no cabe".to_string(), Via::Bloque),
+        ("calculando el informe".to_string(), Via::Bloque),
+        // El motivo más largo con `error: `: 37 caracteres, 44 en total.
+        ("M".repeat(37), Via::Bloque),
+        // El límite físico de `falta: `: 37 tras el prefijo, 44 en total.
+        (format!("falta: {}", "M".repeat(37)), Via::Bloque),
+        (format!("falta: {}", "M".repeat(37)), Via::Resumen),
+    ]
+}
+
+#[test]
+fn fila_8_20b_los_pies_fijados_caben_a_las_cinco_escalas_en_las_dos_ventanas() {
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            // Un solo banco por escala y ventana: sin `ConvertSync` el motivo no se recalcula.
+            let mut b = Banco::abierto(ppp, ventana, Mode::Rgba);
+            b.convert = None;
+            for (motivo, via) in pies_fijados() {
+                let ctx = format!("ppp {ppp} {ventana:?} {via:?} {motivo:?}");
+                b.dialogo_mut().set_block(None);
+                b.dialogo_mut().set_summary(None);
+                match via {
+                    Via::Bloque => b.dialogo_mut().set_block(Some(motivo.clone())),
+                    Via::Resumen => b.dialogo_mut().set_summary(Some(motivo.clone())),
+                }
+                b.reposo();
+                assert!(b.aceptar_deshabilitado(), "{ctx}");
+                let pintado = b.dialogo().reason().expect("hay motivo");
+                comprueba_pie(&b, &pintado, &ctx);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_8_20b_el_pie_mas_largo_con_error_y_el_mas_largo_con_falta_llenan_las_44_columnas() {
+    // 37 caracteres con `error: ` y `falta: ` + 37: 44 columnas de 7 u cada uno.
+    for ppp in PPPS {
+        let mut b = Banco::abierto(ppp, Ventana::Grande, Mode::Rgba);
+        b.convert = None;
+        for motivo in ["M".repeat(37), format!("falta: {}", "M".repeat(37))] {
+            b.dialogo_mut().set_block(Some(motivo.clone()));
+            b.reposo();
+            let pie = pie_de(&b).expect("pie");
+            assert_eq!(
+                pie.texto.trim().chars().count(),
+                44,
+                "ppp {ppp}: {motivo:?}"
+            );
+            let layout = b.layout();
+            // Fuente monoespaciada: 44 columnas ocupan como mucho el ancho del pie.
+            assert!(
+                pie.tamano.x * ppp <= layout.reason.width as f32 + 0.5,
+                "ppp {ppp}: {motivo:?} mide {} px de {}",
+                pie.tamano.x * ppp,
+                layout.reason.width
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_8_20b_los_pies_reales_de_cada_estado_caben_a_las_cinco_escalas_en_las_dos_ventanas() {
+    let corto = hex_notice(&HexError::Length(2));
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            let ctx = |estado: &str| format!("ppp {ppp} {ventana:?}: {estado}");
+
+            // Gris sin nada: color y fondo; con la casilla: el fondo.
+            let mut b = Banco::abierto(ppp, ventana, Mode::Rgba);
+            pon_gris(&mut b, 0);
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(motivo, FALTA_AMBOS_20B, "{}", ctx("sin nada"));
+            comprueba_pie(&b, &motivo, &ctx("sin nada"));
+            b.marca("luma_gris", true);
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(motivo, ELIGE_FONDO_20B, "{}", ctx("casilla"));
+            comprueba_pie(&b, &motivo, &ctx("casilla"));
+
+            // Gris con alfa sin la casilla.
+            let mut b = Banco::abierto(ppp, ventana, Mode::Rgba);
+            b.elige_destino(Mode::GrayAlpha);
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(motivo, FALTA_COLOR_20B, "{}", ctx("gris con alfa"));
+            comprueba_pie(&b, &motivo, &ctx("gris con alfa"));
+
+            // Hexadecimal ilegible: con la casilla sin marcar (resumen) y con ella (valor solo).
+            let mut b = Banco::abierto(ppp, ventana, Mode::Rgba);
+            pon_gris(&mut b, 4);
+            b.foco_hasta(FocusTarget::Field("fondo_hex"));
+            b.escribe("zz");
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(motivo, FALTA_COLOR_Y_VALOR_20B, "{}", ctx("zz sin casilla"));
+            comprueba_pie(&b, &motivo, &ctx("zz sin casilla"));
+            b.marca("luma_gris", true);
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(
+                motivo,
+                format!("Color: {corto}"),
+                "{}",
+                ctx("zz con casilla")
+            );
+            comprueba_pie(&b, &motivo, &ctx("zz con casilla"));
+            b.escribe("#ff000080");
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(motivo, "Color: el fondo no lleva alfa", "{}", ctx("alfa"));
+            comprueba_pie(&b, &motivo, &ctx("alfa"));
+
+            // Color activo con alfa: color y fondo válido (sin resumen).
+            let mut b = Banco::abierto_con(
+                ppp,
+                ventana,
+                Mode::Rgba,
+                imagen_de_banco(Mode::Rgba),
+                Some(Rgba::new(0xff, 0, 0, 0x80)),
+            );
+            pon_gris(&mut b, 3);
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(
+                motivo,
+                FALTA_COLOR_Y_VALOR_20B,
+                "{}",
+                ctx("activo con alfa")
+            );
+            comprueba_pie(&b, &motivo, &ctx("activo con alfa"));
+            b.marca("luma_gris", true);
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(
+                motivo,
+                "el color activo #ff000080 tiene alfa",
+                "{}",
+                ctx("activo")
+            );
+            comprueba_pie(&b, &motivo, &ctx("activo"));
+
+            // Más de 256 colores.
+            let b = Banco::abierto_con(
+                ppp,
+                ventana,
+                Mode::Rgba,
+                rgba_de_257_colores(),
+                Some(ACTIVO),
+            );
+            let motivo = b.dialogo().reason().expect("hay motivo");
+            assert_eq!(
+                motivo,
+                "más de 256 colores: sin cuantizador",
+                "{}",
+                ctx("257")
+            );
+            comprueba_pie(&b, &motivo, &ctx("257"));
+        }
+    }
+}
+
+#[test]
+fn fila_8_20b_la_pista_esta_en_el_texto_y_no_solo_en_el_color() {
+    let mut b = Banco::abierto(2.0, Ventana::Grande, Mode::Rgba);
+    pon_gris(&mut b, 0);
+    let t = pie_de(&b).expect("pie");
+    assert!(t.texto.trim().starts_with("falta:"), "{:?}", t.texto);
+    b.marca("luma_gris", true);
+    b.elige("alfa_gris", 3);
+    b.dialogo_mut()
+        .set_block(Some("no hay color activo".to_string()));
+    b.convert = None;
+    b.reposo();
+    let t = pie_de(&b).expect("pie");
+    assert!(t.texto.trim().starts_with("error:"), "{:?}", t.texto);
+}
