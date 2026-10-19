@@ -45,9 +45,8 @@ const fn item(label: &'static str, action: AppAction) -> MenuItem {
     }
 }
 
-/// Los cuatro menús. Solo hay entradas de funciones que existen: «Convertir modo» (unidad 20) se
-/// añade en su unidad.
-pub const MENUS: [Menu; 4] = [
+/// Los cinco menús. Solo hay entradas de funciones que existen.
+pub const MENUS: [Menu; 5] = [
     Menu {
         title: "Archivo",
         items: &[
@@ -69,6 +68,11 @@ pub const MENUS: [Menu; 4] = [
             item("Deshacer", AppAction::Undo),
             item("Rehacer", AppAction::Redo),
         ],
+        submenus: &[],
+    },
+    Menu {
+        title: "Imagen",
+        items: &[item("Convertir modo…", AppAction::ConvertMode)],
         submenus: &[],
     },
     Menu {

@@ -14,6 +14,8 @@ use crate::view::Zoom;
 pub enum AppAction {
     /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).
     NewImage,
+    /// `Imagen → Convertir modo…` (specs/hito-2-convertir-modo.md): sin atajo.
+    ConvertMode,
     Open,
     Save,
     SaveAs,
@@ -48,10 +50,13 @@ impl AppAction {
         )
     }
 
-    /// Las acciones que abren un diálogo modal (las licencias y nueva imagen; la 20 añade la
-    /// suya): no se abren con un gesto en curso ni con una quita pendiente.
+    /// Las acciones que abren un diálogo modal (las licencias, nueva imagen y convertir modo): no
+    /// se abren con un gesto en curso ni con una quita pendiente.
     pub fn opens_dialog(self) -> bool {
-        matches!(self, AppAction::ShowLicenses | AppAction::NewImage)
+        matches!(
+            self,
+            AppAction::ShowLicenses | AppAction::NewImage | AppAction::ConvertMode
+        )
     }
 
     /// Las cuatro acciones de zoom, que no modifican el documento.

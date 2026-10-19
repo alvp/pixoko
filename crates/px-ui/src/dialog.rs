@@ -278,6 +278,8 @@ pub enum DialogKind {
     Demo,
     /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).
     NewImage,
+    /// `Imagen → Convertir modo…` (specs/hito-2-convertir-modo.md).
+    ConvertMode,
 }
 
 /// Lo que le pasa a un diálogo abierto.
@@ -355,6 +357,8 @@ pub struct Dialog {
     focus_taken: bool,
     /// Nota del límite de un campo numérico: su error `Above` dice `máximo N (nota)`.
     limit_notes: Vec<(FieldId, &'static str)>,
+    /// Motivo externo que hace inválido el conjunto (`set_block`).
+    block: Option<String>,
 }
 
 impl Dialog {
@@ -383,6 +387,7 @@ impl Dialog {
             scroll_u: 0,
             focus_taken: false,
             limit_notes: Vec::new(),
+            block: None,
         })
     }
 
@@ -496,7 +501,7 @@ impl Dialog {
     }
 
     /// El motivo del primer campo visible inválido (`etiqueta: motivo`) o, con todos válidos, el de
-    /// la comprobación cruzada (recortado). `None` si todo vale.
+    /// la comprobación cruzada (recortado) y, por último, el motivo externo. `None` si todo vale.
     pub fn reason(&self) -> Option<String> {
         for index in self.shown_indices() {
             if let Validity::Invalid(reason) = self.field_validity(index) {
@@ -504,8 +509,24 @@ impl Dialog {
                 return Some(text.chars().take(REASON_MAX_CHARS).collect());
             }
         }
-        let check = self.spec.check?;
-        check(&self.collect_values()).map(|text| text.chars().take(REASON_MAX_CHARS).collect())
+        if let Some(check) = self.spec.check
+            && let Some(text) = check(&self.collect_values())
+        {
+            return Some(text.chars().take(REASON_MAX_CHARS).collect());
+        }
+        self.block.clone()
+    }
+
+    /// Pone (o quita, con `None`) un motivo externo: mientras exista, el conjunto no es válido,
+    /// después de los campos y de la comprobación cruzada. Lo usa quien tiene datos que el
+    /// formulario no ve (el informe de una conversión). Se recorta a 37 caracteres.
+    pub fn set_block(&mut self, reason: Option<String>) {
+        self.block = reason.map(|text| text.chars().take(REASON_MAX_CHARS).collect());
+    }
+
+    /// El motivo externo, si lo hay.
+    pub fn block(&self) -> Option<&str> {
+        self.block.as_deref()
     }
 
     pub fn is_valid(&self) -> bool {
@@ -554,8 +575,8 @@ impl Dialog {
         })
     }
 
-    /// Si una casilla está marcada.
-    pub(crate) fn checked(&self, id: FieldId) -> Option<bool> {
+    /// Si una casilla está marcada, aunque el formulario no sea válido.
+    pub fn checked(&self, id: FieldId) -> Option<bool> {
         match &self.states[self.index_of(id)?] {
             FieldState::Check(on) => Some(*on),
             _ => None,
