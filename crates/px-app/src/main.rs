@@ -39,16 +39,21 @@ use px_ui::tool::{ToolEvent, ToolState, tool_color_label};
 use px_ui::toolbar::{show_toolbar, zoom_label};
 
 use crate::confirm::{
-    Confirm, Confirmation, Request, close_allowed, close_warning, open_dialog_warning, open_warning,
+    Confirm, Confirmation, Request, close_allowed, close_warning, new_warning, open_dialog_warning,
+    open_warning,
 };
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
     DialogKind, Dialogs, Finished, Outcome, RfdPicker, fallback_request, ignored_file_notice,
-    open_gate, unavailable_notice,
+    new_gate, open_gate, unavailable_notice,
 };
 use crate::dispatch::{Dispatched, Targets, dispatch};
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::licenses::wants_licenses;
+use crate::new_image::{
+    FormSync, NewImageError, SystemAlloc, build_new_images, describe_new, memory_notice,
+    open_new_image, spec_from_values, sync_form,
+};
 use crate::session::{Session, describe_saved, describe_saved_dialog};
 use crate::title::{TitleInfo, status_line, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
@@ -84,6 +89,9 @@ struct App {
     modal_focus: Option<FocusTarget>,
     /// Abrir el diálogo de prueba en el primer fotograma (`PIXOKO_DIALOGO_PRUEBA=1`).
     demo_pending: bool,
+    /// Con el diálogo de nueva imagen abierto: su traslado de fondo y si el descarte de los
+    /// cambios sin guardar ya se confirmó (specs/hito-2-nueva-imagen.md, D6 y D8).
+    new_image: Option<(FormSync, bool)>,
 }
 
 impl App {
@@ -119,6 +127,7 @@ impl App {
             modal: Modal::Closed,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
+            new_image: None,
         }
     }
 
@@ -406,6 +415,7 @@ impl App {
                 self.canvas.request_view(op);
                 ctx.request_repaint();
             }
+            Dispatched::NewImage => self.begin_new_image(ctx),
             Dispatched::Licenses(true) => {
                 let locks = self.locks(ctx);
                 if self.modal.open(
@@ -425,6 +435,66 @@ impl App {
                 ctx.request_repaint();
             }
         }
+    }
+
+    /// `Archivo → Nueva imagen…`: con cambios sin guardar, pide confirmación por repetición; luego
+    /// abre el diálogo (el lado máximo es el de textura de la GPU).
+    fn begin_new_image(&mut self, ctx: &egui::Context) {
+        let modified = self.session.modified();
+        let now = ctx.input(|i| i.time);
+        if !new_gate(modified, &mut self.confirm, now) {
+            self.notify(ctx, new_warning());
+            return;
+        }
+        let max_side = ctx.input(|i| i.max_texture_side);
+        let locks = self.locks(ctx);
+        if open_new_image(&mut self.modal, max_side, locks) {
+            self.modal_focus = None;
+            self.confirm.clear();
+            self.new_image = Some((FormSync::default(), modified));
+        }
+    }
+
+    /// El diálogo de nueva imagen se aceptó: construye todo (documento y copia del lienzo) y solo
+    /// entonces reemplaza el documento; si algo falla, avisa y todo queda como estaba.
+    fn finish_new_image(
+        &mut self,
+        ctx: &egui::Context,
+        values: &px_ui::dialog::Values,
+        discard: bool,
+    ) {
+        let Some(spec) = spec_from_values(values) else {
+            return;
+        };
+        if self.session.modified() && !discard {
+            self.notify(ctx, crate::files::FileError::Unsaved.to_string());
+            return;
+        }
+        let images = match build_new_images(&spec, &mut SystemAlloc) {
+            Ok(images) => images,
+            Err(NewImageError::Size(reason)) => {
+                self.notify(ctx, reason);
+                return;
+            }
+            Err(NewImageError::Memory { bytes }) => {
+                self.notify(ctx, memory_notice(spec.width, spec.height, bytes));
+                return;
+            }
+        };
+        if let Err(error) = self.session.new_image(images.document, discard) {
+            self.notify(ctx, error.to_string());
+            return;
+        }
+        self.canvas.set_owned_image(images.canvas);
+        self.confirm.clear();
+        let mut text = describe_new(&spec);
+        if self.session.take_discarded_text() {
+            text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
+        }
+        if self.session.take_removal_cancelled() {
+            text = format!("{REMOVAL_CANCELLED_NOTICE} · {text}");
+        }
+        self.notify(ctx, text);
     }
 
     /// Aplica una edición de la paleta pedida por el panel y avisa del resultado.
@@ -471,10 +541,18 @@ impl App {
             self.modal_focus = None;
         }
         let Modal::Open(dialog) = &mut self.modal else {
+            // Cerrado por `Quit` o por la ventana: el estado de nueva imagen se va con él.
+            self.new_image = None;
             return;
         };
         let kind = dialog.kind();
         let reaction = show_dialog(ctx, dialog, &mut self.modal_focus);
+        if kind == ModalKind::NewImage
+            && let Some((sync, _)) = &mut self.new_image
+            && sync_form(dialog, sync)
+        {
+            ctx.request_repaint();
+        }
         if !matches!(reaction, Reaction::Accepted(_) | Reaction::Cancelled) {
             return;
         }
@@ -483,6 +561,12 @@ impl App {
         self.modal_focus = None;
         if kind == ModalKind::Demo {
             self.notify(ctx, demo_notice(&reaction));
+        }
+        if kind == ModalKind::NewImage {
+            let discard = self.new_image.take().is_some_and(|(_, discard)| discard);
+            if let Reaction::Accepted(values) = &reaction {
+                self.finish_new_image(ctx, values, discard);
+            }
         }
     }
 }

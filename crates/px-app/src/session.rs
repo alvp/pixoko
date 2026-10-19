@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use px_core::{Command, Document, DocumentError, Mode, Pixel};
+use px_core::{Command, Document, DocumentError, Image, Mode, Pixel};
 use px_formats::write_png;
 use px_ui::color::{ColorChoice, SlotBank, clamp_choice, initial_choice, pixel_for_choice_with};
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
@@ -18,6 +18,7 @@ use crate::files::{
     FileError, MAX_FILE_BYTES, copy_path, describe_open, describe_report, file_label, load_png,
     untitled_path, write_atomic,
 };
+use crate::new_image::BLACK_INDEX;
 
 /// Resultado de guardar: dónde se escribió y, si no se sobrescribió el original porque Pixoko
 /// lo convierte al abrir, qué conversiones eran.
@@ -366,18 +367,48 @@ impl Session {
         let read = load_png(path, MAX_FILE_BYTES, max_side)?;
         let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
         let text = describe_open(&file_label(&absolute), &read.image, &read.report);
-        self.conversion = (!read.report.is_empty()).then(|| describe_report(&read.report));
-        self.choice = initial_choice(&read.image);
+        let conversion = (!read.report.is_empty()).then(|| describe_report(&read.report));
+        let choice = initial_choice(&read.image);
+        self.replace_document(read.image, choice, Some(absolute), conversion);
+        Ok(text)
+    }
+
+    /// Sustituye el documento por una imagen nueva ya construida (specs/hito-2-nueva-imagen.md,
+    /// D3): historia vacía, sin ruta y sin cambios sin guardar. Con cambios sin guardar y sin
+    /// `discard`, `Err(Unsaved)` y no cambia nada. El color activo es el negro en indexado.
+    pub fn new_image(&mut self, image: Image, discard: bool) -> Result<(), FileError> {
+        if self.modified() && !discard {
+            return Err(FileError::Unsaved);
+        }
+        let choice = match image.mode() {
+            Mode::Indexed => ColorChoice::Entry(BLACK_INDEX),
+            _ => initial_choice(&image),
+        };
+        self.replace_document(image, choice, None, None);
+        Ok(())
+    }
+
+    /// Lo que se reinicia al cambiar de documento (`open` y `new_image`): color activo,
+    /// desplazamiento y estado del panel, editor y operaciones de paleta. Las ranuras de color
+    /// son de la sesión y no se tocan.
+    fn replace_document(
+        &mut self,
+        image: Image,
+        choice: ColorChoice,
+        path: Option<PathBuf>,
+        conversion: Option<String>,
+    ) {
+        self.conversion = conversion;
+        self.choice = choice;
         self.scroll = Scroll::default();
         self.view = PanelView::default();
         self.discarded_text = self.editor.has_pending();
         self.removal_cancelled |= self.ops.removal().is_some();
         self.ops.reset();
         self.editor.reset();
-        self.document = Document::new(read.image);
+        self.document = Document::new(image);
         self.saved_id = self.document.state_id();
-        self.path = Some(absolute);
-        Ok(text)
+        self.path = path;
     }
 
     /// El fichero abierto se convierte al abrir: el primer `save` hace una copia.

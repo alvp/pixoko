@@ -13,6 +13,8 @@ pub enum Request {
     Close,
     /// Ctrl+O con cambios sin guardar (specs/hito-2-dialogos-archivo.md).
     OpenDialog,
+    /// `Nueva imagen…` con cambios sin guardar (specs/hito-2-nueva-imagen.md, D6).
+    NewImage,
     /// Segunda pulsación de guardar tras un diálogo que no se pudo abrir.
     SaveFallback {
         as_copy: bool,
@@ -80,6 +82,13 @@ pub fn open_warning(name: &str) -> String {
 pub fn open_dialog_warning() -> String {
     format!(
         "hay cambios sin guardar: pulsa Ctrl+O otra vez en {CONFIRM_SECS:.0} s para descartarlos, o guarda con Ctrl+S"
+    )
+}
+
+/// Aviso al elegir `Nueva imagen…` con cambios sin guardar.
+pub fn new_warning() -> String {
+    format!(
+        "hay cambios sin guardar: elige Nueva imagen otra vez en {CONFIRM_SECS:.0} s para descartarlos, o guarda con Ctrl+S"
     )
 }
 

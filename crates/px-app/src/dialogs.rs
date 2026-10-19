@@ -297,6 +297,12 @@ pub fn open_gate(modified: bool, confirm: &mut Confirm, now: f64) -> Option<bool
     (confirm.request(Request::OpenDialog, now) == Confirmation::Confirmed).then_some(true)
 }
 
+/// `true`: abrir el diálogo de nueva imagen ya. `false`: confirmación armada, hay que avisar
+/// (specs/hito-2-nueva-imagen.md, D6).
+pub fn new_gate(modified: bool, confirm: &mut Confirm, now: f64) -> bool {
+    !modified || confirm.request(Request::NewImage, now) == Confirmation::Confirmed
+}
+
 /// Lo que se arma tras un fallo del diálogo: `Open` nada; `Save` y `SaveAs`, su segunda pulsación.
 pub fn fallback_request(kind: DialogKind) -> Option<Request> {
     match kind {
