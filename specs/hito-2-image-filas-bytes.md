@@ -55,55 +55,69 @@ Constructores (validan y devuelven `Result`, sin pánico):
 5. **`from_bytes` no relaja ningún invariante.** Si devuelve `Ok`, la longitud es `byte_len` y, en indexado, todo píxel es `< paleta.len()`. Un índice fuera de la paleta nunca produce una imagen.
 6. **Aditivo.** Ninguna firma ni comportamiento existente cambia. `ImageError` no es `#[non_exhaustive]`: una variante nueva rompería un `match` exhaustivo ajeno; en este repositorio no hay ninguno (comprobado: todos los usos construyen o comparan, ninguno hace `match`).
 
-## Medidas (release, Linux, 12 hilos; mejor de 3; milisegundos, antes → después)
+## Medidas finales (release, Linux, 12 hilos; mejor de 3; milisegundos, antes → después)
 
-Banco desechable en una copia del repositorio fuera de él (`~/.cache/pixoko-scratch`, borrada al terminar). **«Después» es de un prototipo** de esta spec en esa copia, con las seis migraciones aplicadas, no del código final: se remide al cerrar la unidad con el código real. Imagen de prueba: bloques de 32 colores (PNG de ~30 a ~500 KiB, así que el coste del deflate es **bajo**; con una foto el `write_png` cambia menos en proporción). `get_pixel` y `rows()` no hacen lo mismo: el segundo solo suma el primer byte de cada píxel. `write_png` y `read_png` se midieron en dos pasadas a 4096² y en una a 8192² (el resto, mejor de tres).
+Hechas al cerrar la unidad con un banco desechable fuera del repositorio: «antes» es el commit de la spec (`7a8016e`, código sin tocar) y «después» el código final. Las cifras de la primera versión de esta página eran de un prototipo y se sustituyen por estas. Imagen de prueba: bloques de 32 colores (PNG de ~30 a ~500 KiB, así que el coste del deflate es **bajo**; con una foto el `write_png` mejora menos en proporción). `rows()` solo suma el primer byte de cada píxel; `get_pixel` decodifica el `Pixel` entero. `write_png` y `read_png` se midieron en dos pasadas a 4096² y en una a 8192².
 
-**8192²** (el lienzo mayor de «Nueva imagen» y de la puerta):
+**Ruido.** Una sola máquina y un solo proceso por banco: lo que no cambió de código (`convert_image`, `clone`, `new` a ceros) varía de una medida a otra hasta un ±15 %, y el coste de «tocar memoria nueva» depende de si el asignador reutiliza páginas ya usadas (`new` a ceros a 8192² RGBA cuesta ~100 ms la primera vez y unos pocos ms cuando reutiliza). Por eso en el relleno y el clonado de las imágenes pequeñas de 8192² la diferencia es más grande o más pequeña según la ejecución; la de RGBA, que siempre toca memoria nueva, es la estable (~100 ms después).
+
+**8192²:**
 
 | Operación | RGBA | Indexado | Gris | Gris+alfa |
 | --- | --- | --- | --- | --- |
-| Recorrer todo: `get_pixel` → `rows()` | 152 → 14 | 138 → 12 | 139 → 12 | 140 → 12 |
-| Rellenar con blanco: `new` + `set_pixel` → `filled` | 436 → 108 | 206 → 21 | 198 → 23 | 307 → 55 |
-| Clonar: `clone` → `try_clone` | 108 → 110 | 17 → 23 | 19 → 23 | 55 → 55 |
-| `to_rgba8` | 584 → 107 | 548 → 116 | 535 → 122 | 567 → 133 |
-| `to_rgba8_with_entry` | — | 238 → 116 | — | — |
-| `uses_entry` con la entrada sin usar → `uses_index` | — | 138 → 2,7 | — | — |
-| `write_png` | 904 → 337 | 601 → 89 | 596 → 83 | 731 → 172 |
-| `read_png` | 910 → 267 | 366 → 99 | 354 → 77 | 619 → 156 |
-| (suelo) `new` a ceros | 103 | 16 | 19 | 52 |
+| Recorrer todo: `get_pixel` → `rows()` | 152 → 14 | 139 → 12 | 139 → 12 | 139 → 12 |
+| Rellenar con blanco (`SystemAlloc::image`): `new` + `set_pixel` → `filled` | 370 → 101 | 176 → 4,4 | 163 → 4,2 | 257 → 46 |
+| Clonar: `clone` → `try_clone` | 111 → 102 | 5,2 → 5,3 | 5,3 → 5,1 | 24 → 46 |
+| `to_rgba8` | 579 → 93 | 502 → 87 | 489 → 96 | 531 → 116 |
+| `to_rgba8_with_entry` | — | 192 → 88 | — | — |
+| `uses_entry` con la entrada sin usar | — | 140 → 2,8 | — | — |
+| `write_png` | 907 → 343 | 593 → 90 | 582 → 83 | 718 → 169 |
+| `read_png` | 936 → 156 | 333 → 51 | 348 → 30 | 576 → 93 |
+| (suelo) `new` a ceros | 104 | 3,3 | 3,4 | 20 |
 
 **4096²:**
 
 | Operación | RGBA | Indexado | Gris | Gris+alfa |
 | --- | --- | --- | --- | --- |
-| Recorrer todo: `get_pixel` → `rows()` | 38 → 3,2 | 35 → 3,1 | 35 → 3,1 | 35 → 3,1 |
-| Rellenar con blanco: `new` + `set_pixel` → `filled` | 95 → 19 | 48 → 0,1 | 44 → 0,1 | 65 → 2,5 |
-| Clonar: `clone` → `try_clone` | 20 → 20 | 0,4 → 0,4 | 0,4 → 0,4 | 2,8 → 3,0 |
-| `to_rgba8` | 140 → 22 | 120 → 10 | 119 → 14 | 127 → 24 |
-| `to_rgba8_with_entry` | — | 40 → 10 | — | — |
-| `uses_entry` con la entrada sin usar → `uses_index` | — | 35 → 0,7 | — | — |
-| `write_png` | 222 → 85 | 147 → 24 | 146 → 22 | 173 → 45 |
-| `read_png` | 220 → 67 | 78 → 14 | 76 → 9,0 | 126 → 28 |
-| (suelo) `new` a ceros | 18 | 0,1 | 0,1 | 2,0 |
+| Recorrer todo: `get_pixel` → `rows()` | 38 → 3,3 | 35 → 3,1 | 35 → 3,1 | 35 → 3,1 |
+| Rellenar con blanco (`SystemAlloc::image`): `new` + `set_pixel` → `filled` | 75 → 4,1 | 44 → 0,2 | 40 → 0,1 | 62 → 1,8 |
+| Clonar: `clone` → `try_clone` | 5,0 → 5,7 | 0,4 → 0,7 | 0,4 → 0,4 | 2,9 → 2,7 |
+| `to_rgba8` | 122 → 5,0 | 118 → 8,5 | 113 → 10 | 120 → 12 |
+| `to_rgba8_with_entry` | — | 40 → 8,4 | — | — |
+| `uses_entry` con la entrada sin usar | — | 35 → 0,7 | — | — |
+| `write_png` | 206 → 85 | 147 → 24 | 146 → 22 | 172 → 44 |
+| `read_png` | 179 → 19 | 78 → 13 | 84 → 6,5 | 132 → 14 |
+| (suelo) `new` a ceros | 3,3 | 0,1 | 0,1 | 2,0 |
 
-`index_counts` (histograma de 256 contadores, con cuatro subhistogramas para que las tiradas de un mismo índice no se serialicen): 4,3 ms a 4096² y 17 ms a 8192², indexado.
+**`convert_image`** (8192², sin cambios de código):
 
-**`convert_image`** (8192², antes → prototipo con la pasada 1 omitida si el destino es RGBA y con el histograma si el origen es indexado; la función ya trabajaba sobre bytes por dentro y **no usa `get_pixel`**, así que la API pública no la cambia):
-
-| Conversión | Antes | Prototipo |
+| Conversión | Antes | Después |
 | --- | --- | --- |
-| RGBA → Gris / Gris+alfa / Indexado | 339 / 327 / 604 | 331 / 314 / 596 |
-| Indexado → RGBA / Gris / Gris+alfa | 326 / 417 / 356 | 229 / 274 / 225 |
-| Gris → RGBA; Gris+alfa → RGBA | 287; 320 | 212; 224 |
+| RGBA → Gris | 344 | 330 |
+| RGBA → Gris+alfa | 331 | 311 |
+| RGBA → Indexado | 602 | 590 |
+| Indexado → RGBA | 294 | 317 |
+| Indexado → Gris | 386 | 444 |
+| Indexado → Gris+alfa | 322 | 343 |
+| Gris → RGBA | 253 | 262 |
+| Gris+alfa → RGBA | 288 | 309 |
+
+**Pico de memoria** (RSS máximo menos RSS antes de la operación; 8192², mismo banco):
+
+| Operación | RGBA | Indexado |
+| --- | --- | --- |
+| `write_png` | +257 → +1 MiB | +63 → +0 MiB |
+| `read_png` | +511 → +256 MiB | +127 → +64 MiB |
+
+`write_png` ya no copia la imagen; lo que queda es la salida (0,5 MiB y 0,15 MiB en esta imagen; con datos que no comprimen, hasta el tamaño de la imagen). `read_png` con 8 bits pasa de «muestras + imagen» a «muestras = imagen»; con 16 bits, menos de 8 bits o RGB sigue siendo muestras + imagen (no se midió: por construcción, el mismo pico que antes).
 
 ### Lo que dicen las cifras
 
-- **Lo que se gana de verdad** es el coste por píxel de `get_pixel`: `to_rgba8` (~5×), `write_png` y `read_png` (2,7 a 7×) y `uses_entry` (~50×). `write_png` además **deja de copiar la imagen entera** (a 8192² RGBA, 256 MiB menos de pico; hasta 1 GiB en el límite): `bytes()` es ya lo que pide el codificador.
-- **`filled` queda en el suelo de `new`**: a 8192² RGBA son ~108 ms frente a ~103 ms de `new` a ceros, porque lo que cuesta es tocar la memoria por primera vez. «Nueva imagen» a 8192² RGBA con fondo blanco pasa de ≈ 0,9 s (dos imágenes, notas de la 14) a ≈ 0,22 s (2 × 108 ms): no baja más sin cambiar el reparto de memoria.
-- **`try_clone` no es más rápido que `clone`**: se añade por **robustez** (`clone` aborta el proceso si falta memoria; a 16384² RGBA son 1 GiB), no por velocidad.
-- **`convert_image` mejora a lo sumo un 35 % (≤ 0,14 s a 8192²)** y no por esta API. No se migra (D7).
-- **El editor de color**: `to_rgba8_with_entry` baja ~2× en CPU, pero no toca la subida a la GPU de la textura entera; la lentitud que mediste a 6000² puede quedarse en parte (es de la 14a).
+- **Se gana el coste por píxel de `get_pixel`:** `to_rgba8` (~5 a 24×), `write_png` (~2,6 a 6,6×), `read_png` (~6 a 13×) y `uses_entry` (~50×). La primera versión (prototipo) daba menos en `read_png` (3 a 4×): el código final, además, deja las muestras en el `Vec` de la imagen sin copiarlas.
+- **`filled` queda en el suelo de `new`**: a 8192² RGBA, ~100 ms (que son páginas nuevas). «Nueva imagen» a 8192² RGBA en blanco pasa de ≈ 0,75 s a ≈ 0,2 s (dos imágenes).
+- **`try_clone` no es más rápido que `clone`**: se añade por robustez (`clone` aborta el proceso si falta memoria), no por velocidad.
+- **`convert_image` no cambia** (no se migró; sus variaciones son ruido).
+- **El editor de color**: `to_rgba8_with_entry` baja de 192 a 88 ms a 8192² indexado en CPU, pero no toca la subida a la GPU de la textura entera: la lentitud que mediste a 6000² puede quedarse en parte (es de la 14a).
 
 ## Casos (12 filas)
 
@@ -139,12 +153,12 @@ Cada una pasa con **las pruebas existentes sin cambiarlas**, y **en cada commit 
 
 | # | Dónde | Qué cambia | Gana (8192², RGBA o indexado) |
 | --- | --- | --- | --- |
-| M1 | `write_png` (`px-formats`) | `write_image_data(image.bytes())`: sin copiar la imagen; **salida idéntica byte a byte**: se comprueba contra el corpus (`golden/png`) y con una propiedad que usa, **dentro de la prueba**, una copia de la implementación antigua como oráculo (nada de eso en `src/`) | 904 → 337 y 601 → 89 ms; −256 MiB de pico |
-| M2 | `to_rgba8` (`px-ui`) | RGBA: copia; gris y gris+alfa: expansión por bytes; indexado: tabla de 256 entradas; **salida idéntica**, con la implementación antigua copiada en la prueba como oráculo | 584 → 107 y 548 → 116 ms |
-| M3 | `to_rgba8_with_entry` (`px-ui`) | la misma tabla con la entrada sustituida, sobre `bytes()`; **salida idéntica**, con la antigua como oráculo en la prueba | 238 → 116 ms |
-| M4 | `build_image` de `read_png` (`px-formats`) | **sigue reservando `raw` con `try_reserve_exact` antes de decodificar**. Con 8 bits y el diseño de `Image` (RGBA, gris, gris+alfa e indexado de 8 bits), `raw` **es ya** el vector de la imagen: se pasa a `from_bytes` o `from_bytes_indexed` **sin copias** (el pico baja de `raw` + imagen a `raw`). Si no (16 bits, menos de 8 bits, RGB, clave de color), se construye un `Vec` reservado con `try_reserve_exact` y se pasa igual. `PaletteIndexOutOfRange` conserva su valor (el primer índice fuera, en orden de lectura). **El pico de memoria no sube; se mide antes y después** | 910 → 267 y 366 → 99 ms |
-| M5 | `uses_entry` (`px-ui`) | `image.uses_index(index)` | 138 → 2,7 ms |
-| M6 | `SystemAlloc::image` (`px-app`) | `filled` o `filled_indexed`; el `trait ImageAlloc` y `build_new_images` **no cambian** | blanco en 8192² RGBA: ≈ 0,9 → ≈ 0,22 s |
+| M1 | `write_png` (`px-formats`) | `write_image_data(image.bytes())`: sin copiar la imagen; **salida idéntica byte a byte**: se comprueba contra el corpus (`golden/png`) y con una propiedad que usa, **dentro de la prueba**, una copia de la implementación antigua como oráculo (nada de eso en `src/`) | 907 → 343 y 593 → 90 ms; −257 MiB de pico (RGBA) |
+| M2 | `to_rgba8` (`px-ui`) | RGBA: copia; gris y gris+alfa: expansión por bytes; indexado: tabla de 256 entradas; **salida idéntica**, con la implementación antigua copiada en la prueba como oráculo | 579 → 93 y 502 → 87 ms |
+| M3 | `to_rgba8_with_entry` (`px-ui`) | la misma tabla con la entrada sustituida, sobre `bytes()`; **salida idéntica**, con la antigua como oráculo en la prueba | 192 → 88 ms |
+| M4 | `build_image` de `read_png` (`px-formats`) | **sigue reservando `raw` con `try_reserve_exact` antes de decodificar**. Con 8 bits y el diseño de `Image` (RGBA, gris, gris+alfa e indexado de 8 bits), `raw` **es ya** el vector de la imagen: se pasa a `from_bytes` o `from_bytes_indexed` **sin copias** (el pico baja de `raw` + imagen a `raw`). Si no (16 bits, menos de 8 bits, RGB, clave de color), se construye un `Vec` reservado con `try_reserve_exact` y se pasa igual. `PaletteIndexOutOfRange` conserva su valor (el primer índice fuera, en orden de lectura). **El pico de memoria no sube (medido: baja)** | 936 → 156 y 333 → 51 ms; pico −256 MiB (RGBA) y −64 MiB (indexado) |
+| M5 | `uses_entry` (`px-ui`) | `image.uses_index(index)` | 140 → 2,8 ms |
+| M6 | `SystemAlloc::image` (`px-app`) | `filled` o `filled_indexed`; el `trait ImageAlloc` y `build_new_images` **no cambian** | blanco en 8192² RGBA: 370 → 101 ms por imagen |
 
 **No se migran:** `convert_image` (no usa `get_pixel`; ≤ 35 %); `Canvas::set_image`, que clona sin canal de error (convertirlo en `try_clone` cambia su firma y sus llamadas; es de la 14a); `px-raster` (no autorizado y sin medida que lo pida); el instantáneo de tramos de `Document::apply` (sin medida que lo pida); `demo.rs`.
 
