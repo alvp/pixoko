@@ -45,12 +45,13 @@ const fn item(label: &'static str, action: AppAction) -> MenuItem {
     }
 }
 
-/// Los cuatro menús. Solo hay entradas de funciones que existen: «Nueva imagen» (unidad 19) y
-/// «Convertir modo» (unidad 20) se añaden en sus unidades.
+/// Los cuatro menús. Solo hay entradas de funciones que existen: «Convertir modo» (unidad 20) se
+/// añade en su unidad.
 pub const MENUS: [Menu; 4] = [
     Menu {
         title: "Archivo",
         items: &[
+            item("Nueva imagen…", AppAction::NewImage),
             item("Abrir…", AppAction::Open),
             item("Guardar", AppAction::Save),
             item("Guardar como…", AppAction::SaveAs),
@@ -132,6 +133,7 @@ pub fn shortcut_for(action: AppAction, platform: Platform) -> Option<Shortcut> {
         shift: false,
     };
     match action {
+        AppAction::NewImage => Some(with_command(Key::N, false)),
         AppAction::Open => Some(with_command(Key::O, false)),
         AppAction::Save => Some(with_command(Key::S, false)),
         AppAction::SaveAs => Some(with_command(Key::S, true)),

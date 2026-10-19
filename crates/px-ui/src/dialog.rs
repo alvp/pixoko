@@ -13,7 +13,7 @@ use crate::dialog_layout::{
 };
 use crate::edit_layout::ROW_H_U;
 use crate::licenses_view::wrap_text;
-use crate::number::{bounded_text, number_error_text, parse_number, step_number};
+use crate::number::{NumberError, bounded_text, number_error_text, parse_number, step_number};
 use crate::text::INTERFACE_CHARSET;
 
 /// Identificador de un campo.
@@ -276,6 +276,8 @@ pub enum DialogKind {
     /// El diálogo de prueba de `PIXOKO_DIALOGO_PRUEBA=1` (specs/hito-2-dialogos-modales.md,
     /// decisión 10): no cambia el documento.
     Demo,
+    /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).
+    NewImage,
 }
 
 /// Lo que le pasa a un diálogo abierto.
@@ -351,6 +353,8 @@ pub struct Dialog {
     states: Vec<FieldState>,
     scroll_u: i64,
     focus_taken: bool,
+    /// Nota del límite de un campo numérico: su error `Above` dice `máximo N (nota)`.
+    limit_notes: Vec<(FieldId, &'static str)>,
 }
 
 impl Dialog {
@@ -378,6 +382,7 @@ impl Dialog {
             states,
             scroll_u: 0,
             focus_taken: false,
+            limit_notes: Vec::new(),
         })
     }
 
@@ -393,11 +398,17 @@ impl Dialog {
         self.spec.fields.iter().position(|f| f.id == id)
     }
 
+    /// Un campo se muestra si su control (un campo anterior) vale la opción **y el control se
+    /// muestra** (transitivo: un control oculto, aunque conserve un valor, oculta a sus
+    /// dependientes).
     fn shown_at(&self, index: usize) -> bool {
         match &self.spec.fields[index].shown_when {
             None => true,
-            Some(show) => match self.index_of(show.field).map(|j| &self.states[j]) {
-                Some(FieldState::Choice(selected)) => *selected == show.choice,
+            Some(show) => match self.index_of(show.field) {
+                Some(j) if j < index => {
+                    matches!(&self.states[j], FieldState::Choice(selected) if *selected == show.choice)
+                        && self.shown_at(j)
+                }
                 _ => false,
             },
         }
@@ -421,7 +432,16 @@ impl Dialog {
             (FieldKind::Number { min, max, .. }, FieldState::Number { text }) => {
                 match parse_number(text, *min, *max) {
                     Ok(_) => Validity::Valid,
-                    Err(error) => Validity::Invalid(number_error_text(&error)),
+                    Err(error) => {
+                        let mut reason = number_error_text(&error);
+                        if matches!(error, NumberError::Above { .. })
+                            && let Some((_, note)) =
+                                self.limit_notes.iter().find(|(id, _)| *id == field.id)
+                        {
+                            reason = format!("{reason} ({note})");
+                        }
+                        Validity::Invalid(reason)
+                    }
                 }
             }
             (
@@ -542,12 +562,44 @@ impl Dialog {
         }
     }
 
-    /// La opción elegida de un grupo.
-    pub(crate) fn chosen(&self, id: FieldId) -> Option<usize> {
+    /// La opción elegida de un grupo, aunque el formulario no sea válido (la necesita quien
+    /// traslada valores entre grupos, como `Nueva imagen`).
+    pub fn chosen(&self, id: FieldId) -> Option<usize> {
         match &self.states[self.index_of(id)?] {
             FieldState::Choice(selected) => Some(*selected),
             _ => None,
         }
+    }
+
+    /// Cambia el texto de una zona de solo lectura (`content_h_u` lo recalcula). `false` si el
+    /// campo no existe o no es de solo lectura.
+    pub fn set_report(&mut self, id: FieldId, text: String) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        match &mut self.spec.fields[index].kind {
+            FieldKind::ReadOnly { text: stored, .. } => {
+                *stored = text;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Pone (o quita, con `None`) la nota del límite de un campo numérico: su error `Above` pasa
+    /// a decir `máximo N (nota)`. `false` si el campo no existe o no es numérico.
+    pub fn set_limit_note(&mut self, id: FieldId, note: Option<&'static str>) -> bool {
+        let numeric = self
+            .index_of(id)
+            .is_some_and(|i| matches!(self.spec.fields[i].kind, FieldKind::Number { .. }));
+        if !numeric {
+            return false;
+        }
+        self.limit_notes.retain(|(field, _)| *field != id);
+        if let Some(note) = note {
+            self.limit_notes.push((id, note));
+        }
+        true
     }
 
     /// Primera línea visible de una zona de texto (sin recortar al total: lo hace el pintado).

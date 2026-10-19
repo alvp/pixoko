@@ -12,6 +12,8 @@ use crate::view::Zoom;
 /// Lo que se puede pedir a la app, venga de donde venga.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppAction {
+    /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).
+    NewImage,
     Open,
     Save,
     SaveAs,
@@ -38,14 +40,18 @@ impl AppAction {
     pub fn ignores_repeat(self) -> bool {
         matches!(
             self,
-            AppAction::Open | AppAction::Save | AppAction::SaveAs | AppAction::Quit
+            AppAction::NewImage
+                | AppAction::Open
+                | AppAction::Save
+                | AppAction::SaveAs
+                | AppAction::Quit
         )
     }
 
-    /// Las acciones que abren un diálogo modal (hoy, solo las licencias; la 19 y la 20 añaden las
-    /// suyas): no se abren con un gesto en curso ni con una quita pendiente.
+    /// Las acciones que abren un diálogo modal (las licencias y nueva imagen; la 20 añade la
+    /// suya): no se abren con un gesto en curso ni con una quita pendiente.
     pub fn opens_dialog(self) -> bool {
-        matches!(self, AppAction::ShowLicenses)
+        matches!(self, AppAction::ShowLicenses | AppAction::NewImage)
     }
 
     /// Las cuatro acciones de zoom, que no modifican el documento.
@@ -202,6 +208,7 @@ pub fn action_for_shortcut(
         }
         return match key {
             Key::Num1 => Some(AppAction::ZoomActual),
+            Key::N => Some(AppAction::NewImage),
             Key::Q if platform == Platform::Linux => Some(AppAction::Quit),
             _ => None,
         };

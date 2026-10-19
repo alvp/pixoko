@@ -135,8 +135,14 @@ impl Canvas {
     /// Cambia la imagen mostrada. La textura se sube entera en el siguiente `show` y la vista
     /// vuelve al ajuste.
     pub fn set_image(&mut self, image: &Image) {
+        self.set_owned_image(image.clone());
+    }
+
+    /// Como [`Canvas::set_image`], pero con una imagen ya construida (no se clona: quien la crea
+    /// ya reservó su memoria, specs/hito-2-nueva-imagen.md, D4).
+    pub fn set_owned_image(&mut self, image: Image) {
         self.size = Some(Size::new(image.width(), image.height()));
-        self.pending = Some(image.clone());
+        self.pending = Some(image);
         self.texture = None;
         self.view = None;
         self.error = None;
