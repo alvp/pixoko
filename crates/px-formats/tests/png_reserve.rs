@@ -8,7 +8,8 @@
 //! 1024 MiB) y el control (gris 8192² plano escrito con `write_png`, con la imagen soltada antes
 //! de medir) lo sube **48 MiB o más**, para demostrar que el instrumento mide.
 //!
-//! En ROJO hasta la cota: hoy el fichero falso reserva y decodifica, y su error es otro `Decode`.
+//! Si `/proc/self/clear_refs` no se puede escribir (algunos contenedores), la prueba se omite con
+//! un aviso en stderr, salvo que la variable de entorno `CI` esté definida: entonces falla.
 
 #![cfg(target_os = "linux")]
 
@@ -81,11 +82,16 @@ fn campo(nombre: &str) -> u64 {
     kb * 1024
 }
 
+/// Reinicia el máximo de RSS del proceso. Algunos contenedores no dejan escribir en
+/// `/proc/self/clear_refs`.
+fn reinicia_pico() -> std::io::Result<()> {
+    fs::write("/proc/self/clear_refs", "5")
+}
+
 /// Ejecuta `f` y devuelve su resultado y cuánto subió el pico de RSS del proceso (en bytes) por
 /// encima del RSS de antes de empezar.
 fn mide<T>(f: impl FnOnce() -> T) -> (T, u64) {
-    fs::write("/proc/self/clear_refs", "5")
-        .expect("no se pudo reiniciar el máximo de RSS (/proc/self/clear_refs)");
+    reinicia_pico().expect("no se pudo reiniciar el máximo de RSS (/proc/self/clear_refs)");
     let antes = campo("VmRSS");
     let resultado = f();
     let pico = campo("VmHWM");
@@ -98,6 +104,19 @@ fn es_cota(r: &Result<PngRead, PngError>) -> bool {
 
 #[test]
 fn fila4_rechazo_antes_de_reservar_y_control() {
+    // Sin poder reiniciar el pico no hay instrumento: se salta, salvo en el CI (variable `CI`
+    // definida), donde un fallo aquí es una regresión del entorno y debe verse.
+    if let Err(e) = reinicia_pico() {
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "no se pudo escribir /proc/self/clear_refs en el CI: {e}"
+        );
+        eprintln!(
+            "OMITIDA fila4_rechazo_antes_de_reservar_y_control: no se puede escribir \
+             /proc/self/clear_refs ({e}); sin él no se mide el pico de RSS"
+        );
+        return;
+    }
     // (nombre, fichero falso): gris 8 de 32768², RGBA 8 de 16384², RGBA 8 de 8192², indexado de
     // 6000² y gris 32768² entrelazado, todos con IDAT mínimo de 9 bytes.
     let casos: [(&str, Vec<u8>); 5] = [
