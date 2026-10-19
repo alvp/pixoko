@@ -56,7 +56,7 @@ Versión en texto de la hoja de ruta, para quien lea el documento exportado a Ma
 | 1 · Núcleo y formatos | Color (`Rgba`), paleta con índice transparente, imagen en modos RGBA, indexado y grises, documento y comandos con deshacer, PNG indexado y RGBA | Ida y vuelta de PNG sin pérdida en el corpus |
 | 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador y paleta; conversión RGB y HSL, reordenar la paleta, conversión entre modos, lienzos grandes y panel de paletas | Abrir, editar y guardar un PNG real en tres sistemas |
 | 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde |
-| 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección | Dorados contra referencias |
+| 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección, cuantizador de color (RGBA a indexado con más de 256 colores) | Dorados contra referencias |
 | 5 · Animación | Fotogramas, línea de tiempo, onion skin, GIF | GIF y hojas de sprites verificados |
 | 6 · Más formatos | `.aseprite` desde su especificación, IFF, BMP, PCX | Corpus de ficheros ajenos se abre |
 | 7 · Estilo DPaint (opcional) | Ciclo de color, stencil, perspectiva, por caja negra | Casos del emulador en verde |
