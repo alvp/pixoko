@@ -1700,3 +1700,485 @@ fn fila_13_las_acciones_anteriores_se_despachan_igual_que_antes_con_el_fondo_en_
         assert_eq!(con.foto(), sin.foto(), "{action:?}");
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 18, fila 6 (c), (d) y (f): bloqueo por diálogo modal a nivel `dispatch`
+// (specs/hito-2-dialogos-modales.md). La parte pura (`can_open_dialog`, `Modal::open`,
+// `is_blocked` y `enabled` con los 32 bloqueos) está en `px-ui/tests/dialog_lock.rs`, y
+// `ignored_file_notice` (6e), en `dialogs/tests.rs`.
+//
+// - (c) Con `modal`, `dispatch` de **todas** las `AppAction` (herramientas, ranuras 1 a 9, los
+//   cuatro fondos, zoom, fichero, deshacer, rehacer y licencias) con los tres orígenes y cuatro
+//   sesiones distintas: `Dispatched::Blocked` salvo `CloseLicenses` (`Licenses(false)`) y `Quit`
+//   (`Quit`, decisión D1), con `state_id`, historia, herramienta y elección intactos.
+// - (d) Lo mismo con todo lo que traduce `action_for_shortcut` sobre `Key::ALL` × 32
+//   combinaciones de modificadores × tres plataformas: solo `Ctrl+Q` en Linux da `Quit`.
+// - (f) Cerrar la ventana con un diálogo abierto: `Modal::abandon` (sin `Reaction`) y después
+//   `close_allowed(modified, &mut Confirm, now)`, con y sin cambios y con dos peticiones dentro y
+//   fuera de `CONFIRM_SECS`. La regla de cierre no cambia por haber un diálogo.
+//
+// Decisiones donde la spec no fija un detalle:
+// - Los bloqueos de (c) y (d) son los de la sesión (`Mundo::locks`) más `modal: true`; con la
+//   sesión de la quita pendiente, `removal` también está activo (Quit sigue pasando: la regla
+//   (2) lo deja y `removal` solo frena a `SelectColor` y a `ShowLicenses`).
+// - Un `Modal` y un `Confirm` no se comunican: abandonar el diálogo no arma ni desarma la
+//   confirmación (la primera petición con cambios da `false` aunque haya un diálogo abierto).
+// - Suposiciones sobre las firmas de «Piezas»: `Modal: Default` y `Reaction: Clone + Debug +
+//   PartialEq` (derives no listados).
+
+use px_ui::dialog::{DialogKind as ModalKind, Event as DialogEvent, Modal, Reaction};
+use px_ui::licenses_view::licenses_form;
+
+use crate::confirm::{CONFIRM_SECS, Confirm, Confirmation, Request, close_allowed};
+
+/// Las 30 acciones: las de `todas_las_acciones` más los cuatro fondos del lienzo.
+fn todas_las_acciones_con_fondos() -> Vec<AppAction> {
+    let mut v = todas_las_acciones();
+    v.extend(FONDOS.map(accion_de_fondo));
+    v
+}
+
+/// Las 32 combinaciones de los cinco modificadores de egui.
+fn modificadores_de_bits(bits: u8) -> Modifiers {
+    Modifiers {
+        alt: bits & 1 != 0,
+        ctrl: bits & 2 != 0,
+        shift: bits & 4 != 0,
+        mac_cmd: bits & 8 != 0,
+        command: bits & 16 != 0,
+    }
+}
+
+/// Los bloqueos de la sesión con el diálogo modal abierto.
+fn con_modal(mundo: &Mundo) -> Locks {
+    Locks {
+        modal: true,
+        ..mundo.locks()
+    }
+}
+
+fn pasa_con_modal(action: AppAction) -> bool {
+    matches!(action, AppAction::CloseLicenses | AppAction::Quit)
+}
+
+fn abre_licencias(modal: &mut Modal) -> bool {
+    modal.open(
+        ModalKind::Licenses,
+        licenses_form("texto"),
+        Locks::default(),
+    )
+}
+
+// --- (c) todas las acciones con modal ---
+
+#[test]
+fn fila_6c_con_modal_dispatch_da_blocked_en_todas_salvo_close_licenses_y_quit() {
+    let acciones = todas_las_acciones_con_fondos();
+    assert_eq!(acciones.len(), 30);
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        for action in &acciones {
+            for origin in ORIGENES {
+                let (sesion, mut mundo) = mundo_del_caso(caso);
+                let locks = con_modal(&mundo);
+                let antes = mundo.foto();
+                let extras_antes = extras(&mundo);
+                let resultado = mundo.despacha_con(*action, origin, locks);
+                let esperado = match action {
+                    AppAction::CloseLicenses => Dispatched::Licenses(false),
+                    AppAction::Quit => Dispatched::Quit,
+                    _ => Dispatched::Blocked,
+                };
+                assert_eq!(resultado, esperado, "{sesion}: {action:?} con {origin:?}");
+                assert_eq!(
+                    mundo.foto(),
+                    antes,
+                    "{sesion}: {action:?} con {origin:?} tocó el estado"
+                );
+                assert_eq!(extras(&mundo), extras_antes, "{sesion}: {action:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_6c_con_modal_no_cambian_state_id_historia_herramienta_ni_eleccion() {
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        let (sesion, mut mundo) = mundo_del_caso(caso);
+        let locks = con_modal(&mundo);
+        let state_id = mundo.session.document.state_id();
+        let can_undo = mundo.session.document.can_undo();
+        let can_redo = mundo.session.document.can_redo();
+        let bytes = mundo.session.document.history_bytes();
+        let modificado = mundo.session.modified();
+        let eleccion = mundo.session.choice;
+        let herramienta = mundo.tools.tool();
+        let quita = mundo.session.ops.removal();
+        for action in todas_las_acciones_con_fondos() {
+            for origin in ORIGENES {
+                mundo.despacha_con(action, origin, locks);
+            }
+        }
+        assert_eq!(mundo.session.document.state_id(), state_id, "{sesion}");
+        assert_eq!(mundo.session.document.can_undo(), can_undo, "{sesion}");
+        assert_eq!(mundo.session.document.can_redo(), can_redo, "{sesion}");
+        assert_eq!(mundo.session.document.history_bytes(), bytes, "{sesion}");
+        assert_eq!(mundo.session.modified(), modificado, "{sesion}");
+        assert_eq!(mundo.session.choice, eleccion, "{sesion}");
+        assert_eq!(mundo.tools.tool(), herramienta, "{sesion}");
+        assert_eq!(mundo.session.ops.removal(), quita, "{sesion}");
+    }
+}
+
+#[test]
+fn fila_6c_con_modal_las_nueve_ranuras_y_las_cinco_herramientas_no_cambian_nada() {
+    for origin in ORIGENES {
+        let mut mundo = Mundo::nuevo(indexada(9, None), 2, 1);
+        let locks = con_modal(&mundo);
+        let antes = mundo.foto();
+        for slot in 1..=9u8 {
+            assert_eq!(
+                mundo.despacha_con(AppAction::SelectColor(slot), origin, locks),
+                Dispatched::Blocked,
+                "ranura {slot} con {origin:?}"
+            );
+        }
+        for tool in HERRAMIENTAS {
+            assert_eq!(
+                mundo.despacha_con(AppAction::SelectTool(tool), origin, locks),
+                Dispatched::Blocked,
+                "{tool:?} con {origin:?}"
+            );
+        }
+        assert_eq!(mundo.foto(), antes, "{origin:?}");
+    }
+}
+
+#[test]
+fn fila_6c_con_modal_deshacer_y_rehacer_no_consumen_la_historia_ni_cancelan_la_quita() {
+    for origin in ORIGENES {
+        let mut mundo = Mundo::estandar();
+        let locks = con_modal(&mundo);
+        let antes = mundo.foto();
+        assert!(antes.can_undo && antes.can_redo);
+        assert_eq!(
+            mundo.despacha_con(AppAction::Undo, origin, locks),
+            Dispatched::Blocked
+        );
+        assert_eq!(
+            mundo.despacha_con(AppAction::Redo, origin, locks),
+            Dispatched::Blocked
+        );
+        assert_eq!(mundo.foto(), antes, "{origin:?}");
+
+        // Con una quita pendiente, deshacer bloqueado no la cancela (a diferencia de la fila 5).
+        let mut mundo = mundo_con_quita_pendiente();
+        let locks = con_modal(&mundo);
+        assert!(locks.removal && locks.modal);
+        assert_eq!(
+            mundo.despacha_con(AppAction::Undo, origin, locks),
+            Dispatched::Blocked
+        );
+        assert!(mundo.session.ops.removal().is_some(), "{origin:?}");
+        assert!(!mundo.session.take_removal_cancelled(), "{origin:?}");
+    }
+}
+
+#[test]
+fn fila_6c_con_modal_enabled_es_falso_salvo_close_licenses_y_quit() {
+    for caso in 0..CASOS_DE_LA_FILA_13 {
+        for zoom in [None, Zoom::from_int(5)] {
+            let (sesion, mundo) = mundo_del_caso(caso);
+            let locks = con_modal(&mundo);
+            let estado = mundo.estado_de_la_ui(zoom, locks);
+            for action in todas_las_acciones_con_fondos() {
+                assert_eq!(
+                    enabled(action, &estado),
+                    pasa_con_modal(action),
+                    "{sesion}: {action:?} con zoom {zoom:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_6c_con_modal_dispatch_da_blocked_exactamente_cuando_is_blocked_en_las_treinta_acciones() {
+    for action in todas_las_acciones_con_fondos() {
+        for origin in ORIGENES {
+            let mut mundo = Mundo::estandar();
+            let locks = con_modal(&mundo);
+            let resultado = mundo.despacha_con(action, origin, locks);
+            assert_eq!(
+                resultado == Dispatched::Blocked,
+                is_blocked(action, locks, origin),
+                "{action:?} {origin:?}: {resultado:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_6c_un_dialogo_abierto_con_show_licenses_cierra_con_close_licenses_y_no_deja_abrir_otro() {
+    // El recorrido de `main`: `Licenses(true)` abre; con el diálogo abierto `ShowLicenses` ya no
+    // pasa; `Licenses(false)` cierra solo el diálogo de Licencias.
+    let mut mundo = Mundo::estandar();
+    let mut modal = Modal::default();
+    let locks = Locks {
+        modal: modal.is_open(),
+        ..mundo.locks()
+    };
+    assert_eq!(
+        mundo.despacha_con(AppAction::ShowLicenses, Origin::Menu, locks),
+        Dispatched::Licenses(true)
+    );
+    assert!(modal.open(ModalKind::Licenses, licenses_form("texto"), locks));
+
+    let locks = Locks {
+        modal: modal.is_open(),
+        ..mundo.locks()
+    };
+    assert!(locks.modal);
+    for origin in ORIGENES {
+        assert_eq!(
+            mundo.despacha_con(AppAction::ShowLicenses, origin, locks),
+            Dispatched::Blocked,
+            "{origin:?}"
+        );
+    }
+    assert!(!modal.open(ModalKind::Licenses, licenses_form("otro"), locks));
+
+    assert_eq!(
+        mundo.despacha_con(AppAction::CloseLicenses, Origin::Button, locks),
+        Dispatched::Licenses(false)
+    );
+    assert!(modal.close_kind(ModalKind::Licenses));
+    assert!(!modal.is_open());
+    assert!(
+        !modal.close_kind(ModalKind::Licenses),
+        "ya no hay nada que cerrar"
+    );
+}
+
+// --- (d) todas las teclas con modal ---
+
+#[test]
+fn fila_6d_ninguna_tecla_cambia_el_estado_con_modal_y_solo_ctrl_q_en_linux_da_quit() {
+    let mut mundo = Mundo::estandar();
+    let locks = con_modal(&mundo);
+    let antes = mundo.foto();
+    let extras_antes = extras(&mundo);
+    let mut traducidas = 0usize;
+    let mut quits = 0usize;
+    for &key in Key::ALL {
+        for bits in 0..32u8 {
+            let modifiers = modificadores_de_bits(bits);
+            for platform in PLATAFORMAS {
+                let Some(action) = action_for_shortcut(key, modifiers, platform) else {
+                    continue;
+                };
+                traducidas += 1;
+                let contexto = format!("{key:?} con {modifiers:?} en {platform:?}: {action:?}");
+                let resultado = mundo.despacha_con(action, Origin::Key, locks);
+                match resultado {
+                    Dispatched::Quit => {
+                        quits += 1;
+                        assert_eq!(action, AppAction::Quit, "{contexto}");
+                        assert_eq!(key, Key::Q, "{contexto}");
+                        assert_eq!(platform, Platform::Linux, "{contexto}");
+                        assert!(modifiers.command, "{contexto}");
+                        assert!(!modifiers.alt && !modifiers.shift, "{contexto}");
+                    }
+                    Dispatched::Blocked => {
+                        assert_ne!(action, AppAction::Quit, "{contexto}");
+                    }
+                    otro => panic!("{contexto}: con modal no puede dar {otro:?}"),
+                }
+                assert_eq!(mundo.foto(), antes, "{contexto}");
+                assert_eq!(extras(&mundo), extras_antes, "{contexto}");
+            }
+        }
+    }
+    assert!(traducidas > 100, "se tradujeron {traducidas} combinaciones");
+    assert!(quits > 0, "Ctrl+Q en Linux da Quit");
+}
+
+#[test]
+fn fila_6d_ctrl_q_en_linux_da_quit_con_modal_y_en_windows_y_mac_no_hay_atajo() {
+    let mut mundo = Mundo::estandar();
+    let locks = con_modal(&mundo);
+    let action = action_for_shortcut(Key::Q, command(Platform::Linux), Platform::Linux)
+        .expect("Ctrl+Q en Linux es un atajo");
+    assert_eq!(action, AppAction::Quit);
+    assert_eq!(
+        mundo.despacha_con(action, Origin::Key, locks),
+        Dispatched::Quit
+    );
+    for platform in [Platform::Windows, Platform::Mac] {
+        assert_eq!(
+            action_for_shortcut(Key::Q, command(platform), platform),
+            None,
+            "{platform:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_6d_las_teclas_de_herramienta_color_zoom_y_fichero_dan_blocked_con_modal() {
+    let casos = [
+        (Key::P, Modifiers::NONE),
+        (Key::L, Modifiers::NONE),
+        (Key::F, Modifiers::NONE),
+        (Key::I, Modifiers::NONE),
+        (Key::E, Modifiers::NONE),
+        (Key::Num1, Modifiers::NONE),
+        (Key::Num5, Modifiers::NONE),
+        (Key::Num9, Modifiers::NONE),
+        (Key::Plus, Modifiers::NONE),
+        (Key::Minus, Modifiers::NONE),
+        (Key::Home, Modifiers::NONE),
+        (Key::Z, command(Platform::Linux)),
+        (Key::O, command(Platform::Linux)),
+        (Key::S, command(Platform::Linux)),
+        (Key::Num1, command(Platform::Linux)),
+    ];
+    for (key, modifiers) in casos {
+        let mut mundo = Mundo::estandar();
+        let locks = con_modal(&mundo);
+        let antes = mundo.foto();
+        let action = action_for_shortcut(key, modifiers, Platform::Linux)
+            .unwrap_or_else(|| panic!("{key:?} con {modifiers:?} debería traducirse"));
+        assert_eq!(
+            mundo.despacha_con(action, Origin::Key, locks),
+            Dispatched::Blocked,
+            "{key:?} con {modifiers:?}: {action:?}"
+        );
+        assert_eq!(mundo.foto(), antes, "{key:?} con {modifiers:?}");
+    }
+}
+
+// --- (f) cerrar la ventana con un diálogo abierto ---
+
+#[test]
+fn fila_6f_abandonar_el_dialogo_no_da_reaccion_y_deja_todo_cerrado() {
+    let mut modal = Modal::default();
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon(), "había un diálogo que abandonar");
+    assert!(!modal.is_open());
+    assert_eq!(modal.kind(), None);
+    assert!(!modal.abandon(), "la segunda vez no hay nada");
+    // Tras abandonar, ningún evento hace nada: ni `Accepted` ni `Cancelled`.
+    for evento in [DialogEvent::Accept, DialogEvent::Cancel] {
+        assert_eq!(modal.event(evento), Reaction::None);
+    }
+}
+
+#[test]
+fn fila_6f_sin_cambios_el_dialogo_se_abandona_y_la_ventana_cierra_a_la_primera() {
+    let mut modal = Modal::default();
+    let mut confirm = Confirm::new();
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon());
+    assert!(close_allowed(false, &mut confirm, 0.0));
+    assert!(!modal.is_open());
+}
+
+#[test]
+fn fila_6f_con_cambios_el_dialogo_se_abandona_y_hacen_falta_dos_peticiones() {
+    let mut modal = Modal::default();
+    let mut confirm = Confirm::new();
+    assert!(abre_licencias(&mut modal));
+
+    // Primera petición: el diálogo se abandona siempre y la ventana no cierra.
+    assert!(modal.abandon());
+    assert!(!close_allowed(true, &mut confirm, 10.0));
+    assert!(!modal.is_open());
+
+    // Segunda, dentro del plazo: cierra (ya no hay diálogo que abandonar).
+    assert!(!modal.abandon());
+    assert!(close_allowed(true, &mut confirm, 10.0 + CONFIRM_SECS - 0.1));
+}
+
+#[test]
+fn fila_6f_con_cambios_y_un_dialogo_abierto_en_cada_peticion_se_abandona_cada_vez() {
+    let mut modal = Modal::default();
+    let mut confirm = Confirm::new();
+
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon());
+    assert!(!close_allowed(true, &mut confirm, 0.0));
+
+    // El usuario vuelve a abrir el diálogo y pide cerrar otra vez dentro del plazo.
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon(), "se abandona también la segunda vez");
+    assert!(close_allowed(true, &mut confirm, 2.0));
+    assert!(!modal.is_open());
+}
+
+#[test]
+fn fila_6f_fuera_del_plazo_la_segunda_peticion_vuelve_a_armar_y_la_tercera_cierra() {
+    let mut modal = Modal::default();
+    let mut confirm = Confirm::new();
+
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon());
+    assert!(!close_allowed(true, &mut confirm, 0.0));
+
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon());
+    assert!(
+        !close_allowed(true, &mut confirm, CONFIRM_SECS),
+        "a los CONFIRM_SECS justos la primera ya caducó"
+    );
+    assert!(!modal.is_open());
+
+    assert!(close_allowed(true, &mut confirm, CONFIRM_SECS + 1.0));
+}
+
+#[test]
+fn fila_6f_abandonar_no_arma_ni_desarma_la_confirmacion() {
+    let mut modal = Modal::default();
+    let mut confirm = Confirm::new();
+    // Abandonar sin pedir cerrar no deja nada armado: la primera petición con cambios no cierra.
+    assert!(abre_licencias(&mut modal));
+    assert!(modal.abandon());
+    assert!(!close_allowed(true, &mut confirm, 1.0));
+    // Y la armada de cerrar sigue siendo la de `Request::Close`.
+    assert_eq!(
+        confirm.request(Request::Close, 2.0),
+        Confirmation::Confirmed,
+        "la primera petición dejó armado `Request::Close`"
+    );
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Haya o no un diálogo abierto al pedir cerrar, `close_allowed` sigue la regla de siempre
+    /// (`Confirm::request(Request::Close, now)` con cambios y `true` sin ellos), el diálogo
+    /// siempre acaba cerrado y `abandon` solo da `true` si estaba abierto.
+    #[test]
+    fn fila_6f_abandonar_el_dialogo_no_cambia_la_regla_de_cierre(
+        pasos in prop::collection::vec((any::<bool>(), any::<bool>(), 0.0f64..9.0), 1..12),
+    ) {
+        let mut real = Confirm::new();
+        let mut modelo = Confirm::new();
+        let mut modal = Modal::default();
+        let mut now = 0.0;
+        for (modified, abre, paso) in pasos {
+            now += paso;
+            if abre {
+                let _ = abre_licencias(&mut modal);
+            }
+            let estaba_abierto = modal.is_open();
+            prop_assert_eq!(modal.abandon(), estaba_abierto);
+            prop_assert!(!modal.is_open());
+            let esperado =
+                !modified || modelo.request(Request::Close, now) == Confirmation::Confirmed;
+            prop_assert_eq!(
+                close_allowed(modified, &mut real, now),
+                esperado,
+                "modified {}, now {}", modified, now
+            );
+        }
+    }
+}

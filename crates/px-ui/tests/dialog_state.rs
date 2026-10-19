@@ -1,0 +1,2041 @@
+//! Tests del estado puro de los diálogos `px_ui::dialog` (specs/hito-2-dialogos-modales.md, unidad
+//! 18, decisiones 1, 3, 4 y 6, «Casos» filas 3 y 4 y propiedad 2). Sin egui: ni ventana ni banco.
+//! **En rojo** hasta que exista el módulo.
+//!
+//! - Fila 3: validez de cada campo y del conjunto con el formulario de los cinco tipos
+//!   (`dialog_forms::all_kinds`), los motivos, el `check` con su contador de llamadas,
+//!   `FormSpec::validate` con cada `SpecError` y que `Dialog::new` y `Modal::open` la rechazan.
+//! - Fila 4: `Modal` cerrado y abierto, eventos válidos e inválidos, `Accept`, `Cancel`,
+//!   `abandon`, `close_kind`, las reglas del hexadecimal (decisión 6) y `take_focus_request`.
+//! - Propiedad 2: el estado nunca se corrompe, con formularios y secuencias de eventos al azar
+//!   (`dialog_random`) y un modelo escrito aparte.
+//!
+//! Derives que se suponen (la spec no los lista): `Dialog`, `Values`, `Value`, `Validity`,
+//! `Reaction`, `Event` y `SpecError` son `Clone + Debug + PartialEq`; `DialogKind` es
+//! `Clone + Copy + Debug + PartialEq + Eq` (`Dialog::kind` lo devuelve por valor);
+//! `FocusTarget`, `Clone + Copy + Debug + PartialEq + Eq`. `Modal` solo se supone `Default`.
+//!
+//! Decisiones donde la spec no fija un detalle:
+//! - `SpecError` no tiene variantes nombradas en la spec: cada causa se prueba con
+//!   `validate().is_err()`, y `Dialog::new` y `Modal::open` con el mismo formulario.
+//! - Solo existe `DialogKind::Licenses` (`#[non_exhaustive]` y «la 19 y la 20 añaden las suyas»):
+//!   el «segundo `open` de otro tipo» y «`close_kind` solo cierra el tipo pedido» no se pueden
+//!   probar con dos tipos; se prueba el segundo `open` del mismo tipo y que `close_kind` cierra
+//!   el tipo abierto y da `false` con el diálogo cerrado.
+//! - El recorte del texto del `check` es a **37** caracteres (decisión 8, «Piezas» y la frase
+//!   «todo motivo mide ≤ 37» de la propia fila 3); la fila dice «44» en un sitio, que se lee como
+//!   un descuido. Se comprueba que el motivo mide ≤ 37 y es un prefijo del texto del `check`.
+//! - `Validity::Invalid(m)` lleva el motivo; `reason()` es `etiqueta: motivo`. Para no fijar si
+//!   `m` lleva o no la etiqueta, solo se exige que `reason()` empiece por la etiqueta y contenga
+//!   `m`. `validity` de un campo que no es numérico ni hexadecimal puede ser `Valid` o `None`
+//!   (en las propiedades se exige solo que no sea `Invalid`); de un id desconocido, `None`.
+//! - Eventos sobre un campo **oculto**: la spec no dice si se aplican; las pruebas fijas no los
+//!   envían y la propiedad no comprueba el campo tocado (solo que no se corrompe nada).
+//! - `Values` de un hexadecimal con un pendiente válido sin confirmar: la spec no dice si trae el
+//!   color confirmado o el pendiente; `Accept` confirma el pendiente antes de entregar. En la
+//!   propiedad 2 los hexadecimales con pendiente no se comparan entre `values()` y `Accepted`.
+//! - Un id desconocido: `is_shown` da `false`, `validity` y `text` dan `None`, `hex_pending`
+//!   `false`.
+//! - `content_h_u` sigue las medidas de «Geometría»: `16` de relleno más los bloques (numérico y
+//!   hexadecimal 32, casilla 16, grupo `14 + 16·n + 2·(n−1)`, zona `6 + 14·min(filas, líneas)`)
+//!   más 4 entre bloques; un formulario vacío mide 16; con `Fill`, 330 (el contenido natural
+//!   de la spec, `16 + 6 + 22·14`).
+//! - El orden de `check`: se evalúa solo con todos los campos visibles válidos.
+
+use std::collections::HashSet;
+
+use proptest::prelude::*;
+use px_core::{Mode, Rgba};
+use px_ui::actions::Locks;
+use px_ui::color_edit::{hex_notice, parse_hex};
+use px_ui::dialog::{
+    Dialog, DialogKind, Event, FieldKind, FieldSpec, FormSpec, Modal, Reaction, Rows, ShowWhen,
+    Validity, Value, Values,
+};
+use px_ui::dialog_keys::{FocusTarget, initial_focus};
+use px_ui::licenses_view::{LICENSES_FIELD, licenses_form};
+use px_ui::number::{bounded_text, parse_number, step_number};
+use px_ui::text::INTERFACE_CHARSET;
+
+#[path = "common/dialog_forms.rs"]
+mod dialog_forms;
+#[path = "common/dialog_random.rs"]
+mod dialog_random;
+
+use dialog_forms::{all_kinds, check_calls, huge, open, reset_check_calls};
+use dialog_random::{
+    EventRecipe, FormRecipe, IDS, KIND_ABANDON, LABELS, SUMA_IMPAR, build, event_of, event_recipe,
+    form_recipe, target_id,
+};
+
+// ---------------------------------------------------------------------------------------------
+// Ayudas
+// ---------------------------------------------------------------------------------------------
+
+fn dialog() -> Dialog {
+    open(all_kinds())
+}
+
+fn numero(d: &mut Dialog, field: &'static str, text: &str) {
+    assert_eq!(
+        d.event(Event::Number {
+            field,
+            text: text.to_string()
+        }),
+        Reaction::None
+    );
+}
+
+fn elige(d: &mut Dialog, field: &'static str, index: usize) {
+    assert_eq!(d.event(Event::Choice { field, index }), Reaction::None);
+}
+
+fn hex(d: &mut Dialog, field: &'static str, text: &str) {
+    assert_eq!(
+        d.event(Event::Hex {
+            field,
+            text: text.to_string()
+        }),
+        Reaction::None
+    );
+}
+
+fn confirma(d: &mut Dialog, field: &'static str, blur: bool) {
+    assert_eq!(d.event(Event::HexConfirm { field, blur }), Reaction::None);
+}
+
+fn en_el_juego(texto: &str) -> bool {
+    texto.chars().all(|c| INTERFACE_CHARSET.contains(c))
+}
+
+fn campo(id: &'static str, label: &'static str, kind: FieldKind) -> FieldSpec {
+    FieldSpec {
+        id,
+        label,
+        kind,
+        shown_when: None,
+    }
+}
+
+fn numerico(id: &'static str, label: &'static str, min: u32, max: u32, default: u32) -> FieldSpec {
+    campo(id, label, FieldKind::Number { min, max, default })
+}
+
+fn spec_con(fields: Vec<FieldSpec>) -> FormSpec {
+    FormSpec {
+        title: "Prueba",
+        accept: "Aceptar",
+        cancel: Some("Cancelar"),
+        fields,
+        check: None,
+    }
+}
+
+/// Un formulario con un solo hexadecimal «color».
+fn hex_form(mode: Mode, default: Rgba) -> FormSpec {
+    spec_con(vec![campo(
+        "color",
+        "Color",
+        FieldKind::Hex { mode, default },
+    )])
+}
+
+/// El color confirmado, leído sin cerrar el diálogo (con `Accept` sobre una copia).
+fn color_aceptado(d: &Dialog) -> Rgba {
+    match d.clone().event(Event::Accept) {
+        Reaction::Accepted(v) => v
+            .color("color")
+            .expect("el hexadecimal sale en los valores"),
+        r => panic!("se esperaba Accepted y salió {r:?}"),
+    }
+}
+
+fn dialogo_de(modal: &Modal) -> &Dialog {
+    match modal {
+        Modal::Open(d) => d,
+        Modal::Closed => panic!("el modal está cerrado"),
+    }
+}
+
+fn modal_abierto(spec: FormSpec) -> Modal {
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::Licenses, spec, Locks::default()));
+    modal
+}
+
+fn comprueba_rechazada(causa: &str, spec: FormSpec) {
+    assert!(spec.validate().is_err(), "{causa}: validate la acepta");
+}
+
+/// Como `comprueba_rechazada`, y además `Dialog::new` y `Modal::open` la rechazan.
+fn rechaza(causa: &str, mut hace: impl FnMut() -> FormSpec) {
+    comprueba_rechazada(causa, hace());
+    assert!(
+        Dialog::new(DialogKind::Licenses, hace()).is_err(),
+        "{causa}: Dialog::new la acepta"
+    );
+    let mut modal = Modal::default();
+    assert!(
+        !modal.open(DialogKind::Licenses, hace(), Locks::default()),
+        "{causa}: Modal::open la acepta"
+    );
+    assert!(!modal.is_open(), "{causa}: el modal se abrió");
+    assert!(matches!(modal, Modal::Closed));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 3: validez de cada campo y del conjunto
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_3_la_spec_de_los_cinco_tipos_valida() {
+    assert!(all_kinds().validate().is_ok());
+    assert!(huge(10).validate().is_ok());
+    assert!(huge(0).validate().is_ok());
+    assert!(spec_con(vec![]).validate().is_ok());
+}
+
+#[test]
+fn fila_3_por_defecto_es_valido_y_los_valores_son_los_de_los_campos_visibles() {
+    let d = dialog();
+    assert!(d.is_valid());
+    assert_eq!(d.reason(), None);
+    let v = d.values().expect("válido: hay valores");
+    assert_eq!(v.number("ancho"), Some(64));
+    assert_eq!(v.number("alto"), Some(64));
+    assert_eq!(v.choice("modo"), Some(0));
+    assert_eq!(v.check("opaco"), Some(false));
+    assert_eq!(v.get("ancho"), Some(&Value::Number(64)));
+    assert_eq!(v.get("modo"), Some(&Value::Choice(0)));
+    assert_eq!(v.get("opaco"), Some(&Value::Check(false)));
+    // El hexadecimal está oculto (la opción es la 0) y el informe no es un valor.
+    assert_eq!(v.get("color"), None);
+    assert_eq!(v.color("color"), None);
+    assert_eq!(v.get("informe"), None);
+    assert_eq!(v.get("nada"), None);
+    // Un getter de otro tipo no devuelve nada.
+    assert_eq!(v.choice("ancho"), None);
+    assert_eq!(v.number("modo"), None);
+    assert_eq!(v.check("alto"), None);
+    assert_eq!(v.color("opaco"), None);
+}
+
+#[test]
+fn fila_3_los_accesores_basicos() {
+    let d = dialog();
+    assert_eq!(d.kind(), DialogKind::Licenses);
+    assert_eq!(d.spec().title, "Prueba");
+    assert_eq!(d.spec().accept, "Aceptar");
+    assert_eq!(d.spec().cancel, Some("Cancelar"));
+    assert_eq!(d.spec().fields.len(), 6);
+    assert!(d.is_shown("ancho"));
+    assert!(d.is_shown("modo"));
+    assert!(d.is_shown("opaco"));
+    assert!(d.is_shown("informe"));
+    assert!(!d.is_shown("color"));
+    assert!(!d.is_shown("nada"));
+    assert_eq!(d.text("ancho"), Some("64".to_string()));
+    assert_eq!(d.text("alto"), Some("64".to_string()));
+    assert_eq!(d.validity("ancho"), Some(Validity::Valid));
+    assert_eq!(d.validity("alto"), Some(Validity::Valid));
+    assert_eq!(d.validity("nada"), None);
+    assert_eq!(d.text("nada"), None);
+    assert!(!d.hex_pending("color"));
+    assert!(!d.hex_pending("nada"));
+    assert!(!d.is_fill());
+}
+
+#[test]
+fn fila_3_un_numerico_vacio_da_el_motivo_con_la_etiqueta() {
+    let mut d = dialog();
+    numero(&mut d, "ancho", "");
+    assert!(!d.is_valid());
+    assert_eq!(d.reason(), Some("Ancho: escribe un número".to_string()));
+    assert_eq!(d.values().map(|_| ()), None);
+    assert_eq!(d.text("ancho"), Some(String::new()));
+    let Some(Validity::Invalid(motivo)) = d.validity("ancho") else {
+        panic!("el campo vacío es inválido");
+    };
+    assert!(d.reason().unwrap().contains(&motivo));
+    assert_eq!(d.validity("alto"), Some(Validity::Valid));
+}
+
+#[test]
+fn fila_3_los_motivos_de_cada_error_numerico() {
+    let casos = [
+        ("", "Ancho: escribe un número"),
+        ("abc", "Ancho: solo dígitos 0-9"),
+        (" 5", "Ancho: solo dígitos 0-9"),
+        ("-5", "Ancho: solo dígitos 0-9"),
+        ("0", "Ancho: mínimo 1"),
+        ("8193", "Ancho: máximo 8192"),
+        ("99999999999", "Ancho: máximo 10 cifras"),
+        ("4294967295", "Ancho: máximo 8192"),
+    ];
+    for (texto, esperado) in casos {
+        let mut d = dialog();
+        numero(&mut d, "ancho", texto);
+        assert_eq!(d.reason().as_deref(), Some(esperado), "texto {texto:?}");
+    }
+}
+
+#[test]
+fn fila_3_dos_invalidos_a_la_vez_el_motivo_es_el_del_primero_en_orden_de_campos() {
+    let mut d = dialog();
+    numero(&mut d, "alto", "abc");
+    numero(&mut d, "ancho", "");
+    assert_eq!(d.reason(), Some("Ancho: escribe un número".to_string()));
+    // Se arregla el primero: sale el segundo.
+    numero(&mut d, "ancho", "10");
+    assert_eq!(d.reason(), Some("Alto: solo dígitos 0-9".to_string()));
+    // Y al arreglar el segundo, todo vale.
+    numero(&mut d, "alto", "10");
+    assert!(d.is_valid());
+    assert_eq!(d.reason(), None);
+    assert!(d.values().is_some());
+}
+
+#[test]
+fn fila_3_el_hexadecimal_oculto_no_cuenta_y_al_mostrarse_si_y_recupera_lo_escrito() {
+    let mut d = dialog();
+    // Se muestra con la opción 2 y se escribe algo inválido.
+    elige(&mut d, "modo", 2);
+    assert!(d.is_shown("color"));
+    hex(&mut d, "color", "zz");
+    assert!(!d.is_valid());
+    let motivo = d.reason().expect("hay motivo");
+    assert!(motivo.starts_with("Color: "), "{motivo}");
+    // Se oculta: ya no cuenta y no sale en los valores, pero conserva lo escrito.
+    elige(&mut d, "modo", 0);
+    assert!(!d.is_shown("color"));
+    assert!(d.is_valid());
+    assert_eq!(d.reason(), None);
+    let v = d.values().expect("válido");
+    assert_eq!(v.get("color"), None);
+    assert_eq!(d.text("color"), Some("zz".to_string()));
+    assert!(d.hex_pending("color"));
+    // Al mostrarse otra vez recupera lo escrito y vuelve a ser inválido, con el mismo motivo.
+    elige(&mut d, "modo", 2);
+    assert!(!d.is_valid());
+    assert_eq!(d.reason(), Some(motivo.clone()));
+    assert_eq!(d.text("color"), Some("zz".to_string()));
+    // Y de nuevo oculto.
+    elige(&mut d, "modo", 1);
+    assert!(d.is_valid());
+    assert_eq!(d.text("color"), Some("zz".to_string()));
+    // Con la opción 2 y el color por defecto sale en los valores.
+    let mut d = dialog();
+    elige(&mut d, "modo", 2);
+    let v = d.values().expect("válido");
+    assert_eq!(v.color("color"), Some(Rgba::opaque(0x33, 0x66, 0x99)));
+    assert_eq!(
+        v.get("color"),
+        Some(&Value::Color(Rgba::opaque(0x33, 0x66, 0x99)))
+    );
+    assert_eq!(d.text("color"), Some("#336699".to_string()));
+}
+
+#[test]
+fn fila_3_los_numericos_ocultos_tampoco_cuentan() {
+    let mut spec = spec_con(vec![
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: &["A", "B"],
+                default: 0,
+            },
+        ),
+        numerico("n", "Cuanto", 1, 10, 5),
+    ]);
+    spec.fields[1].shown_when = Some(ShowWhen {
+        field: "modo",
+        choice: 1,
+    });
+    let mut d = open(spec);
+    assert!(!d.is_shown("n"));
+    assert_eq!(d.values().expect("válido").number("n"), None);
+    elige(&mut d, "modo", 1);
+    numero(&mut d, "n", "");
+    assert_eq!(d.reason(), Some("Cuanto: escribe un número".to_string()));
+    elige(&mut d, "modo", 0);
+    assert!(d.is_valid());
+    assert_eq!(d.text("n"), Some(String::new()));
+}
+
+#[test]
+fn fila_3_los_motivos_del_hexadecimal_son_los_de_hex_notice() {
+    let def = Rgba::opaque(0x33, 0x66, 0x99);
+    for texto in ["#12", "zz", "zzz", "", "#12345", "#ggg", "#12 3"] {
+        let mut d = open(hex_form(Mode::Rgba, def));
+        hex(&mut d, "color", texto);
+        let error = parse_hex(texto, Mode::Rgba, def).expect_err(texto);
+        assert!(!d.is_valid(), "{texto:?}");
+        assert_eq!(
+            d.reason(),
+            Some(format!("Color: {}", hex_notice(&error))),
+            "{texto:?}"
+        );
+        assert!(d.hex_pending("color"), "{texto:?}");
+    }
+    // En el formulario de los cinco tipos, con `#12`.
+    let mut d = dialog();
+    elige(&mut d, "modo", 2);
+    hex(&mut d, "color", "#12");
+    assert_eq!(
+        d.reason(),
+        Some("Color: usa 3, 4, 6 u 8 dígitos".to_string())
+    );
+}
+
+#[test]
+fn fila_3_hexadecimal_en_modo_gris() {
+    let gris = Rgba::opaque(0x80, 0x80, 0x80);
+    let mut d = open(hex_form(Mode::Gray, gris));
+    hex(&mut d, "color", "#ff0000");
+    assert_eq!(
+        d.reason(),
+        Some("Color: en modo gris: r = g = b".to_string())
+    );
+    assert!(!d.is_valid());
+    hex(&mut d, "color", "#80808080");
+    assert_eq!(
+        d.reason(),
+        Some("Color: este modo no tiene alfa".to_string())
+    );
+    hex(&mut d, "color", "#aaa");
+    assert!(d.is_valid());
+    assert_eq!(d.reason(), None);
+    confirma(&mut d, "color", false);
+    assert_eq!(color_aceptado(&d), Rgba::opaque(0xaa, 0xaa, 0xaa));
+    // GrayAlpha admite alfa pero no color.
+    let mut d = open(hex_form(Mode::GrayAlpha, Rgba::new(0x80, 0x80, 0x80, 0xff)));
+    hex(&mut d, "color", "#ff000080");
+    assert_eq!(
+        d.reason(),
+        Some("Color: en modo gris: r = g = b".to_string())
+    );
+    hex(&mut d, "color", "#80808040");
+    assert!(d.is_valid());
+}
+
+#[test]
+fn fila_3_el_check_solo_se_llama_con_todo_valido() {
+    // Con un campo inválido, ni al crear el estado ni al consultarlo se llama.
+    let mut d = dialog();
+    reset_check_calls();
+    numero(&mut d, "ancho", "");
+    let _ = (d.is_valid(), d.reason(), d.values(), d.validity("ancho"));
+    let _ = (d.validity("alto"), d.text("ancho"), d.is_shown("color"));
+    assert_eq!(
+        check_calls(),
+        0,
+        "el check no se llama con un campo inválido"
+    );
+    // Con todo válido sí se llama.
+    reset_check_calls();
+    numero(&mut d, "ancho", "10");
+    let _ = (d.is_valid(), d.reason(), d.values());
+    assert!(check_calls() >= 1, "el check se llama con todo válido");
+}
+
+#[test]
+fn fila_3_el_check_que_falla_con_todo_valido_invalida_el_conjunto() {
+    let mut d = dialog();
+    numero(&mut d, "ancho", "2000");
+    assert!(d.is_valid(), "2000 × 64 cabe");
+    reset_check_calls();
+    numero(&mut d, "alto", "2000");
+    assert!(!d.is_valid());
+    assert_eq!(d.reason(), Some("demasiado grande".to_string()));
+    assert!(d.values().is_none());
+    assert!(check_calls() >= 1);
+    // El motivo del check no se atribuye a ningún campo.
+    assert_eq!(d.validity("ancho"), Some(Validity::Valid));
+    assert_eq!(d.validity("alto"), Some(Validity::Valid));
+    // Un campo inválido gana al check: ya no se llama.
+    reset_check_calls();
+    numero(&mut d, "alto", "");
+    assert_eq!(d.reason(), Some("Alto: escribe un número".to_string()));
+    assert!(d.values().is_none());
+    assert_eq!(
+        check_calls(),
+        0,
+        "con un campo inválido no se llama al check"
+    );
+}
+
+#[test]
+fn fila_3_el_limite_del_check_es_un_millon_de_pixeles() {
+    let mut d = dialog();
+    numero(&mut d, "ancho", "1000");
+    numero(&mut d, "alto", "1000");
+    assert!(d.is_valid(), "1000 × 1000 = 1 000 000 cabe");
+    numero(&mut d, "alto", "1001");
+    assert!(!d.is_valid());
+    numero(&mut d, "ancho", "8192");
+    numero(&mut d, "alto", "8192");
+    assert_eq!(d.reason(), Some("demasiado grande".to_string()));
+}
+
+fn check_largo(_: &Values) -> Option<String> {
+    Some("x".repeat(100))
+}
+
+fn check_multibyte(_: &Values) -> Option<String> {
+    Some("é".repeat(100))
+}
+
+fn check_nunca(_: &Values) -> Option<String> {
+    None
+}
+
+#[test]
+fn fila_3_el_texto_del_check_se_recorta_a_37_caracteres() {
+    let mut spec = spec_con(vec![numerico("n", "Cuanto", 1, 10, 5)]);
+    spec.check = Some(check_largo);
+    let d = open(spec);
+    assert!(!d.is_valid());
+    let motivo = d.reason().expect("el check falla");
+    assert!(motivo.chars().count() <= 37, "{motivo:?}");
+    assert!(!motivo.is_empty());
+    assert!("x".repeat(100).starts_with(&motivo), "{motivo:?}");
+
+    let mut spec = spec_con(vec![numerico("n", "Cuanto", 1, 10, 5)]);
+    spec.check = Some(check_multibyte);
+    let d = open(spec);
+    let motivo = d.reason().expect("el check falla");
+    assert!(motivo.chars().count() <= 37, "{motivo:?}");
+    assert!("é".repeat(100).starts_with(&motivo));
+
+    let mut spec = spec_con(vec![numerico("n", "Cuanto", 1, 10, 5)]);
+    spec.check = Some(check_nunca);
+    assert!(open(spec).is_valid());
+}
+
+#[test]
+fn fila_3_todo_motivo_mide_37_o_menos_y_esta_en_el_juego_de_caracteres() {
+    let textos = [
+        "",
+        "abc",
+        " 5",
+        "0",
+        "99999999999",
+        "4294967295",
+        "#12",
+        "zz",
+        "#ff0000",
+        "#80808080",
+        "#abcde",
+    ];
+    // Rótulos de 12 caracteres, el máximo.
+    let etiqueta = "ABCDEFGHIJKL";
+    assert_eq!(etiqueta.chars().count(), 12);
+    let mut mayor = 0;
+    for texto in textos {
+        let mut d = open(spec_con(vec![numerico("n", etiqueta, 1, 8192, 64)]));
+        numero(&mut d, "n", texto);
+        if let Some(r) = d.reason() {
+            mayor = mayor.max(r.chars().count());
+            assert!(r.chars().count() <= 37, "{r:?}");
+            assert!(en_el_juego(&r), "{r:?}");
+        }
+        let mut d = open(hex_form_con_etiqueta(etiqueta));
+        hex(&mut d, "color", texto);
+        if let Some(r) = d.reason() {
+            mayor = mayor.max(r.chars().count());
+            assert!(r.chars().count() <= 37, "{r:?}");
+            assert!(en_el_juego(&r), "{r:?}");
+        }
+    }
+    // El peor caso (12 + «: » + 23) llega exactamente a 37.
+    let mut d = open(hex_form_con_etiqueta(etiqueta));
+    hex(&mut d, "color", "#ff0000");
+    assert_eq!(d.reason().expect("modo gris").chars().count(), 37);
+    assert_eq!(mayor, 37);
+}
+
+fn hex_form_con_etiqueta(label: &'static str) -> FormSpec {
+    spec_con(vec![campo(
+        "color",
+        label,
+        FieldKind::Hex {
+            mode: Mode::Gray,
+            default: Rgba::opaque(0x80, 0x80, 0x80),
+        },
+    )])
+}
+
+#[test]
+fn fila_3_el_motivo_de_cualquier_estado_de_los_cinco_tipos_cabe_en_la_linea() {
+    // `error: ` (7) + motivo (≤ 37) = 44 columnas.
+    for texto in ["", "x", "0", "8193", "99999999999"] {
+        let mut d = dialog();
+        numero(&mut d, "alto", texto);
+        if let Some(r) = d.reason() {
+            assert!(7 + r.chars().count() <= 44, "{r:?}");
+            assert!(en_el_juego(&r));
+        }
+    }
+}
+
+#[test]
+fn fila_3_validate_acepta_los_limites_exactos() {
+    // Rótulos de 12 (numérico y hexadecimal) y 42 (casilla); min = max; valores por defecto en
+    // los extremos; la última opción por defecto.
+    let spec = spec_con(vec![
+        numerico("a", "ABCDEFGHIJKL", 5, 5, 5),
+        numerico("b", "B", 0, u32::MAX, 0),
+        numerico("c", "C", 0, u32::MAX, u32::MAX),
+        campo(
+            "d",
+            "ABCDEFGHIJKL",
+            FieldKind::Hex {
+                mode: Mode::Rgba,
+                default: Rgba::TRANSPARENT,
+            },
+        ),
+        campo("e", "x", FieldKind::Check { default: true }),
+        campo(
+            "f",
+            "Opciones",
+            FieldKind::Choice {
+                options: &["A", "B", "C"],
+                default: 2,
+            },
+        ),
+    ]);
+    assert!(spec.validate().is_ok());
+    let casilla_larga: &'static str = Box::leak("x".repeat(42).into_boxed_str());
+    let spec = spec_con(vec![campo(
+        "g",
+        casilla_larga,
+        FieldKind::Check { default: false },
+    )]);
+    assert!(spec.validate().is_ok());
+    // El texto del informe no es fijo: pasa por `printable` al pintar y no se valida contra el
+    // juego de caracteres.
+    let spec = spec_con(vec![campo(
+        "h",
+        "Informe",
+        FieldKind::ReadOnly {
+            text: "日✓ 🙂".to_string(),
+            rows: Rows::Fixed(3),
+        },
+    )]);
+    assert!(spec.validate().is_ok());
+    // Un `Fill` solo es válido.
+    let spec = spec_con(vec![campo(
+        "i",
+        "Zona",
+        FieldKind::ReadOnly {
+            text: "x".to_string(),
+            rows: Rows::Fill,
+        },
+    )]);
+    assert!(spec.validate().is_ok());
+    // `shown_when` válido: un `Choice` anterior y una opción que existe.
+    let mut spec = spec_con(vec![
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: &["A", "B"],
+                default: 0,
+            },
+        ),
+        campo("c", "Casilla", FieldKind::Check { default: false }),
+    ]);
+    spec.fields[1].shown_when = Some(ShowWhen {
+        field: "modo",
+        choice: 1,
+    });
+    assert!(spec.validate().is_ok());
+}
+
+#[test]
+fn fila_3_spec_error_id_repetido() {
+    rechaza("id repetido", || {
+        spec_con(vec![
+            campo("a", "Uno", FieldKind::Check { default: false }),
+            campo("a", "Dos", FieldKind::Check { default: true }),
+        ])
+    });
+    rechaza("id repetido entre tipos distintos", || {
+        spec_con(vec![
+            numerico("a", "Uno", 1, 2, 1),
+            campo(
+                "b",
+                "Dos",
+                FieldKind::Choice {
+                    options: &["x"],
+                    default: 0,
+                },
+            ),
+            campo("a", "Tres", FieldKind::Check { default: false }),
+        ])
+    });
+}
+
+#[test]
+fn fila_3_spec_error_min_mayor_que_max() {
+    rechaza("min > max", || spec_con(vec![numerico("n", "N", 10, 5, 7)]));
+    rechaza("min > max por uno", || {
+        spec_con(vec![numerico("n", "N", 6, 5, 5)])
+    });
+}
+
+#[test]
+fn fila_3_spec_error_valor_por_defecto_fuera() {
+    rechaza("default por debajo", || {
+        spec_con(vec![numerico("n", "N", 1, 10, 0)])
+    });
+    rechaza("default por encima", || {
+        spec_con(vec![numerico("n", "N", 1, 10, 11)])
+    });
+    rechaza("opción por defecto = len", || {
+        spec_con(vec![campo(
+            "m",
+            "M",
+            FieldKind::Choice {
+                options: &["a", "b", "c"],
+                default: 3,
+            },
+        )])
+    });
+    rechaza("opción por defecto enorme", || {
+        spec_con(vec![campo(
+            "m",
+            "M",
+            FieldKind::Choice {
+                options: &["a"],
+                default: usize::MAX,
+            },
+        )])
+    });
+}
+
+#[test]
+fn fila_3_spec_error_opciones_vacias() {
+    rechaza("opciones vacías", || {
+        spec_con(vec![campo(
+            "m",
+            "M",
+            FieldKind::Choice {
+                options: &[],
+                default: 0,
+            },
+        )])
+    });
+}
+
+#[test]
+fn fila_3_spec_error_rotulo_largo() {
+    rechaza("rótulo numérico de 13", || {
+        spec_con(vec![numerico("n", "ABCDEFGHIJKLM", 1, 2, 1)])
+    });
+    rechaza("rótulo hexadecimal de 13", || {
+        spec_con(vec![campo(
+            "c",
+            "ABCDEFGHIJKLM",
+            FieldKind::Hex {
+                mode: Mode::Rgba,
+                default: Rgba::TRANSPARENT,
+            },
+        )])
+    });
+    let largo: &'static str = Box::leak("x".repeat(43).into_boxed_str());
+    rechaza("rótulo de casilla de 43", || {
+        spec_con(vec![campo("c", largo, FieldKind::Check { default: false })])
+    });
+}
+
+#[test]
+fn fila_3_spec_error_texto_fuera_del_juego() {
+    rechaza("título", || {
+        let mut s = spec_con(vec![]);
+        s.title = "日本";
+        s
+    });
+    rechaza("botón de aceptar", || {
+        let mut s = spec_con(vec![]);
+        s.accept = "✓";
+        s
+    });
+    rechaza("botón de cancelar", || {
+        let mut s = spec_con(vec![]);
+        s.cancel = Some("日");
+        s
+    });
+    rechaza("rótulo de un campo", || {
+        spec_con(vec![campo(
+            "c",
+            "Año日",
+            FieldKind::Check { default: false },
+        )])
+    });
+    rechaza("opción de un grupo", || {
+        spec_con(vec![campo(
+            "m",
+            "M",
+            FieldKind::Choice {
+                options: &["bien", "mal✗"],
+                default: 0,
+            },
+        )])
+    });
+    // Los acentos y la eñe del español sí están.
+    let mut s = spec_con(vec![campo(
+        "c",
+        "Año ¿sí?",
+        FieldKind::Check { default: false },
+    )]);
+    s.title = "Información — ñandú · ×…";
+    assert!(s.validate().is_ok());
+}
+
+#[test]
+fn fila_3_spec_error_shown_when_invalido() {
+    let modo = || {
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: &["A", "B"],
+                default: 0,
+            },
+        )
+    };
+    rechaza("shown_when de un campo que no existe", || {
+        let mut s = spec_con(vec![
+            modo(),
+            campo("c", "C", FieldKind::Check { default: false }),
+        ]);
+        s.fields[1].shown_when = Some(ShowWhen {
+            field: "nada",
+            choice: 0,
+        });
+        s
+    });
+    rechaza("shown_when de un campo que no es Choice", || {
+        let mut s = spec_con(vec![
+            campo("k", "K", FieldKind::Check { default: false }),
+            campo("c", "C", FieldKind::Check { default: false }),
+        ]);
+        s.fields[1].shown_when = Some(ShowWhen {
+            field: "k",
+            choice: 0,
+        });
+        s
+    });
+    rechaza("shown_when de un numérico", || {
+        let mut s = spec_con(vec![
+            numerico("n", "N", 1, 2, 1),
+            campo("c", "C", FieldKind::Check { default: false }),
+        ]);
+        s.fields[1].shown_when = Some(ShowWhen {
+            field: "n",
+            choice: 0,
+        });
+        s
+    });
+    rechaza("shown_when con una opción que no existe", || {
+        let mut s = spec_con(vec![
+            modo(),
+            campo("c", "C", FieldKind::Check { default: false }),
+        ]);
+        s.fields[1].shown_when = Some(ShowWhen {
+            field: "modo",
+            choice: 2,
+        });
+        s
+    });
+}
+
+#[test]
+fn fila_3_spec_error_fill_con_otros_campos_visibles() {
+    let zona = |id: &'static str| {
+        campo(
+            id,
+            "Zona",
+            FieldKind::ReadOnly {
+                text: "texto".to_string(),
+                rows: Rows::Fill,
+            },
+        )
+    };
+    rechaza("Fill con una casilla", || {
+        spec_con(vec![
+            campo("c", "C", FieldKind::Check { default: false }),
+            zona("z"),
+        ])
+    });
+    rechaza("Fill con un numérico después", || {
+        spec_con(vec![zona("z"), numerico("n", "N", 1, 2, 1)])
+    });
+    rechaza("dos Fill", || spec_con(vec![zona("z"), zona("y")]));
+}
+
+#[test]
+fn fila_3_dialog_new_y_modal_open_aceptan_una_spec_valida() {
+    assert!(Dialog::new(DialogKind::Licenses, all_kinds()).is_ok());
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::Licenses, all_kinds(), Locks::default()));
+    assert!(modal.is_open());
+}
+
+// ---------------------------------------------------------------------------------------------
+// Geometría que expone el estado: content_h_u, is_fill, scroll y primera línea
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_3_content_h_u_sigue_las_medidas_de_la_geometria() {
+    // Con la opción 0: numérico 32 + numérico 32 + grupo (14 + 3·16 + 2·2 = 66) + casilla 16 +
+    // informe (6 + 4·14 = 62) = 208, más 4 huecos de 4 y 16 de relleno.
+    let mut d = dialog();
+    assert_eq!(d.content_h_u(), 208 + 16 + 16);
+    // Con la opción 2 se suma el hexadecimal (32) y un hueco.
+    elige(&mut d, "modo", 2);
+    assert_eq!(d.content_h_u(), 240 + 32 + 4);
+    // Vacío: solo el relleno.
+    assert_eq!(open(spec_con(vec![])).content_h_u(), 16);
+    // N casillas: 16 de relleno + 16·N + 4·(N − 1).
+    for n in [1usize, 2, 10, 64] {
+        assert_eq!(
+            open(huge(n)).content_h_u(),
+            (16 + 16 * n + 4 * (n - 1)) as i64,
+            "{n} casillas"
+        );
+    }
+    // Un informe con menos líneas que filas mide las líneas que tiene.
+    let spec = spec_con(vec![campo(
+        "z",
+        "Z",
+        FieldKind::ReadOnly {
+            text: "una\ndos".to_string(),
+            rows: Rows::Fixed(4),
+        },
+    )]);
+    assert_eq!(open(spec).content_h_u(), 16 + 6 + 2 * 14);
+}
+
+#[test]
+fn fila_3_un_formulario_tipico_de_la_19_mide_228() {
+    // Dos numéricos, un grupo de 4 opciones, una casilla y un hexadecimal visible.
+    let spec = spec_con(vec![
+        numerico("ancho", "Ancho", 1, 8192, 64),
+        numerico("alto", "Alto", 1, 8192, 64),
+        campo(
+            "modo",
+            "Modo",
+            FieldKind::Choice {
+                options: &["A", "B", "C", "D"],
+                default: 0,
+            },
+        ),
+        campo("opaco", "Opaco", FieldKind::Check { default: false }),
+        campo(
+            "color",
+            "Color",
+            FieldKind::Hex {
+                mode: Mode::Rgba,
+                default: Rgba::opaque(0, 0, 0),
+            },
+        ),
+    ]);
+    assert_eq!(open(spec).content_h_u(), 228);
+}
+
+#[test]
+fn fila_3_un_formulario_con_fill_es_fill_y_mide_330() {
+    let d = open(licenses_form("texto"));
+    assert!(d.is_fill());
+    assert_eq!(d.content_h_u(), 330);
+    assert!(!dialog().is_fill());
+}
+
+#[test]
+fn fila_3_el_desplazamiento_y_la_primera_linea_se_guardan_y_los_eventos_no_los_tocan() {
+    let mut d = dialog();
+    assert_eq!(d.scroll_u(), 0);
+    assert_eq!(d.first_line("informe"), 0);
+    d.set_scroll_u(100);
+    d.set_first_line("informe", 7);
+    assert_eq!(d.scroll_u(), 100);
+    assert_eq!(d.first_line("informe"), 7);
+    numero(&mut d, "ancho", "10");
+    elige(&mut d, "modo", 1);
+    assert_eq!(d.scroll_u(), 100);
+    assert_eq!(d.first_line("informe"), 7);
+    // Guardar el desplazamiento no cambia los valores.
+    let v = d.values().expect("válido");
+    assert_eq!(v.number("ancho"), Some(10));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 4: Modal y eventos
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_4_un_modal_cerrado_no_reacciona() {
+    let mut modal = Modal::default();
+    assert!(!modal.is_open());
+    assert_eq!(modal.kind(), None);
+    assert_eq!(modal.event(Event::Accept), Reaction::None);
+    assert_eq!(modal.event(Event::Cancel), Reaction::None);
+    assert_eq!(
+        modal.event(Event::Number {
+            field: "ancho",
+            text: "5".into()
+        }),
+        Reaction::None
+    );
+    assert!(!modal.abandon());
+    assert!(!modal.close_kind(DialogKind::Licenses));
+    assert!(matches!(modal, Modal::Closed));
+}
+
+#[test]
+fn fila_4_open_abre_y_el_segundo_open_es_false_y_no_toca_los_valores() {
+    let mut modal = Modal::default();
+    assert!(modal.open(DialogKind::Licenses, all_kinds(), Locks::default()));
+    assert!(modal.is_open());
+    assert_eq!(modal.kind(), Some(DialogKind::Licenses));
+    assert_eq!(
+        modal.event(Event::Number {
+            field: "ancho",
+            text: "100".into()
+        }),
+        Reaction::None
+    );
+    // Un segundo open con uno abierto (la 19 y la 20 añadirán otros tipos; hoy solo hay uno).
+    assert!(!modal.open(DialogKind::Licenses, all_kinds(), Locks::default()));
+    assert!(!modal.open(DialogKind::Licenses, licenses_form("x"), Locks::default()));
+    assert!(modal.is_open());
+    assert_eq!(dialogo_de(&modal).text("ancho"), Some("100".to_string()));
+    assert_eq!(dialogo_de(&modal).spec().title, "Prueba");
+    assert_eq!(
+        dialogo_de(&modal).values().unwrap().number("ancho"),
+        Some(100)
+    );
+}
+
+#[test]
+fn fila_4_un_numerico_cambia_solo_su_campo() {
+    let mut d = dialog();
+    let antes_alto = d.text("alto");
+    numero(&mut d, "ancho", "100");
+    assert_eq!(d.text("ancho"), Some("100".to_string()));
+    assert_eq!(d.text("alto"), antes_alto);
+    let v = d.values().expect("válido");
+    assert_eq!(v.number("ancho"), Some(100));
+    assert_eq!(v.number("alto"), Some(64));
+    assert_eq!(v.choice("modo"), Some(0));
+    assert_eq!(v.check("opaco"), Some(false));
+}
+
+#[test]
+fn fila_4_el_texto_numerico_se_guarda_acotado_a_once_caracteres() {
+    let mut d = dialog();
+    numero(&mut d, "ancho", "123456789012345");
+    assert_eq!(d.text("ancho"), Some("12345678901".to_string()));
+    assert_eq!(d.reason(), Some("Ancho: máximo 10 cifras".to_string()));
+    let largo = "9".repeat(1_000_000);
+    numero(&mut d, "ancho", &largo);
+    let texto = d.text("ancho").expect("hay texto");
+    assert_eq!(texto, bounded_text(&largo));
+    assert!(texto.chars().count() <= 11);
+    // Multibyte: se corta en frontera de carácter.
+    numero(&mut d, "alto", &"é".repeat(13));
+    assert_eq!(d.text("alto"), Some("é".repeat(11)));
+}
+
+#[test]
+fn fila_4_step_suma_resta_y_se_para_en_los_limites() {
+    let mut d = dialog();
+    assert_eq!(
+        d.event(Event::Step {
+            field: "ancho",
+            delta: 1
+        }),
+        Reaction::None
+    );
+    assert_eq!(d.text("ancho"), Some("65".to_string()));
+    assert_eq!(
+        d.event(Event::Step {
+            field: "ancho",
+            delta: -1
+        }),
+        Reaction::None
+    );
+    assert_eq!(
+        d.event(Event::Step {
+            field: "ancho",
+            delta: -1
+        }),
+        Reaction::None
+    );
+    assert_eq!(d.text("ancho"), Some("63".to_string()));
+    // Con el texto inválido, el valor por defecto en los dos sentidos.
+    for delta in [1i8, -1] {
+        numero(&mut d, "ancho", "abc");
+        d.event(Event::Step {
+            field: "ancho",
+            delta,
+        });
+        assert_eq!(d.text("ancho"), Some("64".to_string()), "delta {delta}");
+    }
+    // En los límites.
+    numero(&mut d, "ancho", "8192");
+    d.event(Event::Step {
+        field: "ancho",
+        delta: 1,
+    });
+    assert_eq!(d.text("ancho"), Some("8192".to_string()));
+    numero(&mut d, "ancho", "1");
+    d.event(Event::Step {
+        field: "ancho",
+        delta: -1,
+    });
+    assert_eq!(d.text("ancho"), Some("1".to_string()));
+    // Sin ceros a la izquierda.
+    numero(&mut d, "ancho", "007");
+    d.event(Event::Step {
+        field: "ancho",
+        delta: 1,
+    });
+    assert_eq!(d.text("ancho"), Some(step_number("007", 1, 8192, 64, 1)));
+    assert_eq!(d.text("ancho"), Some("8".to_string()));
+    // El `Step` deja el otro numérico como estaba.
+    assert_eq!(d.text("alto"), Some("64".to_string()));
+}
+
+#[test]
+fn fila_4_choice_y_check_cambian_solo_su_campo() {
+    let mut d = dialog();
+    elige(&mut d, "modo", 1);
+    assert_eq!(d.values().unwrap().choice("modo"), Some(1));
+    assert!(!d.is_shown("color"));
+    elige(&mut d, "modo", 2);
+    assert!(d.is_shown("color"));
+    assert_eq!(
+        d.event(Event::Check {
+            field: "opaco",
+            on: true
+        }),
+        Reaction::None
+    );
+    let v = d.values().unwrap();
+    assert_eq!(v.check("opaco"), Some(true));
+    assert_eq!(v.choice("modo"), Some(2));
+    assert_eq!(v.number("ancho"), Some(64));
+    assert_eq!(
+        d.event(Event::Check {
+            field: "opaco",
+            on: false
+        }),
+        Reaction::None
+    );
+    assert_eq!(d.values().unwrap().check("opaco"), Some(false));
+}
+
+#[test]
+fn fila_4_los_eventos_invalidos_se_ignoran_sin_panico() {
+    let base = dialog();
+    let invalidos = [
+        // Opción fuera de rango.
+        Event::Choice {
+            field: "modo",
+            index: 3,
+        },
+        Event::Choice {
+            field: "modo",
+            index: usize::MAX,
+        },
+        // Campo desconocido, de cada clase de evento.
+        Event::Number {
+            field: "nada",
+            text: "5".into(),
+        },
+        Event::Step {
+            field: "nada",
+            delta: 1,
+        },
+        Event::Choice {
+            field: "nada",
+            index: 0,
+        },
+        Event::Check {
+            field: "nada",
+            on: true,
+        },
+        Event::Hex {
+            field: "nada",
+            text: "#fff".into(),
+        },
+        Event::HexConfirm {
+            field: "nada",
+            blur: false,
+        },
+        Event::HexConfirm {
+            field: "nada",
+            blur: true,
+        },
+        Event::HexRevert { field: "nada" },
+        // `Step` sobre un campo que no es numérico.
+        Event::Step {
+            field: "modo",
+            delta: 1,
+        },
+        Event::Step {
+            field: "opaco",
+            delta: -1,
+        },
+        Event::Step {
+            field: "informe",
+            delta: 1,
+        },
+        // Un evento de otra clase de campo.
+        Event::Number {
+            field: "modo",
+            text: "1".into(),
+        },
+        Event::Number {
+            field: "opaco",
+            text: "1".into(),
+        },
+        Event::Choice {
+            field: "ancho",
+            index: 0,
+        },
+        Event::Choice {
+            field: "opaco",
+            index: 0,
+        },
+        Event::Check {
+            field: "ancho",
+            on: true,
+        },
+        Event::Check {
+            field: "modo",
+            on: true,
+        },
+        Event::Hex {
+            field: "ancho",
+            text: "#fff".into(),
+        },
+        Event::HexConfirm {
+            field: "ancho",
+            blur: false,
+        },
+        Event::HexRevert { field: "ancho" },
+        Event::Number {
+            field: "informe",
+            text: "1".into(),
+        },
+    ];
+    for evento in invalidos {
+        let mut d = base.clone();
+        assert_eq!(d.event(evento.clone()), Reaction::None, "{evento:?}");
+        assert_eq!(d, base, "el evento {evento:?} cambió el estado");
+    }
+}
+
+#[test]
+fn fila_4_accept_valido_entrega_lo_confirmado_y_cierra() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "100".into(),
+    });
+    modal.event(Event::Choice {
+        field: "modo",
+        index: 1,
+    });
+    modal.event(Event::Check {
+        field: "opaco",
+        on: true,
+    });
+    let antes = dialogo_de(&modal).values().expect("válido");
+    let Reaction::Accepted(v) = modal.event(Event::Accept) else {
+        panic!("se esperaba Accepted");
+    };
+    assert_eq!(v, antes);
+    assert_eq!(v.number("ancho"), Some(100));
+    assert_eq!(v.number("alto"), Some(64));
+    assert_eq!(v.choice("modo"), Some(1));
+    assert_eq!(v.check("opaco"), Some(true));
+    // El hexadecimal estaba oculto: no se entrega.
+    assert_eq!(v.get("color"), None);
+    assert!(!modal.is_open());
+    assert!(matches!(modal, Modal::Closed));
+    assert_eq!(modal.kind(), None);
+}
+
+#[test]
+fn fila_4_accept_no_entrega_campos_ocultos_aunque_tengan_algo_escrito() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Choice {
+        field: "modo",
+        index: 2,
+    });
+    modal.event(Event::Hex {
+        field: "color",
+        text: "#abc".into(),
+    });
+    modal.event(Event::HexConfirm {
+        field: "color",
+        blur: false,
+    });
+    modal.event(Event::Choice {
+        field: "modo",
+        index: 0,
+    });
+    let Reaction::Accepted(v) = modal.event(Event::Accept) else {
+        panic!("se esperaba Accepted");
+    };
+    assert_eq!(v.get("color"), None);
+    assert_eq!(v.choice("modo"), Some(0));
+}
+
+#[test]
+fn fila_4_accept_con_hexadecimal_visible_da_el_color_canonico() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Choice {
+        field: "modo",
+        index: 2,
+    });
+    let Reaction::Accepted(v) = modal.event(Event::Accept) else {
+        panic!("se esperaba Accepted");
+    };
+    assert_eq!(v.color("color"), Some(Rgba::opaque(0x33, 0x66, 0x99)));
+}
+
+#[test]
+fn fila_4_accept_invalido_da_rejected_con_el_motivo_sin_cambiar_ni_cerrar() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "".into(),
+    });
+    let antes = dialogo_de(&modal).clone();
+    let motivo = antes.reason().expect("inválido");
+    assert_eq!(modal.event(Event::Accept), Reaction::Rejected(motivo));
+    assert!(modal.is_open());
+    assert_eq!(dialogo_de(&modal), &antes);
+    // También con el `check` que falla.
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "8192".into(),
+    });
+    modal.event(Event::Number {
+        field: "alto",
+        text: "8192".into(),
+    });
+    assert_eq!(
+        modal.event(Event::Accept),
+        Reaction::Rejected("demasiado grande".to_string())
+    );
+    assert!(modal.is_open());
+}
+
+#[test]
+fn fila_4_cancel_da_cancelled_y_nunca_valores() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "100".into(),
+    });
+    assert_eq!(modal.event(Event::Cancel), Reaction::Cancelled);
+    assert!(!modal.is_open());
+    // Con el formulario inválido también.
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "".into(),
+    });
+    assert_eq!(modal.event(Event::Cancel), Reaction::Cancelled);
+    assert!(!modal.is_open());
+}
+
+#[test]
+fn fila_4_tras_cerrar_todo_da_none() {
+    for cierre in [Event::Accept, Event::Cancel] {
+        let mut modal = modal_abierto(all_kinds());
+        let primera = modal.event(cierre.clone());
+        assert!(matches!(
+            primera,
+            Reaction::Accepted(_) | Reaction::Cancelled
+        ));
+        assert!(!modal.is_open());
+        for evento in [
+            Event::Accept,
+            Event::Cancel,
+            Event::Number {
+                field: "ancho",
+                text: "5".into(),
+            },
+            Event::Step {
+                field: "ancho",
+                delta: 1,
+            },
+            Event::Choice {
+                field: "modo",
+                index: 1,
+            },
+            Event::Check {
+                field: "opaco",
+                on: true,
+            },
+            Event::Hex {
+                field: "color",
+                text: "#fff".into(),
+            },
+            Event::HexConfirm {
+                field: "color",
+                blur: true,
+            },
+            Event::HexRevert { field: "color" },
+        ] {
+            assert_eq!(modal.event(evento.clone()), Reaction::None, "{evento:?}");
+            assert!(!modal.is_open());
+        }
+        assert!(!modal.abandon());
+        assert!(!modal.close_kind(DialogKind::Licenses));
+    }
+}
+
+#[test]
+fn fila_4_abandon_da_true_y_luego_false_sin_reaccion() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "100".into(),
+    });
+    assert!(modal.abandon());
+    assert!(!modal.is_open());
+    assert!(!modal.abandon());
+    assert_eq!(modal.event(Event::Accept), Reaction::None);
+}
+
+#[test]
+fn fila_4_se_puede_reabrir_tras_cerrar_con_el_estado_limpio() {
+    let mut modal = modal_abierto(all_kinds());
+    modal.event(Event::Number {
+        field: "ancho",
+        text: "100".into(),
+    });
+    assert!(modal.abandon());
+    assert!(modal.open(DialogKind::Licenses, all_kinds(), Locks::default()));
+    assert_eq!(dialogo_de(&modal).text("ancho"), Some("64".to_string()));
+}
+
+#[test]
+fn fila_4_close_kind_cierra_el_tipo_abierto() {
+    let mut modal = modal_abierto(licenses_form("texto"));
+    assert!(modal.close_kind(DialogKind::Licenses));
+    assert!(!modal.is_open());
+    assert!(!modal.close_kind(DialogKind::Licenses));
+}
+
+#[test]
+fn fila_4_hexadecimal_escribir_no_confirma() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    assert_eq!(d.text("color"), Some("#33669980".to_string()));
+    assert!(!d.hex_pending("color"));
+    hex(&mut d, "color", "#abc");
+    assert_eq!(d.text("color"), Some("#abc".to_string()));
+    assert!(d.hex_pending("color"));
+    // El pendiente es válido: el conjunto lo es.
+    assert!(d.is_valid());
+    assert_eq!(d.reason(), None);
+}
+
+#[test]
+fn fila_4_hexadecimal_intro_valido_confirma_y_muestra_hex_text() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "#abc");
+    confirma(&mut d, "color", false);
+    // 3 dígitos: conserva el alfa confirmado (0x80).
+    assert_eq!(d.text("color"), Some("#aabbcc80".to_string()));
+    assert!(!d.hex_pending("color"));
+    assert!(d.is_valid());
+    assert_eq!(color_aceptado(&d), Rgba::new(0xaa, 0xbb, 0xcc, 0x80));
+}
+
+#[test]
+fn fila_4_hexadecimal_intro_invalido_conserva_el_texto_y_el_error() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "zz");
+    let motivo = d.reason();
+    assert!(motivo.is_some());
+    confirma(&mut d, "color", false);
+    assert_eq!(d.text("color"), Some("zz".to_string()));
+    assert!(d.hex_pending("color"));
+    assert!(!d.is_valid());
+    assert_eq!(d.reason(), motivo);
+    // Y sigue sin ser válido el conjunto: Aceptar se rechaza.
+    assert!(matches!(d.event(Event::Accept), Reaction::Rejected(_)));
+}
+
+#[test]
+fn fila_4_hexadecimal_blur_valido_confirma() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "#abc");
+    confirma(&mut d, "color", true);
+    assert_eq!(d.text("color"), Some("#aabbcc80".to_string()));
+    assert!(!d.hex_pending("color"));
+    assert_eq!(color_aceptado(&d), Rgba::new(0xaa, 0xbb, 0xcc, 0x80));
+}
+
+#[test]
+fn fila_4_hexadecimal_blur_invalido_revierte_al_ultimo_confirmado() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "zz");
+    confirma(&mut d, "color", true);
+    assert_eq!(d.text("color"), Some("#33669980".to_string()));
+    assert!(!d.hex_pending("color"));
+    assert!(d.is_valid());
+    assert_eq!(d.reason(), None);
+    assert_eq!(color_aceptado(&d), def);
+    // Revierte al último **confirmado**, no al valor por defecto.
+    hex(&mut d, "color", "#123456");
+    confirma(&mut d, "color", false);
+    assert_eq!(d.text("color"), Some("#12345680".to_string()));
+    hex(&mut d, "color", "nope");
+    confirma(&mut d, "color", true);
+    assert_eq!(d.text("color"), Some("#12345680".to_string()));
+}
+
+#[test]
+fn fila_4_hexadecimal_revert_vuelve_al_confirmado() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    for texto in ["zz", "#abc", ""] {
+        let mut d = open(hex_form(Mode::Rgba, def));
+        hex(&mut d, "color", texto);
+        assert_eq!(d.event(Event::HexRevert { field: "color" }), Reaction::None);
+        assert_eq!(d.text("color"), Some("#33669980".to_string()), "{texto:?}");
+        assert!(!d.hex_pending("color"), "{texto:?}");
+        assert!(d.is_valid(), "{texto:?}");
+    }
+}
+
+#[test]
+fn fila_4_hexadecimal_tres_o_seis_digitos_conservan_el_alfa_y_cuatro_u_ocho_el_escrito() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let casos = [
+        ("#f00", Rgba::new(0xff, 0, 0, 0x80)),
+        ("#ff0000", Rgba::new(0xff, 0, 0, 0x80)),
+        ("f00", Rgba::new(0xff, 0, 0, 0x80)),
+        ("#f008", Rgba::new(0xff, 0, 0, 0x88)),
+        ("#ff000040", Rgba::new(0xff, 0, 0, 0x40)),
+        ("#ff0000ff", Rgba::new(0xff, 0, 0, 0xff)),
+    ];
+    for (texto, esperado) in casos {
+        let mut d = open(hex_form(Mode::Rgba, def));
+        hex(&mut d, "color", texto);
+        confirma(&mut d, "color", false);
+        assert_eq!(color_aceptado(&d), esperado, "{texto:?}");
+        assert_eq!(d.text("color"), Some(esperado.to_string()), "{texto:?}");
+    }
+    // El alfa que se conserva es el **confirmado**, no el de partida.
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "#f008");
+    confirma(&mut d, "color", false);
+    hex(&mut d, "color", "#0f0");
+    confirma(&mut d, "color", false);
+    assert_eq!(color_aceptado(&d), Rgba::new(0, 0xff, 0, 0x88));
+    hex(&mut d, "color", "#00ff00");
+    confirma(&mut d, "color", true);
+    assert_eq!(color_aceptado(&d), Rgba::new(0, 0xff, 0, 0x88));
+    // Un color opaco se muestra sin los dígitos del alfa.
+    let mut d = open(hex_form(Mode::Rgba, Rgba::opaque(1, 2, 3)));
+    hex(&mut d, "color", "#f00");
+    confirma(&mut d, "color", false);
+    assert_eq!(d.text("color"), Some("#ff0000".to_string()));
+}
+
+#[test]
+fn fila_4_accept_con_un_pendiente_valido_lo_confirma_antes_de_entregar() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "#abc");
+    let Reaction::Accepted(v) = d.event(Event::Accept) else {
+        panic!("se esperaba Accepted");
+    };
+    assert_eq!(v.color("color"), Some(Rgba::new(0xaa, 0xbb, 0xcc, 0x80)));
+}
+
+#[test]
+fn fila_4_accept_con_un_pendiente_invalido_se_rechaza_sin_cambiar_nada() {
+    let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
+    let mut d = open(hex_form(Mode::Rgba, def));
+    hex(&mut d, "color", "zz");
+    let antes = d.clone();
+    let motivo = d.reason().expect("inválido");
+    assert_eq!(d.event(Event::Accept), Reaction::Rejected(motivo));
+    assert_eq!(d, antes);
+    assert_eq!(d.text("color"), Some("zz".to_string()));
+    assert!(d.hex_pending("color"));
+    // Lo mismo a través del `Modal`: sigue abierto con el pendiente.
+    let mut modal = modal_abierto(hex_form(Mode::Rgba, def));
+    modal.event(Event::Hex {
+        field: "color",
+        text: "zz".into(),
+    });
+    assert!(matches!(modal.event(Event::Accept), Reaction::Rejected(_)));
+    assert!(modal.is_open());
+    assert_eq!(dialogo_de(&modal).text("color"), Some("zz".to_string()));
+}
+
+#[test]
+fn fila_4_escribir_en_un_hexadecimal_no_toca_los_demas_campos() {
+    let mut d = dialog();
+    elige(&mut d, "modo", 2);
+    numero(&mut d, "ancho", "10");
+    hex(&mut d, "color", "#123");
+    assert_eq!(d.text("ancho"), Some("10".to_string()));
+    assert_eq!(d.text("alto"), Some("64".to_string()));
+    assert_eq!(d.values().expect("válido").choice("modo"), Some(2));
+}
+
+// ---------------------------------------------------------------------------------------------
+// take_focus_request
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_4_take_focus_request_da_some_una_vez_tras_new_y_luego_none() {
+    let mut d = dialog();
+    let inicial = initial_focus(&d);
+    assert_eq!(d.take_focus_request(), Some(inicial));
+    assert_eq!(d.take_focus_request(), None);
+    assert_eq!(d.take_focus_request(), None);
+    // Los eventos no vuelven a pedirlo.
+    numero(&mut d, "ancho", "5");
+    elige(&mut d, "modo", 2);
+    assert_eq!(d.take_focus_request(), None);
+    // Un diálogo nuevo vuelve a pedirlo.
+    let mut otro = dialog();
+    assert!(otro.take_focus_request().is_some());
+}
+
+#[test]
+fn fila_4_el_foco_inicial_pedido_es_el_primer_campo_o_la_zona_en_licencias() {
+    let mut d = dialog();
+    assert_eq!(d.take_focus_request(), Some(FocusTarget::Field("ancho")));
+    let mut l = open(licenses_form("texto"));
+    assert_eq!(
+        l.take_focus_request(),
+        Some(FocusTarget::Zone(LICENSES_FIELD))
+    );
+    assert_eq!(l.take_focus_request(), None);
+}
+
+#[test]
+fn fila_4_take_focus_request_a_traves_del_modal() {
+    let mut modal = modal_abierto(all_kinds());
+    let Modal::Open(d) = &mut modal else {
+        panic!("abierto");
+    };
+    assert_eq!(d.take_focus_request(), Some(FocusTarget::Field("ancho")));
+    assert_eq!(d.take_focus_request(), None);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Propiedad 2: el estado nunca se corrompe
+// ---------------------------------------------------------------------------------------------
+
+/// Lo que el modelo, escrito aparte, sabe del diálogo. Se indexa por posición del campo.
+struct Modelo {
+    choices: Vec<usize>,
+    checks: Vec<bool>,
+    numbers: Vec<String>,
+    /// Campos a los que llegó un evento mientras estaban ocultos: la spec no dice qué pasa.
+    tainted: Vec<bool>,
+}
+
+impl Modelo {
+    fn new(spec: &FormSpec) -> Modelo {
+        let mut m = Modelo {
+            choices: vec![0; spec.fields.len()],
+            checks: vec![false; spec.fields.len()],
+            numbers: vec![String::new(); spec.fields.len()],
+            tainted: vec![false; spec.fields.len()],
+        };
+        for (i, f) in spec.fields.iter().enumerate() {
+            match &f.kind {
+                FieldKind::Number { default, .. } => m.numbers[i] = default.to_string(),
+                FieldKind::Choice { default, .. } => m.choices[i] = *default,
+                FieldKind::Check { default } => m.checks[i] = *default,
+                _ => {}
+            }
+        }
+        m
+    }
+
+    fn visible(&self, spec: &FormSpec, i: usize) -> bool {
+        match &spec.fields[i].shown_when {
+            None => true,
+            Some(sw) => {
+                let j = spec
+                    .fields
+                    .iter()
+                    .position(|f| f.id == sw.field)
+                    .expect("shown_when válido");
+                self.choices[j] == sw.choice
+            }
+        }
+    }
+
+    fn visibles(&self, spec: &FormSpec) -> Vec<bool> {
+        (0..spec.fields.len())
+            .map(|i| self.visible(spec, i))
+            .collect()
+    }
+
+    /// Aplica el evento al modelo. Devuelve `(campo tocado, debe ignorarse)`.
+    fn aplica(&mut self, spec: &FormSpec, event: &Event) -> (Option<usize>, bool) {
+        let idx = |field: &str| spec.fields.iter().position(|f| f.id == field);
+        match event {
+            Event::Number { field, text } => match idx(field) {
+                Some(i) if matches!(spec.fields[i].kind, FieldKind::Number { .. }) => {
+                    if self.visible(spec, i) {
+                        self.numbers[i] = bounded_text(text);
+                    } else {
+                        self.tainted[i] = true;
+                    }
+                    (Some(i), false)
+                }
+                other => (other, true),
+            },
+            Event::Step { field, delta } => match idx(field) {
+                Some(i) => match spec.fields[i].kind {
+                    FieldKind::Number { min, max, default } => {
+                        if self.visible(spec, i) {
+                            self.numbers[i] =
+                                step_number(&self.numbers[i], min, max, default, *delta);
+                        } else {
+                            self.tainted[i] = true;
+                        }
+                        (Some(i), false)
+                    }
+                    _ => (Some(i), true),
+                },
+                None => (None, true),
+            },
+            Event::Choice { field, index } => match idx(field) {
+                Some(i) => match spec.fields[i].kind {
+                    FieldKind::Choice { options, .. } if *index < options.len() => {
+                        if self.visible(spec, i) {
+                            self.choices[i] = *index;
+                        } else {
+                            self.tainted[i] = true;
+                        }
+                        (Some(i), false)
+                    }
+                    _ => (Some(i), true),
+                },
+                None => (None, true),
+            },
+            Event::Check { field, on } => match idx(field) {
+                Some(i) if matches!(spec.fields[i].kind, FieldKind::Check { .. }) => {
+                    if self.visible(spec, i) {
+                        self.checks[i] = *on;
+                    } else {
+                        self.tainted[i] = true;
+                    }
+                    (Some(i), false)
+                }
+                other => (other, true),
+            },
+            Event::Hex { field, .. }
+            | Event::HexConfirm { field, .. }
+            | Event::HexRevert { field } => match idx(field) {
+                Some(i) if matches!(spec.fields[i].kind, FieldKind::Hex { .. }) => (Some(i), false),
+                other => (other, true),
+            },
+            Event::Accept | Event::Cancel => (None, false),
+        }
+    }
+}
+
+/// Lo que tiene que cumplir un diálogo abierto tras cualquier secuencia de eventos.
+fn comprueba_estado(d: &Dialog, spec: &FormSpec, m: &Modelo) -> Result<(), TestCaseError> {
+    let n = spec.fields.len();
+    let vis = m.visibles(spec);
+    let mut primero_invalido: Option<(usize, String)> = None;
+    let mut suma: u64 = 0;
+    for i in 0..n {
+        let id = IDS[i];
+        prop_assert_eq!(d.is_shown(id), vis[i], "is_shown de {}", id);
+        let validity = d.validity(id);
+        let invalido = match &validity {
+            Some(Validity::Invalid(motivo)) => Some(motivo.clone()),
+            _ => None,
+        };
+        match &spec.fields[i].kind {
+            FieldKind::Number { min, max, .. } => {
+                let texto = d.text(id).expect("un numérico siempre tiene texto");
+                prop_assert!(texto.chars().count() <= 11, "texto numérico {:?}", texto);
+                if !m.tainted[i] {
+                    prop_assert_eq!(&texto, &m.numbers[i], "texto de {}", id);
+                }
+                let analisis = parse_number(&texto, *min, *max);
+                if vis[i] {
+                    prop_assert_eq!(analisis.is_err(), invalido.is_some(), "validez de {}", id);
+                    if let Ok(v) = analisis {
+                        suma += u64::from(v);
+                    }
+                }
+            }
+            FieldKind::Hex { .. } => {
+                prop_assert!(d.text(id).is_some());
+                if vis[i] && !d.hex_pending(id) {
+                    prop_assert!(invalido.is_none(), "un hexadecimal sin pendiente es válido");
+                }
+            }
+            _ => {
+                if vis[i] {
+                    prop_assert!(invalido.is_none());
+                }
+            }
+        }
+        if vis[i] && primero_invalido.is_none() {
+            if let Some(motivo) = invalido {
+                primero_invalido = Some((i, motivo));
+            }
+        }
+    }
+    // Los ids que no existen nunca son nada.
+    for id in IDS.iter().skip(n).chain(["zz"].iter()).copied() {
+        prop_assert!(!d.is_shown(id));
+        prop_assert!(d.validity(id).is_none());
+        prop_assert!(d.text(id).is_none());
+        prop_assert!(!d.hex_pending(id));
+    }
+
+    let check_falla = spec.check.is_some() && primero_invalido.is_none() && suma % 2 == 1;
+    let esperado_valido = primero_invalido.is_none() && !check_falla;
+    prop_assert_eq!(d.is_valid(), esperado_valido);
+    let reason = d.reason();
+    prop_assert_eq!(reason.is_none(), esperado_valido);
+    let values = d.values();
+    prop_assert_eq!(values.is_some(), esperado_valido);
+    if let Some(r) = &reason {
+        prop_assert!(r.chars().count() <= 37, "motivo largo {:?}", r);
+        prop_assert!(en_el_juego(r), "motivo fuera del juego {:?}", r);
+    }
+    if let Some((i, motivo)) = &primero_invalido {
+        let r = reason.expect("hay un campo inválido");
+        prop_assert!(
+            r.starts_with(LABELS[*i]),
+            "{:?} no empieza por {:?}",
+            r,
+            LABELS[*i]
+        );
+        prop_assert!(
+            r.contains(motivo.as_str()),
+            "{:?} no contiene {:?}",
+            r,
+            motivo
+        );
+    } else if check_falla {
+        prop_assert_eq!(reason, Some(SUMA_IMPAR.to_string()));
+    }
+
+    if let Some(v) = values {
+        for i in 0..n {
+            let id = IDS[i];
+            let hay = vis[i] && !matches!(spec.fields[i].kind, FieldKind::ReadOnly { .. });
+            prop_assert_eq!(v.get(id).is_some(), hay, "{} en los valores", id);
+            match &spec.fields[i].kind {
+                FieldKind::Choice { options, .. } if vis[i] => {
+                    let c = v.choice(id).expect("la opción sale en los valores");
+                    prop_assert!(c < options.len(), "opción {} de {}", c, options.len());
+                    if !m.tainted[i] {
+                        prop_assert_eq!(c, m.choices[i]);
+                    }
+                }
+                FieldKind::Check { .. } if vis[i] && !m.tainted[i] => {
+                    prop_assert_eq!(v.check(id), Some(m.checks[i]));
+                }
+                FieldKind::Number { min, max, .. } if vis[i] => {
+                    let esperado = parse_number(&d.text(id).unwrap(), *min, *max).ok();
+                    prop_assert_eq!(v.number(id), esperado);
+                }
+                FieldKind::Hex { .. } if vis[i] => {
+                    prop_assert!(v.color(id).is_some());
+                }
+                _ => {}
+            }
+        }
+        for id in IDS.iter().skip(n).copied() {
+            prop_assert!(v.get(id).is_none());
+        }
+    }
+    Ok(())
+}
+
+/// Los valores de dos `Values` son iguales salvo en los hexadecimales con pendiente.
+fn valores_iguales(a: &Values, b: &Values, pendiente: &[bool]) -> bool {
+    IDS.iter()
+        .enumerate()
+        .all(|(i, id)| pendiente.get(i).copied().unwrap_or(false) || a.get(*id) == b.get(*id))
+}
+
+fn ejecuta(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseError> {
+    let spec = build(recipe);
+    prop_assert!(spec.validate().is_ok(), "la spec al azar no valida");
+    let n = spec.fields.len();
+    let mut model = Modelo::new(&spec);
+    let mut modal = Modal::default();
+    prop_assert!(modal.open(DialogKind::Licenses, build(recipe), Locks::default()));
+    comprueba_estado(dialogo_de(&modal), &spec, &model)?;
+
+    let mut abierto = true;
+    for r in events {
+        let evento = event_of(r);
+        if !abierto {
+            // Tras cerrar, todo da `None`.
+            match evento {
+                Some(e) => prop_assert_eq!(modal.event(e), Reaction::None),
+                None => prop_assert!(!modal.abandon()),
+            }
+            prop_assert!(!modal.is_open());
+            continue;
+        }
+        let antes = dialogo_de(&modal).clone();
+        let valido_antes = antes.is_valid();
+        let motivo_antes = antes.reason();
+        let valores_antes = antes.values();
+        let textos_antes: Vec<Option<String>> = IDS.iter().map(|id| antes.text(*id)).collect();
+        let pendiente_antes: Vec<bool> = IDS
+            .iter()
+            .take(n)
+            .map(|id| antes.hex_pending(*id))
+            .collect();
+        let visibles_antes = model.visibles(&spec);
+
+        let Some(evento) = evento else {
+            prop_assert_eq!(r.kind, KIND_ABANDON);
+            prop_assert!(modal.abandon());
+            prop_assert!(!modal.is_open());
+            prop_assert!(!modal.abandon());
+            abierto = false;
+            continue;
+        };
+
+        let (tocado, ignorado) = model.aplica(&spec, &evento);
+        let reaccion = modal.event(evento.clone());
+        match (&evento, reaccion) {
+            (Event::Accept, Reaction::Accepted(v)) => {
+                prop_assert!(valido_antes, "Accepted con el conjunto inválido");
+                let antes_v = valores_antes.expect("válido: había valores");
+                prop_assert!(valores_iguales(&v, &antes_v, &pendiente_antes));
+                for i in 0..n {
+                    let hay = visibles_antes[i]
+                        && !matches!(spec.fields[i].kind, FieldKind::ReadOnly { .. });
+                    prop_assert_eq!(v.get(IDS[i]).is_some(), hay, "{} en lo aceptado", IDS[i]);
+                }
+                prop_assert!(!modal.is_open());
+                abierto = false;
+            }
+            (Event::Accept, Reaction::Rejected(motivo)) => {
+                prop_assert!(!valido_antes, "Rejected con el conjunto válido");
+                prop_assert_eq!(Some(motivo), motivo_antes);
+                prop_assert!(modal.is_open());
+                prop_assert_eq!(dialogo_de(&modal), &antes);
+            }
+            (Event::Cancel, Reaction::Cancelled) => {
+                prop_assert!(!modal.is_open());
+                abierto = false;
+            }
+            (Event::Accept | Event::Cancel, otra) => {
+                prop_assert!(false, "{:?} dio {:?}", evento, otra);
+            }
+            (_, Reaction::None) => {
+                prop_assert!(modal.is_open());
+                if ignorado {
+                    prop_assert_eq!(
+                        dialogo_de(&modal),
+                        &antes,
+                        "un evento ignorado cambió el estado"
+                    );
+                }
+                // Un evento solo cambia el texto de su campo.
+                let d = dialogo_de(&modal);
+                for (i, id) in IDS.iter().copied().enumerate() {
+                    if Some(i) != tocado {
+                        prop_assert_eq!(
+                            d.text(id),
+                            textos_antes[i].clone(),
+                            "{} cambió sin evento",
+                            id
+                        );
+                    }
+                }
+            }
+            (_, otra) => {
+                prop_assert!(false, "{:?} dio {:?}", evento, otra);
+            }
+        }
+        if abierto {
+            comprueba_estado(dialogo_de(&modal), &spec, &model)?;
+        }
+    }
+
+    // Al final, si sigue abierto: abandonar no entrega nada y luego todo da `None`.
+    if abierto {
+        prop_assert!(modal.abandon());
+    }
+    prop_assert!(!modal.abandon());
+    prop_assert_eq!(modal.event(Event::Accept), Reaction::None);
+    prop_assert_eq!(modal.event(Event::Cancel), Reaction::None);
+    Ok(())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    #[test]
+    fn propiedad_2_el_estado_nunca_se_corrompe(
+        recipe in form_recipe(),
+        events in prop::collection::vec(event_recipe(), 0..=64),
+    ) {
+        ejecuta(&recipe, &events)?;
+    }
+
+    /// `target_id` y `build` son coherentes entre sí (guarda de la propia prueba): los ids de la
+    /// spec son los de `IDS` y no se repiten.
+    #[test]
+    fn propiedad_2_los_formularios_al_azar_son_validos(recipe in form_recipe()) {
+        let spec = build(&recipe);
+        prop_assert!(spec.validate().is_ok());
+        let ids: HashSet<_> = spec.fields.iter().map(|f| f.id).collect();
+        prop_assert_eq!(ids.len(), spec.fields.len());
+        prop_assert!(Dialog::new(DialogKind::Licenses, spec).is_ok());
+        prop_assert_eq!(target_id(&EventRecipe { kind: 0, id: 99, text: 0, index: 0, flag: false }), "zz");
+    }
+}
+
+/// Los campos ocultos conservan lo escrito aunque se cambie la opción varias veces.
+#[test]
+fn propiedad_2_los_ocultos_conservan_lo_escrito_en_una_secuencia_fija() {
+    let mut d = dialog();
+    elige(&mut d, "modo", 2);
+    hex(&mut d, "color", "#12345");
+    for index in [0, 1, 2, 0, 1, 0] {
+        elige(&mut d, "modo", index);
+        assert_eq!(
+            d.text("color"),
+            Some("#12345".to_string()),
+            "opción {index}"
+        );
+    }
+}

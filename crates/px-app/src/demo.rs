@@ -237,3 +237,10 @@ mod fill_tests {
         }
     }
 }
+
+/// Pruebas del diálogo de prueba (`demo_form` y `demo_notice`, fila 12 de
+/// specs/hito-2-dialogos-modales.md). Con `#[path]` porque `mod tests` ya es el módulo en línea de
+/// arriba.
+#[cfg(test)]
+#[path = "demo/tests.rs"]
+mod form_tests;

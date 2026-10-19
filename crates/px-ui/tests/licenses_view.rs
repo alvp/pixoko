@@ -538,3 +538,413 @@ fn fila_11_el_texto_externo_pasa_por_printable_y_no_provoca_un_glifo_ausente() {
     assert!(!todo.contains('✓'), "{todo:?}");
     assert!(todo.contains('a') && todo.contains('b'));
 }
+
+// ---------------------------------------------------------------------------------------------
+// Fila 12 de la unidad 18: Licencias migradas (specs/hito-2-dialogos-modales.md). En ROJO hasta la
+// implementación: `licenses_form`, `Modal` y `show_dialog` no existen todavía.
+// ---------------------------------------------------------------------------------------------
+
+mod fila_12 {
+    //! Lo nuevo de la fila 12 que toca a Licencias (`demo_form` y `demo_notice` están en `px-app`):
+    //!
+    //! - `licenses_form(THIRD_PARTY)`: `validate` correcto, título «Licencias», un único campo
+    //!   `ReadOnly` con `Rows::Fill` de id `LICENSES_FIELD`, botón «Cerrar» y sin Cancelar. El texto
+    //!   del campo es el recibido, tal cual (decisión: la spec no dice que se transforme), y como
+    //!   texto externo no se valida contra `INTERFACE_CHARSET` (`日✓` y el texto vacío valen).
+    //! - `Modal::open` con y sin bloqueos (las 32 combinaciones de los cinco; solo con todos en
+    //!   falso abre, un segundo `open` y una spec inválida dan `false`), `Accepted` y `Cancelled` lo
+    //!   cierran, `abandon` y `close_kind(Licenses)`. «`Licenses(false)` no cierra otro tipo» no se
+    //!   puede probar todavía: la spec solo tiene `DialogKind::Licenses` (la 19 y la 20 añaden los
+    //!   suyos), así que se prueba que `close_kind` cierra solo cuando está abierto de ese tipo.
+    //! - Banco a la ventana mínima real de cada escala (`468n × 333n` px): 16 filas de 42 columnas del
+    //!   texto envuelto (con 200 líneas cortas: «linea 0» a «linea 15»; con `THIRD_PARTY`: las 16
+    //!   primeras filas de `wrap_text(THIRD_PARTY, 42)` y ninguna línea pintada pasa de 42
+    //!   caracteres), el máximo de desplazamiento es `total − 16`, el foco inicial es la zona, `Tab`
+    //!   la cicla con `Cerrar` (no hay Cancelar) e `Intro` con el foco en `Cerrar` solo lo acepta.
+    //!   Las filas se comparan tras `trim_end` y pasadas por `printable`, como las pinta el diálogo.
+
+    use super::*;
+    use px_ui::actions::Locks;
+    use px_ui::dialog::{DialogKind, Event as Evento, FieldKind, FieldSpec, FormSpec, Modal, Rows};
+    use px_ui::text::{apply_scale, printable};
+    use px_ui::theme::visuals;
+
+    fn spec_valida() -> FormSpec {
+        licenses_form(THIRD_PARTY)
+    }
+
+    fn locks_de(bits: u8) -> Locks {
+        Locks {
+            gesture: bits & 1 != 0,
+            dialog: bits & 2 != 0,
+            text_focus: bits & 4 != 0,
+            removal: bits & 8 != 0,
+            modal: bits & 16 != 0,
+        }
+    }
+
+    #[test]
+    fn fila_12_licenses_form_de_third_party_es_valida_y_tiene_la_forma_pedida() {
+        let spec = spec_valida();
+        assert!(spec.validate().is_ok());
+        assert_eq!(spec.title, "Licencias");
+        assert_eq!(spec.accept, "Cerrar");
+        assert_eq!(spec.cancel, None, "sin Cancelar");
+        assert_eq!(spec.fields.len(), 1, "un único campo");
+        let campo = &spec.fields[0];
+        assert_eq!(campo.id, LICENSES_FIELD);
+        assert_eq!(LICENSES_FIELD, "texto");
+        assert!(campo.shown_when.is_none());
+        match &campo.kind {
+            FieldKind::ReadOnly { text, rows } => {
+                assert_eq!(text, THIRD_PARTY, "el texto es el recibido");
+                assert!(matches!(rows, Rows::Fill), "la zona ocupa el cuerpo");
+            }
+            otro => panic!("el campo es una zona de solo lectura, no {otro:?}"),
+        }
+    }
+
+    #[test]
+    fn fila_12_licenses_form_acepta_cualquier_texto_externo() {
+        for texto in [
+            "",
+            "a",
+            "日✓",
+            "á é ñ © — ✓ 日",
+            &"x".repeat(100_000),
+            THIRD_PARTY,
+        ] {
+            assert!(
+                licenses_form(texto).validate().is_ok(),
+                "el texto externo no se valida contra el juego de caracteres"
+            );
+            assert!(Dialog::new(DialogKind::Licenses, licenses_form(texto)).is_ok());
+        }
+    }
+
+    #[test]
+    fn fila_12_el_dialogo_de_licencias_es_fill_sin_cancelar_y_con_el_contenido_natural_de_330_u() {
+        let dialog = Dialog::new(DialogKind::Licenses, spec_valida()).expect("válida");
+        assert_eq!(dialog.kind(), DialogKind::Licenses);
+        assert!(dialog.is_fill());
+        assert_eq!(dialog.content_h_u(), 330, "16 + 6 + 22·14");
+        assert!(dialog.is_valid());
+        assert_eq!(dialog.reason(), None);
+        assert_eq!(dialog.first_line(LICENSES_FIELD), 0);
+    }
+
+    #[test]
+    fn fila_12_modal_open_solo_abre_con_los_cinco_bloqueos_en_falso() {
+        for bits in 0u8..32 {
+            let mut modal = Modal::default();
+            assert!(!modal.is_open());
+            assert_eq!(modal.kind(), None);
+            let abre = modal.open(DialogKind::Licenses, spec_valida(), locks_de(bits));
+            assert_eq!(abre, bits == 0, "bloqueos {:?}", locks_de(bits));
+            assert_eq!(modal.is_open(), bits == 0, "bloqueos {:?}", locks_de(bits));
+            assert_eq!(
+                modal.kind(),
+                (bits == 0).then_some(DialogKind::Licenses),
+                "bloqueos {:?}",
+                locks_de(bits)
+            );
+        }
+    }
+
+    #[test]
+    fn fila_12_modal_open_con_uno_abierto_o_con_una_spec_invalida_da_false() {
+        let mut modal = Modal::default();
+        assert!(modal.open(DialogKind::Licenses, spec_valida(), Locks::default()));
+        // Un segundo `open`, ya con todo en falso, no toca el diálogo abierto.
+        assert!(!modal.open(
+            DialogKind::Licenses,
+            licenses_form("otro"),
+            Locks::default()
+        ));
+        assert!(modal.is_open());
+        assert!(!modal.open(
+            DialogKind::Licenses,
+            spec_valida(),
+            Locks {
+                modal: true,
+                ..Locks::default()
+            }
+        ));
+        assert!(modal.is_open());
+
+        // Una spec inválida (`min > max`) no abre.
+        let invalida = FormSpec {
+            title: "Prueba",
+            accept: "Aceptar",
+            cancel: None,
+            fields: vec![FieldSpec {
+                id: "n",
+                label: "N",
+                kind: FieldKind::Number {
+                    min: 5,
+                    max: 1,
+                    default: 3,
+                },
+                shown_when: None,
+            }],
+            check: None,
+        };
+        assert!(invalida.validate().is_err());
+        let mut cerrado = Modal::default();
+        assert!(!cerrado.open(DialogKind::Licenses, invalida, Locks::default()));
+        assert!(!cerrado.is_open());
+        assert_eq!(cerrado.kind(), None);
+    }
+
+    #[test]
+    fn fila_12_cerrar_escape_y_abandon_cierran_y_close_kind_cierra_solo_el_tipo_abierto() {
+        let abre = |modal: &mut Modal| {
+            assert!(modal.open(DialogKind::Licenses, spec_valida(), Locks::default()));
+        };
+        let mut modal = Modal::default();
+
+        // Cerrado: nada que hacer.
+        assert_eq!(modal.event(Evento::Accept), Reaction::None);
+        assert_eq!(modal.event(Evento::Cancel), Reaction::None);
+        assert!(!modal.abandon());
+        assert!(!modal.close_kind(DialogKind::Licenses));
+
+        // `Cerrar` (aceptar) cierra y entrega sus valores (ninguno: es solo lectura).
+        abre(&mut modal);
+        assert!(matches!(modal.event(Evento::Accept), Reaction::Accepted(_)));
+        assert!(!modal.is_open());
+        assert_eq!(
+            modal.event(Evento::Accept),
+            Reaction::None,
+            "tras cerrar, nada"
+        );
+
+        // `Escape` (cancelar) cierra.
+        abre(&mut modal);
+        assert_eq!(modal.event(Evento::Cancel), Reaction::Cancelled);
+        assert!(!modal.is_open());
+        assert_eq!(modal.event(Evento::Cancel), Reaction::None);
+
+        // `abandon` cierra sin `Reaction` y la segunda vez da `false`.
+        abre(&mut modal);
+        assert!(modal.abandon());
+        assert!(!modal.is_open());
+        assert!(!modal.abandon());
+
+        // `close_kind` de Licencias cierra el diálogo de Licencias y solo si está abierto.
+        abre(&mut modal);
+        assert!(modal.close_kind(DialogKind::Licenses));
+        assert!(!modal.is_open());
+        assert!(!modal.close_kind(DialogKind::Licenses));
+        // Y se puede volver a abrir.
+        abre(&mut modal);
+        assert_eq!(modal.kind(), Some(DialogKind::Licenses));
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Banco a la ventana mínima real de cada escala
+    // -----------------------------------------------------------------------------------------
+
+    /// La zona de texto de Licencias: 16 filas de 42 columnas (4 u de 8 u + 308 u − 14 u de
+    /// caja… lo da `dialog_layout`; aquí solo se mide lo pintado).
+    const FILAS: usize = 16;
+    const COLUMNAS: usize = 42;
+
+    struct BancoMinimo {
+        ctx: Context,
+        ppp: f32,
+        dialog: Dialog,
+        focus: Option<FocusTarget>,
+        reacciones: Vec<Reaction>,
+    }
+
+    impl BancoMinimo {
+        fn nuevo(ppp: f32, texto: &str) -> BancoMinimo {
+            let ctx = contexto(ppp);
+            ctx.set_visuals_of(egui::Theme::Dark, visuals(ppp));
+            BancoMinimo {
+                ctx,
+                ppp,
+                dialog: Dialog::new(DialogKind::Licenses, licenses_form(texto)).expect("válida"),
+                focus: None,
+                reacciones: Vec::new(),
+            }
+        }
+
+        /// La ventana mínima real: `468n × 333n` píxeles, en puntos.
+        fn pantalla(&self) -> Vec2 {
+            let n = n_de(self.ppp);
+            vec2((468 * n) as f32 / self.ppp, (333 * n) as f32 / self.ppp)
+        }
+
+        fn fotograma(&mut self, events: Vec<Event>) -> Pintado {
+            let pantalla = self.pantalla();
+            let mut reaccion = Reaction::None;
+            let (dialog, focus) = (&mut self.dialog, &mut self.focus);
+            let formas = fotograma(&self.ctx, pantalla, events, |ui| {
+                let c = ui.ctx().clone();
+                apply_scale(&c);
+                reaccion = show_dialog(&c, dialog, focus);
+            });
+            if !matches!(reaccion, Reaction::None) {
+                self.reacciones.push(reaccion);
+            }
+            pintado(&formas)
+        }
+
+        fn reposo(&mut self) -> Pintado {
+            self.fotograma(vec![]);
+            self.fotograma(vec![]);
+            self.fotograma(vec![])
+        }
+
+        fn tab(&mut self) -> Pintado {
+            self.fotograma(vec![tecla(egui::Key::Tab, egui::Modifiers::NONE)]);
+            self.reposo()
+        }
+
+        /// Las filas de la zona que se pintan, sin el título, el botón ni las filas vacías.
+        fn filas(&self, p: &Pintado) -> Vec<String> {
+            p.textos
+                .iter()
+                .flat_map(|t| t.texto.lines())
+                .map(|l| l.trim_end().to_owned())
+                .filter(|l| !l.is_empty() && l != "Licencias" && l != "Cerrar")
+                .collect()
+        }
+    }
+
+    #[test]
+    fn fila_12_a_la_ventana_minima_se_ven_16_filas_de_42_columnas_del_texto_envuelto() {
+        for ppp in PPPS {
+            let mut banco = BancoMinimo::nuevo(ppp, &doscientas_lineas());
+            let p = banco.reposo();
+            let esperado: Vec<String> = (0..FILAS).map(|i| format!("linea {i}")).collect();
+            assert_eq!(
+                banco.filas(&p),
+                esperado,
+                "ppp {ppp}: 16 filas desde el principio"
+            );
+            assert_eq!(
+                lineas_pintadas(&p),
+                (0..FILAS).collect::<Vec<_>>(),
+                "ppp {ppp}"
+            );
+
+            // Con la rueda hasta el final, `total − 16`: son 16 las filas que caben.
+            let centro = pos2(banco.pantalla().x / 2.0, banco.pantalla().y / 2.0);
+            banco.fotograma(vec![mover(centro)]);
+            banco.reposo();
+            banco.fotograma((0..5000).map(|_| rueda_linea(false)).collect());
+            let p = banco.reposo();
+            assert_eq!(
+                banco.dialog.first_line(LICENSES_FIELD),
+                200 - FILAS,
+                "ppp {ppp}: el máximo es total − 16"
+            );
+            assert_eq!(
+                lineas_pintadas(&p),
+                (200 - FILAS..200).collect::<Vec<_>>(),
+                "ppp {ppp}: al final se ven las últimas 16"
+            );
+        }
+    }
+
+    #[test]
+    fn fila_12_con_third_party_se_ven_las_16_primeras_filas_envueltas_a_42_y_ninguna_pasa_de_42() {
+        let envuelto = wrap_text(THIRD_PARTY, COLUMNAS);
+        assert!(
+            envuelto.len() > 2 * FILAS,
+            "THIRD_PARTY da más de dos pantallas"
+        );
+        for ppp in PPPS {
+            let mut banco = BancoMinimo::nuevo(ppp, THIRD_PARTY);
+            let p = banco.reposo();
+            let esperado: Vec<String> = envuelto[..FILAS]
+                .iter()
+                .map(|l| printable(&banco.ctx, l.trim_end()))
+                .filter(|l| !l.is_empty())
+                .collect();
+            assert_eq!(
+                banco.filas(&p),
+                esperado,
+                "ppp {ppp}: las 16 primeras filas del texto envuelto a 42"
+            );
+            for t in &p.textos {
+                for linea in t.texto.lines() {
+                    assert!(
+                        linea.chars().count() <= COLUMNAS,
+                        "ppp {ppp}: una línea pintada mide {} (> 42): {linea:?}",
+                        linea.chars().count()
+                    );
+                }
+            }
+            // El máximo de desplazamiento con THIRD_PARTY.
+            let centro = pos2(banco.pantalla().x / 2.0, banco.pantalla().y / 2.0);
+            banco.fotograma(vec![mover(centro)]);
+            banco.reposo();
+            banco.fotograma((0..5000).map(|_| rueda_linea(false)).collect());
+            let p = banco.reposo();
+            assert_eq!(
+                banco.dialog.first_line(LICENSES_FIELD),
+                clamp_first_line(usize::MAX / 2, envuelto.len(), FILAS),
+                "ppp {ppp}"
+            );
+            for t in &p.textos {
+                for linea in t.texto.lines() {
+                    assert!(linea.chars().count() <= COLUMNAS, "ppp {ppp}: {linea:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fila_12_el_foco_inicial_es_la_zona_y_tab_la_cicla_con_cerrar_sin_cancelar() {
+        for ppp in PPPS {
+            let mut banco = BancoMinimo::nuevo(ppp, &doscientas_lineas());
+            banco.reposo();
+            assert_eq!(
+                banco.focus,
+                Some(FocusTarget::Zone(LICENSES_FIELD)),
+                "ppp {ppp}"
+            );
+            banco.tab();
+            assert_eq!(banco.focus, Some(FocusTarget::Accept), "ppp {ppp}");
+            banco.tab();
+            assert_eq!(
+                banco.focus,
+                Some(FocusTarget::Zone(LICENSES_FIELD)),
+                "ppp {ppp}: sin Cancelar, la tabulación da la vuelta"
+            );
+        }
+    }
+
+    #[test]
+    fn fila_12_intro_y_espacio_con_el_foco_en_cerrar_solo_lo_aceptan() {
+        for ppp in PPPS {
+            for tecla_boton in [egui::Key::Enter, egui::Key::Space] {
+                let mut banco = BancoMinimo::nuevo(ppp, &doscientas_lineas());
+                banco.reposo();
+                banco.tab();
+                assert_eq!(banco.focus, Some(FocusTarget::Accept), "ppp {ppp}");
+                banco.reacciones.clear();
+                banco.fotograma(vec![tecla(tecla_boton, egui::Modifiers::NONE)]);
+                banco.reposo();
+                let aceptadas = banco
+                    .reacciones
+                    .iter()
+                    .filter(|r| matches!(r, Reaction::Accepted(_)))
+                    .count();
+                assert_eq!(
+                    aceptadas, 1,
+                    "ppp {ppp} {tecla_boton:?}: {:?}",
+                    banco.reacciones
+                );
+                assert!(
+                    !banco.reacciones.contains(&Reaction::Cancelled),
+                    "ppp {ppp} {tecla_boton:?}"
+                );
+            }
+        }
+    }
+}

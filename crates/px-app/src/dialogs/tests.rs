@@ -874,3 +874,70 @@ fn fila_12_el_aviso_de_abrir_con_cambios_dice_ctrl_o_y_ctrl_s() {
         "hay cambios sin guardar: pulsa Ctrl+O otra vez en 5 s para descartarlos, o guarda con Ctrl+S"
     );
 }
+
+// ---------------------------------------------------------------------------------------
+// Unidad 18, fila 6 (e): `ignored_file_notice(file_dialog, modal)`
+// (specs/hito-2-dialogos-modales.md, decisión 2). Función pura: con un diálogo de archivo o un
+// diálogo modal abierto (o los dos) avisa `IGNORED_FILE_WHILE_DIALOG`; con ninguno de los dos
+// (queda un trazo en curso) avisa «se ignora el fichero: hay un trazo en curso». Todo en
+// `INTERFACE_CHARSET`.
+//
+// Decisión donde la spec no fija un detalle: el texto del aviso del trazo es el que tiene hoy
+// `main.rs` al soltar un fichero con un gesto en curso, sin cambios.
+// ---------------------------------------------------------------------------------------
+
+const IGNORED_FILE_WHILE_STROKE: &str = "se ignora el fichero: hay un trazo en curso";
+
+#[test]
+fn fila_6e_con_un_dialogo_de_archivo_o_modal_avisa_del_dialogo() {
+    for (file_dialog, modal) in [(true, false), (false, true), (true, true)] {
+        assert_eq!(
+            ignored_file_notice(file_dialog, modal),
+            IGNORED_FILE_WHILE_DIALOG,
+            "archivo {file_dialog}, modal {modal}"
+        );
+    }
+}
+
+#[test]
+fn fila_6e_sin_dialogo_de_archivo_ni_modal_avisa_del_trazo() {
+    assert_eq!(ignored_file_notice(false, false), IGNORED_FILE_WHILE_STROKE);
+}
+
+#[test]
+fn fila_6e_los_textos_son_los_de_la_spec_distintos_entre_si_y_del_juego_de_caracteres() {
+    assert_eq!(
+        IGNORED_FILE_WHILE_DIALOG,
+        "se ignora el fichero: hay un diálogo abierto"
+    );
+    assert_ne!(
+        ignored_file_notice(true, false),
+        ignored_file_notice(false, false)
+    );
+    for file_dialog in [false, true] {
+        for modal in [false, true] {
+            let aviso: &'static str = ignored_file_notice(file_dialog, modal);
+            assert!(!aviso.is_empty());
+            assert_in_charset(aviso);
+        }
+    }
+    assert_in_charset(IGNORED_FILE_WHILE_STROKE);
+}
+
+#[test]
+fn fila_6e_el_aviso_solo_depende_de_si_hay_algun_dialogo() {
+    for file_dialog in [false, true] {
+        for modal in [false, true] {
+            let esperado = if file_dialog || modal {
+                IGNORED_FILE_WHILE_DIALOG
+            } else {
+                IGNORED_FILE_WHILE_STROKE
+            };
+            assert_eq!(
+                ignored_file_notice(file_dialog, modal),
+                esperado,
+                "archivo {file_dialog}, modal {modal}"
+            );
+        }
+    }
+}
