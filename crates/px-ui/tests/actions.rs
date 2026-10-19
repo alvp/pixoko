@@ -449,7 +449,8 @@ fn fila_5b_f_el_panel_de_licencias_bloquea_el_zoom_y_deja_pasar_solo_cerrar_y_sa
 /// Oráculo de `action_for_shortcut`, escrito aparte de la implementación.
 ///
 /// Con `command` (y sin `Alt`): `Z` deshacer, `Mayús`+`Z` e `Y` rehacer, `S` guardar, `Mayús`+`S`
-/// guardar como, `O` abrir, `1` 1:1 (sin `Mayús`) y `Q` salir solo en Linux (sin `Mayús`). Sin
+/// guardar como, `O` abrir, `N` nueva imagen (sin `Mayús`; unidad 19), `1` 1:1 (sin `Mayús`) y `Q`
+/// salir solo en Linux (sin `Mayús`). Sin
 /// `command`: `+`, `=`, `-` y `Home` con cualquier otro modificador, y con **ningún** modificador
 /// `P L F I E` y `1` a `9`.
 fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppAction> {
@@ -463,6 +464,7 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
             (Key::S, false) => Some(AppAction::Save),
             (Key::S, true) => Some(AppAction::SaveAs),
             (Key::O, false) => Some(AppAction::Open),
+            (Key::N, false) => Some(AppAction::NewImage),
             (Key::Num1, false) => Some(AppAction::ZoomActual),
             (Key::Q, false) if platform == Platform::Linux => Some(AppAction::Quit),
             _ => None,
@@ -711,9 +713,9 @@ fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
             }
         }
     }
-    // 10 entradas con atajo en Linux y 9 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
-    // `Salir`): 10 + 9 + 9 = 28 pares.
-    assert_eq!(con_atajo, 10 + 9 + 9);
+    // 11 entradas con atajo en Linux y 10 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
+    // `Salir`; con `Nueva imagen…` de la unidad 19): 11 + 10 + 10 = 31 pares.
+    assert_eq!(con_atajo, 11 + 10 + 10);
 }
 
 // ---------------------------------------------------------------------------------------------

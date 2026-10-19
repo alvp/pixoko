@@ -181,12 +181,15 @@ fn fila_12_el_resto_de_menus_no_tiene_submenus_y_siguen_siendo_cuatro_en_orden()
 }
 
 #[test]
-fn fila_12_menu_items_no_cambia_son_las_11_entradas_de_la_17() {
+fn fila_12_menu_items_son_las_11_entradas_de_la_17_y_nueva_imagen_de_la_19() {
     let acciones: Vec<AppAction> = MENUS
         .iter()
         .flat_map(|m| m.items.iter().map(|i| i.action))
         .collect();
-    assert_eq!(acciones, ACCIONES_DE_LA_TABLA);
+    // `Nueva imagen…` (unidad 19) es la primera; las otras 11 son las de la 17, sin cambios.
+    let mut esperado = vec![AppAction::NewImage];
+    esperado.extend(ACCIONES_DE_LA_TABLA);
+    assert_eq!(acciones, esperado);
     // Ninguna acción del fondo cuela en `items`.
     for b in FONDOS {
         assert!(!acciones.contains(&accion(b)));
@@ -196,6 +199,7 @@ fn fila_12_menu_items_no_cambia_son_las_11_entradas_de_la_17() {
     assert_eq!(
         rotulos_y_acciones(archivo.items),
         [
+            ("Nueva imagen…", AppAction::NewImage),
             ("Abrir…", AppAction::Open),
             ("Guardar", AppAction::Save),
             ("Guardar como…", AppAction::SaveAs),

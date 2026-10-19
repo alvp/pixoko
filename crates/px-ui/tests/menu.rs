@@ -82,6 +82,7 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
         (
             "Archivo",
             vec![
+                ("Nueva imagen…", AppAction::NewImage),
                 ("Abrir…", AppAction::Open),
                 ("Guardar", AppAction::Save),
                 ("Guardar como…", AppAction::SaveAs),
@@ -127,16 +128,19 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 }
 
 #[test]
-fn fila_1_hay_once_entradas_y_ninguna_accion_se_repite() {
+fn fila_1_hay_doce_entradas_y_ninguna_accion_se_repite() {
     let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 11);
+    assert_eq!(acciones.len(), 12);
     for (i, a) in acciones.iter().enumerate() {
         assert!(
             !acciones[i + 1..].contains(a),
             "la acción {a:?} aparece dos veces"
         );
     }
-    assert_eq!(acciones, ACCIONES_DE_LA_TABLA);
+    // `Nueva imagen…` (unidad 19) es la primera; las otras 11 siguen siendo las de la 17.
+    let mut esperado = vec![AppAction::NewImage];
+    esperado.extend(ACCIONES_DE_LA_TABLA);
+    assert_eq!(acciones, esperado);
 }
 
 #[test]
@@ -161,7 +165,7 @@ fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 11]) -> Vec<Option<String>> {
+fn algunos(textos: [Option<&str>; 12]) -> Vec<Option<String>> {
     textos.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -170,6 +174,7 @@ fn fila_1_atajos_en_linux() {
     assert_eq!(
         textos_de_atajo(Platform::Linux),
         algunos([
+            Some("Ctrl+N"),
             Some("Ctrl+O"),
             Some("Ctrl+S"),
             Some("Ctrl+Mayús+S"),
@@ -190,6 +195,7 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
     assert_eq!(
         textos_de_atajo(Platform::Windows),
         algunos([
+            Some("Ctrl+N"),
             Some("Ctrl+O"),
             Some("Ctrl+S"),
             Some("Ctrl+Mayús+S"),
@@ -211,6 +217,7 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
     assert_eq!(
         textos_de_atajo(Platform::Mac),
         algunos([
+            Some("Cmd+N"),
             Some("Cmd+O"),
             Some("Cmd+S"),
             Some("Cmd+Mayús+S"),
