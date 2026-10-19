@@ -104,6 +104,8 @@ impl Dialog {
     pub fn first_line(&self, id: FieldId) -> usize;  pub fn set_first_line(&mut self, id: FieldId, line: usize);
     pub fn scroll_u(&self) -> i64;  pub fn set_scroll_u(&mut self, scroll: i64);
     pub fn content_h_u(&self) -> i64;  pub fn is_fill(&self) -> bool;
+    /// El foco inicial, una sola vez tras `new` (después, `None`): `show_dialog` lo pide a egui en el primer fotograma.
+    pub fn take_focus_request(&mut self) -> Option<FocusTarget>;
 }
 pub enum Modal { Closed, Open(Dialog) }                                       // Default = Closed
 impl Modal {
@@ -131,7 +133,8 @@ pub fn next_focus(order: &[FocusTarget], current: Option<FocusTarget>, backwards
 //   `zone_rows(box_h_u: i64) -> usize` y `ensure_visible(scroll_u: i64, top_u: i64, bottom_u: i64, view_h_u: i64) -> i64`.
 // px-ui/src/dialog_view.rs (egui): `show_dialog(ctx: &Context, dialog: &mut Dialog, focus: &mut Option<FocusTarget>) -> Reaction`
 //   sobre `egui::Modal`, `ERROR_PREFIX` y `CONTRAST_PAIRS: [(&str, Color32, Color32, f64)]`.
-// px-ui/src/licenses_view.rs: `wrap_text`, `clamp_first_line` (sin cambios) y `licenses_form(text: &str) -> FormSpec`.
+// px-ui/src/licenses_view.rs: `wrap_text`, `clamp_first_line` (sin cambios), `licenses_form(text: &str) -> FormSpec`
+//   y `LICENSES_FIELD: FieldId = "texto"` (el único campo, la zona de texto).
 // px-app/src/dialogs.rs: `ignored_file_notice(file_dialog: bool, modal: bool) -> &'static str`.
 // px-app/src/demo.rs: `demo_form() -> FormSpec` y `demo_notice(reaction: &Reaction) -> String`. main.rs: `modal: Modal` sustituye a `licenses_open` y `licenses_first`.
 ```

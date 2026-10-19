@@ -6,7 +6,8 @@
 //!   tres plataformas, contra un oráculo escrito aparte; ida y vuelta con la tabla del menú; las
 //!   tres funciones de teclas anteriores se componen sin cambios.
 //! - Fila 3b: las teclas `1` a `9` siguen eligiendo color y `Ctrl`/`Cmd`+`1` es solo `ZoomActual`.
-//! - Fila 5: `is_blocked` en el orden de la spec, con un modelo independiente que se compara con la
+//! - Fila 5: `is_blocked` en el orden de la spec (con la quita pendiente también frena abrir un
+//!   diálogo: unidad 18, D2), con un modelo independiente que se compara con la
 //!   implementación sobre todas las acciones, orígenes y combinaciones de bloqueos; `enabled`.
 //! - Fila 5b (parte pura): los bloqueos del zoom, uno por bloqueo, con los tres orígenes.
 //!
@@ -166,7 +167,8 @@ fn platform_current_sigue_el_sistema_de_compilacion() {
 /// Modelo de `is_blocked`, escrito aparte de la implementación y en el orden de la spec:
 /// (1) `CloseLicenses` nunca; (2) `modal`: todo salvo `CloseLicenses` y `Quit`; (3) `dialog`:
 /// todo; (4) zoom: con `text_focus` solo si el origen es `Key`; (5) el resto: `gesture` o
-/// `text_focus`, y `removal` solo `SelectColor`; (6) nada.
+/// `text_focus`, y `removal` solo `SelectColor` y las acciones que abren un diálogo (hoy, solo
+/// `ShowLicenses`; unidad 18, decisión D2); (6) nada.
 fn bloqueada_segun_el_modelo(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if action == AppAction::CloseLicenses {
         return false;
@@ -183,7 +185,7 @@ fn bloqueada_segun_el_modelo(action: AppAction, locks: Locks, origin: Origin) ->
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && matches!(action, AppAction::SelectColor(_))
+    locks.removal && matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses)
 }
 
 #[test]
@@ -305,7 +307,8 @@ fn fila_5_regla_4_el_zoom_ignora_gesto_y_quita_y_solo_las_teclas_paran_con_texto
 }
 
 #[test]
-fn fila_5_regla_5_el_resto_para_con_gesto_o_texto_y_la_quita_solo_para_las_ranuras() {
+fn fila_5_regla_5_el_resto_para_con_gesto_o_texto_y_la_quita_solo_para_las_ranuras_y_los_dialogos()
+{
     for action in todas_las_acciones() {
         if es_zoom(action) || action == AppAction::CloseLicenses {
             continue;
@@ -321,7 +324,7 @@ fn fila_5_regla_5_el_resto_para_con_gesto_o_texto_y_la_quita_solo_para_las_ranur
             );
             assert_eq!(
                 is_blocked(action, solo(|l| l.removal = true), origin),
-                matches!(action, AppAction::SelectColor(_)),
+                matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses),
                 "{action:?} con removal y {origin:?}"
             );
         }
@@ -329,13 +332,17 @@ fn fila_5_regla_5_el_resto_para_con_gesto_o_texto_y_la_quita_solo_para_las_ranur
 }
 
 #[test]
-fn fila_5_quit_y_show_licenses_tambien_las_frena_un_gesto() {
+fn fila_5_quit_y_show_licenses_tambien_las_frena_un_gesto_y_solo_show_licenses_una_quita() {
     for action in [AppAction::Quit, AppAction::ShowLicenses] {
         for origin in ORIGENES {
             assert!(is_blocked(action, solo(|l| l.gesture = true), origin));
             assert!(is_blocked(action, solo(|l| l.dialog = true), origin));
             assert!(is_blocked(action, solo(|l| l.text_focus = true), origin));
-            assert!(!is_blocked(action, solo(|l| l.removal = true), origin));
+            // Una quita pendiente no frena `Quit`; sí frena abrir un diálogo (D2).
+            assert_eq!(
+                is_blocked(action, solo(|l| l.removal = true), origin),
+                action == AppAction::ShowLicenses
+            );
         }
     }
 }

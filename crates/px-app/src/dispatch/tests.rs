@@ -914,12 +914,13 @@ fn fila_5_un_undo_bloqueado_no_consume_la_historia() {
 }
 
 #[test]
-fn fila_5_con_una_quita_pendiente_solo_select_color_da_blocked() {
+fn fila_5_con_una_quita_pendiente_solo_select_color_y_show_licenses_dan_blocked() {
     for action in todas_las_acciones() {
         for origin in ORIGENES {
             let mut mundo = mundo_con_quita_pendiente();
             let resultado = mundo.despacha(action, origin);
-            let bloqueada = matches!(action, AppAction::SelectColor(_));
+            // `ShowLicenses` abre un diálogo: una quita pendiente también lo frena (unidad 18, D2).
+            let bloqueada = matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses);
             assert_eq!(
                 resultado == Dispatched::Blocked,
                 bloqueada,

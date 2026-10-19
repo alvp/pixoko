@@ -1,13 +1,21 @@
-//! Tests del panel de licencias `px_ui::licenses_view` (specs/hito-2-menu-herramientas.md, «Casos»
-//! fila 11 y decisión 7).
+//! Tests de las licencias de terceros `px_ui::licenses_view` (specs/hito-2-menu-herramientas.md,
+//! «Casos» fila 11 y decisión 7), **adaptados a la unidad 18** (specs/hito-2-dialogos-modales.md,
+//! decisión 9 y «Tests de la 17 que cambian»): el panel que sustituía al lienzo es ahora un diálogo
+//! modal (`licenses_form` + `show_dialog`).
 //!
 //! - Parte pura: `wrap_text` (ajuste duro a `columns` caracteres, cortando por el último espacio de
 //!   la línea si lo hay y, si no, en seco; conserva las líneas vacías; `columns = 0` da vacío) con
 //!   `THIRD_PARTY` a 18, 40 y 200 columnas, el texto vacío, `c = 0` y una palabra de 500 letras;
 //!   `clamp_first_line` recorta a `0..=total − visibles`.
-//! - Banco de egui sin ventana: `show_licenses` sobre el rectángulo del lienzo con la rueda (avanza
-//!   por líneas y se recorta), `Escape` y el botón `Cerrar`. «El lienzo no interactúa mientras el
-//!   panel está abierto» y «con él abierto todo lo demás da `Blocked` salvo `Quit`» son de `px-app`
+//! - Banco de egui sin ventana: el diálogo de Licencias con la rueda (avanza por líneas y se
+//!   recorta), `Escape` y el botón `Cerrar`. Lo que cambia respecto a la 17, y solo esto: se llama a
+//!   `show_dialog` sobre un `Dialog` abierto con `licenses_form` en vez de a `show_licenses`; la
+//!   «primera línea» se lee y se escribe con `Dialog::first_line` y `set_first_line`; «se cierra» es
+//!   que la `Reaction` sea `Accepted` o `Cancelled`; y el puntero de las pruebas de la rueda va al
+//!   centro de la pantalla (el diálogo ya no ocupa toda la pantalla, sino el centro).
+//!   `fila_11_el_panel_cubre_el_rectangulo_del_lienzo` **desaparece** (decisión D3: garantizaba que
+//!   el lienzo no recibe entrada mientras el panel está abierto; lo comprueban ahora las filas 6, 10,
+//!   7 y 11 de la 18). «Con él abierto todo lo demás da `Blocked` salvo `Quit`» es de `px-app`
 //!   (`dispatch/tests.rs`) y de `actions.rs`.
 //!
 //! Decisiones donde la spec no fija un detalle: de `wrap_text("", c)` solo se exige «sin pánico y
@@ -17,7 +25,10 @@
 
 use egui::{Context, Event, Vec2, pos2, vec2};
 use proptest::prelude::*;
-use px_ui::licenses_view::{LicensesOutput, clamp_first_line, show_licenses, wrap_text};
+use px_ui::dialog::{Dialog, DialogKind, Reaction};
+use px_ui::dialog_keys::FocusTarget;
+use px_ui::dialog_view::show_dialog;
+use px_ui::licenses_view::{LICENSES_FIELD, clamp_first_line, licenses_form, wrap_text};
 use px_ui::status::ADVANCE_PX;
 
 mod common;
@@ -252,26 +263,36 @@ const PANTALLA: Vec2 = vec2(600.0, 300.0);
 
 struct Banco {
     ctx: Context,
-    texto: String,
-    primera: usize,
+    dialog: Dialog,
+    focus: Option<FocusTarget>,
+}
+
+/// La respuesta cierra el diálogo (`Cerrar` lo acepta y `Escape` lo cancela).
+fn cierra(reaction: &Reaction) -> bool {
+    matches!(reaction, Reaction::Accepted(_) | Reaction::Cancelled)
 }
 
 impl Banco {
     fn nuevo(ppp: f32, texto: &str) -> Banco {
         Banco {
             ctx: contexto(ppp),
-            texto: texto.to_string(),
-            primera: 0,
+            dialog: Dialog::new(DialogKind::Licenses, licenses_form(texto))
+                .expect("la spec de Licencias es válida"),
+            focus: None,
         }
     }
 
-    fn fotograma(&mut self, events: Vec<Event>) -> (Pintado, LicensesOutput) {
+    fn primera(&self) -> usize {
+        self.dialog.first_line(LICENSES_FIELD)
+    }
+
+    fn fotograma(&mut self, events: Vec<Event>) -> (Pintado, Reaction) {
         let mut salida = None;
-        let (texto, primera) = (&self.texto, &mut self.primera);
+        let (dialog, focus) = (&mut self.dialog, &mut self.focus);
         let formas = fotograma(&self.ctx, PANTALLA, events, |ui| {
-            salida = Some(show_licenses(ui, texto, primera));
+            salida = Some(show_dialog(ui.ctx(), dialog, focus));
         });
-        (pintado(&formas), salida.expect("el panel se dibuja"))
+        (pintado(&formas), salida.expect("el diálogo se dibuja"))
     }
 
     fn reposo(&mut self) -> Pintado {
@@ -279,9 +300,10 @@ impl Banco {
         self.fotograma(vec![]).0
     }
 
-    /// Pone el puntero sobre el panel y espera un fotograma estable.
+    /// Pone el puntero sobre el texto (el centro de la pantalla, que es el centro del diálogo) y
+    /// espera un fotograma estable.
     fn con_puntero(&mut self) {
-        self.fotograma(vec![mover(pos2(100.0, 100.0))]);
+        self.fotograma(vec![mover(pos2(300.0, 150.0))]);
         self.reposo();
     }
 
@@ -316,9 +338,9 @@ fn lineas_pintadas(pintado: &Pintado) -> Vec<usize> {
 fn fila_11_al_abrir_se_ve_el_principio_sin_cerrar() {
     for ppp in PPPS {
         let mut banco = Banco::nuevo(ppp, &doscientas_lineas());
-        let (pintado, salida) = banco.fotograma(vec![]);
-        assert!(!salida.close, "ppp {ppp}: se cerró solo");
-        assert_eq!(banco.primera, 0);
+        let (pintado, reaccion) = banco.fotograma(vec![]);
+        assert!(!cierra(&reaccion), "ppp {ppp}: se cerró solo");
+        assert_eq!(banco.primera(), 0);
         let visibles = lineas_pintadas(&pintado);
         assert_eq!(visibles.first(), Some(&0), "ppp {ppp}: {visibles:?}");
         assert!(
@@ -336,7 +358,7 @@ fn fila_11_la_rueda_avanza_por_lineas_y_la_primera_linea_pintada_es_first_line()
         let mut banco = Banco::nuevo(ppp, &doscientas_lineas());
         banco.con_puntero();
         banco.rueda(true, 1);
-        let tras_una = banco.primera;
+        let tras_una = banco.primera();
         assert!(tras_una >= 1, "ppp {ppp}: una muesca hacia abajo avanza");
         let pintado = banco.reposo();
         let visibles = lineas_pintadas(&pintado);
@@ -348,14 +370,14 @@ fn fila_11_la_rueda_avanza_por_lineas_y_la_primera_linea_pintada_es_first_line()
         );
         banco.rueda(true, 3);
         assert!(
-            banco.primera > tras_una,
+            banco.primera() > tras_una,
             "ppp {ppp}: más muescas, más abajo"
         );
-        let antes = banco.primera;
+        let antes = banco.primera();
         banco.rueda(false, 1);
-        assert!(banco.primera < antes, "ppp {ppp}: hacia arriba retrocede");
+        assert!(banco.primera() < antes, "ppp {ppp}: hacia arriba retrocede");
         banco.rueda(false, 1000);
-        assert_eq!(banco.primera, 0, "ppp {ppp}: no baja de 0");
+        assert_eq!(banco.primera(), 0, "ppp {ppp}: no baja de 0");
     }
 }
 
@@ -365,7 +387,7 @@ fn fila_11_la_rueda_se_recorta_a_total_menos_visibles_y_la_ultima_linea_queda_a_
         let mut banco = Banco::nuevo(ppp, &doscientas_lineas());
         banco.con_puntero();
         banco.rueda(true, 2000);
-        let maximo = banco.primera;
+        let maximo = banco.primera();
         assert!((1..=199).contains(&maximo), "ppp {ppp}: {maximo}");
         let pintado = banco.reposo();
         let visibles = lineas_pintadas(&pintado);
@@ -378,9 +400,9 @@ fn fila_11_la_rueda_se_recorta_a_total_menos_visibles_y_la_ultima_linea_queda_a_
         assert_eq!(visibles.first(), Some(&maximo), "ppp {ppp}: {visibles:?}");
         // Otra muesca hacia abajo no se mueve.
         banco.rueda(true, 1);
-        assert_eq!(banco.primera, maximo, "ppp {ppp}: se recorta, no se pasa");
+        assert_eq!(banco.primera(), maximo, "ppp {ppp}: se recorta, no se pasa");
         banco.reposo();
-        assert_eq!(banco.primera, maximo);
+        assert_eq!(banco.primera(), maximo);
     }
 }
 
@@ -390,16 +412,16 @@ fn fila_11_un_texto_corto_no_se_desplaza() {
         let mut banco = Banco::nuevo(ppp, "uno\ndos\ntres");
         banco.con_puntero();
         banco.rueda(true, 50);
-        assert_eq!(banco.primera, 0, "ppp {ppp}");
+        assert_eq!(banco.primera(), 0, "ppp {ppp}");
     }
 }
 
 #[test]
 fn fila_11_un_first_line_fuera_de_rango_se_recorta_al_pintar() {
     let mut banco = Banco::nuevo(1.0, &doscientas_lineas());
-    banco.primera = usize::MAX / 2;
+    banco.dialog.set_first_line(LICENSES_FIELD, usize::MAX / 2);
     banco.reposo();
-    assert!(banco.primera <= 199, "{}", banco.primera);
+    assert!(banco.primera() <= 199, "{}", banco.primera());
     let pintado = banco.reposo();
     assert_eq!(lineas_pintadas(&pintado).last(), Some(&199));
 }
@@ -410,11 +432,15 @@ fn fila_11_escape_cierra_y_sin_escape_no() {
         let mut banco = Banco::nuevo(ppp, &doscientas_lineas());
         banco.reposo();
         for tecla_cualquiera in [egui::Key::A, egui::Key::Enter, egui::Key::Space] {
-            let (_, salida) = banco.fotograma(vec![tecla(tecla_cualquiera, egui::Modifiers::NONE)]);
-            assert!(!salida.close, "ppp {ppp}: {tecla_cualquiera:?} no cierra");
+            let (_, reaccion) =
+                banco.fotograma(vec![tecla(tecla_cualquiera, egui::Modifiers::NONE)]);
+            assert!(
+                !cierra(&reaccion),
+                "ppp {ppp}: {tecla_cualquiera:?} no cierra"
+            );
         }
-        let (_, salida) = banco.fotograma(vec![tecla(egui::Key::Escape, egui::Modifiers::NONE)]);
-        assert!(salida.close, "ppp {ppp}: Escape cierra");
+        let (_, reaccion) = banco.fotograma(vec![tecla(egui::Key::Escape, egui::Modifiers::NONE)]);
+        assert!(cierra(&reaccion), "ppp {ppp}: Escape cierra");
     }
 }
 
@@ -436,8 +462,8 @@ fn fila_11_el_boton_cerrar_cierra_con_un_clic() {
             vec![boton(centro, true)],
             vec![boton(centro, false)],
         ] {
-            let (_, salida) = banco.fotograma(events);
-            cerro |= salida.close;
+            let (_, reaccion) = banco.fotograma(events);
+            cerro |= cierra(&reaccion);
         }
         assert!(cerro, "ppp {ppp}: el clic en `Cerrar` cierra");
     }
@@ -454,7 +480,7 @@ fn fila_11_un_clic_fuera_del_boton_no_cierra() {
         vec![boton(pos, true)],
         vec![boton(pos, false)],
     ] {
-        cerro |= banco.fotograma(events).1.close;
+        cerro |= cierra(&banco.fotograma(events).1);
     }
     assert!(!cerro);
 }
@@ -511,21 +537,4 @@ fn fila_11_el_texto_externo_pasa_por_printable_y_no_provoca_un_glifo_ausente() {
     assert!(!todo.contains('日'), "{todo:?}");
     assert!(!todo.contains('✓'), "{todo:?}");
     assert!(todo.contains('a') && todo.contains('b'));
-}
-
-#[test]
-fn fila_11_el_panel_cubre_el_rectangulo_del_lienzo() {
-    // «Sustituye al lienzo»: pinta un fondo que ocupa el espacio libre.
-    for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, &doscientas_lineas());
-        let pintado = banco.reposo();
-        let pantalla = egui::Rect::from_min_size(egui::Pos2::ZERO, PANTALLA);
-        assert!(
-            pintado
-                .rellenos
-                .iter()
-                .any(|r| r.rect.expand(0.01).contains_rect(pantalla)),
-            "ppp {ppp}: ningún relleno cubre el panel entero"
-        );
-    }
 }

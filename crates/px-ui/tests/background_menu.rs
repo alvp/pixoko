@@ -553,7 +553,7 @@ fn fila_13_con_un_campo_de_texto_enfocado_el_submenu_esta_deshabilitado_y_sin_el
 /// Modelo de `is_blocked` de las acciones de antes, escrito aparte (el de `actions.rs`): (1)
 /// `CloseLicenses` nunca; (2) `modal`: todo salvo `Quit`; (3) `dialog`: todo; (4) zoom: con
 /// `text_focus` solo si el origen es `Key`; (5) el resto: `gesture` o `text_focus`, y `removal` solo
-/// `SelectColor`; (6) nada.
+/// `SelectColor` y las que abren un diálogo (`ShowLicenses`, unidad 18, D2); (6) nada.
 fn bloqueada_segun_el_modelo(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if action == AppAction::CloseLicenses {
         return false;
@@ -570,7 +570,7 @@ fn bloqueada_segun_el_modelo(action: AppAction, locks: Locks, origin: Origin) ->
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && matches!(action, AppAction::SelectColor(_))
+    locks.removal && matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses)
 }
 
 #[test]
