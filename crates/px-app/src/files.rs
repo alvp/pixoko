@@ -290,4 +290,6 @@ pub fn describe_open(name: &str, image: &Image, report: &[Conversion]) -> String
 }
 
 #[cfg(test)]
+mod aux_tests;
+#[cfg(test)]
 mod tests;

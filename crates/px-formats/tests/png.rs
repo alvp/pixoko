@@ -17,6 +17,9 @@ use proptest::test_runner::TestCaseError;
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use px_formats::{AuxChunk, Conversion, PngError, PngRead, read_png, write_png};
 
+#[path = "png/aux_chunks.rs"]
+mod aux_chunks;
+
 // ---------------------------------------------------------------------------------------
 // Ayudante de corpus: CRC-32, Adler-32, deflate «stored», chunks y Adam7.
 // ---------------------------------------------------------------------------------------
