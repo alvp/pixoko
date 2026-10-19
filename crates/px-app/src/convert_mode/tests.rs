@@ -4161,7 +4161,10 @@ fn fila_3_20b_todo_texto_de_la_lista_cabe_en_el_pie_de_44_columnas_y_en_el_juego
         let pie = px_ui::dialog_view::footer_text(&texto);
         assert!(pie.chars().count() <= 44, "{lista:?}: {pie:?}");
         assert!(en_el_juego(&pie), "{pie:?}");
-        assert_eq!(pie, texto, "una lista (`falta: ` o `faltan N: `) va tal cual");
+        assert_eq!(
+            pie, texto,
+            "una lista (`falta: ` o `faltan N: `) va tal cual"
+        );
     }
 }
 

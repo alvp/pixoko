@@ -11,7 +11,8 @@ use px_core::{
 use px_ui::actions::Locks;
 use px_ui::color_edit::parse_hex;
 use px_ui::dialog::{
-    Dialog, DialogKind, FieldId, FieldKind, FieldSpec, FormSpec, Modal, Rows, ShowWhen, Values,
+    Dialog, DialogKind, FOOTER_COLUMNS, FieldId, FieldKind, FieldSpec, FormSpec, MISSING_PREFIX,
+    Modal, Rows, ShowWhen, Values,
 };
 
 use crate::new_image::{ImageAlloc, WARN_PIXELS};
@@ -294,7 +295,94 @@ pub fn allowed_of(perms: &Permissions, active: Option<Rgba>) -> Option<Allowed> 
     })
 }
 
-/// Por qué `Aceptar` está atenuado (≤ 37 caracteres); `analysis = None` es «pendiente».
+/// Un requisito que falta para poder aceptar, en el orden en que se lista.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Missing {
+    /// Marcar «permitir perder el color».
+    Luma,
+    /// Elegir el fondo del alfa.
+    AlphaBackground,
+    /// Un valor inválido (hexadecimal mal escrito o con alfa; color activo sin color o con alfa).
+    Value,
+}
+
+impl Missing {
+    /// Rótulo largo, para cuando es el único.
+    fn long(self) -> &'static str {
+        match self {
+            Missing::Luma => "permitir perder el color",
+            Missing::AlphaBackground => "elegir el fondo del alfa",
+            Missing::Value => "fondo válido",
+        }
+    }
+
+    /// Rótulo corto, para la lista de dos o más.
+    fn short(self) -> &'static str {
+        match self {
+            Missing::Luma => "perder el color",
+            Missing::AlphaBackground => "fondo del alfa",
+            Missing::Value => "fondo válido",
+        }
+    }
+
+    /// Una palabra, para la forma con cuenta.
+    fn word(self) -> &'static str {
+        match self {
+            Missing::Luma => "color",
+            Missing::AlphaBackground => "fondo",
+            Missing::Value => "valor",
+        }
+    }
+}
+
+/// El texto del pie para una lista de requisitos (ya en orden): `falta: …` con el rótulo largo si
+/// hay uno, con los cortos si hay varios y, si no caben en el pie, `faltan N: …`. `None` si no
+/// falta nada.
+pub fn missing_text(items: &[Missing]) -> Option<String> {
+    match items {
+        [] => None,
+        [one] => Some(format!("{MISSING_PREFIX}{}", one.long())),
+        _ => {
+            let labels: Vec<&str> = items.iter().map(|item| item.short()).collect();
+            let list = format!("{MISSING_PREFIX}{}", labels.join("; "));
+            if list.chars().count() <= FOOTER_COLUMNS {
+                return Some(list);
+            }
+            let words: Vec<&str> = items.iter().map(|item| item.word()).collect();
+            Some(format!("faltan {}: {}", items.len(), words.join(", ")))
+        }
+    }
+}
+
+/// Lo que falta para aceptar, en el orden color, fondo, valor. Los análisis imposibles no tienen
+/// requisitos que cubrir (su motivo va solo). `value_problem`: hay un valor inválido en un campo.
+pub fn pending(
+    analysis: &Analysis,
+    perms: &Permissions,
+    active: Option<Rgba>,
+    value_problem: bool,
+) -> Vec<Missing> {
+    if matches!(analysis, Analysis::TooManyColors | Analysis::TooLarge) {
+        return Vec::new();
+    }
+    let need = needs(analysis);
+    let mut missing = Vec::new();
+    if need.luma && !perms.luma {
+        missing.push(Missing::Luma);
+    }
+    if need.alpha && perms.alpha == AlphaChoice::Keep {
+        missing.push(Missing::AlphaBackground);
+    }
+    // Un fondo «color activo» no opaco se rechaza siempre que esté elegido.
+    let bad_active = perms.alpha == AlphaChoice::Active && active.is_none_or(|color| color.a < 255);
+    if value_problem || bad_active {
+        missing.push(Missing::Value);
+    }
+    missing
+}
+
+/// Por qué `Aceptar` está atenuado; `analysis = None` es «pendiente». Una lista de pendientes
+/// lleva `falta: ` (≤ 44 columnas); lo demás, ≤ 37 caracteres (el pie les pone `error: `).
 pub fn block_reason(
     analysis: Option<&Analysis>,
     perms: &Permissions,
@@ -308,25 +396,18 @@ pub fn block_reason(
         Analysis::TooLarge => return Some("la imagen convertida no cabe".to_string()),
         Analysis::Exact { .. } | Analysis::Lossy(_) => {}
     }
-    let need = needs(analysis);
-    if need.luma && !perms.luma {
-        return Some("falta permitir perder el color".to_string());
-    }
-    if need.alpha && perms.alpha == AlphaChoice::Keep {
-        return Some("elige el fondo para el alfa".to_string());
-    }
-    // Un fondo «color activo» no opaco se rechaza siempre que esté elegido.
-    if perms.alpha == AlphaChoice::Active {
+    let missing = pending(analysis, perms, active, false);
+    if missing == [Missing::Value] {
+        // Solo el valor: su motivo concreto, con `error: ` en el pie.
         return match active {
             None => Some("no hay color activo".to_string()),
-            Some(color) if color.a < 255 => Some(format!(
+            Some(color) => Some(format!(
                 "el color activo #{:02x}{:02x}{:02x}{:02x} tiene alfa",
                 color.r, color.g, color.b, color.a
             )),
-            Some(_) => None,
         };
     }
-    None
+    missing_text(&missing)
 }
 
 /// Lo que se aplica al aceptar.
@@ -588,6 +669,19 @@ pub fn sync_convert(
     }
     if dialog.block() != reason.as_deref() {
         dialog.set_block(reason);
+        changed = true;
+    }
+    // Con un valor inválido de campo y otros pendientes, el pie los lista todos (el error del
+    // campo sigue junto al campo).
+    let summary = analysis.and_then(|analysis| {
+        let problem = !dialog.problems().is_empty();
+        let missing = pending(analysis, &perms, sync.active, problem);
+        (problem && missing.len() >= 2)
+            .then(|| missing_text(&missing))
+            .flatten()
+    });
+    if dialog.summary() != summary.as_deref() {
+        dialog.set_summary(summary);
         changed = true;
     }
     changed
