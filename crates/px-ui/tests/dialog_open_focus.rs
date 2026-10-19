@@ -18,10 +18,10 @@
 //! - La variante sin menú (el diálogo abierto antes del primer fotograma, como con
 //!   `PIXOKO_DIALOGO_PRUEBA=1`) se comprueba igual, con Licencias y con un formulario con campos.
 
-use egui::{Context, Id, Key, Modifiers, Pos2, Vec2, vec2};
+use egui::{Area, Context, Id, Key, Modifiers, Order, Pos2, Vec2, pos2, vec2};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
 use px_ui::dialog::{Dialog, DialogKind, FormSpec, Modal, Reaction};
-use px_ui::dialog_keys::{FocusTarget, initial_focus};
+use px_ui::dialog_keys::{FocusTarget, focus_order, initial_focus};
 use px_ui::dialog_view::show_dialog;
 use px_ui::licenses_view::{LICENSES_FIELD, licenses_form};
 use px_ui::menu::show_menu;
@@ -82,6 +82,9 @@ struct Aplicacion {
     abierto_en: Option<usize>,
     /// Lo pintado en el último fotograma, para buscar entradas del menú.
     ultimo: common::Pintado,
+    /// Si está, un botón «Abrir formulario» (en una capa bajo el velo) abre este formulario con un
+    /// clic: la misma apertura que el menú, para un diálogo con campos.
+    formulario: Option<fn() -> FormSpec>,
 }
 
 impl Aplicacion {
@@ -98,7 +101,23 @@ impl Aplicacion {
             traza: Vec::new(),
             abierto_en: None,
             ultimo: common::Pintado::default(),
+            formulario: None,
         }
+    }
+
+    /// Con un botón que abre `formulario` con un clic.
+    fn con_boton_de_formulario(ppp: f32, ventana: Ventana, formulario: fn() -> FormSpec) -> Self {
+        let mut app = Aplicacion::nueva(ppp, ventana);
+        app.formulario = Some(formulario);
+        app
+    }
+
+    /// Cambio de escala y de tamaño de la ventana con el diálogo abierto.
+    fn cambia(&mut self, ppp: f32, ventana: Ventana) {
+        self.ppp = ppp;
+        self.ventana = ventana;
+        self.ctx.set_pixels_per_point(ppp);
+        self.ctx.set_visuals_of(egui::Theme::Dark, visuals(ppp));
     }
 
     /// El diálogo ya abierto antes del primer fotograma (como `PIXOKO_DIALOGO_PRUEBA=1`).
@@ -121,7 +140,11 @@ impl Aplicacion {
         let mut pinto_el_dialogo = false;
         let formas = {
             let Aplicacion {
-                ctx, modal, focus, ..
+                ctx,
+                modal,
+                focus,
+                formulario,
+                ..
             } = &mut *self;
             fotograma(ctx, size, events, |ui| {
                 let c = ui.ctx().clone();
@@ -150,6 +173,23 @@ impl Aplicacion {
                             ..Locks::default()
                         };
                         if modal.open(DialogKind::Licenses, licenses_form(&texto_largo()), locks) {
+                            *focus = None;
+                        }
+                    }
+                }
+                if let Some(formulario) = formulario {
+                    let boton = Area::new(Id::unique("abrir_formulario"))
+                        .order(Order::Middle)
+                        .fixed_pos(pos2(2.0, 150.0))
+                        .show(&c, |ui| ui.button("Abrir formulario"))
+                        .inner;
+                    if boton.clicked() {
+                        let locks = Locks {
+                            text_focus: c.text_edit_focused(),
+                            modal: modal.is_open(),
+                            ..Locks::default()
+                        };
+                        if modal.open(DialogKind::Licenses, formulario(), locks) {
                             *focus = None;
                         }
                     }
@@ -414,5 +454,117 @@ fn variante_sin_menu_un_formulario_con_campos_tiene_el_foco_en_el_primer_campo()
                 );
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Con el diálogo abierto por un clic: redimensionar, cambiar de escala y recorrer con Tab
+// ---------------------------------------------------------------------------------------------
+
+fn abre_formulario_con_un_clic(app: &mut Aplicacion) {
+    app.reposo();
+    let boton = app.centro_de("Abrir formulario");
+    app.clic(boton);
+    app.reposo();
+}
+
+fn formulario_de_prueba() -> FormSpec {
+    all_kinds()
+}
+
+/// Un ciclo entero de `Tab` más una vuelta extra desde el foco actual: cada paso es el siguiente de
+/// `focus_order`.
+fn tab_recorre_el_orden(app: &mut Aplicacion, contexto: &str) {
+    let orden = focus_order(app.dialogo().expect("abierto"));
+    let mut actual = app.focus.expect("hay un foco para empezar");
+    for paso in 0..=orden.len() {
+        let posicion = orden
+            .iter()
+            .position(|t| *t == actual)
+            .unwrap_or_else(|| panic!("{contexto}: {actual:?} no está en {orden:?}"));
+        let esperado = orden[(posicion + 1) % orden.len()];
+        app.pulsa(Key::Tab);
+        assert_eq!(
+            app.focus,
+            Some(esperado),
+            "{contexto}: paso {paso} de Tab desde {actual:?}; orden {orden:?}"
+        );
+        actual = esperado;
+    }
+}
+
+#[test]
+fn un_formulario_abierto_con_un_clic_tiene_el_foco_inicial_y_tab_recorre_el_orden_de_la_spec() {
+    for ppp in PPPS {
+        for ventana in VENTANAS {
+            let mut app = Aplicacion::con_boton_de_formulario(ppp, ventana, formulario_de_prueba);
+            abre_formulario_con_un_clic(&mut app);
+            let dialog = app.dialogo().expect("se abrió");
+            let esperado = initial_focus(dialog);
+            let contexto = format!("ppp {ppp} {ventana:?}");
+            assert_eq!(app.focus, Some(esperado), "{contexto}: foco inicial");
+            assert!(
+                app.ctx.memory(|m| m.focused()).is_some(),
+                "{contexto}: egui no tiene ningún widget con foco"
+            );
+            tab_recorre_el_orden(&mut app, &contexto);
+        }
+    }
+}
+
+#[test]
+fn el_foco_inicial_se_mantiene_tras_redimensionar_y_cambiar_de_escala_con_el_menu() {
+    for ppp in PPPS {
+        let mut app = Aplicacion::nueva(ppp, Ventana::Minima);
+        app.abre_licencias_con_el_raton();
+        let zona = Some(FocusTarget::Zone(LICENSES_FIELD));
+        assert_eq!(app.focus, zona, "ppp {ppp}: tras abrir");
+        let id = app.ctx.memory(|m| m.focused());
+        assert_eq!(id, Some(id_de_la_zona()), "ppp {ppp}: tras abrir");
+        for otra in PPPS {
+            for ventana in [Ventana::Grande, Ventana::Minima] {
+                app.cambia(otra, ventana);
+                app.reposo();
+                assert_eq!(
+                    app.focus, zona,
+                    "ppp {ppp} -> {otra} {ventana:?}: el foco que lleva show_dialog"
+                );
+                assert_eq!(
+                    app.ctx.memory(|m| m.focused()),
+                    id,
+                    "ppp {ppp} -> {otra} {ventana:?}: el foco de egui"
+                );
+            }
+        }
+        // El orden de Tab sigue siendo el de la spec tras tanto cambio.
+        tab_recorre_el_orden(&mut app, &format!("ppp {ppp}, tras los cambios"));
+        // Y el diálogo sigue abierto y sin cerrar.
+        assert!(app.modal.is_open() && app.cierres == 0);
+    }
+}
+
+#[test]
+fn el_foco_inicial_de_un_formulario_se_mantiene_tras_redimensionar_y_cambiar_de_escala() {
+    for ppp in PPPS {
+        let mut app =
+            Aplicacion::con_boton_de_formulario(ppp, Ventana::Minima, formulario_de_prueba);
+        abre_formulario_con_un_clic(&mut app);
+        let inicial = Some(initial_focus(app.dialogo().expect("abierto")));
+        assert_eq!(app.focus, inicial, "ppp {ppp}: tras abrir");
+        let id = app.ctx.memory(|m| m.focused());
+        assert!(id.is_some(), "ppp {ppp}: egui sin foco tras abrir");
+        for otra in PPPS {
+            for ventana in [Ventana::Grande, Ventana::Minima] {
+                app.cambia(otra, ventana);
+                app.reposo();
+                assert_eq!(app.focus, inicial, "ppp {ppp} -> {otra} {ventana:?}");
+                assert_eq!(
+                    app.ctx.memory(|m| m.focused()),
+                    id,
+                    "ppp {ppp} -> {otra} {ventana:?}: el foco de egui"
+                );
+            }
+        }
+        tab_recorre_el_orden(&mut app, &format!("ppp {ppp}, tras los cambios"));
     }
 }
