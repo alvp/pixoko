@@ -70,7 +70,7 @@ impl fmt::Display for FileError {
                 max_side,
             } => write!(
                 f,
-                "la imagen de {width}×{height} no cabe en una textura (lado máximo {max_side})"
+                "la imagen de {width}×{height} supera el lado máximo mostrable ({max_side})"
             ),
             FileError::TooManyPixels { width, height, max } => write!(
                 f,

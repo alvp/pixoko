@@ -131,8 +131,8 @@ fn background_of(mode: Mode, option: usize, color: Option<Rgba>) -> Option<Backg
     }
 }
 
-/// El formulario. `max_side` es el lado máximo de textura de la GPU: el de los campos es
-/// `min(8192, max_side)` (como mínimo 1).
+/// El formulario. `max_side` es el lado máximo que se muestra (`Canvas::MAX_SIDE`; ya no depende
+/// de la GPU): el de los campos es `min(8192, max_side)` (como mínimo 1).
 pub fn new_image_form(max_side: usize) -> FormSpec {
     let max = u32::try_from(max_side)
         .unwrap_or(u32::MAX)
@@ -344,8 +344,8 @@ pub fn carry_background(from: Mode, background: Background, to: Mode) -> Carry {
     }
 }
 
-/// Lo que ocupa una imagen: la del documento, la copia del lienzo y la subida a RGBA (RAM), y la
-/// textura RGBA8 (GPU).
+/// Lo que ocupa una imagen: la del documento y la subida a baldosas RGBA (RAM, transitoria: egui
+/// guarda cada subida hasta el final del fotograma), y las texturas RGBA8 (GPU).
 pub struct Memory {
     pub ram_bytes: u64,
     pub gpu_bytes: u64,
@@ -362,7 +362,7 @@ fn bytes_per_pixel(mode: Mode) -> u64 {
 pub fn memory_estimate(width: u32, height: u32, mode: Mode) -> Memory {
     let pixels = u64::from(width) * u64::from(height);
     Memory {
-        ram_bytes: pixels * (2 * bytes_per_pixel(mode) + 4),
+        ram_bytes: pixels * (bytes_per_pixel(mode) + 4),
         gpu_bytes: pixels * 4,
     }
 }
@@ -456,18 +456,13 @@ impl ImageAlloc for SystemAlloc {
     }
 }
 
-/// Las dos imágenes iguales: la del documento y la que se entrega al lienzo.
-pub struct NewImages {
-    pub document: Image,
-    pub canvas: Image,
-}
-
-/// Construye todo antes de tocar nada: la del documento, la del lienzo y la reserva de la subida a
-/// RGBA. Solo si las tres salen bien devuelve `Ok`.
-pub fn build_new_images(
+/// Construye la imagen del documento y reserva la subida a baldosas RGBA antes de tocar nada.
+/// Solo si las dos salen bien devuelve `Ok`; el lienzo la carga desde esa misma imagen
+/// (`Canvas::load`), sin segunda copia.
+pub fn build_new_image(
     spec: &NewImageSpec,
     alloc: &mut dyn ImageAlloc,
-) -> Result<NewImages, NewImageError> {
+) -> Result<Image, NewImageError> {
     if let Some(reason) = size_error(spec.width, spec.height, spec.mode) {
         return Err(NewImageError::Size(reason));
     }
@@ -480,15 +475,14 @@ pub fn build_new_images(
     let no_memory = |_| NewImageError::Memory {
         bytes: memory.ram_bytes,
     };
-    let document = alloc.image(spec).map_err(no_memory)?;
-    let canvas = alloc.image(spec).map_err(no_memory)?;
+    let image = alloc.image(spec).map_err(no_memory)?;
     let staging = usize::try_from(memory.gpu_bytes).unwrap_or(usize::MAX);
     if !alloc.probe(staging) {
         return Err(NewImageError::Memory {
             bytes: memory.ram_bytes,
         });
     }
-    Ok(NewImages { document, canvas })
+    Ok(image)
 }
 
 /// Estado de `sync_form` entre fotogramas: el modo anterior, el aviso pendiente y la memoria del

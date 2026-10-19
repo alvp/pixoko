@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use eframe::egui;
-use px_core::{Document, DocumentError};
+use px_core::{Document, DocumentError, Rgba};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
 use px_ui::canvas::Canvas;
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
@@ -36,6 +36,7 @@ use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::texture::pixel_rgba;
+use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{ToolEvent, ToolState, tool_color_label};
 use px_ui::toolbar::{show_toolbar, zoom_label};
 
@@ -57,7 +58,7 @@ use crate::dispatch::{Dispatched, Targets, dispatch};
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::licenses::wants_licenses;
 use crate::new_image::{
-    FormSync, NewImageError, SystemAlloc, build_new_images, describe_new, memory_notice,
+    FormSync, NewImageError, SystemAlloc, build_new_image, describe_new, memory_notice,
     open_new_image, spec_from_values, sync_form,
 };
 use crate::session::{Session, describe_saved, describe_saved_dialog};
@@ -112,6 +113,9 @@ struct App {
     convert: Option<ConvertSync>,
     /// Una conversión de una imagen grande que espera su fotograma: la entrada está bloqueada.
     pending_convert: Option<PendingConversion>,
+    /// Reserva de los búferes de las baldosas (cargar y regenerar); las pruebas la sustituyen por
+    /// una que falla.
+    tile_alloc: Box<dyn TileAlloc>,
 }
 
 impl App {
@@ -150,6 +154,7 @@ impl App {
             new_image: None,
             convert: None,
             pending_convert: None,
+            tile_alloc: Box::new(SystemTileAlloc),
         }
     }
 
@@ -218,36 +223,42 @@ impl App {
                 Confirmation::Confirmed => discard = true,
             }
         }
-        let max_side = ctx.input(|i| i.max_texture_side);
-        match self.session.open(path, max_side, discard) {
-            Ok(mut text) => {
-                self.confirm.clear();
-                self.dialogs.remember_dir(path);
-                if let Some(image) = self
-                    .session
-                    .document
-                    .image(self.session.document.main_image())
-                {
-                    self.canvas.set_image(image);
-                }
-                if ignored > 0 {
-                    text.push_str(&format!(" · se ignoran {ignored} más"));
-                }
-                if self.session.take_discarded_text() {
-                    text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
-                }
-                if self.session.take_removal_cancelled() {
-                    text = format!("{REMOVAL_CANCELLED_NOTICE} · {text}");
-                }
-                self.notify(ctx, text);
-            }
+        // El lienzo se carga **antes** de reemplazar el documento: si no hay memoria para las
+        // baldosas, la sesión y el lienzo quedan como estaban.
+        let loaded = match self.session.load(path, Canvas::MAX_SIDE, discard) {
+            Ok(loaded) => loaded,
             Err(error) => {
                 if from_cli {
                     eprintln!("px-app: {error}");
                 }
                 self.notify(ctx, error.to_string());
+                return;
             }
+        };
+        if let Err(error) = self
+            .canvas
+            .load_with(ctx, &loaded.image, &mut *self.tile_alloc)
+        {
+            if from_cli {
+                eprintln!("px-app: {error}");
+            }
+            self.notify(ctx, error.to_string());
+            return;
         }
+        let mut text = loaded.text.clone();
+        self.session.install(loaded);
+        self.confirm.clear();
+        self.dialogs.remember_dir(path);
+        if ignored > 0 {
+            text.push_str(&format!(" · se ignoran {ignored} más"));
+        }
+        if self.session.take_discarded_text() {
+            text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
+        }
+        if self.session.take_removal_cancelled() {
+            text = format!("{REMOVAL_CANCELLED_NOTICE} · {text}");
+        }
+        self.notify(ctx, text);
     }
 
     /// `Ctrl`+`S` (`as_copy` falso) o `Ctrl`+`Mayús`+`S`. Sin ruta, escribe en el directorio
@@ -469,7 +480,7 @@ impl App {
     }
 
     /// `Archivo → Nueva imagen…`: con cambios sin guardar, pide confirmación por repetición; luego
-    /// abre el diálogo (el lado máximo es el de textura de la GPU).
+    /// abre el diálogo (el lado máximo es `Canvas::MAX_SIDE`).
     fn begin_new_image(&mut self, ctx: &egui::Context) {
         let modified = self.session.modified();
         let now = ctx.input(|i| i.time);
@@ -477,16 +488,15 @@ impl App {
             self.notify(ctx, new_warning());
             return;
         }
-        let max_side = ctx.input(|i| i.max_texture_side);
         let locks = self.locks(ctx);
-        if open_new_image(&mut self.modal, max_side, locks) {
+        if open_new_image(&mut self.modal, Canvas::MAX_SIDE, locks) {
             self.modal_focus = None;
             self.confirm.clear();
             self.new_image = Some((FormSync::default(), modified));
         }
     }
 
-    /// El diálogo de nueva imagen se aceptó: construye todo (documento y copia del lienzo) y solo
+    /// El diálogo de nueva imagen se aceptó: construye la imagen, carga el lienzo desde ella y solo
     /// entonces reemplaza el documento; si algo falla, avisa y todo queda como estaba.
     fn finish_new_image(
         &mut self,
@@ -501,8 +511,8 @@ impl App {
             self.notify(ctx, crate::files::FileError::Unsaved.to_string());
             return;
         }
-        let images = match build_new_images(&spec, &mut SystemAlloc) {
-            Ok(images) => images,
+        let image = match build_new_image(&spec, &mut SystemAlloc) {
+            Ok(image) => image,
             Err(NewImageError::Size(reason)) => {
                 self.notify(ctx, reason);
                 return;
@@ -512,11 +522,14 @@ impl App {
                 return;
             }
         };
-        if let Err(error) = self.session.new_image(images.document, discard) {
+        if let Err(error) = self.canvas.load_with(ctx, &image, &mut *self.tile_alloc) {
             self.notify(ctx, error.to_string());
             return;
         }
-        self.canvas.set_owned_image(images.canvas);
+        if let Err(error) = self.session.new_image(image, discard) {
+            self.notify(ctx, error.to_string());
+            return;
+        }
         self.confirm.clear();
         let mut text = describe_new(&spec);
         if self.session.take_discarded_text() {
@@ -617,7 +630,23 @@ impl App {
         }
         match self.session.convert_mode(plan.target, plan.allowed) {
             Ok(changed) => {
-                self.finish::<std::convert::Infallible>(ctx, Ok(changed));
+                if changed && !self.refresh_now(ctx) {
+                    // No hay memoria para regenerar las baldosas: el documento manda, así que se
+                    // deshace la conversión (un intercambio que no reserva) y queda rehacer.
+                    let _ = self.session.undo();
+                    let blocks = self.session.take_dirty();
+                    self.canvas.invalidate(&blocks);
+                    self.notify(
+                        ctx,
+                        convert_memory_notice(
+                            width,
+                            height,
+                            plan.target,
+                            u64::from(width) * u64::from(height) * 4,
+                        ),
+                    );
+                    return;
+                }
                 if changed {
                     self.notify(ctx, describe_converted(plan.target, analysis));
                 }
@@ -650,23 +679,36 @@ impl App {
         }
     }
 
-    /// `Ok(true)`: algo cambió y la textura se regenera entera (las regiones son de la unidad
-    /// 14). `Ok(false)`: nada que hacer. `Err`: el documento quedó intacto y el error va al
-    /// título durante `NOTICE_SECS`.
+    /// `Ok(true)`: algo cambió y el lienzo marca como sucios los bloques que anotó la sesión (los
+    /// sube `sync` en este mismo fotograma, solo en las baldosas visibles). `Ok(false)`: nada que
+    /// hacer. `Err`: el documento quedó intacto y el error va al título durante `NOTICE_SECS`.
     fn finish<E: std::fmt::Display>(&mut self, ctx: &egui::Context, result: Result<bool, E>) {
         match result {
             Ok(true) => {
-                if let Some(image) = self
-                    .session
-                    .document
-                    .image(self.session.document.main_image())
-                {
-                    self.canvas.refresh(ctx, image);
-                }
+                let blocks = self.session.take_dirty();
+                self.canvas.invalidate(&blocks);
+                ctx.request_repaint();
             }
             Ok(false) => {}
             Err(error) => self.notify(ctx, error.to_string()),
         }
+    }
+
+    /// Marca lo anotado y regenera ya las baldosas visibles; `false` si no hubo memoria (las
+    /// baldosas siguen sucias).
+    fn refresh_now(&mut self, ctx: &egui::Context) -> bool {
+        let blocks = self.session.take_dirty();
+        self.canvas.invalidate(&blocks);
+        let Some(image) = self
+            .session
+            .document
+            .image(self.session.document.main_image())
+        else {
+            return true;
+        };
+        self.canvas
+            .sync_with(ctx, image, &mut *self.tile_alloc)
+            .is_ok()
     }
 }
 
@@ -822,6 +864,7 @@ impl eframe::App for App {
             let result = self
                 .tools
                 .canvas_input_with(&mut self.session.document, id, pixel, input);
+            self.session.absorb(self.tools.take_changes());
             self.finish(&ctx, result);
             for event in self.tools.take_events() {
                 match event {
@@ -841,8 +884,10 @@ impl eframe::App for App {
             self.apply_action(&ctx, frame, action, origin);
         }
 
-        // Vista previa del color que se está editando: la textura la lleva el lienzo y vuelve al
-        // documento al soltar o cancelar.
+        // Vista previa del color que se está editando y superposición del trazo: ambas viven en
+        // las texturas del lienzo y vuelven al documento al soltar o cancelar. Después, `sync`
+        // sube lo que cambió en el documento (solo las baldosas visibles).
+        let mut sync_error = None;
         if let Some(image) = self.session.document.image(id) {
             match self.session.editor.preview() {
                 Some((EditTarget::Entry(index), color)) => {
@@ -850,14 +895,21 @@ impl eframe::App for App {
                 }
                 _ => self.canvas.end_preview(&ctx, image),
             }
+            let pending: Vec<(u32, u32, Rgba)> = self
+                .tools
+                .preview()
+                .filter_map(|edit| Some((edit.x, edit.y, pixel_rgba(image, edit.pixel)?)))
+                .collect();
+            self.canvas.set_overlay(&ctx, image, &pending);
+            if let Err(error) = self.canvas.sync_with(&ctx, image, &mut *self.tile_alloc) {
+                sync_error = Some(error.to_string());
+            }
         }
-
+        if let Some(text) = sync_error {
+            self.notify(&ctx, text);
+        }
         let image = self.session.document.image(id);
-        let overlay = self.tools.preview().filter_map(|edit| {
-            let color = pixel_rgba(image?, edit.pixel)?;
-            Some((edit.x, edit.y, color))
-        });
-        let canvas_info = self.canvas.paint(ui, overlay);
+        let canvas_info = self.canvas.paint(ui);
 
         let now = ui.input(|i| i.time);
         let notice = self

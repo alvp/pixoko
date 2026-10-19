@@ -7,11 +7,13 @@ use px_core::{Allowed, Command, Document, DocumentError, Image, Mode, Pixel};
 use px_formats::write_png;
 use px_ui::color::{ColorChoice, SlotBank, clamp_choice, initial_choice, pixel_for_choice_with};
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
+use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
 use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_ops::{
     Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_fate, summary,
 };
 use px_ui::pick::{Picked, pick_notice};
+use px_ui::view::Size;
 
 use crate::dialogs::with_png_extension;
 use crate::files::{
@@ -43,6 +45,16 @@ pub struct PickOutcome {
     pub notice: Option<String>,
 }
 
+/// Un fichero leído y listo para instalar como documento (`Session::load` + `Session::install`).
+pub struct Loaded {
+    pub image: Image,
+    /// El aviso de apertura.
+    pub text: String,
+    choice: ColorChoice,
+    path: PathBuf,
+    conversion: Option<String>,
+}
+
 pub struct Session {
     pub document: Document,
     /// Color activo del panel de paletas. Abrir un fichero lo reinicia (specs/hito-2-panel-paletas.md).
@@ -69,6 +81,11 @@ pub struct Session {
     saved_id: u64,
     /// Conversiones del fichero abierto, si las hubo: el primer `save` hace una copia.
     conversion: Option<String>,
+    /// Qué bloques tocó cada paso de la historia, por `state_id` (specs/hito-2-zoom-baldosas.md,
+    /// decisión 6): `undo` y `redo` invalidan lo que anotó el paso.
+    log: ChangeLog,
+    /// Bloques tocados desde la última vez que el lienzo los tomó; `None`: nada anotado.
+    dirty: Option<BlockSet>,
 }
 
 impl Session {
@@ -89,7 +106,55 @@ impl Session {
             path: None,
             discarded_text: false,
             conversion: None,
+            log: ChangeLog::new(),
+            dirty: None,
         }
+    }
+
+    fn image_size(&self) -> Size {
+        self.document
+            .image(self.document.main_image())
+            .map_or(Size::new(0, 0), |image| {
+                Size::new(image.width(), image.height())
+            })
+    }
+
+    /// Toda la imagen.
+    fn full(&self) -> BlockSet {
+        let size = self.image_size();
+        BlockSet::full(size.width, size.height)
+    }
+
+    fn note_dirty(&mut self, blocks: &BlockSet) {
+        match &mut self.dirty {
+            Some(dirty) => dirty.union(blocks),
+            None => self.dirty = Some(blocks.clone()),
+        }
+    }
+
+    /// Anota un paso que acaba de aplicarse: su región, por el `state_id` que dejó.
+    fn note_applied(&mut self, blocks: BlockSet) {
+        self.log.record(self.document.state_id(), blocks.clone());
+        self.note_dirty(&blocks);
+    }
+
+    /// Anota los cambios que aplicaron las herramientas (`ToolState::take_changes`).
+    pub fn absorb(&mut self, changes: Vec<Change>) {
+        for change in changes {
+            self.log.record(change.state, change.blocks.clone());
+            self.note_dirty(&change.blocks);
+        }
+    }
+
+    /// La unión de los bloques anotados desde la última vez, que el lienzo debe regenerar. Si no
+    /// se anotó nada (un cambio que no se conoce), toda la imagen.
+    pub fn take_dirty(&mut self) -> BlockSet {
+        self.dirty.take().unwrap_or_else(|| self.full())
+    }
+
+    #[cfg(test)]
+    pub fn change_log(&self) -> &ChangeLog {
+        &self.log
     }
 
     /// Cambia la elección por teclado; si cambió, el panel muestra su fila en el fotograma
@@ -148,6 +213,7 @@ impl Session {
             allowed,
         })?;
         if changed {
+            self.note_applied(self.full());
             self.after_history_move(before);
         }
         Ok(changed)
@@ -156,7 +222,13 @@ impl Session {
     /// Deshace un paso y deja la selección válida para la paleta resultante.
     pub fn undo(&mut self) -> Result<(), DocumentError> {
         let before = self.choice;
+        let from = self.document.state_id();
         let result = self.document.undo();
+        if result.is_ok() {
+            // Deshacer desde `from` toca lo que tocó el paso que dejó ese estado.
+            let blocks = self.log.get(from).cloned().unwrap_or_else(|| self.full());
+            self.note_dirty(&blocks);
+        }
         self.after_history_move(before);
         result
     }
@@ -165,6 +237,12 @@ impl Session {
     pub fn redo(&mut self) -> Result<(), DocumentError> {
         let before = self.choice;
         let result = self.document.redo();
+        if result.is_ok() {
+            // Rehacer hacia `to` toca lo mismo que tocó el paso al aplicarse.
+            let to = self.document.state_id();
+            let blocks = self.log.get(to).cloned().unwrap_or_else(|| self.full());
+            self.note_dirty(&blocks);
+        }
         self.after_history_move(before);
         result
     }
@@ -250,6 +328,8 @@ impl Session {
             (op, self.ops.removal()),
             (PaletteOp::Remove { index, .. }, Some(removal)) if removal.index == index
         );
+        let size = self.image_size();
+        let blocks = dirty_of(&command, size);
         if !self.document.apply(command)? {
             let notice = match op {
                 PaletteOp::Rotate { len, .. } if len >= 2 => {
@@ -263,6 +343,8 @@ impl Session {
                 notice: notice.map(str::to_string),
             });
         }
+
+        self.note_applied(blocks);
 
         // El texto pendiente del campo, si la operación movió, quitó o cambió su entrada.
         let stale = match self.editor.pending_target() {
@@ -345,11 +427,17 @@ impl Session {
     pub fn commit_edit(&mut self, commit: Commit) -> Result<bool, DocumentError> {
         let image = self.document.main_image();
         match commit.target {
-            EditTarget::Entry(index) => self.document.apply(Command::SetPaletteColor {
-                image,
-                index,
-                color: commit.color,
-            }),
+            EditTarget::Entry(index) => {
+                let changed = self.document.apply(Command::SetPaletteColor {
+                    image,
+                    index,
+                    color: commit.color,
+                })?;
+                if changed {
+                    self.note_applied(self.full());
+                }
+                Ok(changed)
+            }
             EditTarget::Slot(slot) => {
                 if let Some(mode) = self.document.image(image).map(|image| image.mode()) {
                     self.slots.get_mut(mode).set(slot, commit.color);
@@ -369,15 +457,10 @@ impl Session {
         self.document.state_id() != self.saved_id
     }
 
-    /// Abre `path` y reemplaza el documento (historia vacía). Con cambios sin guardar y sin
-    /// `discard`, `Err(Unsaved)` sin leer el fichero. Con cualquier error la sesión no cambia.
-    /// Devuelve el aviso de apertura.
-    pub fn open(
-        &mut self,
-        path: &Path,
-        max_side: usize,
-        discard: bool,
-    ) -> Result<String, FileError> {
+    /// Lee `path` **sin cambiar nada** (ni documento, ni ruta, ni registro): el resultado se
+    /// instala con [`Session::install`], después de cargar el lienzo (specs/hito-2-zoom-baldosas.md,
+    /// decisión 11). Con cambios sin guardar y sin `discard`, `Err(Unsaved)` sin leer el fichero.
+    pub fn load(&self, path: &Path, max_side: usize, discard: bool) -> Result<Loaded, FileError> {
         if self.modified() && !discard {
             return Err(FileError::Unsaved);
         }
@@ -394,7 +477,38 @@ impl Session {
         }
         let conversion = (!reason.is_empty()).then_some(reason);
         let choice = initial_choice(&read.image);
-        self.replace_document(read.image, choice, Some(absolute), conversion);
+        Ok(Loaded {
+            image: read.image,
+            text,
+            choice,
+            path: absolute,
+            conversion,
+        })
+    }
+
+    /// Reemplaza el documento por lo leído (historia y registro vacíos).
+    pub fn install(&mut self, loaded: Loaded) {
+        self.replace_document(
+            loaded.image,
+            loaded.choice,
+            Some(loaded.path),
+            loaded.conversion,
+        );
+    }
+
+    /// Abre `path` y reemplaza el documento (historia vacía): [`Session::load`] más
+    /// [`Session::install`]. Solo lo usan las pruebas: la app carga el lienzo entre las dos. Con cualquier error la sesión no cambia. Devuelve el aviso de
+    /// apertura.
+    #[cfg(test)]
+    pub fn open(
+        &mut self,
+        path: &Path,
+        max_side: usize,
+        discard: bool,
+    ) -> Result<String, FileError> {
+        let loaded = self.load(path, max_side, discard)?;
+        let text = loaded.text.clone();
+        self.install(loaded);
         Ok(text)
     }
 
@@ -432,6 +546,8 @@ impl Session {
         self.ops.reset();
         self.editor.reset();
         self.document = Document::new(image);
+        self.log.clear();
+        self.dirty = None;
         self.saved_id = self.document.state_id();
         self.path = path;
     }
