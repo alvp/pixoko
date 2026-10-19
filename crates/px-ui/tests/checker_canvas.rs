@@ -694,6 +694,8 @@ impl Banco {
         del_lienzo.set.remove(&TextureId::default());
         del_lienzo.free.retain(|id| *id != TextureId::default());
         self.texturas.aplica(&del_lienzo);
+        // La copia no se entrega a la GPU: egui exige vaciarla antes de soltarla.
+        del_lienzo.clear();
         output.textures_delta.clear();
         Salida {
             formas: std::mem::take(&mut output.shapes),
@@ -2300,11 +2302,11 @@ fn comprueba_base_con_damero_existente(banco: &Banco, salida: &Salida, fondo: Ca
 fn fila_14_volver_a_checker_crea_la_textura_del_damero_una_sola_vez() {
     let mut banco =
         Banco::sin_calentar(PANTALLA, 1.0, imagen_azul(), CanvasBackground::Black, false);
-    let imagen = banco.canvas.texture_id().expect("textura de la imagen");
     for k in 0..3 {
         let salida = banco.corre(vec![], &bloques());
         assert_eq!(banco.canvas.checker_texture_id(), None);
         if k == 0 {
+            let imagen = banco.canvas.texture_id().expect("textura de la imagen");
             // La carga de la baldosa y los bloques de la superposición: solo la imagen.
             assert!(!salida.subidas.is_empty());
             assert_eq!(

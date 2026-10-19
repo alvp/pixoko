@@ -665,6 +665,8 @@ impl Banco {
         delta.set.remove(&TextureId::Managed(0));
         delta.free.remove(&TextureId::Managed(0));
         self.compuestas.aplica(&delta);
+        // La copia no se entrega a la GPU: egui exige vaciarla antes de soltarla.
+        delta.clear();
         salida.textures_delta.clear();
         let formas = std::mem::take(&mut salida.shapes);
         let (info, entradas) = resultado.expect("el lienzo se dibuja");

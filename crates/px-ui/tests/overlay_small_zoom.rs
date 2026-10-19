@@ -303,7 +303,10 @@ impl Banco {
                 .expect("el documento se carga");
             info = Some(canvas.paint(ui));
         });
-        self.texturas.aplica(&sin_la_fuente(&salida.textures_delta));
+        let mut del_lienzo = sin_la_fuente(&salida.textures_delta);
+        self.texturas.aplica(&del_lienzo);
+        // La copia no se entrega a la GPU: egui exige vaciarla antes de soltarla.
+        del_lienzo.clear();
         salida.textures_delta.clear();
         let formas = std::mem::take(&mut salida.shapes);
         let primitivas = self.ctx.tessellate(formas.clone(), self.ppp);

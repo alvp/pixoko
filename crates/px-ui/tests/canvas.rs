@@ -56,6 +56,8 @@ impl Banco {
         delta.set.remove(&TextureId::Managed(0));
         delta.free.remove(&TextureId::Managed(0));
         self.texturas.aplica(&delta);
+        // La copia no se entrega a la GPU: egui exige vaciarla antes de soltarla.
+        delta.clear();
     }
 
     /// Ejecuta un fotograma con los eventos dados y devuelve su salida y la información del
@@ -371,7 +373,8 @@ fn comprueba_las_dos_baldosas(banco: &Banco, etiqueta: &str) {
 /// El píxel de imagen bajo el píxel físico `dx` (desde el borde izquierdo de la imagen) y la
 /// primera fila de pantalla de la imagen, con el puntero ahí (a `ppp` 1: un punto = un píxel).
 fn hover_en(banco: &mut Banco, rect: Rect, dx: f32) -> Option<(u32, u32)> {
-    let pos = pos2(rect.min.x + dx + 0.5, rect.min.y + 0.5);
+    // +0,25 y no +0,5: `interact` redondea a píxeles físicos y 0,5 sube al siguiente.
+    let pos = pos2(rect.min.x + dx + 0.25, rect.min.y + 0.25);
     let mut f = banco.fotograma(vec![Event::PointerMoved(pos)], Some(1024));
     Banco::limpiar(&mut f);
     f.info.hover
