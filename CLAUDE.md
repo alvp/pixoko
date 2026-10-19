@@ -14,6 +14,7 @@
 - No toques px-core ni px-raster sin mi aprobación expresa.
 - No hagas capturas de pantalla del escritorio (ni de la ventana ni de nada que se vea en pantalla).
   La prueba manual la hago yo.
+- Las compilaciones desechables y las copias de prueba NO van en `/tmp` (es un tmpfs, memoria): usa `CARGO_TARGET_DIR=~/.cache/pixoko-scratch` o una carpeta en el disco, y bórrala al terminar.
 
 ## Unidad de trabajo (una función o un panel; commits pequeños)
 1. **Spec primero**, en `specs/` y con su fila en `specs/INDEX.md`:
