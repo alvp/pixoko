@@ -6,9 +6,10 @@
 //! - Fila 2 (parte pura): máximo de cada campo según el lado de textura de la GPU.
 //! - Fila 3: `background_pixel`, `default_background`, `spec_from_values` y los motivos del hexadecimal.
 //! - Fila 4: `carry_background` (tabla D1b) y `sync_form` aplicándola en el diálogo.
-//! - Fila 5: `initial_palette` (los 32 valores literales de D2) y `build_new_images` con el real.
+//! - Fila 5: `initial_palette` (los 32 valores literales de D2) y `build_new_image` con el real.
 //! - Fila 6: `memory_estimate` y `report_text`.
-//! - Fila 7: `ImageAlloc` falso que falla en la 1.ª imagen, la 2.ª o el `probe`; el real a 8192².
+//! - Fila 7: `ImageAlloc` falso que falla en la imagen o en el `probe` (la 2.ª imagen, la copia del
+//!   lienzo, desapareció en la 14a-2); el real a 8192².
 //! - Fila 8 (`describe_new`): el aviso de 5 s tras crear.
 //! - Propiedades 1 (construir es exacto), 2 (trasladar nunca pierde color en silencio, exhaustiva),
 //!   3 (el estado del formulario no se corrompe) y 4 (fallar no cambia nada, exhaustiva).
@@ -20,7 +21,7 @@
 //! - Orden de las opciones de `modo`: Indexado (0), RGBA (1), Gris con alfa (2), Gris (3), y por
 //!   defecto Indexado. Opciones del fondo: RGBA y Gris con alfa Transparente, Blanco, Negro, Color…;
 //!   Gris Blanco, Negro, Color…; Indexado Transparente, Blanco, Negro (la primera es la de defecto).
-//! - Derives no listados: `NewImageSpec`, `NewImages`, `NewImageError`, `Carry` y `Memory` no se
+//! - Derives no listados: `NewImageSpec`, `NewImageError`, `Carry` y `Memory` no se
 //!   comparan ni se imprimen (se miran sus campos y se casan sus variantes); solo se suponen los de
 //!   `Background` (los de la spec).
 //! - `FormSync` se construye con `FormSync::default()` (la spec no da constructor). La primera
@@ -39,8 +40,8 @@
 //!   `gris con alfa`); solo el indexado lleva ` · 32 colores`.
 //! - El tamaño «grande» de la fila 5 es 1000 × 600 (esquinas y centro).
 //! - El recorrido de `App` (D8) se escribe aquí como el ayudante `crea` (el cableado es del último
-//!   commit de la unidad): `Unsaved` antes de construir nada, luego `build_new_images`, luego
-//!   `Session::new_image` y `Canvas::set_owned_image`. Se prueban los contratos de las tres piezas.
+//!   commit de la unidad): `Unsaved` antes de construir nada, luego `build_new_image`, luego
+//!   `Session::new_image` y `Canvas::set_image` con la imagen del documento. Se prueban los contratos de las tres piezas.
 //! - `new_image_form` con un lado de textura menor que 64: el valor por defecto es `min(64, máximo)`
 //!   (`validate` rechaza un defecto fuera de rango); con 1, el defecto es 1.
 //! - La línea de estado del informe de la propiedad 3 se compara solo en lo que dice la spec
@@ -269,15 +270,15 @@ fn color_visible(mode: Mode, fondo: Background) -> Option<Rgba> {
 }
 
 /// `Ok` o el motivo en texto (para no suponer `Debug` en `NewImageError`).
-fn construye(spec: &NewImageSpec, alloc: &mut dyn ImageAlloc) -> Result<NewImages, String> {
-    match build_new_images(spec, alloc) {
-        Ok(images) => Ok(images),
+fn construye(spec: &NewImageSpec, alloc: &mut dyn ImageAlloc) -> Result<Image, String> {
+    match build_new_image(spec, alloc) {
+        Ok(image) => Ok(image),
         Err(NewImageError::Size(texto)) => Err(format!("Size({texto})")),
         Err(NewImageError::Memory { bytes }) => Err(format!("Memory({bytes})")),
     }
 }
 
-fn construye_real(spec: &NewImageSpec) -> NewImages {
+fn construye_real(spec: &NewImageSpec) -> Image {
     construye(spec, &mut SystemAlloc).unwrap_or_else(|e| {
         panic!(
             "{:?} {}×{} {:?}: {e}",
@@ -1404,20 +1405,17 @@ fn fila_5_la_imagen_creada_tiene_el_tamano_y_el_modo_pedidos_y_todos_los_pixeles
         for mode in MODOS {
             for fondo in fondos_validos(mode) {
                 let spec = spec_nueva(width, height, mode, fondo);
-                let images = construye_real(&spec);
+                let image = construye_real(&spec);
                 let esperado = background_pixel(mode, fondo).expect("fondo válido");
-                for (nombre, image) in [("document", &images.document), ("canvas", &images.canvas)]
-                {
-                    assert_eq!((image.width(), image.height()), (width, height));
-                    assert_eq!(image.mode(), mode);
-                    for y in 0..height {
-                        for x in 0..width {
-                            assert_eq!(
-                                image.get_pixel(x, y),
-                                Ok(esperado),
-                                "{nombre} {width}×{height} {mode:?} {fondo:?} en ({x}, {y})"
-                            );
-                        }
+                assert_eq!((image.width(), image.height()), (width, height));
+                assert_eq!(image.mode(), mode);
+                for y in 0..height {
+                    for x in 0..width {
+                        assert_eq!(
+                            image.get_pixel(x, y),
+                            Ok(esperado),
+                            "{width}×{height} {mode:?} {fondo:?} en ({x}, {y})"
+                        );
                     }
                 }
             }
@@ -1431,24 +1429,22 @@ fn fila_5_en_la_imagen_grande_valen_el_fondo_las_cuatro_esquinas_y_el_centro() {
     for mode in MODOS {
         for fondo in fondos_validos(mode) {
             let spec = spec_nueva(width, height, mode, fondo);
-            let images = construye_real(&spec);
+            let image = construye_real(&spec);
             let esperado = background_pixel(mode, fondo).expect("fondo válido");
-            for image in [&images.document, &images.canvas] {
-                assert_eq!((image.width(), image.height()), (width, height));
-                assert_eq!(image.mode(), mode);
-                for (x, y) in [
-                    (0, 0),
-                    (width - 1, 0),
-                    (0, height - 1),
-                    (width - 1, height - 1),
-                    (width / 2, height / 2),
-                ] {
-                    assert_eq!(
-                        image.get_pixel(x, y),
-                        Ok(esperado),
-                        "{mode:?} {fondo:?} en ({x}, {y})"
-                    );
-                }
+            assert_eq!((image.width(), image.height()), (width, height));
+            assert_eq!(image.mode(), mode);
+            for (x, y) in [
+                (0, 0),
+                (width - 1, 0),
+                (0, height - 1),
+                (width - 1, height - 1),
+                (width / 2, height / 2),
+            ] {
+                assert_eq!(
+                    image.get_pixel(x, y),
+                    Ok(esperado),
+                    "{mode:?} {fondo:?} en ({x}, {y})"
+                );
             }
         }
     }
@@ -1457,44 +1453,42 @@ fn fila_5_en_la_imagen_grande_valen_el_fondo_las_cuatro_esquinas_y_el_centro() {
 #[test]
 fn fila_5_el_indexado_lleva_la_paleta_de_d2_con_blanco_negro_y_transparente_en_sus_indices() {
     for fondo in [TRANSPARENTE, BLANCO, NEGRO] {
-        let images = construye_real(&spec_nueva(7, 5, Mode::Indexed, fondo));
-        for image in [&images.document, &images.canvas] {
-            assert_eq!(image.palette(), Some(&initial_palette()), "{fondo:?}");
-            let indice = match fondo {
-                Background::Transparent => 0,
-                Background::White => 31,
-                Background::Black => 25,
-                Background::Color(_) => unreachable!(),
-            };
-            assert_eq!(
-                image.get_pixel(3, 2),
-                Ok(Pixel::Indexed(indice)),
-                "{fondo:?}"
-            );
-            let palette = image.palette().expect("paleta");
-            let visible = palette.resolved(indice).expect("índice");
-            let esperado = match fondo {
-                Background::Transparent => Rgba::new(0, 0, 0, 0),
-                Background::White => Rgba::opaque(255, 255, 255),
-                _ => Rgba::opaque(0, 0, 0),
-            };
-            assert_eq!(visible, esperado, "{fondo:?}");
-        }
+        let image = construye_real(&spec_nueva(7, 5, Mode::Indexed, fondo));
+        assert_eq!(image.palette(), Some(&initial_palette()), "{fondo:?}");
+        let indice = match fondo {
+            Background::Transparent => 0,
+            Background::White => 31,
+            Background::Black => 25,
+            Background::Color(_) => unreachable!(),
+        };
+        assert_eq!(
+            image.get_pixel(3, 2),
+            Ok(Pixel::Indexed(indice)),
+            "{fondo:?}"
+        );
+        let palette = image.palette().expect("paleta");
+        let visible = palette.resolved(indice).expect("índice");
+        let esperado = match fondo {
+            Background::Transparent => Rgba::new(0, 0, 0, 0),
+            Background::White => Rgba::opaque(255, 255, 255),
+            _ => Rgba::opaque(0, 0, 0),
+        };
+        assert_eq!(visible, esperado, "{fondo:?}");
     }
     // Los demás modos no llevan paleta.
     for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
-        let images = construye_real(&spec_nueva(2, 2, mode, default_background(mode)));
-        assert!(images.document.palette().is_none(), "{mode:?}");
-        assert!(images.canvas.palette().is_none(), "{mode:?}");
+        let image = construye_real(&spec_nueva(2, 2, mode, default_background(mode)));
+        assert!(image.palette().is_none(), "{mode:?}");
     }
 }
 
 #[test]
-fn fila_5_document_y_canvas_son_iguales_y_envueltos_en_document_no_tienen_ruta_ni_historia() {
+fn fila_5_envuelta_en_document_la_imagen_no_tiene_ruta_ni_historia() {
+    // Antes (unidades 19 a 14a-1) se afirmaba también `document == canvas`: la segunda copia, la
+    // del lienzo, desaparece (decisión 10 de la 14a-2).
     for mode in MODOS {
-        let images = construye_real(&spec_nueva(9, 4, mode, default_background(mode)));
-        assert_eq!(images.document, images.canvas, "{mode:?}");
-        let document = Document::new(images.document);
+        let image = construye_real(&spec_nueva(9, 4, mode, default_background(mode)));
+        let document = Document::new(image);
         assert!(!document.can_undo(), "{mode:?}");
         assert!(!document.can_redo(), "{mode:?}");
         assert_eq!(document.state_id(), 0, "{mode:?}");
@@ -1524,7 +1518,7 @@ fn memoria(width: u32, height: u32, mode: Mode) -> (u64, u64) {
 }
 
 #[test]
-fn fila_6_memory_estimate_es_n_por_2_bpp_mas_4_en_ram_y_4_n_en_gpu() {
+fn fila_6_memory_estimate_es_n_por_bpp_mas_4_en_ram_y_4_n_en_gpu() {
     for (width, height) in [
         (1u32, 1u32),
         (64, 64),
@@ -1540,7 +1534,7 @@ fn fila_6_memory_estimate_es_n_por_2_bpp_mas_4_en_ram_y_4_n_en_gpu() {
             let n = u64::from(width) * u64::from(height);
             assert_eq!(
                 memoria(width, height, mode),
-                (n * (2 * bpp(mode) + 4), 4 * n),
+                (n * (bpp(mode) + 4), 4 * n),
                 "{width}×{height} {mode:?}"
             );
         }
@@ -1549,13 +1543,14 @@ fn fila_6_memory_estimate_es_n_por_2_bpp_mas_4_en_ram_y_4_n_en_gpu() {
 
 #[test]
 fn fila_6_memory_estimate_da_las_cifras_de_la_spec() {
-    assert_eq!(memoria(1024, 1024, Mode::Rgba), (12 * MIB, 4 * MIB));
-    assert_eq!(memoria(4096, 4096, Mode::Rgba), (192 * MIB, 64 * MIB));
-    assert_eq!(memoria(8192, 8192, Mode::Rgba), (768 * MIB, 256 * MIB));
-    assert_eq!(memoria(8192, 8192, Mode::GrayAlpha), (512 * MIB, 256 * MIB));
-    assert_eq!(memoria(8192, 8192, Mode::Gray), (384 * MIB, 256 * MIB));
-    assert_eq!(memoria(8192, 8192, Mode::Indexed), (384 * MIB, 256 * MIB));
-    assert_eq!(memoria(4097, 4096, Mode::Rgba), (201_375_744, 67_125_248));
+    // RAM = N · (bytes por píxel + 4) desde la 14a-2 (antes N · (2 · bytes por píxel + 4)).
+    assert_eq!(memoria(1024, 1024, Mode::Rgba), (8 * MIB, 4 * MIB));
+    assert_eq!(memoria(4096, 4096, Mode::Rgba), (128 * MIB, 64 * MIB));
+    assert_eq!(memoria(8192, 8192, Mode::Rgba), (512 * MIB, 256 * MIB));
+    assert_eq!(memoria(8192, 8192, Mode::GrayAlpha), (384 * MIB, 256 * MIB));
+    assert_eq!(memoria(8192, 8192, Mode::Gray), (320 * MIB, 256 * MIB));
+    assert_eq!(memoria(8192, 8192, Mode::Indexed), (320 * MIB, 256 * MIB));
+    assert_eq!(memoria(4097, 4096, Mode::Rgba), (134_250_496, 67_125_248));
 }
 
 const AVISO_DE_TAMANO: &str = "aviso: más de 16777216 px; puede ir lento";
@@ -1571,7 +1566,7 @@ fn fila_6_report_text_menos_de_1_mib_en_64_y_256_al_cuadrado() {
         informe(Some((64, 64)), Mode::Rgba, None),
         "Memoria: menos de 1 MiB"
     );
-    // 256² RGBA son 0,75 MiB de RAM: todavía menos de 1.
+    // 256² RGBA son 0,5 MiB de RAM: todavía menos de 1.
     assert_eq!(
         informe(Some((256, 256)), Mode::Rgba, None),
         "Memoria: menos de 1 MiB"
@@ -1586,37 +1581,37 @@ fn fila_6_report_text_menos_de_1_mib_en_64_y_256_al_cuadrado() {
 fn fila_6_report_text_da_los_textos_exactos_de_d4() {
     assert_eq!(
         informe(Some((1024, 1024)), Mode::Rgba, None),
-        "Memoria: ~12 MiB + 4 MiB de GPU"
+        "Memoria: ~8 MiB + 4 MiB de GPU"
     );
     assert_eq!(
         informe(Some((4096, 4096)), Mode::Rgba, None),
-        "Memoria: ~192 MiB + 64 MiB de GPU",
+        "Memoria: ~128 MiB + 64 MiB de GPU",
         "4096² no avisa"
     );
     assert_eq!(
         informe(Some((8192, 8192)), Mode::Rgba, None),
-        format!("Memoria: ~768 MiB + 256 MiB de GPU\n{AVISO_DE_TAMANO}")
-    );
-    assert_eq!(
-        informe(Some((8192, 8192)), Mode::GrayAlpha, None),
         format!("Memoria: ~512 MiB + 256 MiB de GPU\n{AVISO_DE_TAMANO}")
     );
     assert_eq!(
-        informe(Some((8192, 8192)), Mode::Gray, None),
+        informe(Some((8192, 8192)), Mode::GrayAlpha, None),
         format!("Memoria: ~384 MiB + 256 MiB de GPU\n{AVISO_DE_TAMANO}")
     );
     assert_eq!(
+        informe(Some((8192, 8192)), Mode::Gray, None),
+        format!("Memoria: ~320 MiB + 256 MiB de GPU\n{AVISO_DE_TAMANO}")
+    );
+    assert_eq!(
         informe(Some((8192, 8192)), Mode::Indexed, None),
-        format!("Memoria: ~384 MiB + 256 MiB de GPU\n{LINEA_DE_PALETA}\n{AVISO_DE_TAMANO}")
+        format!("Memoria: ~320 MiB + 256 MiB de GPU\n{LINEA_DE_PALETA}\n{AVISO_DE_TAMANO}")
     );
 }
 
 #[test]
 fn fila_6_el_redondeo_es_hacia_arriba() {
-    // 4097 × 4096 RGBA: 192,01 MiB de RAM y 64,004 de GPU.
+    // 4097 × 4096 RGBA: 128,01 MiB de RAM y 64,004 de GPU.
     assert_eq!(
         informe(Some((4097, 4096)), Mode::Rgba, None),
-        format!("Memoria: ~193 MiB + 65 MiB de GPU\n{AVISO_DE_TAMANO}")
+        format!("Memoria: ~129 MiB + 65 MiB de GPU\n{AVISO_DE_TAMANO}")
     );
 }
 
@@ -1757,18 +1752,19 @@ enum Llamada {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fallo {
     Ninguno,
-    PrimeraImagen,
-    SegundaImagen,
+    /// Falla la reserva de la imagen del documento.
+    Imagen,
+    /// Falla la reserva de la subida a baldosas (`probe`). Desde la 14a-2 ya no hay una segunda
+    /// imagen (la copia del lienzo): quedan estos dos pasos.
     Probe,
 }
 
-const FALLOS: [Fallo; 3] = [Fallo::PrimeraImagen, Fallo::SegundaImagen, Fallo::Probe];
+const FALLOS: [Fallo; 2] = [Fallo::Imagen, Fallo::Probe];
 
 /// Un `ImageAlloc` que cuenta las llamadas, delega en el real y falla donde se le dice.
 struct Falso {
     fallo: Fallo,
     llamadas: Vec<Llamada>,
-    imagenes: usize,
 }
 
 impl Falso {
@@ -1776,7 +1772,6 @@ impl Falso {
         Falso {
             fallo,
             llamadas: Vec::new(),
-            imagenes: 0,
         }
     }
 }
@@ -1784,12 +1779,7 @@ impl Falso {
 impl ImageAlloc for Falso {
     fn image(&mut self, spec: &NewImageSpec) -> Result<Image, ImageError> {
         self.llamadas.push(Llamada::Imagen);
-        self.imagenes += 1;
-        let falla = matches!(
-            (self.fallo, self.imagenes),
-            (Fallo::PrimeraImagen, 1) | (Fallo::SegundaImagen, 2)
-        );
-        if falla {
+        if self.fallo == Fallo::Imagen {
             return Err(ImageError::TooLarge {
                 width: spec.width,
                 height: spec.height,
@@ -1806,32 +1796,23 @@ impl ImageAlloc for Falso {
 
 fn llamadas_esperadas(fallo: Fallo, bytes_del_probe: usize) -> Vec<Llamada> {
     match fallo {
-        Fallo::PrimeraImagen => vec![Llamada::Imagen],
-        Fallo::SegundaImagen => vec![Llamada::Imagen, Llamada::Imagen],
-        Fallo::Probe | Fallo::Ninguno => vec![
-            Llamada::Imagen,
-            Llamada::Imagen,
-            Llamada::Probe(bytes_del_probe),
-        ],
+        Fallo::Imagen => vec![Llamada::Imagen],
+        Fallo::Probe | Fallo::Ninguno => vec![Llamada::Imagen, Llamada::Probe(bytes_del_probe)],
     }
 }
 
 #[test]
-fn fila_7_sin_fallo_el_falso_ve_imagen_copia_y_probe_de_4_n_bytes_y_da_ok() {
+fn fila_7_sin_fallo_el_falso_ve_una_imagen_y_probe_de_4_n_bytes_y_da_ok() {
     for mode in MODOS {
         let spec = spec_nueva(100, 50, mode, default_background(mode));
         let mut falso = Falso::nuevo(Fallo::Ninguno);
-        let images = construye(&spec, &mut falso).expect("sin fallo da Ok");
+        let image = construye(&spec, &mut falso).expect("sin fallo da Ok");
         assert_eq!(
             falso.llamadas,
             llamadas_esperadas(Fallo::Ninguno, 4 * 100 * 50),
             "{mode:?}"
         );
-        assert_eq!(images.document, images.canvas);
-        assert_eq!(
-            (images.document.width(), images.document.height()),
-            (100, 50)
-        );
+        assert_eq!((image.width(), image.height()), (100, 50));
     }
 }
 
@@ -1841,7 +1822,7 @@ fn fila_7_cada_fallo_da_err_memory_con_los_bytes_de_la_estimacion_y_no_se_llama_
         for fallo in FALLOS {
             let spec = spec_nueva(100, 50, mode, default_background(mode));
             let mut falso = Falso::nuevo(fallo);
-            let resultado = build_new_images(&spec, &mut falso);
+            let resultado = build_new_image(&spec, &mut falso);
             match resultado {
                 Err(NewImageError::Memory { bytes }) => assert_eq!(
                     bytes,
@@ -1873,20 +1854,13 @@ fn fila_7_el_probe_recibe_los_bytes_de_la_conversion_a_rgba_de_la_subida() {
 
 #[test]
 fn fila_7_con_el_real_a_8192_por_8192_rgba_da_ok() {
-    // Dos imágenes de 256 MiB y un `probe` de 256 MiB: lo más pesado de la unidad. Fondo
+    // Una imagen de 256 MiB y un `probe` de 256 MiB: lo más pesado de la unidad. Fondo
     // transparente (ceros): no hace falta rellenar.
     let spec = spec_nueva(8192, 8192, Mode::Rgba, TRANSPARENTE);
-    let images = construye(&spec, &mut SystemAlloc).expect("con el real, Ok");
+    let image = construye(&spec, &mut SystemAlloc).expect("con el real, Ok");
+    assert_eq!((image.width(), image.height()), (8192, 8192));
     assert_eq!(
-        (images.document.width(), images.document.height()),
-        (8192, 8192)
-    );
-    assert_eq!(
-        (images.canvas.width(), images.canvas.height()),
-        (8192, 8192)
-    );
-    assert_eq!(
-        images.document.get_pixel(8191, 8191),
+        image.get_pixel(8191, 8191),
         Ok(Pixel::Rgba(Rgba::TRANSPARENT))
     );
 }
@@ -2013,8 +1987,8 @@ enum NoSeCreo {
 }
 
 /// El recorrido de `App` (D8) sin egui: con cambios y sin el descarte recordado, `Unsaved` antes de
-/// construir nada; si no, `build_new_images` y, solo si salió bien, `Session::new_image` y
-/// `Canvas::set_owned_image`.
+/// construir nada; si no, `build_new_image` y, solo si salió bien, `Session::new_image` y el
+/// lienzo con la imagen del documento (`Canvas::set_image`; ya no hay una copia aparte, 14a-2).
 fn crea(
     session: &mut Session,
     lienzo: &mut Lienzo,
@@ -2025,14 +1999,18 @@ fn crea(
     if session.modified() && !discard {
         return Err(NoSeCreo::Unsaved);
     }
-    let images = match build_new_images(spec, alloc) {
-        Ok(images) => images,
+    let image = match build_new_image(spec, alloc) {
+        Ok(image) => image,
         Err(NewImageError::Memory { bytes }) => return Err(NoSeCreo::Memoria(bytes)),
         Err(NewImageError::Size(texto)) => panic!("Size({texto})"),
     };
-    match session.new_image(images.document, discard) {
+    match session.new_image(image, discard) {
         Ok(()) => {
-            lienzo.canvas.set_owned_image(images.canvas);
+            let del_documento = session
+                .document
+                .image(session.document.main_image())
+                .expect("imagen");
+            lienzo.canvas.set_image(del_documento);
             Ok(())
         }
         Err(FileError::Unsaved) => Err(NoSeCreo::Unsaved),
@@ -2095,8 +2073,8 @@ fn fila_7_con_exito_se_reemplazan_sesion_y_lienzo_una_vez() {
     );
     assert_eq!(
         falso.llamadas.len(),
-        3,
-        "dos imágenes y un probe, una sola vez"
+        2,
+        "una imagen y un probe, una sola vez"
     );
 
     let image = session
@@ -2170,8 +2148,8 @@ fn fondos_con_color(mode: Mode, color: [u8; 4]) -> Vec<Background> {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
-    /// Para cualquier lado de 1 a 24, modo y fondo válido: `Ok`, las dos imágenes miden lo pedido,
-    /// son iguales y cada píxel es `background_pixel`; con la paleta de D2 en indexado; y
+    /// Para cualquier lado de 1 a 24, modo y fondo válido: `Ok`, la imagen mide lo pedido y cada
+    /// píxel es `background_pixel`; con la paleta de D2 en indexado; y
     /// `memory_estimate` crece con el área.
     #[test]
     fn propiedad_1_construir_es_exacto(
@@ -2187,25 +2165,22 @@ proptest! {
         let candidatos = fondos_con_color(mode, color);
         let fondo = candidatos[fondo % candidatos.len()];
         let spec = spec_nueva(width, height, mode, fondo);
-        let images = construye(&spec, &mut SystemAlloc)
+        let image = construye(&spec, &mut SystemAlloc)
             .map_err(TestCaseError::fail)?;
         let pixel = background_pixel(mode, fondo);
         prop_assert!(pixel.is_some(), "{:?} {:?}: fondo no válido en la prueba", mode, fondo);
         let pixel = pixel.unwrap();
-        prop_assert_eq!(&images.document, &images.canvas);
-        for image in [&images.document, &images.canvas] {
-            prop_assert_eq!((image.width(), image.height()), (width, height));
-            prop_assert_eq!(image.mode(), mode);
-            for y in 0..height {
-                for x in 0..width {
-                    prop_assert_eq!(image.get_pixel(x, y), Ok(pixel), "({}, {})", x, y);
-                }
+        prop_assert_eq!((image.width(), image.height()), (width, height));
+        prop_assert_eq!(image.mode(), mode);
+        for y in 0..height {
+            for x in 0..width {
+                prop_assert_eq!(image.get_pixel(x, y), Ok(pixel), "({}, {})", x, y);
             }
-            if mode == Mode::Indexed {
-                prop_assert_eq!(image.palette(), Some(&initial_palette()));
-            } else {
-                prop_assert!(image.palette().is_none());
-            }
+        }
+        if mode == Mode::Indexed {
+            prop_assert_eq!(image.palette(), Some(&initial_palette()));
+        } else {
+            prop_assert!(image.palette().is_none());
         }
 
         // `memory_estimate` crece con el área (y no decrece nunca).
@@ -2620,7 +2595,7 @@ fn propiedad_4_fallar_no_cambia_nada() {
                 Ok(()),
                 "{contexto}"
             );
-            assert_eq!(falso.llamadas.len(), 3, "{contexto}: se construyó una vez");
+            assert_eq!(falso.llamadas.len(), 2, "{contexto}: se construyó una vez");
             let image = session
                 .document
                 .image(session.document.main_image())
@@ -2673,9 +2648,9 @@ fn propiedad_4_session_new_image_con_unsaved_no_cambia_la_sesion_ni_el_lienzo() 
     for mode in MODOS {
         let mut session = sesion(true);
         let antes = foto_de(&session);
-        let images = construye_real(&spec_nueva(16, 8, mode, default_background(mode)));
+        let image = construye_real(&spec_nueva(16, 8, mode, default_background(mode)));
         assert_eq!(
-            session.new_image(images.document, false),
+            session.new_image(image, false),
             Err(FileError::Unsaved),
             "{mode:?}"
         );

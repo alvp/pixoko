@@ -90,7 +90,7 @@ fn image_f() -> Image {
     image
 }
 
-/// La imagen nueva de cada modo, como la entregaría `build_new_images` (con la paleta de D2 en
+/// La imagen nueva de cada modo, como la entregaría `build_new_image` (con la paleta de D2 en
 /// indexado).
 fn imagen_nueva(mode: Mode) -> Image {
     match mode {
