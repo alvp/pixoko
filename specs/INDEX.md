@@ -64,5 +64,15 @@ Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *pendiente de
 | [hito-2-contraste-menu.md](hito-2-contraste-menu.md) | 2.19c | aprobada | Contraste ≥ 4,5 de todo texto de los menús: rótulo marcado en `SURFACE_0` (era 1,47) y atajos en `TEXT` (3,84 con el ratón); prueba de recorrido con clics reales; lo desactivado exento; ninguna prueba anterior cambia (medido) | px-ui |
 | [hito-2-fijar-transparente.md](hito-2-fijar-transparente.md) | 2.21 | aprobada | Botón `Fijar transparente` / `Quitar transparente` en el editor de la paleta sobre `SetTransparentIndex` (solo mueve el índice, un paso); bandera `alfa 0`; cuarta fila de botones (editor 242 → 260 u) y el criterio de ventana baja que no se cumple (65 % de 720 o rotar en una fila); 32 pruebas anteriores de cifras | px-ui, px-app |
 | [hito-2-puerta.md](hito-2-puerta.md) | 2.22 | aprobada | Puerta del hito: abrir, editar y guardar un PNG real. Prueba automática en px-app (módulo `puerta`, `Session` + herramientas + diálogos falsos + modelo independiente, 12 filas y 4 propiedades) y oráculo SHA-256 en px-golden; `golden/png` nunca es destino de escritura; lienzos de 8192² y 6000² como `#[ignore]`; lista manual de 15 pasos; cierre del hito (`hito-2-resumen.md`); `cargo deny` (excepción NCSA a `fuzz/deny.toml`, duplicados aceptados) y fuzzer de 10 minutos | px-app, px-golden, fuzz, deny.toml |
-
 | [hito-2-resumen.md](hito-2-resumen.md) | cierre | notas | Cierre del hito 2: unidades cerradas, descartada (14b) y aplazadas con su spec de origen, cifras medidas y estado de `cargo deny` | — |
+
+## Interfaz (pendiente)
+
+Entre el hito 2 y el 3. Diseño en `docs/DISENO-INTERFAZ.md`; ninguna unidad tiene todavía spec, y cada una se escribe y espera su visto bueno al empezarla.
+
+| Fichero | Unidad | Estado | Qué decide | Crates |
+| --- | --- | --- | --- | --- |
+| — | I.1 | pendiente (sin spec) | Teclado como datos con las letras del programa de referencia | — |
+| — | I.2 | pendiente (sin spec) | Dos colores y ratón con rueda, botón central, botones extra reasignables y gestos del trackpad | — |
+| — | I.3 | pendiente (sin spec) | Caja de herramientas a la derecha con panel de opciones | — |
+| — | I.4 | pendiente (sin spec) | Iconos propios | — |
