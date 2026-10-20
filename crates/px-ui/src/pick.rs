@@ -27,7 +27,7 @@ impl fmt::Display for EraseError {
 /// Entrada que usa el borrador en una imagen indexada: el índice transparente si está fijado
 /// y, si no, la primera entrada de la paleta con alfa guardado 0 (el `tRNS` de un PNG o lo que
 /// se edita con el editor de color).
-fn eraser_entry(image: &Image) -> Option<(u8, bool)> {
+pub(crate) fn eraser_entry(image: &Image) -> Option<(u8, bool)> {
     let palette = image.palette()?;
     if let Some(index) = palette.transparent_index() {
         return Some((index, false));

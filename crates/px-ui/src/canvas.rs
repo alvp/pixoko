@@ -17,6 +17,7 @@ use px_core::{Image, Rgba};
 
 use crate::background::{CanvasBackground, Fill, background_fill};
 use crate::checker::{self, Shade};
+use crate::color::Role;
 use crate::dirty::BlockSet;
 use crate::text::text_scale;
 use crate::texture::{try_tile_pixels, try_tile_pixels_with_entry};
@@ -92,8 +93,16 @@ enum Gesture {
     None,
     /// Desplazar, con el botón que lo empezó.
     Pan(PointerButton),
-    /// Dibujar (botón izquierdo).
-    Draw,
+    /// Dibujar, con el rol del botón que empezó el gesto (izquierdo: primer plano; derecho: fondo).
+    Draw(Role),
+}
+
+/// El botón del ratón que dibuja con el color de `role`.
+fn button_of(role: Role) -> PointerButton {
+    match role {
+        Role::Foreground => PointerButton::Primary,
+        Role::Background => PointerButton::Secondary,
+    }
 }
 
 /// Lo que `interact` calcula para que `paint` lo dibuje.
@@ -668,6 +677,23 @@ impl Canvas {
     /// modificadores) **en su sitio** entre los eventos de trazo del fotograma, para que quien
     /// dibuja respete el orden de los eventos de egui. `interact` es esto sin los `Escape`.
     pub fn interact_ordered(&mut self, ui: &mut Ui) -> Vec<CanvasInput> {
+        self.interact_inner(ui, false)
+            .into_iter()
+            .map(|(input, _)| input)
+            .collect()
+    }
+
+    /// Como [`Canvas::interact_ordered`], pero el botón derecho también dibuja: cada entrada lleva
+    /// el rol del botón que **empezó** el gesto (izquierdo: `Foreground`; derecho: `Background`),
+    /// igual para sus `Move` y su `End`. El central desplaza y el derecho no (specs/interfaz-dos-
+    /// colores.md, decisión 2). `Escape` lleva el rol del gesto en curso o `Foreground`.
+    pub fn interact_roles(&mut self, ui: &mut Ui) -> Vec<(CanvasInput, Role)> {
+        self.interact_inner(ui, true)
+    }
+
+    // TODO(I.2b): retirar `interact` e `interact_ordered` cuando los llamadores migren a
+    // `interact_roles`.
+    fn interact_inner(&mut self, ui: &mut Ui, secondary: bool) -> Vec<(CanvasInput, Role)> {
         self.upload_if_pending(ui);
 
         let rect = ui.available_rect_before_wrap();
@@ -747,7 +773,13 @@ impl Canvas {
                         zoom_step(&mut view, true, center);
                     }
                     Key::Minus if !self.view_keys_off => zoom_step(&mut view, false, center),
-                    Key::Escape if modifiers.is_none() => strokes.push(CanvasInput::Escape),
+                    Key::Escape if modifiers.is_none() => {
+                        let role = match self.gesture {
+                            Gesture::Draw(role) => role,
+                            _ => Role::Foreground,
+                        };
+                        strokes.push((CanvasInput::Escape, role));
+                    }
                     _ => {}
                 },
                 Event::PointerButton {
@@ -761,13 +793,15 @@ impl Canvas {
                         PointerButton::Primary if space_down => {
                             Gesture::Pan(PointerButton::Primary)
                         }
-                        PointerButton::Primary => Gesture::Draw,
+                        PointerButton::Primary => Gesture::Draw(Role::Foreground),
+                        PointerButton::Secondary if secondary => Gesture::Draw(Role::Background),
                         _ => Gesture::None,
                     };
-                    if self.gesture == Gesture::Draw {
-                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeBegin(to_image(
-                            &view, *pos,
-                        ))));
+                    if let Gesture::Draw(role) = self.gesture {
+                        strokes.push((
+                            CanvasInput::Stroke(CanvasEvent::StrokeBegin(to_image(&view, *pos))),
+                            role,
+                        ));
                     }
                 }
                 Event::PointerButton {
@@ -776,24 +810,28 @@ impl Canvas {
                     pressed: false,
                     ..
                 } => match self.gesture {
-                    Gesture::Draw if *button == PointerButton::Primary => {
-                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(
-                            &view, *pos,
-                        ))));
-                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeEnd));
+                    Gesture::Draw(role) if *button == button_of(role) => {
+                        strokes.push((
+                            CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(&view, *pos))),
+                            role,
+                        ));
+                        strokes.push((CanvasInput::Stroke(CanvasEvent::StrokeEnd), role));
                         self.gesture = Gesture::None;
                     }
                     Gesture::Pan(owner) if *button == owner => self.gesture = Gesture::None,
                     _ => {}
                 },
-                Event::PointerMoved(pos) if self.gesture == Gesture::Draw => {
-                    strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(
-                        &view, *pos,
-                    ))));
+                Event::PointerMoved(pos) if matches!(self.gesture, Gesture::Draw(_)) => {
+                    if let Gesture::Draw(role) = self.gesture {
+                        strokes.push((
+                            CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(&view, *pos))),
+                            role,
+                        ));
+                    }
                 }
                 Event::WindowFocused(false) => {
-                    if self.gesture == Gesture::Draw {
-                        strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeEnd));
+                    if let Gesture::Draw(role) = self.gesture {
+                        strokes.push((CanvasInput::Stroke(CanvasEvent::StrokeEnd), role));
                     }
                     self.gesture = Gesture::None;
                 }
@@ -802,8 +840,8 @@ impl Canvas {
         }
         // Red de seguridad: un soltar que no llegó (por ejemplo, fuera de la ventana).
         match self.gesture {
-            Gesture::Draw if !ui.input(|i| i.pointer.primary_down()) => {
-                strokes.push(CanvasInput::Stroke(CanvasEvent::StrokeEnd));
+            Gesture::Draw(role) if !ui.input(|i| i.pointer.button_down(button_of(role))) => {
+                strokes.push((CanvasInput::Stroke(CanvasEvent::StrokeEnd), role));
                 self.gesture = Gesture::None;
             }
             Gesture::Pan(button) if !ui.input(|i| i.pointer.button_down(button)) => {

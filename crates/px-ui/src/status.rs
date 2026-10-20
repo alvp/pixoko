@@ -33,6 +33,13 @@ pub fn columns(width_px: f32, ppp: f32) -> usize {
     (width_px / advance).floor() as usize
 }
 
+/// Caracteres que caben en la barra de estado de una ventana de `width_pt` puntos de ancho (la
+/// barra ocupa todo el ancho y deja un margen a cada lado).
+pub fn bar_columns(width_pt: f32, ppp: f32) -> usize {
+    let pad = PADDING_UI_PX as f32 * ui_unit(ppp);
+    columns((width_pt - 2.0 * pad) * ppp, ppp)
+}
+
 /// Texto de la barra: con aviso, antepone `NOTICE_PREFIX`; lo recorta a `columns` caracteres
 /// (`…` si la fuente lo tiene, `...` si no) y sustituye lo que la fuente no dibuja.
 pub fn bar_text(ctx: &Context, text: &str, is_notice: bool, columns: usize) -> String {

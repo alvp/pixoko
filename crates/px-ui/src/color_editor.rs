@@ -87,7 +87,7 @@ pub(crate) fn is_escape(event: &Event) -> bool {
 }
 
 /// Identificador del campo hexadecimal (el mismo cada fotograma).
-pub(crate) fn hex_field_id() -> Id {
+pub fn hex_field_id() -> Id {
     Id::unique("pixoko-campo-hex")
 }
 

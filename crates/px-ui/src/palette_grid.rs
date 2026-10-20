@@ -7,6 +7,8 @@
 
 use px_core::Rgba;
 
+use crate::color::Role;
+
 use crate::view::ScreenRect;
 
 /// Muestras por fila.
@@ -23,15 +25,37 @@ pub const CHECK_U: i64 = 5;
 pub const PANEL_WIDTH_U: i64 = 233;
 /// Origen de la rejilla en el panel.
 pub const GRID_X_U: i64 = 4;
-pub const GRID_Y_U: i64 = 41;
+pub const GRID_Y_U: i64 = INDICATOR_H_U + 41;
+/// Banda del indicador de color y del selector «editar primer plano / fondo», encima del texto
+/// (specs/interfaz-dos-colores.md, decisión 5). De ella cuelga todo lo demás del panel.
+pub const INDICATOR_H_U: i64 = 36;
+/// Rectángulo pequeño del indicador (primer plano) y grande (fondo, debajo del pequeño): origen
+/// y lado, desde la esquina del panel.
+pub const IND_FG_X_U: i64 = 4;
+pub const IND_FG_Y_U: i64 = 4;
+pub const IND_FG_SIZE_U: i64 = 14;
+pub const IND_BG_X_U: i64 = 12;
+pub const IND_BG_Y_U: i64 = 12;
+pub const IND_BG_SIZE_U: i64 = 20;
+/// Borde de 1 u (`SURFACE_3`) por fuera de cada rectángulo del indicador.
+pub const IND_BORDER_U: i64 = 1;
+/// Selector de qué color edita el editor: dos filas excluyentes a la derecha del indicador.
+pub const SEL_X_U: i64 = 40;
+pub const SEL_W_U: i64 = 182;
+pub const SEL_FG_Y_U: i64 = 4;
+pub const SEL_BG_Y_U: i64 = 18;
+pub const SEL_H_U: i64 = 14;
+/// Marca redonda (aro y punto) dentro de la fila y origen del texto.
+pub const SEL_MARK_U: i64 = 10;
+pub const SEL_TEXT_X_U: i64 = SEL_X_U + 14;
 /// Texto: origen, ancho útil y alto de línea.
 pub const TEXT_X_U: i64 = 4;
 pub const TEXT_WIDTH_U: i64 = 225;
 pub const LINE_H_U: i64 = 14;
-pub const LINE1_Y_U: i64 = 4;
-pub const LINE2_Y_U: i64 = 18;
+pub const LINE1_Y_U: i64 = INDICATOR_H_U + 4;
+pub const LINE2_Y_U: i64 = INDICATOR_H_U + 18;
 /// Franja de 1 u entre el texto y la rejilla.
-pub const SEPARATOR_Y_U: i64 = 36;
+pub const SEPARATOR_Y_U: i64 = INDICATOR_H_U + 36;
 /// Pista del indicador de desplazamiento.
 pub const TRACK_X_U: i64 = 230;
 pub const TRACK_W_U: i64 = 2;
@@ -45,6 +69,9 @@ pub const RING_HOVER_U: i64 = 1;
 pub const DRAG_START_U: i64 = 4;
 /// Media separación entre muestras: la captura del destino de un arrastre llega hasta ahí.
 pub const DROP_HALF_GAP_U: i64 = GAP_U / 2;
+/// Grosor y largo de los brazos de las esquinas del anillo del fondo.
+pub const RING_BACKGROUND_U: i64 = 2;
+pub const RING_BACKGROUND_ARM_U: i64 = 5;
 /// Anillo de las muestras del rango de rotación y del destino de una quita pendiente.
 pub const RING_RANGE_U: i64 = 1;
 pub const RING_DEST_U: i64 = 2;
@@ -80,6 +107,30 @@ pub fn edges_u() -> Vec<i64> {
         TRACK_X_U + TRACK_W_U,
         RIGHT_LINE_X_U,
         RIGHT_LINE_X_U + 1,
+        INDICATOR_H_U,
+        IND_FG_X_U - IND_BORDER_U,
+        IND_FG_X_U,
+        IND_FG_X_U + IND_FG_SIZE_U,
+        IND_FG_X_U + IND_FG_SIZE_U + IND_BORDER_U,
+        IND_FG_Y_U - IND_BORDER_U,
+        IND_FG_Y_U,
+        IND_FG_Y_U + IND_FG_SIZE_U,
+        IND_FG_Y_U + IND_FG_SIZE_U + IND_BORDER_U,
+        IND_BG_X_U - IND_BORDER_U,
+        IND_BG_X_U,
+        IND_BG_X_U + IND_BG_SIZE_U,
+        IND_BG_X_U + IND_BG_SIZE_U + IND_BORDER_U,
+        IND_BG_Y_U - IND_BORDER_U,
+        IND_BG_Y_U,
+        IND_BG_Y_U + IND_BG_SIZE_U,
+        IND_BG_Y_U + IND_BG_SIZE_U + IND_BORDER_U,
+        SEL_X_U,
+        SEL_X_U + SEL_W_U,
+        SEL_TEXT_X_U,
+        SEL_FG_Y_U,
+        SEL_FG_Y_U + SEL_H_U,
+        SEL_BG_Y_U,
+        SEL_BG_Y_U + SEL_H_U,
     ];
     for step in 0..MAX_ROWS {
         for origin in [GRID_X_U, GRID_Y_U] {
@@ -401,6 +452,110 @@ pub fn drop_mark_rect(cell: ScreenRect, after: bool, n: u32) -> ScreenRect {
         DROP_MARK_W_U * n,
         PITCH_U * n,
     )
+}
+
+fn indicator_rect(x: i64, y: i64, size: i64, n: u32) -> ScreenRect {
+    let k = scale(n);
+    rect(x * k, y * k, size * k, size * k)
+}
+
+/// Los dos rectángulos del indicador en píxeles físicos desde la esquina del panel: `(primer
+/// plano, fondo)`. El pequeño se pinta encima del grande.
+pub fn indicator_rects(n: u32) -> (ScreenRect, ScreenRect) {
+    (
+        indicator_rect(IND_FG_X_U, IND_FG_Y_U, IND_FG_SIZE_U, n),
+        indicator_rect(IND_BG_X_U, IND_BG_Y_U, IND_BG_SIZE_U, n),
+    )
+}
+
+fn contains(r: &ScreenRect, x: i64, y: i64) -> bool {
+    x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
+}
+
+/// Rol del rectángulo del indicador bajo `(x, y)` (píxeles desde la esquina del panel): donde se
+/// superponen manda el pequeño; las esquinas vacías de la caja que los contiene no son de nadie.
+pub fn indicator_hit(x: i64, y: i64, n: u32) -> Option<Role> {
+    let (fg, bg) = indicator_rects(n);
+    if contains(&fg, x, y) {
+        Some(Role::Foreground)
+    } else if contains(&bg, x, y) {
+        Some(Role::Background)
+    } else {
+        None
+    }
+}
+
+/// Fila del selector de `role`, en píxeles desde la esquina del panel.
+pub fn selector_rect(role: Role, n: u32) -> ScreenRect {
+    let k = scale(n);
+    let y = match role {
+        Role::Foreground => SEL_FG_Y_U,
+        Role::Background => SEL_BG_Y_U,
+    };
+    rect(SEL_X_U * k, y * k, SEL_W_U * k, SEL_H_U * k)
+}
+
+/// Selector bajo `(x, y)` (píxeles desde la esquina del panel).
+pub fn selector_hit(x: i64, y: i64, n: u32) -> Option<Role> {
+    [Role::Foreground, Role::Background]
+        .into_iter()
+        .find(|role| contains(&selector_rect(*role, n), x, y))
+}
+
+/// Partes de un rectángulo de `width × height` píxeles con el color `color`, en el orden en que se
+/// pintan y relativas a su esquina: alfa 255, un rectángulo; alfa 0, el damero de cuadrados de
+/// `square` píxeles (recortado al borde) sin color; alfa de 1 a 254, el damero y encima el
+/// rectángulo con su alfa. Es `swatch_parts` para un tamaño cualquiera.
+pub fn block_parts(width: i64, height: i64, square: i64, color: Rgba) -> Vec<(ScreenRect, Rgba)> {
+    let solid = (rect(0, 0, width, height), color);
+    if color.a == 255 {
+        return vec![solid];
+    }
+    let mut parts = Vec::new();
+    let square = square.max(1);
+    let (mut j, mut y) = (0, 0);
+    while y < height {
+        let (mut i, mut x) = (0, 0);
+        while x < width {
+            let tone = if (i + j) % 2 == 0 { CHECK_A } else { CHECK_B };
+            parts.push((
+                rect(x, y, square.min(width - x), square.min(height - y)),
+                tone,
+            ));
+            i += 1;
+            x += square;
+        }
+        j += 1;
+        y += square;
+    }
+    if color.a > 0 {
+        parts.push(solid);
+    }
+    parts
+}
+
+/// Anillo del fondo: cuatro esquinas en L (ocho rectángulos disjuntos) de `thickness` píxeles y
+/// brazos de `arm` píxeles, a `offset` píxeles de la muestra (0: pegado a ella). Orden: por
+/// esquina (arriba izquierda, arriba derecha, abajo izquierda, abajo derecha), el brazo
+/// horizontal y luego el vertical.
+pub fn corner_rects(cell: ScreenRect, offset: i64, thickness: i64, arm: i64) -> [ScreenRect; 8] {
+    let t = thickness;
+    let (x0, y0) = (cell.x - offset - t, cell.y - offset - t);
+    let (x1, y1) = (
+        cell.x + cell.width + offset + t,
+        cell.y + cell.height + offset + t,
+    );
+    let tall = (arm - t).max(0);
+    [
+        rect(x0, y0, arm, t),
+        rect(x0, y0 + t, t, tall),
+        rect(x1 - arm, y0, arm, t),
+        rect(x1 - t, y0 + t, t, tall),
+        rect(x0, y1 - t, arm, t),
+        rect(x0, y1 - arm, t, tall),
+        rect(x1 - arm, y1 - t, arm, t),
+        rect(x1 - t, y1 - arm, t, tall),
+    ]
 }
 
 /// Anillo de `thickness` píxeles alrededor de `cell`: arriba, abajo, izquierda y derecha. Las

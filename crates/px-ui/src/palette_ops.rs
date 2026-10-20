@@ -92,6 +92,34 @@ pub fn choice_after(op: &PaletteOp, active: u8, old_len: usize) -> u8 {
     }
 }
 
+/// Dónde queda una entrada (la del fondo) tras una operación de paleta: sigue a su entrada si se
+/// mueve, se desplaza un lugar si otra cruza, se recorta a la última si se quita y no cambia con
+/// `Add`, `Rotate` ni `SetTransparent`.
+pub fn entry_after(op: &PaletteOp, entry: u8, old_len: usize) -> u8 {
+    match *op {
+        PaletteOp::Add | PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. } => entry,
+        PaletteOp::Remove { index, .. } => {
+            let last = u8::try_from(old_len.saturating_sub(2)).unwrap_or(u8::MAX);
+            match entry.cmp(&index) {
+                std::cmp::Ordering::Less => entry,
+                std::cmp::Ordering::Equal => index.min(last),
+                std::cmp::Ordering::Greater => (entry - 1).min(last),
+            }
+        }
+        PaletteOp::Move { from, to } => {
+            if entry == from {
+                to
+            } else if from < to && entry > from && entry <= to {
+                entry - 1
+            } else if from > to && entry >= to && entry < from {
+                entry + 1
+            } else {
+                entry
+            }
+        }
+    }
+}
+
 /// Lo que hace el botón de la fila 4 con la entrada activa: quitar la marca si ya es la
 /// transparente (`None`), si no fijarla en ella (`Some(active)`).
 pub fn transparent_toggle(palette: &Palette, active: u8) -> Option<u8> {

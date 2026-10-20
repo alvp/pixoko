@@ -40,6 +40,12 @@ pub enum AppAction {
     ColorPrev,
     /// Centra el área bajo el cursor (`n`): necesita el puntero, no tiene entrada de menú.
     CenterOnCursor,
+    /// Color de fondo siguiente (`}` y `Mayús`+`Av Pág`), como `ColorNext` pero para el fondo.
+    BackgroundNext,
+    /// Color de fondo anterior (`{` y `Mayús`+`Re Pág`).
+    BackgroundPrev,
+    /// `Editar → Borrar página` (`K`): rellena toda la imagen con el color de fondo, en un paso.
+    ClearPage,
     /// Fondo bajo la transparencia del lienzo: preferencia de la sesión, no del documento.
     CanvasBackground(CanvasBackground),
     /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
@@ -84,11 +90,16 @@ impl AppAction {
         self.is_zoom() || self == AppAction::CenterOnCursor
     }
 
-    /// Las que cambian el color activo: se bloquean con una quita pendiente.
+    /// Las que cambian uno de los dos colores: se bloquean con una quita pendiente y no con un
+    /// trazo en curso (specs/interfaz-dos-colores.md, decisión 6).
     fn changes_color(self) -> bool {
         matches!(
             self,
-            AppAction::SelectColor(_) | AppAction::ColorNext | AppAction::ColorPrev
+            AppAction::SelectColor(_)
+                | AppAction::ColorNext
+                | AppAction::ColorPrev
+                | AppAction::BackgroundNext
+                | AppAction::BackgroundPrev
         )
     }
 }
@@ -128,6 +139,9 @@ impl Platform {
 pub struct Locks {
     /// Un trazo de una herramienta, el deslizador del editor o el arrastre de una muestra.
     pub gesture: bool,
+    /// El gesto en curso es solo un trazo de una herramienta (no hay deslizador ni arrastre de
+    /// muestra): las acciones de color valen con el botón pulsado y afectan al trazo siguiente.
+    pub stroke: bool,
     /// Un diálogo de archivo abierto.
     pub dialog: bool,
     /// Un campo de texto con el foco.
@@ -143,8 +157,9 @@ pub struct Locks {
 /// En este orden: (1) `CloseLicenses` nunca; (2) con `modal`, todo salvo `Quit`; (3) con `dialog`,
 /// todo; (4) las acciones de vista (el zoom y centrar bajo el cursor) solo se bloquean con
 /// `text_focus` y desde el teclado (no modifican el documento: un gesto o una quita pendiente no
-/// las paran); (5) el resto, con `gesture` o `text_focus`, y con `removal` solo las de color y las
-/// que abren un diálogo; (6) si no, nada. El fondo del lienzo
+/// las paran); (5) las de color, con `text_focus`, con `removal` o con un `gesture` que no sea solo
+/// un trazo (`stroke`); (6) el resto, con `gesture` o `text_focus`, y con `removal` solo las que
+/// abren un diálogo; (7) si no, nada. El fondo del lienzo
 /// (`CanvasBackground`) tampoco toca el documento: tras (1) a (3) solo lo bloquea `text_focus`, con
 /// cualquier origen; un gesto o una quita pendiente no.
 pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
@@ -163,10 +178,15 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if action.is_view() {
         return locks.text_focus && origin == Origin::Key;
     }
+    if action.changes_color() {
+        // Con un trazo de una herramienta en curso el color se puede cambiar: el trazo conserva el
+        // que tenía al pulsar. Con el deslizador del editor o un arrastre de muestra, no.
+        return locks.text_focus || locks.removal || (locks.gesture && !locks.stroke);
+    }
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && (action.changes_color() || action.opens_dialog())
+    locks.removal && action.opens_dialog()
 }
 
 /// Si se puede abrir un diálogo modal: ni un gesto en curso, ni una quita pendiente, ni un diálogo

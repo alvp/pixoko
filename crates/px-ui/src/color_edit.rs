@@ -363,6 +363,11 @@ impl ColorEditor {
         }
     }
 
+    /// El destino que muestra el editor, si lo hay.
+    pub fn target(&self) -> Option<EditTarget> {
+        self.target
+    }
+
     /// Lo deja como recién creado (al abrir un documento).
     pub fn reset(&mut self) {
         *self = ColorEditor::default();

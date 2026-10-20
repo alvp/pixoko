@@ -58,6 +58,27 @@ pub fn slot_label(image: &Image, slot: u8) -> Option<String> {
     Some(format!("color {slot} {what}"))
 }
 
+/// Cuál de los dos colores: el de primer plano (botón izquierdo) o el de fondo (botón derecho)
+/// (specs/interfaz-dos-colores.md).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Role {
+    #[default]
+    Foreground,
+    Background,
+}
+
+/// Fondo por defecto de una imagen: en indexadas, el índice transparente si está fijado, si no la
+/// primera entrada de alfa guardado 0 (la regla del borrador) y, si no hay, la entrada 0; en RGBA y
+/// gris con alfa, la ranura 9 (transparente); en gris, la ranura 9 (blanco).
+pub fn default_background(image: &Image) -> ColorChoice {
+    match image.mode() {
+        Mode::Indexed => {
+            ColorChoice::Entry(crate::pick::eraser_entry(image).map_or(0, |(index, _)| index))
+        }
+        Mode::Rgba | Mode::GrayAlpha | Mode::Gray => ColorChoice::Slot(SLOTS),
+    }
+}
+
 /// Muestras de un modo sin paleta: las nueve ranuras.
 const SLOT_CELLS: usize = SLOTS as usize;
 
@@ -208,6 +229,45 @@ pub fn info_flags_alpha0(
         .map(|(_, name)| *name)
         .collect();
     shown.join(" · ")
+}
+
+/// Como [`info_flags_alpha0`] con los dos colores: `frente` y `fondo` en lugar de `activa`. Orden:
+/// `cursor`, `frente`, `fondo`, `rango` (en el rango y no es el primer plano), `transparente` y
+/// `alfa 0` (excluyentes). Si no cabe en `columns` caracteres se omite `cursor`.
+pub fn info_flags_roles(flags: RoleFlags, columns: usize) -> String {
+    let join = |with_cursor: bool| {
+        let list = [
+            (with_cursor && flags.hover, "cursor"),
+            (flags.foreground, "frente"),
+            (flags.background, "fondo"),
+            (flags.in_range && !flags.foreground, "rango"),
+            (flags.transparent, "transparente"),
+            (flags.alpha0 && !flags.transparent, "alfa 0"),
+        ];
+        let shown: Vec<&str> = list
+            .iter()
+            .filter(|(on, _)| *on)
+            .map(|(_, name)| *name)
+            .collect();
+        shown.join(" · ")
+    };
+    let full = join(true);
+    if full.chars().count() > columns {
+        join(false)
+    } else {
+        full
+    }
+}
+
+/// Lo que dice la línea 2 de una muestra.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RoleFlags {
+    pub hover: bool,
+    pub foreground: bool,
+    pub background: bool,
+    pub in_range: bool,
+    pub transparent: bool,
+    pub alpha0: bool,
 }
 
 /// Deja la elección válida para la imagen: en indexadas `Entry(min(i, len − 1))` (`Slot(n)` pasa

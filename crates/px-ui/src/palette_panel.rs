@@ -11,8 +11,9 @@ use egui::{
 use px_core::{Image, Mode, Rgba};
 
 use crate::color::{
-    ColorChoice, SlotColors, cell_color_with, cell_count, cell_label_with, cell_of_choice,
-    choice_for_cell, info_flags_alpha0, is_alpha0_cell_with, is_transparent_cell_with,
+    ColorChoice, Role, RoleFlags, SlotColors, cell_color_with, cell_count, cell_label_with,
+    cell_of_choice, choice_for_cell, info_flags_alpha0, info_flags_roles, is_alpha0_cell_with,
+    is_transparent_cell_with,
 };
 use crate::color_edit::{
     ColorEditor, Commit, EditTarget, HexOutcome, Resolved, hex_notice, stale_notice,
@@ -20,10 +21,12 @@ use crate::color_edit::{
 use crate::color_editor::{self, ButtonsView, Extras, Geometry, hex_field_id, is_escape};
 use crate::edit_layout::{PaletteButton, PanelLayout, block_height_px, button_hit, panel_layout};
 use crate::palette_grid::{
-    COLUMNS, GRID_X_U, GRID_Y_U, Grid, LINE_H_U, LINE1_Y_U, LINE2_Y_U, PANEL_WIDTH_U, PITCH_U,
-    PanelView, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_DEST_U, RING_HOVER_U, RING_RANGE_U,
-    SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U, TEXT_X_U, TRACK_W_U, TRACK_X_U, drop_mark_rect,
-    panel_thumb, ring_rects, swatch_parts, thumb, total_rows, visible_rows_reserved,
+    COLUMNS, GRID_X_U, GRID_Y_U, Grid, IND_BORDER_U, INDICATOR_H_U, LINE_H_U, LINE1_Y_U, LINE2_Y_U,
+    PANEL_WIDTH_U, PITCH_U, PanelView, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_BACKGROUND_ARM_U,
+    RING_BACKGROUND_U, RING_DEST_U, RING_HOVER_U, RING_RANGE_U, SEL_MARK_U, SEL_TEXT_X_U, SEL_X_U,
+    SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U, TEXT_X_U, TRACK_W_U, TRACK_X_U, block_parts, corner_rects,
+    drop_mark_rect, indicator_hit, indicator_rects, panel_thumb, ring_rects, selector_hit,
+    selector_rect, swatch_parts, thumb, total_rows, visible_rows_reserved,
 };
 use crate::palette_ops::{
     DragEnd, PaletteOp, PaletteOps, blocked_reason, default_destination, drag_labels,
@@ -33,10 +36,15 @@ use crate::palette_ops::{
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, text_scale, ui_unit};
 use crate::theme::{
-    DROP_MARK, RING_ACTIVE, RING_DEST, RING_HOVER, RING_RANGE, SURFACE_1, SURFACE_2, SURFACE_3,
-    TEXT, TEXT_DIM,
+    DROP_MARK, RING_ACTIVE, RING_BACKGROUND, RING_DEST, RING_HOVER, RING_RANGE, SURFACE_1,
+    SURFACE_2, SURFACE_3, TEXT, TEXT_DIM,
 };
 use crate::view::ScreenRect;
+
+/// Marca temporal de «llevar el foco al campo hexadecimal» (clic derecho en el indicador).
+fn hex_focus_pending() -> egui::Id {
+    egui::Id::unique("pixoko-hex-focus-pending")
+}
 
 /// Filas que desplaza una «línea» de la rueda.
 const WHEEL_LINE_ROWS: f32 = 3.0;
@@ -73,6 +81,15 @@ impl Layout {
         )
     }
 
+    /// Un punto de egui sobre el panel, en píxeles físicos desde la esquina del bloque del panel
+    /// (donde empieza la banda del indicador).
+    fn band_px(&self, p: Pos2) -> (i64, i64) {
+        (
+            ((p.x - self.min.x) * self.ppp).round() as i64,
+            ((p.y - self.min.y) * self.ppp).round() as i64,
+        )
+    }
+
     /// Un rectángulo en `u` desde la esquina del panel, en puntos de egui.
     fn u_rect(&self, x: i64, y: i64, width: i64, height: i64) -> Rect {
         let u = ui_unit(self.ppp);
@@ -96,6 +113,56 @@ pub struct PanelOutput {
     pub op: Option<PaletteOp>,
     /// Con `op` = `Remove`: ningún píxel usaba la entrada (se quita sin pedir destino).
     pub op_unused: bool,
+    /// Elección pedida por un clic derecho en una muestra: el color de fondo.
+    pub background: Option<ColorChoice>,
+    /// Lo que pidió un clic en el indicador de color.
+    pub indicator: Option<Indicator>,
+    /// El destino del editor que pidió un clic en el selector «editar primer plano / fondo».
+    pub editing: Option<Role>,
+}
+
+/// Lo que pide un clic en el indicador de color (specs/interfaz-dos-colores.md, decisión 5).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Indicator {
+    /// Clic izquierdo: activar el cuentagotas.
+    Dropper,
+    /// Clic derecho: el foco va al editor de color, con el color del rectángulo pulsado.
+    FocusEditor(Role),
+}
+
+/// Los dos colores y cuál edita el editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Roles {
+    pub foreground: ColorChoice,
+    pub background: ColorChoice,
+    pub editing: Role,
+}
+
+/// Lo que `show_panel` necesita de los colores: el fondo es `None` en las vías antiguas (que no
+/// pintan el anillo del fondo ni dicen `frente`/`fondo`).
+#[derive(Clone, Copy)]
+struct PanelRoles {
+    foreground: ColorChoice,
+    background: Option<ColorChoice>,
+    editing: Role,
+}
+
+impl PanelRoles {
+    fn legacy(choice: ColorChoice) -> PanelRoles {
+        PanelRoles {
+            foreground: choice,
+            background: None,
+            editing: Role::Foreground,
+        }
+    }
+
+    /// La elección que edita el editor y sobre la que actúan los botones de la paleta.
+    fn edited(&self) -> ColorChoice {
+        match (self.editing, self.background) {
+            (Role::Background, Some(background)) => background,
+            _ => self.foreground,
+        }
+    }
 }
 
 /// Pinta el panel a la izquierda de `ui` y devuelve la elección que pidió un clic (botón
@@ -114,7 +181,7 @@ pub fn show(
     show_panel(
         ui,
         image,
-        choice,
+        PanelRoles::legacy(choice),
         scroll,
         &mut PanelView::default(),
         enabled,
@@ -196,7 +263,39 @@ pub fn show_editing_ops(
     show_panel(
         ui,
         image,
-        choice,
+        PanelRoles::legacy(choice),
+        scroll,
+        view,
+        enabled,
+        slots,
+        Some(editor),
+        Some(ops),
+    )
+}
+
+/// Como [`show_editing_ops`] con los dos colores (specs/interfaz-dos-colores.md): el indicador y
+/// el selector encabezan el panel; un clic derecho en una muestra pide el fondo; el editor y los
+/// botones de la paleta actúan sobre el color de `roles.editing`.
+#[allow(clippy::too_many_arguments)]
+pub fn show_roles(
+    ui: &mut Ui,
+    image: &Image,
+    roles: Roles,
+    scroll: &mut Scroll,
+    view: &mut PanelView,
+    enabled: bool,
+    slots: &SlotColors,
+    editor: &mut ColorEditor,
+    ops: &mut PaletteOps,
+) -> PanelOutput {
+    show_panel(
+        ui,
+        image,
+        PanelRoles {
+            foreground: roles.foreground,
+            background: Some(roles.background),
+            editing: roles.editing,
+        },
         scroll,
         view,
         enabled,
@@ -210,7 +309,7 @@ pub fn show_editing_ops(
 fn show_panel(
     ui: &mut Ui,
     image: &Image,
-    choice: ColorChoice,
+    roles: PanelRoles,
     scroll: &mut Scroll,
     view: &mut PanelView,
     enabled: bool,
@@ -238,7 +337,9 @@ fn show_panel(
                 min: rect.min,
             };
             let mode = image.mode();
-            let target = editor.as_ref().and_then(|_| EditTarget::of(image, choice));
+            let choice = roles.foreground;
+            let edited = roles.edited();
+            let target = editor.as_ref().and_then(|_| EditTarget::of(image, edited));
             // Reparto vertical: con destino, el del editor (que puede desplazar todo el panel);
             // sin él, la rejilla usa todo el alto.
             let place = |offset_px: i64| match target {
@@ -270,7 +371,7 @@ fn show_panel(
             view.last_visible = Some(visible);
             let busy_editing = editor.as_ref().is_some_and(|editor| editor.dragging());
             // Operaciones de paleta: solo indexadas, con editor y con una entrada activa.
-            let active_entry = match choice {
+            let active_entry = match edited {
                 ColorChoice::Entry(index) => Some(index),
                 ColorChoice::Slot(_) => None,
             };
@@ -322,6 +423,57 @@ fn show_panel(
                             scroll.by(pixels, layout.n, total, visible);
                         } else if !busy_editing {
                             view.scroll_by(pixels, layout.n, placed.max_offset_px);
+                        }
+                    }
+                    Event::PointerButton {
+                        pos,
+                        button: button @ (PointerButton::Primary | PointerButton::Secondary),
+                        pressed: true,
+                        ..
+                    } if roles.background.is_some()
+                        && enabled
+                        && !busy_editing
+                        && rect.contains(*pos)
+                        && {
+                            let (bx, by) = layout.band_px(*pos);
+                            (0..INDICATOR_H_U * i64::from(layout.n)).contains(&by)
+                                && (0..PANEL_WIDTH_U * i64::from(layout.n)).contains(&bx)
+                        } =>
+                    {
+                        let (bx, by) = layout.band_px(*pos);
+                        if *button == PointerButton::Primary
+                            && let Some(role) = selector_hit(bx, by, layout.n)
+                        {
+                            output.editing = Some(role);
+                        } else if let Some(role) = indicator_hit(bx, by, layout.n) {
+                            output.indicator = Some(if *button == PointerButton::Primary {
+                                Indicator::Dropper
+                            } else {
+                                if editor.is_some() && target.is_some() {
+                                    // El foco se pide en un fotograma sin puntero: un clic le
+                                    // quita el foco a todo widget no sobrevolado.
+                                    ctx.data_mut(|d| d.insert_temp(hex_focus_pending(), true));
+                                    ctx.request_repaint();
+                                }
+                                Indicator::FocusEditor(role)
+                            });
+                        }
+                    }
+                    Event::PointerButton {
+                        pos,
+                        button: PointerButton::Secondary,
+                        pressed: true,
+                        ..
+                    } if roles.background.is_some()
+                        && enabled
+                        && !busy_editing
+                        && rect.contains(*pos)
+                        && ops.as_deref().is_none_or(|ops| ops.removal().is_none()) =>
+                    {
+                        let grid = Grid::new(layout.n, count, visible, scroll.first_row);
+                        let (x, y) = layout.grid_px(*pos);
+                        if let Some(cell) = grid.index_at(x, y) {
+                            output.background = choice_for_cell(image, cell);
                         }
                     }
                     Event::PointerButton {
@@ -430,6 +582,19 @@ fn show_panel(
                 }
             }
             output.choice = picked;
+            let pending: bool = ctx
+                .data(|d| d.get_temp(hex_focus_pending()))
+                .unwrap_or(false);
+            let pointer_active =
+                ctx.input(|input| input.pointer.any_click() || input.pointer.any_pressed());
+            if pending && !pointer_active {
+                if ctx.memory(|m| m.has_focus(hex_field_id())) {
+                    ctx.data_mut(|d| d.insert_temp(hex_focus_pending(), false));
+                } else {
+                    ctx.memory_mut(|m| m.request_focus(hex_field_id()));
+                    ctx.request_repaint();
+                }
+            }
             placed = place(view.offset_px);
             view.offset_px = placed.offset_px;
             layout.min = rect.min - vec2(0.0, placed.offset_px as f32 / ppp);
@@ -523,7 +688,7 @@ fn show_panel(
             }
             let marks = Marks::new(ops.as_deref(), active_entry, ops_on);
             paint(
-                ui, &layout, image, slots, choice, &grid, hover, preview, scroll, total, visible,
+                ui, &layout, image, slots, roles, &grid, hover, preview, scroll, total, visible,
                 panel_bar, &marks,
             );
             output
@@ -537,7 +702,7 @@ fn paint(
     layout: &Layout,
     image: &Image,
     slots: &SlotColors,
-    choice: ColorChoice,
+    roles: PanelRoles,
     grid: &Grid,
     hover: Option<usize>,
     preview: Option<(EditTarget, Rgba)>,
@@ -551,7 +716,10 @@ fn paint(
     let (n, ppp) = (layout.n, layout.ppp);
     let n_px = i64::from(n);
     let painter = ui.painter_at(layout.rect);
-    let active = cell_of_choice(image, choice);
+    let active = cell_of_choice(image, roles.foreground);
+    let background = roles
+        .background
+        .and_then(|choice| cell_of_choice(image, choice));
 
     // Trazos: bajo el texto y a la derecha.
     painter.rect_filled(
@@ -569,20 +737,39 @@ fn paint(
         SURFACE_3,
     );
 
+    if let Some(background_choice) = roles.background {
+        paint_band(&painter, layout, image, slots, roles, background_choice);
+    }
+
     // Información: la muestra bajo el cursor o, si no hay, la elegida.
     let shown = hover.or(active);
     let mut line1 = shown
         .and_then(|cell| cell_label_with(image, cell, slots))
         .unwrap_or_default();
+    let cols = columns((TEXT_WIDTH_U * n_px) as f32, ppp);
     let mut line2 = shown
         .map(|cell| {
-            info_flags_alpha0(
-                hover.is_some(),
-                Some(cell) == active,
-                marks.in_range(cell),
-                is_transparent_cell_with(image, cell, slots),
-                is_alpha0_cell_with(image, cell, slots),
-            )
+            if roles.background.is_some() {
+                info_flags_roles(
+                    RoleFlags {
+                        hover: hover.is_some(),
+                        foreground: Some(cell) == active,
+                        background: Some(cell) == background,
+                        in_range: marks.in_range(cell),
+                        transparent: is_transparent_cell_with(image, cell, slots),
+                        alpha0: is_alpha0_cell_with(image, cell, slots),
+                    },
+                    cols,
+                )
+            } else {
+                info_flags_alpha0(
+                    hover.is_some(),
+                    Some(cell) == active,
+                    marks.in_range(cell),
+                    is_transparent_cell_with(image, cell, slots),
+                    is_alpha0_cell_with(image, cell, slots),
+                )
+            }
         })
         .unwrap_or_default();
     // Durante un arrastre, el panel dice qué se mueve y cómo cancelarlo.
@@ -590,7 +777,6 @@ fn paint(
         line1 = first.clone();
         line2 = second.clone();
     }
-    let cols = columns((TEXT_WIDTH_U * n_px) as f32, ppp);
     let font = FontId::new(font_size_points(ppp), FontFamily::Proportional);
     for (y, text, color) in [(LINE1_Y_U, line1, TEXT), (LINE2_Y_U, line2, TEXT_DIM)] {
         let text = bar_text(ctx, &text, false, cols);
@@ -639,7 +825,7 @@ fn paint(
     }
     let rings = [
         (
-            hover.filter(|cell| Some(*cell) != active),
+            hover.filter(|cell| Some(*cell) != active && Some(*cell) != background),
             RING_HOVER_U,
             RING_HOVER,
         ),
@@ -651,6 +837,24 @@ fn paint(
         };
         for ring in ring_rects(rect, thickness * n_px) {
             painter.rect_filled(layout.grid_rect(ring), 0.0, color);
+        }
+    }
+
+    // El fondo: cuatro esquinas en L; con la misma muestra que el primer plano, por fuera de su
+    // anillo.
+    if let Some(rect) = background.and_then(|cell| grid.cell_rect(cell)) {
+        let offset = if background == active {
+            RING_ACTIVE_U * n_px
+        } else {
+            0
+        };
+        for corner in corner_rects(
+            rect,
+            offset,
+            RING_BACKGROUND_U * n_px,
+            RING_BACKGROUND_ARM_U * n_px,
+        ) {
+            painter.rect_filled(layout.grid_rect(corner), 0.0, RING_BACKGROUND);
         }
     }
 
@@ -701,6 +905,73 @@ fn paint(
             vec2(TRACK_W_U as f32 * ui_unit(ppp), height as f32 / ppp),
         );
         painter.rect_filled(bar, 0.0, TEXT_DIM);
+    }
+}
+
+/// La banda de arriba: el indicador de color (el pequeño, el primer plano, encima del grande, el
+/// fondo) y el selector de qué color edita el editor.
+fn paint_band(
+    painter: &egui::Painter,
+    layout: &Layout,
+    image: &Image,
+    slots: &SlotColors,
+    roles: PanelRoles,
+    background: ColorChoice,
+) {
+    let n = i64::from(layout.n);
+    let at_panel = |r: ScreenRect| {
+        let origin = layout.min;
+        Rect::from_min_size(
+            origin + vec2(r.x as f32 / layout.ppp, r.y as f32 / layout.ppp),
+            vec2(r.width as f32 / layout.ppp, r.height as f32 / layout.ppp),
+        )
+    };
+    let color_of = |choice: ColorChoice| {
+        cell_of_choice(image, choice)
+            .and_then(|cell| cell_color_with(image, cell, slots))
+            .unwrap_or(Rgba::TRANSPARENT)
+    };
+    let (fg, bg) = indicator_rects(layout.n);
+    for (rect, choice) in [(bg, background), (fg, roles.foreground)] {
+        for border in ring_rects(rect, IND_BORDER_U * n) {
+            painter.rect_filled(at_panel(border), 0.0, SURFACE_3);
+        }
+        for (part, tone) in block_parts(rect.width, rect.height, 5 * n, color_of(choice)) {
+            let part = ScreenRect {
+                x: rect.x + part.x,
+                y: rect.y + part.y,
+                ..part
+            };
+            painter.rect_filled(at_panel(part), 0.0, to_color32(tone));
+        }
+    }
+    // El selector: dos filas excluyentes con una marca redonda (aro y punto).
+    let font = FontId::new(font_size_points(layout.ppp), FontFamily::Proportional);
+    let u = ui_unit(layout.ppp);
+    for (role, text) in [
+        (Role::Foreground, "editar primer plano"),
+        (Role::Background, "editar fondo"),
+    ] {
+        let row = at_panel(selector_rect(role, layout.n));
+        let selected = role == roles.editing;
+        let tone = if selected { TEXT } else { TEXT_DIM };
+        let center = row.min + vec2(SEL_MARK_U as f32 * u / 2.0, row.height() / 2.0);
+        painter.circle_stroke(
+            center,
+            (SEL_MARK_U as f32 - 1.0) * u / 2.0,
+            egui::Stroke::new(u, tone),
+        );
+        if selected {
+            painter.circle_filled(center, 2.0 * u, tone);
+        }
+        let text_x = row.min.x + (SEL_TEXT_X_U - SEL_X_U) as f32 * u;
+        painter.text(
+            Pos2::new(text_x, row.min.y),
+            Align2::LEFT_TOP,
+            text,
+            font.clone(),
+            tone,
+        );
     }
 }
 

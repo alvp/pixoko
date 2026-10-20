@@ -68,6 +68,7 @@ pub const MENUS: [Menu; 5] = [
         items: &[
             item("Deshacer", AppAction::Undo),
             item("Rehacer", AppAction::Redo),
+            item("Borrar página", AppAction::ClearPage),
         ],
         submenus: &[],
     },

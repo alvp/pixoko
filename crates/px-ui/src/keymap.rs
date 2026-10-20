@@ -161,7 +161,7 @@ fn row(
 }
 
 impl Keymap {
-    /// El esquema por defecto: 25 filas (16 sin `command` y 9 con él).
+    /// El esquema por defecto: 30 filas (21 sin `command` y 9 con él).
     pub fn default_scheme() -> Keymap {
         use Platforms::{All, Except, Never, Only};
         let c = KeyId::Char;
@@ -207,6 +207,24 @@ impl Keymap {
                 All,
                 Never,
             ),
+            row(
+                KeyId::PageDown,
+                false,
+                true,
+                AppAction::BackgroundNext,
+                All,
+                Never,
+            ),
+            row(
+                KeyId::PageUp,
+                false,
+                true,
+                AppAction::BackgroundPrev,
+                All,
+                Never,
+            ),
+            row(c('}'), false, false, AppAction::BackgroundNext, All, All),
+            row(c('{'), false, false, AppAction::BackgroundPrev, All, All),
             row(c('>'), false, false, AppAction::ZoomIn, All, All),
             row(c('+'), false, false, AppAction::ZoomIn, All, Never),
             row(c('='), false, false, AppAction::ZoomIn, All, Never),
@@ -215,6 +233,7 @@ impl Keymap {
             row(KeyId::Home, false, false, AppAction::ZoomFit, All, All),
             row(c('1'), true, false, AppAction::ZoomActual, All, All),
             row(c('n'), false, false, AppAction::CenterOnCursor, All, All),
+            row(c('k'), false, true, AppAction::ClearPage, All, All),
             row(c('o'), true, false, AppAction::Open, All, All),
             row(c('s'), true, false, AppAction::Save, All, All),
             row(c('s'), true, true, AppAction::SaveAs, All, All),
@@ -299,9 +318,10 @@ fn is_digit(key: KeyId) -> bool {
     matches!(key, KeyId::Char(c) if c.is_ascii_digit())
 }
 
-/// Si `shift` cuenta para casar la fila: en letras y con `command`.
+/// Si `shift` cuenta para casar la fila: en letras, con `command` y en `Re Pág` y `Av Pág`
+/// (`Mayús` con ellas es el color de fondo).
 fn shift_counts(row: &Binding) -> bool {
-    row.command || is_letter(row.key)
+    row.command || is_letter(row.key) || matches!(row.key, KeyId::PageUp | KeyId::PageDown)
 }
 
 fn matches(row: &Binding, press: &Press, platform: Platform) -> bool {
@@ -325,8 +345,10 @@ fn matches(row: &Binding, press: &Press, platform: Platform) -> bool {
         KeyId::Char(_) if is_digit(row.key) => !press.alt && !press.other_ctrl,
         // Símbolos: el carácter ya lleva `Mayús`, AltGr u `Option`.
         KeyId::Char(_) => true,
-        // Teclas con nombre: `Mayús`, `Alt` y `Ctrl` suelto no cuentan.
-        KeyId::Home | KeyId::PageUp | KeyId::PageDown => true,
+        // `Re Pág` y `Av Pág`: `Mayús` es exacto; `Alt` y `Ctrl` suelto no cuentan.
+        KeyId::PageUp | KeyId::PageDown => press.shift == row.shift,
+        // `Inicio`: `Mayús`, `Alt` y `Ctrl` suelto no cuentan.
+        KeyId::Home => true,
     }
 }
 

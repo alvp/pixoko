@@ -24,6 +24,9 @@ pub const WARNING: Color32 = Color32::from_rgb(0xef, 0x8e, 0x39);
 
 /// Anillo de la muestra elegida en el panel de paletas (contraste ≥ 3:1 con `SURFACE_1`).
 pub const RING_ACTIVE: Color32 = ACCENT;
+/// Anillo (en esquinas) de la muestra elegida como color de fondo: contraste ≥ 3:1 con
+/// `SURFACE_1`, distinto del verde del primer plano y del naranja del destino de una quita.
+pub const RING_BACKGROUND: Color32 = Color32::from_rgb(0xf2, 0xd0, 0x3c);
 /// Anillo de la muestra bajo el cursor.
 pub const RING_HOVER: Color32 = TEXT;
 
