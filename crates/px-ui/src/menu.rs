@@ -5,12 +5,12 @@ use egui::containers::menu::{MenuBar, MenuConfig, menu_style};
 use egui::{Button, Frame, Key, Panel, Sense, Style, Ui, vec2};
 
 use crate::actions::{AppAction, Platform, UiState, enabled};
-use crate::background::CanvasBackground;
+use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
 use crate::edit_layout::{BUTTON_H_U, BUTTON_TEXT_Y_U};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
-use crate::theme::{SURFACE_1, SURFACE_3};
+use crate::theme::{SURFACE_0, SURFACE_1, SURFACE_3};
 
 /// Una entrada de un desplegable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +99,7 @@ pub const MENUS: [Menu; 5] = [
                     "Blanco",
                     AppAction::CanvasBackground(CanvasBackground::White),
                 ),
+                item("Color…", AppAction::BackgroundColor),
             ],
         }],
     },
@@ -109,9 +110,13 @@ pub const MENUS: [Menu; 5] = [
     },
 ];
 
-/// `true` si `action` es la del fondo `current`: la entrada del submenú que lleva la marca.
+/// `true` si `action` es la del fondo `current`: la entrada del submenú que lleva la marca. Con un
+/// color propio la lleva `Color…`, no la entrada del fondo liso que tenga el mismo color.
 pub fn background_checked(action: AppAction, current: CanvasBackground) -> bool {
-    action == AppAction::CanvasBackground(current)
+    match current {
+        CanvasBackground::Custom(_) => action == AppAction::BackgroundColor,
+        _ => action == AppAction::CanvasBackground(current),
+    }
 }
 
 /// Un atajo para mostrarlo: la tecla, si lleva `command` (`Ctrl` o `Cmd`) y si lleva `Mayús`.
@@ -202,6 +207,15 @@ pub fn popup_width_u(menu: &Menu, platform: Platform) -> i64 {
     2 * PAD_X_U + widest * i64::from(ADVANCE_PX)
 }
 
+/// Caracteres del valor de un color propio (`#rrggbb`).
+const VALUE_CHARS: i64 = 7;
+
+/// Ancho de un submenú en `u`: márgenes, la marca (`· `), el rótulo más largo, un hueco y la
+/// columna del valor, que se reserva **siempre** para que el submenú no cambie de ancho al elegir.
+pub fn submenu_width_u(submenu: &Submenu) -> i64 {
+    2 * PAD_X_U + (submenu_label_chars(submenu) + 2 + 2 + VALUE_CHARS) * i64::from(ADVANCE_PX)
+}
+
 /// Como [`show_menu_with_background`] con el fondo por defecto marcado.
 pub fn show_menu(ui: &mut Ui, state: &UiState, platform: Platform) -> Option<AppAction> {
     show_menu_with_background(ui, state, platform, CanvasBackground::default())
@@ -257,22 +271,12 @@ pub fn show_menu_with_background(
                             }
                             for submenu in menu.submenus {
                                 ui.menu_button(printable(&ctx, submenu.label), |ui| {
-                                    // Hueco de la marca (`· `) y del rótulo más largo.
-                                    let width = (2 * PAD_X_U
-                                        + (submenu_label_chars(submenu) + 2)
-                                            * i64::from(ADVANCE_PX))
-                                        as f32
-                                        * u;
+                                    let width = submenu_width_u(submenu) as f32 * u;
                                     ui.set_min_width(width);
                                     ui.set_max_width(width);
                                     for item in submenu.items {
-                                        let checked = match item.action {
-                                            AppAction::CanvasBackground(_) => {
-                                                background_checked(item.action, background)
-                                            }
-                                            _ => false,
-                                        };
-                                        if marked_entry(ui, &ctx, state, item, checked, width, u) {
+                                        if marked_entry(ui, &ctx, state, item, background, width, u)
+                                        {
                                             chosen = Some(item.action);
                                         }
                                     }
@@ -324,14 +328,25 @@ fn marked_entry(
     ctx: &egui::Context,
     state: &UiState,
     item: &MenuItem,
-    checked: bool,
+    background: CanvasBackground,
     width: f32,
     u: f32,
 ) -> bool {
     let on = enabled(item.action, state);
+    let checked = background_checked(item.action, background);
+    let value = if item.action == AppAction::BackgroundColor {
+        background_value_text(background)
+    } else {
+        None
+    };
     let text = format!("{} {}", if checked { '·' } else { ' ' }, item.label);
-    let button = Button::new(printable(ctx, &text))
+    let mut button = Button::new(printable(ctx, &text))
         .selected(checked)
         .min_size(vec2(width, BUTTON_H_U as f32 * u));
+    // El valor del color propio, a la derecha como un atajo. La fila con `Custom` siempre está
+    // marcada (relleno `ACCENT`): `SURFACE_0` da 8,98:1 sobre él y `TEXT`, 1,47.
+    if let Some(value) = value {
+        button = button.shortcut_text(egui::RichText::new(printable(ctx, &value)).color(SURFACE_0));
+    }
     ui.add_enabled(on, button).clicked()
 }

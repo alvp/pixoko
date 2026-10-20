@@ -16,6 +16,24 @@ pub enum CanvasBackground {
     /// El gris liso de siempre, el de [`BACKGROUND`].
     Gray,
     White,
+    /// Un color elegido por el usuario (`Color…`): siempre opaco (véase [`CanvasBackground::custom`]).
+    Custom(Rgba),
+}
+
+impl CanvasBackground {
+    /// El fondo de un color propio; `None` si el color no es opaco (el fondo va *debajo* de la
+    /// transparencia).
+    pub fn custom(color: Rgba) -> Option<CanvasBackground> {
+        (color.a == 255).then_some(CanvasBackground::Custom(color))
+    }
+
+    /// El color del fondo si es liso (las tres sólidas y `Custom`); `None` con el damero.
+    pub fn solid_color(self) -> Option<Rgba> {
+        match background_fill(self) {
+            Fill::Solid(color) => Some(color),
+            Fill::Checker => None,
+        }
+    }
 }
 
 /// Cómo se rellena ese fondo.
@@ -36,5 +54,14 @@ pub fn background_fill(background: CanvasBackground) -> Fill {
             Fill::Solid(Rgba::opaque(BACKGROUND.r(), BACKGROUND.g(), BACKGROUND.b()))
         }
         CanvasBackground::White => Fill::Solid(WHITE),
+        CanvasBackground::Custom(c) => Fill::Solid(Rgba::opaque(c.r, c.g, c.b)),
+    }
+}
+
+/// El valor de un color propio como se ve en el menú (`#rrggbb`); `None` con los demás fondos.
+pub fn background_value_text(background: CanvasBackground) -> Option<String> {
+    match background {
+        CanvasBackground::Custom(c) => Some(Rgba::opaque(c.r, c.g, c.b).to_string()),
+        _ => None,
     }
 }

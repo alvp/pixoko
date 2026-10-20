@@ -35,6 +35,8 @@ pub enum AppAction {
     SelectColor(u8),
     /// Fondo bajo la transparencia del lienzo: preferencia de la sesión, no del documento.
     CanvasBackground(CanvasBackground),
+    /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
+    BackgroundColor,
 }
 
 impl AppAction {
@@ -50,12 +52,15 @@ impl AppAction {
         )
     }
 
-    /// Las acciones que abren un diálogo modal (las licencias, nueva imagen y convertir modo): no
-    /// se abren con un gesto en curso ni con una quita pendiente.
+    /// Las acciones que abren un diálogo modal (las licencias, nueva imagen, convertir modo y el
+    /// color del fondo): no se abren con un gesto en curso ni con una quita pendiente.
     pub fn opens_dialog(self) -> bool {
         matches!(
             self,
-            AppAction::ShowLicenses | AppAction::NewImage | AppAction::ConvertMode
+            AppAction::ShowLicenses
+                | AppAction::NewImage
+                | AppAction::ConvertMode
+                | AppAction::BackgroundColor
         )
     }
 

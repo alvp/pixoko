@@ -302,6 +302,8 @@ pub enum DialogKind {
     NewImage,
     /// `Imagen → Convertir modo…` (specs/hito-2-convertir-modo.md).
     ConvertMode,
+    /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md).
+    BackgroundColor,
 }
 
 /// Lo que le pasa a un diálogo abierto.
