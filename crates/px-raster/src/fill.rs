@@ -13,13 +13,28 @@ use px_core::{Command, Document, DocumentError, Image, ImageId, Pixel, Span};
 /// Orden de comprobaciones: imagen desconocida, `pixel` que no es del modo de la imagen o con
 /// índice fuera de la paleta (`Image::check_pixel`), semilla fuera del lienzo (`None`) y `pixel`
 /// igual al valor de la semilla (`None`). Solo lee `doc`; reserva con `try_reserve*`, así que
-/// la falta de memoria es `Err(OutOfMemory)` y nunca aborta.
+/// la falta de memoria es `Err(OutOfMemory)` y nunca aborta. Una región con más de
+/// `Document::MAX_FILL_SPANS` tramos es `Err(FillTooFragmented)` (specs/hito-2-limites-relleno.md).
 pub fn fill_command(
     doc: &Document,
     image: ImageId,
     x: i32,
     y: i32,
     pixel: Pixel,
+) -> Result<Option<Command>, DocumentError> {
+    fill_command_with_limit(doc, image, x, y, pixel, Document::MAX_FILL_SPANS)
+}
+
+/// Como [`fill_command`], con el tope de tramos como parámetro: al descubrir el tramo número
+/// `max_spans + 1` devuelve `Err(FillTooFragmented { limit: max_spans })` sin haber reservado la
+/// salida; con exactamente `max_spans` tramos, `Ok`. El tope es la última comprobación.
+pub fn fill_command_with_limit(
+    doc: &Document,
+    image: ImageId,
+    x: i32,
+    y: i32,
+    pixel: Pixel,
+    max_spans: usize,
 ) -> Result<Option<Command>, DocumentError> {
     let target = doc.image(image).ok_or(DocumentError::UnknownImage(image))?;
     target
@@ -35,7 +50,7 @@ pub fn fill_command(
     if seed == pixel {
         return Ok(None);
     }
-    let spans = region_spans(target, x, y, seed)?;
+    let spans = region_spans(target, x, y, seed, max_spans)?;
     Ok(Some(Command::FillSpans {
         image,
         spans,
@@ -159,7 +174,13 @@ fn extend(image: &Image, x: u32, y: u32, seed: Pixel) -> Span {
 }
 
 /// Los tramos de la región de `(x, y)` (que vale `seed`), ordenados por `(y, x_start)`.
-fn region_spans(image: &Image, x: u32, y: u32, seed: Pixel) -> Result<Vec<Span>, DocumentError> {
+fn region_spans(
+    image: &Image,
+    x: u32,
+    y: u32,
+    seed: Pixel,
+    max_spans: usize,
+) -> Result<Vec<Span>, DocumentError> {
     let (width, height) = (image.width(), image.height());
     let mut visited = Visited::new(width, height)?;
     let mut stack: Vec<Span> = Vec::new();
@@ -169,6 +190,10 @@ fn region_spans(image: &Image, x: u32, y: u32, seed: Pixel) -> Result<Vec<Span>,
     // Descubre un tramo máximo, lo marca y lo apila. Un píxel visitado tiene visitado todo su
     // tramo máximo, así que cada tramo entra una sola vez.
     let mut discover = |visited: &mut Visited, stack: &mut Vec<Span>, x: u32, y: u32| {
+        // El tope va antes de marcar y de apilar: la pila y la salida nunca pasan de `max_spans`.
+        if count >= max_spans {
+            return Err(DocumentError::FillTooFragmented { limit: max_spans });
+        }
         let span = extend(image, x, y, seed);
         let row = visited.at(0, y);
         visited.set_range(row + span.x_start as usize, row + span.x_end as usize);

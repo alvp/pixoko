@@ -5,5 +5,5 @@ mod fill;
 mod line;
 
 pub use draw::{draw_line, line_command};
-pub use fill::{fill_command, flood_fill};
+pub use fill::{fill_command, fill_command_with_limit, flood_fill};
 pub use line::Line;
