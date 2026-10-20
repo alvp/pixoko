@@ -2,9 +2,10 @@
 //! 12 y propiedad 2). Sin egui más allá de `Key` y `Modifiers`: `dispatch` recibe la acción, su
 //! origen y `Targets { session, tools, locks }` y no toca ninguna ventana.
 //!
-//! - Fila 3b: las nueve ranuras de una indexada de 9 entradas con `action_for_shortcut` +
-//!   `dispatch` (lo que hará `handle_keys` traducido) cambian `choice` como antes, con la
-//!   sincronización de la rejilla; `command`+`1` es solo `ZoomActual` y no cambia `choice`.
+//! - Fila 3b: las cifras 1 a 9 sin modificadores no hacen nada (unidad I.1); las nueve entradas de
+//!   una indexada de 9 se recorren con `ColorNext` (por `action_for_shortcut` + `dispatch`, lo que
+//!   hace `key_actions` traducido) con la sincronización de la rejilla; `command`+`1` es solo
+//!   `ZoomActual` y no cambia `choice`.
 //! - Fila 4: la misma acción por el menú (buscada por rótulo), por el botón (por rótulo de
 //!   `TOOL_BUTTONS` o `ZOOM_BUTTONS`) y por el atajo: las tres acciones, los tres `Dispatched` y el
 //!   estado final son iguales sobre copias idénticas de sesión y herramienta.
@@ -418,31 +419,49 @@ fn command(platform: Platform) -> Modifiers {
 const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
 // ---------------------------------------------------------------------------------------------
-// Fila 3b: las teclas 1 a 9 siguen eligiendo color (en la app)
+// Fila 3b: las teclas 1 a 9 ya no eligen color; `]` y `[` recorren los colores (en la app)
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3b_las_nueve_ranuras_de_una_indexada_de_9_entradas_cambian_choice_como_antes() {
+fn fila_3b_las_cifras_sin_modificadores_no_hacen_nada() {
     for platform in PLATAFORMAS {
         for slot in 1..=9u8 {
-            let mut mundo = Mundo::nuevo(indexada(9, None), 0, 0);
+            let mundo = Mundo::nuevo(indexada(9, None), 0, 0);
+            let antes = mundo.foto();
+            // `key_actions` traducido: la tecla no da ninguna acción que despachar.
+            assert_eq!(
+                action_for_shortcut(tecla_digito(slot), Modifiers::NONE, platform),
+                None,
+                "{platform:?} cifra {slot} (antes elegía la ranura)"
+            );
             assert_eq!(mundo.session.choice, ColorChoice::Entry(0));
-            // `handle_keys` traducido: la tecla da la acción y la acción se despacha.
-            let action = action_for_shortcut(tecla_digito(slot), Modifiers::NONE, platform)
-                .expect("los dígitos sin modificadores dan una acción");
-            assert_eq!(action, AppAction::SelectColor(slot));
+            assert_eq!(mundo.foto(), antes);
+        }
+    }
+}
+
+#[test]
+fn fila_3b_color_next_recorre_las_nueve_entradas_de_una_indexada_con_la_rejilla_sincronizada() {
+    for platform in PLATAFORMAS {
+        let mut mundo = Mundo::nuevo(indexada(9, None), 0, 0);
+        assert_eq!(mundo.session.choice, ColorChoice::Entry(0));
+        for entrada in 1..=8u8 {
+            mundo.session.view.reveal = false;
+            // `key_actions` traducido: la tecla da la acción y la acción se despacha.
+            let action = action_for_shortcut(Key::CloseBracket, Modifiers::NONE, platform)
+                .expect("`]` sin modificadores da una acción");
+            assert_eq!(action, AppAction::ColorNext);
             let resultado = mundo.despacha(action, Origin::Key);
-            assert_eq!(resultado, hecho(false), "{platform:?} ranura {slot}");
+            assert_eq!(resultado, hecho(false), "{platform:?} entrada {entrada}");
             assert_eq!(
                 mundo.session.choice,
-                ColorChoice::Entry(slot - 1),
-                "{platform:?} ranura {slot}"
+                ColorChoice::Entry(entrada),
+                "{platform:?} entrada {entrada}"
             );
             // Con la sincronización de la rejilla: si cambió, el panel muestra su fila.
-            assert_eq!(
+            assert!(
                 mundo.session.view.reveal,
-                slot != 1,
-                "{platform:?} ranura {slot}: reveal"
+                "{platform:?} entrada {entrada}: reveal"
             );
         }
     }
@@ -558,13 +577,14 @@ fn casos_de_la_fila_4() -> Vec<Caso> {
             esperada: AppAction::SelectTool(Tool::Eraser),
             menu: None,
             boton: Some("Borrador"),
-            atajo: Some((Key::E, Modifiers::NONE)),
+            // Sin tecla desde la unidad I.1: solo el botón.
+            atajo: None,
         },
         Caso {
-            esperada: AppAction::SelectColor(3),
+            esperada: AppAction::ColorNext,
             menu: None,
             boton: None,
-            atajo: Some((Key::Num3, Modifiers::NONE)),
+            atajo: Some((Key::CloseBracket, Modifiers::NONE)),
         },
         Caso {
             esperada: AppAction::Open,
@@ -713,9 +733,9 @@ fn fila_4_los_tres_dispatched_y_el_estado_final_son_iguales() {
                 );
                 assert_eq!(despues.tool, Tool::Eraser);
             }
-            AppAction::SelectColor(3) => {
+            AppAction::ColorNext => {
                 assert_eq!(*resultado, hecho(false));
-                assert_eq!(despues.choice, ColorChoice::Entry(2));
+                assert_eq!(despues.choice, ColorChoice::Entry(1));
             }
             otra => panic!("caso sin comprobar: {otra:?}"),
         }
@@ -723,14 +743,12 @@ fn fila_4_los_tres_dispatched_y_el_estado_final_son_iguales() {
 }
 
 #[test]
-fn fila_4_el_aviso_del_borrador_es_el_mismo_desde_el_boton_y_desde_la_tecla() {
+fn fila_4_el_aviso_del_borrador_es_el_mismo_con_cualquier_origen() {
+    // El borrador ya no tiene tecla: solo el botón, y la acción da lo mismo con cualquier origen.
     let mut por_boton = Mundo::estandar();
-    let mut por_tecla = Mundo::estandar();
+    let mut por_otro_origen = Mundo::estandar();
     let desde_boton = por_boton.despacha(por_rotulo_de_boton("Borrador"), Origin::Button);
-    let desde_tecla = por_tecla.despacha(
-        action_for_shortcut(Key::E, Modifiers::NONE, Platform::Linux).expect("E"),
-        Origin::Key,
-    );
+    let desde_tecla = por_otro_origen.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Key);
     assert_eq!(desde_boton, desde_tecla);
     assert!(matches!(
         desde_boton,
@@ -760,24 +778,28 @@ fn fila_4_el_aviso_del_borrador_es_el_mismo_desde_el_boton_y_desde_la_tecla() {
 }
 
 #[test]
-fn fila_4_las_cinco_herramientas_se_eligen_igual_desde_el_boton_y_desde_su_tecla() {
+fn fila_4_las_cinco_herramientas_se_eligen_desde_el_boton_y_las_cuatro_con_letra_tambien_desde_su_tecla()
+ {
     for (tool, (key, boton)) in HERRAMIENTAS.iter().zip([
-        (Key::P, "Lápiz"),
-        (Key::L, "Línea"),
-        (Key::F, "Relleno"),
-        (Key::I, "Cuentagotas"),
-        (Key::E, "Borrador"),
+        (Some(Key::D), "Lápiz"),
+        (Some(Key::V), "Línea"),
+        (Some(Key::F), "Relleno"),
+        (Some(Key::Comma), "Cuentagotas"),
+        // El borrador no tiene tecla: se elige solo por el botón.
+        (None, "Borrador"),
     ]) {
         let mut a = Mundo::nuevo(rgba(), 0, 0);
-        let mut b = Mundo::nuevo(rgba(), 0, 0);
         let ra = a.despacha(por_rotulo_de_boton(boton), Origin::Button);
-        let rb = b.despacha(
-            action_for_shortcut(key, Modifiers::NONE, Platform::Linux).expect("tecla"),
-            Origin::Key,
-        );
-        assert_eq!(ra, rb, "{tool:?}");
         assert_eq!(a.tools.tool(), *tool);
-        assert_eq!(b.tools.tool(), *tool);
+        if let Some(key) = key {
+            let mut b = Mundo::nuevo(rgba(), 0, 0);
+            let rb = b.despacha(
+                action_for_shortcut(key, Modifiers::NONE, Platform::Linux).expect("tecla"),
+                Origin::Key,
+            );
+            assert_eq!(ra, rb, "{tool:?}");
+            assert_eq!(b.tools.tool(), *tool);
+        }
     }
 }
 
@@ -2025,14 +2047,12 @@ fn fila_6d_ctrl_q_en_linux_da_quit_con_modal_y_en_windows_y_mac_no_hay_atajo() {
 #[test]
 fn fila_6d_las_teclas_de_herramienta_color_zoom_y_fichero_dan_blocked_con_modal() {
     let casos = [
-        (Key::P, Modifiers::NONE),
-        (Key::L, Modifiers::NONE),
+        (Key::D, Modifiers::NONE),
+        (Key::V, Modifiers::NONE),
         (Key::F, Modifiers::NONE),
-        (Key::I, Modifiers::NONE),
-        (Key::E, Modifiers::NONE),
-        (Key::Num1, Modifiers::NONE),
-        (Key::Num5, Modifiers::NONE),
-        (Key::Num9, Modifiers::NONE),
+        (Key::Comma, Modifiers::NONE),
+        (Key::CloseBracket, Modifiers::NONE),
+        (Key::OpenBracket, Modifiers::NONE),
         (Key::Plus, Modifiers::NONE),
         (Key::Minus, Modifiers::NONE),
         (Key::Home, Modifiers::NONE),

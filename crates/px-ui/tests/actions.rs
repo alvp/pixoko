@@ -5,7 +5,8 @@
 //! - Fila 3: `action_for_shortcut` sobre `Key::ALL` por las 32 combinaciones de modificadores y las
 //!   tres plataformas, contra un oráculo escrito aparte; ida y vuelta con la tabla del menú; las
 //!   tres funciones de teclas anteriores se componen sin cambios.
-//! - Fila 3b: las teclas `1` a `9` siguen eligiendo color y `Ctrl`/`Cmd`+`1` es solo `ZoomActual`.
+//! - Fila 3b: las teclas `1` a `9` sin modificadores no hacen nada (unidad I.1) y `Ctrl`/`Cmd`+`1`
+//!   es solo `ZoomActual`.
 //! - Fila 5: `is_blocked` en el orden de la spec (con la quita pendiente también frena abrir un
 //!   diálogo: unidad 18, D2), con un modelo independiente que se compara con la
 //!   implementación sobre todas las acciones, orígenes y combinaciones de bloqueos; `enabled`.
@@ -21,6 +22,7 @@ use egui::{Key, Modifiers};
 use px_ui::actions::{
     AppAction, Locks, Origin, Platform, UiState, action_for_shortcut, enabled, is_blocked,
 };
+use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::menu::{MENUS, Shortcut, shortcut_for};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
 use px_ui::tool::{Tool, ToolAction, tool_action_for_key};
@@ -451,8 +453,8 @@ fn fila_5b_f_el_panel_de_licencias_bloquea_el_zoom_y_deja_pasar_solo_cerrar_y_sa
 /// Con `command` (y sin `Alt`): `Z` deshacer, `Mayús`+`Z` e `Y` rehacer, `S` guardar, `Mayús`+`S`
 /// guardar como, `O` abrir, `N` nueva imagen (sin `Mayús`; unidad 19), `1` 1:1 (sin `Mayús`) y `Q`
 /// salir solo en Linux (sin `Mayús`). Sin
-/// `command`: `+`, `=`, `-` y `Home` con cualquier otro modificador, y con **ningún** modificador
-/// `P L F I E` y `1` a `9`.
+/// `command`: `+`, `=`, `-`, `Home`, `Re Pág` y `Av Pág` con cualquier otro modificador, y con
+/// **ningún** modificador `d v f ,`, `u`, `n`, `[` y `]` (las cifras ya no hacen nada).
 fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppAction> {
     if m.command {
         if m.alt {
@@ -474,26 +476,22 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
         Key::Plus | Key::Equals => return Some(AppAction::ZoomIn),
         Key::Minus => return Some(AppAction::ZoomOut),
         Key::Home => return Some(AppAction::ZoomFit),
+        Key::PageDown => return Some(AppAction::ColorNext),
+        Key::PageUp => return Some(AppAction::ColorPrev),
         _ => {}
     }
     if !m.is_none() {
         return None;
     }
     match key {
-        Key::P => Some(AppAction::SelectTool(Tool::Pencil)),
-        Key::L => Some(AppAction::SelectTool(Tool::Line)),
+        Key::D => Some(AppAction::SelectTool(Tool::Pencil)),
+        Key::V => Some(AppAction::SelectTool(Tool::Line)),
         Key::F => Some(AppAction::SelectTool(Tool::Fill)),
-        Key::I => Some(AppAction::SelectTool(Tool::Dropper)),
-        Key::E => Some(AppAction::SelectTool(Tool::Eraser)),
-        Key::Num1 => Some(AppAction::SelectColor(1)),
-        Key::Num2 => Some(AppAction::SelectColor(2)),
-        Key::Num3 => Some(AppAction::SelectColor(3)),
-        Key::Num4 => Some(AppAction::SelectColor(4)),
-        Key::Num5 => Some(AppAction::SelectColor(5)),
-        Key::Num6 => Some(AppAction::SelectColor(6)),
-        Key::Num7 => Some(AppAction::SelectColor(7)),
-        Key::Num8 => Some(AppAction::SelectColor(8)),
-        Key::Num9 => Some(AppAction::SelectColor(9)),
+        Key::Comma => Some(AppAction::SelectTool(Tool::Dropper)),
+        Key::U => Some(AppAction::Undo),
+        Key::N => Some(AppAction::CenterOnCursor),
+        Key::CloseBracket => Some(AppAction::ColorNext),
+        Key::OpenBracket => Some(AppAction::ColorPrev),
         _ => None,
     }
 }
@@ -599,18 +597,20 @@ fn fila_3_las_teclas_de_zoom_valen_sin_command_y_con_cualquier_otro_modificador(
 }
 
 #[test]
-fn fila_3_cada_tecla_de_herramienta_y_de_ranura_vale_sin_modificadores_en_las_tres_plataformas() {
+fn fila_3_cada_tecla_de_herramienta_y_de_color_vale_sin_modificadores_en_las_tres_plataformas() {
     for platform in PLATAFORMAS {
-        for (key, tool) in [
-            (Key::P, Tool::Pencil),
-            (Key::L, Tool::Line),
-            (Key::F, Tool::Fill),
-            (Key::I, Tool::Dropper),
-            (Key::E, Tool::Eraser),
+        for (key, accion) in [
+            (Key::D, AppAction::SelectTool(Tool::Pencil)),
+            (Key::V, AppAction::SelectTool(Tool::Line)),
+            (Key::F, AppAction::SelectTool(Tool::Fill)),
+            (Key::Comma, AppAction::SelectTool(Tool::Dropper)),
+            // La parte de ranuras: `]` y `[` recorren los colores.
+            (Key::CloseBracket, AppAction::ColorNext),
+            (Key::OpenBracket, AppAction::ColorPrev),
         ] {
             assert_eq!(
                 action_for_shortcut(key, Modifiers::NONE, platform),
-                Some(AppAction::SelectTool(tool))
+                Some(accion)
             );
             // Con cualquier modificador (también `command`) no hacen nada.
             for bits in 1..32 {
@@ -659,6 +659,12 @@ fn fila_3_compone_las_tres_funciones_de_teclas_existentes_sin_cambiarlas() {
                     Some(Action::SelectColor(n)) => {
                         assert_eq!(atajo, Some(AppAction::SelectColor(n)), "{key:?} con {m:?}");
                     }
+                    Some(Action::ColorNext) => {
+                        assert_eq!(atajo, Some(AppAction::ColorNext), "{key:?} con {m:?}");
+                    }
+                    Some(Action::ColorPrev) => {
+                        assert_eq!(atajo, Some(AppAction::ColorPrev), "{key:?} con {m:?}");
+                    }
                     None => {}
                 }
             }
@@ -682,14 +688,15 @@ fn fila_3_las_tres_funciones_anteriores_siguen_dando_none_para_command_q_y_comma
     }
 }
 
-/// Modificadores con los que se pulsa un `Shortcut` en `platform`.
-fn pulsado(shortcut: Shortcut, platform: Platform) -> Modifiers {
-    Modifiers {
-        alt: false,
-        ctrl: shortcut.command && platform != Platform::Mac,
-        shift: shortcut.shift,
-        mac_cmd: shortcut.command && platform == Platform::Mac,
+/// La pulsación que hace un `Shortcut` (la tecla que muestra, con `command` y `Mayús` si los lleva).
+fn pulsado(shortcut: Shortcut) -> Press {
+    Press {
+        key: Some(shortcut.key),
         command: shortcut.command,
+        shift: shortcut.shift,
+        alt: false,
+        other_ctrl: false,
+        repeat: false,
     }
 }
 
@@ -704,7 +711,7 @@ fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
                 };
                 con_atajo += 1;
                 assert_eq!(
-                    action_for_shortcut(shortcut.key, pulsado(shortcut, platform), platform),
+                    Keymap::default_scheme().action_for(&pulsado(shortcut), platform),
                     Some(item.action),
                     "{} ({:?}) en {platform:?}",
                     item.label,
@@ -719,7 +726,7 @@ fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fila 3b: las teclas 1 a 9 siguen eligiendo color
+// Fila 3b: las teclas 1 a 9 ya no eligen color (unidad I.1)
 // ---------------------------------------------------------------------------------------------
 
 const DIGITOS: [(Key, u8); 9] = [
@@ -735,13 +742,13 @@ const DIGITOS: [(Key, u8); 9] = [
 ];
 
 #[test]
-fn fila_3b_los_digitos_sin_modificadores_dan_select_color_en_las_tres_plataformas() {
+fn fila_3b_los_digitos_sin_modificadores_no_hacen_nada_en_las_tres_plataformas() {
     for platform in PLATAFORMAS {
         for (key, slot) in DIGITOS {
             assert_eq!(
                 action_for_shortcut(key, Modifiers::NONE, platform),
-                Some(AppAction::SelectColor(slot)),
-                "{key:?} en {platform:?}"
+                None,
+                "{key:?} en {platform:?} (antes elegía la ranura {slot})"
             );
         }
     }
@@ -905,14 +912,14 @@ fn fila_9_shortcut_for_de_nueva_imagen_va_y_vuelve_por_action_for_shortcut() {
         assert_eq!(
             shortcut,
             Shortcut {
-                key: Key::N,
+                key: KeyId::Char('n'),
                 command: true,
                 shift: false
             },
             "{platform:?}"
         );
         assert_eq!(
-            action_for_shortcut(shortcut.key, pulsado(shortcut, platform), platform),
+            Keymap::default_scheme().action_for(&pulsado(shortcut), platform),
             Some(AppAction::NewImage),
             "{platform:?}"
         );
@@ -920,7 +927,7 @@ fn fila_9_shortcut_for_de_nueva_imagen_va_y_vuelve_por_action_for_shortcut() {
 }
 
 #[test]
-fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola_no() {
+fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola_no_la_dan() {
     for platform in PLATAFORMAS {
         let command = modificadores_command(platform == Platform::Mac);
         assert_eq!(
@@ -942,7 +949,6 @@ fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola
             ..command
         };
         for (nombre, m) in [
-            ("N sola", Modifiers::NONE),
             ("Mayús+N", Modifiers::SHIFT),
             ("Alt+N", Modifiers::ALT),
             ("command+Mayús+N", command_mayus),
@@ -955,6 +961,12 @@ fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola
                 "{nombre} en {platform:?}"
             );
         }
+        // La `n` sola ya no es `None`: centra bajo el cursor (unidad I.1).
+        assert_eq!(
+            action_for_shortcut(Key::N, Modifiers::NONE, platform),
+            Some(AppAction::CenterOnCursor),
+            "N sola en {platform:?}"
+        );
     }
 }
 

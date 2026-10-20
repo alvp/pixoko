@@ -632,18 +632,18 @@ fn aplica_teclas_de_herramienta(tool: &mut ToolState, eventos: &[Event]) {
     }
 }
 
-fn teclas_i_y_e() -> Vec<Event> {
+fn teclas_coma_y_e() -> Vec<Event> {
     vec![
-        tecla(Key::I, Modifiers::NONE),
-        Event::Text("i".to_string()),
+        tecla(Key::Comma, Modifiers::NONE),
+        Event::Text(",".to_string()),
         tecla(Key::E, Modifiers::NONE),
         Event::Text("e".to_string()),
     ]
 }
 
 #[test]
-fn fila_8_gate_keys_con_foco_de_texto_no_deja_pasar_ni_i_ni_e() {
-    let eventos = teclas_i_y_e();
+fn fila_8_gate_keys_con_foco_de_texto_no_deja_pasar_ni_coma_ni_e() {
+    let eventos = teclas_coma_y_e();
     assert!(gate_keys(&eventos, true).is_empty());
     for evento in &eventos {
         assert!(gate_keys(std::slice::from_ref(evento), true).is_empty());
@@ -654,13 +654,17 @@ fn fila_8_gate_keys_con_foco_de_texto_no_deja_pasar_ni_i_ni_e() {
 }
 
 #[test]
-fn fila_8_gate_keys_sin_foco_deja_pasar_i_y_e() {
-    let eventos = teclas_i_y_e();
+fn fila_8_gate_keys_sin_foco_deja_pasar_coma_y_e() {
+    let eventos = teclas_coma_y_e();
     assert_eq!(gate_keys(&eventos, false), eventos);
     let mut tool = ToolState::new();
-    aplica_teclas_de_herramienta(&mut tool, &gate_keys(&tecla_sola(Key::I), false));
+    aplica_teclas_de_herramienta(&mut tool, &gate_keys(&tecla_sola(Key::Comma), false));
     assert_eq!(tool.tool(), Tool::Dropper);
+    // La `E` ya no es atajo: el filtro la deja pasar y no cambia nada. El borrador se elige por
+    // su acción (la del botón).
     aplica_teclas_de_herramienta(&mut tool, &gate_keys(&tecla_sola(Key::E), false));
+    assert_eq!(tool.tool(), Tool::Dropper);
+    tool.apply_action(ToolAction::Select(Tool::Eraser));
     assert_eq!(tool.tool(), Tool::Eraser);
 }
 
@@ -700,10 +704,10 @@ impl BancoTexto {
 }
 
 /// **[DEPENDE DE EGUI]** Con un campo de texto enfocado de verdad, `text_edit_focused()` es cierto
-/// y `gate_keys` no deja pasar ni `I` ni `E`; sin él, los deja pasar.
+/// y `gate_keys` no deja pasar ni `,` ni `E`; sin él, los deja pasar.
 #[test]
 fn fila_8_banco_de_egui_con_un_campo_enfocado() {
-    let eventos = teclas_i_y_e();
+    let eventos = teclas_coma_y_e();
 
     let mut con_foco = BancoTexto::nuevo();
     con_foco.fotograma(vec![], true);
@@ -725,7 +729,9 @@ fn fila_8_banco_de_egui_con_un_campo_enfocado() {
     assert_eq!(vistos, eventos);
     let mut tool = ToolState::new();
     aplica_teclas_de_herramienta(&mut tool, &vistos);
-    assert_eq!(tool.tool(), Tool::Eraser, "I y luego E");
+    assert_eq!(tool.tool(), Tool::Dropper, "`,` y luego E (sin atajo)");
+    tool.apply_action(ToolAction::Select(Tool::Eraser));
+    assert_eq!(tool.tool(), Tool::Eraser, "el borrador, por su acción");
 }
 
 // Estrategias de las propiedades 2 y 4.

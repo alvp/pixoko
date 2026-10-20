@@ -25,7 +25,8 @@
 //!   `Zoom `: el banco solo exige que el texto pintado lo contenga.
 
 use egui::{Context, Event, Vec2, vec2};
-use px_ui::actions::{AppAction, Locks, UiState};
+use px_ui::actions::{AppAction, Locks, Platform, UiState};
+use px_ui::keymap::Keymap;
 use px_ui::theme::{ACCENT, SURFACE_0, TEXT_DIM, contrast_ratio};
 use px_ui::tool::Tool;
 use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, show_toolbar};
@@ -145,41 +146,46 @@ fn el_activo_tiene_contraste_suficiente_accent_sobre_surface_0() {
     );
 }
 
+/// La letra que la columna enseña para `action`: sale de la tabla de teclas (`Button.key` ya no
+/// existe) y no hay ninguna si la acción no tiene fila.
+fn letra_de(action: AppAction) -> Option<char> {
+    Keymap::default_scheme()
+        .shown_text(action, Platform::Linux)
+        .and_then(|texto| texto.chars().next())
+}
+
 #[test]
 fn tool_buttons_son_los_cinco_botones_con_su_letra() {
     let tabla: Vec<(&str, AppAction, Option<char>)> = TOOL_BUTTONS
         .iter()
-        .map(|b| (b.label, b.action, b.key))
+        .map(|b| (b.label, b.action, letra_de(b.action)))
         .collect();
     assert_eq!(
         tabla,
         [
-            ("Lápiz", AppAction::SelectTool(Tool::Pencil), Some('P')),
-            ("Línea", AppAction::SelectTool(Tool::Line), Some('L')),
-            ("Relleno", AppAction::SelectTool(Tool::Fill), Some('F')),
+            ("Lápiz", AppAction::SelectTool(Tool::Pencil), Some('d')),
+            ("Línea", AppAction::SelectTool(Tool::Line), Some('v')),
+            ("Relleno", AppAction::SelectTool(Tool::Fill), Some('f')),
             (
                 "Cuentagotas",
                 AppAction::SelectTool(Tool::Dropper),
-                Some('I')
+                Some(',')
             ),
-            ("Borrador", AppAction::SelectTool(Tool::Eraser), Some('E')),
+            ("Borrador", AppAction::SelectTool(Tool::Eraser), None),
         ]
     );
 }
 
 #[test]
 fn zoom_buttons_son_los_cuatro_botones_sin_letra() {
-    let tabla: Vec<(&str, AppAction, Option<char>)> = ZOOM_BUTTONS
-        .iter()
-        .map(|b| (b.label, b.action, b.key))
-        .collect();
+    let tabla: Vec<(&str, AppAction)> = ZOOM_BUTTONS.iter().map(|b| (b.label, b.action)).collect();
     assert_eq!(
         tabla,
         [
-            ("Acercar", AppAction::ZoomIn, None),
-            ("Alejar", AppAction::ZoomOut, None),
-            ("Ajustar", AppAction::ZoomFit, None),
-            ("1:1", AppAction::ZoomActual, None),
+            ("Acercar", AppAction::ZoomIn),
+            ("Alejar", AppAction::ZoomOut),
+            ("Ajustar", AppAction::ZoomFit),
+            ("1:1", AppAction::ZoomActual),
         ]
     );
 }
@@ -353,7 +359,10 @@ fn las_letras_de_los_botones_no_activos_van_en_text_dim() {
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
         let pintado = banco.reposo();
         for button in TOOL_BUTTONS.iter().skip(1) {
-            let letra = button.key.expect("lleva letra").to_string();
+            // El Borrador ya no tiene letra: no hay nada que pintar.
+            let Some(letra) = letra_de(button.action).map(|c| c.to_string()) else {
+                continue;
+            };
             let tramo = pintado
                 .tramo(&letra)
                 .unwrap_or_else(|| panic!("ppp {ppp}: no se pinta la letra {letra}"));

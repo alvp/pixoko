@@ -14,11 +14,10 @@
 //! Suposiciones sobre las firmas de «Piezas» (derives no listados): `Shortcut`, `Menu` y
 //! `MenuItem` son `Clone, Copy, Debug, PartialEq, Eq`; `Platform`, `Origin` y `Locks` también.
 
-use egui::{Context, Key, Modifiers};
+use egui::Context;
 use proptest::prelude::*;
-use px_ui::actions::{
-    AppAction, Locks, Origin, Platform, UiState, action_for_shortcut, enabled, is_blocked,
-};
+use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, enabled, is_blocked};
+use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::menu::{MENUS, Menu, MenuItem, Shortcut, shortcut_for, shortcut_text};
 use px_ui::text::{INTERFACE_CHARSET, install_fonts, printable, replace_missing};
 use px_ui::tool::Tool;
@@ -58,7 +57,7 @@ fn titulo(menu: &Menu) -> &'static str {
     menu.title
 }
 
-fn atajo(key: Key, command: bool, shift: bool) -> Option<Shortcut> {
+fn atajo(key: KeyId, command: bool, shift: bool) -> Option<Shortcut> {
     Some(Shortcut {
         key,
         command,
@@ -186,8 +185,8 @@ fn fila_1_atajos_en_linux() {
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             None,
-            Some("+"),
-            Some("-"),
+            Some(">"),
+            Some("<"),
             Some("Inicio"),
             Some("Ctrl+1"),
             None,
@@ -208,8 +207,8 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             None,
-            Some("+"),
-            Some("-"),
+            Some(">"),
+            Some("<"),
             Some("Inicio"),
             Some("Ctrl+1"),
             None,
@@ -231,8 +230,8 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
             None,
-            Some("+"),
-            Some("-"),
+            Some(">"),
+            Some("<"),
             Some("Inicio"),
             Some("Cmd+1"),
             None,
@@ -252,24 +251,24 @@ fn fila_1_licencias_no_tiene_atajo_en_ninguna_plataforma() {
 fn fila_1_shortcut_for_da_la_tecla_y_los_modificadores_de_cada_entrada() {
     for platform in PLATAFORMAS {
         let redo = if platform == Platform::Mac {
-            atajo(Key::Z, true, true)
+            atajo(KeyId::Char('z'), true, true)
         } else {
-            atajo(Key::Y, true, false)
+            atajo(KeyId::Char('y'), true, false)
         };
         let quit = (platform == Platform::Linux)
-            .then(|| atajo(Key::Q, true, false))
+            .then(|| atajo(KeyId::Char('q'), true, false))
             .flatten();
         let esperado = [
-            (AppAction::Open, atajo(Key::O, true, false)),
-            (AppAction::Save, atajo(Key::S, true, false)),
-            (AppAction::SaveAs, atajo(Key::S, true, true)),
+            (AppAction::Open, atajo(KeyId::Char('o'), true, false)),
+            (AppAction::Save, atajo(KeyId::Char('s'), true, false)),
+            (AppAction::SaveAs, atajo(KeyId::Char('s'), true, true)),
             (AppAction::Quit, quit),
-            (AppAction::Undo, atajo(Key::Z, true, false)),
+            (AppAction::Undo, atajo(KeyId::Char('z'), true, false)),
             (AppAction::Redo, redo),
-            (AppAction::ZoomIn, atajo(Key::Plus, false, false)),
-            (AppAction::ZoomOut, atajo(Key::Minus, false, false)),
-            (AppAction::ZoomFit, atajo(Key::Home, false, false)),
-            (AppAction::ZoomActual, atajo(Key::Num1, true, false)),
+            (AppAction::ZoomIn, atajo(KeyId::Char('>'), false, false)),
+            (AppAction::ZoomOut, atajo(KeyId::Char('<'), false, false)),
+            (AppAction::ZoomFit, atajo(KeyId::Home, false, false)),
+            (AppAction::ZoomActual, atajo(KeyId::Char('1'), true, false)),
             (AppAction::ShowLicenses, None),
         ];
         for (action, shortcut) in esperado {
@@ -291,32 +290,32 @@ fn fila_1_shortcut_text_de_cada_forma() {
         (Platform::Mac, "Cmd"),
     ] {
         assert_eq!(
-            shortcut_text(atajo(Key::O, true, false).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Char('o'), true, false).unwrap(), platform),
             format!("{command}+O")
         );
         assert_eq!(
-            shortcut_text(atajo(Key::S, true, true).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Char('s'), true, true).unwrap(), platform),
             format!("{command}+Mayús+S")
         );
         assert_eq!(
-            shortcut_text(atajo(Key::Num1, true, false).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Char('1'), true, false).unwrap(), platform),
             format!("{command}+1")
         );
         assert_eq!(
-            shortcut_text(atajo(Key::Z, true, true).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Char('z'), true, true).unwrap(), platform),
             format!("{command}+Mayús+Z")
         );
         // Sin `command` la tecla va sola, con su nombre en español o su signo.
         assert_eq!(
-            shortcut_text(atajo(Key::Home, false, false).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Home, false, false).unwrap(), platform),
             "Inicio"
         );
         assert_eq!(
-            shortcut_text(atajo(Key::Plus, false, false).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Char('+'), false, false).unwrap(), platform),
             "+"
         );
         assert_eq!(
-            shortcut_text(atajo(Key::Minus, false, false).unwrap(), platform),
+            shortcut_text(atajo(KeyId::Char('-'), false, false).unwrap(), platform),
             "-"
         );
     }
@@ -534,15 +533,15 @@ fn fila_2_zoom_in_es_falso_solo_en_x64_en_todos_los_niveles_enteros() {
 // Propiedad 1: tabla coherente
 // ---------------------------------------------------------------------------------------------
 
-/// `Key` de la letra de un botón de herramienta.
-fn tecla_de(letra: char) -> Key {
-    match letra {
-        'P' => Key::P,
-        'L' => Key::L,
-        'F' => Key::F,
-        'I' => Key::I,
-        'E' => Key::E,
-        otra => panic!("letra de herramienta inesperada: {otra:?}"),
+/// La pulsación que hace un `Shortcut` (la tecla que muestra, con `command` y `Mayús` si los lleva).
+fn pulsado(shortcut: Shortcut) -> Press {
+    Press {
+        key: Some(shortcut.key),
+        command: shortcut.command,
+        shift: shortcut.shift,
+        alt: false,
+        other_ctrl: false,
+        repeat: false,
     }
 }
 
@@ -642,31 +641,27 @@ proptest! {
         let platform = plataforma(platform_i);
         for item in entradas() {
             if let Some(shortcut) = shortcut_for(item.action, platform) {
-                let modifiers = Modifiers {
-                    alt: false,
-                    ctrl: shortcut.command && platform != Platform::Mac,
-                    shift: shortcut.shift,
-                    mac_cmd: shortcut.command && platform == Platform::Mac,
-                    command: shortcut.command,
-                };
                 prop_assert_eq!(
-                    action_for_shortcut(shortcut.key, modifiers, platform),
+                    Keymap::default_scheme().action_for(&pulsado(shortcut), platform),
                     Some(item.action),
                     "{}", item.label
                 );
             }
         }
-        // Las letras de la columna son las teclas de herramienta.
+        // La letra de la columna sale de la tabla y es la tecla de herramienta; el Borrador no
+        // tiene (sin fila).
         for button in TOOL_BUTTONS.iter() {
-            let letra = button.key.expect("los botones de herramienta llevan letra");
-            prop_assert_eq!(
-                action_for_shortcut(tecla_de(letra), Modifiers::NONE, platform),
-                Some(button.action),
-                "{}", button.label
-            );
-        }
-        for button in ZOOM_BUTTONS.iter() {
-            prop_assert_eq!(button.key, None, "{}", button.label);
+            let letra = Keymap::default_scheme().shown(button.action, platform);
+            if button.action == AppAction::SelectTool(Tool::Eraser) {
+                prop_assert_eq!(letra, None, "{}", button.label);
+            } else {
+                let letra = letra.expect("los botones de herramienta con letra la muestran");
+                prop_assert_eq!(
+                    Keymap::default_scheme().action_for(&pulsado(letra), platform),
+                    Some(button.action),
+                    "{}", button.label
+                );
+            }
         }
     }
 }
@@ -689,7 +684,7 @@ fn fila_9_shortcut_for_nueva_imagen_es_command_n_en_las_tres_plataformas() {
             .unwrap_or_else(|| panic!("{platform:?}: Nueva imagen… tiene atajo"));
         assert_eq!(
             shortcut,
-            atajo(Key::N, true, false).unwrap(),
+            atajo(KeyId::Char('n'), true, false).unwrap(),
             "{platform:?}"
         );
         assert_eq!(shortcut_text(shortcut, platform), texto, "{platform:?}");

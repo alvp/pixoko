@@ -464,9 +464,9 @@ fn fila_6d_solo_ctrl_q_en_linux_da_quit_y_es_lo_unico_que_pasa_con_modal() {
 fn fila_6d_las_teclas_de_herramienta_color_zoom_y_fichero_estan_bloqueadas_con_modal() {
     let locks = solo(|l| l.modal = true);
     let casos = [
-        (Key::P, modificadores(0)),
-        (Key::Num1, modificadores(0)),
-        (Key::Num9, modificadores(0)),
+        (Key::D, modificadores(0)),
+        (Key::CloseBracket, modificadores(0)),
+        (Key::OpenBracket, modificadores(0)),
         (Key::Plus, modificadores(0)),
         (Key::Minus, modificadores(0)),
         (Key::Home, modificadores(0)),

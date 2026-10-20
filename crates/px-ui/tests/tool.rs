@@ -167,14 +167,14 @@ fn linea_de_la_fila_5(es: &mut Escena) -> bool {
 // Fila 1.
 
 #[test]
-fn fila_1_p_l_f_y_escape_sin_modificadores() {
+fn fila_1_d_v_f_y_escape_sin_modificadores() {
     let n = Modifiers::NONE;
     assert_eq!(
-        tool_action_for_key(Key::P, n),
+        tool_action_for_key(Key::D, n),
         Some(ToolAction::Select(Tool::Pencil))
     );
     assert_eq!(
-        tool_action_for_key(Key::L, n),
+        tool_action_for_key(Key::V, n),
         Some(ToolAction::Select(Tool::Line))
     );
     assert_eq!(
@@ -192,7 +192,7 @@ fn fila_1_p_l_f_y_escape_sin_modificadores() {
 #[test]
 fn fila_2_con_shift_command_o_alt_no_hay_accion() {
     for modifiers in [Modifiers::SHIFT, Modifiers::COMMAND, Modifiers::ALT] {
-        for key in [Key::P, Key::L, Key::F, Key::Escape] {
+        for key in [Key::D, Key::V, Key::F, Key::Escape] {
             assert_eq!(
                 tool_action_for_key(key, modifiers),
                 None,
@@ -210,8 +210,8 @@ fn fila_2_otras_teclas_sin_modificadores_no_hacen_nada() {
 }
 
 #[test]
-fn fila_2_action_for_key_sigue_dando_none_para_p_l_f_y_escape() {
-    for key in [Key::P, Key::L, Key::F, Key::Escape] {
+fn fila_2_action_for_key_sigue_dando_none_para_d_v_f_y_escape() {
+    for key in [Key::D, Key::V, Key::F, Key::Escape] {
         assert_eq!(action_for_key(key, Modifiers::NONE), None, "{key:?}");
     }
 }
@@ -591,7 +591,7 @@ fn fila_12_una_semilla_ya_roja_tras_un_undo_no_borra_el_rehacer() {
 // Fila 16.
 
 #[test]
-fn fila_16_ctrl_p_l_f_no_cambian_de_herramienta() {
+fn fila_16_ctrl_d_v_f_no_cambian_de_herramienta() {
     // En Linux egui da `ctrl` y `command` a la vez.
     let ctrl_y_command = Modifiers {
         ctrl: true,
@@ -605,7 +605,7 @@ fn fila_16_ctrl_p_l_f_no_cambian_de_herramienta() {
         ctrl_y_command,
     ];
     for modifiers in combinaciones {
-        for key in [Key::P, Key::L, Key::F] {
+        for key in [Key::D, Key::V, Key::F] {
             assert_eq!(
                 tool_action_for_key(key, modifiers),
                 None,
@@ -1253,11 +1253,10 @@ fn accion_esperada(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         return None;
     }
     match key {
-        Key::P => Some(ToolAction::Select(Tool::Pencil)),
-        Key::L => Some(ToolAction::Select(Tool::Line)),
+        Key::D => Some(ToolAction::Select(Tool::Pencil)),
+        Key::V => Some(ToolAction::Select(Tool::Line)),
         Key::F => Some(ToolAction::Select(Tool::Fill)),
-        Key::I => Some(ToolAction::Select(Tool::Dropper)),
-        Key::E => Some(ToolAction::Select(Tool::Eraser)),
+        Key::Comma => Some(ToolAction::Select(Tool::Dropper)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -1272,10 +1271,7 @@ fn comprueba_teclas(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError>
         key,
         modifiers
     );
-    if matches!(
-        key,
-        Key::P | Key::L | Key::F | Key::I | Key::E | Key::Escape
-    ) {
+    if matches!(key, Key::D | Key::V | Key::F | Key::Comma | Key::Escape) {
         prop_assert_eq!(
             action_for_key(key, modifiers),
             None,

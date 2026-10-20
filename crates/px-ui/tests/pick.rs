@@ -104,21 +104,18 @@ fn modificadores_de_la_fila_1() -> Vec<Modifiers> {
 // Fila 1: teclas y rótulos.
 
 #[test]
-fn fila_1_i_es_cuentagotas_y_e_es_borrador_sin_modificadores() {
+fn fila_1_coma_es_cuentagotas_y_e_ya_no_es_borrador_sin_modificadores() {
     assert_eq!(
-        tool_action_for_key(Key::I, Modifiers::NONE),
+        tool_action_for_key(Key::Comma, Modifiers::NONE),
         Some(ToolAction::Select(Tool::Dropper))
     );
-    assert_eq!(
-        tool_action_for_key(Key::E, Modifiers::NONE),
-        Some(ToolAction::Select(Tool::Eraser))
-    );
+    assert_eq!(tool_action_for_key(Key::E, Modifiers::NONE), None);
 }
 
 #[test]
-fn fila_1_con_cualquier_modificador_i_y_e_no_hacen_nada() {
+fn fila_1_con_cualquier_modificador_coma_no_hace_nada() {
     for modifiers in modificadores_de_la_fila_1() {
-        for key in [Key::I, Key::E] {
+        for key in [Key::Comma] {
             assert_eq!(
                 tool_action_for_key(key, modifiers),
                 None,
@@ -129,10 +126,10 @@ fn fila_1_con_cualquier_modificador_i_y_e_no_hacen_nada() {
 }
 
 #[test]
-fn fila_1_p_l_f_y_escape_siguen_igual() {
+fn fila_1_d_v_f_y_escape_con_las_teclas_nuevas() {
     for (key, accion) in [
-        (Key::P, ToolAction::Select(Tool::Pencil)),
-        (Key::L, ToolAction::Select(Tool::Line)),
+        (Key::D, ToolAction::Select(Tool::Pencil)),
+        (Key::V, ToolAction::Select(Tool::Line)),
         (Key::F, ToolAction::Select(Tool::Fill)),
         (Key::Escape, ToolAction::Cancel),
     ] {
@@ -141,12 +138,12 @@ fn fila_1_p_l_f_y_escape_siguen_igual() {
 }
 
 #[test]
-fn fila_1_action_for_key_y_file_action_for_key_dan_none_para_i_y_e() {
+fn fila_1_action_for_key_y_file_action_for_key_dan_none_para_coma() {
     let mut combinaciones = modificadores_de_la_fila_1();
     combinaciones.push(Modifiers::NONE);
     combinaciones.push(Modifiers::COMMAND | Modifiers::SHIFT);
     for modifiers in combinaciones {
-        for key in [Key::I, Key::E] {
+        for key in [Key::Comma] {
             assert_eq!(
                 action_for_key(key, modifiers),
                 None,
@@ -603,11 +600,10 @@ fn accion_esperada(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         return None;
     }
     match key {
-        Key::P => Some(ToolAction::Select(Tool::Pencil)),
-        Key::L => Some(ToolAction::Select(Tool::Line)),
+        Key::D => Some(ToolAction::Select(Tool::Pencil)),
+        Key::V => Some(ToolAction::Select(Tool::Line)),
         Key::F => Some(ToolAction::Select(Tool::Fill)),
-        Key::I => Some(ToolAction::Select(Tool::Dropper)),
-        Key::E => Some(ToolAction::Select(Tool::Eraser)),
+        Key::Comma => Some(ToolAction::Select(Tool::Dropper)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -624,16 +620,13 @@ fn comprueba_teclas(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError>
     );
     if accion.is_some() {
         prop_assert!(
-            matches!(
-                key,
-                Key::P | Key::L | Key::F | Key::I | Key::E | Key::Escape
-            ),
+            matches!(key, Key::D | Key::V | Key::F | Key::Comma | Key::Escape),
             "{:?} no debería dar acción",
             key
         );
         prop_assert!(modifiers.is_none(), "{:?} con {:?}", key, modifiers);
     }
-    if matches!(key, Key::I | Key::E) {
+    if matches!(key, Key::Comma) {
         prop_assert_eq!(
             action_for_key(key, modifiers),
             None,
@@ -677,18 +670,19 @@ fn propiedad_3_teclas_exhaustiva_key_all_por_las_32_combinaciones() {
 
 #[test]
 fn propiedad_3_cada_herramienta_tiene_su_tecla_sin_modificadores() {
-    // Las cinco herramientas se alcanzan, cada una con una sola tecla distinta.
+    // Cuatro herramientas se alcanzan, cada una con una sola tecla distinta; el Borrador no tiene tecla.
     let mut alcanzadas = Vec::new();
     for &key in Key::ALL {
         if let Some(ToolAction::Select(tool)) = tool_action_for_key(key, Modifiers::NONE) {
             alcanzadas.push((tool, key));
         }
     }
-    assert_eq!(alcanzadas.len(), TODAS.len(), "{alcanzadas:?}");
+    assert_eq!(alcanzadas.len(), TODAS.len() - 1, "{alcanzadas:?}");
     for tool in TODAS {
+        let esperadas = usize::from(tool != Tool::Eraser);
         assert_eq!(
             alcanzadas.iter().filter(|(t, _)| *t == tool).count(),
-            1,
+            esperadas,
             "{tool:?}"
         );
     }

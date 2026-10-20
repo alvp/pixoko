@@ -170,7 +170,7 @@ fn fila_17_sin_foco_devuelve_todos_en_el_mismo_orden() {
 fn fila_17_sin_foco_los_atajos_vuelven_a_verse() {
     let eventos = vec![
         tecla(Key::Z, Modifiers::COMMAND),
-        tecla(Key::Num3, Modifiers::NONE),
+        tecla(Key::CloseBracket, Modifiers::NONE),
         tecla(Key::Home, Modifiers::NONE),
     ];
     let visibles = gate_keys(&eventos, false);
@@ -184,7 +184,7 @@ fn fila_17_sin_foco_los_atajos_vuelven_a_verse() {
         .collect();
     assert_eq!(
         acciones,
-        [Some(Action::Undo), Some(Action::SelectColor(3)), None]
+        [Some(Action::Undo), Some(Action::ColorNext), None]
     );
 }
 

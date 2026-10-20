@@ -8,19 +8,6 @@
 use egui::{Key, Modifiers};
 use px_ui::shortcuts::{Action, action_for_key};
 
-const NUMEROS: [Key; 10] = [
-    Key::Num0,
-    Key::Num1,
-    Key::Num2,
-    Key::Num3,
-    Key::Num4,
-    Key::Num5,
-    Key::Num6,
-    Key::Num7,
-    Key::Num8,
-    Key::Num9,
-];
-
 /// Los cinco booleanos de `Modifiers`, en el orden de una máscara de 5 bits.
 fn modificadores(mascara: u8) -> Modifiers {
     Modifiers {
@@ -66,7 +53,7 @@ fn fila_12_lo_que_no_es_un_atajo_da_none() {
 }
 
 #[test]
-fn fila_12_las_teclas_numericas_eligen_ranura() {
+fn fila_12_las_teclas_numericas_sin_modificadores_no_hacen_nada() {
     let esperado = [
         (Key::Num1, 1),
         (Key::Num2, 2),
@@ -81,8 +68,8 @@ fn fila_12_las_teclas_numericas_eligen_ranura() {
     for (key, n) in esperado {
         assert_eq!(
             action_for_key(key, Modifiers::NONE),
-            Some(Action::SelectColor(n)),
-            "{key:?}"
+            None,
+            "{key:?} (antes elegía la ranura {n})"
         );
     }
     assert_eq!(action_for_key(Key::Num0, Modifiers::NONE), None);
@@ -137,15 +124,25 @@ fn propiedad_6_todas_las_combinaciones_y_todas_las_teclas() {
             let accion = action_for_key(key, m);
             let ninguno = !(m.alt || m.ctrl || m.shift || m.mac_cmd || m.command);
 
-            // `Undo` y `Redo` solo con `command` y sin `alt`.
+            // `Undo` y `Redo` solo con `command` y sin `alt` (y `Undo` también con `u` sola).
             if matches!(accion, Some(Action::Undo | Action::Redo)) {
-                assert!(m.command && !m.alt, "{key:?} con {m:?} dio {accion:?}");
+                assert!(
+                    (m.command && !m.alt) || (key == Key::U && ninguno),
+                    "{key:?} con {m:?} dio {accion:?}"
+                );
             }
-            // `SelectColor` solo sin ningún modificador, y con 1 <= n <= 9.
-            if let Some(Action::SelectColor(n)) = accion {
-                assert!(ninguno, "{key:?} con {m:?} dio {accion:?}");
-                assert!((1..=9).contains(&n), "{key:?} dio SelectColor({n})");
+            // `ColorNext` y `ColorPrev` nunca con `command`, `ctrl` ni `mac_cmd`.
+            if matches!(accion, Some(Action::ColorNext | Action::ColorPrev)) {
+                assert!(
+                    !(m.command || m.ctrl || m.mac_cmd),
+                    "{key:?} con {m:?} dio {accion:?}"
+                );
             }
+            // Las cifras ya no eligen ranura: `SelectColor` no sale de ninguna tecla.
+            assert!(
+                !matches!(accion, Some(Action::SelectColor(_))),
+                "{key:?} con {m:?} dio {accion:?}"
+            );
 
             // Y la tabla completa de la sección 5 como modelo.
             let esperado = if m.command && !m.alt && !m.shift && key == Key::Z {
@@ -155,12 +152,22 @@ fn propiedad_6_todas_las_combinaciones_y_todas_las_teclas() {
                 && ((key == Key::Y && !m.shift) || (key == Key::Z && m.shift))
             {
                 Some(Action::Redo)
+            } else if m.command || m.ctrl || m.mac_cmd {
+                None
+            } else if matches!(key, Key::PageDown | Key::PageUp) {
+                // Teclas con nombre: Mayús y Alt no cuentan (como `Inicio`).
+                Some(if key == Key::PageDown {
+                    Action::ColorNext
+                } else {
+                    Action::ColorPrev
+                })
             } else if ninguno {
-                NUMEROS
-                    .iter()
-                    .position(|&k| k == key)
-                    .filter(|&i| i >= 1)
-                    .map(|i| Action::SelectColor(i as u8))
+                match key {
+                    Key::U => Some(Action::Undo),
+                    Key::CloseBracket => Some(Action::ColorNext),
+                    Key::OpenBracket => Some(Action::ColorPrev),
+                    _ => None,
+                }
             } else {
                 None
             };
