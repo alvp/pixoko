@@ -241,6 +241,9 @@ pub fn show_menu_with_background(
         style.spacing.item_spacing = vec2(0.0, 0.0);
         style.spacing.interact_size.y = BUTTON_H_U as f32 * u;
         style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
+        // Los atajos se pintan «débiles» (60 % de alfa): con el ratón encima, sobre `SURFACE_3`,
+        // dan 3,84:1. En el menú van en `TEXT`, sin atenuar.
+        style.visuals.weak_text_alpha = 1.0;
     };
     Panel::top("menu")
         .exact_size(MENU_H_U as f32 * u)
@@ -340,11 +343,18 @@ fn marked_entry(
         None
     };
     let text = format!("{} {}", if checked { '·' } else { ' ' }, item.label);
-    let mut button = Button::new(printable(ctx, &text))
+    // `override_text_color` (TEXT) gana al trazo de la selección: sin color propio el rótulo de la
+    // fila marcada (relleno `ACCENT`) sale a 1,47:1. `SURFACE_0` da 8,98:1.
+    let label = egui::RichText::new(printable(ctx, &text));
+    let label = if checked {
+        label.color(SURFACE_0)
+    } else {
+        label
+    };
+    let mut button = Button::new(label)
         .selected(checked)
         .min_size(vec2(width, BUTTON_H_U as f32 * u));
-    // El valor del color propio, a la derecha como un atajo. La fila con `Custom` siempre está
-    // marcada (relleno `ACCENT`): `SURFACE_0` da 8,98:1 sobre él y `TEXT`, 1,47.
+    // El valor del color propio, a la derecha como un atajo, también en `SURFACE_0`.
     if let Some(value) = value {
         button = button.shortcut_text(egui::RichText::new(printable(ctx, &value)).color(SURFACE_0));
     }
