@@ -27,22 +27,24 @@ use std::time::Duration;
 use crate::background_color::{background_from_values, open_background_color};
 use eframe::egui;
 use px_core::{Document, DocumentError, Rgba};
-use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
+use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState};
 use px_ui::canvas::Canvas;
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
+use px_ui::key_events::presses;
+use px_ui::keymap::Keymap;
 use px_ui::licenses_view::licenses_form;
-use px_ui::menu::show_menu_with_background;
+use px_ui::menu::show_menu_in;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{ToolEvent, ToolState, tool_color_label};
-use px_ui::toolbar::{show_toolbar, zoom_label};
+use px_ui::toolbar::{show_toolbar_with, zoom_label};
 
 use crate::confirm::{
     Confirm, Confirmation, Request, close_allowed, close_warning, new_warning, open_dialog_warning,
@@ -104,6 +106,9 @@ struct App {
     min_sent: Option<[f32; 2]>,
     /// Sistema para el que se compiló: decide los atajos que se muestran y los que valen.
     platform: Platform,
+    /// Las teclas: el menú, la columna y `key_actions` leen esta tabla (el hito 8 la hará
+    /// configurable; hoy es el esquema por defecto).
+    keymap: Keymap,
     /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
     modal: Modal,
     /// El elemento enfocado del diálogo modal.
@@ -152,6 +157,7 @@ impl App {
             min_enabled: min_enabled(std::env::var(ENV_NO_MIN).ok().as_deref()),
             min_sent: None,
             platform: Platform::current(),
+            keymap: Keymap::default_scheme(),
             modal: Modal::Closed,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
@@ -407,19 +413,9 @@ impl App {
     /// Traduce las teclas del fotograma a acciones. Un atajo de fichero o `Salir` mantenido
     /// pulsado no repite: confirmaría solo. `Escape` no es una acción (lo ordena el lienzo).
     fn key_actions(&self, events: &[egui::Event], out: &mut Vec<(AppAction, Origin)>) {
-        for event in events {
-            let egui::Event::Key {
-                key,
-                pressed: true,
-                repeat,
-                modifiers,
-                ..
-            } = event
-            else {
-                continue;
-            };
-            if let Some(action) = action_for_shortcut(*key, *modifiers, self.platform)
-                && !(*repeat && action.ignores_repeat())
+        for press in presses(events) {
+            if let Some(action) = self.keymap.action_for(&press, self.platform)
+                && !(press.repeat && action.ignores_repeat())
             {
                 out.push((action, Origin::Key));
             }
@@ -803,13 +799,23 @@ impl eframe::App for App {
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
         let state = self.ui_state(&ctx);
-        if let Some(action) =
-            show_menu_with_background(ui, &state, self.platform, self.canvas.background())
-        {
+        if let Some(action) = show_menu_in(
+            ui,
+            &state,
+            self.platform,
+            self.canvas.background(),
+            &self.keymap,
+        ) {
             actions.push((action, Origin::Menu));
         }
         px_ui::status::show(ui, &self.status.0, self.status.1);
-        if let Some(action) = show_toolbar(ui, &state, &zoom_label(state.zoom)) {
+        if let Some(action) = show_toolbar_with(
+            ui,
+            &state,
+            &zoom_label(state.zoom),
+            &self.keymap,
+            self.platform,
+        ) {
             actions.push((action, Origin::Button));
         }
         self.session.normalize();

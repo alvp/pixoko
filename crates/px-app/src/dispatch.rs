@@ -103,6 +103,15 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
                 notice: select_tool(tools, ToolAction::Select(tool), false, image),
             }
         }
+        AppAction::ColorNext => {
+            session.cycle_choice(1);
+            done(false)
+        }
+        AppAction::ColorPrev => {
+            session.cycle_choice(-1);
+            done(false)
+        }
+        AppAction::CenterOnCursor => Dispatched::View(ViewOp::CenterOnCursor),
         AppAction::SelectColor(slot) => {
             let image = session.document.image(session.document.main_image());
             if let Some(choice) = image.and_then(|image| key_choice(image, slot)) {

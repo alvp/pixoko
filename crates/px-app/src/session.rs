@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 
 use px_core::{Allowed, Command, Document, DocumentError, Image, Mode, Pixel};
 use px_formats::write_png;
-use px_ui::color::{ColorChoice, SlotBank, clamp_choice, initial_choice, pixel_for_choice_with};
+use px_ui::color::{
+    ColorChoice, SlotBank, cell_count, cell_of_choice, choice_for_cell, clamp_choice,
+    initial_choice, pixel_for_choice_with,
+};
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
 use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
 use px_ui::palette_grid::{PanelView, Scroll};
@@ -165,6 +168,31 @@ impl Session {
             self.choice = choice;
             self.view.reveal = true;
             self.ops.clear_range();
+        }
+    }
+
+    /// Recorre los colores `delta` pasos (`+1` el siguiente, `-1` el anterior): la entrada en
+    /// indexado y la ranura en los demás modos, dando la vuelta en los extremos. Muestra la fila
+    /// elegida. Con una elección que ya no vale para la imagen, vuelve a la inicial.
+    pub fn cycle_choice(&mut self, delta: i8) {
+        let next = self
+            .document
+            .image(self.document.main_image())
+            .and_then(|image| {
+                let count = cell_count(image) as i64;
+                if count == 0 {
+                    return None;
+                }
+                match cell_of_choice(image, self.choice) {
+                    Some(cell) => {
+                        let cell = (cell as i64 + i64::from(delta)).rem_euclid(count);
+                        choice_for_cell(image, cell as usize)
+                    }
+                    None => Some(initial_choice(image)),
+                }
+            });
+        if let Some(choice) = next {
+            self.set_choice_revealing(choice);
         }
     }
 
