@@ -8,7 +8,7 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 | --- | --- | --- | --- |
 | 0 · Fundaciones | Repo, CLAUDE.md, CI en tres sistemas, cargo-deny | CI verde en Linux, Windows y macOS | cerrado |
 | 1 · Núcleo y formatos | `Rgba`, paleta, imagen en 4 modos, documento con deshacer, PNG | Ida y vuelta de PNG sin pérdida en el corpus | cerrado |
-| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador, paleta, conversión de modos, lienzos grandes | Abrir, editar y guardar un PNG real en tres sistemas | en curso (unidad 18) |
+| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador, paleta, conversión de modos, lienzos grandes | Abrir, editar y guardar un PNG real en tres sistemas cerrado, a falta de la prueba manual de la unidad 22 (resumen en `specs/hito-2-resumen.md`) |
 | 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde | pendiente |
 | 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección | Dorados contra referencias | pendiente |
 | 5 · Animación | Fotogramas, línea de tiempo, onion skin, GIF | GIF y hojas de sprites verificados | pendiente |
@@ -18,7 +18,7 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 
 Los hitos 3 a 6 pueden solaparse en worktrees una vez cerrado el 2; el 7 es opcional.
 
-**Resto del hito 2** (orden en `specs/hito-2-reparto-cierre.md`): 19 Nueva imagen, 19b «Color…» del fondo, 20 Convertir de modo, 13b chunks auxiliares del PNG, 12 acceso por filas a `Image`, 13 escritor de PNG por flujo, 14a zoom 1/2-1/8 y textura por regiones, 14b índices en la GPU (solo si 14a lo justifica), 14c topes de relleno y memoria, 21 puerta del hito.
+**Hito 2:** todas las unidades hechas, la 14b descartada y la puerta (unidad 22: prueba automática en `px-app` y `px-golden`, lista manual de 15 pasos en `specs/hito-2-puerta.md`) a la espera de tu prueba manual. Unidades, aplazado a los hitos siguientes con su spec de origen y cifras medidas: `specs/hito-2-resumen.md`. Candidato para el hito 3: partir `px-app` en lib y binario.
 
 ## Arquitectura
 
@@ -43,7 +43,7 @@ Fuera del workspace: `fuzz/` (`cargo-fuzz` del lector PNG, `specs/hito-1-fuzz.md
 - **Ruta de código:** todo en Rust, desde cero. Grafx2, LibreSprite, Aseprite y DPaint V son solo programas de referencia: se ejecutan y su salida va a `golden/`; no se lee, copia ni porta su código (`.claude/hooks/guard.sh` lo bloquea). La especificación pública de `.aseprite` sí se puede leer. DPaint V (hito 7): solo caja negra en emulador, sin descompilar. Ver `docs/REFERENCIAS.md`.
 - **Interfaz:** `eframe`/`egui` sobre `winit` y `glow`, con tema y fuente de píxeles propios; menú dentro de la ventana en los tres sistemas.
 - **Plataformas:** Linux, Windows y macOS con CI desde el hito 0.
-- **Dependencias:** `deny.toml` permite MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib y Unicode-3.0; cualquier otra es una excepción aprobada a mano y anotada en `docs/DEPENDENCIES.md` (hoy solo NCSA para `libfuzzer-sys`). Fijadas hoy: `png` 0.18.1, `eframe` y `egui` `=0.37.0`, `rfd` 0.17.2, `proptest` 1.12.0. El material ajeno que no es una dependencia de Cargo va en `docs/THIRD-PARTY.md`.
+- **Dependencias:** `deny.toml` permite MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, Zlib y Unicode-3.0; cualquier otra es una excepción aprobada a mano y anotada en `docs/DEPENDENCIES.md` (hoy solo NCSA para `libfuzzer-sys`, en `fuzz/deny.toml`, no en el de la raíz). Fijadas hoy: `png` 0.18.1, `eframe` y `egui` `=0.37.0`, `rfd` 0.17.2, `proptest` 1.12.0. El material ajeno que no es una dependencia de Cargo va en `docs/THIRD-PARTY.md`.
 - **Pruebas:** dorados exactos en indexado y con tolerancia explícita en RGBA con mezcla; propiedades con `proptest` (hacer/deshacer, guardar/cargar); fuzzing de cada lector; si dos referencias discrepan, la decisión se anota en la spec.
 - **Alcance del hito 2:** pincel, rectángulo y elipse pasaron al hito 4; el cuantizador de «Convertir» también (hito 4).
 - **Nombre «Pixoko»:** pendiente de comprobar marca, dominio, crates.io y GitHub antes de publicar (existe «Pixiko», a una letra).
