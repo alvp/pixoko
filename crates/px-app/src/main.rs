@@ -36,6 +36,7 @@ use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
+use px_ui::gestures::GestureMap;
 use px_ui::key_events::presses;
 use px_ui::keymap::Keymap;
 use px_ui::licenses_view::licenses_form;
@@ -43,6 +44,7 @@ use px_ui::menu::show_menu_in;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::palette_panel::{Indicator, Roles, show_roles};
+use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
@@ -116,6 +118,9 @@ struct App {
     /// Las teclas: el menú, la columna y `key_actions` leen esta tabla (el hito 8 la hará
     /// configurable; hoy es el esquema por defecto).
     keymap: Keymap,
+    /// Los gestos del ratón y del trackpad: el lienzo y `pointer_actions` leen esta tabla (el hito 8
+    /// la hará configurable; hoy es el esquema por defecto).
+    gestures: GestureMap,
     /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
     modal: Modal,
     /// El elemento enfocado del diálogo modal.
@@ -137,6 +142,8 @@ struct App {
 impl App {
     fn new(document: Document, cli_path: Option<PathBuf>) -> App {
         let mut canvas = Canvas::new();
+        let gestures = GestureMap::default_scheme();
+        canvas.set_gestures(gestures.clone());
         // Las teclas de zoom las trata la capa de acciones, con sus propios bloqueos.
         canvas.set_view_keys(false);
         // `PIXOKO_DAMERO_MALLA=1`: el damero con una malla de casillas en vez de la textura repetida.
@@ -166,6 +173,7 @@ impl App {
             min_sent: None,
             platform: Platform::current(),
             keymap: Keymap::default_scheme(),
+            gestures,
             modal: Modal::Closed,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
@@ -448,6 +456,17 @@ impl App {
                 out.push((action, Origin::Key));
             }
         }
+    }
+
+    /// Traduce los botones laterales del fotograma (los gestos de ventana de la tabla) a acciones,
+    /// con `Origin::Button`: los bloqueos son los de un botón (gesto, diálogo, modal y campo de
+    /// texto enfocado; `dispatch` los aplica). Los eventos van sin filtrar por el foco del campo.
+    fn pointer_actions(&self, events: &[egui::Event], out: &mut Vec<(AppAction, Origin)>) {
+        out.extend(
+            window_actions(events, &self.gestures, self.platform)
+                .into_iter()
+                .map(|action| (action, Origin::Button)),
+        );
     }
 
     /// Despacha una acción venga de donde venga (menú, columna o atajo) y ejecuta lo que necesita
@@ -966,6 +985,8 @@ impl eframe::App for App {
         // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
         let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
         self.key_actions(&events, &mut actions);
+        let raw_events = ui.input(|i| i.events.clone());
+        self.pointer_actions(&raw_events, &mut actions);
         for (action, origin) in actions {
             self.apply_action(&ctx, frame, action, origin);
         }
