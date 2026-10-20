@@ -3276,3 +3276,154 @@ fn fila_3_quit_con_el_dialogo_de_color_abierto_lo_abandona_y_sigue_la_regla_de_c
         );
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// I.2b, fila 8: botones laterales (specs/interfaz-raton.md). Eventos sintéticos de egui al nivel al
+// que llegarían desde el hardware (`PointerButton::Extra1` y `Extra2`), traducidos por la tabla de
+// gestos y despachados con `Origin::Button`.
+// ---------------------------------------------------------------------------------------------
+
+mod botones_laterales {
+    use super::*;
+    use eframe::egui::{Event, PointerButton, Pos2};
+    use px_ui::gestures::{Button, GestureAction, GestureMap, GestureRow, Input, Mods, Scope};
+    use px_ui::keymap::Platforms;
+    use px_ui::pointer_events::window_actions;
+
+    fn pulsa(button: PointerButton, pressed: bool) -> Event {
+        Event::PointerButton {
+            pos: Pos2::new(5.0, 5.0),
+            button,
+            pressed,
+            modifiers: Modifiers::NONE,
+        }
+    }
+
+    fn acciones(eventos: &[Event]) -> Vec<AppAction> {
+        window_actions(eventos, &GestureMap::default_scheme(), Platform::Linux)
+    }
+
+    #[test]
+    fn fila_8_atras_deshace_y_adelante_rehace_igual_que_el_teclado() {
+        assert_eq!(
+            acciones(&[pulsa(PointerButton::Extra1, true)]),
+            [AppAction::Undo]
+        );
+        assert_eq!(
+            acciones(&[pulsa(PointerButton::Extra2, true)]),
+            [AppAction::Redo]
+        );
+        for (boton, accion) in [
+            (PointerButton::Extra1, AppAction::Undo),
+            (PointerButton::Extra2, AppAction::Redo),
+        ] {
+            let mut lateral = Mundo::estandar();
+            let mut teclado = Mundo::estandar();
+            let [traducida] = acciones(&[pulsa(boton, true)])[..] else {
+                panic!("una acción")
+            };
+            assert_eq!(traducida, accion);
+            let a = lateral.despacha(traducida, Origin::Button);
+            let b = teclado.despacha(accion, Origin::Key);
+            assert_eq!(a, b, "mismo Dispatched");
+            assert_eq!(a, hecho(true));
+            assert_eq!(lateral.foto(), teclado.foto(), "mismo estado");
+        }
+    }
+
+    #[test]
+    fn fila_8_sin_historia_no_hacen_nada() {
+        let mut m = Mundo::nuevo(rgba(), 0, 0);
+        let antes = m.foto();
+        assert_eq!(m.despacha(AppAction::Undo, Origin::Button), hecho(false));
+        assert_eq!(m.despacha(AppAction::Redo, Origin::Button), hecho(false));
+        assert_eq!(m.foto(), antes);
+    }
+
+    #[test]
+    fn fila_8_bloqueados_con_gesto_dialogo_modal_y_campo() {
+        for accion in [AppAction::Undo, AppAction::Redo] {
+            for locks in [
+                locks_con(|l| l.dialog = true),
+                locks_con(|l| l.modal = true),
+                locks_con(|l| l.text_focus = true),
+                locks_con(|l| l.gesture = true),
+            ] {
+                let mut m = Mundo::estandar();
+                let antes = m.foto();
+                assert_eq!(
+                    m.despacha_con(accion, Origin::Button, locks),
+                    Dispatched::Blocked
+                );
+                assert_eq!(m.foto(), antes);
+            }
+        }
+        // Con un trazo de verdad en curso no se deshace a mitad de trazo.
+        let mut m = Mundo::estandar();
+        empieza_un_trazo(&mut m);
+        let antes = m.foto();
+        assert_eq!(
+            m.despacha(AppAction::Undo, Origin::Button),
+            Dispatched::Blocked
+        );
+        assert_eq!(m.foto(), antes);
+    }
+
+    #[test]
+    fn fila_8_soltar_u_otros_botones_o_la_rueda_no_hacen_nada() {
+        assert!(acciones(&[pulsa(PointerButton::Extra1, false)]).is_empty());
+        assert!(acciones(&[pulsa(PointerButton::Primary, true)]).is_empty());
+        assert!(acciones(&[pulsa(PointerButton::Middle, true)]).is_empty());
+        assert!(acciones(&[pulsa(PointerButton::Secondary, true)]).is_empty());
+        let rueda = Event::MouseWheel {
+            unit: eframe::egui::MouseWheelUnit::Line,
+            delta: eframe::egui::vec2(0.0, 1.0),
+            phase: eframe::egui::TouchPhase::Move,
+            source: eframe::egui::MouseWheelSource::Unknown,
+            modifiers: Modifiers::NONE,
+        };
+        assert!(
+            acciones(&[rueda]).is_empty(),
+            "la rueda es del lienzo, no de la ventana"
+        );
+        // Un pulsado y un soltado: una sola acción.
+        assert_eq!(
+            acciones(&[
+                pulsa(PointerButton::Extra1, true),
+                pulsa(PointerButton::Extra1, false)
+            ]),
+            [AppAction::Undo]
+        );
+    }
+
+    #[test]
+    fn fila_8_con_la_tabla_sustituida_cambia_lo_que_hace_cada_boton() {
+        let atras_a_zoom = GestureMap::new(vec![GestureRow {
+            input: Input::Press(Button::Back),
+            mods: Mods {
+                command: None,
+                shift: None,
+                space: None,
+            },
+            action: GestureAction::App(AppAction::ZoomIn),
+            scope: Scope::Window,
+            active: Platforms::All,
+        }]);
+        let acciones_de = |tabla: &GestureMap, boton| {
+            window_actions(&[pulsa(boton, true)], tabla, Platform::Windows)
+        };
+        assert_eq!(
+            acciones_de(&atras_a_zoom, PointerButton::Extra1),
+            [AppAction::ZoomIn]
+        );
+        assert!(acciones_de(&atras_a_zoom, PointerButton::Extra2).is_empty());
+        let mut m = Mundo::estandar();
+        assert_eq!(
+            m.despacha(AppAction::ZoomIn, Origin::Button),
+            Dispatched::View(ViewOp::ZoomIn)
+        );
+        let vacia = GestureMap::new(vec![]);
+        assert!(acciones_de(&vacia, PointerButton::Extra1).is_empty());
+        assert!(acciones_de(&vacia, PointerButton::Extra2).is_empty());
+    }
+}

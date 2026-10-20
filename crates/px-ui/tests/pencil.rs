@@ -24,7 +24,7 @@ use std::collections::HashSet;
 use egui::epaint::Primitive;
 use egui::{
     Color32, Context, Event, FullOutput, ImageData, Key, Modifiers, MouseWheelUnit, PointerButton,
-    PointerState, Pos2, RawInput, Rect, Ui, Vec2, pos2, vec2,
+    PointerState, Pos2, RawInput, Rect, TextEdit, Ui, Vec2, pos2, vec2,
 };
 use px_core::{Document, Image, Mode, Pixel, Rgba};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo, CanvasInput};
@@ -136,6 +136,15 @@ impl Banco {
     /// Un fotograma como el de la app (`interact_roles`, `sync` y `paint`), con la entrada
     /// ordenada: los eventos de trazo **y** `Escape`, cada uno con su rol.
     fn paso_roles(&mut self, events: Vec<Event>) -> (Vec<(CanvasInput, Role)>, CanvasInfo) {
+        self.paso_roles_con(events, None)
+    }
+
+    /// Como `paso_roles`, con una función que corre dentro del fotograma antes de `interact_roles`.
+    fn paso_roles_con(
+        &mut self,
+        events: Vec<Event>,
+        antes: Option<fn(&mut Ui)>,
+    ) -> (Vec<(CanvasInput, Role)>, CanvasInfo) {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
             events,
@@ -145,6 +154,9 @@ impl Banco {
         let canvas = &mut self.canvas;
         let imagen = &self.imagen;
         let mut output = self.ctx.run_ui(input, |ui| {
+            if let Some(antes) = antes {
+                antes(ui);
+            }
             let entradas = canvas.interact_roles(ui);
             canvas.sync(ui.ctx(), imagen).expect("sync");
             resultado = Some((entradas, canvas.paint(ui)));
@@ -995,4 +1007,87 @@ fn refresh_con_otro_tamano_se_comporta_como_set_image() {
     assert_eq!(Some(f.info.zoom), Zoom::from_int(25));
     let rect = f.info.image_rect.expect("hay imagen");
     assert!((rect.width() - 800.0).abs() < 1e-3 && (rect.height() - 600.0).abs() < 1e-3);
+}
+
+/// Fila 7 (I.2b): `Espacio` sin gesto, repetido, con un desplazamiento en curso o con un campo de
+/// texto enfocado no cancela nada. (El diálogo no es del lienzo: `Espacio` sigue activando el botón
+/// enfocado o marcando la casilla en `new_image/dialog_tests.rs` y `convert_mode/dialog_tests.rs`,
+/// que no cambian, y un diálogo no puede coexistir con un gesto.)
+mod espacio {
+    use super::*;
+
+    fn escapes(entradas: &[(CanvasInput, Role)]) -> usize {
+        entradas
+            .iter()
+            .filter(|(e, _)| *e == CanvasInput::Escape)
+            .count()
+    }
+
+    #[test]
+    fn fila_7_sin_gesto_espacio_no_emite_nada_y_sigue_siendo_la_mano() {
+        let mut s = Sesion::nueva();
+        let p = s.pos(10, 5);
+        s.paso(vec![mover(p)]);
+        let (entradas, _) = s.banco.paso_roles(vec![espacio(true)]);
+        assert!(entradas.is_empty(), "{entradas:?}");
+        // Sigue siendo la tecla de la mano: con ella abajo, el izquierdo desplaza.
+        let antes = s.rect_actual();
+        s.paso(vec![izquierdo(p, true)]);
+        s.paso(vec![mover(p + vec2(10.0, 5.0))]);
+        s.paso(vec![mover(p + vec2(20.0, 10.0))]);
+        s.paso(vec![izquierdo(p + vec2(20.0, 10.0), false)]);
+        assert_eq!(s.eventos, NADA);
+        assert!(s.rect_actual().min.x > antes.min.x);
+    }
+
+    #[test]
+    fn fila_7_un_desplazamiento_en_curso_no_se_cancela_con_espacio() {
+        let mut s = Sesion::nueva();
+        let p = s.pos(10, 5);
+        s.paso(vec![mover(p)]);
+        s.paso(vec![boton(p, PointerButton::Middle, true)]);
+        s.paso(vec![mover(p + vec2(10.0, 5.0))]);
+        let a_mitad = s.rect_actual();
+        let (entradas, _) = s.banco.paso_roles(vec![espacio(true)]);
+        assert_eq!(escapes(&entradas), 0);
+        s.paso(vec![mover(p + vec2(20.0, 10.0))]);
+        assert!(
+            s.rect_actual().min.x > a_mitad.min.x,
+            "el desplazamiento continúa"
+        );
+        s.paso(vec![boton(p, PointerButton::Middle, false)]);
+    }
+
+    #[test]
+    fn fila_7_con_un_campo_de_texto_enfocado_espacio_no_cancela_el_trazo() {
+        fn campo(ui: &mut Ui) {
+            egui::Area::new(egui::Id::new("campo-de-prueba"))
+                .fixed_pos(pos2(700.0, 550.0))
+                .show(ui.ctx(), |ui| {
+                    let mut texto = String::new();
+                    let r = ui.add(TextEdit::singleline(&mut texto).id(egui::Id::new("campo")));
+                    r.request_focus();
+                });
+        }
+        let mut s = Sesion::nueva();
+        let (p0, p1) = (s.pos(10, 5), s.pos(12, 5));
+        s.paso(vec![mover(p0)]);
+        s.paso(vec![izquierdo(p0, true)]);
+        s.banco.paso_roles_con(vec![mover(p1)], Some(campo));
+        s.banco.paso_roles_con(vec![], Some(campo));
+        assert!(s.banco.ctx.text_edit_focused(), "el campo tiene el foco");
+        let (entradas, _) = s.banco.paso_roles_con(vec![espacio(true)], Some(campo));
+        assert_eq!(
+            escapes(&entradas),
+            0,
+            "con el foco en el campo, Espacio no cancela"
+        );
+        let (entradas, _) = s.banco.paso_roles_con(vec![mover(p0)], Some(campo));
+        assert!(
+            entradas
+                .iter()
+                .any(|(e, _)| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeMove(_)))),
+            "el trazo sigue"
+        );
+    }
 }
