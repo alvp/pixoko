@@ -3,7 +3,7 @@
 //! aritmética pura en `chrome.rs`).
 //!
 //! Banco de egui sin ventana (`Context::run_ui` con `RawInput` sintético): `show_toolbar` se pinta
-//! sola en una ventana vacía, así que la columna empieza en `(0, 0)`. Se comprueba a las cinco
+//! sola en una ventana vacía, así que la columna queda pegada al borde derecho (`common::zonas::caja_sola`). Se comprueba a las cinco
 //! escalas (`ppp` 1,0, 1,25, 1,5, 2,0 y 3,0), en píxeles físicos:
 //!
 //! - las tablas `TOOL_BUTTONS` y `ZOOM_BUTTONS`;
@@ -19,7 +19,7 @@
 //! (`common::tolerancia_de_egui`: 1/32 pt, porque `Panel` y `allocate_rect` redondean a múltiplos pares de 1/32 pt).
 //!
 //! Supuestos sobre lo que la spec no fija (cualquier otro reparto cambiaría esta página):
-//! - `show_toolbar` crea su propio panel a la izquierda de `ui` (como `status::show` y
+//! - `show_toolbar` crea su propio panel a la derecha de `ui` (como `status::show` y
 //!   `palette_panel::show`), de `toolbar_width_u()·n` píxeles de ancho;
 //! - el rótulo de zoom que recibe es el texto del nivel (`×12`, `1/8`, `—`) con o sin el prefijo
 //!   `Zoom `: el banco solo exige que el texto pintado lo contenga.
@@ -33,6 +33,7 @@ use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, show_toolbar};
 use px_ui::view::Zoom;
 
 mod common;
+use common::zonas::caja_sola;
 use common::{
     PPPS, Pintado, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, tolerancia_de_egui,
 };
@@ -94,6 +95,18 @@ impl Banco {
         n_de(self.ppp)
     }
 
+    /// `x` de la columna en píxeles físicos (pegada al borde derecho de la pantalla del banco).
+    fn x0(&self) -> i64 {
+        caja_sola(
+            (
+                (PANTALLA.x * self.ppp).round() as i64,
+                (PANTALLA.y * self.ppp).round() as i64,
+            ),
+            self.n() as u32,
+        )
+        .x
+    }
+
     /// Un fotograma: lo pintado y lo que devolvió `show_toolbar`.
     fn fotograma(&self, events: Vec<Event>) -> (Pintado, Option<AppAction>) {
         let mut accion = None;
@@ -129,7 +142,10 @@ impl Banco {
     /// Clic en el centro del botón de la fila `y_u`.
     fn clic_en_boton(&self, y_u: i64) -> Vec<AppAction> {
         let n = self.n();
-        self.clic((MARGEN_U + BOTON_W_U / 2) * n, y_u * n + BOTON_H_U * n / 2)
+        self.clic(
+            self.x0() + (MARGEN_U + BOTON_W_U / 2) * n,
+            y_u * n + BOTON_H_U * n / 2,
+        )
     }
 }
 
@@ -241,8 +257,11 @@ fn fila_7_la_primera_y_la_ultima_coordenada_fisica_de_cada_boton_golpean() {
             )
             .collect();
         for (y_u, accion) in filas {
-            let (x0, y0) = (MARGEN_U * n, y_u * n);
-            let (x1, y1) = ((MARGEN_U + BOTON_W_U) * n - 1, (y_u + BOTON_H_U) * n - 1);
+            let (x0, y0) = (banco.x0() + MARGEN_U * n, y_u * n);
+            let (x1, y1) = (
+                banco.x0() + (MARGEN_U + BOTON_W_U) * n - 1,
+                (y_u + BOTON_H_U) * n - 1,
+            );
             for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
                 assert_eq!(
                     banco.clic(x, y),
@@ -262,18 +281,18 @@ fn fila_7_el_nivel_de_zoom_y_lo_que_queda_lejos_de_los_botones_no_golpean_nada()
     for ppp in PPPS {
         let n = n_de(ppp);
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
-        let centro_x = (MARGEN_U + BOTON_W_U / 2) * n;
+        let centro_x = banco.x0() + (MARGEN_U + BOTON_W_U / 2) * n;
         // El nivel de zoom (y = 101 a 115): a 16 u del último botón de herramienta y a 11 u del
         // primero de zoom.
         assert!(
             banco.clic(centro_x, 108 * n).is_empty(),
             "ppp {ppp}: el nivel de zoom no es un botón"
         );
-        // Fuera de la columna (a su derecha) no hay nada.
+        // Fuera de la columna (a 40 u de su borde, en el lado del lienzo) no hay nada.
         for y_u in [10, 50, 130] {
             assert!(
-                banco.clic(150 * n, y_u * n).is_empty(),
-                "ppp {ppp}: x = 150 u está fuera de la columna (y = {y_u} u)"
+                banco.clic(banco.x0() - 40 * n, y_u * n).is_empty(),
+                "ppp {ppp}: 40 u fuera de la columna no golpean nada (y = {y_u} u)"
             );
         }
     }
@@ -289,8 +308,10 @@ fn fila_7_todo_lo_pintado_cae_dentro_de_la_columna_y_de_sus_botones() {
         for texto in &pintado.textos {
             let r = texto.rect();
             assert!(
-                r.min.x * p >= (MARGEN_U * n) as f32 - tolerancia_de_egui(ppp)
-                    && r.max.x * p <= ((MARGEN_U + BOTON_W_U) * n) as f32 + tolerancia_de_egui(ppp),
+                r.min.x * p >= (banco.x0() + MARGEN_U * n) as f32 - tolerancia_de_egui(ppp)
+                    && r.max.x * p
+                        <= (banco.x0() + (MARGEN_U + BOTON_W_U) * n) as f32
+                            + tolerancia_de_egui(ppp),
                 "ppp {ppp}: {:?} se sale de la columna: {r:?}",
                 texto.texto
             );
@@ -298,7 +319,7 @@ fn fila_7_todo_lo_pintado_cae_dentro_de_la_columna_y_de_sus_botones() {
         for relleno in &pintado.rellenos {
             let r = relleno.rect;
             assert!(
-                r.max.x * p <= (COLUMNA_U * n) as f32 + tolerancia_de_egui(ppp),
+                r.max.x * p <= (banco.x0() + COLUMNA_U * n) as f32 + tolerancia_de_egui(ppp),
                 "ppp {ppp}: relleno fuera de la columna: {r:?}"
             );
         }
@@ -328,9 +349,9 @@ fn el_activo_se_resalta_con_relleno_accent_en_su_boton_y_texto_surface_0() {
             );
             let r = acentos[0].rect;
             let esperado = [
-                MARGEN_U * n,
+                banco.x0() + MARGEN_U * n,
                 y_herramienta_u(i as i64) * n,
-                (MARGEN_U + BOTON_W_U) * n,
+                banco.x0() + (MARGEN_U + BOTON_W_U) * n,
                 (y_herramienta_u(i as i64) + BOTON_H_U) * n,
             ];
             let real = [r.min.x * ppp, r.min.y * ppp, r.max.x * ppp, r.max.y * ppp];

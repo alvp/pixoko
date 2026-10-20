@@ -11,6 +11,7 @@
 #![allow(dead_code)]
 
 pub mod texturas;
+pub mod zonas;
 
 use egui::epaint::{ClippedShape, Shape};
 use egui::{

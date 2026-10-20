@@ -50,6 +50,10 @@ use px_ui::status::bar_height_px;
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::TEXT_DIM;
 
+#[path = "common/zonas.rs"]
+mod zonas;
+use zonas::panel_a_la_izquierda;
+
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba
 // ---------------------------------------------------------------------------------------------
@@ -380,12 +384,20 @@ impl Banco {
         let mut salida = ctx.run_ui(input, |ui| {
             apply_scale(ui.ctx());
             px_ui::status::show(ui, "lápiz · color 1 #000000", false);
-            let panel = palette_panel::show_editing_view(
-                ui, image, *choice, scroll, view, enabled, slots, editor,
+            let (panel, rect_lienzo) = panel_a_la_izquierda(
+                ui,
+                |ui| {
+                    palette_panel::show_editing_view(
+                        ui, image, *choice, scroll, view, enabled, slots, editor,
+                    )
+                },
+                |ui| {
+                    let rect_lienzo = ui.available_rect_before_wrap();
+                    let _ = canvas.interact_ordered(ui);
+                    let _ = canvas.paint(ui);
+                    rect_lienzo
+                },
             );
-            let rect_lienzo = ui.available_rect_before_wrap();
-            let _ = canvas.interact_ordered(ui);
-            let _ = canvas.paint(ui);
             resultado = Some((rect_lienzo, panel));
         });
         salida.textures_delta.clear();

@@ -62,6 +62,7 @@ use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, show_toolbar_with};
 use px_ui::view::Zoom;
 
 mod common;
+use common::zonas::caja_sola;
 use common::{Pintado, boton, contexto, en_puntos, modificadores, mover, n_de, pintado};
 
 const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
@@ -1309,7 +1310,19 @@ impl BancoUi {
         self.columna_en_reposo(km, platform);
         let n = n_de(self.ppp);
         // Botones de 99 × 16 u con 4 u de margen; herramientas en `y = 4 + 18·i`.
-        let pos = en_puntos(self.ppp, (4 + 99 / 2) * n, (4 + 18 * indice) * n + 8 * n);
+        let caja_x = caja_sola(
+            (
+                (PANTALLA.x * self.ppp).round() as i64,
+                (PANTALLA.y * self.ppp).round() as i64,
+            ),
+            n as u32,
+        )
+        .x;
+        let pos = en_puntos(
+            self.ppp,
+            caja_x + (4 + 99 / 2) * n,
+            (4 + 18 * indice) * n + 8 * n,
+        );
         let mut acciones = Vec::new();
         for events in [
             vec![mover(pos)],

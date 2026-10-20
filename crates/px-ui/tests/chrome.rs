@@ -4,7 +4,7 @@
 //!
 //! - Fila 7 (parte pura): `toolbar_width_u() = 107 = 2·4 + 99` con 99 = `4 + (longest + 2)·7 + 4` y
 //!   `longest` = el mayor `chars().count()` de `TOOL_BUTTONS` (11); los 9 botones caben en la
-//!   columna sin tocar el borde y no se solapan; el contenido (193 u) cabe en 351 u; el menú entero
+//!   columna sin tocar el borde y no se solapan; el contenido (335 u) cabe en 351 u; el menú entero
 //!   y el desplegable más ancho (208 u) caben en el ancho mínimo; los cinco rectángulos de
 //!   `window_layout` recubren la ventana sin huecos ni solapes, a las cinco escalas y en la ventana
 //!   por defecto y en la mínima. El banco de egui con la pila real está en `window_stack.rs`.
@@ -50,7 +50,7 @@ fn cerca_pt(a: f32, b: f32) -> bool {
 #[test]
 fn fila_7_las_constantes_valen_lo_que_dice_la_spec() {
     assert_eq!(MENU_H_U, 16);
-    assert_eq!(TOOLBAR_CONTENT_H_U, 193);
+    assert_eq!(TOOLBAR_CONTENT_H_U, 335);
     assert_eq!(toolbar_width_u(), 107);
     assert_eq!(toolbar_button_width_u(), 99);
     assert_eq!(PANEL_WIDTH_U, 233);
@@ -115,16 +115,16 @@ fn fila_7_los_nueve_botones_caben_en_la_columna_sin_tocar_el_borde_y_no_se_solap
 }
 
 #[test]
-fn fila_7_el_contenido_de_193_u_cabe_en_los_351_u_del_panel_minimo() {
-    // Último botón de zoom (termina en 189) más el margen inferior de 4 u.
-    assert_eq!(119 + 18 * 3 + 16 + 4, TOOLBAR_CONTENT_H_U);
-    assert_eq!(TOOLBAR_CONTENT_H_U, 193);
+fn fila_7_el_contenido_de_335_u_cabe_en_los_351_u_del_panel_minimo() {
+    // Último botón de zoom (termina en 189), 4 u, el recuadro de opciones de 138 u y 4 u de margen.
+    assert_eq!(119 + 18 * 3 + 16 + 4 + 138 + 4, TOOLBAR_CONTENT_H_U);
+    assert_eq!(TOOLBAR_CONTENT_H_U, 335);
     for ppp in PPPS {
         let n = n_de(ppp);
         assert!(TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32));
         assert_eq!(
             min_panel_height_px(n as u32) - TOOLBAR_CONTENT_H_U * n,
-            158 * n
+            16 * n
         );
     }
 }
@@ -223,17 +223,22 @@ fn comprueba_layout(ventana: (i64, i64), n: u32) -> Result<(), TestCaseError> {
     let (w, h) = ventana;
     let layout = window_layout(ventana, n);
     let franja = h - (MENU_H_U + 20) * k;
-    // Medidas de la spec: menú de 16·n, barra de 20·n, columna de 107·n y panel de 233·n.
+    // Medidas de la spec: menú de 16·n, barra de 20·n, columna de 107·n y panel de 233·n, a la derecha del lienzo.
     prop_assert_eq!(layout.menu, rect(0, 0, w, MENU_H_U * k));
     prop_assert_eq!(layout.status, rect(0, h - 20 * k, w, 20 * k));
     prop_assert_eq!(
         layout.toolbar,
-        rect(0, MENU_H_U * k, toolbar_width_u() * k, franja)
+        rect(
+            w - toolbar_width_u() * k,
+            MENU_H_U * k,
+            toolbar_width_u() * k,
+            franja
+        )
     );
     prop_assert_eq!(
         layout.panel,
         rect(
-            toolbar_width_u() * k,
+            w - (toolbar_width_u() + PANEL_WIDTH_U) * k,
             MENU_H_U * k,
             PANEL_WIDTH_U * k,
             franja
@@ -243,13 +248,13 @@ fn comprueba_layout(ventana: (i64, i64), n: u32) -> Result<(), TestCaseError> {
     prop_assert_eq!(
         layout.canvas,
         rect(
-            (toolbar_width_u() + PANEL_WIDTH_U) * k,
+            0,
             MENU_H_U * k,
             w - (toolbar_width_u() + PANEL_WIDTH_U) * k,
             franja
         )
     );
-    prop_assert_eq!(canvas_origin_px(n), (340 * k, 16 * k));
+    prop_assert_eq!(canvas_origin_px(n), (0, 16 * k));
     prop_assert_eq!(canvas_origin_px(n), (layout.canvas.x, layout.canvas.y));
 
     // Recubren la ventana sin huecos ni solapes: dentro, disjuntos y con el área total.
@@ -302,10 +307,10 @@ fn fila_7_window_layout_cumple_la_geometria_a_las_cinco_escalas() {
 }
 
 #[test]
-fn fila_7_el_origen_del_lienzo_es_340n_16n() {
+fn fila_7_el_origen_del_lienzo_es_0_16n() {
     for (ppp, origen) in PPPS
         .iter()
-        .zip([(340, 16), (340, 16), (680, 32), (680, 32), (1020, 48)])
+        .zip([(0, 16), (0, 16), (0, 32), (0, 32), (0, 48)])
     {
         assert_eq!(canvas_origin_px(text_scale(*ppp)), origen, "ppp {ppp}");
     }

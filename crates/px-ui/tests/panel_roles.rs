@@ -25,6 +25,10 @@ use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::{RING_ACTIVE, RING_BACKGROUND};
 use px_ui::view::ScreenRect;
 
+#[path = "common/zonas.rs"]
+mod zonas;
+use zonas::panel_a_la_izquierda;
+
 const PANTALLA: Vec2 = vec2(1200.0, 1000.0);
 
 fn indexada(count: usize) -> Image {
@@ -105,9 +109,12 @@ impl Banco {
         let mut resultado = None;
         let mut salida = self.ctx.run_ui(Banco::entrada(events), |ui| {
             apply_scale(ui.ctx());
-            resultado = Some(show_roles(
-                ui, image, roles, scroll, view, enabled, &slots, editor, ops,
-            ));
+            let (panel, ()) = panel_a_la_izquierda(
+                ui,
+                |ui| show_roles(ui, image, roles, scroll, view, enabled, &slots, editor, ops),
+                |_| (),
+            );
+            resultado = Some(panel);
         });
         salida.textures_delta.clear();
         let formas = std::mem::take(&mut salida.shapes);

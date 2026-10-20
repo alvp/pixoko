@@ -6,13 +6,14 @@
 //! fotogramas con `RawInput` sintético, sin GPU ni pantalla. En cada fotograma, como hace la app:
 //! `show_menu` (arriba), `status::show` (abajo), `show_toolbar`, `palette_panel::show_editing_view`
 //! y el lienzo (`interact_ordered` y `paint`). Los rectángulos de cada pieza salen de la diferencia
-//! de `ui.available_rect_before_wrap()` antes y después de pintarla.
+//! de `ui.available_rect_before_wrap()` antes y después de pintarla (la caja y el panel están a la
+//! derecha: se llama primero la caja y lo que queda disponible se encoge por su borde derecho).
 //!
 //! - Fila 7: los rectángulos del banco son los de `chrome::window_layout`, enteros en píxeles
 //!   físicos (error de `f32` ≤ 0,001), a las cinco escalas y en la ventana por defecto (960 × 720 pt)
 //!   y en la mínima; los botones golpean en su sitio dentro de la pila; el título más ancho y el
 //!   desplegable de `Ver` (208 u) caben.
-//! - Fila 9: el origen del lienzo está en `(340·n, 16·n)`: `hover` y `StrokeBegin` valen lo mismo que
+//! - Fila 9: el origen del lienzo está en `(0, 16·n)` (I.3): `hover` y `StrokeBegin` valen lo mismo que
 //!   en un lienzo con origen (0,0) y el puntero desplazado, en la primera y la última coordenada
 //!   física de cada píxel de la imagen, en las cuatro esquinas del lienzo y un píxel fuera; y
 //!   `Ajustar` centra la imagen en **ese** rectángulo (no en la ventana).
@@ -23,7 +24,7 @@
 //! - Propiedad 4: conversión pantalla-imagen con el origen del lienzo desplazado (pura).
 //!
 //! Supuestos (la spec no los fija): `show_menu` crea su propio panel superior y `show_toolbar` el
-//! suyo a la izquierda, como `status::show` y `palette_panel::show` crean los suyos; los títulos del
+//! suyo a la derecha, como `status::show` y `palette_panel::show` crean los suyos; los títulos del
 //! menú se pintan con el texto del título a `x = (4 + 6)·u` y `y = 1·u` del borde del menú.
 
 use egui::{Context, Event, Pos2, Rect, vec2};
@@ -235,8 +236,8 @@ impl Banco {
             let rects = Rects {
                 menu: Rect::from_min_max(r0.min, Pos2::new(r0.max.x, r1.min.y)),
                 estado: Rect::from_min_max(Pos2::new(r1.min.x, r2.max.y), r1.max),
-                columna: Rect::from_min_max(r2.min, Pos2::new(r3.min.x, r2.max.y)),
-                panel: Rect::from_min_max(r3.min, Pos2::new(r4.min.x, r3.max.y)),
+                columna: Rect::from_min_max(Pos2::new(r3.max.x, r2.min.y), r2.max),
+                panel: Rect::from_min_max(Pos2::new(r4.max.x, r3.min.y), r3.max),
                 lienzo: r4,
             };
             resultado = Some((rects, entradas, info, panel, menu, columna));
@@ -335,7 +336,7 @@ fn fila_7_los_rectangulos_del_banco_son_los_de_window_layout_y_enteros() {
 }
 
 #[test]
-fn fila_7_el_origen_del_lienzo_del_banco_es_340n_16n() {
+fn fila_7_el_origen_del_lienzo_del_banco_es_0_16n() {
     for ppp in PPPS {
         let n = text_scale(ppp);
         for ventana in ventanas(ppp) {
@@ -343,7 +344,7 @@ fn fila_7_el_origen_del_lienzo_del_banco_es_340n_16n() {
             let f = banco.reposo();
             let [x, y, ..] = bordes_fisicos(f.rects.lienzo, ppp).expect("entero");
             assert_eq!((x, y), canvas_origin_px(n), "ppp {ppp}");
-            assert_eq!((x, y), (340 * i64::from(n), 16 * i64::from(n)));
+            assert_eq!((x, y), (0, 16 * i64::from(n)));
         }
     }
 }
@@ -354,7 +355,7 @@ fn fila_7_los_botones_de_la_columna_golpean_en_su_sitio_dentro_de_la_pila() {
         let n = n_de(ppp);
         for ventana in ventanas(ppp) {
             let mut banco = Banco::nuevo(ppp, ventana, indexada());
-            let x = (4 + 99 / 2) * n;
+            let x = window_layout(ventana, n as u32).toolbar.x + (4 + 99 / 2) * n;
             for (i, button) in TOOL_BUTTONS.iter().enumerate() {
                 let y = (16 + 4 + 18 * i as i64) * n + 8 * n;
                 let acciones: Vec<_> = banco.clic(x, y).iter().filter_map(|f| f.columna).collect();
@@ -433,11 +434,11 @@ fn fila_7_el_desplegable_de_ver_mide_208_u_con_filas_de_16_u() {
                 .textos
                 .iter()
                 .find(|t| {
-                    // El desplegable cae sobre el panel y el lienzo, no sobre la columna (que
-                    // tiene sus propios `Acercar`, `Alejar` y `1:1`).
+                    // El desplegable cae sobre el lienzo, no sobre la columna (que tiene sus
+                    // propios `Acercar`, `Alejar` y `1:1`).
                     t.texto.trim() == texto
                         && f.rects.menu.max.y <= t.pos.y
-                        && t.pos.x >= f.rects.columna.max.x
+                        && t.pos.x < f.rects.columna.min.x
                 })
                 .unwrap_or_else(|| {
                     panic!(
@@ -585,7 +586,7 @@ fn fila_9_hover_en_la_primera_y_la_ultima_coordenada_de_cada_pixel_vale_lo_que_c
         let ventana = ventanas(ppp)[0];
         let mut banco = Banco::nuevo(ppp, ventana, rgba(6, 4));
         let f0 = banco.reposo();
-        let (origen_lienzo_x, origen_lienzo_y) = (340 * n, 16 * n);
+        let (origen_lienzo_x, origen_lienzo_y) = canvas_origin_px(n as u32);
         let lienzo = window_layout(ventana, n as u32).canvas;
         let mut referencia = Referencia::nuevo(ppp, (lienzo.width, lienzo.height), &rgba(6, 4));
         let (origen, z) = imagen_en_el_lienzo(&f0, ppp);
@@ -627,7 +628,7 @@ fn fila_9_stroke_begin_en_cada_pixel_vale_lo_que_con_origen_cero() {
                     let (x, y) = (origen.0 + ix * z + dx, origen.1 + iy * z + dy);
                     let esperado = Some((ix as i32, iy as i32));
                     assert_eq!(
-                        banco.empieza(340 * n + x, 16 * n + y),
+                        banco.empieza(canvas_origin_px(n as u32).0 + x, 16 * n + y),
                         esperado,
                         "ppp {ppp}: pila, píxel ({ix}, {iy}) en ({dx}, {dy})"
                     );
@@ -662,7 +663,7 @@ fn fila_9_en_las_cuatro_esquinas_del_lienzo_y_un_pixel_fuera() {
         let mut referencia = Referencia::nuevo(ppp, (w, h), &imagen);
         referencia.canvas.request_view(ViewOp::Actual);
         referencia.fotograma(vec![]);
-        let (ox, oy) = (340 * n, 16 * n);
+        let (ox, oy) = canvas_origin_px(n as u32);
 
         for (x, y) in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)] {
             let esperado = Some(((x - origen.0) as u32, (y - origen.1) as u32));
@@ -843,8 +844,8 @@ fn fila_10_la_columna_y_el_menu_no_se_desplazan_con_ningun_offset_px() {
 const TITULOS: [&str; 4] = ["Archivo", "Editar", "Ver", "Ayuda"];
 
 /// Textos de la columna: rótulos, nivel de zoom y letras de atajo (estas por contenido y por estar
-/// a la izquierda de la columna: la `L` del deslizador de luminosidad es del panel).
-fn es_texto_de_la_columna(texto: &common::Texto, ppp: f32) -> bool {
+/// dentro de la columna: la `L` del deslizador de luminosidad es del panel).
+fn es_texto_de_la_columna(texto: &common::Texto, columna: Rect) -> bool {
     let t = texto.texto.trim();
     TOOL_BUTTONS.iter().any(|b| t == b.label)
         || ZOOM_BUTTONS.iter().any(|b| t == b.label)
@@ -853,7 +854,7 @@ fn es_texto_de_la_columna(texto: &common::Texto, ppp: f32) -> bool {
             default_keymap()
                 .shown_text(b.action, px_ui::actions::Platform::Linux)
                 .is_some_and(|k| t == k)
-        }) && texto.pos.x * ppp < (107 * n_de(ppp)) as f32)
+        }) && texto.pos.x >= columna.min.x - TOL_PT)
 }
 
 fn es_titulo_del_menu(texto: &str) -> bool {
@@ -868,7 +869,7 @@ fn textos_de_columna_y_menu(f: &Fot, ppp: f32) -> Vec<(String, [i64; 2])> {
         .pintado
         .textos
         .iter()
-        .filter(|t| es_titulo_del_menu(&t.texto) || es_texto_de_la_columna(t, ppp))
+        .filter(|t| es_titulo_del_menu(&t.texto) || es_texto_de_la_columna(t, f.rects.columna))
         .map(|t| {
             (
                 t.texto.clone(),
@@ -901,7 +902,7 @@ fn fila_10_la_columna_y_el_menu_se_pintan_recortados_a_su_rectangulo() {
                         t.texto,
                         t.clip
                     );
-                } else if es_texto_de_la_columna(t, ppp) {
+                } else if es_texto_de_la_columna(t, f.rects.columna) {
                     vistos_columna += 1;
                     assert!(
                         columna.contains_rect(t.clip),
@@ -929,9 +930,9 @@ fn fila_10_los_botones_de_la_columna_golpean_en_su_sitio_con_el_panel_bajo() {
         let n = n_de(ppp);
         for panel_u in ALTOS_DEL_PANEL_U {
             let mut banco = banco_con_panel_de(ppp, panel_u);
-            let x = (4 + 99 / 2) * n;
             // Con el panel desplazado a un extremo la columna sigue en su sitio.
             let layout = window_layout(banco.ventana_px, n as u32);
+            let x = layout.toolbar.x + (4 + 99 / 2) * n;
             banco.rueda_en(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 20 * n);
             for (i, button) in TOOL_BUTTONS.iter().enumerate() {
                 let y = (16 + 4 + 18 * i as i64) * n + 8 * n;
@@ -1104,7 +1105,7 @@ proptest! {
         let k = i64::from(n);
         let lienzo = Size::new(lienzo_w, lienzo_h);
         let imagen = Size::new(ancho, alto);
-        // Origen del lienzo: múltiplos de `n`, como el de la pila (340·n, 16·n).
+        // Origen del lienzo: múltiplos de `n`, como el de la pila (0, 16·n).
         let (x0, y0) = (celdas_x * k, celdas_y * k);
         prop_assert_eq!(canvas_origin_px(n).0 % k, 0);
         prop_assert_eq!(canvas_origin_px(n).1 % k, 0);

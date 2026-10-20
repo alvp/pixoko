@@ -58,6 +58,7 @@ use px_ui::toolbar::{show_toolbar, zoom_label};
 use px_ui::view::{Size, ViewOp, Zoom};
 
 mod common;
+use common::zonas::caja_sola;
 use common::{
     PPPS, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, rueda_linea, tecla,
     tolerancia_de_egui,
@@ -1520,7 +1521,13 @@ fn fila_a8_zoom_1_2_zoom_1_64_y_zoom_x12_caben_en_la_columna_a_las_cinco_escalas
                 texto.texto, etiqueta,
                 "ppp {ppp}: el texto se pinta entero, sin recorte"
             );
-            let limite = ((TOOLBAR_MARGIN_U + toolbar_button_width_u()) * n) as f32;
+            // La columna va pegada al borde derecho de la pantalla de 400 × 600 pt.
+            let caja_x = caja_sola(
+                ((400.0 * ppp).round() as i64, (600.0 * ppp).round() as i64),
+                n as u32,
+            )
+            .x;
+            let limite = (caja_x + (TOOLBAR_MARGIN_U + toolbar_button_width_u()) * n) as f32;
             assert!(
                 texto.rect().max.x * ppp <= limite + tolerancia_de_egui(ppp),
                 "ppp {ppp}: `{etiqueta}` termina en {} px y el botón acaba en {limite}",

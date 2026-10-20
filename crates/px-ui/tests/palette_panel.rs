@@ -16,7 +16,7 @@
 //! rejilla `(GRID_X_U, GRID_Y_U)·u`, paso `PITCH_U·u`, con `u = text_scale(ppp)` píxeles
 //! físicos); ningún número de la maqueta se repite aquí.
 
-use egui::epaint::{ClippedShape, Shape};
+use egui::epaint::Shape;
 use egui::{
     Context, Event, FontId, Key, MissingGlyphPolicy, Modifiers, MouseWheelUnit, PointerButton,
     Pos2, RawInput, Rect, TouchPhase, Vec2, pos2, vec2,
@@ -37,6 +37,10 @@ use px_ui::text::{
 };
 use px_ui::theme::SURFACE_1;
 use px_ui::view::Zoom;
+
+#[path = "common/zonas.rs"]
+mod zonas;
+use zonas::panel_a_la_izquierda;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba
@@ -102,8 +106,6 @@ struct Fotograma {
     info: CanvasInfo,
     /// Lo que devolvió `palette_panel::show`.
     eleccion: Option<ColorChoice>,
-    /// Lo pintado en el fotograma.
-    formas: Vec<ClippedShape>,
 }
 
 impl Banco {
@@ -168,21 +170,25 @@ impl Banco {
         let mut salida = self.ctx.run_ui(input, |ui| {
             apply_scale(ui.ctx());
             px_ui::status::show(ui, "lápiz · color 1 #000000", false);
-            let eleccion = palette_panel::show(ui, image, choice, scroll, enabled);
-            let rect_lienzo = ui.available_rect_before_wrap();
-            let entradas = canvas.interact_ordered(ui);
-            let info = canvas.paint(ui);
+            let (eleccion, (rect_lienzo, entradas, info)) = panel_a_la_izquierda(
+                ui,
+                |ui| palette_panel::show(ui, image, choice, scroll, enabled),
+                |ui| {
+                    let rect_lienzo = ui.available_rect_before_wrap();
+                    let entradas = canvas.interact_ordered(ui);
+                    let info = canvas.paint(ui);
+                    (rect_lienzo, entradas, info)
+                },
+            );
             resultado = Some((rect_lienzo, entradas, info, eleccion));
         });
         salida.textures_delta.clear();
-        let formas = std::mem::take(&mut salida.shapes);
         let (rect_lienzo, entradas, info, eleccion) = resultado.expect("el lienzo se dibuja");
         Fotograma {
             rect_lienzo,
             entradas,
             info,
             eleccion,
-            formas,
         }
     }
 
@@ -788,26 +794,44 @@ fn propiedad_3_las_aristas_incluyen_los_bordes_del_panel_y_de_la_rejilla() {
 }
 
 #[test]
-fn propiedad_3_el_panel_real_mide_233_n_pixeles_fisicos_y_empieza_en_cero() {
+fn propiedad_3_el_panel_real_mide_233_n_pixeles_fisicos_y_termina_en_el_borde_derecho() {
     let image = imagen_rgba();
     let ancho_u = PANEL_WIDTH_U as f32;
     for ppp in PPP_SIEMPRE {
         let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
         let n = banco.n() as f32;
-        let f = banco.reposo(&image);
+        // El panel real, sin ranura: directamente en el `Ui` raíz, tras la barra de estado.
+        let mut rect_lienzo = None;
+        let mut formas = Vec::new();
+        for _ in 0..2 {
+            let mut salida = banco.ctx.run_ui(banco.entrada(vec![]), |ui| {
+                apply_scale(ui.ctx());
+                px_ui::status::show(ui, "lápiz · color 1 #000000", false);
+                palette_panel::show(ui, &image, initial_choice(&image), &mut banco.scroll, true);
+                rect_lienzo = Some(ui.available_rect_before_wrap());
+            });
+            salida.textures_delta.clear();
+            formas = std::mem::take(&mut salida.shapes);
+        }
+        let rect_lienzo = rect_lienzo.expect("el lienzo se reparte");
 
-        // Lo que el panel quita al lienzo: empieza en x = 0 y mide `233·n` px.
+        // Lo que el panel quita al lienzo: mide `233·n` px y termina en el borde derecho.
         assert!(
-            cerca(f.rect_lienzo.min.x * ppp, ancho_u * n, TOLERANCIA_PX),
+            cerca(
+                (PANTALLA_GRANDE.x - rect_lienzo.max.x) * ppp,
+                ancho_u * n,
+                TOLERANCIA_PX
+            ),
             "ppp {ppp}: el panel mide {} px, se esperaba {}",
-            f.rect_lienzo.min.x * ppp,
+            (PANTALLA_GRANDE.x - rect_lienzo.max.x) * ppp,
             ancho_u * n
         );
-        assert!(cerca(f.rect_lienzo.min.y, 0.0, 1e-3), "ppp {ppp}");
+        assert!(cerca(rect_lienzo.min.x, 0.0, 1e-3), "ppp {ppp}");
+        assert!(cerca(rect_lienzo.min.y, 0.0, 1e-3), "ppp {ppp}");
 
-        // Y el fondo pintado (`SURFACE_1`) del panel arranca en (0, 0) con ese ancho.
+        // Y el fondo pintado (`SURFACE_1`) del panel termina en el borde derecho con ese ancho.
         let mut rects = Vec::new();
-        for clipped in &f.formas {
+        for clipped in &formas {
             recoge_rectangulos(&clipped.shape, &mut rects);
         }
         let del_panel: Vec<Rect> = rects
@@ -815,13 +839,13 @@ fn propiedad_3_el_panel_real_mide_233_n_pixeles_fisicos_y_empieza_en_cero() {
             .filter(|(_, relleno)| *relleno == SURFACE_1)
             .map(|(rect, _)| *rect)
             .filter(|rect| {
-                cerca(rect.min.x * ppp, 0.0, TOLERANCIA_PX)
+                cerca(rect.max.x, PANTALLA_GRANDE.x, TOLERANCIA_PX / ppp)
                     && cerca(rect.min.y * ppp, 0.0, TOLERANCIA_PX)
             })
             .collect();
         assert!(
             !del_panel.is_empty(),
-            "ppp {ppp}: ningún rectángulo SURFACE_1 empieza en (0, 0)"
+            "ppp {ppp}: ningún rectángulo SURFACE_1 termina en el borde derecho"
         );
         assert!(
             del_panel
