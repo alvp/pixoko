@@ -123,6 +123,8 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 
 **Hecho en la unidad I.1 (2026-10-20, `specs/interfaz-teclado.md`):** `d v f ,` (herramientas), `u` (más `Ctrl+Z`), `]` y `[` (también `Av Pág` y `Re Pág`), `<` y `>` (además de `+`, `=` y `-`), `n`, `Inicio`; el Borrador queda sin letra y las cifras 1 a 9 sin asignar. Lo demás de la tabla sigue pendiente en su hito.
 
+**Hecho en la unidad I.2a (2026-10-20, `specs/interfaz-dos-colores.md`):** `}` y `{` (también `Mayús`+`Av Pág` y `Mayús`+`Re Pág`) cambian el fondo, `K` borra la página con él (también `Editar → Borrar página`), el botón derecho pinta con el fondo, el indicador de color y los dos anillos del panel. Con un trazo en curso el color ya se puede cambiar (afecta al trazo siguiente).
+
 Reglas del esquema:
 
 - **Cifras 1 a 9:** dejan de elegir color y se reservan para los controles de animación (hito 5).
