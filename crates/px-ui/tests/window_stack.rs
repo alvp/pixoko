@@ -38,6 +38,7 @@ use px_ui::edit_layout::{
     ROW_H_U, TRACK_W_U, TRACK_X_U, block_height_px, control_row_u, min_window_height_pt,
     min_window_width_pt, min_window_width_u, panel_layout,
 };
+use px_ui::keymap::default_keymap;
 use px_ui::menu::show_menu;
 use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_panel::{self, PanelOutput};
@@ -848,10 +849,11 @@ fn es_texto_de_la_columna(texto: &common::Texto, ppp: f32) -> bool {
     TOOL_BUTTONS.iter().any(|b| t == b.label)
         || ZOOM_BUTTONS.iter().any(|b| t == b.label)
         || t.starts_with("Zoom ")
-        || (TOOL_BUTTONS
-            .iter()
-            .any(|b| b.key.is_some_and(|k| t == k.to_string()))
-            && texto.pos.x * ppp < (107 * n_de(ppp)) as f32)
+        || (TOOL_BUTTONS.iter().any(|b| {
+            default_keymap()
+                .shown_text(b.action, px_ui::actions::Platform::Linux)
+                .is_some_and(|k| t == k)
+        }) && texto.pos.x * ppp < (107 * n_de(ppp)) as f32)
 }
 
 fn es_titulo_del_menu(texto: &str) -> bool {
