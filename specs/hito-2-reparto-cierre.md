@@ -21,7 +21,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 | 10 | **13** | Escritor de PNG por flujo y lectura sin reserva anticipada | `px-formats` | ninguna |
 | 11 | **14a** | Zoom 1/2, 1/4 y 1/8, textura por regiones, superposición del trazo como textura o sombreador (con el damero de la superposición del borrador) y medición del editor de color | `px-ui` | ninguna |
 | 11b | **14-limpieza** | Unidad corta junto a la 14a: dos limpiezas de API que cambian pruebas anteriores (D13), con spec propia y visto bueno antes de tocar nada | `px-ui`, `px-app` | ninguna |
-| 12 | **14b** | Índices en la GPU con la paleta en un sombreador, **solo si la medición de 14a lo justifica** | `px-render` | `glow` y `egui_glow` como directas (ya en el árbol) |
+| 12 | ~~**14b**~~ | **DESCARTADA para el hito 2** (prueba manual del usuario; ver D2). Era: índices en la GPU con la paleta en un sombreador, solo si la medición de 14a lo justificaba | ~~`px-render`~~ | ~~`glow` y `egui_glow` como directas~~ (no se añaden) |
 | 13 | **14c** | Tope de tramos del relleno y tope de memoria del peine | `px-core`, `px-raster` | ninguna |
 | 14 | **21** | Puerta del hito: abrir, editar y guardar un PNG real | `px-app`, `px-golden` | ninguna |
 
@@ -32,6 +32,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
   - **Cuentagotas.** Indexado: elige la entrada. Resto de modos: cambia el color de la ranura activa.
   - Cada uno es un `Command` de `Document` o estado de sesión, según corresponda.
 - **D2. Medir antes del sombreador.** 14a incluye medir el editor de color a 4096², 6000² y 16384²; con los números se decide 14b.
+  - **Resultado:** la unidad 14b queda **DESCARTADA para el hito 2**. En la prueba manual del usuario, tras la 14a, el editor de color es fluido con un PNG indexado de 6000×6000 y de 8192×8192, tanto a zoom de trabajo como con la imagen entera visible. Se retoma solo si el ciclo de color de los hitos 5 o 7 lo exige (idea de diseño conservada en [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md), «Idea de diseño: paleta en el sombreador»). Sin `px-render` ni `glow`/`egui_glow` como dependencias directas en este hito.
 - **D3. Tamaño de la puerta.** 8192×8192 en RGBA (2²⁶ píxeles, el tope de apertura de hoy, `MAX_OPEN_PIXELS`) y un PNG indexado de 6000×6000. Por encima, un mensaje claro hasta que existan texturas por regiones.
 - **D4. Menú** dentro de la ventana en los tres sistemas (sin barra de menú nativa de macOS).
 - **D5. Barra de herramientas:** columna estrecha a la izquierda del panel de paletas, con botones de texto. La geometría y el mínimo de ventana (ancho y alto) se fijan **una sola vez**, en la spec de la unidad 17.

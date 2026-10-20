@@ -41,6 +41,8 @@ Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unida
 
 ## Idea de diseño: paleta en el sombreador
 
+**Estado: DESCARTADA para el hito 2** (unidad 14b; decisión por la prueba manual del usuario, tras la 14a). El editor de color es fluido con un PNG indexado de 6000×6000 y de 8192×8192, tanto a zoom de trabajo como con la imagen entera visible, así que la vista previa por baldosas de la 14a basta y no hace falta subir índices a la GPU ni escribir el sombreador. Se retoma **solo si el ciclo de color de los hitos 5 o 7 lo exige** (ver «Qué da», tercer punto). Lo que sigue se conserva como diseño de partida para ese caso; la lentitud medida el 2026-10-18 en «Vista previa del editor de color» (más arriba) es la que la 14a resolvió.
+
 **Propuesta.** Para imágenes indexadas, subir a la GPU la imagen de **índices** (una textura de un canal de 8 bits) y la paleta (256 entradas RGBA, otra textura o un arreglo uniforme), y resolver el color en un programa de sombreado de fragmentos. Con `eframe` en `glow`, se hace con `egui_glow` y un `PaintCallback` en el lienzo.
 
 **Qué da.**
