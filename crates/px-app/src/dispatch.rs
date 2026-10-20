@@ -114,4 +114,6 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
 }
 
 #[cfg(test)]
+mod teclado_tests;
+#[cfg(test)]
 mod tests;
