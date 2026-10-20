@@ -25,11 +25,11 @@ El indicador de color y el panel de opciones son las dos piezas nuevas; el resto
 | --- | --- | --- |
 | Arriba | Barra de menús, siempre visible (el original la muestra con el botón derecho sobre la barra de título) | Existe, con 5 menús |
 | Izquierda | La página o lienzo, con zoom y desplazamiento | Existe |
-| Derecha, junto al lienzo | Panel de la paleta, con el indicador de color arriba y el editor de color debajo | Existe; el indicador de color es nuevo |
-| Derecha, en el borde | Caja de herramientas: herramientas, botones de zoom y, debajo, el panel de opciones de la herramienta activa | Existe a la izquierda del panel de paletas, sin panel de opciones |
+| Derecha, junto al lienzo | Panel de la paleta, con el indicador de color arriba y el editor de color debajo | Hecho (I.2a, I.3): a la derecha del lienzo, con una línea fina a cada lado |
+| Derecha, en el borde | Caja de herramientas: herramientas, botones de zoom y, debajo, el panel de opciones de la herramienta activa | Hecho (I.3): en el borde derecho, con un recuadro fijo de opciones de 99 × 138 u (hoy: nombre, atajo y `sin opciones`) |
 | Abajo | Barra de estado con herramienta, coordenadas, color y avisos | Existe |
 
-Hoy el orden de izquierda a derecha es caja de herramientas, paleta y lienzo. El cambio solo lo invierte, así que el ancho mínimo de ventana (468 u) no cambia: 107 u de caja, 233 u de paleta y 128 u de lienzo.
+**Hecho en I.3 (21 de octubre de 2026):** el orden de izquierda a derecha es lienzo, paleta y caja de herramientas, y el ancho mínimo de ventana (468 u) no cambió: 128 u de lienzo, 233 u de paleta y 107 u de caja. El lienzo empieza en `(0, 16·n)` y `chrome::window_layout` es la única función que conoce el orden. Spec: `specs/interfaz-caja-derecha.md`.
 
 Tres puntos que condicionan la geometría:
 
@@ -179,7 +179,7 @@ Ventajas del panel fijo: la paleta no se oculta nunca, las opciones se ven mient
 | Simetría | Tipo (punto, mosaico, cíclica, espejo), orden y colocación del centro | 4 |
 | Lupa y zoom | Nivel de zoom | 2 (ya hecho con los botones de zoom) |
 
-Hoy el lápiz, la línea, el relleno, el cuentagotas y el borrador no tienen opciones, así que el panel nace vacío y se llena con cada herramienta nueva. Cada fila de la tabla es una spec con su propio visto bueno.
+Hoy el lápiz, la línea, el relleno, el cuentagotas y el borrador no tienen opciones: el recuadro (I.3) enseña el nombre, el atajo de la tabla y `sin opciones`, y se llena con cada herramienta nueva (su cuerpo, de 7 filas de 13 columnas, se desplaza por filas). Cada fila de la tabla es una spec con su propio visto bueno. Las opciones del hito 4 deben caber en esas 13 columnas o ensanchar la caja (hasta 44 u más a `ppp` 1,5 sin pasar de 683 pt, con su propia spec); el menú del pincel es una ventana aparte, no este recuadro.
 
 ## Qué se descarta
 
@@ -224,3 +224,12 @@ Orden de trabajo después del hito 2:
 **Excepción transitoria (I.2a, 2026-10-20):** el indicador de color añade una banda de 36 u al panel de la paleta y el criterio del alto mínimo de ventana sube del 65 % al 72 % de 720 pt (518,4 pt; a `ppp` 1,5 la ventana mínima pasa de 468,0 a 516,0 pt). Con los iconos propios (I.4) las filas de botones del editor se reducen y el criterio **vuelve al 65 %**. Spec: `specs/interfaz-dos-colores.md`.
 
 Este documento es la entrada de la planificación de los hitos siguientes. La planificación lee además las secciones del manual que cada hito necesite, de una en una, y produce el mapa de funciones con su hito, sus dependencias y su riesgo.
+
+**Nota de I.3 sobre la excepción transitoria:** el recuadro fijo de opciones (138 u) sube el contenido de la caja de 193 a 335 u de los 351 u del panel mínimo: los mínimos de ventana no cambian (387 u de alto y 468 u de ancho). Con I.4 se libera altura en la caja y habrá que reevaluar ese recuadro fijo.
+
+## Decisiones del 21 de octubre de 2026
+
+Dos decisiones de estilo y de herramientas, solo anotadas: no se implementan en I.3.
+
+- **(A) Estilo de los iconos de I.4.** Iconos de 1 bit, con un trazo oscuro y grueso, sobre un botón cuadrado con relieve que se ve hundido cuando la herramienta está activa. Van dentro de la interfaz oscura actual y se dibujan nuevos, con el propio Pixoko.
+- **(B) Pincel en el hito 4.** Un único icono de pincel que muestra el pincel activo. El clic derecho sobre él abre una ventana con la rejilla de formas y un botón de preajustes; no es este panel de opciones.

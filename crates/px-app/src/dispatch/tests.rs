@@ -3505,7 +3505,7 @@ mod caja_derecha {
     /// Fila 6: `Acercar` con el derecho despacha lo que `Alejar` con el izquierdo, y al revés.
     #[test]
     fn fila_6_el_clic_derecho_en_acercar_y_alejar_despacha_lo_que_el_izquierdo_del_otro() {
-        let mut a = Mundo::estandar();
+        let a = Mundo::estandar();
         let estado = a.estado_de_la_ui(Zoom::from_int(5), Locks::default());
         for (rotulo, contrario) in [("Acercar", "Alejar"), ("Alejar", "Acercar")] {
             let SecondaryOutcome::Action(accion) = secondary_outcome(por_rotulo(rotulo), &estado)
