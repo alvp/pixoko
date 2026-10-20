@@ -98,6 +98,14 @@ pub fn press_from_key(key: egui::Key, modifiers: egui::Modifiers) -> Press;
 //   conservan la firma como vistas de la tabla (misma entrada, los tres resultados de hoy), con un
 //   `TODO(hito 8)` para eliminarlas cuando los llamadores migren a `Keymap`.
 // px-ui/src/view.rs: ViewOp::CenterOnCursor; View::center_on(&mut self, point: (i64, i64), viewport: Size, image: Size)
+// Derives: KeyId, Platforms, Chord, Press y Conflict `Clone, Copy (salvo Conflict), Debug, PartialEq, Eq`;
+//   Binding y Keymap `Clone, Debug, PartialEq`. `Press` tiene todos sus campos públicos.
+// px-ui/src/menu.rs: shortcut_in(&Keymap, AppAction, Platform) -> Option<Shortcut>;
+//   show_menu_in(ui, &UiState, Platform, CanvasBackground, &Keymap) -> Option<AppAction>.
+// px-ui/src/toolbar.rs: show_toolbar_with(ui, &UiState, zoom_label: &str, &Keymap, Platform) -> Option<AppAction>.
+//   Button pierde `key`; la letra de TOOL_BUTTONS sale de Keymap::shown_text.
+// Canvas::interact resuelve ViewOp::CenterOnCursor con `ctx.input(|i| i.pointer.latest_pos())` si cae
+//   dentro del lienzo y no hay otra capa encima; View::apply_op no la conoce (la deja como está).
 // px-app: Session::cycle_choice(&mut self, delta: i8); dispatch: ColorNext/ColorPrev y View(CenterOnCursor);
 //   App { keymap }, key_actions con presses(); Canvas resuelve CenterOnCursor con el puntero en interact.
 ```
