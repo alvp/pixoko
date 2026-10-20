@@ -11,6 +11,7 @@ mod damero_guardado;
 mod demo;
 mod dialogs;
 mod dispatch;
+mod dropper_once;
 mod files;
 mod keys;
 mod licenses;
@@ -30,6 +31,7 @@ use px_core::{Document, DocumentError, Rgba};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState};
 use px_ui::canvas::Canvas;
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
+use px_ui::color::choice_label_with;
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
@@ -40,10 +42,11 @@ use px_ui::licenses_view::licenses_form;
 use px_ui::menu::show_menu_in;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
+use px_ui::palette_panel::{Indicator, Roles, show_roles};
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
-use px_ui::tool::{ToolEvent, ToolState, tool_color_label};
+use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
 use px_ui::toolbar::{show_toolbar_with, zoom_label};
 
 use crate::confirm::{
@@ -61,14 +64,16 @@ use crate::dialogs::{
     new_gate, open_gate, unavailable_notice,
 };
 use crate::dispatch::{Dispatched, Targets, dispatch};
+use crate::dropper_once::DropperOnce;
 use crate::files::{file_label, parse_args, pick_dropped};
+use crate::keys::select_tool;
 use crate::licenses::wants_licenses;
 use crate::new_image::{
     FormSync, NewImageError, SystemAlloc, build_new_image, describe_new, memory_notice,
     open_new_image, spec_from_values, sync_form,
 };
 use crate::session::{Session, describe_saved, describe_saved_dialog};
-use crate::title::{app_title_info, status_line, title_with_file, window_title};
+use crate::title::{app_title_info, colors_label, status_line_fit, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
 /// Una conversión que espera su fotograma tras `Aceptar` (specs/hito-2-convertir-modo.md, D5).
@@ -92,6 +97,8 @@ struct App {
     themed_ppp: f32,
     /// Herramienta activa y gesto en curso; el documento no cambia hasta soltar.
     tools: ToolState,
+    /// El cuentagotas del indicador de color es de un solo uso: vuelve a la herramienta anterior.
+    dropper_once: DropperOnce,
     /// Último error de una herramienta, `undo` o `redo`; caduca a los `NOTICE_SECS`.
     notice: Option<Notice>,
     /// Confirmación por repetición al abrir o cerrar con cambios sin guardar.
@@ -146,6 +153,7 @@ impl App {
             status: (String::new(), false),
             themed_ppp: 0.0,
             tools: ToolState::new(),
+            dropper_once: DropperOnce::new(),
             notice: None,
             confirm: Confirm::new(),
             dialogs: Dialogs::new(
@@ -201,6 +209,25 @@ impl App {
             || self.dialogs.pending()
             || self.modal.is_open()
             || self.pending_convert.is_some()
+    }
+
+    /// El cuentagotas del indicador de color es de un solo uso: al soltar su primer gesto vuelve la
+    /// herramienta anterior.
+    fn tick_dropper_once(&mut self, ctx: &egui::Context) {
+        let Some(previous) = self
+            .dropper_once
+            .update(self.tools.tool(), self.tools.busy())
+        else {
+            return;
+        };
+        let image = self
+            .session
+            .document
+            .image(self.session.document.main_image());
+        if let Some(text) = select_tool(&mut self.tools, ToolAction::Select(previous), false, image)
+        {
+            self.notify(ctx, text);
+        }
     }
 
     /// Abre `path` (del argumento, soltado o elegido en el diálogo). Con cambios sin guardar pide
@@ -392,6 +419,7 @@ impl App {
     fn locks(&self, ctx: &egui::Context) -> Locks {
         Locks {
             gesture: self.tools.busy() || self.session.busy(),
+            stroke: self.tools.busy() && !self.session.busy(),
             dialog: self.dialogs.pending(),
             text_focus: ctx.text_edit_focused(),
             removal: self.session.ops.removal().is_some(),
@@ -823,14 +851,24 @@ impl eframe::App for App {
             self.notify(&ctx, REMOVAL_CANCELLED_NOTICE.to_string());
         }
         self.session.sync_editor();
-        let enabled = !self.busy();
+        // El panel sigue vivo con un trazo en curso (el color se puede cambiar: afecta al trazo
+        // siguiente); no con el deslizador del editor, un arrastre de muestra ni un diálogo.
+        let enabled = !(self.session.busy()
+            || self.dialogs.pending()
+            || self.modal.is_open()
+            || self.pending_convert.is_some());
         let main = self.session.document.main_image();
         let mut panel = None;
         if let Some(image) = self.session.document.image(main) {
-            panel = Some(px_ui::palette_panel::show_editing_ops(
+            let roles = Roles {
+                foreground: self.session.choice,
+                background: self.session.background,
+                editing: self.session.editing,
+            };
+            panel = Some(show_roles(
                 ui,
                 image,
-                self.session.choice,
+                roles,
                 &mut self.session.scroll,
                 &mut self.session.view,
                 enabled,
@@ -842,6 +880,28 @@ impl eframe::App for App {
         if let Some(panel) = panel {
             if let Some(choice) = panel.choice {
                 self.session.choice = choice;
+            }
+            if let Some(choice) = panel.background {
+                self.session.background = choice;
+            }
+            if let Some(role) = panel.editing {
+                self.session.editing = role;
+            }
+            match panel.indicator {
+                Some(Indicator::Dropper) => {
+                    let before = self.tools.tool();
+                    self.apply_action(
+                        &ctx,
+                        frame,
+                        AppAction::SelectTool(Tool::Dropper),
+                        Origin::Button,
+                    );
+                    if before != Tool::Dropper && self.tools.tool() == Tool::Dropper {
+                        self.dropper_once.arm(before);
+                    }
+                }
+                Some(Indicator::FocusEditor(role)) => self.session.editing = role,
+                None => {}
             }
             if let Some(commit) = panel.commit {
                 let result = self.session.commit_edit(commit);
@@ -881,10 +941,10 @@ impl eframe::App for App {
         let canvas_inputs = if self.modal.is_open() {
             Vec::new()
         } else {
-            self.canvas.interact_ordered(ui)
+            self.canvas.interact_roles(ui)
         };
-        for input in canvas_inputs {
-            let pixel = self.session.active_pixel();
+        for (input, role) in canvas_inputs {
+            let pixel = self.session.pixel_of(role);
             let result = self
                 .tools
                 .canvas_input_with(&mut self.session.document, id, pixel, input);
@@ -893,14 +953,16 @@ impl eframe::App for App {
             for event in self.tools.take_events() {
                 match event {
                     ToolEvent::Picked(picked) => {
-                        if let Some(text) = self.session.apply_pick(picked).notice {
+                        if let Some(text) = self.session.apply_pick_for(picked, role).notice {
                             self.notify(&ctx, text);
                         }
                     }
                     ToolEvent::Refused(error) => self.notify(&ctx, error.to_string()),
                 }
             }
+            self.tick_dropper_once(&ctx);
         }
+        self.tick_dropper_once(&ctx);
         // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
         let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
         self.key_actions(&events, &mut actions);
@@ -946,24 +1008,27 @@ impl eframe::App for App {
         }
         let canvas_error = canvas_info.error.as_ref().map(|error| error.to_string());
         let tool = self.tools.tool();
+        let colors = image.and_then(|image| {
+            let slots = self.session.slots.get(image.mode());
+            colors_label(
+                tool,
+                tool_color_label(tool, image, self.session.choice, slots),
+                choice_label_with(image, self.session.background, slots),
+            )
+        });
         let info = app_title_info(
             tool,
             image,
             &canvas_info,
-            image.and_then(|image| {
-                tool_color_label(
-                    tool,
-                    image,
-                    self.session.choice,
-                    self.session.slots.get(image.mode()),
-                )
-            }),
+            colors,
             self.session.document.can_undo(),
             self.session.document.can_redo(),
             canvas_error.or(notice),
         );
         let title = window_title(&info);
-        let status = (status_line(&info), info.error.is_some());
+        let columns =
+            px_ui::status::bar_columns(ctx.content_rect().width(), ctx.pixels_per_point());
+        let status = (status_line_fit(&info, columns), info.error.is_some());
         if status != self.status {
             self.status = status;
             ctx.request_repaint();

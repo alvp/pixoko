@@ -111,6 +111,21 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
             session.cycle_choice(-1);
             done(false)
         }
+        AppAction::BackgroundNext => {
+            session.cycle_background(1);
+            done(false)
+        }
+        AppAction::BackgroundPrev => {
+            session.cycle_background(-1);
+            done(false)
+        }
+        AppAction::ClearPage => match session.clear_page() {
+            Ok(changed) => done(changed),
+            Err(error) => Dispatched::Done {
+                refresh: false,
+                notice: Some(error.to_string()),
+            },
+        },
         AppAction::CenterOnCursor => Dispatched::View(ViewOp::CenterOnCursor),
         AppAction::SelectColor(slot) => {
             let image = session.document.image(session.document.main_image());

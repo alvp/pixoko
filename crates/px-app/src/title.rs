@@ -92,6 +92,66 @@ pub fn status_line(info: &TitleInfo) -> String {
     }
 }
 
+/// Lo que acompaña a la herramienta en el título y la barra: el color de primer plano y, tras
+/// `fondo`, el de fondo (specs/interfaz-dos-colores.md, decisión 10). El borrador no usa los
+/// colores y deja solo su propio texto.
+pub fn colors_label(
+    tool: Tool,
+    foreground: Option<String>,
+    background: Option<String>,
+) -> Option<String> {
+    if tool == Tool::Eraser {
+        return foreground;
+    }
+    match (foreground, background) {
+        (Some(foreground), Some(background)) => Some(format!("{foreground} · fondo {background}")),
+        (foreground, _) => foreground,
+    }
+}
+
+/// Texto de la barra de estado en `columns` caracteres: con poco ancho la línea pierde primero el
+/// tamaño, después el zoom y por último la posición del cursor y deshacer y rehacer; nunca la
+/// herramienta ni los dos colores. Con un error, el texto del error tal cual.
+pub fn status_line_fit(info: &TitleInfo, columns: usize) -> String {
+    let full = status_line(info);
+    if info.error.is_some() || full.chars().count() <= columns {
+        return full;
+    }
+    let tool = match (info.tool, info.color.as_deref()) {
+        (Some(tool), color) => Some(status_text(tool, color)),
+        (None, Some(color)) => Some(color.to_string()),
+        (None, None) => None,
+    };
+    let line = |size: bool, zoom: bool, extras: bool| -> String {
+        let mut parts: Vec<String> = Vec::new();
+        if size && let Some((width, height)) = info.size {
+            parts.push(format!("{width}×{height}"));
+        }
+        if zoom {
+            parts.push(info.zoom.to_string());
+        }
+        if extras && let Some((x, y)) = info.hover {
+            parts.push(format!("({x}, {y})"));
+        }
+        parts.extend(tool.clone());
+        if extras && info.can_undo {
+            parts.push("deshacer".to_string());
+        }
+        if extras && info.can_redo {
+            parts.push("rehacer".to_string());
+        }
+        parts.join(" · ")
+    };
+    [
+        line(false, true, true),
+        line(false, false, true),
+        line(false, false, false),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.chars().count() <= columns)
+    .unwrap_or_else(|| line(false, false, false))
+}
+
 /// Antepone al título el fichero del documento (solo el nombre, sin directorios) y, si hay
 /// cambios sin guardar, un `*`: `casa.png* — {title}`. Sin fichero y con cambios, `sin título*`;
 /// sin fichero y sin cambios, el título tal cual (specs/hito-2-abrir-guardar.md).
@@ -102,6 +162,9 @@ pub fn title_with_file(file: Option<&str>, modified: bool, title: &str) -> Strin
         (None, false) => title.to_string(),
     }
 }
+
+#[cfg(test)]
+mod roles_tests;
 
 #[cfg(test)]
 mod tests {

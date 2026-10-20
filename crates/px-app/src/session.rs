@@ -3,18 +3,20 @@
 
 use std::path::{Path, PathBuf};
 
-use px_core::{Allowed, Command, Document, DocumentError, Image, Mode, Pixel};
+use std::fmt;
+
+use px_core::{Allowed, Command, Document, DocumentError, Image, Mode, Pixel, Span};
 use px_formats::write_png;
 use px_ui::color::{
-    ColorChoice, SlotBank, cell_count, cell_of_choice, choice_for_cell, clamp_choice,
-    initial_choice, pixel_for_choice_with,
+    ColorChoice, Role, SlotBank, SlotColors, cell_count, cell_of_choice, choice_for_cell,
+    clamp_choice, default_background, initial_choice, pixel_for_choice_with,
 };
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
 use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
 use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_ops::{
-    Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_fate, summary,
-    transparent_summary,
+    Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_after, entry_fate,
+    summary, transparent_summary,
 };
 use px_ui::pick::{Picked, pick_notice};
 use px_ui::view::Size;
@@ -49,6 +51,23 @@ pub struct PickOutcome {
     pub notice: Option<String>,
 }
 
+/// Por qué no se pudo borrar la página.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClearPageError {
+    /// No hay memoria para el paso de deshacer: la imagen queda intacta.
+    OutOfMemory,
+    Document(DocumentError),
+}
+
+impl fmt::Display for ClearPageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ClearPageError::OutOfMemory => f.write_str("no hay memoria para borrar la página"),
+            ClearPageError::Document(error) => write!(f, "{error}"),
+        }
+    }
+}
+
 /// Un fichero leído y listo para instalar como documento (`Session::load` + `Session::install`).
 pub struct Loaded {
     pub image: Image,
@@ -63,6 +82,11 @@ pub struct Session {
     pub document: Document,
     /// Color activo del panel de paletas. Abrir un fichero lo reinicia (specs/hito-2-panel-paletas.md).
     pub choice: ColorChoice,
+    /// Color de fondo (botón derecho): por defecto el transparente del modo (specs/interfaz-dos-
+    /// colores.md). Abrir o crear un documento lo reinicia.
+    pub background: ColorChoice,
+    /// Qué color edita el editor de color y sobre cuál actúan los botones de la paleta.
+    pub editing: Role,
     /// Desplazamiento del panel de paletas; abrir un fichero lo reinicia.
     pub scroll: Scroll,
     /// Estado del panel entre fotogramas (desplazamiento de todo el panel y «mostrar la elegida»);
@@ -97,10 +121,15 @@ impl Session {
         let choice = document
             .image(document.main_image())
             .map_or(ColorChoice::Slot(1), initial_choice);
+        let background = document
+            .image(document.main_image())
+            .map_or(ColorChoice::Slot(9), default_background);
         Session {
             saved_id: document.state_id(),
             document,
             choice,
+            background,
+            editing: Role::Foreground,
             scroll: Scroll::default(),
             view: PanelView::default(),
             slots: SlotBank::new(),
@@ -201,21 +230,71 @@ impl Session {
         self.editor.dragging() || self.ops.busy()
     }
 
-    /// Aplica lo que eligió el cuentagotas (specs/hito-2-cuentagotas-borrador.md, decisión 4).
-    /// Indexada: elige la entrada y la muestra en el panel; con una quita pendiente se ignora.
-    /// RGBA, Gray y GrayAlpha: escribe el color en la ranura activa de ese modo. Nunca modifica el
-    /// documento: ni paso de deshacer ni marca de modificado.
+    /// La elección de color del rol.
+    pub fn choice_of(&self, role: Role) -> ColorChoice {
+        match role {
+            Role::Foreground => self.choice,
+            Role::Background => self.background,
+        }
+    }
+
+    /// `Pixel` del color del rol con los colores de ranura de la sesión.
+    pub fn pixel_of(&self, role: Role) -> Option<Pixel> {
+        let image = self.document.image(self.document.main_image())?;
+        pixel_for_choice_with(image, self.choice_of(role), self.slots.get(image.mode()))
+    }
+
+    /// Recorre el color de fondo `delta` pasos (`+1` el siguiente, `-1` el anterior), dando la
+    /// vuelta en los extremos, como [`Session::cycle_choice`] con el primer plano. No toca el
+    /// rango de rotación.
+    pub fn cycle_background(&mut self, delta: i8) {
+        let next = self
+            .document
+            .image(self.document.main_image())
+            .and_then(|image| {
+                let count = cell_count(image) as i64;
+                if count == 0 {
+                    return None;
+                }
+                match cell_of_choice(image, self.background) {
+                    Some(cell) => {
+                        let cell = (cell as i64 + i64::from(delta)).rem_euclid(count);
+                        choice_for_cell(image, cell as usize)
+                    }
+                    None => Some(default_background(image)),
+                }
+            });
+        if let Some(choice) = next {
+            self.background = choice;
+        }
+    }
+
+    /// Aplica lo que eligió el cuentagotas con el botón izquierdo: el primer plano. La app usa
+    /// [`Session::apply_pick_for`]; esta es la vía de las pruebas anteriores a I.2a.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn apply_pick(&mut self, picked: Picked) -> PickOutcome {
+        self.apply_pick_for(picked, Role::Foreground)
+    }
+
+    /// Aplica lo que eligió el cuentagotas (specs/hito-2-cuentagotas-borrador.md, decisión 4) al
+    /// color de `role`. Indexada: elige la entrada (el primer plano además la muestra en el
+    /// panel); con una quita pendiente se ignora. RGBA, Gray y GrayAlpha: escribe el color en la
+    /// ranura del rol en ese modo. Nunca modifica el documento: ni paso de deshacer ni marca de
+    /// modificado.
+    pub fn apply_pick_for(&mut self, picked: Picked, role: Role) -> PickOutcome {
         let Some(image) = self.document.image(self.document.main_image()) else {
             return PickOutcome { notice: None };
         };
         let mode = image.mode();
         let palette_len = image.palette().map_or(0, |palette| palette.len());
-        let applied = match (picked, mode, self.choice) {
+        let applied = match (picked, mode, self.choice_of(role)) {
             (Picked::Entry(index), Mode::Indexed, _)
                 if usize::from(index) < palette_len && self.ops.removal().is_none() =>
             {
-                self.set_choice_revealing(ColorChoice::Entry(index));
+                match role {
+                    Role::Foreground => self.set_choice_revealing(ColorChoice::Entry(index)),
+                    Role::Background => self.background = ColorChoice::Entry(index),
+                }
                 true
             }
             (
@@ -228,6 +307,60 @@ impl Session {
         PickOutcome {
             notice: applied.then(|| pick_notice(&picked)).flatten(),
         }
+    }
+
+    /// Borra la página: la rellena con el color de fondo como **un** paso (`FillSpans` con un
+    /// tramo por fila). `Ok(false)` si ya era de ese color. Reserva antes de modificar; si no hay
+    /// memoria, la imagen y la historia quedan intactas.
+    pub fn clear_page(&mut self) -> Result<bool, ClearPageError> {
+        self.clear_page_with(&mut |bytes| Vec::<u8>::new().try_reserve_exact(bytes).is_ok())
+    }
+
+    /// Como [`Session::clear_page`] con la reserva dada: `reserve(bytes)` dice si caben los bytes
+    /// de la imagen entera (lo máximo que guardará el paso de deshacer).
+    pub fn clear_page_with(
+        &mut self,
+        reserve: &mut dyn FnMut(usize) -> bool,
+    ) -> Result<bool, ClearPageError> {
+        let id = self.document.main_image();
+        let Some(pixel) = self.pixel_of(Role::Background) else {
+            return Ok(false);
+        };
+        let Some(image) = self.document.image(id) else {
+            return Ok(false);
+        };
+        let (width, height) = (image.width(), image.height());
+        let bytes = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|pixels| pixels.checked_mul(image.mode().bytes_per_pixel()))
+            .ok_or(ClearPageError::OutOfMemory)?;
+        if !reserve(bytes) {
+            return Err(ClearPageError::OutOfMemory);
+        }
+        let mut spans = Vec::new();
+        spans
+            .try_reserve_exact(height as usize)
+            .map_err(|_| ClearPageError::OutOfMemory)?;
+        spans.extend((0..height).map(|y| Span {
+            y,
+            x_start: 0,
+            x_end: width,
+        }));
+        let changed = self
+            .document
+            .apply(Command::FillSpans {
+                image: id,
+                spans,
+                pixel,
+            })
+            .map_err(|error| match error {
+                DocumentError::OutOfMemory => ClearPageError::OutOfMemory,
+                other => ClearPageError::Document(other),
+            })?;
+        if changed {
+            self.note_applied(self.full());
+        }
+        Ok(changed)
     }
 
     /// Convierte la imagen principal a `target` como **un** paso de la historia (specs/hito-2-convertir-modo.md,
@@ -244,6 +377,10 @@ impl Session {
         if changed {
             self.note_applied(self.full());
             self.after_history_move(before);
+            // El fondo por defecto es del modo: tras convertir se vuelve a elegir.
+            if let Some(image) = self.document.image(self.document.main_image()) {
+                self.background = default_background(image);
+            }
         }
         Ok(changed)
     }
@@ -291,6 +428,7 @@ impl Session {
             return;
         };
         self.choice = clamp_choice(image, self.choice);
+        self.background = clamp_choice(image, self.background);
         let len = image.palette().map_or(0, |palette| palette.len());
         if self.ops.sync(self.document.state_id(), len) {
             self.removal_cancelled = true;
@@ -399,8 +537,27 @@ impl Session {
             op,
             PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. }
         ) {
-            let after = choice_after(&op, active, old_len);
-            self.set_choice_revealing(ColorChoice::Entry(after));
+            let after = ColorChoice::Entry(choice_after(&op, active, old_len));
+            // El otro color sigue a su entrada si se mueve o se desplaza (`entry_after`).
+            let other = match self.editing {
+                Role::Foreground => self.background,
+                Role::Background => self.choice,
+            };
+            let other = match other {
+                ColorChoice::Entry(entry) => ColorChoice::Entry(entry_after(&op, entry, old_len)),
+                slot => slot,
+            };
+            match self.editing {
+                Role::Foreground => {
+                    self.set_choice_revealing(after);
+                    self.background = other;
+                }
+                Role::Background => {
+                    self.background = after;
+                    self.choice = other;
+                    self.view.reveal = true;
+                }
+            }
             self.ops.clear_range();
         }
         if self.ops.removal().is_some() {
@@ -424,7 +581,7 @@ impl Session {
     }
 
     fn active_entry(&self) -> Option<u8> {
-        match self.choice {
+        match self.choice_of(self.editing) {
             ColorChoice::Entry(index) => Some(index),
             ColorChoice::Slot(_) => None,
         }
@@ -442,10 +599,9 @@ impl Session {
         std::mem::take(&mut self.discarded_text)
     }
 
-    /// `Pixel` del color activo con los colores de ranura de la sesión.
+    /// `Pixel` del color de primer plano con los colores de ranura de la sesión.
     pub fn active_pixel(&self) -> Option<Pixel> {
-        let image = self.document.image(self.document.main_image())?;
-        pixel_for_choice_with(image, self.choice, self.slots.get(image.mode()))
+        self.pixel_of(Role::Foreground)
     }
 
     /// Pone al día el editor con el destino y el color guardado de la selección actual.
@@ -454,7 +610,7 @@ impl Session {
             .document
             .image(self.document.main_image())
             .and_then(|image| {
-                let target = EditTarget::of(image, self.choice)?;
+                let target = EditTarget::of(image, self.choice_of(self.editing))?;
                 let color = target.stored(image, self.slots.get(image.mode()))?;
                 Some((target, color))
             });
@@ -579,6 +735,15 @@ impl Session {
     ) {
         self.conversion = conversion;
         self.choice = choice;
+        self.background = default_background(&image);
+        self.editing = Role::Foreground;
+        // La ranura 9 es el fondo por defecto (transparente, o blanca en gris): abrir o crear la
+        // restaura aunque se haya editado. Es la única excepción a «las ranuras duran la sesión».
+        for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+            if let Some(color) = SlotColors::defaults(mode).get(9) {
+                self.slots.get_mut(mode).set(9, color);
+            }
+        }
         self.scroll = Scroll::default();
         self.view = PanelView::default();
         self.discarded_text = self.editor.has_pending();
@@ -705,3 +870,5 @@ mod tests;
 mod tiles_tests;
 #[cfg(test)]
 mod transparent_tests;
+#[cfg(test)]
+mod two_colors_tests;
