@@ -42,6 +42,7 @@ use px_ui::keymap::Keymap;
 use px_ui::licenses_view::licenses_form;
 use px_ui::menu::show_menu_in;
 use px_ui::notice::{NOTICE_SECS, Notice};
+use px_ui::options::{OptionsState, options_row_count};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::palette_panel::{Indicator, Roles, show_roles};
 use px_ui::pointer_events::window_actions;
@@ -49,7 +50,7 @@ use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
-use px_ui::toolbar::{show_toolbar_with, zoom_label};
+use px_ui::toolbar::{ToolboxView, show_toolbox, zoom_label};
 
 use crate::confirm::{
     Confirm, Confirmation, Request, close_allowed, close_warning, new_warning, open_dialog_warning,
@@ -121,6 +122,8 @@ struct App {
     /// Los gestos del ratón y del trackpad: el lienzo y `pointer_actions` leen esta tabla (el hito 8
     /// la hará configurable; hoy es el esquema por defecto).
     gestures: GestureMap,
+    /// Foco y desplazamiento del recuadro de opciones de la caja (I.3).
+    options: OptionsState,
     /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
     modal: Modal,
     /// El elemento enfocado del diálogo modal.
@@ -174,6 +177,7 @@ impl App {
             platform: Platform::current(),
             keymap: Keymap::default_scheme(),
             gestures,
+            options: OptionsState::default(),
             modal: Modal::Closed,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
@@ -856,13 +860,24 @@ impl eframe::App for App {
             actions.push((action, Origin::Menu));
         }
         px_ui::status::show(ui, &self.status.0, self.status.1);
-        if let Some(action) = show_toolbar_with(
+        // La caja va primero a la derecha y el panel de paletas se apila a su izquierda.
+        let level = zoom_label(state.zoom);
+        let toolbox = show_toolbox(
             ui,
-            &state,
-            &zoom_label(state.zoom),
+            &ToolboxView {
+                state: &state,
+                zoom_label: &level,
+                options: &self.options,
+            },
             &self.keymap,
             self.platform,
-        ) {
+        );
+        if toolbox.pressed_outside_options {
+            self.options.press_outside();
+        }
+        self.options
+            .scroll_by(toolbox.options_scroll_rows, options_row_count(state.tool));
+        if let Some(action) = toolbox.action {
             actions.push((action, Origin::Button));
         }
         self.session.normalize();
@@ -989,6 +1004,15 @@ impl eframe::App for App {
         self.pointer_actions(&raw_events, &mut actions);
         for (action, origin) in actions {
             self.apply_action(&ctx, frame, action, origin);
+        }
+        // Foco del recuadro de opciones: otra herramienta por cualquier vía lo quita; el clic
+        // derecho permitido en una herramienta lo da (después), salvo con un diálogo abierto.
+        self.options.sync_tool(self.tools.tool());
+        if toolbox.focus_options {
+            self.options.focus();
+        }
+        if self.dialogs.pending() || self.modal.is_open() {
+            self.options.blur();
         }
 
         // Vista previa del color que se está editando y superposición del trazo: ambas viven en
