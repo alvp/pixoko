@@ -321,7 +321,7 @@ fn show_panel(
     let ppp = ctx.pixels_per_point();
     let u = ui_unit(ppp);
     let width = PANEL_WIDTH_U as f32 * u;
-    Panel::left("paleta")
+    Panel::right("paleta")
         .exact_size(width)
         .resizable(false)
         .show_separator_line(false)
@@ -727,15 +727,19 @@ fn paint(
         0.0,
         SURFACE_3,
     );
-    let line = layout.u_rect(RIGHT_LINE_X_U, 0, 1, 0);
-    painter.rect_filled(
-        Rect::from_min_size(
-            Pos2::new(line.min.x, layout.rect.min.y),
-            vec2(line.width(), layout.rect.height()),
-        ),
-        0.0,
-        SURFACE_3,
-    );
+    // Dos líneas de 1 u: la de la izquierda separa el panel del lienzo y la de la derecha, de la
+    // caja de herramientas (la izquierda cae en el margen de 4 u de la rejilla).
+    for x_u in [0, RIGHT_LINE_X_U] {
+        let line = layout.u_rect(x_u, 0, 1, 0);
+        painter.rect_filled(
+            Rect::from_min_size(
+                Pos2::new(line.min.x, layout.rect.min.y),
+                vec2(line.width(), layout.rect.height()),
+            ),
+            0.0,
+            SURFACE_3,
+        );
+    }
 
     if let Some(background_choice) = roles.background {
         paint_band(&painter, layout, image, slots, roles, background_choice);

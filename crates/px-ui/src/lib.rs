@@ -25,6 +25,7 @@ pub mod licenses_view;
 pub mod menu;
 pub mod notice;
 pub mod number;
+pub mod options;
 pub mod palette_grid;
 pub mod palette_ops;
 pub mod palette_panel;

@@ -1191,6 +1191,11 @@ mod caja_derecha {
         )
     }
 
+    /// Tolerancia, en píxeles físicos, de un texto respecto de su posición ideal: egui coloca algunos
+    /// (el campo hexadecimal) con márgenes redondeados a 1/16 pt, a unas centésimas de píxel, y
+    /// pinta el texto en el píxel entero más cercano; borroso sería medio píxel.
+    const TOL_BORROSO_PX: f32 = 0.1;
+
     /// Distancia de `valor` (px físicos) al múltiplo de `n` más cercano.
     fn resto_de_n(valor: f32, n: i64) -> f32 {
         let resto = valor.rem_euclid(n as f32);
@@ -1241,7 +1246,7 @@ mod caja_derecha {
                         for (eje, pos, origen) in [("x", t.pos.x, zona.x), ("y", t.pos.y, zona.y)] {
                             let rel = pos * ppp - origen as f32;
                             assert!(
-                                resto_de_n(rel, n) <= tolerancia_de_egui(ppp),
+                                resto_de_n(rel, n) <= TOL_BORROSO_PX,
                                 "ppp {ppp} ventana {ventana:?}: {nombre}: {:?} en {eje} = {rel} px \
                                  desde su esquina (n = {n}): borroso",
                                 t.texto
@@ -1258,7 +1263,8 @@ mod caja_derecha {
     fn fila_8_sobre_el_panel_y_la_caja_no_hay_hover_ni_trazo() {
         for ppp in PPPS {
             let n = i64::from(text_scale(ppp));
-            let ventana = ventanas(ppp)[0];
+            // Ventana mínima y una imagen de 1200 × 1200 a ×1: cubre el lienzo entero.
+            let ventana = ventanas(ppp)[1];
             let layout = window_layout(ventana, n as u32);
             let mut banco = Banco::nuevo(ppp, ventana, rgba(1200, 1200));
             banco.canvas.request_view(ViewOp::Actual);
@@ -1487,20 +1493,19 @@ mod caja_derecha {
                 let union = rect_en_puntos(panel, ppp)
                     .union(rect_en_puntos(layout.toolbar, ppp))
                     .expand(TOL_PT);
-                for r in f
-                    .pintado
-                    .rellenos
-                    .iter()
-                    .filter(|r| r.rect.center().x * ppp > panel.x as f32)
-                {
+                // Solo la franja central: el menú y la barra de estado ocupan todo el ancho.
+                let franja = |min_y: f32, max_y: f32| {
+                    min_y * ppp >= panel.y as f32 - 0.5
+                        && max_y * ppp <= (panel.y + panel.height) as f32 + 0.5
+                };
+                for r in f.pintado.rellenos.iter().filter(|r| {
+                    r.rect.center().x * ppp > panel.x as f32 && franja(r.rect.min.y, r.rect.max.y)
+                }) {
                     assert!(union.contains_rect(r.rect), "ppp {ppp}: {:?} fuera", r.rect);
                 }
-                for t in f
-                    .pintado
-                    .textos
-                    .iter()
-                    .filter(|t| t.rect().center().x * ppp > panel.x as f32)
-                {
+                for t in f.pintado.textos.iter().filter(|t| {
+                    t.rect().center().x * ppp > panel.x as f32 && franja(t.pos.y, t.rect().max.y)
+                }) {
                     assert!(union.contains_rect(t.clip), "ppp {ppp}: {:?}", t.texto);
                 }
             }

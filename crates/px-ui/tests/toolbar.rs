@@ -747,7 +747,7 @@ mod caja_derecha {
     }
 
     /// El texto pintado cuya esquina cae en `(x_px, y_px)`.
-    fn texto_en<'a>(p: &'a Pintado, ppp: f32, x_px: i64, y_px: i64) -> Option<&'a Texto> {
+    fn texto_en(p: &Pintado, ppp: f32, x_px: i64, y_px: i64) -> Option<&Texto> {
         let tol = tolerancia_de_egui(ppp);
         p.textos.iter().find(|t| {
             (t.pos.x * ppp - x_px as f32).abs() <= tol && (t.pos.y * ppp - y_px as f32).abs() <= tol
@@ -957,7 +957,8 @@ mod caja_derecha {
 
     #[test]
     fn fila_5_bloqueado_no_hay_ni_herramienta_ni_foco_y_la_quita_no_bloquea() {
-        let bloqueos: [(&str, fn(&mut Locks)); 4] = [
+        type Poner = fn(&mut Locks);
+        let bloqueos: [(&str, Poner); 4] = [
             ("gesto", |l| l.gesture = true),
             ("diálogo", |l| l.dialog = true),
             ("modal", |l| l.modal = true),
@@ -1306,8 +1307,7 @@ mod caja_derecha {
                 let renglon = ultimo
                     .textos
                     .iter()
-                    .filter(|t| t.texto == primero)
-                    .last()
+                    .rfind(|t| t.texto == primero)
                     .expect("el tooltip");
                 assert!(
                     (renglon.tamano.y * ppp - (14 * n) as f32).abs() <= 0.05,

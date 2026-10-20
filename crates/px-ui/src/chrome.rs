@@ -1,5 +1,6 @@
-//! Geometría del menú y de la columna de herramientas, sin tipos de egui
-//! (specs/hito-2-menu-herramientas.md, «Geometría»).
+//! Geometría del menú y de la caja de herramientas, sin tipos de egui
+//! (specs/hito-2-menu-herramientas.md, «Geometría»; specs/interfaz-caja-derecha.md: la caja y el
+//! panel van a la derecha del lienzo y la caja lleva el recuadro de opciones).
 //!
 //! Las medidas son enteros de «píxeles de interfaz» `u` (`n = text_scale(ppp)` píxeles físicos
 //! cada una), igual que el panel de paletas y el editor de color.
@@ -26,8 +27,31 @@ pub const TOOLBAR_SEPARATOR_Y_U: i64 = 96;
 pub const ZOOM_LABEL_Y_U: i64 = 101;
 /// `y` del primer botón de zoom (`119 + 18·i`; el último termina en 189).
 pub const ZOOM_Y_U: i64 = 119;
-/// Alto del contenido de la columna: hasta el último botón de zoom y un margen inferior de 4 u.
-pub const TOOLBAR_CONTENT_H_U: i64 = 193;
+/// Recuadro fijo de opciones de la herramienta activa, en `u` desde la esquina de la caja: 4 u bajo
+/// el último botón de zoom (termina en 189), del ancho de un botón, con borde de 1 u (2 u con el
+/// foco) y relleno; su alto no cambia con la herramienta ni con la ventana.
+pub const OPTIONS_X_U: i64 = TOOLBAR_MARGIN_U;
+pub const OPTIONS_Y_U: i64 = 193;
+pub const OPTIONS_W_U: i64 = 99;
+pub const OPTIONS_H_U: i64 = 138;
+/// Grosor del borde del recuadro, sin y con el foco.
+pub const OPTIONS_BORDER_U: i64 = 1;
+pub const OPTIONS_FOCUS_BORDER_U: i64 = 2;
+/// Título (nombre de la herramienta) y línea del atajo, de 14 u, con 4 u de margen en el recuadro.
+pub const OPTIONS_TITLE_X_U: i64 = OPTIONS_X_U + 4;
+pub const OPTIONS_TITLE_Y_U: i64 = OPTIONS_Y_U + 4;
+pub const OPTIONS_KEY_Y_U: i64 = OPTIONS_TITLE_Y_U + 14;
+/// Cuerpo: 13 columnas de 7 u por 7 filas de 14 u. Con más filas de las que caben, se desplaza por
+/// filas enteras.
+pub const OPTIONS_ROW_H_U: i64 = 14;
+pub const OPTIONS_BODY_ROWS: i64 = 7;
+pub const OPTIONS_BODY_X_U: i64 = OPTIONS_TITLE_X_U;
+pub const OPTIONS_BODY_Y_U: i64 = OPTIONS_KEY_Y_U + 14 + 4;
+pub const OPTIONS_BODY_W_U: i64 = OPTIONS_W_U - 8;
+pub const OPTIONS_BODY_H_U: i64 = OPTIONS_BODY_ROWS * OPTIONS_ROW_H_U;
+/// Alto del contenido de la caja: el recuadro de opciones y un margen inferior de 4 u. Cabe en el
+/// panel mínimo (351 u): una prueba lo guarda (I.4 liberará altura y habrá que reevaluarlo).
+pub const TOOLBAR_CONTENT_H_U: i64 = OPTIONS_Y_U + OPTIONS_H_U + 4;
 
 /// Rótulos de los botones de herramienta (sin la letra del atajo), en el orden de la columna.
 pub const TOOL_LABELS: [&str; 5] = ["Lápiz", "Línea", "Relleno", "Cuentagotas", "Borrador"];
@@ -62,14 +86,15 @@ fn scale(n: u32) -> i64 {
     i64::from(n.max(1))
 }
 
-/// Origen del lienzo en la ventana, en píxeles físicos: tras la columna y el panel, bajo el menú.
+/// Origen del lienzo en la ventana, en píxeles físicos: en el borde izquierdo, bajo el menú (la
+/// caja y el panel van a su derecha).
 pub fn canvas_origin_px(n: u32) -> (i64, i64) {
-    let n = scale(n);
-    ((toolbar_width_u() + PANEL_WIDTH_U) * n, MENU_H_U * n)
+    (0, MENU_H_U * scale(n))
 }
 
 /// Reparte una ventana de `window_px` píxeles físicos: menú arriba y barra de estado abajo (todo el
-/// ancho) y, en la franja central, la columna, el panel de paletas y el lienzo (el resto). Los cinco
+/// ancho) y, en la franja central, de izquierda a derecha, el lienzo (el resto), el panel de paletas
+/// y la caja de herramientas en el borde derecho. Es la **única** función que conoce ese orden. Los cinco
 /// rectángulos recubren la ventana sin huecos ni solapes (con una ventana menor que el mínimo, los
 /// tamaños no negativos se recortan a lo que queda).
 pub fn window_layout(window_px: (i64, i64), n: u32) -> WindowLayout {
@@ -88,9 +113,9 @@ pub fn window_layout(window_px: (i64, i64), n: u32) -> WindowLayout {
     };
     WindowLayout {
         menu: rect(0, 0, w, menu_h),
-        toolbar: rect(0, menu_h, toolbar_w, band),
-        panel: rect(toolbar_w, menu_h, panel_w, band),
-        canvas: rect(toolbar_w + panel_w, menu_h, w - toolbar_w - panel_w, band),
+        toolbar: rect(w - toolbar_w, menu_h, toolbar_w, band),
+        panel: rect(w - toolbar_w - panel_w, menu_h, panel_w, band),
+        canvas: rect(0, menu_h, w - toolbar_w - panel_w, band),
         status: rect(0, h - bar_h, w, bar_h),
     }
 }
