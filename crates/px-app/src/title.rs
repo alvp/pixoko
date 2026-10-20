@@ -641,3 +641,330 @@ mod status_line_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod tool_field_tests {
+    //! Unidad 14-limpieza (specs/hito-2-limpieza-api.md, filas 1 a 8 y propiedades P1 y P2):
+    //! `TitleInfo` tiene un campo propio `tool: Option<Tool>`; `title_text` escribe la herramienta
+    //! (entre el cursor y deshacer) solo si es `Some`; `window_title(&info)` y `status_line(&info)`
+    //! ya no reciben la herramienta; y `app_title_info` construye el `TitleInfo` de producción con
+    //! `tool` siempre `Some`.
+
+    use super::*;
+    use proptest::prelude::*;
+    use px_core::{Image, Mode};
+    use px_ui::canvas::CanvasInfo;
+    use px_ui::text::INTERFACE_CHARSET;
+    use px_ui::tool::Tool;
+    use px_ui::view::Zoom;
+
+    fn zoom(n: u32) -> Zoom {
+        Zoom::from_int(n).expect("el zoom existe")
+    }
+
+    /// Las cinco herramientas con su etiqueta, escritas a mano (no con `Tool::label()`).
+    const HERRAMIENTAS: [(Tool, &str); 5] = [
+        (Tool::Pencil, "lápiz"),
+        (Tool::Line, "línea"),
+        (Tool::Fill, "relleno"),
+        (Tool::Dropper, "cuentagotas"),
+        (Tool::Eraser, "borrador"),
+    ];
+
+    /// `base` de la spec: 64×48, zoom ×8, cursor (3, 4), `color 3 #ff0000`, sin deshacer ni
+    /// rehacer y sin herramienta.
+    fn base() -> TitleInfo {
+        TitleInfo {
+            size: Some((64, 48)),
+            zoom: zoom(8),
+            hover: Some((3, 4)),
+            tool: None,
+            color: Some("color 3 #ff0000".to_string()),
+            can_undo: false,
+            can_redo: false,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn fila_1_sin_herramienta_no_sale_la_herramienta() {
+        assert_eq!(
+            title_text(&base()),
+            "Pixoko: 64×48 · ×8 · (3, 4) · color 3 #ff0000"
+        );
+    }
+
+    #[test]
+    fn fila_2_con_la_linea_sale_antes_del_color() {
+        let info = TitleInfo {
+            tool: Some(Tool::Line),
+            ..base()
+        };
+        assert_eq!(
+            title_text(&info),
+            "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000"
+        );
+    }
+
+    #[test]
+    fn fila_3_con_la_linea_y_sin_color_solo_sale_la_herramienta() {
+        let info = TitleInfo {
+            tool: Some(Tool::Line),
+            color: None,
+            ..base()
+        };
+        assert_eq!(title_text(&info), "Pixoko: 64×48 · ×8 · (3, 4) · línea");
+    }
+
+    #[test]
+    fn fila_4_las_cinco_herramientas_ponen_su_etiqueta() {
+        let casos = [
+            (Tool::Pencil, "Pixoko: 64×48 · ×8 · lápiz · color 3 #ff0000"),
+            (Tool::Line, "Pixoko: 64×48 · ×8 · línea · color 3 #ff0000"),
+            (Tool::Fill, "Pixoko: 64×48 · ×8 · relleno · color 3 #ff0000"),
+            (
+                Tool::Dropper,
+                "Pixoko: 64×48 · ×8 · cuentagotas · color 3 #ff0000",
+            ),
+            (
+                Tool::Eraser,
+                "Pixoko: 64×48 · ×8 · borrador · color 3 #ff0000",
+            ),
+        ];
+        for (tool, esperado) in casos {
+            let info = TitleInfo {
+                hover: None,
+                tool: Some(tool),
+                ..base()
+            };
+            assert_eq!(title_text(&info), esperado, "{tool:?}");
+        }
+    }
+
+    #[test]
+    fn fila_5_el_borrador_con_color_transparente_y_la_historia_van_en_orden() {
+        let info = TitleInfo {
+            tool: Some(Tool::Eraser),
+            color: Some("color 0 transparente".to_string()),
+            can_undo: true,
+            can_redo: true,
+            ..base()
+        };
+        assert_eq!(
+            title_text(&info),
+            "Pixoko: 64×48 · ×8 · (3, 4) · borrador · color 0 transparente · deshacer · rehacer"
+        );
+    }
+
+    #[test]
+    fn fila_6_con_error_el_titulo_es_pixoko_y_el_error_con_cualquier_herramienta() {
+        let herramientas = [
+            None,
+            Some(Tool::Pencil),
+            Some(Tool::Line),
+            Some(Tool::Fill),
+            Some(Tool::Dropper),
+            Some(Tool::Eraser),
+        ];
+        for tool in herramientas {
+            for (can_undo, can_redo) in [(false, false), (true, true)] {
+                let info = TitleInfo {
+                    tool,
+                    can_undo,
+                    can_redo,
+                    error: Some("no se pudo guardar".to_string()),
+                    ..base()
+                };
+                assert_eq!(
+                    title_text(&info),
+                    "Pixoko: no se pudo guardar",
+                    "{tool:?}, undo {can_undo}, redo {can_redo}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fila_7_window_title_y_status_line_leen_la_herramienta_del_campo() {
+        let sin = base();
+        assert_eq!(window_title(&sin), title_text(&sin));
+        assert_eq!(
+            window_title(&sin),
+            "Pixoko: 64×48 · ×8 · (3, 4) · color 3 #ff0000"
+        );
+        assert_eq!(status_line(&sin), "64×48 · ×8 · (3, 4) · color 3 #ff0000");
+
+        let con = TitleInfo {
+            tool: Some(Tool::Line),
+            ..base()
+        };
+        assert_eq!(window_title(&con), title_text(&con));
+        assert_eq!(
+            window_title(&con),
+            "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000"
+        );
+        assert_eq!(
+            status_line(&con),
+            "64×48 · ×8 · (3, 4) · línea · color 3 #ff0000"
+        );
+    }
+
+    #[test]
+    fn fila_8_app_title_info_siempre_pone_la_herramienta() {
+        let imagen = Image::new(64, 48, Mode::Rgba).expect("la imagen cabe");
+        let canvas = CanvasInfo {
+            zoom: zoom(8),
+            hover: Some((3, 4)),
+            image_rect: None,
+            error: None,
+        };
+        for (tool, etiqueta) in HERRAMIENTAS {
+            for image in [Some(&imagen), None] {
+                let info = app_title_info(
+                    tool,
+                    image,
+                    &canvas,
+                    Some("color 3 #ff0000".to_string()),
+                    false,
+                    false,
+                    None,
+                );
+                assert_eq!(
+                    info.tool,
+                    Some(tool),
+                    "{tool:?}, imagen {}",
+                    image.is_some()
+                );
+                let titulo = window_title(&info);
+                assert!(
+                    titulo.contains(etiqueta),
+                    "{tool:?}, imagen {}: {titulo:?}",
+                    image.is_some()
+                );
+            }
+        }
+        // Guarda de texto: `main.rs` no construye el literal `TitleInfo { .. }` por otro camino
+        // que `app_title_info`. Es frágil a propósito (mira el texto fuente, no el
+        // comportamiento): si falla, hay que mirar por qué antes de tocar la prueba.
+        assert!(!include_str!("main.rs").contains("TitleInfo {"));
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Propiedades
+    // -----------------------------------------------------------------------------------------
+
+    fn herramienta() -> impl Strategy<Value = Option<Tool>> {
+        prop::sample::select(vec![
+            None,
+            Some(Tool::Pencil),
+            Some(Tool::Line),
+            Some(Tool::Fill),
+            Some(Tool::Dropper),
+            Some(Tool::Eraser),
+        ])
+    }
+
+    /// Los zoom enteros posibles, y el de por defecto.
+    fn zoom_cualquiera() -> impl Strategy<Value = Zoom> {
+        let mut todos: Vec<Zoom> = (1..=64).filter_map(Zoom::from_int).collect();
+        todos.push(Zoom::default());
+        prop::sample::select(todos)
+    }
+
+    /// Textos de color como los de `slot_label`, o ninguno.
+    fn color_cualquiera() -> impl Strategy<Value = Option<String>> {
+        prop_oneof![
+            1 => Just(None),
+            3 => "color [0-9]{1,3} #[0-9a-f]{6}".prop_map(Some),
+            1 => "color [0-9]{1,3} índice [0-9]{1,3}".prop_map(Some),
+            1 => "color [0-9]{1,3} gris [0-9]{1,3}".prop_map(Some),
+            1 => "color [0-9]{1,3} transparente".prop_map(Some),
+        ]
+    }
+
+    /// Un error cualquiera (o ninguno), solo con letras minúsculas y espacios.
+    fn error_cualquiera() -> impl Strategy<Value = Option<String>> {
+        prop_oneof![
+            3 => Just(None),
+            1 => "[a-z]{1,8}( [a-z]{1,8}){0,3}".prop_map(Some),
+        ]
+    }
+
+    /// Oráculo de P1, escrito a mano con `format!`: la fórmula de antes del campo `tool`.
+    fn oraculo(info: &TitleInfo) -> String {
+        if let Some(error) = &info.error {
+            return format!("Pixoko: {error}");
+        }
+        let tamano = match info.size {
+            Some((w, h)) => format!("{w}×{h}"),
+            None => String::new(),
+        };
+        let cursor = match info.hover {
+            Some((x, y)) => format!(" · ({x}, {y})"),
+            None => String::new(),
+        };
+        let etiqueta = info.tool.map(|tool| {
+            HERRAMIENTAS
+                .iter()
+                .find(|(t, _)| *t == tool)
+                .map(|(_, etiqueta)| *etiqueta)
+                .expect("la herramienta está en la tabla")
+        });
+        let estado = match (etiqueta, &info.color) {
+            (Some(etiqueta), Some(color)) => format!(" · {etiqueta} · {color}"),
+            (Some(etiqueta), None) => format!(" · {etiqueta}"),
+            (None, Some(color)) => format!(" · {color}"),
+            (None, None) => String::new(),
+        };
+        let deshacer = if info.can_undo { " · deshacer" } else { "" };
+        let rehacer = if info.can_redo { " · rehacer" } else { "" };
+        format!(
+            "Pixoko: {tamano} · {}{cursor}{estado}{deshacer}{rehacer}",
+            info.zoom
+        )
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn propiedad_1_title_text_coincide_con_la_formula_anterior(
+            tool in herramienta(),
+            size in prop::option::of((0_u32..=16384, 0_u32..=16384)),
+            zoom in zoom_cualquiera(),
+            hover in prop::option::of((0_u32..=16384, 0_u32..=16384)),
+            color in color_cualquiera(),
+            can_undo in any::<bool>(),
+            can_redo in any::<bool>(),
+            error in error_cualquiera(),
+        ) {
+            let info = TitleInfo { size, zoom, hover, tool, color, can_undo, can_redo, error };
+            prop_assert_eq!(title_text(&info), oraculo(&info));
+        }
+
+        #[test]
+        fn propiedad_2_la_barra_solo_usa_caracteres_de_la_interfaz_con_las_cinco_herramientas(
+            tool in herramienta(),
+            size in prop::option::of((0_u32..=16384, 0_u32..=16384)),
+            zoom in zoom_cualquiera(),
+            hover in prop::option::of((0_u32..=16384, 0_u32..=16384)),
+            color in color_cualquiera(),
+            can_undo in any::<bool>(),
+            can_redo in any::<bool>(),
+            error in error_cualquiera(),
+        ) {
+            let info = TitleInfo { size, zoom, hover, tool, color, can_undo, can_redo, error };
+            let linea = status_line(&info);
+            prop_assert!(!linea.contains('\n') && !linea.contains('\r'), "{:?}", linea);
+            for c in linea.chars() {
+                prop_assert!(
+                    INTERFACE_CHARSET.contains(c),
+                    "{:?} (U+{:04X}) no está en INTERFACE_CHARSET: {:?}",
+                    c,
+                    c as u32,
+                    linea
+                );
+            }
+        }
+    }
+}
