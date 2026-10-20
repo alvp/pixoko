@@ -62,6 +62,8 @@ Versión en texto de la hoja de ruta, para quien lea el documento exportado a Ma
 | 7 · Estilo DPaint (opcional) | Ciclo de color, stencil, perspectiva, por caja negra | Casos del emulador en verde |
 | 8 · Automatización y lanzamiento | CLI, scripting, MCP, traducciones, instaladores | Primera versión: instaladores y licencias revisadas |
 
+**Interfaz estilo programa de referencia, entre el hito 2 y el 3.** Cuatro unidades fijan la base que usarán las herramientas del hito 4: el teclado como tabla de datos con las letras del original, los dos colores y el ratón (botón derecho, rueda, botón central, botones extra reasignables y gestos del trackpad), la caja de herramientas a la derecha con un panel fijo de opciones, y los iconos propios. Los menús del original se añaden con cada función. El diseño completo está en `docs/DISENO-INTERFAZ.md`, y el manual de referencia se queda fuera del repositorio.
+
 ## Repositorio y Claude Code
 
 Un solo repositorio con un `CLAUDE.md` corto, las reglas en `.claude/` y una unidad de trabajo pequeña por sesión.
