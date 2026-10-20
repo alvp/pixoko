@@ -185,6 +185,7 @@ impl Mundo {
     fn locks(&self) -> Locks {
         Locks {
             gesture: self.tools.busy() || self.session.busy(),
+            stroke: self.tools.busy() && !self.session.busy(),
             removal: self.session.ops.removal().is_some(),
             ..Locks::default()
         }
@@ -827,6 +828,7 @@ fn fila_4_close_licenses_da_licenses_false_con_cualquier_bloqueo_y_origen() {
     for bits in 0..32u8 {
         let locks = Locks {
             gesture: bits & 1 != 0,
+            stroke: false,
             dialog: bits & 2 != 0,
             text_focus: bits & 4 != 0,
             removal: bits & 8 != 0,
@@ -874,7 +876,8 @@ fn fila_5_undo_y_redo_con_historia_cambian_el_documento_y_piden_refresco() {
 }
 
 #[test]
-fn fila_5_con_gesto_dialogo_o_texto_todas_las_que_no_son_zoom_dan_blocked_sin_cambiar_nada() {
+fn fila_5_con_gesto_dialogo_o_texto_todas_las_que_no_son_zoom_dan_blocked_salvo_el_color_con_un_trazo()
+ {
     for action in todas_las_acciones()
         .into_iter()
         .filter(no_es_zoom)
@@ -885,6 +888,16 @@ fn fila_5_con_gesto_dialogo_o_texto_todas_las_que_no_son_zoom_dan_blocked_sin_ca
             for gesto in GESTOS {
                 let mut mundo = mundo_con_gesto(gesto);
                 let antes = mundo.foto();
+                // I.2a: con un trazo en curso el color se puede cambiar (afecta al trazo
+                // siguiente); con el deslizador o una muestra arrastrándose, no.
+                if matches!(action, AppAction::SelectColor(_)) && matches!(gesto, Gesto::Trazo) {
+                    assert_ne!(
+                        mundo.despacha(action, origin),
+                        Dispatched::Blocked,
+                        "{action:?} {origin:?} con {gesto:?}"
+                    );
+                    continue;
+                }
                 assert_eq!(
                     mundo.despacha(action, origin),
                     Dispatched::Blocked,
@@ -1018,6 +1031,7 @@ fn fila_5_dispatch_da_blocked_exactamente_cuando_is_blocked() {
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,
@@ -1046,6 +1060,7 @@ fn fila_5_enabled_es_falso_exactamente_donde_dispatch_da_blocked_con_origen_menu
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,
@@ -1357,6 +1372,7 @@ fn origen_cualquiera() -> impl Strategy<Value = Origin> {
 fn bloqueos_cualesquiera() -> impl Strategy<Value = Locks> {
     prop::array::uniform5(prop::bool::weighted(0.2)).prop_map(|b| Locks {
         gesture: b[0],
+        stroke: false,
         dialog: b[1],
         text_focus: b[2],
         removal: b[3],
@@ -1645,6 +1661,7 @@ fn fila_13_con_los_bloqueos_combinados_solo_cuentan_dialog_modal_y_text_focus() 
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,
@@ -1677,6 +1694,7 @@ fn fila_13_enabled_es_lo_contrario_de_blocked_con_el_origen_menu() {
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,
@@ -2361,6 +2379,7 @@ fn fila_9_con_las_32_combinaciones_de_bloqueos_solo_pasa_sin_ninguno() {
     for bits in 0..32u8 {
         let locks = Locks {
             gesture: bits & 1 != 0,
+            stroke: false,
             dialog: bits & 2 != 0,
             text_focus: bits & 4 != 0,
             removal: bits & 8 != 0,
@@ -2388,6 +2407,7 @@ fn fila_9_enabled_es_falso_exactamente_donde_dispatch_da_blocked_con_origen_menu
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,
@@ -2681,6 +2701,7 @@ fn fila_10_con_las_32_combinaciones_de_bloqueos_solo_pasa_sin_ninguno() {
     for bits in 0..32u8 {
         let locks = Locks {
             gesture: bits & 1 != 0,
+            stroke: false,
             dialog: bits & 2 != 0,
             text_focus: bits & 4 != 0,
             removal: bits & 8 != 0,
@@ -2708,6 +2729,7 @@ fn fila_10_enabled_es_falso_exactamente_donde_dispatch_da_blocked_con_origen_men
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,
@@ -3037,6 +3059,7 @@ fn fila_3_con_las_32_combinaciones_de_bloqueos_solo_pasa_sin_ninguno() {
     for bits in 0..32u8 {
         let locks = Locks {
             gesture: bits & 1 != 0,
+            stroke: false,
             dialog: bits & 2 != 0,
             text_focus: bits & 4 != 0,
             removal: bits & 8 != 0,
@@ -3064,6 +3087,7 @@ fn fila_3_enabled_de_background_color_es_falso_exactamente_donde_dispatch_da_blo
         for bits in 0..32u8 {
             let locks = Locks {
                 gesture: bits & 1 != 0,
+                stroke: false,
                 dialog: bits & 2 != 0,
                 text_focus: bits & 4 != 0,
                 removal: bits & 8 != 0,

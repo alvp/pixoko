@@ -90,7 +90,11 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
         ),
         (
             "Editar",
-            vec![("Deshacer", AppAction::Undo), ("Rehacer", AppAction::Redo)],
+            vec![
+                ("Deshacer", AppAction::Undo),
+                ("Rehacer", AppAction::Redo),
+                ("Borrar página", AppAction::ClearPage),
+            ],
         ),
         ("Imagen", vec![("Convertir modo…", AppAction::ConvertMode)]),
         (
@@ -128,9 +132,9 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 }
 
 #[test]
-fn fila_1_hay_trece_entradas_y_ninguna_accion_se_repite() {
+fn fila_1_hay_catorce_entradas_y_ninguna_accion_se_repite() {
     let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 13);
+    assert_eq!(acciones.len(), 14);
     for (i, a) in acciones.iter().enumerate() {
         assert!(
             !acciones[i + 1..].contains(a),
@@ -141,6 +145,8 @@ fn fila_1_hay_trece_entradas_y_ninguna_accion_se_repite() {
     // `Rehacer`; las otras 11 siguen siendo las de la 17.
     let mut esperado = vec![AppAction::NewImage];
     esperado.extend(&ACCIONES_DE_LA_TABLA[..6]);
+    // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
+    esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
     esperado.extend(&ACCIONES_DE_LA_TABLA[6..]);
     assert_eq!(acciones, esperado);
@@ -168,7 +174,7 @@ fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 13]) -> Vec<Option<String>> {
+fn algunos(textos: [Option<&str>; 14]) -> Vec<Option<String>> {
     textos.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -184,6 +190,7 @@ fn fila_1_atajos_en_linux() {
             Some("Ctrl+Q"),
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
+            Some("K"),
             None,
             Some(">"),
             Some("<"),
@@ -206,6 +213,7 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             None,
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
+            Some("K"),
             None,
             Some(">"),
             Some("<"),
@@ -229,6 +237,7 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             None,
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
+            Some("K"),
             None,
             Some(">"),
             Some("<"),
@@ -571,6 +580,7 @@ fn estado_de(
         tool: HERRAMIENTAS[usize::from(tool) % 5],
         locks: Locks {
             gesture: locks[0],
+            stroke: false,
             dialog: locks[1],
             text_focus: locks[2],
             removal: locks[3],
@@ -622,6 +632,7 @@ proptest! {
             for bits in 0..32u8 {
                 let locks = Locks {
                     gesture: bits & 1 != 0,
+                    stroke: false,
                     dialog: bits & 2 != 0,
                     text_focus: bits & 4 != 0,
                     removal: bits & 8 != 0,

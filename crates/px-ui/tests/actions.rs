@@ -80,6 +80,7 @@ fn es_zoom(action: AppAction) -> bool {
 fn bloqueos(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
+        stroke: false,
         dialog: bits & 2 != 0,
         text_focus: bits & 4 != 0,
         removal: bits & 8 != 0,
@@ -222,6 +223,7 @@ fn fila_5_sin_bloqueos_nada_esta_bloqueado() {
 fn fila_5_regla_1_close_licenses_nunca_se_bloquea() {
     let todo = Locks {
         gesture: true,
+        stroke: false,
         dialog: true,
         text_focus: true,
         removal: true,
@@ -476,8 +478,15 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
         Key::Plus | Key::Equals => return Some(AppAction::ZoomIn),
         Key::Minus => return Some(AppAction::ZoomOut),
         Key::Home => return Some(AppAction::ZoomFit),
+        // I.2a: con `Mayús`, `Re Pág` y `Av Pág` son el color de fondo; sin ella, el primer plano.
+        Key::PageDown if m.shift => return Some(AppAction::BackgroundNext),
+        Key::PageUp if m.shift => return Some(AppAction::BackgroundPrev),
         Key::PageDown => return Some(AppAction::ColorNext),
         Key::PageUp => return Some(AppAction::ColorPrev),
+        // I.2a: `K` (con `Mayús` y nada más) borra la página.
+        Key::K if m.shift && !m.alt && !m.ctrl && !m.command && !m.mac_cmd => {
+            return Some(AppAction::ClearPage);
+        }
         _ => {}
     }
     if !m.is_none() {
@@ -492,6 +501,8 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
         Key::N => Some(AppAction::CenterOnCursor),
         Key::CloseBracket => Some(AppAction::ColorNext),
         Key::OpenBracket => Some(AppAction::ColorPrev),
+        Key::CloseCurlyBracket => Some(AppAction::BackgroundNext),
+        Key::OpenCurlyBracket => Some(AppAction::BackgroundPrev),
         _ => None,
     }
 }
@@ -720,9 +731,9 @@ fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
             }
         }
     }
-    // 11 entradas con atajo en Linux y 10 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
-    // `Salir`; con `Nueva imagen…` de la unidad 19): 11 + 10 + 10 = 31 pares.
-    assert_eq!(con_atajo, 11 + 10 + 10);
+    // 12 entradas con atajo en Linux y 11 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
+    // `Salir`; con `Nueva imagen…` de la unidad 19 y `Borrar página` de I.2a): 12 + 11 + 11 = 34.
+    assert_eq!(con_atajo, 12 + 11 + 11);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1050,16 +1050,17 @@ fn show_un_clic_en_una_muestra_que_no_existe_no_elige() {
 
 #[test]
 fn show_una_fila_que_no_se_ve_no_se_elige() {
-    // Pantalla de 110 pt a ppp 1: el panel mide 90 px y solo se ven 3 filas.
+    // Pantalla de 146 pt a ppp 1: el panel mide 126 px y solo se ven 3 filas (la banda del
+    // indicador, de I.2a, ocupa 36 u más que antes).
     let image = imagen_indexada(256);
-    let mut banco = Banco::con_imagen(1.0, vec2(800.0, 110.0), &image);
+    let mut banco = Banco::con_imagen(1.0, vec2(800.0, 146.0), &image);
     let n = banco.n();
-    let panel_h_px = 110 - i64::from(bar_height_px(n));
+    let panel_h_px = 146 - i64::from(bar_height_px(n));
     assert_eq!(palette_grid::visible_rows(panel_h_px, n), 3);
     let choice = ColorChoice::Entry(5);
     banco.reposo(&image);
 
-    // La fila 3 (la cuarta) empieza dentro del panel (a 83 px) pero no se ve.
+    // La fila 3 (la cuarta) empieza dentro del panel (a 119 px) pero no se ve.
     let (x, y) = centro_de_muestra_px(n, 3 * COLUMNS, 0);
     assert!(y < panel_h_px as f32, "la fila oculta cae dentro del panel");
     let (pulsado, _) = clic(

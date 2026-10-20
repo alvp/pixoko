@@ -50,13 +50,13 @@ fn las_constantes_valen_lo_que_dice_la_spec() {
     assert_eq!(CHECK_U, 5);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(GRID_X_U, 4);
-    assert_eq!(GRID_Y_U, 41);
+    assert_eq!(GRID_Y_U, 77);
     assert_eq!(TEXT_X_U, 4);
     assert_eq!(TEXT_WIDTH_U, 225);
     assert_eq!(LINE_H_U, 14);
-    assert_eq!(LINE1_Y_U, 4);
-    assert_eq!(LINE2_Y_U, 18);
-    assert_eq!(SEPARATOR_Y_U, 36);
+    assert_eq!(LINE1_Y_U, 40);
+    assert_eq!(LINE2_Y_U, 54);
+    assert_eq!(SEPARATOR_Y_U, 72);
     assert_eq!(TRACK_X_U, 230);
     assert_eq!(TRACK_W_U, 2);
     assert_eq!(RIGHT_LINE_X_U, 232);
@@ -106,7 +106,7 @@ fn edges_u_contiene_los_bordes_de_la_maqueta() {
         );
     }
     // Y con los valores literales de la spec.
-    for esperado in [233, 4, 41, 36] {
+    for esperado in [233, 4, 77, 72] {
         assert!(bordes.contains(&esperado), "falta {esperado}");
     }
 }
@@ -300,20 +300,20 @@ fn fila_3_visible_rows() {
     let n1 = [
         (0, 0usize),
         (-5, 0),
-        (54, 0),
-        (55, 1),
-        (68, 1),
-        (69, 2),
-        (264, 15),
-        (265, 16),
+        (90, 0),
+        (91, 1),
+        (104, 1),
+        (105, 2),
+        (300, 15),
+        (301, 16),
     ];
     for (alto, esperado) in n1 {
         assert_eq!(visible_rows(alto, 1), esperado, "n=1, alto {alto}");
     }
-    for (alto, esperado) in [(109, 0usize), (110, 1)] {
+    for (alto, esperado) in [(181, 0usize), (182, 1)] {
         assert_eq!(visible_rows(alto, 2), esperado, "n=2, alto {alto}");
     }
-    for (alto, esperado) in [(164, 0usize), (165, 1)] {
+    for (alto, esperado) in [(272, 0usize), (273, 1)] {
         assert_eq!(visible_rows(alto, 3), esperado, "n=3, alto {alto}");
     }
 }

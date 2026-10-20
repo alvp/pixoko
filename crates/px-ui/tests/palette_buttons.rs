@@ -872,15 +872,15 @@ fn fila_2_con_el_panel_desplazado_los_botones_se_pintan_y_se_pulsan_con_y_menos_
         );
         let (x, y) = banco.sobre_el_texto();
         let max = banco.max_offset();
-        assert!(max >= 97 * n, "ppp {ppp}: hay recorrido ({max})");
-        for offset in [90 * n, max] {
+        assert!(max >= 133 * n, "ppp {ppp}: hay recorrido ({max})");
+        for offset in [126 * n, max] {
             banco.rueda_en(x, y, -100_000 * n);
             banco.rueda(offset);
             assert_eq!(banco.view.offset_px, offset, "ppp {ppp}");
             let contexto = format!("ppp {ppp}, offset {offset}");
             let f = banco.reposo();
-            assert_eq!(banco.geo().top_px, 55 * n - offset, "{contexto}");
-            // Con 90·n el botón de abajo asoma 3·n por debajo del panel: se pinta (egui no
+            assert_eq!(banco.geo().top_px, 91 * n - offset, "{contexto}");
+            // Con 126·n el botón de abajo asoma 3·n por debajo del panel: se pinta (egui no
             // descarta formas) y se recorta al panel, lo que comprueba la línea siguiente.
             comprueba_botones(&f, &banco, &NORMALES, &contexto);
             comprueba_dentro_del_panel(&f, banco.rect_panel(), &contexto);
@@ -926,10 +926,10 @@ fn fila_2_lo_que_cae_fuera_del_panel_no_se_golpea_con_el_panel_desplazado() {
     for ppp in PPPS {
         let n = (ppp + 0.5).floor().max(1.0) as i64;
         let mut banco = Banco::con_alto_de_panel(ppp, 200 * n, imagen_f(), ColorChoice::Entry(1));
-        // Con 48·n de desplazamiento, `Añadir` va de 193·n a 209·n y el panel acaba en 200·n.
+        // Con 84·n de desplazamiento, `Añadir` va de 193·n a 209·n y el panel acaba en 200·n.
         let (x, y) = banco.sobre_el_texto();
-        banco.rueda_en(x, y, 48 * n);
-        assert_eq!(banco.view.offset_px, 48 * n, "ppp {ppp}");
+        banco.rueda_en(x, y, 84 * n);
+        assert_eq!(banco.view.offset_px, 84 * n, "ppp {ppp}");
         let (x, _) = banco.centro_de_boton(PaletteButton::Add);
         let alto = banco.panel_h_px();
         assert_eq!(banco.geo().top_px, 7 * n);
@@ -1120,7 +1120,7 @@ fn fila_2_todo_lo_pintado_con_botones_y_estados_queda_dentro_del_panel() {
         let (x, y) = banco.sobre_el_texto();
         banco.mueve(x, y);
         let max = banco.max_offset();
-        for objetivo in [0, n, 48 * n, max] {
+        for objetivo in [0, n, 84 * n, max] {
             banco.rueda(-100_000 * n);
             banco.rueda(objetivo);
             let contexto = format!("ppp {ppp}, offset {}", banco.view.offset_px);
@@ -2534,7 +2534,7 @@ mod fijar_transparente {
             );
             let contexto = format!("ppp {ppp}");
             assert!(!banco.disposicion().scrolling, "{contexto}");
-            assert_eq!(banco.panel_h_px(), 315 * n, "{contexto}");
+            assert_eq!(banco.panel_h_px(), 351 * n, "{contexto}");
             let f = banco.reposo();
             comprueba_boton(&f, &banco, FIJAR, &contexto);
             comprueba_botones(&f, &banco, &NORMALES, &contexto);

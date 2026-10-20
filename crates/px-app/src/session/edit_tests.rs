@@ -672,8 +672,12 @@ fn fila_15_ranura_9_y_gris_por_modo() {
     assert!(!session.document.can_undo());
     assert!(!session.modified());
 
-    // Cada modo tiene su tabla: lo de RGBA no se movió con lo de Gray.
-    assert_eq!(session.slots.get(Mode::Rgba).get(9), Some(BLACK));
+    // Cada modo tiene su tabla: lo de RGBA no se movió con lo de Gray. Abrir el gris restauró la
+    // ranura 9 de RGBA (I.2a: es el fondo por defecto, transparente).
+    assert_eq!(
+        session.slots.get(Mode::Rgba).get(9),
+        Some(Rgba::TRANSPARENT)
+    );
     assert_eq!(
         session.slots.get(Mode::Gray).get(5),
         Some(Rgba::opaque(200, 200, 200))
@@ -712,9 +716,11 @@ fn assert_bank_as_left(bank: &SlotBank, context: &str) {
         Some(YELLOW),
         "{context}: RGBA 3"
     );
+    // La ranura 9 editada se restaura al abrir otro fichero (I.2a, decisión 9): la única que lo
+    // hace; las demás se conservan.
     assert_eq!(
         bank.get(Mode::Rgba).get(9),
-        Some(BLACK),
+        Some(Rgba::TRANSPARENT),
         "{context}: RGBA 9"
     );
     assert_eq!(
@@ -754,7 +760,11 @@ fn fila_15_el_banco_se_conserva_al_abrir_otros_ficheros() {
     select(&mut session, ColorChoice::Slot(3));
     assert_eq!(session.active_pixel(), Some(Pixel::Rgba(YELLOW)));
     select(&mut session, ColorChoice::Slot(9));
-    assert_eq!(session.active_pixel(), Some(Pixel::Rgba(BLACK)));
+    assert_eq!(
+        session.active_pixel(),
+        Some(Pixel::Rgba(Rgba::TRANSPARENT)),
+        "la 9 vuelve a ser la transparente"
+    );
 }
 
 #[test]

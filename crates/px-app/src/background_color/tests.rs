@@ -110,6 +110,7 @@ fn bloqueos_de_uno_en_uno() -> [(&'static str, Locks); 5] {
 fn bloqueos(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
+        stroke: false,
         dialog: bits & 2 != 0,
         text_focus: bits & 4 != 0,
         removal: bits & 8 != 0,

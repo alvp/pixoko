@@ -722,15 +722,21 @@ fn fila_4_las_teclas_con_nombre_valen_siempre_por_la_tecla_y_con_cualquier_modif
             &[tecla(Key::Home, modifiers)],
             &[Some(AppAction::ZoomFit)],
         );
+        // I.2a: con `Mayús` son el color de fondo; sin ella, el primer plano.
+        let (anterior, siguiente) = if modifiers.shift {
+            (AppAction::BackgroundPrev, AppAction::BackgroundNext)
+        } else {
+            (AppAction::ColorPrev, AppAction::ColorNext)
+        };
         assert_acciones(
             "Re Pág",
             &[tecla(Key::PageUp, modifiers)],
-            &[Some(AppAction::ColorPrev)],
+            &[Some(anterior)],
         );
         assert_acciones(
             "Av Pág",
             &[tecla(Key::PageDown, modifiers)],
-            &[Some(AppAction::ColorNext)],
+            &[Some(siguiente)],
         );
     }
     // Con `command` no hay acción.

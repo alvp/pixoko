@@ -181,6 +181,7 @@ impl Mundo {
     fn locks(&self) -> Locks {
         Locks {
             gesture: self.tools.busy() || self.session.busy(),
+            stroke: self.tools.busy() && !self.session.busy(),
             removal: self.session.ops.removal().is_some(),
             ..Locks::default()
         }
@@ -254,6 +255,7 @@ fn locks_con(f: impl FnOnce(&mut Locks)) -> Locks {
 fn bloqueos(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
+        stroke: false,
         dialog: bits & 2 != 0,
         text_focus: bits & 4 != 0,
         removal: bits & 8 != 0,
@@ -693,9 +695,27 @@ fn fila_8_color_next_y_color_prev_se_bloquean_con_cada_bloqueo_y_origen_como_sel
     }
 }
 
+/// Antes de I.2a (decisión 8 de I.1) el color se bloqueaba con cualquier gesto; ahora un trazo de
+/// una herramienta no lo bloquea (el trazo conserva el color con el que empezó) y el deslizador del
+/// editor y el arrastre de una muestra siguen bloqueándolo.
 #[test]
-fn fila_8_color_next_y_color_prev_no_hacen_nada_con_un_gesto_de_verdad() {
-    for gesto in GESTOS {
+fn fila_8_color_next_y_color_prev_con_un_trazo_en_curso_siguen_permitidos() {
+    for action in [AppAction::ColorNext, AppAction::ColorPrev] {
+        let mut mundo = mundo_con_gesto(Gesto::Trazo);
+        let antes = mundo.foto();
+        assert_eq!(
+            mundo.despacha(action, Origin::Key),
+            hecho(false),
+            "{action:?}"
+        );
+        assert_ne!(mundo.session.choice, antes.choice, "{action:?}");
+        assert!(mundo.tools.busy(), "el trazo sigue en curso");
+    }
+}
+
+#[test]
+fn fila_8_color_next_y_color_prev_no_hacen_nada_con_el_deslizador_o_una_muestra_arrastrandose() {
+    for gesto in [Gesto::Deslizador, Gesto::Muestra] {
         for action in [AppAction::ColorNext, AppAction::ColorPrev] {
             let mut mundo = mundo_con_gesto(gesto);
             let antes = mundo.foto();
@@ -847,7 +867,7 @@ fn fila_8_con_un_dialogo_de_archivo_toda_fila_de_la_tabla_da_blocked_tambien_ini
     let filas = filas_activas();
     assert_eq!(
         filas.len(),
-        25 + 24 + 24,
+        30 + 29 + 29,
         "filas activas en las tres plataformas"
     );
     for (action, platform) in filas {

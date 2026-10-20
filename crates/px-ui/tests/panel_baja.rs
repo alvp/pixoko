@@ -647,13 +647,13 @@ fn comprueba_barra(f: &Fotograma, banco: &Banco, contexto: &str) {
 fn fila_3_el_editor_se_ve_siempre_y_la_rejilla_tiene_una_fila() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for alto in [241 * n, 240 * n, 200 * n, 100 * n] {
+        for alto in [277 * n, 276 * n, 200 * n, 100 * n] {
             let contexto = format!("ppp {ppp}, alto {alto}");
             let mut banco =
                 Banco::con_alto_de_panel(ppp, alto, imagen_indexada_256(), ColorChoice::Entry(5));
             let f = banco.reposo();
             let geo = banco.geo();
-            assert_eq!(geo.top_px, 55 * n, "{contexto}: top_px con offset 0");
+            assert_eq!(geo.top_px, 91 * n, "{contexto}: top_px con offset 0");
             // El editor se pinta, en su sitio.
             let cabecera = f
                 .texto_pintado("editar índice 5")
@@ -679,11 +679,11 @@ fn fila_3_el_editor_se_ve_siempre_y_la_rejilla_tiene_una_fila() {
 }
 
 #[test]
-fn fila_3_de_315n_a_314n_el_editor_y_la_rejilla_no_saltan() {
+fn fila_3_de_351n_a_350n_el_editor_y_la_rejilla_no_saltan() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
         let mut banco =
-            Banco::con_alto_de_panel(ppp, 315 * n, imagen_indexada_256(), ColorChoice::Entry(5));
+            Banco::con_alto_de_panel(ppp, 351 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let antes = banco.reposo();
         let cabecera_antes = antes
             .texto_pintado("editar índice 5")
@@ -691,9 +691,9 @@ fn fila_3_de_315n_a_314n_el_editor_y_la_rejilla_no_saltan() {
             .pos;
         assert!(!banco.disposicion().scrolling);
 
-        banco.alto_de_panel(314 * n);
+        banco.alto_de_panel(350 * n);
         let despues = banco.reposo();
-        assert!(banco.disposicion().scrolling, "ppp {ppp}: 314n desplaza");
+        assert!(banco.disposicion().scrolling, "ppp {ppp}: 350n desplaza");
         assert_eq!(banco.view.offset_px, 0);
         let cabecera_despues = despues
             .texto_pintado("editar índice 5")
@@ -712,7 +712,7 @@ fn fila_3_de_315n_a_314n_el_editor_y_la_rejilla_no_saltan() {
 fn fila_3_con_offset_maximo_el_editor_queda_anclado_al_fondo() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for alto in [240 * n, 200 * n, 100 * n] {
+        for alto in [276 * n, 200 * n, 100 * n] {
             let mut banco =
                 Banco::con_alto_de_panel(ppp, alto, imagen_indexada_256(), ColorChoice::Entry(5));
             let (x, y) = banco.sobre_el_editor();
@@ -774,7 +774,7 @@ fn fila_4_offset_px_siempre_es_multiplo_de_n_y_se_recorta_a_cero_y_al_maximo() {
         let mut banco =
             Banco::con_alto_de_panel(ppp, 200 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let max = banco.max_offset();
-        assert_eq!(max, 115 * n);
+        assert_eq!(max, 151 * n);
         let (x, y) = banco.sobre_el_texto();
         banco.mueve(x, y);
         // Subir con el desplazamiento a 0: se queda en 0.
@@ -864,24 +864,24 @@ fn fila_4_al_agrandar_hasta_el_bloque_offset_px_es_0_en_el_mismo_fotograma() {
             Banco::con_alto_de_panel(ppp, 200 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let (x, y) = banco.sobre_el_texto();
         banco.rueda_en(x, y, 100_000 * n);
-        assert_eq!(banco.view.offset_px, 115 * n);
+        assert_eq!(banco.view.offset_px, 151 * n);
 
         // Agrandar un poco: el máximo baja y el desplazamiento se recorta en el mismo fotograma.
         banco.alto_de_panel(220 * n);
         banco.reposo();
-        assert_eq!(banco.view.offset_px, 95 * n, "ppp {ppp}: 220n");
-        assert_eq!(banco.max_offset(), 95 * n);
+        assert_eq!(banco.view.offset_px, 131 * n, "ppp {ppp}: 220n");
+        assert_eq!(banco.max_offset(), 131 * n);
 
         // Hasta el bloque: 0 en el mismo fotograma, sin pista y con el editor en su sitio.
-        banco.alto_de_panel(315 * n);
+        banco.alto_de_panel(351 * n);
         let f = banco.reposo();
-        assert_eq!(banco.view.offset_px, 0, "ppp {ppp}: 315n");
+        assert_eq!(banco.view.offset_px, 0, "ppp {ppp}: 351n");
         assert!(!banco.disposicion().scrolling);
-        comprueba_barra(&f, &banco, &format!("ppp {ppp}, 315n"));
+        comprueba_barra(&f, &banco, &format!("ppp {ppp}, 351n"));
         let cabecera = f.texto_pintado("editar índice 5").expect("cabecera");
         assert!(cerca(
             cabecera.pos.y * ppp,
-            (55 * n + HEADER_Y_U * n) as f32
+            (91 * n + HEADER_Y_U * n) as f32
         ));
 
         // Y mucho más alto: el diseño normal, sin desplazamiento posible.
@@ -898,9 +898,9 @@ fn fila_4_la_barra_solo_se_pinta_con_desplazamiento_y_la_rejilla_no_pinta_la_suy
         let n = i64::from(text_scale(ppp));
         for (alto, desplaza) in [
             (700 * n, false),
-            (318 * n, false),
-            (315 * n, false),
-            (314 * n, true),
+            (354 * n, false),
+            (351 * n, false),
+            (350 * n, true),
             (200 * n, true),
             (100 * n, true),
         ] {
@@ -938,8 +938,8 @@ fn fila_5_un_clic_en_un_deslizador_halla_el_control_con_y_menos_offset() {
         let n = i64::from(text_scale(ppp));
         let mut banco = Banco::con_alto_de_panel(ppp, 200 * n, imagen_f(), ColorChoice::Entry(1));
         let (x, y) = banco.sobre_el_texto();
-        banco.rueda_en(x, y, 10 * n);
-        assert_eq!(banco.view.offset_px, 10 * n);
+        banco.rueda_en(x, y, 46 * n);
+        assert_eq!(banco.view.offset_px, 46 * n);
         let geo = banco.geo();
         assert_eq!(geo.top_px, 45 * n);
 
@@ -968,7 +968,7 @@ fn fila_5_un_clic_en_un_deslizador_halla_el_control_con_y_menos_offset() {
             })
         );
 
-        // El sitio donde estaría R sin desplazar (y = 84·n) es ahora la fila de G.
+        // El sitio donde estaría R con 36·n menos de desplazamiento (y = 84·n) es ahora la fila de G.
         let y_sin_desplazar = (55 + 22 + ROW_H_U / 2) * n;
         banco.mueve(x_a, y_sin_desplazar);
         banco.pulsa(x_a, y_sin_desplazar);
@@ -987,9 +987,9 @@ fn fila_5_un_clic_en_el_campo_con_offset_le_da_el_foco() {
         let n = i64::from(text_scale(ppp));
         let mut banco = Banco::con_alto_de_panel(ppp, 200 * n, imagen_f(), ColorChoice::Entry(1));
         let (x, y) = banco.sobre_el_texto();
-        banco.rueda_en(x, y, 10 * n);
-        assert_eq!(banco.view.offset_px, 10 * n);
-        // El campo está en la parte visible (y = 55·n − 10·n + 132·n + 9·n = 186·n < 200·n).
+        banco.rueda_en(x, y, 46 * n);
+        assert_eq!(banco.view.offset_px, 46 * n);
+        // El campo está en la parte visible (y = 91·n − 46·n + 132·n + 9·n = 186·n < 200·n).
         let (x, y) = banco.geo().campo();
         assert!(y < banco.panel_h_px());
         banco.clic(x, y);
@@ -1013,14 +1013,14 @@ fn fila_5_un_clic_en_el_campo_con_offset_le_da_el_foco() {
 fn fila_5_fuera_del_rectangulo_del_panel_no_se_golpea_nada() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // Panel de 100·n y sin desplazar: la fila de B (105..119·n) y el campo (187..205·n)
-        // quedan por debajo del panel, bajo la barra de estado (100..120·n).
-        let mut banco = Banco::con_alto_de_panel(ppp, 100 * n, imagen_f(), ColorChoice::Entry(1));
+        // Panel de 136·n y sin desplazar: la fila de B (141..155·n) y el campo (223..241·n)
+        // quedan por debajo del panel, bajo la barra de estado (136..156·n).
+        let mut banco = Banco::con_alto_de_panel(ppp, 136 * n, imagen_f(), ColorChoice::Entry(1));
         let geo = banco.geo();
-        assert_eq!(geo.top_px, 55 * n);
+        assert_eq!(geo.top_px, 91 * n);
         let x = geo.x_de_valor(128, 255);
         let y_azul = geo.y_fila(Control::Blue);
-        assert!(y_azul >= 100 * n, "B está fuera del panel");
+        assert!(y_azul >= 136 * n, "B está fuera del panel");
         banco.mueve(x, y_azul);
         banco.pulsa(x, y_azul);
         assert!(
@@ -1030,8 +1030,8 @@ fn fila_5_fuera_del_rectangulo_del_panel_no_se_golpea_nada() {
         banco.suelta(x, y_azul);
         assert!(banco.commits().is_empty());
 
-        // Contraste: la fila de G, dentro del panel (91..105·n, y = 98·n), sí.
-        let y_verde = 98 * n;
+        // Contraste: la fila de G, dentro del panel (127..141·n, y = 134·n), sí.
+        let y_verde = 134 * n;
         banco.mueve(x, y_verde);
         banco.pulsa(x, y_verde);
         assert_eq!(banco.editor.dragging_control(), Some(Control::Green));
@@ -1043,21 +1043,21 @@ fn fila_5_fuera_del_rectangulo_del_panel_no_se_golpea_nada() {
 fn fila_5_un_clic_en_la_parte_del_campo_que_cae_fuera_del_panel_no_lo_enfoca() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // 190·n sin desplazar: el campo va de 187 a 205·n y el panel acaba en 190·n. Egui
+        // 226·n sin desplazar: el campo va de 223 a 241·n y el panel acaba en 226·n. Egui
         // acepta clics hasta 5 puntos fuera de un widget (`interact_radius`): se pulsa a más de
-        // eso (en 200·n), sobre la barra de estado.
-        let mut banco = Banco::con_alto_de_panel(ppp, 190 * n, imagen_f(), ColorChoice::Entry(1));
+        // eso (en 236·n), sobre la barra de estado.
+        let mut banco = Banco::con_alto_de_panel(ppp, 226 * n, imagen_f(), ColorChoice::Entry(1));
         let geo = banco.geo();
-        assert_eq!(geo.top_px, 55 * n);
+        assert_eq!(geo.top_px, 91 * n);
         let (x, _) = geo.campo();
-        banco.clic(x, 200 * n);
+        banco.clic(x, 236 * n);
         banco.reposo();
         assert!(
             !banco.quiere_teclado(),
             "ppp {ppp}: la parte del campo bajo el panel no recibe el clic"
         );
-        // La parte de dentro (y = 188·n, de 187 a 190·n) sí.
-        banco.clic(x, 188 * n);
+        // La parte de dentro (y = 224·n, de 223 a 226·n) sí.
+        banco.clic(x, 224 * n);
         banco.reposo();
         assert!(banco.quiere_teclado(), "ppp {ppp}: la de dentro sí");
     }
@@ -1067,7 +1067,7 @@ fn fila_5_un_clic_en_la_parte_del_campo_que_cae_fuera_del_panel_no_lo_enfoca() {
 fn fila_5_todo_lo_pintado_queda_dentro_del_rectangulo_del_panel() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for alto in [300 * n, 241 * n, 240 * n, 200 * n, 100 * n] {
+        for alto in [300 * n, 277 * n, 276 * n, 200 * n, 100 * n] {
             let mut banco =
                 Banco::con_alto_de_panel(ppp, alto, imagen_indexada_256(), ColorChoice::Entry(5));
             let panel = banco.rect_panel();
@@ -1095,7 +1095,7 @@ fn fila_5_todo_lo_pintado_queda_dentro_del_rectangulo_del_panel() {
 fn fila_5_el_campo_enfocado_y_el_arrastre_tambien_se_recortan_al_panel() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = Banco::con_alto_de_panel(ppp, 200 * n, imagen_f(), ColorChoice::Entry(1));
+        let mut banco = Banco::con_alto_de_panel(ppp, 236 * n, imagen_f(), ColorChoice::Entry(1));
         let panel = banco.rect_panel();
         banco.enfoca_campo();
         banco.escribe("#ff00ff");
@@ -1127,7 +1127,7 @@ fn fila_5_bajar_la_ventana_no_cancela_un_arrastre() {
         assert!(provisional.is_some());
 
         // La ventana baja hasta el bloque, por debajo (se desplaza) y hasta el mínimo.
-        for alto in [241 * n, 240 * n, 200 * n, 100 * n] {
+        for alto in [277 * n, 276 * n, 200 * n, 100 * n] {
             banco.alto_de_panel(alto);
             let f = banco.reposo();
             assert!(
@@ -1164,22 +1164,26 @@ fn fila_5_bajar_la_ventana_no_cancela_un_arrastre() {
 fn fila_6_con_alto_200n_no_hay_aviso_de_ventana_baja_y_el_editor_pinta_su_cabecera() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for alto in [200 * n, 100 * n, 240 * n] {
+        for alto in [200 * n, 100 * n, 276 * n] {
             let mut banco = Banco::con_alto_de_panel(ppp, alto, imagen_f(), ColorChoice::Entry(1));
             for _ in 0..3 {
                 let f = banco.reposo();
-                // `PanelOutput` solo tiene `choice`, `commit`, `notice` y, desde 11d, `op` y
-                // `op_unused`: si recupera `editor_hidden` (u otro campo) esta desestructuración
-                // deja de compilar.
+                // `PanelOutput` solo tiene `choice`, `commit`, `notice`, desde 11d `op` y
+                // `op_unused` y, desde I.2a, `background`, `indicator` y `editing`: si recupera
+                // `editor_hidden` (u otro campo) esta desestructuración deja de compilar.
                 let PanelOutput {
                     choice,
                     commit,
                     notice,
                     op,
                     op_unused,
+                    background,
+                    indicator,
+                    editing,
                 } = f.salida.clone();
                 assert_eq!((choice, commit, notice), (None, None, None));
                 assert_eq!((op, op_unused), (None, false));
+                assert_eq!((background, indicator, editing), (None, None, None));
                 assert!(
                     f.pinta("editar índice 1"),
                     "ppp {ppp}, alto {alto}: el editor pinta su cabecera"
@@ -1201,7 +1205,7 @@ fn fila_6_con_alto_200n_no_hay_aviso_de_ventana_baja_y_el_editor_pinta_su_cabece
 fn fila_6_ni_al_bajar_ni_al_subir_la_ventana_hay_avisos() {
     let ppp = 1.0;
     let mut banco = banco_f(ppp, 1);
-    for alto in [300, 241, 240, 100, 241, 700] {
+    for alto in [300, 277, 276, 100, 277, 700] {
         banco.alto_de_panel(alto);
         let f = banco.reposo();
         assert_eq!(f.salida.notice, None, "alto {alto}");
@@ -1542,11 +1546,11 @@ fn reducir_y_agrandar_la_ventana_no_pierde_el_texto_pendiente() {
         banco.historial.clear();
         for alto in [
             300 * n,
-            241 * n,
+            277 * n,
             200 * n,
             100 * n,
             200 * n,
-            241 * n,
+            277 * n,
             500 * n,
         ] {
             banco.alto_de_panel(alto);
@@ -1608,8 +1612,8 @@ fn banco_256(ppp: f32, panel_h_px: i64, entrada: u8, calentar: bool) -> Banco {
 fn fila_11_el_primer_fotograma_no_muestra_la_elegida() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // (400 + 74)·n: 12 filas visibles de 16 y la elegida (200 → fila 12) fuera de la vista.
-        let mut banco = banco_256(ppp, (400 + BOTONES_U) * n, 200, false);
+        // (436 + 74)·n: 12 filas visibles de 16 y la elegida (200 → fila 12) fuera de la vista.
+        let mut banco = banco_256(ppp, (436 + BOTONES_U) * n, 200, false);
         assert_eq!(banco.view, PanelView::default());
         banco.reposo();
         assert_eq!(banco.view.last_visible, Some(12), "ppp {ppp}");
@@ -1631,12 +1635,12 @@ fn fila_11_el_primer_fotograma_no_muestra_la_elegida() {
 fn fila_11_cambiar_el_numero_de_filas_visibles_muestra_la_elegida_con_el_minimo_movimiento() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, (400 + BOTONES_U) * n, 200, true);
+        let mut banco = banco_256(ppp, (436 + BOTONES_U) * n, 200, true);
         assert_eq!(banco.scroll.first_row, 0);
         assert_eq!(banco.view.last_visible, Some(12));
 
-        // (300 + 74)·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
-        banco.alto_de_panel((300 + BOTONES_U) * n);
+        // (336 + 74)·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
+        banco.alto_de_panel((336 + BOTONES_U) * n);
         banco.reposo();
         assert_eq!(banco.view.last_visible, Some(5), "ppp {ppp}");
         assert_eq!(banco.scroll.first_row, 8, "ppp {ppp}: el mínimo movimiento");
@@ -1647,7 +1651,7 @@ fn fila_11_cambiar_el_numero_de_filas_visibles_muestra_la_elegida_con_el_minimo_
         assert_eq!(banco.scroll.first_row, 8);
 
         // Agrandar: 12 filas visibles; la elegida sigue a la vista.
-        banco.alto_de_panel((400 + BOTONES_U) * n);
+        banco.alto_de_panel((436 + BOTONES_U) * n);
         banco.reposo();
         assert_eq!(banco.view.last_visible, Some(12));
         assert!(elegida_visible(&banco, 12), "ppp {ppp}");
@@ -1680,7 +1684,7 @@ fn fila_11_al_bajar_hasta_el_respaldo_la_elegida_sigue_a_la_vista() {
 fn fila_11_view_reveal_muestra_la_elegida_y_el_panel_lo_apaga() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, (400 + BOTONES_U) * n, 200, true);
+        let mut banco = banco_256(ppp, (436 + BOTONES_U) * n, 200, true);
         assert_eq!(banco.scroll.first_row, 0);
         // Como las teclas 1 a 9, deshacer o rehacer: la sesión lo pone y el panel lo apaga.
         banco.view.reveal = true;
@@ -1725,7 +1729,7 @@ fn fila_11_view_reveal_con_una_eleccion_sin_muestra_no_mueve_nada_y_se_apaga() {
 #[test]
 fn fila_11_view_reveal_en_el_primer_fotograma_si_muestra_la_elegida() {
     let n = 1;
-    let mut banco = banco_256(1.0, (400 + BOTONES_U) * n, 200, false);
+    let mut banco = banco_256(1.0, (436 + BOTONES_U) * n, 200, false);
     banco.view.reveal = true;
     banco.reposo();
     assert!(!banco.view.reveal);
@@ -1736,7 +1740,7 @@ fn fila_11_view_reveal_en_el_primer_fotograma_si_muestra_la_elegida() {
 fn fila_11_la_rueda_no_muestra_la_elegida() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, (300 + BOTONES_U) * n, 0, true);
+        let mut banco = banco_256(ppp, (336 + BOTONES_U) * n, 0, true);
         assert_eq!(banco.view.last_visible, Some(5));
         let (x, y) = centro_de_muestra(n, 0, 0);
         banco.mueve(x, y);
@@ -1757,7 +1761,7 @@ fn fila_11_la_rueda_no_muestra_la_elegida() {
 fn fila_11_un_clic_en_una_muestra_no_muestra_la_elegida() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut banco = banco_256(ppp, 318 * n, 0, true);
+        let mut banco = banco_256(ppp, 354 * n, 0, true);
         let (x, y) = centro_de_muestra(n, 0, 0);
         banco.mueve(x, y);
         banco.rueda(3 * PITCH_U * n);

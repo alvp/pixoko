@@ -4,7 +4,7 @@
 //!
 //! - Fila 7 (parte pura): `toolbar_width_u() = 107 = 2·4 + 99` con 99 = `4 + (longest + 2)·7 + 4` y
 //!   `longest` = el mayor `chars().count()` de `TOOL_BUTTONS` (11); los 9 botones caben en la
-//!   columna sin tocar el borde y no se solapan; el contenido (193 u) cabe en 315 u; el menú entero
+//!   columna sin tocar el borde y no se solapan; el contenido (193 u) cabe en 351 u; el menú entero
 //!   y el desplegable más ancho (208 u) caben en el ancho mínimo; los cinco rectángulos de
 //!   `window_layout` recubren la ventana sin huecos ni solapes, a las cinco escalas y en la ventana
 //!   por defecto y en la mínima. El banco de egui con la pila real está en `window_stack.rs`.
@@ -31,7 +31,7 @@ use px_ui::toolbar::TOOL_BUTTONS;
 use px_ui::view::ScreenRect;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-const ALTOS_PT: [f32; 5] = [351.0, 280.8, 468.0, 351.0, 351.0];
+const ALTOS_PT: [f32; 5] = [387.0, 309.6, 516.0, 387.0, 387.0];
 const ANCHOS_PT: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
 const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
@@ -55,7 +55,7 @@ fn fila_7_las_constantes_valen_lo_que_dice_la_spec() {
     assert_eq!(toolbar_button_width_u(), 99);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(bar_height_px(1), 20);
-    assert_eq!(min_panel_height_px(1), 315);
+    assert_eq!(min_panel_height_px(1), 351);
 }
 
 #[test]
@@ -115,7 +115,7 @@ fn fila_7_los_nueve_botones_caben_en_la_columna_sin_tocar_el_borde_y_no_se_solap
 }
 
 #[test]
-fn fila_7_el_contenido_de_193_u_cabe_en_los_315_u_del_panel_minimo() {
+fn fila_7_el_contenido_de_193_u_cabe_en_los_351_u_del_panel_minimo() {
     // Último botón de zoom (termina en 189) más el margen inferior de 4 u.
     assert_eq!(119 + 18 * 3 + 16 + 4, TOOLBAR_CONTENT_H_U);
     assert_eq!(TOOLBAR_CONTENT_H_U, 193);
@@ -124,7 +124,7 @@ fn fila_7_el_contenido_de_193_u_cabe_en_los_315_u_del_panel_minimo() {
         assert!(TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32));
         assert_eq!(
             min_panel_height_px(n as u32) - TOOLBAR_CONTENT_H_U * n,
-            122 * n
+            158 * n
         );
     }
 }
@@ -359,15 +359,15 @@ fn fila_8_ancho_minimo_en_u_y_en_pt_a_las_cinco_escalas() {
 #[test]
 fn fila_8_un_ppp_invalido_da_el_minimo_de_1_0() {
     for ppp in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.0, -0.5] {
-        assert!(cerca_pt(min_window_height_pt(ppp), 351.0), "alto con {ppp}");
+        assert!(cerca_pt(min_window_height_pt(ppp), 387.0), "alto con {ppp}");
         assert!(cerca_pt(min_window_width_pt(ppp), 468.0), "ancho con {ppp}");
     }
 }
 
 #[test]
-fn fila_8_el_alto_no_pasa_del_65_por_ciento_de_720_y_el_ancho_no_pasa_de_683() {
+fn fila_8_el_alto_no_pasa_del_72_por_ciento_de_720_y_el_ancho_no_pasa_de_683() {
     for ppp in PPPS {
-        assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
+        assert!(min_window_height_pt(ppp) <= 518.4 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
 }
@@ -387,10 +387,10 @@ fn fila_8_el_alto_es_barra_mas_menu_mas_panel_minimo_y_el_ancho_columna_panel_y_
 }
 
 #[test]
-fn fila_8_el_lienzo_minimo_mide_128n_por_315n_pixeles() {
+fn fila_8_el_lienzo_minimo_mide_128n_por_351n_pixeles() {
     for (ppp, esperado) in
         PPPS.iter()
-            .zip([(128, 315), (128, 315), (256, 630), (256, 630), (384, 945)])
+            .zip([(128, 351), (128, 351), (256, 702), (256, 702), (384, 1053)])
     {
         let n = n_de(*ppp);
         let minima = ventanas(*ppp)[1];
@@ -402,7 +402,7 @@ fn fila_8_el_lienzo_minimo_mide_128n_por_315n_pixeles() {
         );
         assert_eq!(
             (layout.canvas.width, layout.canvas.height),
-            (128 * n, 315 * n)
+            (128 * n, 351 * n)
         );
     }
 }
@@ -431,11 +431,11 @@ fn propiedad_3_los_minimos_siguen_la_formula_y_cumplen_las_dos_reglas_en_todos_l
     for i in 0..=60 {
         let ppp = ppp_del_paso(i);
         let n = n_de(ppp);
-        let alto = ((20 + MENU_H_U + 315) * n) as f32 / ppp;
+        let alto = ((20 + MENU_H_U + 351) * n) as f32 / ppp;
         let ancho = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
         assert!(cerca_pt(min_window_height_pt(ppp), alto), "alto con {ppp}");
         assert!(cerca_pt(min_window_width_pt(ppp), ancho), "ancho con {ppp}");
-        assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
+        assert!(min_window_height_pt(ppp) <= 518.4 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
 }

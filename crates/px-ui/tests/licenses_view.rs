@@ -576,6 +576,7 @@ mod fila_12 {
     fn locks_de(bits: u8) -> Locks {
         Locks {
             gesture: bits & 1 != 0,
+            stroke: false,
             dialog: bits & 2 != 0,
             text_focus: bits & 4 != 0,
             removal: bits & 8 != 0,

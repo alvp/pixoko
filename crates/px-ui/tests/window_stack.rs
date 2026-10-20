@@ -646,12 +646,12 @@ fn fila_9_stroke_begin_en_cada_pixel_vale_lo_que_con_origen_cero() {
 fn fila_9_en_las_cuatro_esquinas_del_lienzo_y_un_pixel_fuera() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // Ventana mínima y una imagen de 1024 × 1024: a ×1 cubre el lienzo entero, así que las
-        // esquinas del lienzo caen sobre la imagen.
+        // Ventana mínima y una imagen de 1200 × 1200: a ×1 cubre el lienzo entero (el mayor mide
+        // 384 × 1053 a ppp 3 desde I.2a), así que las esquinas del lienzo caen sobre la imagen.
         let ventana = ventanas(ppp)[1];
         let lienzo = window_layout(ventana, n as u32).canvas;
         let (w, h) = (lienzo.width, lienzo.height);
-        let imagen = rgba(1024, 1024);
+        let imagen = rgba(1200, 1200);
         let mut banco = Banco::nuevo(ppp, ventana, imagen.clone());
         // Ajustar da ahora un nivel 1/K para esta imagen: se pasa a ×1, que es el zoom en el que la
         // imagen cubre el lienzo entero.

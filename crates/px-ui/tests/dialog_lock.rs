@@ -88,6 +88,7 @@ fn todas_las_acciones() -> Vec<AppAction> {
 fn bloqueos(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
+        stroke: false,
         dialog: bits & 2 != 0,
         text_focus: bits & 4 != 0,
         removal: bits & 8 != 0,
@@ -180,6 +181,7 @@ fn fila_6a_cada_bloqueo_solo_impide_abrir_y_todos_juntos_tambien() {
     }
     let todos = Locks {
         gesture: true,
+        stroke: false,
         dialog: true,
         text_focus: true,
         removal: true,

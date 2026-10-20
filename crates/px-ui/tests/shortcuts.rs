@@ -155,12 +155,15 @@ fn propiedad_6_todas_las_combinaciones_y_todas_las_teclas() {
             } else if m.command || m.ctrl || m.mac_cmd {
                 None
             } else if matches!(key, Key::PageDown | Key::PageUp) {
-                // Teclas con nombre: Mayús y Alt no cuentan (como `Inicio`).
-                Some(if key == Key::PageDown {
-                    Action::ColorNext
+                // Teclas con nombre: Alt no cuenta; con Mayús (I.2a) son el color de fondo y
+                // esta vista no lo conoce (`None`).
+                if m.shift {
+                    None
+                } else if key == Key::PageDown {
+                    Some(Action::ColorNext)
                 } else {
-                    Action::ColorPrev
-                })
+                    Some(Action::ColorPrev)
+                }
             } else if ninguno {
                 match key {
                     Key::U => Some(Action::Undo),

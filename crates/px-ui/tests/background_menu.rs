@@ -117,6 +117,7 @@ fn rotulos_y_acciones(items: &[MenuItem]) -> Vec<(&'static str, AppAction)> {
 fn bloqueos(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
+        stroke: false,
         dialog: bits & 2 != 0,
         text_focus: bits & 4 != 0,
         removal: bits & 8 != 0,
@@ -202,6 +203,8 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
     // `Rehacer`; las otras 11 son las de la 17, sin cambios.
     let mut esperado = vec![AppAction::NewImage];
     esperado.extend(&ACCIONES_DE_LA_TABLA[..6]);
+    // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
+    esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
     esperado.extend(&ACCIONES_DE_LA_TABLA[6..]);
     assert_eq!(acciones, esperado);
@@ -223,7 +226,11 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
     );
     assert_eq!(
         rotulos_y_acciones(el_menu("Editar").items),
-        [("Deshacer", AppAction::Undo), ("Rehacer", AppAction::Redo)]
+        [
+            ("Deshacer", AppAction::Undo),
+            ("Rehacer", AppAction::Redo),
+            ("Borrar página", AppAction::ClearPage),
+        ]
     );
     assert_eq!(
         rotulos_y_acciones(el_menu("Imagen").items),
@@ -2070,9 +2077,10 @@ mod contraste_del_menu {
         let mut fallos = Fallos::default();
         for (f, por_plataforma) in resultados {
             fallos.mezcla(f);
-            // Los atajos de la tabla: 11 en Linux (con `Salir`), 10 en Windows y en macOS.
+            // Los atajos de la tabla: 12 en Linux (con `Salir`), 11 en Windows y en macOS (con
+            // `Borrar página`, de I.2a).
             for (platform, n) in por_plataforma {
-                let esperados = if platform == Platform::Linux { 11 } else { 10 };
+                let esperados = if platform == Platform::Linux { 12 } else { 11 };
                 assert_eq!(n, esperados, "atajos de la tabla en {platform:?}");
             }
         }

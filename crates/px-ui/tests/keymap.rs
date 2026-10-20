@@ -204,7 +204,7 @@ fn e(
     }
 }
 
-/// Las 25 filas del «Esquema por defecto», en el orden de la spec (dentro de cada fila doble, la
+/// Las 30 filas del «Esquema por defecto» (25 de I.1 y 5 de I.2a), en el orden de la spec (dentro de cada fila doble, la
 /// siguiente antes que la anterior; `Av Pág` y `Re Pág` después de `]` y `[`).
 fn esquema_esperado() -> Vec<Esperada> {
     let todas = Platforms::All;
@@ -279,6 +279,24 @@ fn esquema_esperado() -> Vec<Esperada> {
             todas,
             None,
         ),
+        e(
+            AppAction::BackgroundNext,
+            KeyId::PageDown,
+            false,
+            true,
+            todas,
+            None,
+        ),
+        e(
+            AppAction::BackgroundPrev,
+            KeyId::PageUp,
+            false,
+            true,
+            todas,
+            None,
+        ),
+        e(AppAction::BackgroundNext, c('}'), false, false, todas, t),
+        e(AppAction::BackgroundPrev, c('{'), false, false, todas, t),
         e(AppAction::ZoomIn, c('>'), false, false, todas, t),
         e(AppAction::ZoomIn, c('+'), false, false, todas, None),
         e(AppAction::ZoomIn, c('='), false, false, todas, None),
@@ -287,6 +305,7 @@ fn esquema_esperado() -> Vec<Esperada> {
         e(AppAction::ZoomFit, KeyId::Home, false, false, todas, t),
         e(AppAction::ZoomActual, c('1'), true, false, todas, t),
         e(AppAction::CenterOnCursor, c('n'), false, false, todas, t),
+        e(AppAction::ClearPage, c('k'), false, true, todas, t),
         e(AppAction::Open, c('o'), true, false, todas, t),
         e(AppAction::Save, c('s'), true, false, todas, t),
         e(AppAction::SaveAs, c('s'), true, true, todas, t),
@@ -317,11 +336,11 @@ fn fila_1_los_tipos_de_la_tabla_tienen_los_derives_de_la_spec() {
 }
 
 #[test]
-fn fila_1_la_tabla_por_defecto_son_las_25_filas_de_la_spec_en_orden() {
+fn fila_1_la_tabla_por_defecto_son_las_30_filas_de_la_spec_en_orden() {
     let km = por_defecto();
     let esperado = esquema_esperado();
-    assert_eq!(esperado.len(), 25);
-    assert_eq!(km.rows().len(), 25, "filas de la tabla por defecto");
+    assert_eq!(esperado.len(), 30);
+    assert_eq!(km.rows().len(), 30, "filas de la tabla por defecto");
     for (i, (real, esperada)) in km.rows().iter().zip(&esperado).enumerate() {
         assert_eq!(real.action, esperada.action, "fila {i}: acción");
         assert_eq!(
@@ -355,11 +374,11 @@ fn fila_1_la_tabla_por_defecto_son_las_25_filas_de_la_spec_en_orden() {
 }
 
 #[test]
-fn fila_1_hay_16_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
+fn fila_1_hay_21_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
     let km = por_defecto();
     let sin = km.rows().iter().filter(|f| !f.command).count();
     let con = km.rows().iter().filter(|f| f.command).count();
-    assert_eq!((sin, con), (16, 9));
+    assert_eq!((sin, con), (21, 9));
     let quit: Vec<&Binding> = km
         .rows()
         .iter()
@@ -370,12 +389,12 @@ fn fila_1_hay_16_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
 }
 
 #[test]
-fn fila_1_hay_25_filas_activas_en_linux_y_24_en_windows_y_macos() {
+fn fila_1_hay_30_filas_activas_en_linux_y_29_en_windows_y_macos() {
     let km = por_defecto();
     for (platform, esperado) in [
-        (Platform::Linux, 25),
-        (Platform::Windows, 24),
-        (Platform::Mac, 24),
+        (Platform::Linux, 30),
+        (Platform::Windows, 29),
+        (Platform::Mac, 29),
     ] {
         let activas = km
             .rows()
@@ -501,6 +520,8 @@ fn asignadas_sin_command() -> Vec<(KeyId, AppAction)> {
         (c('n'), AppAction::CenterOnCursor),
         (c(']'), AppAction::ColorNext),
         (c('['), AppAction::ColorPrev),
+        (c('}'), AppAction::BackgroundNext),
+        (c('{'), AppAction::BackgroundPrev),
         (c('<'), AppAction::ZoomOut),
         (c('>'), AppAction::ZoomIn),
         (c('+'), AppAction::ZoomIn),
@@ -589,6 +610,12 @@ fn fila_2_en_simbolos_y_teclas_con_nombre_shift_y_alt_no_cambian_el_resultado() 
             .filter(|(k, _)| !es_letra(*k))
         {
             for (shift, alt) in [(false, false), (true, false), (false, true), (true, true)] {
+                // I.2a: en `Re Pág` y `Av Pág` `Mayús` cuenta (con ella son el fondo); `Alt` no.
+                let esperada = match (key, shift) {
+                    (KeyId::PageUp, true) => AppAction::BackgroundPrev,
+                    (KeyId::PageDown, true) => AppAction::BackgroundNext,
+                    _ => esperada,
+                };
                 assert_eq!(
                     accion(&km, &press(key, false, shift, alt, false), platform),
                     Some(esperada),
@@ -672,7 +699,7 @@ fn fila_2_lo_sin_asignar_da_none_con_cualquier_modificador_en_las_tres_plataform
     let km = por_defecto();
     // Sin `command`: `p l i e` y `P L I E` (sin convivencia), las cifras 1 a 9, `K` `D`, las
     // teclas del hito 4, y `. / { }`.
-    let mut sin_asignar: Vec<KeyId> = "plieKDPLIE.{}/kqrcwbtgmasxyzo"
+    let mut sin_asignar: Vec<KeyId> = "plieKDPLIE./qrcwbtgmasxyzo"
         .chars()
         .map(KeyId::Char)
         .collect();
@@ -2154,13 +2181,24 @@ fn fila_11_no_chocan_las_que_difieren_en_letra_con_shift_en_command_o_en_platafo
 
 #[test]
 fn fila_11_en_simbolos_y_teclas_con_nombre_shift_no_cuenta_para_el_choque() {
-    for key in [c('+'), c('<'), c(','), KeyId::Home, KeyId::PageUp] {
+    for key in [c('+'), c('<'), c(','), KeyId::Home] {
         assert_eq!(
             conflictos(vec![
                 fila(key, false, false, AppAction::ZoomIn),
                 fila(key, false, true, AppAction::ZoomOut),
             ]),
             vec![Conflict::Duplicate(0, 1)],
+            "{key:?}"
+        );
+    }
+    // I.2a: en `Re Pág` y `Av Pág` `shift` sí cuenta (con él son el color de fondo).
+    for key in [KeyId::PageUp, KeyId::PageDown] {
+        assert_eq!(
+            conflictos(vec![
+                fila(key, false, false, AppAction::ZoomIn),
+                fila(key, false, true, AppAction::ZoomOut),
+            ]),
+            vec![],
             "{key:?}"
         );
     }
@@ -2448,7 +2486,7 @@ fn clase_de(key: KeyId) -> Clase {
 /// Si la fila casa con la `Press` en `platform`, con las reglas de la decisión 1 escritas a mano:
 /// `command` exacto; con `command`, `shift` exacto y `Alt` apagado; sin él, en letras `shift`
 /// exacto y `Alt` y `other_ctrl` apagados, en cifras `Alt` y `other_ctrl` apagados, y en
-/// símbolos y teclas con nombre nada más.
+/// símbolos y teclas con nombre nada más (salvo `Re Pág` y `Av Pág`, con `shift` exacto).
 fn casa(fila: &Binding, p: &Press, platform: Platform) -> bool {
     if !vale_en(fila.active, platform) || p.key != Some(fila.key) || p.command != fila.command {
         return false;
@@ -2459,6 +2497,8 @@ fn casa(fila: &Binding, p: &Press, platform: Platform) -> bool {
     match clase_de(fila.key) {
         Clase::Letra => p.shift == fila.shift && !p.alt && !p.other_ctrl,
         Clase::Cifra => !p.alt && !p.other_ctrl,
+        // I.2a: en `Re Pág` y `Av Pág` `shift` es exacto.
+        Clase::Otra if matches!(fila.key, KeyId::PageUp | KeyId::PageDown) => p.shift == fila.shift,
         Clase::Otra => true,
     }
 }
