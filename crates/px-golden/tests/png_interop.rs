@@ -14,6 +14,8 @@
 //! - La fila 16 comprueba la estructura del repositorio (`.gitattributes` y el README).
 
 mod common;
+#[path = "png_interop/gate_oraculo.rs"]
+mod gate_oraculo;
 
 use std::fs;
 use std::io::ErrorKind;

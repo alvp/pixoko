@@ -15,6 +15,8 @@ mod files;
 mod keys;
 mod licenses;
 mod new_image;
+#[cfg(test)]
+mod puerta;
 mod session;
 mod title;
 mod window_min;
