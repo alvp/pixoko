@@ -71,15 +71,15 @@ Navegar por la imagen se hace con la rueda, el botón central y los gestos del t
 
 | Gesto | Efecto | Estado |
 | --- | --- | --- |
-| Rueda sobre el lienzo | Zoom anclado al cursor, un paso por muesca | Existe |
-| Botón central y arrastrar | Desplaza la vista | Existe |
-| Espacio y arrastrar con el botón izquierdo | Desplaza la vista, la «sobre» habitual de los editores | Por comprobar |
-| Mayús y rueda | Desplaza en horizontal | Nuevo |
+| Rueda sobre el lienzo | Zoom anclado al cursor, un paso por muesca | Hecho (I.2b) |
+| Botón central y arrastrar | Desplaza la vista | Hecho (I.2b: por la tabla) |
+| Espacio y arrastrar con el botón izquierdo | Desplaza la vista, la «sobre» habitual de los editores | Hecho (I.2b); `Espacio` a mitad de un trazo lo cancela |
+| Mayús y rueda | Desplaza en horizontal | Hecho (I.2b) |
 | Rueda sobre la paleta | Desplaza la rejilla de la paleta | Existe |
-| Dos dedos en el trackpad | Desplaza la vista | Nuevo |
-| Pellizco en el trackpad | Zoom | Nuevo |
-| Botón lateral «atrás» (el 4) | Deshacer | Nuevo, configurable |
-| Botón lateral «adelante» (el 5) | Rehacer | Nuevo, configurable |
+| Dos dedos en el trackpad | Desplaza la vista | Hecho (I.2b) para `Point` (macOS y Wayland); en X11 y Windows llegan como líneas: pendiente de la prueba manual |
+| Pellizco en el trackpad | Zoom | Hecho (I.2b, acumulador); en Linux el pellizco no llega (`winit` 0.30.13) |
+| Botón lateral «atrás» (el 4) | Deshacer | Hecho (I.2b), reasignable en la tabla |
+| Botón lateral «adelante» (el 5) | Rehacer | Hecho (I.2b), reasignable en la tabla |
 | Botones 6 y siguientes | No llegan a la app (`egui-winit` los descarta); se reasignan en el sistema | Imposible hoy |
 
 Reglas:

@@ -132,7 +132,7 @@ pub fn pointer_presses(&[Event]) -> Vec<(Button, bool /*command*/, bool /*shift*
 | 9 | **Reasignar y validar.** `GestureMap::new` con `Back` → `App(ColorNext)`, con filas repetidas con modificadores compatibles (`None` y `Some(false)`), y con combinaciones inválidas | `Back` → `ColorNext`; `Duplicate` para las filas que chocan y **no** para las que se excluyen (`space: Some(true)` y `Some(false)`); `Invalid` para `Wheel`→`Draw`, `Press`→`ZoomStep`, `Pinch`→`PanX` y `Scroll`→`App`; `default_scheme()` ninguno |
 | 10 | **Botón derecho y `Alt`.** `Right` con y sin `Espacio`, con `Alt` en cada gesto (el modificador viaja en el evento de egui), `interact`/`interact_ordered` con el derecho; `Mayús`+izquierdo | Derecho → `Draw(Background)` con y sin `Espacio` (como hoy); `Alt` no cambia ningún resultado; `Mayús`+izquierdo sigue dibujando; `interact` e `interact_ordered` siguen sin emitir nada con el derecho |
 | 11 | **Sentido del desplazamiento.** `Scroll` con `delta.y` > 0 y < 0, y con `delta.x`; `Mayús` + `Line` con `delta.y` > 0 y con `delta.x` (macOS ya intercambia los ejes); el mismo gesto con el desplazamiento natural de macOS (el sistema ya invierte el signo del delta que entrega: dos eventos con signos opuestos para el mismo movimiento de dedos) | El signo del delta **lo da el sistema y la app no lo invierte**: delta positivo en `y` = la imagen baja, en `x` = va a la derecha; `Mayús` + `Line`: `dx = delta.x + delta.y`; con signos opuestos, movimientos opuestos, sin ninguna rama por plataforma ni por `source` |
-| 12 | **Restos de medio píxel.** `Scroll` de `0,4` pt repetido a `ppp` 1,0, 1,5 y 2,0, y de `−0,4`; un `Scroll` con resto que cambia de eje | Tras 5 eventos de 0,4 pt a `ppp` 1 la vista se ha movido 2 px (no 0 ni 5); a otros `ppp`, la suma de lo movido es el entero más cercano por debajo del total (sin perder ni inventar píxeles); el resto se arrastra por eje y con signo; siempre enteros físicos |
+| 12 | **Restos de medio píxel.** `Scroll` de `0,4` pt repetido a `ppp` 1,0, 1,5 y 2,0, y de `−0,4`; un `Scroll` con resto que cambia de eje | Tras 7 eventos de 0,4 pt a `ppp` 1 la vista se ha movido 2 px (2,8 px: no 0 ni 3; a 1,5 y 2,0, 4 y 5 px); a otros `ppp`, la suma de lo movido es el entero más cercano por debajo del total (sin perder ni inventar píxeles); el resto se arrastra por eje y con signo; siempre enteros físicos |
 
 ## Propiedades (proptest; 256 casos, 500 como máximo)
 
@@ -183,6 +183,10 @@ Pantalla de remapeo y guardado en disco (hito 8); botones del 6 en adelante (ina
 6. **Botones laterales en toda la ventana con `Origin::Button`** (bloqueados con gesto, diálogo, modal y campo de texto); sin variante nueva en `Origin`.
 7. **`Alt` no existe en la tabla** y `Espacio` + derecho sigue pintando con el fondo (los modificadores de `Right` y `Middle` no cuentan).
 8. **Clic derecho en herramientas y en los botones de zoom** se van a I.3 (y se corrigen el INDEX y PLAN-RESUMEN al aprobar).
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+Lo que la implementación fijó y la spec no decía o decía distinto: (a) `Scroll` asignado a `ZoomStep` da una muesca por cada `PAN_LINE_POINTS` (40) puntos de dedos, con su propio acumulador; (b) una **página** de rueda (`Page`) vale una muesca (`wheel_of` no distingue `Line` de `Page`), no el ancho del lienzo; (c) la traducción de los botones laterales vive en `px-ui::pointer_events::window_actions` (pura, probada sin ventana) y `App::pointer_actions` solo la llama con `Origin::Button`; (d) `Gesture::Draw` guarda el botón físico que empezó el trazo (la tabla puede asignar `Draw` a cualquiera); (e) el caso 11 usa `Point` y `Line`, y las repeticiones de `Espacio` se prueban tras la pulsación (egui solo marca `repeat` si la tecla ya estaba abajo); (f) el caso 12 usa 7 eventos de 0,4 pt (2,8 px a `ppp` 1), no 5 (2,0 px es el borde del redondeo).
 
 ## Contingencia (NO se implementa ahora)
 

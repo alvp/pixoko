@@ -11,7 +11,7 @@ use proptest::prelude::*;
 use px_core::{Image, Mode};
 use px_ui::canvas::{Canvas, CanvasInfo, CanvasInput};
 use px_ui::color::Role;
-use px_ui::gestures::{Button, GestureAction, GestureMap, GestureRow, Input, Mods, Scope};
+use px_ui::gestures::{GestureAction, GestureMap, GestureRow, Input, Mods, Scope};
 use px_ui::keymap::Platforms;
 use px_ui::view::Zoom;
 

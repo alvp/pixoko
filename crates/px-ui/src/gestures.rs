@@ -121,12 +121,12 @@ impl GestureRow {
     /// Si la acción tiene sentido con esa entrada.
     fn valid(&self) -> bool {
         use GestureAction::*;
-        match (self.input, self.action) {
-            (Input::Press(_), Draw(_) | Pan | App(_)) => true,
-            (Input::Wheel | Input::Scroll, ZoomStep | Pan | PanX) => true,
-            (Input::Pinch, ZoomStep) => true,
-            _ => false,
-        }
+        matches!(
+            (self.input, self.action),
+            (Input::Press(_), Draw(_) | Pan | App(_))
+                | (Input::Wheel | Input::Scroll, ZoomStep | Pan | PanX)
+                | (Input::Pinch, ZoomStep)
+        )
     }
 }
 
