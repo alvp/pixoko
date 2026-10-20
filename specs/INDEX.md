@@ -27,7 +27,7 @@ Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *pendiente de
 
 | Fichero | Unidad | Estado | Qué decide | Crates |
 | --- | --- | --- | --- | --- |
-| [hito-2-reparto-cierre.md](hito-2-reparto-cierre.md) | reparto | aprobada | Orden de las unidades 16 a 21 y 12 a 14c, y decisiones D1 a D12; solo reparto, sin tests | — |
+| [hito-2-reparto-cierre.md](hito-2-reparto-cierre.md) | reparto | aprobada | Orden de las unidades 16 a 22 y 12 a 14c, y decisiones D1 a D12; solo reparto, sin tests | — |
 | [hito-2-notas-unidad-14.md](hito-2-notas-unidad-14.md) | 14 | notas | Pendientes consolidados: topes de relleno y memoria, textura, API, PNG, sombreador | — |
 | [hito-2-hsl.md](hito-2-hsl.md) | 2.1 | aprobada | `Hsl` y conversión RGB↔HSL de ida y vuelta | px-core |
 | [hito-2-ventana.md](hito-2-ventana.md) | 2.2 | aprobada | Ventana con `eframe`, zoom entero y desplazamiento; versiones fijadas | px-app, px-ui |

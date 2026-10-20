@@ -1,6 +1,6 @@
 # Hito 2 · Reparto del cierre
 
-Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó el usuario). Solo reparto: no es una spec de comportamiento ni tiene tests. **Sustituye** a la lista de unidades de [`hito-2-hsl.md`](hito-2-hsl.md) («Unidades del hito 2») en lo que queda por hacer: las unidades 1 a 11 y la 15 mínima están hechas, y de la 15 queda el diálogo de archivo (unidad 16) y la puerta (unidad 21). Cada unidad tendrá su spec y su visto bueno antes de implementarse.
+Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó el usuario). Solo reparto: no es una spec de comportamiento ni tiene tests. **Sustituye** a la lista de unidades de [`hito-2-hsl.md`](hito-2-hsl.md) («Unidades del hito 2») en lo que queda por hacer: las unidades 1 a 11 y la 15 mínima están hechas, y de la 15 queda el diálogo de archivo (unidad 16) y la puerta (unidad 22). Cada unidad tendrá su spec y su visto bueno antes de implementarse.
 
 ## Orden
 
@@ -23,7 +23,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
 | 11b | **14-limpieza** | Unidad corta junto a la 14a: dos limpiezas de API que cambian pruebas anteriores (D13), con spec propia y visto bueno antes de tocar nada | `px-ui`, `px-app` | ninguna |
 | 12 | ~~**14b**~~ | **DESCARTADA para el hito 2** (prueba manual del usuario; ver D2). Era: índices en la GPU con la paleta en un sombreador, solo si la medición de 14a lo justificaba | ~~`px-render`~~ | ~~`glow` y `egui_glow` como directas~~ (no se añaden) |
 | 13 | **14c** | Tope de tramos del relleno y tope de memoria del peine | `px-core`, `px-raster` | ninguna |
-| 14 | **21** | Puerta del hito: abrir, editar y guardar un PNG real | `px-app`, `px-golden` | ninguna |
+| 14 | **22** | Puerta del hito: abrir, editar y guardar un PNG real | `px-app`, `px-golden` | ninguna |
 
 ## Decisiones
 
@@ -44,7 +44,7 @@ Estado: **aprobado** (2026-10-18; orden y decisiones D1 a D10 como las confirmó
   - El `unsafe` de `rfd` se anota en `docs/DEPENDENCIES.md`.
 - **D7. Paleta inicial de «Nueva imagen»** (19): generada por una regla documentada, de **32 colores**: entrada 0 transparente (índice transparente 0), ocho matices en tres luminosidades y siete grises. Con pruebas (32 entradas, distintas entre sí, determinista). Fondo transparente por defecto o un color elegido. Lado máximo 8192 y `MAX_BYTES`.
 - **D8. Convertir** (20): el cuantizador es una unidad aparte, **fuera del hito 2 y anotada para el hito 4**; la interfaz solo explica `TooManyColors`. Para `drop_alpha` no hay fondo por defecto: se elige blanco, negro, el color activo o un hexadecimal.
-- **D9. Puerta** (21): la prueba va en `px-app` y `px-golden`, sin xvfb ni cambios en el CI (no `px-cli`, que no tiene código hasta el hito 8). **Unidad 13b:** la lectura de PNG lista en su informe los chunks auxiliares ignorados (`iCCP`, `gAMA`, `sRGB`, `pHYs`, texto…); con `iCCP`, `Ctrl`+`S` guarda una copia, como con las conversiones, y el título lo explica. El usuario probó a mano la puerta actual en Linux, macOS y Windows (todo bien) y la repetirá al final del hito.
+- **D9. Puerta** (22; era la 21 hasta el 2026-10-20, cuando «Fijar transparente» tomó ese número, [`hito-2-fijar-transparente.md`](hito-2-fijar-transparente.md)): la prueba va en `px-app` y `px-golden`, sin xvfb ni cambios en el CI (no `px-cli`, que no tiene código hasta el hito 8). **Unidad 13b:** la lectura de PNG lista en su informe los chunks auxiliares ignorados (`iCCP`, `gAMA`, `sRGB`, `pHYs`, texto…); con `iCCP`, `Ctrl`+`S` guarda una copia, como con las conversiones, y el título lo explica. El usuario probó a mano la puerta actual en Linux, macOS y Windows (todo bien) y la repetirá al final del hito.
 - **D10. Rellenos y memoria** (14c): tope de tramos del relleno con error claro y constante con nombre (sin hilo aparte), y tope de memoria del peine.
 - **D11. Damero de transparencia** (nota de [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md), aprobada 2026-10-18). El damero **de fondo del lienzo** es la unidad **17b**, corta y tras la 17: solo cambia `Canvas::paint` (el fondo liso `BACKGROUND` pasa a damero) y la fila 10 de [`hito-2-cuentagotas-borrador.md`](hito-2-cuentagotas-borrador.md) para el fondo. El damero **de la superposición del borrador** va **dentro de la 14a**, junto a la superposición del trazo como textura o sombreador (medida del zigzag a 4096² en las notas de la 14): su forma depende de cómo la textura resuelva «borrar», y con formas por píxel empeoraría el retraso medido. Cada una tendrá su spec y su visto bueno.
 - **D12. «Color…» del fondo del lienzo** (aprobada 2026-10-19, en la spec de la unidad 18): queda fuera de la 18 y es la unidad corta **19b**, tras la 19, con un diálogo de un campo hexadecimal ([`hito-2-fondo-color.md`](hito-2-fondo-color.md)). **Pendiente para la unidad de ajustes del hito 8:** guardar en disco la preferencia del fondo del lienzo, incluido el color elegido, y leerla al arrancar (hoy es solo de la sesión). Cada una tendrá su spec y su visto bueno.
