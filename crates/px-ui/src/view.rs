@@ -185,6 +185,10 @@ pub enum ViewOp {
     Fit,
     /// Zoom ×1 anclado en el centro del lienzo.
     Actual,
+    /// El punto de la imagen bajo el cursor pasa al centro del lienzo, con el mismo zoom. Necesita
+    /// el puntero: lo resuelve `Canvas::interact` con [`View::center_on`]; `apply_op` la deja como
+    /// está.
+    CenterOnCursor,
 }
 
 /// Rectángulo en coordenadas de pantalla.
@@ -270,7 +274,26 @@ impl View {
             ViewOp::ZoomOut => self.zoom_out(center),
             ViewOp::Actual => self.set_zoom(Zoom::ONE, center),
             ViewOp::Fit => *self = View::fit(viewport, image),
+            ViewOp::CenterOnCursor => {}
         }
+        self.clamp(viewport, image);
+    }
+
+    /// Mueve la vista para que el punto de la imagen que hay bajo `point` (píxeles de pantalla
+    /// relativos al lienzo) quede en el centro del lienzo, con el mismo zoom, y hace `clamp`.
+    pub fn center_on(&mut self, point: (i64, i64), viewport: Size, image: Size) {
+        let center = (
+            i64::from(viewport.width) / 2,
+            i64::from(viewport.height) / 2,
+        );
+        self.origin = (
+            center
+                .0
+                .saturating_sub(point.0.saturating_sub(self.origin.0)),
+            center
+                .1
+                .saturating_sub(point.1.saturating_sub(self.origin.1)),
+        );
         self.clamp(viewport, image);
     }
 

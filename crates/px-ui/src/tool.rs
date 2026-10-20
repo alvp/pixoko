@@ -8,9 +8,12 @@ use egui::{Key, Modifiers};
 use px_core::{Command, Document, DocumentError, Image, ImageId, Pixel, PixelEdit};
 use px_raster::{Line, fill_command, line_command};
 
+use crate::actions::{AppAction, Platform};
 use crate::canvas::{CanvasEvent, CanvasInput};
 use crate::color::{ColorChoice, SlotColors, choice_label_with, pixel_for_choice};
 use crate::dirty::{Change, dirty_of};
+use crate::key_events::press_from_key;
+use crate::keymap::default_keymap;
 use crate::pick::{Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable};
 use crate::stroke::Stroke;
 use crate::view::Size;
@@ -46,20 +49,18 @@ pub enum ToolAction {
     Cancel,
 }
 
-/// `P`, `L`, `F`, `I` y `E` eligen herramienta y `Escape` cancela, solo sin ningún modificador (así
-/// `Ctrl`+`P`, `Ctrl`+`L`, `Ctrl`+`F`, `Ctrl`+`I` y `Ctrl`+`E` no hacen nada). Es aparte de
-/// [`crate::shortcuts::action_for_key`], que da `None` para estas teclas.
+/// Vista de la tabla de teclas por defecto: `d`, `v`, `f` y `,` eligen herramienta y `Escape`
+/// cancela, solo sin ningún modificador (así `Ctrl`+`d` y las demás no hacen nada). El Borrador no
+/// tiene tecla. Es aparte de [`crate::shortcuts::action_for_key`], que da `None` para estas teclas.
 pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
     if !modifiers.is_none() {
         return None;
     }
-    match key {
-        Key::P => Some(ToolAction::Select(Tool::Pencil)),
-        Key::L => Some(ToolAction::Select(Tool::Line)),
-        Key::F => Some(ToolAction::Select(Tool::Fill)),
-        Key::I => Some(ToolAction::Select(Tool::Dropper)),
-        Key::E => Some(ToolAction::Select(Tool::Eraser)),
-        Key::Escape => Some(ToolAction::Cancel),
+    if key == Key::Escape {
+        return Some(ToolAction::Cancel);
+    }
+    match default_keymap().action_for(&press_from_key(key, modifiers), Platform::Linux)? {
+        AppAction::SelectTool(tool) => Some(ToolAction::Select(tool)),
         _ => None,
     }
 }

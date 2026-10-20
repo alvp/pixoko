@@ -5,8 +5,9 @@
 use egui::{Key, Modifiers};
 
 use crate::background::CanvasBackground;
-use crate::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
-use crate::tool::{Tool, ToolAction, tool_action_for_key};
+use crate::key_events::press_from_key;
+use crate::keymap::default_keymap;
+use crate::tool::Tool;
 use crate::view::Zoom;
 
 /// Lo que se puede pedir a la app, venga de donde venga.
@@ -31,8 +32,14 @@ pub enum AppAction {
     ShowLicenses,
     CloseLicenses,
     SelectTool(Tool),
-    /// Ranura de color, de 1 a 9.
+    /// Ranura de color, de 1 a 9 (sin tecla por defecto: asignable en el hito 8).
     SelectColor(u8),
+    /// Color siguiente (`]`): la entrada en indexado, la ranura en los demás modos.
+    ColorNext,
+    /// Color anterior (`[`).
+    ColorPrev,
+    /// Centra el área bajo el cursor (`n`): necesita el puntero, no tiene entrada de menú.
+    CenterOnCursor,
     /// Fondo bajo la transparencia del lienzo: preferencia de la sesión, no del documento.
     CanvasBackground(CanvasBackground),
     /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
@@ -69,6 +76,19 @@ impl AppAction {
         matches!(
             self,
             AppAction::ZoomIn | AppAction::ZoomOut | AppAction::ZoomFit | AppAction::ZoomActual
+        )
+    }
+
+    /// Las acciones de vista: el zoom y centrar bajo el cursor. No modifican el documento.
+    pub fn is_view(self) -> bool {
+        self.is_zoom() || self == AppAction::CenterOnCursor
+    }
+
+    /// Las que cambian el color activo: se bloquean con una quita pendiente.
+    fn changes_color(self) -> bool {
+        matches!(
+            self,
+            AppAction::SelectColor(_) | AppAction::ColorNext | AppAction::ColorPrev
         )
     }
 }
@@ -121,9 +141,10 @@ pub struct Locks {
 /// `true` si `action`, pedida desde `origin`, no debe ejecutarse con estos bloqueos.
 ///
 /// En este orden: (1) `CloseLicenses` nunca; (2) con `modal`, todo salvo `Quit`; (3) con `dialog`,
-/// todo; (4) el zoom solo se bloquea con `text_focus` y desde el teclado (no modifica el
-/// documento: un gesto o una quita pendiente no lo paran); (5) el resto, con `gesture` o
-/// `text_focus`, y con `removal` solo `SelectColor` y las que abren un diálogo; (6) si no, nada. El fondo del lienzo
+/// todo; (4) las acciones de vista (el zoom y centrar bajo el cursor) solo se bloquean con
+/// `text_focus` y desde el teclado (no modifican el documento: un gesto o una quita pendiente no
+/// las paran); (5) el resto, con `gesture` o `text_focus`, y con `removal` solo las de color y las
+/// que abren un diálogo; (6) si no, nada. El fondo del lienzo
 /// (`CanvasBackground`) tampoco toca el documento: tras (1) a (3) solo lo bloquea `text_focus`, con
 /// cualquier origen; un gesto o una quita pendiente no.
 pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
@@ -139,13 +160,13 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if matches!(action, AppAction::CanvasBackground(_)) {
         return locks.text_focus;
     }
-    if action.is_zoom() {
+    if action.is_view() {
         return locks.text_focus && origin == Origin::Key;
     }
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && (matches!(action, AppAction::SelectColor(_)) || action.opens_dialog())
+    locks.removal && (action.changes_color() || action.opens_dialog())
 }
 
 /// Si se puede abrir un diálogo modal: ni un gesto en curso, ni una quita pendiente, ni un diálogo
@@ -175,19 +196,15 @@ pub fn enabled(action: AppAction, state: &UiState) -> bool {
         AppAction::Redo => state.can_redo,
         AppAction::ZoomIn => state.zoom.is_some_and(|zoom| zoom < Zoom::MAX),
         AppAction::ZoomOut => state.zoom.is_some_and(|zoom| zoom > Zoom::MIN),
-        AppAction::ZoomFit => state.zoom.is_some(),
+        AppAction::ZoomFit | AppAction::CenterOnCursor => state.zoom.is_some(),
         AppAction::ZoomActual => state.zoom.is_some_and(|zoom| zoom != Zoom::ONE),
         _ => true,
     }
 }
 
-/// Traduce una tecla pulsada y sus modificadores. Compone `file_action_for_key`, las teclas de
-/// herramienta, `action_for_key` y las nuevas:
-///
-/// - `command` + `1` (sin Mayús ni Alt): 1:1. `command` + `Q` (sin Mayús ni Alt): salir, **solo en
-///   Linux**: en Windows `Alt`+`F4` llega como petición de cierre y en macOS `Cmd`+`Q` lo gestiona
-///   el sistema.
-/// - `+`, `=`, `-` y `Inicio` sin `command` (con cualquier otro modificador): zoom.
+/// Traduce una tecla pulsada y sus modificadores (sin texto: la tecla se toma como tecleada) con
+/// la tabla por defecto. Es [`crate::keymap::Keymap::action_for`] sobre
+/// [`press_from_key`]; los eventos de la ventana pasan por `key_events::presses`.
 ///
 /// `Escape` no es una acción: la ordena el lienzo con los eventos de trazo.
 pub fn action_for_shortcut(
@@ -195,38 +212,5 @@ pub fn action_for_shortcut(
     modifiers: Modifiers,
     platform: Platform,
 ) -> Option<AppAction> {
-    if let Some(action) = file_action_for_key(key, modifiers) {
-        return Some(match action {
-            FileAction::Open => AppAction::Open,
-            FileAction::Save => AppAction::Save,
-            FileAction::SaveAs => AppAction::SaveAs,
-        });
-    }
-    if let Some(ToolAction::Select(tool)) = tool_action_for_key(key, modifiers) {
-        return Some(AppAction::SelectTool(tool));
-    }
-    if let Some(action) = action_for_key(key, modifiers) {
-        return Some(match action {
-            Action::Undo => AppAction::Undo,
-            Action::Redo => AppAction::Redo,
-            Action::SelectColor(slot) => AppAction::SelectColor(slot),
-        });
-    }
-    if modifiers.command {
-        if modifiers.alt || modifiers.shift {
-            return None;
-        }
-        return match key {
-            Key::Num1 => Some(AppAction::ZoomActual),
-            Key::N => Some(AppAction::NewImage),
-            Key::Q if platform == Platform::Linux => Some(AppAction::Quit),
-            _ => None,
-        };
-    }
-    match key {
-        Key::Plus | Key::Equals => Some(AppAction::ZoomIn),
-        Key::Minus => Some(AppAction::ZoomOut),
-        Key::Home => Some(AppAction::ZoomFit),
-        _ => None,
-    }
+    default_keymap().action_for(&press_from_key(key, modifiers), platform)
 }

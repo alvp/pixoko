@@ -2,12 +2,13 @@
 //! entradas con su acción y su atajo por plataforma es lógica pura; `show_menu` solo la pinta.
 
 use egui::containers::menu::{MenuBar, MenuConfig, menu_style};
-use egui::{Button, Frame, Key, Panel, Sense, Style, Ui, vec2};
+use egui::{Button, Frame, Panel, Sense, Style, Ui, vec2};
 
 use crate::actions::{AppAction, Platform, UiState, enabled};
 use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
 use crate::edit_layout::{BUTTON_H_U, BUTTON_TEXT_Y_U};
+use crate::keymap::{Chord, Keymap, default_keymap};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
 use crate::theme::{SURFACE_0, SURFACE_1, SURFACE_3};
@@ -119,67 +120,25 @@ pub fn background_checked(action: AppAction, current: CanvasBackground) -> bool 
     }
 }
 
-/// Un atajo para mostrarlo: la tecla, si lleva `command` (`Ctrl` o `Cmd`) y si lleva `Mayús`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Shortcut {
-    pub key: Key,
-    pub command: bool,
-    pub shift: bool,
+/// Un atajo para mostrarlo: la tecla, si lleva `command` (`Ctrl` o `Cmd`) y si lleva `Mayús`. Es
+/// el [`Chord`] de la tabla de teclas.
+pub type Shortcut = Chord;
+
+/// El atajo que muestra `keymap` para `action` en `platform`, si lo tiene: la primera fila de la
+/// tabla marcada como mostrada en esa plataforma (`Rehacer` enseña `Ctrl+Y` y, en macOS,
+/// `Cmd+Mayús+Z`; `Salir` solo tiene atajo en Linux).
+pub fn shortcut_in(keymap: &Keymap, action: AppAction, platform: Platform) -> Option<Shortcut> {
+    keymap.shown(action, platform)
 }
 
-/// El atajo que se muestra para `action` en `platform`, si lo tiene. `Rehacer` muestra
-/// `Ctrl+Y` y, en macOS, `Cmd+Mayús+Z` (las dos teclas funcionan en todos los sistemas); `Salir`
-/// solo tiene atajo en Linux.
+/// Como [`shortcut_in`] con la tabla por defecto.
 pub fn shortcut_for(action: AppAction, platform: Platform) -> Option<Shortcut> {
-    let with_command = |key, shift| Shortcut {
-        key,
-        command: true,
-        shift,
-    };
-    let plain = |key| Shortcut {
-        key,
-        command: false,
-        shift: false,
-    };
-    match action {
-        AppAction::NewImage => Some(with_command(Key::N, false)),
-        AppAction::Open => Some(with_command(Key::O, false)),
-        AppAction::Save => Some(with_command(Key::S, false)),
-        AppAction::SaveAs => Some(with_command(Key::S, true)),
-        AppAction::Quit => (platform == Platform::Linux).then(|| with_command(Key::Q, false)),
-        AppAction::Undo => Some(with_command(Key::Z, false)),
-        AppAction::Redo if platform == Platform::Mac => Some(with_command(Key::Z, true)),
-        AppAction::Redo => Some(with_command(Key::Y, false)),
-        AppAction::ZoomIn => Some(plain(Key::Plus)),
-        AppAction::ZoomOut => Some(plain(Key::Minus)),
-        AppAction::ZoomFit => Some(plain(Key::Home)),
-        AppAction::ZoomActual => Some(with_command(Key::Num1, false)),
-        _ => None,
-    }
+    shortcut_in(default_keymap(), action, platform)
 }
 
-/// Texto de un atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Inicio`, `+`, `-`.
+/// Texto de un atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Inicio`, `>`, `d`.
 pub fn shortcut_text(shortcut: Shortcut, platform: Platform) -> String {
-    let key = match shortcut.key {
-        Key::Home => "Inicio".to_string(),
-        Key::Plus => "+".to_string(),
-        Key::Minus => "-".to_string(),
-        Key::Num1 => "1".to_string(),
-        other => other.name().to_string(),
-    };
-    let mut text = String::new();
-    if shortcut.command {
-        text.push_str(if platform == Platform::Mac {
-            "Cmd+"
-        } else {
-            "Ctrl+"
-        });
-    }
-    if shortcut.shift {
-        text.push_str("Mayús+");
-    }
-    text.push_str(&key);
-    text
+    shortcut.text(platform)
 }
 
 /// Margen del texto de un botón del menú, en `u`, a cada lado.
@@ -187,13 +146,19 @@ const PAD_X_U: i64 = 6;
 /// Margen a la izquierda de la barra, en `u`.
 const BAR_MARGIN_U: i64 = 4;
 
-/// Ancho de un desplegable en `u`: márgenes y el mayor `rótulo + 2 + atajo`, a 7 u por carácter.
+/// Ancho de un desplegable en `u`: márgenes y el mayor `rótulo + 2 + atajo`, a 7 u por carácter
+/// (con la tabla de teclas por defecto).
 pub fn popup_width_u(menu: &Menu, platform: Platform) -> i64 {
+    popup_width_in(menu, platform, default_keymap())
+}
+
+/// Como [`popup_width_u`] con los atajos de `keymap`.
+pub fn popup_width_in(menu: &Menu, platform: Platform, keymap: &Keymap) -> i64 {
     let widest = menu
         .items
         .iter()
         .map(|item| {
-            let shortcut = shortcut_for(item.action, platform)
+            let shortcut = shortcut_in(keymap, item.action, platform)
                 .map_or(0, |s| shortcut_text(s, platform).chars().count());
             item.label.chars().count() + 2 + shortcut
         })
@@ -230,6 +195,17 @@ pub fn show_menu_with_background(
     platform: Platform,
     background: CanvasBackground,
 ) -> Option<AppAction> {
+    show_menu_in(ui, state, platform, background, default_keymap())
+}
+
+/// Como [`show_menu_with_background`] con los atajos de `keymap` (la app pasa su tabla).
+pub fn show_menu_in(
+    ui: &mut Ui,
+    state: &UiState,
+    platform: Platform,
+    background: CanvasBackground,
+    keymap: &Keymap,
+) -> Option<AppAction> {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
     let u = ui_unit(ppp);
@@ -258,7 +234,7 @@ pub fn show_menu_with_background(
                 .ui(ui, |ui| {
                     ui.add_space(BAR_MARGIN_U as f32 * u);
                     for menu in &MENUS {
-                        let width = popup_width_u(menu, platform) as f32 * u;
+                        let width = popup_width_in(menu, platform, keymap) as f32 * u;
                         ui.menu_button(printable(&ctx, menu.title), |ui| {
                             ui.set_min_width(width);
                             ui.set_max_width(width);
@@ -268,7 +244,7 @@ pub fn show_menu_with_background(
                                         ui.allocate_exact_size(vec2(width, u), Sense::hover());
                                     ui.painter().rect_filled(rect, 0.0, SURFACE_3);
                                 }
-                                if menu_entry(ui, &ctx, state, platform, item, width, u) {
+                                if menu_entry(ui, &ctx, state, (keymap, platform), item, width, u) {
                                     chosen = Some(item.action);
                                 }
                             }
@@ -298,14 +274,14 @@ fn menu_entry(
     ui: &mut Ui,
     ctx: &egui::Context,
     state: &UiState,
-    platform: Platform,
+    (keymap, platform): (&Keymap, Platform),
     item: &MenuItem,
     width: f32,
     u: f32,
 ) -> bool {
     let on = enabled(item.action, state);
     let label = printable(ctx, item.label);
-    let shortcut = shortcut_for(item.action, platform).map(|s| shortcut_text(s, platform));
+    let shortcut = shortcut_in(keymap, item.action, platform).map(|s| shortcut_text(s, platform));
     let mut button = Button::new(label).min_size(vec2(width, BUTTON_H_U as f32 * u));
     if let Some(text) = shortcut {
         button = button.shortcut_text(printable(ctx, &text));

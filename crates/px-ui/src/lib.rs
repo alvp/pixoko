@@ -1,7 +1,8 @@
 //! px-ui: modelo de vista del lienzo, conversión de imágenes, lienzo de egui, texto, tema y
 //! barra de estado, el panel de paletas, el editor de color, la capa de acciones (`actions`), el
 //! menú, la columna de herramientas, el panel de licencias y el damero de transparencia del lienzo
-//! con su fondo elegible (`checker`, `background`).
+//! con su fondo elegible (`checker`, `background`) y el teclado como tabla de datos (`keymap`,
+//! `key_events`).
 
 pub mod actions;
 pub mod background;
@@ -17,6 +18,8 @@ pub mod dialog_layout;
 pub mod dialog_view;
 pub mod dirty;
 pub mod edit_layout;
+pub mod key_events;
+pub mod keymap;
 pub mod licenses_view;
 pub mod menu;
 pub mod notice;

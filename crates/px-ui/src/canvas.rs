@@ -702,8 +702,18 @@ impl Canvas {
         };
 
         let mut view = self.view.unwrap_or_else(|| View::fit(viewport, size));
+        // `n` (centrar bajo el cursor) necesita el puntero: la última posición conocida, si cae
+        // en el lienzo y ninguna otra capa está encima.
+        let cursor = ui
+            .input(|i| i.pointer.latest_pos())
+            .filter(|p| on_canvas(*p))
+            .map(|p| (physical(p.x - rect.min.x), physical(p.y - rect.min.y)));
         for op in std::mem::take(&mut self.requested) {
-            view.apply_op(op, viewport, size);
+            match (op, cursor) {
+                (ViewOp::CenterOnCursor, Some(point)) => view.center_on(point, viewport, size),
+                (ViewOp::CenterOnCursor, None) => {}
+                _ => view.apply_op(op, viewport, size),
+            }
         }
         let center = (
             i64::from(viewport.width) / 2,
