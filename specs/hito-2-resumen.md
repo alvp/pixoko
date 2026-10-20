@@ -1,6 +1,6 @@
 # Hito 2 · Resumen del cierre
 
-Solo notas: no es una spec de comportamiento ni tiene tests. Estado del hito: **cerrado, a falta de la prueba manual de la unidad 22** ([`hito-2-puerta.md`](hito-2-puerta.md), lista de 15 pasos); pasa a «cerrado» cuando el usuario la confirme. Orden y decisiones del reparto: [`hito-2-reparto-cierre.md`](hito-2-reparto-cierre.md). Cada punto remite a la spec que lo decidió, que sigue siendo la fuente; nada de lo que sigue es nuevo salvo las cifras de la unidad 22.
+Solo notas: no es una spec de comportamiento ni tiene tests. Estado del hito: **cerrado**; el usuario confirmó la prueba manual de la unidad 22 ([`hito-2-puerta.md`](hito-2-puerta.md), lista de 15 pasos) en Linux, Windows y macOS. Orden y decisiones del reparto: [`hito-2-reparto-cierre.md`](hito-2-reparto-cierre.md). Cada punto remite a la spec que lo decidió, que sigue siendo la fuente; nada de lo que sigue es nuevo salvo las cifras de la unidad 22.
 
 ## Unidades
 

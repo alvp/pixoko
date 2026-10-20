@@ -8,7 +8,7 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 | --- | --- | --- | --- |
 | 0 · Fundaciones | Repo, CLAUDE.md, CI en tres sistemas, cargo-deny | CI verde en Linux, Windows y macOS | cerrado |
 | 1 · Núcleo y formatos | `Rgba`, paleta, imagen en 4 modos, documento con deshacer, PNG | Ida y vuelta de PNG sin pérdida en el corpus | cerrado |
-| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador, paleta, conversión de modos, lienzos grandes | Abrir, editar y guardar un PNG real en tres sistemas cerrado, a falta de la prueba manual de la unidad 22 (resumen en `specs/hito-2-resumen.md`) |
+| 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador, paleta, conversión de modos, lienzos grandes | Abrir, editar y guardar un PNG real en tres sistemas | cerrado (prueba manual confirmada; resumen en `specs/hito-2-resumen.md`) |
 | Interfaz estilo programa de referencia | Base de interfaz para las herramientas del hito 4, en cuatro unidades (abajo) y con el diseño en `docs/DISENO-INTERFAZ.md` | Por definir en la spec de cada unidad | pendiente |
 | ↳ I.1 · Teclado como datos | Tabla de atajos como datos, con las letras del programa de referencia | Por definir en su spec | pendiente |
 | ↳ I.2 · Dos colores y ratón | Primer plano y fondo; botón derecho, rueda, botón central, botones extra reasignables y gestos del trackpad | Por definir en su spec | pendiente |
@@ -23,7 +23,7 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 
 Los hitos 3 a 6 pueden solaparse en worktrees una vez cerrado el 2; el 7 es opcional.
 
-**Hito 2:** todas las unidades hechas, la 14b descartada y la puerta (unidad 22: prueba automática en `px-app` y `px-golden`, lista manual de 15 pasos en `specs/hito-2-puerta.md`) a la espera de tu prueba manual. Unidades, aplazado a los hitos siguientes con su spec de origen y cifras medidas: `specs/hito-2-resumen.md`. Candidato para el hito 3: partir `px-app` en lib y binario.
+**Hito 2:** cerrado. Todas las unidades hechas, la 14b descartada y la puerta (unidad 22: prueba automática en `px-app` y `px-golden`, lista manual de 15 pasos en `specs/hito-2-puerta.md`) superada: la prueba manual salió bien en Linux, Windows y macOS. Unidades, aplazado a los hitos siguientes con su spec de origen y cifras medidas: `specs/hito-2-resumen.md`. Candidato para el hito 3: partir `px-app` en lib y binario.
 
 ## Interfaz estilo programa de referencia
 
