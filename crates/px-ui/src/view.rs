@@ -333,8 +333,8 @@ impl View {
 
     /// Como [`View::screen_to_image`], pero sin `None` fuera de la imagen: coordenadas con
     /// signo (`floor` de la división), saturadas a `i32`. Sirve para los trazos, que pueden
-    /// salir del lienzo y volver. `image` no cambia el resultado: se acepta por simetría.
-    pub fn screen_to_image_i32(&self, p: (i64, i64), _image: Size) -> (i32, i32) {
+    /// salir del lienzo y volver.
+    pub fn screen_to_image_i32(&self, p: (i64, i64)) -> (i32, i32) {
         let axis = |p: i64, origin: i64| {
             let index = self.zoom.unscale(p.saturating_sub(origin));
             i32::try_from(index).unwrap_or(if index < 0 { i32::MIN } else { i32::MAX })

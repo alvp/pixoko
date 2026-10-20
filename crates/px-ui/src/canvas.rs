@@ -710,10 +710,7 @@ impl Canvas {
             i64::from(viewport.height) / 2,
         );
         let to_image = |view: &View, p: egui::Pos2| {
-            view.screen_to_image_i32(
-                (physical(p.x - rect.min.x), physical(p.y - rect.min.y)),
-                size,
-            )
+            view.screen_to_image_i32((physical(p.x - rect.min.x), physical(p.y - rect.min.y)))
         };
         let space_down = ui.input(|i| i.key_down(Key::Space));
         // Con un campo de texto enfocado el teclado es suyo (specs/hito-2-editar-color.md, 11).
