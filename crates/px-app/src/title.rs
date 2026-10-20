@@ -1,6 +1,9 @@
 //! Texto del título de la ventana, como función pura (specs/hito-2-lapiz-deshacer.md, fila 17).
 //! (Sin fuente en egui todavía, el estado va en el título.)
 
+use px_core::Image;
+use px_ui::canvas::CanvasInfo;
+use px_ui::tool::{Tool, status_text};
 use px_ui::view::Zoom;
 
 /// Datos del título, ya calculados.
@@ -9,6 +12,9 @@ pub struct TitleInfo {
     pub zoom: Zoom,
     /// Píxel de la imagen bajo el cursor.
     pub hover: Option<(u32, u32)>,
+    /// Herramienta activa; `None` no escribe herramienta. En la app siempre es `Some`
+    /// (`app_title_info`).
+    pub tool: Option<Tool>,
     /// Color activo, ya con su ranura (`color 3 #ff0000`).
     pub color: Option<String>,
     pub can_undo: bool,
@@ -18,7 +24,8 @@ pub struct TitleInfo {
 }
 
 /// `Pixoko: {w}×{h} · {zoom}`, y a continuación, cada uno solo si existe, ` · ({x}, {y})`,
-/// ` · {color}`, ` · deshacer` y ` · rehacer`. Con error, `Pixoko: {error}` y nada más.
+/// ` · {herramienta} · {color}` (o solo uno de los dos), ` · deshacer` y ` · rehacer`.
+/// Con error, `Pixoko: {error}` y nada más.
 pub fn title_text(info: &TitleInfo) -> String {
     if let Some(error) = &info.error {
         return format!("Pixoko: {error}");
@@ -31,8 +38,10 @@ pub fn title_text(info: &TitleInfo) -> String {
     if let Some((x, y)) = info.hover {
         title.push_str(&format!(" · ({x}, {y})"));
     }
-    if let Some(color) = &info.color {
-        title.push_str(&format!(" · {color}"));
+    match (info.tool, info.color.as_deref()) {
+        (Some(tool), color) => title.push_str(&format!(" · {}", status_text(tool, color))),
+        (None, Some(color)) => title.push_str(&format!(" · {color}")),
+        (None, None) => {}
     }
     if info.can_undo {
         title.push_str(" · deshacer");
@@ -43,24 +52,40 @@ pub fn title_text(info: &TitleInfo) -> String {
     title
 }
 
-/// Título completo con la herramienta: `title_text` con `status_text(tool, color)` en el campo
-/// `color`. (Apaño hasta que `TitleInfo` tenga un campo propio, unidad 14.)
-pub fn window_title(tool: px_ui::tool::Tool, info: &TitleInfo) -> String {
-    title_text(&TitleInfo {
-        size: info.size,
-        zoom: info.zoom,
-        hover: info.hover,
-        color: Some(px_ui::tool::status_text(tool, info.color.as_deref())),
-        can_undo: info.can_undo,
-        can_redo: info.can_redo,
-        error: info.error.clone(),
-    })
+/// Título completo: es `title_text`. Existe solo porque varias specs y pruebas citan
+/// `window_title` (filas 22 y 10, propiedad 5); debe quitarse cuando dejen de citarlo, y sus
+/// llamadas pasan a `title_text` (specs/hito-2-limpieza-api.md).
+pub fn window_title(info: &TitleInfo) -> String {
+    title_text(info)
+}
+
+/// `TitleInfo` de la app: el único sitio de producción que lo construye, siempre con la
+/// herramienta (`tool: Some(tool)`). Una prueba vigila que `main.rs` no lo construya aparte.
+pub fn app_title_info(
+    tool: Tool,
+    image: Option<&Image>,
+    canvas: &CanvasInfo,
+    color: Option<String>,
+    can_undo: bool,
+    can_redo: bool,
+    error: Option<String>,
+) -> TitleInfo {
+    TitleInfo {
+        size: image.map(|image| (image.width(), image.height())),
+        zoom: canvas.zoom,
+        hover: canvas.hover,
+        tool: Some(tool),
+        color,
+        can_undo,
+        can_redo,
+        error,
+    }
 }
 
 /// Texto de la barra de estado: el título de `window_title` sin el prefijo `Pixoko: ` y sin el
 /// fichero (specs/hito-2-texto.md). `window_title` es, pues, `Pixoko: ` más esto.
-pub fn status_line(tool: px_ui::tool::Tool, info: &TitleInfo) -> String {
-    let title = window_title(tool, info);
+pub fn status_line(info: &TitleInfo) -> String {
+    let title = window_title(info);
     match title.strip_prefix("Pixoko: ") {
         Some(line) => line.to_string(),
         None => title,

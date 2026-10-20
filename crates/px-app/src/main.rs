@@ -62,7 +62,7 @@ use crate::new_image::{
     open_new_image, spec_from_values, sync_form,
 };
 use crate::session::{Session, describe_saved, describe_saved_dialog};
-use crate::title::{TitleInfo, status_line, title_with_file, window_title};
+use crate::title::{app_title_info, status_line, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
 /// Una conversión que espera su fotograma tras `Aceptar` (specs/hito-2-convertir-modo.md, D5).
@@ -920,25 +920,26 @@ impl eframe::App for App {
         if notice.is_none() {
             self.notice = None;
         }
-        let canvas_error = canvas_info.error.map(|error| error.to_string());
-        let info = TitleInfo {
-            size: image.map(|image| (image.width(), image.height())),
-            zoom: canvas_info.zoom,
-            hover: canvas_info.hover,
-            color: image.and_then(|image| {
+        let canvas_error = canvas_info.error.as_ref().map(|error| error.to_string());
+        let tool = self.tools.tool();
+        let info = app_title_info(
+            tool,
+            image,
+            &canvas_info,
+            image.and_then(|image| {
                 tool_color_label(
-                    self.tools.tool(),
+                    tool,
                     image,
                     self.session.choice,
                     self.session.slots.get(image.mode()),
                 )
             }),
-            can_undo: self.session.document.can_undo(),
-            can_redo: self.session.document.can_redo(),
-            error: canvas_error.or(notice),
-        };
-        let title = window_title(self.tools.tool(), &info);
-        let status = (status_line(self.tools.tool(), &info), info.error.is_some());
+            self.session.document.can_undo(),
+            self.session.document.can_redo(),
+            canvas_error.or(notice),
+        );
+        let title = window_title(&info);
+        let status = (status_line(&info), info.error.is_some());
         if status != self.status {
             self.status = status;
             ctx.request_repaint();
