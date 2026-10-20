@@ -470,7 +470,7 @@ fn fila_7_el_desplegable_de_ver_mide_208_u_con_filas_de_16_u() {
         );
         // Las demás filas llevan su atajo alineado a la derecha, en el mismo borde.
         let borde = inicio.rect().max.x * ppp;
-        for atajo in ["+", "-", "Ctrl+1"] {
+        for atajo in [">", "<", "Ctrl+1"] {
             let t = busca(atajo);
             assert!(
                 (t.rect().max.x * ppp - borde).abs() <= TOL_MENU_PX,

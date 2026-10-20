@@ -75,6 +75,8 @@ fn modelo(v: View, op: ViewOp) -> View {
         ViewOp::ZoomOut => m.set_zoom(v.zoom().zoom_out(), CENTRO),
         ViewOp::Actual => m.set_zoom(Zoom::ONE, CENTRO),
         ViewOp::Fit => return View::fit(LIENZO, IMAGEN),
+        // Necesita el puntero: `apply_op` la deja como está (solo `clamp`).
+        ViewOp::CenterOnCursor => {}
     }
     con_clamp(m)
 }
@@ -272,6 +274,7 @@ proptest! {
             ViewOp::ZoomIn => prop_assert_eq!(despues.zoom(), antes.zoom().zoom_in()),
             ViewOp::ZoomOut => prop_assert_eq!(despues.zoom(), antes.zoom().zoom_out()),
             ViewOp::Actual => prop_assert_eq!(despues.zoom(), Zoom::ONE),
+            ViewOp::CenterOnCursor => prop_assert_eq!(despues.zoom(), antes.zoom()),
         }
 
         // Modelo: `set_zoom` anclado en el centro y `clamp`.
