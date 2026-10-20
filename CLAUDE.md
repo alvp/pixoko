@@ -15,6 +15,7 @@
 - No hagas capturas de pantalla del escritorio (ni de la ventana ni de nada que se vea en pantalla).
   La prueba manual la hago yo.
 - Las compilaciones desechables y las copias de prueba NO van en `/tmp` (es un tmpfs, memoria): usa `CARGO_TARGET_DIR=~/.cache/pixoko-scratch` o una carpeta en el disco, y bórrala al terminar.
+- Tareas cortas (un commit, solo pruebas o documentación): sin test-writer ni subagentes, sin auditor de licencias (no hay dependencias ni código de producción nuevos), cargo check y cargo test solo del crate tocado y un cierre completo una sola vez antes del commit. Las propiedades de proptest se comprueban con 500 casos como máximo, en release si hace falta.
 
 ## Unidad de trabajo (una función o un panel; commits pequeños)
 1. **Spec primero**, en `specs/` y con su fila en `specs/INDEX.md`:
@@ -41,3 +42,12 @@
 - Los tests nuevos de un crate se añaden como módulos de un ejecutable de pruebas existente si es razonable (menos enlazados).
 - Tras `/clear`, la sesión se reanuda leyendo la spec de la unidad y `git log -6`.
 - Informe final, solo esto: commits, qué cambia respecto a la spec, riesgos y la lista de prueba manual.
+
+## Modo ahorro (desde 2026-10-20)
+- Pruebas nuevas: una por fila de la spec y una por propiedad; tope orientativo de 40 por unidad. Los barridos exhaustivos solo donde la spec lo pida (contraste, geometría).
+- test-writer solo para px-core, px-formats, px-raster y lógica delicada. En unidades de interfaz, la sesión principal escribe y commitea las pruebas ANTES del código, sin subagente.
+- license-auditor solo si hay dependencias nuevas o cambios en px-core, px-formats o px-raster.
+- Pruebas anteriores que cambian: sin medir en copia desechable. Se hace el cambio, se corre cargo test -p del crate y se commitea la adaptación con mensaje que explique qué comprobaba cada una. Si alguna necesita más que firmas, literales o cifras, parar.
+- Spec: una sola corrección posterior, al final.
+- Informe final: máximo 20 líneas (commits, desvíos de la spec, riesgos, prueba manual en 10 pasos).
+- Tareas cortas (un commit, solo pruebas o documentación): sin subagentes, cargo check y cargo test del crate, un cierre completo antes del commit, proptest con 500 casos como máximo.
