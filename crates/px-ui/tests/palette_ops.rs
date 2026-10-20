@@ -2509,6 +2509,11 @@ fn modelo_aplicar(op: &PaletteOp, ids: &[u32]) -> Vec<u32> {
             let k = i64::from(steps).rem_euclid(i64::from(len));
             nuevo[inicio..fin].rotate_right(usize::try_from(k).expect("k pequeño"));
         }
+        // `operacion_valida` (`tipo % 4`) no genera `SetTransparent`: la unidad 21 tiene su
+        // propia propiedad (conmutador exacto) y la estrategia de 11d no se amplía.
+        PaletteOp::SetTransparent { .. } => {
+            unreachable!("operacion_valida no genera SetTransparent (propiedad propia, unidad 21)")
+        }
     }
     nuevo
 }
@@ -2539,6 +2544,10 @@ fn seleccion_modelo(op: &PaletteOp, activa: u8, nuevo: &[u32]) -> usize {
             .position(|&id| id == u32::from(from))
             .expect("la movida"),
         PaletteOp::Rotate { .. } => usize::from(activa),
+        // Inalcanzable por la misma razón que en `modelo_aplicar`.
+        PaletteOp::SetTransparent { .. } => {
+            unreachable!("operacion_valida no genera SetTransparent (propiedad propia, unidad 21)")
+        }
     }
 }
 
@@ -2601,6 +2610,10 @@ proptest! {
             PaletteOp::Move { from, to } => Command::MovePaletteEntry { image: id, from, to },
             PaletteOp::Rotate { start, len, steps } => {
                 Command::RotateColors { image: id, start, len, steps }
+            }
+            // Inalcanzable por la misma razón que en `modelo_aplicar`.
+            PaletteOp::SetTransparent { .. } => {
+                unreachable!("operacion_valida no genera SetTransparent (propiedad propia, unidad 21)")
             }
         };
         doc.apply(comando).expect("operación válida");
