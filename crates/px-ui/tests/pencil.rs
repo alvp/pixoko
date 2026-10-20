@@ -27,7 +27,8 @@ use egui::{
     PointerState, Pos2, RawInput, Rect, Ui, Vec2, pos2, vec2,
 };
 use px_core::{Document, Image, Mode, Pixel, Rgba};
-use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo};
+use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo, CanvasInput};
+use px_ui::color::Role;
 use px_ui::stroke::Stroke;
 use px_ui::texture::to_rgba8;
 use px_ui::view::Zoom;
@@ -130,6 +131,27 @@ impl Banco {
         let mut f = self.fotograma(events, vec![], None);
         f.output.textures_delta.clear();
         f
+    }
+
+    /// Un fotograma como el de la app (`interact_roles`, `sync` y `paint`), con la entrada
+    /// ordenada: los eventos de trazo **y** `Escape`, cada uno con su rol.
+    fn paso_roles(&mut self, events: Vec<Event>) -> (Vec<(CanvasInput, Role)>, CanvasInfo) {
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+            events,
+            ..RawInput::default()
+        };
+        let mut resultado = None;
+        let canvas = &mut self.canvas;
+        let imagen = &self.imagen;
+        let mut output = self.ctx.run_ui(input, |ui| {
+            let entradas = canvas.interact_roles(ui);
+            canvas.sync(ui.ctx(), imagen).expect("sync");
+            resultado = Some((entradas, canvas.paint(ui)));
+        });
+        self.texturas.aplica(&output.textures_delta);
+        output.textures_delta.clear();
+        resultado.expect("el lienzo se dibuja")
     }
 
     /// Un fotograma con `show`, que debe ser igual que `interact` y `paint` sin superposición.
@@ -487,34 +509,80 @@ fn fila_15_el_izquierdo_con_espacio_abajo_al_pulsar_desplaza_y_no_dibuja() {
     assert!(dy > 0.0 && dy <= 20.0 + 1e-3, "dy = {dy}");
 }
 
+/// Fila 15 (adaptada en I.2b): `Espacio` a mitad de un trazo **lo cancela**, igual que `Escape`.
+/// Antes de I.2b la prueba afirmaba lo contrario (`…_no_desplaza_y_el_trazo_sigue`: el trazo seguía
+/// y dejaba los píxeles 10 a 14); ahora la pulsación de `Espacio` emite el mismo `Escape` que la
+/// tecla `Escape`, el trazo no deja píxeles y la vista sigue sin moverse (esa mitad se conserva).
+/// La repetición de la tecla (`repeat: true`) no cancela.
 #[test]
-fn fila_15_pulsar_espacio_a_mitad_de_un_trazo_no_desplaza_y_el_trazo_sigue() {
-    let mut s = Sesion::nueva();
-    let antes = s.rect_actual();
-    let (p0, p1, p2) = (s.pos(10, 5), s.pos(12, 5), s.pos(14, 5));
-    s.paso(vec![mover(p0)]);
-    assert_eq!(s.paso(vec![izquierdo(p0, true)]), [begin(10, 5)]);
-    assert_eq!(s.paso(vec![mover(p1)]), [paso_a(12, 5)]);
-    assert_eq!(s.paso(vec![espacio(true)]), NADA);
-    // Con el espacio abajo el trazo sigue y la vista no se mueve.
-    assert_eq!(s.paso(vec![mover(p2)]), [paso_a(14, 5)]);
-    assert_eq!(s.rect_actual(), antes, "la vista no se mueve");
-    s.paso(vec![izquierdo(p2, false)]);
-    s.paso(vec![espacio(false)]);
-    assert_eq!(
-        sin_moves_repetidos(&s.eventos),
-        [
-            begin(10, 5),
-            paso_a(12, 5),
-            paso_a(14, 5),
-            CanvasEvent::StrokeEnd
-        ]
-    );
-    assert_eq!(s.rect_actual(), antes);
+fn fila_15_espacio_a_mitad_de_un_trazo_lo_cancela() {
+    fn recorrido(tecla: Event) -> (Vec<(CanvasInput, Role)>, Rect, Rect, Mini) {
+        let mut s = Sesion::nueva();
+        let antes = s.rect_actual();
+        let (p0, p1, p2) = (s.pos(10, 5), s.pos(12, 5), s.pos(14, 5));
+        let mut todo = Vec::new();
+        let mut ultimo = antes;
+        let mut paso = |s: &mut Sesion, events: Vec<Event>| {
+            let (entradas, info) = s.banco.paso_roles(events);
+            ultimo = info.image_rect.expect("hay imagen");
+            todo.extend(entradas.clone());
+            entradas
+        };
+        paso(&mut s, vec![mover(p0)]);
+        let entradas = paso(&mut s, vec![izquierdo(p0, true)]);
+        assert_eq!(
+            entradas,
+            [(CanvasInput::Stroke(begin(10, 5)), Role::Foreground)]
+        );
+        paso(&mut s, vec![mover(p1)]);
+        paso(&mut s, vec![tecla]);
+        paso(&mut s, vec![mover(p2)]);
+        paso(&mut s, vec![izquierdo(p2, false)]);
+        let mut app = Mini::nuevo();
+        for (entrada, _) in &todo {
+            match entrada {
+                CanvasInput::Stroke(e) => app.aplicar(&[*e]),
+                CanvasInput::Escape => app.stroke = None,
+            }
+        }
+        (todo, antes, ultimo, app)
+    }
 
-    let mut app = Mini::nuevo();
-    app.aplicar(&s.eventos);
-    assert_eq!(app.cambiados(), 5, "los píxeles 10 a 14 de la fila 5");
+    let (con_espacio, antes, despues, app) = recorrido(espacio(true));
+    let (con_escape, _, _, _) = recorrido(Event::Key {
+        key: Key::Escape,
+        physical_key: Some(Key::Escape),
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    });
+    assert_eq!(con_espacio, con_escape, "Espacio hace lo mismo que Escape");
+    let escapes = con_espacio
+        .iter()
+        .filter(|(e, _)| *e == CanvasInput::Escape)
+        .count();
+    assert_eq!(escapes, 1, "una sola cancelación");
+    assert_eq!(app.cambiados(), 0, "el trazo cancelado no deja píxeles");
+    assert_eq!(despues, antes, "la vista no se mueve");
+
+    // La repetición de la tecla no cancela.
+    let (con_repeticion, _, _, app) = recorrido(Event::Key {
+        key: Key::Space,
+        physical_key: Some(Key::Space),
+        pressed: true,
+        repeat: true,
+        modifiers: Modifiers::NONE,
+    });
+    assert!(
+        !con_repeticion
+            .iter()
+            .any(|(e, _)| *e == CanvasInput::Escape)
+    );
+    assert_eq!(
+        app.cambiados(),
+        5,
+        "el trazo sigue y deja los píxeles 10 a 14"
+    );
 }
 
 #[test]
