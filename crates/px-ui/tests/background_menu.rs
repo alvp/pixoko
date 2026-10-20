@@ -1407,3 +1407,1057 @@ fn fila_3_las_cuatro_fijas_siguen_sin_bloquearse_con_un_gesto_ni_con_una_quita()
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19c (specs/hito-2-contraste-menu.md): contraste de las entradas de los menús
+// ---------------------------------------------------------------------------------------------
+//
+// Todo lo de abajo es un módulo de este ejecutable (D5) y reutiliza `BancoDelMenu`, `Forma`,
+// `encima`, `fondo_bajo` (por índice, para no confundir «Guardar» con «Guardar como…») y los
+// colores del tema. Reglas de medida:
+//
+// - El color de un texto es el del primer vértice de glifo (`Forma::Texto::glifo`), que es el de
+//   pantalla pero **premultiplicado** (el atajo débil de egui es `#86868699`, lo desactivado lleva
+//   alfa 128): se mezcla con `encima` sobre el relleno real de debajo antes de `contrast_ratio`.
+// - El relleno real es el de `fondo_bajo`: todos los rellenos anteriores que contienen el texto,
+//   mezclados en orden sobre el fondo del lienzo.
+// - El banco abre los menús con clics (barra y submenú) y mueve el ratón con eventos reales. Aquí
+//   se construye con un envoltorio (`Mesa`) que también admite la plataforma (el banco fija Linux),
+//   así que la fila 3 prueba las tres plataformas pintadas de verdad, no solo `shortcut_text`.
+// - «Fondos activos»: los seis de `ACTIVOS` (cuatro fijos, `Custom(#336699)` y `Custom(#000000)`).
+// - La fila 5 compara posiciones y tamaños con las invariantes de la geometría de la 17 (margen de
+//   6 u, fila de 16 u, texto de 14 u y 7 u por carácter, anchos de `popup_width_u` y
+//   `submenu_width_u`), medidas sobre el código actual: no hay una captura «de antes» que comparar,
+//   y un cambio de color no puede alterarlas. Es lo que se puede probar sin inventar cifras.
+mod contraste_del_menu {
+    use super::*;
+    use proptest::prelude::*;
+    use px_ui::menu::popup_width_u;
+    use px_ui::theme::{ACCENT, SURFACE_0, TEXT};
+    use std::collections::{BTreeMap, BTreeSet};
+
+    /// Suelo de contraste del texto desactivado (visto bueno de D4): se compara con `>=`.
+    const SUELO_DESACTIVADO: f64 = 2.0;
+    /// Pares texto-fondo mínimos que debe recorrer la fila 1 (que no sea vacía por un fallo del
+    /// banco): seis escenas, todas las filas y los seis fondos a las cinco escalas.
+    const PARES_MINIMOS_FILA_1: usize = 10_000;
+
+    // -----------------------------------------------------------------------------------------
+    // Escenas
+    // -----------------------------------------------------------------------------------------
+
+    #[derive(Clone, Copy, Debug)]
+    struct Escena {
+        nombre: &'static str,
+        menu: &'static str,
+        /// Con `Ver → Fondo del lienzo` abierto además del desplegable.
+        submenu: bool,
+    }
+
+    const fn escena(nombre: &'static str, menu: &'static str, submenu: bool) -> Escena {
+        Escena {
+            nombre,
+            menu,
+            submenu,
+        }
+    }
+
+    const ESC_ARCHIVO: Escena = escena("Archivo", "Archivo", false);
+    const ESC_EDITAR: Escena = escena("Editar", "Editar", false);
+    const ESC_IMAGEN: Escena = escena("Imagen", "Imagen", false);
+    const ESC_VER: Escena = escena("Ver", "Ver", false);
+    const ESC_AYUDA: Escena = escena("Ayuda", "Ayuda", false);
+    const ESC_FONDO: Escena = escena("Ver → Fondo del lienzo", "Ver", true);
+    /// Archivo, Editar, Imagen, Ver y su submenú (spec) y, de propina, Ayuda.
+    const ESCENAS: [Escena; 6] = [
+        ESC_ARCHIVO,
+        ESC_EDITAR,
+        ESC_IMAGEN,
+        ESC_VER,
+        ESC_FONDO,
+        ESC_AYUDA,
+    ];
+
+    fn marca(fondo: CanvasBackground, item: &MenuItem) -> String {
+        format!(
+            "{} {}",
+            if background_checked(item.action, fondo) {
+                '·'
+            } else {
+                ' '
+            },
+            item.label
+        )
+    }
+
+    /// Los rótulos de las filas sobre las que se pone el ratón en la escena, uno a uno.
+    fn filas_de(escena: Escena, fondo: CanvasBackground) -> Vec<String> {
+        if escena.submenu {
+            el_submenu_de_fondo()
+                .items
+                .iter()
+                .map(|i| marca(fondo, i))
+                .collect()
+        } else {
+            let menu = el_menu(escena.menu);
+            let mut v: Vec<String> = menu.items.iter().map(|i| i.label.to_string()).collect();
+            v.extend(menu.submenus.iter().map(|s| s.label.to_string()));
+            v
+        }
+    }
+
+    /// La acción de una fila a partir de su rótulo pintado (con o sin marca).
+    fn accion_de_rotulo(texto: &str) -> Option<AppAction> {
+        let de_menu = MENUS
+            .iter()
+            .flat_map(|m| m.items.iter())
+            .find(|i| i.label == texto);
+        if let Some(i) = de_menu {
+            return Some(i.action);
+        }
+        let sin_marca = texto
+            .strip_prefix("· ")
+            .or_else(|| texto.strip_prefix("  "))?;
+        el_submenu_de_fondo()
+            .items
+            .iter()
+            .find(|i| i.label == sin_marca)
+            .map(|i| i.action)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // El banco con plataforma
+    // -----------------------------------------------------------------------------------------
+
+    fn idx_exacto(b: &BancoDelMenu, buscado: &str) -> Option<usize> {
+        b.formas
+            .iter()
+            .position(|f| matches!(f, Forma::Texto { texto, .. } if texto == buscado))
+    }
+
+    fn rect_exacto(b: &BancoDelMenu, buscado: &str) -> Rect {
+        match idx_exacto(b, buscado) {
+            Some(i) => match &b.formas[i] {
+                Forma::Texto { rect, .. } => *rect,
+                Forma::Relleno { .. } => unreachable!(),
+            },
+            None => panic!(
+                "no se pinta {buscado:?}; hay {:?}",
+                b.formas
+                    .iter()
+                    .filter_map(|f| match f {
+                        Forma::Texto { texto, .. } => Some(texto.as_str()),
+                        Forma::Relleno { .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+            ),
+        }
+    }
+
+    /// Como `BancoDelMenu::fondo_bajo`, pero por índice de forma.
+    fn fondo_en(b: &BancoDelMenu, i: usize) -> Option<(Rect, Color32)> {
+        let Forma::Texto { rect, clip, .. } = &b.formas[i] else {
+            return None;
+        };
+        let visible = rect.intersect(*clip);
+        let sonda = visible.shrink2(vec2(0.0, visible.height() * 0.25));
+        let mut fila = None;
+        let mut fondo = BACKGROUND;
+        for forma in &b.formas[..i] {
+            if let Forma::Relleno { rect, fill, clip } = forma
+                && rect.intersect(*clip).expand(0.01).contains_rect(sonda)
+            {
+                fila = Some(*rect);
+                fondo = encima(fondo, *fill);
+            }
+        }
+        fila.map(|fila| (fila, fondo))
+    }
+
+    /// Un texto pintado con su relleno real y su contraste.
+    #[derive(Clone, Debug)]
+    struct Medida {
+        texto: String,
+        rect: Rect,
+        /// El color del glifo tal cual lo pinta egui (premultiplicado).
+        pintado: Color32,
+        /// La fila (relleno más cercano) y el color real de debajo; `None` si no hay relleno.
+        fila: Option<Rect>,
+        fondo: Option<Color32>,
+        /// `pintado` mezclado sobre `fondo`: lo que ve el usuario.
+        pantalla: Option<Color32>,
+        ratio: Option<f64>,
+    }
+
+    impl Medida {
+        fn describe(&self) -> String {
+            match (self.fondo, self.pantalla, self.ratio) {
+                (Some(f), Some(p), Some(r)) => format!(
+                    "{:?} pintado {:?} (en pantalla {p:?}) sobre {f:?} da {r:.2}",
+                    self.texto, self.pintado
+                ),
+                _ => format!(
+                    "{:?} pintado {:?} sin relleno debajo",
+                    self.texto, self.pintado
+                ),
+            }
+        }
+    }
+
+    fn medir(b: &BancoDelMenu) -> Vec<Medida> {
+        let mut v = Vec::new();
+        for (i, f) in b.formas.iter().enumerate() {
+            let Forma::Texto {
+                texto,
+                rect,
+                glifo,
+                colores,
+                ..
+            } = f
+            else {
+                continue;
+            };
+            // «Unaligned» es el rótulo de depuración que egui pinta en las compilaciones de
+            // depuración cuando un rectángulo no cae en la rejilla de píxeles (a 1,25 el menú
+            // no cae): no es texto de la interfaz y no lleva relleno.
+            if texto.trim().is_empty() || texto == "Unaligned" {
+                continue;
+            }
+            let pintado = glifo
+                .or_else(|| colores.first().copied())
+                .unwrap_or(Color32::PLACEHOLDER);
+            let (fila, fondo, pantalla, ratio) = match fondo_en(b, i) {
+                Some((fila, fondo)) => {
+                    let pantalla = encima(fondo, pintado);
+                    (
+                        Some(fila),
+                        Some(fondo),
+                        Some(pantalla),
+                        Some(contrast_ratio(pantalla, fondo)),
+                    )
+                }
+                None => (None, None, None, None),
+            };
+            v.push(Medida {
+                texto: texto.clone(),
+                rect: *rect,
+                pintado,
+                fila,
+                fondo,
+                pantalla,
+                ratio,
+            });
+        }
+        v
+    }
+
+    /// El estado de un recorrido: la escena, dónde está el ratón y todo lo pintado.
+    #[derive(Clone, Debug)]
+    struct Estado {
+        escena: Escena,
+        /// Rótulo de la fila bajo el ratón; `None` es el ratón fuera de la ventana (reposo).
+        raton: Option<String>,
+        medidas: Vec<Medida>,
+    }
+
+    struct Mesa {
+        b: BancoDelMenu,
+        platform: Platform,
+    }
+
+    impl Mesa {
+        fn nueva(ppp: f32, fondo: CanvasBackground, locks: Locks, platform: Platform) -> Mesa {
+            let ctx = contexto(ppp);
+            ctx.set_visuals_of(egui::Theme::Dark, visuals(ppp));
+            let mut mesa = Mesa {
+                b: BancoDelMenu {
+                    ctx,
+                    fondo,
+                    locks,
+                    formas: Vec::new(),
+                    elegida: None,
+                    tiempo: 0.0,
+                },
+                platform,
+            };
+            mesa.reposo();
+            mesa
+        }
+
+        /// Un fotograma como el de `BancoDelMenu::fotograma`, con la plataforma de la mesa.
+        fn fotograma(&mut self, events: Vec<Event>) {
+            let b = &mut self.b;
+            let estado = UiState {
+                can_undo: true,
+                can_redo: true,
+                zoom: Zoom::from_int(5),
+                tool: Tool::Pencil,
+                locks: b.locks,
+            };
+            let fondo = b.fondo;
+            let platform = self.platform;
+            b.tiempo += 0.25;
+            let entrada = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, PANTALLA_DEL_MENU)),
+                events,
+                time: Some(b.tiempo),
+                ..RawInput::default()
+            };
+            let mut salida = b.ctx.run_ui(entrada, |ui| {
+                apply_scale(ui.ctx());
+                show_menu_with_background(ui, &estado, platform, fondo);
+            });
+            salida.textures_delta.clear();
+            b.formas = formas_en_orden(&salida.shapes);
+        }
+
+        fn reposo(&mut self) {
+            for _ in 0..6 {
+                self.fotograma(vec![]);
+            }
+        }
+
+        fn clic(&mut self, pos: Pos2) {
+            self.fotograma(vec![mover(pos)]);
+            self.fotograma(vec![boton(pos, true)]);
+            self.fotograma(vec![boton(pos, false)]);
+        }
+
+        fn centro(&self, texto: &str) -> Pos2 {
+            rect_exacto(&self.b, texto).center()
+        }
+
+        /// Barra con `escena` abierta con clics reales (el menú y, si toca, el submenú).
+        fn abierta(
+            ppp: f32,
+            fondo: CanvasBackground,
+            locks: Locks,
+            platform: Platform,
+            escena: Escena,
+        ) -> Mesa {
+            let mut mesa = Mesa::nueva(ppp, fondo, locks, platform);
+            let titulo = mesa.centro(escena.menu);
+            mesa.clic(titulo);
+            mesa.reposo();
+            if escena.submenu {
+                let submenu = mesa.centro("Fondo del lienzo");
+                mesa.clic(submenu);
+                mesa.reposo();
+            }
+            mesa
+        }
+
+        /// Mide la escena con el ratón sobre la fila `raton` (o fuera, si es `None`).
+        fn estado(&mut self, escena: Escena, raton: Option<&str>) -> Estado {
+            match raton {
+                None => self.fotograma(vec![Event::PointerGone]),
+                Some(fila) => {
+                    let pos = self.centro(fila);
+                    self.fotograma(vec![mover(pos)]);
+                }
+            }
+            self.fotograma(vec![]);
+            self.fotograma(vec![]);
+            Estado {
+                escena,
+                raton: raton.map(str::to_owned),
+                medidas: medir(&self.b),
+            }
+        }
+    }
+
+    /// Reposo (ratón fuera) y luego el ratón sobre cada fila, una a una.
+    fn recorrer_escena(
+        ppp: f32,
+        fondo: CanvasBackground,
+        locks: Locks,
+        platform: Platform,
+        escena: Escena,
+    ) -> Vec<Estado> {
+        let mut mesa = Mesa::abierta(ppp, fondo, locks, platform, escena);
+        let mut estados = vec![mesa.estado(escena, None)];
+        for fila in filas_de(escena, fondo) {
+            estados.push(mesa.estado(escena, Some(&fila)));
+        }
+        estados
+    }
+
+    fn recorrer(
+        ppp: f32,
+        fondo: CanvasBackground,
+        locks: Locks,
+        platform: Platform,
+    ) -> Vec<Estado> {
+        ESCENAS
+            .iter()
+            .flat_map(|e| recorrer_escena(ppp, fondo, locks, platform, *e))
+            .collect()
+    }
+
+    /// Reparte las escalas en hilos (cada una con su contexto de egui).
+    fn en_paralelo<T: Sync, R: Send>(datos: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+        std::thread::scope(|s| {
+            let hilos: Vec<_> = datos.iter().map(|d| s.spawn(|| f(d))).collect();
+            hilos
+                .into_iter()
+                .map(|h| h.join().expect("un hilo del recorrido ha fallado"))
+                .collect()
+        })
+    }
+
+    fn estado_de_ui(locks: Locks) -> UiState {
+        UiState {
+            can_undo: true,
+            can_redo: true,
+            zoom: Zoom::from_int(5),
+            tool: Tool::Pencil,
+            locks,
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Informe de fallos (compacto: sin repetir el mismo par cien veces)
+    // -----------------------------------------------------------------------------------------
+
+    #[derive(Default)]
+    struct Fallos {
+        /// Clave del par (texto, relleno, resultado) -> (veces, primer sitio donde ocurre).
+        por_par: BTreeMap<String, (usize, String)>,
+    }
+
+    impl Fallos {
+        fn anota(&mut self, donde: String, m: &Medida) {
+            self.por_par
+                .entry(m.describe())
+                .and_modify(|(n, _)| *n += 1)
+                .or_insert((1, donde));
+        }
+
+        fn anota_texto(&mut self, donde: String, mensaje: String) {
+            self.por_par
+                .entry(mensaje)
+                .and_modify(|(n, _)| *n += 1)
+                .or_insert((1, donde));
+        }
+
+        fn mezcla(&mut self, otro: Fallos) {
+            for (k, (n, donde)) in otro.por_par {
+                self.por_par
+                    .entry(k)
+                    .and_modify(|(m, _)| *m += n)
+                    .or_insert((n, donde));
+            }
+        }
+
+        fn esta_vacio(&self) -> bool {
+            self.por_par.is_empty()
+        }
+
+        fn resumen(&self) -> String {
+            let total: usize = self.por_par.values().map(|(n, _)| n).sum();
+            let mut s = format!(
+                "{} pares distintos fallan ({total} apariciones):",
+                self.por_par.len()
+            );
+            for (par, (n, donde)) in self.por_par.iter().take(14) {
+                s.push_str(&format!("\n  x{n}  {par}  [p. ej. {donde}]"));
+            }
+            s
+        }
+    }
+
+    fn donde(ppp: f32, fondo: CanvasBackground, e: &Estado) -> String {
+        format!(
+            "ppp {ppp}, fondo {fondo:?}, {}, ratón en {:?}",
+            e.escena.nombre, e.raton
+        )
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 1: recorrido de todo texto, en reposo y con el ratón
+    // -----------------------------------------------------------------------------------------
+
+    #[test]
+    fn fila_1_todo_texto_de_los_menus_tiene_contraste_4_5_sobre_su_relleno_real() {
+        let resultados = en_paralelo(&PPPS, |&ppp| {
+            let mut fallos = Fallos::default();
+            let mut pares = 0usize;
+            let mut distintos = BTreeSet::new();
+            for fondo in ACTIVOS {
+                for e in recorrer(ppp, fondo, sin_bloqueos(), Platform::Linux) {
+                    for m in &e.medidas {
+                        pares += 1;
+                        distintos.insert((
+                            m.texto.clone(),
+                            m.fondo.map(|f| f.to_array()),
+                            m.pintado.to_array(),
+                        ));
+                        match m.ratio {
+                            None => fallos.anota(donde(ppp, fondo, &e), m),
+                            Some(r) if r < MIN_TEXTO => fallos.anota(donde(ppp, fondo, &e), m),
+                            Some(_) => {}
+                        }
+                    }
+                }
+            }
+            (fallos, pares, distintos)
+        });
+        let mut fallos = Fallos::default();
+        let mut pares = 0;
+        let mut distintos = BTreeSet::new();
+        for (f, n, d) in resultados {
+            fallos.mezcla(f);
+            pares += n;
+            distintos.extend(d);
+        }
+        eprintln!(
+            "fila 1: {pares} medidas texto-fondo, {} pares (texto, relleno) distintos, 6 fondos x 5 escalas",
+            distintos.len()
+        );
+        assert!(
+            pares >= PARES_MINIMOS_FILA_1,
+            "el recorrido solo midió {pares} pares: el banco no está abriendo los menús"
+        );
+        assert!(fallos.esta_vacio(), "{}", fallos.resumen());
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 2: la entrada marcada
+    // -----------------------------------------------------------------------------------------
+
+    #[test]
+    fn fila_2_la_marcada_es_surface_0_sobre_accent_las_demas_text_y_el_valor_surface_0() {
+        let resultados = en_paralelo(&PPPS, |&ppp| {
+            let mut fallos = Fallos::default();
+            let mut estados_vistos = 0usize;
+            for fondo in ACTIVOS {
+                let estados =
+                    recorrer_escena(ppp, fondo, sin_bloqueos(), Platform::Linux, ESC_FONDO);
+                for e in &estados {
+                    estados_vistos += 1;
+                    let sitio = donde(ppp, fondo, e);
+                    // Una sola fila sobre ACCENT en todo lo pintado.
+                    let filas_accent: BTreeSet<[u32; 4]> = e
+                        .medidas
+                        .iter()
+                        .filter(|m| m.fondo == Some(ACCENT))
+                        .filter_map(|m| m.fila)
+                        .map(|r| [r.min.x, r.min.y, r.max.x, r.max.y].map(f32::to_bits))
+                        .collect();
+                    if filas_accent.len() != 1 {
+                        fallos.anota_texto(
+                            sitio.clone(),
+                            format!(
+                                "hay {} filas sobre ACCENT y debía haber 1",
+                                filas_accent.len()
+                            ),
+                        );
+                    }
+                    for item in el_submenu_de_fondo().items {
+                        let rotulo = marca(fondo, item);
+                        let marcada = background_checked(item.action, fondo);
+                        let Some(m) = e.medidas.iter().find(|m| m.texto == rotulo) else {
+                            fallos.anota_texto(sitio.clone(), format!("no se pinta {rotulo:?}"));
+                            continue;
+                        };
+                        let (color, base) = if marcada {
+                            (SURFACE_0, Some(ACCENT))
+                        } else {
+                            (TEXT, None)
+                        };
+                        if m.pantalla != Some(color) || m.pintado != color {
+                            fallos.anota(sitio.clone(), m);
+                        }
+                        if let Some(base) = base
+                            && m.fondo != Some(base)
+                        {
+                            fallos.anota(sitio.clone(), m);
+                        }
+                        match m.ratio {
+                            Some(r) if r >= MIN_TEXTO => {}
+                            _ => fallos.anota(sitio.clone(), m),
+                        }
+                        if marcada {
+                            // SURFACE_0 sobre ACCENT: 8,98.
+                            match m.ratio {
+                                Some(r) if (r - 8.98).abs() < 0.01 => {}
+                                _ => fallos.anota(sitio.clone(), m),
+                            }
+                        }
+                    }
+                    // El valor de `Color…`, solo con un color propio, en SURFACE_0.
+                    if let Some(valor) = background_value_text(fondo) {
+                        match e.medidas.iter().find(|m| m.texto == valor) {
+                            Some(m) => {
+                                if m.pantalla != Some(SURFACE_0) || m.fondo != Some(ACCENT) {
+                                    fallos.anota(sitio.clone(), m);
+                                }
+                            }
+                            None => fallos.anota_texto(
+                                sitio.clone(),
+                                format!("no se pinta el valor {valor:?}"),
+                            ),
+                        }
+                    }
+                }
+            }
+            (fallos, estados_vistos)
+        });
+        let mut fallos = Fallos::default();
+        for (f, n) in resultados {
+            assert_eq!(n, 6 * 6, "seis fondos x (reposo + cinco filas)");
+            fallos.mezcla(f);
+        }
+        assert!(fallos.esta_vacio(), "{}", fallos.resumen());
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 3: los atajos, en TEXT opaco
+    // -----------------------------------------------------------------------------------------
+
+    fn escena_del_menu(titulo: &str) -> Escena {
+        *ESCENAS
+            .iter()
+            .find(|e| e.menu == titulo && !e.submenu)
+            .expect("escena del menú")
+    }
+
+    #[test]
+    fn fila_3_los_atajos_se_pintan_en_text_opaco_con_4_5_en_reposo_y_con_el_raton() {
+        // `show_menu_with_background` recibe la plataforma, así que las tres se pintan de verdad.
+        let resultados = en_paralelo(&PPPS, |&ppp| {
+            let mut fallos = Fallos::default();
+            let mut por_plataforma = Vec::new();
+            for platform in PLATAFORMAS {
+                let mut n = 0usize;
+                for titulo in ["Archivo", "Editar", "Ver"] {
+                    let escena = escena_del_menu(titulo);
+                    let mut mesa = Mesa::abierta(
+                        ppp,
+                        CanvasBackground::Checker,
+                        sin_bloqueos(),
+                        platform,
+                        escena,
+                    );
+                    for item in el_menu(titulo).items {
+                        let Some(atajo) = shortcut_for(item.action, platform) else {
+                            continue;
+                        };
+                        let texto = shortcut_text(atajo, platform);
+                        n += 1;
+                        for raton in [None, Some(item.label)] {
+                            let e = mesa.estado(escena, raton);
+                            let sitio = format!("{platform:?}, {}", donde(ppp, e_fondo(), &e));
+                            let Some(m) = e.medidas.iter().find(|m| m.texto == texto) else {
+                                fallos
+                                    .anota_texto(sitio, format!("no se pinta el atajo {texto:?}"));
+                                continue;
+                            };
+                            if m.pintado != TEXT || m.pintado.a() != 255 {
+                                fallos.anota(sitio.clone(), m);
+                            }
+                            match m.ratio {
+                                Some(r) if r >= MIN_TEXTO => {}
+                                _ => fallos.anota(sitio, m),
+                            }
+                        }
+                    }
+                }
+                por_plataforma.push((platform, n));
+            }
+            (fallos, por_plataforma)
+        });
+        let mut fallos = Fallos::default();
+        for (f, por_plataforma) in resultados {
+            fallos.mezcla(f);
+            // Los atajos de la tabla: 11 en Linux (con `Salir`), 10 en Windows y en macOS.
+            for (platform, n) in por_plataforma {
+                let esperados = if platform == Platform::Linux { 11 } else { 10 };
+                assert_eq!(n, esperados, "atajos de la tabla en {platform:?}");
+            }
+        }
+        assert!(fallos.esta_vacio(), "{}", fallos.resumen());
+    }
+
+    fn e_fondo() -> CanvasBackground {
+        CanvasBackground::Checker
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 4: lo desactivado
+    // -----------------------------------------------------------------------------------------
+    //
+    // Cifras medidas en la spec (D4), anotadas aquí y NO fijadas con una igualdad: el rótulo
+    // desactivado da 3,72:1, el atajo desactivado 3,72:1 (2,26 hoy; con los atajos en `TEXT`) y el
+    // rótulo marcado de `Color…` desactivado 2,00:1 (hoy 1,06, porque va en `TEXT` sobre `ACCENT`
+    // al 50 %). Lo que se exige es el suelo de 2,0 (con `>=`), que cada par sea estrictamente
+    // menor que el mismo par habilitado y que lo único bajo 4,5 sea desactivado.
+
+    fn bloqueos_de_la_fila_4() -> [(&'static str, Locks); 3] {
+        [
+            (
+                "dialog",
+                Locks {
+                    dialog: true,
+                    ..Locks::default()
+                },
+            ),
+            (
+                "gesture",
+                Locks {
+                    gesture: true,
+                    ..Locks::default()
+                },
+            ),
+            (
+                "text_focus",
+                Locks {
+                    text_focus: true,
+                    ..Locks::default()
+                },
+            ),
+        ]
+    }
+
+    /// Fondos de la fila 4: uno fijo (la marcada es una fila de color) y uno propio (la marcada es
+    /// `Color…`, la que más baja da).
+    const FONDOS_DE_LA_FILA_4: [CanvasBackground; 2] = [
+        CanvasBackground::Checker,
+        CanvasBackground::Custom(AZUL_ACERO),
+    ];
+
+    /// `m` está en una fila cuyo rótulo es de una acción deshabilitada con `locks`.
+    fn desactivada(m: &Medida, e: &Estado, state: &UiState) -> bool {
+        let Some(fila) = m.fila else {
+            return false;
+        };
+        e.medidas.iter().any(|o| {
+            o.fila == Some(fila) && accion_de_rotulo(&o.texto).is_some_and(|a| !enabled(a, state))
+        })
+    }
+
+    /// `m` está en una fila marcada del submenú de fondo (su rótulo lleva la marca `· `).
+    fn de_fila_marcada(m: &Medida, e: &Estado) -> bool {
+        let Some(fila) = m.fila else {
+            return false;
+        };
+        e.medidas
+            .iter()
+            .any(|o| o.fila == Some(fila) && o.texto.starts_with("· "))
+    }
+
+    /// Recorre los tres bloqueos y compara cada par desactivado (de filas marcadas o de las no
+    /// marcadas, según `marcadas`) con el mismo par habilitado, y con el suelo de D4.
+    fn comprueba_desactivados(marcadas: bool) -> (Fallos, usize) {
+        let resultados = en_paralelo(&PPPS, |&ppp| {
+            let mut fallos = Fallos::default();
+            let mut desactivados = 0usize;
+            for fondo in FONDOS_DE_LA_FILA_4 {
+                let libre = recorrer(ppp, fondo, sin_bloqueos(), Platform::Linux);
+                for (nombre, locks) in bloqueos_de_la_fila_4() {
+                    let state = estado_de_ui(locks);
+                    let con = recorrer(ppp, fondo, locks, Platform::Linux);
+                    assert_eq!(libre.len(), con.len());
+                    for (a, b) in libre.iter().zip(&con) {
+                        assert_eq!(a.medidas.len(), b.medidas.len(), "{nombre}");
+                        for (habilitado, m) in a.medidas.iter().zip(&b.medidas) {
+                            assert_eq!(
+                                habilitado.texto, m.texto,
+                                "{nombre}: mismo orden de textos"
+                            );
+                            if !desactivada(m, b, &state) || de_fila_marcada(m, b) != marcadas {
+                                continue;
+                            }
+                            desactivados += 1;
+                            let sitio = format!("{nombre}: {}", donde(ppp, fondo, b));
+                            let (Some(r), Some(rh)) = (m.ratio, habilitado.ratio) else {
+                                fallos.anota(sitio, m);
+                                continue;
+                            };
+                            if r >= rh {
+                                fallos.anota_texto(
+                                    sitio.clone(),
+                                    format!(
+                                        "{:?} desactivado da {r:.2} y habilitado {rh:.2}: no se nota atenuado",
+                                        m.texto
+                                    ),
+                                );
+                            }
+                            // Suelo de D4 (comparación `>=`, matiz del visto bueno).
+                            if r < SUELO_DESACTIVADO {
+                                fallos.anota_texto(
+                                    sitio,
+                                    format!(
+                                        "{:?} desactivado da {r:.2}, por debajo del suelo de {SUELO_DESACTIVADO}",
+                                        m.texto
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            (fallos, desactivados)
+        });
+        let mut fallos = Fallos::default();
+        let mut total = 0;
+        for (f, n) in resultados {
+            fallos.mezcla(f);
+            total += n;
+        }
+        (fallos, total)
+    }
+
+    #[test]
+    fn fila_4_cada_rotulo_y_atajo_desactivado_es_menor_que_el_habilitado_y_al_menos_2_0() {
+        let (fallos, n) = comprueba_desactivados(false);
+        assert!(
+            n > 1000,
+            "el recorrido solo encontró {n} pares desactivados"
+        );
+        assert!(fallos.esta_vacio(), "{}", fallos.resumen());
+    }
+
+    #[test]
+    fn fila_4_la_fila_marcada_desactivada_es_menor_que_la_habilitada_y_al_menos_2_0() {
+        let (fallos, n) = comprueba_desactivados(true);
+        assert!(
+            n > 100,
+            "el recorrido solo encontró {n} pares marcados desactivados"
+        );
+        assert!(fallos.esta_vacio(), "{}", fallos.resumen());
+    }
+
+    #[test]
+    fn fila_4_los_pares_bajo_4_5_estan_solo_entre_los_desactivados() {
+        let resultados = en_paralelo(&PPPS, |&ppp| {
+            let mut fallos = Fallos::default();
+            for fondo in FONDOS_DE_LA_FILA_4 {
+                for (nombre, locks) in bloqueos_de_la_fila_4() {
+                    let state = estado_de_ui(locks);
+                    for e in recorrer(ppp, fondo, locks, Platform::Linux) {
+                        for m in &e.medidas {
+                            let bajo = m.ratio.is_none_or(|r| r < MIN_TEXTO);
+                            if bajo && !desactivada(m, &e, &state) {
+                                fallos.anota(format!("{nombre}: {}", donde(ppp, fondo, &e)), m);
+                            }
+                        }
+                    }
+                }
+            }
+            fallos
+        });
+        let mut fallos = Fallos::default();
+        for f in resultados {
+            fallos.mezcla(f);
+        }
+        assert!(
+            fallos.esta_vacio(),
+            "pares habilitados bajo 4,5 con un bloqueo puesto: {}",
+            fallos.resumen()
+        );
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 5: nada más cambia
+    // -----------------------------------------------------------------------------------------
+
+    #[test]
+    fn fila_5_override_text_color_sigue_siendo_text_y_el_submenu_mide_131_u() {
+        for ppp in PPPS {
+            assert_eq!(
+                visuals(ppp).override_text_color,
+                Some(TEXT),
+                "ppp {ppp}: el color de texto forzado no cambia"
+            );
+        }
+        assert_eq!(submenu_width_u(el_submenu_de_fondo()), 131);
+    }
+
+    #[test]
+    fn fila_5_posiciones_y_tamanos_de_cada_texto_siguen_la_geometria_de_la_17() {
+        let fallos = en_paralelo(&PPPS, |&ppp| {
+            let u = ui_unit(ppp);
+            // A 1,25 egui coloca el panel y las filas fuera de la rejilla de píxeles (por eso pinta
+            // «Unaligned»): las filas miden hasta medio píxel físico más y los márgenes un cuarto.
+            // Es el comportamiento de siempre; a ese ppp se tolera un píxel físico.
+            let tol = if ppp == 1.25 {
+                1.0 / ppp
+            } else {
+                tolerancia_de_egui(ppp) / ppp
+            };
+            let mut fallos = Fallos::default();
+            let mut vistos = 0usize;
+            for fondo in FONDOS_DE_LA_FILA_4 {
+                for escena in ESCENAS {
+                    let mut mesa =
+                        Mesa::abierta(ppp, fondo, sin_bloqueos(), Platform::Linux, escena);
+                    let e = mesa.estado(escena, None);
+                    for m in &e.medidas {
+                        vistos += 1;
+                        let sitio = donde(ppp, fondo, &e);
+                        let Some(fila) = m.fila else {
+                            fallos.anota_texto(sitio, format!("{:?} sin fila", m.texto));
+                            continue;
+                        };
+                        let es_titulo = MENUS.iter().any(|menu| menu.title == m.texto);
+                        let es_rotulo = es_titulo
+                            || m.texto == "Fondo del lienzo"
+                            || accion_de_rotulo(&m.texto).is_some();
+                        let caracteres = m.texto.chars().count() as f32;
+                        let mut comprueba = |nombre: &str, real: f32, esperado: f32| {
+                            if (real - esperado).abs() > tol {
+                                fallos.anota_texto(
+                                    sitio.clone(),
+                                    format!(
+                                        "{:?}: {nombre} mide {real} y debía medir {esperado} (u = {u})",
+                                        m.texto
+                                    ),
+                                );
+                            }
+                        };
+                        // La caja del texto: 7 u por carácter y 14 u de alto.
+                        comprueba("ancho del texto", m.rect.width(), caracteres * 7.0 * u);
+                        comprueba("alto del texto", m.rect.height(), 14.0 * u);
+                        // La fila: 16 u de alto y el texto 1 u por debajo de su borde.
+                        // (La fila del submenú `Fondo del lienzo` a 1,25 mide 16 pt y no 12,8: la
+                        // flecha y el redondeo de egui; es así hoy y solo a ese ppp.)
+                        if !(ppp == 1.25 && m.texto == "Fondo del lienzo") {
+                            comprueba("alto de la fila", fila.height(), 16.0 * u);
+                            comprueba("margen superior", m.rect.min.y - fila.min.y, u);
+                        }
+                        // Rótulos con 6 u a la izquierda; atajos y valor con 6 u a la derecha.
+                        if es_rotulo {
+                            comprueba("margen izquierdo", m.rect.min.x - fila.min.x, 6.0 * u);
+                        } else {
+                            comprueba("margen derecho", fila.max.x - m.rect.max.x, 6.0 * u);
+                        }
+                        // El ancho de la fila.
+                        let ancho_u = if es_titulo {
+                            Some(12.0 + caracteres * 7.0)
+                        } else {
+                            match accion_de_rotulo(&m.texto) {
+                                Some(
+                                    AppAction::CanvasBackground(_) | AppAction::BackgroundColor,
+                                ) => Some(submenu_width_u(el_submenu_de_fondo()) as f32),
+                                Some(_) => {
+                                    Some(popup_width_u(el_menu(escena.menu), Platform::Linux) as f32)
+                                }
+                                None if m.texto == "Fondo del lienzo" => {
+                                    Some(popup_width_u(el_menu("Ver"), Platform::Linux) as f32)
+                                }
+                                None => None,
+                            }
+                        };
+                        if let Some(ancho_u) = ancho_u {
+                            comprueba("ancho de la fila", fila.width(), ancho_u * u);
+                        }
+                    }
+                }
+            }
+            (fallos, vistos)
+        });
+        let mut todos = Fallos::default();
+        for (f, vistos) in fallos {
+            assert!(vistos > 100, "solo se midieron {vistos} textos");
+            todos.mezcla(f);
+        }
+        assert!(todos.esta_vacio(), "{}", todos.resumen());
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Propiedades (32 casos; `PROPTEST_CASES` baja o sube el número al desarrollar)
+    // -----------------------------------------------------------------------------------------
+
+    fn casos() -> u32 {
+        std::env::var("PROPTEST_CASES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(32)
+    }
+
+    fn fondo_cualquiera() -> impl Strategy<Value = CanvasBackground> {
+        prop_oneof![
+            Just(CanvasBackground::Checker),
+            Just(CanvasBackground::Black),
+            Just(CanvasBackground::Gray),
+            Just(CanvasBackground::White),
+            (any::<u8>(), any::<u8>(), any::<u8>())
+                .prop_map(|(r, g, b)| CanvasBackground::Custom(Rgba::opaque(r, g, b))),
+        ]
+    }
+
+    /// Dos menús abiertos con clics (el submenú de fondo y `Archivo`), con el ratón sobre la fila
+    /// `fila` (módulo el número de filas de cada uno).
+    fn dos_menus(ppp: f32, fondo: CanvasBackground, fila: usize) -> Vec<Estado> {
+        [ESC_FONDO, ESC_ARCHIVO]
+            .into_iter()
+            .map(|escena| {
+                let filas = filas_de(escena, fondo);
+                let raton = filas[fila % filas.len()].clone();
+                let mut mesa = Mesa::abierta(ppp, fondo, sin_bloqueos(), Platform::Linux, escena);
+                mesa.estado(escena, Some(&raton))
+            })
+            .collect()
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: casos(),
+            failure_persistence: None,
+            ..ProptestConfig::default()
+        })]
+
+        /// Contraste >= 4,5 de todo par texto-fondo habilitado con cualquier fondo activo (con
+        /// `Custom` de RGB opaco aleatorio), cualquier escala y cualquier fila bajo el ratón.
+        #[test]
+        fn propiedad_1_el_contraste_habilitado_es_al_menos_4_5_con_cualquier_fondo(
+            fondo in fondo_cualquiera(),
+            escala in 0..PPPS.len(),
+            fila in 0usize..64,
+        ) {
+            let ppp = PPPS[escala];
+            let mut fallos = Fallos::default();
+            for e in dos_menus(ppp, fondo, fila) {
+                for m in &e.medidas {
+                    if m.ratio.is_none_or(|r| r < MIN_TEXTO) {
+                        fallos.anota(donde(ppp, fondo, &e), m);
+                    }
+                }
+            }
+            prop_assert!(fallos.esta_vacio(), "{}", fallos.resumen());
+        }
+
+        /// El color pintado depende solo del estado: `SURFACE_0` el rótulo marcado y el valor,
+        /// `TEXT` todo lo demás (rótulos, atajos, títulos), sin mirar fondo, escala ni fila.
+        #[test]
+        fn propiedad_2_el_color_del_texto_depende_solo_del_estado(
+            fondo in fondo_cualquiera(),
+            escala in 0..PPPS.len(),
+            fila in 0usize..64,
+        ) {
+            let ppp = PPPS[escala];
+            let marcada = el_submenu_de_fondo()
+                .items
+                .iter()
+                .find(|i| background_checked(i.action, fondo))
+                .map(|i| marca(fondo, i))
+                .expect("siempre hay una marcada");
+            let valor = background_value_text(fondo);
+            let mut fallos = Fallos::default();
+            for e in dos_menus(ppp, fondo, fila) {
+                for m in &e.medidas {
+                    let esperado = if m.texto == marcada || valor.as_deref() == Some(m.texto.as_str()) {
+                        SURFACE_0
+                    } else {
+                        TEXT
+                    };
+                    if m.pintado != esperado || m.pintado.a() != 255 {
+                        fallos.anota(donde(ppp, fondo, &e), m);
+                    }
+                }
+            }
+            prop_assert!(fallos.esta_vacio(), "debían ser {SURFACE_0:?} o {TEXT:?}: {}", fallos.resumen());
+        }
+    }
+}
