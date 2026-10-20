@@ -569,3 +569,881 @@ fn un_boton_deshabilitado_se_pinta_atenuado() {
         .aspecto();
     assert_eq!(zoom_libre, zoom_gesto);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad I.3 (specs/interfaz-caja-derecha.md): recuadro de opciones, clic derecho y tooltips
+// ---------------------------------------------------------------------------------------------
+
+mod caja_derecha {
+    use super::*;
+    use egui::{Color32, PointerButton, RawInput, Rect};
+    use proptest::prelude::*;
+    use px_ui::actions::{Origin, is_blocked};
+    use px_ui::chrome::{
+        OPTIONS_BODY_ROWS, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U, OPTIONS_BORDER_U,
+        OPTIONS_FOCUS_BORDER_U, OPTIONS_H_U, OPTIONS_KEY_Y_U, OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U,
+        OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U,
+    };
+    use px_ui::keymap::{KeyId, default_keymap};
+    use px_ui::options::{
+        NO_OPTIONS, OptionsState, key_line, options_max_scroll, options_row_count,
+    };
+    use px_ui::palette_grid::ring_rects;
+    use px_ui::text::INTERFACE_CHARSET;
+    use px_ui::theme::{SURFACE_1, SURFACE_3};
+    use px_ui::toolbar::{
+        SecondaryOutcome, ToolboxOutput, ToolboxView, secondary_outcome, show_toolbox, tooltip_text,
+    };
+    use px_ui::view::ScreenRect;
+
+    use super::common::{Texto, boton_de, rueda_linea};
+
+    const LINUX: Platform = Platform::Linux;
+
+    /// Banco de la caja entera (`show_toolbox`) con el tiempo del fotograma (los tooltips lo usan).
+    struct Caja {
+        ctx: Context,
+        ppp: f32,
+        estado: UiState,
+        opciones: OptionsState,
+        keymap: Keymap,
+        tiempo: f64,
+    }
+
+    impl Caja {
+        fn nueva(ppp: f32, estado: UiState) -> Caja {
+            Caja {
+                ctx: contexto(ppp),
+                ppp,
+                estado,
+                opciones: OptionsState::default(),
+                keymap: default_keymap().clone(),
+                tiempo: 0.0,
+            }
+        }
+
+        fn n(&self) -> i64 {
+            n_de(self.ppp)
+        }
+
+        /// `x` de la caja en píxeles físicos (pegada al borde derecho de la pantalla del banco).
+        fn x0(&self) -> i64 {
+            caja_sola(
+                (
+                    (PANTALLA.x * self.ppp).round() as i64,
+                    (PANTALLA.y * self.ppp).round() as i64,
+                ),
+                self.n() as u32,
+            )
+            .x
+        }
+
+        fn fotograma(&mut self, events: Vec<Event>) -> (Pintado, ToolboxOutput) {
+            self.tiempo += 0.1;
+            let entrada = RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, PANTALLA)),
+                events,
+                time: Some(self.tiempo),
+                ..RawInput::default()
+            };
+            let mut salida = None;
+            let mut fuera = self.ctx.run_ui(entrada, |ui| {
+                let vista = ToolboxView {
+                    state: &self.estado,
+                    zoom_label: "×5",
+                    options: &self.opciones,
+                };
+                salida = Some(show_toolbox(ui, &vista, &self.keymap, LINUX));
+            });
+            fuera.textures_delta.clear();
+            let formas = std::mem::take(&mut fuera.shapes);
+            (pintado(&formas), salida.expect("la caja se pinta"))
+        }
+
+        fn reposo(&mut self) -> Pintado {
+            self.fotograma(vec![]);
+            self.fotograma(vec![]).0
+        }
+
+        /// Mueve, pulsa y suelta `boton` en `(x, y)`; devuelve la salida de cada uno de los tres
+        /// fotogramas.
+        fn clic(&mut self, boton: PointerButton, x: i64, y: i64) -> Vec<ToolboxOutput> {
+            self.reposo();
+            let pos = en_puntos(self.ppp, x, y);
+            let mut salidas = Vec::new();
+            for events in [
+                vec![mover(pos)],
+                vec![boton_de(pos, boton, true)],
+                vec![boton_de(pos, boton, false)],
+            ] {
+                salidas.push(self.fotograma(events).1);
+            }
+            self.fotograma(vec![mover(en_puntos(self.ppp, 3000, 3000))]);
+            salidas
+        }
+
+        fn centro_de_herramienta(&self, i: i64) -> (i64, i64) {
+            let n = self.n();
+            (
+                self.x0() + (MARGEN_U + BOTON_W_U / 2) * n,
+                y_herramienta_u(i) * n + BOTON_H_U * n / 2,
+            )
+        }
+
+        fn centro_de_zoom(&self, i: i64) -> (i64, i64) {
+            let n = self.n();
+            (
+                self.x0() + (MARGEN_U + BOTON_W_U / 2) * n,
+                y_zoom_u(i) * n + BOTON_H_U * n / 2,
+            )
+        }
+
+        /// Rectángulo del recuadro de opciones en píxeles físicos.
+        fn recuadro(&self) -> ScreenRect {
+            let n = self.n();
+            ScreenRect {
+                x: self.x0() + OPTIONS_X_U * n,
+                y: OPTIONS_Y_U * n,
+                width: OPTIONS_W_U * n,
+                height: OPTIONS_H_U * n,
+            }
+        }
+    }
+
+    fn cerca_rect(real: Rect, ppp: f32, esperado: ScreenRect) -> bool {
+        let tol = tolerancia_de_egui(ppp);
+        let r = [
+            real.min.x * ppp,
+            real.min.y * ppp,
+            real.max.x * ppp,
+            real.max.y * ppp,
+        ];
+        let e = [
+            esperado.x,
+            esperado.y,
+            esperado.x + esperado.width,
+            esperado.y + esperado.height,
+        ];
+        r.iter().zip(e).all(|(a, b)| (a - b as f32).abs() <= tol)
+    }
+
+    fn hay_relleno(p: &Pintado, ppp: f32, color: Color32, esperado: ScreenRect) -> bool {
+        p.rellenos
+            .iter()
+            .any(|r| r.fill == color && cerca_rect(r.rect, ppp, esperado))
+    }
+
+    /// Borde de `grosor` px por dentro de `caja`: las cuatro franjas de un anillo sobre el interior.
+    fn borde(caja: ScreenRect, grosor: i64) -> [ScreenRect; 4] {
+        ring_rects(
+            ScreenRect {
+                x: caja.x + grosor,
+                y: caja.y + grosor,
+                width: caja.width - 2 * grosor,
+                height: caja.height - 2 * grosor,
+            },
+            grosor,
+        )
+    }
+
+    /// El texto pintado cuya esquina cae en `(x_px, y_px)`.
+    fn texto_en<'a>(p: &'a Pintado, ppp: f32, x_px: i64, y_px: i64) -> Option<&'a Texto> {
+        let tol = tolerancia_de_egui(ppp);
+        p.textos.iter().find(|t| {
+            (t.pos.x * ppp - x_px as f32).abs() <= tol && (t.pos.y * ppp - y_px as f32).abs() <= tol
+        })
+    }
+
+    fn acciones(salidas: &[ToolboxOutput]) -> Vec<AppAction> {
+        salidas.iter().filter_map(|s| s.action).collect()
+    }
+
+    fn foco(salidas: &[ToolboxOutput]) -> bool {
+        salidas.iter().any(|s| s.focus_options)
+    }
+
+    fn por_rotulo(rotulo: &str) -> &'static px_ui::toolbar::Button {
+        TOOL_BUTTONS
+            .iter()
+            .chain(ZOOM_BUTTONS.iter())
+            .find(|b| b.label == rotulo)
+            .expect("el botón existe")
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 3: el recuadro se pinta donde dice la spec
+    // -----------------------------------------------------------------------------------------
+
+    #[test]
+    fn fila_3_el_recuadro_se_pinta_con_relleno_y_borde_de_1_u_a_las_cinco_escalas() {
+        for ppp in PPPS {
+            let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            let p = caja.reposo();
+            let n = caja.n();
+            let recuadro = caja.recuadro();
+            assert!(
+                hay_relleno(&p, ppp, SURFACE_0, recuadro),
+                "ppp {ppp}: falta el relleno del recuadro {recuadro:?}"
+            );
+            for franja in borde(recuadro, OPTIONS_BORDER_U * n) {
+                assert!(
+                    hay_relleno(&p, ppp, SURFACE_3, franja),
+                    "ppp {ppp}: falta una franja del borde de 1 u: {franja:?}"
+                );
+            }
+            // Sin el foco no hay borde de 2 u en `ACCENT`.
+            for franja in borde(recuadro, OPTIONS_FOCUS_BORDER_U * n) {
+                assert!(
+                    !hay_relleno(&p, ppp, ACCENT, franja),
+                    "ppp {ppp}: el borde de foco no debería pintarse"
+                );
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 4: qué trae el panel hoy y cómo se prepara
+    // -----------------------------------------------------------------------------------------
+
+    #[test]
+    fn fila_4_cada_herramienta_pinta_su_nombre_su_atajo_y_sin_opciones_en_un_recuadro_fijo() {
+        let esperado = [
+            (Tool::Pencil, "Lápiz", "tecla d"),
+            (Tool::Line, "Línea", "tecla v"),
+            (Tool::Fill, "Relleno", "tecla f"),
+            (Tool::Dropper, "Cuentagotas", "tecla ,"),
+            (Tool::Eraser, "Borrador", "sin tecla"),
+        ];
+        for ppp in PPPS {
+            for (tool, nombre, atajo) in esperado {
+                let mut caja = Caja::nueva(ppp, estado(tool, x5(), Locks::default()));
+                let p = caja.reposo();
+                let n = caja.n();
+                let x = caja.x0() + OPTIONS_TITLE_X_U * n;
+                let titulo = texto_en(&p, ppp, x, OPTIONS_TITLE_Y_U * n)
+                    .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta el título"));
+                assert_eq!(titulo.texto, nombre, "ppp {ppp}");
+                let linea = texto_en(&p, ppp, x, OPTIONS_KEY_Y_U * n)
+                    .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta la línea del atajo"));
+                assert_eq!(linea.texto, atajo, "ppp {ppp}");
+                assert_eq!(linea.color(), TEXT_DIM, "ppp {ppp}");
+                let cuerpo = texto_en(
+                    &p,
+                    ppp,
+                    caja.x0() + OPTIONS_BODY_X_U * n,
+                    OPTIONS_BODY_Y_U * n,
+                )
+                .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta `sin opciones`"));
+                assert_eq!(cuerpo.texto, NO_OPTIONS, "ppp {ppp}");
+                assert_eq!(NO_OPTIONS, "sin opciones");
+                assert_eq!(cuerpo.color(), TEXT_DIM, "ppp {ppp}");
+                // El recuadro es el mismo con cualquier herramienta.
+                assert!(hay_relleno(&p, ppp, SURFACE_0, caja.recuadro()));
+            }
+        }
+    }
+
+    #[test]
+    fn fila_4_la_linea_del_atajo_lee_la_tabla_y_el_borrador_no_tiene() {
+        for tool in HERRAMIENTAS {
+            assert_eq!(
+                key_line(tool, default_keymap(), LINUX),
+                match tool {
+                    Tool::Pencil => "tecla d",
+                    Tool::Line => "tecla v",
+                    Tool::Fill => "tecla f",
+                    Tool::Dropper => "tecla ,",
+                    Tool::Eraser => "sin tecla",
+                }
+            );
+        }
+        // Con otra tabla (la `d` pasa a `x`) cambia el texto.
+        let filas = default_keymap()
+            .rows()
+            .iter()
+            .cloned()
+            .map(|mut f| {
+                if !f.command && f.key == KeyId::Char('d') {
+                    f.key = KeyId::Char('x');
+                }
+                f
+            })
+            .collect();
+        let otra = Keymap::new(filas);
+        assert_eq!(key_line(Tool::Pencil, &otra, LINUX), "tecla x");
+        let mut caja = Caja::nueva(1.0, estado(Tool::Pencil, x5(), Locks::default()));
+        caja.keymap = otra;
+        let p = caja.reposo();
+        assert!(p.pinta("tecla x"));
+    }
+
+    #[test]
+    fn fila_4_las_filas_del_cuerpo_y_su_desplazamiento_estan_preparados_pero_vacios() {
+        for tool in HERRAMIENTAS {
+            assert_eq!(options_row_count(tool), 0, "{tool:?}");
+        }
+        assert_eq!(OPTIONS_BODY_ROWS, 7);
+        for (filas, maximo) in [(0, 0), (7, 0), (8, 1), (30, 23)] {
+            assert_eq!(options_max_scroll(filas), maximo, "{filas} filas");
+        }
+        let mut estado = OptionsState::default();
+        assert_eq!((estado.focused, estado.scroll_rows), (false, 0));
+        estado.scroll_by(3, 0);
+        assert_eq!(estado.scroll_rows, 0, "sin filas no hay nada que desplazar");
+        estado.scroll_by(5, 30);
+        assert_eq!(estado.scroll_rows, 5);
+        estado.scroll_by(100, 30);
+        assert_eq!(estado.scroll_rows, 23, "se recorta a `filas − 7`");
+        estado.scroll_by(-100, 30);
+        assert_eq!(estado.scroll_rows, 0);
+        // Cambiar de herramienta lo devuelve a 0.
+        estado.scroll_by(4, 30);
+        estado.sync_tool(Tool::Line);
+        assert_eq!(estado.scroll_rows, 0);
+    }
+
+    #[test]
+    fn fila_4_la_rueda_sobre_el_cuerpo_pide_desplazar_filas_y_en_otro_sitio_no() {
+        for ppp in PPPS {
+            let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            let n = caja.n();
+            let cuerpo = (
+                caja.x0() + (OPTIONS_BODY_X_U + 10) * n,
+                (OPTIONS_BODY_Y_U + 10) * n,
+            );
+            caja.reposo();
+            caja.fotograma(vec![mover(en_puntos(ppp, cuerpo.0, cuerpo.1))]);
+            let (_, salida) = caja.fotograma(vec![rueda_linea(false)]);
+            assert_eq!(
+                salida.options_scroll_rows, 3,
+                "ppp {ppp}: una muesca = 3 filas"
+            );
+            assert_eq!(salida.action, None);
+            let (x, y) = caja.centro_de_herramienta(0);
+            caja.fotograma(vec![mover(en_puntos(ppp, x, y))]);
+            let (_, salida) = caja.fotograma(vec![rueda_linea(false)]);
+            assert_eq!(salida.options_scroll_rows, 0, "ppp {ppp}: fuera del cuerpo");
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 5: clic derecho en una herramienta
+    // -----------------------------------------------------------------------------------------
+
+    #[test]
+    fn fila_5_el_clic_derecho_elige_la_herramienta_y_da_el_foco_a_las_cinco_escalas() {
+        for ppp in PPPS {
+            for (i, button) in TOOL_BUTTONS.iter().enumerate() {
+                // Con cualquier herramienta activa, también con la propia.
+                for activa in [Tool::Pencil, Tool::Eraser] {
+                    let mut caja = Caja::nueva(ppp, estado(activa, x5(), Locks::default()));
+                    let (x, y) = caja.centro_de_herramienta(i as i64);
+                    let salidas = caja.clic(PointerButton::Secondary, x, y);
+                    assert_eq!(
+                        acciones(&salidas),
+                        vec![button.action],
+                        "ppp {ppp}: {} con {activa:?}",
+                        button.label
+                    );
+                    assert!(foco(&salidas), "ppp {ppp}: {} da el foco", button.label);
+                    assert!(
+                        salidas.iter().any(|s| s.pressed_outside_options),
+                        "ppp {ppp}: el clic cae fuera del recuadro"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fila_5_bloqueado_no_hay_ni_herramienta_ni_foco_y_la_quita_no_bloquea() {
+        let bloqueos: [(&str, fn(&mut Locks)); 4] = [
+            ("gesto", |l| l.gesture = true),
+            ("diálogo", |l| l.dialog = true),
+            ("modal", |l| l.modal = true),
+            ("campo", |l| l.text_focus = true),
+        ];
+        for ppp in PPPS {
+            for (nombre, poner) in bloqueos {
+                let mut locks = Locks::default();
+                poner(&mut locks);
+                let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), locks));
+                for i in 0..5 {
+                    let (x, y) = caja.centro_de_herramienta(i);
+                    let salidas = caja.clic(PointerButton::Secondary, x, y);
+                    assert!(acciones(&salidas).is_empty(), "ppp {ppp}: {nombre}");
+                    assert!(!foco(&salidas), "ppp {ppp}: {nombre}");
+                }
+            }
+            let con_quita = Locks {
+                removal: true,
+                ..Locks::default()
+            };
+            let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), con_quita));
+            let (x, y) = caja.centro_de_herramienta(1);
+            let salidas = caja.clic(PointerButton::Secondary, x, y);
+            assert_eq!(acciones(&salidas), vec![AppAction::SelectTool(Tool::Line)]);
+            assert!(foco(&salidas));
+        }
+    }
+
+    #[test]
+    fn fila_5_el_clic_izquierdo_no_da_foco_y_el_central_no_hace_nada() {
+        for ppp in PPPS {
+            let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            let (x, y) = caja.centro_de_herramienta(2);
+            let izquierdo = caja.clic(PointerButton::Primary, x, y);
+            assert_eq!(
+                acciones(&izquierdo),
+                vec![AppAction::SelectTool(Tool::Fill)]
+            );
+            assert!(!foco(&izquierdo), "ppp {ppp}");
+            let central = caja.clic(PointerButton::Middle, x, y);
+            assert!(
+                acciones(&central).is_empty() && !foco(&central),
+                "ppp {ppp}"
+            );
+        }
+    }
+
+    #[test]
+    fn fila_5_una_pulsacion_dentro_del_recuadro_no_es_fuera_y_en_cualquier_otro_sitio_si() {
+        for ppp in PPPS {
+            let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            let n = caja.n();
+            let dentro = (
+                caja.x0() + (OPTIONS_BODY_X_U + 20) * n,
+                (OPTIONS_BODY_Y_U + 20) * n,
+            );
+            for boton in [PointerButton::Primary, PointerButton::Secondary] {
+                let s = caja.clic(boton, dentro.0, dentro.1);
+                assert!(
+                    s.iter().all(|s| !s.pressed_outside_options),
+                    "ppp {ppp}: dentro del recuadro"
+                );
+                // Fuera de la caja (hacia el lienzo) y sobre un botón de la propia caja.
+                let s = caja.clic(boton, caja.x0() - 40 * n, 50 * n);
+                assert!(
+                    s.iter().any(|s| s.pressed_outside_options),
+                    "ppp {ppp}: fuera"
+                );
+                let (x, y) = caja.centro_de_zoom(3);
+                let s = caja.clic(boton, x, y);
+                assert!(
+                    s.iter().any(|s| s.pressed_outside_options),
+                    "ppp {ppp}: un botón no es el recuadro"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fila_5_el_foco_se_pinta_con_un_borde_de_2_u_accent_con_contraste_3_a_1() {
+        // Sobre el fondo de la caja.
+        assert!(contrast_ratio(ACCENT, SURFACE_1) >= 3.0);
+        for ppp in PPPS {
+            let mut caja = Caja::nueva(ppp, estado(Tool::Line, x5(), Locks::default()));
+            caja.opciones.focus();
+            let p = caja.reposo();
+            let n = caja.n();
+            for franja in borde(caja.recuadro(), OPTIONS_FOCUS_BORDER_U * n) {
+                assert!(
+                    hay_relleno(&p, ppp, ACCENT, franja),
+                    "ppp {ppp}: falta una franja del foco: {franja:?}"
+                );
+            }
+            // El borde de 1 u desaparece: no depende solo del color, cambia el grosor.
+            for franja in borde(caja.recuadro(), OPTIONS_BORDER_U * n) {
+                assert!(!hay_relleno(&p, ppp, SURFACE_3, franja), "ppp {ppp}");
+            }
+        }
+    }
+
+    #[test]
+    fn fila_5_el_foco_se_pierde_con_una_pulsacion_fuera_otra_herramienta_o_un_dialogo() {
+        let mut e = OptionsState::default();
+        e.focus();
+        assert!(e.focused);
+        e.sync_tool(Tool::Pencil);
+        assert!(e.focused, "la misma herramienta no lo quita");
+        e.sync_tool(Tool::Line);
+        assert!(!e.focused, "otra herramienta por otra vía lo quita");
+        e.focus();
+        e.press_outside();
+        assert!(!e.focused);
+        e.focus();
+        e.blur();
+        assert!(!e.focused, "abrir un diálogo lo quita");
+        // El orden del fotograma: pulsación fuera y luego el foco del clic derecho que la causó.
+        e.press_outside();
+        e.focus();
+        assert!(e.focused);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 6: clic derecho en el zoom (la tabla `Secondary` en los dos sentidos)
+    // -----------------------------------------------------------------------------------------
+
+    fn zoom_nivel(n: u32) -> Option<Zoom> {
+        Zoom::from_int(n)
+    }
+
+    #[test]
+    fn fila_6_acercar_aleja_alejar_acerca_y_ajustar_y_uno_a_uno_no_hacen_nada() {
+        let estado = estado(Tool::Pencil, x5(), Locks::default());
+        assert_eq!(
+            secondary_outcome(por_rotulo("Acercar"), &estado),
+            SecondaryOutcome::Action(AppAction::ZoomOut)
+        );
+        assert_eq!(
+            secondary_outcome(por_rotulo("Alejar"), &estado),
+            SecondaryOutcome::Action(AppAction::ZoomIn)
+        );
+        assert_eq!(
+            secondary_outcome(por_rotulo("Ajustar"), &estado),
+            SecondaryOutcome::Nothing
+        );
+        assert_eq!(
+            secondary_outcome(por_rotulo("1:1"), &estado),
+            SecondaryOutcome::Nothing
+        );
+        for button in &TOOL_BUTTONS {
+            assert_eq!(
+                secondary_outcome(button, &estado),
+                SecondaryOutcome::SelectAndFocus(button.action)
+            );
+        }
+    }
+
+    #[test]
+    fn fila_6_se_habilita_por_la_accion_efectiva_en_los_extremos_de_la_escalera() {
+        let en_max = estado(Tool::Pencil, Some(Zoom::MAX), Locks::default());
+        let en_min = estado(Tool::Pencil, Some(Zoom::MIN), Locks::default());
+        // En ×64 el botón `Acercar` está atenuado para el izquierdo y el derecho aleja.
+        assert!(!px_ui::actions::enabled(AppAction::ZoomIn, &en_max));
+        assert_eq!(
+            secondary_outcome(por_rotulo("Acercar"), &en_max),
+            SecondaryOutcome::Action(AppAction::ZoomOut)
+        );
+        assert_eq!(
+            secondary_outcome(por_rotulo("Alejar"), &en_max),
+            SecondaryOutcome::Nothing
+        );
+        // En 1/64, al revés.
+        assert_eq!(
+            secondary_outcome(por_rotulo("Alejar"), &en_min),
+            SecondaryOutcome::Action(AppAction::ZoomIn)
+        );
+        assert_eq!(
+            secondary_outcome(por_rotulo("Acercar"), &en_min),
+            SecondaryOutcome::Nothing
+        );
+        // Sin imagen, nada.
+        let sin_imagen = estado(Tool::Pencil, None, Locks::default());
+        for rotulo in ["Acercar", "Alejar", "Ajustar", "1:1"] {
+            assert_eq!(
+                secondary_outcome(por_rotulo(rotulo), &sin_imagen),
+                SecondaryOutcome::Nothing,
+                "{rotulo}"
+            );
+        }
+    }
+
+    #[test]
+    fn fila_6_los_bloqueos_del_zoom_son_los_de_la_spec_17_con_el_origen_boton() {
+        let con = |poner: fn(&mut Locks)| {
+            let mut l = Locks::default();
+            poner(&mut l);
+            estado(Tool::Pencil, zoom_nivel(5), l)
+        };
+        for (nombre, e, pasa) in [
+            ("gesto", con(|l| l.gesture = true), true),
+            ("quita", con(|l| l.removal = true), true),
+            ("campo", con(|l| l.text_focus = true), true),
+            ("diálogo", con(|l| l.dialog = true), false),
+            ("modal", con(|l| l.modal = true), false),
+        ] {
+            for (rotulo, efectiva) in [
+                ("Acercar", AppAction::ZoomOut),
+                ("Alejar", AppAction::ZoomIn),
+            ] {
+                let esperado = if pasa {
+                    SecondaryOutcome::Action(efectiva)
+                } else {
+                    SecondaryOutcome::Nothing
+                };
+                assert_eq!(
+                    secondary_outcome(por_rotulo(rotulo), &e),
+                    esperado,
+                    "{rotulo} con {nombre}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fila_6_el_clic_derecho_en_los_botones_de_zoom_da_la_accion_contraria_a_las_cinco_escalas() {
+        for ppp in PPPS {
+            for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
+                let esperado: Vec<AppAction> = match button.label {
+                    "Acercar" => vec![AppAction::ZoomOut],
+                    "Alejar" => vec![AppAction::ZoomIn],
+                    _ => vec![],
+                };
+                let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+                let (x, y) = caja.centro_de_zoom(i as i64);
+                let salidas = caja.clic(PointerButton::Secondary, x, y);
+                assert_eq!(acciones(&salidas), esperado, "ppp {ppp}: {}", button.label);
+                assert!(!foco(&salidas), "ppp {ppp}: el zoom no da foco");
+                // En ×64 el derecho de `Acercar` aleja aunque el izquierdo esté atenuado.
+                if button.label == "Acercar" {
+                    let mut caja =
+                        Caja::nueva(ppp, estado(Tool::Pencil, Some(Zoom::MAX), Locks::default()));
+                    let derecho = caja.clic(PointerButton::Secondary, x, y);
+                    assert_eq!(acciones(&derecho), vec![AppAction::ZoomOut], "ppp {ppp}");
+                    let izquierdo = caja.clic(PointerButton::Primary, x, y);
+                    assert!(acciones(&izquierdo).is_empty(), "ppp {ppp}");
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Fila 7: tooltips
+    // -----------------------------------------------------------------------------------------
+
+    fn esperados_tooltips(command: &str) -> Vec<(&'static str, String)> {
+        vec![
+            ("Lápiz", "Lápiz (d)\nclic derecho: opciones".to_string()),
+            ("Línea", "Línea (v)\nclic derecho: opciones".to_string()),
+            ("Relleno", "Relleno (f)\nclic derecho: opciones".to_string()),
+            (
+                "Cuentagotas",
+                "Cuentagotas (,)\nclic derecho: opciones".to_string(),
+            ),
+            ("Borrador", "Borrador\nclic derecho: opciones".to_string()),
+            ("Acercar", "Acercar (>)\nclic derecho: alejar".to_string()),
+            ("Alejar", "Alejar (<)\nclic derecho: acercar".to_string()),
+            ("Ajustar", "Ajustar (Inicio)".to_string()),
+            ("1:1", format!("1:1 ({command}+1)")),
+        ]
+    }
+
+    #[test]
+    fn fila_7_el_texto_del_tooltip_lee_la_tabla_en_las_tres_plataformas() {
+        for (platform, command) in [
+            (Platform::Linux, "Ctrl"),
+            (Platform::Windows, "Ctrl"),
+            (Platform::Mac, "Cmd"),
+        ] {
+            for (rotulo, texto) in esperados_tooltips(command) {
+                assert_eq!(
+                    tooltip_text(por_rotulo(rotulo), default_keymap(), platform),
+                    texto,
+                    "{platform:?}: {rotulo}"
+                );
+            }
+        }
+        // Con otra tabla cambia (la `d` pasa a `x`) y el borrador sigue sin atajo.
+        let filas = default_keymap()
+            .rows()
+            .iter()
+            .cloned()
+            .map(|mut f| {
+                if !f.command && f.key == KeyId::Char('d') {
+                    f.key = KeyId::Char('x');
+                }
+                f
+            })
+            .collect();
+        let otra = Keymap::new(filas);
+        assert_eq!(
+            tooltip_text(por_rotulo("Lápiz"), &otra, LINUX),
+            "Lápiz (x)\nclic derecho: opciones"
+        );
+    }
+
+    #[test]
+    fn fila_7_todo_el_texto_de_los_tooltips_cabe_en_el_juego_de_caracteres_de_la_interfaz() {
+        for platform in [Platform::Linux, Platform::Windows, Platform::Mac] {
+            for (rotulo, _) in esperados_tooltips("Ctrl") {
+                let texto = tooltip_text(por_rotulo(rotulo), default_keymap(), platform);
+                for c in texto.chars().filter(|c| *c != '\n') {
+                    assert!(INTERFACE_CHARSET.contains(c), "{rotulo}: {c:?} no está");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fila_7_el_hover_enseña_el_tooltip_con_la_fuente_de_pixeles_y_sin_hover_no_hay_ninguno() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            for (i, (rotulo, texto)) in esperados_tooltips("Ctrl").iter().enumerate() {
+                let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+                // El primer renglón del tooltip es el que lleva el atajo; el segundo, el clic derecho.
+                let primero = texto.lines().next().expect("hay una línea").to_string();
+                let sin_hover = caja.reposo();
+                let cuenta =
+                    |p: &Pintado, t: &str| p.textos.iter().filter(|x| x.texto == t).count();
+                let antes = cuenta(&sin_hover, &primero);
+                let (x, y) = if i < 5 {
+                    caja.centro_de_herramienta(i as i64)
+                } else {
+                    caja.centro_de_zoom(i as i64 - 5)
+                };
+                let pos = en_puntos(ppp, x, y);
+                let mut ultimo = caja.fotograma(vec![mover(pos)]).0;
+                for _ in 0..8 {
+                    ultimo = caja.fotograma(vec![]).0;
+                }
+                assert_eq!(
+                    cuenta(&ultimo, &primero),
+                    antes + 1,
+                    "ppp {ppp}: {rotulo}: falta el tooltip {primero:?}; hay {:?}",
+                    ultimo.todos_los_textos()
+                );
+                let renglon = ultimo
+                    .textos
+                    .iter()
+                    .filter(|t| t.texto == primero)
+                    .last()
+                    .expect("el tooltip");
+                assert!(
+                    (renglon.tamano.y * ppp - (14 * n) as f32).abs() <= 0.05,
+                    "ppp {ppp}: {rotulo}: el tooltip no usa la fuente de píxeles ({} px de alto)",
+                    renglon.tamano.y * ppp
+                );
+                if let Some(segundo) = texto.lines().nth(1) {
+                    assert!(
+                        ultimo.pinta(segundo),
+                        "ppp {ppp}: {rotulo}: falta {segundo:?}"
+                    );
+                }
+                // Sin el puntero encima, desaparece.
+                caja.fotograma(vec![mover(en_puntos(ppp, 3000, 3000))]);
+                let lejos = caja.fotograma(vec![]).0;
+                assert_eq!(cuenta(&lejos, &primero), antes, "ppp {ppp}: {rotulo}");
+            }
+        }
+    }
+
+    #[test]
+    fn fila_7_un_boton_atenuado_tambien_enseña_su_tooltip() {
+        let ppp = 1.0;
+        let mut caja = Caja::nueva(ppp, estado(Tool::Pencil, Some(Zoom::MAX), Locks::default()));
+        let (x, y) = caja.centro_de_zoom(0); // Acercar, atenuado en ×64.
+        caja.fotograma(vec![mover(en_puntos(ppp, x, y))]);
+        let mut p = caja.fotograma(vec![]).0;
+        for _ in 0..8 {
+            p = caja.fotograma(vec![]).0;
+        }
+        assert!(p.pinta("Acercar (>)"), "hay {:?}", p.todos_los_textos());
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Propiedad 3: el clic secundario sigue la tabla
+    // -----------------------------------------------------------------------------------------
+
+    #[derive(Clone, Copy, Debug)]
+    enum Ev {
+        ClicDerechoEnHerramienta { permitido: bool },
+        PulsacionFuera,
+        CambioDeHerramienta,
+        Dialogo,
+        PulsacionDentro,
+    }
+
+    fn evento() -> impl Strategy<Value = Ev> {
+        prop_oneof![
+            any::<bool>().prop_map(|permitido| Ev::ClicDerechoEnHerramienta { permitido }),
+            Just(Ev::PulsacionFuera),
+            Just(Ev::CambioDeHerramienta),
+            Just(Ev::Dialogo),
+            Just(Ev::PulsacionDentro),
+        ]
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn propiedad_3_el_clic_derecho_sigue_la_tabla_secondary_y_el_bloqueo_del_origen_boton(
+            tool in 0usize..5,
+            nivel in prop::option::of(0usize..1000),
+            gesture in any::<bool>(),
+            dialog in any::<bool>(),
+            text_focus in any::<bool>(),
+            removal in any::<bool>(),
+            modal in any::<bool>(),
+        ) {
+            let niveles: Vec<Zoom> = Zoom::levels().collect();
+            let zoom = nivel.map(|i| niveles[i % niveles.len()]);
+            let locks = Locks { gesture, dialog, text_focus, removal, modal, ..Locks::default() };
+            let e = estado(HERRAMIENTAS[tool], zoom, locks);
+            for button in TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()) {
+                let efectiva = match button.label {
+                    "Acercar" => Some(AppAction::ZoomOut),
+                    "Alejar" => Some(AppAction::ZoomIn),
+                    "Ajustar" | "1:1" => None,
+                    _ => Some(button.action),
+                };
+                let esperado = match efectiva {
+                    None => SecondaryOutcome::Nothing,
+                    Some(accion) => {
+                        let hay_escalon = match accion {
+                            AppAction::ZoomOut => zoom.is_some_and(|z| z > Zoom::MIN),
+                            AppAction::ZoomIn => zoom.is_some_and(|z| z < Zoom::MAX),
+                            _ => true,
+                        };
+                        if is_blocked(accion, locks, Origin::Button) || !hay_escalon {
+                            SecondaryOutcome::Nothing
+                        } else if matches!(accion, AppAction::SelectTool(_)) {
+                            SecondaryOutcome::SelectAndFocus(accion)
+                        } else {
+                            SecondaryOutcome::Action(accion)
+                        }
+                    }
+                };
+                prop_assert_eq!(secondary_outcome(button, &e), esperado, "{}", button.label);
+            }
+        }
+
+        #[test]
+        fn propiedad_3_el_foco_solo_dura_tras_un_clic_derecho_permitido(
+            eventos in prop::collection::vec(evento(), 0..24),
+        ) {
+            let mut e = OptionsState::default();
+            let mut herramienta = Tool::Pencil;
+            let mut antes;
+            for ev in eventos {
+                antes = e.focused;
+                match ev {
+                    Ev::ClicDerechoEnHerramienta { permitido } => {
+                        // Orden del fotograma: primero la pulsación fuera, luego el foco.
+                        e.press_outside();
+                        if permitido {
+                            e.focus();
+                        }
+                        prop_assert_eq!(e.focused, permitido);
+                    }
+                    Ev::PulsacionFuera => {
+                        e.press_outside();
+                        prop_assert!(!e.focused);
+                    }
+                    Ev::CambioDeHerramienta => {
+                        herramienta = if herramienta == Tool::Line { Tool::Fill } else { Tool::Line };
+                        e.sync_tool(herramienta);
+                        prop_assert!(!e.focused);
+                    }
+                    Ev::Dialogo => {
+                        e.blur();
+                        prop_assert!(!e.focused);
+                    }
+                    Ev::PulsacionDentro => prop_assert_eq!(e.focused, antes),
+                }
+                prop_assert!(e.scroll_rows <= options_max_scroll(options_row_count(herramienta)));
+            }
+        }
+    }
+}

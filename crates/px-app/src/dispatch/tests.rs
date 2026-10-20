@@ -3427,3 +3427,141 @@ mod botones_laterales {
         assert!(acciones_de(&vacia, PointerButton::Extra2).is_empty());
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad I.3 (specs/interfaz-caja-derecha.md): clic derecho en la caja de herramientas
+// ---------------------------------------------------------------------------------------------
+
+mod caja_derecha {
+    use super::*;
+    use px_ui::toolbar::{SecondaryOutcome, secondary_outcome};
+
+    fn por_rotulo(rotulo: &str) -> &'static px_ui::toolbar::Button {
+        TOOL_BUTTONS
+            .iter()
+            .chain(ZOOM_BUTTONS.iter())
+            .find(|b| b.label == rotulo)
+            .expect("el botón existe")
+    }
+
+    /// Fila 5: el clic derecho en una herramienta es el mismo `SelectTool` con `Origin::Button`:
+    /// mismo `Dispatched`, mismo aviso del borrador y mismo estado que el clic izquierdo.
+    #[test]
+    fn fila_5_el_clic_derecho_en_una_herramienta_despacha_lo_mismo_que_el_izquierdo() {
+        for button in &TOOL_BUTTONS {
+            let mut derecho = Mundo::estandar();
+            let estado = derecho.estado_de_la_ui(Zoom::from_int(5), Locks::default());
+            let SecondaryOutcome::SelectAndFocus(accion) = secondary_outcome(button, &estado)
+            else {
+                panic!("{}: el clic derecho elige y da el foco", button.label);
+            };
+            let mut izquierdo = Mundo::estandar();
+            let d = derecho.despacha(accion, Origin::Button);
+            let i = izquierdo.despacha(button.action, Origin::Button);
+            assert_eq!(d, i, "{}", button.label);
+            assert_eq!(derecho.foto(), izquierdo.foto(), "{}", button.label);
+            assert_eq!(
+                derecho.tools.tool(),
+                izquierdo.tools.tool(),
+                "{}",
+                button.label
+            );
+        }
+        // El aviso del borrador en una indexada sin transparencia sale igual.
+        let mut m = Mundo::estandar();
+        let Dispatched::Done { notice, .. } =
+            m.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Button)
+        else {
+            panic!("el borrador se elige");
+        };
+        assert_eq!(notice.as_deref(), Some(NO_INDEX_NOTICE));
+    }
+
+    /// Fila 5: con un bloqueo, el clic derecho no hace nada y `dispatch` también da `Blocked`.
+    #[test]
+    fn fila_5_bloqueado_el_clic_derecho_no_sale_y_dispatch_da_blocked() {
+        for poner in [
+            (|l: &mut Locks| l.gesture = true) as fn(&mut Locks),
+            |l| l.dialog = true,
+            |l| l.modal = true,
+            |l| l.text_focus = true,
+        ] {
+            let locks = locks_con(poner);
+            let mut m = Mundo::estandar();
+            let estado = m.estado_de_la_ui(Zoom::from_int(5), locks);
+            for button in &TOOL_BUTTONS {
+                assert_eq!(
+                    secondary_outcome(button, &estado),
+                    SecondaryOutcome::Nothing
+                );
+                assert_eq!(
+                    m.despacha_con(button.action, Origin::Button, locks),
+                    Dispatched::Blocked
+                );
+            }
+        }
+    }
+
+    /// Fila 6: `Acercar` con el derecho despacha lo que `Alejar` con el izquierdo, y al revés.
+    #[test]
+    fn fila_6_el_clic_derecho_en_acercar_y_alejar_despacha_lo_que_el_izquierdo_del_otro() {
+        let mut a = Mundo::estandar();
+        let estado = a.estado_de_la_ui(Zoom::from_int(5), Locks::default());
+        for (rotulo, contrario) in [("Acercar", "Alejar"), ("Alejar", "Acercar")] {
+            let SecondaryOutcome::Action(accion) = secondary_outcome(por_rotulo(rotulo), &estado)
+            else {
+                panic!("{rotulo}: el clic derecho da una acción");
+            };
+            let mut derecho = Mundo::estandar();
+            let mut izquierdo = Mundo::estandar();
+            let d = derecho.despacha(accion, Origin::Button);
+            let i = izquierdo.despacha(por_rotulo(contrario).action, Origin::Button);
+            assert_eq!(d, i, "{rotulo}");
+            assert!(matches!(d, Dispatched::View(_)), "{rotulo}: {d:?}");
+            assert_eq!(derecho.foto(), izquierdo.foto(), "{rotulo}");
+        }
+        for rotulo in ["Ajustar", "1:1"] {
+            assert_eq!(
+                secondary_outcome(por_rotulo(rotulo), &estado),
+                SecondaryOutcome::Nothing
+            );
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// Propiedad 3 (parte del documento): ninguna secuencia de clics derechos en la caja
+        /// cambia `state_id`, `can_undo` ni `can_redo`, con cualquier bloqueo.
+        #[test]
+        fn propiedad_3_los_clics_derechos_no_tocan_el_documento_ni_la_historia(
+            clics in prop::collection::vec(
+                (0usize..9, any::<bool>(), any::<bool>(), any::<bool>(), 0usize..1000),
+                0..24,
+            ),
+        ) {
+            let niveles: Vec<Zoom> = Zoom::levels().collect();
+            let mut m = Mundo::estandar();
+            let antes = m.foto();
+            for (indice, gesture, dialog, text_focus, nivel) in clics {
+                let locks = Locks { gesture, dialog, text_focus, ..Locks::default() };
+                let zoom = Some(niveles[nivel % niveles.len()]);
+                let estado = m.estado_de_la_ui(zoom, locks);
+                let boton = TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).nth(indice).expect("hay nueve botones");
+                match secondary_outcome(boton, &estado) {
+                    SecondaryOutcome::Nothing => {}
+                    SecondaryOutcome::Action(a) | SecondaryOutcome::SelectAndFocus(a) => {
+                        let d = m.despacha_con(a, Origin::Button, locks);
+                        if !matches!(a, AppAction::SelectTool(_)) {
+                            prop_assert!(matches!(d, Dispatched::View(_)), "{a:?}: {d:?}");
+                        }
+                    }
+                }
+                let ahora = m.foto();
+                prop_assert_eq!(ahora.state_id, antes.state_id);
+                prop_assert_eq!(ahora.can_undo, antes.can_undo);
+                prop_assert_eq!(ahora.can_redo, antes.can_redo);
+            }
+        }
+    }
+}

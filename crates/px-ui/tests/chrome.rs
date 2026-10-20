@@ -469,3 +469,132 @@ proptest! {
         prop_assert!(layout.canvas.height >= min_panel_height_px(n));
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad I.3 (specs/interfaz-caja-derecha.md): orden de las zonas, mínimos y geometría de la caja
+// ---------------------------------------------------------------------------------------------
+
+mod caja_derecha {
+    use super::*;
+    use px_ui::chrome::{
+        OPTIONS_BODY_H_U, OPTIONS_BODY_ROWS, OPTIONS_BODY_W_U, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U,
+        OPTIONS_BORDER_U, OPTIONS_FOCUS_BORDER_U, OPTIONS_H_U, OPTIONS_KEY_Y_U, OPTIONS_ROW_H_U,
+        OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U, OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U, ZOOM_Y_U,
+    };
+
+    const ALTO_MAX_PT: f32 = 518.4;
+    const ANCHO_MAX_PT: f32 = 683.0;
+
+    /// Fila 1: **la única prueba que conoce el orden de las zonas** (lienzo, panel, caja).
+    #[test]
+    fn fila_1_el_orden_es_lienzo_panel_y_caja_en_el_borde_derecho() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            for ventana in ventanas(ppp) {
+                let l = window_layout(ventana, n as u32);
+                assert_eq!(l.canvas.x, 0, "ppp {ppp}");
+                assert_eq!(l.canvas.x + l.canvas.width, l.panel.x, "ppp {ppp}");
+                assert_eq!(l.panel.x + l.panel.width, l.toolbar.x, "ppp {ppp}");
+                assert_eq!(l.toolbar.x + l.toolbar.width, ventana.0, "ppp {ppp}");
+                assert_eq!(l.panel.width, 233 * n);
+                assert_eq!(l.toolbar.width, 107 * n);
+                assert_eq!(canvas_origin_px(n as u32), (0, 16 * n));
+            }
+        }
+    }
+
+    /// Fila 2: los mínimos no cambian y cumplen los dos techos; el contenido de la caja cabe.
+    #[test]
+    fn fila_2_los_minimos_no_cambian_y_cumplen_los_techos() {
+        for ((ppp, alto), ancho) in PPPS.iter().zip(ALTOS_PT).zip(ANCHOS_PT) {
+            assert!(cerca_pt(min_window_height_pt(*ppp), alto), "ppp {ppp}");
+            assert!(cerca_pt(min_window_width_pt(*ppp), ancho), "ppp {ppp}");
+            assert!(min_window_height_pt(*ppp) <= ALTO_MAX_PT, "ppp {ppp}");
+            assert!(min_window_width_pt(*ppp) <= ANCHO_MAX_PT, "ppp {ppp}");
+            let n = n_de(*ppp);
+            assert!(
+                TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32),
+                "ppp {ppp}: la caja no cabe en el panel mínimo"
+            );
+        }
+        for invalido in [f32::NAN, 0.0, -1.0, f32::INFINITY] {
+            assert!(cerca_pt(min_window_height_pt(invalido), 387.0));
+            assert!(cerca_pt(min_window_width_pt(invalido), 468.0));
+        }
+        assert_eq!(min_window_width_u(), 468);
+    }
+
+    /// Fila 3: las constantes y las relaciones del recuadro de opciones.
+    #[test]
+    fn fila_3_el_recuadro_de_opciones_tiene_la_geometria_de_la_spec() {
+        assert_eq!(
+            (OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U),
+            (4, 193, 99, 138)
+        );
+        assert_eq!(OPTIONS_W_U, toolbar_button_width_u());
+        assert_eq!((OPTIONS_BORDER_U, OPTIONS_FOCUS_BORDER_U), (1, 2));
+        assert_eq!((OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U), (8, 197));
+        assert_eq!(OPTIONS_KEY_Y_U, 211);
+        assert_eq!(
+            (OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U, OPTIONS_BODY_W_U),
+            (8, 229, 91)
+        );
+        assert_eq!(OPTIONS_BODY_ROWS, 7);
+        assert_eq!(OPTIONS_ROW_H_U, 14);
+        assert_eq!(OPTIONS_BODY_H_U, 7 * 14);
+        // 4 u bajo el último botón de zoom (termina en 189) y 4 u de margen inferior.
+        assert_eq!(OPTIONS_Y_U, ZOOM_Y_U + 3 * 18 + 16 + 4);
+        assert_eq!(OPTIONS_Y_U + OPTIONS_H_U + 4, TOOLBAR_CONTENT_H_U);
+        // Dentro del recuadro: margen de 4 u (borde y relleno) en los cuatro lados.
+        assert_eq!(OPTIONS_TITLE_X_U, OPTIONS_X_U + 4);
+        assert_eq!(OPTIONS_TITLE_Y_U, OPTIONS_Y_U + 4);
+        assert_eq!(OPTIONS_KEY_Y_U, OPTIONS_TITLE_Y_U + 14);
+        assert_eq!(OPTIONS_BODY_Y_U, OPTIONS_KEY_Y_U + 14 + 4);
+        assert_eq!(
+            OPTIONS_BODY_X_U + OPTIONS_BODY_W_U + 4,
+            OPTIONS_X_U + OPTIONS_W_U
+        );
+        assert_eq!(
+            OPTIONS_BODY_Y_U + OPTIONS_BODY_H_U + 4,
+            OPTIONS_Y_U + OPTIONS_H_U
+        );
+        // Las 13 columnas de 7 u del cuerpo.
+        assert_eq!(OPTIONS_BODY_W_U, 13 * 7);
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// Propiedad 1: reparto entero, adyacente y recubridor con cualquier ancho (también impar).
+        #[test]
+        fn propiedad_1_el_reparto_con_la_caja_a_la_derecha_es_entero_adyacente_y_cabe(
+            paso in 0u32..=60,
+            extra_w in 0i64..=700,
+            extra_h in 0i64..=500,
+        ) {
+            let ppp = 1.0 + paso as f32 * 0.05;
+            let n = text_scale(ppp);
+            let k = i64::from(n);
+            let minima = (
+                min_window_width_u() * k,
+                i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n),
+            );
+            let ventana = (minima.0 + extra_w, minima.1 + extra_h);
+            comprueba_layout(ventana, n)?;
+            let l = window_layout(ventana, n);
+            prop_assert_eq!(l.toolbar.x + l.toolbar.width, ventana.0);
+            prop_assert_eq!(l.panel.x + l.panel.width, l.toolbar.x);
+            prop_assert_eq!(l.canvas.x, 0);
+            prop_assert_eq!(l.canvas.x + l.canvas.width, l.panel.x);
+            prop_assert_eq!(canvas_origin_px(n), (0, 16 * k));
+            prop_assert!(l.toolbar.height >= TOOLBAR_CONTENT_H_U * k);
+            // Alto y ancho mínimos: la fórmula y los dos techos.
+            let alto = (i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n)) as f32 / ppp;
+            prop_assert!((min_window_height_pt(ppp) - alto).abs() <= 0.01);
+            prop_assert!(min_window_height_pt(ppp) <= ALTO_MAX_PT);
+            let ancho = (min_window_width_u() * k) as f32 / ppp;
+            prop_assert!((min_window_width_pt(ppp) - ancho).abs() <= 0.01);
+            prop_assert!(min_window_width_pt(ppp) <= ANCHO_MAX_PT);
+        }
+    }
+}

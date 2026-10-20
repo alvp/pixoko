@@ -1170,3 +1170,386 @@ proptest! {
         prop_assert!((margen_superior - margen_inferior).abs() <= 1);
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad I.3 (specs/interfaz-caja-derecha.md): caja y panel a la derecha
+// ---------------------------------------------------------------------------------------------
+
+mod caja_derecha {
+    use super::*;
+    use egui::PointerButton;
+    use px_ui::chrome::{OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U};
+    use px_ui::palette_grid::RIGHT_LINE_X_U;
+    use px_ui::theme::SURFACE_3;
+
+    use super::common::{boton_de, rueda_linea};
+
+    fn rect_en_puntos(r: px_ui::view::ScreenRect, ppp: f32) -> Rect {
+        Rect::from_min_size(
+            Pos2::new(r.x as f32 / ppp, r.y as f32 / ppp),
+            vec2(r.width as f32 / ppp, r.height as f32 / ppp),
+        )
+    }
+
+    /// Distancia de `valor` (px físicos) al múltiplo de `n` más cercano.
+    fn resto_de_n(valor: f32, n: i64) -> f32 {
+        let resto = valor.rem_euclid(n as f32);
+        resto.min(n as f32 - resto)
+    }
+
+    /// Fila 1 (condición 5 del visto bueno): con el ancho de la ventana cambiando de píxel en
+    /// píxel (también impar) y las cinco escalas, ninguna zona cae en medio píxel y el texto de la
+    /// caja y del panel queda a un múltiplo de `n` desde la esquina de su zona (nada borroso).
+    #[test]
+    fn fila_1_con_anchos_de_ventana_impares_ninguna_zona_cae_en_medio_pixel_ni_el_texto_queda_borroso()
+     {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            let minima = ventanas(ppp)[1];
+            for extra in 0..=17 {
+                let ventana = (minima.0 + extra, minima.1 + 2 * extra);
+                let mut banco = Banco::nuevo(ppp, ventana, indexada());
+                let f = banco.reposo();
+                let layout = window_layout(ventana, n as u32);
+                let piezas = [
+                    ("menu", f.rects.menu, layout.menu),
+                    ("estado", f.rects.estado, layout.status),
+                    ("columna", f.rects.columna, layout.toolbar),
+                    ("panel", f.rects.panel, layout.panel),
+                    ("lienzo", f.rects.lienzo, layout.canvas),
+                ];
+                for (nombre, medido, previsto) in piezas {
+                    let fisico = bordes_fisicos(medido, ppp).unwrap_or_else(|| {
+                        panic!("ppp {ppp} ventana {ventana:?}: {nombre} en medio píxel: {medido:?}")
+                    });
+                    assert_eq!(
+                        fisico,
+                        esperado(previsto),
+                        "ppp {ppp} ventana {ventana:?}: {nombre}"
+                    );
+                }
+                for (nombre, zona) in [("caja", layout.toolbar), ("panel", layout.panel)] {
+                    let en_puntos = rect_en_puntos(zona, ppp).expand(TOL_PT);
+                    let textos: Vec<_> = f
+                        .pintado
+                        .textos
+                        .iter()
+                        .filter(|t| en_puntos.contains_rect(t.rect()))
+                        .collect();
+                    assert!(!textos.is_empty(), "ppp {ppp}: {nombre} sin texto");
+                    for t in textos {
+                        for (eje, pos, origen) in [("x", t.pos.x, zona.x), ("y", t.pos.y, zona.y)] {
+                            let rel = pos * ppp - origen as f32;
+                            assert!(
+                                resto_de_n(rel, n) <= tolerancia_de_egui(ppp),
+                                "ppp {ppp} ventana {ventana:?}: {nombre}: {:?} en {eje} = {rel} px \
+                                 desde su esquina (n = {n}): borroso",
+                                t.texto
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Fila 8: sobre el panel y sobre la caja no hay `hover` ni trazo, aunque la imagen cubra todo.
+    #[test]
+    fn fila_8_sobre_el_panel_y_la_caja_no_hay_hover_ni_trazo() {
+        for ppp in PPPS {
+            let n = i64::from(text_scale(ppp));
+            let ventana = ventanas(ppp)[0];
+            let layout = window_layout(ventana, n as u32);
+            let mut banco = Banco::nuevo(ppp, ventana, rgba(1200, 1200));
+            banco.canvas.request_view(ViewOp::Actual);
+            banco.reposo();
+            let y = layout.canvas.y + 100 * n;
+            // Último píxel del lienzo: sí; primero del panel y de la caja y sus centros: no.
+            let ultimo = layout.canvas.x + layout.canvas.width - 1;
+            assert!(
+                banco.hover(ultimo, y).is_some(),
+                "ppp {ppp}: el borde del lienzo"
+            );
+            for (nombre, x) in [
+                ("primer píxel del panel", layout.panel.x),
+                ("centro del panel", layout.panel.x + layout.panel.width / 2),
+                ("primer píxel de la caja", layout.toolbar.x),
+                (
+                    "centro de la caja",
+                    layout.toolbar.x + layout.toolbar.width / 2,
+                ),
+            ] {
+                assert_eq!(banco.hover(x, y), None, "ppp {ppp}: {nombre}");
+                assert_eq!(banco.empieza(x, y), None, "ppp {ppp}: trazo en {nombre}");
+            }
+        }
+    }
+
+    /// Fila 8: la imagen ajustada queda centrada en el lienzo, a la izquierda del panel.
+    #[test]
+    fn fila_8_ajustar_deja_la_imagen_a_la_izquierda_del_panel_y_centrada_en_el_lienzo() {
+        for ppp in PPPS {
+            let n = i64::from(text_scale(ppp));
+            let ventana = ventanas(ppp)[0];
+            let layout = window_layout(ventana, n as u32);
+            let mut banco = Banco::nuevo(ppp, ventana, rgba(64, 48));
+            banco.canvas.request_view(ViewOp::Fit);
+            let f = banco.reposo();
+            let imagen = f.info.image_rect.expect("hay imagen");
+            assert!(
+                imagen.max.x * ppp <= layout.panel.x as f32 + 0.01,
+                "ppp {ppp}: la imagen invade el panel"
+            );
+            assert!(imagen.min.x >= -0.01, "ppp {ppp}");
+            let centro = f.rects.lienzo.center();
+            assert!(
+                (imagen.center().x - centro.x).abs() * ppp <= 1.01
+                    && (imagen.center().y - centro.y).abs() * ppp <= 1.01,
+                "ppp {ppp}"
+            );
+        }
+    }
+
+    /// Fila 9: la rueda sobre la caja (botones y cuerpo del recuadro) no hace zoom ni desplaza el
+    /// panel, con el respaldo B y con el alto del bloque (351 u).
+    #[test]
+    fn fila_9_la_rueda_sobre_la_caja_no_hace_zoom_ni_desplaza_el_panel() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            for panel_u in [200, 100, 351] {
+                let mut banco = banco_con_panel_de(ppp, panel_u);
+                let layout = window_layout(banco.ventana_px, n as u32);
+                let zoom_antes = banco.reposo().info.zoom;
+                for (nombre, x, y) in [
+                    (
+                        "un botón",
+                        layout.toolbar.x + 20 * n,
+                        layout.toolbar.y + 10 * n,
+                    ),
+                    (
+                        "el cuerpo de opciones",
+                        layout.toolbar.x + (OPTIONS_BODY_X_U + 10) * n,
+                        layout.toolbar.y + (OPTIONS_BODY_Y_U + 10) * n,
+                    ),
+                ] {
+                    banco.mueve(x, y);
+                    banco.fotograma(vec![rueda_linea(false)]);
+                    banco.fotograma(vec![rueda_linea(true)]);
+                    banco.rueda_en(x, y, 10 * n);
+                    assert_eq!(
+                        banco.view.offset_px, 0,
+                        "ppp {ppp} panel {panel_u} u: {nombre}"
+                    );
+                    assert_eq!(
+                        banco.reposo().info.zoom,
+                        zoom_antes,
+                        "ppp {ppp} panel {panel_u} u: {nombre} no hace zoom"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Fila 9: con el alto del bloque (351 u) el panel no se desplaza ni con la rueda encima.
+    #[test]
+    fn fila_9_con_351_u_el_panel_no_se_desplaza() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            let mut banco = banco_con_panel_de(ppp, 351);
+            let layout = window_layout(banco.ventana_px, n as u32);
+            assert!(!panel_layout(Mode::Indexed, banco.panel_h_px(), n as u32, 0).scrolling);
+            banco.rueda_en(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
+            assert_eq!(banco.view.offset_px, 0, "ppp {ppp}");
+        }
+    }
+
+    /// Fila 9: todo lo pintado en la caja (también el recuadro de opciones) se recorta a la caja
+    /// aunque la ventana sea más baja que su contenido, y no se mueve con el panel.
+    #[test]
+    fn fila_9_el_recuadro_de_opciones_se_recorta_a_la_caja_con_el_panel_bajo() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            for panel_u in [100, 200, 351] {
+                let mut banco = banco_con_panel_de(ppp, panel_u);
+                let antes = banco.reposo();
+                let layout = window_layout(banco.ventana_px, n as u32);
+                banco.rueda_en(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 20 * n);
+                let f = banco.reposo();
+                let columna = f.rects.columna.expand(TOL_PT);
+                let en_la_caja = |p: &Pintado| {
+                    p.textos
+                        .iter()
+                        .filter(|t| t.pos.x >= f.rects.columna.min.x - TOL_PT)
+                        .map(|t| {
+                            (
+                                t.texto.clone(),
+                                (t.pos.x * ppp).round() as i64,
+                                (t.pos.y * ppp).round() as i64,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let mut ahora = en_la_caja(&f.pintado);
+                let mut antes_t = en_la_caja(&antes.pintado);
+                ahora.sort();
+                antes_t.sort();
+                assert_eq!(
+                    ahora, antes_t,
+                    "ppp {ppp} panel {panel_u} u: la caja se movió"
+                );
+                assert!(!ahora.is_empty(), "ppp {ppp} panel {panel_u} u");
+                for t in f
+                    .pintado
+                    .textos
+                    .iter()
+                    .filter(|t| t.pos.x >= f.rects.columna.min.x - TOL_PT)
+                {
+                    assert!(
+                        columna.contains_rect(t.clip),
+                        "ppp {ppp} panel {panel_u} u: {:?} se pinta fuera de la caja: {:?}",
+                        t.texto,
+                        t.clip
+                    );
+                }
+            }
+        }
+    }
+
+    /// Fila 9: el clic derecho golpea en su sitio dentro de la pila (los nueve botones).
+    #[test]
+    fn fila_9_el_clic_derecho_golpea_en_su_sitio_dentro_de_la_pila() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            let ventana = ventanas(ppp)[0];
+            let layout = window_layout(ventana, n as u32);
+            let mut banco = Banco::nuevo(ppp, ventana, indexada());
+            let x = layout.toolbar.x + (4 + 99 / 2) * n;
+            let botones = TOOL_BUTTONS
+                .iter()
+                .enumerate()
+                .map(|(i, b)| ((16 + 4 + 18 * i as i64) * n + 8 * n, b))
+                .chain(
+                    ZOOM_BUTTONS
+                        .iter()
+                        .enumerate()
+                        .map(|(i, b)| ((16 + 119 + 18 * i as i64) * n + 8 * n, b)),
+                );
+            for (y, button) in botones {
+                let pos = en_puntos(ppp, x, y);
+                let mut acciones = Vec::new();
+                for events in [
+                    vec![mover(pos)],
+                    vec![boton_de(pos, PointerButton::Secondary, true)],
+                    vec![boton_de(pos, PointerButton::Secondary, false)],
+                ] {
+                    acciones.extend(banco.fotograma(events).columna);
+                }
+                let esperado = match button.label {
+                    "Acercar" => vec![AppAction::ZoomOut],
+                    "Alejar" => vec![AppAction::ZoomIn],
+                    "Ajustar" | "1:1" => vec![],
+                    _ => vec![button.action],
+                };
+                assert_eq!(acciones, esperado, "ppp {ppp}: {}", button.label);
+            }
+        }
+    }
+
+    /// Fila 10: línea de 1 u nueva en el borde izquierdo del panel, la de la derecha como hoy, y
+    /// todo lo que pintan el panel y la caja cae dentro de sus rectángulos.
+    #[test]
+    fn fila_10_el_panel_pinta_su_linea_izquierda_la_derecha_y_todo_dentro_de_su_rectangulo() {
+        for ppp in PPPS {
+            let n = n_de(ppp);
+            for ventana in ventanas(ppp) {
+                let mut banco = Banco::nuevo(ppp, ventana, indexada());
+                let f = banco.reposo();
+                let layout = window_layout(ventana, n as u32);
+                let panel = layout.panel;
+                let linea = |x: i64| {
+                    f.pintado.rellenos.iter().any(|r| {
+                        r.fill == SURFACE_3
+                            && (r.rect.min.x * ppp - x as f32).abs() <= tolerancia_de_egui(ppp)
+                            && ((r.rect.max.x - r.rect.min.x) * ppp - n as f32).abs()
+                                <= tolerancia_de_egui(ppp)
+                            && (r.rect.min.y * ppp - panel.y as f32).abs()
+                                <= tolerancia_de_egui(ppp)
+                            && ((r.rect.max.y - r.rect.min.y) * ppp - panel.height as f32).abs()
+                                <= tolerancia_de_egui(ppp)
+                    })
+                };
+                assert!(linea(panel.x), "ppp {ppp} {ventana:?}: línea izquierda");
+                assert!(
+                    linea(panel.x + RIGHT_LINE_X_U * n),
+                    "ppp {ppp} {ventana:?}: línea derecha"
+                );
+                // Todo lo pintado a la derecha del lienzo cae dentro del panel y la caja.
+                let union = rect_en_puntos(panel, ppp)
+                    .union(rect_en_puntos(layout.toolbar, ppp))
+                    .expand(TOL_PT);
+                for r in f
+                    .pintado
+                    .rellenos
+                    .iter()
+                    .filter(|r| r.rect.center().x * ppp > panel.x as f32)
+                {
+                    assert!(union.contains_rect(r.rect), "ppp {ppp}: {:?} fuera", r.rect);
+                }
+                for t in f
+                    .pintado
+                    .textos
+                    .iter()
+                    .filter(|t| t.rect().center().x * ppp > panel.x as f32)
+                {
+                    assert!(union.contains_rect(t.clip), "ppp {ppp}: {:?}", t.texto);
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// Propiedad 2: con el lienzo desde el origen `(0, Y0)` y un ancho cualquiera, la
+        /// conversión es la de origen (0, 0) con el puntero restado, de ida y vuelta, y `fit`
+        /// centra.
+        #[test]
+        fn propiedad_2_la_conversion_con_el_lienzo_desde_x_0_y_ancho_cualquiera_es_exacta(
+            zoom_n in 1u32..=64,
+            ancho in 1u32..=128,
+            alto in 1u32..=128,
+            lienzo_w in 1u32..=2001,
+            lienzo_h in 1u32..=2000,
+            n in 1u32..=3,
+            celdas_y in 0i64..=40,
+            puntero_x in -100i64..=2200,
+            puntero_y in -100i64..=2200,
+            desplazamiento in (-2000i64..=2000, -2000i64..=2000),
+        ) {
+            let k = i64::from(n);
+            let lienzo = Size::new(lienzo_w, lienzo_h);
+            let imagen = Size::new(ancho, alto);
+            let (x0, y0) = (canvas_origin_px(n).0, celdas_y * k);
+            prop_assert_eq!(x0, 0);
+            prop_assert_eq!(y0 % k, 0);
+            let zoom = Zoom::from_int(zoom_n).expect("zoom válido");
+            let mut vista = View::fit(lienzo, imagen);
+            vista.set_zoom(zoom, (i64::from(lienzo_w) / 2, i64::from(lienzo_h) / 2));
+            vista.pan(desplazamiento.0, desplazamiento.1, lienzo, imagen);
+            let en_lienzo = (puntero_x - x0, puntero_y - y0);
+            prop_assert_eq!(
+                vista.screen_to_image(en_lienzo, imagen),
+                vista.screen_to_image((puntero_x, puntero_y - y0), imagen)
+            );
+            if let Some((px, py)) = vista.screen_to_image(en_lienzo, imagen) {
+                let (sx, sy) = vista.image_to_screen(px, py);
+                let (ex, ey) = vista.image_to_screen(px + 1, py + 1);
+                prop_assert!(sx <= en_lienzo.0 && en_lienzo.0 < ex);
+                prop_assert!(sy <= en_lienzo.1 && en_lienzo.1 < ey);
+            }
+            let ajustada = View::fit(lienzo, imagen).image_rect(imagen);
+            let (izq, der) = (ajustada.x, i64::from(lienzo_w) - ajustada.x - ajustada.width);
+            prop_assert!((izq - der).abs() <= 1);
+        }
+    }
+}
