@@ -15,10 +15,13 @@ use egui::{
 };
 use px_core::{Image, Rgba};
 
+use crate::actions::Platform;
 use crate::background::{CanvasBackground, Fill, background_fill};
 use crate::checker::{self, Shade};
 use crate::color::Role;
 use crate::dirty::BlockSet;
+use crate::gestures::{GestureAction, GestureMap, Input, Navigation, PAN_LINE_POINTS, Pointing};
+use crate::pointer_events::{button_of, wheel_of};
 use crate::text::text_scale;
 use crate::texture::{try_tile_pixels, try_tile_pixels_with_entry};
 use crate::tiles::{BLOCK, SystemTileAlloc, TileAlloc, TileRect, Tiling, block_rect, tile_side};
@@ -93,16 +96,9 @@ enum Gesture {
     None,
     /// Desplazar, con el botón que lo empezó.
     Pan(PointerButton),
-    /// Dibujar, con el rol del botón que empezó el gesto (izquierdo: primer plano; derecho: fondo).
-    Draw(Role),
-}
-
-/// El botón del ratón que dibuja con el color de `role`.
-fn button_of(role: Role) -> PointerButton {
-    match role {
-        Role::Foreground => PointerButton::Primary,
-        Role::Background => PointerButton::Secondary,
-    }
+    /// Dibujar con el color del rol que la tabla de gestos da a `button`, el botón que lo empezó
+    /// (por defecto, izquierdo: primer plano; derecho: fondo).
+    Draw { role: Role, button: PointerButton },
 }
 
 /// Lo que `interact` calcula para que `paint` lo dibuje.
@@ -161,6 +157,10 @@ pub struct Canvas {
     view_keys_off: bool,
     /// Qué se ve bajo la transparencia de la imagen: preferencia de la sesión, no del documento.
     background: CanvasBackground,
+    /// Qué hace cada botón, la rueda, los dos dedos y el pellizco (specs/interfaz-raton.md).
+    gestures: GestureMap,
+    /// Acumuladores de pasos de zoom y restos de píxel del desplazamiento.
+    nav: Navigation,
     /// Respaldo: el damero como una malla de casillas en vez de la textura repetida.
     checker_mesh: bool,
     /// Textura de 2×2 del damero, creada la primera vez que se pinta con ella.
@@ -183,6 +183,11 @@ impl Canvas {
             tile_side_override: Some(side.max(1)),
             ..Canvas::default()
         }
+    }
+
+    /// Sustituye la tabla de gestos (hito 8; hoy solo la usan las pruebas).
+    pub fn set_gestures(&mut self, gestures: GestureMap) {
+        self.gestures = gestures;
     }
 
     /// Cambia la imagen mostrada (compatibilidad: clona la imagen). Las baldosas se construyen en
@@ -691,7 +696,7 @@ impl Canvas {
         self.interact_inner(ui, true)
     }
 
-    // TODO(I.2b): retirar `interact` e `interact_ordered` cuando los llamadores migren a
+    // TODO(hito 8): retirar `interact` e `interact_ordered` cuando los llamadores migren a
     // `interact_roles`.
     fn interact_inner(&mut self, ui: &mut Ui, secondary: bool) -> Vec<(CanvasInput, Role)> {
         self.upload_if_pending(ui);
@@ -749,22 +754,60 @@ impl Canvas {
             view.screen_to_image_i32((physical(p.x - rect.min.x), physical(p.y - rect.min.y)))
         };
         let space_down = ui.input(|i| i.key_down(Key::Space));
+        let platform = Platform::current();
         // Con un campo de texto enfocado el teclado es suyo (specs/hito-2-editar-color.md, 11).
         let typing = ui.ctx().text_edit_focused();
         let mut strokes = Vec::new();
         let events = ui.input(|i| i.events.clone());
+        let (mut saw_wheel, mut saw_scroll) = (false, false);
         for event in &events {
             match event {
                 Event::MouseWheel {
-                    delta, modifiers, ..
-                } if !modifiers.command && delta.y != 0.0 => {
-                    if let Some(anchor) = pointer {
-                        zoom_step(&mut view, delta.y > 0.0, anchor);
+                    unit,
+                    delta,
+                    modifiers,
+                    ..
+                } => {
+                    let Some((input, dx, dy)) = wheel_of(*unit, *delta, *modifiers) else {
+                        continue;
+                    };
+                    saw_wheel |= input == Input::Wheel;
+                    saw_scroll |= input == Input::Scroll;
+                    let Some(anchor) = pointer else { continue };
+                    let pointing = Pointing {
+                        input,
+                        command: false,
+                        shift: modifiers.shift,
+                        space: space_down,
+                    };
+                    // Muescas (`Wheel`) o puntos (`Scroll`): las muescas valen `PAN_LINE_POINTS`.
+                    let to_points = |amount: f32| match input {
+                        Input::Wheel => amount * PAN_LINE_POINTS,
+                        _ => amount,
+                    };
+                    let steps = |nav: &mut Navigation| match input {
+                        Input::Wheel => nav.wheel.push(dy),
+                        _ => nav.scroll_zoom.push(dy / PAN_LINE_POINTS),
+                    };
+                    match self.gestures.resolve(&pointing, true, platform) {
+                        Some(GestureAction::ZoomStep) => {
+                            zoom_steps(&mut view, steps(&mut self.nav), anchor);
+                        }
+                        Some(GestureAction::Pan) => {
+                            let (px, py) = self.nav.carry.add(to_points(dx), to_points(dy), ppp);
+                            view.pan(px, py, viewport, size);
+                        }
+                        Some(GestureAction::PanX) => {
+                            let (px, _) = self.nav.carry.add(to_points(dx + dy), 0.0, ppp);
+                            view.pan(px, 0, viewport, size);
+                        }
+                        _ => {}
                     }
                 }
                 Event::Key {
                     key,
                     pressed: true,
+                    repeat,
                     modifiers,
                     ..
                 } if !modifiers.command && !typing => match key {
@@ -775,10 +818,17 @@ impl Canvas {
                     Key::Minus if !self.view_keys_off => zoom_step(&mut view, false, center),
                     Key::Escape if modifiers.is_none() => {
                         let role = match self.gesture {
-                            Gesture::Draw(role) => role,
+                            Gesture::Draw { role, .. } => role,
                             _ => Role::Foreground,
                         };
                         strokes.push((CanvasInput::Escape, role));
+                    }
+                    // `Espacio` con un trazo en curso lo cancela, como `Escape`; sin gesto es la
+                    // tecla de la mano. Su repetición no cancela, y un desplazamiento no se cancela.
+                    Key::Space if !repeat && modifiers.is_none() => {
+                        if let Gesture::Draw { role, .. } = self.gesture {
+                            strokes.push((CanvasInput::Escape, role));
+                        }
                     }
                     _ => {}
                 },
@@ -786,18 +836,24 @@ impl Canvas {
                     pos,
                     button,
                     pressed: true,
-                    ..
+                    modifiers,
                 } if self.gesture == Gesture::None && on_canvas(*pos) => {
-                    self.gesture = match button {
-                        PointerButton::Middle => Gesture::Pan(PointerButton::Middle),
-                        PointerButton::Primary if space_down => {
-                            Gesture::Pan(PointerButton::Primary)
-                        }
-                        PointerButton::Primary => Gesture::Draw(Role::Foreground),
-                        PointerButton::Secondary if secondary => Gesture::Draw(Role::Background),
+                    let pointing = Pointing {
+                        input: Input::Press(button_of(*button)),
+                        command: modifiers.command,
+                        shift: modifiers.shift,
+                        space: space_down,
+                    };
+                    self.gesture = match self.gestures.resolve(&pointing, true, platform) {
+                        Some(GestureAction::Draw(Role::Background)) if !secondary => Gesture::None,
+                        Some(GestureAction::Draw(role)) => Gesture::Draw {
+                            role,
+                            button: *button,
+                        },
+                        Some(GestureAction::Pan) => Gesture::Pan(*button),
                         _ => Gesture::None,
                     };
-                    if let Gesture::Draw(role) = self.gesture {
+                    if let Gesture::Draw { role, .. } = self.gesture {
                         strokes.push((
                             CanvasInput::Stroke(CanvasEvent::StrokeBegin(to_image(&view, *pos))),
                             role,
@@ -810,7 +866,10 @@ impl Canvas {
                     pressed: false,
                     ..
                 } => match self.gesture {
-                    Gesture::Draw(role) if *button == button_of(role) => {
+                    Gesture::Draw {
+                        role,
+                        button: owner,
+                    } if *button == owner => {
                         strokes.push((
                             CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(&view, *pos))),
                             role,
@@ -821,8 +880,8 @@ impl Canvas {
                     Gesture::Pan(owner) if *button == owner => self.gesture = Gesture::None,
                     _ => {}
                 },
-                Event::PointerMoved(pos) if matches!(self.gesture, Gesture::Draw(_)) => {
-                    if let Gesture::Draw(role) = self.gesture {
+                Event::PointerMoved(pos) if matches!(self.gesture, Gesture::Draw { .. }) => {
+                    if let Gesture::Draw { role, .. } = self.gesture {
                         strokes.push((
                             CanvasInput::Stroke(CanvasEvent::StrokeMove(to_image(&view, *pos))),
                             role,
@@ -830,7 +889,7 @@ impl Canvas {
                     }
                 }
                 Event::WindowFocused(false) => {
-                    if let Gesture::Draw(role) = self.gesture {
+                    if let Gesture::Draw { role, .. } = self.gesture {
                         strokes.push((CanvasInput::Stroke(CanvasEvent::StrokeEnd), role));
                     }
                     self.gesture = Gesture::None;
@@ -838,9 +897,17 @@ impl Canvas {
                 _ => {}
             }
         }
+        // Un fotograma sin rueda o sin dedos acaba el gesto: se descarta lo que no dio un paso.
+        if !saw_wheel {
+            self.nav.wheel.reset();
+        }
+        if !saw_scroll {
+            self.nav.scroll_zoom.reset();
+            self.nav.carry.reset();
+        }
         // Red de seguridad: un soltar que no llegó (por ejemplo, fuera de la ventana).
         match self.gesture {
-            Gesture::Draw(role) if !ui.input(|i| i.pointer.button_down(button_of(role))) => {
+            Gesture::Draw { role, button } if !ui.input(|i| i.pointer.button_down(button)) => {
                 strokes.push((CanvasInput::Stroke(CanvasEvent::StrokeEnd), role));
                 self.gesture = Gesture::None;
             }
@@ -849,12 +916,24 @@ impl Canvas {
             }
             _ => {}
         }
-        // Pellizco y Ctrl + rueda: egui los resume en `zoom_delta`.
+        // Pellizco y Ctrl + rueda: egui los resume en `zoom_delta`, un paso cada vez que el
+        // logaritmo acumulado cruza `PINCH_STEP_LN` (antes, un paso por fotograma).
         let pinch = ui.input(|i| i.zoom_delta());
-        if (pinch - 1.0).abs() > 1e-3
-            && let Some(anchor) = pointer
-        {
-            zoom_step(&mut view, pinch > 1.0, anchor);
+        if (pinch - 1.0).abs() > 1e-3 {
+            let (command, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+            let pointing = Pointing {
+                input: Input::Pinch,
+                command,
+                shift,
+                space: space_down,
+            };
+            if let (Some(anchor), Some(GestureAction::ZoomStep)) =
+                (pointer, self.gestures.resolve(&pointing, true, platform))
+            {
+                zoom_steps(&mut view, self.nav.pinch.push(pinch.ln()), anchor);
+            }
+        } else {
+            self.nav.pinch.reset();
         }
         if let Gesture::Pan(button) = self.gesture
             && response.dragged_by(button)
@@ -1028,6 +1107,13 @@ fn blocks_in(rect: TileRect) -> usize {
     let cols = rect.right().div_ceil(block) - u64::from(rect.x) / block;
     let rows = rect.bottom().div_ceil(block) - u64::from(rect.y) / block;
     (cols * rows) as usize
+}
+
+/// `steps` pasos de zoom (con signo: positivo acerca) anclados en `anchor`.
+fn zoom_steps(view: &mut View, steps: i32, anchor: (i64, i64)) {
+    for _ in 0..steps.unsigned_abs() {
+        zoom_step(view, steps > 0, anchor);
+    }
 }
 
 fn zoom_step(view: &mut View, zoom_in: bool, anchor: (i64, i64)) {

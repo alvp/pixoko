@@ -44,7 +44,7 @@ impl Platforms {
         }
     }
 
-    fn overlaps(self, other: Platforms) -> bool {
+    pub(crate) fn overlaps(self, other: Platforms) -> bool {
         ALL_PLATFORMS
             .iter()
             .any(|&platform| self.includes(platform) && other.includes(platform))

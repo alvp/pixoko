@@ -577,24 +577,28 @@ fn fila_15_espacio_a_mitad_de_un_trazo_lo_cancela() {
     assert_eq!(app.cambiados(), 0, "el trazo cancelado no deja píxeles");
     assert_eq!(despues, antes, "la vista no se mueve");
 
-    // La repetición de la tecla no cancela.
-    let (con_repeticion, _, _, app) = recorrido(Event::Key {
+    // Con la tecla mantenida, las repeticiones no cancelan otra vez: una sola cancelación.
+    // (egui marca `repeat` solo si la tecla ya estaba abajo, por eso va después de la pulsación.)
+    let repeticion = Event::Key {
         key: Key::Space,
         physical_key: Some(Key::Space),
         pressed: true,
         repeat: true,
         modifiers: Modifiers::NONE,
-    });
-    assert!(
-        !con_repeticion
-            .iter()
-            .any(|(e, _)| *e == CanvasInput::Escape)
-    );
-    assert_eq!(
-        app.cambiados(),
-        5,
-        "el trazo sigue y deja los píxeles 10 a 14"
-    );
+    };
+    let mut s = Sesion::nueva();
+    let (p0, p1) = (s.pos(10, 5), s.pos(12, 5));
+    s.paso(vec![mover(p0)]);
+    s.paso(vec![izquierdo(p0, true)]);
+    s.paso(vec![mover(p1)]);
+    let (primera, _) = s.banco.paso_roles(vec![espacio(true)]);
+    let (segunda, _) = s.banco.paso_roles(vec![repeticion.clone()]);
+    let (tercera, _) = s.banco.paso_roles(vec![repeticion]);
+    let total = [primera, segunda, tercera]
+        .iter()
+        .map(|e| e.iter().filter(|(e, _)| *e == CanvasInput::Escape).count())
+        .sum::<usize>();
+    assert_eq!(total, 1, "la repetición de la tecla no cancela");
 }
 
 #[test]
@@ -1061,11 +1065,11 @@ mod espacio {
     #[test]
     fn fila_7_con_un_campo_de_texto_enfocado_espacio_no_cancela_el_trazo() {
         fn campo(ui: &mut Ui) {
-            egui::Area::new(egui::Id::new("campo-de-prueba"))
+            egui::Area::new(egui::Id::unique("campo-de-prueba"))
                 .fixed_pos(pos2(700.0, 550.0))
                 .show(ui.ctx(), |ui| {
                     let mut texto = String::new();
-                    let r = ui.add(TextEdit::singleline(&mut texto).id(egui::Id::new("campo")));
+                    let r = ui.add(TextEdit::singleline(&mut texto).id(egui::Id::unique("campo")));
                     r.request_focus();
                 });
         }

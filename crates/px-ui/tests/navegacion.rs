@@ -34,6 +34,16 @@ impl Banco {
     fn con_ppp(ppp: f32) -> Banco {
         let ctx = Context::default();
         ctx.set_pixels_per_point(ppp);
+        // `set_pixels_per_point` se activa al empezar el pase siguiente: un pase vacío antes de que
+        // el lienzo calcule su ajuste.
+        let mut vacio = ctx.run_ui(
+            RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+                ..RawInput::default()
+            },
+            |_| {},
+        );
+        vacio.textures_delta.clear();
         let mut canvas = Canvas::new();
         canvas.set_image(&Image::new(64, 48, Mode::Rgba).expect("imagen"));
         let mut banco = Banco {
