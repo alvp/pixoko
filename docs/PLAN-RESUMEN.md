@@ -12,8 +12,8 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 | Interfaz estilo programa de referencia | Base de interfaz para las herramientas del hito 4, en cuatro unidades (abajo) y con el diseño en `docs/DISENO-INTERFAZ.md` | Por definir en la spec de cada unidad | pendiente |
 | ↳ I.1 · Teclado como datos | Tabla de atajos como datos, con las letras del programa de referencia | Pruebas y cierre en verde; prueba manual en `specs/interfaz-teclado.md` | hecha, a falta de la prueba manual |
 | ↳ I.2a · Dos colores y botón derecho | Primer plano y fondo, botón derecho, indicador de color, `}` `{` y `K` | Spec en `specs/interfaz-dos-colores.md`; pruebas y cierre en verde | hecha, a falta de la prueba manual |
-| ↳ I.2b · Navegación y botones extra del ratón | Rueda con `Mayús`, `Espacio` como mano, trackpad, botones laterales reasignables, clic derecho en herramientas y zoom | Por definir en su spec | pendiente (sin spec) |
-| ↳ I.3 · Caja a la derecha y panel de opciones | Caja de herramientas a la derecha con un panel fijo de opciones | Por definir en su spec | pendiente |
+| ↳ I.2b · Navegación y botones extra del ratón | Tabla de gestos (`GestureMap`): rueda por la unidad, `Mayús`+rueda, `Espacio` como mano (cancela trazos), trackpad, pellizco, botones laterales 4 y 5 (deshacer y rehacer; del 6 en adelante `egui-winit` los descarta) | Spec en `specs/interfaz-raton.md` (aprobada) | en curso |
+| ↳ I.3 · Caja a la derecha y panel de opciones | Caja de herramientas a la derecha con un panel fijo de opciones; clic derecho en una herramienta (foco al panel) y en los botones de zoom (aleja) | Por definir en su spec | pendiente |
 | ↳ I.4 · Iconos propios | Iconos dibujados con Pixoko, antes de las herramientas de formas del hito 4 | Por definir en su spec | pendiente |
 | 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde | pendiente |
 | 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección | Dorados contra referencias | pendiente |

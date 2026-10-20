@@ -68,12 +68,12 @@ Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *pendiente de
 
 ## Interfaz (pendiente)
 
-Entre el hito 2 y el 3. Diseño en `docs/DISENO-INTERFAZ.md`; I.1 e I.2a tienen spec aprobada; cada unidad se escribe y espera su visto bueno al empezarla.
+Entre el hito 2 y el 3. Diseño en `docs/DISENO-INTERFAZ.md`; I.1, I.2a e I.2b tienen spec aprobada; cada unidad se escribe y espera su visto bueno al empezarla.
 
 | Fichero | Unidad | Estado | Qué decide | Crates |
 | --- | --- | --- | --- | --- |
 | [interfaz-teclado.md](interfaz-teclado.md) | I.1 | aprobada | Teclado como tabla de datos (`Keymap`, sin egui) con las letras del programa de referencia: se compara el carácter que produce la tecla (no la física), el menú y los botones leen la tabla, `ColorNext`/`ColorPrev` (`]` `[` y `Av Pág`/`Re Pág`), `<` `>` y `n`; cifras, `P L I E` sin asignar; 24 pruebas anteriores medidas (13 con más que un literal) | px-ui, px-app |
 | [interfaz-dos-colores.md](interfaz-dos-colores.md) | I.2a | aprobada | Primer plano y fondo (`Session.background`, `Role`), botón derecho por `Canvas::interact_roles`, indicador de color en una banda de 36 u (la ventana mínima sube a 387 u y el criterio del alto del 65 % al 72 % de 720 pt, transitorio hasta I.4), anillos distintos, `}` `{` (y `Mayús`+`Re Pág`/`Av Pág`) y `K` con `Editar → Borrar página` (`FillSpans`, un tramo por fila, reserva previa), color desbloqueado con el botón pulsado | px-ui, px-app |
-| — | I.2b | pendiente (sin spec) | Navegación y botones extra del ratón: rueda con `Mayús`, `Espacio` como mano, trackpad, botones laterales reasignables, clic derecho en herramientas y zoom | — |
-| — | I.3 | pendiente (sin spec) | Caja de herramientas a la derecha con panel de opciones | — |
+| [interfaz-raton.md](interfaz-raton.md) | I.2b | aprobada | Gestos del ratón y del trackpad como tabla de datos (`GestureMap`, sin egui): cinco botones (izquierdo, central, derecho y dos extra, `Back`/`Forward` = deshacer/rehacer en toda la ventana, reasignables; del 6 en adelante `egui-winit` los descarta y no llegan), rueda por la unidad (`Line` zoom, `Point` desplaza; en X11 y Windows los dos dedos llegan como líneas), `Mayús`+rueda horizontal, `Espacio` cancela solo trazos, acumuladores de pasos (rueda 1,0; pellizco y Ctrl+rueda ln 0,15: hoy 11 pasos por muesca con Ctrl y 30 por un pellizco lento), `Alt` fuera de la tabla; sentido de desplazamiento dado por el sistema y restos de medio píxel; contingencia (no implementada) para trackpads en X11 y Windows; 12 filas y 3 propiedades; una prueba anterior invierte su intención | px-ui, px-app |
+| — | I.3 | pendiente (sin spec) | Caja de herramientas a la derecha con panel de opciones; clic derecho en una herramienta (foco al panel de opciones) y en los botones de zoom (aleja) | — |
 | — | I.4 | pendiente (sin spec) | Iconos propios | — |

@@ -80,7 +80,7 @@ Navegar por la imagen se hace con la rueda, el botón central y los gestos del t
 | Pellizco en el trackpad | Zoom | Nuevo |
 | Botón lateral «atrás» (el 4) | Deshacer | Nuevo, configurable |
 | Botón lateral «adelante» (el 5) | Rehacer | Nuevo, configurable |
-| Botones 6 y siguientes | Sin acción por defecto; se asignan en preferencias | Hito 8 |
+| Botones 6 y siguientes | No llegan a la app (`egui-winit` los descarta); se reasignan en el sistema | Imposible hoy |
 
 Reglas:
 
@@ -91,7 +91,7 @@ Reglas:
 - **Con el botón pulsado:** el zoom y el desplazamiento siguen permitidos mientras se dibuja, como hoy.
 - **Configurable:** la tabla de gestos son datos, como la de atajos, y el hito 8 la hará editable, incluidos los botones extra.
 
-**Soporte mínimo (decidido el 20 de octubre de 2026):** tres botones (izquierdo, central y derecho) con asignación propia para cada uno, más todos los botones extra que tenga el ratón, que se pueden reasignar a cualquier acción de la tabla de atajos. Quien no tenga tres botones o un trackpad llega a lo mismo con gestos y teclas: Espacio y arrastrar para desplazar, y rueda y pellizco para el zoom. El detalle de la unidad del ratón se decide después del hito 2.
+**Soporte mínimo (decidido el 20 de octubre de 2026; limitación anotada el 21):** cinco botones, todos reasignables: izquierdo, central y derecho con asignación propia, más **dos extra** (4 y 5, `Back` y `Forward`), que se pueden reasignar a cualquier acción de la tabla de atajos. **Del botón 6 en adelante no llega nada a la app:** `egui-winit` descarta `MouseButton::Other` antes de que egui lo vea y `eframe` no deja engancharse antes; la salida es reasignarlos en el sistema a los extra 4 y 5 o a teclas. Spec: `specs/interfaz-raton.md`. Quien no tenga tres botones o un trackpad llega a lo mismo con gestos y teclas: Espacio y arrastrar para desplazar, y rueda y pellizco para el zoom. 
 
 ## Atajos de teclado
 
