@@ -68,11 +68,11 @@ Estado: *aprobada* = con visto bueno; *en curso* = unidad abierta; *pendiente de
 
 ## Interfaz (pendiente)
 
-Entre el hito 2 y el 3. Diseño en `docs/DISENO-INTERFAZ.md`; ninguna unidad tiene todavía spec, y cada una se escribe y espera su visto bueno al empezarla.
+Entre el hito 2 y el 3. Diseño en `docs/DISENO-INTERFAZ.md`; solo I.1 tiene spec (aprobada); cada unidad se escribe y espera su visto bueno al empezarla.
 
 | Fichero | Unidad | Estado | Qué decide | Crates |
 | --- | --- | --- | --- | --- |
-| — | I.1 | pendiente (sin spec) | Teclado como datos con las letras del programa de referencia | — |
+| [interfaz-teclado.md](interfaz-teclado.md) | I.1 | aprobada | Teclado como tabla de datos (`Keymap`, sin egui) con las letras del programa de referencia: se compara el carácter que produce la tecla (no la física), el menú y los botones leen la tabla, `ColorNext`/`ColorPrev` (`]` `[` y `Av Pág`/`Re Pág`), `<` `>` y `n`; cifras, `P L I E` sin asignar; 24 pruebas anteriores medidas (13 con más que un literal) | px-ui, px-app |
 | — | I.2 | pendiente (sin spec) | Dos colores y ratón con rueda, botón central, botones extra reasignables y gestos del trackpad | — |
 | — | I.3 | pendiente (sin spec) | Caja de herramientas a la derecha con panel de opciones | — |
 | — | I.4 | pendiente (sin spec) | Iconos propios | — |
