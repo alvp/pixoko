@@ -51,7 +51,7 @@ pub const NOTICE_LINES: i64 = 2;
 /// Botones de la paleta (solo indexadas; specs/hito-2-paleta-operaciones.md): filas, alto, hueco
 /// entre filas, origen, ancho de los dos botones de la fila 1 y hueco entre ellos, y margen del
 /// texto dentro del botón.
-pub const BUTTON_ROWS: i64 = 3;
+pub const BUTTON_ROWS: i64 = 4;
 pub const BUTTON_H_U: i64 = 16;
 pub const BUTTON_ROW_GAP_U: i64 = 2;
 pub const BUTTON_X_U: i64 = 4;
@@ -100,6 +100,8 @@ pub enum PaletteButton {
     Cancel,
     RotateLeft,
     RotateRight,
+    /// Fijar o quitar la transparente (fila 4, specs/hito-2-fijar-transparente.md).
+    Transparent,
 }
 
 /// Rectángulo `(x, y, ancho, alto)` del botón, en `u` desde la esquina del editor. `None` en los
@@ -120,6 +122,7 @@ pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64
         }
         PaletteButton::RotateLeft => (BUTTON_X_U, top + row, BUTTON_FULL_W_U, BUTTON_H_U),
         PaletteButton::RotateRight => (BUTTON_X_U, top + 2 * row, BUTTON_FULL_W_U, BUTTON_H_U),
+        PaletteButton::Transparent => (BUTTON_X_U, top + 3 * row, BUTTON_FULL_W_U, BUTTON_H_U),
     })
 }
 
@@ -143,6 +146,7 @@ pub fn button_hit(
         second,
         PaletteButton::RotateLeft,
         PaletteButton::RotateRight,
+        PaletteButton::Transparent,
     ]
     .into_iter()
     .find(|button| {
@@ -314,6 +318,7 @@ pub fn edges_u(mode: Mode) -> Vec<i64> {
         PaletteButton::Remove,
         PaletteButton::RotateLeft,
         PaletteButton::RotateRight,
+        PaletteButton::Transparent,
     ] {
         if let Some((x, y, w, h)) = button_rect_u(mode, button) {
             e.extend([

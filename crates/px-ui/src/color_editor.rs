@@ -162,6 +162,8 @@ pub(crate) struct ButtonsView {
     pub len: usize,
     /// La quita pendiente tiene destino.
     pub has_destination: bool,
+    /// Rótulo del botón de la fila 4 (`Fijar transparente` o `Quitar transparente`).
+    pub transparent_label: &'static str,
 }
 
 /// Lo que el editor pinta además de los deslizadores y el campo.
@@ -181,6 +183,7 @@ fn button_label(button: PaletteButton) -> &'static str {
         PaletteButton::Cancel => "Cancelar",
         PaletteButton::RotateLeft => "Rotar a la izquierda",
         PaletteButton::RotateRight => "Rotar a la derecha",
+        PaletteButton::Transparent => "Fijar transparente",
     }
 }
 
@@ -339,6 +342,7 @@ pub(crate) fn show(
             second,
             PaletteButton::RotateLeft,
             PaletteButton::RotateRight,
+            PaletteButton::Transparent,
         ] {
             let Some((x, y, width, height)) = button_rect_u(mode, button) else {
                 continue;
@@ -357,7 +361,11 @@ pub(crate) fn show(
             text(
                 x + BUTTON_TEXT_X_U,
                 y + BUTTON_TEXT_Y_U,
-                button_label(button),
+                if button == PaletteButton::Transparent {
+                    view.transparent_label
+                } else {
+                    button_label(button)
+                },
                 color,
             );
         }

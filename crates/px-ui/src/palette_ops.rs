@@ -18,9 +18,23 @@ pub const NOTHING_TO_ROTATE_NOTICE: &str = "nada que rotar: una sola entrada";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaletteOp {
     Add,
-    Remove { index: u8, into: u8 },
-    Move { from: u8, to: u8 },
-    Rotate { start: u8, len: u16, steps: i32 },
+    Remove {
+        index: u8,
+        into: u8,
+    },
+    Move {
+        from: u8,
+        to: u8,
+    },
+    Rotate {
+        start: u8,
+        len: u16,
+        steps: i32,
+    },
+    /// Fija (`Some`) o quita (`None`) el índice transparente: solo mueve la marca.
+    SetTransparent {
+        index: Option<u8>,
+    },
 }
 
 /// Qué le pasa a una entrada (por su índice) con una operación.
@@ -39,7 +53,7 @@ pub enum Fate {
 /// Destino de la entrada `entry` tras `op` (para el texto pendiente del campo hexadecimal).
 pub fn entry_fate(op: &PaletteOp, entry: u8) -> Fate {
     match *op {
-        PaletteOp::Add => Fate::Same,
+        PaletteOp::Add | PaletteOp::SetTransparent { .. } => Fate::Same,
         PaletteOp::Move { from, to } => {
             if from != to && (from.min(to)..=from.max(to)).contains(&entry) {
                 Fate::Moved
@@ -74,7 +88,37 @@ pub fn choice_after(op: &PaletteOp, active: u8, old_len: usize) -> u8 {
             u8::try_from(usize::from(index).min(last)).unwrap_or(u8::MAX)
         }
         PaletteOp::Move { to, .. } => to,
-        PaletteOp::Rotate { .. } => active,
+        PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. } => active,
+    }
+}
+
+/// Lo que hace el botón de la fila 4 con la entrada activa: quitar la marca si ya es la
+/// transparente (`None`), si no fijarla en ella (`Some(active)`).
+pub fn transparent_toggle(palette: &Palette, active: u8) -> Option<u8> {
+    if palette.transparent_index() == Some(active) {
+        None
+    } else {
+        Some(active)
+    }
+}
+
+/// Rótulo del botón de la fila 4: sale siempre del estado.
+pub fn transparent_button_label(palette: &Palette, active: u8) -> &'static str {
+    if palette.transparent_index() == Some(active) {
+        "Quitar transparente"
+    } else {
+        "Fijar transparente"
+    }
+}
+
+/// Resumen de 5 s de fijar o quitar la transparente. `previous`: la marca que había antes.
+pub fn transparent_summary(index: Option<u8>, active: u8, previous: Option<u8>) -> String {
+    match (index, previous) {
+        (Some(index), Some(previous)) if previous != index => {
+            format!("entrada {index} transparente (antes la {previous})")
+        }
+        (Some(index), _) => format!("entrada {index} transparente"),
+        (None, _) => format!("entrada {active} ya no es transparente"),
     }
 }
 
@@ -191,6 +235,7 @@ pub fn summary(
             }
         }
         PaletteOp::Move { from, to } => format!("entrada {from} movida a la posición {to}"),
+        PaletteOp::SetTransparent { index } => transparent_summary(index, active, None),
         PaletteOp::Rotate { start, len, steps } => {
             let way = if steps > 0 { "derecha" } else { "izquierda" };
             if start == 0 && usize::from(len) == old_len {

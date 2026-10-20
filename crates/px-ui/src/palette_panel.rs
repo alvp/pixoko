@@ -12,7 +12,7 @@ use px_core::{Image, Mode, Rgba};
 
 use crate::color::{
     ColorChoice, SlotColors, cell_color_with, cell_count, cell_label_with, cell_of_choice,
-    choice_for_cell, info_flags_range, is_transparent_cell_with,
+    choice_for_cell, info_flags_alpha0, is_alpha0_cell_with, is_transparent_cell_with,
 };
 use crate::color_edit::{
     ColorEditor, Commit, EditTarget, HexOutcome, Resolved, hex_notice, stale_notice,
@@ -27,7 +27,8 @@ use crate::palette_grid::{
 };
 use crate::palette_ops::{
     DragEnd, PaletteOp, PaletteOps, blocked_reason, default_destination, drag_labels,
-    removal_prompt, removal_warning, rotation_range, uses_entry,
+    removal_prompt, removal_warning, rotation_range, transparent_button_label, transparent_toggle,
+    uses_entry,
 };
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, text_scale, ui_unit};
@@ -462,6 +463,12 @@ fn show_panel(
                                 removing: removal.is_some(),
                                 len: count,
                                 has_destination: removal.is_some_and(|r| r.into.is_some()),
+                                transparent_label: match (image.palette(), active_entry) {
+                                    (Some(palette), Some(active)) => {
+                                        transparent_button_label(palette, active)
+                                    }
+                                    _ => "Fijar transparente",
+                                },
                             }),
                             prompt: removal.map(|r| {
                                 let warn = image
@@ -569,11 +576,12 @@ fn paint(
         .unwrap_or_default();
     let mut line2 = shown
         .map(|cell| {
-            info_flags_range(
+            info_flags_alpha0(
                 hover.is_some(),
                 Some(cell) == active,
                 marks.in_range(cell),
                 is_transparent_cell_with(image, cell, slots),
+                is_alpha0_cell_with(image, cell, slots),
             )
         })
         .unwrap_or_default();
@@ -821,6 +829,13 @@ fn press_button(
             }
         }
         PaletteButton::Cancel => ops.cancel_removal(),
+        PaletteButton::Transparent => {
+            if let Some(palette) = image.palette() {
+                output.op = Some(PaletteOp::SetTransparent {
+                    index: transparent_toggle(palette, active),
+                });
+            }
+        }
         PaletteButton::RotateLeft | PaletteButton::RotateRight => {
             let (start, len) = rotation_range(count, active, ops.range_end());
             let steps = if button == PaletteButton::RotateLeft {

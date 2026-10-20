@@ -185,6 +185,31 @@ pub fn info_flags_range(hover: bool, active: bool, in_range: bool, transparent: 
     shown.join(" · ")
 }
 
+/// Como [`info_flags_range`] con la bandera `alfa 0` (entrada indexada con alfa guardado 0 que no
+/// es el índice transparente), al final. `transparente` y `alfa 0` son excluyentes: si se piden
+/// las dos, gana `transparente` (specs/hito-2-fijar-transparente.md).
+pub fn info_flags_alpha0(
+    hover: bool,
+    active: bool,
+    in_range: bool,
+    transparent: bool,
+    alpha0: bool,
+) -> String {
+    let flags = [
+        (hover, "cursor"),
+        (active, "activa"),
+        (in_range && !active, "rango"),
+        (transparent, "transparente"),
+        (alpha0 && !transparent, "alfa 0"),
+    ];
+    let shown: Vec<&str> = flags
+        .iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, name)| *name)
+        .collect();
+    shown.join(" · ")
+}
+
 /// Deja la elección válida para la imagen: en indexadas `Entry(min(i, len − 1))` (`Slot(n)` pasa
 /// a `Entry(n − 1)`); en los demás modos, igual si vale y si no la inicial.
 pub fn clamp_choice(image: &Image, choice: ColorChoice) -> ColorChoice {
@@ -332,6 +357,22 @@ pub fn is_transparent_cell_with(image: &Image, cell: usize, slots: &SlotColors) 
         return transparent.is_some_and(|index| usize::from(index) == cell);
     }
     cell_color_with(image, cell, slots).is_some_and(|color| color.a == 0)
+}
+
+/// La muestra es una entrada indexada con alfa guardado 0 que no es el índice transparente (el
+/// caso del `tRNS` de un PNG). En los demás modos, falso: `is_transparent_cell_with` ya dice
+/// `transparente` para el alfa 0.
+pub fn is_alpha0_cell_with(image: &Image, cell: usize, _slots: &SlotColors) -> bool {
+    if image.mode() != Mode::Indexed {
+        return false;
+    }
+    let Some(palette) = image.palette() else {
+        return false;
+    };
+    let Ok(index) = u8::try_from(cell) else {
+        return false;
+    };
+    palette.transparent_index() != Some(index) && palette.get(index).is_ok_and(|color| color.a == 0)
 }
 
 /// Como [`cell_label`], con los colores de ranura de `slots`.
