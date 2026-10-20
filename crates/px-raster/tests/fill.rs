@@ -1249,3 +1249,422 @@ proptest! {
         }
     }
 }
+
+// Unidad 14c: límites del relleno (specs/hito-2-limites-relleno.md).
+//
+// Filas 1 a 6 y 15 y propiedades 1 a 3 de la spec. Las filas 7 a 10 están en `px-core`, la 11 en
+// `px-ui`, la 13 en `px-ui` (`tests/status.rs`) y la 12 y la 14 en `tests/fill_memory.rs` (que
+// son `#[ignore]`). Las filas 4, 5 y 15 usan peines de 16384 x 368 (24 MiB en RGBA) y cuestan
+// unos segundos en debug; el resto son imágenes de 12 de lado o menos.
+
+mod limites {
+    use super::*;
+    use px_raster::fill_command_with_limit;
+
+    /// Valor de la spec (D1). La única fuente es `Document::MAX_FILL_SPANS`; aquí se repite el
+    /// número a propósito para que cambiarlo haga fallar la prueba.
+    const TOPE: usize = 3_000_000;
+
+    fn demasiado(limit: usize) -> DocumentError {
+        DocumentError::FillTooFragmented { limit }
+    }
+
+    /// Peine de `w` x `h` RGBA: fila 0 toda `A` y, en el resto, `A` en las columnas pares y `B`
+    /// en las impares. Con `dientes = Some(k)`, la última fila solo tiene `A` en las columnas
+    /// pares `0, 2, .., 2(k - 1)`, y el resto `B`. Se construye con `Image::from_bytes`.
+    fn peine(w: u32, h: u32, dientes: Option<u32>) -> Image {
+        let (wu, hu) = (ancho_usize(w), ancho_usize(h));
+        let a = [10u8, 20, 30, 255];
+        let b = [40u8, 50, 60, 255];
+        let mut data = Vec::with_capacity(wu * hu * 4);
+        for y in 0..hu {
+            for x in 0..wu {
+                let es_a = match dientes {
+                    _ if y == 0 => true,
+                    Some(k) if y == hu - 1 => x % 2 == 0 && x / 2 < ancho_usize(k),
+                    _ => x % 2 == 0,
+                };
+                data.extend_from_slice(if es_a { &a } else { &b });
+            }
+        }
+        let img = Image::from_bytes(w, h, Mode::Rgba, data).unwrap();
+        assert_eq!(
+            img.get_pixel(0, 0),
+            Ok(va()),
+            "el orden de los bytes es RGBA"
+        );
+        assert_eq!(img.get_pixel(1, 0), Ok(va()));
+        img
+    }
+
+    fn doc_peine(w: u32, h: u32, dientes: Option<u32>) -> (Document, ImageId) {
+        let doc = Document::new(peine(w, h, dientes));
+        let id = doc.main_image();
+        (doc, id)
+    }
+
+    fn tramos_del(resultado: Result<Option<Command>, DocumentError>) -> Vec<Span> {
+        match resultado {
+            Ok(Some(Command::FillSpans { spans, .. })) => spans,
+            otro => panic!("se esperaba Ok(Some(FillSpans)), salió {otro:?}"),
+        }
+    }
+
+    /// `apply` del comando da `Ok(true)` y el paso cabe en el límite por defecto de la historia.
+    /// Si `ciclo`, `undo` restaura la imagen original y `redo` la rellena otra vez.
+    fn aplica_y_comprueba(doc: &mut Document, id: ImageId, comando: Command, ciclo: bool) {
+        let original = doc.image(id).unwrap().clone();
+        assert_eq!(doc.apply(comando), Ok(true));
+        assert!(
+            doc.history_bytes() <= Document::DEFAULT_HISTORY_LIMIT,
+            "el paso ocupa {} bytes y el límite por defecto es {}",
+            doc.history_bytes(),
+            Document::DEFAULT_HISTORY_LIMIT
+        );
+        if ciclo {
+            let rellena = doc.image(id).unwrap().clone();
+            assert!(rellena != original, "el relleno cambia la imagen");
+            assert_eq!(rellena.get_pixel(0, 0), Ok(vc()));
+            assert_eq!(rellena.get_pixel(1, 0), Ok(vc()));
+            assert_eq!(rellena.get_pixel(1, 1), Ok(vb()), "la pared no cambia");
+            assert_eq!(doc.undo(), Ok(()));
+            assert!(doc.image(id) == Some(&original), "undo restaura la imagen");
+            assert_eq!(doc.redo(), Ok(()));
+            assert!(doc.image(id) == Some(&rellena), "redo la rellena");
+        }
+    }
+
+    // Fila 1.
+
+    #[test]
+    fn fila_01_peine_5x3_justo_en_el_tope_y_uno_por_debajo() {
+        let doc = doc_matriz(&["AAAAA", "ABABA", "ABABA"]);
+        let id = doc.main_image();
+        let esperados = [
+            sp(0, 0, 5),
+            sp(1, 0, 1),
+            sp(1, 2, 3),
+            sp(1, 4, 5),
+            sp(2, 0, 1),
+            sp(2, 2, 3),
+            sp(2, 4, 5),
+        ];
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 0, 0, vc(), 7),
+            comando(id, &esperados, vc()),
+            "7 tramos con tope 7"
+        );
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 4, 2, vc(), 7),
+            comando(id, &esperados, vc()),
+            "otra semilla, mismo resultado"
+        );
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 0, 0, vc(), 6),
+            Err(demasiado(6))
+        );
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 4, 2, vc(), 6),
+            Err(demasiado(6))
+        );
+    }
+
+    // Fila 2.
+
+    #[test]
+    fn fila_02_tope_cero_da_error_y_el_tablero_cabe_en_uno() {
+        let doc = doc_matriz(&["AAA"]);
+        let id = doc.main_image();
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 1, 0, vc(), 0),
+            Err(demasiado(0))
+        );
+        // Con tope 1 el mismo relleno (1 tramo) sí cabe.
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 1, 0, vc(), 1),
+            comando(id, &[sp(0, 0, 3)], vc())
+        );
+
+        // Tablero de 64 x 64 (`A` si x + y es par), semilla en el centro: la región es un píxel.
+        let tablero = Document::new(imagen_de(64, 64, |x, y| {
+            if (x + y) % 2 == 0 { va() } else { vb() }
+        }));
+        let id = tablero.main_image();
+        assert_eq!(
+            fill_command_with_limit(&tablero, id, 32, 32, vc(), 1),
+            comando(id, &[sp(32, 32, 33)], vc())
+        );
+    }
+
+    // Fila 3.
+
+    #[test]
+    fn fila_03_con_tope_cero_el_tope_se_comprueba_el_ultimo() {
+        let doc = doc_matriz(&["AAA", "AAA"]);
+        let id = doc.main_image();
+        let antes = instantanea(&doc);
+
+        let desconocida = ImageId::from_raw(99);
+        assert_eq!(
+            fill_command_with_limit(&doc, desconocida, 0, 0, vc(), 0),
+            Err(DocumentError::UnknownImage(desconocida))
+        );
+        let resultado = fill_command_with_limit(&doc, id, 0, 0, Pixel::Indexed(0), 0);
+        assert!(
+            matches!(resultado, Err(DocumentError::Pixel { pixel: 0, .. })),
+            "salió {resultado:?}"
+        );
+        assert_eq!(fill_command_with_limit(&doc, id, -1, 0, vc(), 0), Ok(None));
+        assert_eq!(
+            fill_command_with_limit(&doc, id, MIN, MAX, vc(), 0),
+            Ok(None)
+        );
+        assert_eq!(fill_command_with_limit(&doc, id, 0, 0, va(), 0), Ok(None));
+        // Y el tope, si hay algo que rellenar.
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 0, 0, vc(), 0),
+            Err(demasiado(0))
+        );
+        assert_eq!(
+            instantanea(&doc),
+            antes,
+            "ninguna llamada toca el documento"
+        );
+    }
+
+    // Fila 4.
+
+    #[test]
+    fn fila_04_flood_fill_con_el_tope_real_no_toca_documento_ni_historia() {
+        let (mut doc, id) = doc_peine(16384, 368, None);
+        // Un paso de deshacer y uno de rehacer, sobre paredes (columnas impares): no cambian
+        // los tramos del peine.
+        for x in [1, 3] {
+            let paso = Command::SetPixels {
+                image: id,
+                pixels: vec![edicion(x, 5, vc())],
+            };
+            assert_eq!(doc.apply(paso), Ok(true));
+        }
+        assert_eq!(doc.undo(), Ok(()));
+        assert!(doc.can_undo() && doc.can_redo());
+
+        let imagen = doc.image(id).unwrap().clone();
+        let (undo, redo, bytes, estado) = (
+            doc.can_undo(),
+            doc.can_redo(),
+            doc.history_bytes(),
+            doc.state_id(),
+        );
+
+        let resultado = flood_fill(&mut doc, id, 0, 0, vc());
+        assert!(
+            matches!(
+                resultado,
+                Err(DocumentError::FillTooFragmented {
+                    limit: Document::MAX_FILL_SPANS
+                })
+            ),
+            "salió {resultado:?}"
+        );
+        assert!(doc.image(id) == Some(&imagen), "la imagen no cambia");
+        assert_eq!(doc.can_undo(), undo);
+        assert_eq!(doc.can_redo(), redo, "la pila de rehacer sigue viva");
+        assert_eq!(doc.history_bytes(), bytes);
+        assert_eq!(doc.state_id(), estado, "no se llamó a apply");
+    }
+
+    // Fila 5.
+
+    #[test]
+    fn fila_05_peine_de_368_filas_supera_el_tope_real() {
+        // S = 1 + 367 * 8192 = 3 006 465.
+        let (doc, id) = doc_peine(16384, 368, None);
+        assert_eq!(
+            fill_command(&doc, id, 0, 0, vc()),
+            Err(demasiado(TOPE)),
+            "el error lleva el tope real"
+        );
+    }
+
+    #[test]
+    fn fila_05_peine_de_367_filas_cabe_y_su_paso_cabe_en_la_historia() {
+        // S = 1 + 366 * 8192 = 2 998 273.
+        let (mut doc, id) = doc_peine(16384, 367, None);
+        let comando = fill_command(&doc, id, 0, 0, vc());
+        let n = tramos_del(comando.clone()).len();
+        assert_eq!(n, 2_998_273);
+        let comando = comando.unwrap().unwrap();
+        aplica_y_comprueba(&mut doc, id, comando, true);
+    }
+
+    // Fila 6 (la mitad de px-raster: la constante; el coste real del paso máximo va en px-core).
+
+    #[test]
+    fn fila_06_la_constante_del_tope_es_tres_millones() {
+        assert_eq!(Document::MAX_FILL_SPANS, 3_000_000);
+        assert_eq!(Document::MAX_FILL_SPANS, TOPE);
+    }
+
+    // Fila 15: justo por debajo, en y por encima del tope real. Peine de 16384 x 368 cuya última
+    // fila solo tiene `k` dientes: S = 2 998 273 + k.
+
+    #[test]
+    fn fila_15_k_1726_un_tramo_por_debajo_del_tope() {
+        let (mut doc, id) = doc_peine(16384, 368, Some(1726));
+        let comando = fill_command(&doc, id, 0, 0, vc());
+        assert_eq!(tramos_del(comando.clone()).len(), 2_999_999);
+        aplica_y_comprueba(&mut doc, id, comando.unwrap().unwrap(), false);
+    }
+
+    #[test]
+    fn fila_15_k_1727_justo_en_el_tope() {
+        let (mut doc, id) = doc_peine(16384, 368, Some(1727));
+        let comando = fill_command(&doc, id, 0, 0, vc());
+        assert_eq!(tramos_del(comando.clone()).len(), 3_000_000);
+        aplica_y_comprueba(&mut doc, id, comando.unwrap().unwrap(), false);
+    }
+
+    #[test]
+    fn fila_15_k_1728_un_tramo_por_encima_del_tope() {
+        let (doc, id) = doc_peine(16384, 368, Some(1728));
+        assert_eq!(
+            fill_command(&doc, id, 0, 0, vc()),
+            Err(demasiado(TOPE)),
+            "S = 3 000 001"
+        );
+    }
+
+    // Apoyo de las propiedades.
+
+    /// Número de tramos máximos (por fila) de una región.
+    fn tramos_maximos(region: &BTreeSet<(u32, u32)>) -> usize {
+        region
+            .iter()
+            .filter(|&&(x, y)| x == 0 || !region.contains(&(x - 1, y)))
+            .count()
+    }
+
+    /// Topes pequeños con los extremos siempre presentes.
+    fn tope_cualquiera() -> impl Strategy<Value = usize> {
+        prop_oneof![
+            6 => 0usize..=40,
+            1 => Just(0usize),
+            1 => Just(usize::MAX),
+            1 => any::<usize>(),
+        ]
+    }
+
+    proptest! {
+        // Propiedad 1: oráculo del tope.
+        #[test]
+        fn tope_igual_al_oraculo(caso in casos(), l in 0usize..=40) {
+            let (doc, id) = caso.documento();
+            let (x, y) = caso.semilla_i32();
+            let valor = caso.valor();
+            let region = region_ingenua(&caso.image, caso.seed.0, caso.seed.1);
+            let s = tramos_maximos(&region);
+
+            let con_tope = fill_command_with_limit(&doc, id, x, y, caso.pixel, l);
+            let sin_tope = fill_command(&doc, id, x, y, caso.pixel);
+            if caso.pixel == valor {
+                prop_assert_eq!(con_tope, Ok(None));
+            } else if s > l {
+                prop_assert_eq!(con_tope, Err(DocumentError::FillTooFragmented { limit: l }));
+            } else {
+                // Los mismos tramos que sin tope, y exactamente `s`.
+                prop_assert_eq!(&con_tope, &sin_tope);
+                let Ok(Some(Command::FillSpans { spans, .. })) = con_tope else {
+                    return Err(TestCaseError::fail(format!("salió {con_tope:?}")));
+                };
+                prop_assert_eq!(spans.len(), s);
+                prop_assert!(spans.len() <= l);
+                prop_assert_eq!(spans.capacity(), spans.len());
+            }
+        }
+
+        // Propiedad 2: atomicidad y orden de las comprobaciones.
+        #[test]
+        fn tope_atomicidad_y_orden(
+            caso in casos(),
+            l in tope_cualquiera(),
+            semilla_del_caso in any::<bool>(),
+            (xr, yr) in (coordenada(), coordenada()),
+            otro_pixel in pixel_cualquiera(),
+            usa_otro_pixel in any::<bool>(),
+            ajena in any::<bool>(),
+            raw in any::<u32>(),
+        ) {
+            let (mut doc, principal) = caso.documento();
+            paso_previo(&mut doc);
+            let (x, y) = if semilla_del_caso { caso.semilla_i32() } else { (xr, yr) };
+            let pixel = if usa_otro_pixel { otro_pixel } else { caso.pixel };
+            let id = if ajena { ImageId::from_raw(raw) } else { principal };
+            let (w, h) = (i64::from(caso.image.width()), i64::from(caso.image.height()));
+            let fuera = x < 0 || y < 0 || i64::from(x) >= w || i64::from(y) >= h;
+
+            let antes = instantanea(&doc);
+            let imagen_previa = doc.image(id).cloned();
+            let c = fill_command_with_limit(&doc, id, x, y, pixel, l);
+            // Con cualquier resultado, `fill_command_with_limit` solo lee.
+            prop_assert_eq!(instantanea(&doc), antes.clone());
+
+            // UnknownImage > Pixel > fuera > igual > tope.
+            let Some(img) = imagen_previa else {
+                prop_assert_eq!(c, Err(DocumentError::UnknownImage(id)));
+                return Ok(());
+            };
+            if let Some(e) = error_de_apply(&img, pixel) {
+                prop_assert!(
+                    matches!(&e, DocumentError::Pixel { pixel: 0, .. }),
+                    "apply debería dar Pixel {{ pixel: 0, .. }}, dio {:?}", e
+                );
+                prop_assert_eq!(c, Err(e));
+                return Ok(());
+            }
+            if fuera {
+                prop_assert_eq!(c, Ok(None));
+                return Ok(());
+            }
+            let (ux, uy) = (u32::try_from(x).unwrap(), u32::try_from(y).unwrap());
+            if img.get_pixel(ux, uy).unwrap() == pixel {
+                prop_assert_eq!(c, Ok(None));
+                return Ok(());
+            }
+            let s = tramos_maximos(&region_ingenua(&img, ux, uy));
+            if s > l {
+                prop_assert_eq!(c, Err(DocumentError::FillTooFragmented { limit: l }));
+            } else {
+                prop_assert!(
+                    matches!(c, Ok(Some(Command::FillSpans { .. }))),
+                    "se esperaba Some(FillSpans), salió {:?}", c
+                );
+            }
+        }
+
+        // Propiedad 3: monotonía del tope.
+        #[test]
+        fn tope_monotono(caso in casos(), a in tope_cualquiera(), b in tope_cualquiera()) {
+            let (doc, id) = caso.documento();
+            let (x, y) = caso.semilla_i32();
+            let (menor, mayor) = (a.min(b), a.max(b));
+            let con_menor = fill_command_with_limit(&doc, id, x, y, caso.pixel, menor);
+            let con_mayor = fill_command_with_limit(&doc, id, x, y, caso.pixel, mayor);
+            if con_menor.is_ok() {
+                // Ok(x) con L implica Ok(x) con cualquier L' >= L.
+                prop_assert_eq!(&con_mayor, &con_menor);
+            }
+            if con_mayor.is_err() {
+                // Err con L implica Err con cualquier L' < L, y cada uno con su tope.
+                prop_assert_eq!(
+                    con_menor,
+                    Err(DocumentError::FillTooFragmented { limit: menor })
+                );
+                prop_assert_eq!(
+                    con_mayor,
+                    Err(DocumentError::FillTooFragmented { limit: mayor })
+                );
+            }
+        }
+    }
+}

@@ -1309,3 +1309,76 @@ fn propiedad_5_teclas_exhaustiva_key_all_por_las_32_combinaciones() {
         }
     }
 }
+
+// Unidad 14c: límites del relleno (specs/hito-2-limites-relleno.md, fila 11).
+
+mod limites_relleno {
+    use super::*;
+
+    /// Peine RGBA de 16384 x 368 (`S = 3 006 465`, por encima del tope real): fila 0 toda `A`
+    /// y, en el resto, `A` en las columnas pares y `B` en las impares.
+    fn peine() -> Image {
+        let (ancho, alto) = (16384usize, 368usize);
+        let a = [10u8, 20, 30, 255];
+        let b = [40u8, 50, 60, 255];
+        let mut data = Vec::with_capacity(ancho * alto * 4);
+        for y in 0..alto {
+            for x in 0..ancho {
+                data.extend_from_slice(if y == 0 || x % 2 == 0 { &a } else { &b });
+            }
+        }
+        Image::from_bytes(16384, 368, Mode::Rgba, data).expect("imagen válida")
+    }
+
+    #[test]
+    fn fila_11_un_relleno_demasiado_fragmentado_da_error_y_el_siguiente_clic_funciona() {
+        let mut es = Escena::nueva(peine(), Tool::Fill, 3);
+        let imagen = es.imagen().clone();
+        let antes = es.historia();
+        let estado = es.doc.state_id();
+
+        // Clic en (0, 0): el relleno se rechaza.
+        let resultado = es
+            .tool
+            .canvas_event(&mut es.doc, es.id, es.slot, begin(0, 0));
+        assert!(
+            matches!(resultado, Err(DocumentError::FillTooFragmented { .. })),
+            "salió {resultado:?}"
+        );
+        // Soltar termina el gesto (tras el `Err` queda en espera de su `End`).
+        assert!(!es.ev(fin()));
+        assert!(!es.tool.busy());
+
+        assert!(
+            es.tool.take_changes().is_empty(),
+            "no hay cambios que registrar"
+        );
+        assert!(es.imagen() == &imagen, "la imagen no cambia");
+        assert_eq!(es.historia(), antes);
+        assert_eq!(es.doc.state_id(), estado);
+        assert!(!es.doc.can_undo());
+
+        // El mismo estado de la herramienta rellena un documento de 8 x 8 con el mismo clic.
+        let mut pequeno = Document::new(imagen_8x8());
+        let id = pequeno.main_image();
+        assert_eq!(
+            es.tool.canvas_event(&mut pequeno, id, 3, begin(0, 0)),
+            Ok(true)
+        );
+        assert!(!es.ev(fin()));
+        assert!(!es.tool.busy());
+        for y in 0..8 {
+            for x in 0..8 {
+                assert_eq!(
+                    pequeno.image(id).unwrap().get_pixel(x, y),
+                    Ok(rojo()),
+                    "({x}, {y})"
+                );
+            }
+        }
+        assert!(
+            !es.tool.take_changes().is_empty(),
+            "el relleno sí se registra"
+        );
+    }
+}

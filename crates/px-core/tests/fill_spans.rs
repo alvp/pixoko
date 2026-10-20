@@ -2407,3 +2407,225 @@ proptest! {
         }
     }
 }
+
+// Unidad 14c: límite de trozos por paso de relleno (specs/hito-2-limites-relleno.md, filas 6 a
+// 10). Las imágenes miden 16384 x 368 o 16384 x 184 (RGBA, 24 y 12 MiB) y los pasos tienen
+// hasta 3 millones de trozos, así que cada prueba cuesta unos segundos en debug.
+
+mod limites {
+    use super::*;
+
+    /// Valor de la spec (D1). La única fuente es `Document::MAX_FILL_SPANS`; aquí se repite el
+    /// número a propósito para que cambiarlo haga fallar la prueba.
+    const TOPE: usize = 3_000_000;
+
+    const ANCHO: u32 = 16384;
+
+    fn demasiado() -> DocumentError {
+        DocumentError::FillTooFragmented { limit: TOPE }
+    }
+
+    /// Imagen RGBA de 16384 x `alto` con un solo valor (`c0`, transparente).
+    fn uniforme(alto: u32) -> Document {
+        Document::new(Image::filled(ANCHO, alto, Pixel::Rgba(c0())).unwrap())
+    }
+
+    /// Los `n` primeros tramos de un píxel en las columnas pares, en orden de lectura
+    /// (8192 por fila): sobre una imagen de un solo valor, un trozo cada uno.
+    fn tramos_de_un_pixel(n: usize) -> Vec<Span> {
+        (0..)
+            .flat_map(|y| (0..ANCHO / 2).map(move |k| sp(y, 2 * k, 2 * k + 1)))
+            .take(n)
+            .collect()
+    }
+
+    /// Imagen RGBA de 16384 x `alto` con `c2` en las columnas pares y `c3` en las impares.
+    fn alterna(alto: u32) -> Document {
+        let (a, b) = (c2(), c3());
+        let mut data = Vec::with_capacity(ANCHO as usize * alto as usize * 4);
+        for _ in 0..alto {
+            for x in 0..ANCHO {
+                let c = if x % 2 == 0 { a } else { b };
+                data.extend_from_slice(&[c.r, c.g, c.b, c.a]);
+            }
+        }
+        let imagen = Image::from_bytes(ANCHO, alto, Mode::Rgba, data).unwrap();
+        assert_eq!(imagen.get_pixel(0, 0), Ok(Pixel::Rgba(a)), "orden RGBA");
+        assert_eq!(imagen.get_pixel(1, 0), Ok(Pixel::Rgba(b)));
+        Document::new(imagen)
+    }
+
+    /// `n` tramos de fila completa (filas `0..n`).
+    fn filas_completas(n: u32) -> Vec<Span> {
+        (0..n).map(|y| sp(y, 0, ANCHO)).collect()
+    }
+
+    /// Lo observable y barato de comparar de un documento (no clona la historia entera).
+    fn foto(doc: &Document) -> (Image, bool, bool, usize, u64) {
+        (
+            imagen_de(doc).clone(),
+            doc.can_undo(),
+            doc.can_redo(),
+            doc.history_bytes(),
+            doc.state_id(),
+        )
+    }
+
+    /// Deja `doc` con un paso de deshacer y otro de rehacer (sobre columnas impares y sobre
+    /// una fila a la que no llegan los tramos de las pruebas).
+    fn con_deshacer_y_rehacer(doc: &mut Document) {
+        let id = doc.main_image();
+        assert_eq!(doc.apply(set(id, &[px(1, 1, c2())])), Ok(true));
+        assert_eq!(doc.apply(set(id, &[px(3, 1, c3())])), Ok(true));
+        assert_eq!(doc.undo(), Ok(()));
+        assert!(doc.can_undo() && doc.can_redo());
+    }
+
+    // Filas 6 y 7.
+
+    #[test]
+    fn fila_06_y_07_exactamente_max_trozos_caben_en_el_limite_por_defecto() {
+        // Fila 6: la constante es única y el paso máximo que admite cabe en la historia.
+        assert_eq!(Document::MAX_FILL_SPANS, 3_000_000);
+        assert_eq!(Document::MAX_FILL_SPANS, TOPE);
+
+        let mut doc = uniforme(368);
+        let id = doc.main_image();
+        let original = imagen_de(&doc).clone();
+        let spans = tramos_de_un_pixel(Document::MAX_FILL_SPANS);
+        assert_eq!(spans.len(), TOPE);
+        assert_eq!(doc.apply(fr(id, &spans, c1())), Ok(true));
+        let bytes = doc.history_bytes();
+        assert!(
+            bytes <= Document::DEFAULT_HISTORY_LIMIT,
+            "el paso máximo ocupa {bytes} bytes y el límite por defecto es {}",
+            Document::DEFAULT_HISTORY_LIMIT
+        );
+        // Un trozo por tramo: no puede ser menos de 3 millones de trozos.
+        assert!(bytes >= TOPE, "{bytes} bytes para {TOPE} trozos");
+        let rellena = imagen_de(&doc).clone();
+        assert_eq!(rellena.get_pixel(0, 0), Ok(Pixel::Rgba(c1())));
+        assert_eq!(rellena.get_pixel(1, 0), Ok(Pixel::Rgba(c0())));
+
+        assert_eq!(doc.undo(), Ok(()));
+        assert!(imagen_de(&doc) == &original, "undo restaura la imagen");
+        assert_eq!(doc.redo(), Ok(()));
+        assert!(imagen_de(&doc) == &rellena);
+    }
+
+    #[test]
+    fn fila_07_un_trozo_mas_que_el_tope_se_rechaza_sin_tocar_nada() {
+        let mut doc = uniforme(368);
+        con_deshacer_y_rehacer(&mut doc);
+        let id = doc.main_image();
+        let antes = foto(&doc);
+
+        let spans = tramos_de_un_pixel(TOPE + 1);
+        assert_eq!(spans.len(), TOPE + 1);
+        assert_eq!(doc.apply(fr(id, &spans, c1())), Err(demasiado()));
+        let despues = foto(&doc);
+        assert!(
+            despues == antes,
+            "imagen, can_undo, can_redo, history_bytes y state_id iguales"
+        );
+        assert!(doc.can_redo(), "la pila de rehacer sigue viva");
+
+        // `undo` y `redo` posteriores siguen sin error.
+        assert_eq!(doc.redo(), Ok(()));
+        assert_eq!(doc.undo(), Ok(()));
+        assert_eq!(doc.undo(), Ok(()));
+        assert_eq!(doc.redo(), Ok(()));
+        assert_eq!(doc.redo(), Ok(()));
+    }
+
+    // Fila 8: pocos tramos, muchos trozos.
+
+    #[test]
+    fn fila_08_cuenta_trozos_y_no_tramos_184_filas_se_rechazan() {
+        // 184 tramos de 16384 píxeles, cada píxel distinto de `c1` y de su vecino: 3 014 656
+        // trozos.
+        let mut doc = alterna(184);
+        let id = doc.main_image();
+        let antes = foto(&doc);
+        assert_eq!(
+            doc.apply(fr(id, &filas_completas(184), c1())),
+            Err(demasiado())
+        );
+        assert!(foto(&doc) == antes, "el documento no cambia");
+    }
+
+    #[test]
+    fn fila_08_183_filas_caben_y_undo_restaura() {
+        // 183 tramos: 2 998 272 trozos.
+        let mut doc = alterna(184);
+        let id = doc.main_image();
+        let original = imagen_de(&doc).clone();
+        assert_eq!(doc.apply(fr(id, &filas_completas(183), c1())), Ok(true));
+        assert!(doc.history_bytes() <= Document::DEFAULT_HISTORY_LIMIT);
+        let img = imagen_de(&doc);
+        assert_eq!(img.get_pixel(0, 0), Ok(Pixel::Rgba(c1())));
+        assert_eq!(img.get_pixel(ANCHO - 1, 182), Ok(Pixel::Rgba(c1())));
+        assert_eq!(
+            img.get_pixel(0, 183),
+            Ok(Pixel::Rgba(c2())),
+            "la fila 183 no se toca"
+        );
+        assert_eq!(doc.undo(), Ok(()));
+        assert!(imagen_de(&doc) == &original, "undo restaura la imagen");
+    }
+
+    // Fila 9.
+
+    #[test]
+    fn fila_09_batch_con_un_relleno_demasiado_fragmentado_se_revierte() {
+        let mut doc = uniforme(368);
+        con_deshacer_y_rehacer(&mut doc);
+        let id = doc.main_image();
+        let antes = foto(&doc);
+
+        // `S` pinta una columna impar de la fila 0 (los tramos solo tocan columnas pares).
+        let paso = lote(vec![
+            set(id, &[px(1, 0, c2())]),
+            fr(id, &tramos_de_un_pixel(TOPE + 1), c1()),
+        ]);
+        assert_eq!(
+            doc.apply(paso),
+            Err(en_lote(1, demasiado())),
+            "InBatch con index 1 y el error del relleno"
+        );
+        assert_eq!(
+            pixel_en(&doc, 1, 0),
+            Pixel::Rgba(c0()),
+            "el píxel de S se revierte"
+        );
+        assert!(foto(&doc) == antes, "historia y estado intactos");
+    }
+
+    // Fila 10.
+
+    #[test]
+    fn fila_10_display_source_eq_y_clone_del_error() {
+        let e = DocumentError::FillTooFragmented { limit: TOPE };
+        let texto = e.to_string();
+        assert_eq!(texto, "relleno cancelado: región demasiado fragmentada");
+        assert_eq!(texto.chars().count(), 47);
+        for numero in [
+            "3000000",
+            "3 000 000",
+            "3_000_000",
+            "3.000.000",
+            "3,000,000",
+        ] {
+            assert!(!texto.contains(numero), "el texto no lleva el número");
+        }
+        assert!(e.source().is_none());
+        assert_eq!(e.clone(), e);
+        assert_ne!(e, DocumentError::FillTooFragmented { limit: 0 });
+        assert_ne!(e, DocumentError::OutOfMemory);
+        assert_error_traits::<DocumentError>();
+        // Dentro de un Batch el texto del lote lo contiene y `source` es el error de dentro.
+        let dentro = en_lote(1, e.clone());
+        assert!(dentro.to_string().contains(&texto));
+        assert_eq!(dentro.source().map(ToString::to_string), Some(texto));
+    }
+}

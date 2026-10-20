@@ -17,10 +17,11 @@ use egui::{
     Context, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelUnit, PointerButton, Pos2,
     RawInput, Rect, TouchPhase, Vec2, pos2, vec2,
 };
-use px_core::{Image, Mode, Pixel, Rgba};
+use px_core::{DocumentError, Image, Mode, Pixel, Rgba};
 use px_ui::canvas::{Canvas, CanvasInfo, CanvasInput};
+use px_ui::edit_layout::min_window_width_pt;
 use px_ui::status::{bar_height_px, bar_text, columns, show};
-use px_ui::text::{apply_scale, install_fonts};
+use px_ui::text::{apply_scale, install_fonts, ui_unit};
 use px_ui::view::Zoom;
 
 /// Imagen RGBA de 64×48 con un píxel de cada color en las esquinas.
@@ -457,4 +458,31 @@ fn fila_16_columns_de_un_ancho_no_valido_es_0() {
     assert_eq!(columns(-1.0, 1.0), 0);
     assert_eq!(columns(f32::NAN, 1.0), 0);
     assert_eq!(columns(f32::INFINITY, 1.0), 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 13 de specs/hito-2-limites-relleno.md: el aviso del relleno demasiado fragmentado cabe
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_13_el_aviso_de_relleno_fragmentado_cabe_en_la_barra_a_la_ventana_minima() {
+    let texto = DocumentError::FillTooFragmented { limit: 3_000_000 }.to_string();
+    let esperado = "aviso: relleno cancelado: región demasiado fragmentada";
+    assert_eq!(esperado.chars().count(), 54);
+    for ppp in [1.0f32, 1.25, 1.5, 2.0, 3.0] {
+        let ancho = min_window_width_pt(ppp);
+        let banco = Banco::nuevo(ppp, vec2(ancho, 300.0));
+        // Como `show`: ancho útil = (ancho - 2 * margen) píxeles de interfaz, en físicos.
+        let margen = 3.0 * ui_unit(ppp);
+        let cols = columns((ancho - 2.0 * margen) * ppp, ppp);
+        assert!(
+            cols >= 54,
+            "ppp {ppp}: solo caben {cols} columnas (ancho {ancho} pt)"
+        );
+        assert_eq!(
+            bar_text(&banco.ctx, &texto, true, cols),
+            esperado,
+            "ppp {ppp}: el texto se recorta o cambia"
+        );
+    }
 }
