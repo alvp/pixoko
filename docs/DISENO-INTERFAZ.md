@@ -121,6 +121,8 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 | Modos de pincel | `F1` a `F8` | no existen | 4 |
 | Restringir el cursor y dejar trazas | `Mayus` y `Ctrl` mientras se dibuja | no existen | 4 |
 
+**Hecho en la unidad I.1 (2026-10-20, `specs/interfaz-teclado.md`):** `d v f ,` (herramientas), `u` (más `Ctrl+Z`), `]` y `[` (también `Av Pág` y `Re Pág`), `<` y `>` (además de `+`, `=` y `-`), `n`, `Inicio`; el Borrador queda sin letra y las cifras 1 a 9 sin asignar. Lo demás de la tabla sigue pendiente en su hito.
+
 Reglas del esquema:
 
 - **Cifras 1 a 9:** dejan de elegir color y se reservan para los controles de animación (hito 5).
