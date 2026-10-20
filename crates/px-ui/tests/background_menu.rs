@@ -143,7 +143,7 @@ fn fila_12_ver_conserva_sus_4_entradas() {
 }
 
 #[test]
-fn fila_12_ver_gana_un_submenu_fondo_del_lienzo_con_las_cuatro_opciones_en_orden() {
+fn fila_12_ver_gana_un_submenu_fondo_del_lienzo_con_las_cinco_opciones_en_orden() {
     let ver = el_menu("Ver");
     assert_eq!(ver.submenus.len(), 1, "un solo submenú");
     let fondo = &ver.submenus[0];
@@ -164,6 +164,7 @@ fn fila_12_ver_gana_un_submenu_fondo_del_lienzo_con_las_cuatro_opciones_en_orden
                 "Blanco",
                 AppAction::CanvasBackground(CanvasBackground::White)
             ),
+            ("Color…", AppAction::BackgroundColor),
         ]
     );
     for item in fondo.items {
@@ -227,7 +228,10 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
 fn fila_12_las_cuatro_acciones_del_submenu_son_distintas_y_no_estan_en_items() {
     let ver = el_menu("Ver");
     let acciones: Vec<AppAction> = ver.submenus[0].items.iter().map(|i| i.action).collect();
-    assert_eq!(acciones, las_cuatro());
+    // Las cuatro fijas y, al final, `Color…` (unidad 19b).
+    let mut esperado = las_cuatro().to_vec();
+    esperado.push(AppAction::BackgroundColor);
+    assert_eq!(acciones, esperado);
     for (i, a) in acciones.iter().enumerate() {
         assert!(!acciones[i + 1..].contains(a), "{a:?} repetida");
     }
@@ -265,6 +269,8 @@ fn fila_12_con_cada_fondo_activo_hay_exactamente_una_marca_en_el_submenu() {
             CanvasBackground::Black => "Negro",
             CanvasBackground::Gray => "Gris",
             CanvasBackground::White => "Blanco",
+            // Con un color propio la marca va en `Color…` (unidad 19b).
+            CanvasBackground::Custom(_) => "Color…",
         };
         assert_eq!(marcadas, [esperado], "{activo:?} activo");
     }
@@ -367,8 +373,8 @@ fn fila_12_sin_rotulos_repetidos_con_los_de_menus() {
     }
     assert_eq!(
         todos.len(),
-        n_anteriores + 5,
-        "el submenú y sus cuatro entradas"
+        n_anteriores + 6,
+        "el submenú y sus cinco entradas"
     );
 }
 

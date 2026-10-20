@@ -167,6 +167,7 @@ fn fondo_en(fondo: CanvasBackground, px: i64, py: i64, origen: (i64, i64), cell:
         CanvasBackground::Black => Color32::from_rgb(0, 0, 0),
         CanvasBackground::Gray => BACKGROUND,
         CanvasBackground::White => Color32::from_rgb(255, 255, 255),
+        CanvasBackground::Custom(c) => Color32::from_rgb(c.r, c.g, c.b),
     }
 }
 
