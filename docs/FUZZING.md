@@ -47,7 +47,7 @@ Cada fallo se convierte en un test de regresión en `crates/px-formats/tests/png
 ```
 cargo fmt --manifest-path fuzz/Cargo.toml --check
 cargo clippy --manifest-path fuzz/Cargo.toml -- -D warnings
-cargo deny --manifest-path fuzz/Cargo.toml --locked check
+cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check
 ```
 
-Las dos primeras compilan con la toolchain estable. Las dependencias del fuzzer y su excepción de licencia (NCSA, solo para `libfuzzer-sys`) están en `docs/DEPENDENCIES.md`.
+Las dos primeras compilan con la toolchain estable. Las dependencias del fuzzer y su excepción de licencia (NCSA, solo para `libfuzzer-sys`, en `fuzz/deny.toml` desde 2026-10-20, con la misma lista de licencias que el `deny.toml` de la raíz y ninguna otra) están en `docs/DEPENDENCIES.md`. Sin `--config fuzz/deny.toml`, el `cargo deny` del fuzzer falla por NCSA.

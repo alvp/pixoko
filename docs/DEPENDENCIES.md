@@ -39,7 +39,7 @@ Notas:
 
 ### Fuzzing (`fuzz/`, fuera del workspace)
 
-`fuzz/Cargo.toml` (crate `pixoko-fuzz`, con su propio `Cargo.lock`) depende de `libfuzzer-sys`, de `px-core` y `px-formats` (rutas) y, por tanto, de `png` y sus transitivas (arriba). Solo se compila en el fuzzer, que no se distribuye: nada de esto entra en los binarios de Pixoko. El `cargo deny` del CI no lo ve; se comprueba en local con `cargo deny --manifest-path fuzz/Cargo.toml --locked check` (`docs/FUZZING.md`), que da `advisories ok, bans ok, licenses ok, sources ok`.
+`fuzz/Cargo.toml` (crate `pixoko-fuzz`, con su propio `Cargo.lock`) depende de `libfuzzer-sys`, de `px-core` y `px-formats` (rutas) y, por tanto, de `png` y sus transitivas (arriba). Solo se compila en el fuzzer, que no se distribuye: nada de esto entra en los binarios de Pixoko. El `cargo deny` del CI no lo ve; se comprueba en local con `cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check` (`docs/FUZZING.md`), que da `advisories ok, bans ok, licenses ok, sources ok`.
 
 | Crate | Versión | Licencia | Uso |
 | --- | --- | --- | --- |
@@ -52,7 +52,29 @@ Notas:
 | `getrandom` | 0.4.3 | MIT OR Apache-2.0 | Solo build (de `jobserver`); su dependencia `r-efi` es solo UEFI y ya está explicada arriba |
 | `shlex` | 2.0.1 | MIT OR Apache-2.0 | Solo build (de `cc`) |
 
-**Excepción de licencia: `NCSA` para `libfuzzer-sys` (2026-10-17).** La licencia de la crate es `(MIT OR Apache-2.0) AND NCSA`; con `AND`, NCSA es obligatoria (empaqueta libFuzzer, de LLVM) y no hay rama alternativa. NCSA (University of Illinois/NCSA Open Source License) es permisiva, del estilo de MIT y BSD-3 (conservar el aviso de copyright y el descargo), está aprobada por la OSI y no es GPL, LGPL ni AGPL. Por eso `deny.toml` no la añade a `allow`: declara una excepción `[[licenses.exceptions]]` solo para `libfuzzer-sys`. El `cargo deny check` del workspace no usa esa crate y da un aviso inofensivo (`license-exception-not-encountered`). Si otra crate pidiera NCSA, habría que decidirlo de nuevo.
+**Excepción de licencia: `NCSA` para `libfuzzer-sys` (2026-10-17).** La licencia de la crate es `(MIT OR Apache-2.0) AND NCSA`; con `AND`, NCSA es obligatoria (empaqueta libFuzzer, de LLVM) y no hay rama alternativa. NCSA (University of Illinois/NCSA Open Source License) es permisiva, del estilo de MIT y BSD-3 (conservar el aviso de copyright y el descargo), está aprobada por la OSI y no es GPL, LGPL ni AGPL. Por eso no se añade a `allow`: declara una excepción `[[licenses.exceptions]]` solo para `libfuzzer-sys`, con comentario y fecha. **Desde 2026-10-20 la excepción está en `fuzz/deny.toml`** (antes, en el `deny.toml` de la raíz, donde daba el aviso `license-exception-not-encountered` en cada ejecución porque `fuzz/` está fuera del workspace). `fuzz/deny.toml` repite **la misma lista de licencias permitidas que el de la raíz, sin ninguna otra** (nunca GPL, LGPL ni AGPL): si una cambia, hay que cambiar la otra. El CI no comprueba ni la excepción ni `fuzz/deny.toml`; el comando exacto del fuzzer es `cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check` (`advisories ok, bans ok, licenses ok, sources ok`; avisos esperados: `miniz_oxide` duplicada y 4 `license-not-encountered` de licencias de `allow` que el fuzzer no usa). Si otra crate pidiera NCSA, habría que decidirlo de nuevo.
+
+### Avisos de `cargo deny`: línea base (2026-10-20)
+
+`cargo deny --locked check` en la raíz da `advisories ok, bans ok, licenses ok, sources ok` y **17 avisos `duplicate`**, aceptados sin `skip` en `deny.toml` (un `skip` taparía un duplicado nuevo). Cualquier duplicado fuera de esta lista, o cualquier otro aviso, es **nuevo** y se decide. Las ramas antiguas llegan por `eframe` (a través de `winit` 0.30, `glutin` y `wayland-source`, comprobado con `cargo tree -i`); la excepción es `miniz_oxide` 0.8.9, que pide `png` (la 0.9.1 la pide `flate2`). Se vuelve a mirar al actualizar `eframe`, `rfd` o `png`.
+
+| Crate | Versiones |
+| --- | --- |
+| `bitflags` | 1.3.2 y 2.13.2 |
+| `block2` | 0.5.1 y 0.6.2 |
+| `getrandom` | 0.3.4 y 0.4.3 |
+| `jni-sys` | 0.3.1 y 0.4.1 |
+| `linux-raw-sys` | 0.4.15 y 0.12.1 |
+| `miniz_oxide` | 0.8.9 y 0.9.1 |
+| `objc2`, `objc2-app-kit`, `objc2-foundation`, `objc2-ui-kit` | 0.5.3 / 0.2.2 y 0.6.5 / 0.3.2 |
+| `r-efi` | 5.3.0 y 6.0.0 |
+| `redox_syscall` | 0.4.1, 0.5.18 y 0.9.4 |
+| `rustix` | 0.38.44 y 1.1.5 |
+| `syn` | 2.0.119 y 3.0.9 |
+| `thiserror`, `thiserror-impl` | 1.0.69 y 2.0.21 |
+| `windows-sys` | 0.52.0, 0.59.0 y 0.61.2 |
+
+Los 17 avisos son estas 13 filas, contando cada `objc2*` y cada `thiserror*` por separado (`cargo deny` avisa por crate). Medido con `cargo tree --workspace -d --target all`.
 
 ## Acciones de GitHub
 
@@ -89,7 +111,7 @@ Todos los crates del árbol tienen una licencia de `allow` o una disyunción con
 
 Sin `default_fonts`, la crate `epaint_default_fonts` (`(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`) **no entra** en el árbol, y por eso `deny.toml` no cambia. La fuente de la interfaz se decidió en la unidad 11a (`specs/hito-2-texto.md`): Departure Mono 1.500 (SIL OFL 1.1) cargada con `include_bytes!` desde `assets/fonts/`. No es una dependencia de Cargo: su origen, copyright, SHA-256 y licencia están en `docs/THIRD-PARTY.md`. Activar `default_fonts` exigiría una excepción de licencia solo para `epaint_default_fonts`; no se activa.
 
-`libfuzzer-sys` y su excepción NCSA siguen como antes; el aviso `license-exception-not-encountered` de `cargo deny` es esa excepción, que solo aplica al crate `fuzz/`, fuera del workspace.
+`libfuzzer-sys` y su excepción NCSA (ahora en `fuzz/deny.toml`, ver «Fuzzing») no afectan al `cargo deny` del workspace.
 
 ### Diálogos de archivo: `rfd` (`specs/hito-2-dialogos-archivo.md`)
 

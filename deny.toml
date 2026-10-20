@@ -2,10 +2,7 @@
 allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0"]
 confidence-threshold = 0.9
 
-# 2026-10-17: `libfuzzer-sys` (solo en fuzz/, fuera del workspace) tiene la licencia
-# `(MIT OR Apache-2.0) AND NCSA`: NCSA es obligatoria porque empaqueta libFuzzer (LLVM).
-# NCSA es permisiva y no entra en ningún binario de Pixoko, así que se admite solo para esa
-# crate y no en `allow`. Ver specs/hito-1-fuzz.md y docs/DEPENDENCIES.md.
-[[licenses.exceptions]]
-crate = "libfuzzer-sys"
-allow = ["NCSA"]
+# 2026-10-20: la excepción NCSA de `libfuzzer-sys` (solo en fuzz/, fuera del workspace) vive en
+# `fuzz/deny.toml`, que repite esta misma lista de licencias. Aquí no hace falta y daría el aviso
+# `license-exception-not-encountered` en cada ejecución. Ver specs/hito-2-puerta.md (D9) y
+# docs/DEPENDENCIES.md.
