@@ -2587,11 +2587,17 @@ proptest! {
             // `hover` es `floor((puntero − image_rect.min)·ppp / zoom)`.
             let info = con.info();
             let rect = info.image_rect.expect("hay imagen");
+            // Con zoom ≥ ×1 un píxel de imagen ocupa `z` píxeles físicos (`scale(1)`); con 1/K,
+            // `scale(1)` vale 0 y es el píxel físico `s` el que muestra el de imagen `s·K`.
             let z = info.zoom.scale(1);
+            let alejado = info.zoom.shrink_factor();
             let esperado = pos_actual.and_then(|p| {
                 let fx = ((p.x - rect.min.x) * ppp).round() as i64;
                 let fy = ((p.y - rect.min.y) * ppp).round() as i64;
-                let (ix, iy) = (fx.div_euclid(z), fy.div_euclid(z));
+                let (ix, iy) = match alejado {
+                    Some(k) => (fx * i64::from(k), fy * i64::from(k)),
+                    None => (fx.div_euclid(z), fy.div_euclid(z)),
+                };
                 (fx >= 0 && fy >= 0 && ix < 64 && iy < 48).then_some((ix as u32, iy as u32))
             });
             prop_assert_eq!(info.hover, esperado, "fotograma {}: hover", k);
