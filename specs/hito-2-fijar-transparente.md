@@ -40,6 +40,8 @@ El resto de la página está escrita para **A**; si eliges B, la maqueta, las ci
 
 Este es **el último aumento de altura del editor de indexadas**. Con iconos propios (la unidad de interfaz posterior al hito 2) toda la botonera cabe en **una sola fila**; y si antes de eso hiciera falta otra operación de paleta, irá al **menú `Color`** o a un menú contextual, **no a otra fila**. El tope de 468,0 pt se queda sin holgura a propósito: la prueba compara contra la cifra exacta.
 
+**Actualización de I.2a (2026-10-20), que prevalece:** el indicador de color de [`interfaz-dos-colores.md`](interfaz-dos-colores.md) añade 36 u de altura y el criterio sube **transitoriamente** al 72 % de 720 pt (518,4 pt). Con los iconos propios (I.4) las filas de botones se reducen y el criterio vuelve al 65 %; «último aumento» queda en suspenso hasta entonces.
+
 ## Decisiones (aprobadas el 2026-10-20)
 
 1. ⚠ **Criterio de la ventana baja: aprobada la A** (cuarta fila, tope del 65 % de 720 = 468,0 pt). La B (rotar en una fila) queda descartada.

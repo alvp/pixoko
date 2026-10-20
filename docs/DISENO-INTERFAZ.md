@@ -219,4 +219,6 @@ Orden de trabajo después del hito 2:
 4. **Iconos propios:** dibujados con Pixoko y exportados como recursos de la aplicación.
 5. **Menús del original:** se añaden a medida que llegan las funciones de cada hito.
 
+**Excepción transitoria (I.2a, 2026-10-20):** el indicador de color añade una banda de 36 u al panel de la paleta y el criterio del alto mínimo de ventana sube del 65 % al 72 % de 720 pt (518,4 pt; a `ppp` 1,5 la ventana mínima pasa de 468,0 a 516,0 pt). Con los iconos propios (I.4) las filas de botones del editor se reducen y el criterio **vuelve al 65 %**. Spec: `specs/interfaz-dos-colores.md`.
+
 Este documento es la entrada de la planificación de los hitos siguientes. La planificación lee además las secciones del manual que cada hito necesite, de una en una, y produce el mapa de funciones con su hito, sus dependencias y su riesgo.
