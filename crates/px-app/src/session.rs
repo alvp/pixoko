@@ -11,6 +11,7 @@ use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
 use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_ops::{
     Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_fate, summary,
+    transparent_summary,
 };
 use px_ui::pick::{Picked, pick_notice};
 use px_ui::view::Size;
@@ -283,7 +284,7 @@ impl Session {
     ) -> Result<PaletteOutcome, DocumentError> {
         let id = self.document.main_image();
         let active = self.active_entry().unwrap_or(0);
-        let (old_len, was_transparent, command) = {
+        let (old_len, was_transparent, previous, command) = {
             let Some(image) = self.document.image(id) else {
                 return Ok(PaletteOutcome {
                     changed: false,
@@ -292,6 +293,7 @@ impl Session {
             };
             let palette = image.palette();
             let old_len = palette.map_or(0, |palette| palette.len());
+            let previous = palette.and_then(|palette| palette.transparent_index());
             let was_transparent = match (op, palette) {
                 (PaletteOp::Remove { index, .. }, Some(palette)) => {
                     palette.transparent_index() == Some(index)
@@ -321,8 +323,11 @@ impl Session {
                     len,
                     steps,
                 },
+                PaletteOp::SetTransparent { index } => {
+                    Command::SetTransparentIndex { image: id, index }
+                }
             };
-            (old_len, was_transparent, command)
+            (old_len, was_transparent, previous, command)
         };
         let own_removal = matches!(
             (op, self.ops.removal()),
@@ -360,8 +365,12 @@ impl Session {
             .filter(|_| self.editor.discard_pending())
             .map(stale_notice);
 
-        // Selección y estado de las operaciones.
-        if !matches!(op, PaletteOp::Rotate { .. }) {
+        // Selección y estado de las operaciones. Rotar y fijar o quitar la transparente no mueven
+        // la selección ni borran el rango (specs/hito-2-fijar-transparente.md, decisión 4).
+        if !matches!(
+            op,
+            PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. }
+        ) {
             let after = choice_after(&op, active, old_len);
             self.set_choice_revealing(ColorChoice::Entry(after));
             self.ops.clear_range();
@@ -373,7 +382,10 @@ impl Session {
             }
         }
         self.normalize();
-        let text = summary(&op, active, old_len, was_transparent, unused);
+        let text = match op {
+            PaletteOp::SetTransparent { index } => transparent_summary(index, active, previous),
+            _ => summary(&op, active, old_len, was_transparent, unused),
+        };
         Ok(PaletteOutcome {
             changed: true,
             notice: Some(match stale {
