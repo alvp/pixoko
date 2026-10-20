@@ -17,6 +17,15 @@
 //! - Propiedad 3: lo que se ve es el oráculo puro, con los cuatro fondos y los dos caminos
 //!   (24 casos).
 //!
+//! Unidad 19b (specs/hito-2-fondo-color.md, al final del fichero): las filas 6, 7 y 8 y la propiedad
+//! 3 con un color propio (`CanvasBackground::Custom`), con el mismo banco y el mismo rasterizador.
+//! Fila 6: oráculo píxel a píxel a las cinco escalas, ×1, ×2 y ×3, tras arrastrar la vista, con el
+//! respaldo por malla y con los zooms de alejamiento 1/2, 1/4 y 1/8; sin textura del damero. Fila 7:
+//! la superposición del trazo, el borrador y `preview_entry` sobre el color. Fila 8: el cambio de
+//! fondo en caliente con un trazo a medias y sin regenerar baldosas. Propiedad 3: el oráculo con un
+//! color propio al azar. (La parte de `write_png` de la fila 8 necesita `px-formats` y está en
+//! `px-app/src/background_color/tests.rs`.)
+//!
 //! El banco es el de `overlay_small_zoom.rs`: `Canvas::interact`, `Canvas::set_overlay`,
 //! `Canvas::sync` y `Canvas::paint` (el orden de un fotograma de la app) dentro de
 //! `Context::run_ui` con `RawInput` sintético, lo pintado pasa por el teselador de egui
@@ -55,7 +64,7 @@ use px_ui::palette_grid::{CHECK_A, CHECK_B};
 use px_ui::text::text_scale;
 use px_ui::texture::{pixel_rgba, to_rgba8};
 use px_ui::tool::{Tool, ToolAction, ToolState};
-use px_ui::view::{MIN_VISIBLE, ScreenRect, Size, ViewOp};
+use px_ui::view::{MIN_VISIBLE, ScreenRect, Size, ViewOp, Zoom};
 
 mod common;
 use common::texturas::Texturas;
@@ -2687,5 +2696,787 @@ proptest! {
         // Y las capas según el fondo y el camino: sin formas de superposición.
         comprueba_base(&banco, &escena.salida, c.fondo, c.malla, "propiedad 3");
         comprueba_textura(&banco, &c.overlay, "propiedad 3");
+    }
+}
+
+// =============================================================================================
+// Unidad 19b: un color propio como fondo (specs/hito-2-fondo-color.md, filas 6 a 8 y propiedad 3)
+// =============================================================================================
+//
+// `fondo_en` ya tiene el brazo `Custom`; `fallos`, `comprueba_base`, `comprueba_textura`,
+// `bloques_con` y `trazo_del_borrador` valen con cualquier fondo. Lo que se añade es el recorrido
+// con colores de canales distintos (para que un canal cambiado o un redondeo mal sentado no pasen)
+// y el oráculo de los zooms de alejamiento, que el banco de arriba no tenía (`Geom::z` vale 0 a 1/K).
+//
+// Suposiciones: a 1/K el píxel físico `(i, j)` del rectángulo de la imagen muestra el píxel de imagen
+// `(i·K, j·K)` (`Zoom::shrink_factor` y `View::pixel_block`, como en `zoom_canvas.rs`); `Zoom::shrink(k)`
+// y `ViewOp::ZoomOut` desde `Actual` dan 1/2, 1/4 y 1/8 con una, dos y tres operaciones.
+
+const AZUL_ACERO: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
+const NARANJA: Rgba = Rgba::opaque(0xff, 0x80, 0x00);
+const OSCURO: Rgba = Rgba::opaque(0x01, 0x02, 0x03);
+/// El color de `BACKGROUND` como fondo propio: se ve igual que el gris de fuera del lienzo.
+const COMO_EL_FONDO: Rgba = Rgba::opaque(40, 40, 40);
+
+const PROPIOS: [CanvasBackground; 4] = [
+    CanvasBackground::Custom(AZUL_ACERO),
+    CanvasBackground::Custom(NARANJA),
+    CanvasBackground::Custom(OSCURO),
+    CanvasBackground::Custom(COMO_EL_FONDO),
+];
+
+#[test]
+fn fila_6_el_color_propio_del_fondo_es_el_de_background_y_se_ve_como_color32() {
+    assert_eq!(
+        Color32::from_rgb(COMO_EL_FONDO.r, COMO_EL_FONDO.g, COMO_EL_FONDO.b),
+        BACKGROUND
+    );
+    for fondo in PROPIOS {
+        let CanvasBackground::Custom(c) = fondo else {
+            unreachable!()
+        };
+        assert_eq!(fondo_en(fondo, 5, 7, (0, 0), 8), gris(c));
+    }
+}
+
+/// Imagen RGBA de 64×48 en bloques de 8×8 con alfa 0, 128 y 255 (según `(bx + by) % 3`) y un color
+/// distinto en cada bloque: todos los canales difieren, también en los de alfa 0.
+fn imagen_de_alfas() -> Imagen {
+    let mut pixeles = Vec::with_capacity(64 * 48);
+    for y in 0..48u32 {
+        for x in 0..64u32 {
+            let (bx, by) = (x / 8, y / 8);
+            let alfa = [0u8, 128, 255][((bx + by) % 3) as usize];
+            pixeles.push(Rgba::new(
+                (40 + 24 * bx) as u8,
+                (30 + 30 * by) as u8,
+                (250 - 10 * (bx + by)) as u8,
+                alfa,
+            ));
+        }
+    }
+    Imagen {
+        ancho: 64,
+        alto: 48,
+        pixeles,
+    }
+}
+
+/// Con un color propio ni el damero, ni el gris de fuera, ni un borde asoman bajo la imagen: el
+/// píxel de la imagen con alfa 0 se ve exactamente el color, el de alfa 128 mezclado y el opaco, el
+/// suyo.
+fn comprueba_muestras_de_alfa(escena: &Escena, imagen: &Imagen, fondo: CanvasBackground, k: i64) {
+    let g = escena.geom;
+    for (ix, iy, alfa) in [(0u32, 0u32, 0u8), (8, 0, 128), (16, 0, 255)] {
+        let color = imagen.pixel(ix, iy);
+        assert_eq!(color.a, alfa);
+        // Con zoom ≥ ×1 el bloque de `z × z` píxeles físicos; a 1/K, el píxel `(ix / K, iy / K)`.
+        let (px, py) = if k == 1 {
+            let b = g.bloque(ix, iy);
+            (b.x, b.y)
+        } else {
+            (
+                g.origen.0 + i64::from(ix) / k,
+                g.origen.1 + i64::from(iy) / k,
+            )
+        };
+        let esperado = compone(fondo_en(fondo, px, py, g.origen, g.cell), color);
+        let visto = escena.buffer.en(px, py);
+        assert!(
+            visto.cerca(esperado, TOLERANCIA),
+            "alfa {alfa}: el píxel ({px}, {py}) se ve {visto:?} y debía verse {esperado:?}"
+        );
+    }
+}
+
+#[test]
+fn fila_6_color_propio_cada_pixel_se_ve_la_composicion_a_las_cinco_escalas_y_tres_zooms() {
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for zoom in 1..=3 {
+                let etiqueta = format!("ppp {ppp} ×{zoom} {fondo:?}");
+                let mut banco = Banco::nuevo_con(ppp, imagen_de_alfas(), fondo, false);
+                banco.con_zoom(zoom);
+                let escena = banco.escena(&[]);
+                assert_eq!(escena.geom.z, i64::from(zoom), "{etiqueta}");
+                assert_eq!(escena.geom.ancho, 64 * escena.geom.z, "{etiqueta}");
+                assert_eq!(escena.geom.alto, 48 * escena.geom.z, "{etiqueta}");
+                // Un solo rectángulo de fondo bajo las baldosas y ninguna textura del damero.
+                comprueba_base(&banco, &escena.salida, fondo, false, &etiqueta);
+                assert_eq!(banco.canvas.checker_texture_id(), None, "{etiqueta}");
+                sin_fallos(&fallos(&escena, &banco.imagen, &[], fondo), &etiqueta);
+                comprueba_muestras_de_alfa(&escena, &banco.imagen, fondo, 1);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_6_color_propio_con_el_respaldo_por_malla_se_ve_igual_que_con_la_textura() {
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for zoom in 1..=3 {
+                let etiqueta = format!("ppp {ppp} ×{zoom} {fondo:?}");
+                let mut con_textura = Banco::nuevo_con(ppp, imagen_de_alfas(), fondo, false);
+                con_textura.con_zoom(zoom);
+                let a = con_textura.escena(&[]);
+                let mut con_malla = Banco::nuevo_con(ppp, imagen_de_alfas(), fondo, true);
+                con_malla.con_zoom(zoom);
+                assert!(con_malla.canvas.checker_mesh());
+                let b = con_malla.escena(&[]);
+                comprueba_base(&con_malla, &b.salida, fondo, true, &etiqueta);
+                assert_eq!(con_malla.canvas.checker_texture_id(), None, "{etiqueta}");
+                sin_fallos(&fallos(&b, &con_malla.imagen, &[], fondo), &etiqueta);
+                // Igual, píxel a píxel y en todo el lienzo.
+                assert_eq!(a.geom.origen, b.geom.origen, "{etiqueta}");
+                assert_eq!(
+                    (a.buffer.ancho, a.buffer.alto),
+                    (b.buffer.ancho, b.buffer.alto)
+                );
+                for py in 0..a.buffer.alto as i64 {
+                    for px in 0..a.buffer.ancho as i64 {
+                        assert!(
+                            a.buffer.en(px, py).cerca(b.buffer.en(px, py), TOLERANCIA),
+                            "{etiqueta}: el píxel ({px}, {py}) cambia con el respaldo por malla"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Fila 6 tras arrastrar `(dx, dy)`: cada píxel físico sigue siendo el oráculo y, relativo a la
+/// esquina de la imagen, es el mismo que antes (el fondo liso va con la imagen).
+fn fila_6_tras_arrastrar(fondo: CanvasBackground, ppp: f32, zoom: u32, desplazos: &[(i64, i64)]) {
+    let mut banco = Banco::nuevo_con(ppp, imagen_de_alfas(), fondo, false);
+    banco.con_zoom(zoom);
+    let antes = banco.escena(&[]);
+    let g0 = antes.geom;
+    let (mut x, mut y) = g0.origen;
+    for &(dx, dy) in desplazos {
+        let etiqueta = format!("ppp {ppp} ×{zoom} {fondo:?} arrastre ({dx}, {dy})");
+        banco.arrastra(dx, dy);
+        let despues = banco.escena(&[]);
+        let g1 = despues.geom;
+        assert_eq!(
+            g1.origen,
+            (x + dx, y + dy),
+            "{etiqueta}: la imagen se desplazó exactamente lo arrastrado"
+        );
+        (x, y) = g1.origen;
+        comprueba_base(&banco, &despues.salida, fondo, false, &etiqueta);
+        sin_fallos(&fallos(&despues, &banco.imagen, &[], fondo), &etiqueta);
+        for ry in 0..g0.alto {
+            for rx in 0..g0.ancho {
+                let antes_ = antes.buffer.en(g0.origen.0 + rx, g0.origen.1 + ry);
+                let despues_ = despues.buffer.en(g1.origen.0 + rx, g1.origen.1 + ry);
+                assert!(
+                    antes_.cerca(despues_, TOLERANCIA),
+                    "{etiqueta}: el píxel ({rx}, {ry}) relativo a la esquina era {antes_:?} y ahora es {despues_:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_6_color_propio_tras_arrastrar_la_vista_7_y_13_pixeles_el_fondo_va_con_la_imagen() {
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for zoom in 1..=3 {
+                // Un arrastre de 7 píxeles en x y 13 en y, y luego otro de 13 en x y 7 en y.
+                fila_6_tras_arrastrar(fondo, ppp, zoom, &[(7, 13), (13, 7)]);
+            }
+        }
+    }
+}
+
+/// Lleva el zoom a 1/`k` (de ×1 por `k` = 2, 4 u 8 con una, dos o tres operaciones de alejar).
+fn con_alejamiento(banco: &mut Banco, k: u32) {
+    banco.canvas.request_view(ViewOp::Actual);
+    for _ in 0..k.trailing_zeros() {
+        banco.canvas.request_view(ViewOp::ZoomOut);
+    }
+    banco.corre(vec![], &[]);
+    assert_eq!(banco.canvas.zoom(), Zoom::shrink(k), "1/{k}");
+}
+
+/// El oráculo a 1/`k`: el píxel físico `(i, j)` del rectángulo de la imagen muestra el píxel
+/// `(i·k, j·k)` (el de la superposición, si lo hay) sobre el fondo elegido; fuera, `BACKGROUND`.
+fn fallos_alejado(
+    escena: &Escena,
+    imagen: &Imagen,
+    overlay: &[Pendiente],
+    fondo: CanvasBackground,
+    k: i64,
+) -> Fallos {
+    let g = escena.geom;
+    let mapa: HashMap<(u32, u32), Rgba> = overlay.iter().map(|&(x, y, c)| ((x, y), c)).collect();
+    let mut fallos = Fallos::nuevo();
+    for py in 0..escena.buffer.alto as i64 {
+        for px in 0..escena.buffer.ancho as i64 {
+            let dentro = px >= g.origen.0
+                && px < g.origen.0 + g.ancho
+                && py >= g.origen.1
+                && py < g.origen.1 + g.alto;
+            let esperado = if dentro {
+                let ix = ((px - g.origen.0) * k) as u32;
+                let iy = ((py - g.origen.1) * k) as u32;
+                let color = mapa
+                    .get(&(ix, iy))
+                    .copied()
+                    .unwrap_or_else(|| imagen.pixel(ix, iy));
+                compone(fondo_en(fondo, px, py, g.origen, g.cell), color)
+            } else {
+                Visto::de_color(BACKGROUND)
+            };
+            let visto = escena.buffer.en(px, py);
+            if !visto.cerca(esperado, TOLERANCIA) {
+                fallos.anota(|| {
+                    format!(
+                        "ppp {} 1/{k}: el píxel físico ({px}, {py}) se ve {visto:?} y debía verse {esperado:?} (dentro de la imagen: {dentro})",
+                        g.ppp
+                    )
+                });
+            }
+        }
+    }
+    fallos
+}
+
+#[test]
+fn fila_6_color_propio_a_1_2_1_4_y_1_8_cada_pixel_se_ve_la_composicion() {
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for k in [2u32, 4, 8] {
+                let etiqueta = format!("ppp {ppp} 1/{k} {fondo:?}");
+                let mut banco = Banco::nuevo_con(ppp, imagen_de_alfas(), fondo, false);
+                con_alejamiento(&mut banco, k);
+                let escena = banco.escena(&[]);
+                let g = escena.geom;
+                assert_eq!(g.ancho, 64 / i64::from(k), "{etiqueta}");
+                assert_eq!(g.alto, 48 / i64::from(k), "{etiqueta}");
+                comprueba_base(&banco, &escena.salida, fondo, false, &etiqueta);
+                assert_eq!(banco.canvas.checker_texture_id(), None, "{etiqueta}");
+                let f = fallos_alejado(&escena, &banco.imagen, &[], fondo, i64::from(k));
+                sin_fallos(&f, &etiqueta);
+                comprueba_muestras_de_alfa(&escena, &banco.imagen, fondo, i64::from(k));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 7: la superposición y la vista previa sobre el color
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn fila_7_color_propio_los_bloques_pendientes_se_ven_sobre_el_color_a_cinco_escalas_y_tres_zooms() {
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for zoom in 1..=3 {
+                // Sin formas de superposición, la textura es el documento con los bloques escritos
+                // y cada píxel físico es el oráculo; a ×1 los de 1×1 píxel físico también.
+                bloques_con(ppp, zoom, fondo, false);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_7_color_propio_con_el_respaldo_por_malla_los_bloques_se_ven_igual() {
+    for fondo in [PROPIOS[0], PROPIOS[2]] {
+        for ppp in PPPS {
+            for zoom in 1..=3 {
+                bloques_con(ppp, zoom, fondo, true);
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_7_color_propio_a_x1_los_pixeles_translucidos_se_ven_mezclados_con_el_color_y_no_con_la_imagen()
+ {
+    // El fallo de `b702d8e`: a ×1 la superposición de 1×1 píxel físico no se veía. Con un color propio
+    // el píxel `(255, 0, 0, 128)` se ve mezclado con **el color**, no con el azul de la imagen ni con
+    // el damero, y el borrador (`alfa 0`) deja ver el color exacto.
+    for fondo in PROPIOS {
+        let CanvasBackground::Custom(c) = fondo else {
+            unreachable!()
+        };
+        for ppp in PPPS {
+            let mut banco = Banco::nuevo_con(ppp, imagen_azul(), fondo, false);
+            banco.con_zoom(1);
+            let overlay = bloques();
+            let escena = banco.escena(&overlay);
+            assert_eq!(escena.geom.z, 1);
+            let f = fallos(&escena, &banco.imagen, &overlay, fondo);
+            sin_fallos(&f, &format!("ppp {ppp} ×1 {fondo:?}"));
+            for &(x, y, color) in &overlay {
+                let b = escena.geom.bloque(x, y);
+                let visto = escena.buffer.en(b.x, b.y);
+                let esperado = match color.a {
+                    0 => Visto::de_color(gris(c)),
+                    _ => compone(gris(c), color),
+                };
+                assert!(
+                    visto.cerca(esperado, TOLERANCIA),
+                    "ppp {ppp} {fondo:?}: ({x}, {y}) con {color:?} se ve {visto:?} y debía verse {esperado:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_7_color_propio_el_trazo_del_borrador_se_ve_igual_antes_y_despues_de_soltar() {
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            trazo_del_borrador(ppp, fondo, false);
+        }
+    }
+}
+
+#[test]
+fn fila_7_color_propio_con_el_respaldo_por_malla_el_trazo_del_borrador_se_ve_igual() {
+    for ppp in PPPS {
+        trazo_del_borrador(ppp, PROPIOS[0], true);
+    }
+}
+
+/// Imagen indexada de 64×48 con la entrada 0 transparente (`alfa 0`) y las 1 a 3 opacas; las filas 3
+/// (`x < 32`, entrada 1) y 10 a 12 (`x` de 8 a 39, entrada 2) tienen píxeles, el resto es la entrada
+/// transparente. La que se edita es la 1 y la 2.
+fn indexada_para_la_vista_previa() -> Image {
+    let mut image = indexada();
+    for y in 10..13 {
+        for x in 8..40 {
+            image.set_pixel(x, y, Pixel::Indexed(2)).expect("dentro");
+        }
+    }
+    image
+}
+
+/// Lo que se debe ver de `image` con la entrada `index` valiendo `color` (la `0`, transparente, no
+/// cambia): la imagen RGBA equivalente.
+fn imagen_con_la_entrada(image: &Image, index: u8, color: Rgba) -> Imagen {
+    let paleta = image.palette().expect("indexada");
+    let mut pixeles = Vec::with_capacity(64 * 48);
+    for y in 0..48 {
+        for x in 0..64 {
+            let Pixel::Indexed(i) = image.get_pixel(x, y).expect("dentro") else {
+                panic!("es indexada");
+            };
+            pixeles.push(if i == index {
+                color
+            } else {
+                paleta.get(i).expect("entrada")
+            });
+        }
+    }
+    Imagen {
+        ancho: 64,
+        alto: 48,
+        pixeles,
+    }
+}
+
+#[test]
+fn fila_7_color_propio_preview_entry_se_ve_sobre_el_color_igual_que_tras_end_preview() {
+    // Una entrada de alfa 0, de 128 y opaca.
+    let colores = [
+        Rgba::new(255, 255, 0, 0),
+        Rgba::new(255, 255, 0, 128),
+        Rgba::opaque(255, 255, 0),
+    ];
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for zoom in 1..=3 {
+                let etiqueta = format!("ppp {ppp} ×{zoom} {fondo:?}");
+                let indexada = indexada_para_la_vista_previa();
+                let original = imagen_con_la_entrada(&indexada, 1, Rgba::opaque(255, 0, 0));
+                let mut banco = Banco::nuevo_con(ppp, imagen_transparente(), fondo, false);
+                banco.canvas.set_image(&indexada);
+                banco.documento = indexada.clone();
+                banco.imagen = original.clone();
+                banco.con_zoom(zoom);
+                let sin_vista_previa = banco.escena(&[]);
+                sin_fallos(
+                    &fallos(&sin_vista_previa, &original, &[], fondo),
+                    &format!("{etiqueta}: antes de la vista previa"),
+                );
+                let textura = banco.canvas.texture_id().expect("textura de la imagen");
+                let subidas_antes = banco.canvas.preview_uploads();
+                let mut previstas = Vec::new();
+                for (n, color) in colores.into_iter().enumerate() {
+                    banco.canvas.preview_entry(&banco.ctx, &indexada, 1, color);
+                    let vista = imagen_con_la_entrada(&indexada, 1, color);
+                    let escena = banco.escena(&[]);
+                    let etiqueta = format!("{etiqueta}, vista previa con {color:?}");
+                    // Sin superposición propia ni damero, y cada píxel físico es el oráculo.
+                    comprueba_base(&banco, &escena.salida, fondo, false, &etiqueta);
+                    assert_eq!(banco.canvas.checker_texture_id(), None, "{etiqueta}");
+                    sin_fallos(&fallos(&escena, &vista, &[], fondo), &etiqueta);
+                    // Una sola subida (la baldosa de la imagen) y ninguna del damero.
+                    assert_eq!(
+                        escena.salida.subidas.len(),
+                        escena.salida.subidas_de(textura).len(),
+                        "{etiqueta}: solo se sube la baldosa de la imagen"
+                    );
+                    assert_eq!(escena.salida.subidas_de(textura).len(), 1, "{etiqueta}");
+                    assert_eq!(
+                        banco.canvas.preview_uploads(),
+                        subidas_antes + n as u32 + 1,
+                        "{etiqueta}: una subida de vista previa por valor nuevo"
+                    );
+                    // Otro fotograma con el mismo valor: nada que subir.
+                    let otra = banco.corre(vec![], &[]);
+                    assert!(
+                        otra.subidas.is_empty(),
+                        "{etiqueta}: sin cambios no se sube"
+                    );
+                    previstas.push((color, escena));
+                }
+                // Al soltar (`end_preview`), vuelve la imagen del documento y se ve sobre el color.
+                banco.canvas.end_preview(&banco.ctx, &indexada);
+                let salida = banco.corre(vec![], &[]);
+                let tras = banco.rasteriza_salida(salida);
+                comprueba_base(&banco, &tras.salida, fondo, false, &etiqueta);
+                sin_fallos(
+                    &fallos(&tras, &original, &[], fondo),
+                    &format!("{etiqueta}: tras end_preview"),
+                );
+                // Fuera de los píxeles de la entrada editada, la vista previa se ve igual que antes
+                // y que después: solo cambian los de la entrada 1.
+                let g = tras.geom;
+                for (color, vista) in &previstas {
+                    for py in g.origen.1..g.origen.1 + g.alto {
+                        for px in g.origen.0..g.origen.0 + g.ancho {
+                            let (ix, iy) = (
+                                ((px - g.origen.0) / g.z) as u32,
+                                ((py - g.origen.1) / g.z) as u32,
+                            );
+                            if matches!(indexada.get_pixel(ix, iy), Ok(Pixel::Indexed(1))) {
+                                continue;
+                            }
+                            assert!(
+                                vista
+                                    .buffer
+                                    .en(px, py)
+                                    .cerca(tras.buffer.en(px, py), TOLERANCIA),
+                                "{etiqueta}: el píxel ({px}, {py}) de otra entrada cambió con la vista previa de {color:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_7_color_propio_a_1_2_1_4_y_1_8_la_superposicion_se_ve_sobre_el_color() {
+    // Solo se ven los píxeles de imagen con `x` e `y` múltiplos de `K`: los pendientes se ponen en
+    // múltiplos de 8, visibles a los tres niveles.
+    let mut overlay: Vec<Pendiente> = Vec::new();
+    for (i, color) in [ROJO, TRANSPARENTE, ROJO_MEDIO].into_iter().enumerate() {
+        for fila in [8u32, 16] {
+            overlay.push((8 * (2 * i as u32 + 1), fila, color));
+        }
+    }
+    for fondo in PROPIOS {
+        for ppp in PPPS {
+            for k in [2u32, 4, 8] {
+                let etiqueta = format!("ppp {ppp} 1/{k} {fondo:?}");
+                let mut banco = Banco::nuevo_con(ppp, imagen_azul(), fondo, false);
+                con_alejamiento(&mut banco, k);
+                let escena = banco.escena(&overlay);
+                comprueba_base(&banco, &escena.salida, fondo, false, &etiqueta);
+                comprueba_textura(&banco, &overlay, &etiqueta);
+                let f = fallos_alejado(&escena, &banco.imagen, &overlay, fondo, i64::from(k));
+                sin_fallos(&f, &etiqueta);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fila 8: cambio de fondo en caliente, recursos
+// ---------------------------------------------------------------------------------------------
+
+impl Trazo {
+    /// Como `Trazo::nuevo`, con el fondo de partida que se pida.
+    fn con_fondo(ppp: f32, fondo: CanvasBackground) -> Trazo {
+        let banco = Banco::sin_calentar(vec2(800.0, 600.0), ppp, imagen_azul(), fondo, false);
+        let doc = Document::new(banco.imagen.image());
+        let mut tool = ToolState::new();
+        tool.apply_action(ToolAction::Select(Tool::Eraser));
+        let mut trazo = Trazo {
+            banco,
+            doc,
+            tool,
+            rect: Rect::NOTHING,
+            zoom: 0,
+        };
+        trazo.fotograma(vec![]);
+        let salida = trazo.fotograma(vec![]);
+        trazo.rect = salida.info().image_rect.expect("hay imagen");
+        trazo.zoom = salida.info().zoom.scale(1);
+        trazo
+    }
+}
+
+#[test]
+fn fila_8_color_propio_cambiar_de_fondo_a_mitad_de_trazo_se_ve_en_el_siguiente_fotograma() {
+    let a = CanvasBackground::Custom(AZUL_ACERO);
+    let b = CanvasBackground::Custom(NARANJA);
+    let mut t = Trazo::con_fondo(1.0, a);
+    let state_id = t.doc.state_id();
+    let bytes = to_rgba8(t.doc.image(t.doc.main_image()).expect("imagen"));
+    let inicio = t.centro(10, 5);
+    t.fotograma(vec![mover(inicio)]);
+    t.fotograma(vec![boton_de(inicio, PointerButton::Primary, true)]);
+    for x in 11..=14 {
+        t.fotograma(vec![mover(t.centro(x, 5))]);
+    }
+    assert!(t.tool.busy(), "el trazo está en curso");
+    let n_pendientes = t.pendientes().len();
+    assert_eq!(n_pendientes, 5);
+    // Con un color propio nunca se creó la textura del damero.
+    assert_eq!(t.banco.canvas.checker_texture_id(), None);
+    let salida = t.fotograma(vec![]);
+    comprueba_base(&t.banco, &salida, a, false, "color propio inicial");
+    t.se_ve_como_el_oraculo(salida, a, "color propio inicial");
+
+    // La cadena de la spec: Custom(a) → Custom(b) → Damero → Custom(a) → Negro → Damero.
+    let cadena = [
+        b,
+        CanvasBackground::Checker,
+        a,
+        CanvasBackground::Black,
+        CanvasBackground::Checker,
+    ];
+    let mut damero: Option<TextureId> = None;
+    for (paso, fondo) in cadena.into_iter().enumerate() {
+        let etiqueta = format!("paso {paso}: {fondo:?}");
+        t.banco.canvas.set_background(fondo);
+        assert_eq!(t.banco.canvas.background(), fondo);
+        let salida = t.fotograma(vec![]);
+        // `textures_delta` vacío en el fotograma del cambio, salvo la textura del damero la primera
+        // vez que se vuelve a él (se crea una sola vez: mismo id después, sin otra subida).
+        let nuevo_damero = fondo == CanvasBackground::Checker && damero.is_none();
+        if nuevo_damero {
+            let id = t
+                .banco
+                .canvas
+                .checker_texture_id()
+                .unwrap_or_else(|| panic!("{etiqueta}: se crea la textura del damero"));
+            assert_eq!(
+                salida.subidas.len(),
+                1,
+                "{etiqueta}: solo la textura del damero"
+            );
+            assert_eq!(salida.subidas_de(id).len(), 1, "{etiqueta}");
+            damero = Some(id);
+        } else {
+            assert!(
+                salida.subidas.is_empty(),
+                "{etiqueta}: el cambio de fondo no sube ninguna textura ({} subidas)",
+                salida.subidas.len()
+            );
+            assert_eq!(t.banco.canvas.checker_texture_id(), damero, "{etiqueta}");
+        }
+        assert!(salida.liberadas.is_empty(), "{etiqueta}: no se libera nada");
+        // Lo que se ve es el fondo nuevo, con el trazo a medias encima.
+        if fondo == CanvasBackground::Checker {
+            comprueba_base(&t.banco, &salida, fondo, false, &etiqueta);
+        } else if damero.is_some() {
+            comprueba_base_con_damero_existente(&t.banco, &salida, fondo);
+        } else {
+            comprueba_base(&t.banco, &salida, fondo, false, &etiqueta);
+        }
+        t.se_ve_como_el_oraculo(salida, fondo, &etiqueta);
+        // El trazo sigue, el documento y la herramienta, como estaban.
+        assert!(t.tool.busy(), "{etiqueta}");
+        assert_eq!(t.tool.tool(), Tool::Eraser, "{etiqueta}");
+        assert_eq!(t.doc.state_id(), state_id, "{etiqueta}");
+        assert!(!t.doc.can_undo(), "{etiqueta}");
+        assert_eq!(t.pendientes().len(), n_pendientes, "{etiqueta}");
+        assert_eq!(
+            to_rgba8(t.doc.image(t.doc.main_image()).expect("imagen")),
+            bytes,
+            "{etiqueta}"
+        );
+    }
+
+    // El trazo no se cortó: sigue con otro fondo propio y termina en un solo paso de historia, con
+    // los píxeles borrados sobre el fondo de ese momento.
+    t.fotograma(vec![mover(t.centro(15, 5))]);
+    t.banco.canvas.set_background(b);
+    let salida = t.fotograma(vec![mover(t.centro(16, 5))]);
+    assert_eq!(t.pendientes().len(), 7);
+    assert_eq!(
+        salida.subidas.len(),
+        salida
+            .subidas_de(t.banco.canvas.texture_id().expect("textura"))
+            .len(),
+        "con el trazo, solo se sube la baldosa de la imagen (nunca el damero)"
+    );
+    comprueba_base_con_damero_existente(&t.banco, &salida, b);
+    t.se_ve_como_el_oraculo(salida, b, "el trazo sigue");
+    let fin = t.centro(16, 5);
+    let salida = t.fotograma(vec![boton_de(fin, PointerButton::Primary, false)]);
+    assert!(!t.tool.busy(), "el trazo terminó");
+    assert!(t.doc.can_undo(), "el trazo es un paso de historia");
+    assert_ne!(t.doc.state_id(), state_id);
+    // Soltar sube lo borrado y se ve sobre el color elegido, como se veía con la superposición.
+    let escena = t.banco.rasteriza_salida(salida);
+    let mut imagen_final = Imagen::uniforme(64, 48, AZUL);
+    for x in 10..=16 {
+        imagen_final = imagen_final.con(x, 5, TRANSPARENTE);
+    }
+    let f = fallos(&escena, &imagen_final, &[], b);
+    sin_fallos(&f, "tras soltar");
+}
+
+#[test]
+fn fila_8_color_propio_cambiar_el_fondo_no_regenera_baldosas_y_el_damero_se_crea_una_sola_vez() {
+    for ppp in PPPS {
+        let a = CanvasBackground::Custom(AZUL_ACERO);
+        let mut banco = Banco::sin_calentar(PANTALLA, ppp, imagen_de_alfas(), a, false);
+        for _ in 0..3 {
+            banco.corre(vec![], &[]);
+        }
+        let imagen = banco.canvas.texture_id().expect("textura de la imagen");
+        assert_eq!(banco.canvas.checker_texture_id(), None);
+        let mut damero: Option<TextureId> = None;
+        for (paso, fondo) in [
+            CanvasBackground::Custom(NARANJA),
+            CanvasBackground::Custom(OSCURO),
+            CanvasBackground::Custom(NARANJA),
+            CanvasBackground::Checker,
+            a,
+            CanvasBackground::Checker,
+            CanvasBackground::Black,
+            CanvasBackground::Custom(COMO_EL_FONDO),
+            CanvasBackground::Checker,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            banco.canvas.set_background(fondo);
+            let salida = banco.corre(vec![], &[]);
+            let etiqueta = format!("ppp {ppp} paso {paso}: {fondo:?}");
+            if fondo == CanvasBackground::Checker && damero.is_none() {
+                let id = banco
+                    .canvas
+                    .checker_texture_id()
+                    .unwrap_or_else(|| panic!("{etiqueta}: se crea al volver al damero"));
+                assert_eq!(salida.subidas.len(), 1, "{etiqueta}");
+                assert_eq!(salida.subidas_de(id).len(), 1, "{etiqueta}");
+                damero = Some(id);
+            } else {
+                assert!(salida.subidas.is_empty(), "{etiqueta}: sin subidas");
+                assert_eq!(banco.canvas.checker_texture_id(), damero, "{etiqueta}");
+            }
+            assert!(salida.liberadas.is_empty(), "{etiqueta}");
+            // La imagen no se regenera: es la misma baldosa, con el mismo contenido.
+            assert_eq!(banco.canvas.texture_id(), Some(imagen), "{etiqueta}");
+            comprueba_textura(&banco, &[], &etiqueta);
+            assert_eq!(banco.canvas.background(), fondo);
+        }
+    }
+}
+
+#[test]
+fn fila_8_color_propio_el_documento_to_rgba8_el_state_id_y_la_textura_de_la_imagen_quedan_intactos()
+{
+    let ppp = 2.0;
+    let imagen = imagen_de_alfas();
+    let doc = Document::new(imagen.image());
+    let id = doc.main_image();
+    let state_id = doc.state_id();
+    let bytes = to_rgba8(doc.image(id).expect("imagen"));
+    let mut banco = Banco::sin_calentar(
+        PANTALLA,
+        ppp,
+        imagen.clone(),
+        CanvasBackground::Custom(AZUL_ACERO),
+        false,
+    );
+    let primero = banco.corre(vec![], &[]);
+    let textura = banco.canvas.texture_id().expect("textura de la imagen");
+    // La imagen se sube una sola vez, tal cual: los mismos bytes que `to_rgba8`, sin el color.
+    let subida = primero.subidas_de(textura);
+    assert_eq!(subida.len(), 1);
+    let ImageData::Color(color) = &subida[0].image;
+    let esperado = egui::ColorImage::from_rgba_unmultiplied([64, 48], &bytes);
+    assert_eq!(color.pixels, esperado.pixels);
+    assert_eq!(banco.canvas.checker_texture_id(), None);
+    // Con la superposición y con cada fondo propio (y los de siempre), la textura sigue siendo el
+    // documento con los píxeles pendientes y no se vuelve a subir nada.
+    let overlay = bloques();
+    banco.corre(vec![], &overlay);
+    comprueba_textura(&banco, &overlay, "con la superposición");
+    for fondo in PROPIOS
+        .into_iter()
+        .chain(FONDOS)
+        .chain([CanvasBackground::Custom(AZUL_ACERO)])
+    {
+        banco.canvas.set_background(fondo);
+        for _ in 0..2 {
+            let salida = banco.corre(vec![], &overlay);
+            if fondo == CanvasBackground::Checker {
+                // La textura del damero se crea la primera vez que se vuelve a él; la de la imagen,
+                // nunca se toca.
+                assert!(salida.subidas_de(textura).is_empty(), "{fondo:?}");
+            } else {
+                assert!(salida.subidas.is_empty(), "{fondo:?}");
+            }
+        }
+        comprueba_textura(&banco, &overlay, &format!("{fondo:?}"));
+    }
+    // Al quitar la superposición, la textura vuelve a ser el documento, byte a byte.
+    banco.corre(vec![], &[]);
+    comprueba_textura(&banco, &[], "tras quitar la superposición");
+    assert!(banco.texturas.get(textura).expect("textura").texels == esperado.pixels);
+    assert_eq!(to_rgba8(doc.image(id).expect("imagen")), bytes);
+    assert_eq!(doc.state_id(), state_id);
+    assert!(!doc.can_undo());
+}
+
+// ---------------------------------------------------------------------------------------------
+// Propiedad 3: lo que se ve es el oráculo puro, con un color propio
+// ---------------------------------------------------------------------------------------------
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(24))]
+
+    /// Como la propiedad 3 de la 17b, con el fondo `Custom(c)` de un `c` opaco al azar: imagen de 1
+    /// a 24 de lado con píxeles de alfa 0, 1 a 254 y 255, superposición al azar, una de las cinco
+    /// escalas, ×1, ×2 o ×3, vista desplazada al azar, con la textura o con el respaldo por malla:
+    /// cada píxel físico del rectángulo de la imagen vale `composición(c, píxel)` y el resto del
+    /// lienzo, `BACKGROUND`.
+    #[test]
+    fn propiedad_3_color_propio_lo_que_se_ve_es_el_oraculo_puro(
+        c in caso_visto(),
+        rgb in any::<[u8; 3]>(),
+    ) {
+        let fondo = CanvasBackground::Custom(Rgba::opaque(rgb[0], rgb[1], rgb[2]));
+        let mut banco = Banco::nuevo_con(c.ppp, c.imagen.clone(), fondo, c.malla);
+        banco.con_zoom(c.zoom);
+        banco.arrastra(c.desplazo.0, c.desplazo.1);
+        let escena = banco.escena(&c.overlay);
+        let f = fallos(&escena, &c.imagen, &c.overlay, fondo);
+        prop_assert!(
+            f.vacio(),
+            "ppp {} ×{} {:?} malla={} desplazo {:?}: {}",
+            c.ppp, c.zoom, fondo, c.malla, c.desplazo, f.resumen()
+        );
+        // Las capas: un solo rectángulo de fondo, sin textura del damero ni formas de superposición.
+        comprueba_base(&banco, &escena.salida, fondo, c.malla, "propiedad 3 (color propio)");
+        prop_assert_eq!(banco.canvas.checker_texture_id(), None);
+        comprueba_textura(&banco, &c.overlay, "propiedad 3 (color propio)");
     }
 }

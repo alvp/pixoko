@@ -19,18 +19,26 @@
 //! Eq` y `Rgba` es `Debug` y `PartialEq`. Los uv de `CheckerQuad` se comparan **exactos**: todos los
 //! valores de la spec son múltiplos de 1/16 y se representan sin error en `f32`.
 //!
+//! Unidad 19b (specs/hito-2-fondo-color.md): la fila 1 (`CanvasBackground::Custom`, `custom`,
+//! `solid_color`, `background_value_text` y `background_fill` de un color propio) y la parte pura de
+//! la propiedad 1 (`custom(c)` es `Some` si y solo si el alfa es 255, `background_value_text` se lee
+//! de vuelta con `parse_hex` y `background_fill` nunca lleva alfa < 255) están al final del fichero.
+//!
 //! Los oráculos (paridad de las casillas, fase, número de casillas por eje) están escritos aquí con
 //! `rem_euclid` y `div_euclid`, sin llamar a las funciones nuevas, salvo donde la propiedad 1 las
 //! compara entre sí.
 
 use proptest::prelude::*;
-use px_core::Rgba;
-use px_ui::background::{BLACK, CanvasBackground, Fill, WHITE, background_fill};
+use px_core::{Mode, Rgba};
+use px_ui::background::{
+    BLACK, CanvasBackground, Fill, WHITE, background_fill, background_value_text,
+};
 use px_ui::canvas::BACKGROUND;
 use px_ui::checker::{
     CELL_U, Cell, CheckerQuad, ENV_MESH, Shade, cell_px, cells, clip, mesh_fallback_enabled, quad,
     shade_at, texels,
 };
+use px_ui::color_edit::parse_hex;
 use px_ui::palette_grid::{CHECK_A, CHECK_B, swatch_parts};
 use px_ui::text::text_scale;
 use px_ui::view::{ScreenRect, Size};
@@ -838,6 +846,239 @@ proptest! {
             if k + columnas < lista.len() {
                 prop_assert_ne!(casilla.shade, lista[k + columnas].shade);
             }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19b, fila 1: tipo y relleno de `CanvasBackground::Custom`
+// ---------------------------------------------------------------------------------------------
+//
+// Suposiciones: `CanvasBackground::custom(Rgba) -> Option<CanvasBackground>`, `solid_color(self) ->
+// Option<Rgba>` y `background_value_text(CanvasBackground) -> Option<String>` son las de «Piezas».
+// Con un `Custom` construido a mano con alfa < 255 (la variante es pública) la spec solo fija
+// `background_fill` (alfa 255 forzado): su `solid_color` y su valor escrito no se prueban.
+// NO PROBADO: `solid_color` y `background_value_text` de un `Custom(c)` con `c.a < 255` (la spec no
+// dice si devuelven `c` tal cual, con el alfa forzado o `#rrggbbaa`).
+
+const AZUL_ACERO: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
+const GRIS_40: Rgba = Rgba::opaque(40, 40, 40);
+
+fn propio(c: Rgba) -> CanvasBackground {
+    CanvasBackground::Custom(c)
+}
+
+/// Los cinco fondos, con un color propio de canales distintos.
+fn los_cinco() -> [CanvasBackground; 5] {
+    [
+        CanvasBackground::Checker,
+        CanvasBackground::Black,
+        CanvasBackground::Gray,
+        CanvasBackground::White,
+        propio(AZUL_ACERO),
+    ]
+}
+
+#[test]
+fn fila_1_custom_da_some_solo_con_alfa_255_y_conserva_el_color() {
+    assert_eq!(
+        CanvasBackground::custom(AZUL_ACERO),
+        Some(CanvasBackground::Custom(AZUL_ACERO))
+    );
+    assert_eq!(
+        CanvasBackground::custom(Rgba::new(0x33, 0x66, 0x99, 0xfe)),
+        None
+    );
+    assert_eq!(CanvasBackground::custom(Rgba::new(0, 0, 0, 0)), None);
+    // `#ffffffff` es el blanco opaco: vale y no se confunde con `White`.
+    assert_eq!(
+        CanvasBackground::custom(Rgba::new(0xff, 0xff, 0xff, 0xff)),
+        Some(CanvasBackground::Custom(WHITE))
+    );
+    assert_ne!(CanvasBackground::Custom(WHITE), CanvasBackground::White);
+    // Los 256 alfas: solo el último vale.
+    for a in 0..=255u8 {
+        let c = Rgba::new(0x33, 0x66, 0x99, a);
+        assert_eq!(
+            CanvasBackground::custom(c).is_some(),
+            a == 255,
+            "alfa {a:#04x}"
+        );
+    }
+}
+
+#[test]
+fn fila_1_background_fill_de_custom_es_siempre_solido_con_alfa_255() {
+    assert_eq!(
+        background_fill(propio(AZUL_ACERO)),
+        Fill::Solid(Rgba::new(0x33, 0x66, 0x99, 255))
+    );
+    // Construido a mano con alfa < 255: el relleno fuerza el alfa a 255 y conserva r, g, b.
+    for a in [0u8, 1, 0x7f, 0x80, 0xfe] {
+        assert_eq!(
+            background_fill(propio(Rgba::new(0x33, 0x66, 0x99, a))),
+            Fill::Solid(Rgba::new(0x33, 0x66, 0x99, 255)),
+            "alfa {a:#04x}"
+        );
+    }
+    for c in [
+        Rgba::opaque(0xff, 0x80, 0x00),
+        Rgba::opaque(0x01, 0x02, 0x03),
+        Rgba::new(0xff, 0x80, 0x00, 0),
+    ] {
+        assert_eq!(
+            background_fill(propio(c)),
+            Fill::Solid(Rgba::opaque(c.r, c.g, c.b))
+        );
+    }
+}
+
+#[test]
+fn fila_1_el_relleno_de_las_otras_cuatro_es_el_de_la_17b() {
+    assert_eq!(background_fill(CanvasBackground::Checker), Fill::Checker);
+    assert_eq!(background_fill(CanvasBackground::Black), Fill::Solid(BLACK));
+    assert_eq!(background_fill(CanvasBackground::White), Fill::Solid(WHITE));
+    assert_eq!(
+        background_fill(CanvasBackground::Gray),
+        Fill::Solid(GRIS_40)
+    );
+    assert_eq!(
+        background_fill(CanvasBackground::Gray),
+        Fill::Solid(Rgba::opaque(BACKGROUND.r(), BACKGROUND.g(), BACKGROUND.b()))
+    );
+}
+
+#[test]
+fn fila_1_el_fondo_por_defecto_sigue_siendo_el_damero() {
+    assert_eq!(CanvasBackground::default(), CanvasBackground::Checker);
+    assert_eq!(background_fill(CanvasBackground::default()), Fill::Checker);
+}
+
+#[test]
+fn fila_1_solid_color_es_some_en_las_cuatro_solidas_y_none_con_el_damero() {
+    assert_eq!(CanvasBackground::Checker.solid_color(), None);
+    assert_eq!(CanvasBackground::Black.solid_color(), Some(BLACK));
+    assert_eq!(CanvasBackground::White.solid_color(), Some(WHITE));
+    assert_eq!(CanvasBackground::Gray.solid_color(), Some(GRIS_40));
+    assert_eq!(propio(AZUL_ACERO).solid_color(), Some(AZUL_ACERO));
+    assert_eq!(
+        propio(Rgba::opaque(0xff, 0x80, 0x00)).solid_color(),
+        Some(Rgba::opaque(0xff, 0x80, 0x00))
+    );
+    // `Custom(#000000)` no pasa a `Black` ni a otro valor: su color es el elegido.
+    assert_eq!(propio(BLACK).solid_color(), Some(BLACK));
+}
+
+#[test]
+fn fila_1_background_value_text_es_some_solo_con_custom_y_mide_7_caracteres() {
+    assert_eq!(
+        background_value_text(propio(AZUL_ACERO)),
+        Some("#336699".to_string())
+    );
+    assert_eq!(
+        background_value_text(propio(Rgba::opaque(0xff, 0x80, 0x00))),
+        Some("#ff8000".to_string())
+    );
+    assert_eq!(
+        background_value_text(propio(Rgba::opaque(0x01, 0x02, 0x03))),
+        Some("#010203".to_string())
+    );
+    assert_eq!(
+        background_value_text(propio(BLACK)),
+        Some("#000000".to_string())
+    );
+    assert_eq!(
+        background_value_text(propio(AZUL_ACERO)).map(|t| t.chars().count()),
+        Some(7)
+    );
+    for otro in [
+        CanvasBackground::Checker,
+        CanvasBackground::Black,
+        CanvasBackground::Gray,
+        CanvasBackground::White,
+    ] {
+        assert_eq!(background_value_text(otro), None, "{otro:?}");
+    }
+}
+
+#[test]
+fn fila_1_custom_no_se_normaliza_a_otra_variante_aunque_su_color_coincida() {
+    // El usuario eligió «Color…»: la marca y el valor no saltan a otra entrada.
+    assert_ne!(propio(BLACK), CanvasBackground::Black);
+    assert_ne!(propio(WHITE), CanvasBackground::White);
+    assert_ne!(propio(GRIS_40), CanvasBackground::Gray);
+    assert_eq!(CanvasBackground::custom(BLACK), Some(propio(BLACK)));
+    // Pero se ve igual: el mismo relleno.
+    assert_eq!(
+        background_fill(propio(BLACK)),
+        background_fill(CanvasBackground::Black)
+    );
+    assert_eq!(
+        background_fill(propio(WHITE)),
+        background_fill(CanvasBackground::White)
+    );
+    assert_eq!(
+        background_fill(propio(GRIS_40)),
+        background_fill(CanvasBackground::Gray)
+    );
+}
+
+#[test]
+fn fila_1_las_cinco_variantes_son_distintas_entre_si_y_el_tipo_sigue_siendo_plano() {
+    let cinco = los_cinco();
+    for (i, a) in cinco.iter().enumerate() {
+        for b in &cinco[i + 1..] {
+            assert_ne!(a, b);
+        }
+    }
+    // Dos colores propios distintos son fondos distintos y con rellenos distintos.
+    assert_ne!(propio(AZUL_ACERO), propio(Rgba::opaque(0xff, 0x80, 0)));
+    assert_ne!(
+        background_fill(propio(AZUL_ACERO)),
+        background_fill(propio(Rgba::opaque(0xff, 0x80, 0)))
+    );
+    assert_eq!(propio(AZUL_ACERO), propio(AZUL_ACERO));
+    assert_plano::<CanvasBackground>();
+    assert_plano::<Fill>();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19b, propiedad 1 (parte pura): `custom`, `background_value_text` y `background_fill`
+// ---------------------------------------------------------------------------------------------
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// `custom(c)` es `Some` si y solo si `c.a == 255`; entonces es `Custom(c)`. El valor escrito de
+    /// un color propio opaco se lee de vuelta (`parse_hex`) como el mismo color y mide 7
+    /// caracteres. `background_fill(Custom(c))`, con cualquier alfa, es un sólido opaco con los
+    /// mismos r, g, b y nunca lleva alfa < 255.
+    #[test]
+    fn propiedad_1_custom_solo_opaco_valor_de_ida_y_vuelta_y_relleno_siempre_opaco(
+        r in any::<u8>(),
+        g in any::<u8>(),
+        b in any::<u8>(),
+        a in any::<u8>(),
+    ) {
+        let c = Rgba::new(r, g, b, a);
+        let hecho = CanvasBackground::custom(c);
+        prop_assert_eq!(hecho.is_some(), a == 255);
+        if let Some(fondo) = hecho {
+            prop_assert_eq!(fondo, CanvasBackground::Custom(c));
+            prop_assert_eq!(fondo.solid_color(), Some(c));
+            let texto = background_value_text(fondo).expect("un color propio tiene valor");
+            prop_assert_eq!(texto.chars().count(), 7);
+            // Se lee de vuelta con `parse_hex`: con seis dígitos el alfa es el del color actual
+            // (aquí, opaco).
+            prop_assert_eq!(parse_hex(&texto, Mode::Rgba, Rgba::opaque(0, 0, 0)), Ok(c));
+        }
+        // El relleno de un `Custom` construido a mano, con cualquier alfa.
+        match background_fill(CanvasBackground::Custom(c)) {
+            Fill::Solid(s) => {
+                prop_assert_eq!(s.a, 255);
+                prop_assert_eq!((s.r, s.g, s.b), (r, g, b));
+            }
+            Fill::Checker => prop_assert!(false, "un color propio nunca es el damero"),
         }
     }
 }

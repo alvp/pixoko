@@ -2886,3 +2886,349 @@ fn fila_10_el_zoom_no_cambia_con_la_accion_nueva() {
     }
     assert!(!AppAction::ConvertMode.is_zoom());
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 19b: «Color…» (specs/hito-2-fondo-color.md, fila 3, parte de `dispatch`)
+// ---------------------------------------------------------------------------------------------
+//
+// - `Dispatched::BackgroundColor` desde el menú, el botón y la tecla (la misma acción), con una
+//   imagen de cada modo y con historia, una edición deshecha o sin historia: el mismo resultado y
+//   nada tocado (`state_id`, historia, imagen, elección, herramienta; lo ejecuta `App`, como
+//   `NewImage`). Sin atajo: ninguna tecla la da.
+// - Los cinco bloqueos (`gesture`, `dialog`, `text_focus`, `removal`, `modal`) la bloquean, solos y
+//   combinados, con cualquier origen; un gesto de verdad y una quita pendiente también, mientras las
+//   cuatro fijas (`Negro`...) siguen dando `Dispatched::Background`.
+// - Con el diálogo de color abierto todo está bloqueado salvo `Quit`, que lo abandona sin aplicar
+//   nada y sigue la regla de cierre de siempre.
+//
+// Suposiciones: `Dispatched::BackgroundColor` es una variante sin datos (`Clone, Debug, PartialEq`
+// ya los tiene `Dispatched`); `open_background_color(modal, current, locks) -> bool` es la de «Piezas»;
+// `DialogKind::BackgroundColor` es el tipo del diálogo.
+
+use crate::background_color::open_background_color;
+
+/// Un fondo activo de cada clase, para abrir el diálogo desde cada uno.
+const FONDOS_DE_PARTIDA: [CanvasBackground; 5] = [
+    CanvasBackground::Checker,
+    CanvasBackground::Black,
+    CanvasBackground::Gray,
+    CanvasBackground::White,
+    CanvasBackground::Custom(Rgba::opaque(0x11, 0x22, 0x33)),
+];
+
+#[test]
+fn fila_3_color_da_dispatched_background_color_con_cada_origen_y_cada_modo_sin_tocar_nada() {
+    let mut mundos = mundos_de_cada_modo();
+    mundos.extend(mundos_sin_quita());
+    for (nombre, mut mundo) in mundos {
+        for origin in ORIGENES {
+            let antes = (mundo.foto(), extras(&mundo));
+            let resultado = mundo.despacha(AppAction::BackgroundColor, origin);
+            assert_eq!(
+                resultado,
+                Dispatched::BackgroundColor,
+                "{nombre}, {origin:?}"
+            );
+            assert!(
+                !matches!(
+                    resultado,
+                    Dispatched::View(_) | Dispatched::Background(_) | Dispatched::Done { .. }
+                ),
+                "{nombre}: no es zoom, ni uno de los fondos fijos, ni una acción de documento"
+            );
+            assert_eq!(
+                (mundo.foto(), extras(&mundo)),
+                antes,
+                "{nombre}, {origin:?}: despachar no toca nada (lo hace App)"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_3_la_entrada_color_del_submenu_da_dispatched_background_color() {
+    let submenu = MENUS
+        .iter()
+        .find(|m| m.title == "Ver")
+        .expect("el menú tiene «Ver»")
+        .submenus
+        .first()
+        .expect("Ver tiene «Fondo del lienzo»");
+    let entrada = submenu
+        .items
+        .iter()
+        .find(|item| item.label == "Color…")
+        .expect("el submenú tiene «Color…»");
+    assert_eq!(entrada.action, AppAction::BackgroundColor);
+    let mut por_menu = Mundo::estandar();
+    let mut por_boton = Mundo::estandar();
+    let a = por_menu.despacha(entrada.action, Origin::Menu);
+    let b = por_boton.despacha(AppAction::BackgroundColor, Origin::Button);
+    assert_eq!(a, Dispatched::BackgroundColor);
+    assert_eq!(a, b);
+    assert_eq!(por_menu.foto(), por_boton.foto());
+}
+
+#[test]
+fn fila_3_ninguna_tecla_con_ninguna_combinacion_da_background_color() {
+    for plataforma in PLATAFORMAS_DE_LA_19 {
+        for &tecla in Key::ALL {
+            for bits in 0..32u8 {
+                let m = modificadores_de_bits(bits);
+                assert_ne!(
+                    action_for_shortcut(tecla, m, plataforma),
+                    Some(AppAction::BackgroundColor),
+                    "{plataforma:?}, {tecla:?}, {bits:05b}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_3_cada_bloqueo_bloquea_background_color_con_cada_origen_y_cada_modo_sin_tocar_nada() {
+    let mut mundos = mundos_de_cada_modo();
+    mundos.push(("con una quita pendiente", mundo_con_quita_pendiente()));
+    for (nombre_mundo, mut mundo) in mundos {
+        for (nombre, locks) in bloqueos_de_uno_en_uno() {
+            for origin in ORIGENES {
+                let antes = (mundo.foto(), extras(&mundo));
+                assert_eq!(
+                    mundo.despacha_con(AppAction::BackgroundColor, origin, locks),
+                    Dispatched::Blocked,
+                    "{nombre_mundo}, {nombre}, {origin:?}"
+                );
+                assert!(
+                    is_blocked(AppAction::BackgroundColor, locks, origin),
+                    "{nombre}"
+                );
+                assert_eq!(
+                    (mundo.foto(), extras(&mundo)),
+                    antes,
+                    "{nombre_mundo}, {nombre}, {origin:?}: bloqueada no toca nada"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_3_con_las_32_combinaciones_de_bloqueos_solo_pasa_sin_ninguno() {
+    for bits in 0..32u8 {
+        let locks = Locks {
+            gesture: bits & 1 != 0,
+            dialog: bits & 2 != 0,
+            text_focus: bits & 4 != 0,
+            removal: bits & 8 != 0,
+            modal: bits & 16 != 0,
+        };
+        for origin in ORIGENES {
+            let mut mundo = Mundo::estandar();
+            let esperado = if bits == 0 {
+                Dispatched::BackgroundColor
+            } else {
+                Dispatched::Blocked
+            };
+            assert_eq!(
+                mundo.despacha_con(AppAction::BackgroundColor, origin, locks),
+                esperado,
+                "{bits:05b}, {origin:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_3_enabled_de_background_color_es_falso_exactamente_donde_dispatch_da_blocked() {
+    for zoom in [None, Zoom::from_int(5)] {
+        for bits in 0..32u8 {
+            let locks = Locks {
+                gesture: bits & 1 != 0,
+                dialog: bits & 2 != 0,
+                text_focus: bits & 4 != 0,
+                removal: bits & 8 != 0,
+                modal: bits & 16 != 0,
+            };
+            let mut mundo = Mundo::estandar();
+            let estado = mundo.estado_de_la_ui(zoom, locks);
+            let bloqueada = mundo.despacha_con(AppAction::BackgroundColor, Origin::Menu, locks)
+                == Dispatched::Blocked;
+            assert_eq!(
+                enabled(AppAction::BackgroundColor, &estado),
+                !bloqueada,
+                "{bits:05b}, zoom {zoom:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_3_un_gesto_de_verdad_o_una_quita_pendiente_bloquean_color_y_no_las_cuatro_fijas() {
+    let cuatro = [
+        CanvasBackground::Checker,
+        CanvasBackground::Black,
+        CanvasBackground::Gray,
+        CanvasBackground::White,
+    ];
+    let comprueba = |nombre: &str, mundo: &mut Mundo| {
+        for origin in ORIGENES {
+            let antes = (mundo.foto(), extras(mundo));
+            assert_eq!(
+                mundo.despacha(AppAction::BackgroundColor, origin),
+                Dispatched::Blocked,
+                "{nombre}, {origin:?}: `Color…` bloqueada"
+            );
+            assert!(!enabled(
+                AppAction::BackgroundColor,
+                &mundo.estado_de_la_ui(Zoom::from_int(5), mundo.locks())
+            ));
+            // Las cuatro fijas pasan con el mismo gesto o la misma quita.
+            for fondo in cuatro {
+                assert_eq!(
+                    mundo.despacha(AppAction::CanvasBackground(fondo), origin),
+                    Dispatched::Background(fondo),
+                    "{nombre}, {origin:?}: {fondo:?} sigue habilitada"
+                );
+                assert!(enabled(
+                    AppAction::CanvasBackground(fondo),
+                    &mundo.estado_de_la_ui(Zoom::from_int(5), mundo.locks())
+                ));
+            }
+            assert_eq!(
+                (mundo.foto(), extras(mundo)),
+                antes,
+                "{nombre}, {origin:?}: nada cambia"
+            );
+        }
+    };
+    // Un trazo en curso.
+    let mut mundo = Mundo::estandar();
+    empieza_un_trazo(&mut mundo);
+    comprueba("trazo", &mut mundo);
+    // El deslizador del editor.
+    let mut mundo = Mundo::estandar();
+    pulsa_el_deslizador(&mut mundo);
+    comprueba("deslizador", &mut mundo);
+    // El arrastre de una muestra.
+    let mut mundo = Mundo::estandar();
+    arrastra_una_muestra(&mut mundo);
+    comprueba("arrastre de muestra", &mut mundo);
+    // Una quita de paleta pendiente.
+    let mut mundo = mundo_con_quita_pendiente();
+    assert!(mundo.locks().removal);
+    comprueba("quita pendiente", &mut mundo);
+}
+
+#[test]
+fn fila_3_con_el_dialogo_de_color_abierto_todo_esta_bloqueado_salvo_quit() {
+    for fondo in FONDOS_DE_PARTIDA {
+        for (nombre_mundo, mut mundo) in mundos_de_cada_modo() {
+            let mut modal = Modal::default();
+            assert!(open_background_color(&mut modal, fondo, mundo.locks()));
+            assert_eq!(
+                modal.kind(),
+                Some(ModalKind::BackgroundColor),
+                "{nombre_mundo}"
+            );
+            let locks = con_modal(&mundo);
+            assert!(locks.modal);
+            let antes = (mundo.foto(), extras(&mundo));
+            for action in todas_las_acciones()
+                .into_iter()
+                .chain(FONDOS.map(accion_de_fondo))
+                .chain([
+                    AppAction::NewImage,
+                    AppAction::ConvertMode,
+                    AppAction::BackgroundColor,
+                    accion_de_fondo(CanvasBackground::Custom(Rgba::opaque(1, 2, 3))),
+                ])
+            {
+                for origin in ORIGENES {
+                    let esperado = match action {
+                        AppAction::Quit => Dispatched::Quit,
+                        AppAction::CloseLicenses => Dispatched::Licenses(false),
+                        _ => Dispatched::Blocked,
+                    };
+                    assert_eq!(
+                        mundo.despacha_con(action, origin, locks),
+                        esperado,
+                        "{nombre_mundo}, {fondo:?}, {action:?}, {origin:?}"
+                    );
+                }
+            }
+            assert_eq!(
+                (mundo.foto(), extras(&mundo)),
+                antes,
+                "{nombre_mundo}: con el diálogo abierto el documento no cambia"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_3_un_dialogo_abierto_no_deja_abrir_otro_ni_otro_color() {
+    let mundo = Mundo::estandar();
+    let mut modal = Modal::default();
+    assert!(open_background_color(
+        &mut modal,
+        CanvasBackground::Black,
+        mundo.locks()
+    ));
+    let antes = modal.clone();
+    assert!(
+        !open_background_color(&mut modal, CanvasBackground::White, mundo.locks()),
+        "ya hay uno abierto"
+    );
+    assert_eq!(modal, antes, "no cambia el diálogo abierto");
+    assert!(!abre_licencias(&mut modal));
+    assert!(!open_new_image(&mut modal, 16384, mundo.locks()));
+    assert!(!open_convert_mode(&mut modal, Mode::Indexed, mundo.locks()));
+    assert_eq!(modal.kind(), Some(ModalKind::BackgroundColor));
+    // Y al revés: con otro diálogo abierto no se abre el de color.
+    let mut otro = Modal::default();
+    assert!(abre_licencias(&mut otro));
+    assert!(!open_background_color(
+        &mut otro,
+        CanvasBackground::Checker,
+        Locks::default()
+    ));
+    assert_eq!(otro.kind(), Some(ModalKind::Licenses));
+}
+
+#[test]
+fn fila_3_quit_con_el_dialogo_de_color_abierto_lo_abandona_y_sigue_la_regla_de_cierre() {
+    for modified in [false, true] {
+        let mut mundo = Mundo::estandar();
+        let mut modal = Modal::default();
+        let mut confirm = Confirm::new();
+        assert!(open_background_color(
+            &mut modal,
+            CanvasBackground::Custom(Rgba::opaque(0x11, 0x22, 0x33)),
+            mundo.locks()
+        ));
+        let locks = con_modal(&mundo);
+
+        // `Quit` pasa con el diálogo abierto, con cualquier origen.
+        for origin in ORIGENES {
+            assert_eq!(
+                mundo.despacha_con(AppAction::Quit, origin, locks),
+                Dispatched::Quit,
+                "{origin:?}"
+            );
+        }
+        // `App` lo abandona sin reacción y pregunta a la regla de cierre.
+        let antes = (mundo.foto(), extras(&mundo));
+        assert!(modal.abandon());
+        assert!(!modal.is_open());
+        let cierra = close_allowed(modified, &mut confirm, 0.0);
+        assert_eq!(cierra, !modified, "primera petición, modified {modified}");
+        if modified {
+            assert!(close_allowed(true, &mut confirm, 1.0), "la segunda cierra");
+        }
+        assert_eq!(
+            (mundo.foto(), extras(&mundo)),
+            antes,
+            "no se aplicó nada: la sesión es la de antes"
+        );
+    }
+}
