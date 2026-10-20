@@ -2690,3 +2690,697 @@ proptest! {
         }
     }
 }
+
+// Unidad 21: botón «Fijar/Quitar transparente» (specs/hito-2-fijar-transparente.md), en su parte
+// pura: filas 3, 4, 6, 8 y 10 y la propiedad 1. El comando es `Command::SetTransparentIndex`
+// (unidad 10); lo nuevo es `PaletteOp::SetTransparent`, `transparent_toggle`,
+// `transparent_button_label`, `transparent_summary`, `entry_fate` y `choice_after`.
+
+mod fijar_transparente {
+    use super::*;
+    use px_ui::palette_ops::{transparent_button_label, transparent_summary, transparent_toggle};
+    use px_ui::pick::{EraseError, eraser_label, eraser_pixel, is_erasable};
+
+    const FIJAR: &str = "Fijar transparente";
+    const QUITAR: &str = "Quitar transparente";
+
+    /// Lo que hace pulsar el botón con `activa`: el `PaletteOp` y el comando de `px-core`.
+    fn pulsar(doc: &mut Document, activa: u8) -> Result<bool, px_core::DocumentError> {
+        let id = doc.main_image();
+        let palette = imagen_de(doc, id).palette().expect("indexada");
+        let op = PaletteOp::SetTransparent {
+            index: transparent_toggle(palette, activa),
+        };
+        let PaletteOp::SetTransparent { index } = op else {
+            unreachable!()
+        };
+        doc.apply(Command::SetTransparentIndex { image: id, index })
+    }
+
+    fn marca(doc: &Document) -> Option<u8> {
+        imagen_de(doc, doc.main_image())
+            .palette()
+            .expect("indexada")
+            .transparent_index()
+    }
+
+    fn rotulo(doc: &Document, activa: u8) -> &'static str {
+        let paleta = imagen_de(doc, doc.main_image())
+            .palette()
+            .expect("indexada");
+        transparent_button_label(paleta, activa)
+    }
+
+    fn resuelto(doc: &Document, indice: u8) -> Rgba {
+        imagen_de(doc, doc.main_image())
+            .palette()
+            .expect("indexada")
+            .resolved(indice)
+            .expect("entrada válida")
+    }
+
+    /// Color visible de cada píxel, calculado a mano (sin `Palette::resolved`).
+    fn visibles(imagen: &Image) -> Vec<Rgba> {
+        let paleta = imagen.palette().expect("indexada");
+        (0..imagen.width())
+            .map(|x| {
+                let Pixel::Indexed(i) = imagen.get_pixel(x, 0).expect("píxel") else {
+                    panic!("no indexado")
+                };
+                let guardado = paleta.colors()[usize::from(i)];
+                if paleta.transparent_index() == Some(i) {
+                    Rgba { a: 0, ..guardado }
+                } else {
+                    guardado
+                }
+            })
+            .collect()
+    }
+
+    // Tipos.
+
+    #[test]
+    fn set_transparent_es_copy_debug_y_comparable() {
+        let op = PaletteOp::SetTransparent { index: Some(2) };
+        let copia = op;
+        assert_eq!(op, copia);
+        assert_ne!(op, PaletteOp::SetTransparent { index: None });
+        assert_ne!(op, PaletteOp::SetTransparent { index: Some(3) });
+        assert_ne!(op, PaletteOp::Add);
+        assert!(format!("{op:?}").contains("SetTransparent"));
+    }
+
+    // Fila 3: fijar y quitar.
+
+    #[test]
+    fn fila_3_fijar_sobre_f_con_la_2_es_un_solo_paso_que_solo_mueve_el_indice() {
+        let original = imagen_f(None);
+        let mut doc = Document::new(original.clone());
+        let id = doc.main_image();
+        let paleta = original.palette().unwrap();
+        assert_eq!(transparent_button_label(paleta, 2), FIJAR);
+        assert_eq!(transparent_toggle(paleta, 2), Some(2));
+
+        assert_eq!(pulsar(&mut doc, 2), Ok(true));
+        assert_eq!(marca(&doc), Some(2));
+        assert_eq!(pixeles(imagen_de(&doc, id)), vec![0, 1, 2, 3]);
+        assert_eq!(colores_de(&doc, id), vec![ROJO, VERDE, AZUL, NEGRO]);
+        assert_eq!(resuelto(&doc, 2), Rgba::new(0, 0, 255, 0));
+        assert_eq!(resuelto(&doc, 1), VERDE);
+        assert_eq!(rotulo(&doc, 2), QUITAR);
+        assert_ne!(doc.state_id(), 0);
+
+        // Un solo paso.
+        doc.undo().unwrap();
+        assert_eq!(marca(&doc), None);
+        assert_eq!(imagen_de(&doc, id), &original);
+        assert_eq!(doc.state_id(), 0);
+        assert!(!doc.can_undo());
+        assert_eq!(rotulo(&doc, 2), FIJAR);
+        doc.redo().unwrap();
+        assert_eq!(marca(&doc), Some(2));
+        assert!(!doc.can_redo());
+    }
+
+    #[test]
+    fn fila_3_la_seleccion_y_el_aviso_de_fijar() {
+        let op = PaletteOp::SetTransparent { index: Some(2) };
+        assert_eq!(choice_after(&op, 2, 4), 2);
+        assert_eq!(entry_fate(&op, 2), Fate::Same);
+        assert_eq!(
+            ColorChoice::Entry(choice_after(&op, 2, 4)),
+            ColorChoice::Entry(2)
+        );
+        assert_eq!(
+            transparent_summary(Some(2), 2, None),
+            "entrada 2 transparente"
+        );
+        assert_eq!(blocked_reason(PaletteButton::Transparent, 4, false), None);
+    }
+
+    #[test]
+    fn fila_3_quitar_con_la_2_marcada_deja_el_color_guardado() {
+        let original = imagen_f(Some(2));
+        let mut doc = Document::new(original.clone());
+        let id = doc.main_image();
+        assert_eq!(rotulo(&doc, 2), QUITAR);
+        assert_eq!(
+            transparent_toggle(original.palette().unwrap(), 2),
+            None,
+            "con la marcada activa el botón quita"
+        );
+        assert_eq!(resuelto(&doc, 2), Rgba::new(0, 0, 255, 0));
+
+        assert_eq!(pulsar(&mut doc, 2), Ok(true));
+        assert_eq!(marca(&doc), None);
+        assert_eq!(colores_de(&doc, id), vec![ROJO, VERDE, AZUL, NEGRO]);
+        assert_eq!(pixeles(imagen_de(&doc, id)), vec![0, 1, 2, 3]);
+        assert_eq!(resuelto(&doc, 2), AZUL, "vuelve a su alfa guardado");
+        assert_eq!(rotulo(&doc, 2), FIJAR);
+        assert_eq!(
+            transparent_summary(None, 2, None),
+            "entrada 2 ya no es transparente"
+        );
+
+        doc.undo().unwrap();
+        assert_eq!(marca(&doc), Some(2));
+        assert_eq!(imagen_de(&doc, id), &original);
+        assert_eq!(rotulo(&doc, 2), QUITAR, "el rótulo sale siempre del estado");
+        doc.redo().unwrap();
+        assert_eq!(marca(&doc), None);
+        assert_eq!(rotulo(&doc, 2), FIJAR);
+    }
+
+    #[test]
+    fn fila_3_el_rotulo_depende_solo_de_si_la_activa_es_la_marcada() {
+        let paleta = paleta(&[ROJO, VERDE, AZUL, NEGRO], Some(1));
+        for activa in 0..4u8 {
+            let esperado = if activa == 1 { QUITAR } else { FIJAR };
+            assert_eq!(
+                transparent_button_label(&paleta, activa),
+                esperado,
+                "{activa}"
+            );
+            assert_eq!(
+                transparent_toggle(&paleta, activa),
+                if activa == 1 { None } else { Some(activa) },
+                "{activa}"
+            );
+        }
+        let sin = self::paleta(&[ROJO, VERDE, AZUL, NEGRO], None);
+        for activa in 0..4u8 {
+            assert_eq!(transparent_button_label(&sin, activa), FIJAR);
+            assert_eq!(transparent_toggle(&sin, activa), Some(activa));
+        }
+    }
+
+    #[test]
+    fn fila_3_los_tres_resumenes() {
+        assert_eq!(
+            transparent_summary(Some(0), 0, None),
+            "entrada 0 transparente"
+        );
+        assert_eq!(
+            transparent_summary(Some(7), 7, None),
+            "entrada 7 transparente"
+        );
+        assert_eq!(
+            transparent_summary(Some(3), 3, Some(1)),
+            "entrada 3 transparente (antes la 1)"
+        );
+        assert_eq!(
+            transparent_summary(None, 3, Some(3)),
+            "entrada 3 ya no es transparente"
+        );
+        assert_eq!(
+            transparent_summary(None, 255, None),
+            "entrada 255 ya no es transparente"
+        );
+    }
+
+    // Fila 4: reemplazo.
+
+    #[test]
+    fn fila_4_fijar_la_3_con_la_1_marcada_reemplaza_y_la_1_vuelve_a_verse() {
+        let original = imagen_f(Some(1));
+        let mut doc = Document::new(original.clone());
+        let id = doc.main_image();
+        assert_eq!(resuelto(&doc, 1), Rgba::new(0, 255, 0, 0));
+        assert_eq!(rotulo(&doc, 3), FIJAR);
+
+        assert_eq!(pulsar(&mut doc, 3), Ok(true));
+        assert_eq!(marca(&doc), Some(3));
+        assert_eq!(resuelto(&doc, 1), Rgba::new(0, 255, 0, 255));
+        assert_eq!(resuelto(&doc, 3), Rgba::new(0, 0, 0, 0));
+        assert_eq!(
+            transparent_summary(Some(3), 3, Some(1)),
+            "entrada 3 transparente (antes la 1)"
+        );
+
+        // Un solo paso y un solo `undo`.
+        doc.undo().unwrap();
+        assert_eq!(marca(&doc), Some(1));
+        assert_eq!(imagen_de(&doc, id), &original);
+        assert!(!doc.can_undo());
+    }
+
+    #[test]
+    fn fila_4_con_alfa_guardado_0_en_la_anterior_sigue_con_alfa_0() {
+        let verde_alfa_0 = Rgba::new(0, 255, 0, 0);
+        let imagen = imagen_con(&[ROJO, verde_alfa_0, AZUL, NEGRO], Some(1), &[0, 1, 2, 3]);
+        let mut doc = Document::new(imagen);
+        assert_eq!(pulsar(&mut doc, 3), Ok(true));
+        assert_eq!(marca(&doc), Some(3));
+        assert_eq!(resuelto(&doc, 1), verde_alfa_0);
+        doc.undo().unwrap();
+        assert_eq!(marca(&doc), Some(1));
+    }
+
+    #[test]
+    fn fila_4_el_aviso_con_tres_cifras_son_39_caracteres_y_ningun_aviso_pasa_de_43() {
+        let aviso = transparent_summary(Some(255), 255, Some(254));
+        assert_eq!(aviso, "entrada 255 transparente (antes la 254)");
+        assert_eq!(caracteres(&aviso), 39);
+
+        let mut mas_largo = 0;
+        let mut comprobar = |texto: String| {
+            let n = caracteres(&texto);
+            mas_largo = mas_largo.max(n);
+            assert!(n <= 43, "{texto:?}: {n} caracteres");
+            assert!(en_el_juego(&texto), "{texto:?} sale de INTERFACE_CHARSET");
+            let completo = format!("{NOTICE_PREFIX}{texto}");
+            assert_eq!(
+                fit_text(&completo, 50, |c| INTERFACE_CHARSET.contains(c)),
+                completo,
+                "fit_text recortó {completo:?}"
+            );
+        };
+        for activa in 0..=255u8 {
+            comprobar(transparent_summary(None, activa, None));
+            comprobar(transparent_summary(None, activa, Some(activa)));
+            comprobar(transparent_summary(Some(activa), activa, None));
+            for previa in (0..=255u8).filter(|&p| p != activa) {
+                comprobar(transparent_summary(Some(activa), activa, Some(previa)));
+            }
+        }
+        assert_eq!(mas_largo, 39);
+    }
+
+    // Fila 6: borrador (ya existe; la regla no cambia).
+
+    /// `[0 = alfa 0, G, B, K]` con píxeles `[0, 1, 2, 3]`: una entrada anterior de alfa 0.
+    fn con_una_de_alfa_0() -> Document {
+        Document::new(imagen_con(
+            &[Rgba::new(5, 5, 5, 0), VERDE, AZUL, NEGRO],
+            None,
+            &[0, 1, 2, 3],
+        ))
+    }
+
+    #[test]
+    fn fila_6_con_fijar_en_j_el_borrador_usa_j_aunque_haya_una_anterior_de_alfa_0() {
+        let mut doc = con_una_de_alfa_0();
+        let id = doc.main_image();
+        // Antes de fijar: la primera de alfa 0.
+        assert_eq!(eraser_pixel(imagen_de(&doc, id)), Ok(Pixel::Indexed(0)));
+        assert_eq!(
+            eraser_label(imagen_de(&doc, id)),
+            "transparente (entrada 0)"
+        );
+
+        pulsar(&mut doc, 2).unwrap();
+        let imagen = imagen_de(&doc, id);
+        assert_eq!(eraser_pixel(imagen), Ok(Pixel::Indexed(2)));
+        assert_eq!(eraser_label(imagen), "transparente");
+        // Los píxeles `Indexed(2)` ya son transparentes: el borrador los omite.
+        assert!(!is_erasable(imagen, 2, 0));
+        assert!(is_erasable(imagen, 1, 0));
+        assert!(is_erasable(imagen, 3, 0));
+        assert!(!is_erasable(imagen, 0, 0), "alfa guardado 0");
+
+        // `Quitar`: vuelve a la primera de alfa 0 y los `Indexed(2)` (alfa guardado 255) cuentan.
+        pulsar(&mut doc, 2).unwrap();
+        let imagen = imagen_de(&doc, id);
+        assert_eq!(eraser_pixel(imagen), Ok(Pixel::Indexed(0)));
+        assert_eq!(eraser_label(imagen), "transparente (entrada 0)");
+        assert!(is_erasable(imagen, 2, 0));
+    }
+
+    #[test]
+    fn fila_6_quitar_sin_ninguna_entrada_de_alfa_0_deja_al_borrador_sin_valor() {
+        let mut doc = Document::new(imagen_f(None));
+        let id = doc.main_image();
+        assert_eq!(
+            eraser_pixel(imagen_de(&doc, id)),
+            Err(EraseError::NoTransparentIndex)
+        );
+        assert_eq!(eraser_label(imagen_de(&doc, id)), "sin índice transparente");
+
+        pulsar(&mut doc, 3).unwrap();
+        assert_eq!(eraser_pixel(imagen_de(&doc, id)), Ok(Pixel::Indexed(3)));
+        assert_eq!(eraser_label(imagen_de(&doc, id)), "transparente");
+        assert!(!is_erasable(imagen_de(&doc, id), 3, 0));
+
+        pulsar(&mut doc, 3).unwrap();
+        assert_eq!(
+            eraser_pixel(imagen_de(&doc, id)),
+            Err(EraseError::NoTransparentIndex)
+        );
+        assert_eq!(eraser_label(imagen_de(&doc, id)), "sin índice transparente");
+        assert!(!is_erasable(imagen_de(&doc, id), 3, 0));
+    }
+
+    // Fila 8: la paleta inicial de «Nueva imagen» (entrada 0 marcada con #00000000).
+
+    /// Réplica de la forma de `initial_palette()`: 32 entradas, la 0 transparente y marcada, la
+    /// 25 negra.
+    fn paleta_inicial() -> Palette {
+        let mut colores = vec![Rgba::TRANSPARENT];
+        colores.extend((1..32u8).map(|i| Rgba::opaque(i * 8, 255 - i * 8, i)));
+        colores[25] = NEGRO;
+        paleta(&colores, Some(0))
+    }
+
+    #[test]
+    fn fila_8_quitar_la_marca_de_la_entrada_0_no_cambia_ningun_pixel_visible() {
+        let mut imagen = Image::new_indexed(4, 1, paleta_inicial()).unwrap();
+        imagen.set_pixel(3, 0, Pixel::Indexed(25)).unwrap();
+        let mut doc = Document::new(imagen);
+        let id = doc.main_image();
+        let antes = visibles(imagen_de(&doc, id));
+        assert_eq!(rotulo(&doc, 0), QUITAR);
+        assert_eq!(rotulo(&doc, 25), FIJAR);
+        assert_eq!(
+            transparent_toggle(imagen_de(&doc, id).palette().unwrap(), 25),
+            Some(25)
+        );
+
+        assert_eq!(pulsar(&mut doc, 0), Ok(true));
+        assert_eq!(marca(&doc), None);
+        let paleta = imagen_de(&doc, id).palette().unwrap();
+        assert_eq!(paleta.get(0).unwrap(), Rgba::new(0, 0, 0, 0));
+        assert_eq!(visibles(imagen_de(&doc, id)), antes, "mismo aspecto");
+        assert_eq!(rotulo(&doc, 0), FIJAR);
+        // El borrador usa ahora la entrada 0 por la segunda rama.
+        assert_eq!(eraser_pixel(imagen_de(&doc, id)), Ok(Pixel::Indexed(0)));
+        assert_eq!(
+            eraser_label(imagen_de(&doc, id)),
+            "transparente (entrada 0)"
+        );
+
+        doc.undo().unwrap();
+        assert_eq!(marca(&doc), Some(0));
+        assert_eq!(rotulo(&doc, 0), QUITAR);
+        assert_eq!(visibles(imagen_de(&doc, id)), antes);
+    }
+
+    // Fila 10: límites.
+
+    #[test]
+    fn fila_10_con_una_sola_entrada_fijar_y_quitar_funcionan() {
+        let mut doc = Document::new(imagen_con(&[ROJO], None, &[0, 0, 0]));
+        let id = doc.main_image();
+        assert_eq!(rotulo(&doc, 0), FIJAR);
+        assert_eq!(pulsar(&mut doc, 0), Ok(true));
+        assert_eq!(marca(&doc), Some(0));
+        assert_eq!(rotulo(&doc, 0), QUITAR);
+        assert!(visibles(imagen_de(&doc, id)).iter().all(|c| c.a == 0));
+        assert_eq!(pulsar(&mut doc, 0), Ok(true));
+        assert_eq!(marca(&doc), None);
+        assert!(visibles(imagen_de(&doc, id)).iter().all(|c| *c == ROJO));
+        assert_eq!(
+            choice_after(&PaletteOp::SetTransparent { index: None }, 0, 1),
+            0
+        );
+        assert_eq!(blocked_reason(PaletteButton::Transparent, 1, false), None);
+    }
+
+    fn paleta_de_256() -> Vec<Rgba> {
+        (0..=255u8).map(|i| Rgba::opaque(i, 255 - i, 9)).collect()
+    }
+
+    #[test]
+    fn fila_10_con_256_entradas_fijar_en_la_255_y_quitar_la_marcada_en_0_o_en_la_ultima() {
+        let colores = paleta_de_256();
+        let mut doc = Document::new(imagen_con(&colores, None, &[0, 255]));
+        assert_eq!(pulsar(&mut doc, 255), Ok(true));
+        assert_eq!(marca(&doc), Some(255));
+        assert_eq!(rotulo(&doc, 255), QUITAR);
+        assert_eq!(rotulo(&doc, 254), FIJAR);
+        assert_eq!(pulsar(&mut doc, 255), Ok(true));
+        assert_eq!(marca(&doc), None);
+
+        for extremo in [0u8, 255] {
+            let mut doc = Document::new(imagen_con(&colores, Some(extremo), &[0, 255]));
+            assert_eq!(rotulo(&doc, extremo), QUITAR, "marcada en {extremo}");
+            assert_eq!(pulsar(&mut doc, extremo), Ok(true));
+            assert_eq!(marca(&doc), None);
+            doc.undo().unwrap();
+            assert_eq!(marca(&doc), Some(extremo));
+        }
+        // La marcada en 0 con la 255 activa: fijar reemplaza.
+        let mut doc = Document::new(imagen_con(&colores, Some(0), &[0, 255]));
+        assert_eq!(pulsar(&mut doc, 255), Ok(true));
+        assert_eq!(marca(&doc), Some(255));
+        assert_eq!(
+            transparent_summary(Some(255), 255, Some(0)),
+            "entrada 255 transparente (antes la 0)"
+        );
+    }
+
+    #[test]
+    fn fila_10_entry_fate_es_same_y_choice_after_es_la_activa_en_todo_el_rango() {
+        for index in [None, Some(0u8), Some(255)] {
+            let op = PaletteOp::SetTransparent { index };
+            for entrada in 0..=255u8 {
+                assert_eq!(entry_fate(&op, entrada), Fate::Same, "{index:?}, {entrada}");
+            }
+            for largo in [1usize, 2, 4, 255, 256] {
+                for activa in [0u8, 1, 3, 254, 255] {
+                    assert_eq!(choice_after(&op, activa, largo), activa, "{index:?}");
+                }
+            }
+        }
+        for largo in 0..=257usize {
+            for destino in [false, true] {
+                assert_eq!(
+                    blocked_reason(PaletteButton::Transparent, largo, destino),
+                    None,
+                    "len {largo}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fila_10_el_rango_y_la_seleccion_se_conservan_y_una_quita_pendiente_se_cancela() {
+        let mut doc = Document::new(imagen_f(None));
+        let mut ops = PaletteOps::default();
+        ops.sync(doc.state_id(), 4);
+        ops.set_range_end(3);
+        ops.begin_removal(2, Some(0));
+        assert!(ops.removal().is_some());
+
+        pulsar(&mut doc, 1).unwrap();
+        let op = PaletteOp::SetTransparent { index: Some(1) };
+        // Selección intacta: la misma activa.
+        assert_eq!(
+            ColorChoice::Entry(choice_after(&op, 1, 4)),
+            ColorChoice::Entry(1)
+        );
+        // El siguiente fotograma cancela la quita (el documento cambió) pero conserva el rango.
+        assert!(ops.sync(doc.state_id(), 4), "la quita se cancela");
+        assert!(ops.removal().is_none());
+        assert_eq!(ops.range_end(), Some(3));
+        assert!(!ops.sync(doc.state_id(), 4), "una sola vez");
+        assert_eq!(ops.range_end(), Some(3));
+    }
+
+    #[test]
+    fn fila_10_undo_y_redo_no_mueven_la_seleccion_y_la_elegida_mas_alla_del_final_se_recorta() {
+        let mut doc = Document::new(imagen_f(None));
+        let id = doc.main_image();
+        pulsar(&mut doc, 2).unwrap();
+        for paso in 0..2 {
+            for elegida in [0u8, 2, 3, 7, 200] {
+                let imagen = imagen_de(&doc, id);
+                let esperada = ColorChoice::Entry(elegida.min(3));
+                assert_eq!(
+                    clamp_choice(imagen, ColorChoice::Entry(elegida)),
+                    esperada,
+                    "paso {paso}, elegida {elegida}"
+                );
+            }
+            if paso == 0 {
+                doc.undo().unwrap();
+            }
+        }
+        doc.redo().unwrap();
+        assert_eq!(marca(&doc), Some(2));
+        assert_eq!(rotulo(&doc, 2), QUITAR);
+    }
+
+    // Propiedad 1: conmutador exacto.
+
+    fn canal() -> impl Strategy<Value = u8> {
+        prop_oneof![Just(0u8), Just(255u8), any::<u8>()]
+    }
+
+    /// Color visible de la entrada `i` según el oráculo: el guardado, con alfa 0 en la marcada.
+    fn visible_modelo(colores: &[Rgba], marca: Option<u8>, i: u8) -> Rgba {
+        let guardado = colores[usize::from(i)];
+        if marca == Some(i) {
+            Rgba { a: 0, ..guardado }
+        } else {
+            guardado
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn propiedad_1_el_boton_conmuta_la_marca_y_no_toca_nada_mas(
+            colores in vec((canal(), canal(), canal(), canal()), 1..=256),
+            marca_cruda in any::<usize>(),
+            activa_cruda in any::<usize>(),
+            crudos in vec(any::<u8>(), 1..=24),
+        ) {
+            let colores: Vec<Rgba> =
+                colores.into_iter().map(|(r, g, b, a)| Rgba::new(r, g, b, a)).collect();
+            let largo = colores.len();
+            let marca_inicial = {
+                let m = marca_cruda % (largo + 1);
+                (m < largo).then_some(m as u8)
+            };
+            let activa = (activa_cruda % largo) as u8;
+            let indices: Vec<u8> = crudos.iter().map(|&c| (usize::from(c) % largo) as u8).collect();
+
+            // Oráculo propio: rótulo e índice resultante.
+            let es_la_marcada = marca_inicial == Some(activa);
+            let rotulo_esperado = if es_la_marcada { QUITAR } else { FIJAR };
+            let marca_esperada = if es_la_marcada { None } else { Some(activa) };
+
+            let original = imagen_con(&colores, marca_inicial, &indices);
+            let paleta_original = original.palette().unwrap().clone();
+            prop_assert_eq!(transparent_button_label(&paleta_original, activa), rotulo_esperado);
+            prop_assert_eq!(transparent_toggle(&paleta_original, activa), marca_esperada);
+
+            let mut doc = Document::new(original.clone());
+            let id = doc.main_image();
+            prop_assert_eq!(pulsar(&mut doc, activa), Ok(true));
+            let despues = imagen_de(&doc, id).clone();
+
+            // Solo cambia el índice: bytes de píxeles y colores guardados iguales.
+            prop_assert_eq!(despues.palette().unwrap().transparent_index(), marca_esperada);
+            prop_assert_eq!(despues.bytes(), original.bytes());
+            prop_assert_eq!(despues.palette().unwrap().colors(), &colores[..]);
+
+            // El color resuelto cambia exactamente en los píxeles de la activa y de la marca
+            // anterior (si el alfa guardado no era ya 0), y esa vuelve a su guardado.
+            let visibles_antes = visibles(&original);
+            let visibles_despues = visibles(&despues);
+            for (x, &i) in indices.iter().enumerate() {
+                let afectada = i == activa || marca_inicial == Some(i);
+                let cambia = afectada && colores[usize::from(i)].a != 0;
+                prop_assert_eq!(
+                    visibles_antes[x] != visibles_despues[x],
+                    cambia,
+                    "píxel {} (entrada {})", x, i
+                );
+                prop_assert_eq!(visibles_antes[x], visible_modelo(&colores, marca_inicial, i));
+                prop_assert_eq!(visibles_despues[x], visible_modelo(&colores, marca_esperada, i));
+                if marca_inicial == Some(i) && i != activa {
+                    prop_assert_eq!(visibles_despues[x], colores[usize::from(i)]);
+                }
+            }
+
+            // Undo y redo exactos.
+            doc.undo().unwrap();
+            prop_assert_eq!(imagen_de(&doc, id), &original);
+            prop_assert!(!doc.can_undo());
+            doc.redo().unwrap();
+            prop_assert_eq!(imagen_de(&doc, id), &despues);
+
+            // Una segunda pulsación con la misma activa: el rótulo y el índice salen del estado.
+            let segunda_quita = marca_esperada == Some(activa);
+            prop_assert_eq!(rotulo(&doc, activa), if segunda_quita { QUITAR } else { FIJAR });
+            prop_assert_eq!(pulsar(&mut doc, activa), Ok(true));
+            let segunda_esperada = if segunda_quita { None } else { Some(activa) };
+            prop_assert_eq!(marca(&doc), segunda_esperada);
+            // Vuelve a la original si no había otra marca distinta de la activa.
+            if marca_inicial.is_none() || marca_inicial == Some(activa) {
+                prop_assert_eq!(imagen_de(&doc, id), &original);
+            } else {
+                prop_assert_eq!(marca(&doc), None);
+                prop_assert_eq!(imagen_de(&doc, id).bytes(), original.bytes());
+                prop_assert_eq!(imagen_de(&doc, id).palette().unwrap().colors(), &colores[..]);
+            }
+        }
+    }
+}
+
+// Unidad 21: `summary` con la rama `SetTransparent` (delega en `transparent_summary(index, active,
+// None)`; la firma no cambia).
+
+mod resumen_transparente {
+    use super::*;
+    use px_ui::palette_ops::transparent_summary;
+
+    fn resumen(index: Option<u8>, activa: u8, largo: usize) -> String {
+        summary(
+            &PaletteOp::SetTransparent { index },
+            activa,
+            largo,
+            false,
+            false,
+        )
+    }
+
+    #[test]
+    fn summary_de_set_transparent_da_los_dos_textos_de_la_spec() {
+        assert_eq!(resumen(Some(2), 2, 4), "entrada 2 transparente");
+        assert_eq!(resumen(Some(0), 0, 1), "entrada 0 transparente");
+        assert_eq!(resumen(Some(255), 255, 256), "entrada 255 transparente");
+        assert_eq!(resumen(None, 2, 4), "entrada 2 ya no es transparente");
+        assert_eq!(resumen(None, 255, 256), "entrada 255 ya no es transparente");
+    }
+
+    #[test]
+    fn summary_delega_en_transparent_summary_sin_previa() {
+        for activa in 0..=255u8 {
+            for index in [None, Some(activa)] {
+                assert_eq!(
+                    resumen(index, activa, 256),
+                    transparent_summary(index, activa, None),
+                    "{index:?}, activa {activa}"
+                );
+            }
+        }
+        // Los demás argumentos no cuentan.
+        for (era_transparente, sin_pixeles) in [(false, true), (true, false), (true, true)] {
+            assert_eq!(
+                summary(
+                    &PaletteOp::SetTransparent { index: Some(3) },
+                    3,
+                    4,
+                    era_transparente,
+                    sin_pixeles
+                ),
+                "entrada 3 transparente"
+            );
+        }
+    }
+
+    #[test]
+    fn transparent_summary_con_previa_distinta() {
+        assert_eq!(
+            transparent_summary(Some(3), 3, Some(1)),
+            "entrada 3 transparente (antes la 1)"
+        );
+        assert_eq!(
+            transparent_summary(Some(255), 255, Some(254)),
+            "entrada 255 transparente (antes la 254)"
+        );
+        assert_eq!(
+            transparent_summary(Some(0), 0, Some(255)),
+            "entrada 0 transparente (antes la 255)"
+        );
+    }
+
+    #[test]
+    fn los_resumenes_con_tres_cifras_son_de_39_y_33_caracteres_y_caben_en_43() {
+        let con_previa = transparent_summary(Some(255), 255, Some(254));
+        let quitar = resumen(None, 255, 256);
+        assert_eq!(caracteres(&con_previa), 39);
+        assert_eq!(caracteres(&quitar), 33);
+        for texto in [&con_previa, &quitar] {
+            assert!(caracteres(texto) <= 43);
+            assert!(en_el_juego(texto), "{texto:?}");
+            let completo = format!("{NOTICE_PREFIX}{texto}");
+            assert!(caracteres(&completo) <= 50);
+            assert_eq!(
+                fit_text(&completo, 50, |c| INTERFACE_CHARSET.contains(c)),
+                completo
+            );
+        }
+    }
+}

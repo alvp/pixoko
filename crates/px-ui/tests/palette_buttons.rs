@@ -2432,3 +2432,754 @@ fn un_cambio_del_documento_cancela_la_quita_pendiente_y_los_botones_vuelven() {
         assert!(banco.ops.removal().is_none(), "ppp {ppp}");
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad 21: botón «Fijar/Quitar transparente» (specs/hito-2-fijar-transparente.md, filas 2, 3, 5 y
+// 9 en su parte de ventana). Lo puro (rótulo, `transparent_toggle`, resúmenes) está en
+// `palette_ops.rs`; `button_hit` y `edges_u`, en `edit_layout.rs`; `info_flags_alpha0` e
+// `is_alpha0_cell_with`, en `color.rs`; `Session`, en `px-app`. El banco no aplica las `op`: las
+// pruebas que necesitan el documento nuevo lo aplican con `Banco::aplica`.
+// ---------------------------------------------------------------------------------------------
+
+mod fijar_transparente {
+    use super::*;
+    use px_ui::edit_layout::min_panel_height_px;
+    use px_ui::text::{INTERFACE_CHARSET, fit_text};
+
+    const FIJAR: &str = "Fijar transparente";
+    const QUITAR: &str = "Quitar transparente";
+
+    const ALFA_0: Rgba = Rgba::new(0, 255, 0, 0);
+
+    /// `[R, G con alfa guardado 0, B, K]`, píxeles `[0, 1, 2, 3]`, con `marca` como transparente.
+    fn imagen_alfa_0(marca: Option<u8>) -> Image {
+        imagen_con(&[ROJO, ALFA_0, AZUL, NEGRO], marca, &[0, 1, 2, 3])
+    }
+
+    fn op_de(index: Option<u8>) -> Option<PaletteOp> {
+        Some(PaletteOp::SetTransparent { index })
+    }
+
+    /// Hay texto pintado (en alguna forma) con ese contenido exacto, en el rectángulo del botón
+    /// `Transparent` con el margen de la maqueta, y con el fondo del botón.
+    fn comprueba_boton(f: &Fotograma, banco: &Banco, rotulo: &str, contexto: &str) {
+        let (ppp, n) = (banco.ppp(), banco.n());
+        let top = banco.geo().top_px;
+        let (x, y, _, _) = rect_boton_u(PaletteButton::Transparent);
+        let pintado = f
+            .texto_pintado(rotulo)
+            .unwrap_or_else(|| panic!("{contexto}: no se pinta {rotulo:?}"));
+        let esperado = (
+            ((x + BUTTON_TEXT_X_U) * n) as f32,
+            (top + (y + BUTTON_TEXT_Y_U) * n) as f32,
+        );
+        assert!(
+            cerca(pintado.pos.x * ppp, esperado.0) && cerca(pintado.pos.y * ppp, esperado.1),
+            "{contexto}: {rotulo:?} en ({}, {}) px y la maqueta dice {esperado:?}",
+            pintado.pos.x * ppp,
+            pintado.pos.y * ppp
+        );
+        let rect = banco.rect_de_boton(PaletteButton::Transparent);
+        assert!(
+            hay_rect(f, rect, SURFACE_2) || hay_rect(f, rect, SURFACE_3),
+            "{contexto}: no hay fondo del botón en {rect:?}"
+        );
+    }
+
+    /// Algún texto de la línea 2 (en `TEXT_DIM`) dice `transparente` y `alfa 0` a la vez.
+    fn linea_2_mezcla_las_dos(f: &Fotograma) -> bool {
+        f.textos.iter().any(|t| {
+            t.color == TEXT_DIM && t.texto.contains("transparente") && t.texto.contains("alfa 0")
+        })
+    }
+
+    // Fila 2: se pinta y se pulsa donde la maqueta dice.
+
+    #[test]
+    fn fila_2_el_boton_se_pinta_con_el_rotulo_del_estado_a_los_cinco_ppp() {
+        for ppp in PPPS {
+            let contexto = format!("ppp {ppp}");
+            // Sin marca: `Fijar`; con la activa marcada: `Quitar`; con otra marcada: `Fijar`.
+            for (marca, activa, esperado, otro) in [
+                (None, 1u8, FIJAR, QUITAR),
+                (Some(1u8), 1, QUITAR, FIJAR),
+                (Some(2), 1, FIJAR, QUITAR),
+            ] {
+                let mut banco = Banco::nuevo(
+                    ppp,
+                    PANTALLA_ALTA,
+                    imagen_alfa_0(marca),
+                    ColorChoice::Entry(activa),
+                );
+                let f = banco.reposo();
+                let contexto = format!("{contexto}, marca {marca:?}");
+                comprueba_boton(&f, &banco, esperado, &contexto);
+                assert!(!f.pinta(otro), "{contexto}: solo un rótulo");
+                // Las tres primeras filas siguen donde estaban.
+                comprueba_botones(&f, &banco, &NORMALES, &contexto);
+                comprueba_dentro_del_panel(&f, banco.rect_panel(), &contexto);
+            }
+        }
+    }
+
+    #[test]
+    fn fila_2_con_el_panel_en_su_alto_minimo_el_boton_cabe_sin_desplazar() {
+        for ppp in PPPS {
+            let n = i64::from(text_scale(ppp));
+            let mut banco = Banco::con_alto_de_panel(
+                ppp,
+                min_panel_height_px(n as u32),
+                imagen_f(),
+                ColorChoice::Entry(1),
+            );
+            let contexto = format!("ppp {ppp}");
+            assert!(!banco.disposicion().scrolling, "{contexto}");
+            assert_eq!(banco.panel_h_px(), 315 * n, "{contexto}");
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, FIJAR, &contexto);
+            comprueba_botones(&f, &banco, &NORMALES, &contexto);
+            comprueba_dentro_del_panel(&f, banco.rect_panel(), &contexto);
+            // El botón acaba 4 u antes del borde inferior del panel.
+            let rect = banco.rect_de_boton(PaletteButton::Transparent);
+            let alto_panel = banco.rect_panel().max.y;
+            assert!(
+                cerca(rect.max.y + 4.0 * n as f32 / ppp, alto_panel),
+                "{contexto}"
+            );
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(1)), "{contexto}");
+        }
+    }
+
+    #[test]
+    fn fila_2_pulsar_en_los_puntos_de_la_maqueta_del_boton_nuevo() {
+        for ppp in PPPS {
+            let mut banco = banco_f(ppp, 2);
+            let n = banco.n();
+            let top = banco.geo().top_px;
+            // Dentro: la esquina y el último píxel físico; fuera: izquierda, derecha, 1 u sobre
+            // el botón y bajo él.
+            for (x, y, dentro) in [
+                (4 * n, 240 * n, true),
+                (229 * n - 1, 256 * n - 1, true),
+                (10 * n, 248 * n, true),
+                (3 * n, 248 * n, false),
+                (229 * n, 248 * n, false),
+                (10 * n, 239 * n, false),
+                (10 * n, 256 * n, false),
+            ] {
+                banco.historial.clear();
+                let f = banco.clic(x, top + y);
+                let contexto = format!("ppp {ppp}, ({x}, {y})");
+                if dentro {
+                    assert_eq!(f.salida.op, op_de(Some(2)), "{contexto}");
+                } else {
+                    assert_eq!(f.salida.op, None, "{contexto}");
+                }
+                assert_eq!(f.salida.notice, None, "{contexto}");
+                assert_eq!(banco.elecciones(), vec![], "{contexto}");
+            }
+            // Y las filas 1 a 3 siguen en sus puntos.
+            let f = banco.clic(4 * n, top + 186 * n);
+            assert_eq!(f.salida.op, Some(PaletteOp::Add));
+        }
+    }
+
+    #[test]
+    fn fila_2_con_el_panel_desplazado_el_boton_se_pulsa_con_y_menos_offset() {
+        for ppp in PPPS {
+            let n = i64::from(text_scale(ppp));
+            let mut banco =
+                Banco::con_alto_de_panel(ppp, 200 * n, imagen_f(), ColorChoice::Entry(1));
+            assert!(banco.disposicion().scrolling, "ppp {ppp}");
+            // Sin desplazar el botón queda por debajo del panel: no se golpea.
+            let (x, _) = banco.centro_de_boton(PaletteButton::Transparent);
+            let f = banco.clic(x, (55 + 248) * n);
+            assert_eq!(f.salida.op, None, "ppp {ppp}: fuera del panel");
+            // Con el máximo desplazamiento entero cae dentro.
+            let (tx, ty) = banco.sobre_el_texto();
+            banco.rueda_en(tx, ty, -100_000 * n);
+            banco.rueda(banco.max_offset());
+            assert_eq!(banco.view.offset_px, banco.max_offset(), "ppp {ppp}");
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, FIJAR, &format!("ppp {ppp}"));
+            comprueba_dentro_del_panel(&f, banco.rect_panel(), &format!("ppp {ppp}"));
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(1)), "ppp {ppp}");
+        }
+    }
+
+    // Fila 3: pulsar emite la op y el rótulo sale del estado.
+
+    #[test]
+    fn fila_3_pulsar_fijar_emite_set_transparent_y_nada_mas() {
+        for ppp in PPPS {
+            let mut banco = banco_f(ppp, 2);
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(
+                f.salida,
+                PanelOutput {
+                    op: op_de(Some(2)),
+                    ..PanelOutput::default()
+                },
+                "ppp {ppp}"
+            );
+            banco.reposo();
+            banco.reposo();
+            assert_eq!(
+                banco.operaciones(),
+                vec![PaletteOp::SetTransparent { index: Some(2) }]
+            );
+            assert!(banco.ops.removal().is_none());
+            assert!(banco.avisos().is_empty());
+            assert!(banco.elecciones().is_empty(), "no cambia la selección");
+            assert_eq!(banco.choice, ColorChoice::Entry(2));
+        }
+    }
+
+    #[test]
+    fn fila_3_aplicada_la_op_el_rotulo_y_la_linea_2_cambian_y_pulsar_otra_vez_quita() {
+        for ppp in PPPS {
+            let mut banco = banco_f(ppp, 2);
+            let id = banco.documento.main_image();
+            banco.clic_boton(PaletteButton::Transparent);
+            banco.aplica(Command::SetTransparentIndex {
+                image: id,
+                index: Some(2),
+            });
+            let f = banco.reposo();
+            let contexto = format!("ppp {ppp}");
+            comprueba_boton(&f, &banco, QUITAR, &contexto);
+            assert!(!f.pinta(FIJAR), "{contexto}");
+            assert!(f.pinta("activa · transparente"), "{contexto}");
+
+            banco.historial.clear();
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(
+                f.salida.op,
+                op_de(None),
+                "{contexto}: la activa es la marcada"
+            );
+            banco.aplica(Command::SetTransparentIndex {
+                image: id,
+                index: None,
+            });
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, FIJAR, &contexto);
+            assert!(f.pinta("activa"), "{contexto}");
+
+            // Deshacer: vuelve a la marca y el rótulo cambia solo.
+            banco.deshace();
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, QUITAR, &contexto);
+            banco.deshace();
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, FIJAR, &contexto);
+        }
+    }
+
+    #[test]
+    fn fila_3_con_otra_entrada_marcada_el_boton_fija_la_activa() {
+        for ppp in PPPS {
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_con(&[ROJO, VERDE, AZUL, NEGRO], Some(1), &[0, 1, 2, 3]),
+                ColorChoice::Entry(3),
+            );
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(3)), "ppp {ppp}");
+        }
+    }
+
+    // Fila 5: la línea 2 de la muestra.
+
+    #[test]
+    fn fila_5_la_linea_2_de_una_marcada_de_alfa_0_sin_marcar_de_una_opaca_y_vacia() {
+        for ppp in PPPS {
+            // Marcada la 2; la 1 tiene alfa guardado 0; la 0 y la 3 son opacas.
+            for (activa, esperado) in [
+                (2u8, "activa · transparente"),
+                (1, "activa · alfa 0"),
+                (3, "activa"),
+                (0, "activa"),
+            ] {
+                let mut banco = Banco::nuevo(
+                    ppp,
+                    PANTALLA_ALTA,
+                    imagen_alfa_0(Some(2)),
+                    ColorChoice::Entry(activa),
+                );
+                let f = banco.reposo();
+                let contexto = format!("ppp {ppp}, activa {activa}");
+                let linea = f
+                    .texto_pintado(esperado)
+                    .unwrap_or_else(|| panic!("{contexto}: no se pinta {esperado:?}"));
+                assert_eq!(linea.color, TEXT_DIM, "{contexto}");
+                // `transparente` y `alfa 0` nunca juntas.
+                assert!(!linea_2_mezcla_las_dos(&f), "{contexto}");
+            }
+            // Sin cursor ni elegida en la rejilla (elegida fuera de rango no hay): vacía no se
+            // puede probar aquí; una opaca solo dice `activa`.
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_alfa_0(Some(2)),
+                ColorChoice::Entry(0),
+            );
+            let f = banco.reposo();
+            assert!(!f.pinta("activa · alfa 0"), "ppp {ppp}");
+            assert!(!f.pinta("activa · transparente"), "ppp {ppp}");
+        }
+    }
+
+    #[test]
+    fn fila_5_con_el_cursor_encima_la_linea_mas_larga_y_las_demas() {
+        for ppp in PPPS {
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_alfa_0(Some(2)),
+                ColorChoice::Entry(2),
+            );
+            let contexto = format!("ppp {ppp}");
+            // Cursor sobre la activa marcada: la línea más larga, 30 columnas, sin recortar.
+            let (x, y) = banco.centro_de_la_muestra(2);
+            let f = banco.mueve(x, y);
+            let linea = "cursor · activa · transparente";
+            assert_eq!(linea.chars().count(), 30);
+            assert!(f.pinta(linea), "{contexto}");
+            // Cursor sobre la de alfa 0 (no es la activa).
+            let (x, y) = banco.centro_de_la_muestra(1);
+            assert!(banco.mueve(x, y).pinta("cursor · alfa 0"), "{contexto}");
+            // Cursor sobre una opaca.
+            let (x, y) = banco.centro_de_la_muestra(3);
+            assert!(banco.mueve(x, y).pinta("cursor"), "{contexto}");
+            // Con la activa de alfa 0 y el cursor encima.
+            banco.choice = ColorChoice::Entry(1);
+            let (x, y) = banco.centro_de_la_muestra(1);
+            let f = banco.mueve(x, y);
+            assert!(f.pinta("cursor · activa · alfa 0"), "{contexto}");
+            assert!(!linea_2_mezcla_las_dos(&f), "{contexto}");
+            // Y sobre la marcada, con la de alfa 0 activa.
+            let (x, y) = banco.centro_de_la_muestra(2);
+            assert!(
+                banco.mueve(x, y).pinta("cursor · transparente"),
+                "{contexto}"
+            );
+        }
+    }
+
+    #[test]
+    fn fila_5_la_marca_de_una_entrada_con_alfa_guardado_0_dice_transparente_no_alfa_0() {
+        for ppp in PPPS {
+            // La 1 tiene alfa guardado 0 y está marcada: ya resuelve alfa 0 y dice `transparente`.
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_alfa_0(Some(1)),
+                ColorChoice::Entry(1),
+            );
+            let f = banco.reposo();
+            assert!(f.pinta("activa · transparente"), "ppp {ppp}");
+            assert!(!f.pinta("activa · alfa 0"), "ppp {ppp}");
+            // Tras `Quitar` (aplicado en el documento), pasa a decir `alfa 0`.
+            let id = banco.documento.main_image();
+            banco.aplica(Command::SetTransparentIndex {
+                image: id,
+                index: None,
+            });
+            let f = banco.reposo();
+            assert!(f.pinta("activa · alfa 0"), "ppp {ppp}");
+            assert!(!f.pinta("activa · transparente"), "ppp {ppp}");
+            assert!(!linea_2_mezcla_las_dos(&f), "ppp {ppp}");
+        }
+    }
+
+    #[test]
+    fn fila_5_con_tres_cifras_los_rotulos_y_las_lineas_se_pintan_sin_recortar() {
+        for ppp in PPPS {
+            let colores: Vec<Rgba> = (0..256usize)
+                .map(|i| Rgba::opaque(i as u8, 255 - i as u8, 7))
+                .collect();
+            let imagen = imagen_con(&colores, Some(254), &[0, 255]);
+            let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen, ColorChoice::Entry(255));
+            let contexto = format!("ppp {ppp}");
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, FIJAR, &contexto);
+            assert!(f.pinta("activa"), "{contexto}");
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(255)), "{contexto}");
+            banco.choice = ColorChoice::Entry(254);
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, QUITAR, &contexto);
+            assert!(f.pinta("activa · transparente"), "{contexto}");
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(None), "{contexto}");
+        }
+    }
+
+    #[test]
+    fn fila_5_los_rotulos_salen_del_juego_de_caracteres_y_caben_en_225_u() {
+        assert_eq!(6 + 7 * QUITAR.chars().count(), 139);
+        for rotulo in [FIJAR, QUITAR, "alfa 0", "transparente"] {
+            assert!(
+                rotulo.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+                "{rotulo}"
+            );
+            let usado = 6 + 7 * rotulo.chars().count() as i64;
+            assert!(usado <= 225, "{rotulo}: {usado} u");
+            assert_eq!(
+                fit_text(rotulo, 32, |c| INTERFACE_CHARSET.contains(c)),
+                rotulo
+            );
+        }
+    }
+
+    #[test]
+    fn fila_5_el_boton_nunca_esta_atenuado() {
+        for ppp in PPPS {
+            let casos: [(&str, Image, u8, &str); 4] = [
+                ("F sin marca", imagen_f(), 1, FIJAR),
+                ("una entrada", imagen_una_entrada(), 0, FIJAR),
+                ("256", imagen_indexada_256(), 5, FIJAR),
+                (
+                    "marcada",
+                    imagen_con(&[ROJO, VERDE], Some(0), &[0, 1]),
+                    0,
+                    QUITAR,
+                ),
+            ];
+            for (nombre, imagen, activa, rotulo) in casos {
+                let mut banco =
+                    Banco::nuevo(ppp, PANTALLA_ALTA, imagen, ColorChoice::Entry(activa));
+                let f = banco.reposo();
+                assert_eq!(f.color_de(rotulo), TEXT, "ppp {ppp}, {nombre}");
+            }
+        }
+    }
+
+    #[test]
+    fn fila_5_con_una_entrada_y_con_256_pulsar_emite_la_op_sin_aviso() {
+        for ppp in PPPS {
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_una_entrada(),
+                ColorChoice::Entry(0),
+            );
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(0)), "ppp {ppp}");
+            assert_eq!(f.salida.notice, None, "ppp {ppp}");
+
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_indexada_256(),
+                ColorChoice::Entry(255),
+            );
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(255)), "ppp {ppp}");
+            assert_eq!(f.salida.notice, None, "ppp {ppp}");
+        }
+    }
+
+    // Fila 9: bloqueos.
+
+    /// `enabled` falso (un gesto de dibujo en curso; un diálogo abierto da el mismo `enabled`).
+    #[test]
+    fn fila_9_con_un_gesto_o_un_dialogo_abierto_el_boton_se_ve_y_no_hace_nada() {
+        for ppp in PPPS {
+            for (marca, rotulo) in [(None, FIJAR), (Some(1u8), QUITAR)] {
+                let mut banco = Banco::nuevo(
+                    ppp,
+                    PANTALLA_ALTA,
+                    imagen_alfa_0(marca),
+                    ColorChoice::Entry(1),
+                );
+                banco.gesto_dibujo = true;
+                let contexto = format!("ppp {ppp}, marca {marca:?}");
+                banco.clic_boton(PaletteButton::Transparent);
+                let (x, y) = banco.centro_de_boton(PaletteButton::Transparent);
+                banco.pulsa(x, y);
+                banco.reposo();
+                banco.suelta(x, y);
+                let f = banco.reposo();
+                assert!(banco.historial_vacio(), "{contexto}: {:?}", banco.historial);
+                assert_eq!(banco.doc_state, 0, "{contexto}");
+                assert_eq!(banco.choice, ColorChoice::Entry(1), "{contexto}");
+                assert!(banco.ops.removal().is_none(), "{contexto}");
+                // Se ve igual.
+                comprueba_boton(&f, &banco, rotulo, &contexto);
+            }
+        }
+    }
+
+    #[test]
+    fn fila_9_con_un_deslizador_o_un_arrastre_de_muestra_en_curso_no_hace_nada() {
+        for ppp in PPPS {
+            // Deslizador en curso.
+            let mut banco = banco_p5(ppp, 3);
+            let geo = banco.geo();
+            let (x, y) = (
+                geo.x_de_valor(128, Control::Red.max()),
+                geo.y_fila(Control::Red),
+            );
+            banco.mueve(x, y);
+            banco.pulsa(x, y);
+            assert!(banco.editor.dragging(), "ppp {ppp}");
+            banco.historial.clear();
+            let (bx, by) = banco.centro_de_boton(PaletteButton::Transparent);
+            banco.mueve(bx, by);
+            let f = banco.pulsa(bx, by);
+            assert_eq!(f.salida.op, None, "ppp {ppp}: deslizador");
+            assert!(banco.operaciones().is_empty(), "ppp {ppp}");
+            assert!(banco.avisos().is_empty(), "ppp {ppp}");
+            assert!(banco.editor.dragging(), "ppp {ppp}");
+
+            // Arrastre de muestra en curso.
+            let mut banco = banco_f(ppp, 1);
+            banco.arrastra(0, 2);
+            assert!(banco.ops.busy(), "ppp {ppp}");
+            banco.historial.clear();
+            let (bx, by) = banco.centro_de_boton(PaletteButton::Transparent);
+            banco.mueve(bx, by);
+            let f = banco.pulsa(bx, by);
+            assert_eq!(f.salida.op, None, "ppp {ppp}: arrastre");
+            assert!(banco.ops.busy(), "ppp {ppp}");
+            assert!(banco.operaciones().is_empty(), "ppp {ppp}");
+            assert!(banco.avisos().is_empty(), "ppp {ppp}");
+        }
+    }
+
+    #[test]
+    fn fila_9_con_texto_valido_en_el_campo_el_commit_llega_antes_que_la_op() {
+        let mut banco = banco_con_pendiente(imagen_f(), ColorChoice::Entry(1), "#ff00ff");
+        banco.clic_boton(PaletteButton::Transparent);
+        banco.reposo();
+        banco.reposo();
+        assert_eq!(
+            banco.commits(),
+            vec![Commit {
+                target: EditTarget::Entry(1),
+                color: Rgba::opaque(255, 0, 255)
+            }]
+        );
+        assert_eq!(
+            banco.operaciones(),
+            vec![PaletteOp::SetTransparent { index: Some(1) }]
+        );
+        let del_commit = banco.historial.iter().position(|o| o.commit.is_some());
+        let de_la_op = banco.historial.iter().position(|o| o.op.is_some());
+        assert!(
+            del_commit.is_some() && del_commit <= de_la_op,
+            "el commit ({del_commit:?}) llega antes que la op ({de_la_op:?})"
+        );
+        assert!(!banco.editor.has_pending(), "no queda texto");
+        assert!(banco.avisos().is_empty());
+    }
+
+    #[test]
+    fn fila_9_con_el_clic_en_un_solo_fotograma_el_commit_y_la_op_salen_juntos() {
+        let mut banco = banco_con_pendiente(imagen_f(), ColorChoice::Entry(1), "#ff00ff");
+        let (x, y) = banco.centro_de_boton(PaletteButton::Transparent);
+        banco.mueve(x, y);
+        let pos = en_puntos(banco.ppp(), x, y);
+        let f = banco.fotograma(vec![
+            boton(pos, true, Modifiers::NONE),
+            boton(pos, false, Modifiers::NONE),
+        ]);
+        assert_eq!(
+            f.salida.commit,
+            Some(Commit {
+                target: EditTarget::Entry(1),
+                color: Rgba::opaque(255, 0, 255)
+            })
+        );
+        assert_eq!(f.salida.op, op_de(Some(1)));
+        assert!(!banco.editor.has_pending(), "no queda texto");
+    }
+
+    #[test]
+    fn fila_9_con_una_quita_pendiente_el_boton_aplica_y_la_quita_se_cancela_al_cambiar_el_documento()
+     {
+        for ppp in PPPS {
+            let mut banco = banco_p5(ppp, 3);
+            let id = banco.documento.main_image();
+            // Rango de rotación 3..=4 con Mayús, y la quita pendiente de la 3.
+            banco.clic_muestra_con(4, MAYUS);
+            assert_eq!(banco.ops.range_end(), Some(4), "ppp {ppp}");
+            banco.clic_boton(PaletteButton::Remove);
+            assert!(banco.ops.removal().is_some(), "ppp {ppp}");
+            let f = banco.reposo();
+            comprueba_botones(&f, &banco, &CON_QUITA, &format!("ppp {ppp}"));
+            comprueba_boton(
+                &f,
+                &banco,
+                FIJAR,
+                &format!("ppp {ppp}: sigue siendo el mismo"),
+            );
+            banco.historial.clear();
+
+            let f = banco.clic_boton(PaletteButton::Transparent);
+            assert_eq!(f.salida.op, op_de(Some(3)), "ppp {ppp}: no bloquea");
+            assert_eq!(f.salida.notice, None, "ppp {ppp}");
+            assert_eq!(banco.choice, ColorChoice::Entry(3), "ppp {ppp}");
+            assert_eq!(banco.ops.range_end(), Some(4), "ppp {ppp}: rango intacto");
+
+            // La sesión aplica la op; en el siguiente fotograma la quita se cancela.
+            banco.aplica(Command::SetTransparentIndex {
+                image: id,
+                index: Some(3),
+            });
+            let f = banco.reposo();
+            assert_eq!(banco.cancelaciones, 1, "ppp {ppp}");
+            assert!(banco.ops.removal().is_none(), "ppp {ppp}");
+            assert_eq!(banco.ops.range_end(), Some(4), "ppp {ppp}");
+            assert_eq!(banco.choice, ColorChoice::Entry(3), "ppp {ppp}");
+            comprueba_botones(&f, &banco, &NORMALES, &format!("ppp {ppp}"));
+            comprueba_boton(&f, &banco, QUITAR, &format!("ppp {ppp}"));
+        }
+    }
+
+    #[test]
+    fn fila_9_en_rgba_gray_y_grayalpha_no_hay_boton_ni_op() {
+        for ppp in PPPS {
+            for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+                let image = Image::new(64, 48, modo).expect("imagen");
+                let choice = initial_choice(&image);
+                let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, image, choice);
+                let contexto = format!("ppp {ppp}, {modo:?}");
+                let f = banco.reposo();
+                assert!(!f.pinta_algo_con(FIJAR), "{contexto}");
+                assert!(!f.pinta_algo_con(QUITAR), "{contexto}");
+                let n = banco.n();
+                let top = banco.geo().top_px;
+                let mut y = top + 4 * n;
+                while y < banco.panel_h_px() {
+                    for x_u in [10, 60, 120, 200] {
+                        let f = banco.clic(x_u * n, y);
+                        assert_eq!(f.salida.op, None, "{contexto}: ({x_u}·n, {y})");
+                        assert_eq!(f.salida.notice, None, "{contexto}");
+                    }
+                    y += 8 * n;
+                }
+                // Donde estaría el botón de indexadas, medido desde el borde superior del editor.
+                let (x, y) = (10 * n, top + 248 * n);
+                if y < banco.panel_h_px() {
+                    let f = banco.clic(x, y);
+                    assert_eq!(f.salida.op, None, "{contexto}");
+                }
+                assert!(banco.operaciones().is_empty(), "{contexto}");
+                assert!(banco.avisos().is_empty(), "{contexto}");
+            }
+        }
+    }
+
+    #[test]
+    fn fila_2_show_editing_view_sin_ops_tambien_pinta_el_boton() {
+        // La spec no dice si el botón emite `op` sin estado de operaciones (como `Añadir`, no lo
+        // necesita); aquí solo se fija que se pinta.
+        for ppp in PPPS {
+            let mut banco = banco_f(ppp, 2);
+            banco.sin_ops = true;
+            let f = banco.reposo();
+            comprueba_boton(&f, &banco, FIJAR, &format!("ppp {ppp}"));
+        }
+    }
+}
+
+// Unidad 21, ampliación: clic real con el rótulo del estado y avisos en la barra de estado.
+
+mod fijar_transparente_clic_y_barra {
+    use super::*;
+    use px_ui::palette_ops::{summary, transparent_summary, transparent_toggle};
+    use px_ui::status::{bar_text, columns};
+    use px_ui::text::fit_text;
+    use px_ui::theme::NOTICE_PREFIX;
+
+    /// Con un clic real (mover, pulsar y soltar en la ventana del banco), la op que sale es
+    /// `SetTransparent { index: transparent_toggle(palette, activa) }`, en los dos estados.
+    #[test]
+    fn el_clic_real_emite_la_op_del_conmutador_con_la_activa_sin_marca_y_con_la_activa_marcada() {
+        for ppp in PPPS {
+            for marca in [None, Some(0u8), Some(1), Some(3)] {
+                for activa in 0..4u8 {
+                    let imagen = imagen_con(&[ROJO, VERDE, AZUL, NEGRO], marca, &[0, 1, 2, 3]);
+                    let esperado = transparent_toggle(imagen.palette().unwrap(), activa);
+                    assert_eq!(
+                        esperado,
+                        if marca == Some(activa) {
+                            None
+                        } else {
+                            Some(activa)
+                        }
+                    );
+                    let mut banco =
+                        Banco::nuevo(ppp, PANTALLA_ALTA, imagen, ColorChoice::Entry(activa));
+                    let contexto = format!("ppp {ppp}, marca {marca:?}, activa {activa}");
+                    let f = banco.clic_boton(PaletteButton::Transparent);
+                    assert_eq!(
+                        f.salida.op,
+                        Some(PaletteOp::SetTransparent { index: esperado }),
+                        "{contexto}"
+                    );
+                    // Tras pulsar y soltar, la op salió una sola vez y no hay nada más.
+                    banco.reposo();
+                    assert_eq!(banco.operaciones().len(), 1, "{contexto}");
+                    assert!(banco.avisos().is_empty(), "{contexto}");
+                    assert!(banco.elecciones().is_empty(), "{contexto}");
+                }
+            }
+        }
+    }
+
+    /// Los avisos caben en la barra de estado a las cinco escalas: `bar_text` con las columnas
+    /// de 361 u − 6 u, `MissingGlyphPolicy::Panic` y sin recortar.
+    #[test]
+    fn los_avisos_de_transparente_caben_en_la_barra_a_los_cinco_ppp_sin_recorte() {
+        for ppp in PPPS {
+            let banco = banco_f(ppp, 1);
+            let n = text_scale(ppp);
+            let columnas = columns((361 - 6) as f32 * n as f32, ppp);
+            assert_eq!(columnas, 50, "ppp {ppp}");
+            let mut avisos: Vec<String> = vec![
+                transparent_summary(Some(255), 255, Some(254)),
+                transparent_summary(Some(255), 255, None),
+                transparent_summary(None, 255, None),
+                transparent_summary(Some(3), 3, Some(1)),
+                transparent_summary(Some(0), 0, Some(255)),
+            ];
+            for (index, activa) in [(Some(255u8), 255u8), (None, 255), (Some(2), 2), (None, 0)] {
+                avisos.push(summary(
+                    &PaletteOp::SetTransparent { index },
+                    activa,
+                    256,
+                    false,
+                    false,
+                ));
+            }
+            for i in [0u8, 9, 10, 99, 100, 255] {
+                for p in [0u8, 9, 10, 99, 100, 254] {
+                    if p != i {
+                        avisos.push(transparent_summary(Some(i), i, Some(p)));
+                    }
+                }
+            }
+            for texto in &avisos {
+                assert!(texto.chars().count() <= 43, "{texto:?}");
+                let esperado = format!("{NOTICE_PREFIX}{texto}");
+                assert_eq!(
+                    bar_text(&banco.ctx, texto, true, columnas),
+                    esperado,
+                    "ppp {ppp}: se recortó o se sustituyó {texto:?}"
+                );
+                assert_eq!(
+                    fit_text(&esperado, columnas, |_| true),
+                    esperado,
+                    "ppp {ppp}: fit_text recorta {texto:?}"
+                );
+            }
+        }
+    }
+}

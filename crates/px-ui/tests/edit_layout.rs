@@ -1230,3 +1230,203 @@ fn los_bordes_de_los_botones_caen_en_pixeles_fisicos_enteros() {
         }
     }
 }
+
+// Unidad 21: botón «Fijar/Quitar transparente» (specs/hito-2-fijar-transparente.md, filas 1 y 2).
+// Las cifras de alturas, ventana y `panel_layout` ya están en las pruebas adaptadas de arriba;
+// aquí solo lo nuevo: la cuarta fila, `PaletteButton::Transparent`, `button_hit` y `edges_u`.
+
+const BOTONES_U21: [PaletteButton; 7] = [
+    PaletteButton::Add,
+    PaletteButton::Remove,
+    PaletteButton::Confirm,
+    PaletteButton::Cancel,
+    PaletteButton::RotateLeft,
+    PaletteButton::RotateRight,
+    PaletteButton::Transparent,
+];
+
+#[test]
+fn fila_1_u21_la_cuarta_fila_suma_70_u_y_deja_el_editor_en_260() {
+    assert_eq!(BUTTON_ROWS, 4);
+    assert_eq!(buttons_height_u(Mode::Indexed), 4 * 16 + 3 * 2);
+    assert_eq!(buttons_height_u(Mode::Indexed), 70);
+    // La derivación de la maqueta, con literales: 186 + 70 + 4.
+    assert_eq!(buttons_y_u(Mode::Indexed), 186);
+    assert_eq!(editor_height_u(Mode::Indexed), 186 + 70 + 4);
+    assert_eq!(editor_height_u(Mode::Indexed), 260);
+    // Una sola función: el bloque, el mínimo y el último botón cuelgan de ella.
+    let (_, y, _, h) = button_rect_u(Mode::Indexed, PaletteButton::Transparent).expect("botón");
+    assert_eq!(y + h + BLOCK_GAP_U, editor_height_u(Mode::Indexed));
+    for n in ESCALAS {
+        let k = i64::from(n);
+        assert_eq!(block_height_px(Mode::Indexed, n), 315 * k);
+        assert_eq!(min_panel_height_px(n), 315 * k);
+    }
+    // Solo indexadas llevan botones: los demás modos no cambian (186, 94 y 112 u).
+    for (modo, altura) in [(Mode::Rgba, 186), (Mode::Gray, 94), (Mode::GrayAlpha, 112)] {
+        assert_eq!(buttons_height_u(modo), 0, "{modo:?}");
+        assert_eq!(editor_height_u(modo), altura, "{modo:?}");
+    }
+}
+
+#[test]
+fn fila_2_u21_button_rect_u_del_boton_transparente() {
+    let m = Mode::Indexed;
+    assert_eq!(
+        button_rect_u(m, PaletteButton::Transparent),
+        Some((4, 240, 225, 16))
+    );
+    let (x, y, w, h) = button_rect_u(m, PaletteButton::Transparent).expect("botón");
+    // Fila 4: 186 + 3 · 18, mismo ancho que los botones de rotar, mismo alto que todos.
+    assert_eq!(y, 186 + 3 * (BUTTON_H_U + BUTTON_ROW_GAP_U));
+    assert_eq!((x, w, h), (BUTTON_X_U, BUTTON_FULL_W_U, BUTTON_H_U));
+    let (_, y_der, _, _) = button_rect_u(m, PaletteButton::RotateRight).expect("botón");
+    assert_eq!(y, y_der + BUTTON_H_U + BUTTON_ROW_GAP_U);
+    // Las filas 1 a 3 siguen donde estaban.
+    assert_eq!(
+        button_rect_u(m, PaletteButton::Add),
+        Some((4, 186, 110, 16))
+    );
+    assert_eq!(
+        button_rect_u(m, PaletteButton::RotateLeft),
+        Some((4, 204, 225, 16))
+    );
+    assert_eq!(
+        button_rect_u(m, PaletteButton::RotateRight),
+        Some((4, 222, 225, 16))
+    );
+    // Ni pisa el aviso ni sale del panel ni se solapa con otro botón.
+    let fin_aviso = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
+    assert!(y >= fin_aviso);
+    assert!(x >= 0 && x + w < PANEL_WIDTH_U);
+    for otro in BOTONES_U21 {
+        if otro == PaletteButton::Transparent {
+            continue;
+        }
+        let (ox, oy, ow, oh) = button_rect_u(m, otro).expect("botón");
+        let solapa = x < ox + ow && ox < x + w && y < oy + oh && oy < y + h;
+        assert!(!solapa, "solapa con {otro:?}");
+    }
+}
+
+#[test]
+fn fila_2_u21_los_modos_sin_botones_no_tienen_el_transparente() {
+    for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+        assert_eq!(
+            button_rect_u(modo, PaletteButton::Transparent),
+            None,
+            "{modo:?}"
+        );
+        for n in ESCALAS {
+            let k = i64::from(n);
+            for removing in [false, true] {
+                // El punto donde está el botón en indexadas y todo el alto del editor.
+                for y in [0, 190 * k, 240 * k, 248 * k, editor_height_u(modo) * k - 1] {
+                    assert_eq!(
+                        button_hit(modo, removing, 10 * k, y, n),
+                        None,
+                        "{modo:?}, n = {n}, y = {y}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_2_u21_button_hit_en_los_puntos_del_boton_transparente() {
+    use PaletteButton::*;
+    for n in ESCALAS {
+        let k = i64::from(n);
+        let m = Mode::Indexed;
+        let casos = [
+            // Esquina superior izquierda y última esquina dentro del botón.
+            (4 * k, 240 * k, Some(Transparent)),
+            (228 * k, 255 * k, Some(Transparent)),
+            (229 * k - 1, 256 * k - 1, Some(Transparent)),
+            (10 * k, 248 * k, Some(Transparent)),
+            // A la izquierda, a la derecha, 1 u sobre el botón y bajo él.
+            (3 * k, 248 * k, None),
+            (229 * k, 248 * k, None),
+            (10 * k, 239 * k, None),
+            (10 * k, 256 * k, None),
+            // Un píxel físico fuera por cada lado.
+            (4 * k - 1, 240 * k, None),
+            (229 * k, 255 * k, None),
+            (10 * k, 240 * k - 1, None),
+            // El hueco entre la fila 3 y la fila 4 no es de ninguno.
+            (10 * k, 238 * k, None),
+            (10 * k, 240 * k - 1, None),
+        ];
+        for (x, y, esperado) in casos {
+            for removing in [false, true] {
+                assert_eq!(
+                    button_hit(m, removing, x, y, n),
+                    esperado,
+                    "n = {n}, ({x}, {y}), removing = {removing}"
+                );
+            }
+        }
+        // Las filas 1 a 3 siguen en sus puntos.
+        assert_eq!(button_hit(m, false, 4 * k, 186 * k, n), Some(Add));
+        assert_eq!(button_hit(m, true, 4 * k, 186 * k, n), Some(Confirm));
+        assert_eq!(button_hit(m, false, 10 * k, 204 * k, n), Some(RotateLeft));
+        assert_eq!(button_hit(m, false, 10 * k, 222 * k, n), Some(RotateRight));
+        assert_eq!(button_hit(m, true, 10 * k, 222 * k, n), Some(RotateRight));
+    }
+}
+
+#[test]
+fn fila_2_u21_button_hit_recorre_todo_el_rectangulo_del_boton() {
+    let n = 2u32;
+    let k = i64::from(n);
+    let m = Mode::Indexed;
+    let (x, y, w, h) = button_rect_u(m, PaletteButton::Transparent).expect("botón");
+    for removing in [false, true] {
+        for py in (y - 2) * k..(y + h + 2) * k {
+            for px in ((x - 2) * k..(x + w + 2) * k).step_by(3) {
+                let dentro = px >= x * k && px < (x + w) * k && py >= y * k && py < (y + h) * k;
+                let esperado = dentro.then_some(PaletteButton::Transparent);
+                assert_eq!(
+                    button_hit(m, removing, px, py, n),
+                    esperado,
+                    "({px}, {py}), removing = {removing}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn fila_2_u21_los_bordes_del_boton_estan_en_edges_u_y_son_enteros_a_los_cinco_ppp() {
+    let (x, y, w, h) = button_rect_u(Mode::Indexed, PaletteButton::Transparent).expect("botón");
+    let bordes = edges_u(Mode::Indexed);
+    for u in [
+        x,
+        x + 1,
+        x + w - 1,
+        x + w,
+        x + BUTTON_TEXT_X_U,
+        y,
+        y + 1,
+        y + h - 1,
+        y + h,
+        y + BUTTON_TEXT_Y_U,
+        y + BUTTON_TEXT_Y_U + ROW_H_U,
+    ] {
+        assert!(bordes.contains(&u), "falta el borde {u} en edges_u");
+    }
+    assert!(bordes.contains(&240) && bordes.contains(&256));
+    assert!(bordes.contains(&editor_height_u(Mode::Indexed)));
+    for ppp in PPPS {
+        let n = text_scale(ppp);
+        let k = i64::from(n);
+        for u in edges_u(Mode::Indexed) {
+            let fisico = (u * k) as f32 / ppp * ppp;
+            assert!(
+                (fisico - fisico.round()).abs() <= 0.001 && (u * k) % k == 0,
+                "ppp {ppp}: el borde {u} u no cae en píxel físico entero"
+            );
+        }
+    }
+}

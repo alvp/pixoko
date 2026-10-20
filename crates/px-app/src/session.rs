@@ -661,3 +661,5 @@ mod pick_tests;
 mod tests;
 #[cfg(test)]
 mod tiles_tests;
+#[cfg(test)]
+mod transparent_tests;

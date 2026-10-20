@@ -249,3 +249,249 @@ proptest! {
         }
     }
 }
+
+// Unidad 21 (specs/hito-2-fijar-transparente.md, fila 5): la bandera `alfa 0` de la línea 2 de
+// la muestra y `is_alpha0_cell_with`.
+
+mod alfa_0 {
+    use super::*;
+    use px_ui::color::{
+        SlotColors, info_flags, info_flags_alpha0, info_flags_range, is_alpha0_cell_with,
+    };
+    use px_ui::text::INTERFACE_CHARSET;
+
+    /// Oráculo propio: las banderas que apliquen, en orden, unidas con ` · `.
+    fn modelo(
+        hover: bool,
+        active: bool,
+        in_range: bool,
+        transparent: bool,
+        alpha0: bool,
+    ) -> String {
+        let mut partes: Vec<&str> = Vec::new();
+        if hover {
+            partes.push("cursor");
+        }
+        if active {
+            partes.push("activa");
+        }
+        if in_range && !active {
+            partes.push("rango");
+        }
+        if transparent {
+            partes.push("transparente");
+        }
+        // Excluyentes: si es la transparente, gana `transparente`.
+        if alpha0 && !transparent {
+            partes.push("alfa 0");
+        }
+        partes.join(" · ")
+    }
+
+    fn combinaciones() -> impl Iterator<Item = (bool, bool, bool, bool, bool)> {
+        (0..32u8).map(|b| (b & 1 != 0, b & 2 != 0, b & 4 != 0, b & 8 != 0, b & 16 != 0))
+    }
+
+    #[test]
+    fn info_flags_alpha0_de_la_spec() {
+        assert_eq!(info_flags_alpha0(false, false, false, false, false), "");
+        assert_eq!(
+            info_flags_alpha0(false, false, false, true, false),
+            "transparente"
+        );
+        assert_eq!(
+            info_flags_alpha0(false, false, false, false, true),
+            "alfa 0"
+        );
+        assert_eq!(
+            info_flags_alpha0(true, true, false, true, false),
+            "cursor · activa · transparente"
+        );
+        assert_eq!(
+            info_flags_alpha0(true, true, false, false, true),
+            "cursor · activa · alfa 0"
+        );
+        assert_eq!(
+            info_flags_alpha0(true, false, true, false, true),
+            "cursor · rango · alfa 0"
+        );
+        assert_eq!(
+            info_flags_alpha0(false, false, true, true, false),
+            "rango · transparente"
+        );
+    }
+
+    #[test]
+    fn info_flags_alpha0_sigue_al_modelo_en_las_32_combinaciones() {
+        for (h, a, r, t, z) in combinaciones() {
+            assert_eq!(
+                info_flags_alpha0(h, a, r, t, z),
+                modelo(h, a, r, t, z),
+                "h={h} a={a} r={r} t={t} z={z}"
+            );
+        }
+    }
+
+    #[test]
+    fn transparente_y_alfa_0_son_excluyentes_y_gana_transparente() {
+        for (h, a, r, t, z) in combinaciones() {
+            let linea = info_flags_alpha0(h, a, r, t, z);
+            assert!(
+                !(linea.contains("transparente") && linea.contains("alfa 0")),
+                "h={h} a={a} r={r} t={t} z={z}: {linea:?}"
+            );
+            if t {
+                assert!(linea.contains("transparente"), "{linea:?}");
+                assert!(!linea.contains("alfa 0"), "{linea:?}");
+            } else if z {
+                assert!(linea.contains("alfa 0"), "{linea:?}");
+                assert!(!linea.contains("transparente"), "{linea:?}");
+            } else {
+                assert!(!linea.contains("alfa 0") && !linea.contains("transparente"));
+            }
+        }
+        assert_eq!(
+            info_flags_alpha0(true, true, false, true, true),
+            "cursor · activa · transparente"
+        );
+        assert_eq!(
+            info_flags_alpha0(false, false, false, true, true),
+            "transparente"
+        );
+        assert_eq!(
+            info_flags_alpha0(false, false, false, false, true),
+            "alfa 0"
+        );
+    }
+
+    #[test]
+    fn la_bandera_rango_solo_sale_si_esta_en_el_rango_y_no_es_la_activa() {
+        for t in [false, true] {
+            let con = info_flags_alpha0(false, false, true, t, !t);
+            assert!(con.contains("rango"), "{con:?}");
+            let activa = info_flags_alpha0(false, true, true, t, !t);
+            assert!(!activa.contains("rango"), "{activa:?}");
+            let fuera = info_flags_alpha0(false, false, false, t, !t);
+            assert!(!fuera.contains("rango"), "{fuera:?}");
+        }
+    }
+
+    #[test]
+    fn info_flags_e_info_flags_range_no_cambian_y_coinciden_sin_alfa_0() {
+        for (h, a, r, t, _) in combinaciones() {
+            assert_eq!(
+                info_flags_alpha0(h, a, r, t, false),
+                info_flags_range(h, a, r, t)
+            );
+            assert_eq!(
+                info_flags_alpha0(h, a, false, t, false),
+                info_flags(h, a, t)
+            );
+        }
+        assert_eq!(
+            info_flags(true, true, true),
+            "cursor · activa · transparente"
+        );
+        assert_eq!(
+            info_flags_range(true, false, true, true),
+            "cursor · rango · transparente"
+        );
+        assert_eq!(info_flags(false, false, false), "");
+    }
+
+    #[test]
+    fn la_linea_mas_larga_son_30_columnas_y_todo_sale_del_juego_de_caracteres() {
+        let mut mas_larga = 0;
+        for (h, a, r, t, z) in combinaciones() {
+            let linea = info_flags_alpha0(h, a, r, t, z);
+            mas_larga = mas_larga.max(linea.chars().count());
+            assert!(linea.chars().count() <= 32, "{linea:?}");
+            assert!(
+                linea.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+                "{linea:?}"
+            );
+        }
+        assert_eq!(mas_larga, 30);
+        assert_eq!("cursor · activa · transparente".chars().count(), 30);
+    }
+
+    fn paleta_con_alfa_0(transparente: Option<u8>) -> Image {
+        // 0 opaca, 1 con alfa guardado 0, 2 opaca, 3 con alfa guardado 0.
+        let mut paleta = Palette::from_colors([
+            Rgba::opaque(255, 0, 0),
+            Rgba::new(0, 255, 0, 0),
+            Rgba::opaque(0, 0, 255),
+            Rgba::new(1, 1, 1, 0),
+        ])
+        .unwrap();
+        paleta.set_transparent_index(transparente).unwrap();
+        Image::new_indexed(2, 2, paleta).unwrap()
+    }
+
+    #[test]
+    fn is_alpha0_cell_with_marca_las_de_alfa_guardado_0_que_no_son_la_transparente() {
+        let slots = SlotColors::defaults(Mode::Indexed);
+        let sin = paleta_con_alfa_0(None);
+        let esperado = [false, true, false, true];
+        for (celda, esperado) in esperado.into_iter().enumerate() {
+            assert_eq!(
+                is_alpha0_cell_with(&sin, celda, &slots),
+                esperado,
+                "sin marca, {celda}"
+            );
+        }
+        // Con la 3 marcada: la marcada ya dice `transparente`, no `alfa 0`.
+        let marcada = paleta_con_alfa_0(Some(3));
+        for (celda, esperado) in [false, true, false, false].into_iter().enumerate() {
+            assert_eq!(
+                is_alpha0_cell_with(&marcada, celda, &slots),
+                esperado,
+                "con la 3 marcada, {celda}"
+            );
+        }
+        // Una opaca marcada tampoco es alfa 0 (resuelve 0, pero el guardado es 255).
+        let opaca = paleta_con_alfa_0(Some(0));
+        assert!(!is_alpha0_cell_with(&opaca, 0, &slots));
+        assert!(is_alpha0_cell_with(&opaca, 1, &slots));
+        assert!(is_alpha0_cell_with(&opaca, 3, &slots));
+    }
+
+    #[test]
+    fn is_alpha0_cell_with_es_excluyente_con_is_transparent_cell_with() {
+        use px_ui::color::is_transparent_cell_with;
+        let slots = SlotColors::defaults(Mode::Indexed);
+        for transparente in [None, Some(0), Some(1), Some(2), Some(3)] {
+            let imagen = paleta_con_alfa_0(transparente);
+            for celda in 0..4 {
+                assert!(
+                    !(is_alpha0_cell_with(&imagen, celda, &slots)
+                        && is_transparent_cell_with(&imagen, celda, &slots)),
+                    "{transparente:?}, celda {celda}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_alpha0_cell_con_una_celda_fuera_de_la_paleta_es_falso() {
+        let slots = SlotColors::defaults(Mode::Indexed);
+        let imagen = paleta_con_alfa_0(None);
+        for celda in [4usize, 5, 255, 256, 1000] {
+            assert!(!is_alpha0_cell_with(&imagen, celda, &slots), "{celda}");
+        }
+    }
+
+    #[test]
+    fn is_alpha0_cell_with_en_los_demas_modos_es_siempre_falso() {
+        for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+            let imagen = Image::new(2, 2, modo).unwrap();
+            let slots = SlotColors::defaults(modo);
+            for celda in 0..12 {
+                assert!(
+                    !is_alpha0_cell_with(&imagen, celda, &slots),
+                    "{modo:?}, celda {celda}"
+                );
+            }
+        }
+    }
+}
