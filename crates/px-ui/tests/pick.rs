@@ -114,14 +114,13 @@ fn fila_1_coma_es_cuentagotas_y_e_ya_no_es_borrador_sin_modificadores() {
 
 #[test]
 fn fila_1_con_cualquier_modificador_coma_no_hace_nada() {
+    let key = Key::Comma;
     for modifiers in modificadores_de_la_fila_1() {
-        for key in [Key::Comma] {
-            assert_eq!(
-                tool_action_for_key(key, modifiers),
-                None,
-                "{key:?} con {modifiers:?}"
-            );
-        }
+        assert_eq!(
+            tool_action_for_key(key, modifiers),
+            None,
+            "{key:?} con {modifiers:?}"
+        );
     }
 }
 
@@ -142,19 +141,18 @@ fn fila_1_action_for_key_y_file_action_for_key_dan_none_para_coma() {
     let mut combinaciones = modificadores_de_la_fila_1();
     combinaciones.push(Modifiers::NONE);
     combinaciones.push(Modifiers::COMMAND | Modifiers::SHIFT);
+    let key = Key::Comma;
     for modifiers in combinaciones {
-        for key in [Key::Comma] {
-            assert_eq!(
-                action_for_key(key, modifiers),
-                None,
-                "action_for_key {key:?} con {modifiers:?}"
-            );
-            assert_eq!(
-                file_action_for_key(key, modifiers),
-                None,
-                "file_action_for_key {key:?} con {modifiers:?}"
-            );
-        }
+        assert_eq!(
+            action_for_key(key, modifiers),
+            None,
+            "action_for_key {key:?} con {modifiers:?}"
+        );
+        assert_eq!(
+            file_action_for_key(key, modifiers),
+            None,
+            "file_action_for_key {key:?} con {modifiers:?}"
+        );
     }
 }
 
