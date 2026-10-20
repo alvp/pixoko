@@ -3,6 +3,7 @@
 //! y las herramientas línea y relleno (specs/hito-2-linea-relleno-app.md). Abre PNG por
 //! argumento o arrastrando, y los guarda con `Ctrl`+`S` (specs/hito-2-abrir-guardar.md).
 
+mod background_color;
 mod confirm;
 mod convert_mode;
 #[cfg(test)]
@@ -21,6 +22,7 @@ mod window_min;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::background_color::{background_from_values, open_background_color};
 use eframe::egui;
 use px_core::{Document, DocumentError, Rgba};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, action_for_shortcut};
@@ -472,6 +474,12 @@ impl App {
             Dispatched::Licenses(false) => {
                 self.modal.close_kind(ModalKind::Licenses);
             }
+            Dispatched::BackgroundColor => {
+                let locks = self.locks(ctx);
+                if open_background_color(&mut self.modal, self.canvas.background(), locks) {
+                    self.modal_focus = None;
+                }
+            }
             Dispatched::Background(background) => {
                 self.canvas.set_background(background);
                 ctx.request_repaint();
@@ -767,6 +775,14 @@ impl App {
             } else {
                 self.convert = None;
             }
+        }
+        if kind == ModalKind::BackgroundColor
+            && let Reaction::Accepted(values) = &reaction
+            && let Some(background) = background_from_values(values)
+        {
+            // Solo al aceptar; sin pasar por `dispatch` (con el modal abierto lo bloquearía).
+            self.canvas.set_background(background);
+            ctx.request_repaint();
         }
         if kind == ModalKind::NewImage {
             let discard = self.new_image.take().is_some_and(|(_, discard)| discard);

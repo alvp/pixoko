@@ -41,6 +41,8 @@ pub enum Dispatched {
     /// Elegir el fondo bajo la transparencia del lienzo: preferencia de la sesión, no toca el
     /// documento.
     Background(CanvasBackground),
+    /// `Color…` del fondo del lienzo: la ejecuta `App` (abre el diálogo).
+    BackgroundColor,
 }
 
 /// Lo que `dispatch` puede tocar, con los bloqueos de este fotograma.
@@ -93,6 +95,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::ShowLicenses => Dispatched::Licenses(true),
         AppAction::CloseLicenses => Dispatched::Licenses(false),
         AppAction::CanvasBackground(background) => Dispatched::Background(background),
+        AppAction::BackgroundColor => Dispatched::BackgroundColor,
         AppAction::SelectTool(tool) => {
             let image = session.document.image(session.document.main_image());
             Dispatched::Done {
