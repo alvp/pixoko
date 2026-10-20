@@ -120,7 +120,7 @@ fn fila_6_las_vistas_de_prueba_cubren_x1_x5_y_x64_con_el_centro_sobre_la_imagen(
 #[test]
 fn fila_6_acercar_alejar_y_actual_no_mueven_el_pixel_bajo_el_centro() {
     for (nombre, antes) in vistas_con_el_centro_sobre_la_imagen() {
-        let pixel = antes.screen_to_image_i32(CENTRO, IMAGEN);
+        let pixel = antes.screen_to_image_i32(CENTRO);
         for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual] {
             let despues = aplica(antes, op);
             // Con zoom ≥ ×1 el píxel es el mismo; a 1/K sube a la rejilla del nivel
@@ -132,7 +132,7 @@ fn fila_6_acercar_alejar_y_actual_no_mueven_el_pixel_bajo_el_centro() {
             };
             let esperado = (pixel.0.div_euclid(k) * k, pixel.1.div_euclid(k) * k);
             assert_eq!(
-                despues.screen_to_image_i32(CENTRO, IMAGEN),
+                despues.screen_to_image_i32(CENTRO),
                 esperado,
                 "{nombre}: {op:?} movió el píxel bajo el centro"
             );

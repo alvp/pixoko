@@ -101,6 +101,7 @@ mod tests {
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
+            tool: None,
             color: Some("color 3 #ff0000".to_string()),
             can_undo: false,
             can_redo: false,
@@ -218,6 +219,7 @@ mod tests {
             size: None,
             zoom: Zoom::default(),
             hover: None,
+            tool: None,
             color: None,
             can_undo: false,
             can_redo: false,
@@ -252,9 +254,9 @@ mod tests {
 
 #[cfg(test)]
 mod window_title_tests {
-    //! Fila 22 de specs/hito-2-linea-relleno-app.md: `window_title(tool, info)` da el título
-    //! completo, con `status_text(tool, color)` dentro del campo `color` de `title_text`. No toca
-    //! los tests del módulo `tests` ni cambia `TitleInfo` ni `title_text`.
+    //! Fila 22 de specs/hito-2-linea-relleno-app.md: `window_title(info)` da el título completo,
+    //! con la herramienta en el campo `tool` de `TitleInfo` y `status_text(tool, color)` dentro de
+    //! `title_text`. No toca los tests del módulo `tests`.
 
     use super::*;
     use px_ui::tool::Tool;
@@ -270,6 +272,7 @@ mod window_title_tests {
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
+            tool: Some(Tool::Line),
             color: Some("color 3 #ff0000".to_string()),
             can_undo: false,
             can_redo: false,
@@ -285,36 +288,31 @@ mod window_title_tests {
             ..completo()
         };
         assert_eq!(
-            window_title(Tool::Line, &info),
+            window_title(&info),
             "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer"
         );
     }
 
     #[test]
     fn fila_22_sin_color_solo_sale_la_herramienta() {
-        let sin_cursor = TitleInfo {
+        let mut sin_cursor = TitleInfo {
             hover: None,
             color: None,
             ..completo()
         };
-        assert_eq!(
-            window_title(Tool::Pencil, &sin_cursor),
-            "Pixoko: 64×48 · ×8 · lápiz"
-        );
-        assert_eq!(
-            window_title(Tool::Line, &sin_cursor),
-            "Pixoko: 64×48 · ×8 · línea"
-        );
-        assert_eq!(
-            window_title(Tool::Fill, &sin_cursor),
-            "Pixoko: 64×48 · ×8 · relleno"
-        );
+        sin_cursor.tool = Some(Tool::Pencil);
+        assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · lápiz");
+        sin_cursor.tool = Some(Tool::Line);
+        assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · línea");
+        sin_cursor.tool = Some(Tool::Fill);
+        assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · relleno");
         let con_cursor = TitleInfo {
+            tool: Some(Tool::Pencil),
             color: None,
             ..completo()
         };
         assert_eq!(
-            window_title(Tool::Pencil, &con_cursor),
+            window_title(&con_cursor),
             "Pixoko: 64×48 · ×8 · (3, 4) · lápiz"
         );
     }
@@ -350,7 +348,7 @@ mod window_title_tests {
                 ..completo()
             };
             assert_eq!(
-                window_title(Tool::Line, &info),
+                window_title(&info),
                 esperado,
                 "undo {can_undo}, redo {can_redo}"
             );
@@ -363,13 +361,14 @@ mod window_title_tests {
             for (can_undo, can_redo) in [(false, false), (true, false), (false, true), (true, true)]
             {
                 let info = TitleInfo {
+                    tool: Some(tool),
                     can_undo,
                     can_redo,
                     error: Some("no hay memoria para guardar el paso en la historia".to_string()),
                     ..completo()
                 };
                 assert_eq!(
-                    window_title(tool, &info),
+                    window_title(&info),
                     "Pixoko: no hay memoria para guardar el paso en la historia",
                     "{tool:?}, undo {can_undo}, redo {can_redo}"
                 );
@@ -380,11 +379,12 @@ mod window_title_tests {
     #[test]
     fn el_relleno_con_la_ranura_transparente_y_la_herramienta_van_juntos() {
         let info = TitleInfo {
+            tool: Some(Tool::Fill),
             color: Some("color 9 transparente".to_string()),
             ..completo()
         };
         assert_eq!(
-            window_title(Tool::Fill, &info),
+            window_title(&info),
             "Pixoko: 64×48 · ×8 · (3, 4) · relleno · color 9 transparente"
         );
     }
@@ -395,12 +395,13 @@ mod window_title_tests {
             size: None,
             zoom: Zoom::default(),
             hover: None,
+            tool: Some(Tool::Pencil),
             color: None,
             can_undo: false,
             can_redo: false,
             error: None,
         };
-        assert_eq!(window_title(Tool::Pencil, &info), "Pixoko:  · ×1 · lápiz");
+        assert_eq!(window_title(&info), "Pixoko:  · ×1 · lápiz");
     }
 }
 
@@ -454,10 +455,11 @@ mod file_title_tests {
 
 #[cfg(test)]
 mod status_line_tests {
-    //! Fila 10 y propiedad 5 de specs/hito-2-texto.md: `status_line(tool, info)` es el título de
-    //! la ventana **sin** el prefijo `Pixoko: ` (la barra de estado repite lo que va en el título);
+    //! Fila 10 y propiedad 5 de specs/hito-2-texto.md: `status_line(info)` es el título de la
+    //! ventana **sin** el prefijo `Pixoko: ` (la barra de estado repite lo que va en el título);
     //! `window_title` pasa a ser `format!("Pixoko: {}", status_line(..))` y `title_with_file` no
-    //! cambia, así que el título sale idéntico. Con error o aviso, solo ese texto.
+    //! cambia, así que el título sale idéntico. La herramienta va en el campo `tool` de
+    //! `TitleInfo`. Con error o aviso, solo ese texto.
     //!
     //! La propiedad 5 exige además que `status_line` use solo caracteres de `INTERFACE_CHARSET`
     //! (la fuente de la interfaz tiene glifo para todos) y que no lleve saltos de línea.
@@ -478,6 +480,7 @@ mod status_line_tests {
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
+            tool: Some(Tool::Line),
             color: Some("color 3 #ff0000".to_string()),
             can_undo: true,
             can_redo: true,
@@ -486,9 +489,9 @@ mod status_line_tests {
     }
 
     /// Comprueba `window_title == "Pixoko: " + status_line` y que `title_with_file` no cambia.
-    fn comprueba_titulo(tool: Tool, info: &TitleInfo, linea: &str) {
-        assert_eq!(status_line(tool, info), linea);
-        let titulo = window_title(tool, info);
+    fn comprueba_titulo(info: &TitleInfo, linea: &str) {
+        assert_eq!(status_line(info), linea);
+        let titulo = window_title(info);
         assert_eq!(titulo, format!("Pixoko: {linea}"));
         assert_eq!(
             title_with_file(Some("casa.png"), true, &titulo),
@@ -508,7 +511,6 @@ mod status_line_tests {
     #[test]
     fn fila_10_la_linea_de_estado_completa() {
         comprueba_titulo(
-            Tool::Line,
             &completo(),
             "64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer",
         );
@@ -520,11 +522,7 @@ mod status_line_tests {
             color: None,
             ..completo()
         };
-        comprueba_titulo(
-            Tool::Line,
-            &info,
-            "64×48 · ×8 · (3, 4) · línea · deshacer · rehacer",
-        );
+        comprueba_titulo(&info, "64×48 · ×8 · (3, 4) · línea · deshacer · rehacer");
     }
 
     #[test]
@@ -534,7 +532,6 @@ mod status_line_tests {
             ..completo()
         };
         comprueba_titulo(
-            Tool::Line,
             &info,
             "64×48 · ×8 · línea · color 3 #ff0000 · deshacer · rehacer",
         );
@@ -546,11 +543,7 @@ mod status_line_tests {
             error: Some("no hay memoria para guardar el paso en la historia".to_string()),
             ..completo()
         };
-        comprueba_titulo(
-            Tool::Line,
-            &info,
-            "no hay memoria para guardar el paso en la historia",
-        );
+        comprueba_titulo(&info, "no hay memoria para guardar el paso en la historia");
     }
 
     #[test]
@@ -561,12 +554,12 @@ mod status_line_tests {
             (Tool::Fill, "relleno"),
         ] {
             let info = TitleInfo {
+                tool: Some(tool),
                 can_undo: false,
                 can_redo: false,
                 ..completo()
             };
             comprueba_titulo(
-                tool,
                 &info,
                 &format!("64×48 · ×8 · (3, 4) · {etiqueta} · color 3 #ff0000"),
             );
@@ -581,13 +574,14 @@ mod status_line_tests {
             size: None,
             zoom: Zoom::default(),
             hover: None,
+            tool: Some(Tool::Pencil),
             color: None,
             can_undo: false,
             can_redo: false,
             error: None,
         };
-        assert_eq!(window_title(Tool::Pencil, &info), "Pixoko:  · ×1 · lápiz");
-        assert_eq!(status_line(Tool::Pencil, &info), " · ×1 · lápiz");
+        assert_eq!(window_title(&info), "Pixoko:  · ×1 · lápiz");
+        assert_eq!(status_line(&info), " · ×1 · lápiz");
     }
 
     // -----------------------------------------------------------------------------------------
@@ -631,9 +625,9 @@ mod status_line_tests {
             can_undo in any::<bool>(),
             can_redo in any::<bool>(),
         ) {
-            let info = TitleInfo { size, zoom, hover, color, can_undo, can_redo, error: None };
-            let linea = status_line(tool, &info);
-            prop_assert_eq!(window_title(tool, &info), format!("Pixoko: {linea}"));
+            let info = TitleInfo { size, zoom, hover, tool: Some(tool), color, can_undo, can_redo, error: None };
+            let linea = status_line(&info);
+            prop_assert_eq!(window_title(&info), format!("Pixoko: {linea}"));
             prop_assert!(!linea.contains('\n') && !linea.contains('\r'), "{:?}", linea);
             for c in linea.chars() {
                 prop_assert!(

@@ -488,9 +488,9 @@ fn fila_a3_screen_to_image_a_1_4_con_origen_10_20() {
         assert_eq!(v.screen_to_image(p, IMAGEN_10), esperado, "{p:?}");
     }
     // La versión con signo no recorta: el 9 es -4 y el 13 es 12.
-    assert_eq!(v.screen_to_image_i32((9, 20), IMAGEN_10), (-4, 0));
-    assert_eq!(v.screen_to_image_i32((13, 20), IMAGEN_10), (12, 0));
-    assert_eq!(v.screen_to_image_i32((12, 23), IMAGEN_10), (8, 12));
+    assert_eq!(v.screen_to_image_i32((9, 20)), (-4, 0));
+    assert_eq!(v.screen_to_image_i32((13, 20)), (12, 0));
+    assert_eq!(v.screen_to_image_i32((12, 23)), (8, 12));
 }
 
 #[test]
@@ -771,16 +771,11 @@ fn fila_a5_ida_y_vuelta_no_es_la_identidad_pero_el_pixel_es_el_de_la_rejilla() {
 fn fila_a5_acercar_a_un_entero_conserva_el_pixel_exacto() {
     let mut v = desde_x1();
     v.set_zoom(Zoom::MIN, (100, 50));
-    let pixel = v.screen_to_image_i32((100, 50), IMAGEN_1000);
+    let pixel = v.screen_to_image_i32((100, 50));
     assert_eq!(pixel, (64, 0));
     for _ in 0..7 {
         v.zoom_in((100, 50));
-        assert_eq!(
-            v.screen_to_image_i32((100, 50), IMAGEN_1000),
-            pixel,
-            "{}",
-            v.zoom()
-        );
+        assert_eq!(v.screen_to_image_i32((100, 50)), pixel, "{}", v.zoom());
     }
     assert_eq!(v.zoom(), zoom_entero(2));
 }
@@ -883,7 +878,7 @@ proptest! {
             };
             prop_assert_eq!(v.screen_to_image(punto, tam), esperado, "{} origen {:?}", z, origen);
             prop_assert_eq!(
-                v.screen_to_image_i32(punto, tam),
+                v.screen_to_image_i32(punto),
                 (o_eje_i32(f, punto.0, origen.0), o_eje_i32(f, punto.1, origen.1)),
                 "{} origen {:?}", z, origen
             );
@@ -963,10 +958,10 @@ proptest! {
         let mut v = View::fit(Size::new(800, 600), tam);
         v.set_zoom(todos[desde], ancla_previa);
         prop_assert_eq!(v.zoom(), todos[desde]);
-        let antes = v.screen_to_image_i32(ancla, tam);
+        let antes = v.screen_to_image_i32(ancla);
         v.set_zoom(todos[hasta], ancla);
         prop_assert_eq!(v.zoom(), todos[hasta]);
-        let despues = v.screen_to_image_i32(ancla, tam);
+        let despues = v.screen_to_image_i32(ancla);
         let g = rejilla(hasta);
         prop_assert_eq!(
             despues,
@@ -979,11 +974,11 @@ proptest! {
         // Un paso de zoom_in / zoom_out con la misma regla.
         let mut w = View::fit(Size::new(800, 600), tam);
         w.set_zoom(todos[desde], ancla_previa);
-        let pixel = w.screen_to_image_i32(ancla, tam);
+        let pixel = w.screen_to_image_i32(ancla);
         w.zoom_in(ancla);
         let g = rejilla((desde + 1).min(69));
         prop_assert_eq!(
-            w.screen_to_image_i32(ancla, tam),
+            w.screen_to_image_i32(ancla),
             (pixel.0.div_euclid(g) * g, pixel.1.div_euclid(g) * g),
             "zoom_in desde {}", todos[desde]
         );
@@ -992,7 +987,7 @@ proptest! {
         w.zoom_out(ancla);
         let g = rejilla(desde.saturating_sub(1));
         prop_assert_eq!(
-            w.screen_to_image_i32(ancla, tam),
+            w.screen_to_image_i32(ancla),
             (pixel.0.div_euclid(g) * g, pixel.1.div_euclid(g) * g),
             "zoom_out desde {}", todos[desde]
         );
@@ -1015,7 +1010,7 @@ proptest! {
         v.zoom_in(ancla);
         v.zoom_out(ancla);
         let _ = v.origin();
-        let _ = v.screen_to_image_i32(ancla, tam);
+        let _ = v.screen_to_image_i32(ancla);
         let _ = v.image_rect(tam);
     }
 }
