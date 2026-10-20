@@ -214,6 +214,12 @@ impl Document {
     /// Límite de memoria de la historia por defecto (64 MiB).
     pub const DEFAULT_HISTORY_LIMIT: usize = 64 << 20;
 
+    /// Tope de tramos de un relleno por inundación y de trozos que un `FillSpans` guarda en su
+    /// paso de historia (specs/hito-2-limites-relleno.md). Un paso así cuesta como mucho
+    /// `20 · 3 000 000 = 57,2 MiB`, por debajo de `DEFAULT_HISTORY_LIMIT`. Pasarse es
+    /// `FillTooFragmented`, antes de reservar nada.
+    pub const MAX_FILL_SPANS: usize = 3_000_000;
+
     pub fn new(image: Image) -> Document {
         Document {
             images: vec![(ImageId(0), image)],
@@ -590,6 +596,11 @@ impl Document {
         if count == 0 {
             return Ok(());
         }
+        if count > Document::MAX_FILL_SPANS {
+            return Err(DocumentError::FillTooFragmented {
+                limit: Document::MAX_FILL_SPANS,
+            });
+        }
         let mut runs = Vec::new();
         runs.try_reserve_exact(count)
             .map_err(|_| DocumentError::OutOfMemory)?;
@@ -797,6 +808,11 @@ pub enum DocumentError {
     NothingToRedo,
     /// No se pudo reservar memoria para la historia.
     OutOfMemory,
+    /// Un relleno tiene más de `limit` (`Document::MAX_FILL_SPANS`) tramos, o un `FillSpans`
+    /// dejaría más de `limit` trozos en su paso. Se rechaza antes de reservar nada.
+    FillTooFragmented {
+        limit: usize,
+    },
 }
 
 impl fmt::Display for DocumentError {
@@ -835,6 +851,9 @@ impl fmt::Display for DocumentError {
             DocumentError::NothingToRedo => write!(f, "no hay nada que rehacer"),
             DocumentError::OutOfMemory => {
                 write!(f, "no hay memoria para guardar el paso en la historia")
+            }
+            DocumentError::FillTooFragmented { .. } => {
+                write!(f, "relleno cancelado: región demasiado fragmentada")
             }
         }
     }
