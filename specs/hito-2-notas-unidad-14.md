@@ -4,6 +4,8 @@ Solo notas: no es una spec de comportamiento ni tiene tests. Al empezar la unida
 
 ## Rellenos
 
+**Los dos puntos siguientes (tope de tramos y pico del peine) pasan a la unidad 14c: [`hito-2-limites-relleno.md`](hito-2-limites-relleno.md), con las medidas hechas (8192², release) y el tope propuesto; pendiente de visto bueno.**
+
 - **Tope de tramos por relleno, o relleno fuera del hilo de la interfaz.** El relleno corre síncrono; con 16384² serían del orden de 5 s con la ventana bloqueada (estimado, sin medir). [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md), «Errores» (alcance de «no colgarse») y «Para la unidad 14».
 - **Pico de memoria del peine en 16384×16384 RGBA.** Unos 5,3 GiB con `apply` (estimado, sin medir). Con *overcommit* un `try_reserve*` con éxito no impide que el sistema mate el proceso. Valorar un tope configurable que dé error antes de reservar la salida, y medir la memoria residente antes de fijar su valor por defecto. [`hito-2-relleno.md`](hito-2-relleno.md), «Para la unidad 14» y comportamiento 7.
 
