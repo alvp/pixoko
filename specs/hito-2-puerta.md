@@ -109,7 +109,16 @@ Demostrar que un PNG real se abre, se edita y se guarda en Linux, Windows y macO
 
 ## Resultado del fuzzer
 
-(Se rellena tras la ejecución de 10 minutos, D10.)
+Ejecutado por el usuario el 2026-10-20, al cierre de la unidad, con el código ya fijado (D10), y anotado tal como lo comunicó:
+
+```
+cargo +nightly fuzz run read_png fuzz/corpus/read_png golden/png -- -rss_limit_mb=4096 -timeout=10 -create_missing_dirs=1 -max_total_time=600
+```
+
+- **12 733 737 ejecuciones en 601 segundos** (≈ 21 200 por segundo).
+- **Ningún fallo**: `fuzz/artifacts/read_png/` vacío (sin `crash-*`, `oom-*`, `timeout-*` ni `slow-unit-*`).
+- **`golden/` intacto** al terminar.
+- No se comunicaron la cobertura final ni el RSS máximo, y no se inventan aquí.
 
 ## Riesgos
 

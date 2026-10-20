@@ -58,7 +58,7 @@ Solo las que ya constan en una spec, con su enlace; las de la unidad 22 son nuev
 | Crear una imagen nueva de 8192² RGBA | ≈ 0,9 s → ≈ 0,15 s con `Image::filled` y `try_clone` | [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md), «API» (unidad 12) |
 | Escritura por flujo (pospuesta) | RGBA 8192² con ruido: 7549 → 7361 ms y +439 → +0,5 MiB; con contenido que comprime, sin ganancia | [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md), «PNG» |
 | **Unidad 22: lienzos grandes** (release, un hilo, Linux) | RGBA 8192²: relleno 702 ms, `undo` del relleno 143 ms, `redo` 137 ms, `save` 327 ms, relectura 40 ms; pico de RSS 271 MiB. Indexada 6000²: relleno 313 ms, `undo` 52 ms, `save` 60 ms, relectura 20 ms; pico 46 MiB. Salvo el relleno, `undo` y `redo` de los demás gestos cuestan microsegundos. La comprobación contra la fórmula cerrada, en cambio, tarda unos 150 ms (RGBA) y 80 ms (indexada) por vez. Medido con `cargo test --release -p px-app -- --ignored --test-threads=1`, `ru_maxrss` del proceso | [`hito-2-puerta.md`](hito-2-puerta.md), fila 12 |
-| **Unidad 22: fuzzer, 10 minutos** | (por rellenar con el resultado que pase el usuario) | [`hito-2-puerta.md`](hito-2-puerta.md), «Resultado del fuzzer» |
+| **Unidad 22: fuzzer, 10 minutos** | 12 733 737 ejecuciones en 601 s, sin ningún fallo y con `golden/` intacto (2026-10-20, lo lanzó el usuario) | [`hito-2-puerta.md`](hito-2-puerta.md), «Resultado del fuzzer» |
 | **Pruebas del workspace** | 3379 pasadas, 0 falladas y 12 ignoradas (los lienzos grandes y bancos de medida) | `cargo test --workspace --locked` |
 
 ## `cargo deny` al cerrar
