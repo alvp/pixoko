@@ -2,6 +2,8 @@
 
 Estado: **aprobada** (2026-10-17; decisiones 1 a 8 con los matices 1, 3, 5, 6 y 9 incorporados al texto: (1) el segmento entero usa el píxel de la llamada nueva, extremo ya pintado incluido; (3) si hubiera que tocar un test de la unidad 2, se para y se avisa; (5) tabla de colores propia, ranura 9 con alfa 0 y gris propio en Gray, y las ranuras sobrantes del indexado se ignoran sin error; (6) `Canvas::show` y sus pruebas no cambian, `interact` y `paint` son aditivos, y se anota el umbral de la superposición; (9) se usan los eventos de puntero intermedios, que egui 0.37 sí expone). **No toca `px-core`**: `Image::check_pixel` ya es pública (unidad 5) y `Document` trae todo lo demás.
 
+**Actualización de la unidad I.1 (2026-10-20), que prevalece:** las cifras `1` a `9` **ya no eligen color** (sin modificadores no hacen nada), `]` y `[` (también `Av Pág` y `Re Pág`) eligen el color siguiente y el anterior, y `u` deshace además de `Ctrl+Z`. `P` deja de ser la tecla del lápiz (`d`). Ver [`interfaz-teclado.md`](interfaz-teclado.md).
+
 ## Objetivo
 
 Dibujar con el botón izquierdo en la ventana y poder deshacer y rehacer. Cada trazo es **un solo paso de historia** y la lógica de trazo, el color activo y los atajos son funciones puras que se prueban sin ventana.
