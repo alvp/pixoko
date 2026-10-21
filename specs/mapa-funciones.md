@@ -327,7 +327,7 @@ Parte de las celdas de 3.1: un fotograma más es una columna más, con las celda
 | --- | --- | --- |
 | Cuantizador de color | `hito-2-reparto-cierre.md` D8 | 4.2 |
 | `ConvertAll` y `ConvertMode` en un `Batch` | `hito-2-conversion-modos.md` | 3.5 |
-| Partir `px-app` en lib y binario | `hito-2-puerta.md` D1 | 3.0 |
+| Partir `px-app` en lib y binario (**hecho en 3.0**; la puerta a `px-golden` se decide en 3.9) | `hito-2-puerta.md` D1 | 3.0 |
 | Relleno por filas | `hito-2-notas-unidad-14.md` | 4.5 (D22) |
 | Marca de transparencia al guardar | `hito-2-fijar-transparente.md` | 8.7 |
 | Preferencias en disco (fondo del lienzo y su color, ranuras de color) | `hito-2-reparto-cierre.md` D12 | 8.1 |

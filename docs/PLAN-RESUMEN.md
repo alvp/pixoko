@@ -25,7 +25,7 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 
 Los hitos 3 a 6 pueden solaparse en worktrees una vez cerrado el 2; el 7 es opcional. Reparto, clases y decisiones de los hitos 3 a 8 en [`specs/mapa-funciones.md`](../specs/mapa-funciones.md) (aprobado el 21 de octubre de 2026; 61 unidades: 27 núcleo, 16 deseables, 18 opcionales). **Hasta que se actualice `PLAN.md`, para los hitos 3 a 8 manda el mapa.**
 
-**Hito 2:** cerrado. Todas las unidades hechas, la 14b descartada y la puerta (unidad 22: prueba automática en `px-app` y `px-golden`, lista manual de 15 pasos en `specs/hito-2-puerta.md`) superada: la prueba manual salió bien en Linux, Windows y macOS. Unidades, aplazado a los hitos siguientes con su spec de origen y cifras medidas: `specs/hito-2-resumen.md`. Candidato para el hito 3: partir `px-app` en lib y binario.
+**Hito 2:** cerrado. Todas las unidades hechas, la 14b descartada y la puerta (unidad 22: prueba automática en `px-app` y `px-golden`, lista manual de 15 pasos en `specs/hito-2-puerta.md`) superada: la prueba manual salió bien en Linux, Windows y macOS. Unidades, aplazado a los hitos siguientes con su spec de origen y cifras medidas: `specs/hito-2-resumen.md`. Partir `px-app` en lib y binario: hecho en la unidad 3.0 (`specs/hito-3-px-app-lib.md`).
 
 ## Interfaz estilo programa de referencia
 
@@ -66,7 +66,7 @@ El núcleo no sabe nada de ventanas: la interfaz y la CLI usan el mismo document
 | `px-raster` | Algoritmos de píxeles (línea, relleno) | px-core |
 | `px-formats` | Lectores y escritores de formatos (PNG hoy) | px-core, `png` |
 | `px-ui` | Lógica de interfaz pura y pintado con egui; se prueba sin ventana | px-core, px-raster, `egui` |
-| `px-app` | Ventana (`eframe`), diálogos de archivo, bucle de eventos | px-core, px-ui, px-formats, `eframe`, `rfd` |
+| `px-app` | Biblioteca `px_app` (ventana con `eframe`, diálogos de archivo, `Session`; solo exporta `pub fn run`) y binario `px-app` de una línea (3.0) | px-core, px-ui, px-formats, `eframe`, `rfd` |
 | `px-render` | Render; el único crate donde se permite `unsafe` (con comentario). Vacío hoy | — |
 | `px-cli` | CLI sin ventana (hito 8). Vacío hoy | — |
 | `px-golden` | Corpus y pruebas dorados | px-core, px-formats (dev) |

@@ -107,3 +107,11 @@ Decisiones 1 a 6 aprobadas con estas condiciones:
 4. Se mide el binario de `release` antes y después (tamaño y configuración de optimización: no hay `[profile]` en el `Cargo.toml` raíz ni en el del paquete, así que rige el perfil por defecto de Cargo: `opt-level` 3, sin LTO) y se informan las dos cifras.
 5. P1: la lista de nombres de prueba de antes (`px-app-antes.txt`) debe ser idéntica a la de después salvo las 4 pruebas nuevas de `arranque.rs`.
 6. Orden de trabajo: spec; `git mv`; `main` mínimo y lib; pruebas de arranque; cierre completo una sola vez. Sin auditor (sin dependencias ni cambios en `px-core` o `px-raster`). No se tocan `ci.rs`, `ci.yml`, `deny.toml`, `Cargo.lock` ni `fuzz/`; si algo lo exigiera, parar.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+- P2 decía «uno, dos y tres argumentos inválidos», pero **un argumento es un fichero válido** y abre ventana. Se comparó el binario anterior y el nuevo (release) con `--licencias`, `a b`, `a b c`, `a b c d`, `x --licencias` y `--licencias a b`: mismos bytes en las dos salidas y mismo código (0 o 2) en los seis.
+- P1: la lista de nombres solo gana las 4 pruebas de `arranque.rs` (1063 → 1067); `cargo test --workspace` sin fallos; las 5 `#[ignore]` de `px-app` siguen ignoradas.
+- Binario de `release`: 12 677 568 bytes antes y 12 676 896 después (−672). No hay `[profile]` en ningún `Cargo.toml` (ni raíz ni paquete; Cargo solo admite perfiles en la raíz), así que antes y después rige el perfil por defecto (`opt-level` 3, sin LTO).
+- `Cargo.lock`, `deny.toml`, `ci.yml`, `ci.rs`, `fuzz/`, `px-core`, `px-raster` y `px-golden`: sin cambios. `cargo deny`, clippy `-D warnings` y fmt, limpios.
+- **3.9** deberá exportar los 11 nombres de la puerta con la misma regla (lo mínimo) y mover entonces la puerta a `px-golden` si procede.
