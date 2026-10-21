@@ -83,6 +83,7 @@ pub struct Layer {
     visible: bool,
     opacity: u8,
     blend: BlendMode,
+    locked: bool,
     cel: ImageId,
     image: Option<Image>,
 }
@@ -110,6 +111,12 @@ impl Layer {
     /// lo es.
     pub fn blend(&self) -> BlendMode {
         self.blend
+    }
+
+    /// Bloqueada: las herramientas de dibujo no la pintan (lo aplica la interfaz; el núcleo no
+    /// impide escribir en una celda bloqueada, y los cambios de paleta y de modo la afectan).
+    pub fn locked(&self) -> bool {
+        self.locked
     }
 
     /// El `ImageId` de la celda de la capa; su imagen se pide con `Document::image`.
@@ -204,6 +211,12 @@ pub enum Command {
     /// Cambia el modo de mezcla de la capa (en indexado solo vale `Normal`). Solo como comando
     /// suelto.
     SetLayerBlend { layer: LayerId, blend: BlendMode },
+    /// Bloquea o desbloquea la capa. Solo como comando suelto.
+    SetLayerLocked { layer: LayerId, locked: bool },
+    /// Copia la capa justo encima de ella (posición + 1) con las mismas propiedades, el bloqueo
+    /// incluido, y el nombre `name`. La celda con imagen se copia; la vacía sigue vacía. Solo como
+    /// comando suelto.
+    DuplicateLayer { layer: LayerId, name: String },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -318,6 +331,11 @@ enum LayerStep {
         layer: LayerId,
         before: BlendMode,
         after: BlendMode,
+    },
+    Locked {
+        layer: LayerId,
+        before: bool,
+        after: bool,
     },
 }
 
@@ -473,6 +491,7 @@ impl Document {
                 visible: true,
                 opacity: 255,
                 blend: BlendMode::Normal,
+                locked: false,
                 cel: ImageId(0),
                 image: Some(image),
             }],
@@ -621,6 +640,12 @@ impl Document {
             }
             Command::SetLayerBlend { layer, blend } => {
                 return self.apply_layer_blend(layer, blend);
+            }
+            Command::SetLayerLocked { layer, locked } => {
+                return self.apply_layer_locked(layer, locked);
+            }
+            Command::DuplicateLayer { layer, name } => {
+                return self.apply_duplicate_layer(layer, name);
             }
             _ => {}
         }
@@ -919,6 +944,7 @@ impl Document {
                 visible: true,
                 opacity: 255,
                 blend: BlendMode::Normal,
+                locked: false,
                 cel: ImageId(cel),
                 image: None,
             },
@@ -1085,6 +1111,107 @@ impl Document {
         Ok(true)
     }
 
+    /// `SetLayerLocked`.
+    fn apply_layer_locked(&mut self, id: LayerId, locked: bool) -> Result<bool, DocumentError> {
+        let at = self.layer_position(id)?;
+        let Some(before) = self.layers.get(at).map(|layer| layer.locked) else {
+            return Ok(false);
+        };
+        if before == locked {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        if let Some(layer) = self.layers.get_mut(at) {
+            layer.locked = locked;
+        }
+        self.commit(Step {
+            layer: Some(LayerStep::Locked {
+                layer: id,
+                before,
+                after: locked,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `DuplicateLayer`: copia exacta (propiedades y celda) justo encima de la original. Orden de
+    /// comprobación: capa desconocida, nombre, número de capas, límite de celdas (solo si la celda
+    /// tiene imagen) y memoria; ningún error reserva ni modifica nada.
+    fn apply_duplicate_layer(&mut self, id: LayerId, name: String) -> Result<bool, DocumentError> {
+        let at = self.layer_position(id)?;
+        if name.len() > Document::MAX_LAYER_NAME_BYTES {
+            return Err(DocumentError::LayerName {
+                len: name.len(),
+                limit: Document::MAX_LAYER_NAME_BYTES,
+            });
+        }
+        let too_many = DocumentError::TooManyLayers {
+            limit: Document::MAX_LAYERS,
+        };
+        if self.layers.len() >= Document::MAX_LAYERS {
+            return Err(too_many);
+        }
+        let has_image = self
+            .layers
+            .get(at)
+            .ok_or(DocumentError::UnknownLayer(id))?
+            .image
+            .is_some();
+        if has_image {
+            let needed = self.materialized_bytes().saturating_add(self.cel_bytes());
+            if needed > self.cells_limit {
+                return Err(DocumentError::CelsTooLarge {
+                    needed,
+                    limit: self.cells_limit,
+                });
+            }
+        }
+        // El id `u32::MAX` de las celdas queda reservado (la plantilla del lienzo).
+        let (new_id, cel) = match (
+            self.next_layer.checked_add(1),
+            self.next_image.checked_add(1),
+        ) {
+            (Some(_), Some(next)) if next < u32::MAX => (self.next_layer, self.next_image),
+            _ => return Err(too_many),
+        };
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        self.layers
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let source = self.layers.get(at).ok_or(DocumentError::UnknownLayer(id))?;
+        let image = match &source.image {
+            Some(image) => Some(image.try_clone().map_err(|_| DocumentError::OutOfMemory)?),
+            None => None,
+        };
+        let copy = Layer {
+            id: LayerId(new_id),
+            name,
+            visible: source.visible,
+            opacity: source.opacity,
+            blend: source.blend,
+            locked: source.locked,
+            cel: ImageId(cel),
+            image,
+        };
+        self.next_layer = new_id.saturating_add(1);
+        self.next_image = cel.saturating_add(1);
+        self.layers.insert(at + 1, copy);
+        self.commit(Step {
+            layer: Some(LayerStep::Presence {
+                at: at + 1,
+                added: true,
+                stored: None,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
     /// `SetLayerVisible`.
     fn apply_layer_visible(&mut self, id: LayerId, visible: bool) -> Result<bool, DocumentError> {
         let at = self.layer_position(id)?;
@@ -1236,6 +1363,15 @@ impl Document {
             } => {
                 if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
                     found.blend = if undoing { *before } else { *after };
+                }
+            }
+            LayerStep::Locked {
+                layer,
+                before,
+                after,
+            } => {
+                if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
+                    found.locked = if undoing { *before } else { *after };
                 }
             }
         }
