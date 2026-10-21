@@ -10,7 +10,7 @@ use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
 use px_ui::help::{HELP_PRIMARY, HELP_SECONDARY, HELP_ZONE, HelpTarget, help_form, shortcuts_form};
 use px_ui::key_events::Capture;
-use px_ui::keymap::{Keymap, KeyId, Press};
+use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::shortcut_editor::{
     EDITOR_CONFLICT, EDITOR_PRIMARY, ShortcutEditor, Slot, editor_form, sync_editor_dialog,
 };
@@ -133,8 +133,19 @@ fn fila_2_los_botones_de_atajo_se_pintan_y_un_clic_da_pressed_sin_cerrar() {
         let mut b = Banco::nuevo(ppp, ayuda(HelpTarget::Tool(Tool::Pencil), &tabla));
         let p = b.reposo();
         // El rótulo de la fila, el atajo y `sin atajo` se pintan; la ayuda tiene el nombre.
-        for texto in ["Lápiz", "Principal", "Secundario", "d", "sin atajo", "Cerrar"] {
-            assert!(p.pinta(texto), "{texto:?} a ppp {ppp}: {:?}", p.todos_los_textos());
+        for texto in [
+            "Lápiz",
+            "Principal",
+            "Secundario",
+            "d",
+            "sin atajo",
+            "Cerrar",
+        ] {
+            assert!(
+                p.pinta(texto),
+                "{texto:?} a ppp {ppp}: {:?}",
+                p.todos_los_textos()
+            );
         }
         let p = b.clic(centro(&p, "d"));
         assert_eq!(
@@ -145,7 +156,11 @@ fn fila_2_los_botones_de_atajo_se_pintan_y_un_clic_da_pressed_sin_cerrar() {
             }],
             "a ppp {ppp}"
         );
-        assert!(b.reacciones.iter().all(|r| !matches!(r, Reaction::Accepted(_) | Reaction::Cancelled)));
+        assert!(
+            b.reacciones
+                .iter()
+                .all(|r| !matches!(r, Reaction::Accepted(_) | Reaction::Cancelled))
+        );
         let _ = p;
         b.reacciones.clear();
         let p = b.reposo();
@@ -180,7 +195,10 @@ fn fila_2_el_foco_inicial_es_la_zona_y_tab_recorre_la_zona_los_botones_y_cerrar(
     b.pulsa(Key::Enter);
     assert!(matches!(
         b.reacciones.as_slice(),
-        [Reaction::Pressed { field: HELP_PRIMARY, aside: false }]
+        [Reaction::Pressed {
+            field: HELP_PRIMARY,
+            aside: false
+        }]
     ));
     // `Escape` cierra.
     b.reacciones.clear();
@@ -192,12 +210,21 @@ fn fila_2_el_foco_inicial_es_la_zona_y_tab_recorre_la_zona_los_botones_y_cerrar(
 fn fila_8_el_editor_pinta_sus_botones_y_quitar_y_los_atenuados_no_responden() {
     let tabla = Keymap::default_scheme();
     let mut dialog = Dialog::new(DialogKind::ShortcutEditor, editor_form()).unwrap();
-    let editor = ShortcutEditor::new(AppAction::SelectTool(Tool::Pencil), &tabla, Platform::Linux)
-        .unwrap();
+    let editor =
+        ShortcutEditor::new(AppAction::SelectTool(Tool::Pencil), &tabla, Platform::Linux).unwrap();
     sync_editor_dialog(&mut dialog, &editor, Platform::Linux);
     let mut b = Banco::nuevo(1.0, dialog);
     let p = b.reposo();
-    for texto in ["Principal", "Secundario", "Quitar", "Restablecer", "Reasignar", "Dejarlo", "Aceptar", "Cancelar"] {
+    for texto in [
+        "Principal",
+        "Secundario",
+        "Quitar",
+        "Restablecer",
+        "Reasignar",
+        "Dejarlo",
+        "Aceptar",
+        "Cancelar",
+    ] {
         assert!(p.pinta(texto), "{texto:?}: {:?}", p.todos_los_textos());
     }
     // `Reasignar` y `Dejarlo` están atenuados sin conflicto: un clic no hace nada.
@@ -229,14 +256,21 @@ fn fila_8_el_editor_pinta_sus_botones_y_quitar_y_los_atenuados_no_responden() {
     b.clic(centro(&p, "Reasignar"));
     assert!(matches!(
         b.reacciones.as_slice(),
-        [Reaction::Pressed { field: EDITOR_CONFLICT, aside: false }]
+        [Reaction::Pressed {
+            field: EDITOR_CONFLICT,
+            aside: false
+        }]
     ));
 }
 
 #[test]
 fn fila_12_la_lista_de_atajos_se_pinta_y_sus_botones_responden() {
     let tabla = Keymap::default_scheme();
-    let spec = shortcuts_form(&tabla, Platform::Linux, &[AppAction::SelectTool(Tool::Fill)]);
+    let spec = shortcuts_form(
+        &tabla,
+        Platform::Linux,
+        &[AppAction::SelectTool(Tool::Fill)],
+    );
     assert!(spec.validate().is_ok());
     let dialog = Dialog::new(DialogKind::ShortcutList, spec).unwrap();
     let mut b = Banco::nuevo(1.0, dialog);
@@ -254,6 +288,9 @@ fn fila_12_la_lista_de_atajos_se_pinta_y_sus_botones_responden() {
     b.clic(centro_de_linea(&p, "Lápiz"));
     assert!(matches!(
         b.reacciones.as_slice(),
-        [Reaction::Pressed { field: "tool.pencil", aside: false }]
+        [Reaction::Pressed {
+            field: "tool.pencil",
+            aside: false
+        }]
     ));
 }

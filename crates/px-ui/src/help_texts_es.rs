@@ -160,7 +160,13 @@ pub(crate) const HELP_ES: [HelpEntry; 22] = [
         None,
         None,
     ),
-    entry("file.save", "Guardar", "Guarda la imagen como PNG.", None, None),
+    entry(
+        "file.save",
+        "Guardar",
+        "Guarda la imagen como PNG.",
+        None,
+        None,
+    ),
     entry(
         "file.save-as",
         "Guardar como",

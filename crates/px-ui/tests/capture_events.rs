@@ -8,10 +8,10 @@
 
 use egui::{Event, ImeEvent, Key, Modifiers};
 use proptest::prelude::*;
+use px_ui::actions::AppAction;
 use px_ui::actions::Platform;
 use px_ui::key_events::{Capture, captures, chord_of, help_pressed};
 use px_ui::keymap::{Binding, Chord, KeyId, Keymap, Platforms, Press};
-use px_ui::actions::AppAction;
 
 fn tecla(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
@@ -143,10 +143,19 @@ fn fila_6_las_distribuciones_dan_el_caracter_que_produce_la_tecla() {
         Ok(simbolo('['))
     );
     // Dvorak: la `d` en otra posición física; ruso: `Key::D` con `в` (cae a la tecla).
-    assert_eq!(captura(&[tecla(Key::E, NADA), texto("d")]), Ok(simbolo('d')));
-    assert_eq!(captura(&[tecla(Key::D, NADA), texto("в")]), Ok(simbolo('d')));
+    assert_eq!(
+        captura(&[tecla(Key::E, NADA), texto("d")]),
+        Ok(simbolo('d'))
+    );
+    assert_eq!(
+        captura(&[tecla(Key::D, NADA), texto("в")]),
+        Ok(simbolo('d'))
+    );
     // Bloq Mayús: `Text("D")` sin `shift` es la `d`.
-    assert_eq!(captura(&[tecla(Key::D, NADA), texto("D")]), Ok(simbolo('d')));
+    assert_eq!(
+        captura(&[tecla(Key::D, NADA), texto("D")]),
+        Ok(simbolo('d'))
+    );
     // Con Mayús, una letra lleva `shift`.
     assert_eq!(
         captura(&[tecla(Key::K, mayus()), texto("K")]),
@@ -175,7 +184,10 @@ fn fila_6_las_distribuciones_dan_el_caracter_que_produce_la_tecla() {
         "Mayús no cuenta en Inicio"
     );
     // Una cifra.
-    assert_eq!(captura(&[tecla(Key::Num3, NADA), texto("3")]), Ok(simbolo('3')));
+    assert_eq!(
+        captura(&[tecla(Key::Num3, NADA), texto("3")]),
+        Ok(simbolo('3'))
+    );
 }
 
 #[test]
@@ -217,7 +229,10 @@ fn fila_6_lo_que_no_vale_da_su_motivo_y_ninguno_pasa_de_37_caracteres() {
 #[test]
 fn fila_6_escape_f1_repeticiones_y_la_primera_del_fotograma() {
     assert_eq!(captures(&[tecla(Key::Escape, NADA)]), vec![Capture::Cancel]);
-    assert_eq!(captures(&[tecla(Key::Escape, mayus())]), vec![Capture::Cancel]);
+    assert_eq!(
+        captures(&[tecla(Key::Escape, mayus())]),
+        vec![Capture::Cancel]
+    );
     assert!(captures(&[repetida(Key::Escape, NADA)]).is_empty());
     assert_eq!(
         captura(&[tecla(Key::F1, NADA)]),
@@ -232,10 +247,13 @@ fn fila_6_escape_f1_repeticiones_y_la_primera_del_fotograma() {
         tecla(Key::Y, NADA),
         texto("y"),
     ]);
-    assert_eq!(chord_of(match &dos[0] {
-        Capture::Press(p) => p,
-        otro => panic!("{otro:?}"),
-    }), Ok(simbolo('x')));
+    assert_eq!(
+        chord_of(match &dos[0] {
+            Capture::Press(p) => p,
+            otro => panic!("{otro:?}"),
+        }),
+        Ok(simbolo('x'))
+    );
 }
 
 #[test]
@@ -246,7 +264,11 @@ fn fila_6_lo_capturado_funciona_como_fila_de_la_tabla() {
         if !c.is_ascii_graphic() {
             continue;
         }
-        let mods = if c.is_ascii_uppercase() { mayus() } else { NADA };
+        let mods = if c.is_ascii_uppercase() {
+            mayus()
+        } else {
+            NADA
+        };
         let Ok(chord) = captura(&[tecla(Key::A, mods), texto(&c.to_string())]) else {
             continue;
         };
@@ -304,19 +326,20 @@ fn evento() -> impl Strategy<Value = Event> {
             ctrl,
             command: ctrl,
             mac_cmd: mac,
-            ..Modifiers::NONE
         },
     );
     prop_oneof![
-        (teclas, mods, any::<bool>(), any::<bool>()).prop_map(|(key, modifiers, pressed, repeat)| {
-            Event::Key {
-                key,
-                physical_key: Some(key),
-                pressed,
-                repeat,
-                modifiers,
+        (teclas, mods, any::<bool>(), any::<bool>()).prop_map(
+            |(key, modifiers, pressed, repeat)| {
+                Event::Key {
+                    key,
+                    physical_key: Some(key),
+                    pressed,
+                    repeat,
+                    modifiers,
+                }
             }
-        }),
+        ),
         "\\PC{0,3}".prop_map(Event::Text),
         "\\PC{0,3}".prop_map(|t| Event::Ime(ImeEvent::Commit(t))),
     ]

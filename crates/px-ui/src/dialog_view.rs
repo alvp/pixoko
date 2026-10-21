@@ -1183,7 +1183,13 @@ fn draw_button_field(
     } else {
         (FIELD_X_U, BUTTON_FIELD_W_U)
     };
-    let mut buttons = vec![(FocusTarget::Button(spec.id), main_x, main_w, text.as_str(), false)];
+    let mut buttons = vec![(
+        FocusTarget::Button(spec.id),
+        main_x,
+        main_w,
+        text.as_str(),
+        false,
+    )];
     if let Some(label) = aside {
         buttons.push((
             FocusTarget::ButtonAside(spec.id),

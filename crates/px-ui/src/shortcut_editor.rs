@@ -10,12 +10,10 @@
 //! si todas las acciones coinciden con las del esquema por defecto devuelve ese esquema exacto.
 
 use crate::actions::{AppAction, Platform};
-use crate::dialog::{
-    Dialog, FieldId, FieldKind, FieldSpec, FormSpec, Rows,
-};
+use crate::dialog::{Dialog, FieldId, FieldKind, FieldSpec, FormSpec, Rows};
 use crate::help_texts::{help_entry, help_key, help_table, is_editable, ui};
 use crate::key_events::{Capture, chord_of};
-use crate::keymap::{Binding, Chord, Conflict, KeyId, Keymap, Platforms, default_keymap};
+use crate::keymap::{Binding, Chord, Conflict, Keymap, Platforms, default_keymap};
 
 /// Campos del formulario del editor.
 pub const EDITOR_PRIMARY: FieldId = "principal";
@@ -91,9 +89,17 @@ impl Parts {
         let mut unknown = Vec::new();
         for action_slot in &mut actions {
             let action = action_slot.0;
-            let rows: Vec<&Binding> = keymap.rows().iter().filter(|r| r.action == action).collect();
+            let rows: Vec<&Binding> = keymap
+                .rows()
+                .iter()
+                .filter(|r| r.action == action)
+                .collect();
             if is_editable(action) {
-                action_slot.1 = rows.iter().filter(|r| r.command).map(|r| (*r).clone()).collect();
+                action_slot.1 = rows
+                    .iter()
+                    .filter(|r| r.command)
+                    .map(|r| (*r).clone())
+                    .collect();
                 let editable: Vec<&&Binding> = rows.iter().filter(|r| !r.command).collect();
                 let primary = editable
                     .iter()
@@ -295,7 +301,13 @@ impl ShortcutEditor {
 
     /// La casilla armada, si la hay.
     pub fn capturing(&self) -> Option<Slot> {
-        self.capturing.map(|i| if i == 0 { Slot::Primary } else { Slot::Secondary })
+        self.capturing.map(|i| {
+            if i == 0 {
+                Slot::Primary
+            } else {
+                Slot::Secondary
+            }
+        })
     }
 
     /// Desarma la captura. `true` si estaba armada.
@@ -359,7 +371,8 @@ impl ShortcutEditor {
             self.action,
             self.with_chord_at(slot, chord),
         );
-        for conflict in candidate.conflicts() {
+        // El borrador no tiene conflictos: cualquiera es del atajo nuevo.
+        if let Some(conflict) = candidate.conflicts().into_iter().next() {
             match conflict {
                 Conflict::Duplicate(i, j) => {
                     let (a, b) = (&candidate.rows()[i], &candidate.rows()[j]);
@@ -476,7 +489,12 @@ pub fn editor_form() -> FormSpec {
         cancel: Some(strings.cancel),
         fields: vec![
             button(EDITOR_PRIMARY, strings.primary, "", Some(strings.remove)),
-            button(EDITOR_SECONDARY, strings.secondary, "", Some(strings.remove)),
+            button(
+                EDITOR_SECONDARY,
+                strings.secondary,
+                "",
+                Some(strings.remove),
+            ),
             zone(EDITOR_MESSAGE, 3),
             button(
                 EDITOR_CONFLICT,
@@ -502,7 +520,9 @@ pub fn sync_editor_dialog(dialog: &mut Dialog, editor: &ShortcutEditor, platform
         } else {
             slots
                 .get(index)
-                .map_or(strings.no_shortcut.to_string(), |chord| chord.text(platform))
+                .map_or(strings.no_shortcut.to_string(), |chord| {
+                    chord.text(platform)
+                })
         };
         dialog.set_button_text(id, text);
         dialog.set_button_disabled(id, false, slots.len() <= index);
@@ -547,10 +567,4 @@ pub fn sync_editor_dialog(dialog: &mut Dialog, editor: &ShortcutEditor, platform
         fixed.push_str(&join(extras));
     }
     dialog.set_report(EDITOR_FIXED, fixed);
-}
-
-/// Si `key` es una tecla con carácter (para los pocos sitios que lo necesitan).
-#[allow(dead_code)]
-fn is_char(key: KeyId) -> bool {
-    matches!(key, KeyId::Char(_))
 }

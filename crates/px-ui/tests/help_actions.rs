@@ -88,7 +88,10 @@ fn fila_3_el_puntero_sobre_un_boton_da_el_destino_y_fuera_de_ellos_la_herramient
         // el menú, la barra de estado y fuera de la ventana: la activa.
         let (x0, y0, w0, h0) = toolbox_button_rect_u(0);
         let fuera = [
-            (layout.toolbar.x + (x0 + w0) * k, layout.toolbar.y + y0 * k + h0 * k / 2),
+            (
+                layout.toolbar.x + (x0 + w0) * k,
+                layout.toolbar.y + y0 * k + h0 * k / 2,
+            ),
             (layout.toolbar.x + x0 * k - 1, layout.toolbar.y + y0 * k + 1),
             (layout.toolbar.x + 10 * k, layout.toolbar.y + 200 * k),
             (layout.canvas.x + 10, layout.canvas.y + 10),
@@ -110,8 +113,12 @@ fn fila_3_el_puntero_sobre_un_boton_da_el_destino_y_fuera_de_ellos_la_herramient
 
 #[test]
 fn fila_3_el_menu_ayuda_tiene_tres_entradas_y_f1_solo_en_la_primera() {
-    let ayuda = MENUS.iter().find(|m| m.title == "Ayuda").expect("menú Ayuda");
-    let entradas: Vec<(&str, AppAction)> = ayuda.items.iter().map(|i| (i.label, i.action)).collect();
+    let ayuda = MENUS
+        .iter()
+        .find(|m| m.title == "Ayuda")
+        .expect("menú Ayuda");
+    let entradas: Vec<(&str, AppAction)> =
+        ayuda.items.iter().map(|i| (i.label, i.action)).collect();
     assert_eq!(
         entradas,
         [

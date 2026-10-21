@@ -13,8 +13,8 @@ use px_ui::help_texts::{action_of_key, help_table, is_editable};
 use px_ui::key_events::Capture;
 use px_ui::keymap::{Chord, KeyId, Keymap, Press};
 use px_ui::shortcut_editor::{
-    CaptureResult, EDITOR_CONFLICT, EDITOR_MESSAGE, EDITOR_PRIMARY, EDITOR_RESET,
-    EDITOR_SECONDARY, ShortcutEditor, Slot, editor_form, slots_of, sync_editor_dialog,
+    CaptureResult, EDITOR_CONFLICT, EDITOR_MESSAGE, EDITOR_PRIMARY, EDITOR_RESET, EDITOR_SECONDARY,
+    ShortcutEditor, Slot, editor_form, slots_of, sync_editor_dialog,
 };
 use px_ui::tool::Tool;
 
@@ -103,7 +103,10 @@ fn fila_5_las_casillas_de_la_tabla_por_defecto() {
         vec![chord('}'), chord_con(KeyId::PageDown, false, true)],
         "la principal es la que se muestra, no la primera fila"
     );
-    assert_eq!(slots(AppAction::ClearPage), vec![chord_con(KeyId::Char('k'), false, true)]);
+    assert_eq!(
+        slots(AppAction::ClearPage),
+        vec![chord_con(KeyId::Char('k'), false, true)]
+    );
     assert_eq!(slots(AppAction::ZoomActual), vec![]);
     // Fijas: las filas con `command` activas en la plataforma.
     assert_eq!(
@@ -170,7 +173,13 @@ fn fila_5_asignar_regenera_las_filas_y_conserva_lo_demas() {
     assert_eq!(x.shown_text(lapiz(), Platform::Linux).as_deref(), Some("x"));
     assert_eq!(slots_of(&x, lapiz()).slots, vec![chord('x')]);
     // Las filas con `command` no cambian: exactamente las nueve modernas.
-    let con_command = |k: &Keymap| k.rows().iter().filter(|r| r.command).cloned().collect::<Vec<_>>();
+    let con_command = |k: &Keymap| {
+        k.rows()
+            .iter()
+            .filter(|r| r.command)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
     assert_eq!(con_command(&x).len(), 9);
     for fila in con_command(&defecto) {
         assert!(con_command(&x).contains(&fila), "{fila:?}");
@@ -189,14 +198,30 @@ fn fila_5_asignar_regenera_las_filas_y_conserva_lo_demas() {
     );
     // Deshacer sigue mostrando `Ctrl+Z` (la fija se muestra) aunque se cambie `u`.
     let u = asigna(&defecto, AppAction::Undo, Slot::Primary, 'x', false);
-    assert_eq!(u.shown_text(AppAction::Undo, Platform::Linux).as_deref(), Some("Ctrl+Z"));
+    assert_eq!(
+        u.shown_text(AppAction::Undo, Platform::Linux).as_deref(),
+        Some("Ctrl+Z")
+    );
     // Rehacer no tiene casillas: asignar a la principal la crea (`shown` al ser la fija la que se muestra).
     let r = asigna(&defecto, AppAction::Redo, Slot::Primary, 'r', false);
     assert_eq!(slots_of(&r, AppAction::Redo).slots, vec![chord('r')]);
-    assert_eq!(r.shown_text(AppAction::Redo, Platform::Linux).as_deref(), Some("Ctrl+Y"));
+    assert_eq!(
+        r.shown_text(AppAction::Redo, Platform::Linux).as_deref(),
+        Some("Ctrl+Y")
+    );
     // Un acción que solo tenía casillas editables muestra la nueva.
-    let c = asigna(&defecto, AppAction::CenterOnCursor, Slot::Primary, 'q', false);
-    assert_eq!(c.shown_text(AppAction::CenterOnCursor, Platform::Linux).as_deref(), Some("q"));
+    let c = asigna(
+        &defecto,
+        AppAction::CenterOnCursor,
+        Slot::Primary,
+        'q',
+        false,
+    );
+    assert_eq!(
+        c.shown_text(AppAction::CenterOnCursor, Platform::Linux)
+            .as_deref(),
+        Some("q")
+    );
     // Con el extra `=` de Acercar: se conserva al cambiar la principal.
     let z = asigna(&defecto, AppAction::ZoomIn, Slot::Primary, 'x', false);
     assert_eq!(
@@ -219,8 +244,15 @@ fn fila_7_una_tecla_de_otra_accion_avisa_y_ofrece_reasignar_o_dejarlo() {
         CaptureResult::Pending(linea())
     );
     assert_eq!(e.pending(), Some((chord('v'), linea())));
-    assert!(!e.can_accept(), "con un conflicto sin resolver no se acepta");
-    assert!(e.message().unwrap().contains("ya es de Línea"), "{:?}", e.message());
+    assert!(
+        !e.can_accept(),
+        "con un conflicto sin resolver no se acepta"
+    );
+    assert!(
+        e.message().unwrap().contains("ya es de Línea"),
+        "{:?}",
+        e.message()
+    );
     // Dejarlo: la casilla vuelve a como estaba y no queda huella.
     e.resolve(false);
     assert!(e.pending().is_none() && e.can_accept());
@@ -281,7 +313,10 @@ fn fila_7_las_filas_que_no_se_muestran_tambien_cuentan_y_el_nombre_sale_de_la_ta
     );
     e.resolve(true);
     let t = e.accept();
-    assert_eq!(slots_of(&t, AppAction::ZoomIn).slots, vec![chord('>'), chord('+')]);
+    assert_eq!(
+        slots_of(&t, AppAction::ZoomIn).slots,
+        vec![chord('>'), chord('+')]
+    );
     assert!(t.conflicts().is_empty());
 }
 
@@ -295,7 +330,11 @@ fn fila_7_la_misma_tecla_en_las_dos_casillas_y_lo_no_asignable_se_rechazan() {
         CaptureResult::Rejected(m) => assert!(m.contains("esta acción"), "{m}"),
         otro => panic!("{otro:?}"),
     }
-    assert_eq!(e.capturing(), Some(Slot::Secondary), "la captura sigue armada");
+    assert_eq!(
+        e.capturing(),
+        Some(Slot::Secondary),
+        "la captura sigue armada"
+    );
     // Reservadas y combinaciones modernas: rechazadas, captura armada.
     let mut e = editor(lapiz(), &defecto);
     e.begin_capture(Slot::Primary);
@@ -336,7 +375,10 @@ fn fila_7_escape_desarma_la_captura_y_el_conflicto_en_cadena() {
     e.begin_capture(Slot::Primary);
     assert!(e.cancel_capture());
     assert!(!e.cancel_capture(), "ya estaba desarmada");
-    assert_eq!(e.capture(Capture::Press(press('x'))), CaptureResult::Ignored);
+    assert_eq!(
+        e.capture(Capture::Press(press('x'))),
+        CaptureResult::Ignored
+    );
     e.begin_capture(Slot::Primary);
     assert_eq!(e.capture(Capture::Cancel), CaptureResult::Ignored);
     assert_eq!(e.capturing(), None, "Escape desarma");
@@ -370,13 +412,24 @@ fn fila_8_el_formulario_del_editor_sigue_al_modelo() {
     // Armada: la casilla lo dice y el mensaje invita a pulsar.
     e.begin_capture(Slot::Primary);
     sync_editor_dialog(&mut dialog, &e, Platform::Linux);
-    assert!(dialog.button_text(EDITOR_PRIMARY).unwrap().contains("pulsa"));
+    assert!(
+        dialog
+            .button_text(EDITOR_PRIMARY)
+            .unwrap()
+            .contains("pulsa")
+    );
     let mensaje = zona(&dialog, EDITOR_MESSAGE);
-    assert!(mensaje.contains("Acercar") && mensaje.contains("Esc cancela"), "{mensaje}");
+    assert!(
+        mensaje.contains("Acercar") && mensaje.contains("Esc cancela"),
+        "{mensaje}"
+    );
     // Con un conflicto: botones habilitados, `Aceptar` rechazado con el motivo.
     e.capture(Capture::Press(press('v')));
     sync_editor_dialog(&mut dialog, &e, Platform::Linux);
-    assert_eq!(dialog.button_disabled(EDITOR_CONFLICT), Some([false, false]));
+    assert_eq!(
+        dialog.button_disabled(EDITOR_CONFLICT),
+        Some([false, false])
+    );
     assert!(!dialog.is_valid());
     assert_eq!(dialog.reason().as_deref(), Some("resuelve el conflicto"));
     assert!(matches!(dialog.event(Event::Accept), Reaction::Rejected(_)));
@@ -403,12 +456,22 @@ fn fila_8_el_formulario_del_editor_sigue_al_modelo() {
     );
     e2.clear(Slot::Primary);
     sync_editor_dialog(&mut dialog, &e2, Platform::Linux);
-    assert_eq!(dialog.button_text(EDITOR_PRIMARY).as_deref(), Some("sin atajo"));
+    assert_eq!(
+        dialog.button_text(EDITOR_PRIMARY).as_deref(),
+        Some("sin atajo")
+    );
 }
 
 fn zona(dialog: &Dialog, id: &str) -> String {
     use px_ui::dialog::FieldKind;
-    match &dialog.spec().fields.iter().find(|f| f.id == id).unwrap().kind {
+    match &dialog
+        .spec()
+        .fields
+        .iter()
+        .find(|f| f.id == id)
+        .unwrap()
+        .kind
+    {
         FieldKind::ReadOnly { text, .. } => text.clone(),
         otro => panic!("{otro:?}"),
     }
@@ -488,22 +551,22 @@ proptest! {
                     }
                 }
                 Paso::Resolver(reasignar) => {
-                    if let Some((_, e)) = &mut abierto {
-                        if e.pending().is_some() {
-                            e.resolve(reasignar);
-                        }
+                    if let Some((_, e)) = &mut abierto
+                        && e.pending().is_some()
+                    {
+                        e.resolve(reasignar);
                     }
                 }
                 Paso::Cancelar => abierto = None,
                 Paso::Aceptar => {
-                    if let Some((action, e)) = abierto.take() {
-                        if e.can_accept() {
-                            let nueva = e.accept();
-                            // El borrador es una tabla válida.
-                            prop_assert!(nueva.conflicts().is_empty());
-                            tabla = nueva;
-                            tocadas.push(action);
-                        }
+                    if let Some((action, e)) = abierto.take()
+                        && e.can_accept()
+                    {
+                        let nueva = e.accept();
+                        // El borrador es una tabla válida.
+                        prop_assert!(nueva.conflicts().is_empty());
+                        tabla = nueva;
+                        tocadas.push(action);
                     }
                 }
             }

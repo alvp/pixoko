@@ -192,7 +192,8 @@ pub fn help_form(
     keymap: &Keymap,
     platform: Platform,
 ) -> FormSpec {
-    let key = help_key(target.action(active)).expect("toda herramienta y todo botón de zoom tienen ayuda");
+    let key = help_key(target.action(active))
+        .expect("toda herramienta y todo botón de zoom tienen ayuda");
     help_form_for(key, keymap, platform).expect("la clave existe")
 }
 
@@ -243,7 +244,13 @@ pub fn shortcuts_form(keymap: &Keymap, platform: Platform, conflicted: &[AppActi
                 id: entry.key,
                 label: "",
                 kind: FieldKind::Button {
-                    text: list_line(entry, action, keymap, platform, conflicted.contains(&action)),
+                    text: list_line(
+                        entry,
+                        action,
+                        keymap,
+                        platform,
+                        conflicted.contains(&action),
+                    ),
                     aside: None,
                 },
                 shown_when: None,

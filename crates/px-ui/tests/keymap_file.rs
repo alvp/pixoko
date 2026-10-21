@@ -13,7 +13,7 @@ use px_ui::actions::{AppAction, Platform};
 use px_ui::help_texts::{action_of_key, help_table, is_editable};
 use px_ui::key_events::Capture;
 use px_ui::keymap::{Binding, Chord, KeyId, Keymap, Platforms, Press};
-use px_ui::keymap_file::{Fatal, MAX_BYTES, MAX_LINES, Loaded, load_notice, parse, to_text};
+use px_ui::keymap_file::{Fatal, Loaded, MAX_BYTES, MAX_LINES, load_notice, parse, to_text};
 use px_ui::shortcut_editor::{CaptureResult, ShortcutEditor, Slot, slots_of};
 use px_ui::tool::Tool;
 
@@ -225,7 +225,10 @@ fn fila_9_la_gramatica_de_los_atajos() {
     }
     // Tabuladores, CRLF, comentarios y líneas vacías valen.
     let l = lee("pixoko-atajos 1\r\n# nota\r\n\r\ntool.pencil\t1\tx\r\n");
-    assert_eq!((l.ignored_lines, slots_of(&l.keymap, lapiz()).slots), (0, vec![chord('x')]));
+    assert_eq!(
+        (l.ignored_lines, slots_of(&l.keymap, lapiz()).slots),
+        (0, vec![chord('x')])
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -281,7 +284,10 @@ fn fila_10_las_lineas_malas_se_ignoran_y_las_buenas_se_aplican() {
     // (vacía un extra que no hay) y no cuenta como mala.
     assert_eq!(l.ignored_lines, 5, "{l:?}");
     assert_eq!(slots_of(&l.keymap, lapiz()).slots, vec![chord('x')]);
-    assert_eq!(slots_of(&l.keymap, relleno()).slots, vec![chord('w'), chord('e')]);
+    assert_eq!(
+        slots_of(&l.keymap, relleno()).slots,
+        vec![chord('w'), chord('e')]
+    );
     assert!(l.keymap.conflicts().is_empty());
     assert_eq!(
         load_notice(&l).as_deref(),
@@ -296,13 +302,18 @@ fn fila_10_un_choque_a_mano_gana_la_primera_fila_y_se_cuenta() {
     let l = lee("pixoko-atajos 1\ntool.pencil 1 f\ntool.fill 1 f\n");
     assert!(l.keymap.conflicts().is_empty());
     assert_eq!(slots_of(&l.keymap, lapiz()).slots, vec![chord('f')]);
-    assert_eq!(slots_of(&l.keymap, relleno()).slots, vec![], "pierde la segunda");
+    assert_eq!(
+        slots_of(&l.keymap, relleno()).slots,
+        vec![],
+        "pierde la segunda"
+    );
     assert_eq!(l.dropped_rows, 1);
     assert!(l.conflicted.contains(&relleno()));
     let aviso = load_notice(&l).unwrap();
     assert_eq!(aviso, "atajos: 1 repetidos");
     assert!(aviso.chars().count() <= 60);
-    let los_dos = lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\ntool.fill 1 q\ntool.fill 2 q\n");
+    let los_dos =
+        lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\ntool.fill 1 q\ntool.fill 2 q\n");
     // La misma tecla dos veces en una acción: queda una.
     assert_eq!(slots_of(&los_dos.keymap, relleno()).slots, vec![chord('q')]);
     assert!(los_dos.keymap.conflicts().is_empty());
@@ -339,13 +350,20 @@ fn condicion_1_un_atajo_por_defecto_nuevo_nunca_quita_el_del_usuario() {
         vec![chord('x')],
         "el atajo del usuario se conserva"
     );
-    assert_eq!(slots_of(&l.keymap, relleno()).slots, vec![], "la acción nueva queda sin atajo");
+    assert_eq!(
+        slots_of(&l.keymap, relleno()).slots,
+        vec![],
+        "la acción nueva queda sin atajo"
+    );
     assert!(l.keymap.conflicts().is_empty());
     assert_eq!(l.conflicted, vec![relleno()], "marca `conflicto`");
     assert_eq!(l.dropped_rows, 1);
     assert_eq!(load_notice(&l).as_deref(), Some("atajos: 1 repetidos"));
     // Lo guardado después sigue diciendo lo del usuario.
-    let relee = parse(to_text(&l.keymap, &nuevo_defecto).as_bytes(), &nuevo_defecto);
+    let relee = parse(
+        to_text(&l.keymap, &nuevo_defecto).as_bytes(),
+        &nuevo_defecto,
+    );
     assert_eq!(slots_of(&relee.keymap, lapiz()).slots, vec![chord('x')]);
     assert!(relee.keymap.conflicts().is_empty());
 }
@@ -468,7 +486,12 @@ fn propiedad_1b_ida_y_vuelta_con_todas_las_combinaciones_de_la_tabla() {
 #[test]
 fn lo_leido_funciona_como_tabla() {
     let l = lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\n");
-    for (c, esperado) in [('x', Some(lapiz())), ('y', Some(linea())), ('d', None), ('v', None)] {
+    for (c, esperado) in [
+        ('x', Some(lapiz())),
+        ('y', Some(linea())),
+        ('d', None),
+        ('v', None),
+    ] {
         assert_eq!(
             l.keymap.action_for(&press(c), Platform::Linux),
             esperado,

@@ -165,7 +165,11 @@ pub fn parse(bytes: &[u8], default: &Keymap) -> Loaded {
         let parsed = match tokens.as_slice() {
             [key, slot, chord] => action_of_key(key)
                 .filter(|action| is_editable(*action))
-                .zip(slot.parse::<usize>().ok().filter(|n| (1..=MAX_SLOT).contains(n)))
+                .zip(
+                    slot.parse::<usize>()
+                        .ok()
+                        .filter(|n| (1..=MAX_SLOT).contains(n)),
+                )
                 .zip(parse_chord(chord)),
             _ => None,
         };
@@ -190,8 +194,11 @@ pub fn parse(bytes: &[u8], default: &Keymap) -> Loaded {
         if !entries.iter().any(|(a, _, _)| *a == action) {
             continue;
         }
-        let mut slots: Vec<Option<Chord>> =
-            slots_of(default, action).slots.into_iter().map(Some).collect();
+        let mut slots: Vec<Option<Chord>> = slots_of(default, action)
+            .slots
+            .into_iter()
+            .map(Some)
+            .collect();
         for (_, slot, chord) in entries.iter().filter(|(a, _, _)| *a == action) {
             if slots.len() < *slot {
                 slots.resize(*slot, None);
@@ -250,9 +257,7 @@ pub fn parse(bytes: &[u8], default: &Keymap) -> Loaded {
 /// El fichero de `keymap` respecto a `default`: la cabecera y, en el orden de la tabla de ayuda,
 /// una línea por cada casilla que difiere (ya compactadas). Una tabla por defecto da solo la cabecera.
 pub fn to_text(keymap: &Keymap, default: &Keymap) -> String {
-    let mut out = format!(
-        "{HEADER} {VERSION}\n# solo lo que difiere del esquema por defecto\n"
-    );
+    let mut out = format!("{HEADER} {VERSION}\n# solo lo que difiere del esquema por defecto\n");
     for entry in help_table() {
         let Some(action) = action_of_key(entry.key) else {
             continue;
@@ -269,7 +274,11 @@ pub fn to_text(keymap: &Keymap, default: &Keymap) -> String {
             let (new, old) = (now.get(i), before.get(i));
             if new != old {
                 let atajo = new.map_or("none".to_string(), |chord| chord_text(*chord));
-                out.push_str(&format!("{} {} {atajo}\n", help_key(action).unwrap_or(""), i + 1));
+                out.push_str(&format!(
+                    "{} {} {atajo}\n",
+                    help_key(action).unwrap_or(""),
+                    i + 1
+                ));
             }
         }
     }
