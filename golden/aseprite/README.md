@@ -1,7 +1,7 @@
 # golden/aseprite
 
 Corpus del hito 3 (`specs/corpus-hito-3.md`): capas, opacidad, modos de mezcla, celdas con
-desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 25 casos.
+desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 28 casos.
 
 - **Programa:** Aseprite 1.3.18.6-dev
 - **Fecha:** 2026-10-21
@@ -24,11 +24,14 @@ desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 25 casos.
 | celda-desplazada.aseprite | celda-desplazada.png |
 | celda-recortada.aseprite | celda-recortada.png |
 | celda-vacia.aseprite | celda-vacia.png |
+| fondo-con-opacidad.aseprite | fondo-con-opacidad.png |
 | indexado-capas.aseprite | indexado-capas.png |
 | indexado-celdas.aseprite | indexado-celdas.png |
 | indexado-paleta-256.aseprite | indexado-paleta-256.png |
 | indexado-transparente-7.aseprite | indexado-transparente-7.png |
 | mezcla-aclarar.aseprite | mezcla-aclarar.png |
+| mezcla-alfa-rejilla-multiplicar.aseprite | mezcla-alfa-rejilla-multiplicar.png |
+| mezcla-alfa-rejilla-superponer.aseprite | mezcla-alfa-rejilla-superponer.png |
 | mezcla-diferencia.aseprite | mezcla-diferencia.png |
 | mezcla-multiplicar.aseprite | mezcla-multiplicar.png |
 | mezcla-normal.aseprite | mezcla-normal.png |
