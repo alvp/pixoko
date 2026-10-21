@@ -7,7 +7,8 @@
 
 use egui::{Event, Key, Modifiers};
 
-use crate::keymap::{KeyId, Press};
+use crate::help_texts::ui;
+use crate::keymap::{Chord, KeyId, Press};
 
 /// La `Press` de cada `Event::Key` pulsado de `events`, en orden. Un `Event::Text` suelto (que no
 /// sigue a una tecla pulsada) y los `Event::Ime` no dan ninguna: un IME o un teclado en pantalla
@@ -46,6 +47,107 @@ pub fn presses(events: &[Event]) -> Vec<Press> {
         });
     }
     out
+}
+
+/// Lo que dio un fotograma a la captura de un atajo (specs/interfaz-ayuda.md, decisión 6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Capture {
+    /// `Escape`: desarma la captura.
+    Cancel,
+    /// Una tecla que no se puede asignar y por qué (`F1`, de la ayuda).
+    Reserved(&'static str),
+    /// Una pulsación, para `chord_of`.
+    Press(Press),
+}
+
+/// Las capturas de `events`, en orden: `Escape` (con cualquier modificador) es `Cancel`, `F1` es
+/// `Reserved` y el resto, la `Press` con el mismo emparejado `Key`+`Text` que [`presses`]. Se
+/// descartan las repeticiones (una tecla mantenida al armar la captura no se captura sola); un
+/// `Text` suelto y los `Event::Ime` no dan nada.
+pub fn captures(events: &[Event]) -> Vec<Capture> {
+    let mut out = Vec::new();
+    for (i, event) in events.iter().enumerate() {
+        let Event::Key {
+            key,
+            pressed: true,
+            repeat: false,
+            modifiers,
+            ..
+        } = event
+        else {
+            continue;
+        };
+        match key {
+            Key::Escape => out.push(Capture::Cancel),
+            Key::F1 => out.push(Capture::Reserved(ui().f1_reserved)),
+            _ => {
+                let text = match events.get(i + 1) {
+                    Some(Event::Text(text)) => Some(text.as_str()),
+                    _ => None,
+                };
+                out.push(Capture::Press(Press {
+                    key: key_of(*key, *modifiers, text),
+                    command: modifiers.command,
+                    shift: modifiers.shift,
+                    alt: modifiers.alt,
+                    other_ctrl: other_ctrl(*modifiers),
+                    repeat: false,
+                }));
+            }
+        }
+    }
+    out
+}
+
+/// `F1` pulsada, sin modificadores y sin repetición: pide la ayuda.
+pub fn help_pressed(events: &[Event]) -> bool {
+    events.iter().any(|event| {
+        matches!(
+            event,
+            Event::Key {
+                key: Key::F1,
+                pressed: true,
+                repeat: false,
+                modifiers,
+                ..
+            } if modifiers.is_none()
+        )
+    })
+}
+
+/// El atajo que se puede asignar con una pulsación, o por qué no (≤ 37 caracteres, para la línea
+/// de la casilla). Sin carácter (tecla muerta, composición, `Intro`, flechas, teclas de función):
+/// no vale; con `Ctrl` o `Cmd`: no se asigna (son las combinaciones modernas); `Alt` o el `Ctrl`
+/// de macOS con letra o cifra: no es esa letra; `Espacio` es del lienzo. `Mayús` solo cuenta en
+/// letras y en `Re Pág`/`Av Pág`.
+pub fn chord_of(press: &Press) -> Result<Chord, &'static str> {
+    let strings = ui();
+    let Some(key) = press.key else {
+        return Err(strings.not_a_key);
+    };
+    if press.command {
+        return Err(strings.no_command);
+    }
+    let chord = |key, shift| Chord {
+        key,
+        command: false,
+        shift,
+    };
+    match key {
+        KeyId::Char(' ') => Err(strings.no_space),
+        KeyId::Char(c) if !c.is_ascii_graphic() => Err(strings.not_a_key),
+        KeyId::Char(c) => {
+            if c.is_ascii_alphanumeric() && (press.alt || press.other_ctrl) {
+                return Err(strings.no_alt_letter);
+            }
+            Ok(chord(
+                KeyId::Char(c.to_ascii_lowercase()),
+                c.is_ascii_alphabetic() && press.shift,
+            ))
+        }
+        KeyId::Home => Ok(chord(KeyId::Home, false)),
+        KeyId::PageUp | KeyId::PageDown => Ok(chord(key, press.shift)),
+    }
 }
 
 /// La `Press` de una tecla y unos modificadores sin texto (pruebas y funciones antiguas): la

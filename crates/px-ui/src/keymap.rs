@@ -96,6 +96,10 @@ impl Chord {
             KeyId::Char(c) => c.to_string(),
         };
         let mut text = String::new();
+        // `Mayús` con `Re Pág` o `Av Pág` (el color de fondo) se dice aunque no haya `command`.
+        if self.shift && !self.command && matches!(self.key, KeyId::PageUp | KeyId::PageDown) {
+            text.push_str("Mayús+");
+        }
         if self.command {
             text.push_str(if platform == Platform::Mac {
                 "Cmd+"

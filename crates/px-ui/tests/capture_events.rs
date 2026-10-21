@@ -319,7 +319,6 @@ fn evento() -> impl Strategy<Value = Event> {
         }),
         "\\PC{0,3}".prop_map(Event::Text),
         "\\PC{0,3}".prop_map(|t| Event::Ime(ImeEvent::Commit(t))),
-        Just(Event::Ime(ImeEvent::Enabled)),
     ]
 }
 

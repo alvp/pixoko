@@ -77,6 +77,13 @@ pub enum FieldKind {
         text: String,
         rows: Rows,
     },
+    /// Un botón de una fila (specs/interfaz-ayuda.md, decisión 3): el rótulo del campo a la
+    /// izquierda, el botón con `text` y, si lo hay, un segundo botón (`aside`) a su derecha. Pulsarlo
+    /// no cierra el diálogo: da `Reaction::Pressed`.
+    Button {
+        text: String,
+        aside: Option<&'static str>,
+    },
 }
 
 /// Un campo se muestra solo si el campo `Choice` `field` vale `choice`.
@@ -175,6 +182,15 @@ impl FormSpec {
                 FieldKind::Number { .. } | FieldKind::Hex { .. } => FIELD_LABEL_MAX,
                 FieldKind::Check { .. } => CHECK_LABEL_MAX,
                 FieldKind::Choice { .. } | FieldKind::ReadOnly { .. } => WIDE_LABEL_MAX,
+                FieldKind::Button { aside, .. } => {
+                    if let Some(label) = aside {
+                        text(label)?;
+                        if label.chars().count() > BUTTON_LABEL_MAX {
+                            return Err(SpecError::ButtonTooLong(label));
+                        }
+                    }
+                    FIELD_LABEL_MAX
+                }
             };
             if label_chars > max_label {
                 return Err(SpecError::LabelTooLong(field.id));
@@ -304,6 +320,14 @@ pub enum DialogKind {
     ConvertMode,
     /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md).
     BackgroundColor,
+    /// `F1`: la ayuda de la herramienta o del botón (specs/interfaz-ayuda.md).
+    Help,
+    /// `Ayuda → Atajos de teclado…`: la lista de atajos.
+    ShortcutList,
+    /// El editor de atajo de una acción.
+    ShortcutEditor,
+    /// La confirmación de `Restablecer todo`.
+    ResetShortcuts,
 }
 
 /// Lo que le pasa a un diálogo abierto.
@@ -341,6 +365,11 @@ pub enum Event {
     HexRevert {
         field: FieldId,
     },
+    /// Se pulsó un botón de campo (`aside`: el segundo botón de la fila).
+    Press {
+        field: FieldId,
+        aside: bool,
+    },
     Accept,
     Cancel,
 }
@@ -353,6 +382,11 @@ pub enum Reaction {
     Rejected(String),
     Accepted(Values),
     Cancelled,
+    /// Se pulsó un botón de campo: el diálogo sigue abierto.
+    Pressed {
+        field: FieldId,
+        aside: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -368,6 +402,10 @@ enum FieldState {
     },
     Text {
         first_line: usize,
+    },
+    /// Qué botones de la fila están atenuados (el principal y el segundo).
+    Button {
+        disabled: [bool; 2],
     },
 }
 
@@ -404,6 +442,9 @@ impl Dialog {
                     pending: None,
                 },
                 FieldKind::ReadOnly { .. } => FieldState::Text { first_line: 0 },
+                FieldKind::Button { .. } => FieldState::Button {
+                    disabled: [false, false],
+                },
             })
             .collect();
         Ok(Dialog {
@@ -679,6 +720,68 @@ impl Dialog {
         }
     }
 
+    /// Cambia el texto del botón principal de un campo `Button`. `false` si no existe o no es un
+    /// botón.
+    pub fn set_button_text(&mut self, id: FieldId, new_text: String) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        match &mut self.spec.fields[index].kind {
+            FieldKind::Button { text, .. } => {
+                *text = new_text;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// El texto del botón principal de un campo `Button`.
+    pub fn button_text(&self, id: FieldId) -> Option<String> {
+        match &self.spec.fields[self.index_of(id)?].kind {
+            FieldKind::Button { text, .. } => Some(text.clone()),
+            _ => None,
+        }
+    }
+
+    /// Atenúa o habilita los dos botones de un campo `Button` (el segundo solo existe con
+    /// `aside`). `false` si el campo no existe o no es un botón.
+    pub fn set_button_disabled(&mut self, id: FieldId, main: bool, aside: bool) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        match &mut self.states[index] {
+            FieldState::Button { disabled } => {
+                *disabled = [main, aside];
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Qué botones de un campo `Button` están atenuados: `[principal, segundo]`.
+    pub fn button_disabled(&self, id: FieldId) -> Option<[bool; 2]> {
+        match &self.states[self.index_of(id)?] {
+            FieldState::Button { disabled } => Some(*disabled),
+            _ => None,
+        }
+    }
+
+    /// Si el botón `aside` (o el principal) del campo existe, se muestra y está habilitado.
+    pub(crate) fn button_enabled(&self, id: FieldId, aside: bool) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        if !self.shown_at(index) {
+            return false;
+        }
+        match (&self.spec.fields[index].kind, &self.states[index]) {
+            (FieldKind::Button { aside: second, .. }, FieldState::Button { disabled }) => {
+                (!aside || second.is_some()) && !disabled[usize::from(aside)]
+            }
+            _ => false,
+        }
+    }
+
     /// Pone (o quita, con `None`) la nota del límite de un campo numérico: su error `Above` pasa
     /// a decir `máximo N (nota)`. `false` si el campo no existe o no es numérico.
     pub fn set_limit_note(&mut self, id: FieldId, note: Option<&'static str>) -> bool {
@@ -737,6 +840,7 @@ impl Dialog {
     pub(crate) fn block_h_u(&self, index: usize) -> i64 {
         match &self.spec.fields[index].kind {
             FieldKind::Number { .. } | FieldKind::Hex { .. } => FIELD_H_U + ERROR_H_U,
+            FieldKind::Button { .. } => FIELD_H_U,
             FieldKind::Check { .. } => CHOICE_ROW_H_U,
             FieldKind::Choice { options, .. } => {
                 let n = options.len() as i64;
@@ -834,6 +938,11 @@ impl Dialog {
                     *pending = None;
                 }
             }
+            Event::Press { field, aside } => {
+                if self.button_enabled(field, aside) {
+                    return Reaction::Pressed { field, aside };
+                }
+            }
             Event::Cancel => return Reaction::Cancelled,
             Event::Accept => {
                 if let Some(reason) = self.reason() {
@@ -898,6 +1007,22 @@ impl Modal {
     pub fn kind(&self) -> Option<DialogKind> {
         match self {
             Modal::Open(dialog) => Some(dialog.kind()),
+            Modal::Closed => None,
+        }
+    }
+
+    /// El diálogo abierto, si lo hay.
+    pub fn dialog(&self) -> Option<&Dialog> {
+        match self {
+            Modal::Open(dialog) => Some(dialog),
+            Modal::Closed => None,
+        }
+    }
+
+    /// El diálogo abierto, para cambiarlo.
+    pub fn dialog_mut(&mut self) -> Option<&mut Dialog> {
+        match self {
+            Modal::Open(dialog) => Some(dialog),
             Modal::Closed => None,
         }
     }

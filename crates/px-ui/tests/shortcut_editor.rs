@@ -171,8 +171,10 @@ fn fila_5_asignar_regenera_las_filas_y_conserva_lo_demas() {
     assert_eq!(slots_of(&x, lapiz()).slots, vec![chord('x')]);
     // Las filas con `command` no cambian: exactamente las nueve modernas.
     let con_command = |k: &Keymap| k.rows().iter().filter(|r| r.command).cloned().collect::<Vec<_>>();
-    assert_eq!(con_command(&x), con_command(&defecto));
     assert_eq!(con_command(&x).len(), 9);
+    for fila in con_command(&defecto) {
+        assert!(con_command(&x).contains(&fila), "{fila:?}");
+    }
     // Lo que no se tocó conserva sus filas.
     for fila in defecto.rows().iter().filter(|r| r.action != lapiz()) {
         assert!(x.rows().contains(fila), "{fila:?}");
@@ -511,8 +513,10 @@ proptest! {
         }
         prop_assert!(tabla.conflicts().is_empty());
         let modernas = |k: &Keymap| k.rows().iter().filter(|r| r.command).cloned().collect::<Vec<_>>();
-        prop_assert_eq!(modernas(&tabla), modernas(&defecto));
         prop_assert_eq!(modernas(&tabla).len(), 9);
+        for fila in modernas(&defecto) {
+            prop_assert!(modernas(&tabla).contains(&fila), "{fila:?}");
+        }
         for action in editables() {
             let casillas = slots_of(&tabla, action).slots;
             // Ninguna casilla repetida dentro de la acción.

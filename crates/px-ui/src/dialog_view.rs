@@ -115,6 +115,11 @@ const STEP_BUTTON_U: i64 = 18;
 const MINUS_X_U: i64 = 183;
 const PLUS_X_U: i64 = 203;
 const RANGE_X_U: i64 = 225;
+/// Botón de campo: ancho solo y con un segundo botón (`x` y ancho de cada uno).
+const BUTTON_FIELD_W_U: i64 = 206;
+const BUTTON_PAIR_MAIN_W_U: i64 = 125;
+const BUTTON_ASIDE_X_U: i64 = 239;
+const BUTTON_ASIDE_W_U: i64 = 69;
 /// Marca de una casilla o una opción: caja de 10 u y marca de 6 u.
 const BOX_U: i64 = 10;
 const MARK_U: i64 = 6;
@@ -179,6 +184,8 @@ fn widget_id(target: FocusTarget) -> Id {
         FocusTarget::Minus(id) => Id::unique(("pixoko-dialog-minus", id)),
         FocusTarget::Plus(id) => Id::unique(("pixoko-dialog-plus", id)),
         FocusTarget::Zone(id) => Id::unique(("pixoko-dialog-zone", id)),
+        FocusTarget::Button(id) => Id::unique(("pixoko-dialog-button", id)),
+        FocusTarget::ButtonAside(id) => Id::unique(("pixoko-dialog-button-aside", id)),
         FocusTarget::Accept => Id::unique("pixoko-dialog-accept"),
         FocusTarget::Cancel => Id::unique("pixoko-dialog-cancel"),
     }
@@ -461,6 +468,19 @@ pub fn show_dialog(
                             &mut items,
                         );
                     }
+                    FieldKind::Button { .. } => {
+                        draw_button_field(
+                            ctx,
+                            &mut body_ui,
+                            &body_painter,
+                            &font,
+                            &origin,
+                            block,
+                            dialog,
+                            &mut items,
+                            &mut pending,
+                        );
+                    }
                 }
             }
             draw_scrollbar(&body_painter, &layout, scale, dialog.scroll_u());
@@ -510,7 +530,10 @@ pub fn show_dialog(
         });
 
     for event in pending {
-        dialog.event(event);
+        let applied = dialog.event(event);
+        if matches!(applied, Reaction::Pressed { .. }) && matches!(reaction, Reaction::None) {
+            reaction = applied;
+        }
     }
     if matches!(reaction, Reaction::None) && pressed_accept {
         reaction = dialog.event(Event::Accept);
@@ -1127,6 +1150,133 @@ fn draw_choice(
             });
         }
     }
+}
+
+/// Un campo `Button`: el rótulo a la izquierda, el botón principal y, si lo hay, el segundo. Un
+/// botón atenuado no se enfoca ni responde.
+#[allow(clippy::too_many_arguments)]
+fn draw_button_field(
+    ctx: &Context,
+    ui: &mut Ui,
+    painter: &Painter,
+    font: &FontId,
+    origin: &Origin,
+    block: &Block,
+    dialog: &Dialog,
+    items: &mut Vec<Item>,
+    pending: &mut Vec<Event>,
+) {
+    let spec = &dialog.spec().fields[block.index];
+    let FieldKind::Button { text, aside } = &spec.kind else {
+        return;
+    };
+    let y = block.y_u;
+    let span = (y, y + block.h_u);
+    draw_label(ctx, painter, font, origin, y + 2, spec.label);
+    // Sin rótulo ni segundo botón (la lista de atajos) el botón ocupa toda la fila, con el texto a
+    // la izquierda.
+    let wide = spec.label.is_empty() && aside.is_none();
+    let (main_x, main_w) = if wide {
+        (PAD_U, CONTENT_W_U)
+    } else if aside.is_some() {
+        (FIELD_X_U, BUTTON_PAIR_MAIN_W_U)
+    } else {
+        (FIELD_X_U, BUTTON_FIELD_W_U)
+    };
+    let mut buttons = vec![(FocusTarget::Button(spec.id), main_x, main_w, text.as_str(), false)];
+    if let Some(label) = aside {
+        buttons.push((
+            FocusTarget::ButtonAside(spec.id),
+            BUTTON_ASIDE_X_U,
+            BUTTON_ASIDE_W_U,
+            label,
+            true,
+        ));
+    }
+    for (target, x_u, w_u, label, is_aside) in buttons {
+        let enabled = dialog.button_enabled(spec.id, is_aside);
+        if draw_field_button(
+            ctx,
+            ui,
+            painter,
+            font,
+            origin,
+            (x_u, y, w_u),
+            label,
+            (enabled, wide),
+            target,
+            span,
+            items,
+        ) {
+            pending.push(Event::Press {
+                field: spec.id,
+                aside: is_aside,
+            });
+        }
+    }
+}
+
+/// Un botón de campo con el texto centrado. Devuelve si se pulsó.
+#[allow(clippy::too_many_arguments)]
+fn draw_field_button(
+    ctx: &Context,
+    ui: &mut Ui,
+    painter: &Painter,
+    font: &FontId,
+    origin: &Origin,
+    (x_u, y_u, w_u): (i64, i64, i64),
+    label: &str,
+    (enabled, left): (bool, bool),
+    target: FocusTarget,
+    span_u: (i64, i64),
+    items: &mut Vec<Item>,
+) -> bool {
+    let scale = origin.scale;
+    let rect = origin.rect_u(x_u, y_u, w_u, FIELD_H_U);
+    let id = widget_id(target);
+    let response = enabled.then(|| ui.interact(rect, id, Sense::click()));
+    if response.is_some() {
+        items.push(Item {
+            target,
+            id,
+            span_u: Some(span_u),
+        });
+    }
+    let hovered = response.as_ref().is_some_and(|r| r.hovered());
+    painter.rect(
+        rect,
+        0.0,
+        if hovered {
+            BUTTON_HOVER_FILL
+        } else {
+            BUTTON_FILL
+        },
+        Stroke::new(scale.u(), EDGE),
+        StrokeKind::Inside,
+    );
+    let shown = printable(ctx, label);
+    let chars = shown.chars().count() as i64;
+    let text_x = origin.x_px
+        + x_u * scale.n
+        + if left {
+            4 * scale.n
+        } else {
+            ((w_u * scale.n - chars * i64::from(ADVANCE_PX) * scale.n) / 2).max(0)
+        };
+    painter.text(
+        pos2(scale.pt(text_x), origin.pos_u(0, y_u + 2).y),
+        Align2::LEFT_TOP,
+        shown,
+        font.clone(),
+        if enabled { TEXT } else { TEXT_DISABLED },
+    );
+    let Some(response) = response else {
+        return false;
+    };
+    if response.has_focus() {
+        ring(painter, rect, scale);
+    }
+    response.clicked()
 }
 
 #[allow(clippy::too_many_arguments)]

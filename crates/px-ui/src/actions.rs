@@ -5,6 +5,7 @@
 use egui::{Key, Modifiers};
 
 use crate::background::CanvasBackground;
+use crate::help::HelpTarget;
 use crate::key_events::press_from_key;
 use crate::keymap::default_keymap;
 use crate::tool::Tool;
@@ -50,6 +51,11 @@ pub enum AppAction {
     CanvasBackground(CanvasBackground),
     /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
     BackgroundColor,
+    /// `F1` o `Ayuda → Ayuda de la herramienta` (specs/interfaz-ayuda.md): abre la ayuda del
+    /// destino (la herramienta activa o el botón de la caja bajo el puntero).
+    ShowHelp(HelpTarget),
+    /// `Ayuda → Atajos de teclado…`: abre la lista de atajos.
+    ShowShortcuts,
 }
 
 impl AppAction {
@@ -62,11 +68,12 @@ impl AppAction {
                 | AppAction::Save
                 | AppAction::SaveAs
                 | AppAction::Quit
+                | AppAction::ShowHelp(_)
         )
     }
 
-    /// Las acciones que abren un diálogo modal (las licencias, nueva imagen, convertir modo y el
-    /// color del fondo): no se abren con un gesto en curso ni con una quita pendiente.
+    /// Las acciones que abren un diálogo modal (las licencias, nueva imagen, convertir modo, el
+    /// color del fondo, la ayuda y la lista de atajos): no se abren con un gesto en curso ni con una quita pendiente.
     pub fn opens_dialog(self) -> bool {
         matches!(
             self,
@@ -74,6 +81,8 @@ impl AppAction {
                 | AppAction::NewImage
                 | AppAction::ConvertMode
                 | AppAction::BackgroundColor
+                | AppAction::ShowHelp(_)
+                | AppAction::ShowShortcuts
         )
     }
 

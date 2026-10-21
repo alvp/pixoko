@@ -207,7 +207,11 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
     // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
     esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
-    esperado.extend(&ACCIONES_DE_LA_TABLA[6..]);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[6..10]);
+    // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
+    esperado.push(AppAction::ShowHelp(HelpTarget::Active));
+    esperado.push(AppAction::ShowShortcuts);
+    esperado.push(AppAction::ShowLicenses);
     assert_eq!(acciones, esperado);
     // Ninguna acción del fondo cuela en `items`.
     for b in FONDOS {

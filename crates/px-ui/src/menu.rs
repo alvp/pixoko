@@ -8,6 +8,7 @@ use crate::actions::{AppAction, Platform, UiState, enabled};
 use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
 use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
+use crate::help::HelpTarget;
 use crate::keymap::{Chord, Keymap, default_keymap};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
@@ -107,7 +108,14 @@ pub const MENUS: [Menu; 5] = [
     },
     Menu {
         title: "Ayuda",
-        items: &[item("Licencias", AppAction::ShowLicenses)],
+        items: &[
+            item(
+                "Ayuda de la herramienta",
+                AppAction::ShowHelp(HelpTarget::Active),
+            ),
+            item("Atajos de teclado…", AppAction::ShowShortcuts),
+            item("Licencias", AppAction::ShowLicenses),
+        ],
         submenus: &[],
     },
 ];
@@ -137,6 +145,12 @@ pub fn shortcut_for(action: AppAction, platform: Platform) -> Option<Shortcut> {
     shortcut_in(default_keymap(), action, platform)
 }
 
+/// El atajo fijo de una entrada que no sale de la tabla de teclas: `F1` en `Ayuda de la
+/// herramienta` (`F1` es de la ayuda y no se reasigna).
+pub fn fixed_shortcut(action: AppAction) -> Option<&'static str> {
+    matches!(action, AppAction::ShowHelp(_)).then_some("F1")
+}
+
 /// Texto de un atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Inicio`, `>`, `d`.
 pub fn shortcut_text(shortcut: Shortcut, platform: Platform) -> String {
     shortcut.text(platform)
@@ -160,7 +174,9 @@ pub fn popup_width_in(menu: &Menu, platform: Platform, keymap: &Keymap) -> i64 {
         .iter()
         .map(|item| {
             let shortcut = shortcut_in(keymap, item.action, platform)
-                .map_or(0, |s| shortcut_text(s, platform).chars().count());
+                .map(|s| shortcut_text(s, platform))
+                .or_else(|| fixed_shortcut(item.action).map(str::to_string))
+                .map_or(0, |text| text.chars().count());
             item.label.chars().count() + 2 + shortcut
         })
         .chain(
@@ -282,7 +298,9 @@ fn menu_entry(
 ) -> bool {
     let on = enabled(item.action, state);
     let label = printable(ctx, item.label);
-    let shortcut = shortcut_in(keymap, item.action, platform).map(|s| shortcut_text(s, platform));
+    let shortcut = shortcut_in(keymap, item.action, platform)
+        .map(|s| shortcut_text(s, platform))
+        .or_else(|| fixed_shortcut(item.action).map(str::to_string));
     let mut button = Button::new(label).min_size(vec2(width, TEXT_BUTTON_H_U as f32 * u));
     if let Some(text) = shortcut {
         button = button.shortcut_text(printable(ctx, &text));

@@ -1760,7 +1760,7 @@ impl Modelo {
                 Some(i) if matches!(spec.fields[i].kind, FieldKind::Hex { .. }) => (Some(i), false),
                 other => (other, true),
             },
-            Event::Accept | Event::Cancel => (None, false),
+            Event::Accept | Event::Cancel | Event::Press { .. } => (None, false),
         }
     }
 }
@@ -2226,7 +2226,9 @@ fn fila_12_e1_lo_oculto_por_transitividad_no_cuenta_en_validez_valores_ni_foco()
             | FocusTarget::Option(id, _)
             | FocusTarget::Minus(id)
             | FocusTarget::Plus(id)
-            | FocusTarget::Zone(id) => {
+            | FocusTarget::Zone(id)
+            | FocusTarget::Button(id)
+            | FocusTarget::ButtonAside(id) => {
                 assert!(
                     d.is_shown(id),
                     "{objetivo:?} está oculto y está en el orden"

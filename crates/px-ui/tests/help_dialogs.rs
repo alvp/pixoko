@@ -87,9 +87,22 @@ impl Banco {
     }
 }
 
+/// El centro del texto pintado exactamente igual a `texto`.
 fn centro(p: &common::Pintado, texto: &str) -> Pos2 {
-    p.texto_con(texto)
+    p.textos
+        .iter()
+        .find(|t| t.texto == texto)
         .unwrap_or_else(|| panic!("no se pinta {texto:?}; hay {:?}", p.todos_los_textos()))
+        .rect()
+        .center()
+}
+
+/// El centro del primer texto pintado que empieza por `prefijo`.
+fn centro_de_linea(p: &common::Pintado, prefijo: &str) -> Pos2 {
+    p.textos
+        .iter()
+        .find(|t| t.texto.starts_with(prefijo))
+        .unwrap_or_else(|| panic!("no hay línea {prefijo:?}; hay {:?}", p.todos_los_textos()))
         .rect()
         .center()
 }
@@ -229,12 +242,16 @@ fn fila_12_la_lista_de_atajos_se_pinta_y_sus_botones_responden() {
     let mut b = Banco::nuevo(1.0, dialog);
     let p = b.reposo();
     // Hay más botones de los que caben: se desplaza el cuerpo.
-    assert!(p.pinta("Lápiz"));
     assert!(p.pinta("Cerrar"));
-    let linea = p.texto_con("Lápiz").unwrap().texto.clone();
-    assert!(linea.starts_with("Lápiz"), "{linea:?}");
+    let linea = p
+        .textos
+        .iter()
+        .find(|t| t.texto.starts_with("Lápiz"))
+        .unwrap_or_else(|| panic!("{:?}", p.todos_los_textos()))
+        .texto
+        .clone();
     assert!(linea.chars().count() <= 44, "{linea:?}");
-    b.clic(centro(&p, "Lápiz"));
+    b.clic(centro_de_linea(&p, "Lápiz"));
     assert!(matches!(
         b.reacciones.as_slice(),
         [Reaction::Pressed { field: "tool.pencil", aside: false }]

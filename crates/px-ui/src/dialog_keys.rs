@@ -16,6 +16,10 @@ pub enum FocusTarget {
     Plus(FieldId),
     /// Una zona de texto de solo lectura.
     Zone(FieldId),
+    /// El botón principal de un campo `Button`.
+    Button(FieldId),
+    /// El segundo botón de un campo `Button`.
+    ButtonAside(FieldId),
     Accept,
     Cancel,
 }
@@ -70,6 +74,14 @@ pub fn focus_order(dialog: &Dialog) -> Vec<FocusTarget> {
                 order.push(FocusTarget::Field(field.id));
             }
             FieldKind::ReadOnly { .. } => order.push(FocusTarget::Zone(field.id)),
+            FieldKind::Button { .. } => {
+                if dialog.button_enabled(field.id, false) {
+                    order.push(FocusTarget::Button(field.id));
+                }
+                if dialog.button_enabled(field.id, true) {
+                    order.push(FocusTarget::ButtonAside(field.id));
+                }
+            }
         }
     }
     if dialog.is_valid() {
@@ -82,7 +94,8 @@ pub fn focus_order(dialog: &Dialog) -> Vec<FocusTarget> {
 }
 
 /// El foco al abrir: el primer campo editable visible (en un grupo, la opción elegida); si no hay,
-/// la zona de texto; si no, `Aceptar`.
+/// el primero que sea una zona de texto o un botón de campo habilitado, en el orden de los campos;
+/// si no, `Aceptar`.
 pub fn initial_focus(dialog: &Dialog) -> FocusTarget {
     for index in dialog.shown_indices() {
         let field = &dialog.spec().fields[index];
@@ -93,13 +106,17 @@ pub fn initial_focus(dialog: &Dialog) -> FocusTarget {
             FieldKind::Choice { .. } => {
                 return FocusTarget::Option(field.id, dialog.chosen(field.id).unwrap_or(0));
             }
-            FieldKind::ReadOnly { .. } => {}
+            FieldKind::ReadOnly { .. } | FieldKind::Button { .. } => {}
         }
     }
     for index in dialog.shown_indices() {
         let field = &dialog.spec().fields[index];
-        if matches!(field.kind, FieldKind::ReadOnly { .. }) {
-            return FocusTarget::Zone(field.id);
+        match field.kind {
+            FieldKind::ReadOnly { .. } => return FocusTarget::Zone(field.id),
+            FieldKind::Button { .. } if dialog.button_enabled(field.id, false) => {
+                return FocusTarget::Button(field.id);
+            }
+            _ => {}
         }
     }
     FocusTarget::Accept
@@ -148,6 +165,8 @@ pub fn key_action(
         DialogKey::Enter => match focus {
             Some(
                 FocusTarget::Zone(_)
+                | FocusTarget::Button(_)
+                | FocusTarget::ButtonAside(_)
                 | FocusTarget::Minus(_)
                 | FocusTarget::Plus(_)
                 | FocusTarget::Accept
