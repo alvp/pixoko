@@ -341,6 +341,64 @@ ocho_modos("mezcla-ocho-opacidad", 128, 255, 255, 255)
 ocho_modos("mezcla-ocho-alfa", 255, 200, 77, 255)
 ocho_modos("mezcla-ocho-fondo-translucido", 255, 255, 100, 150)
 
+-- Rejilla de alfas (ampliación del corpus, specs/corpus-hito-3.md «Casos añadidos»): 64 x 32, dos
+-- rejillas de 8 x 8 celdas de 3 px. Columnas = alfa del fondo, filas = alfa de la fuente, los dos
+-- con los mismos valores (el 127 al final, fuera de orden, a propósito). La base es opaca fuera de
+-- las rejillas (gris 90) y translúcida dentro; la capa `fuente` solo existe dentro. Dos pares de
+-- colores con canales distintos; el segundo cambia fuente y fondo de sitio.
+local ALFAS_REJILLA = { 0, 40, 80, 120, 160, 200, 255, 127 }
+local PARES_REJILLA = {
+  { x0 = 4, fuente = { 200, 60, 20 }, fondo = { 30, 120, 220 } },
+  { x0 = 36, fuente = { 30, 120, 220 }, fondo = { 200, 60, 20 } },
+}
+local function rejilla(nombre, modo, opacidad)
+  CASOS[nombre] = function()
+    local s = nuevo_sprite(64, 32, false, PALETA)
+    local base = capa(s, "base")
+    local fuente = capa(s, "fuente", { mezcla = modo, opacidad = opacidad })
+    local a = imagen(s, 64, 32, rgb({ 90, 90, 90 }))
+    local b = imagen(s, 64, 32)
+    for _, p in ipairs(PARES_REJILLA) do
+      for i, alfa_fondo in ipairs(ALFAS_REJILLA) do
+        for j, alfa_fuente in ipairs(ALFAS_REJILLA) do
+          local x0 = p.x0 + 3 * (i - 1)
+          local y0 = 4 + 3 * (j - 1)
+          rect(a, x0, y0, x0 + 2, y0 + 2, rgb(p.fondo, alfa_fondo))
+          rect(b, x0, y0, x0 + 2, y0 + 2, rgb(p.fuente, alfa_fuente))
+        end
+      end
+    end
+    celda(s, base, a)
+    celda(s, fuente, b)
+    guardar(s, nombre)
+  end
+end
+rejilla("mezcla-alfa-rejilla-multiplicar", BlendMode.MULTIPLY, 255)
+rejilla("mezcla-alfa-rejilla-superponer", BlendMode.OVERLAY, 128)
+
+-- La capa de abajo con opacidad 128 y modo Multiplicar sobre el lienzo transparente (no hay nada
+-- que mezclar debajo) y una capa Normal encima. Alfas de la base 255, 223, 191, 159, 127, 95, 63 y
+-- 0 por filas de 4 px (con 128 la parte fraccionaria de alfa x 128 / 255 es mayor que 0,5 en seis
+-- de las ocho) y los colores A por columnas de 4 px; la fila de alfa 0 lleva RGB distinto de 0.
+CASOS["fondo-con-opacidad"] = function()
+  local s = nuevo_sprite(32, 32, false, PALETA)
+  local base = capa(s, "base", { mezcla = BlendMode.MULTIPLY, opacidad = 128 })
+  local arriba = capa(s, "arriba")
+  local alfas = { 255, 223, 191, 159, 127, 95, 63, 0 }
+  local a = imagen(s, 32, 32)
+  for y = 0, 31 do
+    for x = 0, 31 do
+      pon(a, x, y, rgb(A[x // 4 + 1], alfas[y // 4 + 1]))
+    end
+  end
+  celda(s, base, a)
+  local b = imagen(s, 32, 32)
+  disco(b, 16, 16, 9, col("naranja"))
+  rect(b, 2, 2, 13, 13, col("cian", 128))
+  celda(s, arriba, b)
+  guardar(s, "fondo-con-opacidad")
+end
+
 CASOS["indexado-capas"] = function()
   local s = nuevo_sprite(16, 16, true, PALETA)
   s.transparentColor = 0 -- comprobar: Sprite.transparentColor
