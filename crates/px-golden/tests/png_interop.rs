@@ -12,7 +12,10 @@
 //! - El SHA-256 propio (`common::sha256`) se valida con sus vectores en un único test
 //!   (fila 15), aparte de la fila 13: si falla el hash se sabe si es el SHA-256 o el PNG.
 //! - La fila 16 comprueba la estructura del repositorio (`.gitattributes` y el README).
+//! - `aseprite_corpus` hace lo mismo con `golden/aseprite/` (specs/corpus-hito-3.md).
 
+#[path = "png_interop/aseprite_corpus.rs"]
+mod aseprite_corpus;
 mod common;
 #[path = "png_interop/gate_oraculo.rs"]
 mod gate_oraculo;

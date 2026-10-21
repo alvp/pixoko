@@ -56,6 +56,10 @@ grafx2 imagen.png
 
 Cualquier captura de su comportamiento exige sesión gráfica y se hace a mano (acciones en la interfaz → fichero guardado → `golden/`). No hay `xvfb-run` instalado, así que no se puede lanzar sin pantalla.
 
+## Aseprite (hito 3)
+
+Desde el 21 de octubre de 2026 es la **única referencia del hito 3** (capas, alfa y mezcla): genera los `.aseprite` del corpus con scripts de Lua propios y exporta sus PNG aplanados por lotes (`aseprite -b`). No es GPL (licencia propia del programa), así que valen las mismas reglas de caja negra: no se abre ni se lee su código ni su documentación, y el hook de `.claude/hooks/guard.sh` lo bloquea; solo la especificación pública del formato `.aseprite`. Los scripts van en `tools/corpus-h3/` (MIT), los resultados en `golden/aseprite/` con su README (versión y fecha de la ejecución) y la lista en `specs/corpus-hito-3.md`. LibreSprite sigue instalado para los hitos 4 y 5 hasta que se decida otra cosa.
+
 ## Pendiente
 
 - Decidir el formato de las notas que acompañan a cada fichero de `golden/` (comando, versión del paquete, fecha).
