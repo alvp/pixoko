@@ -57,7 +57,7 @@ El indicador de color son dos rectángulos superpuestos: el pequeño es el prime
 
 Propuesta de fondo por defecto, según el modo de la imagen:
 
-- **RGBA y gris con alfa:** transparente. Pintar con el botón derecho borra, y la herramienta Borrador queda como atajo sin letra.
+- **RGBA y gris con alfa:** transparente. Pintar con el botón derecho borra, y la herramienta Borrador se elige con `k` (desde el 21 de octubre).
 - **Indexado:** la entrada transparente si existe y, si no, la 0.
 - **Gris:** blanco, porque no tiene transparencia.
 
@@ -105,12 +105,12 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 | Curva | `q` | no existe | 4 |
 | Relleno | `f` | `F` | 2 |
 | Cuentagotas | `,` | `I` | 2 |
-| Borrador | sin letra (botón derecho con fondo transparente) | `E` | 2 |
+| Borrador | `k` (`K` con `Mayús` es Borrar página; el botón derecho con fondo transparente también borra) | `E` | 2 |
 | Rectángulo, círculo, elipse, polígono | `r`, `c`, `e`, `w`; la mayúscula, con relleno | no existen | 4 |
 | Selector de pincel y restaurar pincel | `b`, `B` | no existen | 4 |
 | Pincel de un píxel | `.` | no existe | 4 |
 | Texto, rejilla, simetría, lupa | `t`, `g`, `/`, `m` | no existen | por decidir |
-| Deshacer y borrar la página | `u` y `K` (más `Ctrl+Z`) | `Ctrl+Z` | 2 |
+| Deshacer y borrar la página | `u` y `K` con `Mayús` (más `Ctrl+Z`) | `Ctrl+Z` | 2 |
 | Color de primer plano, siguiente y anterior | `]` y `[` | cifras 1 a 9 | 2 |
 | Color de fondo, siguiente y anterior | `}` y `{` | no existe | 2 |
 | Zoom | `<` y `>`, rueda y `Home` | `+`, `-`, rueda y `Home` | 2 |
@@ -121,7 +121,7 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 | Modos de pincel | `F1` a `F8` | no existen | 4 |
 | Restringir el cursor y dejar trazas | `Mayus` y `Ctrl` mientras se dibuja | no existen | 4 |
 
-**Hecho en la unidad I.1 (2026-10-20, `specs/interfaz-teclado.md`):** `d v f ,` (herramientas), `u` (más `Ctrl+Z`), `]` y `[` (también `Av Pág` y `Re Pág`), `<` y `>` (además de `+`, `=` y `-`), `n`, `Inicio`; el Borrador queda sin letra y las cifras 1 a 9 sin asignar. Lo demás de la tabla sigue pendiente en su hito.
+**Hecho en la unidad I.1 (2026-10-20, `specs/interfaz-teclado.md`):** `d v f ,` (herramientas), `u` (más `Ctrl+Z`), `]` y `[` (también `Av Pág` y `Re Pág`), `<` y `>` (además de `+`, `=` y `-`), `n`, `Inicio`; el Borrador quedó sin letra (desde el 21 de octubre tiene `k`) y las cifras 1 a 9 sin asignar. Lo demás de la tabla sigue pendiente en su hito.
 
 **Hecho en la unidad I.2a (2026-10-20, `specs/interfaz-dos-colores.md`):** `}` y `{` (también `Mayús`+`Av Pág` y `Mayús`+`Re Pág`) cambian el fondo, `K` borra la página con él (también `Editar → Borrar página`), el botón derecho pinta con el fondo, el indicador de color y los dos anillos del panel. Con un trazo en curso el color ya se puede cambiar (afecta al trazo siguiente).
 

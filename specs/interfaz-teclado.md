@@ -175,7 +175,7 @@ Specs que reciben una línea «Actualización de I.1, que prevalece» en el comm
 2. `]` y `[` (con AltGr) recorren la paleta y dan la vuelta; la fila elegida se ve aunque estuviera fuera. En RGBA recorren las nueve ranuras.
 3. `<` y `>` (tecla ISO, `>` con `Mayús`) alejan y acercan; `+`, `=` y `-` siguen; `Inicio` ajusta; `n` centra el punto bajo el cursor y no hace nada con el cursor fuera del lienzo.
 4. Con el campo hexadecimal enfocado, ninguna de esas teclas actúa. Con un trazo a medias, `]` no hace nada y `<`, `>` y `n` sí.
-5. **Bloq Mayús activado:** `d` sigue eligiendo el lápiz. Menú `Ver`: `Acercar` muestra `>`, `Alejar` muestra `<`; el botón Borrador sin letra.
+5. **Bloq Mayús activado:** `d` sigue eligiendo el lápiz. Menú `Ver`: `Acercar` muestra `>`, `Alejar` muestra `<`; el botón Borrador sin letra (desde el 21 de octubre, con tooltip `Borrador (k)`).
 6. **Windows y macOS:** comprobar `[` y `]` (AltGr en Windows con teclado español o alemán; `Option` en macOS) y `<`/`>`. **Si en Windows no funcionan**, es que AltGr llega como `Ctrl`+`Alt`; se anota y se añade la regla en un commit aparte.
 7. Con otra distribución (inglesa o Dvorak, si la tienes): `<` es `Mayús`+`,`.
 
@@ -202,3 +202,14 @@ Cambio de color con el botón pulsado, color de fondo (`{`, `}`), `K`, `Espacio`
 3. **`Alt` más una letra no es esa letra y no hace nada** (decisión 1).
 4. **`Re Pág` y `Av Pág` en la tabla por defecto** como segundo atajo de color anterior y siguiente; el menú y los rótulos muestran `[` y `]`; 25 filas, 16 sin `command`; las filas con `command` siguen siendo exactamente las nueve modernas. Con un diálogo abierto la tabla está bloqueada y `Inicio`, `Fin`, `Re Pág` y `Av Pág` son del diálogo.
 8. **Las tres funciones antiguas** son vistas de la tabla, con una prueba de que dan lo mismo (caso 10) y un `TODO(hito 8)` para eliminarlas cuando los llamadores migren.
+
+## Actualización del 21 de octubre de 2026
+
+**El Borrador tiene la tecla `k`** (minúscula, sin modificadores; decisión del usuario, tarea corta con visto bueno previo). Esto prevalece sobre «sin fila» y «el Borrador sin letra» de esta página.
+
+- **Tabla:** una fila nueva `SelectTool(Eraser)`, `k`, sin `command` ni `shift`, `active` y `shown` en todas las plataformas, justo tras la del cuentagotas: **31 filas, 22 sin `command` y 9 con él** (31 activas en Linux, 30 en Windows y macOS).
+- **`K` con `Mayús` sigue siendo `ClearPage`** (I.2a): las letras se comparan en minúscula y `Mayús` va aparte (`shift_counts`), así que las dos filas no chocan y la propiedad de conflictos sigue sin ninguno. Con Bloq Mayús, la `K` que escribe el teclado no lleva `Mayús`: elige el Borrador.
+- **Rótulos:** el botón del Borrador muestra `k` en la tabla; su tooltip, `Borrador (k)`, `clic derecho: opciones` y, nueva, `el clic derecho también borra con el fondo` (el clic derecho del lienzo pinta con el color de fondo); el recuadro de opciones dice `tecla k` (`sin tecla` queda solo para una tabla sin fila).
+- **Bloqueos:** los de siempre de `SelectTool`: con un campo de texto enfocado, un diálogo abierto o un trazo en curso, la `k` no actúa.
+- **Pruebas anteriores adaptadas** (solo literales y cifras): recuentos de filas (30 → 31, 21 → 22 sin `command`, 30/29/29 → 31/30/30 activas), los oráculos de teclas de `actions`, `tool` y `pick` (añaden `Key::K`), `shown_text` y tooltip del Borrador, `TOOL_BUTTONS`, la línea del recuadro y la fila de `k` sin `Mayús` de `two_colors` (de «no hace nada» a «elige el Borrador»). Prueba nueva: `k` elige el Borrador con y sin Bloq Mayús y `K` con `Mayús` borra la página; con campo, diálogo o trazo, no actúa.
+- **Prueba manual:** con Bloq Mayús activado, `k` elige el Borrador; `Mayús`+`k` borra la página; el tooltip del Borrador dice `Borrador (k)`; el recuadro de opciones, `tecla k`.

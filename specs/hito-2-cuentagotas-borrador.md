@@ -4,6 +4,8 @@ Estado: **aprobada** (2026-10-18; **corrección posterior, misma fecha: el valor
 
 **Actualización de la unidad I.1 (2026-10-20), que prevalece:** el cuentagotas pasa de `I` a `,` y el borrador **deja de tener tecla** (se elige por su botón; el aviso de 5 s sale igual). Donde la página dice `I` o `E`, léase `,` y «sin tecla». Ver [`interfaz-teclado.md`](interfaz-teclado.md).
 
+**Actualización del 21 de octubre de 2026, que prevalece:** el borrador **vuelve a tener tecla: `k`** (minúscula, sin modificadores; `K` con `Mayús` sigue siendo Borrar página). Donde la página dice «sin tecla» o `E`, léase `k`. Ver [`interfaz-teclado.md`](interfaz-teclado.md), «Actualización del 21 de octubre».
+
 Referencias: decisión D1 de [`hito-2-reparto-cierre.md`](hito-2-reparto-cierre.md) (alcance de las dos herramientas). `Stroke`, un gesto un paso, superposición del trazo y su medida: [`hito-2-lapiz-deshacer.md`](hito-2-lapiz-deshacer.md) §2, §3 y §6. `ToolState`, `busy()`, `Escape`, `Notice` y `window_title`: [`hito-2-linea-relleno-app.md`](hito-2-linea-relleno-app.md). `ColorChoice`, `Session.choice` y mostrar la fila elegida: [`hito-2-panel-paletas.md`](hito-2-panel-paletas.md) y [`hito-2-panel-ventana-baja.md`](hito-2-panel-ventana-baja.md). Ranuras por modo (`SlotBank`), `gate_keys` y texto pendiente: [`hito-2-editar-color.md`](hito-2-editar-color.md). Quita pendiente y rango: [`hito-2-paleta-operaciones.md`](hito-2-paleta-operaciones.md).
 
 ## Objetivo
