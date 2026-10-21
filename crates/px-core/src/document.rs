@@ -148,6 +148,17 @@ pub enum Command {
     AddLayer { name: String, at: usize },
     /// Quita la capa con su celda. No se puede quitar la única. Solo como comando suelto.
     RemoveLayer { layer: LayerId },
+    /// Mueve la capa a la posición `to` (`0..capas`, la posición final). Solo como comando
+    /// suelto.
+    MoveLayer { layer: LayerId, to: usize },
+    /// Cambia el nombre de la capa (hasta `Document::MAX_LAYER_NAME_BYTES` bytes). Solo como
+    /// comando suelto.
+    RenameLayer { layer: LayerId, name: String },
+    /// Cambia la opacidad de la capa (0 a 255; en indexado solo vale 255). Solo como comando
+    /// suelto.
+    SetLayerOpacity { layer: LayerId, opacity: u8 },
+    /// Muestra u oculta la capa. Solo como comando suelto.
+    SetLayerVisible { layer: LayerId, visible: bool },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -244,6 +255,20 @@ enum LayerStep {
         added: bool,
         stored: Option<Layer>,
     },
+    /// La capa pasó de la posición `from` a la `to`.
+    Move { from: usize, to: usize },
+    /// El nombre del otro lado: aplicar y deshacer lo intercambian con el de la capa.
+    Name { layer: LayerId, other: String },
+    Opacity {
+        layer: LayerId,
+        before: u8,
+        after: u8,
+    },
+    Visible {
+        layer: LayerId,
+        before: bool,
+        after: bool,
+    },
 }
 
 impl LayerStep {
@@ -251,6 +276,7 @@ impl LayerStep {
     fn inserts(&self, undoing: bool) -> bool {
         match self {
             LayerStep::Presence { added, .. } => *added != undoing,
+            _ => false,
         }
     }
 
@@ -259,6 +285,8 @@ impl LayerStep {
             LayerStep::Presence { stored, .. } => stored.as_ref().map_or(0, |layer| {
                 layer.name.capacity().saturating_add(layer.content_bytes())
             }),
+            LayerStep::Name { other, .. } => other.capacity(),
+            _ => 0,
         }
         .saturating_add(size_of::<LayerStep>())
     }
@@ -459,10 +487,10 @@ impl Document {
         Image::byte_len(self.canvas.width, self.canvas.height, self.mode()).unwrap_or(usize::MAX)
     }
 
-    /// Bytes de píxeles de las celdas con imagen. No cuenta la historia.
+    /// Bytes de píxeles de las celdas con imagen (sin las paletas). No cuenta la historia.
     pub fn materialized_bytes(&self) -> usize {
         self.layers.iter().fold(0usize, |total, layer| {
-            total.saturating_add(layer.content_bytes())
+            total.saturating_add(layer.image.as_ref().map_or(0, |image| image.bytes().len()))
         })
     }
 
@@ -519,6 +547,14 @@ impl Document {
         match command {
             Command::AddLayer { name, at } => return self.apply_add_layer(name, at),
             Command::RemoveLayer { layer } => return self.apply_remove_layer(layer),
+            Command::MoveLayer { layer, to } => return self.apply_move_layer(layer, to),
+            Command::RenameLayer { layer, name } => return self.apply_rename_layer(layer, name),
+            Command::SetLayerOpacity { layer, opacity } => {
+                return self.apply_layer_opacity(layer, opacity);
+            }
+            Command::SetLayerVisible { layer, visible } => {
+                return self.apply_layer_visible(layer, visible);
+            }
             _ => {}
         }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
@@ -847,6 +883,128 @@ impl Document {
         Ok(true)
     }
 
+    fn layer_position(&self, id: LayerId) -> Result<usize, DocumentError> {
+        self.layers
+            .iter()
+            .position(|layer| layer.id == id)
+            .ok_or(DocumentError::UnknownLayer(id))
+    }
+
+    /// `MoveLayer`: `to` es la posición final.
+    fn apply_move_layer(&mut self, id: LayerId, to: usize) -> Result<bool, DocumentError> {
+        let from = self.layer_position(id)?;
+        if to >= self.layers.len() {
+            return Err(DocumentError::LayerIndex {
+                index: to,
+                max: self.layers.len().saturating_sub(1),
+            });
+        }
+        if from == to {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        self.move_layer(from, to);
+        self.commit(Step {
+            layer: Some(LayerStep::Move { from, to }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// Lleva la capa de `from` a `to`; las de en medio se desplazan un lugar. No reserva.
+    fn move_layer(&mut self, from: usize, to: usize) {
+        if from < to {
+            if let Some(range) = self.layers.get_mut(from..=to) {
+                range.rotate_left(1);
+            }
+        } else if let Some(range) = self.layers.get_mut(to..=from) {
+            range.rotate_right(1);
+        }
+    }
+
+    /// `RenameLayer`: el nombre viejo pasa al paso, sin copiar ni reservar.
+    fn apply_rename_layer(&mut self, id: LayerId, name: String) -> Result<bool, DocumentError> {
+        let at = self.layer_position(id)?;
+        if name.len() > Document::MAX_LAYER_NAME_BYTES {
+            return Err(DocumentError::LayerName {
+                len: name.len(),
+                limit: Document::MAX_LAYER_NAME_BYTES,
+            });
+        }
+        if self.layers.get(at).is_none_or(|layer| layer.name == name) {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let Some(layer) = self.layers.get_mut(at) else {
+            return Ok(false);
+        };
+        let other = std::mem::replace(&mut layer.name, name);
+        self.commit(Step {
+            layer: Some(LayerStep::Name { layer: id, other }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `SetLayerOpacity`: en indexado solo vale 255.
+    fn apply_layer_opacity(&mut self, id: LayerId, opacity: u8) -> Result<bool, DocumentError> {
+        let at = self.layer_position(id)?;
+        if self.mode() == Mode::Indexed && opacity != 255 {
+            return Err(DocumentError::IndexedOpacity);
+        }
+        let Some(before) = self.layers.get(at).map(|layer| layer.opacity) else {
+            return Ok(false);
+        };
+        if before == opacity {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        if let Some(layer) = self.layers.get_mut(at) {
+            layer.opacity = opacity;
+        }
+        self.commit(Step {
+            layer: Some(LayerStep::Opacity {
+                layer: id,
+                before,
+                after: opacity,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `SetLayerVisible`.
+    fn apply_layer_visible(&mut self, id: LayerId, visible: bool) -> Result<bool, DocumentError> {
+        let at = self.layer_position(id)?;
+        let Some(before) = self.layers.get(at).map(|layer| layer.visible) else {
+            return Ok(false);
+        };
+        if before == visible {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        if let Some(layer) = self.layers.get_mut(at) {
+            layer.visible = visible;
+        }
+        self.commit(Step {
+            layer: Some(LayerStep::Visible {
+                layer: id,
+                before,
+                after: visible,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
     /// Hace sitio en la paleta del lienzo y en la de cada celda con imagen para una entrada más
     /// (`OutOfMemory` si no hay). Lo ya reservado se queda: no estorba.
     fn reserve_palette_slots(&mut self) -> Result<(), DocumentError> {
@@ -933,6 +1091,36 @@ impl Document {
                     }
                 } else if *at < self.layers.len() {
                     *stored = Some(self.layers.remove(*at));
+                }
+            }
+            LayerStep::Move { from, to } => {
+                if undoing {
+                    self.move_layer(*to, *from);
+                } else {
+                    self.move_layer(*from, *to);
+                }
+            }
+            LayerStep::Name { layer, other } => {
+                if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
+                    std::mem::swap(&mut found.name, other);
+                }
+            }
+            LayerStep::Opacity {
+                layer,
+                before,
+                after,
+            } => {
+                if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
+                    found.opacity = if undoing { *before } else { *after };
+                }
+            }
+            LayerStep::Visible {
+                layer,
+                before,
+                after,
+            } => {
+                if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
+                    found.visible = if undoing { *before } else { *after };
                 }
             }
         }
