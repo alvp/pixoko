@@ -1,6 +1,6 @@
 # Corpus del hito 3: capas, alfa y mezcla
 
-Estado: **preparada, a la espera de que el usuario ejecute el script y pase los errores**. No es una unidad (no cuenta en las 10 del hito; ver `mapa-funciones.md`, sección 1): es la lista única de casos con corpus ajeno, escrita antes de la primera unidad para generarlos de una sentada. No toca código de la aplicación.
+Estado: **generada el 21 de octubre de 2026 con Aseprite 1.3.18.6-dev (`golden/aseprite/`, 25 casos); pendiente de visto bueno**. No es una unidad (no cuenta en las 10 del hito; ver `mapa-funciones.md`, sección 1): es la lista única de casos con corpus ajeno, escrita antes de la primera unidad para generarlos de una sentada. No toca código de la aplicación.
 
 **Decisión del usuario (21 de octubre de 2026): la única referencia es Aseprite**, como generador y oráculo de los `.aseprite` y de los PNG aplanados. No se usa LibreSprite en el hito 3. Cambia el flujo de D10: antes los `.aseprite` los escribía Pixoko (3.8) y LibreSprite los convertía; ahora los escribe Aseprite desde un script propio, así que **3.8 empieza leyendo un corpus que ya existe** y su escritura se prueba después (ida y vuelta, y abrir lo que escribe Pixoko con Aseprite por lotes).
 
@@ -11,7 +11,7 @@ Estado: **preparada, a la espera de que el usuario ejecute el script y pase los 
 
 ## 0. Antes de nada: versión y modo por lotes
 
-El script se escribió sin ejecutar nada de Aseprite; cada duda sobre su API de Lua está marcada con `comprobar` en el código (lista en la sección 5). `ASEPRITE` es la orden del programa (por defecto `aseprite`).
+El script se escribió sin ejecutar nada de Aseprite; las dudas de su API de Lua, marcadas con `comprobar` en el código, están resueltas en la sección 5 (el orden de `--script-param` era la única que fallaba). `ASEPRITE` es la orden del programa (por defecto `aseprite`).
 
 ```sh
 # 1. Versión (anótala para el README del corpus; la cadena exacta puede variar)
@@ -100,21 +100,18 @@ El test no ejecuta Aseprite ni lee las capas.
 - **Hito 6 (`.aseprite` restante, 6.1):** opacidad de celda propia, modo de grises, perfil de color, paleta con alfa en un PNG indexado (si Aseprite escribe `tRNS` por entrada), propiedades de usuario, capas de grupo, capas de mapa de tiles, otros modos de mezcla (los diez que no están en D07), cuadro de referencia de capa y rejilla.
 - **Hito 4:** los casos de herramientas (círculo, elipse, degradados, cuantizador) tienen su propia lista, que se escribe al empezar el hito 4.
 
-## 5. Dudas de la API: `comprobar`
+## 5. Dudas de la API: resueltas con Aseprite 1.3.18.6-dev (2026-10-21)
 
-El script se escribió de memoria. Lo que hay que mirar si falla (cada una está marcada en el código y centralizada en un ayudante, así que se corrige en un sitio):
+El script se escribió de memoria y a la primera ejecución real solo falló el orden de las opciones. Lo comprobado (con `generar.sh --verificar` y Pillow sobre los PNG):
 
-1. ~~`app.params` y `--script-param`~~ **resuelta**: funcionan, pero los `--script-param` van antes de `--script`. `aseprite --version` da `1.3.18.6-dev` y `app.version` funciona.
-2. `Sprite(ancho, alto, ColorMode.X)` (si no, `Sprite{ width, height, colorMode }`); que un sprite nuevo trae **una capa y ninguna celda** (si trae celda, `newCel` debe reemplazarla).
-3. `Palette(n)`, `Palette:setColor` y `Sprite:setPalette`; `Sprite.transparentColor`.
-4. `Image(ancho, alto, modo)` e `Image:putPixel(x, y, entero)` (valor de píxel RGBA con `app.pixelColor.rgba`, o índice); si `putPixel` pide `Color`, se cambia en `pon`.
-5. `Sprite:newCel(capa, 1, imagen, Point)` reemplaza una celda existente; `Sprite:deleteCel(celda)`.
-6. `Layer.opacity` (0 a 255), `Layer.blendMode`, los nombres del enum `BlendMode` (`NORMAL`, `MULTIPLY`, `SCREEN`, `OVERLAY`, `DARKEN`, `LIGHTEN`, `ADDITION`, `DIFFERENCE`) y `Layer.isVisible`.
-7. `Sprite:saveAs(ruta.aseprite)` y que **el fichero conserva la parte de las celdas que sale del lienzo** (no la recorta al guardar): se ve con `generar.sh --verificar` (`celda 48x48 en (-8,-8)`). Si las recorta, `celda-recortada` y `indexado-celdas` pierden la mitad de su sentido y se avisa.
-8. `--save-as` aplana solo las capas **visibles**; el PNG de un sprite indexado sale indexado (con `PLTE` y, quizá, `tRNS`): se mira qué lee `read_png`.
-9. Que el RGB bajo alfa 0 se conserve o no en el PNG (`rgba-una-capa`): se anota lo que pase.
-10. `aseprite --version` (formato de la cadena) y `app.version`.
-11. `verificar.lua`: `Layer:cel`, `Cel.position`, que con un fichero en la línea de órdenes `app.sprite` sea ese sprite.
+1. `app.params` funciona, pero los `--script-param` van **antes** de `--script`; si no, llega vacío.
+2. `Sprite(ancho, alto, ColorMode.X)`, `Palette(n)`, `Palette:setColor`, `Sprite:setPalette`, `Sprite.transparentColor`, `Image(ancho, alto, modo)`, `Image:putPixel(x, y, entero)`, `Sprite:newCel(capa, 1, imagen, Point)` y `Sprite:deleteCel` valen tal como se escribieron; un sprite nuevo trae una capa y se reutiliza sin celda que estorbe.
+3. `Layer.opacity` (0 a 255), `Layer.blendMode` con los nombres del enum y `Layer.isVisible` valen. Valores numéricos del enum de Lua, que `verificar.lua` imprime: Normal 3, Multiplicar 14, Trama (*Screen*) 15, Superponer 16, Oscurecer 17, Aclarar 18, Sumar (*Addition*) 29, Diferencia 23. **No son los códigos del fichero**: 3.8 los saca de la especificación pública.
+4. **El `.aseprite` conserva la parte de las celdas que sale del lienzo** (`celda 48x48 en (-8,-8)`, `celda 16x16 en (-16,-16)`, etc.): `celda-recortada` e `indexado-celdas` valen para lo que se pensó. Una capa sin celda se guarda sin celda (`celda-vacia`).
+5. `--save-as` aplana solo las capas **visibles**: el PNG de `capas-ocultas` no muestra el magenta de las ocultas.
+6. **PNG indexado:** los cuatro casos indexados salen como PNG indexado con **un solo índice transparente** (el 0, y el 7 en `indexado-transparente-7`), sin alfa por entrada de paleta. La paleta con alfa por entrada sigue siendo del hito 6.
+7. **RGB bajo alfa 0:** el PNG lo conserva (`rgba-una-capa`: `(232, 198, 52, 0)`). Un fondo sin dibujar sale `(0, 0, 0, 0)`.
+8. Comprobaciones de valores a mano (Pillow): multiplicar, trama, sumar, diferencia y oscurecer en la combinación `(196, 46, 52)` sobre `(90, 60, 220)` dan `(69, 11, 45)`, `(217, 95, 227)`, `(255, 106, 255)`, `(106, 14, 168)` y `(90, 46, 52)`; la opacidad 64 de un rojo sobre negro da 49 en el canal rojo.
 
 ## 6. Decisiones que debes confirmar
 
