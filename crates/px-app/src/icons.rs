@@ -1,4 +1,4 @@
-//! Los 14 iconos propios de la interfaz (specs/interfaz-iconos.md): PNG de 16 × 16 incrustados con
+//! Los 21 iconos propios de la interfaz (specs/interfaz-iconos.md): PNG de 16 × 16 incrustados con
 //! `include_bytes!`, decodificados una vez al arrancar con `px-formats` y subidos como texturas de
 //! vecino más cercano. `px-ui` los pinta tintados y a escala entera (`IconSet`).
 //!
@@ -64,6 +64,13 @@ pub fn embedded(icon: Icon) -> &'static [u8] {
         Icon::RotateLeft => include_bytes!("../../../assets/icons/rotar-izquierda.png"),
         Icon::RotateRight => include_bytes!("../../../assets/icons/rotar-derecha.png"),
         Icon::Transparent => include_bytes!("../../../assets/icons/transparente.png"),
+        Icon::Eye => include_bytes!("../../../assets/icons/ojo.png"),
+        Icon::EyeClosed => include_bytes!("../../../assets/icons/ojo-cerrado.png"),
+        Icon::Lock => include_bytes!("../../../assets/icons/candado.png"),
+        Icon::LockOpen => include_bytes!("../../../assets/icons/candado-abierto.png"),
+        Icon::Duplicate => include_bytes!("../../../assets/icons/duplicar.png"),
+        Icon::Up => include_bytes!("../../../assets/icons/subir.png"),
+        Icon::Down => include_bytes!("../../../assets/icons/bajar.png"),
     }
 }
 
@@ -107,7 +114,7 @@ impl Icons {
     }
 }
 
-/// Carga los 14 iconos incrustados.
+/// Carga los 21 iconos incrustados.
 pub fn load(ctx: &egui::Context) -> Result<Icons, IconError> {
     load_with(ctx, &|icon| embedded(icon).to_vec())
 }

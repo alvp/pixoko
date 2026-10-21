@@ -14,7 +14,8 @@ pub const ICON_PX: i64 = 16;
 /// Nombre y fichero reservados para el pincel (hito 4); no es un `Icon` ni tiene PNG todavía.
 pub const RESERVED_BRUSH_STEM: &str = "pincel";
 
-/// Los 14 iconos: cinco herramientas, cuatro botones de zoom y cinco del editor de paleta.
+/// Los 21 iconos: cinco herramientas, cuatro botones de zoom, cinco del editor de paleta y siete
+/// del panel de capas.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Icon {
     Pencil,
@@ -31,11 +32,18 @@ pub enum Icon {
     RotateLeft,
     RotateRight,
     Transparent,
+    Eye,
+    EyeClosed,
+    Lock,
+    LockOpen,
+    Duplicate,
+    Up,
+    Down,
 }
 
 impl Icon {
     /// Todos, en el orden de la spec.
-    pub const ALL: [Icon; 14] = [
+    pub const ALL: [Icon; 21] = [
         Icon::Pencil,
         Icon::Line,
         Icon::Fill,
@@ -50,6 +58,13 @@ impl Icon {
         Icon::RotateLeft,
         Icon::RotateRight,
         Icon::Transparent,
+        Icon::Eye,
+        Icon::EyeClosed,
+        Icon::Lock,
+        Icon::LockOpen,
+        Icon::Duplicate,
+        Icon::Up,
+        Icon::Down,
     ];
 
     /// Posición en [`Icon::ALL`].
@@ -74,6 +89,13 @@ impl Icon {
             Icon::RotateLeft => "rotar-izquierda",
             Icon::RotateRight => "rotar-derecha",
             Icon::Transparent => "transparente",
+            Icon::Eye => "ojo",
+            Icon::EyeClosed => "ojo-cerrado",
+            Icon::Lock => "candado",
+            Icon::LockOpen => "candado-abierto",
+            Icon::Duplicate => "duplicar",
+            Icon::Up => "subir",
+            Icon::Down => "bajar",
         }
     }
 }
@@ -82,13 +104,13 @@ impl Icon {
 /// `px-app` al arrancar y las texturas las mantiene vivas quien las creó.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct IconSet {
-    textures: [Option<TextureId>; 14],
+    textures: [Option<TextureId>; 21],
 }
 
 impl IconSet {
     /// Un conjunto con la textura que da `texture` para cada icono.
     pub fn new(mut texture: impl FnMut(Icon) -> TextureId) -> IconSet {
-        let mut textures = [None; 14];
+        let mut textures = [None; 21];
         for icon in Icon::ALL {
             textures[icon.index()] = Some(texture(icon));
         }
