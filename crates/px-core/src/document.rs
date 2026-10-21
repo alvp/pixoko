@@ -39,6 +39,40 @@ impl LayerId {
     }
 }
 
+/// Modo de mezcla de una capa con lo que hay debajo (D07). Los ocho modos separables de la
+/// composición de `px-raster` (`compose`); las fórmulas están en `specs/hito-3-mezcla.md`.
+///
+/// Sin discriminantes explícitos y sin conversión a número: nada serializa el valor de Rust (los
+/// códigos de un fichero se mapean con una tabla propia del formato). `#[non_exhaustive]`: el
+/// hito 6 añade más modos.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum BlendMode {
+    #[default]
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    Darken,
+    Lighten,
+    Add,
+    Difference,
+}
+
+impl BlendMode {
+    /// Los ocho modos, en el orden de la declaración.
+    pub const ALL: [BlendMode; 8] = [
+        BlendMode::Normal,
+        BlendMode::Multiply,
+        BlendMode::Screen,
+        BlendMode::Overlay,
+        BlendMode::Darken,
+        BlendMode::Lighten,
+        BlendMode::Add,
+        BlendMode::Difference,
+    ];
+}
+
 /// Una capa: sus propiedades y su celda, que es la imagen `image` (`None` = celda vacía, sin
 /// píxeles reservados; vale transparente). `cel` es el `ImageId` de la celda y existe desde que
 /// se crea la capa.
@@ -48,6 +82,7 @@ pub struct Layer {
     name: String,
     visible: bool,
     opacity: u8,
+    blend: BlendMode,
     cel: ImageId,
     image: Option<Image>,
 }
@@ -65,9 +100,16 @@ impl Layer {
         self.visible
     }
 
-    /// Opacidad de 0 (transparente) a 255 (opaca). En indexado siempre es 255.
+    /// Opacidad de 0 (transparente) a 255 (opaca); escala el alfa de la capa al componerla (fórmulas
+    /// en `specs/hito-3-mezcla.md`). En indexado siempre es 255.
     pub fn opacity(&self) -> u8 {
         self.opacity
+    }
+
+    /// Modo de mezcla con lo que hay debajo. Las capas nuevas son `Normal`; en indexado siempre
+    /// lo es.
+    pub fn blend(&self) -> BlendMode {
+        self.blend
     }
 
     /// El `ImageId` de la celda de la capa; su imagen se pide con `Document::image`.
@@ -159,6 +201,9 @@ pub enum Command {
     SetLayerOpacity { layer: LayerId, opacity: u8 },
     /// Muestra u oculta la capa. Solo como comando suelto.
     SetLayerVisible { layer: LayerId, visible: bool },
+    /// Cambia el modo de mezcla de la capa (en indexado solo vale `Normal`). Solo como comando
+    /// suelto.
+    SetLayerBlend { layer: LayerId, blend: BlendMode },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -268,6 +313,11 @@ enum LayerStep {
         layer: LayerId,
         before: bool,
         after: bool,
+    },
+    Blend {
+        layer: LayerId,
+        before: BlendMode,
+        after: BlendMode,
     },
 }
 
@@ -422,6 +472,7 @@ impl Document {
                 name: String::from("Capa 1"),
                 visible: true,
                 opacity: 255,
+                blend: BlendMode::Normal,
                 cel: ImageId(0),
                 image: Some(image),
             }],
@@ -557,6 +608,9 @@ impl Document {
             }
             Command::SetLayerVisible { layer, visible } => {
                 return self.apply_layer_visible(layer, visible);
+            }
+            Command::SetLayerBlend { layer, blend } => {
+                return self.apply_layer_blend(layer, blend);
             }
             _ => {}
         }
@@ -740,6 +794,14 @@ impl Document {
         if target == Mode::Indexed && self.layers.iter().any(|layer| layer.opacity != 255) {
             return Err(DocumentError::IndexedOpacity);
         }
+        if target == Mode::Indexed
+            && self
+                .layers
+                .iter()
+                .any(|layer| layer.blend != BlendMode::Normal)
+        {
+            return Err(DocumentError::IndexedBlend);
+        }
         self.undo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
@@ -846,6 +908,7 @@ impl Document {
                 name,
                 visible: true,
                 opacity: 255,
+                blend: BlendMode::Normal,
                 cel: ImageId(cel),
                 image: None,
             },
@@ -976,6 +1039,36 @@ impl Document {
                 layer: id,
                 before,
                 after: opacity,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `SetLayerBlend`: en indexado solo vale `Normal`. Orden de comprobación: capa desconocida,
+    /// modo en indexado y, por último, «sin cambios».
+    fn apply_layer_blend(&mut self, id: LayerId, blend: BlendMode) -> Result<bool, DocumentError> {
+        let at = self.layer_position(id)?;
+        if self.mode() == Mode::Indexed && blend != BlendMode::Normal {
+            return Err(DocumentError::IndexedBlend);
+        }
+        let Some(before) = self.layers.get(at).map(|layer| layer.blend) else {
+            return Ok(false);
+        };
+        if before == blend {
+            return Ok(false);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        if let Some(layer) = self.layers.get_mut(at) {
+            layer.blend = blend;
+        }
+        self.commit(Step {
+            layer: Some(LayerStep::Blend {
+                layer: id,
+                before,
+                after: blend,
             }),
             ..Step::default()
         });
@@ -1124,6 +1217,15 @@ impl Document {
             } => {
                 if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
                     found.visible = if undoing { *before } else { *after };
+                }
+            }
+            LayerStep::Blend {
+                layer,
+                before,
+                after,
+            } => {
+                if let Some(found) = self.layers.iter_mut().find(|found| found.id == *layer) {
+                    found.blend = if undoing { *before } else { *after };
                 }
             }
         }
@@ -1571,6 +1673,8 @@ pub enum DocumentError {
     },
     /// Opacidad distinta de 255 en indexado.
     IndexedOpacity,
+    /// Modo de mezcla distinto de `Normal` en indexado.
+    IndexedBlend,
     /// `ConvertMode` con más de una capa.
     MultiLayerConvert {
         layers: usize,
@@ -1647,6 +1751,12 @@ impl fmt::Display for DocumentError {
             ),
             DocumentError::IndexedOpacity => {
                 write!(f, "en indexado la opacidad de las capas es siempre 255")
+            }
+            DocumentError::IndexedBlend => {
+                write!(
+                    f,
+                    "en indexado el modo de mezcla de las capas es siempre Normal"
+                )
             }
             DocumentError::MultiLayerConvert { layers } => write!(
                 f,
