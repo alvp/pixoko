@@ -27,6 +27,7 @@ pub struct TitleInfo {
 }
 
 /// `Pixoko: {w}×{h} · {zoom}`, y a continuación, cada uno solo si existe, ` · ({x}, {y})`,
+/// ` · capa {posición}/{total}` (solo con más de una capa),
 /// ` · {herramienta} · {color}` (o solo uno de los dos), ` · deshacer` y ` · rehacer`.
 /// Con error, `Pixoko: {error}` y nada más.
 pub fn title_text(info: &TitleInfo) -> String {
@@ -40,6 +41,9 @@ pub fn title_text(info: &TitleInfo) -> String {
     let mut title = format!("Pixoko: {size} · {}", info.zoom);
     if let Some((x, y)) = info.hover {
         title.push_str(&format!(" · ({x}, {y})"));
+    }
+    if let Some((position, total)) = info.layers {
+        title.push_str(&format!(" · capa {position}/{total}"));
     }
     match (info.tool, info.color.as_deref()) {
         (Some(tool), color) => title.push_str(&format!(" · {}", status_text(tool, color))),

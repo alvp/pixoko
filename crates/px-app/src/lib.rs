@@ -9,6 +9,7 @@ mod confirm;
 mod convert_mode;
 #[cfg(test)]
 mod damero_guardado;
+mod debug_layers;
 mod demo;
 mod dialogs;
 mod dispatch;
@@ -20,6 +21,7 @@ mod licenses;
 mod new_image;
 #[cfg(test)]
 mod puerta;
+mod save_wait;
 mod session;
 mod shortcuts_flow;
 mod title;
@@ -31,9 +33,9 @@ use std::time::Duration;
 
 use crate::background_color::{background_from_values, open_background_color};
 use eframe::egui;
-use px_core::{Document, DocumentError, Rgba};
+use px_core::{Document, DocumentError};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState};
-use px_ui::canvas::Canvas;
+use px_ui::canvas::{Canvas, CanvasEvent, CanvasInput};
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::color::choice_label_with;
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
@@ -53,6 +55,7 @@ use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::palette_panel::{Indicator, Roles, show_roles};
 use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
+use px_ui::source::{DocSource, flatten, overlay_pixels};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
@@ -67,6 +70,7 @@ use crate::convert_mode::{
     Start, SystemAnalyzer, convert_memory_notice, describe_converted, open_convert_mode,
     plan_from_values, reserve_for_convert, start_convert, sync_convert,
 };
+use crate::debug_layers::{ENV_LAYERS, LayersRequest, apply_debug_layers, parse_layers};
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
     DialogKind, Dialogs, Finished, Outcome, RfdPicker, fallback_request, ignored_file_notice,
@@ -81,7 +85,8 @@ use crate::new_image::{
     FormSync, NewImageError, SystemAlloc, build_new_image, describe_new, memory_notice,
     open_new_image, spec_from_values, sync_form,
 };
-use crate::session::{Session, describe_saved, describe_saved_dialog};
+use crate::save_wait::{PendingSave, SAVING_NOTICE, StartSave, compose_pixels, start_save};
+use crate::session::{Session, describe_saved, describe_saved_dialog, with_flatten_notice};
 use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
 use crate::title::{app_title_info, colors_label, status_line_fit, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
@@ -94,6 +99,14 @@ struct PendingConversion {
     /// Fotogramas que se dejan pasar antes de contar: el aviso se pinta un fotograma después de
     /// ponerlo (la barra de estado va un fotograma por detrás).
     skip: u8,
+}
+
+/// Un guardado que espera su fotograma (specs/hito-3-capas-vista.md, condición 4).
+enum SaveJob {
+    /// `Ctrl+S` (o `Ctrl+Mayús+S`, con `as_copy`) sin diálogo.
+    File { as_copy: bool },
+    /// La ruta elegida en el diálogo.
+    Chosen(PathBuf),
 }
 
 struct App {
@@ -154,6 +167,8 @@ struct App {
     convert: Option<ConvertSync>,
     /// Una conversión de una imagen grande que espera su fotograma: la entrada está bloqueada.
     pending_convert: Option<PendingConversion>,
+    /// Un guardado que compone mucho y espera su fotograma: la entrada está bloqueada.
+    pending_save: Option<(SaveJob, PendingSave)>,
     /// Reserva de los búferes de las baldosas (cargar y regenerar); las pruebas la sustituyen por
     /// una que falla.
     tile_alloc: Box<dyn TileAlloc>,
@@ -170,11 +185,14 @@ impl App {
         canvas.set_checker_mesh(mesh_fallback_enabled(
             std::env::var(ENV_MESH).ok().as_deref(),
         ));
-        if let Some(image) = document.image(document.main_image()) {
-            canvas.set_image(image);
+        let mut session = Session::sample(document);
+        // Ayuda de depuración descartable (3.3): `PIXOKO_CAPAS=N[,K]`.
+        let startup_notice = debug_layers_from_env(&mut session);
+        if let Ok(image) = flatten(&session.document) {
+            canvas.set_image(&image);
         }
         App {
-            session: Session::sample(document),
+            session,
             canvas,
             title: String::new(),
             status: (String::new(), false),
@@ -200,12 +218,13 @@ impl App {
             flow: Flow::new(Vec::new()),
             shortcuts: ShortcutStore::new(None),
             config_warned: false,
-            startup_notice: None,
+            startup_notice,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
             new_image: None,
             convert: None,
             pending_convert: None,
+            pending_save: None,
             tile_alloc: Box::new(SystemTileAlloc),
         }
     }
@@ -314,6 +333,7 @@ impl App {
             || self.dialogs.pending()
             || self.modal.is_open()
             || self.pending_convert.is_some()
+            || self.pending_save.is_some()
     }
 
     /// El cuentagotas del indicador de color es de un solo uso: al soltar su primer gesto vuelve la
@@ -325,13 +345,21 @@ impl App {
         else {
             return;
         };
-        let image = self
-            .session
-            .document
-            .image(self.session.document.main_image());
+        let image = Some(self.session.document.canvas_image());
         if let Some(text) = select_tool(&mut self.tools, ToolAction::Select(previous), false, image)
         {
             self.notify(ctx, text);
+        }
+    }
+
+    /// `PIXOKO_CAPAS` al abrir un documento (ayuda de depuración descartable): crea las capas y
+    /// avisa si no se pudo.
+    fn apply_debug_layers(&mut self, ctx: &egui::Context, text: &mut String) {
+        if let Some(extra) = debug_layers_from_env(&mut self.session) {
+            text.push_str(&format!(" · {extra}"));
+        }
+        if self.session.document.layers().len() > 1 {
+            self.finish::<std::convert::Infallible>(ctx, Ok(true));
         }
     }
 
@@ -349,7 +377,9 @@ impl App {
         if self.busy() {
             let text = ignored_file_notice(
                 self.dialogs.pending(),
-                self.modal.is_open() || self.pending_convert.is_some(),
+                self.modal.is_open()
+                    || self.pending_convert.is_some()
+                    || self.pending_save.is_some(),
             );
             self.notify(ctx, text.to_string());
             return;
@@ -389,6 +419,7 @@ impl App {
         }
         let mut text = loaded.text.clone();
         self.session.install(loaded);
+        self.apply_debug_layers(ctx, &mut text);
         self.confirm.clear();
         self.dialogs.remember_dir(path);
         if ignored > 0 {
@@ -406,6 +437,52 @@ impl App {
     /// `Ctrl`+`S` (`as_copy` falso) o `Ctrl`+`Mayús`+`S`. Sin ruta, escribe en el directorio
     /// actual.
     fn save_file(&mut self, ctx: &egui::Context, as_copy: bool) {
+        self.request_save(ctx, SaveJob::File { as_copy });
+    }
+
+    /// Guarda ya, o con muchos píxeles por componer dice «Guardando…» y guarda dos fotogramas
+    /// después, con la entrada bloqueada mientras tanto.
+    fn request_save(&mut self, ctx: &egui::Context, job: SaveJob) {
+        match start_save(compose_pixels(&self.session.document)) {
+            StartSave::Now => self.run_save(ctx, job),
+            StartSave::Later(wait) => {
+                self.pending_save = Some((job, wait));
+                self.notify(ctx, SAVING_NOTICE.to_string());
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    /// Cuenta un fotograma de un guardado en espera y lo ejecuta en el que toca.
+    fn advance_save(&mut self, ctx: &egui::Context) {
+        let Some((_, wait)) = &mut self.pending_save else {
+            return;
+        };
+        if wait.tick() {
+            if let Some((job, _)) = self.pending_save.take() {
+                self.run_save(ctx, job);
+            }
+        } else {
+            ctx.request_repaint();
+        }
+    }
+
+    fn run_save(&mut self, ctx: &egui::Context, job: SaveJob) {
+        match job {
+            SaveJob::File { as_copy } => self.save_file_now(ctx, as_copy),
+            SaveJob::Chosen(path) => match self.session.save_to(&path) {
+                Ok(saved) => {
+                    self.confirm.clear();
+                    self.dialogs.remember_dir(&saved.path);
+                    let text = describe_saved_dialog(&saved);
+                    self.notify(ctx, with_flatten_notice(text, &self.session.document));
+                }
+                Err(error) => self.notify(ctx, error.to_string()),
+            },
+        }
+    }
+
+    fn save_file_now(&mut self, ctx: &egui::Context, as_copy: bool) {
         let result = std::env::current_dir()
             .map_err(|error| crate::files::FileError::Write(error.to_string()))
             .and_then(|dir| {
@@ -419,7 +496,8 @@ impl App {
             Ok(saved) => {
                 self.confirm.clear();
                 self.dialogs.remember_dir(&saved.path);
-                self.notify(ctx, describe_saved(&saved));
+                let text = describe_saved(&saved);
+                self.notify(ctx, with_flatten_notice(text, &self.session.document));
             }
             Err(error) => self.notify(ctx, error.to_string()),
         }
@@ -491,14 +569,9 @@ impl App {
             }
             Outcome::Chosen(path) => match finished.kind {
                 DialogKind::Open => self.open_file(ctx, &path, 0, false, finished.discard),
-                DialogKind::Save | DialogKind::SaveAs => match self.session.save_to(&path) {
-                    Ok(saved) => {
-                        self.confirm.clear();
-                        self.dialogs.remember_dir(&saved.path);
-                        self.notify(ctx, describe_saved_dialog(&saved));
-                    }
-                    Err(error) => self.notify(ctx, error.to_string()),
-                },
+                DialogKind::Save | DialogKind::SaveAs => {
+                    self.request_save(ctx, SaveJob::Chosen(path));
+                }
             },
         }
     }
@@ -511,6 +584,7 @@ impl App {
         }
         self.dialogs.abandon();
         self.pending_convert = None;
+        self.pending_save = None;
         let now = ctx.input(|i| i.time);
         // Un diálogo modal se abandona sin aplicar nada, como uno de archivo, también con una
         // captura de atajo armada; después, la regla de cierre por repetición.
@@ -532,7 +606,9 @@ impl App {
             dialog: self.dialogs.pending(),
             text_focus: ctx.text_edit_focused(),
             removal: self.session.ops.removal().is_some(),
-            modal: self.modal.is_open() || self.pending_convert.is_some(),
+            modal: self.modal.is_open()
+                || self.pending_convert.is_some()
+                || self.pending_save.is_some(),
         }
     }
 
@@ -709,6 +785,7 @@ impl App {
         }
         self.confirm.clear();
         let mut text = describe_new(&spec);
+        self.apply_debug_layers(ctx, &mut text);
         if self.session.take_discarded_text() {
             text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
         }
@@ -720,8 +797,11 @@ impl App {
 
     /// `Imagen → Convertir modo…`: abre el diálogo con el modo y el color activo de ahora.
     fn begin_convert_mode(&mut self, ctx: &egui::Context) {
-        let main = self.session.document.main_image();
-        let Some(image) = self.session.document.image(main) else {
+        if let Some(reason) = self.session.convert_refusal() {
+            self.notify(ctx, reason.to_string());
+            return;
+        }
+        let Some(image) = self.session.document.image(self.session.active_cel()) else {
             return;
         };
         let from = image.mode();
@@ -743,8 +823,7 @@ impl App {
         let Some(sync) = self.convert.take() else {
             return;
         };
-        let main = self.session.document.main_image();
-        let Some(image) = self.session.document.image(main) else {
+        let Some(image) = self.session.document.image(self.session.active_cel()) else {
             return;
         };
         let from = image.mode();
@@ -791,8 +870,7 @@ impl App {
     /// Reserva la memoria que hará falta y convierte como un paso de la historia; con un fallo,
     /// aviso de 5 s y todo queda como estaba.
     fn run_convert(&mut self, ctx: &egui::Context, plan: Plan, analysis: Option<&Analysis>) {
-        let main = self.session.document.main_image();
-        let Some(image) = self.session.document.image(main) else {
+        let Some(image) = self.session.document.image(self.session.active_cel()) else {
             return;
         };
         let (width, height) = (image.width(), image.height());
@@ -876,15 +954,9 @@ impl App {
     fn refresh_now(&mut self, ctx: &egui::Context) -> bool {
         let blocks = self.session.take_dirty();
         self.canvas.invalidate(&blocks);
-        let Some(image) = self
-            .session
-            .document
-            .image(self.session.document.main_image())
-        else {
-            return true;
-        };
+        let source = DocSource(&self.session.document);
         self.canvas
-            .sync_with(ctx, image, &mut *self.tile_alloc)
+            .sync_with(ctx, &source, &mut *self.tile_alloc)
             .is_ok()
     }
 }
@@ -941,10 +1013,7 @@ impl App {
         }
         if kind == ModalKind::ConvertMode
             && let Some(sync) = &mut self.convert
-            && let Some(image) = self
-                .session
-                .document
-                .image(self.session.document.main_image())
+            && let Some(image) = self.session.document.image(self.session.active_cel())
         {
             let history = History {
                 limit: self.session.document.history_limit(),
@@ -998,6 +1067,7 @@ impl eframe::App for App {
         // Con la captura de un atajo armada, el teclado es de la captura.
         self.handle_capture(&ctx);
         self.advance_convert(&ctx);
+        self.advance_save(&ctx);
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
         let state = self.ui_state(&ctx);
@@ -1042,17 +1112,23 @@ impl eframe::App for App {
         let enabled = !(self.session.busy()
             || self.dialogs.pending()
             || self.modal.is_open()
-            || self.pending_convert.is_some());
-        let main = self.session.document.main_image();
-        let mut panel = None;
+            || self.pending_convert.is_some()
+            || self.pending_save.is_some());
         self.session.view.icons = self.icons.set;
-        if let Some(image) = self.session.document.image(main) {
+        let panel = {
+            // La celda activa si tiene imagen (la quita de una entrada pregunta si la usa); si
+            // está vacía, el lienzo da el modo y la paleta.
+            let image = self
+                .session
+                .document
+                .image(self.session.active_cel())
+                .unwrap_or_else(|| self.session.document.canvas_image());
             let roles = Roles {
                 foreground: self.session.choice,
                 background: self.session.background,
                 editing: self.session.editing,
             };
-            panel = Some(show_roles(
+            Some(show_roles(
                 ui,
                 image,
                 roles,
@@ -1062,8 +1138,8 @@ impl eframe::App for App {
                 self.session.slots.get(image.mode()),
                 &mut self.session.editor,
                 &mut self.session.ops,
-            ));
-        }
+            ))
+        };
         if let Some(panel) = panel {
             if let Some(choice) = panel.choice {
                 self.session.choice = choice;
@@ -1098,7 +1174,19 @@ impl eframe::App for App {
                 self.notify(&ctx, text);
             }
             if let Some(op) = panel.op {
-                self.apply_palette_op(&ctx, op, panel.op_unused);
+                // Con varias capas, «nadie la usa» mira todas las celdas, no solo la activa: si
+                // otra la usa, se pide el destino como con una sola capa.
+                let used_elsewhere = match op {
+                    PaletteOp::Remove { index, .. } if panel.op_unused => {
+                        self.session.removal_needs_destination(index)
+                    }
+                    _ => false,
+                };
+                if used_elsewhere && let PaletteOp::Remove { index, .. } = op {
+                    self.session.begin_removal_for(index);
+                } else {
+                    self.apply_palette_op(&ctx, op, panel.op_unused);
+                }
             }
         }
         let now = ctx.input(|i| i.time);
@@ -1123,7 +1211,7 @@ impl eframe::App for App {
             self.open_file(&ctx, &path, ignored, false, false);
         }
 
-        let id = self.session.document.main_image();
+        let id = self.session.active_cel();
         // Con un diálogo modal abierto el lienzo no interactúa.
         let canvas_inputs = if self.modal.is_open() {
             Vec::new()
@@ -1131,6 +1219,14 @@ impl eframe::App for App {
             self.canvas.interact_roles(ui)
         };
         for (input, role) in canvas_inputs {
+            // La capa activa oculta no se pinta: un aviso y ningún gesto (el cuentagotas sí).
+            if let CanvasInput::Stroke(CanvasEvent::StrokeBegin(_)) = input
+                && !self.tools.busy()
+                && let Some(reason) = self.session.paint_refusal(self.tools.tool())
+            {
+                self.notify(&ctx, reason.to_string());
+                continue;
+            }
             let pixel = self.session.pixel_of(role);
             let result = self
                 .tools
@@ -1175,27 +1271,25 @@ impl eframe::App for App {
         // las texturas del lienzo y vuelven al documento al soltar o cancelar. Después, `sync`
         // sube lo que cambió en el documento (solo las baldosas visibles).
         let mut sync_error = None;
-        if let Some(image) = self.session.document.image(id) {
+        {
+            let source = DocSource(&self.session.document);
             match self.session.editor.preview() {
                 Some((EditTarget::Entry(index), color)) => {
-                    self.canvas.preview_entry(&ctx, image, index, color);
+                    self.canvas.preview_entry(&ctx, &source, index, color);
                 }
-                _ => self.canvas.end_preview(&ctx, image),
+                _ => self.canvas.end_preview(&ctx, &source),
             }
-            let pending: Vec<(u32, u32, Rgba)> = self
-                .tools
-                .preview()
-                .filter_map(|edit| Some((edit.x, edit.y, pixel_rgba(image, edit.pixel)?)))
-                .collect();
-            self.canvas.set_overlay(&ctx, image, &pending);
-            if let Err(error) = self.canvas.sync_with(&ctx, image, &mut *self.tile_alloc) {
+            // Los colores del trazo pendiente son lo que se verá con las capas, no el color crudo.
+            let pending = overlay_pixels(&self.session.document, id, self.tools.preview());
+            self.canvas.set_overlay(&ctx, &source, &pending);
+            if let Err(error) = self.canvas.sync_with(&ctx, &source, &mut *self.tile_alloc) {
                 sync_error = Some(error.to_string());
             }
         }
         if let Some(text) = sync_error {
             self.notify(&ctx, text);
         }
-        let image = self.session.document.image(id);
+        let image = Some(self.session.document.canvas_image());
         let canvas_info = self.canvas.paint(ui);
 
         let now = ui.input(|i| i.time);
@@ -1217,7 +1311,7 @@ impl eframe::App for App {
                 choice_label_with(image, self.session.background, slots),
             )
         });
-        let info = app_title_info(
+        let mut info = app_title_info(
             tool,
             image,
             &canvas_info,
@@ -1226,6 +1320,12 @@ impl eframe::App for App {
             self.session.document.can_redo(),
             canvas_error.or(notice),
         );
+        // El tamaño y las capas son del documento: `image` solo da el modo y la paleta.
+        info.size = Some((
+            self.session.document.width(),
+            self.session.document.height(),
+        ));
+        info.layers = self.session.layers_info();
         let title = window_title(&info);
         let columns =
             px_ui::status::bar_columns(ctx.content_rect().width(), ctx.pixels_per_point());
@@ -1242,6 +1342,16 @@ impl eframe::App for App {
             self.title = title;
         }
         self.show_modal(&ctx);
+    }
+}
+
+/// `PIXOKO_CAPAS` al abrir un documento (ayuda de depuración descartable, 3.3): crea las capas y
+/// devuelve el aviso si el valor no vale o el modo no admite capas.
+fn debug_layers_from_env(session: &mut Session) -> Option<String> {
+    match parse_layers(std::env::var(ENV_LAYERS).ok().as_deref()) {
+        LayersRequest::None => None,
+        LayersRequest::Invalid(notice) => Some(notice),
+        LayersRequest::Create { count, active } => apply_debug_layers(session, count, active).err(),
     }
 }
 

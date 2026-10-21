@@ -939,7 +939,10 @@ proptest! {
         let tmp = Tmp::nuevo();
         let guardado = sesion.save_as(tmp.ruta()).expect("guardar");
         let leida = read_png(&fs::read(&guardado.path).expect("leer")).expect("PNG").image;
-        prop_assert_eq!(leida, oraculo(&sesion.document));
+        // El PNG guarda el índice transparente como alfa 0 de la entrada: se compara lo que se ve.
+        let esperada = oraculo(&sesion.document);
+        prop_assert_eq!((leida.width(), leida.height()), (esperada.width(), esperada.height()));
+        prop_assert_eq!(px_ui::texture::to_rgba8(&leida), px_ui::texture::to_rgba8(&esperada));
         prop_assert_eq!(&sesion.document, &copia);
         prop_assert!(!sesion.modified());
         let aviso = with_flatten_notice("guardado".to_string(), &sesion.document);

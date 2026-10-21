@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 
 use std::fmt;
 
-use px_core::{Allowed, Command, Document, DocumentError, Image, Mode, Pixel, Span};
+use px_core::{
+    Allowed, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Pixel, Span,
+};
 use px_formats::write_png;
 use px_ui::color::{
     ColorChoice, Role, SlotBank, SlotColors, cell_count, cell_of_choice, choice_for_cell,
@@ -15,10 +17,12 @@ use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_noti
 use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
 use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_ops::{
-    Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, entry_after, entry_fate,
-    summary, transparent_summary,
+    Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, default_destination,
+    entry_after, entry_fate, summary, transparent_summary, uses_entry,
 };
 use px_ui::pick::{Picked, pick_notice};
+use px_ui::source::flatten;
+use px_ui::tool::Tool;
 use px_ui::view::Size;
 
 use crate::dialogs::with_png_extension;
@@ -56,6 +60,8 @@ pub struct PickOutcome {
 pub enum ClearPageError {
     /// No hay memoria para el paso de deshacer: la imagen queda intacta.
     OutOfMemory,
+    /// La capa activa está oculta: no se pinta.
+    HiddenLayer,
     Document(DocumentError),
 }
 
@@ -63,6 +69,7 @@ impl fmt::Display for ClearPageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ClearPageError::OutOfMemory => f.write_str("no hay memoria para borrar la página"),
+            ClearPageError::HiddenLayer => f.write_str(HIDDEN_LAYER_NOTICE),
             ClearPageError::Document(error) => write!(f, "{error}"),
         }
     }
@@ -87,6 +94,12 @@ pub struct Session {
     pub background: ColorChoice,
     /// Qué color edita el editor de color y sobre cuál actúan los botones de la paleta.
     pub editing: Role,
+    /// La capa activa: donde actúan las herramientas. Es estado de la sesión, no del documento
+    /// (specs/hito-3-capas-vista.md, decisión 1): cambiarla no es un paso de la historia.
+    active: LayerId,
+    /// Posición de la capa activa en la última comprobación: si la capa desaparece, la activa
+    /// pasa a la que ocupa esa posición (o a la última).
+    active_pos: usize,
     /// Desplazamiento del panel de paletas; abrir un fichero lo reinicia.
     pub scroll: Scroll,
     /// Estado del panel entre fotogramas (desplazamiento de todo el panel y «mostrar la elegida»);
@@ -118,13 +131,12 @@ pub struct Session {
 
 impl Session {
     pub fn sample(document: Document) -> Session {
-        let choice = document
-            .image(document.main_image())
-            .map_or(ColorChoice::Slot(1), initial_choice);
-        let background = document
-            .image(document.main_image())
-            .map_or(ColorChoice::Slot(9), default_background);
+        let choice = initial_choice(document.canvas_image());
+        let background = default_background(document.canvas_image());
+        let active = document.layers()[0].id();
         Session {
+            active,
+            active_pos: 0,
             saved_id: document.state_id(),
             document,
             choice,
@@ -145,11 +157,110 @@ impl Session {
     }
 
     fn image_size(&self) -> Size {
+        Size::new(self.document.width(), self.document.height())
+    }
+
+    /// La capa activa (la app usa la celda: [`Session::active_cel`]).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn active_layer(&self) -> LayerId {
+        self.active
+    }
+
+    /// La celda de la capa activa: donde escriben las herramientas.
+    pub fn active_cel(&self) -> ImageId {
         self.document
-            .image(self.document.main_image())
-            .map_or(Size::new(0, 0), |image| {
-                Size::new(image.width(), image.height())
-            })
+            .layer(self.active)
+            .map_or(self.document.layers()[0].cel(), |layer| layer.cel())
+    }
+
+    /// Elige la capa activa. No toca el documento, la historia ni lo modificado.
+    pub fn set_active_layer(&mut self, id: LayerId) -> Result<(), DocumentError> {
+        let position = self
+            .document
+            .layers()
+            .iter()
+            .position(|layer| layer.id() == id)
+            .ok_or(DocumentError::UnknownLayer(id))?;
+        self.active = id;
+        self.active_pos = position;
+        Ok(())
+    }
+
+    /// Posición (desde 1) de la capa activa y número de capas, solo con más de una.
+    pub fn layers_info(&self) -> Option<(usize, usize)> {
+        let total = self.document.layers().len();
+        let position = self
+            .document
+            .layers()
+            .iter()
+            .position(|layer| layer.id() == self.active)?;
+        (total > 1).then_some((position + 1, total))
+    }
+
+    /// Aplica un comando de capa (o cualquier otro) anotando su región sucia, y deja válida la
+    /// capa activa. `Ok(false)`: sin cambios.
+    pub fn apply_layer(&mut self, command: Command) -> Result<bool, DocumentError> {
+        let blocks = dirty_of(&command, self.image_size());
+        let changed = self.document.apply(command)?;
+        if changed {
+            self.note_applied(blocks);
+            self.normalize();
+        }
+        Ok(changed)
+    }
+
+    /// Si la capa activa ya no existe, pasa a la que ocupa su posición anterior (o a la última).
+    fn keep_active_layer(&mut self) {
+        let layers = self.document.layers();
+        match layers.iter().position(|layer| layer.id() == self.active) {
+            Some(position) => self.active_pos = position,
+            None => {
+                let position = self.active_pos.min(layers.len() - 1);
+                self.active = layers[position].id();
+                self.active_pos = position;
+            }
+        }
+    }
+
+    /// Por qué la herramienta no puede pintar en la capa activa (hoy, solo si está oculta); el
+    /// cuentagotas lee igualmente.
+    pub fn paint_refusal(&self, tool: Tool) -> Option<&'static str> {
+        let paints = matches!(tool, Tool::Pencil | Tool::Line | Tool::Fill | Tool::Eraser);
+        let hidden = self
+            .document
+            .layer(self.active)
+            .is_some_and(|layer| !layer.visible());
+        (paints && hidden).then_some(HIDDEN_LAYER_NOTICE)
+    }
+
+    /// Por qué no se puede convertir el modo ahora: con varias capas hace falta `ConvertAll`.
+    pub fn convert_refusal(&self) -> Option<&'static str> {
+        (self.document.layers().len() > 1).then_some(CONVERT_LAYERS_NOTICE)
+    }
+
+    /// Alguna celda (no solo la activa) usa la entrada `index`: quitarla pide el destino.
+    pub fn removal_needs_destination(&self, index: u8) -> bool {
+        self.document.layers().iter().any(|layer| {
+            self.document
+                .image(layer.cel())
+                .is_some_and(|image| uses_entry(image, index))
+        })
+    }
+
+    /// Empieza la quita pendiente de `index` (la pregunta del destino). `false` si la imagen no
+    /// tiene paleta.
+    pub fn begin_removal_for(&mut self, index: u8) -> bool {
+        let Some(palette) = self.document.palette() else {
+            return false;
+        };
+        let default = default_destination(palette, index);
+        self.ops.begin_removal(index, default);
+        true
+    }
+
+    /// Da el estado actual por guardado (ayudas de depuración que crean capas al abrir).
+    pub fn mark_unmodified(&mut self) {
+        self.saved_id = self.document.state_id();
     }
 
     /// Toda la imagen.
@@ -204,22 +315,19 @@ impl Session {
     /// indexado y la ranura en los demás modos, dando la vuelta en los extremos. Muestra la fila
     /// elegida. Con una elección que ya no vale para la imagen, vuelve a la inicial.
     pub fn cycle_choice(&mut self, delta: i8) {
-        let next = self
-            .document
-            .image(self.document.main_image())
-            .and_then(|image| {
-                let count = cell_count(image) as i64;
-                if count == 0 {
-                    return None;
+        let next = Some(self.document.canvas_image()).and_then(|image| {
+            let count = cell_count(image) as i64;
+            if count == 0 {
+                return None;
+            }
+            match cell_of_choice(image, self.choice) {
+                Some(cell) => {
+                    let cell = (cell as i64 + i64::from(delta)).rem_euclid(count);
+                    choice_for_cell(image, cell as usize)
                 }
-                match cell_of_choice(image, self.choice) {
-                    Some(cell) => {
-                        let cell = (cell as i64 + i64::from(delta)).rem_euclid(count);
-                        choice_for_cell(image, cell as usize)
-                    }
-                    None => Some(initial_choice(image)),
-                }
-            });
+                None => Some(initial_choice(image)),
+            }
+        });
         if let Some(choice) = next {
             self.set_choice_revealing(choice);
         }
@@ -240,7 +348,7 @@ impl Session {
 
     /// `Pixel` del color del rol con los colores de ranura de la sesión.
     pub fn pixel_of(&self, role: Role) -> Option<Pixel> {
-        let image = self.document.image(self.document.main_image())?;
+        let image = self.document.canvas_image();
         pixel_for_choice_with(image, self.choice_of(role), self.slots.get(image.mode()))
     }
 
@@ -248,22 +356,19 @@ impl Session {
     /// vuelta en los extremos, como [`Session::cycle_choice`] con el primer plano. No toca el
     /// rango de rotación.
     pub fn cycle_background(&mut self, delta: i8) {
-        let next = self
-            .document
-            .image(self.document.main_image())
-            .and_then(|image| {
-                let count = cell_count(image) as i64;
-                if count == 0 {
-                    return None;
+        let next = Some(self.document.canvas_image()).and_then(|image| {
+            let count = cell_count(image) as i64;
+            if count == 0 {
+                return None;
+            }
+            match cell_of_choice(image, self.background) {
+                Some(cell) => {
+                    let cell = (cell as i64 + i64::from(delta)).rem_euclid(count);
+                    choice_for_cell(image, cell as usize)
                 }
-                match cell_of_choice(image, self.background) {
-                    Some(cell) => {
-                        let cell = (cell as i64 + i64::from(delta)).rem_euclid(count);
-                        choice_for_cell(image, cell as usize)
-                    }
-                    None => Some(default_background(image)),
-                }
-            });
+                None => Some(default_background(image)),
+            }
+        });
         if let Some(choice) = next {
             self.background = choice;
         }
@@ -282,9 +387,7 @@ impl Session {
     /// ranura del rol en ese modo. Nunca modifica el documento: ni paso de deshacer ni marca de
     /// modificado.
     pub fn apply_pick_for(&mut self, picked: Picked, role: Role) -> PickOutcome {
-        let Some(image) = self.document.image(self.document.main_image()) else {
-            return PickOutcome { notice: None };
-        };
+        let image = self.document.canvas_image();
         let mode = image.mode();
         let palette_len = image.palette().map_or(0, |palette| palette.len());
         let applied = match (picked, mode, self.choice_of(role)) {
@@ -322,14 +425,15 @@ impl Session {
         &mut self,
         reserve: &mut dyn FnMut(usize) -> bool,
     ) -> Result<bool, ClearPageError> {
-        let id = self.document.main_image();
+        if self.paint_refusal(Tool::Fill).is_some() {
+            return Err(ClearPageError::HiddenLayer);
+        }
+        let id = self.active_cel();
         let Some(pixel) = self.pixel_of(Role::Background) else {
             return Ok(false);
         };
-        let Some(image) = self.document.image(id) else {
-            return Ok(false);
-        };
-        let (width, height) = (image.width(), image.height());
+        let image = self.document.canvas_image();
+        let (width, height) = (self.document.width(), self.document.height());
         let bytes = (width as usize)
             .checked_mul(height as usize)
             .and_then(|pixels| pixels.checked_mul(image.mode().bytes_per_pixel()))
@@ -367,7 +471,7 @@ impl Session {
     /// D5). `Ok(true)` si cambió algo; con un error el documento queda intacto. Tras convertir,
     /// la elección de color se ajusta al modo nuevo como tras deshacer o rehacer.
     pub fn convert_mode(&mut self, target: Mode, allowed: Allowed) -> Result<bool, DocumentError> {
-        let image = self.document.main_image();
+        let image = self.active_cel();
         let before = self.choice;
         let changed = self.document.apply(Command::ConvertMode {
             image,
@@ -378,9 +482,7 @@ impl Session {
             self.note_applied(self.full());
             self.after_history_move(before);
             // El fondo por defecto es del modo: tras convertir se vuelve a elegir.
-            if let Some(image) = self.document.image(self.document.main_image()) {
-                self.background = default_background(image);
-            }
+            self.background = default_background(self.document.canvas_image());
         }
         Ok(changed)
     }
@@ -424,9 +526,8 @@ impl Session {
     /// paleta (rango, quita pendiente). Cada fotograma, antes del panel, y tras deshacer o
     /// rehacer.
     pub fn normalize(&mut self) {
-        let Some(image) = self.document.image(self.document.main_image()) else {
-            return;
-        };
+        self.keep_active_layer();
+        let image = self.document.canvas_image();
         self.choice = clamp_choice(image, self.choice);
         self.background = clamp_choice(image, self.background);
         let len = image.palette().map_or(0, |palette| palette.len());
@@ -448,15 +549,10 @@ impl Session {
         op: PaletteOp,
         unused: bool,
     ) -> Result<PaletteOutcome, DocumentError> {
-        let id = self.document.main_image();
+        let id = self.active_cel();
         let active = self.active_entry().unwrap_or(0);
         let (old_len, was_transparent, previous, command) = {
-            let Some(image) = self.document.image(id) else {
-                return Ok(PaletteOutcome {
-                    changed: false,
-                    notice: None,
-                });
-            };
+            let image = self.document.canvas_image();
             let palette = image.palette();
             let old_len = palette.map_or(0, |palette| palette.len());
             let previous = palette.and_then(|palette| palette.transparent_index());
@@ -606,14 +702,11 @@ impl Session {
 
     /// Pone al día el editor con el destino y el color guardado de la selección actual.
     pub fn sync_editor(&mut self) {
-        let current = self
-            .document
-            .image(self.document.main_image())
-            .and_then(|image| {
-                let target = EditTarget::of(image, self.choice_of(self.editing))?;
-                let color = target.stored(image, self.slots.get(image.mode()))?;
-                Some((target, color))
-            });
+        let current = Some(self.document.canvas_image()).and_then(|image| {
+            let target = EditTarget::of(image, self.choice_of(self.editing))?;
+            let color = target.stored(image, self.slots.get(image.mode()))?;
+            Some((target, color))
+        });
         self.editor.sync(current);
     }
 
@@ -621,7 +714,7 @@ impl Session {
     /// cambió, `Ok(false)` si el color era el mismo) o escribe la ranura de ese modo
     /// (`Ok(false)`: no es del documento, ni deshace ni marca cambios).
     pub fn commit_edit(&mut self, commit: Commit) -> Result<bool, DocumentError> {
-        let image = self.document.main_image();
+        let image = self.active_cel();
         match commit.target {
             EditTarget::Entry(index) => {
                 let changed = self.document.apply(Command::SetPaletteColor {
@@ -635,7 +728,7 @@ impl Session {
                 Ok(changed)
             }
             EditTarget::Slot(slot) => {
-                if let Some(mode) = self.document.image(image).map(|image| image.mode()) {
+                if let Some(mode) = Some(self.document.canvas_image().mode()) {
                     self.slots.get_mut(mode).set(slot, commit.color);
                 }
                 Ok(false)
@@ -751,6 +844,8 @@ impl Session {
         self.ops.reset();
         self.editor.reset();
         self.document = Document::new(image);
+        self.active = self.document.layers()[0].id();
+        self.active_pos = 0;
         self.log.clear();
         self.dirty = None;
         self.saved_id = self.document.state_id();
@@ -800,11 +895,8 @@ impl Session {
     }
 
     fn write_to(&mut self, dest: PathBuf, copy_reason: Option<String>) -> Result<Saved, FileError> {
-        let image = self
-            .document
-            .image(self.document.main_image())
-            .ok_or_else(|| FileError::Write("el documento no tiene imagen".to_string()))?;
-        let bytes = write_png(image).map_err(FileError::Png)?;
+        let image = flatten(&self.document).map_err(|error| FileError::Write(error.to_string()))?;
+        let bytes = write_png(&image).map_err(FileError::Png)?;
         write_atomic(&dest, &bytes)?;
         self.path = Some(dest.clone());
         self.saved_id = self.document.state_id();
@@ -814,6 +906,33 @@ impl Session {
             copy_reason,
         })
     }
+}
+
+/// Por qué no se pinta: la capa activa está oculta.
+pub const HIDDEN_LAYER_NOTICE: &str = "la capa activa está oculta";
+
+/// Por qué no se convierte el modo con varias capas (`ConvertAll` es de la unidad 3.5).
+pub const CONVERT_LAYERS_NOTICE: &str =
+    "no se puede convertir el modo con varias capas: deja una sola o espera a la unidad 3.5";
+
+/// Añade al aviso de guardado que con varias capas se guarda aplanado (y cuántas ocultas no
+/// entran). Con una capa, el texto tal cual.
+pub fn with_flatten_notice(text: String, document: &Document) -> String {
+    if document.layers().len() < 2 {
+        return text;
+    }
+    let mut text = format!("{text} · se guarda aplanado; el formato con capas llega con .aseprite");
+    let hidden = document
+        .layers()
+        .iter()
+        .filter(|layer| !layer.visible())
+        .count();
+    match hidden {
+        0 => {}
+        1 => text.push_str(" · 1 capa oculta no se guarda"),
+        n => text.push_str(&format!(" · {n} capas ocultas no se guardan")),
+    }
+    text
 }
 
 /// Aviso al guardar. Con copia por conversión, explica por qué no se sobrescribió el original.
