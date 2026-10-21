@@ -21,6 +21,9 @@ pub struct TitleInfo {
     pub can_redo: bool,
     /// Error que sustituye al estado.
     pub error: Option<String>,
+    /// Posición (desde 1) de la capa activa y número de capas, solo con más de una
+    /// (specs/hito-3-capas-vista.md, decisión 6).
+    pub layers: Option<(usize, usize)>,
 }
 
 /// `Pixoko: {w}×{h} · {zoom}`, y a continuación, cada uno solo si existe, ` · ({x}, {y})`,
@@ -71,6 +74,7 @@ pub fn app_title_info(
     error: Option<String>,
 ) -> TitleInfo {
     TitleInfo {
+        layers: None,
         size: image.map(|image| (image.width(), image.height())),
         zoom: canvas.zoom,
         hover: canvas.hover,
@@ -186,6 +190,7 @@ mod tests {
     /// El título completo de la spec, sin deshacer ni rehacer.
     fn base() -> TitleInfo {
         TitleInfo {
+            layers: None,
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
@@ -223,6 +228,7 @@ mod tests {
         ];
         for (can_undo, can_redo, esperado) in casos {
             let info = TitleInfo {
+                layers: None,
                 can_undo,
                 can_redo,
                 ..base()
@@ -239,6 +245,7 @@ mod tests {
     fn fila_17_el_error_sustituye_al_estado() {
         for (can_undo, can_redo) in [(false, false), (true, false), (false, true), (true, true)] {
             let info = TitleInfo {
+                layers: None,
                 can_undo,
                 can_redo,
                 error: Some("no hay memoria para guardar el paso en la historia".to_string()),
@@ -252,6 +259,7 @@ mod tests {
         }
         // También sin tamaño, sin cursor y sin color.
         let info = TitleInfo {
+            layers: None,
             size: None,
             hover: None,
             color: None,
@@ -264,6 +272,7 @@ mod tests {
     #[test]
     fn sin_cursor_ni_color_el_titulo_es_tamano_y_zoom() {
         let info = TitleInfo {
+            layers: None,
             hover: None,
             color: None,
             ..base()
@@ -274,11 +283,13 @@ mod tests {
     #[test]
     fn cada_parte_opcional_aparece_solo_si_existe() {
         let solo_cursor = TitleInfo {
+            layers: None,
             color: None,
             ..base()
         };
         assert_eq!(title_text(&solo_cursor), "Pixoko: 64×48 · ×8 · (3, 4)");
         let solo_color = TitleInfo {
+            layers: None,
             hover: None,
             ..base()
         };
@@ -288,6 +299,7 @@ mod tests {
         );
         // Deshacer y rehacer no dependen de lo demás.
         let solo_historia = TitleInfo {
+            layers: None,
             hover: None,
             color: None,
             can_undo: true,
@@ -304,6 +316,7 @@ mod tests {
     fn sin_tamano_se_conserva_la_cadena_vacia_de_title_for() {
         // Lo que daba `title_for` sin imagen: `Pixoko: {} · {zoom}` con el tamaño vacío.
         let info = TitleInfo {
+            layers: None,
             size: None,
             zoom: Zoom::default(),
             hover: None,
@@ -316,6 +329,7 @@ mod tests {
         assert_eq!(title_text(&info), "Pixoko:  · ×1");
         // Y con cursor, como antes: `Pixoko:  · ×1 · (2, 5)`.
         let con_cursor = TitleInfo {
+            layers: None,
             hover: Some((2, 5)),
             ..info
         };
@@ -326,11 +340,13 @@ mod tests {
     fn el_titulo_anterior_se_conserva_con_cursor_y_sin_cursor() {
         // Las dos formas de `title_for` en `main.rs` antes de la unidad 6.
         let con = TitleInfo {
+            layers: None,
             color: None,
             ..base()
         };
         assert_eq!(title_text(&con), "Pixoko: 64×48 · ×8 · (3, 4)");
         let sin = TitleInfo {
+            layers: None,
             hover: None,
             color: None,
             zoom: zoom(12),
@@ -357,6 +373,7 @@ mod window_title_tests {
     /// `info` completo: tamaño, zoom, cursor, color, y sin deshacer ni rehacer.
     fn completo() -> TitleInfo {
         TitleInfo {
+            layers: None,
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
@@ -371,6 +388,7 @@ mod window_title_tests {
     #[test]
     fn fila_22_titulo_completo_con_la_linea() {
         let info = TitleInfo {
+            layers: None,
             can_undo: true,
             can_redo: true,
             ..completo()
@@ -384,6 +402,7 @@ mod window_title_tests {
     #[test]
     fn fila_22_sin_color_solo_sale_la_herramienta() {
         let mut sin_cursor = TitleInfo {
+            layers: None,
             hover: None,
             color: None,
             ..completo()
@@ -395,6 +414,7 @@ mod window_title_tests {
         sin_cursor.tool = Some(Tool::Fill);
         assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · relleno");
         let con_cursor = TitleInfo {
+            layers: None,
             tool: Some(Tool::Pencil),
             color: None,
             ..completo()
@@ -431,6 +451,7 @@ mod window_title_tests {
         ];
         for (can_undo, can_redo, esperado) in casos {
             let info = TitleInfo {
+                layers: None,
                 can_undo,
                 can_redo,
                 ..completo()
@@ -449,6 +470,7 @@ mod window_title_tests {
             for (can_undo, can_redo) in [(false, false), (true, false), (false, true), (true, true)]
             {
                 let info = TitleInfo {
+                    layers: None,
                     tool: Some(tool),
                     can_undo,
                     can_redo,
@@ -467,6 +489,7 @@ mod window_title_tests {
     #[test]
     fn el_relleno_con_la_ranura_transparente_y_la_herramienta_van_juntos() {
         let info = TitleInfo {
+            layers: None,
             tool: Some(Tool::Fill),
             color: Some("color 9 transparente".to_string()),
             ..completo()
@@ -480,6 +503,7 @@ mod window_title_tests {
     #[test]
     fn sin_tamano_se_conserva_la_cadena_vacia_y_se_anade_la_herramienta() {
         let info = TitleInfo {
+            layers: None,
             size: None,
             zoom: Zoom::default(),
             hover: None,
@@ -565,6 +589,7 @@ mod status_line_tests {
     /// `info` completo: tamaño, zoom, cursor, color, deshacer y rehacer.
     fn completo() -> TitleInfo {
         TitleInfo {
+            layers: None,
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
@@ -607,6 +632,7 @@ mod status_line_tests {
     #[test]
     fn fila_10_sin_color_solo_sale_la_herramienta() {
         let info = TitleInfo {
+            layers: None,
             color: None,
             ..completo()
         };
@@ -616,6 +642,7 @@ mod status_line_tests {
     #[test]
     fn fila_10_sin_cursor_no_sale_la_posicion() {
         let info = TitleInfo {
+            layers: None,
             hover: None,
             ..completo()
         };
@@ -628,6 +655,7 @@ mod status_line_tests {
     #[test]
     fn fila_10_con_error_solo_sale_el_error() {
         let info = TitleInfo {
+            layers: None,
             error: Some("no hay memoria para guardar el paso en la historia".to_string()),
             ..completo()
         };
@@ -642,6 +670,7 @@ mod status_line_tests {
             (Tool::Fill, "relleno"),
         ] {
             let info = TitleInfo {
+                layers: None,
                 tool: Some(tool),
                 can_undo: false,
                 can_redo: false,
@@ -659,6 +688,7 @@ mod status_line_tests {
         // `window_title` da `Pixoko:  · ×1 · lápiz` (tests de la unidad 7) y sale idéntico:
         // la línea de estado es ese título sin el prefijo `Pixoko: `.
         let info = TitleInfo {
+            layers: None,
             size: None,
             zoom: Zoom::default(),
             hover: None,
@@ -713,7 +743,7 @@ mod status_line_tests {
             can_undo in any::<bool>(),
             can_redo in any::<bool>(),
         ) {
-            let info = TitleInfo { size, zoom, hover, tool: Some(tool), color, can_undo, can_redo, error: None };
+            let info = TitleInfo { layers: None, size, zoom, hover, tool: Some(tool), color, can_undo, can_redo, error: None };
             let linea = status_line(&info);
             prop_assert_eq!(window_title(&info), format!("Pixoko: {linea}"));
             prop_assert!(!linea.contains('\n') && !linea.contains('\r'), "{:?}", linea);
@@ -763,6 +793,7 @@ mod tool_field_tests {
     /// rehacer y sin herramienta.
     fn base() -> TitleInfo {
         TitleInfo {
+            layers: None,
             size: Some((64, 48)),
             zoom: zoom(8),
             hover: Some((3, 4)),
@@ -785,6 +816,7 @@ mod tool_field_tests {
     #[test]
     fn fila_2_con_la_linea_sale_antes_del_color() {
         let info = TitleInfo {
+            layers: None,
             tool: Some(Tool::Line),
             ..base()
         };
@@ -797,6 +829,7 @@ mod tool_field_tests {
     #[test]
     fn fila_3_con_la_linea_y_sin_color_solo_sale_la_herramienta() {
         let info = TitleInfo {
+            layers: None,
             tool: Some(Tool::Line),
             color: None,
             ..base()
@@ -821,6 +854,7 @@ mod tool_field_tests {
         ];
         for (tool, esperado) in casos {
             let info = TitleInfo {
+                layers: None,
                 hover: None,
                 tool: Some(tool),
                 ..base()
@@ -832,6 +866,7 @@ mod tool_field_tests {
     #[test]
     fn fila_5_el_borrador_con_color_transparente_y_la_historia_van_en_orden() {
         let info = TitleInfo {
+            layers: None,
             tool: Some(Tool::Eraser),
             color: Some("color 0 transparente".to_string()),
             can_undo: true,
@@ -857,6 +892,7 @@ mod tool_field_tests {
         for tool in herramientas {
             for (can_undo, can_redo) in [(false, false), (true, true)] {
                 let info = TitleInfo {
+                    layers: None,
                     tool,
                     can_undo,
                     can_redo,
@@ -883,6 +919,7 @@ mod tool_field_tests {
         assert_eq!(status_line(&sin), "64×48 · ×8 · (3, 4) · color 3 #ff0000");
 
         let con = TitleInfo {
+            layers: None,
             tool: Some(Tool::Line),
             ..base()
         };
@@ -931,10 +968,10 @@ mod tool_field_tests {
                 );
             }
         }
-        // Guarda de texto: `main.rs` no construye el literal `TitleInfo { .. }` por otro camino
+        // Guarda de texto: `main.rs` no construye el literal `TitleInfo { layers: None, .. }` por otro camino
         // que `app_title_info`. Es frágil a propósito (mira el texto fuente, no el
         // comportamiento): si falla, hay que mirar por qué antes de tocar la prueba.
-        assert!(!include_str!("main.rs").contains("TitleInfo {"));
+        assert!(!include_str!("main.rs").contains("TitleInfo { layers: None,"));
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1026,7 +1063,7 @@ mod tool_field_tests {
             can_redo in any::<bool>(),
             error in error_cualquiera(),
         ) {
-            let info = TitleInfo { size, zoom, hover, tool, color, can_undo, can_redo, error };
+            let info = TitleInfo { layers: None, size, zoom, hover, tool, color, can_undo, can_redo, error };
             prop_assert_eq!(title_text(&info), oraculo(&info));
         }
 
@@ -1041,7 +1078,7 @@ mod tool_field_tests {
             can_redo in any::<bool>(),
             error in error_cualquiera(),
         ) {
-            let info = TitleInfo { size, zoom, hover, tool, color, can_undo, can_redo, error };
+            let info = TitleInfo { layers: None, size, zoom, hover, tool, color, can_undo, can_redo, error };
             let linea = status_line(&info);
             prop_assert!(!linea.contains('\n') && !linea.contains('\r'), "{:?}", linea);
             for c in linea.chars() {

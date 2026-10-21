@@ -7,6 +7,7 @@ use px_ui::view::Zoom;
 
 fn info(tool: Tool, color: Option<String>) -> TitleInfo {
     TitleInfo {
+        layers: None,
         size: Some((64, 48)),
         zoom: Zoom::from_int(8).expect("zoom"),
         hover: Some((3, 4)),
