@@ -12,4 +12,5 @@ workspace = true
 [dev-dependencies]
 px-core = { path = "../px-core" }
 px-formats = { path = "../px-formats" }
+px-raster = { path = "../px-raster" }
 proptest = "1.12.0"

@@ -1892,6 +1892,7 @@ dependencies = [
  "proptest",
  "px-core",
  "px-formats",
+ "px-raster",
 ]
 
 [[package]]
