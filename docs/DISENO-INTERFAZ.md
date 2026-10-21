@@ -118,12 +118,14 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 | Cancelar y detener una operación | `Espacio` y `Esc` | `Esc` | 2 |
 | Ciclo de color | `Tab` | no existe | 5 |
 | Repetir la última orden | `a` | no existe | 8 |
-| Modos de pincel | `F1` a `F8` | no existen | 4 |
+| Modos de pincel | `Mayús`+`F1` a `Mayús`+`F8` (desde el 21 de octubre; `F1` es la ayuda) | no existen | 4 |
 | Restringir el cursor y dejar trazas | `Mayus` y `Ctrl` mientras se dibuja | no existen | 4 |
 
 **Hecho en la unidad I.1 (2026-10-20, `specs/interfaz-teclado.md`):** `d v f ,` (herramientas), `u` (más `Ctrl+Z`), `]` y `[` (también `Av Pág` y `Re Pág`), `<` y `>` (además de `+`, `=` y `-`), `n`, `Inicio`; el Borrador quedó sin letra (desde el 21 de octubre tiene `k`) y las cifras 1 a 9 sin asignar. Lo demás de la tabla sigue pendiente en su hito.
 
 **Hecho en la unidad I.2a (2026-10-20, `specs/interfaz-dos-colores.md`):** `}` y `{` (también `Mayús`+`Av Pág` y `Mayús`+`Re Pág`) cambian el fondo, `K` borra la página con él (también `Editar → Borrar página`), el botón derecho pinta con el fondo, el indicador de color y los dos anillos del panel. Con un trazo en curso el color ya se puede cambiar (afecta al trazo siguiente).
+
+**Hecho en la unidad I.5 (2026-10-21, `specs/interfaz-ayuda.md`):** `F1` abre la ayuda de la herramienta activa o del botón de la caja bajo el puntero (y `Ayuda → Ayuda de la herramienta`); `Ayuda → Atajos de teclado…` lista los atajos con `Restablecer todo`; cada atajo se edita (principal y secundario, captura del carácter que produce la tecla, conflictos con reasignar o dejarlo) y se guarda en `atajos.txt` de la carpeta de configuración. `F1` queda **reservada** (no es reasignable: la tabla no tiene teclas de función) y los modos de pincel de la fila de arriba pasan de `F1`–`F8` a `Mayús`+`F1`–`F8` (hará falta `KeyId::Function(u8)` en el hito 4). Las acciones de archivo conservan sus combinaciones modernas; ninguna combinación con `Ctrl`/`Cmd` se puede asignar. Ante un choque con un atajo por defecto nuevo gana siempre el del usuario.
 
 Reglas del esquema:
 

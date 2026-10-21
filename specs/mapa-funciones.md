@@ -129,6 +129,8 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 
 ### 2.4 Modos de pintura y efectos de color
 
+> Nota de I.5 (2026-10-21): `F1` es la ayuda y no se reasigna; las teclas `F1` a `F8` de las filas M01 a M08 (y `F1` a `F3` de la unidad 4.10) pasan a `Mayús`+`F1` a `Mayús`+`F8`.
+
 | ID | Función (original) | Qué hace | Hoy | Hito | Depende de | Riesgo | Corpus |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | M01 | Matte (`F1`) | Pincel propio tal cual, con su color transparente | no | 4 (4.10) | 4.8 | bajo | — |
