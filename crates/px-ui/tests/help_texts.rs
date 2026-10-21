@@ -45,7 +45,7 @@ const DESTINOS_DE_BOTON: [HelpTarget; 9] = [
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.
-const CLAVES: [&str; 22] = [
+const CLAVES: [&str; 30] = [
     "tool.pencil",
     "tool.line",
     "tool.fill",
@@ -68,6 +68,14 @@ const CLAVES: [&str; 22] = [
     "file.save",
     "file.save-as",
     "file.quit",
+    "layer.panel",
+    "layer.new",
+    "layer.duplicate",
+    "layer.remove",
+    "layer.up",
+    "layer.down",
+    "layer.rename",
+    "layer.properties",
 ];
 
 /// Las acciones de la tabla por defecto (22 distintas).
@@ -129,7 +137,7 @@ fn press(c: char) -> Press {
 #[test]
 fn fila_1_la_tabla_tiene_22_entradas_con_claves_unicas_y_limites() {
     let tabla = help_table();
-    assert_eq!(tabla.len(), 22);
+    assert_eq!(tabla.len(), 30);
     let claves: Vec<&str> = tabla.iter().map(|e| e.key).collect();
     assert_eq!(claves, CLAVES, "claves estables y en el orden del anexo");
     for (i, e) in tabla.iter().enumerate() {
@@ -184,7 +192,7 @@ fn fila_1_toda_accion_de_la_tabla_de_teclado_tiene_texto_y_las_claves_son_invers
         .iter()
         .filter(|e| is_editable(action_of_key(e.key).unwrap()))
         .count();
-    assert_eq!(editables, 17);
+    assert_eq!(editables, 25);
     for key in [
         "file.new",
         "file.open",

@@ -316,6 +316,10 @@ fn esquema_esperado() -> Vec<Esperada> {
         e(AppAction::ZoomActual, c('1'), true, false, todas, t),
         e(AppAction::CenterOnCursor, c('n'), false, false, todas, t),
         e(AppAction::ClearPage, c('k'), false, true, todas, t),
+        e(AppAction::ToggleLayerPanel, c('\''), false, false, todas, t),
+        e(AppAction::NewLayer, c(';'), false, false, todas, t),
+        e(AppAction::LayerUp, c(')'), false, false, todas, t),
+        e(AppAction::LayerDown, c('('), false, false, todas, t),
         e(AppAction::Open, c('o'), true, false, todas, t),
         e(AppAction::Save, c('s'), true, false, todas, t),
         e(AppAction::SaveAs, c('s'), true, true, todas, t),
@@ -349,8 +353,8 @@ fn fila_1_los_tipos_de_la_tabla_tienen_los_derives_de_la_spec() {
 fn fila_1_la_tabla_por_defecto_son_las_31_filas_de_la_spec_en_orden() {
     let km = por_defecto();
     let esperado = esquema_esperado();
-    assert_eq!(esperado.len(), 31);
-    assert_eq!(km.rows().len(), 31, "filas de la tabla por defecto");
+    assert_eq!(esperado.len(), 35);
+    assert_eq!(km.rows().len(), 35, "filas de la tabla por defecto");
     for (i, (real, esperada)) in km.rows().iter().zip(&esperado).enumerate() {
         assert_eq!(real.action, esperada.action, "fila {i}: acción");
         assert_eq!(
@@ -388,7 +392,7 @@ fn fila_1_hay_22_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
     let km = por_defecto();
     let sin = km.rows().iter().filter(|f| !f.command).count();
     let con = km.rows().iter().filter(|f| f.command).count();
-    assert_eq!((sin, con), (22, 9));
+    assert_eq!((sin, con), (26, 9));
     let quit: Vec<&Binding> = km
         .rows()
         .iter()
@@ -402,9 +406,9 @@ fn fila_1_hay_22_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
 fn fila_1_hay_31_filas_activas_en_linux_y_30_en_windows_y_macos() {
     let km = por_defecto();
     for (platform, esperado) in [
-        (Platform::Linux, 31),
-        (Platform::Windows, 30),
-        (Platform::Mac, 30),
+        (Platform::Linux, 35),
+        (Platform::Windows, 34),
+        (Platform::Mac, 34),
     ] {
         let activas = km
             .rows()
@@ -1142,6 +1146,7 @@ fn fila_5_los_anchos_de_los_desplegables_no_cambian() {
             ("Editar", false) => 124,
             ("Editar", true) => 152,
             ("Imagen", _) => 131,
+            ("Capa", _) => 124,
             ("Ver", _) => 208,
             ("Ayuda", _) => 201,
             otro => panic!("menú {otro:?}"),

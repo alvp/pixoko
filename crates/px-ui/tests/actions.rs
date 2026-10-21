@@ -504,6 +504,8 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
         Key::OpenBracket => Some(AppAction::ColorPrev),
         Key::CloseCurlyBracket => Some(AppAction::BackgroundNext),
         Key::OpenCurlyBracket => Some(AppAction::BackgroundPrev),
+        Key::Quote => Some(AppAction::ToggleLayerPanel),
+        Key::Semicolon => Some(AppAction::NewLayer),
         _ => None,
     }
 }
@@ -733,8 +735,8 @@ fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
         }
     }
     // 12 entradas con atajo en Linux y 11 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
-    // `Salir`; con `Nueva imagen…` de la unidad 19 y `Borrar página` de I.2a): 12 + 11 + 11 = 34.
-    assert_eq!(con_atajo, 12 + 11 + 11);
+    // `Salir`; con `Nueva imagen…` de la unidad 19 y `Borrar página` de I.2a): 16 + 15 + 15 = 46.
+    assert_eq!(con_atajo, 16 + 15 + 15);
 }
 
 // ---------------------------------------------------------------------------------------------

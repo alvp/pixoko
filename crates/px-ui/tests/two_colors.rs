@@ -564,7 +564,7 @@ fn fila_7_mayus_re_pag_y_av_pag_son_el_fondo_y_sin_mayus_siguen_siendo_el_primer
 #[test]
 fn fila_7_la_tabla_tiene_31_filas_sin_choques_y_solo_las_nueve_modernas_llevan_command() {
     let keymap = Keymap::default_scheme();
-    assert_eq!(keymap.rows().len(), 31);
+    assert_eq!(keymap.rows().len(), 35);
     assert_eq!(keymap.conflicts(), Vec::<Conflict>::new());
     let con_command = keymap.rows().iter().filter(|row| row.command).count();
     assert_eq!(con_command, 9);

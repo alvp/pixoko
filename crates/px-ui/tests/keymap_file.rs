@@ -478,7 +478,7 @@ fn propiedad_1b_ida_y_vuelta_con_todas_las_combinaciones_de_la_tabla() {
             }
         }
     }
-    assert_eq!(comprobadas, 17 * 2 * atajos.len());
+    assert_eq!(comprobadas, 25 * 2 * atajos.len());
 }
 
 /// Los atajos mostrados siguen funcionando tras leer un fichero cualquiera (la tabla leída es una

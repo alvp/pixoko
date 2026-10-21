@@ -59,7 +59,7 @@ fn fila_1_los_14_png_son_de_16x16_con_alfa_0_o_255_blancos_no_vacios_ni_llenos_y
         );
         assert!(vistos.insert(mascara), "{nombre}: es igual que otro icono");
     }
-    assert_eq!(vistos.len(), 14);
+    assert_eq!(vistos.len(), 21);
 }
 
 #[test]
@@ -103,6 +103,13 @@ fn fila_1_hay_un_fichero_por_icono_ninguno_de_mas_y_el_readme_dice_original_mit_
             "rotar-izquierda",
             "rotar-derecha",
             "transparente",
+            "ojo",
+            "ojo-cerrado",
+            "candado",
+            "candado-abierto",
+            "duplicar",
+            "subir",
+            "bajar",
         ]
     );
     let readme = std::fs::read_to_string(carpeta().join("README.md")).expect("README.md");
@@ -162,7 +169,7 @@ fn fila_2_load_sube_14_texturas_de_16x16_con_vecino_mas_cercano_y_distintas() {
         );
         imagenes.insert(pixeles.clone());
     }
-    assert_eq!(imagenes.len(), 14, "las 14 son distintas");
+    assert_eq!(imagenes.len(), 21, "las 21 son distintas");
     // Se cargan una vez: otro fotograma no sube nada más.
     assert!(texturas_subidas(&ctx).is_empty());
 }

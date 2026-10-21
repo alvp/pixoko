@@ -139,7 +139,7 @@ fn fila_5_solo_las_acciones_editables_tienen_editor() {
             "{action:?}"
         );
     }
-    assert_eq!(editables().len(), 17);
+    assert_eq!(editables().len(), 25);
     for action in editables() {
         assert!(ShortcutEditor::new(action, &tabla, Platform::Linux).is_some());
     }

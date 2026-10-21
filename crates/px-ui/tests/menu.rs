@@ -73,12 +73,15 @@ fn atajo(key: KeyId, command: bool, shift: bool) -> Option<Shortcut> {
 #[test]
 fn fila_1_cinco_menus_en_orden_con_sus_titulos() {
     let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
-    assert_eq!(titulos, ["Archivo", "Editar", "Imagen", "Ver", "Ayuda"]);
+    assert_eq!(
+        titulos,
+        ["Archivo", "Editar", "Imagen", "Capa", "Ver", "Ayuda"]
+    );
 }
 
 #[test]
 fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
-    let esperado: [(&str, Vec<(&str, AppAction)>); 5] = [
+    let esperado: [(&str, Vec<(&str, AppAction)>); 6] = [
         (
             "Archivo",
             vec![
@@ -98,6 +101,19 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
             ],
         ),
         ("Imagen", vec![("Convertir modo…", AppAction::ConvertMode)]),
+        (
+            "Capa",
+            vec![
+                ("Nueva capa", AppAction::NewLayer),
+                ("Duplicar", AppAction::DuplicateLayer),
+                ("Quitar", AppAction::RemoveLayer),
+                ("Subir", AppAction::LayerUp),
+                ("Bajar", AppAction::LayerDown),
+                ("Renombrar", AppAction::RenameLayer),
+                ("Propiedades", AppAction::LayerProperties),
+                ("Mostrar panel", AppAction::ToggleLayerPanel),
+            ],
+        ),
         (
             "Ver",
             vec![
@@ -145,7 +161,7 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 #[test]
 fn fila_1_hay_dieciseis_entradas_y_ninguna_accion_se_repite() {
     let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 16);
+    assert_eq!(acciones.len(), 24);
     for (i, a) in acciones.iter().enumerate() {
         assert!(
             !acciones[i + 1..].contains(a),
@@ -159,6 +175,16 @@ fn fila_1_hay_dieciseis_entradas_y_ninguna_accion_se_repite() {
     // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
     esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
+    esperado.extend([
+        AppAction::NewLayer,
+        AppAction::DuplicateLayer,
+        AppAction::RemoveLayer,
+        AppAction::LayerUp,
+        AppAction::LayerDown,
+        AppAction::RenameLayer,
+        AppAction::LayerProperties,
+        AppAction::ToggleLayerPanel,
+    ]);
     esperado.extend(&ACCIONES_DE_LA_TABLA[6..10]);
     // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
     esperado.push(AppAction::ShowHelp(HelpTarget::Active));
@@ -189,7 +215,7 @@ fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 16]) -> Vec<Option<String>> {
+fn algunos(textos: [Option<&str>; 24]) -> Vec<Option<String>> {
     textos.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -207,6 +233,14 @@ fn fila_1_atajos_en_linux() {
             Some("Ctrl+Y"),
             Some("K"),
             None,
+            Some(";"),
+            None,
+            None,
+            Some(")"),
+            Some("("),
+            None,
+            None,
+            Some("'"),
             Some(">"),
             Some("<"),
             Some("Inicio"),
@@ -232,6 +266,14 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             Some("Ctrl+Y"),
             Some("K"),
             None,
+            Some(";"),
+            None,
+            None,
+            Some(")"),
+            Some("("),
+            None,
+            None,
+            Some("'"),
             Some(">"),
             Some("<"),
             Some("Inicio"),
@@ -258,6 +300,14 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             Some("Cmd+Mayús+Z"),
             Some("K"),
             None,
+            Some(";"),
+            None,
+            None,
+            Some(")"),
+            Some("("),
+            None,
+            None,
+            Some("'"),
             Some(">"),
             Some("<"),
             Some("Inicio"),
@@ -832,7 +882,8 @@ fn fila_10_imagen_es_el_tercer_menu_entre_editar_y_ver_con_una_sola_entrada() {
     let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
     assert_eq!(titulos.iter().position(|t| *t == "Imagen"), Some(2));
     assert_eq!(titulos[1], "Editar");
-    assert_eq!(titulos[3], "Ver");
+    assert_eq!(titulos[3], "Capa");
+    assert_eq!(titulos[4], "Ver");
 
     let imagen = menu_imagen();
     assert_eq!(imagen.items.len(), 1, "una sola entrada");

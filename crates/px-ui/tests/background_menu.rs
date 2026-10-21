@@ -188,8 +188,11 @@ fn fila_12_ver_gana_un_submenu_fondo_del_lienzo_con_las_cinco_opciones_en_orden(
 #[test]
 fn fila_12_el_resto_de_menus_no_tiene_submenus_y_son_cinco_en_orden() {
     let titulos: Vec<&str> = MENUS.iter().map(|m| m.title).collect();
-    assert_eq!(titulos, ["Archivo", "Editar", "Imagen", "Ver", "Ayuda"]);
-    for titulo in ["Archivo", "Editar", "Imagen", "Ayuda"] {
+    assert_eq!(
+        titulos,
+        ["Archivo", "Editar", "Imagen", "Capa", "Ver", "Ayuda"]
+    );
+    for titulo in ["Archivo", "Editar", "Imagen", "Capa", "Ayuda"] {
         assert!(el_menu(titulo).submenus.is_empty(), "{titulo}");
     }
 }
@@ -207,6 +210,16 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
     // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
     esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
+    esperado.extend([
+        AppAction::NewLayer,
+        AppAction::DuplicateLayer,
+        AppAction::RemoveLayer,
+        AppAction::LayerUp,
+        AppAction::LayerDown,
+        AppAction::RenameLayer,
+        AppAction::LayerProperties,
+        AppAction::ToggleLayerPanel,
+    ]);
     esperado.extend(&ACCIONES_DE_LA_TABLA[6..10]);
     // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
     esperado.push(AppAction::ShowHelp(HelpTarget::Active));

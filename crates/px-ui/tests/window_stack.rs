@@ -408,7 +408,7 @@ fn fila_7_el_menu_pinta_sus_cinco_titulos_dentro_de_su_barra_y_caben_en_el_ancho
         );
         // El último título termina antes de 4 + 249 u más la separación entre botones.
         let ayuda = titulo(&f, ppp, n, "Ayuda");
-        assert!(ayuda.rect().max.x * ppp <= ((4 + 249) * n) as f32 + 4.0 * n as f32);
+        assert!(ayuda.rect().max.x * ppp <= ((4 + 289) * n) as f32 + 4.0 * n as f32);
     }
 }
 

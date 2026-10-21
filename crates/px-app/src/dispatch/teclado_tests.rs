@@ -867,7 +867,7 @@ fn fila_8_con_un_dialogo_de_archivo_toda_fila_de_la_tabla_da_blocked_tambien_ini
     let filas = filas_activas();
     assert_eq!(
         filas.len(),
-        31 + 30 + 30,
+        35 + 34 + 34,
         "filas activas en las tres plataformas"
     );
     for (action, platform) in filas {
