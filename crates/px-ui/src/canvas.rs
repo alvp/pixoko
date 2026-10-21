@@ -22,8 +22,8 @@ use crate::color::Role;
 use crate::dirty::BlockSet;
 use crate::gestures::{GestureAction, GestureMap, Input, Navigation, PAN_LINE_POINTS, Pointing};
 use crate::pointer_events::{button_of, wheel_of};
+use crate::source::PixelSource;
 use crate::text::text_scale;
-use crate::texture::{try_tile_pixels, try_tile_pixels_with_entry};
 use crate::tiles::{BLOCK, SystemTileAlloc, TileAlloc, TileRect, Tiling, block_rect, tile_side};
 use crate::view::{ScreenRect, Size, View, ViewOp, Zoom};
 
@@ -221,7 +221,11 @@ impl Canvas {
     /// solo instala si salen todas. Con un error (`TooLarge`, `OutOfMemory`) el lienzo anterior
     /// queda intacto y no queda ninguna textura nueva viva. La vista vuelve al ajuste en el
     /// siguiente `interact`.
-    pub fn load(&mut self, ctx: &Context, image: &Image) -> Result<(), CanvasError> {
+    pub fn load(
+        &mut self,
+        ctx: &Context,
+        image: &(impl PixelSource + ?Sized),
+    ) -> Result<(), CanvasError> {
         self.load_with(ctx, image, &mut SystemTileAlloc)
     }
 
@@ -229,7 +233,7 @@ impl Canvas {
     pub fn load_with(
         &mut self,
         ctx: &Context,
-        image: &Image,
+        image: &(impl PixelSource + ?Sized),
         alloc: &mut dyn TileAlloc,
     ) -> Result<(), CanvasError> {
         let (width, height) = (image.width(), image.height());
@@ -253,7 +257,7 @@ impl Canvas {
             .map_err(|_| CanvasError::OutOfMemory)?;
         for index in 0..tiling.len() {
             let rect = tiling.rect(index);
-            let pixels = try_tile_pixels(image, rect, alloc)?;
+            let pixels = image.region(rect, None, alloc)?;
             images.push(ColorImage::new(
                 [rect.width as usize, rect.height as usize],
                 pixels,
@@ -338,7 +342,7 @@ impl Canvas {
     }
 
     /// `image` es la imagen que tienen las baldosas (mismo tamaño).
-    fn matches(&self, image: &Image) -> bool {
+    fn matches(&self, image: &(impl PixelSource + ?Sized)) -> bool {
         !self.tiles.is_empty() && self.size == Some(Size::new(image.width(), image.height()))
     }
 
@@ -375,7 +379,11 @@ impl Canvas {
     /// Sube desde el documento los bloques sucios de las baldosas **visibles** (las demás los
     /// conservan hasta que se vean). Si todos los bloques de una baldosa están sucios, una sola
     /// subida de la baldosa entera; si no, una por serie de bloques contiguos (`BlockSet::runs`).
-    pub fn sync(&mut self, ctx: &Context, image: &Image) -> Result<(), CanvasError> {
+    pub fn sync(
+        &mut self,
+        ctx: &Context,
+        image: &(impl PixelSource + ?Sized),
+    ) -> Result<(), CanvasError> {
         self.sync_with(ctx, image, &mut SystemTileAlloc)
     }
 
@@ -384,7 +392,7 @@ impl Canvas {
     pub fn sync_with(
         &mut self,
         ctx: &Context,
-        image: &Image,
+        image: &(impl PixelSource + ?Sized),
         alloc: &mut dyn TileAlloc,
     ) -> Result<(), CanvasError> {
         if !self.matches(image) {
@@ -402,7 +410,7 @@ impl Canvas {
                 self.tiles[index].dirty.runs(rect)
             };
             for run in runs {
-                let pixels = try_tile_pixels(image, run, alloc)?;
+                let pixels = image.region(run, None, alloc)?;
                 let patch = ColorImage::new([run.width as usize, run.height as usize], pixels);
                 let tile = &mut self.tiles[index];
                 if run == rect {
@@ -461,7 +469,12 @@ impl Canvas {
     /// cambia hasta soltar). Se escriben solo los píxeles nuevos si lo anterior es su prefijo
     /// (lápiz y borrador); si no (la goma elástica de la línea), los bloques de lo anterior
     /// vuelven al documento y se escriben los nuevos. Vacío es [`Canvas::clear_overlay`].
-    pub fn set_overlay(&mut self, ctx: &Context, image: &Image, pixels: &[(u32, u32, Rgba)]) {
+    pub fn set_overlay(
+        &mut self,
+        ctx: &Context,
+        image: &(impl PixelSource + ?Sized),
+        pixels: &[(u32, u32, Rgba)],
+    ) {
         if pixels.is_empty() {
             self.clear_overlay();
             return;
@@ -484,7 +497,12 @@ impl Canvas {
             self.overlay.pending.clear();
             for (bx, by) in old.into_iter().filter(|block| !keep.contains(block)) {
                 let rect = block_rect(bx, by, size);
-                self.put(rect, crate::texture::tile_pixels(image, rect));
+                self.put(
+                    rect,
+                    image
+                        .region(rect, None, &mut SystemTileAlloc)
+                        .unwrap_or_default(),
+                );
             }
             0
         };
@@ -495,11 +513,11 @@ impl Canvas {
             }
             let block = (x / BLOCK, y / BLOCK);
             let rect = block_rect(block.0, block.1, size);
-            let buffer = self
-                .overlay
-                .blocks
-                .entry(block)
-                .or_insert_with(|| crate::texture::tile_pixels(image, rect));
+            let buffer = self.overlay.blocks.entry(block).or_insert_with(|| {
+                image
+                    .region(rect, None, &mut SystemTileAlloc)
+                    .unwrap_or_default()
+            });
             buffer[(y - rect.y) as usize * rect.width as usize + (x - rect.x) as usize] =
                 Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
             touched.insert(block);
@@ -568,12 +586,18 @@ impl Canvas {
     /// color resuelto cambió respecto a lo último subido o la baldosa aún no lleva la vista previa
     /// (specs/hito-2-editar-color.md, decisión 7). Sin baldosas o con otro tamaño no hace nada.
     /// [`Canvas::end_preview`], [`Canvas::refresh`] y [`Canvas::set_image`] la deshacen.
-    pub fn preview_entry(&mut self, ctx: &Context, image: &Image, index: u8, color: Rgba) {
+    pub fn preview_entry(
+        &mut self,
+        ctx: &Context,
+        image: &(impl PixelSource + ?Sized),
+        index: u8,
+        color: Rgba,
+    ) {
         if !self.matches(image) {
             return;
         }
         let size = self.size.unwrap_or(Size::new(0, 0));
-        let resolved = if image.palette().and_then(|p| p.transparent_index()) == Some(index) {
+        let resolved = if image.transparent_index() == Some(index) {
             Rgba { a: 0, ..color }
         } else {
             color
@@ -589,9 +613,7 @@ impl Canvas {
                 continue;
             }
             let rect = self.tiles[i].rect;
-            let Ok(pixels) =
-                try_tile_pixels_with_entry(image, rect, index, color, &mut SystemTileAlloc)
-            else {
+            let Ok(pixels) = image.region(rect, Some((index, color)), &mut SystemTileAlloc) else {
                 continue;
             };
             let tile = &mut self.tiles[i];
@@ -612,7 +634,7 @@ impl Canvas {
 
     /// Devuelve las baldosas tocadas por la vista previa al contenido de `image` (las visibles
     /// ya; las demás, al verse). Sin vista previa, no hace nada.
-    pub fn end_preview(&mut self, ctx: &Context, image: &Image) {
+    pub fn end_preview(&mut self, ctx: &Context, image: &(impl PixelSource + ?Sized)) {
         if self.previewing.is_none() && self.tiles.iter().all(|tile| !tile.tainted) {
             return;
         }

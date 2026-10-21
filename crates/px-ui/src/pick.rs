@@ -126,12 +126,25 @@ impl Dropper {
     /// Visita `pos`: `Some` solo si cae dentro de la imagen y es otro píxel que el último
     /// visitado. Fuera de la imagen no hace nada (ni olvida el último).
     pub fn visit(&mut self, image: &Image, pos: (i32, i32)) -> Option<Picked> {
+        self.visit_with((image.width(), image.height()), pos, |x, y| {
+            picked_at(image, x, y)
+        })
+    }
+
+    /// Como [`Dropper::visit`] para un lienzo de `size` (ancho, alto) del que `read` lee el
+    /// valor de un píxel: lo que se ve con capas, o la celda de la capa activa.
+    pub fn visit_with(
+        &mut self,
+        size: (u32, u32),
+        pos: (i32, i32),
+        read: impl FnOnce(u32, u32) -> Option<Picked>,
+    ) -> Option<Picked> {
         let x = u32::try_from(pos.0).ok()?;
         let y = u32::try_from(pos.1).ok()?;
-        if x >= image.width() || y >= image.height() || self.last == Some((x, y)) {
+        if x >= size.0 || y >= size.1 || self.last == Some((x, y)) {
             return None;
         }
         self.last = Some((x, y));
-        picked_at(image, x, y)
+        read(x, y)
     }
 }

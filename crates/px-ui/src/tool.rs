@@ -5,7 +5,9 @@
 //! [`CanvasEvent`] / [`CanvasInput`] y las teclas a [`ToolAction`].
 
 use egui::{Key, Modifiers};
-use px_core::{Command, Document, DocumentError, Image, ImageId, Pixel, PixelEdit};
+use px_core::{
+    Command, Document, DocumentError, Image, ImageId, Mode, Pixel, PixelEdit, Rgba, Span,
+};
 use px_raster::{Line, fill_command, line_command};
 
 use crate::actions::{AppAction, Platform};
@@ -14,9 +16,150 @@ use crate::color::{ColorChoice, SlotColors, choice_label_with, pixel_for_choice}
 use crate::dirty::{Change, dirty_of};
 use crate::key_events::press_from_key;
 use crate::keymap::default_keymap;
-use crate::pick::{Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable};
+use crate::pick::{
+    Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable, picked_at,
+};
+use crate::source::visible_picked;
 use crate::stroke::Stroke;
 use crate::view::Size;
+
+/// `image` es la celda de alguna capa (vacía o no).
+fn is_cell(doc: &Document, image: ImageId) -> bool {
+    doc.layers().iter().any(|layer| layer.cel() == image)
+}
+
+/// La imagen de la que salen el modo y la paleta de la celda `image`: la propia o, si está vacía,
+/// la del lienzo; `None` si `image` no es de ninguna celda.
+fn reference(doc: &Document, image: ImageId) -> Option<&Image> {
+    doc.image(image)
+        .or_else(|| is_cell(doc, image).then(|| doc.canvas_image()))
+}
+
+/// El valor de una celda vacía en el modo del lienzo: el transparente (`None` en los modos que no
+/// lo tienen).
+fn empty_value(canvas: &Image) -> Option<Pixel> {
+    match canvas.mode() {
+        Mode::Rgba => Some(Pixel::Rgba(Rgba::TRANSPARENT)),
+        Mode::GrayAlpha => Some(Pixel::GrayAlpha { gray: 0, alpha: 0 }),
+        Mode::Indexed => canvas
+            .palette()
+            .and_then(|palette| palette.transparent_index())
+            .map(Pixel::Indexed),
+        Mode::Gray => None,
+    }
+}
+
+/// `line_command` también sobre una celda vacía (que `px-raster` no ve): `SetPixels` con lo que
+/// cae dentro del lienzo, sin materializar nada antes de aplicarlo.
+fn line_in(
+    doc: &Document,
+    image: ImageId,
+    a: (i32, i32),
+    b: (i32, i32),
+    pixel: Pixel,
+) -> Result<Option<Command>, DocumentError> {
+    if doc.image(image).is_some() || !is_cell(doc, image) {
+        return line_command(doc, image, a, b, pixel);
+    }
+    let line = Line::new(a, b).clip_to(doc.width(), doc.height());
+    if line.is_empty() {
+        return Ok(None);
+    }
+    let len = usize::try_from(line.len()).map_err(|_| DocumentError::OutOfMemory)?;
+    let mut pixels = Vec::new();
+    pixels
+        .try_reserve_exact(len)
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    for (x, y) in line {
+        // Tras recortar, `x` e `y` están dentro del lienzo.
+        if let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y)) {
+            pixels.push(PixelEdit { x, y, pixel });
+        }
+    }
+    Ok(Some(Command::SetPixels { image, pixels }))
+}
+
+/// `fill_command` también sobre una celda vacía: todo el lienzo es una región del valor
+/// transparente, así que el relleno es un `FillSpans` de un tramo por fila (sin reservar la celda
+/// antes de aplicarlo). El color igual al transparente no cambia nada.
+fn fill_in(
+    doc: &Document,
+    image: ImageId,
+    x: i32,
+    y: i32,
+    pixel: Pixel,
+) -> Result<Option<Command>, DocumentError> {
+    if doc.image(image).is_some() || !is_cell(doc, image) {
+        return fill_command(doc, image, x, y, pixel);
+    }
+    let canvas = doc.canvas_image();
+    canvas
+        .check_pixel(pixel)
+        .map_err(|source| DocumentError::Pixel { pixel: 0, source })?;
+    let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y)) else {
+        return Ok(None);
+    };
+    if x >= doc.width() || y >= doc.height() {
+        return Ok(None);
+    }
+    let seed = empty_value(canvas).ok_or(DocumentError::NoTransparency { mode: doc.mode() })?;
+    if seed == pixel {
+        return Ok(None);
+    }
+    let height = doc.height();
+    let mut spans = Vec::new();
+    spans
+        .try_reserve_exact(height as usize)
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    spans.extend((0..height).map(|y| Span {
+        y,
+        x_start: 0,
+        x_end: doc.width(),
+    }));
+    Ok(Some(Command::FillSpans {
+        image,
+        spans,
+        pixel,
+    }))
+}
+
+/// Qué lee el cuentagotas.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DropperSource {
+    /// Lo que se ve: la composición de las capas visibles.
+    #[default]
+    Visible,
+    /// La celda de la capa activa (vacía: el valor transparente).
+    Layer,
+}
+
+/// Lo que elige el cuentagotas en `pos` según `source`; `None` fuera del lienzo.
+fn pick_at(
+    doc: &Document,
+    image: ImageId,
+    source: DropperSource,
+    x: u32,
+    y: u32,
+) -> Option<Picked> {
+    match source {
+        DropperSource::Visible => visible_picked(doc, x, y),
+        DropperSource::Layer => match doc.image(image) {
+            Some(cell) => picked_at(cell, x, y),
+            None => {
+                let value = empty_value(doc.canvas_image())?;
+                (x < doc.width() && y < doc.height()).then_some(())?;
+                Some(match value {
+                    Pixel::Indexed(index) => Picked::Entry(index),
+                    Pixel::Rgba(color) => Picked::Color(color),
+                    Pixel::GrayAlpha { gray, alpha } => {
+                        Picked::Color(Rgba::new(gray, gray, gray, alpha))
+                    }
+                    Pixel::Gray(gray) => Picked::Color(Rgba::opaque(gray, gray, gray)),
+                })
+            }
+        },
+    }
+}
 
 /// Herramienta activa.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -131,6 +274,7 @@ enum Gesture {
 #[derive(Debug, Default)]
 pub struct ToolState {
     tool: Tool,
+    dropper_source: DropperSource,
     gesture: Gesture,
     events: Vec<ToolEvent>,
     changes: Vec<Change>,
@@ -144,6 +288,16 @@ impl ToolState {
 
     pub fn tool(&self) -> Tool {
         self.tool
+    }
+
+    /// Qué lee el cuentagotas (por defecto, lo visible). Sin gesto ni opción hasta el panel de
+    /// capas (3.4).
+    pub fn dropper_source(&self) -> DropperSource {
+        self.dropper_source
+    }
+
+    pub fn set_dropper_source(&mut self, source: DropperSource) {
+        self.dropper_source = source;
     }
 
     /// Cierto entre `Begin` y `End`, ambos incluidos, haya o no gesto real.
@@ -171,8 +325,8 @@ impl ToolState {
             _ => None,
         };
         let size = image
-            .and_then(|id| doc.image(id))
-            .map(|target| Size::new(target.width(), target.height()));
+            .filter(|&id| is_cell(doc, id))
+            .map(|_| Size::new(doc.width(), doc.height()));
         let blocks = size.map(|size| dirty_of(&command, size));
         let changed = doc.apply(command)?;
         if changed && let Some(blocks) = blocks {
@@ -205,9 +359,8 @@ impl ToolState {
         choice: impl Into<ColorChoice>,
         event: CanvasEvent,
     ) -> Result<bool, DocumentError> {
-        let pixel = doc
-            .image(image)
-            .and_then(|target| pixel_for_choice(target, choice.into()));
+        let pixel =
+            reference(doc, image).and_then(|target| pixel_for_choice(target, choice.into()));
         self.canvas_event_with(doc, image, pixel, event)
     }
 
@@ -229,9 +382,11 @@ impl ToolState {
                         stroke.move_to(pos, *pixel);
                     }
                     Gesture::Dropper(dropper) => {
-                        let picked = doc
-                            .image(image)
-                            .and_then(|target| dropper.visit(target, pos));
+                        let source = self.dropper_source;
+                        let picked =
+                            dropper.visit_with((doc.width(), doc.height()), pos, |x, y| {
+                                pick_at(doc, image, source, x, y)
+                            });
                         self.events.extend(picked.map(ToolEvent::Picked));
                     }
                     Gesture::Line { to, .. } => *to = pos,
@@ -264,7 +419,7 @@ impl ToolState {
                 }
                 Gesture::Line {
                     from, to, pixel, ..
-                } => match line_command(doc, image, from, to, pixel)? {
+                } => match line_in(doc, image, from, to, pixel)? {
                     Some(command) => self.apply(doc, command),
                     None => Ok(false),
                 },
@@ -316,21 +471,25 @@ impl ToolState {
         pos: (i32, i32),
     ) -> Result<bool, DocumentError> {
         self.gesture = Gesture::Waiting;
-        let Some(target) = doc.image(image) else {
+        let Some(target) = reference(doc, image) else {
             return Ok(false);
         };
+        let (width, height) = (doc.width(), doc.height());
         match self.tool {
             Tool::Dropper => {
                 let mut dropper = Dropper::new();
-                self.events
-                    .extend(dropper.visit(target, pos).map(ToolEvent::Picked));
+                let source = self.dropper_source;
+                let picked = dropper.visit_with((width, height), pos, |x, y| {
+                    pick_at(doc, image, source, x, y)
+                });
+                self.events.extend(picked.map(ToolEvent::Picked));
                 self.gesture = Gesture::Dropper(dropper);
                 return Ok(false);
             }
             Tool::Eraser => {
                 match eraser_pixel(target) {
                     Ok(pixel) => {
-                        let mut stroke = Stroke::new(target.width(), target.height());
+                        let mut stroke = Stroke::new(width, height);
                         stroke.move_to(pos, pixel);
                         self.gesture = Gesture::Erase { stroke, pixel };
                     }
@@ -343,7 +502,6 @@ impl ToolState {
         let Some(pixel) = pixel else {
             return Ok(false);
         };
-        let (width, height) = (target.width(), target.height());
         match self.tool {
             Tool::Pencil => {
                 let mut stroke = Stroke::new(width, height);
@@ -361,7 +519,7 @@ impl ToolState {
                 };
                 Ok(false)
             }
-            Tool::Fill => match fill_command(doc, image, pos.0, pos.1, pixel)? {
+            Tool::Fill => match fill_in(doc, image, pos.0, pos.1, pixel)? {
                 Some(command) => self.apply(doc, command),
                 None => Ok(false),
             },

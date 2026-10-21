@@ -186,8 +186,9 @@ impl BlockSet {
 
 /// Bloques que puede cambiar un comando, calculados **antes** de aplicarlo (superconjunto de lo
 /// que cambia): `SetPixels` = los de sus píxeles; `FillSpans` = los de sus tramos; `Batch` = la
-/// unión; mover, reordenar y añadir entradas de paleta = vacío (la imagen se ve igual); el resto
-/// (y cualquier comando que no se conozca) = toda la imagen.
+/// unión; mover, reordenar y añadir entradas de paleta, añadir una capa (vacía) y renombrarla = vacío (lo que
+/// se ve no cambia); el resto, incluidos los demás comandos de capa (y cualquier comando que no se
+/// conozca) = toda la imagen.
 pub fn dirty_of(command: &Command, size: Size) -> BlockSet {
     let mut set = BlockSet::new(size.width, size.height);
     match command {
@@ -213,7 +214,9 @@ pub fn dirty_of(command: &Command, size: Size) -> BlockSet {
         }
         Command::MovePaletteEntry { .. }
         | Command::PermutePalette { .. }
-        | Command::AddPaletteEntry { .. } => {}
+        | Command::AddPaletteEntry { .. }
+        | Command::AddLayer { .. }
+        | Command::RenameLayer { .. } => {}
         _ => return BlockSet::full(size.width, size.height),
     }
     set

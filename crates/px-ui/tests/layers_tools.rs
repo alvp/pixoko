@@ -19,8 +19,8 @@ use std::borrow::Cow;
 
 use proptest::prelude::*;
 use px_core::{
-    BlendMode, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Palette, Pixel,
-    PixelEdit, Rgba, Span,
+    BlendMode, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Pixel, PixelEdit,
+    Rgba,
 };
 use px_raster::{Rect, compose, compose_rect, composite_pixel, fill_command, flood_fill};
 use px_ui::canvas::CanvasEvent;
@@ -803,14 +803,10 @@ fn fila_9_con_una_capa_la_superposicion_es_el_color_crudo_de_hoy() {
 // Propiedad 2: la superposición no miente
 // ---------------------------------------------------------------------------------------------
 
-fn semilla_de_capas() -> impl Strategy<
-    Value = (
-        u8,
-        Vec<(u8, u8, u8, u8, u32, u32)>,
-        u8,
-        Vec<(u32, u32, u32)>,
-    ),
-> {
+type Capas = Vec<(u8, u8, u8, u8, u32, u32)>;
+type Trazo = Vec<(u32, u32, u32)>;
+
+fn semilla_de_capas() -> impl Strategy<Value = (u8, Capas, u8, Trazo)> {
     (
         0u8..3,
         prop::collection::vec(
@@ -882,17 +878,14 @@ proptest! {
         let colores = overlay_pixels(&doc, celda, unicos.clone());
         prop_assert_eq!(colores.len(), unicos.len());
         let mut aplicado = doc.clone();
-        if aplicado.apply(Command::SetPixels { image: celda, pixels: unicos.clone() }).is_ok() {
-            if let Ok(compuesta) = compose(&aplicado) {
-                for (x, y, color) in colores {
-                    let pixel = compuesta.get_pixel(x, y).unwrap();
-                    prop_assert_eq!(Some(color), pixel_rgba(&compuesta, pixel), "({}, {})", x, y);
-                }
+        let aplicable = aplicado
+            .apply(Command::SetPixels { image: celda, pixels: unicos.clone() })
+            .is_ok();
+        if aplicable && let Ok(compuesta) = compose(&aplicado) {
+            for (x, y, color) in colores {
+                let pixel = compuesta.get_pixel(x, y).unwrap();
+                prop_assert_eq!(Some(color), pixel_rgba(&compuesta, pixel), "({}, {})", x, y);
             }
         }
     }
 }
-
-// Lo que no se usa en todos los ejecutables.
-#[allow(dead_code)]
-fn _usos(_: Span, _: Palette) {}

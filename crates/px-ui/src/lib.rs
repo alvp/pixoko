@@ -39,6 +39,7 @@ pub mod pick;
 pub mod pointer_events;
 pub mod shortcut_editor;
 pub mod shortcuts;
+pub mod source;
 pub mod status;
 pub mod stroke;
 pub mod text;

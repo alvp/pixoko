@@ -512,7 +512,9 @@ fn fila_9_el_borrador_en_curso_muestra_lo_de_debajo() {
 
 type Semilla = (u8, u32, u32, u32, u32);
 
-fn semillas() -> impl Strategy<Value = (u8, Vec<(u8, u8, u8, u8)>, Vec<Semilla>)> {
+type Capas = Vec<(u8, u8, u8, u8)>;
+
+fn semillas() -> impl Strategy<Value = (u8, Capas, Vec<Semilla>)> {
     (
         0u8..3,
         prop::collection::vec((0u8..4, 0u8..8, 0u8..3, 0u8..4), 0..4),
