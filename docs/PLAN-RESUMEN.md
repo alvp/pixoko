@@ -15,14 +15,14 @@ Resumen de `docs/PLAN.md` para empezar una unidad sin leer el plan entero (17 KB
 | ↳ I.2b · Navegación y botones extra del ratón | Tabla de gestos (`GestureMap`): rueda por la unidad, `Mayús`+rueda, `Espacio` como mano (cancela trazos), trackpad, pellizco, botones laterales 4 y 5 (deshacer y rehacer; del 6 en adelante `egui-winit` los descarta) | Spec en `specs/interfaz-raton.md`; pruebas y cierre en verde | hecha, a falta de la prueba manual |
 | ↳ I.3 · Caja a la derecha y panel de opciones | Orden lienzo · paleta · caja (borde derecho) con un recuadro fijo de opciones; clic derecho en una herramienta (la elige y da el foco) y en `Acercar`/`Alejar` (la acción contraria); tooltips con nombre y atajo | Spec en `specs/interfaz-caja-derecha.md`; pruebas y cierre en verde | hecha, a falta de la prueba manual |
 | ↳ I.4 · Iconos propios | 14 iconos propios de 16×16 (`assets/icons/`, PNG de 1 bit, MIT) en la caja, el zoom y el editor de la paleta, sobre botones de 24 u con relieve (normal, encima, hundido, desactivado); rejilla de 4 columnas, editor 260 → 214 u, ventana mínima 387 → 341 u y el criterio del alto vuelve al 65 % de 720 pt | Spec en `specs/interfaz-iconos.md`; pruebas y cierre en verde | hecha, a falta de la prueba manual |
-| 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde | pendiente |
-| 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección | Dorados contra referencias | pendiente |
-| 5 · Animación | Fotogramas, línea de tiempo, onion skin, GIF | GIF y hojas de sprites verificados | pendiente |
-| 6 · Más formatos | `.aseprite` (especificación pública), IFF, BMP, PCX | Corpus de ficheros ajenos se abre | pendiente |
-| 7 · Estilo DPaint (opcional) | Ciclo de color, stencil, perspectiva, por caja negra | Casos del emulador en verde | pendiente |
-| 8 · Automatización y lanzamiento | CLI, scripting, MCP, traducciones, instaladores | Instaladores y licencias revisadas | pendiente |
+| 3 · Capas, alfa y referencias | 10 unidades (7 núcleo, 3 deseables): `px-app` en lib y binario, modelo de capas (no aditivo), composición con ocho modos de mezcla, pintar sobre capas, panel de capas flotante, combinar y aplanar, página de reserva, referencias, `.aseprite` etapa 1 (capas, celdas y paleta) | Dorados de mezcla en verde (fórmulas propias; LibreSprite solo contra divergencias grandes) y ida y vuelta de un documento con capas | pendiente |
+| 4 · Herramientas de pixel art | 14 unidades (8 núcleo, 4 deseables, 2 opcionales): imagen, cuantizador de color, pincel y trazos, formas, relleno ampliado y por filas, paleta, rangos y degradados, selector y menú Pincel, rejilla y simetría, modos de pintura (con Sombrear), aerógrafo; opcionales: giro libre y texto | Dorados contra referencias | pendiente |
+| 5 · Animación | 14 unidades (9 núcleo, 2 deseables, 3 opcionales): fotogramas, navegación, línea de tiempo, reproducción, mesa de luz, etiquetas y `.aseprite` etapa 2, GIF, hojas de sprites, ciclo de color (fps propios), pintar animando sin `Alt`; opcionales: pincel animado, paleta por fotograma y mover 2D | GIF y hojas de sprites verificados | pendiente |
+| 6 · Más formatos | 5 unidades (3 deseables, 2 opcionales): resto de `.aseprite` (lo básico llega en el 3 y el 5), IFF ILBM, IFF ANIM, BMP y PCX | Corpus de ficheros ajenos se abre | pendiente |
+| 7 · Estilo DPaint (opcional) | 8 unidades opcionales, por caja negra: plantillas, perspectiva, mover y cámara en 3D, texturas, difuminar, mezclar, suavizar, mezcla viva, calcar, proceso, ciclo avanzado | Casos del emulador en verde | pendiente |
+| 8 · Automatización y lanzamiento | 10 unidades (3 núcleo: preferencias, instaladores y puerta); CLI, traducciones, persistencia PNG y pulidos son deseables; scripting, MCP y macros, opcionales | Instaladores y licencias revisadas | pendiente |
 
-Los hitos 3 a 6 pueden solaparse en worktrees una vez cerrado el 2; el 7 es opcional.
+Los hitos 3 a 6 pueden solaparse en worktrees una vez cerrado el 2; el 7 es opcional. Reparto, clases y decisiones de los hitos 3 a 8 en [`specs/mapa-funciones.md`](../specs/mapa-funciones.md) (aprobado el 21 de octubre de 2026; 61 unidades: 27 núcleo, 16 deseables, 18 opcionales). **Hasta que se actualice `PLAN.md`, para los hitos 3 a 8 manda el mapa.**
 
 **Hito 2:** cerrado. Todas las unidades hechas, la 14b descartada y la puerta (unidad 22: prueba automática en `px-app` y `px-golden`, lista manual de 15 pasos en `specs/hito-2-puerta.md`) superada: la prueba manual salió bien en Linux, Windows y macOS. Unidades, aplazado a los hitos siguientes con su spec de origen y cifras medidas: `specs/hito-2-resumen.md`. Candidato para el hito 3: partir `px-app` en lib y binario.
 
@@ -40,6 +40,20 @@ Entre el hito 2 y el 3. Diseño completo en `docs/DISENO-INTERFAZ.md` (sección 
 **Soporte mínimo de ratón:** tres botones (izquierdo, central y derecho) con asignación propia para cada uno, y todos los botones extra que tenga el ratón, reasignables a cualquier acción de la tabla de atajos. Quien no tenga tres botones o un trackpad llega a lo mismo con gestos y teclas. El detalle de la unidad del ratón se decide después del hito 2.
 
 **Dependencias nuevas:** ninguna.
+
+## Hitos 3 a 8: decisiones del 21 de octubre de 2026
+
+Detalle y tabla de decisiones en `specs/mapa-funciones.md`. Las que cambian el plan:
+
+- **`.aseprite` por etapas (D10):** capas, celdas y paleta con un fotograma en el hito 3 (unidad 3.8); fotogramas y etiquetas en el 5 (5.5); el resto en el 6. Antes estaba entero en el 6. Zlib sale de `miniz_oxide` (ya en el árbol; se anota en `docs/DEPENDENCIES.md` al hacerla dependencia directa). Los PNG de referencia de LibreSprite los genera el usuario por lotes y se commitean como corpus; el CI no los ejecuta.
+- **Ciclo de color (D23):** en el hito 5, con velocidad propia en fps; antes figuraba en el 7. La curva de velocidad exacta del original queda como opcional del 7.
+- **Modos de color (D16):** Sombrear en el hito 4; difuminar, mezclar, suavizar y mezcla viva en el 7.
+- **Capas (D04 a D08):** celdas del tamaño del lienzo (las vacías no reservan memoria, con aviso de presupuesto); un modo por documento y la paleta en cada imagen, con una prueba de que todas las paletas son idénticas; indexado sin opacidad ni mezcla; pintar con alfa reemplaza; ocho modos de mezcla con fórmulas propias de enteros; panel de capas flotante y menú `Capa`.
+- **Pintar animando (D24):** sin `Alt`, con un botón y una tecla de alternancia en el panel de animación.
+- **`px-core` y `px-raster` (D02):** el visto bueno a la spec de una unidad marcada vale solo para los cambios exactos que liste; las specs 3.1 y 3.2 no son aditivas y traen plan de migración.
+- **Corpus manual:** una lista única de casos al empezar cada hito (`specs/corpus-hito-N.md`), para generarlos de una sentada.
+- **Clases:** cada unidad es núcleo, deseable u opcional; la primera versión pública (hito 8) puede salir sin las opcionales.
+- **Después del hito 4:** revisar la composición de la pantalla (editor de color a demanda, indicador de color grande, paleta compacta) y si hace falta un tema gris con biseles.
 
 ## Arquitectura
 
