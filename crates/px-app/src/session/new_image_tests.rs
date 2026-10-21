@@ -157,6 +157,7 @@ fn session_con_de_todo() -> Session {
         rest_px: 2,
         last_visible: Some(3),
         reveal: true,
+        ..PanelView::default()
     };
     session
         .editor

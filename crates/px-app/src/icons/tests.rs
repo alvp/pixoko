@@ -109,15 +109,19 @@ fn fila_1_hay_un_fichero_por_icono_ninguno_de_mas_y_el_readme_dice_original_mit_
 
 /// Las texturas nuevas del fotograma: `(id, tamaño, opciones, píxeles)`.
 fn texturas_subidas(ctx: &egui::Context) -> Vec<(egui::TextureId, [usize; 2], TextureOptions, Vec<Color32>)> {
-    let salida = ctx.run_ui(RawInput::default(), |_| {});
-    salida
+    let mut salida = ctx.run_ui(RawInput::default(), |_| {});
+    let subidas = salida
         .textures_delta
         .set
         .iter()
-        .filter_map(|(id, delta)| match &delta.image {
-            egui::ImageData::Color(c) => Some((*id, c.size, delta.options, c.pixels.clone())),
+        .flat_map(|(id, deltas)| deltas.iter().map(move |delta| (*id, delta)))
+        .map(|(id, delta)| match &delta.image {
+            egui::ImageData::Color(c) => (id, c.size, delta.options, c.pixels.clone()),
         })
-        .collect()
+        .collect();
+    // egui exige no soltar los cambios de textura sin aplicar.
+    salida.textures_delta.clear();
+    subidas
 }
 
 #[test]

@@ -13,6 +13,7 @@ mod dialogs;
 mod dispatch;
 mod dropper_once;
 mod files;
+mod icons;
 mod keys;
 mod licenses;
 mod new_image;
@@ -124,6 +125,8 @@ struct App {
     gestures: GestureMap,
     /// Foco y desplazamiento del recuadro de opciones de la caja (I.3).
     options: OptionsState,
+    /// Las texturas de los iconos propios (I.4); vacío hasta que `main` las carga.
+    icons: icons::Icons,
     /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
     modal: Modal,
     /// El elemento enfocado del diálogo modal.
@@ -178,6 +181,7 @@ impl App {
             keymap: Keymap::default_scheme(),
             gestures,
             options: OptionsState::default(),
+            icons: icons::Icons::empty(),
             modal: Modal::Closed,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
@@ -868,6 +872,7 @@ impl eframe::App for App {
                 state: &state,
                 zoom_label: &level,
                 options: &self.options,
+                icons: &self.icons.set,
             },
             &self.keymap,
             self.platform,
@@ -893,6 +898,7 @@ impl eframe::App for App {
             || self.pending_convert.is_some());
         let main = self.session.document.main_image();
         let mut panel = None;
+        self.session.view.icons = self.icons.set;
         if let Some(image) = self.session.document.image(main) {
             let roles = Roles {
                 foreground: self.session.choice,
@@ -1127,7 +1133,9 @@ fn main() -> eframe::Result {
                 cc.egui_ctx
                     .set_missing_glyph_policy(egui::MissingGlyphPolicy::Panic);
             }
-            Ok(Box::new(App::new(document, cli_path)))
+            let mut app = App::new(document, cli_path);
+            app.icons = icons::load(&cc.egui_ctx).map_err(|e| e.to_string())?;
+            Ok(Box::new(app))
         }),
     )
 }

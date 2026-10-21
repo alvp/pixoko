@@ -293,6 +293,7 @@ fn fila_11_set_choice_revealing_no_toca_el_resto_de_la_vista_ni_del_desplazamien
         rest_px: 1,
         last_visible: Some(5),
         reveal: false,
+        ..PanelView::default()
     };
     session.scroll = Scroll {
         first_row: 3,
@@ -306,6 +307,7 @@ fn fila_11_set_choice_revealing_no_toca_el_resto_de_la_vista_ni_del_desplazamien
             rest_px: 1,
             last_visible: Some(5),
             reveal: true,
+            ..PanelView::default()
         }
     );
     // Mostrar la elegida es cosa del panel: la sesión no mueve la rejilla.
@@ -353,6 +355,7 @@ fn fila_11_abrir_un_fichero_reinicia_la_vista() {
         rest_px: 1,
         last_visible: Some(3),
         reveal: true,
+        ..PanelView::default()
     };
     session.open(&path, 16384, false).expect("abrir");
     assert_eq!(session.view, PanelView::default());
@@ -368,6 +371,7 @@ fn fila_11_un_open_con_error_no_cambia_la_vista() {
         rest_px: 1,
         last_visible: Some(3),
         reveal: true,
+        ..PanelView::default()
     };
     for discard in [false, true] {
         let mut session = Session::sample(Document::new(image_256()));
