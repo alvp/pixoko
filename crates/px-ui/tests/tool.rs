@@ -1257,6 +1257,7 @@ fn accion_esperada(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         Key::V => Some(ToolAction::Select(Tool::Line)),
         Key::F => Some(ToolAction::Select(Tool::Fill)),
         Key::Comma => Some(ToolAction::Select(Tool::Dropper)),
+        Key::K => Some(ToolAction::Select(Tool::Eraser)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -1271,7 +1272,10 @@ fn comprueba_teclas(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError>
         key,
         modifiers
     );
-    if matches!(key, Key::D | Key::V | Key::F | Key::Comma | Key::Escape) {
+    if matches!(
+        key,
+        Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::Escape
+    ) {
         prop_assert_eq!(
             action_for_key(key, modifiers),
             None,

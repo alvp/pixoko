@@ -867,7 +867,7 @@ fn fila_8_con_un_dialogo_de_archivo_toda_fila_de_la_tabla_da_blocked_tambien_ini
     let filas = filas_activas();
     assert_eq!(
         filas.len(),
-        30 + 29 + 29,
+        31 + 30 + 30,
         "filas activas en las tres plataformas"
     );
     for (action, platform) in filas {
@@ -1041,8 +1041,7 @@ fn casos_de_la_fila_9() -> Vec<Caso> {
             esperada: AppAction::SelectTool(Tool::Eraser),
             menu: None,
             boton: Some("Borrador"),
-            // Sin tecla: solo el botón.
-            teclas: vec![],
+            teclas: vec![escribe(Key::K, Modifiers::NONE, "k")],
         },
     ]
 }
@@ -1185,11 +1184,7 @@ fn fila_9_el_aviso_del_borrador_sale_igual_desde_el_boton() {
         }
     );
     assert_eq!(a.foto(), b.foto());
-    // El Borrador no tiene tecla: ninguna de las teclas de herramienta lo elige.
-    let km = Keymap::default_scheme();
-    for fila in km.rows() {
-        assert_ne!(fila.action, AppAction::SelectTool(Tool::Eraser));
-    }
+    // El Borrador tiene la `k` (la `e` no es nada, ni sola ni con `Mayús`).
     for letra in ["e", "E"] {
         assert_eq!(
             acciones_de_teclado(&escribe(Key::E, Modifiers::NONE, letra), Platform::Linux),
@@ -1197,6 +1192,64 @@ fn fila_9_el_aviso_del_borrador_sale_igual_desde_el_boton() {
             "{letra}"
         );
     }
+}
+
+#[test]
+fn borrador_k_elige_el_borrador_con_o_sin_bloq_mayus_y_k_con_mayus_borra_la_pagina() {
+    for platform in PLATAFORMAS {
+        // `k` (y la `K` que escribe el Bloq Mayús, sin `Mayús`): el Borrador.
+        for texto in ["k", "K"] {
+            assert_eq!(
+                una_accion(&escribe(Key::K, Modifiers::NONE, texto), platform),
+                AppAction::SelectTool(Tool::Eraser),
+                "{texto} en {platform:?}"
+            );
+        }
+        // `Mayús`+`k`: Borrar página, no el Borrador.
+        assert_eq!(
+            una_accion(&escribe(Key::K, Modifiers::SHIFT, "K"), platform),
+            AppAction::ClearPage
+        );
+    }
+    let mut mundo = Mundo::estandar();
+    mundo.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Key);
+    assert_eq!(mundo.tools.tool(), Tool::Eraser);
+    let mut mundo = Mundo::estandar();
+    let antes = mundo.foto();
+    mundo.despacha(AppAction::ClearPage, Origin::Key);
+    assert_eq!(mundo.tools.tool(), antes.tool);
+}
+
+#[test]
+fn borrador_k_no_actua_con_un_campo_enfocado_un_dialogo_abierto_o_un_trazo_en_curso() {
+    let k = escribe(Key::K, Modifiers::NONE, "k");
+    // Campo de texto enfocado: el filtro de teclas no deja pasar la `k`.
+    assert_eq!(
+        acciones_de_teclado(&px_ui::shortcuts::gate_keys(&k, true), Platform::Linux),
+        vec![]
+    );
+    // Diálogo abierto o campo enfocado: la acción llega bloqueada y no cambia nada.
+    for locks in [
+        locks_con(|l| l.dialog = true),
+        locks_con(|l| l.text_focus = true),
+    ] {
+        let mut mundo = Mundo::estandar();
+        let antes = mundo.foto();
+        assert_eq!(
+            mundo.despacha_con(AppAction::SelectTool(Tool::Eraser), Origin::Key, locks),
+            Dispatched::Blocked
+        );
+        assert_eq!(mundo.foto(), antes);
+    }
+    // Trazo en curso: bloqueada también.
+    let mut mundo = mundo_con_gesto(Gesto::Trazo);
+    let antes = mundo.foto();
+    assert_eq!(
+        mundo.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Key),
+        Dispatched::Blocked
+    );
+    assert_eq!(mundo.foto(), antes);
+    assert_ne!(mundo.tools.tool(), Tool::Eraser);
 }
 
 // ---------------------------------------------------------------------------------------------

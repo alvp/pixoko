@@ -659,20 +659,15 @@ proptest! {
                 );
             }
         }
-        // La letra de la columna sale de la tabla y es la tecla de herramienta; el Borrador no
-        // tiene (sin fila).
+        // La letra de la columna sale de la tabla y es la tecla de herramienta (el Borrador, `k`).
         for button in TOOL_BUTTONS.iter() {
             let letra = Keymap::default_scheme().shown(button.action, platform);
-            if button.action == AppAction::SelectTool(Tool::Eraser) {
-                prop_assert_eq!(letra, None, "{}", button.label);
-            } else {
-                let letra = letra.expect("los botones de herramienta con letra la muestran");
-                prop_assert_eq!(
-                    Keymap::default_scheme().action_for(&pulsado(letra), platform),
-                    Some(button.action),
-                    "{}", button.label
-                );
-            }
+            let letra = letra.expect("los botones de herramienta la muestran");
+            prop_assert_eq!(
+                Keymap::default_scheme().action_for(&pulsado(letra), platform),
+                Some(button.action),
+                "{}", button.label
+            );
         }
     }
 }

@@ -161,7 +161,7 @@ fn row(
 }
 
 impl Keymap {
-    /// El esquema por defecto: 30 filas (21 sin `command` y 9 con él).
+    /// El esquema por defecto: 31 filas (22 sin `command` y 9 con él).
     pub fn default_scheme() -> Keymap {
         use Platforms::{All, Except, Never, Only};
         let c = KeyId::Char;
@@ -171,6 +171,7 @@ impl Keymap {
             row(c('v'), false, false, tool(Tool::Line), All, All),
             row(c('f'), false, false, tool(Tool::Fill), All, All),
             row(c(','), false, false, tool(Tool::Dropper), All, All),
+            row(c('k'), false, false, tool(Tool::Eraser), All, All),
             row(c('z'), true, false, AppAction::Undo, All, All),
             row(c('u'), false, false, AppAction::Undo, All, Never),
             row(

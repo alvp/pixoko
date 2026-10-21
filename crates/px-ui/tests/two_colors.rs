@@ -488,7 +488,8 @@ fn fila_7_llaves_y_corchetes_del_fondo_con_cualquier_mayus_o_alt() {
 }
 
 #[test]
-fn fila_7_k_mayuscula_borra_la_pagina_y_k_sin_mayus_o_con_ctrl_o_alt_no_hace_nada() {
+fn fila_7_k_mayuscula_borra_la_pagina_k_sin_mayus_elige_el_borrador_y_con_ctrl_o_alt_no_hace_nada()
+{
     for platform in PLATAFORMAS {
         let k = KeyId::Char('k');
         let con_mayus = Press {
@@ -496,7 +497,10 @@ fn fila_7_k_mayuscula_borra_la_pagina_y_k_sin_mayus_o_con_ctrl_o_alt_no_hace_nad
             ..pulsa(k)
         };
         assert_eq!(accion(&con_mayus, platform), Some(AppAction::ClearPage));
-        assert_eq!(accion(&pulsa(k), platform), None);
+        assert_eq!(
+            accion(&pulsa(k), platform),
+            Some(AppAction::SelectTool(px_ui::tool::Tool::Eraser))
+        );
         for press in [
             Press {
                 command: true,
@@ -558,9 +562,9 @@ fn fila_7_mayus_re_pag_y_av_pag_son_el_fondo_y_sin_mayus_siguen_siendo_el_primer
 }
 
 #[test]
-fn fila_7_la_tabla_tiene_30_filas_sin_choques_y_solo_las_nueve_modernas_llevan_command() {
+fn fila_7_la_tabla_tiene_31_filas_sin_choques_y_solo_las_nueve_modernas_llevan_command() {
     let keymap = Keymap::default_scheme();
-    assert_eq!(keymap.rows().len(), 30);
+    assert_eq!(keymap.rows().len(), 31);
     assert_eq!(keymap.conflicts(), Vec::<Conflict>::new());
     let con_command = keymap.rows().iter().filter(|row| row.command).count();
     assert_eq!(con_command, 9);

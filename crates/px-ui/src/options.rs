@@ -37,7 +37,7 @@ pub fn title(tool: Tool) -> &'static str {
     }
 }
 
-/// Línea del atajo, leída de la tabla: `tecla d`, o `sin tecla` si la herramienta no tiene.
+/// Línea del atajo, leída de la tabla: `tecla d`, o `sin tecla` si la tabla no le da ninguno.
 pub fn key_line(tool: Tool, keymap: &Keymap, platform: Platform) -> String {
     match keymap.shown_text(AppAction::SelectTool(tool), platform) {
         Some(text) => format!("tecla {text}"),

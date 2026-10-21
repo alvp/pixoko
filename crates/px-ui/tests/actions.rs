@@ -497,6 +497,7 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
         Key::V => Some(AppAction::SelectTool(Tool::Line)),
         Key::F => Some(AppAction::SelectTool(Tool::Fill)),
         Key::Comma => Some(AppAction::SelectTool(Tool::Dropper)),
+        Key::K => Some(AppAction::SelectTool(Tool::Eraser)),
         Key::U => Some(AppAction::Undo),
         Key::N => Some(AppAction::CenterOnCursor),
         Key::CloseBracket => Some(AppAction::ColorNext),

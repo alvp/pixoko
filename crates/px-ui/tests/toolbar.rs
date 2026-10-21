@@ -195,7 +195,7 @@ fn tool_buttons_son_los_cinco_botones_con_su_letra() {
                 AppAction::SelectTool(Tool::Dropper),
                 Some(',')
             ),
-            ("Borrador", AppAction::SelectTool(Tool::Eraser), None),
+            ("Borrador", AppAction::SelectTool(Tool::Eraser), Some('k')),
         ]
     );
 }
@@ -822,7 +822,7 @@ mod caja_derecha {
             (Tool::Line, "Línea", "tecla v"),
             (Tool::Fill, "Relleno", "tecla f"),
             (Tool::Dropper, "Cuentagotas", "tecla ,"),
-            (Tool::Eraser, "Borrador", "sin tecla"),
+            (Tool::Eraser, "Borrador", "tecla k"),
         ];
         for ppp in PPPS {
             for (tool, nombre, atajo) in esperado {
@@ -854,7 +854,7 @@ mod caja_derecha {
     }
 
     #[test]
-    fn fila_4_la_linea_del_atajo_lee_la_tabla_y_el_borrador_no_tiene() {
+    fn fila_4_la_linea_del_atajo_lee_la_tabla_y_sin_fila_dice_sin_tecla() {
         for tool in HERRAMIENTAS {
             assert_eq!(
                 key_line(tool, default_keymap(), LINUX),
@@ -863,7 +863,7 @@ mod caja_derecha {
                     Tool::Line => "tecla v",
                     Tool::Fill => "tecla f",
                     Tool::Dropper => "tecla ,",
-                    Tool::Eraser => "sin tecla",
+                    Tool::Eraser => "tecla k",
                 }
             );
         }
@@ -881,6 +881,9 @@ mod caja_derecha {
             .collect();
         let otra = Keymap::new(filas);
         assert_eq!(key_line(Tool::Pencil, &otra, LINUX), "tecla x");
+        // Sin fila en la tabla, la herramienta sigue diciendo `sin tecla`.
+        let vacia = Keymap::new(vec![]);
+        assert_eq!(key_line(Tool::Eraser, &vacia, LINUX), "sin tecla");
         let mut caja = Caja::nueva(1.0, estado(Tool::Pencil, x5(), Locks::default()));
         caja.keymap = otra;
         let p = caja.reposo();
@@ -1232,7 +1235,11 @@ mod caja_derecha {
                 "Cuentagotas",
                 "Cuentagotas (,)\nclic derecho: opciones".to_string(),
             ),
-            ("Borrador", "Borrador\nclic derecho: opciones".to_string()),
+            (
+                "Borrador",
+                "Borrador (k)\nclic derecho: opciones\nel clic derecho también borra con el fondo"
+                    .to_string(),
+            ),
             ("Acercar", "Acercar (>)\nclic derecho: alejar".to_string()),
             ("Alejar", "Alejar (<)\nclic derecho: acercar".to_string()),
             ("Ajustar", "Ajustar (Inicio)".to_string()),
@@ -1255,7 +1262,7 @@ mod caja_derecha {
                 );
             }
         }
-        // Con otra tabla cambia (la `d` pasa a `x`) y el borrador sigue sin atajo.
+        // Con otra tabla cambia (la `d` pasa a `x`).
         let filas = default_keymap()
             .rows()
             .iter()

@@ -602,6 +602,7 @@ fn accion_esperada(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         Key::V => Some(ToolAction::Select(Tool::Line)),
         Key::F => Some(ToolAction::Select(Tool::Fill)),
         Key::Comma => Some(ToolAction::Select(Tool::Dropper)),
+        Key::K => Some(ToolAction::Select(Tool::Eraser)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -618,7 +619,10 @@ fn comprueba_teclas(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError>
     );
     if accion.is_some() {
         prop_assert!(
-            matches!(key, Key::D | Key::V | Key::F | Key::Comma | Key::Escape),
+            matches!(
+                key,
+                Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::Escape
+            ),
             "{:?} no debería dar acción",
             key
         );
@@ -668,19 +672,18 @@ fn propiedad_3_teclas_exhaustiva_key_all_por_las_32_combinaciones() {
 
 #[test]
 fn propiedad_3_cada_herramienta_tiene_su_tecla_sin_modificadores() {
-    // Cuatro herramientas se alcanzan, cada una con una sola tecla distinta; el Borrador no tiene tecla.
+    // Las cinco herramientas se alcanzan, cada una con una sola tecla distinta (el Borrador, con `k`).
     let mut alcanzadas = Vec::new();
     for &key in Key::ALL {
         if let Some(ToolAction::Select(tool)) = tool_action_for_key(key, Modifiers::NONE) {
             alcanzadas.push((tool, key));
         }
     }
-    assert_eq!(alcanzadas.len(), TODAS.len() - 1, "{alcanzadas:?}");
+    assert_eq!(alcanzadas.len(), TODAS.len(), "{alcanzadas:?}");
     for tool in TODAS {
-        let esperadas = usize::from(tool != Tool::Eraser);
         assert_eq!(
             alcanzadas.iter().filter(|(t, _)| *t == tool).count(),
-            esperadas,
+            1,
             "{tool:?}"
         );
     }

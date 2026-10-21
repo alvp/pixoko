@@ -206,7 +206,7 @@ fn e(
     }
 }
 
-/// Las 30 filas del «Esquema por defecto» (25 de I.1 y 5 de I.2a), en el orden de la spec (dentro de cada fila doble, la
+/// Las 31 filas del «Esquema por defecto» (25 de I.1, 5 de I.2a y la `k` del Borrador), en el orden de la spec (dentro de cada fila doble, la
 /// siguiente antes que la anterior; `Av Pág` y `Re Pág` después de `]` y `[`).
 fn esquema_esperado() -> Vec<Esperada> {
     let todas = Platforms::All;
@@ -240,6 +240,14 @@ fn esquema_esperado() -> Vec<Esperada> {
         e(
             AppAction::SelectTool(Tool::Dropper),
             c(','),
+            false,
+            false,
+            todas,
+            t,
+        ),
+        e(
+            AppAction::SelectTool(Tool::Eraser),
+            c('k'),
             false,
             false,
             todas,
@@ -338,11 +346,11 @@ fn fila_1_los_tipos_de_la_tabla_tienen_los_derives_de_la_spec() {
 }
 
 #[test]
-fn fila_1_la_tabla_por_defecto_son_las_30_filas_de_la_spec_en_orden() {
+fn fila_1_la_tabla_por_defecto_son_las_31_filas_de_la_spec_en_orden() {
     let km = por_defecto();
     let esperado = esquema_esperado();
-    assert_eq!(esperado.len(), 30);
-    assert_eq!(km.rows().len(), 30, "filas de la tabla por defecto");
+    assert_eq!(esperado.len(), 31);
+    assert_eq!(km.rows().len(), 31, "filas de la tabla por defecto");
     for (i, (real, esperada)) in km.rows().iter().zip(&esperado).enumerate() {
         assert_eq!(real.action, esperada.action, "fila {i}: acción");
         assert_eq!(
@@ -376,11 +384,11 @@ fn fila_1_la_tabla_por_defecto_son_las_30_filas_de_la_spec_en_orden() {
 }
 
 #[test]
-fn fila_1_hay_21_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
+fn fila_1_hay_22_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
     let km = por_defecto();
     let sin = km.rows().iter().filter(|f| !f.command).count();
     let con = km.rows().iter().filter(|f| f.command).count();
-    assert_eq!((sin, con), (21, 9));
+    assert_eq!((sin, con), (22, 9));
     let quit: Vec<&Binding> = km
         .rows()
         .iter()
@@ -391,12 +399,12 @@ fn fila_1_hay_21_filas_sin_command_y_9_con_el_y_quit_solo_en_linux() {
 }
 
 #[test]
-fn fila_1_hay_30_filas_activas_en_linux_y_29_en_windows_y_macos() {
+fn fila_1_hay_31_filas_activas_en_linux_y_30_en_windows_y_macos() {
     let km = por_defecto();
     for (platform, esperado) in [
-        (Platform::Linux, 30),
-        (Platform::Windows, 29),
-        (Platform::Mac, 29),
+        (Platform::Linux, 31),
+        (Platform::Windows, 30),
+        (Platform::Mac, 30),
     ] {
         let activas = km
             .rows()
@@ -946,7 +954,7 @@ fn rotulos_esperados(platform: Platform) -> Vec<(AppAction, Option<String>)> {
         (AppAction::SelectTool(Tool::Line), s("v")),
         (AppAction::SelectTool(Tool::Fill), s("f")),
         (AppAction::SelectTool(Tool::Dropper), s(",")),
-        (AppAction::SelectTool(Tool::Eraser), None),
+        (AppAction::SelectTool(Tool::Eraser), s("k")),
         (AppAction::Undo, Some(format!("{mando}+Z"))),
         (AppAction::Redo, Some(redo)),
         (AppAction::ZoomIn, s(">")),
@@ -1025,9 +1033,9 @@ fn fila_5_shown_text_es_el_texto_de_shown() {
 }
 
 #[test]
-fn fila_5_los_botones_de_herramienta_ensenan_d_v_f_coma_y_el_borrador_nada() {
+fn fila_5_los_botones_de_herramienta_ensenan_d_v_f_coma_y_k() {
     let km = por_defecto();
-    let esperado = [Some("d"), Some("v"), Some("f"), Some(","), None];
+    let esperado = [Some("d"), Some("v"), Some("f"), Some(","), Some("k")];
     for platform in PLATAFORMAS {
         let reales: Vec<Option<String>> = TOOL_BUTTONS
             .iter()
@@ -1379,7 +1387,7 @@ fn fila_5_el_menu_pintado_con_la_tabla_por_defecto_enseña_los_atajos_de_la_tabl
 }
 
 #[test]
-fn fila_5_la_columna_con_la_tabla_por_defecto_dice_d_v_f_coma_en_el_tooltip_y_nada_del_borrador() {
+fn fila_5_la_columna_con_la_tabla_por_defecto_dice_d_v_f_coma_y_k_en_el_tooltip() {
     // Con los iconos (I.4) la letra del atajo ya no se pinta en el botón: se dice en el tooltip,
     // que sale de la misma tabla (`tooltip_text`).
     let km = por_defecto();
@@ -1394,13 +1402,14 @@ fn fila_5_la_columna_con_la_tabla_por_defecto_dice_d_v_f_coma_en_el_tooltip_y_na
     assert_eq!(primera_linea(1, &km), "Línea (v)");
     assert_eq!(primera_linea(2, &km), "Relleno (f)");
     assert_eq!(primera_linea(3, &km), "Cuentagotas (,)");
-    // El Borrador no tiene fila: solo su nombre.
-    assert_eq!(primera_linea(4, &km), "Borrador");
+    assert_eq!(primera_linea(4, &km), "Borrador (k)");
     for ppp in [1.0, 2.0] {
         let mut banco = BancoUi::nuevo(ppp);
         let p = banco.columna_en_reposo(&km, Platform::Linux);
         // Ninguna letra suelta pintada en la columna: ni las del atajo ni otras.
-        for ajena in ["d", "v", "f", ",", "e", "E", "p", "P", ">", "<", "Inicio"] {
+        for ajena in [
+            "d", "v", "f", ",", "k", "e", "E", "p", "P", ">", "<", "Inicio",
+        ] {
             assert!(!p.pinta(ajena), "ppp {ppp}: la columna pinta {ajena:?}");
         }
     }

@@ -578,8 +578,7 @@ fn casos_de_la_fila_4() -> Vec<Caso> {
             esperada: AppAction::SelectTool(Tool::Eraser),
             menu: None,
             boton: Some("Borrador"),
-            // Sin tecla desde la unidad I.1: solo el botón.
-            atajo: None,
+            atajo: Some((Key::K, Modifiers::NONE)),
         },
         Caso {
             esperada: AppAction::ColorNext,
@@ -745,7 +744,7 @@ fn fila_4_los_tres_dispatched_y_el_estado_final_son_iguales() {
 
 #[test]
 fn fila_4_el_aviso_del_borrador_es_el_mismo_con_cualquier_origen() {
-    // El borrador ya no tiene tecla: solo el botón, y la acción da lo mismo con cualquier origen.
+    // La acción del borrador da lo mismo desde el botón que con cualquier otro origen.
     let mut por_boton = Mundo::estandar();
     let mut por_otro_origen = Mundo::estandar();
     let desde_boton = por_boton.despacha(por_rotulo_de_boton("Borrador"), Origin::Button);
@@ -779,15 +778,13 @@ fn fila_4_el_aviso_del_borrador_es_el_mismo_con_cualquier_origen() {
 }
 
 #[test]
-fn fila_4_las_cinco_herramientas_se_eligen_desde_el_boton_y_las_cuatro_con_letra_tambien_desde_su_tecla()
- {
+fn fila_4_las_cinco_herramientas_se_eligen_desde_el_boton_y_tambien_desde_su_tecla() {
     for (tool, (key, boton)) in HERRAMIENTAS.iter().zip([
         (Some(Key::D), "Lápiz"),
         (Some(Key::V), "Línea"),
         (Some(Key::F), "Relleno"),
         (Some(Key::Comma), "Cuentagotas"),
-        // El borrador no tiene tecla: se elige solo por el botón.
-        (None, "Borrador"),
+        (Some(Key::K), "Borrador"),
     ]) {
         let mut a = Mundo::nuevo(rgba(), 0, 0);
         let ra = a.despacha(por_rotulo_de_boton(boton), Origin::Button);

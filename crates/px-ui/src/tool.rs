@@ -49,9 +49,9 @@ pub enum ToolAction {
     Cancel,
 }
 
-/// Vista de la tabla de teclas por defecto: `d`, `v`, `f` y `,` eligen herramienta y `Escape`
-/// cancela, solo sin ningún modificador (así `Ctrl`+`d` y las demás no hacen nada). El Borrador no
-/// tiene tecla. Es aparte de [`crate::shortcuts::action_for_key`], que da `None` para estas teclas.
+/// Vista de la tabla de teclas por defecto: `d`, `v`, `f`, `,` y `k` eligen herramienta y `Escape`
+/// cancela, solo sin ningún modificador (así `Ctrl`+`d` y las demás no hacen nada; `K` con `Mayús`
+/// es Borrar página, no el Borrador). Es aparte de [`crate::shortcuts::action_for_key`], que da `None` para estas teclas.
 pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
     if !modifiers.is_none() {
         return None;
