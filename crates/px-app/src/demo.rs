@@ -123,7 +123,7 @@ pub fn demo_notice(reaction: &Reaction) -> String {
     match reaction {
         Reaction::Cancelled => "diálogo de prueba cancelado".to_string(),
         Reaction::Rejected(reason) => format!("diálogo de prueba sin aceptar: {reason}"),
-        Reaction::None => "diálogo de prueba abierto".to_string(),
+        Reaction::None | Reaction::Pressed { .. } => "diálogo de prueba abierto".to_string(),
         Reaction::Accepted(values) => {
             let spec = demo_form();
             let parts: Vec<String> = spec

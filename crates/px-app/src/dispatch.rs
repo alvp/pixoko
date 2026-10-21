@@ -8,6 +8,7 @@
 use px_ui::actions::{AppAction, Locks, Origin, is_blocked};
 use px_ui::background::CanvasBackground;
 use px_ui::color::key_choice;
+use px_ui::help::HelpTarget;
 use px_ui::shortcuts::FileAction;
 use px_ui::tool::{ToolAction, ToolState};
 use px_ui::view::ViewOp;
@@ -43,6 +44,10 @@ pub enum Dispatched {
     Background(CanvasBackground),
     /// `Color…` del fondo del lienzo: la ejecuta `App` (abre el diálogo).
     BackgroundColor,
+    /// `F1` o `Ayuda → Ayuda de la herramienta`: `App` abre la ayuda de ese destino.
+    Help(HelpTarget),
+    /// `Ayuda → Atajos de teclado…`: `App` abre la lista de atajos.
+    Shortcuts,
 }
 
 /// Lo que `dispatch` puede tocar, con los bloqueos de este fotograma.
@@ -96,6 +101,8 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::CloseLicenses => Dispatched::Licenses(false),
         AppAction::CanvasBackground(background) => Dispatched::Background(background),
         AppAction::BackgroundColor => Dispatched::BackgroundColor,
+        AppAction::ShowHelp(target) => Dispatched::Help(target),
+        AppAction::ShowShortcuts => Dispatched::Shortcuts,
         AppAction::SelectTool(tool) => {
             let image = session.document.image(session.document.main_image());
             Dispatched::Done {
@@ -137,6 +144,8 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
     }
 }
 
+#[cfg(test)]
+mod ayuda_tests;
 #[cfg(test)]
 mod teclado_tests;
 #[cfg(test)]

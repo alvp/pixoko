@@ -41,7 +41,8 @@ fn fila_4_show_help_y_show_shortcuts_se_despachan_o_se_bloquean_sin_tocar_el_doc
             let mut session = Session::sample(Document::new(Image::new(4, 4, Mode::Rgba).unwrap()));
             let mut tools = ToolState::new();
             let estado = session.document.state_id();
-            let bloqueada = locks.modal || locks.dialog || locks.gesture || locks.text_focus || locks.removal;
+            let bloqueada =
+                locks.modal || locks.dialog || locks.gesture || locks.text_focus || locks.removal;
             let mut todas: Vec<(AppAction, Dispatched)> = destinos()
                 .into_iter()
                 .map(|d| (AppAction::ShowHelp(d), Dispatched::Help(d)))
@@ -58,7 +59,11 @@ fn fila_4_show_help_y_show_shortcuts_se_despachan_o_se_bloquean_sin_tocar_el_doc
                     },
                 );
                 if bloqueada {
-                    assert_eq!(resultado, Dispatched::Blocked, "{action:?} {locks:?} {origen:?}");
+                    assert_eq!(
+                        resultado,
+                        Dispatched::Blocked,
+                        "{action:?} {locks:?} {origen:?}"
+                    );
                 } else {
                     assert_eq!(resultado, esperado, "{action:?} {locks:?} {origen:?}");
                 }

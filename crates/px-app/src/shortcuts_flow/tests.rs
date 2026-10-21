@@ -4,7 +4,7 @@
 //! ventana: se alimentan las `Reaction` de los diálogos como lo hace `show_modal`. En ROJO hasta la
 //! lógica: `shortcuts_flow` no existe todavía.
 
-use egui::{Event, Key, Modifiers};
+use eframe::egui::{Event, Key, Modifiers};
 use px_ui::actions::{AppAction, Locks, Platform};
 use px_ui::dialog::{Dialog, DialogKind, Event as Evento, Modal, Reaction};
 use px_ui::help::{HELP_PRIMARY, HELP_SECONDARY, HELP_ZONE, HelpTarget, SHORTCUTS_RESET};
@@ -12,7 +12,7 @@ use px_ui::keymap::{Chord, KeyId, Keymap};
 use px_ui::shortcut_editor::{EDITOR_CONFLICT, EDITOR_PRIMARY, EDITOR_RESET, slots_of};
 use px_ui::tool::Tool;
 
-use super::{Flow, Outcome, Return, Strip};
+use super::{Flow, FlowOutcome, Return, Strip};
 use crate::confirm::Confirm;
 
 const LINUX: Platform = Platform::Linux;
@@ -74,9 +74,10 @@ impl Mundo {
     }
 
     fn abre_lista(&mut self) {
-        assert!(self
-            .flow
-            .open_list(&mut self.modal, &self.keymap, LINUX, Locks::default()));
+        assert!(
+            self.flow
+                .open_list(&mut self.modal, &self.keymap, LINUX, Locks::default())
+        );
     }
 
     fn dialogo(&self) -> &Dialog {
@@ -91,7 +92,7 @@ impl Mundo {
     }
 
     /// Un evento al diálogo (como el pintado) y su reacción al flujo.
-    fn evento(&mut self, evento: Evento) -> Outcome {
+    fn evento(&mut self, evento: Evento) -> FlowOutcome {
         let reaccion = match &mut self.modal {
             Modal::Open(d) => d.event(evento),
             Modal::Closed => Reaction::None,
@@ -99,21 +100,26 @@ impl Mundo {
         self.reacciona(reaccion)
     }
 
-    fn reacciona(&mut self, reaccion: Reaction) -> Outcome {
-        self.flow
-            .react(&mut self.modal, reaccion, &mut self.keymap, LINUX, Tool::Pencil)
+    fn reacciona(&mut self, reaccion: Reaction) -> FlowOutcome {
+        self.flow.react(
+            &mut self.modal,
+            reaccion,
+            &mut self.keymap,
+            LINUX,
+            Tool::Pencil,
+        )
     }
 
-    fn pulsa(&mut self, field: &'static str, aside: bool) -> Outcome {
+    fn pulsa(&mut self, field: &'static str, aside: bool) -> FlowOutcome {
         self.evento(Evento::Press { field, aside })
     }
 
     /// `Aceptar` o `Cancelar` del diálogo abierto, como lo da `show_dialog`.
-    fn acepta(&mut self) -> Outcome {
+    fn acepta(&mut self) -> FlowOutcome {
         self.evento(Evento::Accept)
     }
 
-    fn cancela(&mut self) -> Outcome {
+    fn cancela(&mut self) -> FlowOutcome {
         self.evento(Evento::Cancel)
     }
 
@@ -139,23 +145,33 @@ fn fila_8_ayuda_editor_aceptar_vuelve_a_la_ayuda_con_la_tabla_viva_y_su_linea() 
         d.set_first_line(HELP_ZONE, 2);
     }
     // `Principal` abre el editor: la ayuda se cierra (un solo modal) y la casilla queda armada.
-    assert_eq!(m.pulsa(HELP_PRIMARY, false), Outcome::None);
+    assert_eq!(m.pulsa(HELP_PRIMARY, false), FlowOutcome::None);
     assert_eq!(m.clase(), Some(DialogKind::ShortcutEditor));
-    assert_eq!(m.flow.returns_to(), Some(Return::Help(HelpTarget::Tool(Tool::Pencil), 2)));
+    assert_eq!(
+        m.flow.returns_to(),
+        Some(Return::Help(HelpTarget::Tool(Tool::Pencil), 2))
+    );
     assert!(m.flow.editor().unwrap().capturing().is_some());
     // Capturar `x` (con el pase de eventos del fotograma).
     assert_eq!(m.teclas(&tecla(Key::X, Some("x"))), Strip::All);
-    assert_eq!(slots_of(m.flow.editor().unwrap().keymap(), lapiz()).slots, vec![chord('x')]);
-    assert_eq!(m.keymap, Keymap::default_scheme(), "la tabla viva no cambia hasta aceptar");
+    assert_eq!(
+        slots_of(m.flow.editor().unwrap().keymap(), lapiz()).slots,
+        vec![chord('x')]
+    );
+    assert_eq!(
+        m.keymap,
+        Keymap::default_scheme(),
+        "la tabla viva no cambia hasta aceptar"
+    );
     // `Aceptar`: la tabla cambia y vuelve la ayuda, con `x` y en su línea.
-    assert_eq!(m.acepta(), Outcome::KeymapChanged(lapiz()));
+    assert_eq!(m.acepta(), FlowOutcome::KeymapChanged(lapiz()));
     assert_eq!(slots_of(&m.keymap, lapiz()).slots, vec![chord('x')]);
     assert_eq!(m.clase(), Some(DialogKind::Help));
     assert_eq!(m.dialogo().first_line(HELP_ZONE), 2);
     assert_eq!(m.dialogo().button_text(HELP_PRIMARY).as_deref(), Some("x"));
     assert!(m.flow.editor().is_none() && m.flow.returns_to().is_none());
     // `Cerrar` la cierra del todo.
-    assert_eq!(m.acepta(), Outcome::None);
+    assert_eq!(m.acepta(), FlowOutcome::None);
     assert_eq!(m.clase(), None);
 }
 
@@ -166,7 +182,7 @@ fn fila_8_cancelar_y_escape_vuelven_a_la_ayuda_sin_tocar_la_tabla() {
     m.pulsa(HELP_SECONDARY, false);
     assert_eq!(m.clase(), Some(DialogKind::ShortcutEditor));
     m.teclas(&tecla(Key::X, Some("x")));
-    assert_eq!(m.cancela(), Outcome::None);
+    assert_eq!(m.cancela(), FlowOutcome::None);
     assert_eq!(m.clase(), Some(DialogKind::Help));
     assert_eq!(m.keymap, Keymap::default_scheme());
     assert_eq!(m.dialogo().spec().title, "Acercar");
@@ -179,7 +195,7 @@ fn fila_8_cancelar_y_escape_vuelven_a_la_ayuda_sin_tocar_la_tabla() {
     m.cancela();
     assert_eq!(m.keymap, Keymap::default_scheme());
     // `Cerrar` de la ayuda: sin vuelta.
-    assert_eq!(m.cancela(), Outcome::None);
+    assert_eq!(m.cancela(), FlowOutcome::None);
     assert_eq!(m.clase(), None);
     assert!(m.flow.returns_to().is_none());
 }
@@ -210,7 +226,11 @@ fn fila_8_un_clic_desarma_la_captura_y_las_teclas_no_llegan_a_las_acciones() {
     m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
     m.pulsa(HELP_PRIMARY, false);
     assert!(m.flow.editor().unwrap().capturing().is_some());
-    assert_eq!(m.flow.keys(&[], true), Strip::None, "un clic desarma sin quitar nada");
+    assert_eq!(
+        m.flow.keys(&[], true),
+        Strip::None,
+        "un clic desarma sin quitar nada"
+    );
     assert!(m.flow.editor().unwrap().capturing().is_none());
     // Sin captura, las teclas no se retiran.
     assert_eq!(m.teclas(&tecla(Key::D, Some("d"))), Strip::None);
@@ -226,7 +246,10 @@ fn fila_8_un_clic_desarma_la_captura_y_las_teclas_no_llegan_a_las_acciones() {
         };
     }
     assert_eq!(m.teclas(&ctrl_q), Strip::All);
-    assert!(m.flow.editor().unwrap().capturing().is_some(), "rechazada: sigue armada");
+    assert!(
+        m.flow.editor().unwrap().capturing().is_some(),
+        "rechazada: sigue armada"
+    );
     assert_eq!(m.teclas(&tecla(Key::F1, None)), Strip::All);
     // Las repeticiones también se retiran y no capturan.
     let mut repetida = tecla(Key::X, Some("x"));
@@ -262,9 +285,13 @@ fn fila_8_el_editor_responde_a_sus_botones() {
     m.sincroniza();
     m.pulsa(EDITOR_CONFLICT, false);
     assert!(m.flow.editor().unwrap().pending().is_none());
-    assert_eq!(m.acepta(), Outcome::KeymapChanged(AppAction::ZoomIn));
+    assert_eq!(m.acepta(), FlowOutcome::KeymapChanged(AppAction::ZoomIn));
     assert_eq!(slots_of(&m.keymap, AppAction::ZoomIn).slots[0], chord('v'));
-    assert!(slots_of(&m.keymap, AppAction::SelectTool(Tool::Line)).slots.is_empty());
+    assert!(
+        slots_of(&m.keymap, AppAction::SelectTool(Tool::Line))
+            .slots
+            .is_empty()
+    );
     assert!(m.keymap.conflicts().is_empty());
 }
 
@@ -278,7 +305,7 @@ fn fila_8_cualquier_otro_cierre_borra_la_vuelta_y_el_editor() {
     assert_eq!(m.clase(), None);
     assert!(m.flow.returns_to().is_none() && m.flow.editor().is_none());
     // Y con el diálogo ya cerrado por otro camino, lo que llegue no abre nada.
-    assert_eq!(m.acepta(), Outcome::None);
+    assert_eq!(m.acepta(), FlowOutcome::None);
     assert_eq!(m.clase(), None);
 }
 
@@ -319,7 +346,10 @@ fn fila_8_no_se_abre_con_bloqueos_ni_con_otro_dialogo() {
         assert_eq!(m.clase(), None);
     }
     m.abre_ayuda(HelpTarget::Active);
-    assert!(!m.flow.open_list(&mut m.modal, &m.keymap, LINUX, Locks::default()));
+    assert!(
+        !m.flow
+            .open_list(&mut m.modal, &m.keymap, LINUX, Locks::default())
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -335,11 +365,17 @@ fn condicion_2_cerrar_con_la_x_pasa_por_la_regla_de_repeticion_aunque_haya_captu
     let mut confirm = Confirm::new();
     // Con cambios sin guardar: la primera petición se cancela (y el editor se abandona sin
     // aplicar nada); la segunda, dentro de 5 s, cierra.
-    assert!(!m.flow.close_requested(&mut m.modal, true, &mut confirm, 10.0));
+    assert!(
+        !m.flow
+            .close_requested(&mut m.modal, true, &mut confirm, 10.0)
+    );
     assert_eq!(m.clase(), None);
     assert!(m.flow.editor().is_none() && m.flow.returns_to().is_none());
     assert_eq!(m.keymap, Keymap::default_scheme());
-    assert!(m.flow.close_requested(&mut m.modal, true, &mut confirm, 12.0));
+    assert!(
+        m.flow
+            .close_requested(&mut m.modal, true, &mut confirm, 12.0)
+    );
     // Pasados 5 s, vuelve a pedir confirmación.
     let mut otra = Confirm::new();
     assert!(!m.flow.close_requested(&mut m.modal, true, &mut otra, 20.0));
@@ -348,15 +384,19 @@ fn condicion_2_cerrar_con_la_x_pasa_por_la_regla_de_repeticion_aunque_haya_captu
     m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
     m.pulsa(HELP_PRIMARY, false);
     let mut limpia = Confirm::new();
-    assert!(m.flow.close_requested(&mut m.modal, false, &mut limpia, 1.0));
+    assert!(
+        m.flow
+            .close_requested(&mut m.modal, false, &mut limpia, 1.0)
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
 // Fila 12 y condición 1: lista, restablecer todo y marca de conflicto
 // ---------------------------------------------------------------------------------------------
 
-fn texto_del_boton(d: &Dialog, id: &str) -> String {
-    d.button_text(id).unwrap_or_else(|| panic!("no hay botón {id}"))
+fn texto_del_boton(d: &Dialog, id: &'static str) -> String {
+    d.button_text(id)
+        .unwrap_or_else(|| panic!("no hay botón {id}"))
 }
 
 #[test]
@@ -368,22 +408,31 @@ fn fila_12_la_lista_abre_el_editor_de_las_editables_y_vuelve_a_su_posicion() {
         d.set_scroll_u(40);
     }
     // Las de archivo no abren nada (están atenuadas).
-    assert_eq!(m.pulsa("file.save", false), Outcome::None);
+    assert_eq!(m.pulsa("file.save", false), FlowOutcome::None);
     assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
     // Una editable abre el editor con la principal armada.
-    assert_eq!(m.pulsa("tool.fill", false), Outcome::None);
+    assert_eq!(m.pulsa("tool.fill", false), FlowOutcome::None);
     assert_eq!(m.clase(), Some(DialogKind::ShortcutEditor));
     assert_eq!(m.flow.returns_to(), Some(Return::List(40)));
     assert!(m.flow.editor().unwrap().capturing().is_some());
     m.teclas(&tecla(Key::Y, Some("y")));
-    assert_eq!(m.acepta(), Outcome::KeymapChanged(relleno()));
+    assert_eq!(m.acepta(), FlowOutcome::KeymapChanged(relleno()));
     assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
     assert_eq!(m.dialogo().scroll_u(), 40);
     assert!(texto_del_boton(m.dialogo(), "tool.fill").contains('y'));
     // La línea es `{nombre:<20}{atajos}` de 44 columnas como mucho.
     assert!(texto_del_boton(m.dialogo(), "tool.pencil").starts_with(&format!("{:<20}d", "Lápiz")));
-    for id in ["tool.pencil", "edit.undo", "view.zoom-in", "file.quit", "color.bg-next"] {
-        assert!(texto_del_boton(m.dialogo(), id).chars().count() <= 44, "{id}");
+    for id in [
+        "tool.pencil",
+        "edit.undo",
+        "view.zoom-in",
+        "file.quit",
+        "color.bg-next",
+    ] {
+        assert!(
+            texto_del_boton(m.dialogo(), id).chars().count() <= 44,
+            "{id}"
+        );
     }
 }
 
@@ -401,16 +450,16 @@ fn fila_12_restablecer_todo_pide_confirmacion_cancelar_no_hace_nada_y_aceptar_re
     };
     assert_ne!(m.keymap, Keymap::default_scheme());
     m.abre_lista();
-    assert_eq!(m.pulsa(SHORTCUTS_RESET, false), Outcome::None);
+    assert_eq!(m.pulsa(SHORTCUTS_RESET, false), FlowOutcome::None);
     assert_eq!(m.clase(), Some(DialogKind::ResetShortcuts));
     // Cancelar: vuelve a la lista y no cambia nada.
     let antes = m.keymap.clone();
-    assert_eq!(m.cancela(), Outcome::None);
+    assert_eq!(m.cancela(), FlowOutcome::None);
     assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
     assert_eq!(m.keymap, antes);
     // Aceptar: el esquema por defecto en vivo, y de vuelta a la lista.
     m.pulsa(SHORTCUTS_RESET, false);
-    assert_eq!(m.acepta(), Outcome::ResetAll);
+    assert_eq!(m.acepta(), FlowOutcome::ResetAll);
     assert_eq!(m.keymap, Keymap::default_scheme());
     assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
     assert!(texto_del_boton(m.dialogo(), "tool.pencil").contains('d'));

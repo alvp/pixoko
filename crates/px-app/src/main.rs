@@ -4,6 +4,7 @@
 //! argumento o arrastrando, y los guarda con `Ctrl`+`S` (specs/hito-2-abrir-guardar.md).
 
 mod background_color;
+mod config;
 mod confirm;
 mod convert_mode;
 #[cfg(test)]
@@ -20,6 +21,7 @@ mod new_image;
 #[cfg(test)]
 mod puerta;
 mod session;
+mod shortcuts_flow;
 mod title;
 mod window_min;
 
@@ -38,8 +40,10 @@ use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
 use px_ui::gestures::GestureMap;
-use px_ui::key_events::presses;
+use px_ui::help::{HelpTarget, help_target_at};
+use px_ui::key_events::{help_pressed, presses};
 use px_ui::keymap::Keymap;
+use px_ui::keymap_file::{Loaded, load_notice};
 use px_ui::licenses_view::licenses_form;
 use px_ui::menu::show_menu_in;
 use px_ui::notice::{NOTICE_SECS, Notice};
@@ -53,9 +57,9 @@ use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
 use px_ui::toolbar::{ToolboxView, show_toolbox, zoom_label};
 
+use crate::config::{SaveError, ShortcutStore, shortcuts_path};
 use crate::confirm::{
-    Confirm, Confirmation, Request, close_allowed, close_warning, new_warning, open_dialog_warning,
-    open_warning,
+    Confirm, Confirmation, Request, close_warning, new_warning, open_dialog_warning, open_warning,
 };
 use crate::convert_mode::{
     Analysis, CONVERTING_NOTICE, ConvertModeError, ConvertSync, History, PendingConvert, Plan,
@@ -77,6 +81,7 @@ use crate::new_image::{
     open_new_image, spec_from_values, sync_form,
 };
 use crate::session::{Session, describe_saved, describe_saved_dialog};
+use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
 use crate::title::{app_title_info, colors_label, status_line_fit, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
@@ -129,6 +134,14 @@ struct App {
     icons: icons::Icons,
     /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
     modal: Modal,
+    /// Ayuda, lista de atajos y editor: sustitución con vuelta y captura de teclas (I.5).
+    flow: Flow,
+    /// El fichero de atajos.
+    shortcuts: ShortcutStore,
+    /// Ya se avisó de que no hay carpeta de configuración.
+    config_warned: bool,
+    /// El aviso de la lectura del fichero de atajos, pendiente del primer fotograma.
+    startup_notice: Option<String>,
     /// El elemento enfocado del diálogo modal.
     modal_focus: Option<FocusTarget>,
     /// Abrir el diálogo de prueba en el primer fotograma (`PIXOKO_DIALOGO_PRUEBA=1`).
@@ -183,12 +196,87 @@ impl App {
             options: OptionsState::default(),
             icons: icons::Icons::empty(),
             modal: Modal::Closed,
+            flow: Flow::new(Vec::new()),
+            shortcuts: ShortcutStore::new(None),
+            config_warned: false,
+            startup_notice: None,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
             new_image: None,
             convert: None,
             pending_convert: None,
             tile_alloc: Box::new(SystemTileAlloc),
+        }
+    }
+
+    /// Instala los atajos leídos del fichero: la tabla viva, la marca de conflicto y el aviso de 5 s
+    /// del primer fotograma.
+    fn install_shortcuts(&mut self, store: ShortcutStore, loaded: Loaded) {
+        self.startup_notice = load_notice(&loaded);
+        self.keymap = loaded.keymap;
+        self.flow = Flow::new(loaded.conflicted);
+        self.shortcuts = store;
+    }
+
+    /// Guarda la tabla viva. Si falla, la tabla cambia igual (esta sesión) y un aviso lo dice; sin
+    /// carpeta de configuración se avisa una sola vez.
+    fn save_shortcuts(&mut self, ctx: &egui::Context, reset_all: bool) {
+        let default = Keymap::default_scheme();
+        match self.shortcuts.save(&self.keymap, &default, reset_all) {
+            Ok(()) => {}
+            Err(SaveError::NoDirectory) if self.config_warned => {}
+            Err(error) => {
+                if matches!(error, SaveError::NoDirectory) {
+                    self.config_warned = true;
+                }
+                self.notify(ctx, error.to_string());
+            }
+        }
+    }
+
+    /// De qué pide ayuda `F1`: el botón de la caja bajo el puntero o la herramienta activa.
+    fn help_target(&self, ctx: &egui::Context) -> HelpTarget {
+        let ppp = ctx.pixels_per_point();
+        let screen = ctx.content_rect();
+        let window = (
+            (screen.width() * ppp).round() as i64,
+            (screen.height() * ppp).round() as i64,
+        );
+        match ctx.input(|i| i.pointer.latest_pos()) {
+            Some(pos) => help_target_at(
+                ((pos.x * ppp).round() as i64, (pos.y * ppp).round() as i64),
+                window,
+                px_ui::text::text_scale(ppp),
+            ),
+            None => HelpTarget::Active,
+        }
+    }
+
+    /// La captura de un atajo (editor abierto): le da los eventos de teclado del fotograma y los
+    /// retira de los que ven las acciones, el menú y egui (specs/interfaz-ayuda.md, decisión 6).
+    fn handle_capture(&mut self, ctx: &egui::Context) {
+        let events = ctx.input(|i| i.events.clone());
+        let pointer_pressed = ctx.input(|i| i.pointer.any_pressed());
+        let strip = self.flow.keys(&events, pointer_pressed);
+        let drop = |event: &egui::Event| match strip {
+            Strip::None => false,
+            Strip::All => matches!(
+                event,
+                egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::Ime(_)
+            ),
+            Strip::Escape => matches!(
+                event,
+                egui::Event::Key {
+                    key: egui::Key::Escape,
+                    ..
+                }
+            ),
+        };
+        if strip != Strip::None {
+            ctx.input_mut(|i| {
+                i.events.retain(|event| !drop(event));
+                i.raw.events.retain(|event| !drop(event));
+            });
         }
     }
 
@@ -421,11 +509,15 @@ impl App {
             return;
         }
         self.dialogs.abandon();
-        // Un diálogo modal se abandona sin aplicar nada, como uno de archivo.
-        self.modal.abandon();
         self.pending_convert = None;
         let now = ctx.input(|i| i.time);
-        if !close_allowed(self.session.modified(), &mut self.confirm, now) {
+        // Un diálogo modal se abandona sin aplicar nada, como uno de archivo, también con una
+        // captura de atajo armada; después, la regla de cierre por repetición.
+        let modified = self.session.modified();
+        if !self
+            .flow
+            .close_requested(&mut self.modal, modified, &mut self.confirm, now)
+        {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.notify(ctx, close_warning());
         }
@@ -536,6 +628,29 @@ impl App {
             Dispatched::Background(background) => {
                 self.canvas.set_background(background);
                 ctx.request_repaint();
+            }
+            Dispatched::Help(target) => {
+                let locks = self.locks(ctx);
+                let active = self.tools.tool();
+                if self.flow.open_help(
+                    &mut self.modal,
+                    target,
+                    active,
+                    &self.keymap,
+                    self.platform,
+                    locks,
+                ) {
+                    self.modal_focus = None;
+                }
+            }
+            Dispatched::Shortcuts => {
+                let locks = self.locks(ctx);
+                if self
+                    .flow
+                    .open_list(&mut self.modal, &self.keymap, self.platform, locks)
+                {
+                    self.modal_focus = None;
+                }
             }
         }
     }
@@ -783,14 +898,40 @@ impl App {
             self.modal.open(ModalKind::Demo, demo_form(), locks);
             self.modal_focus = None;
         }
+        self.flow.sync(&mut self.modal, self.platform);
         let Modal::Open(dialog) = &mut self.modal else {
             // Cerrado por `Quit` o por la ventana: el estado de nueva imagen se va con él.
             self.new_image = None;
             self.convert = None;
+            self.flow.abandon(&mut self.modal);
             return;
         };
         let kind = dialog.kind();
         let reaction = show_dialog(ctx, dialog, &mut self.modal_focus);
+        if Flow::handles(kind) {
+            if !matches!(reaction, Reaction::None | Reaction::Rejected(_)) {
+                let editing = kind == ModalKind::ShortcutEditor
+                    && matches!(reaction, Reaction::Pressed { .. });
+                let active = self.tools.tool();
+                let outcome = self.flow.react(
+                    &mut self.modal,
+                    reaction,
+                    &mut self.keymap,
+                    self.platform,
+                    active,
+                );
+                if !editing {
+                    self.modal_focus = None;
+                }
+                match outcome {
+                    FlowOutcome::None => {}
+                    FlowOutcome::KeymapChanged(_) => self.save_shortcuts(ctx, false),
+                    FlowOutcome::ResetAll => self.save_shortcuts(ctx, true),
+                }
+                ctx.request_repaint();
+            }
+            return;
+        }
         if kind == ModalKind::NewImage
             && let Some((sync, _)) = &mut self.new_image
             && sync_form(dialog, sync)
@@ -850,6 +991,11 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.apply_theme(&ctx);
+        if let Some(text) = self.startup_notice.take() {
+            self.notify(&ctx, text);
+        }
+        // Con la captura de un atajo armada, el teclado es de la captura.
+        self.handle_capture(&ctx);
         self.advance_convert(&ctx);
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
@@ -1006,6 +1152,9 @@ impl eframe::App for App {
         // Con un campo de texto enfocado el teclado es suyo: los atajos no ven nada.
         let events = gate_keys(&ui.input(|i| i.events.clone()), ctx.text_edit_focused());
         self.key_actions(&events, &mut actions);
+        if help_pressed(&events) {
+            actions.push((AppAction::ShowHelp(self.help_target(&ctx)), Origin::Key));
+        }
         let raw_events = ui.input(|i| i.events.clone());
         self.pointer_actions(&raw_events, &mut actions);
         for (action, origin) in actions {
@@ -1134,6 +1283,12 @@ fn main() -> eframe::Result {
                     .set_missing_glyph_policy(egui::MissingGlyphPolicy::Panic);
             }
             let mut app = App::new(document, cli_path);
+            // Los atajos del usuario: se leen sin tocar el fichero; lo que falle, se avisa.
+            let mut store = ShortcutStore::new(shortcuts_path(Platform::current(), &|name| {
+                std::env::var(name).ok()
+            }));
+            let loaded = store.load(&Keymap::default_scheme());
+            app.install_shortcuts(store, loaded);
             app.icons = icons::load(&cc.egui_ctx).map_err(|e| e.to_string())?;
             Ok(Box::new(app))
         }),

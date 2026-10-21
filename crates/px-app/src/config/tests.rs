@@ -74,7 +74,10 @@ fn lapiz_con_x() -> Keymap {
 fn sin_archivos_temporales(dir: &Path) {
     for entrada in fs::read_dir(dir).unwrap() {
         let nombre = entrada.unwrap().file_name().to_string_lossy().into_owned();
-        assert!(!nombre.contains("pixoko-tmp"), "temporal sin borrar: {nombre}");
+        assert!(
+            !nombre.contains("pixoko-tmp"),
+            "temporal sin borrar: {nombre}"
+        );
     }
 }
 
@@ -171,9 +174,17 @@ fn condicion_3_si_la_lectura_ignoro_algo_la_primera_escritura_copia_el_original(
     let mut tienda = ShortcutStore::new(Some(ruta.clone()));
     let cargado = tienda.load(&defecto());
     assert_eq!(cargado.ignored_lines, 1);
-    assert_eq!(fs::read_to_string(&ruta).unwrap(), original, "leer no toca el fichero");
+    assert_eq!(
+        fs::read_to_string(&ruta).unwrap(),
+        original,
+        "leer no toca el fichero"
+    );
     tienda.save(&lapiz_con_x(), &defecto(), false).unwrap();
-    assert_eq!(fs::read_to_string(&bak).unwrap(), original, "copia de lo que había");
+    assert_eq!(
+        fs::read_to_string(&bak).unwrap(),
+        original,
+        "copia de lo que había"
+    );
     assert_ne!(fs::read_to_string(&ruta).unwrap(), original);
     // Solo la primera escritura de la sesión: una segunda no vuelve a copiar.
     fs::write(&bak, "marca").unwrap();
@@ -190,7 +201,11 @@ fn condicion_3_un_fichero_ilegible_se_ignora_y_su_copia_precede_a_la_escritura()
     let mut tienda = ShortcutStore::new(Some(ruta.clone()));
     let cargado = tienda.load(&defecto());
     assert_eq!(cargado.fatal, Some(Fatal::Unreadable));
-    assert_eq!(fs::read(&ruta).unwrap(), [0xff, 0xfe, 0x80], "sin borrar ni tocar");
+    assert_eq!(
+        fs::read(&ruta).unwrap(),
+        [0xff, 0xfe, 0x80],
+        "sin borrar ni tocar"
+    );
     tienda.save(&lapiz_con_x(), &defecto(), false).unwrap();
     assert_eq!(fs::read(&bak).unwrap(), [0xff, 0xfe, 0x80]);
 }
@@ -208,7 +223,11 @@ fn condicion_3_restablecer_todo_siempre_copia_y_deja_solo_la_cabecera() {
     let cargado = tienda.load(&defecto());
     assert_eq!((cargado.ignored_lines, cargado.dropped_rows), (0, 0));
     tienda.save(&defecto(), &defecto(), true).unwrap();
-    assert_eq!(fs::read_to_string(&bak).unwrap(), guardado, "sustituye cualquier .bak");
+    assert_eq!(
+        fs::read_to_string(&bak).unwrap(),
+        guardado,
+        "sustituye cualquier .bak"
+    );
     assert_eq!(
         fs::read_to_string(&ruta).unwrap(),
         to_text(&defecto(), &defecto())

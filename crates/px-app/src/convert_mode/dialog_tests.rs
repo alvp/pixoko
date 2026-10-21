@@ -574,7 +574,7 @@ impl Banco {
                 self.convert = None;
                 self.focus = None;
             }
-            Reaction::Rejected(_) | Reaction::None => {}
+            Reaction::Rejected(_) | Reaction::None | Reaction::Pressed { .. } => {}
         }
         if pinto_el_dialogo && self.abierto_en.is_none() {
             self.abierto_en = Some(self.traza.len());
@@ -1564,7 +1564,9 @@ fn comprueba_tab(b: &mut Banco, contexto: &str) {
             | FocusTarget::Option(id, _)
             | FocusTarget::Minus(id)
             | FocusTarget::Plus(id)
-            | FocusTarget::Zone(id) => assert!(
+            | FocusTarget::Zone(id)
+            | FocusTarget::Button(id)
+            | FocusTarget::ButtonAside(id) => assert!(
                 b.dialogo().is_shown(id),
                 "{contexto}: {objetivo:?} está oculto y está en el orden"
             ),
