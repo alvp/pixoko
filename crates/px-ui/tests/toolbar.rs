@@ -1446,3 +1446,191 @@ mod caja_derecha {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad I.4 (specs/interfaz-iconos.md): filas 6 y 8 de la caja, con iconos
+// ---------------------------------------------------------------------------------------------
+
+mod iconos {
+    use super::*;
+    use egui::{OutputEvent, Pos2, RawInput, Rect, WidgetType};
+    use px_ui::icon_button::{Look, look};
+    use px_ui::theme::SURFACE_3;
+
+    const PPPS_FINOS: [f32; 9] = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0];
+
+    fn icono_de(i: usize) -> px_ui::icons::Icon {
+        TOOL_BUTTONS
+            .iter()
+            .chain(ZOOM_BUTTONS.iter())
+            .nth(i)
+            .expect("botón")
+            .icon
+    }
+
+    fn hay(p: &Pintado, ppp: f32, color: egui::Color32, esperado: [i64; 4]) -> bool {
+        p.rellenos.iter().any(|r| {
+            r.fill == color
+                && [r.rect.min.x, r.rect.min.y, r.rect.max.x, r.rect.max.y]
+                    .iter()
+                    .zip(esperado)
+                    .all(|(a, b)| (a * ppp - b as f32).abs() <= tolerancia_de_egui(ppp))
+        })
+    }
+
+    /// El botón `i` se pinta con la cara, el relieve y el icono del aspecto `l`.
+    fn comprueba(p: &Pintado, banco: &Banco, i: usize, l: &Look, contexto: &str) {
+        let (ppp, n) = (banco.ppp, banco.n());
+        let (ex, ey) = Banco::esquina_u(i);
+        let (x, y) = (banco.x0() + ex * n, ey * n);
+        let lado = BOTON_U * n;
+        assert!(hay(p, ppp, l.face, [x, y, x + lado, y + lado]), "{contexto}: falta la cara");
+        for (franja, color) in [
+            ([x, y, x + lado, y + n], l.top_left),
+            ([x, y, x + n, y + lado], l.top_left),
+            ([x, y + lado - n, x + lado, y + lado], l.bottom_right),
+            ([x + lado - n, y, x + lado, y + lado], l.bottom_right),
+        ] {
+            assert!(hay(p, ppp, color, franja), "{contexto}: falta la franja {franja:?}");
+        }
+        let id = banco.iconos.set.get(icono_de(i)).expect("textura");
+        let malla = p
+            .malla_de(id)
+            .unwrap_or_else(|| panic!("{contexto}: no se pinta el icono {i}"));
+        let d = (4 + l.offset_u) * n;
+        let esperado = [x + d, y + d, x + d + 16 * n, y + d + 16 * n];
+        let real = [malla.rect.min.x, malla.rect.min.y, malla.rect.max.x, malla.rect.max.y];
+        for (a, b) in real.iter().zip(esperado) {
+            assert!(
+                (a * ppp - b as f32).abs() <= tolerancia_de_egui(ppp),
+                "{contexto}: icono {i} en {real:?} (pt) y no en {esperado:?} (px)"
+            );
+            // Esquinas en píxeles físicos enteros.
+            assert!((a * ppp - (a * ppp).round()).abs() <= tolerancia_de_egui(ppp), "{contexto}");
+        }
+        assert_eq!(malla.color, l.tint, "{contexto}: tinta");
+        assert!(
+            malla.uv.min.distance(egui::pos2(0.0, 0.0)) < 1e-4
+                && malla.uv.max.distance(egui::pos2(1.0, 1.0)) < 1e-4,
+            "{contexto}: UV completo"
+        );
+    }
+
+    #[test]
+    fn fila_6_normal_hundido_y_desactivado_se_pintan_con_su_aspecto_a_ppp_de_1_a_3() {
+        for ppp in PPPS_FINOS {
+            // Normal (Borrador, Acercar) y hundido (el Lápiz activo).
+            let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            let p = banco.reposo();
+            let contexto = format!("ppp {ppp}");
+            comprueba(&p, &banco, 4, &look(false, true, false), &format!("{contexto} normal"));
+            comprueba(&p, &banco, 5, &look(false, true, false), &format!("{contexto} zoom"));
+            comprueba(&p, &banco, 0, &look(true, true, false), &format!("{contexto} hundido"));
+            // Con un gesto: las herramientas se atenúan (el activo, hundido y atenuado) y el zoom no.
+            let banco = Banco::nuevo(
+                ppp,
+                estado(Tool::Pencil, x5(), bloqueo(|l| l.gesture = true)),
+            );
+            let p = banco.reposo();
+            comprueba(&p, &banco, 1, &look(false, false, false), &format!("{contexto} atenuado"));
+            comprueba(&p, &banco, 0, &look(true, false, false), &format!("{contexto} activo atenuado"));
+            comprueba(&p, &banco, 6, &look(false, true, false), &format!("{contexto} zoom libre"));
+            // Ningún texto de botón: lo pintado como texto no cae sobre ninguna casilla.
+            let n = banco.n();
+            for texto in &p.textos {
+                let r = texto.rect();
+                for i in 0..9 {
+                    let (ex, ey) = Banco::esquina_u(i);
+                    let casilla = Rect::from_min_size(
+                        egui::pos2(
+                            (banco.x0() + ex * n) as f32 / ppp,
+                            (ey * n) as f32 / ppp,
+                        ),
+                        egui::vec2((BOTON_U * n) as f32 / ppp, (BOTON_U * n) as f32 / ppp),
+                    );
+                    assert!(
+                        !casilla.shrink(0.01).intersects(r),
+                        "{contexto}: el texto {:?} cae sobre el botón {i}",
+                        texto.texto
+                    );
+                }
+            }
+            // Todo lo pintado por la caja cae dentro de ella.
+            for malla in &p.mallas {
+                assert!(
+                    malla.rect.max.x * ppp <= (banco.x0() + COLUMNA_U * n) as f32 + tolerancia_de_egui(ppp)
+                        && malla.rect.min.x * ppp >= banco.x0() as f32 - tolerancia_de_egui(ppp),
+                    "{contexto}: icono fuera de la caja: {:?}",
+                    malla.rect
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fila_6_con_el_raton_encima_la_cara_se_aclara_y_un_boton_atenuado_no_se_aclara() {
+        for ppp in PPPS {
+            let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            let n = banco.n();
+            let (cx, cy) = centro_u(2);
+            let pos = en_puntos(ppp, banco.x0() + cx * n, cy * n);
+            banco.fotograma(vec![mover(pos)]);
+            let p = banco.fotograma(vec![]).0;
+            comprueba(&p, &banco, 2, &look(false, true, true), &format!("ppp {ppp}: encima"));
+            assert_eq!(look(false, true, true).face, SURFACE_3);
+            // Atenuado: con el ratón encima sigue con la cara normal.
+            let banco = Banco::nuevo(
+                ppp,
+                estado(Tool::Pencil, x5(), bloqueo(|l| l.gesture = true)),
+            );
+            banco.fotograma(vec![mover(pos)]);
+            let p = banco.fotograma(vec![]).0;
+            comprueba(&p, &banco, 2, &look(false, false, true), &format!("ppp {ppp}: atenuado"));
+        }
+    }
+
+    /// Los eventos de salida del fotograma (`widget_info`).
+    fn eventos(banco: &Banco, events: Vec<Event>) -> Vec<OutputEvent> {
+        let entrada = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, PANTALLA)),
+            events,
+            ..RawInput::default()
+        };
+        let mut salida = banco.ctx.run_ui(entrada, |ui| {
+            let vista = ToolboxView {
+                state: &banco.estado,
+                zoom_label: banco.etiqueta,
+                options: &OptionsState::default(),
+                icons: &banco.iconos.set,
+            };
+            show_toolbox(ui, &vista, default_keymap(), Platform::Linux);
+        });
+        salida.textures_delta.clear();
+        salida.platform_output.events.clone()
+    }
+
+    #[test]
+    fn fila_8_cada_boton_habilitado_emite_widget_info_de_tipo_boton_con_su_rotulo() {
+        for ppp in [1.0, 2.0] {
+            let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
+            for (i, button) in TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).enumerate() {
+                banco.reposo();
+                let n = banco.n();
+                let (cx, cy) = centro_u(i);
+                let pos = en_puntos(ppp, banco.x0() + cx * n, cy * n);
+                let mut todos = eventos(&banco, vec![mover(pos)]);
+                todos.extend(eventos(&banco, vec![boton(pos, true)]));
+                todos.extend(eventos(&banco, vec![boton(pos, false)]));
+                assert!(
+                    todos.iter().any(|e| matches!(e, OutputEvent::Clicked(info)
+                        if info.typ == WidgetType::Button
+                            && info.label.as_deref() == Some(button.label)
+                            && info.enabled)),
+                    "ppp {ppp}: {}: sin WidgetInfo de botón; hay {todos:?}",
+                    button.label
+                );
+                banco.fotograma(vec![mover(en_puntos(ppp, 3000, 3000))]);
+            }
+        }
+    }
+}

@@ -1420,3 +1420,100 @@ fn fila_2_u21_los_bordes_del_boton_estan_en_edges_u_y_son_enteros_a_los_cinco_pp
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad I.4 (specs/interfaz-iconos.md): fila 4 y propiedad 3 de la fila de iconos del editor
+// ---------------------------------------------------------------------------------------------
+
+mod iconos {
+    use super::*;
+
+    type RectU = (i64, i64, i64, i64);
+
+    /// Los cinco iconos con los literales de la spec y los dos botones de texto de la quita
+    /// pendiente.
+    const ICONOS: [(PaletteButton, RectU); 5] = [
+        (PaletteButton::Add, (4, 186, 24, 24)),
+        (PaletteButton::Remove, (29, 186, 24, 24)),
+        (PaletteButton::RotateLeft, (61, 186, 24, 24)),
+        (PaletteButton::RotateRight, (86, 186, 24, 24)),
+        (PaletteButton::Transparent, (118, 186, 24, 24)),
+    ];
+    const TEXTOS: [(PaletteButton, RectU); 2] = [
+        (PaletteButton::Confirm, (4, 186, 110, 24)),
+        (PaletteButton::Cancel, (119, 186, 110, 24)),
+    ];
+
+    #[test]
+    fn fila_4_la_fila_de_iconos_del_editor_tiene_la_geometria_de_la_spec_a_las_cinco_escalas() {
+        for (boton, rect) in ICONOS.into_iter().chain(TEXTOS) {
+            assert_eq!(button_rect_u(Mode::Indexed, boton), Some(rect), "{boton:?}");
+        }
+        for (modo, alto) in [
+            (Mode::Indexed, 214),
+            (Mode::Rgba, 186),
+            (Mode::GrayAlpha, 112),
+            (Mode::Gray, 94),
+        ] {
+            assert_eq!(editor_height_u(modo), alto, "{modo:?}");
+        }
+        // Rgba, Gray y GrayAlpha: sin botones.
+        for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+            assert_eq!(buttons_height_u(modo), 0, "{modo:?}");
+            for (boton, _) in ICONOS.into_iter().chain(TEXTOS) {
+                assert_eq!(button_rect_u(modo, boton), None);
+            }
+        }
+        // Nada pisa el aviso ni el borde del editor; el hueco de 1 u y el de 8 u no golpean.
+        let fin_aviso = notice_y_u(Mode::Indexed) + NOTICE_LINES * ROW_H_U;
+        for (_, (x, y, w, h)) in ICONOS.into_iter().chain(TEXTOS) {
+            assert!(y >= fin_aviso && y + h + BLOCK_GAP_U == editor_height_u(Mode::Indexed));
+            assert!(x >= 0 && x + w < PANEL_WIDTH_U);
+        }
+        for n in ESCALAS {
+            let k = i64::from(n);
+            for x_u in [28, 53, 57, 60, 85, 110, 117, 142] {
+                assert_eq!(
+                    button_hit(Mode::Indexed, false, x_u * k, 198 * k, n),
+                    None,
+                    "n = {n}, x = {x_u} u: es un hueco"
+                );
+            }
+        }
+        // Todo borde en puntos × `ppp` es entero (±0,001) y múltiplo de `n`.
+        for ppp in PPPS {
+            let k = i64::from(text_scale(ppp));
+            for (_, (x, y, w, h)) in ICONOS.into_iter().chain(TEXTOS) {
+                for u in [x, x + 1, x + 4, x + w - 4, x + w, y, y + 4, y + h] {
+                    let fisico = (u * k) as f32 / ppp * ppp;
+                    assert!((fisico - fisico.round()).abs() <= 0.001, "ppp {ppp}: {u} u");
+                }
+            }
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// Propiedad 3 (el editor): un punto golpea como mucho un botón y exactamente el de su
+        /// rectángulo; con una quita pendiente solo `Confirmar` y `Cancelar`; es total.
+        #[test]
+        fn propiedad_3_button_hit_da_el_boton_de_su_rectangulo_y_nada_en_los_huecos(
+            n in 1u32..=8,
+            x in -60i64..=2000,
+            y in -60i64..=2200,
+            removing in any::<bool>(),
+        ) {
+            let k = i64::from(n);
+            let tabla: &[(PaletteButton, RectU)] = if removing { &TEXTOS } else { &ICONOS };
+            let esperado = tabla
+                .iter()
+                .find(|(_, r)| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k)
+                .map(|(b, _)| *b);
+            prop_assert_eq!(button_hit(Mode::Indexed, removing, x, y, n), esperado);
+            for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+                prop_assert_eq!(button_hit(modo, removing, x, y, n), None);
+            }
+        }
+    }
+}

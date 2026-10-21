@@ -240,6 +240,8 @@ pub struct Relleno {
 pub struct Malla {
     pub textura: TextureId,
     pub rect: Rect,
+    /// Rectángulo que cubren las coordenadas de textura de sus vértices.
+    pub uv: Rect,
     pub color: Color32,
     pub clip: Rect,
 }
@@ -316,9 +318,11 @@ fn recoge(shape: &Shape, clip: Rect, fuera: &mut Pintado) {
         }),
         Shape::Mesh(malla) => {
             let puntos: Vec<Pos2> = malla.vertices.iter().map(|v| v.pos).collect();
+            let uvs: Vec<Pos2> = malla.vertices.iter().map(|v| v.uv).collect();
             fuera.mallas.push(Malla {
                 textura: malla.texture_id,
                 rect: Rect::from_points(&puntos),
+                uv: Rect::from_points(&uvs),
                 color: malla
                     .vertices
                     .first()
