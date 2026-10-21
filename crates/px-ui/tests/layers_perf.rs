@@ -17,7 +17,7 @@
 //! Umbrales (presupuesto de un fotograma a 60 por segundo, no lo medido): con 8 capas, el
 //! fotograma más lento del trazo ≤ 16 ms, el coste acumulado del trazo ≤ 250 ms y, al soltar,
 //! deshacer y rehacer el peor caso en (c), ≤ 700 ms; con 1 y 3 capas, ≤ 3 ms por fotograma
-//! (en 3 capas y (c) se mide 3,3 ms: ver la spec).
+//! (en 3 capas y (c) se mide 3,3 ms y el umbral es 4 ms: ver la spec).
 
 use std::time::Instant;
 
@@ -244,9 +244,9 @@ fn rendimiento_3_capas() {
         let m = mide(3, escenario, &serpentina(100_000));
         assert!(m.fotograma_peor <= 3.0, "{escenario}: {m:?}");
     }
-    // (c): 3,3 ms medidos, un poco por encima de los 3 ms; el presupuesto de 16 ms se cumple.
+    // (c): 3,3 ms medidos; el umbral es 4 ms (el de 3 ms no cabe en el peor caso).
     let m = mide(3, 'c', &serpentina(100_000));
-    assert!(m.fotograma_peor <= 16.0, "c: {m:?}");
+    assert!(m.fotograma_peor <= 4.0, "c: {m:?}");
 }
 
 #[test]
