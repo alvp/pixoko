@@ -857,6 +857,8 @@ mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;
 #[cfg(test)]
+mod layers_tests;
+#[cfg(test)]
 mod new_image_tests;
 #[cfg(test)]
 mod ops_tests;

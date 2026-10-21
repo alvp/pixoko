@@ -2605,3 +2605,195 @@ proptest! {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Unidad 3.3, cambio C-01 (specs/hito-3-capas-vista.md, «Cambios exactos»):
+// `Document::canvas_image(&self) -> &Image`, la plantilla de 1 x 1 con el modo y la paleta del
+// lienzo. Fase de pruebas en rojo: no compilan hasta que exista `canvas_image`.
+// ---------------------------------------------------------------------------------------
+
+mod canvas_image {
+    use super::*;
+
+    /// El lienzo y `canvas_image()` coinciden: 1 x 1, el modo y la paleta del documento.
+    fn coincide(d: &Document, contexto: &str) {
+        let plantilla = d.canvas_image();
+        assert_eq!(plantilla.mode(), d.mode(), "{contexto}: modo");
+        assert_eq!(plantilla.palette(), d.palette(), "{contexto}: paleta");
+        assert_eq!(
+            (plantilla.width(), plantilla.height()),
+            (1, 1),
+            "{contexto}: tamaño"
+        );
+    }
+
+    /// (a) En los cuatro modos: modo y paleta del lienzo (`None` salvo indexado), 1 x 1.
+    #[test]
+    fn a_tiene_el_modo_y_la_paleta_del_lienzo_en_los_cuatro_modos() {
+        let imagenes = [
+            img_rgba(4, 3),
+            Image::new(4, 3, Mode::Gray).expect("imagen de grises"),
+            Image::new(4, 3, Mode::GrayAlpha).expect("imagen de grises con alfa"),
+            img_indexada(4, 3, &[ROJO, VERDE, AZUL], Some(0)),
+        ];
+        let modos = [Mode::Rgba, Mode::Gray, Mode::GrayAlpha, Mode::Indexed];
+        for (imagen, modo) in imagenes.into_iter().zip(modos) {
+            let d = Document::new(imagen);
+            assert_eq!(d.mode(), modo);
+            coincide(&d, &format!("{modo:?}"));
+            assert_eq!(d.canvas_image().palette().is_some(), modo == Mode::Indexed);
+        }
+    }
+
+    /// (b) Sigue al lienzo en `apply`, `undo` y `redo`: comandos de paleta en indexado y
+    /// `ConvertMode` de una capa (RGBA a indexado y vuelta).
+    #[test]
+    fn b_sigue_a_los_cambios_del_lienzo_en_apply_undo_y_redo() {
+        // Paleta: color, entrada nueva e índice transparente.
+        let mut d = Document::new(img_indexada(4, 3, &[ROJO, VERDE, AZUL], Some(0)));
+        let cel = d.layers()[0].cel();
+        let comandos = [
+            Command::SetPaletteColor {
+                image: cel,
+                index: 1,
+                color: BLANCO,
+            },
+            Command::AddPaletteEntry {
+                image: cel,
+                color: AMARILLO,
+            },
+            Command::SetTransparentIndex {
+                image: cel,
+                index: Some(2),
+            },
+        ];
+        let mut paletas = vec![d.palette().cloned()];
+        for (i, comando) in comandos.into_iter().enumerate() {
+            assert_eq!(d.apply(comando), Ok(true), "comando {i}");
+            coincide(&d, &format!("apply {i}"));
+            assert_eq!(d.canvas_image().palette(), d.palette());
+            paletas.push(d.palette().cloned());
+        }
+        assert!(paletas.windows(2).all(|p| p[0] != p[1]), "cada paso cambia");
+        for i in (0..comandos_len(&paletas)).rev() {
+            d.undo().expect("deshacer");
+            coincide(&d, &format!("undo {i}"));
+            assert_eq!(d.canvas_image().palette(), paletas[i].as_ref());
+        }
+        for i in 1..paletas.len() {
+            d.redo().expect("rehacer");
+            coincide(&d, &format!("redo {i}"));
+            assert_eq!(d.canvas_image().palette(), paletas[i].as_ref());
+        }
+
+        // Conversión de modo de una capa: RGBA -> indexado y de vuelta.
+        let mut d = doc_con_colores();
+        let cel = d.layers()[0].cel();
+        coincide(&d, "rgba");
+        assert_eq!(d.canvas_image().mode(), Mode::Rgba);
+        assert_eq!(d.apply(convertir(cel, Mode::Indexed)), Ok(true));
+        coincide(&d, "apply a indexado");
+        assert_eq!(d.canvas_image().mode(), Mode::Indexed);
+        assert!(d.canvas_image().palette().is_some());
+        assert_eq!(d.apply(convertir(cel, Mode::Rgba)), Ok(true));
+        coincide(&d, "apply a rgba");
+        assert_eq!(d.canvas_image().palette(), None);
+        d.undo().expect("deshacer");
+        coincide(&d, "undo a indexado");
+        assert_eq!(d.canvas_image().mode(), Mode::Indexed);
+        d.undo().expect("deshacer");
+        coincide(&d, "undo a rgba");
+        assert_eq!(d.canvas_image().mode(), Mode::Rgba);
+        d.redo().expect("rehacer");
+        coincide(&d, "redo a indexado");
+        assert_eq!(d.canvas_image().mode(), Mode::Indexed);
+        d.redo().expect("rehacer");
+        coincide(&d, "redo a rgba");
+        assert_eq!(d.canvas_image().mode(), Mode::Rgba);
+    }
+
+    fn comandos_len(paletas: &[Option<Palette>]) -> usize {
+        paletas.len() - 1
+    }
+
+    /// (c) Sigue válida con todas las celdas vacías y no es ninguna celda: `image(cel)` es
+    /// `None` aunque `canvas_image()` exista.
+    #[test]
+    fn c_sigue_valida_con_las_celdas_vacias() {
+        // RGBA: dos capas y se quita la que tenía imagen (queda solo la vacía).
+        let mut d = doc_d();
+        let a = d.layers()[0].id();
+        let b = anade(&mut d, "B", 1);
+        assert_eq!(d.apply(quita(a)), Ok(true));
+        assert_eq!(d.layers().len(), 1);
+        assert!(
+            d.image(celda(&d, b)).is_none(),
+            "la celda restante es vacía"
+        );
+        coincide(&d, "rgba sin imagen");
+        d.undo().expect("deshacer");
+        coincide(&d, "rgba tras undo");
+
+        // Indexado: capas vacías encima y la paleta cambia con todas las celdas vacías.
+        let mut d = Document::new(img_indexada(4, 3, &[ROJO, VERDE, AZUL], Some(0)));
+        let a = d.layers()[0].id();
+        let b = anade(&mut d, "B", 1);
+        let c = anade(&mut d, "C", 2);
+        coincide(&d, "indexado con capas vacías encima");
+        assert_eq!(d.apply(quita(a)), Ok(true));
+        for capa in [b, c] {
+            assert!(d.image(celda(&d, capa)).is_none());
+        }
+        coincide(&d, "indexado sin imágenes");
+        let cb = celda(&d, b);
+        assert_eq!(
+            d.apply(Command::SetPaletteColor {
+                image: cb,
+                index: 1,
+                color: BLANCO,
+            }),
+            Ok(true)
+        );
+        coincide(&d, "paleta editada con celdas vacías");
+        assert_eq!(
+            d.canvas_image().palette().expect("paleta").get(1),
+            Ok(BLANCO)
+        );
+        assert!(d.image(cb).is_none(), "editar la paleta no materializa");
+        d.undo().expect("deshacer");
+        coincide(&d, "paleta deshecha con celdas vacías");
+        assert_eq!(
+            d.canvas_image().palette().expect("paleta").get(1),
+            Ok(VERDE)
+        );
+    }
+
+    /// (d) Es de solo lectura: no cambia `state_id`, `materialized_bytes()`, la historia ni la
+    /// igualdad del documento (llamarla antes y después es inocuo).
+    #[test]
+    fn d_es_inocua_no_toca_estado_bytes_historia_ni_igualdad() {
+        let (mut d, [_, b, _]) = tres_capas();
+        assert_eq!(d.apply(pone(celda(&d, b), 1, 1, C1)), Ok(true));
+        d.undo().expect("deshacer");
+        let foto = Foto::de(&d);
+        let copia = d.clone();
+
+        let _ = d.canvas_image();
+        foto.assert_igual(&d, "tras llamarla una vez");
+        let _ = (d.canvas_image(), d.canvas_image());
+        foto.assert_igual(&d, "tras llamarla varias veces");
+        assert_eq!(d, copia);
+        assert_eq!(copia, d);
+
+        // Y el documento sigue evolucionando igual que su copia, sin haberla llamado.
+        let mut sin_llamar = copia.clone();
+        let comando = pone(celda(&d, b), 2, 2, C2);
+        assert_eq!(d.apply(comando.clone()), Ok(true));
+        assert_eq!(sin_llamar.apply(comando), Ok(true));
+        let _ = d.canvas_image();
+        assert_eq!(d, sin_llamar);
+        assert_eq!(d.state_id(), sin_llamar.state_id());
+        assert_eq!(d.materialized_bytes(), sin_llamar.materialized_bytes());
+        assert_eq!(d.history_bytes(), sin_llamar.history_bytes());
+    }
+}
