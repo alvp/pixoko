@@ -19,7 +19,7 @@ aseprite --version
 
 # 2. Ejecutar un script de Lua por lotes (escribe humo.aseprite: 4x4, dos capas)
 mkdir -p ~/.cache/pixoko-corpus-h3-prueba
-aseprite -b --script tools/corpus-h3/comprobar.lua --script-param salida="$HOME/.cache/pixoko-corpus-h3-prueba"
+aseprite -b --script-param salida="$HOME/.cache/pixoko-corpus-h3-prueba" --script tools/corpus-h3/comprobar.lua
 
 # 3. Exportar un PNG aplanado de un .aseprite
 aseprite -b ~/.cache/pixoko-corpus-h3-prueba/humo.aseprite --save-as ~/.cache/pixoko-corpus-h3-prueba/humo.png
@@ -29,7 +29,7 @@ Las tres juntas, con comprobación del resultado (esquinas `(196, 46, 52, 255)`,
 
 ## 1. Cómo se genera
 
-`tools/corpus-h3/generar.sh` (sin argumentos: los 25 casos; con nombres: solo esos). Por caso: ejecuta `generar.lua` con `--script-param caso=<nombre>` y `salida=<carpeta>`, comprueba que existe el `.aseprite`, lo abre y exporta el PNG, y escribe `X.png.sha256` con **Pillow** (herramienta independiente, no Pixoko): SHA-256 de la RGBA de 8 bits, alfa directo, sin cabecera ni dimensiones, el mismo criterio de `golden/png/`. Al final rehace `golden/aseprite/README.md` con la versión de Aseprite y la fecha de esa ejecución, el origen de las imágenes (dibujos propios, ningún recurso del programa) y la tabla de ficheros. `--verificar` vuelca capas y celdas de lo generado (`verificar.lua`) para mirar a ojo. No se commitea nada solo.
+`tools/corpus-h3/generar.sh` (sin argumentos: los 25 casos; con nombres: solo esos). Por caso: ejecuta `generar.lua` con `--script-param caso=<nombre>` y `salida=<carpeta>` (siempre **antes** de `--script`; comprobado: si no, `app.params` llega vacío), comprueba que existe el `.aseprite`, lo abre y exporta el PNG, y escribe `X.png.sha256` con **Pillow** (herramienta independiente, no Pixoko): SHA-256 de la RGBA de 8 bits, alfa directo, sin cabecera ni dimensiones, el mismo criterio de `golden/png/`. Al final rehace `golden/aseprite/README.md` con la versión de Aseprite y la fecha de esa ejecución, el origen de las imágenes (dibujos propios, ningún recurso del programa) y la tabla de ficheros. `--verificar` vuelca capas y celdas de lo generado (`verificar.lua`) para mirar a ojo. No se commitea nada solo.
 
 Se necesita `python3` con Pillow; si falta, el script lo dice. Las carpetas de prueba van a `~/.cache`, no a `/tmp`.
 
@@ -104,7 +104,7 @@ El test no ejecuta Aseprite ni lee las capas.
 
 El script se escribió de memoria. Lo que hay que mirar si falla (cada una está marcada en el código y centralizada en un ayudante, así que se corrige en un sitio):
 
-1. `app.params` y `--script-param` (`generar.lua`, `comprobar.lua`).
+1. ~~`app.params` y `--script-param`~~ **resuelta**: funcionan, pero los `--script-param` van antes de `--script`. `aseprite --version` da `1.3.18.6-dev` y `app.version` funciona.
 2. `Sprite(ancho, alto, ColorMode.X)` (si no, `Sprite{ width, height, colorMode }`); que un sprite nuevo trae **una capa y ninguna celda** (si trae celda, `newCel` debe reemplazarla).
 3. `Palette(n)`, `Palette:setColor` y `Sprite:setPalette`; `Sprite.transparentColor`.
 4. `Image(ancho, alto, modo)` e `Image:putPixel(x, y, entero)` (valor de píxel RGBA con `app.pixelColor.rgba`, o índice); si `putPixel` pide `Color`, se cambia en `pon`.

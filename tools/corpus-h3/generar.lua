@@ -1,8 +1,9 @@
 -- Corpus del hito 3 (specs/corpus-hito-3.md): genera UN caso con la API de Lua de Aseprite.
 --
 -- Lo lanza generar.sh, una vez por caso:
---   aseprite -b --script tools/corpus-h3/generar.lua \
---     --script-param caso=<nombre> --script-param salida=<carpeta>
+--   aseprite -b --script-param caso=<nombre> --script-param salida=<carpeta> \
+--     --script tools/corpus-h3/generar.lua
+-- (los --script-param van antes de --script)
 --
 -- Todo es propio y se crea desde cero: los colores y las formas se definen aquí (rectángulos,
 -- discos y diagonales por aritmética de enteros, sin suavizado), cada sprite lleva una paleta

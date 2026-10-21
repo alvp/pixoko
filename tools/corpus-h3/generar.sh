@@ -51,7 +51,8 @@ if [[ "${1:-}" == "--prueba" ]]; then
   rm -rf "$PRUEBA"; mkdir -p "$PRUEBA"
   echo "== versión"; "$ASEPRITE" --version
   echo "== script de Lua por lotes"
-  "$ASEPRITE" -b --script "$RAIZ/tools/corpus-h3/comprobar.lua" --script-param "salida=$PRUEBA"
+  # Los --script-param van ANTES de --script: si no, app.params llega vacío.
+  "$ASEPRITE" -b --script-param "salida=$PRUEBA" --script "$RAIZ/tools/corpus-h3/comprobar.lua"
   [[ -s "$PRUEBA/humo.aseprite" ]] || falta "humo.aseprite (el script no lo escribió)"
   echo "== exportar PNG aplanado"
   "$ASEPRITE" -b "$PRUEBA/humo.aseprite" --save-as "$PRUEBA/humo.png"
@@ -71,6 +72,7 @@ PY
 fi
 
 if [[ "${1:-}" == "--verificar" ]]; then
+  compgen -G "$SALIDA/*.aseprite" >/dev/null || falta "ningún .aseprite en $SALIDA (genera primero)"
   for f in "$SALIDA"/*.aseprite; do
     "$ASEPRITE" -b "$f" --script "$RAIZ/tools/corpus-h3/verificar.lua"
   done
@@ -83,7 +85,7 @@ mkdir -p "$SALIDA"
 for caso in "${CASOS[@]}"; do
   ase="$SALIDA/$caso.aseprite"; png="$SALIDA/$caso.png"
   rm -f "$ase" "$png" "$png.sha256"
-  "$ASEPRITE" -b --script "$LUA" --script-param "caso=$caso" --script-param "salida=$SALIDA"
+  "$ASEPRITE" -b --script-param "caso=$caso" --script-param "salida=$SALIDA" --script "$LUA"
   [[ -s "$ase" ]] || falta "$caso.aseprite (el script no lo escribió; mira el error de arriba)"
   "$ASEPRITE" -b "$ase" --save-as "$png"
   [[ -s "$png" ]] || falta "$caso.png (no se exportó)"
