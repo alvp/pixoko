@@ -143,9 +143,9 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 }
 
 #[test]
-fn fila_1_hay_catorce_entradas_y_ninguna_accion_se_repite() {
+fn fila_1_hay_dieciseis_entradas_y_ninguna_accion_se_repite() {
     let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 14);
+    assert_eq!(acciones.len(), 16);
     for (i, a) in acciones.iter().enumerate() {
         assert!(
             !acciones[i + 1..].contains(a),
@@ -159,7 +159,11 @@ fn fila_1_hay_catorce_entradas_y_ninguna_accion_se_repite() {
     // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
     esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
-    esperado.extend(&ACCIONES_DE_LA_TABLA[6..]);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[6..10]);
+    // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
+    esperado.push(AppAction::ShowHelp(HelpTarget::Active));
+    esperado.push(AppAction::ShowShortcuts);
+    esperado.push(AppAction::ShowLicenses);
     assert_eq!(acciones, esperado);
 }
 
@@ -185,7 +189,7 @@ fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 14]) -> Vec<Option<String>> {
+fn algunos(textos: [Option<&str>; 16]) -> Vec<Option<String>> {
     textos.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -207,6 +211,8 @@ fn fila_1_atajos_en_linux() {
             Some("<"),
             Some("Inicio"),
             Some("Ctrl+1"),
+            None,
+            None,
             None,
         ])
     );
@@ -231,6 +237,8 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             Some("Inicio"),
             Some("Ctrl+1"),
             None,
+            None,
+            None,
         ])
     );
     assert_eq!(shortcut_for(AppAction::Quit, Platform::Windows), None);
@@ -254,6 +262,8 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             Some("<"),
             Some("Inicio"),
             Some("Cmd+1"),
+            None,
+            None,
             None,
         ])
     );
