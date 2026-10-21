@@ -294,3 +294,23 @@ fn fila_12_la_lista_de_atajos_se_pinta_y_sus_botones_responden() {
         }]
     ));
 }
+
+#[test]
+fn fila_2_los_22_textos_de_ayuda_y_la_confirmacion_se_pintan_sin_glifos_ausentes() {
+    // La política del banco es el pánico ante un glifo ausente: pintar cada ayuda lo comprueba.
+    let tabla = Keymap::default_scheme();
+    for entrada in px_ui::help_texts::help_table() {
+        let spec = px_ui::help::help_form_for(entrada.key, &tabla, Platform::Linux).unwrap();
+        let mut b = Banco::nuevo(1.0, Dialog::new(DialogKind::Help, spec).unwrap());
+        let p = b.reposo();
+        assert!(p.pinta(entrada.name), "{}", entrada.key);
+    }
+    let confirmacion = Dialog::new(
+        DialogKind::ResetShortcuts,
+        px_ui::help::confirm_reset_form(),
+    )
+    .unwrap();
+    let mut b = Banco::nuevo(1.0, confirmacion);
+    let p = b.reposo();
+    assert!(p.pinta("Aceptar") && p.pinta("Cancelar"));
+}
