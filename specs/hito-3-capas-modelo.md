@@ -229,3 +229,15 @@ Aprobados **C-01 a C-31 y N-01 a N-08 tal como están**; si hace falta cualquier
 7. **El desvío del mapa** (`DuplicateLayer` a 3.4, mezcla a 3.2, bloqueo a 3.3, sin `SetLayerProps`) queda reflejado en `mapa-funciones.md` y `docs/PLAN-RESUMEN.md`.
 
 Orden de trabajo: commit de spec; commit de pruebas en rojo (solo `tests/layers.rs` deja de compilar); lógica A, B y C con el workspace verde en cada uno y sin API temporal; cierre completo; `license-auditor` una vez al final. Sin `golden/aseprite/`. Informe final de 20 líneas como máximo.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+Estado: **implementada** (commits `fd33133` spec, `1b5907c` pruebas, `e8a604e`, `7f4edea` y `88d6426` lógica A, B y C, `aa14c1c` ajuste de estilo de las pruebas). Lo que la implementación precisó, sin salirse de `C-01..C-31` ni `N-01..N-08`:
+
+1. **Orden de comprobación en los comandos de capa:** `UnknownLayer` gana siempre a los demás errores (también en `RemoveLayer` de la única capa con un id desconocido); después, `MoveLayer`: `LayerIndex`; `RenameLayer`: `LayerName`; `SetLayerOpacity`: `IndexedOpacity`; y por último el «sin cambios» (`Ok(false)`).
+2. **`CelsTooLarge` dentro de un `Batch`** sale sin envolver en `InBatch` (se comprueba antes de ejecutar ningún comando) y `needed = materialized_bytes() + cel_bytes() × celdas vacías nombradas` (con una sola celda es lo que dice C-28).
+3. **`materialized_bytes()` (C-07) cuenta solo los bytes de píxeles**, como `cel_bytes()`, sin las paletas; el coste en la historia del `RemoveLayer` sí cuenta el contenido de la celda entero.
+4. **El lienzo guarda su paleta en una plantilla de 1 × 1** con el modo de las celdas, que recibe los mismos pasos de paleta (un solo paso, sin copia de coste: la cota de 512 B de `propiedad_6_coste_del_paso` sigue valiendo); el paso de `ConvertMode` guarda también la plantilla del otro lado (no se cuenta en su coste: ≤ 1 KiB). `ImageId(u32::MAX)` queda reservado para ella.
+5. **Deshacer no cuesta más con más capas** (medido, release, `SetPixels` de 10⁶ píxeles en una celda de 1024² RGBA, tiempo de `undo`/`redo`): 1 capa 5,1/4,8 ms, 64 capas 4,3/4,4 ms, 256 capas 4,7/4,4 ms.
+6. **Cifras de memoria:** 8192² RGBA, 256 MiB por celda: caben 8 celdas materializadas bajo el tope de 2 GiB; la novena escritura sobre una celda vacía da `CelsTooLarge { needed: 2304 MiB, limit: 2048 MiB }` antes de reservar; el aviso de 1 GiB de peor caso salta al añadir la quinta capa.
+7. **Medido en el cierre:** 3873 pruebas pasan (3825 anteriores sin tocar + 48 nuevas), 12 ignoradas; `cargo fmt`, `clippy --workspace --all-targets --locked -- -D warnings` y `cargo deny check` limpios. `px-ui`, `px-app` y `px-raster` no cambian.

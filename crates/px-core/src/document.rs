@@ -448,7 +448,10 @@ impl Document {
         self.current_id
     }
 
-    /// El id de la imagen con la que se creó el documento.
+    /// El id de la celda de la capa con la que se creó el documento (siempre `ImageId(0)`).
+    ///
+    /// TODO(3.3): se retira cuando los llamadores pasen a la capa activa. Con varias capas, y si
+    /// se quitó la capa 0, `image(main_image())` es `None`.
     pub fn main_image(&self) -> ImageId {
         ImageId(0)
     }
