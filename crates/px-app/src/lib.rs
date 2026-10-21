@@ -55,7 +55,7 @@ use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
 use px_ui::palette_panel::{Indicator, Roles, show_roles};
 use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
-use px_ui::source::{DocSource, flatten, overlay_pixels};
+use px_ui::source::{DocSource, OverlayCache, flatten};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
@@ -169,6 +169,8 @@ struct App {
     pending_convert: Option<PendingConversion>,
     /// Un guardado que compone mucho y espera su fotograma: la entrada está bloqueada.
     pending_save: Option<(SaveJob, PendingSave)>,
+    /// Los colores del trazo pendiente (solo se calculan los píxeles nuevos de cada fotograma).
+    overlay: OverlayCache,
     /// Reserva de los búferes de las baldosas (cargar y regenerar); las pruebas la sustituyen por
     /// una que falla.
     tile_alloc: Box<dyn TileAlloc>,
@@ -225,6 +227,7 @@ impl App {
             convert: None,
             pending_convert: None,
             pending_save: None,
+            overlay: OverlayCache::default(),
             tile_alloc: Box::new(SystemTileAlloc),
         }
     }
@@ -1280,8 +1283,10 @@ impl eframe::App for App {
                 _ => self.canvas.end_preview(&ctx, &source),
             }
             // Los colores del trazo pendiente son lo que se verá con las capas, no el color crudo.
-            let pending = overlay_pixels(&self.session.document, id, self.tools.preview());
-            self.canvas.set_overlay(&ctx, &source, &pending);
+            let pending = self
+                .overlay
+                .colors(&self.session.document, id, self.tools.preview());
+            self.canvas.set_overlay(&ctx, &source, pending);
             if let Err(error) = self.canvas.sync_with(&ctx, &source, &mut *self.tile_alloc) {
                 sync_error = Some(error.to_string());
             }

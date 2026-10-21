@@ -263,3 +263,47 @@ pub fn overlay_pixels(
         })
         .collect()
 }
+
+/// Los colores de la superposición de un trazo que crece, calculados una sola vez: cada fotograma
+/// la app pide los colores de **todo** el trazo pendiente, y con varias capas cada uno cuesta una
+/// pasada por las capas; el caché solo calcula lo añadido. Se vacía cuando cambia el documento
+/// (`state_id`) o la capa activa, o cuando la lista no continúa a la anterior (la línea que cambia
+/// de extremo).
+#[derive(Debug, Default)]
+pub struct OverlayCache {
+    key: Option<(u64, ImageId)>,
+    edits: Vec<PixelEdit>,
+    colors: Vec<(u32, u32, Rgba)>,
+    computed: usize,
+}
+
+impl OverlayCache {
+    /// Los colores de `edits` (como [`overlay_pixels`]), reutilizando los de la llamada anterior si
+    /// `edits` la continúa.
+    pub fn colors(
+        &mut self,
+        doc: &Document,
+        active: ImageId,
+        edits: impl IntoIterator<Item = PixelEdit>,
+    ) -> &[(u32, u32, Rgba)] {
+        let edits: Vec<PixelEdit> = edits.into_iter().collect();
+        let key = Some((doc.state_id(), active));
+        let known = if key == self.key && edits.starts_with(&self.edits) {
+            self.edits.len()
+        } else {
+            self.colors.clear();
+            0
+        };
+        self.computed = edits.len() - known;
+        self.colors
+            .extend(overlay_pixels(doc, active, edits[known..].iter().copied()));
+        self.edits = edits;
+        self.key = key;
+        &self.colors
+    }
+
+    /// Cuántas ediciones calculó la última llamada (las demás venían del caché).
+    pub fn last_computed(&self) -> usize {
+        self.computed
+    }
+}
