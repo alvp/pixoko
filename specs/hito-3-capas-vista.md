@@ -1,6 +1,6 @@
 # Hito 3 · Unidad 3.3: la composición en la vista, la edición y el guardado
 
-Estado: **aprobada** (2026-10-21; decisiones 1 a 13 con las condiciones de «Visto bueno» al final, que **prevalecen sobre cualquier otra frase de la página**). El visto bueno es aprobación expresa de `px-core` **solo para el cambio numerado de abajo** (D02): `C-01` (y `C-02`, solo comentario). Si durante la unidad hace falta otro cambio en `px-core` o cualquiera en `px-raster`, me paro.
+Estado: **implementada** (2026-10-21; detalle y medidas en «Corrección posterior»). Aprobada (2026-10-21; decisiones 1 a 13 con las condiciones de «Visto bueno» al final, que **prevalecen sobre cualquier otra frase de la página**). El visto bueno es aprobación expresa de `px-core` **solo para el cambio numerado de abajo** (D02): `C-01` (y `C-02`, solo comentario). Si durante la unidad hace falta otro cambio en `px-core` o cualquiera en `px-raster`, me paro.
 
 Referencias: filas 3.3 y 3.4 de [`mapa-funciones.md`](mapa-funciones.md); `TODO(3.3)` y «Obligaciones para las unidades siguientes» de [`hito-3-capas-modelo.md`](hito-3-capas-modelo.md); «API», «Rendimiento» y «Obligaciones» de [`hito-3-mezcla.md`](hito-3-mezcla.md); [`hito-2-zoom-baldosas.md`](hito-2-zoom-baldosas.md) (baldosas, bloques sucios, superposición del trazo); [`hito-2-abrir-guardar.md`](hito-2-abrir-guardar.md) (guardado PNG); [`hito-2-cuentagotas-borrador.md`](hito-2-cuentagotas-borrador.md). Sin dependencias nuevas ni `unsafe`; `Cargo.lock` y `docs/DEPENDENCIES.md` no cambian. No usa el corpus `golden/aseprite/` (la mezcla ya está validada en 3.2: aquí se usa `compose` como oráculo).
 
@@ -158,3 +158,31 @@ Decisiones 1 a 13 aprobadas con el modo ahorro de CLAUDE.md. Aprobado expresamen
 5. **Convertir modo con varias capas:** avisa sin abrir el diálogo, con un mensaje claro. El mensaje remite a la **3.5** (ahí llega `ConvertAll`; antes de la 3.4 no hay interfaz para quitar capas).
 6. **Riesgo de la paleta:** quinta propiedad en `px-app` (arriba); quitar una entrada que usa otra celda pide destino igual que hoy.
 7. **Flujo:** commit de spec; adaptación de las pruebas anteriores (los 39 literales `layers: None`) en un commit propio; pruebas nuevas **antes** del código (`test-writer` solo para `canvas_image()`), commiteadas; lógica de `px-core`, `px-ui` y `px-app`; cierre completo; `license-auditor` una vez. Umbrales de rendimiento medidos al cerrar y ajustados; si se pasan, parar y avisar. Informe final de 20 líneas como máximo con la prueba manual en 10 pasos (incluida `PIXOKO_CAPAS`).
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+Estado: **implementada** el 2026-10-21 (commits de spec `b19a30e`, adaptación `bf15a92`, pruebas `9ac945e`, lógica A `075a237`, B `f26d0c3`, C `c2ceeda`, el caché de la superposición `e850ef2` y `53f9683`, su propiedad y el ajuste de `dispatch`). Lo que la implementación y las medidas precisaron, sin salirse de `C-01` y `C-02`:
+
+1. **`OverlayCache` (nuevo, `px-ui/source.rs`).** La primera medida con 8 capas dio 12,5 / 16,5 / 29,7 ms por fotograma al final de un trazo de 100 000 píxeles: la app recalculaba los colores de **todo** el trazo en cada fotograma. El caché solo calcula los píxeles nuevos y se vacía si cambia el `state_id`, la capa activa o la lista no continúa a la anterior. Propiedad añadida (`layers_canvas.rs`): con y sin caché, sobre trazos que crecen, cambian de forma, se sueltan o se cancelan con `Esc`, con deshacer y rehacer a mitad de trazo, zoom y cambio de capa activa, las texturas son idénticas píxel a píxel tras cada fotograma (comprobada con una mutación: sin la clave del estado del documento falla).
+2. **Umbrales y cifras** (decisión del usuario: presupuesto de un fotograma a 60 por segundo, no lo medido). `--release`, un hilo, Ryzen 5 7600X, 8192² RGBA, serpentina de 100 000 píxeles en lotes de 1000 (≈ 224 bloques), **medido el 2026-10-21**; viven en `px-ui/tests/layers_perf.rs` (`#[ignore]`, **no son puerta del CI**: `cargo test --release -p px-ui --test layers_perf -- --ignored --nocapture --test-threads=1`).
+
+   | Escenario | Fotograma más lento | Trazo acumulado | Soltar | Deshacer | Rehacer | Umbral |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | 1 capa (a) | 0,5 ms | 19 ms | 0,8 ms | 1,3 ms | 1,2 ms | ≤ 3 ms por fotograma |
+   | 3 capas (a) | 0,5 ms | 20 ms | 2,0 ms | 2,3 ms | 2,1 ms | ≤ 3 ms |
+   | 3 capas (b) | 1,6 ms | 36 ms | 17 ms | 17 ms | 17 ms | ≤ 3 ms |
+   | 3 capas (c) | **3,3 ms** | 62 ms | 41 ms | 41 ms | 41 ms | ≤ 3 ms: **pasa 0,3 ms** (cumple los 16 ms) |
+   | 8 capas (a) | 0,7 ms | 32 ms | 3,9 ms | 4,5 ms | 4,4 ms | ≤ 16 ms y ≤ 250 ms |
+   | 8 capas (b) | 4,4 ms | 83 ms | 54 ms | 54 ms | 54 ms | ≤ 16 ms y ≤ 250 ms |
+   | 8 capas (c) | 9,7 ms | 161 ms | 127 ms | 125 ms | 125 ms | ≤ 16 ms y ≤ 250 ms |
+   | Peor caso (1024 bloques de una baldosa), 8 capas (c) | — | — | 583 ms | 583 ms | 583 ms | ≤ 700 ms |
+
+   Con 3 capas y (c) los 3 ms no se cumplen (3,3 ms, estable en cuatro ejecuciones); el presupuesto de 16 ms sí. La prueba `#[ignore]` fija ≤ 3 ms en (a) y (b) y ≤ 16 ms en (c) con 3 capas. En el peor caso, el fotograma que crea los 1024 bloques de golpe tarda lo mismo (575 ms), pero un trazo real los crea a lo largo de muchos fotogramas.
+3. **Dónde se va el tiempo.** Cada vez que un trazo entra en un bloque de 64×64 se compone su base (0,2 a 0,4 ms con 8 capas); al entrar en una fila nueva de bloques entran ~16 a la vez. Recomponer al soltar o deshacer es proporcional al área de los bloques sucios.
+4. **Repartir la composición de los bloques nuevos entre dos fotogramas: no cabe** sin cambiar lo que se ve (los píxeles del trazo de un bloque sin base aparecerían un fotograma tarde) y sin hilos. Queda como **pulido**: la base del bloque se podría tomar de la baldosa ya compuesta si el lienzo guardase una copia en CPU (memoria) o componer por bandas con hilos.
+5. **Palanca futura, sin implementar:** partir `compose_rect` en bandas con `std::thread::scope` (determinista y sin dependencias) si el uso real lo exige; baja el coste de recomponer una tira y de componer los bloques nuevos.
+6. **`dispatch.rs` usaba `main_image()`** (la elección con las cifras `1` a `9` y el aviso del borrador): con la celda activa vacía no funcionaban. Pasan a `canvas_image()`; prueba en `layers_tests.rs`. Tras la unidad, `main_image()` solo se usa en pruebas.
+7. **Convertir con varias capas** remite a la **unidad 3.5** (`ConvertAll`); `mapa-funciones.md` ya decía 3.5. El bloqueo de capa pasa a 3.4 (mapa y resumen actualizados).
+8. **PNG con índice transparente:** al leer un PNG guardado, el índice transparente vuelve como una entrada de alfa 0 sin `transparent_index` (conversión ya documentada del hito 1); la propiedad 4 compara por colores resueltos (`to_rgba8`) y no por `Image ==`.
+9. **Pruebas:** 4 en `px-core` (`test-writer`), 34 en `px-ui` (`layers_tools.rs` 24 y `layers_canvas.rs` 10, con la propiedad del caché), 29 en `px-app` (`session/layers_tests.rs`) y 6 de rendimiento ignoradas: 67 contra el tope orientativo de 40, por ser 5 propiedades más las filas. Cierre: **3967 pasan, 0 fallan, 19 ignoradas** (`cargo test --workspace --locked`); `cargo fmt`, `clippy --workspace --all-targets --locked -- -D warnings` y `cargo deny check` limpios. Ninguna prueba anterior cambió salvo los 39 literales `layers: None` (medido y confirmado).
+10. **Qué no se probó sin ventana:** el cableado de `lib.rs` (la guardia de capa oculta al pulsar, `PIXOKO_CAPAS` al abrir y con `Nueva imagen…`, «Guardando…» con la entrada bloqueada, la pregunta de destino al quitar una entrada que usa otra celda): sus piezas puras están probadas; el recorrido es la prueba manual.

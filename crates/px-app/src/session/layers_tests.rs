@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use proptest::prelude::*;
-use px_core::{BlendMode, ImageId, LayerId, Palette, PixelEdit, Rgba};
+use px_core::{ImageId, LayerId, Palette, PixelEdit, Rgba};
 use px_formats::read_png;
 use px_ui::canvas::CanvasEvent;
 use px_ui::dirty::BlockSet;
@@ -26,9 +26,7 @@ use px_ui::tool::{Tool, ToolAction, ToolState};
 use px_ui::view::Zoom;
 
 use crate::debug_layers::{LayersRequest, apply_debug_layers, parse_layers};
-use crate::save_wait::{
-    PendingSave, SAVE_SYNC_PIXELS, SAVING_NOTICE, StartSave, compose_pixels, start_save,
-};
+use crate::save_wait::{SAVE_SYNC_PIXELS, SAVING_NOTICE, StartSave, compose_pixels, start_save};
 use crate::title::{TitleInfo, title_text};
 
 // ---------------------------------------------------------------------------------------------
@@ -670,7 +668,6 @@ fn fila_11_guardando_se_pide_dos_fotogramas_antes_si_hay_mucho_que_componer() {
     assert!(espera.tick(), "fotograma 2: guarda");
     assert!(!espera.tick(), "nunca más");
     assert!(!espera.tick());
-    let _: Option<PendingSave> = None;
 }
 
 #[test]
@@ -1089,7 +1086,3 @@ proptest! {
         }
     }
 }
-
-// Silencia el aviso de importaciones que no usa todo el módulo.
-#[allow(dead_code)]
-fn _usos(_: BlendMode, _: PendingSave) {}
