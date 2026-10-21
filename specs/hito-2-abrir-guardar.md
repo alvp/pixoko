@@ -114,6 +114,10 @@ pub fn title_with_file(file: Option<&str>, modified: bool, title: &str) -> Strin
 - Un corte de luz puede dejar un `.nombre.pixoko-tmp-*` suelto. El directorio no se sincroniza tras el `rename`.
 - Los topes de fichero y de píxeles son provisionales (unidad 14).
 
+## Para más adelante
+
+- **Soltar ficheros no funciona en Linux con Wayland** (el cursor muestra «prohibido»): en winit 0.30.13 solo el backend X11 (`platform_impl/linux/x11/event_processor.rs`) maneja `DroppedFile` y `HoveredFile`; el de Wayland no lo implementa. winit llega como dependencia transitiva de eframe y no se sustituye. Caminos que funcionan: `Ctrl`+`O`, pasar el fichero como argumento (o «Abrir con» del explorador) y lanzar con X11: `env -u WAYLAND_DISPLAY px-app`. No se promete que una versión futura lo resuelva.
+
 ## Fuera de alcance
 
 Diálogos de archivo y `Ctrl`+`O` (unidad 11, con `rfd`), otras ventanas o pestañas, formatos distintos de PNG, conservar chunks auxiliares, limpiar temporales viejos, `fsync` del directorio, lienzos mayores que la GPU (unidad 14), guardado automático, ficheros recientes.

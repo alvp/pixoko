@@ -235,3 +235,7 @@ Dos decisiones de estilo y de herramientas, solo anotadas: no se implementan en 
 
 - **(A) Estilo de los iconos de I.4.** Iconos de 1 bit, con un trazo oscuro y grueso, sobre un botón cuadrado con relieve que se ve hundido cuando la herramienta está activa. Van dentro de la interfaz oscura actual y se dibujan nuevos, con el propio Pixoko.
 - **(B) Pincel en el hito 4.** Un único icono de pincel que muestra el pincel activo. El clic derecho sobre él abre una ventana con la rejilla de formas y un botón de preajustes; no es este panel de opciones.
+
+## Para más adelante
+
+- **Soltar ficheros no funciona en Linux con Wayland** (el cursor muestra «prohibido»): en winit 0.30.13 solo el backend X11 (`platform_impl/linux/x11/event_processor.rs`) maneja `DroppedFile` y `HoveredFile`; el de Wayland no lo implementa. winit llega como dependencia transitiva de eframe y no se sustituye. Caminos que funcionan: `Ctrl`+`O`, pasar el fichero como argumento (o «Abrir con» del explorador) y lanzar con X11: `env -u WAYLAND_DISPLAY px-app`. No se promete que una versión futura lo resuelva.

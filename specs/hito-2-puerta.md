@@ -98,7 +98,7 @@ Demostrar que un PNG real se abre, se edita y se guarda en Linux, Windows y macO
 5. `Ctrl+S` guarda (si el PNG se convierte al abrir, escribe `-copia` y el aviso lo dice). `Ctrl+Mayús+S`: diálogo nativo, modal, con nombre propuesto; un nombre sin extensión se guarda con `.png`.
 6. `Ctrl+O` y elige lo guardado: se abre idéntico (compara a ×8 unos píxeles clave).
 7. Repite 2 a 6 con la copia RGBA.
-8. Suelta un PNG desde el explorador sobre la ventana: se abre; con cambios pendientes avisa y solo reemplaza al soltar otra vez en 5 s.
+8. En Linux, lanza con X11 (`env -u WAYLAND_DISPLAY`; en Wayland soltar ficheros no está disponible) y suelta un PNG desde el explorador sobre la ventana: se abre; con cambios pendientes avisa y solo reemplaza al soltar otra vez en 5 s.
 9. Zoom 1/2, 1/4 y 1/8 en la RGBA y en la indexada: sin costuras ni líneas y sin temblor al desplazar.
 10. HiDPI: a 100 % y a 150–200 % (en macOS, Retina y una pantalla externa): píxeles nítidos, texto legible, ventana mínima.
 11. *Nueva imagen* de 8192×8192 RGBA: pinta, rellena, deshaz, guarda y reabre; igual con 6000×6000 indexada. Sin tirones graves y sin memoria desbocada (monitor del sistema).

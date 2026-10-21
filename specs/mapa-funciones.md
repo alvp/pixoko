@@ -292,6 +292,8 @@ Parte de las celdas de 3.1: un fotograma más es una columna más, con las celda
 
 **Hito 8 · Automatización y lanzamiento** (10 unidades). Núcleo: 8.1 preferencias en disco (también teclas y gestos editables, ficheros recientes y directorio recordado), 8.9 instaladores en los tres sistemas, 8.10 puerta (instaladores y licencias revisadas). Deseables: 8.2 CLI (`px-cli`: convertir, cuantizar, redimensionar, exportar hojas), 8.6 traducciones, 8.7 persistencia PNG (marca de transparencia al guardar, metadatos y perfil de color, escritor por flujo si hay un caso real de falta de memoria) y 8.8 pulidos de interfaz (sección 9). Opcionales: 8.3 scripting (lenguaje por decidir, con su licencia), 8.4 servidor MCP y 8.5 macros con «repetir la última orden». Los pulidos que toquen una unidad núcleo de antes se hacen con esa unidad.
 
+- **Al actualizar dependencias (hito 8):** al actualizar eframe o egui, comprobar si el egui-winit nuevo usa winit 0.31 o superior, que trae una API de arrastrar y soltar con soporte para Wayland; si es así, probar soltar ficheros en Wayland y retirar la nota de limitación (`specs/hito-2-abrir-guardar.md` y `docs/DISENO-INTERFAZ.md`, «Para más adelante»).
+
 ## 7. Corpus y oráculos
 
 - **Instalados** (`REFERENCIAS.md`): LibreSprite 1.3 (modo por lotes; lee `.aseprite`, exporta GIF, hojas y etiquetas, escala y recorta) y Grafx2 2.9 (solo interfaz gráfica). **DPaint V** en emulador, solo para el original.
