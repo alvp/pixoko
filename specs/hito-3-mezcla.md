@@ -234,6 +234,13 @@ Opacidad de celda (hito 6), los diez modos restantes (hito 6), grupos, mesa de l
 10. **Nota para 3.8** (modos del `.aseprite` desde la especificación pública, nunca desde los números de Lua; diez modos sin equivalente se tratan con aviso o error).
 11. **`test-writer` sí** (`px-core` y `px-raster`); `license-auditor` una vez al cerrar (cambian `px-core` y `px-raster`; sin dependencias nuevas de terceros).
 
+## Datos conocidos (confirmados por el usuario el 21 de octubre de 2026)
+
+Se acepta el techo de error de 2 de la fórmula empírica (paso 4b) medido contra el corpus del programa de referencia y contra la forma observada con el `αr` entero. Lo que hay que saber al leerlo:
+
+1. **El 4,16 no mide fidelidad a la referencia.** Frente a la forma real con el `αr` **real** el error llega a 4,16 (3,88 a 4,16 según el modo). Su causa es el redondeo del `αr` entero, que con Normal ya da **0** diferencias contra el corpus (640 puntos) y da el alfa de salida exacto en el 100 % de los casos; solo aparece con alfas pequeñas. Es una propiedad de la forma real sin redondear, **no** una medida de lo lejos que está Pixoko de la referencia, y por eso no se declara como tolerancia.
+2. **El techo de 2 es un máximo observado, no una garantía.** Sale de los pares de alfa del corpus (las dos rejillas de alfas y las siete tiras de `mezcla-ocho-fondo-translucido`: 1064 puntos) y del barrido contra la forma observada, no de una demostración sobre la referencia. Si las unidades **3.8 o 3.9** traen ficheros con otros pares de alfa y la fórmula supera 2 contra su PNG, **se re-evalúa con datos** (casos nuevos del corpus, otra secuencia entera o la forma W3C descrita) y **nunca se ensancha la tolerancia** para que la prueba pase. Riesgo anotado en `mapa-funciones.md` (filas 3.8 y 3.9).
+
 ## Corrección posterior (al cerrar la unidad; la única)
 
 Lo que la implementación y las medidas precisaron, sin salirse de `P-01..P-08` ni de `R-01..R-04` (ningún otro cambio en `px-core`):
