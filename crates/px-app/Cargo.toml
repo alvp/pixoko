@@ -9,6 +9,14 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[lib]
+doctest = false
+
+[[bin]]
+name = "px-app"
+path = "src/main.rs"
+test = false
+
 [dependencies]
 px-core = { path = "../px-core" }
 px-ui = { path = "../px-ui" }

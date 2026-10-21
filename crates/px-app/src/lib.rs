@@ -25,6 +25,7 @@ mod shortcuts_flow;
 mod title;
 mod window_min;
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -1244,8 +1245,9 @@ impl eframe::App for App {
     }
 }
 
-fn main() -> eframe::Result {
-    let args: Vec<_> = std::env::args_os().skip(1).collect();
+/// Arranca la aplicación con los argumentos de la línea de comandos (sin el nombre del programa):
+/// `--licencias` imprime y devuelve `Ok`; unos argumentos inválidos salen del proceso con el código 2.
+pub fn run(args: Vec<OsString>) -> eframe::Result {
     if wants_licenses(&args) {
         print!("{}", licenses::THIRD_PARTY);
         return Ok(());
