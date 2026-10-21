@@ -2797,3 +2797,971 @@ mod canvas_image {
         assert_eq!(d.history_bytes(), sin_llamar.history_bytes());
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Unidad 3.4, cambios P-01 a P-04 (specs/hito-3-capas-interfaz.md, «Lista exacta de cambios en
+// `px-core`»): `Layer::locked()`, `Command::SetLayerLocked` y `Command::DuplicateLayer`. Filas 1
+// y 2 de «Casos», propiedad 1 y condición 1 del visto bueno. Fase de pruebas en rojo: no
+// compilan hasta que existan los dos comandos y `locked()`.
+//
+// Las cifras de bytes son las de la spec de 3.1 (RGBA 4 x 3: celda de 48 bytes, `tres_capas()`
+// tiene la celda de `A` materializada y las de `B` y `C` vacías). Los errores de
+// `DuplicateLayer` se comprueban con `sin_efecto`: ni documento, ni historia, ni `state_id`, ni
+// `materialized_bytes()` cambian (es la forma observable de «antes de reservar»).
+//
+// SPEC?: «rehacer repone la copia sin copiar ni reservar celdas» no se prueba bajando el límite
+// de celdas antes del `redo` (la spec no dice si `redo` de un paso con celda lo vuelve a
+// comprobar, como hace `redo` de una escritura en la fila 11 b de 3.1); solo se prueba que
+// rehacer deja el documento, el `state_id` y los bytes materializados del instante posterior.
+// ---------------------------------------------------------------------------------------
+
+mod duplicar_y_bloquear {
+    use super::*;
+    use px_core::BlendMode;
+
+    fn bloquea(layer: LayerId, locked: bool) -> Command {
+        Command::SetLayerLocked { layer, locked }
+    }
+
+    fn duplica(layer: LayerId, name: &str) -> Command {
+        Command::DuplicateLayer {
+            layer,
+            name: name.to_string(),
+        }
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Fila 1: `SetLayerLocked`.
+    // -----------------------------------------------------------------------------------
+
+    /// (a) Bloquear, repetir, desbloquear, repetir; deshacer y rehacer; `==` y `state_id`;
+    /// en los cuatro modos. Nace desbloqueada en `Document::new` y en `AddLayer`.
+    #[test]
+    fn fila_01_a_bloquear_desbloquear_y_repetir_son_un_paso_cada_uno() {
+        let (mut d, b) = base();
+        let a = d.layers()[0].id();
+        assert!(!d.layer(a).expect("A").locked(), "Document::new");
+        assert!(!d.layer(b).expect("B").locked(), "AddLayer");
+
+        let inicial = d.clone();
+        let estado0 = d.state_id();
+        let materializado = d.materialized_bytes();
+
+        assert_eq!(d.apply(bloquea(b, true)), Ok(true));
+        let estado1 = d.state_id();
+        assert_ne!(estado1, estado0, "state_id nuevo al bloquear");
+        assert!(d.layer(b).expect("B").locked());
+        assert!(!d.layer(a).expect("A").locked(), "solo la pedida");
+        assert_eq!(d.materialized_bytes(), materializado);
+        // Dos documentos que solo difieren en el bloqueo no son iguales.
+        assert_ne!(d, inicial);
+        assert_ne!(inicial, d);
+        let bloqueado = d.clone();
+
+        // Repetir: `Ok(false)` sin tocar nada (ni historia ni `state_id`).
+        sin_efecto(&mut d, bloquea(b, true), Ok(false));
+
+        assert_eq!(d.apply(bloquea(b, false)), Ok(true));
+        let estado2 = d.state_id();
+        assert!(estado2 != estado1 && estado2 != estado0, "state_id nuevo");
+        assert!(!d.layer(b).expect("B").locked());
+        assert_eq!(d, inicial, "desbloquear deja un documento igual");
+        sin_efecto(&mut d, bloquea(b, false), Ok(false));
+
+        // Un paso por comando: dos `undo` y dos `redo`.
+        d.undo().expect("deshacer el desbloqueo");
+        assert_eq!((&d, d.state_id()), (&bloqueado, estado1));
+        d.undo().expect("deshacer el bloqueo");
+        assert_eq!((&d, d.state_id()), (&inicial, estado0));
+        d.redo().expect("rehacer el bloqueo");
+        assert_eq!((&d, d.state_id()), (&bloqueado, estado1));
+        d.redo().expect("rehacer el desbloqueo");
+        assert_eq!((&d, d.state_id()), (&inicial, estado2));
+        assert_eq!(d.redo(), Err(DocumentError::NothingToRedo));
+
+        // Sirve en todos los modos, incluido gris (una sola capa).
+        let imagenes = [
+            img_rgba(4, 3),
+            Image::new(4, 3, Mode::Gray).expect("gris"),
+            Image::new(4, 3, Mode::GrayAlpha).expect("gris con alfa"),
+            img_indexada(4, 3, &[ROJO, VERDE], Some(1)),
+        ];
+        for imagen in imagenes {
+            let modo = imagen.mode();
+            let mut m = Document::new(imagen);
+            let capa = m.layers()[0].id();
+            let antes = m.clone();
+            assert_eq!(m.apply(bloquea(capa, true)), Ok(true), "{modo:?}");
+            assert!(m.layer(capa).expect("capa").locked(), "{modo:?}");
+            assert_ne!(m, antes, "{modo:?}");
+            m.undo().expect("deshacer");
+            assert_eq!(m, antes, "{modo:?}");
+            m.redo().expect("rehacer");
+            assert!(m.layer(capa).expect("capa").locked(), "{modo:?}");
+        }
+    }
+
+    /// (b) Capa desconocida (también una ya quitada) y dentro de un `Batch`.
+    #[test]
+    fn fila_01_b_capa_desconocida_y_en_un_lote_no_cambian_nada() {
+        let (mut d, b) = base();
+        let ca = d.main_image();
+        let falsa = LayerId::from_raw(999);
+        sin_efecto(
+            &mut d,
+            bloquea(falsa, true),
+            Err(DocumentError::UnknownLayer(falsa)),
+        );
+        sin_efecto(
+            &mut d,
+            bloquea(falsa, false),
+            Err(DocumentError::UnknownLayer(falsa)),
+        );
+
+        sin_efecto(
+            &mut d,
+            Command::Batch(vec![bloquea(b, true)]),
+            Err(en_lote(0, DocumentError::NotBatchable)),
+        );
+        // También detrás de una escritura válida, que se revierte.
+        sin_efecto(
+            &mut d,
+            Command::Batch(vec![pone(ca, 0, 0, C1), bloquea(b, true)]),
+            Err(en_lote(1, DocumentError::NotBatchable)),
+        );
+        assert_eq!(pixel_rgba(&d, ca, 0, 0), T);
+        assert!(!d.layer(b).expect("B").locked());
+
+        // Una capa quitada ya no existe para el comando.
+        assert_eq!(d.apply(quita(b)), Ok(true));
+        sin_efecto(
+            &mut d,
+            bloquea(b, true),
+            Err(DocumentError::UnknownLayer(b)),
+        );
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Fila 2: `DuplicateLayer`.
+    // -----------------------------------------------------------------------------------
+
+    /// (a) Copia de una capa con píxeles en medio de `[A, B, C]`: va en `posición + 1`, con
+    /// `LayerId` e `ImageId` nuevos (tampoco los de una capa ya quitada), imagen `==` en otra
+    /// memoria, un solo paso, y editar una no toca la otra. También arriba del todo y abajo.
+    #[test]
+    fn fila_02_a_la_copia_va_encima_con_ids_nuevos_y_sin_compartir_memoria() {
+        let (mut d, [a, b, c]) = tres_capas();
+        assert_eq!(d.cel_bytes(), 48);
+        let (ca, cb, cc) = (celda(&d, a), celda(&d, b), celda(&d, c));
+        // Una capa añadida y quitada: sus ids no se reutilizan.
+        let retirada = anade(&mut d, "X", 3);
+        let celda_retirada = celda(&d, retirada);
+        assert_eq!(d.apply(quita(retirada)), Ok(true));
+        assert_eq!(d.apply(pone(cb, 1, 1, C1)), Ok(true));
+        assert_eq!(d.apply(pone(cb, 3, 2, C2)), Ok(true));
+
+        let antes = d.clone();
+        let estado = d.state_id();
+        let materializado = d.materialized_bytes();
+        assert_eq!(materializado, 96, "A y B tienen celda");
+
+        assert_eq!(d.apply(duplica(b, "B copia")), Ok(true));
+        assert_eq!(d.layers().len(), 4);
+        assert_eq!(d.layers()[0].id(), a);
+        assert_eq!(d.layers()[1].id(), b);
+        assert_eq!(d.layers()[3].id(), c);
+        let copia = d.layers()[2].id();
+        let cel_copia = celda(&d, copia);
+        assert_eq!(d.layer(copia).expect("copia").name(), "B copia");
+        assert!(![a, b, c, retirada].contains(&copia), "LayerId nuevo");
+        assert!(
+            ![ca, cb, cc, celda_retirada].contains(&cel_copia),
+            "ImageId nuevo"
+        );
+        // Las demás capas siguen como estaban.
+        assert_eq!(celda(&d, b), cb);
+        assert_eq!(d.layer(b).expect("B").name(), "B");
+
+        let original = d.image(cb).expect("B tiene imagen");
+        let imagen_copia = d.image(cel_copia).expect("la copia tiene imagen");
+        assert_eq!(original, imagen_copia);
+        assert_ne!(
+            original.bytes().as_ptr(),
+            imagen_copia.bytes().as_ptr(),
+            "no comparte memoria"
+        );
+        assert_eq!(d.materialized_bytes(), materializado + d.cel_bytes());
+
+        // Un solo paso: deshacer deja el documento igual, y rehacer repone la copia.
+        let despues = d.clone();
+        let estado_despues = d.state_id();
+        assert_ne!(estado_despues, estado);
+        d.undo().expect("deshacer la copia");
+        assert_eq!(d, antes);
+        assert_eq!(d.state_id(), estado);
+        assert_eq!(d.materialized_bytes(), materializado);
+        assert!(d.image(cel_copia).is_none() && d.layer(copia).is_none());
+        d.redo().expect("rehacer la copia");
+        assert_eq!(d, despues);
+        assert_eq!(d.state_id(), estado_despues);
+        assert_eq!(d.materialized_bytes(), materializado + d.cel_bytes());
+        assert_eq!(celda(&d, copia), cel_copia, "rehacer repone los mismos ids");
+
+        // Editar una no toca la otra, en los dos sentidos.
+        assert_eq!(d.apply(pone(cel_copia, 0, 0, C2)), Ok(true));
+        assert_eq!(pixel_rgba(&d, cb, 0, 0), T);
+        assert_eq!(d.apply(pone(cb, 2, 0, C1)), Ok(true));
+        assert_eq!(pixel_rgba(&d, cel_copia, 2, 0), T);
+        assert_eq!(pixel_rgba(&d, cel_copia, 1, 1), C1, "lo copiado sigue");
+
+        // Arriba del todo: `posición + 1 == len`; y de la de abajo: va en la posición 1.
+        assert_eq!(d.apply(duplica(c, "C copia")), Ok(true));
+        assert_eq!(d.layers().len(), 5);
+        assert_eq!(d.layers()[3].id(), c);
+        assert_eq!(d.layers()[4].name(), "C copia");
+        assert_eq!(d.apply(duplica(a, "A copia")), Ok(true));
+        assert_eq!(d.layers().len(), 6);
+        assert_eq!(d.layers()[0].id(), a);
+        assert_eq!(d.layers()[1].name(), "A copia");
+        assert_eq!(d.layers()[2].id(), b);
+    }
+
+    /// (b) La copia hereda visible, opacidad, mezcla y bloqueo; cambiarlos en una no toca la
+    /// otra; una capa corriente da una copia corriente.
+    #[test]
+    fn fila_02_b_la_copia_hereda_opacidad_mezcla_visibilidad_y_bloqueo() {
+        let (mut d, [_a, b, _c]) = tres_capas();
+        let cb = celda(&d, b);
+        assert_eq!(d.apply(pone(cb, 0, 0, C1)), Ok(true));
+        assert_eq!(d.apply(opacidad(b, 128)), Ok(true));
+        assert_eq!(
+            d.apply(Command::SetLayerBlend {
+                layer: b,
+                blend: BlendMode::Multiply,
+            }),
+            Ok(true)
+        );
+        assert_eq!(d.apply(visible(b, false)), Ok(true));
+        assert_eq!(d.apply(bloquea(b, true)), Ok(true));
+        let original = d.layer(b).expect("B").clone();
+
+        assert_eq!(d.apply(duplica(b, "B2")), Ok(true));
+        let copia = d.layers()[2].id();
+        {
+            let l = d.layer(copia).expect("copia");
+            assert_eq!(l.name(), "B2");
+            assert!(!l.visible());
+            assert_eq!(l.opacity(), 128);
+            assert_eq!(l.blend(), BlendMode::Multiply);
+            assert!(l.locked(), "la copia conserva el bloqueo");
+        }
+        assert_eq!(d.layer(b).expect("B"), &original, "el original no cambia");
+
+        // Desbloquear la copia no desbloquea el original, y al revés.
+        assert_eq!(d.apply(bloquea(copia, false)), Ok(true));
+        assert!(d.layer(b).expect("B").locked());
+        assert_eq!(d.apply(opacidad(b, 10)), Ok(true));
+        assert_eq!(d.layer(copia).expect("copia").opacity(), 128);
+
+        // Una capa corriente da una copia corriente.
+        assert_eq!(d.apply(duplica(copia, "B3")), Ok(true));
+        let tercera = d.layers()[3].id();
+        let l = d.layer(tercera).expect("tercera");
+        assert!(!l.locked(), "hereda el desbloqueo");
+        assert_eq!(
+            (l.opacity(), l.blend(), l.visible()),
+            (128, BlendMode::Multiply, false)
+        );
+    }
+
+    /// (c) Una celda vacía sigue vacía: `materialized_bytes()` no sube, aunque no quepa otra
+    /// celda; deshacer y rehacer la dejan vacía; escribir en la copia no materializa la otra.
+    #[test]
+    fn fila_02_c_una_celda_vacia_sigue_vacia_y_no_reserva() {
+        let (mut d, [_a, b, c]) = tres_capas();
+        assert_eq!(d.apply(opacidad(b, 100)), Ok(true));
+        assert_eq!(d.apply(bloquea(b, true)), Ok(true));
+        let cb = celda(&d, b);
+        let materializado = d.materialized_bytes();
+        assert_eq!(materializado, 48);
+        assert_eq!(d.worst_case_bytes(), 3 * 48);
+        // El límite justo no deja materializar ninguna otra celda: la copia vacía cabe igual.
+        d.set_cells_limit(materializado);
+        let antes = d.clone();
+        let estado = d.state_id();
+
+        assert_eq!(d.apply(duplica(b, "vacía")), Ok(true));
+        let copia = d.layers()[2].id();
+        let cel_copia = celda(&d, copia);
+        assert_ne!(cel_copia, cb);
+        assert!(d.image(cb).is_none() && d.image(cel_copia).is_none());
+        assert_eq!(d.materialized_bytes(), materializado);
+        assert_eq!(d.worst_case_bytes(), 4 * 48);
+        let l = d.layer(copia).expect("copia");
+        assert_eq!((l.opacity(), l.locked()), (100, true));
+        assert_eq!(d.layers()[3].id(), c);
+
+        let despues = d.clone();
+        d.undo().expect("deshacer");
+        assert_eq!((&d, d.state_id()), (&antes, estado));
+        d.redo().expect("rehacer");
+        assert_eq!(d, despues);
+        assert!(d.image(cel_copia).is_none());
+        assert_eq!(d.materialized_bytes(), materializado);
+
+        // Con sitio, escribir en la copia materializa solo la copia.
+        d.set_cells_limit(1 << 20);
+        assert_eq!(d.apply(pone(cel_copia, 0, 0, C1)), Ok(true));
+        assert!(d.image(cb).is_none(), "el original sigue vacío");
+        assert_eq!(d.materialized_bytes(), materializado + 48);
+    }
+
+    /// (d) Errores, en este orden y sin tocar nada: `UnknownLayer`, `LayerName`,
+    /// `TooManyLayers`, `CelsTooLarge`; y `NotBatchable` dentro de un lote.
+    #[test]
+    fn fila_02_d_los_errores_salen_en_orden_y_sin_tocar_nada() {
+        let falsa = LayerId::from_raw(999);
+        let largo = "a".repeat(256);
+
+        // Con 256 capas: UnknownLayer gana a LayerName y a TooManyLayers; LayerName a
+        // TooManyLayers; y con un nombre bueno, TooManyLayers (con celda o sin ella, y aunque
+        // tampoco quepa otra celda: gana a CelsTooLarge).
+        let mut d = doc_256(false);
+        let primera = d.layers()[0].id();
+        let ultima = d.layers()[255].id();
+        sin_efecto(
+            &mut d,
+            duplica(falsa, &largo),
+            Err(DocumentError::UnknownLayer(falsa)),
+        );
+        sin_efecto(
+            &mut d,
+            duplica(primera, &largo),
+            Err(DocumentError::LayerName {
+                len: 256,
+                limit: 255,
+            }),
+        );
+        let con_celda = Err(DocumentError::TooManyLayers { limit: 256 });
+        sin_efecto(&mut d, duplica(primera, "copia"), con_celda.clone());
+        sin_efecto(&mut d, duplica(ultima, "copia"), con_celda.clone());
+        d.set_cells_limit(d.materialized_bytes());
+        sin_efecto(&mut d, duplica(primera, "copia"), con_celda);
+        assert_eq!(d.layers().len(), 256);
+
+        // LayerName antes que CelsTooLarge, con 255 bytes sí vale.
+        let (mut d, [a, b, c]) = tres_capas();
+        let cb = celda(&d, b);
+        assert_eq!(d.apply(pone(cb, 1, 1, C1)), Ok(true));
+        let materializado = d.materialized_bytes();
+        assert_eq!(materializado, 96);
+        d.set_cells_limit(materializado);
+        sin_efecto(
+            &mut d,
+            duplica(b, &largo),
+            Err(DocumentError::LayerName {
+                len: 256,
+                limit: 255,
+            }),
+        );
+        // CelsTooLarge: `needed = materialized_bytes() + cel_bytes()`, solo si la celda tiene
+        // imagen; una capa vacía sí se copia aunque no quepa otra celda.
+        let sin_sitio = Err(DocumentError::CelsTooLarge {
+            needed: 96 + 48,
+            limit: 96,
+        });
+        sin_efecto(&mut d, duplica(b, "copia"), sin_sitio.clone());
+        sin_efecto(&mut d, duplica(a, "copia"), sin_sitio);
+        // Un byte menos de lo que hace falta sigue sin caber; justo lo que hace falta, sí.
+        d.set_cells_limit(96 + 48 - 1);
+        sin_efecto(
+            &mut d,
+            duplica(b, "copia"),
+            Err(DocumentError::CelsTooLarge {
+                needed: 144,
+                limit: 143,
+            }),
+        );
+        assert_eq!(
+            d.apply(duplica(c, &"a".repeat(255))),
+            Ok(true),
+            "vacía y 255 bytes"
+        );
+        assert_eq!(
+            d.apply(duplica(b, "copia")),
+            Err(DocumentError::CelsTooLarge {
+                needed: 144,
+                limit: 143,
+            })
+        );
+        d.set_cells_limit(144);
+        assert_eq!(d.apply(duplica(b, "copia")), Ok(true));
+        assert_eq!(d.materialized_bytes(), 144);
+
+        // Dentro de un lote: NotBatchable, también detrás de una escritura que se revierte.
+        let (mut d, [_a, b, _c]) = tres_capas();
+        let ca = d.main_image();
+        sin_efecto(
+            &mut d,
+            Command::Batch(vec![duplica(b, "copia")]),
+            Err(en_lote(0, DocumentError::NotBatchable)),
+        );
+        sin_efecto(
+            &mut d,
+            Command::Batch(vec![pone(ca, 0, 0, C1), duplica(b, "copia")]),
+            Err(en_lote(1, DocumentError::NotBatchable)),
+        );
+        assert_eq!(pixel_rgba(&d, ca, 0, 0), T);
+        assert_eq!(d.layers().len(), 3);
+    }
+
+    /// Copia `origen` en `d` y comprueba la copia: imagen `==` en otra memoria, mismas
+    /// propiedades, `+ cel_bytes()` y un solo paso que se deshace y se rehace.
+    fn copia_exacta(mut d: Document, origen: LayerId, etiqueta: &str) {
+        let antes = d.clone();
+        let estado = d.state_id();
+        let materializado = d.materialized_bytes();
+        let p = d
+            .layers()
+            .iter()
+            .position(|l| l.id() == origen)
+            .expect("el origen existe");
+        assert_eq!(d.apply(duplica(origen, "Copia")), Ok(true), "{etiqueta}");
+        let (o, c) = (&d.layers()[p], &d.layers()[p + 1]);
+        assert_eq!(c.name(), "Copia", "{etiqueta}");
+        assert!(c.id() != o.id() && c.cel() != o.cel(), "{etiqueta}: ids");
+        assert_eq!(
+            (c.visible(), c.opacity(), c.blend(), c.locked()),
+            (o.visible(), o.opacity(), o.blend(), o.locked()),
+            "{etiqueta}: propiedades"
+        );
+        let io = d.image(o.cel()).expect("el original tiene imagen");
+        let ic = d.image(c.cel()).expect("la copia tiene imagen");
+        assert_eq!(io, ic, "{etiqueta}: imagen");
+        assert_eq!(io.palette(), ic.palette(), "{etiqueta}: paleta");
+        assert_ne!(
+            io.bytes().as_ptr(),
+            ic.bytes().as_ptr(),
+            "{etiqueta}: memoria"
+        );
+        assert_eq!(d.materialized_bytes(), materializado + d.cel_bytes());
+        let despues = d.clone();
+        d.undo().expect("deshacer");
+        assert_eq!((&d, d.state_id()), (&antes, estado), "{etiqueta}: undo");
+        d.redo().expect("rehacer");
+        assert_eq!(d, despues, "{etiqueta}: redo");
+    }
+
+    /// (e) Funciona en RGBA, grises con alfa, indexado (con transparente) y grises.
+    #[test]
+    fn fila_02_e_duplicar_funciona_en_rgba_gris_con_alfa_indexado_y_gris() {
+        // RGBA.
+        let (mut d, [_a, b, _c]) = tres_capas();
+        let cb = celda(&d, b);
+        assert_eq!(d.apply(pone(cb, 2, 1, C2)), Ok(true));
+        copia_exacta(d, b, "RGBA");
+
+        // Grises con alfa.
+        let mut d = Document::new(Image::new(4, 3, Mode::GrayAlpha).expect("gris con alfa"));
+        let b = anade(&mut d, "B", 1);
+        let pixel = Pixel::GrayAlpha {
+            gray: 9,
+            alpha: 200,
+        };
+        assert_eq!(d.apply(pone_px(celda(&d, b), 1, 2, pixel)), Ok(true));
+        copia_exacta(d, b, "GrayAlpha");
+
+        // Indexado con color transparente, con la capa bloqueada.
+        let mut d = Document::new(img_indexada(4, 3, &[ROJO, VERDE, AZUL], Some(2)));
+        let b = anade(&mut d, "B", 1);
+        assert_eq!(
+            d.apply(pone_px(celda(&d, b), 2, 1, Pixel::Indexed(1))),
+            Ok(true)
+        );
+        assert_eq!(d.apply(bloquea(b, true)), Ok(true));
+        copia_exacta(d, b, "Indexed");
+
+        // Grises: no admite capas nuevas (no hay valor transparente), pero sí copiar.
+        let mut d = Document::new(Image::new(4, 3, Mode::Gray).expect("gris"));
+        let a = d.layers()[0].id();
+        assert_eq!(
+            d.apply(pone_px(d.main_image(), 1, 1, Pixel::Gray(77))),
+            Ok(true)
+        );
+        assert!(
+            d.apply(anade_cmd("B", 1)).is_err(),
+            "gris no admite AddLayer"
+        );
+        copia_exacta(d, a, "Gray");
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Propiedad 1: duplicar y bloquear se deshacen exactamente.
+    // -----------------------------------------------------------------------------------
+
+    #[derive(Clone, Debug)]
+    struct CapaPlan {
+        opacidad: u8,
+        mezcla: u8,
+        visible: bool,
+        bloqueada: bool,
+        /// `None`: celda vacía; `Some`: píxeles `(x, y, semilla)` (puede seguir vacía si todos
+        /// son transparentes).
+        contenido: Option<Vec<(u8, u8, u8)>>,
+    }
+
+    #[derive(Clone, Debug)]
+    struct DocPlan {
+        /// 0 RGBA, 1 grises con alfa, 2 indexado con índice transparente.
+        tipo: u8,
+        w: u32,
+        h: u32,
+        paleta: usize,
+        transparente: usize,
+        /// Celdas que caben además de las ya materializadas.
+        holgura: usize,
+        capas: Vec<CapaPlan>,
+    }
+
+    fn capa_plan() -> impl Strategy<Value = CapaPlan> {
+        (
+            any::<u8>(),
+            0u8..8,
+            any::<bool>(),
+            any::<bool>(),
+            prop::option::of(prop::collection::vec(
+                (any::<u8>(), any::<u8>(), any::<u8>()),
+                1..6,
+            )),
+        )
+            .prop_map(
+                |(opacidad, mezcla, visible, bloqueada, contenido)| CapaPlan {
+                    opacidad,
+                    mezcla,
+                    visible,
+                    bloqueada,
+                    contenido,
+                },
+            )
+    }
+
+    fn doc_plan() -> impl Strategy<Value = DocPlan> {
+        (
+            0u8..3,
+            1u32..=130,
+            1u32..=70,
+            2usize..=8,
+            0usize..8,
+            0usize..=12,
+            prop::collection::vec(capa_plan(), 1..=8),
+        )
+            .prop_map(
+                |(tipo, w, h, paleta, transparente, holgura, capas)| DocPlan {
+                    tipo,
+                    w,
+                    h,
+                    paleta,
+                    transparente,
+                    holgura,
+                    capas,
+                },
+            )
+    }
+
+    /// Lo que la secuencia sabe del documento: modo, tamaño y longitud de la paleta.
+    struct Cx {
+        modo: Mode,
+        w: u32,
+        h: u32,
+        paleta: usize,
+    }
+
+    fn construye_doc(plan: &DocPlan) -> (Document, Cx) {
+        let (imagen, modo) = match plan.tipo {
+            0 => (img_rgba(plan.w, plan.h), Mode::Rgba),
+            1 => (
+                Image::new(plan.w, plan.h, Mode::GrayAlpha).expect("gris con alfa"),
+                Mode::GrayAlpha,
+            ),
+            _ => {
+                let t = u8::try_from(plan.transparente % plan.paleta).expect("cabe en u8");
+                (
+                    img_indexada(plan.w, plan.h, &colores_distintos(plan.paleta), Some(t)),
+                    Mode::Indexed,
+                )
+            }
+        };
+        let cx = Cx {
+            modo,
+            w: plan.w,
+            h: plan.h,
+            paleta: plan.paleta,
+        };
+        let mut d = Document::new(imagen);
+        for i in 1..plan.capas.len() {
+            assert_eq!(d.apply(anade_cmd(&format!("Capa {}", i + 1), i)), Ok(true));
+        }
+        for (i, capa) in plan.capas.iter().enumerate() {
+            let (id, image) = (d.layers()[i].id(), d.layers()[i].cel());
+            if let Some(pixeles) = &capa.contenido {
+                let pixels = pixeles
+                    .iter()
+                    .map(|&(x, y, semilla)| PixelEdit {
+                        x: u32::from(x) % plan.w,
+                        y: u32::from(y) % plan.h,
+                        pixel: pixel_valido(modo, semilla, plan.paleta),
+                    })
+                    .collect();
+                assert!(d.apply(Command::SetPixels { image, pixels }).is_ok());
+            }
+            if modo != Mode::Indexed {
+                if capa.opacidad != 255 {
+                    assert_eq!(d.apply(opacidad(id, capa.opacidad)), Ok(true));
+                }
+                let blend = BlendMode::ALL[usize::from(capa.mezcla) % 8];
+                if blend != BlendMode::Normal {
+                    assert_eq!(
+                        d.apply(Command::SetLayerBlend { layer: id, blend }),
+                        Ok(true)
+                    );
+                }
+            }
+            if !capa.visible {
+                assert_eq!(d.apply(visible(id, false)), Ok(true));
+            }
+            if capa.bloqueada {
+                assert_eq!(d.apply(bloquea(id, true)), Ok(true));
+            }
+        }
+        // Un límite que a veces no deja materializar más celdas.
+        d.set_cells_limit(d.materialized_bytes() + plan.holgura * d.cel_bytes());
+        (d, cx)
+    }
+
+    #[derive(Clone, Debug)]
+    enum Orden {
+        Add(usize),
+        Dup(usize),
+        Remove(usize),
+        Move(usize, usize),
+        Rename(usize, u8),
+        Opacity(usize, u8),
+        Visible(usize, bool),
+        Blend(usize, u8),
+        Locked(usize, bool),
+        Set(usize, Vec<(u8, u8, u8)>),
+        Fill(usize, u8, u8, u8, u8),
+    }
+
+    fn orden() -> impl Strategy<Value = Orden> {
+        (
+            0u8..20,
+            any::<usize>(),
+            any::<usize>(),
+            any::<u8>(),
+            any::<bool>(),
+            prop::collection::vec((any::<u8>(), any::<u8>(), any::<u8>()), 1..5),
+        )
+            .prop_map(|(tipo, k, t, v, b, px)| match tipo {
+                0..=1 => Orden::Add(t),
+                2..=6 => Orden::Dup(k),
+                7..=8 => Orden::Remove(k),
+                9..=10 => Orden::Move(k, t),
+                11 => Orden::Rename(k, v),
+                12 => Orden::Opacity(k, v),
+                13 => Orden::Visible(k, b),
+                14 => Orden::Blend(k, v),
+                15..=16 => Orden::Locked(k, b),
+                17..=18 => Orden::Set(k, px),
+                _ => Orden::Fill(k, px[0].0, px[0].1, px[0].2, v),
+            })
+    }
+
+    /// El comando de la orden con el documento vivo delante (los índices valen `% len`).
+    fn traduce(doc: &Document, o: &Orden, cx: &Cx) -> Command {
+        let capas = doc.layers();
+        let n = capas.len();
+        let id = |k: usize| capas[k % n].id();
+        match o {
+            Orden::Add(at) => anade_cmd(&format!("N{at}"), at % (n + 1)),
+            Orden::Dup(k) => duplica(id(*k), &format!("Copia {}", k % 1000)),
+            Orden::Remove(k) => quita(id(*k)),
+            Orden::Move(k, to) => mueve(id(*k), to % n),
+            Orden::Rename(k, s) => renombra(id(*k), &format!("R{s}")),
+            Orden::Opacity(k, v) => opacidad(id(*k), *v),
+            Orden::Visible(k, v) => visible(id(*k), *v),
+            Orden::Blend(k, m) => Command::SetLayerBlend {
+                layer: id(*k),
+                blend: BlendMode::ALL[usize::from(*m) % 8],
+            },
+            Orden::Locked(k, v) => bloquea(id(*k), *v),
+            Orden::Set(k, pixeles) => Command::SetPixels {
+                image: capas[k % n].cel(),
+                pixels: pixeles
+                    .iter()
+                    .map(|&(x, y, semilla)| PixelEdit {
+                        x: u32::from(x) % cx.w,
+                        y: u32::from(y) % cx.h,
+                        pixel: pixel_valido(cx.modo, semilla, cx.paleta),
+                    })
+                    .collect(),
+            },
+            Orden::Fill(k, y, x0, largo, semilla) => {
+                let x_start = u32::from(*x0) % cx.w;
+                Command::FillSpans {
+                    image: capas[k % n].cel(),
+                    spans: vec![Span {
+                        y: u32::from(*y) % cx.h,
+                        x_start,
+                        x_end: (x_start + 1 + u32::from(*largo)).min(cx.w),
+                    }],
+                    pixel: pixel_valido(cx.modo, *semilla, cx.paleta),
+                }
+            }
+        }
+    }
+
+    /// Ids de capa y de celda que ya existieron alguna vez (los ids no se reutilizan).
+    #[derive(Default)]
+    struct Vistos {
+        capas: HashSet<LayerId>,
+        celdas: HashSet<ImageId>,
+    }
+
+    impl Vistos {
+        fn registra(&mut self, doc: &Document) {
+            for l in doc.layers() {
+                self.capas.insert(l.id());
+                self.celdas.insert(l.cel());
+            }
+        }
+    }
+
+    /// `materialized_bytes()` es la suma real de las celdas con imagen y cabe en el límite; los
+    /// ids de capa y de celda no se repiten.
+    fn invariantes(doc: &Document) -> Result<(), TestCaseError> {
+        let real: usize = doc
+            .layers()
+            .iter()
+            .filter_map(|l| doc.image(l.cel()))
+            .map(|i| i.bytes().len())
+            .sum();
+        prop_assert_eq!(doc.materialized_bytes(), real);
+        prop_assert!(doc.materialized_bytes() <= doc.cells_limit());
+        let capas: HashSet<LayerId> = doc.layers().iter().map(Layer::id).collect();
+        let celdas: HashSet<ImageId> = doc.layers().iter().map(Layer::cel).collect();
+        prop_assert_eq!(capas.len(), doc.layers().len());
+        prop_assert_eq!(celdas.len(), doc.layers().len());
+        Ok(())
+    }
+
+    type Resumen<'a> = (
+        LayerId,
+        ImageId,
+        &'a str,
+        bool,
+        u8,
+        BlendMode,
+        bool,
+        Option<&'a Image>,
+    );
+
+    fn resumen<'a>(doc: &'a Document, l: &'a Layer) -> Resumen<'a> {
+        (
+            l.id(),
+            l.cel(),
+            l.name(),
+            l.visible(),
+            l.opacity(),
+            l.blend(),
+            l.locked(),
+            doc.image(l.cel()),
+        )
+    }
+
+    /// Un píxel válido del modo y distinto de `actual`, si lo hay.
+    fn otro_pixel(cx: &Cx, actual: Pixel) -> Option<Pixel> {
+        (1..=8u8)
+            .map(|s| pixel_valido(cx.modo, s, cx.paleta))
+            .find(|p| *p != actual)
+    }
+
+    /// Tras una copia `Ok(true)`: el original y las demás capas no cambian, la copia tiene ids
+    /// nuevos, el nombre dado, las propiedades del original y su imagen en otra memoria; y
+    /// editar una no toca la otra.
+    fn comprueba_copia(
+        doc: &mut Document,
+        antes: &Document,
+        origen: LayerId,
+        nombre: &str,
+        cx: &Cx,
+        vistos: &Vistos,
+        estados: &mut Vec<u64>,
+    ) -> Result<(), TestCaseError> {
+        let p = antes
+            .layers()
+            .iter()
+            .position(|l| l.id() == origen)
+            .expect("el origen existía");
+        prop_assert_eq!(doc.layers().len(), antes.layers().len() + 1);
+        {
+            let previas: Vec<_> = antes.layers().iter().map(|l| resumen(antes, l)).collect();
+            let resto: Vec<_> = doc
+                .layers()
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != p + 1)
+                .map(|(_, l)| resumen(doc, l))
+                .collect();
+            prop_assert_eq!(
+                previas,
+                resto,
+                "la copia no cambia al original ni a las demás"
+            );
+        }
+        let (original, copia) = (&doc.layers()[p], &doc.layers()[p + 1]);
+        prop_assert_eq!(copia.name(), nombre);
+        prop_assert!(!vistos.capas.contains(&copia.id()), "LayerId nuevo");
+        prop_assert!(!vistos.celdas.contains(&copia.cel()), "ImageId nuevo");
+        prop_assert_eq!(
+            (
+                copia.visible(),
+                copia.opacity(),
+                copia.blend(),
+                copia.locked()
+            ),
+            (
+                original.visible(),
+                original.opacity(),
+                original.blend(),
+                original.locked()
+            )
+        );
+        let (cel_o, cel_c) = (original.cel(), copia.cel());
+        let (io, ic) = (doc.image(cel_o), doc.image(cel_c));
+        match (io, ic) {
+            (None, None) => {
+                prop_assert_eq!(doc.materialized_bytes(), antes.materialized_bytes());
+                return Ok(());
+            }
+            (Some(io), Some(ic)) => {
+                prop_assert_eq!(io, ic);
+                prop_assert_ne!(io.bytes().as_ptr(), ic.bytes().as_ptr());
+                prop_assert_eq!(
+                    doc.materialized_bytes(),
+                    antes.materialized_bytes() + doc.cel_bytes()
+                );
+            }
+            otro => {
+                return Err(TestCaseError::fail(format!(
+                    "la celda vacía y la copia deben coincidir: {otro:?}"
+                )));
+            }
+        }
+
+        // Editar la copia no toca al original; editar el original no toca a la copia.
+        let actual = doc
+            .image(cel_c)
+            .expect("copia")
+            .get_pixel(0, 0)
+            .expect("(0, 0)");
+        if let Some(pixel) = otro_pixel(cx, actual) {
+            let original_antes = doc.image(cel_o).expect("original").clone();
+            let edicion = pone_px(cel_c, 0, 0, pixel);
+            if doc.apply(edicion) == Ok(true) {
+                estados.push(doc.state_id());
+            }
+            prop_assert_eq!(doc.image(cel_o), Some(&original_antes));
+            let copia_antes = doc.image(cel_c).expect("copia").clone();
+            let actual = doc
+                .image(cel_o)
+                .expect("original")
+                .get_pixel(0, 0)
+                .expect("(0, 0)");
+            if let Some(pixel) = otro_pixel(cx, actual) {
+                let edicion = pone_px(cel_o, 0, 0, pixel);
+                if doc.apply(edicion) == Ok(true) {
+                    estados.push(doc.state_id());
+                }
+                prop_assert_eq!(doc.image(cel_c), Some(&copia_antes));
+            }
+        }
+        Ok(())
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// Propiedad 1: con cualquier secuencia de capas, bloqueos y pintura, los bytes
+        /// materializados son la suma real y caben en el límite, una copia nunca cambia a su
+        /// original, `DuplicateLayer` y `SetLayerLocked` son un solo paso, y deshacer hasta el
+        /// principio y rehacer hasta el final dan los documentos (y `state_id`) de entonces.
+        #[test]
+        fn propiedad_1_duplicar_y_bloquear_se_deshacen_exactamente(
+            plan in doc_plan(),
+            ordenes in prop::collection::vec(orden(), 0..=25),
+        ) {
+            let (mut doc, cx) = construye_doc(&plan);
+            invariantes(&doc)?;
+            let inicial = doc.clone();
+            let mut estados = vec![doc.state_id()];
+            let mut vistos = Vistos::default();
+            vistos.registra(&doc);
+
+            for o in &ordenes {
+                let antes = doc.clone();
+                let comando = traduce(&doc, o, &cx);
+                let copiada = match &comando {
+                    Command::DuplicateLayer { layer, name } => Some((*layer, name.clone())),
+                    _ => None,
+                };
+                let un_paso = copiada.is_some() || matches!(comando, Command::SetLayerLocked { .. });
+                let resultado = doc.apply(comando);
+                invariantes(&doc)?;
+                match resultado {
+                    Ok(true) => {
+                        prop_assert!(!estados.contains(&doc.state_id()), "state_id nuevo");
+                        estados.push(doc.state_id());
+                        if un_paso {
+                            let mut c = doc.clone();
+                            prop_assert_eq!(c.undo(), Ok(()));
+                            prop_assert!(c == antes, "un solo paso de historia");
+                            prop_assert_eq!(c.state_id(), antes.state_id());
+                        }
+                        if let Some((origen, nombre)) = copiada {
+                            comprueba_copia(
+                                &mut doc, &antes, origen, &nombre, &cx, &vistos, &mut estados,
+                            )?;
+                        }
+                        vistos.registra(&doc);
+                    }
+                    Ok(false) | Err(_) => {
+                        prop_assert!(doc == antes, "sin cambios: {:?}", resultado);
+                        prop_assert_eq!(doc.state_id(), antes.state_id());
+                        prop_assert_eq!(doc.history_bytes(), antes.history_bytes());
+                        prop_assert_eq!(doc.can_redo(), antes.can_redo());
+                    }
+                }
+            }
+
+            let final_ = doc.clone();
+            let pasos = estados.len() - 1;
+            for i in (0..pasos).rev() {
+                prop_assert_eq!(doc.undo(), Ok(()), "deshacer {}", i);
+                prop_assert_eq!(doc.state_id(), estados[i], "state_id al deshacer a {}", i);
+                invariantes(&doc)?;
+            }
+            prop_assert!(doc == inicial, "deshacer hasta el principio");
+            prop_assert_eq!(doc.materialized_bytes(), inicial.materialized_bytes());
+
+            for i in 1..=pasos {
+                prop_assert_eq!(doc.redo(), Ok(()), "rehacer {}", i);
+                prop_assert_eq!(doc.state_id(), estados[i], "state_id al rehacer a {}", i);
+                invariantes(&doc)?;
+            }
+            prop_assert!(doc == final_, "rehacer hasta el final");
+            prop_assert_eq!(doc.materialized_bytes(), final_.materialized_bytes());
+            prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
+        }
+    }
+}
