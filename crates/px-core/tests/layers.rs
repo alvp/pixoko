@@ -1670,7 +1670,7 @@ fn pixel_valido(modo: Mode, semilla: u8, modulo: usize) -> Pixel {
         Mode::Rgba => Pixel::Rgba(color(semilla)),
         Mode::GrayAlpha => Pixel::GrayAlpha {
             gray: (semilla % 3) * 100,
-            alpha: if semilla % 2 == 0 { 0 } else { 255 },
+            alpha: if semilla.is_multiple_of(2) { 0 } else { 255 },
         },
         Mode::Gray => Pixel::Gray(semilla),
         Mode::Indexed => {
@@ -1682,7 +1682,7 @@ fn pixel_valido(modo: Mode, semilla: u8, modulo: usize) -> Pixel {
 /// Un píxel de una orden generada: casi siempre válido, a veces de otro modo o (en indexado)
 /// fuera de la paleta, para inyectar fallos.
 fn pixel_op(modo: Mode, semilla: u8, paleta: usize) -> Pixel {
-    if semilla % 11 == 0 {
+    if semilla.is_multiple_of(11) {
         return if modo == Mode::Rgba {
             Pixel::Gray(semilla)
         } else {
@@ -1742,7 +1742,7 @@ fn plan_estrategia(
 
 fn imagen_base(plan: &Plan) -> Image {
     match plan.tipo {
-        0 | 1 | 2 => {
+        0..=2 => {
             Image::new(plan.w, plan.h, modo_de(plan.tipo)).expect("imagen de un modo sin paleta")
         }
         _ => {
@@ -2349,7 +2349,7 @@ fn mop() -> BoxedStrategy<MOp> {
 /// con índice transparente, 4 indexado sin él.
 fn doc_modelo(tipo: u8) -> Document {
     Document::new(match tipo {
-        0 | 1 | 2 => Image::new(2, 2, modo_de(tipo)).expect("imagen"),
+        0..=2 => Image::new(2, 2, modo_de(tipo)).expect("imagen"),
         3 => img_indexada(2, 2, &[ROJO, VERDE, AZUL], Some(1)),
         _ => img_indexada(2, 2, &[ROJO, VERDE, AZUL], None),
     })
