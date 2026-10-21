@@ -1140,16 +1140,16 @@ fn efecto(banco: &Banco, f: &Fotograma) -> Efecto {
 fn puntos_de_la_maqueta(n: i64) -> [(i64, i64, Efecto); 11] {
     [
         (4 * n, 186 * n, Efecto::Anadir),
-        (114 * n - 1, 186 * n, Efecto::Anadir),
-        (114 * n, 186 * n, Efecto::Nada),
-        (119 * n, 186 * n, Efecto::Quitar),
-        (229 * n - 1, 202 * n - 1, Efecto::Quitar),
-        (10 * n, 202 * n, Efecto::Nada),
-        (10 * n, 204 * n, Efecto::Izquierda),
-        (10 * n, 222 * n, Efecto::Derecha),
-        (10 * n, 238 * n, Efecto::Nada),
-        (3 * n, 204 * n, Efecto::Nada),
-        (229 * n, 204 * n, Efecto::Nada),
+        (28 * n - 1, 186 * n, Efecto::Anadir),
+        (28 * n, 186 * n, Efecto::Nada),
+        (29 * n, 186 * n, Efecto::Quitar),
+        (53 * n - 1, 210 * n - 1, Efecto::Quitar),
+        (60 * n, 198 * n, Efecto::Nada),
+        (61 * n, 186 * n, Efecto::Izquierda),
+        (86 * n, 198 * n, Efecto::Derecha),
+        (110 * n, 198 * n, Efecto::Nada),
+        (4 * n, 210 * n, Efecto::Nada),
+        (229 * n, 198 * n, Efecto::Nada),
     ]
 }
 
@@ -1201,11 +1201,13 @@ fn fila_2_con_quita_pendiente_la_fila_1_es_confirmar_y_cancelar_en_sus_puntos() 
             Some(PaletteOp::Remove { index: 3, into: 0 }),
             "ppp {ppp}: Confirmar"
         );
-        // Las filas de rotar siguen siendo rotar con la quita pendiente.
+        // Los iconos no golpean con la quita pendiente (decisión 8): donde estaba el de rotar a la
+        // derecha cae `Confirmar`.
         banco.clic_boton(PaletteButton::Remove);
-        let f = banco.clic(10 * n, top + 222 * n);
-        assert!(
-            matches!(f.salida.op, Some(PaletteOp::Rotate { steps: 1, .. })),
+        let f = banco.clic(98 * n, top + 198 * n);
+        assert_eq!(
+            f.salida.op,
+            Some(PaletteOp::Remove { index: 3, into: 0 }),
             "ppp {ppp}: {:?}",
             f.salida.op
         );
@@ -3524,10 +3526,10 @@ mod iconos_editor {
                 for _ in 0..8 {
                     f = banco.reposo();
                 }
-                let texto = f
-                    .texto_pintado(esperado)
-                    .unwrap_or_else(|| panic!("ppp {ppp}: falta el tooltip {esperado:?}"));
-                assert!(texto.color == TEXT, "ppp {ppp}: {esperado} en TEXT");
+                assert!(
+                    f.pinta(esperado),
+                    "ppp {ppp}: falta el tooltip {esperado:?}"
+                );
                 banco.mueve(3000, 3000);
                 let lejos = banco.reposo();
                 assert!(!lejos.pinta(esperado), "ppp {ppp}: {esperado} sin el ratón");
@@ -3538,7 +3540,7 @@ mod iconos_editor {
     #[test]
     fn fila_8_pulsar_un_icono_habilitado_emite_widget_info_de_tipo_boton_con_su_rotulo() {
         use egui::output::OutputEvent;
-        use egui::WidgetType;
+        use egui::Role;
         for (button, esperado) in [
             (PaletteButton::Add, "Añadir entrada"),
             (PaletteButton::RotateRight, "Rotar a la derecha"),
@@ -3553,20 +3555,26 @@ mod iconos_editor {
             let mut eventos = Vec::new();
             for events in [vec![boton(pos, true, Modifiers::NONE)], vec![boton(pos, false, Modifiers::NONE)]] {
                 let input = banco.entrada(events);
-                let Banco { ctx, canvas, scroll, view, image, choice, slots, editor, ops, .. } = &mut banco;
+                let Banco { ctx, scroll, view, image, choice, slots, editor, ops, .. } = &mut banco;
                 let salida = ctx.run_ui(input, |ui| {
                     apply_scale(ui.ctx());
-                    palette_panel::show_editing_ops(
-                        ui, image, *choice, scroll, view, true, slots, editor, ops,
+                    px_ui::status::show(ui, "lápiz · color 1 #000000", false);
+                    panel_a_la_izquierda(
+                        ui,
+                        |ui| {
+                            palette_panel::show_editing_ops(
+                                ui, image, *choice, scroll, view, true, slots, editor, ops,
+                            )
+                        },
+                        |_| (),
                     );
-                    let _ = &canvas;
                 });
                 eventos.extend(salida.platform_output.events.clone());
                 salida.drop_without_applying_deltas();
             }
             assert!(
                 eventos.iter().any(|e| matches!(e, OutputEvent::Clicked(info)
-                    if info.typ == WidgetType::Button
+                    if info.role == Role::Button
                         && info.label.as_deref() == Some(esperado)
                         && info.enabled)),
                 "{button:?}: no hay WidgetInfo de botón con el rótulo {esperado:?}; hay {eventos:?}"

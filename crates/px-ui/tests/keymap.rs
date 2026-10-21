@@ -58,7 +58,7 @@ use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, 
 use px_ui::text::{INTERFACE_CHARSET, apply_scale, printable, replace_missing};
 use px_ui::theme::visuals;
 use px_ui::tool::{Tool, ToolAction, tool_action_for_key};
-use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
+use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, tooltip_text};
 use px_ui::view::Zoom;
 
 mod common;
@@ -1379,18 +1379,28 @@ fn fila_5_el_menu_pintado_con_la_tabla_por_defecto_enseña_los_atajos_de_la_tabl
 }
 
 #[test]
-fn fila_5_la_columna_pintada_con_la_tabla_por_defecto_enseña_d_v_f_coma_y_no_enseña_nada_del_borrador()
- {
+fn fila_5_la_columna_con_la_tabla_por_defecto_dice_d_v_f_coma_en_el_tooltip_y_nada_del_borrador() {
+    // Con los iconos (I.4) la letra del atajo ya no se pinta en el botón: se dice en el tooltip,
+    // que sale de la misma tabla (`tooltip_text`).
     let km = por_defecto();
+    let primera_linea = |i: usize, km: &Keymap| {
+        tooltip_text(&TOOL_BUTTONS[i], km, Platform::Linux)
+            .lines()
+            .next()
+            .expect("hay texto")
+            .to_string()
+    };
+    assert_eq!(primera_linea(0, &km), "Lápiz (d)");
+    assert_eq!(primera_linea(1, &km), "Línea (v)");
+    assert_eq!(primera_linea(2, &km), "Relleno (f)");
+    assert_eq!(primera_linea(3, &km), "Cuentagotas (,)");
+    // El Borrador no tiene fila: solo su nombre.
+    assert_eq!(primera_linea(4, &km), "Borrador");
     for ppp in [1.0, 2.0] {
         let mut banco = BancoUi::nuevo(ppp);
         let p = banco.columna_en_reposo(&km, Platform::Linux);
-        for letra in ["d", "v", "f", ","] {
-            assert!(p.pinta(letra), "ppp {ppp}: falta la letra {letra:?}");
-        }
-        assert!(p.pinta("Borrador"));
-        // Ninguna letra suelta más: el Borrador no tiene fila y los botones de zoom no llevan letra.
-        for ajena in ["e", "E", "p", "P", ">", "<", "Inicio"] {
+        // Ninguna letra suelta pintada en la columna: ni las del atajo ni otras.
+        for ajena in ["d", "v", "f", ",", "e", "E", "p", "P", ">", "<", "Inicio"] {
             assert!(!p.pinta(ajena), "ppp {ppp}: la columna pinta {ajena:?}");
         }
     }
@@ -2100,24 +2110,28 @@ fn fila_11_el_menu_pintado_lee_la_tabla_recibida() {
 }
 
 #[test]
-fn fila_11_la_columna_pintada_lee_la_tabla_recibida() {
+fn fila_11_el_tooltip_de_la_columna_lee_la_tabla_recibida() {
+    let texto = |i: usize, km: &Keymap| tooltip_text(&TOOL_BUTTONS[i], km, Platform::Linux);
     for ppp in [1.0, 2.0] {
-        // `d` y `x` cambiadas: el botón del lápiz enseña `x` y ya no `d`.
+        // `d` y `x` cambiadas: el tooltip del lápiz dice `x` y ya no `d`.
         let cambiada = con_teclas_cambiadas('d', 'x');
-        let mut banco = BancoUi::nuevo(ppp);
-        let p = banco.columna_en_reposo(&cambiada, Platform::Linux);
-        assert!(p.pinta("x"), "ppp {ppp}: {:?}", p.todos_los_textos());
-        assert!(!p.pinta("d"), "ppp {ppp}");
-        assert!(p.pinta("v") && p.pinta("f") && p.pinta(","), "ppp {ppp}");
+        assert!(texto(0, &cambiada).starts_with("Lápiz (x)"), "ppp {ppp}");
+        assert!(!texto(0, &cambiada).contains("(d)"), "ppp {ppp}");
+        assert!(texto(1, &cambiada).starts_with("Línea (v)"), "ppp {ppp}");
+        assert!(texto(2, &cambiada).starts_with("Relleno (f)"), "ppp {ppp}");
+        assert!(texto(3, &cambiada).starts_with("Cuentagotas (,)"), "ppp {ppp}");
 
         // Con la tabla vacía no hay ninguna letra, y los botones siguen funcionando.
         let vacia = Keymap::new(vec![]);
+        for i in 0..5 {
+            let t = texto(i, &vacia);
+            assert!(!t.contains('('), "ppp {ppp}: {t:?} lleva atajo sin tabla");
+        }
         let mut banco = BancoUi::nuevo(ppp);
         let p = banco.columna_en_reposo(&vacia, Platform::Linux);
         for letra in ["d", "v", "f", ",", "x"] {
             assert!(!p.pinta(letra), "ppp {ppp}: pinta {letra:?} sin tabla");
         }
-        assert!(p.pinta("Lápiz") && p.pinta("Borrador"), "ppp {ppp}");
         assert_eq!(
             banco.clic_en_la_herramienta(0, &vacia, Platform::Linux),
             vec![AppAction::SelectTool(Tool::Pencil)],

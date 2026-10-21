@@ -26,7 +26,7 @@ use px_ui::edit_layout::{
 };
 use px_ui::menu::{MENUS, shortcut_for, shortcut_text};
 use px_ui::palette_grid::PANEL_WIDTH_U;
-use px_ui::status::bar_height_px;
+use px_ui::status::{ADVANCE_PX, bar_height_px};
 use px_ui::text::text_scale;
 use px_ui::toolbar::TOOL_BUTTONS;
 use px_ui::view::ScreenRect;

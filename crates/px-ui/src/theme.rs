@@ -22,6 +22,13 @@ pub const ACCENT: Color32 = Color32::from_rgb(0x39, 0xd0, 0xb2);
 /// Avisos (siempre con `NOTICE_PREFIX`: el color solo refuerza).
 pub const WARNING: Color32 = Color32::from_rgb(0xef, 0x8e, 0x39);
 
+/// Relieve de los botones de icono (specs/interfaz-iconos.md, decisión 3): el lado claro (arriba y a
+/// la izquierda, o abajo y a la derecha si el botón está hundido) da el contorno con ≥ 3:1 contra la
+/// cara, el fondo de la caja y el lado oscuro; el oscuro no puede medirse contra una cara oscura
+/// (ni el negro puro pasa de 1,59:1) y solo da la sombra.
+pub const BEVEL_LIGHT: Color32 = TEXT_DIM;
+pub const BEVEL_DARK: Color32 = Color32::from_rgb(0x10, 0x10, 0x10);
+
 /// Anillo de la muestra elegida en el panel de paletas (contraste ≥ 3:1 con `SURFACE_1`).
 pub const RING_ACTIVE: Color32 = ACCENT;
 /// Anillo (en esquinas) de la muestra elegida como color de fondo: contraste ≥ 3:1 con

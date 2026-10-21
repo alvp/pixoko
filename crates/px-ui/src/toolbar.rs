@@ -1,11 +1,13 @@
 //! Caja de herramientas: botones de herramienta y de zoom y, debajo, el recuadro fijo de opciones
-//! de la herramienta activa (specs/hito-2-menu-herramientas.md, «Geometría» y «Piezas», y
-//! specs/interfaz-caja-derecha.md): botones de texto de 99 × 16 u en una caja de 107 u en el borde
-//! derecho, a la derecha del panel de paletas. Los rótulos, las acciones y el clic derecho son
-//! tablas puras; `show_toolbox` solo las pinta.
+//! de la herramienta activa (specs/hito-2-menu-herramientas.md, «Geometría» y «Piezas»,
+//! specs/interfaz-caja-derecha.md y specs/interfaz-iconos.md): botones de icono de 24 × 24 u con
+//! relieve, en una rejilla de cuatro columnas, en una caja de 107 u en el borde derecho, a la
+//! derecha del panel de paletas. Los rótulos, las acciones y el clic derecho son tablas puras;
+//! `show_toolbox` solo las pinta.
 
 use egui::{
-    Align2, Event, FontFamily, FontId, Frame, Label, Panel, RichText, Sense, Ui, pos2, vec2,
+    Align2, Event, FontFamily, FontId, Frame, Label, Panel, RichText, Role, Sense, Ui, WidgetInfo,
+    pos2, vec2,
 };
 use egui::{MouseWheelUnit, Rect};
 
@@ -14,18 +16,17 @@ use crate::chrome::{
     BUTTON_PAD_U, OPTIONS_BODY_H_U, OPTIONS_BODY_W_U, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U,
     OPTIONS_BORDER_U, OPTIONS_FOCUS_BORDER_U, OPTIONS_H_U, OPTIONS_KEY_Y_U, OPTIONS_ROW_H_U,
     OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U, OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U, TOOLBAR_MARGIN_U,
-    TOOLBAR_SEPARATOR_Y_U, TOOLBAR_STEP_U, TOOLS_Y_U, ZOOM_LABEL_Y_U, ZOOM_Y_U,
-    toolbar_button_width_u, toolbar_width_u,
+    TOOLBAR_SEPARATOR_Y_U, TOOLBOX_BUTTONS, ZOOM_LABEL_Y_U, toolbar_button_width_u,
+    toolbar_width_u, toolbox_button_rect_u,
 };
-use crate::edit_layout::{BUTTON_H_U, BUTTON_TEXT_Y_U};
-use crate::keymap::{Keymap, default_keymap};
+use crate::icon_button::{look, paint_icon};
+use crate::icons::{Icon, IconSet};
+use crate::keymap::Keymap;
 use crate::options::{
     NO_OPTIONS, OptionsState, SCROLL_ROWS_PER_NOTCH, key_line, options_row_count, title,
 };
 use crate::text::{font_size_points, printable, ui_unit};
-use crate::theme::{
-    ACCENT, SURFACE_0, SURFACE_1, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM, TEXT_DISABLED,
-};
+use crate::theme::{ACCENT, SURFACE_0, SURFACE_1, SURFACE_3, TEXT, TEXT_DIM};
 use crate::tool::Tool;
 use crate::view::Zoom;
 
@@ -40,18 +41,21 @@ pub enum Secondary {
     FocusOptions,
 }
 
-/// Un botón de la caja: rótulo, acción del clic izquierdo y qué hace el derecho. La letra del atajo
-/// de las herramientas sale de la tabla de teclas (`Keymap::shown_text`), no de aquí.
+/// Un botón de la caja: rótulo (tooltip y texto accesible), icono, acción del clic izquierdo y qué
+/// hace el derecho. El atajo de las herramientas sale de la tabla de teclas
+/// (`Keymap::shown_text`) y solo se dice en el tooltip.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Button {
     pub label: &'static str,
+    pub icon: Icon,
     pub action: AppAction,
     pub secondary: Secondary,
 }
 
-const fn tool_button(label: &'static str, tool: Tool) -> Button {
+const fn tool_button(label: &'static str, icon: Icon, tool: Tool) -> Button {
     Button {
         label,
+        icon,
         action: AppAction::SelectTool(tool),
         secondary: Secondary::FocusOptions,
     }
@@ -59,33 +63,37 @@ const fn tool_button(label: &'static str, tool: Tool) -> Button {
 
 /// Los cinco botones de herramienta, de arriba abajo. Los rótulos son los de `chrome::TOOL_LABELS`.
 pub const TOOL_BUTTONS: [Button; 5] = [
-    tool_button("Lápiz", Tool::Pencil),
-    tool_button("Línea", Tool::Line),
-    tool_button("Relleno", Tool::Fill),
-    tool_button("Cuentagotas", Tool::Dropper),
-    tool_button("Borrador", Tool::Eraser),
+    tool_button("Lápiz", Icon::Pencil, Tool::Pencil),
+    tool_button("Línea", Icon::Line, Tool::Line),
+    tool_button("Relleno", Icon::Fill, Tool::Fill),
+    tool_button("Cuentagotas", Icon::Dropper, Tool::Dropper),
+    tool_button("Borrador", Icon::Eraser, Tool::Eraser),
 ];
 
-/// Los cuatro botones de zoom, sin letra: el menú Ver muestra sus atajos. `Acercar` y `Alejar` se
-/// invierten con el clic derecho; `Ajustar` y `1:1` no hacen nada con él.
+/// Los cuatro botones de zoom: el atajo se dice en el tooltip y en el menú Ver. `Acercar` y
+/// `Alejar` se invierten con el clic derecho; `Ajustar` y `1:1` no hacen nada con él.
 pub const ZOOM_BUTTONS: [Button; 4] = [
     Button {
         label: "Acercar",
+        icon: Icon::ZoomIn,
         action: AppAction::ZoomIn,
         secondary: Secondary::Action(AppAction::ZoomOut),
     },
     Button {
         label: "Alejar",
+        icon: Icon::ZoomOut,
         action: AppAction::ZoomOut,
         secondary: Secondary::Action(AppAction::ZoomIn),
     },
     Button {
         label: "Ajustar",
+        icon: Icon::ZoomFit,
         action: AppAction::ZoomFit,
         secondary: Secondary::None,
     },
     Button {
         label: "1:1",
+        icon: Icon::ZoomActual,
         action: AppAction::ZoomActual,
         secondary: Secondary::None,
     },
@@ -150,6 +158,8 @@ pub struct ToolboxView<'a> {
     /// Texto del nivel de zoom (de [`zoom_label`]).
     pub zoom_label: &'a str,
     pub options: &'a OptionsState,
+    /// Las texturas de los iconos (vacío: los botones se pintan sin icono).
+    pub icons: &'a IconSet,
 }
 
 /// Lo que pasó en la caja en el fotograma.
@@ -166,33 +176,10 @@ pub struct ToolboxOutput {
     pub options_scroll_rows: i64,
 }
 
-/// Como [`show_toolbox`] con la tabla de teclas por defecto, la plataforma actual y sin foco; solo
-/// devuelve la acción.
-// TODO(I.4): envoltorio para las pruebas anteriores; se retira cuando I.4 rehaga la caja.
-pub fn show_toolbar(ui: &mut Ui, state: &UiState, zoom_label: &str) -> Option<AppAction> {
-    show_toolbar_with(ui, state, zoom_label, default_keymap(), Platform::current())
-}
-
-/// Como [`show_toolbar`] con la letra de cada herramienta leída de `keymap` (la app pasa su tabla).
-// TODO(I.4): envoltorio para las pruebas anteriores; se retira cuando I.4 rehaga la caja.
-pub fn show_toolbar_with(
-    ui: &mut Ui,
-    state: &UiState,
-    zoom_label: &str,
-    keymap: &Keymap,
-    platform: Platform,
-) -> Option<AppAction> {
-    let view = ToolboxView {
-        state,
-        zoom_label,
-        options: &OptionsState::default(),
-    };
-    show_toolbox(ui, &view, keymap, platform).action
-}
-
 /// Pinta la caja en el borde **derecho** de `ui` y devuelve lo que pasó en ella. Hay que llamarla
 /// **antes** del panel de paletas (que se apila a su izquierda). Lo que no cabe se recorta a la
-/// caja: no se desplaza. Los botones sin atajo (el Borrador) y los de zoom no llevan letra.
+/// caja: no se desplaza. Cada botón es un icono sobre una cara con relieve; su rótulo, su atajo y
+/// lo que hace el clic derecho van en el tooltip, y el rótulo en el texto accesible.
 pub fn show_toolbox(
     ui: &mut Ui,
     view: &ToolboxView,
@@ -212,88 +199,62 @@ pub fn show_toolbox(
         .show(ui, |ui| {
             let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
             let at = |x_u: i64, y_u: i64| rect.min + vec2(x_u as f32 * u, y_u as f32 * u);
-            let button_w = toolbar_button_width_u();
-            let mut draw =
-                |ui: &mut Ui, index: usize, y_u: i64, button: &Button, letter: Option<String>| {
-                    let button_rect = Rect::from_min_size(
-                        at(TOOLBAR_MARGIN_U, y_u),
-                        vec2(button_w as f32 * u, BUTTON_H_U as f32 * u),
-                    );
-                    let on = enabled(button.action, state);
-                    let secondary = secondary_outcome(button, state);
-                    let active = button.action == AppAction::SelectTool(state.tool);
-                    let sense = if on || secondary != SecondaryOutcome::Nothing {
-                        Sense::click()
-                    } else {
-                        Sense::hover()
-                    };
-                    let response =
-                        ui.interact(button_rect, ui.unique_id().with(("boton", index)), sense);
-                    let fill = if active {
-                        ACCENT
-                    } else if on && response.hovered() {
-                        SURFACE_3
-                    } else {
-                        SURFACE_2
-                    };
-                    let (label_color, key_color) = match (on, active) {
-                        (false, _) => (TEXT_DISABLED, TEXT_DISABLED),
-                        (true, true) => (SURFACE_0, SURFACE_0),
-                        (true, false) => (TEXT, TEXT_DIM),
-                    };
-                    let painter = ui.painter();
-                    painter.rect_filled(button_rect, 0.0, fill);
-                    let text_y = button_rect.min.y + BUTTON_TEXT_Y_U as f32 * u;
-                    painter.text(
-                        pos2(button_rect.min.x + BUTTON_PAD_U as f32 * u, text_y),
-                        Align2::LEFT_TOP,
-                        button.label,
-                        font.clone(),
-                        label_color,
-                    );
-                    if let Some(letter) = letter {
-                        painter.text(
-                            pos2(button_rect.max.x - BUTTON_PAD_U as f32 * u, text_y),
-                            Align2::RIGHT_TOP,
-                            letter,
-                            font.clone(),
-                            key_color,
+            let buttons = TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter());
+            debug_assert_eq!(buttons.clone().count(), TOOLBOX_BUTTONS);
+            for (index, button) in buttons.enumerate() {
+                let (x_u, y_u, w_u, h_u) = toolbox_button_rect_u(index);
+                let button_rect = Rect::from_min_size(
+                    at(x_u, y_u),
+                    vec2(w_u as f32 * u, h_u as f32 * u),
+                );
+                let on = enabled(button.action, state);
+                let secondary = secondary_outcome(button, state);
+                let active = button.action == AppAction::SelectTool(state.tool);
+                let sense = if on || secondary != SecondaryOutcome::Nothing {
+                    Sense::click()
+                } else {
+                    Sense::hover()
+                };
+                let response =
+                    ui.interact(button_rect, ui.unique_id().with(("boton", index)), sense);
+                paint_icon(
+                    ui.painter(),
+                    button_rect,
+                    u,
+                    view.icons.get(button.icon),
+                    &look(active, on, response.hovered()),
+                );
+                if on && response.clicked() {
+                    out.action = Some(button.action);
+                }
+                if response.secondary_clicked() {
+                    match secondary {
+                        SecondaryOutcome::Nothing => {}
+                        SecondaryOutcome::Action(action) => out.action = Some(action),
+                        SecondaryOutcome::SelectAndFocus(action) => {
+                            out.action = Some(action);
+                            out.focus_options = true;
+                        }
+                    }
+                }
+                response.widget_info(|| WidgetInfo::labeled(Role::Button, on, button.label));
+                let tooltip = tooltip_text(button, keymap, platform);
+                response.on_hover_ui(|ui| {
+                    for line in tooltip.lines() {
+                        ui.add(
+                            Label::new(
+                                RichText::new(printable(&ctx, line))
+                                    .font(font.clone())
+                                    .color(TEXT),
+                            )
+                            .extend(),
                         );
                     }
-                    if on && response.clicked() {
-                        out.action = Some(button.action);
-                    }
-                    if response.secondary_clicked() {
-                        match secondary {
-                            SecondaryOutcome::Nothing => {}
-                            SecondaryOutcome::Action(action) => out.action = Some(action),
-                            SecondaryOutcome::SelectAndFocus(action) => {
-                                out.action = Some(action);
-                                out.focus_options = true;
-                            }
-                        }
-                    }
-                    let tooltip = tooltip_text(button, keymap, platform);
-                    response.on_hover_ui(|ui| {
-                        for line in tooltip.lines() {
-                            ui.add(
-                                Label::new(
-                                    RichText::new(printable(&ctx, line))
-                                        .font(font.clone())
-                                        .color(TEXT),
-                                )
-                                .extend(),
-                            );
-                        }
-                    });
-                };
-            for (i, button) in TOOL_BUTTONS.iter().enumerate() {
-                let letter = keymap.shown_text(button.action, platform);
-                draw(ui, i, TOOLS_Y_U + TOOLBAR_STEP_U * i as i64, button, letter);
+                });
             }
             let separator = Rect::from_min_size(
                 at(TOOLBAR_MARGIN_U, TOOLBAR_SEPARATOR_Y_U),
-                vec2(button_w as f32 * u, u),
+                vec2(toolbar_button_width_u() as f32 * u, u),
             );
             ui.painter().rect_filled(separator, 0.0, SURFACE_3);
             ui.painter().text(
@@ -303,15 +264,6 @@ pub fn show_toolbox(
                 font.clone(),
                 TEXT,
             );
-            for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
-                draw(
-                    ui,
-                    TOOL_BUTTONS.len() + i,
-                    ZOOM_Y_U + TOOLBAR_STEP_U * i as i64,
-                    button,
-                    None,
-                );
-            }
             show_options(ui, view, keymap, platform, rect.min, u, &font, &mut out);
         });
     out

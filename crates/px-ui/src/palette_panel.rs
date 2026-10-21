@@ -30,7 +30,7 @@ use crate::palette_grid::{
 };
 use crate::palette_ops::{
     DragEnd, PaletteOp, PaletteOps, blocked_reason, default_destination, drag_labels,
-    removal_prompt, removal_warning, rotation_range, transparent_button_label, transparent_toggle,
+    removal_prompt, removal_warning, rotation_range, transparent_toggle,
     uses_entry,
 };
 use crate::status::{bar_text, columns};
@@ -628,12 +628,12 @@ fn show_panel(
                                 removing: removal.is_some(),
                                 len: count,
                                 has_destination: removal.is_some_and(|r| r.into.is_some()),
-                                transparent_label: match (image.palette(), active_entry) {
-                                    (Some(palette), Some(active)) => {
-                                        transparent_button_label(palette, active)
-                                    }
-                                    _ => "Fijar transparente",
-                                },
+                                transparent_active: matches!(
+                                    (image.palette(), active_entry),
+                                    (Some(palette), Some(active))
+                                        if palette.transparent_index() == Some(active)
+                                ),
+                                icons: view.icons,
                             }),
                             prompt: removal.map(|r| {
                                 let warn = image

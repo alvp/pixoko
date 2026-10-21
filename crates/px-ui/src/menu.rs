@@ -7,7 +7,7 @@ use egui::{Button, Frame, Panel, Sense, Style, Ui, vec2};
 use crate::actions::{AppAction, Platform, UiState, enabled};
 use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
-use crate::edit_layout::{BUTTON_H_U, BUTTON_TEXT_Y_U};
+use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
 use crate::keymap::{Chord, Keymap, default_keymap};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
@@ -214,9 +214,9 @@ pub fn show_menu_in(
     // Botones de 16 u con 6 u de margen a cada lado del texto y 1 u arriba, sin separación.
     let style = move |style: &mut Style| {
         menu_style(style);
-        style.spacing.button_padding = vec2(PAD_X_U as f32 * u, BUTTON_TEXT_Y_U as f32 * u);
+        style.spacing.button_padding = vec2(PAD_X_U as f32 * u, TEXT_BUTTON_TEXT_Y_U as f32 * u);
         style.spacing.item_spacing = vec2(0.0, 0.0);
-        style.spacing.interact_size.y = BUTTON_H_U as f32 * u;
+        style.spacing.interact_size.y = TEXT_BUTTON_H_U as f32 * u;
         style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
         // Los atajos se pintan «débiles» (60 % de alfa): con el ratón encima, sobre `SURFACE_3`,
         // dan 3,84:1. En el menú van en `TEXT`, sin atenuar.
@@ -283,7 +283,7 @@ fn menu_entry(
     let on = enabled(item.action, state);
     let label = printable(ctx, item.label);
     let shortcut = shortcut_in(keymap, item.action, platform).map(|s| shortcut_text(s, platform));
-    let mut button = Button::new(label).min_size(vec2(width, BUTTON_H_U as f32 * u));
+    let mut button = Button::new(label).min_size(vec2(width, TEXT_BUTTON_H_U as f32 * u));
     if let Some(text) = shortcut {
         button = button.shortcut_text(printable(ctx, &text));
     }
@@ -330,7 +330,7 @@ fn marked_entry(
     };
     let mut button = Button::new(label)
         .selected(checked)
-        .min_size(vec2(width, BUTTON_H_U as f32 * u));
+        .min_size(vec2(width, TEXT_BUTTON_H_U as f32 * u));
     // El valor del color propio, a la derecha como un atajo, también en `SURFACE_0`.
     if let Some(value) = value {
         button = button.shortcut_text(egui::RichText::new(printable(ctx, &value)).color(SURFACE_0));

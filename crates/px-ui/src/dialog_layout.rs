@@ -2,7 +2,7 @@
 //! «Geometría»). Las medidas son enteros de «píxeles de interfaz» `u` (`n = text_scale(ppp)`
 //! píxeles físicos cada una); el resultado, rectángulos en píxeles físicos enteros.
 
-use crate::edit_layout::{BUTTON_H_U, ROW_H_U};
+use crate::edit_layout::{ROW_H_U, TEXT_BUTTON_H_U};
 use crate::view::ScreenRect;
 
 /// Ancho del diálogo: 8 de relleno + 308 de contenido (44 columnas) + 2 de hueco + 4 de barra de
@@ -111,7 +111,7 @@ pub fn dialog_layout(
     );
     let buttons_y = footer.y + BUTTONS_Y_U * k;
     let right = x + width - PAD_U * k;
-    let button = |left: i64| rect(left, buttons_y, BUTTON_W_U * k, BUTTON_H_U * k);
+    let button = |left: i64| rect(left, buttons_y, BUTTON_W_U * k, TEXT_BUTTON_H_U * k);
     let (accept, cancel) = if has_cancel {
         let cancel = button(right - BUTTON_W_U * k);
         let accept = button(cancel.x - (BUTTON_GAP_U + BUTTON_W_U) * k);

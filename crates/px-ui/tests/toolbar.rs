@@ -28,7 +28,7 @@ use egui::{Context, Event, Vec2, vec2};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
 use px_ui::keymap::{Keymap, default_keymap};
 use px_ui::options::OptionsState;
-use px_ui::theme::{ACCENT, SURFACE_0, TEXT, TEXT_DISABLED, contrast_ratio};
+use px_ui::theme::{ACCENT, SURFACE_0, TEXT, TEXT_DIM, TEXT_DISABLED, contrast_ratio};
 use px_ui::tool::Tool;
 use px_ui::toolbar::{TOOL_BUTTONS, ToolboxView, ZOOM_BUTTONS, show_toolbox};
 use px_ui::view::Zoom;
@@ -1453,7 +1453,8 @@ mod caja_derecha {
 
 mod iconos {
     use super::*;
-    use egui::{OutputEvent, Pos2, RawInput, Rect, WidgetType};
+    use egui::output::OutputEvent;
+    use egui::{Pos2, RawInput, Rect, Role};
     use px_ui::icon_button::{Look, look};
     use px_ui::theme::SURFACE_3;
 
@@ -1623,7 +1624,7 @@ mod iconos {
                 todos.extend(eventos(&banco, vec![boton(pos, false)]));
                 assert!(
                     todos.iter().any(|e| matches!(e, OutputEvent::Clicked(info)
-                        if info.typ == WidgetType::Button
+                        if info.role == Role::Button
                             && info.label.as_deref() == Some(button.label)
                             && info.enabled)),
                     "ppp {ppp}: {}: sin WidgetInfo de botón; hay {todos:?}",

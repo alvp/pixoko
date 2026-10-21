@@ -139,6 +139,22 @@ pub fn transparent_button_label(palette: &Palette, active: u8) -> &'static str {
     }
 }
 
+/// Rótulo de un botón de la fila de la paleta: tooltip y texto accesible de los iconos y rótulo de
+/// `Confirmar` y `Cancelar` (specs/interfaz-iconos.md, decisión 10). `transparent_active`: la entrada
+/// elegida es la transparente (el icono de la fila dice entonces `Quitar transparente`).
+pub fn palette_button_tooltip(button: PaletteButton, transparent_active: bool) -> &'static str {
+    match button {
+        PaletteButton::Add => "Añadir entrada",
+        PaletteButton::Remove => "Quitar entrada",
+        PaletteButton::Confirm => "Confirmar",
+        PaletteButton::Cancel => "Cancelar",
+        PaletteButton::RotateLeft => "Rotar a la izquierda",
+        PaletteButton::RotateRight => "Rotar a la derecha",
+        PaletteButton::Transparent if transparent_active => "Quitar transparente",
+        PaletteButton::Transparent => "Fijar transparente",
+    }
+}
+
 /// Resumen de 5 s de fijar o quitar la transparente. `previous`: la marca que había antes.
 pub fn transparent_summary(index: Option<u8>, active: u8, previous: Option<u8>) -> String {
     match (index, previous) {

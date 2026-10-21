@@ -6,8 +6,8 @@
 //! que es múltiplo de `n`, y las posiciones dentro de una pista salen de `slider_x`.
 
 use egui::{
-    Align2, Event, FontFamily, FontId, Frame, Id, Key, Margin, PointerButton, Pos2, Rect, Stroke,
-    StrokeKind, TextEdit, Ui, vec2,
+    Align2, Event, FontFamily, FontId, Frame, Id, Key, Label, Margin, PointerButton, Pos2, Rect,
+    RichText, Role, Sense, Stroke, StrokeKind, TextEdit, Ui, WidgetInfo, vec2,
 };
 use px_core::{Mode, Rgba};
 
@@ -19,15 +19,15 @@ use crate::edit_layout::{
     BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, HEADER_X_U,
     HEADER_Y_U, LABEL_X_U, PaletteButton, ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U,
     TRACK_W_U, TRACK_X_U, VALUE_X_U, button_rect_u, control_row_u, field_y_u, notice_y_u,
-    slider_hit,
+    palette_icon, slider_hit,
 };
+use crate::icon_button::{look, paint_icon, paint_text};
+use crate::icons::IconSet;
 use crate::palette_grid::{PANEL_WIDTH_U, TEXT_WIDTH_U};
-use crate::palette_ops::blocked_reason;
+use crate::palette_ops::{blocked_reason, palette_button_tooltip};
 use crate::status::{bar_text, columns};
-use crate::text::{font_size_points, ui_unit};
-use crate::theme::{
-    ACCENT, NOTICE_PREFIX, SURFACE_0, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM, WARNING,
-};
+use crate::text::{font_size_points, printable, ui_unit};
+use crate::theme::{ACCENT, NOTICE_PREFIX, SURFACE_0, SURFACE_3, TEXT, TEXT_DIM, WARNING};
 
 /// Dónde está el editor: escala, esquina del panel y `top_px` desde su borde superior (negativo
 /// si el panel se desplazó). Lo pintado y los clics se limitan a `panel_rect`.
@@ -156,14 +156,17 @@ pub(crate) fn interact(
 /// Qué botones de la paleta hay que pintar y cómo (specs/hito-2-paleta-operaciones.md).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ButtonsView {
-    /// Hay una quita pendiente: la fila 1 es `Confirmar` y `Cancelar`.
+    /// Hay una quita pendiente: `Confirmar` y `Cancelar` (texto) sustituyen a la fila de iconos.
     pub removing: bool,
     /// Entradas de la paleta.
     pub len: usize,
     /// La quita pendiente tiene destino.
     pub has_destination: bool,
-    /// Rótulo del botón de la fila 4 (`Fijar transparente` o `Quitar transparente`).
-    pub transparent_label: &'static str,
+    /// La entrada elegida es la transparente: el icono de fijar o quitar se ve hundido y su
+    /// tooltip dice `Quitar transparente`.
+    pub transparent_active: bool,
+    /// Las texturas de los iconos.
+    pub icons: IconSet,
 }
 
 /// Lo que el editor pinta además de los deslizadores y el campo.
@@ -173,18 +176,6 @@ pub(crate) struct Extras {
     pub buttons: Option<ButtonsView>,
     /// Las dos líneas de una quita pendiente, en lugar del aviso del editor.
     pub prompt: Option<[String; 2]>,
-}
-
-fn button_label(button: PaletteButton) -> &'static str {
-    match button {
-        PaletteButton::Add => "Añadir",
-        PaletteButton::Remove => "Quitar",
-        PaletteButton::Confirm => "Confirmar",
-        PaletteButton::Cancel => "Cancelar",
-        PaletteButton::RotateLeft => "Rotar a la izquierda",
-        PaletteButton::RotateRight => "Rotar a la derecha",
-        PaletteButton::Transparent => "Fijar transparente",
-    }
 }
 
 /// Lo que pidió el editor en un fotograma.
@@ -329,45 +320,65 @@ pub(crate) fn show(
         text(HEADER_X_U, notice + ROW_H_U, &second, WARNING);
     }
 
-    // Botones de la paleta.
+    // Botones de la paleta: la fila de iconos o, con una quita pendiente, `Confirmar` y
+    // `Cancelar` en texto.
     if let Some(view) = extras.buttons {
         let pointer = ui.input(|input| input.pointer.hover_pos());
-        let (first, second) = if view.removing {
-            (PaletteButton::Confirm, PaletteButton::Cancel)
+        let buttons: &[PaletteButton] = if view.removing {
+            &[PaletteButton::Confirm, PaletteButton::Cancel]
         } else {
-            (PaletteButton::Add, PaletteButton::Remove)
+            &[
+                PaletteButton::Add,
+                PaletteButton::Remove,
+                PaletteButton::RotateLeft,
+                PaletteButton::RotateRight,
+                PaletteButton::Transparent,
+            ]
         };
-        for button in [
-            first,
-            second,
-            PaletteButton::RotateLeft,
-            PaletteButton::RotateRight,
-            PaletteButton::Transparent,
-        ] {
+        for &button in buttons {
             let Some((x, y, width, height)) = button_rect_u(mode, button) else {
                 continue;
             };
             let rect = geo.rect_u(x, y, width, height);
-            let disabled = blocked_reason(button, view.len, view.has_destination).is_some();
-            let hover = !disabled
-                && pointer.is_some_and(|p| geo.panel_rect.contains(p) && rect.contains(p));
-            let (fill, edge) = if hover {
-                (SURFACE_3, ACCENT)
-            } else {
-                (SURFACE_2, SURFACE_3)
-            };
-            painter.rect(rect, 0.0, fill, Stroke::new(u, edge), StrokeKind::Inside);
-            let color = if disabled { TEXT_DIM } else { TEXT };
-            text(
-                x + BUTTON_TEXT_X_U,
-                y + BUTTON_TEXT_Y_U,
-                if button == PaletteButton::Transparent {
-                    view.transparent_label
-                } else {
-                    button_label(button)
-                },
-                color,
-            );
+            let enabled = blocked_reason(button, view.len, view.has_destination).is_none();
+            let hovered =
+                pointer.is_some_and(|p| geo.panel_rect.contains(p) && rect.contains(p));
+            let sunken = button == PaletteButton::Transparent && view.transparent_active;
+            let look = look(sunken, enabled, hovered);
+            match palette_icon(button) {
+                Some(icon) => paint_icon(&painter, rect, u, view.icons.get(icon), &look),
+                None => paint_text(
+                    &painter,
+                    rect,
+                    u,
+                    geo.rect_u(x + BUTTON_TEXT_X_U, y + BUTTON_TEXT_Y_U, 0, ROW_H_U).min,
+                    palette_button_tooltip(button, false),
+                    &font,
+                    &look,
+                ),
+            }
+            // Tooltip y texto accesible sobre la parte visible del botón (el panel puede estar
+            // desplazado y recortarlo).
+            let visible = rect.intersect(geo.panel_rect);
+            if visible.is_positive() {
+                let label = palette_button_tooltip(button, view.transparent_active);
+                let response = ui.interact(
+                    visible,
+                    ui.unique_id().with(("boton-paleta", button as u8)),
+                    Sense::click(),
+                );
+                response.widget_info(|| WidgetInfo::labeled(Role::Button, enabled, label));
+                response.on_hover_ui(|ui| {
+                    ui.add(
+                        Label::new(
+                            RichText::new(printable(&ctx, label))
+                                .font(font.clone())
+                                .color(TEXT),
+                        )
+                        .extend(),
+                    );
+                });
+            }
         }
     }
 

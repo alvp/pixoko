@@ -8,6 +8,8 @@ use px_core::Mode;
 
 use crate::chrome::{MENU_H_U, toolbar_width_u};
 use crate::color_edit::{Control, controls};
+use crate::icon_button::{BUTTON_U, GAP_U};
+use crate::icons::Icon;
 use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, visible_rows_reserved};
 use crate::status::bar_height_px;
 use crate::text::text_scale;
@@ -48,18 +50,25 @@ pub const BLOCK_GAP_U: i64 = 4;
 pub const MIN_CANVAS_WIDTH_U: i64 = 128;
 /// Líneas del aviso.
 pub const NOTICE_LINES: i64 = 2;
-/// Botones de la paleta (solo indexadas; specs/hito-2-paleta-operaciones.md): filas, alto, hueco
-/// entre filas, origen, ancho de los dos botones de la fila 1 y hueco entre ellos, y margen del
-/// texto dentro del botón.
-pub const BUTTON_ROWS: i64 = 4;
-pub const BUTTON_H_U: i64 = 16;
-pub const BUTTON_ROW_GAP_U: i64 = 2;
+/// Botones de la paleta (solo indexadas; specs/interfaz-iconos.md): una fila de cinco iconos de
+/// 24 u (hueco de 1 u dentro de un grupo y de 8 u entre grupos: añadir y quitar | rotar a un lado
+/// y a otro | transparente) o, con una quita pendiente, `Confirmar` y `Cancelar` en texto en su
+/// lugar (dos botones de 110 u y 5 u de hueco). Filas, alto, origen, ancho de los dos botones de
+/// texto y hueco entre ellos, margen del texto dentro del botón y hueco entre grupos de iconos.
+pub const BUTTON_ROWS: i64 = 1;
+pub const BUTTON_H_U: i64 = BUTTON_U;
 pub const BUTTON_X_U: i64 = 4;
 pub const BUTTON_HALF_W_U: i64 = 110;
 pub const BUTTON_COL_GAP_U: i64 = 5;
 pub const BUTTON_FULL_W_U: i64 = TEXT_WIDTH_U;
 pub const BUTTON_TEXT_X_U: i64 = 6;
-pub const BUTTON_TEXT_Y_U: i64 = 1;
+/// El rótulo (14 u de alto) centrado en el alto del botón.
+pub const BUTTON_TEXT_Y_U: i64 = (BUTTON_H_U - ROW_H_U) / 2;
+pub const ICON_GROUP_GAP_U: i64 = 8;
+/// Alto de un botón de **texto** (las filas de los menús y los botones de los diálogos) y margen
+/// superior de su rótulo, en `u`: no cambian con los iconos.
+pub const TEXT_BUTTON_H_U: i64 = 16;
+pub const TEXT_BUTTON_TEXT_Y_U: i64 = 1;
 /// Modos de imagen: la altura del editor depende de ellos.
 const MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
@@ -79,7 +88,7 @@ pub fn editor_height_u(mode: Mode) -> i64 {
 /// Alto de los botones del modo, en `u`: 0 si no tiene.
 pub fn buttons_height_u(mode: Mode) -> i64 {
     if mode == Mode::Indexed {
-        BUTTON_ROWS * BUTTON_H_U + (BUTTON_ROWS - 1) * BUTTON_ROW_GAP_U
+        BUTTON_ROWS * BUTTON_H_U
     } else {
         0
     }
@@ -90,8 +99,8 @@ pub fn buttons_y_u(mode: Mode) -> i64 {
     notice_y_u(mode) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
 }
 
-/// Botones de la paleta. `Confirm` y `Cancel` ocupan el lugar de `Add` y `Remove` mientras hay
-/// una quita pendiente.
+/// Botones de la paleta. `Confirm` y `Cancel` (texto) sustituyen a toda la fila de iconos mientras
+/// hay una quita pendiente.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaletteButton {
     Add,
@@ -100,8 +109,20 @@ pub enum PaletteButton {
     Cancel,
     RotateLeft,
     RotateRight,
-    /// Fijar o quitar la transparente (fila 4, specs/hito-2-fijar-transparente.md).
+    /// Fijar o quitar la transparente (el quinto icono, specs/hito-2-fijar-transparente.md).
     Transparent,
+}
+
+/// El icono de un botón de la fila; `None` en `Confirm` y `Cancel`, que son de texto.
+pub fn palette_icon(button: PaletteButton) -> Option<Icon> {
+    match button {
+        PaletteButton::Add => Some(Icon::Add),
+        PaletteButton::Remove => Some(Icon::Remove),
+        PaletteButton::RotateLeft => Some(Icon::RotateLeft),
+        PaletteButton::RotateRight => Some(Icon::RotateRight),
+        PaletteButton::Transparent => Some(Icon::Transparent),
+        PaletteButton::Confirm | PaletteButton::Cancel => None,
+    }
 }
 
 /// Rectángulo `(x, y, ancho, alto)` del botón, en `u` desde la esquina del editor. `None` en los
@@ -111,23 +132,29 @@ pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64
         return None;
     }
     let top = buttons_y_u(mode);
-    let second_col = BUTTON_X_U + BUTTON_HALF_W_U + BUTTON_COL_GAP_U;
-    let row = BUTTON_H_U + BUTTON_ROW_GAP_U;
+    let remove_x = BUTTON_X_U + BUTTON_U + GAP_U;
+    let rotate_left_x = remove_x + BUTTON_U + ICON_GROUP_GAP_U;
+    let rotate_right_x = rotate_left_x + BUTTON_U + GAP_U;
+    let transparent_x = rotate_right_x + BUTTON_U + ICON_GROUP_GAP_U;
+    let icon = |x| (x, top, BUTTON_U, BUTTON_H_U);
     Some(match button {
-        PaletteButton::Add | PaletteButton::Confirm => {
-            (BUTTON_X_U, top, BUTTON_HALF_W_U, BUTTON_H_U)
-        }
-        PaletteButton::Remove | PaletteButton::Cancel => {
-            (second_col, top, BUTTON_HALF_W_U, BUTTON_H_U)
-        }
-        PaletteButton::RotateLeft => (BUTTON_X_U, top + row, BUTTON_FULL_W_U, BUTTON_H_U),
-        PaletteButton::RotateRight => (BUTTON_X_U, top + 2 * row, BUTTON_FULL_W_U, BUTTON_H_U),
-        PaletteButton::Transparent => (BUTTON_X_U, top + 3 * row, BUTTON_FULL_W_U, BUTTON_H_U),
+        PaletteButton::Add => icon(BUTTON_X_U),
+        PaletteButton::Remove => icon(remove_x),
+        PaletteButton::RotateLeft => icon(rotate_left_x),
+        PaletteButton::RotateRight => icon(rotate_right_x),
+        PaletteButton::Transparent => icon(transparent_x),
+        PaletteButton::Confirm => (BUTTON_X_U, top, BUTTON_HALF_W_U, BUTTON_H_U),
+        PaletteButton::Cancel => (
+            BUTTON_X_U + BUTTON_HALF_W_U + BUTTON_COL_GAP_U,
+            top,
+            BUTTON_HALF_W_U,
+            BUTTON_H_U,
+        ),
     })
 }
 
 /// Botón bajo un punto en píxeles físicos, relativo a la esquina del editor. `removing`: hay una
-/// quita pendiente (la fila 1 es `Confirm` y `Cancel`).
+/// quita pendiente (solo `Confirm` y `Cancel` golpean; los iconos no se ven).
 pub fn button_hit(
     mode: Mode,
     removing: bool,
@@ -136,20 +163,18 @@ pub fn button_hit(
     n: u32,
 ) -> Option<PaletteButton> {
     let n = scale(n);
-    let (first, second) = if removing {
-        (PaletteButton::Confirm, PaletteButton::Cancel)
+    let visible: &[PaletteButton] = if removing {
+        &[PaletteButton::Confirm, PaletteButton::Cancel]
     } else {
-        (PaletteButton::Add, PaletteButton::Remove)
+        &[
+            PaletteButton::Add,
+            PaletteButton::Remove,
+            PaletteButton::RotateLeft,
+            PaletteButton::RotateRight,
+            PaletteButton::Transparent,
+        ]
     };
-    [
-        first,
-        second,
-        PaletteButton::RotateLeft,
-        PaletteButton::RotateRight,
-        PaletteButton::Transparent,
-    ]
-    .into_iter()
-    .find(|button| {
+    visible.iter().copied().find(|button| {
         button_rect_u(mode, *button).is_some_and(|(x, y, w, h)| {
             x_px >= x * n && x_px < (x + w) * n && y_px >= y * n && y_px < (y + h) * n
         })
@@ -316,19 +341,30 @@ pub fn edges_u(mode: Mode) -> Vec<i64> {
     for button in [
         PaletteButton::Add,
         PaletteButton::Remove,
+        PaletteButton::Confirm,
+        PaletteButton::Cancel,
         PaletteButton::RotateLeft,
         PaletteButton::RotateRight,
         PaletteButton::Transparent,
     ] {
         if let Some((x, y, w, h)) = button_rect_u(mode, button) {
+            // Cara, relieve (1 u), icono a 4 u del borde (5 u hundido) y rótulo de los de texto.
             e.extend([
                 x,
                 x + 1,
+                x + 4,
+                x + 5,
+                x + w - 5,
+                x + w - 4,
                 x + w - 1,
                 x + w,
                 x + BUTTON_TEXT_X_U,
                 y,
                 y + 1,
+                y + 4,
+                y + 5,
+                y + h - 5,
+                y + h - 4,
                 y + h - 1,
                 y + h,
                 y + BUTTON_TEXT_Y_U,

@@ -1595,9 +1595,10 @@ fn reducir_y_agrandar_la_ventana_no_pierde_el_texto_pendiente() {
 // Fila 11: mostrar la elegida
 // ---------------------------------------------------------------------------------------------
 
-/// Alto de los botones de la unidad 11d con su margen (70 + 4 u), que la rejilla de indexadas
-/// ya no usa: para el mismo número de filas visibles hay que dar tanto panel de más.
-const BOTONES_U: i64 = 74;
+/// Alto de la fila de iconos de la unidad I.4 con su margen (24 + 4 u), que la rejilla de
+/// indexadas ya no usa: para el mismo número de filas visibles hay que dar tanto panel de más
+/// (antes, con los botones de texto de 11d, 70 + 4 u).
+const BOTONES_U: i64 = 28;
 
 fn fila_de(entrada: usize) -> usize {
     entrada / COLUMNS

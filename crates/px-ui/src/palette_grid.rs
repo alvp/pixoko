@@ -8,6 +8,7 @@
 use px_core::Rgba;
 
 use crate::color::Role;
+use crate::icons::IconSet;
 
 use crate::view::ScreenRect;
 
@@ -350,6 +351,8 @@ pub struct PanelView {
     pub last_visible: Option<usize>,
     /// Hay que mostrar la fila elegida (cambió por teclado, deshacer o rehacer).
     pub reveal: bool,
+    /// Las texturas de los iconos de los botones del editor (vacío: se pintan sin icono).
+    pub icons: IconSet,
 }
 
 impl PanelView {
