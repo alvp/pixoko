@@ -27,7 +27,7 @@ use px_ui::canvas::CanvasEvent;
 use px_ui::dirty::{BlockSet, dirty_of};
 use px_ui::pick::{EraseError, Picked, picked_at};
 use px_ui::source::{
-    DocSource, PixelSource, flatten, identity_cell, overlay_pixels, visible_picked,
+    DocSource, OverlayCache, PixelSource, flatten, identity_cell, overlay_pixels, visible_picked,
 };
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileRect};
@@ -797,6 +797,58 @@ fn fila_9_con_una_capa_la_superposicion_es_el_color_crudo_de_hoy() {
         overlay_pixels(&doc, celda, edits),
         vec![(1, 1, ROJO), (2, 2, semitransparente)]
     );
+}
+
+#[test]
+fn fila_9_el_cache_de_la_superposicion_solo_calcula_los_pixeles_nuevos() {
+    let mut doc = doc_rgba(40, 10);
+    let (_, celda_b) = capa_nueva(&mut doc, "B");
+    let (_, celda_c) = capa_nueva(&mut doc, "C");
+    pinta(&mut doc, celda_c, &[(3, 1), (7, 1)], rgba(ROJO));
+    let trazo: Vec<PixelEdit> = (0..30)
+        .map(|x| PixelEdit {
+            x,
+            y: 1,
+            pixel: rgba(VERDE),
+        })
+        .collect();
+    let mut cache = OverlayCache::default();
+    // El trazo crece: cada llamada calcula solo lo añadido y da lo que daría `overlay_pixels`.
+    let mut vistos = 0;
+    for hasta in [10, 20, 30] {
+        let colores = cache
+            .colors(&doc, celda_b, trazo[..hasta].iter().copied())
+            .to_vec();
+        assert_eq!(
+            colores,
+            overlay_pixels(&doc, celda_b, trazo[..hasta].iter().copied())
+        );
+        assert_eq!(cache.last_computed(), hasta - vistos);
+        vistos = hasta;
+    }
+    // La misma lista otra vez: nada que calcular.
+    cache.colors(&doc, celda_b, trazo.iter().copied());
+    assert_eq!(cache.last_computed(), 0);
+    // Una lista que no continúa la anterior (la goma elástica de la línea): se calcula entera.
+    let otra: Vec<PixelEdit> = trazo.iter().rev().take(12).copied().collect();
+    let colores = cache.colors(&doc, celda_b, otra.iter().copied()).to_vec();
+    assert_eq!(cache.last_computed(), 12);
+    assert_eq!(colores, overlay_pixels(&doc, celda_b, otra.iter().copied()));
+    // Otro estado del documento o otra capa activa: todo de nuevo.
+    cache.colors(&doc, celda_b, trazo.iter().copied());
+    pinta(&mut doc, celda_c, &[(9, 1)], rgba(AZUL));
+    let colores = cache.colors(&doc, celda_b, trazo.iter().copied()).to_vec();
+    assert_eq!(cache.last_computed(), 30, "el documento cambió");
+    assert_eq!(
+        colores,
+        overlay_pixels(&doc, celda_b, trazo.iter().copied())
+    );
+    cache.colors(&doc, celda_c, trazo.iter().copied());
+    assert_eq!(cache.last_computed(), 30, "otra capa activa");
+    // Vacío: nada, y el siguiente trazo empieza de cero.
+    assert!(cache.colors(&doc, celda_c, std::iter::empty()).is_empty());
+    cache.colors(&doc, celda_c, trazo[..5].iter().copied());
+    assert_eq!(cache.last_computed(), 5);
 }
 
 // ---------------------------------------------------------------------------------------------

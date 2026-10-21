@@ -2680,10 +2680,10 @@ mod canvas_image {
             coincide(&d, &format!("undo {i}"));
             assert_eq!(d.canvas_image().palette(), paletas[i].as_ref());
         }
-        for i in 1..paletas.len() {
+        for (i, esperada) in paletas.iter().enumerate().skip(1) {
             d.redo().expect("rehacer");
             coincide(&d, &format!("redo {i}"));
-            assert_eq!(d.canvas_image().palette(), paletas[i].as_ref());
+            assert_eq!(d.canvas_image().palette(), esperada.as_ref());
         }
 
         // Conversión de modo de una capa: RGBA -> indexado y de vuelta.
