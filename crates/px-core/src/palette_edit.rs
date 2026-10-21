@@ -74,53 +74,41 @@ impl fmt::Display for PaletteEditError {
 
 impl Error for PaletteEditError {}
 
-/// Paso de historia de un comando de paleta. Lo que guarda cada variante es lo mínimo para
-/// aplicar y deshacer sin reservar (spec, punto 8).
+/// Paso de historia de un comando de paleta. Es del documento entero: se aplica al lienzo y a
+/// cada celda con imagen (spec 3.1, N-04); lo que depende de los píxeles (`Remove`) guarda una
+/// máscara por celda. Lo que guarda cada variante es lo mínimo para aplicar y deshacer sin
+/// reservar (spec, punto 8).
 #[derive(Clone, Debug)]
 pub(crate) enum PaletteStep {
-    /// Color del otro lado: aplicar y deshacer lo intercambian con la entrada.
+    /// Color de la entrada antes y después.
     Color {
-        image: ImageId,
         index: u8,
-        other: Rgba,
+        before: Rgba,
+        after: Rgba,
     },
-    /// Índice transparente del otro lado: aplicar y deshacer lo intercambian.
-    Transparent { image: ImageId, other: Option<u8> },
+    /// Índice transparente antes y después.
+    Transparent {
+        before: Option<u8>,
+        after: Option<u8>,
+    },
     /// Entrada añadida al final.
-    Append { image: ImageId, color: Rgba },
+    Append { color: Rgba },
     /// Permutación `adelante[antiguo] = nuevo` (`move` y `permute`).
-    Reorder { image: ImageId, forward: Vec<u8> },
-    /// Entrada quitada: su color, el índice transparente de antes y los píxeles que la usaban.
+    Reorder { forward: Vec<u8> },
+    /// Entrada quitada: su color, el índice transparente de antes y, por cada imagen que usaba
+    /// la entrada, los píxeles que la usaban.
     Remove {
-        image: ImageId,
         index: u8,
         into: u8,
         color: Rgba,
         transparent: Option<u8>,
-        mask: Vec<u64>,
+        masks: Vec<(ImageId, Vec<u64>)>,
     },
     /// Rotación de `len` entradas desde `start`, `k` posiciones hacia índices mayores.
-    Rotate {
-        image: ImageId,
-        start: u8,
-        len: u16,
-        k: u16,
-    },
+    Rotate { start: u8, len: u16, k: u16 },
 }
 
 impl PaletteStep {
-    /// Imagen sobre la que actúa el paso.
-    pub(crate) fn image(&self) -> ImageId {
-        match self {
-            PaletteStep::Color { image, .. }
-            | PaletteStep::Transparent { image, .. }
-            | PaletteStep::Append { image, .. }
-            | PaletteStep::Reorder { image, .. }
-            | PaletteStep::Remove { image, .. }
-            | PaletteStep::Rotate { image, .. } => *image,
-        }
-    }
-
     /// `true` si deshacer el paso agranda la paleta (hace falta un hueco en su `Vec`).
     pub(crate) fn grows_on_undo(&self) -> bool {
         matches!(self, PaletteStep::Remove { .. })
@@ -134,42 +122,55 @@ impl PaletteStep {
     /// Memoria del paso: su tamaño más lo que reserva en el montón (capacidad real).
     pub(crate) fn cost(&self) -> usize {
         let heap = match self {
-            PaletteStep::Reorder { forward, .. } => forward.capacity(),
-            PaletteStep::Remove { mask, .. } => mask.capacity().saturating_mul(size_of::<u64>()),
+            PaletteStep::Reorder { forward } => forward.capacity(),
+            PaletteStep::Remove { masks, .. } => masks
+                .capacity()
+                .saturating_mul(size_of::<(ImageId, Vec<u64>)>())
+                .saturating_add(masks.iter().fold(0usize, |total, (_, mask)| {
+                    total.saturating_add(mask.capacity().saturating_mul(size_of::<u64>()))
+                })),
             _ => 0,
         };
         size_of::<PaletteStep>().saturating_add(heap)
     }
 
-    /// Aplica el paso (la primera vez, y al rehacer). No reserva ni falla.
-    pub(crate) fn redo(&mut self, image: &mut Image) {
+    /// Aplica el paso a `image` (la primera vez, y al rehacer). No reserva ni falla.
+    pub(crate) fn redo(&self, image: &mut Image) {
         match self {
-            PaletteStep::Color { index, other, .. } => swap_color(image, *index, other),
-            PaletteStep::Transparent { other, .. } => swap_transparent(image, other),
-            PaletteStep::Append { color, .. } => {
+            PaletteStep::Color { index, after, .. } => {
+                image.set_palette_entry(*index, *after);
+            }
+            PaletteStep::Transparent { after, .. } => {
+                image.set_transparent(*after);
+            }
+            PaletteStep::Append { color } => {
                 image.push_palette_entry(*color);
             }
-            PaletteStep::Reorder { forward, .. } => {
+            PaletteStep::Reorder { forward } => {
                 image.reorder_palette(forward);
             }
             PaletteStep::Remove { index, into, .. } => {
                 image.remove_palette_entry(*index, *into);
             }
-            PaletteStep::Rotate { start, len, k, .. } => {
+            PaletteStep::Rotate { start, len, k } => {
                 image.rotate_palette_range(*start, *len, *k, true);
             }
         }
     }
 
-    /// Deshace el paso. No reserva ni falla.
-    pub(crate) fn undo(&mut self, image: &mut Image) {
+    /// Deshace el paso en `image`, que en la historia es la de id `id`. No reserva ni falla.
+    pub(crate) fn undo(&self, id: ImageId, image: &mut Image) {
         match self {
-            PaletteStep::Color { index, other, .. } => swap_color(image, *index, other),
-            PaletteStep::Transparent { other, .. } => swap_transparent(image, other),
+            PaletteStep::Color { index, before, .. } => {
+                image.set_palette_entry(*index, *before);
+            }
+            PaletteStep::Transparent { before, .. } => {
+                image.set_transparent(*before);
+            }
             PaletteStep::Append { .. } => {
                 image.pop_palette_entry();
             }
-            PaletteStep::Reorder { forward, .. } => {
+            PaletteStep::Reorder { forward } => {
                 let mut inverse = [0u8; Palette::MAX_COLORS];
                 for (old, &new) in forward.iter().enumerate() {
                     if let (Some(slot), Ok(old)) =
@@ -186,35 +187,19 @@ impl PaletteStep {
                 index,
                 color,
                 transparent,
-                mask,
+                masks,
                 ..
             } => {
+                let mask: &[u64] = masks
+                    .iter()
+                    .find(|(mask_id, _)| *mask_id == id)
+                    .map_or(&[], |(_, mask)| mask.as_slice());
                 image.restore_palette_entry(*index, *color, *transparent, mask);
             }
-            PaletteStep::Rotate { start, len, k, .. } => {
+            PaletteStep::Rotate { start, len, k } => {
                 image.rotate_palette_range(*start, *len, *k, false);
             }
         }
-    }
-}
-
-/// Intercambia el color de la entrada `index` con `other`.
-fn swap_color(image: &mut Image, index: u8, other: &mut Rgba) {
-    let current = image.palette().and_then(|palette| palette.get(index).ok());
-    if let Some(current) = current
-        && image.set_palette_entry(index, *other)
-    {
-        *other = current;
-    }
-}
-
-/// Intercambia el índice transparente con `other`.
-fn swap_transparent(image: &mut Image, other: &mut Option<u8>) {
-    let current = image.palette().map(Palette::transparent_index);
-    if let Some(current) = current
-        && image.set_transparent(*other)
-    {
-        *other = current;
     }
 }
 
@@ -359,10 +344,13 @@ pub(crate) fn check(image: &Image, command: &Command) -> Result<bool, PaletteEdi
 /// del paso (la tabla de `Move`/`Permute`, la máscara de `Remove`) se reserva aquí, antes de
 /// modificar nada; el único error posible es `OutOfMemory`.
 pub(crate) fn build(
-    image: &Image,
-    id: ImageId,
+    images: &[(ImageId, &Image)],
     command: &Command,
 ) -> Result<PaletteStep, DocumentError> {
+    let image = images
+        .first()
+        .map(|(_, image)| *image)
+        .ok_or(DocumentError::PaletteEdit(PaletteEditError::BadPermutation))?;
     let palette =
         image
             .palette()
@@ -373,23 +361,19 @@ pub(crate) fn build(
     let invalid = || DocumentError::PaletteEdit(PaletteEditError::BadPermutation);
     match command {
         Command::SetPaletteColor { index, color, .. } => Ok(PaletteStep::Color {
-            image: id,
             index: *index,
-            other: *color,
+            before: palette.get(*index).unwrap_or_default(),
+            after: *color,
         }),
         Command::SetTransparentIndex { index, .. } => Ok(PaletteStep::Transparent {
-            image: id,
-            other: *index,
+            before: palette.transparent_index(),
+            after: *index,
         }),
-        Command::AddPaletteEntry { color, .. } => Ok(PaletteStep::Append {
-            image: id,
-            color: *color,
-        }),
+        Command::AddPaletteEntry { color, .. } => Ok(PaletteStep::Append { color: *color }),
         Command::MovePaletteEntry { from, to, .. } => {
             let table = move_table(len, *from, *to);
             let forward = table.get(..len).ok_or_else(invalid)?;
             Ok(PaletteStep::Reorder {
-                image: id,
                 forward: exact_copy(forward)?,
             })
         }
@@ -404,31 +388,36 @@ pub(crate) fn build(
             }
             let forward = forward.get(..len).ok_or_else(invalid)?;
             Ok(PaletteStep::Reorder {
-                image: id,
                 forward: exact_copy(forward)?,
             })
         }
         Command::RemovePaletteEntry { index, into, .. } => {
-            let used = image.count_pixels_using(*index);
-            let mut mask: Vec<u64> = Vec::new();
-            if used > 0 {
+            let mut masks: Vec<(ImageId, Vec<u64>)> = Vec::new();
+            masks
+                .try_reserve_exact(images.len())
+                .map_err(|_| DocumentError::OutOfMemory)?;
+            for (target, image) in images {
+                if image.count_pixels_using(*index) == 0 {
+                    continue;
+                }
                 let pixels = usize::try_from(image.width())
                     .ok()
                     .and_then(|w| w.checked_mul(usize::try_from(image.height()).ok()?))
                     .ok_or(DocumentError::OutOfMemory)?;
                 let words = pixels.div_ceil(64);
+                let mut mask: Vec<u64> = Vec::new();
                 mask.try_reserve_exact(words)
                     .map_err(|_| DocumentError::OutOfMemory)?;
                 mask.resize(words, 0);
                 image.fill_mask(*index, &mut mask);
+                masks.push((*target, mask));
             }
             Ok(PaletteStep::Remove {
-                image: id,
                 index: *index,
                 into: *into,
                 color: palette.get(*index).unwrap_or_default(),
                 transparent: palette.transparent_index(),
-                mask,
+                masks,
             })
         }
         Command::RotateColors {
@@ -437,7 +426,6 @@ pub(crate) fn build(
             steps,
             ..
         } => Ok(PaletteStep::Rotate {
-            image: id,
             start: *start,
             len: *span,
             k: rotation(*steps, *span),

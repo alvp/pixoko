@@ -25,6 +25,43 @@ impl ImageId {
     }
 }
 
+/// Identificador de una capa dentro de un documento. Solo `Document` reparte ids válidos.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LayerId(u32);
+
+/// Una capa: sus propiedades y su celda, que es la imagen `image` (`None` = celda vacía, sin
+/// píxeles reservados; vale transparente). `cel` es el `ImageId` de la celda y existe desde que
+/// se crea la capa.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Layer {
+    id: LayerId,
+    name: String,
+    visible: bool,
+    opacity: u8,
+    cel: ImageId,
+    image: Option<Image>,
+}
+
+/// Id reservado de la plantilla del lienzo; ninguna celda lo recibe nunca.
+const TEMPLATE: ImageId = ImageId(u32::MAX);
+
+/// El lienzo del documento: tamaño y una plantilla de 1 × 1 con el modo y la paleta de todas
+/// las celdas. Con las celdas vacías puede no haber ninguna imagen de la que leerlos.
+#[derive(Clone, Debug)]
+struct Canvas {
+    width: u32,
+    height: u32,
+    template: Image,
+}
+
+/// Plantilla de 1 × 1 con el modo y la paleta de `image`.
+fn make_template(image: &Image) -> Result<Image, ImageError> {
+    match image.palette() {
+        Some(palette) => Image::filled_indexed(1, 1, palette.clone(), 0),
+        None => Image::new(1, 1, image.mode()),
+    }
+}
+
 /// Escritura de un píxel en una coordenada.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PixelEdit {
@@ -136,15 +173,24 @@ struct FillPart {
 struct Step {
     changes: Vec<Change>,
     fills: Vec<FillPart>,
-    /// En un paso de conversión de modo, la imagen que no está en el documento: la anterior
-    /// mientras el paso está en la pila de deshacer, la convertida en la de rehacer. `undo` y
-    /// `redo` la intercambian con la del documento.
-    swapped: Option<(ImageId, Image)>,
+    /// En un paso de conversión de modo, la imagen que no está en el documento (la anterior
+    /// mientras el paso está en la pila de deshacer, la convertida en la de rehacer) y la
+    /// plantilla del lienzo que le corresponde. `undo` y `redo` las intercambian con las del
+    /// documento.
+    swapped: Option<Swapped>,
     /// En un paso de edición de paleta, el paso (que es todo su contenido).
     palette: Option<PaletteStep>,
     /// Identificador de estado del otro lado del paso: en la pila de deshacer, el de antes del
     /// paso; en la de rehacer, el de después. `undo` y `redo` lo intercambian con el actual.
     state: u64,
+}
+
+/// Lo que intercambia un paso de conversión de modo.
+#[derive(Clone, Debug)]
+struct Swapped {
+    id: ImageId,
+    image: Image,
+    template: Image,
 }
 
 impl Step {
@@ -154,8 +200,9 @@ impl Step {
         let runs = self.fills.iter().fold(0usize, |total, fill| {
             total.saturating_add(fill.runs.capacity().saturating_mul(size_of::<Run>()))
         });
-        let swapped = self.swapped.as_ref().map_or(0, |(_, image)| {
-            size_of::<Image>().saturating_add(image.content_bytes())
+        // La plantilla (1 × 1 y una paleta) no se cuenta: es despreciable.
+        let swapped = self.swapped.as_ref().map_or(0, |swapped| {
+            size_of::<Image>().saturating_add(swapped.image.content_bytes())
         });
         let palette = self.palette.as_ref().map_or(0, PaletteStep::cost);
         size_of::<Vec<Change>>()
@@ -190,7 +237,9 @@ impl Step {
 /// La igualdad compara el contenido (las imágenes por id), no la historia.
 #[derive(Clone, Debug)]
 pub struct Document {
-    images: Vec<(ImageId, Image)>,
+    /// De abajo a arriba.
+    layers: Vec<Layer>,
+    canvas: Canvas,
     undo: VecDeque<Step>,
     redo: Vec<Step>,
     /// Suma de `Step::cost` de la pila de deshacer.
@@ -204,7 +253,7 @@ pub struct Document {
 
 impl PartialEq for Document {
     fn eq(&self, other: &Document) -> bool {
-        self.images == other.images
+        self.layers == other.layers
     }
 }
 
@@ -221,8 +270,21 @@ impl Document {
     pub const MAX_FILL_SPANS: usize = 3_000_000;
 
     pub fn new(image: Image) -> Document {
+        let template = make_template(&image).unwrap_or_else(|_| image.clone());
         Document {
-            images: vec![(ImageId(0), image)],
+            canvas: Canvas {
+                width: image.width(),
+                height: image.height(),
+                template,
+            },
+            layers: vec![Layer {
+                id: LayerId(0),
+                name: String::from("Capa 1"),
+                visible: true,
+                opacity: 255,
+                cel: ImageId(0),
+                image: Some(image),
+            }],
             undo: VecDeque::new(),
             redo: Vec::new(),
             undo_bytes: 0,
@@ -248,18 +310,25 @@ impl Document {
         ImageId(0)
     }
 
+    /// La imagen de la celda `id`: `None` si no existe o si la celda está vacía.
     pub fn image(&self, id: ImageId) -> Option<&Image> {
-        self.images
+        self.layers
             .iter()
-            .find(|(image_id, _)| *image_id == id)
-            .map(|(_, image)| image)
+            .find(|layer| layer.cel == id)
+            .and_then(|layer| layer.image.as_ref())
     }
 
+    /// La imagen de una celda con imagen (nunca la plantilla del lienzo).
     fn image_mut(&mut self, id: ImageId) -> Option<&mut Image> {
-        self.images
+        self.layers
             .iter_mut()
-            .find(|(image_id, _)| *image_id == id)
-            .map(|(_, image)| image)
+            .find(|layer| layer.cel == id)
+            .and_then(|layer| layer.image.as_mut())
+    }
+
+    /// `true` si `id` es la celda de alguna capa, vacía o no.
+    fn has_cel(&self, id: ImageId) -> bool {
+        self.layers.iter().any(|layer| layer.cel == id)
     }
 
     /// Ejecuta un comando. `Ok(true)` si algún píxel cambió de valor (y entonces hay un paso
@@ -316,7 +385,7 @@ impl Document {
     }
 
     /// `ConvertMode`: todo lo que puede fallar o reservar ocurre antes de tocar el documento;
-    /// después solo se intercambian dos imágenes.
+    /// después solo se intercambian imágenes.
     fn apply_convert(
         &mut self,
         id: ImageId,
@@ -336,44 +405,69 @@ impl Document {
         let current = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
         let Conversion { image: mut new, .. } =
             convert_image(current, target, allowed).map_err(DocumentError::Convert)?;
+        let mut template = make_template(&new).map_err(|_| DocumentError::OutOfMemory)?;
         let slot = self.image_mut(id).ok_or(DocumentError::UnknownImage(id))?;
         std::mem::swap(slot, &mut new);
+        std::mem::swap(&mut self.canvas.template, &mut template);
         self.commit(Step {
-            swapped: Some((id, new)),
+            swapped: Some(Swapped {
+                id,
+                image: new,
+                template,
+            }),
             ..Step::default()
         });
         Ok(true)
     }
 
-    /// Comandos de paleta: todo lo que puede fallar o reservar ocurre antes de tocar la imagen
-    /// (spec, puntos 5 y 6); después solo se aplica el paso, que no reserva ni falla.
+    /// Comandos de paleta: se aplican al lienzo y a todas las celdas con imagen en un solo
+    /// paso. Todo lo que puede fallar o reservar ocurre antes de tocar nada (spec, puntos 5 y 6);
+    /// después solo se aplica el paso, que no reserva ni falla.
     fn apply_palette(&mut self, id: ImageId, command: &Command) -> Result<bool, DocumentError> {
-        let image = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
-        if !palette_edit::check(image, command).map_err(DocumentError::PaletteEdit)? {
+        if !self.has_cel(id) {
+            return Err(DocumentError::UnknownImage(id));
+        }
+        if !palette_edit::check(&self.canvas.template, command)
+            .map_err(DocumentError::PaletteEdit)?
+        {
             return Ok(false);
         }
         self.undo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
-        let image = self.image(id).ok_or(DocumentError::UnknownImage(id))?;
-        let mut palette_step = palette_edit::build(image, id, command)?;
-        if palette_step.grows_on_redo() {
-            self.reserve_palette_slot(id)?;
+        let step = {
+            let mut images: Vec<(ImageId, &Image)> = Vec::new();
+            images
+                .try_reserve_exact(self.layers.len().saturating_add(1))
+                .map_err(|_| DocumentError::OutOfMemory)?;
+            images.push((TEMPLATE, &self.canvas.template));
+            images.extend(
+                self.layers
+                    .iter()
+                    .filter_map(|layer| layer.image.as_ref().map(|image| (layer.cel, image))),
+            );
+            palette_edit::build(&images, command)?
+        };
+        if step.grows_on_redo() {
+            self.reserve_palette_slots()?;
         }
-        let slot = self.image_mut(id).ok_or(DocumentError::UnknownImage(id))?;
-        palette_step.redo(slot);
+        self.run_palette_step(&step, false);
         self.commit(Step {
-            palette: Some(palette_step),
+            palette: Some(step),
             ..Step::default()
         });
         Ok(true)
     }
 
-    /// Hace sitio en la paleta de la imagen para una entrada más (`OutOfMemory` si no hay).
-    fn reserve_palette_slot(&mut self, id: ImageId) -> Result<(), DocumentError> {
-        let reserved = self
-            .image_mut(id)
-            .is_none_or(|image| image.reserve_palette_slot());
+    /// Hace sitio en la paleta del lienzo y en la de cada celda con imagen para una entrada más
+    /// (`OutOfMemory` si no hay). Lo ya reservado se queda: no estorba.
+    fn reserve_palette_slots(&mut self) -> Result<(), DocumentError> {
+        let reserved = self.canvas.template.reserve_palette_slot()
+            && self
+                .layers
+                .iter_mut()
+                .filter_map(|layer| layer.image.as_mut())
+                .all(Image::reserve_palette_slot);
         if reserved {
             Ok(())
         } else {
@@ -389,41 +483,47 @@ impl Document {
         } else {
             self.redo.last()
         };
-        let target = step
+        let grows = step
             .and_then(|step| step.palette.as_ref())
-            .filter(|palette| {
+            .is_some_and(|palette| {
                 if undoing {
                     palette.grows_on_undo()
                 } else {
                     palette.grows_on_redo()
                 }
-            })
-            .map(PaletteStep::image);
-        match target {
-            Some(id) => self.reserve_palette_slot(id),
-            None => Ok(()),
+            });
+        if grows {
+            self.reserve_palette_slots()
+        } else {
+            Ok(())
         }
     }
 
-    /// Deshace (`undoing`) o rehace el paso de paleta. No reserva ni falla.
-    fn run_palette_step(&mut self, step: &mut Step, undoing: bool) {
-        if let Some(palette_step) = step.palette.as_mut()
-            && let Some(image) = self.image_mut(palette_step.image())
-        {
+    /// Deshace (`undoing`) o rehace el paso de paleta en el lienzo y en cada celda con imagen.
+    /// No reserva ni falla.
+    fn run_palette_step(&mut self, step: &PaletteStep, undoing: bool) {
+        let images = std::iter::once((TEMPLATE, &mut self.canvas.template)).chain(
+            self.layers
+                .iter_mut()
+                .filter_map(|layer| layer.image.as_mut().map(|image| (layer.cel, image))),
+        );
+        for (id, image) in images {
             if undoing {
-                palette_step.undo(image);
+                step.undo(id, image);
             } else {
-                palette_step.redo(image);
+                step.redo(image);
             }
         }
     }
 
-    /// Intercambia la imagen del documento con la que guarda el paso. No reserva ni falla.
+    /// Intercambia la imagen del documento y la plantilla del lienzo con las que guarda el
+    /// paso. No reserva ni falla.
     fn swap_image(&mut self, step: &mut Step) {
-        if let Some((id, stored)) = step.swapped.as_mut()
-            && let Some(slot) = self.image_mut(*id)
+        if let Some(swapped) = step.swapped.as_mut()
+            && let Some(slot) = self.image_mut(swapped.id)
         {
-            std::mem::swap(slot, stored);
+            std::mem::swap(slot, &mut swapped.image);
+            std::mem::swap(&mut self.canvas.template, &mut swapped.template);
         }
     }
 
@@ -441,8 +541,8 @@ impl Document {
         self.undo_bytes = self.undo_bytes.saturating_sub(step.cost());
         if step.swapped.is_some() {
             self.swap_image(&mut step);
-        } else if step.palette.is_some() {
-            self.run_palette_step(&mut step, true);
+        } else if let Some(palette) = step.palette.as_ref() {
+            self.run_palette_step(palette, true);
         } else {
             self.revert(&step);
         }
@@ -464,8 +564,8 @@ impl Document {
         };
         if step.swapped.is_some() {
             self.swap_image(&mut step);
-        } else if step.palette.is_some() {
-            self.run_palette_step(&mut step, false);
+        } else if let Some(palette) = step.palette.as_ref() {
+            self.run_palette_step(palette, false);
         } else {
             self.replay(&step);
         }
@@ -626,10 +726,11 @@ impl Document {
 
     /// Deshace un paso: recorre la secuencia al revés escribiendo los valores «antes».
     fn revert(&mut self, step: &Step) {
+        let mut cursor = Cursor::default();
         let mut end = step.changes.len();
         for fill in step.fills.iter().rev() {
             for change in step.changes.get(fill.at..end).unwrap_or(&[]).iter().rev() {
-                self.write(change.image, change.x, change.y, change.before);
+                self.write(&mut cursor, change.image, change.x, change.y, change.before);
             }
             end = fill.at;
             if let Some(image) = self.image_mut(fill.image) {
@@ -639,16 +740,17 @@ impl Document {
             }
         }
         for change in step.changes.get(..end).unwrap_or(&[]).iter().rev() {
-            self.write(change.image, change.x, change.y, change.before);
+            self.write(&mut cursor, change.image, change.x, change.y, change.before);
         }
     }
 
     /// Rehace un paso: recorre la secuencia hacia delante escribiendo los valores «después».
     fn replay(&mut self, step: &Step) {
+        let mut cursor = Cursor::default();
         let mut start = 0;
         for fill in &step.fills {
             for change in step.changes.get(start..fill.at).unwrap_or(&[]) {
-                self.write(change.image, change.x, change.y, change.after);
+                self.write(&mut cursor, change.image, change.x, change.y, change.after);
             }
             start = fill.at;
             if let Some(image) = self.image_mut(fill.image) {
@@ -658,18 +760,36 @@ impl Document {
             }
         }
         for change in step.changes.get(start..).unwrap_or(&[]) {
-            self.write(change.image, change.x, change.y, change.after);
+            self.write(&mut cursor, change.image, change.x, change.y, change.after);
         }
     }
 
     /// Escribe un valor que salió de la propia imagen: no puede fallar, y si fallara no hay
-    /// nada razonable que hacer, así que se ignora el resultado.
-    fn write(&mut self, id: ImageId, x: u32, y: u32, pixel: Pixel) {
-        if let Some(image) = self.image_mut(id) {
+    /// nada razonable que hacer, así que se ignora el resultado. `cursor` recuerda la capa de
+    /// la última escritura: buscarla una vez por racha, no por píxel, para que deshacer no
+    /// cueste más con más capas.
+    fn write(&mut self, cursor: &mut Cursor, id: ImageId, x: u32, y: u32, pixel: Pixel) {
+        let hit = self
+            .layers
+            .get(cursor.0)
+            .is_some_and(|layer| layer.cel == id);
+        if !hit && let Some(position) = self.layers.iter().position(|layer| layer.cel == id) {
+            cursor.0 = position;
+        }
+        if let Some(image) = self
+            .layers
+            .get_mut(cursor.0)
+            .filter(|layer| layer.cel == id)
+            .and_then(|layer| layer.image.as_mut())
+        {
             let _ = image.set_pixel(x, y, pixel);
         }
     }
 }
+
+/// Posición de la última capa escrita al deshacer o rehacer.
+#[derive(Default)]
+struct Cursor(usize);
 
 /// Escribe `pixel` en los `run.len` píxeles del trozo. Los trozos salen de la propia imagen,
 /// así que no puede fallar; si fallara, se ignora como en `Document::write`.
