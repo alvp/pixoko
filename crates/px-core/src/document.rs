@@ -501,8 +501,11 @@ impl Document {
 
     /// El id de la celda de la capa con la que se creó el documento (siempre `ImageId(0)`).
     ///
-    /// TODO(3.3): se retira cuando los llamadores pasen a la capa activa. Con varias capas, y si
-    /// se quitó la capa 0, `image(main_image())` es `None`.
+    /// **Obsoleta**: es un atajo para pruebas y documentos de una capa. El código de la
+    /// aplicación usa la celda de la capa activa. Con varias capas, y si se quitó la capa 0,
+    /// `image(main_image())` es `None`.
+    ///
+    /// TODO(3.9): retirarla en el cierre del hito 3.
     pub fn main_image(&self) -> ImageId {
         ImageId(0)
     }
@@ -514,6 +517,13 @@ impl Document {
 
     pub fn layer(&self, id: LayerId) -> Option<&Layer> {
         self.layers.iter().find(|layer| layer.id == id)
+    }
+
+    /// Una imagen de 1 × 1 con el modo y la paleta del lienzo: de ahí salen el modo y la paleta
+    /// cuando la celda que se mira está vacía. No es ninguna celda (`image(id)` nunca la
+    /// devuelve) y sus píxeles no significan nada.
+    pub fn canvas_image(&self) -> &Image {
+        &self.canvas.template
     }
 
     /// Ancho del lienzo, y de toda celda.
