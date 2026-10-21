@@ -17,6 +17,7 @@
 use egui::Context;
 use proptest::prelude::*;
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, enabled, is_blocked};
+use px_ui::help::HelpTarget;
 use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::menu::{MENUS, Menu, MenuItem, Shortcut, shortcut_for, shortcut_text};
 use px_ui::text::{INTERFACE_CHARSET, install_fonts, printable, replace_missing};
@@ -106,7 +107,17 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
                 ("1:1", AppAction::ZoomActual),
             ],
         ),
-        ("Ayuda", vec![("Licencias", AppAction::ShowLicenses)]),
+        (
+            "Ayuda",
+            vec![
+                (
+                    "Ayuda de la herramienta",
+                    AppAction::ShowHelp(HelpTarget::Active),
+                ),
+                ("Atajos de teclado…", AppAction::ShowShortcuts),
+                ("Licencias", AppAction::ShowLicenses),
+            ],
+        ),
     ];
     for (menu, (titulo, items)) in MENUS.iter().zip(esperado) {
         assert_eq!(menu.title, titulo);

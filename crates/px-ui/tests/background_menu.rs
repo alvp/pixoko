@@ -36,6 +36,7 @@ use px_ui::actions::{
 };
 use px_ui::background::{CanvasBackground, background_value_text};
 use px_ui::canvas::BACKGROUND;
+use px_ui::help::HelpTarget;
 use px_ui::menu::{
     MENUS, Menu, MenuItem, Submenu, background_checked, shortcut_for, shortcut_text, show_menu,
     show_menu_with_background, submenu_width_u,
@@ -238,7 +239,14 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
     );
     assert_eq!(
         rotulos_y_acciones(el_menu("Ayuda").items),
-        [("Licencias", AppAction::ShowLicenses)]
+        [
+            (
+                "Ayuda de la herramienta",
+                AppAction::ShowHelp(HelpTarget::Active)
+            ),
+            ("Atajos de teclado…", AppAction::ShowShortcuts),
+            ("Licencias", AppAction::ShowLicenses),
+        ]
     );
 }
 

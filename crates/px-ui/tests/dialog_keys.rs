@@ -954,6 +954,9 @@ fn orden_esperado(d: &Dialog) -> Vec<FocusTarget> {
             }
             FieldKind::Check { .. } | FieldKind::Hex { .. } => v.push(FocusTarget::Field(f.id)),
             FieldKind::ReadOnly { .. } => v.push(FocusTarget::Zone(f.id)),
+            FieldKind::Button { .. } => {
+                unreachable!("los formularios aleatorios no llevan botones")
+            }
         }
     }
     if d.is_valid() {
