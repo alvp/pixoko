@@ -104,7 +104,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::ShowHelp(target) => Dispatched::Help(target),
         AppAction::ShowShortcuts => Dispatched::Shortcuts,
         AppAction::SelectTool(tool) => {
-            let image = session.document.image(session.document.main_image());
+            let image = Some(session.document.canvas_image());
             Dispatched::Done {
                 refresh: false,
                 notice: select_tool(tools, ToolAction::Select(tool), false, image),
@@ -135,8 +135,8 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         },
         AppAction::CenterOnCursor => Dispatched::View(ViewOp::CenterOnCursor),
         AppAction::SelectColor(slot) => {
-            let image = session.document.image(session.document.main_image());
-            if let Some(choice) = image.and_then(|image| key_choice(image, slot)) {
+            let image = session.document.canvas_image();
+            if let Some(choice) = key_choice(image, slot) {
                 session.set_choice_revealing(choice);
             }
             done(false)

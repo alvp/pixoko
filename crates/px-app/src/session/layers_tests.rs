@@ -519,6 +519,41 @@ fn fila_10_convertir_el_modo_con_varias_capas_se_rechaza_con_un_aviso_claro() {
     );
 }
 
+#[test]
+fn fila_10_las_cifras_y_las_herramientas_funcionan_con_la_celda_activa_vacia() {
+    use crate::dispatch::{Dispatched, Targets, dispatch};
+    use px_ui::actions::{AppAction, Locks, Origin};
+    fn despacha(sesion: &mut Session, tools: &mut ToolState, accion: AppAction) -> Dispatched {
+        dispatch(
+            accion,
+            Origin::Key,
+            &mut Targets {
+                session: sesion,
+                tools,
+                locks: Locks::default(),
+            },
+        )
+    }
+    let mut sesion = Session::sample(Document::new(indexada_de(6, 4, 1)));
+    anade(&mut sesion, "B");
+    let capa_b = sesion.document.layers()[1].id();
+    sesion.set_active_layer(capa_b).expect("existe");
+    assert!(sesion.document.image(sesion.active_cel()).is_none());
+    let mut tools = ToolState::new();
+    // La cifra 3 elige la entrada 2 aunque la celda activa no tenga imagen.
+    let hecho = despacha(&mut sesion, &mut tools, AppAction::SelectColor(3));
+    assert!(matches!(hecho, Dispatched::Done { .. }));
+    assert_eq!(sesion.choice, ColorChoice::Entry(2));
+    // El borrador se elige y su aviso sale del lienzo (la paleta tiene índice transparente).
+    let Dispatched::Done { notice, .. } =
+        despacha(&mut sesion, &mut tools, AppAction::SelectTool(Tool::Eraser))
+    else {
+        panic!("se despacha");
+    };
+    assert_eq!(notice, None);
+    assert_eq!(tools.tool(), Tool::Eraser);
+}
+
 // ---------------------------------------------------------------------------------------------
 // Fila 11: el guardado aplanado
 // ---------------------------------------------------------------------------------------------
