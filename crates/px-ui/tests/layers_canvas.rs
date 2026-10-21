@@ -21,7 +21,7 @@ use px_core::{
 use px_raster::compose;
 use px_ui::canvas::Canvas;
 use px_ui::dirty::{BlockSet, ChangeLog, dirty_of};
-use px_ui::source::{DocSource, overlay_pixels};
+use px_ui::source::{DocSource, OverlayCache, overlay_pixels};
 use px_ui::view::{Size, ViewOp};
 
 mod common;
@@ -610,6 +610,170 @@ proptest! {
                 prop_assert_eq!(subidos, esperado, "paso {}: solo los bloques anotados", n);
             }
             prop_assert_eq!(banco.discrepancias(), vec![], "paso {}", n);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// El caché de la superposición no cambia lo que se ve
+// ---------------------------------------------------------------------------------------------
+
+/// Lo que ocurre en un fotograma además de pintar la superposición.
+#[derive(Clone, Copy, Debug)]
+enum Accion {
+    Nada,
+    Deshacer,
+    Rehacer,
+    /// Soltar el trazo: se aplica y la superposición se descarta.
+    Soltar,
+}
+
+/// Un fotograma de la app: la acción sobre el documento, los colores del trazo pendiente (con o
+/// sin caché) y `set_overlay`; vacío es descartar la superposición.
+fn fotograma(
+    banco: &mut Banco,
+    cache: Option<&mut OverlayCache>,
+    activa: ImageId,
+    pendiente: &[PixelEdit],
+    accion: Accion,
+) {
+    banco.corre(|ctx, canvas, doc, log| {
+        match accion {
+            Accion::Nada => {}
+            Accion::Deshacer => {
+                let desde = doc.state_id();
+                if doc.undo().is_ok() {
+                    let region = log
+                        .get(desde)
+                        .cloned()
+                        .unwrap_or_else(|| BlockSet::full(doc.width(), doc.height()));
+                    canvas.invalidate(&region);
+                }
+            }
+            Accion::Rehacer => {
+                if doc.redo().is_ok() {
+                    let region = log
+                        .get(doc.state_id())
+                        .cloned()
+                        .unwrap_or_else(|| BlockSet::full(doc.width(), doc.height()));
+                    canvas.invalidate(&region);
+                }
+            }
+            Accion::Soltar => {
+                let comando = Command::SetPixels {
+                    image: activa,
+                    pixels: pendiente.to_vec(),
+                };
+                let region = dirty_of(&comando, Size::new(doc.width(), doc.height()));
+                if let Ok(true) = doc.apply(comando) {
+                    log.record(doc.state_id(), region.clone());
+                    canvas.invalidate(&region);
+                }
+            }
+        }
+        let pendiente = if matches!(accion, Accion::Soltar) {
+            &[][..]
+        } else {
+            pendiente
+        };
+        let colores = match cache {
+            Some(cache) => cache
+                .colors(doc, activa, pendiente.iter().copied())
+                .to_vec(),
+            None => overlay_pixels(doc, activa, pendiente.iter().copied()),
+        };
+        canvas.set_overlay(ctx, &DocSource(doc), &colores);
+    });
+}
+
+type PasoDeTrazo = (u8, u32, u32, u32, u32);
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// Con y sin `OverlayCache`, sobre trazos aleatorios (que crecen, que cambian de forma como la
+    /// goma elástica de la línea, que se sueltan, que se cancelan con `Esc`), con deshacer y
+    /// rehacer a mitad de trazo, cambio de zoom y cambio de capa activa, las texturas son
+    /// idénticas píxel a píxel después de cada fotograma.
+    #[test]
+    fn el_cache_de_la_superposicion_no_cambia_lo_que_se_ve(
+        (modo, capas, _) in semillas(),
+        pasos in prop::collection::vec((0u8..9, any::<u32>(), any::<u32>(), any::<u32>(), any::<u32>()), 1..14),
+    ) {
+        let modo = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(modo)];
+        let mut doc = Document::new(imagen_de(modo, ANCHO, ALTO, 6));
+        for (i, &(contenido, opacidad, mezcla, visible)) in capas.iter().enumerate() {
+            let at = doc.layers().len();
+            if doc.apply(Command::AddLayer { name: format!("C{i}"), at }).is_err() {
+                continue;
+            }
+            let id = doc.layers()[at].id();
+            let celda = doc.layers()[at].cel();
+            if contenido != 0 {
+                let _ = doc.apply(Command::SetPixels {
+                    image: celda,
+                    pixels: (0..30)
+                        .map(|j| PixelEdit {
+                            x: (j * 13 + u32::from(contenido)) % ANCHO,
+                            y: (j * 7) % ALTO,
+                            pixel: pixel_de(modo, j + u32::from(opacidad), 8),
+                        })
+                        .collect(),
+                });
+            }
+            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 128, 200, 254, 1, 77, 255][usize::from(opacidad)] });
+            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(mezcla) * 3 % 8] });
+            let _ = doc.apply(Command::SetLayerVisible { layer: id, visible: visible != 0 });
+        }
+        let mut con = Banco::nuevo(doc.clone());
+        let mut sin = Banco::nuevo(doc);
+        let mut cache = OverlayCache::default();
+        let mut pendiente: Vec<PixelEdit> = Vec::new();
+        let mut activa = con.doc.layers()[0].cel();
+        let generar = |n: u32, a: u32, b: u32, c: u32| -> Vec<PixelEdit> {
+            (0..n)
+                .map(|j| PixelEdit {
+                    x: a.wrapping_add(j.wrapping_mul(11)) % ANCHO,
+                    y: b.wrapping_add(j.wrapping_mul(5)) % ALTO,
+                    pixel: pixel_de(modo, c.wrapping_add(j), 8),
+                })
+                .collect()
+        };
+        for (n, &(tipo, a, b, c, d)) in pasos.iter().enumerate() {
+            let paso: PasoDeTrazo = (tipo, a, b, c, d);
+            let mut accion = Accion::Nada;
+            match paso.0 {
+                // El trazo crece (el lápiz y el borrador).
+                0..=2 => pendiente.extend(generar(1 + a % 40, b, c, d)),
+                // Cambia de forma (la goma elástica de la línea).
+                3 => pendiente = generar(1 + a % 60, b, c, d),
+                // Esc: se cancela.
+                4 => pendiente.clear(),
+                5 => accion = Accion::Deshacer,
+                6 => accion = Accion::Rehacer,
+                7 => {
+                    let capas = con.doc.layers().len();
+                    activa = con.doc.layers()[a as usize % capas].cel();
+                }
+                _ => {
+                    if !pendiente.is_empty() {
+                        accion = Accion::Soltar;
+                    }
+                }
+            }
+            // El zoom cambia entre fotogramas en los dos lienzos a la vez.
+            if b % 5 == 0 {
+                let operacion = if b % 2 == 0 { ViewOp::ZoomIn } else { ViewOp::ZoomOut };
+                con.canvas.request_view(operacion);
+                sin.canvas.request_view(operacion);
+            }
+            fotograma(&mut con, Some(&mut cache), activa, &pendiente, accion);
+            fotograma(&mut sin, None, activa, &pendiente, accion);
+            if matches!(accion, Accion::Soltar) {
+                pendiente.clear();
+            }
+            prop_assert_eq!(con.doc.state_id(), sin.doc.state_id());
+            prop_assert!(con.contenidos() == sin.contenidos(), "paso {} ({:?}): las texturas difieren", n, accion);
         }
     }
 }
