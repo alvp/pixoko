@@ -7,8 +7,8 @@ use std::mem::size_of;
 
 use crate::palette_edit::{self, PaletteStep};
 use crate::{
-    Allowed, Conversion, ConvertError, Image, ImageError, Mode, PaletteEditError, Pixel, Rgba,
-    convert_image,
+    Allowed, Conversion, ConvertError, Image, ImageError, Mode, Palette, PaletteEditError, Pixel,
+    Rgba, convert_image,
 };
 
 /// Identificador de una imagen dentro de un documento. Solo `Document` reparte ids válidos.
@@ -29,6 +29,16 @@ impl ImageId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LayerId(u32);
 
+impl LayerId {
+    pub fn from_raw(raw: u32) -> LayerId {
+        LayerId(raw)
+    }
+
+    pub fn raw(self) -> u32 {
+        self.0
+    }
+}
+
 /// Una capa: sus propiedades y su celda, que es la imagen `image` (`None` = celda vacía, sin
 /// píxeles reservados; vale transparente). `cel` es el `ImageId` de la celda y existe desde que
 /// se crea la capa.
@@ -40,6 +50,35 @@ pub struct Layer {
     opacity: u8,
     cel: ImageId,
     image: Option<Image>,
+}
+
+impl Layer {
+    pub fn id(&self) -> LayerId {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn visible(&self) -> bool {
+        self.visible
+    }
+
+    /// Opacidad de 0 (transparente) a 255 (opaca). En indexado siempre es 255.
+    pub fn opacity(&self) -> u8 {
+        self.opacity
+    }
+
+    /// El `ImageId` de la celda de la capa; su imagen se pide con `Document::image`.
+    pub fn cel(&self) -> ImageId {
+        self.cel
+    }
+
+    /// Bytes de píxeles de la celda si tiene imagen, y 0 si está vacía.
+    fn content_bytes(&self) -> usize {
+        self.image.as_ref().map_or(0, Image::content_bytes)
+    }
 }
 
 /// Id reservado de la plantilla del lienzo; ninguna celda lo recibe nunca.
@@ -104,6 +143,11 @@ pub enum Command {
         target: Mode,
         allowed: Allowed,
     },
+    /// Añade una capa visible, de opacidad 255 y con la celda vacía en la posición `at`
+    /// (`0..=capas`; 0 es el fondo y `capas`, encima de todas). Solo como comando suelto.
+    AddLayer { name: String, at: usize },
+    /// Quita la capa con su celda. No se puede quitar la única. Solo como comando suelto.
+    RemoveLayer { layer: LayerId },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -180,9 +224,44 @@ struct Step {
     swapped: Option<Swapped>,
     /// En un paso de edición de paleta, el paso (que es todo su contenido).
     palette: Option<PaletteStep>,
+    /// En un paso de comando de capa, el paso (que es todo su contenido).
+    layer: Option<LayerStep>,
+    /// Celdas que estaban vacías y este paso materializó: deshacer las vacía y rehacer las
+    /// reserva otra vez.
+    materialized: Vec<ImageId>,
     /// Identificador de estado del otro lado del paso: en la pila de deshacer, el de antes del
     /// paso; en la de rehacer, el de después. `undo` y `redo` lo intercambian con el actual.
     state: u64,
+}
+
+/// Paso de un comando de capa.
+#[derive(Clone, Debug)]
+enum LayerStep {
+    /// Una capa entra en la posición `at` (`added`) o sale de ella; `stored` la guarda mientras
+    /// está fuera del documento.
+    Presence {
+        at: usize,
+        added: bool,
+        stored: Option<Layer>,
+    },
+}
+
+impl LayerStep {
+    /// `true` si deshacerlo (`undoing`) o rehacerlo mete una capa en el documento.
+    fn inserts(&self, undoing: bool) -> bool {
+        match self {
+            LayerStep::Presence { added, .. } => *added != undoing,
+        }
+    }
+
+    fn cost(&self) -> usize {
+        match self {
+            LayerStep::Presence { stored, .. } => stored.as_ref().map_or(0, |layer| {
+                layer.name.capacity().saturating_add(layer.content_bytes())
+            }),
+        }
+        .saturating_add(size_of::<LayerStep>())
+    }
 }
 
 /// Lo que intercambia un paso de conversión de modo.
@@ -205,12 +284,19 @@ impl Step {
             size_of::<Image>().saturating_add(swapped.image.content_bytes())
         });
         let palette = self.palette.as_ref().map_or(0, PaletteStep::cost);
+        let layer = self.layer.as_ref().map_or(0, LayerStep::cost);
+        let materialized = self
+            .materialized
+            .capacity()
+            .saturating_mul(size_of::<ImageId>());
         size_of::<Vec<Change>>()
             .saturating_add(self.changes.capacity().saturating_mul(size_of::<Change>()))
             .saturating_add(self.fills.capacity().saturating_mul(size_of::<FillPart>()))
             .saturating_add(runs)
             .saturating_add(swapped)
             .saturating_add(palette)
+            .saturating_add(layer)
+            .saturating_add(materialized)
     }
 
     /// Ajusta las capacidades al número de elementos; si no se puede reservar, no hace nada.
@@ -220,6 +306,13 @@ impl Step {
             if exact.try_reserve_exact(self.changes.len()).is_ok() {
                 exact.extend_from_slice(&self.changes);
                 self.changes = exact;
+            }
+        }
+        if self.materialized.capacity() != self.materialized.len() {
+            let mut exact = Vec::new();
+            if exact.try_reserve_exact(self.materialized.len()).is_ok() {
+                exact.append(&mut self.materialized);
+                self.materialized = exact;
             }
         }
         if self.fills.capacity() != self.fills.len() {
@@ -249,6 +342,11 @@ pub struct Document {
     current_id: u64,
     /// Siguiente identificador por estrenar; solo crece.
     next_id: u64,
+    /// Siguientes `LayerId` e `ImageId` de celda por repartir; solo crecen (no se reutilizan).
+    next_layer: u32,
+    next_image: u32,
+    /// Tope de `materialized_bytes()`.
+    cells_limit: usize,
 }
 
 impl PartialEq for Document {
@@ -268,6 +366,20 @@ impl Document {
     /// `20 · 3 000 000 = 57,2 MiB`, por debajo de `DEFAULT_HISTORY_LIMIT`. Pasarse es
     /// `FillTooFragmented`, antes de reservar nada.
     pub const MAX_FILL_SPANS: usize = 3_000_000;
+
+    /// Número máximo de capas.
+    pub const MAX_LAYERS: usize = 256;
+
+    /// Longitud máxima del nombre de una capa, en bytes UTF-8.
+    pub const MAX_LAYER_NAME_BYTES: usize = 255;
+
+    /// Tope por defecto de `materialized_bytes()` (2 GiB).
+    pub const DEFAULT_CELLS_LIMIT: usize = 2 << 30;
+
+    /// Umbral del aviso de presupuesto (1 GiB): la interfaz avisa si
+    /// `worst_case_bytes() + cel_bytes()` lo supera antes de añadir una capa. El núcleo no lo
+    /// aplica.
+    pub const MEMORY_WARN_BYTES: usize = 1 << 30;
 
     pub fn new(image: Image) -> Document {
         let template = make_template(&image).unwrap_or_else(|_| image.clone());
@@ -291,6 +403,9 @@ impl Document {
             limit: Document::DEFAULT_HISTORY_LIMIT,
             current_id: 0,
             next_id: 1,
+            next_layer: 1,
+            next_image: 1,
+            cells_limit: Document::DEFAULT_CELLS_LIMIT,
         }
     }
 
@@ -308,6 +423,61 @@ impl Document {
     /// El id de la imagen con la que se creó el documento.
     pub fn main_image(&self) -> ImageId {
         ImageId(0)
+    }
+
+    /// Las capas, de abajo a arriba: la posición 0 es el fondo y la última, la de encima.
+    pub fn layers(&self) -> &[Layer] {
+        &self.layers
+    }
+
+    pub fn layer(&self, id: LayerId) -> Option<&Layer> {
+        self.layers.iter().find(|layer| layer.id == id)
+    }
+
+    /// Ancho del lienzo, y de toda celda.
+    pub fn width(&self) -> u32 {
+        self.canvas.width
+    }
+
+    /// Alto del lienzo, y de toda celda.
+    pub fn height(&self) -> u32 {
+        self.canvas.height
+    }
+
+    /// Modo del lienzo, y de toda celda.
+    pub fn mode(&self) -> Mode {
+        self.canvas.template.mode()
+    }
+
+    /// Paleta del lienzo (`Some` solo en indexado), idéntica a la de toda celda con imagen.
+    pub fn palette(&self) -> Option<&Palette> {
+        self.canvas.template.palette()
+    }
+
+    /// Bytes de píxeles de una celda (sin la paleta).
+    pub fn cel_bytes(&self) -> usize {
+        Image::byte_len(self.canvas.width, self.canvas.height, self.mode()).unwrap_or(usize::MAX)
+    }
+
+    /// Bytes de píxeles de las celdas con imagen. No cuenta la historia.
+    pub fn materialized_bytes(&self) -> usize {
+        self.layers.iter().fold(0usize, |total, layer| {
+            total.saturating_add(layer.content_bytes())
+        })
+    }
+
+    /// Lo que ocuparía el documento con todas las celdas materializadas.
+    pub fn worst_case_bytes(&self) -> usize {
+        self.layers.len().saturating_mul(self.cel_bytes())
+    }
+
+    pub fn cells_limit(&self) -> usize {
+        self.cells_limit
+    }
+
+    /// Cambia el tope de celdas materializadas. No descarta nada: solo impide materializar más.
+    pub fn set_cells_limit(&mut self, bytes: usize) {
+        self.cells_limit = bytes;
     }
 
     /// La imagen de la celda `id`: `None` si no existe o si la celda está vacía.
@@ -346,9 +516,18 @@ impl Document {
         if let Some(id) = palette_edit::command_image(&command) {
             return self.apply_palette(id, &command);
         }
+        match command {
+            Command::AddLayer { name, at } => return self.apply_add_layer(name, at),
+            Command::RemoveLayer { layer } => return self.apply_remove_layer(layer),
+            _ => {}
+        }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
         // justo antes de escribirlo (ver `execute_fill`).
         let (writes, fills) = count_leaves(&command)?;
+        // Las celdas vacías que el comando nombra se materializan antes de ejecutarlo. El límite
+        // y la transparencia se comprueban primero, sin reservar nada.
+        let targets = self.empty_targets(&command)?;
+        self.check_materialize(targets.len())?;
         let mut step = Step::default();
         step.changes
             .try_reserve_exact(writes)
@@ -359,17 +538,132 @@ impl Document {
         self.undo
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
+        let fresh = self.allocate_cels(targets.len())?;
+        self.install_cels(&targets, fresh);
 
         if let Err(error) = self.execute(&command, &mut step) {
             self.revert(&step);
+            self.release_cels(&targets);
             return Err(error);
         }
         if step.changes.is_empty() && step.fills.is_empty() {
+            self.release_cels(&targets);
             return Ok(false);
         }
+        step.materialized = targets;
         step.fit();
         self.commit(step);
         Ok(true)
+    }
+
+    /// `true` si una celda vacía puede escribirse: el modo tiene un valor transparente.
+    fn has_transparency(&self) -> bool {
+        match self.canvas.template.mode() {
+            Mode::Rgba | Mode::GrayAlpha => true,
+            Mode::Indexed => self
+                .canvas
+                .template
+                .palette()
+                .is_some_and(|palette| palette.transparent_index().is_some()),
+            Mode::Gray => false,
+        }
+    }
+
+    fn no_transparency(&self) -> DocumentError {
+        DocumentError::NoTransparency { mode: self.mode() }
+    }
+
+    /// Las celdas vacías que nombran los `SetPixels` y `FillSpans` del comando, sin repetir. Un
+    /// id que no es de ninguna celda se ignora aquí: falla después, con `UnknownImage`.
+    fn empty_targets(&self, command: &Command) -> Result<Vec<ImageId>, DocumentError> {
+        let mut targets: Vec<ImageId> = Vec::new();
+        let leaves = match command {
+            Command::Batch(commands) => commands.as_slice(),
+            leaf => std::slice::from_ref(leaf),
+        };
+        for leaf in leaves {
+            let (Command::SetPixels { image, .. } | Command::FillSpans { image, .. }) = leaf else {
+                continue;
+            };
+            let empty = self
+                .layers
+                .iter()
+                .any(|layer| layer.cel == *image && layer.image.is_none());
+            if empty && !targets.contains(image) {
+                targets
+                    .try_reserve(1)
+                    .map_err(|_| DocumentError::OutOfMemory)?;
+                targets.push(*image);
+            }
+        }
+        Ok(targets)
+    }
+
+    /// Antes de materializar `count` celdas: que haya valor transparente y que quepan bajo el
+    /// límite. Es solo aritmética: no reserva nada y no toca nada.
+    fn check_materialize(&self, count: usize) -> Result<(), DocumentError> {
+        if count == 0 {
+            return Ok(());
+        }
+        if !self.has_transparency() {
+            return Err(self.no_transparency());
+        }
+        let needed = self
+            .materialized_bytes()
+            .saturating_add(self.cel_bytes().saturating_mul(count));
+        if needed > self.cells_limit {
+            return Err(DocumentError::CelsTooLarge {
+                needed,
+                limit: self.cells_limit,
+            });
+        }
+        Ok(())
+    }
+
+    /// Una celda transparente del tamaño y el modo del lienzo.
+    fn blank_cel(&self) -> Result<Image, DocumentError> {
+        let template = &self.canvas.template;
+        let (width, height) = (self.canvas.width, self.canvas.height);
+        let image = match (template.mode(), template.palette()) {
+            (Mode::Indexed, Some(palette)) => {
+                let index = palette
+                    .transparent_index()
+                    .ok_or_else(|| self.no_transparency())?;
+                Image::filled_indexed(width, height, palette.clone(), index)
+            }
+            (Mode::Rgba | Mode::GrayAlpha, _) => Image::new(width, height, template.mode()),
+            _ => return Err(self.no_transparency()),
+        };
+        image.map_err(|_| DocumentError::OutOfMemory)
+    }
+
+    /// Reserva `count` celdas transparentes; `OutOfMemory` si no caben.
+    fn allocate_cels(&self, count: usize) -> Result<Vec<Image>, DocumentError> {
+        let mut cels = Vec::new();
+        cels.try_reserve_exact(count)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        for _ in 0..count {
+            cels.push(self.blank_cel()?);
+        }
+        Ok(cels)
+    }
+
+    /// Pone cada imagen en la celda `ids[i]`. No reserva ni falla.
+    fn install_cels(&mut self, ids: &[ImageId], cels: Vec<Image>) {
+        for (id, image) in ids.iter().zip(cels) {
+            if let Some(layer) = self.layers.iter_mut().find(|layer| layer.cel == *id) {
+                layer.image = Some(image);
+            }
+        }
+    }
+
+    /// Vacía las celdas `ids` (libera su memoria).
+    fn release_cels(&mut self, ids: &[ImageId]) {
+        for id in ids {
+            if let Some(layer) = self.layers.iter_mut().find(|layer| layer.cel == *id) {
+                layer.image = None;
+            }
+        }
     }
 
     /// Anota un paso ya aplicado: nuevo identificador de estado, rehacer borrado, coste en la
@@ -398,6 +692,14 @@ impl Document {
             .mode();
         if mode == target {
             return Ok(false);
+        }
+        if self.layers.len() > 1 {
+            return Err(DocumentError::MultiLayerConvert {
+                layers: self.layers.len(),
+            });
+        }
+        if target == Mode::Indexed && self.layers.iter().any(|layer| layer.opacity != 255) {
+            return Err(DocumentError::IndexedOpacity);
         }
         self.undo
             .try_reserve(1)
@@ -454,6 +756,92 @@ impl Document {
         self.run_palette_step(&step, false);
         self.commit(Step {
             palette: Some(step),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `AddLayer`. Orden de comprobación: nombre, transparencia, número de capas y posición.
+    fn apply_add_layer(&mut self, name: String, at: usize) -> Result<bool, DocumentError> {
+        if name.len() > Document::MAX_LAYER_NAME_BYTES {
+            return Err(DocumentError::LayerName {
+                len: name.len(),
+                limit: Document::MAX_LAYER_NAME_BYTES,
+            });
+        }
+        if !self.has_transparency() {
+            return Err(self.no_transparency());
+        }
+        let too_many = DocumentError::TooManyLayers {
+            limit: Document::MAX_LAYERS,
+        };
+        if self.layers.len() >= Document::MAX_LAYERS {
+            return Err(too_many);
+        }
+        if at > self.layers.len() {
+            return Err(DocumentError::LayerIndex {
+                index: at,
+                max: self.layers.len(),
+            });
+        }
+        // El id `u32::MAX` de las celdas queda reservado (la plantilla del lienzo).
+        let (id, cel) = match (
+            self.next_layer.checked_add(1),
+            self.next_image.checked_add(1),
+        ) {
+            (Some(_), Some(next)) if next < u32::MAX => (self.next_layer, self.next_image),
+            _ => return Err(too_many),
+        };
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        self.layers
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        self.next_layer = id.saturating_add(1);
+        self.next_image = cel.saturating_add(1);
+        self.layers.insert(
+            at,
+            Layer {
+                id: LayerId(id),
+                name,
+                visible: true,
+                opacity: 255,
+                cel: ImageId(cel),
+                image: None,
+            },
+        );
+        self.commit(Step {
+            layer: Some(LayerStep::Presence {
+                at,
+                added: true,
+                stored: None,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `RemoveLayer`: la capa, con su celda, pasa al paso (se mueve, no se copia).
+    fn apply_remove_layer(&mut self, id: LayerId) -> Result<bool, DocumentError> {
+        let at = self
+            .layers
+            .iter()
+            .position(|layer| layer.id == id)
+            .ok_or(DocumentError::UnknownLayer(id))?;
+        if self.layers.len() == 1 {
+            return Err(DocumentError::LastLayer);
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let stored = self.layers.remove(at);
+        self.commit(Step {
+            layer: Some(LayerStep::Presence {
+                at,
+                added: false,
+                stored: Some(stored),
+            }),
             ..Step::default()
         });
         Ok(true)
@@ -516,6 +904,40 @@ impl Document {
         }
     }
 
+    /// Antes de sacar un paso de capa de su pila: si deshacerlo (`undoing`) o rehacerlo mete una
+    /// capa en el documento, hace sitio. Si falla, nada ha cambiado y se puede reintentar.
+    fn reserve_for_layer_step(&mut self, undoing: bool) -> Result<(), DocumentError> {
+        let step = if undoing {
+            self.undo.back()
+        } else {
+            self.redo.last()
+        };
+        let inserts = step
+            .and_then(|step| step.layer.as_ref())
+            .is_some_and(|layer| layer.inserts(undoing));
+        if inserts {
+            self.layers
+                .try_reserve(1)
+                .map_err(|_| DocumentError::OutOfMemory)?;
+        }
+        Ok(())
+    }
+
+    /// Deshace (`undoing`) o rehace un paso de capa. No reserva ni falla.
+    fn run_layer_step(&mut self, step: &mut LayerStep, undoing: bool) {
+        match step {
+            LayerStep::Presence { at, added, stored } => {
+                if *added != undoing {
+                    if let Some(layer) = stored.take() {
+                        self.layers.insert((*at).min(self.layers.len()), layer);
+                    }
+                } else if *at < self.layers.len() {
+                    *stored = Some(self.layers.remove(*at));
+                }
+            }
+        }
+    }
+
     /// Intercambia la imagen del documento y la plantilla del lienzo con las que guarda el
     /// paso. No reserva ni falla.
     fn swap_image(&mut self, step: &mut Step) {
@@ -535,6 +957,7 @@ impl Document {
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
         self.reserve_for_palette_step(true)?;
+        self.reserve_for_layer_step(true)?;
         let Some(mut step) = self.undo.pop_back() else {
             return Err(DocumentError::NothingToUndo);
         };
@@ -543,8 +966,11 @@ impl Document {
             self.swap_image(&mut step);
         } else if let Some(palette) = step.palette.as_ref() {
             self.run_palette_step(palette, true);
+        } else if let Some(layer) = step.layer.as_mut() {
+            self.run_layer_step(layer, true);
         } else {
             self.revert(&step);
+            self.release_cels(&step.materialized);
         }
         std::mem::swap(&mut step.state, &mut self.current_id);
         self.redo.push(step);
@@ -559,6 +985,15 @@ impl Document {
             .try_reserve(1)
             .map_err(|_| DocumentError::OutOfMemory)?;
         self.reserve_for_palette_step(false)?;
+        self.reserve_for_layer_step(false)?;
+        // Si el paso materializó celdas, hay que reservarlas de nuevo antes de tocar nada.
+        let fresh = match self.redo.last() {
+            Some(step) if !step.materialized.is_empty() => {
+                self.check_materialize(step.materialized.len())?;
+                self.allocate_cels(step.materialized.len())?
+            }
+            _ => Vec::new(),
+        };
         let Some(mut step) = self.redo.pop() else {
             return Err(DocumentError::NothingToRedo);
         };
@@ -566,7 +1001,10 @@ impl Document {
             self.swap_image(&mut step);
         } else if let Some(palette) = step.palette.as_ref() {
             self.run_palette_step(palette, false);
+        } else if let Some(layer) = step.layer.as_mut() {
+            self.run_layer_step(layer, false);
         } else {
+            self.install_cels(&step.materialized, fresh);
             self.replay(&step);
         }
         std::mem::swap(&mut step.state, &mut self.current_id);
@@ -636,11 +1074,8 @@ impl Document {
                 spans,
                 pixel,
             } => self.execute_fill(*image, spans, *pixel, step),
-            Command::ConvertMode { .. } => Err(DocumentError::NotBatchable),
-            command if palette_edit::command_image(command).is_some() => {
-                Err(DocumentError::NotBatchable)
-            }
-            _ => Err(DocumentError::NestedBatch),
+            Command::Batch(_) => Err(DocumentError::NestedBatch),
+            _ => Err(DocumentError::NotBatchable),
         }
     }
 
@@ -918,8 +1353,43 @@ pub enum DocumentError {
         index: usize,
         source: Box<DocumentError>,
     },
-    /// `ConvertMode` o un comando de paleta dentro de un `Batch`.
+    /// `ConvertMode`, un comando de paleta o un comando de capa dentro de un `Batch`.
     NotBatchable,
+    /// El documento no tiene esa capa.
+    UnknownLayer(LayerId),
+    /// Posición de capa fuera de rango; `max` es la mayor válida.
+    LayerIndex {
+        index: usize,
+        max: usize,
+    },
+    /// `RemoveLayer` de la única capa.
+    LastLayer,
+    /// Ya hay `Document::MAX_LAYERS` capas (o se agotaron los ids).
+    TooManyLayers {
+        limit: usize,
+    },
+    /// Nombre de capa de más de `Document::MAX_LAYER_NAME_BYTES` bytes.
+    LayerName {
+        len: usize,
+        limit: usize,
+    },
+    /// El modo (o el indexado sin índice transparente) no tiene valor transparente: no se puede
+    /// añadir una capa ni escribir en una celda vacía.
+    NoTransparency {
+        mode: Mode,
+    },
+    /// Opacidad distinta de 255 en indexado.
+    IndexedOpacity,
+    /// `ConvertMode` con más de una capa.
+    MultiLayerConvert {
+        layers: usize,
+    },
+    /// Materializar la celda superaría `Document::cells_limit`; `needed` es lo que habría
+    /// materializado.
+    CelsTooLarge {
+        needed: usize,
+        limit: usize,
+    },
     /// Falló un comando de edición de la paleta.
     PaletteEdit(PaletteEditError),
     /// La conversión de modo de `ConvertMode` falló.
@@ -962,6 +1432,38 @@ impl fmt::Display for DocumentError {
             DocumentError::NotBatchable => write!(
                 f,
                 "la conversión de modo y la edición de la paleta no pueden ir dentro de un Batch"
+            ),
+            DocumentError::UnknownLayer(id) => {
+                write!(f, "el documento no tiene la capa {}", id.raw())
+            }
+            DocumentError::LayerIndex { index, max } => {
+                write!(
+                    f,
+                    "la posición {index} de capa no existe (la mayor es {max})"
+                )
+            }
+            DocumentError::LastLayer => write!(f, "no se puede quitar la única capa"),
+            DocumentError::TooManyLayers { limit } => {
+                write!(f, "no caben más capas (el máximo es {limit})")
+            }
+            DocumentError::LayerName { len, limit } => write!(
+                f,
+                "el nombre de la capa ocupa {len} bytes y el máximo es {limit}"
+            ),
+            DocumentError::NoTransparency { mode } => write!(
+                f,
+                "el modo {mode:?} no tiene un valor transparente para las capas"
+            ),
+            DocumentError::IndexedOpacity => {
+                write!(f, "en indexado la opacidad de las capas es siempre 255")
+            }
+            DocumentError::MultiLayerConvert { layers } => write!(
+                f,
+                "no se puede convertir el modo con {layers} capas (convierte todas a la vez)"
+            ),
+            DocumentError::CelsTooLarge { needed, limit } => write!(
+                f,
+                "las celdas ocuparían {needed} bytes y el límite es {limit}"
             ),
             DocumentError::PaletteEdit(source) => {
                 write!(f, "no se pudo editar la paleta: {source}")
