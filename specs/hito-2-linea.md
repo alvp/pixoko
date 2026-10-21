@@ -39,7 +39,7 @@ Dar en `px-raster` los píxeles de un segmento entre dos puntos, igual en cualqu
 ## Fuera de alcance
 
 - Grosor mayor que 1, pinceles y modo *pixel perfect* (quitar esquinas en L): hito 4.
-- **Comparación con Grafx2 y LibreSprite**: hito 4. Se hará ejecutando los programas y guardando la salida en `golden/`, sin leer su código. En pendientes con empate (como `(0,0)→(2,1)`) es esperable que difieran, porque su regla de desempate puede ser otra; en horizontales, verticales y diagonales deberían coincidir. No hay dorados en esta unidad.
+- **Comparación con Grafx2 y Aseprite** (antes LibreSprite; cambio del 21 de octubre de 2026): hito 4. Se hará ejecutando los programas y guardando la salida en `golden/`, sin leer su código. En pendientes con empate (como `(0,0)→(2,1)`) es esperable que difieran, porque su regla de desempate puede ser otra; en horizontales, verticales y diagonales deberían coincidir. No hay dorados en esta unidad.
 - Recorte contra un rectángulo cualquiera (selecciones): solo el lienzo `0..width × 0..height`.
 - Curvas, rectángulos y elipses; línea con degradado o con patrón.
 - `DoubleEndedIterator`: no se necesita, la simetría se obtiene al construir con los extremos al revés.

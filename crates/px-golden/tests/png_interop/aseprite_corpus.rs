@@ -6,9 +6,8 @@
 //! la cabecera de 128 bytes de la especificación pública (tamaño, magia `0xA5E0`, un fotograma,
 //! dimensiones y profundidad de color) y que sus dimensiones sean las del PNG.
 //!
-//! Si `golden/aseprite/` no existe, el test de la carpeta real avisa y pasa: el corpus lo genera el
-//! usuario con `tools/corpus-h3/generar.sh`. Con la carpeta presente es estricto como el de
-//! `golden/png/` (carpeta vacía = error).
+//! La prueba de la carpeta real es **siempre estricta**: falla si `golden/aseprite/` no existe,
+//! está vacía o no tiene exactamente los 25 casos de `CASOS` (los de la tabla de la spec).
 
 use px_formats::read_png;
 
@@ -17,6 +16,53 @@ use super::{Fichero, bytes_rgba, fichero, hash_bien_formado, lee_carpeta, raiz_d
 
 /// Tope de casos de la spec.
 const MAX_CASOS: usize = 25;
+
+/// Los 25 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generar.sh`).
+const CASOS: [&str; MAX_CASOS] = [
+    "rgba-una-capa",
+    "capas-normal-tres",
+    "capas-opacidad",
+    "capas-alfa-origen",
+    "capas-alfa-fondo",
+    "mezcla-normal",
+    "mezcla-multiplicar",
+    "mezcla-trama",
+    "mezcla-superponer",
+    "mezcla-oscurecer",
+    "mezcla-aclarar",
+    "mezcla-sumar",
+    "mezcla-diferencia",
+    "mezcla-ocho-opacidad",
+    "mezcla-ocho-alfa",
+    "mezcla-ocho-fondo-translucido",
+    "indexado-capas",
+    "indexado-transparente-7",
+    "indexado-paleta-256",
+    "indexado-celdas",
+    "celda-desplazada",
+    "celda-recortada",
+    "celda-vacia",
+    "capas-ocultas",
+    "mixto-rgba",
+];
+
+/// Falta o sobra algún caso respecto de `esperados` (`casos` ordenados).
+fn comparar_con_lista(casos: &[String], esperados: &[&str]) -> Result<(), String> {
+    let faltan: Vec<&str> = esperados
+        .iter()
+        .copied()
+        .filter(|e| !casos.iter().any(|c| c == e))
+        .collect();
+    let sobran: Vec<&String> = casos
+        .iter()
+        .filter(|c| !esperados.contains(&c.as_str()))
+        .collect();
+    if faltan.is_empty() && sobran.is_empty() {
+        Ok(())
+    } else {
+        Err(format!("faltan los casos {faltan:?} y sobran {sobran:?}"))
+    }
+}
 
 /// `a-z`, `0-9` y guiones, sin guiones al principio, al final ni dobles.
 fn nombre_valido(nombre: &str) -> bool {
@@ -291,21 +337,30 @@ fn aseprite_fila_2_cada_defecto_da_error_con_su_mensaje() {
     }
 }
 
-// ---------------------------------------------------------------------------------------
-// Fila 3: la carpeta real.
-// ---------------------------------------------------------------------------------------
-
 #[test]
 fn aseprite_fila_3_cada_aseprite_de_golden_tiene_su_png_y_su_sha256() {
     let dir = raiz_del_repo().join("golden/aseprite");
-    if !dir.is_dir() {
-        eprintln!(
-            "golden/aseprite no existe: corpus pendiente (tools/corpus-h3/generar.sh, specs/corpus-hito-3.md)"
-        );
-        return;
-    }
-    match verificar(&lee_carpeta(&dir)) {
-        Ok(casos) => println!("golden/aseprite: {} casos comprobados", casos.len()),
+    let ficheros = lee_carpeta(&dir); // una carpeta que no existe es una vacía: `verificar` falla
+    match verificar(&ficheros) {
+        Ok(casos) => {
+            if let Err(e) = comparar_con_lista(&casos, &CASOS) {
+                panic!("golden/aseprite no tiene los 25 casos de la spec: {e}");
+            }
+            println!("golden/aseprite: {} casos comprobados", casos.len());
+        }
         Err(e) => panic!("corpus de golden/aseprite con problemas:\n{e}"),
     }
+}
+
+#[test]
+fn aseprite_fila_4_la_lista_exacta_detecta_un_caso_que_falta_o_sobra() {
+    let todos: Vec<String> = CASOS.iter().map(|c| c.to_string()).collect();
+    assert_eq!(comparar_con_lista(&todos, &CASOS), Ok(()));
+    let sin_uno = &todos[1..];
+    let e = comparar_con_lista(sin_uno, &CASOS).unwrap_err();
+    assert!(e.contains("rgba-una-capa"), "{e}");
+    let mut con_uno_mas = todos.clone();
+    con_uno_mas.push("extra".to_string());
+    let e = comparar_con_lista(&con_uno_mas, &CASOS).unwrap_err();
+    assert!(e.contains("extra"), "{e}");
 }

@@ -42,7 +42,7 @@ Calcular en `px-raster` la región de píxeles contiguos que comparte el valor d
 - Conectividad de 8 vecinos y tolerancia de color (hito 4): con 8 vecinos, el barrido de filas vecinas pasa a ser `[x_start − 1, x_end + 1)`; el resto no cambia.
 - Relleno global (todos los píxeles de ese valor, aunque no sean contiguos), con patrón o degradado, o limitado a una selección.
 - La herramienta y su clic en la ventana (unidad 8). Antialiasing o mezcla de alfa: el relleno escribe el `Pixel`, no lo mezcla.
-- Comparar con Grafx2 o LibreSprite: el comportamiento «contiguos y del mismo valor» no tiene casos dudosos, y con tolerancia sí los habrá (hito 4, con dorados).
+- Comparar con Grafx2 o Aseprite (antes LibreSprite): el comportamiento «contiguos y del mismo valor» no tiene casos dudosos, y con tolerancia sí los habrá (hito 4, con dorados).
 
 ## Casos límite
 

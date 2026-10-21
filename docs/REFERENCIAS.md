@@ -23,7 +23,9 @@ Al anotar una captura en `golden/`, se cita la versión del paquete (`pacman -Q`
 
 ## Cómo se ejecutan
 
-### LibreSprite
+### LibreSprite (retirado como oráculo el 21 de octubre de 2026)
+
+Ya no se usa como referencia de ninguna unidad (la sustituye Aseprite, ver más abajo); sigue instalado y su código sigue vetado. Sus dos PNG del hito 1 siguen en `golden/png/`. Lo que sigue es el registro de lo que se observó:
 
 Tiene modo por línea de comandos sin interfaz (`-b` / `--batch`), que es el que sirve para generar capturas reproducibles. Lista completa de opciones: `libresprite --help`.
 
@@ -56,9 +58,11 @@ grafx2 imagen.png
 
 Cualquier captura de su comportamiento exige sesión gráfica y se hace a mano (acciones en la interfaz → fichero guardado → `golden/`). No hay `xvfb-run` instalado, así que no se puede lanzar sin pantalla.
 
-## Aseprite (hito 3)
+## Aseprite (hitos 3 a 5)
 
-Desde el 21 de octubre de 2026 es la **única referencia del hito 3** (capas, alfa y mezcla): genera los `.aseprite` del corpus con scripts de Lua propios y exporta sus PNG aplanados por lotes (`aseprite -b`). No es GPL (licencia propia del programa), así que valen las mismas reglas de caja negra: no se abre ni se lee su código ni su documentación, y el hook de `.claude/hooks/guard.sh` lo bloquea; solo la especificación pública del formato `.aseprite`. Los scripts van en `tools/corpus-h3/` (MIT), los resultados en `golden/aseprite/` con su README (versión y fecha de la ejecución) y la lista en `specs/corpus-hito-3.md`. LibreSprite sigue instalado para los hitos 4 y 5 hasta que se decida otra cosa.
+Desde el 21 de octubre de 2026 es la **única referencia automática** de los hitos 3 a 5: capas, alfa y mezcla (hito 3); formas, relleno y cuantización de colores (hito 4); GIF y hojas de sprites (hito 5). Genera los `.aseprite` del corpus con scripts de Lua propios y exporta sus PNG (y, más adelante, GIF y hojas) por lotes con `aseprite -b`. No es GPL (licencia propia del programa), así que valen las mismas reglas de caja negra: no se abre ni se lee su código ni su documentación, y `.claude/hooks/guard.sh` lo bloquea; solo la especificación pública del formato `.aseprite`. Los scripts van en `tools/` (MIT; `tools/corpus-h3/` para el hito 3), los resultados en `golden/aseprite/` con su README (versión y fecha de la ejecución) y la lista en `specs/corpus-hito-N.md`.
+
+Regla: la spec de cada unidad confirma que Aseprite tiene la función antes de usarlo como oráculo; si no la tiene, se anota y se decide. Grafx2 se mantiene como referencia manual donde el mapa ya la usa por algo propio, y DPaint V (emulador) en el hito 7.
 
 ## Pendiente
 

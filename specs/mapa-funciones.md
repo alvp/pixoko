@@ -8,7 +8,7 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 - *Hoy*: `sí` (ya existe), `parcial`, `no`, `—` (no aplica).
 - *Hito*: 3 a 8 con la unidad entre paréntesis, o `descartada`.
 - *Riesgo*: `bajo`, `medio`, `alto`, con el motivo.
-- *Corpus*: `—` sin corpus ajeno (propiedades y casos propios); `AS` Aseprite por lotes (hito 3; `aseprite -b` con scripts de Lua propios de `tools/corpus-h3/`, que escriben los `.aseprite` y exportan los PNG aplanados; el usuario los ejecuta y se commitean en `golden/aseprite/`; el CI no los ejecuta); `LS` LibreSprite por lotes (`libresprite -b`; PNG de referencia del hito 4 y del 5 generados por el usuario con un script por lotes y commiteados; el CI no lo ejecuta; **pendiente de decidir si también pasan a Aseprite**); `G2` Grafx2 (solo interfaz gráfica: sesión manual del usuario que guarda ficheros); `DP` DPaint V en emulador (sesión manual y conversión a PNG fuera del repositorio). Un corpus es siempre un fichero guardado por el programa, nunca una captura de pantalla.
+- *Corpus*: `—` sin corpus ajeno (propiedades y casos propios); `AS` Aseprite por lotes (**única referencia automática de los hitos 3 a 5**; `aseprite -b` con scripts de Lua propios de `tools/`, que crean los casos, guardan los `.aseprite` y exportan PNG, GIF u hojas; el usuario los ejecuta, los resultados se commitean en `golden/aseprite/` y el CI no los ejecuta; **cada unidad confirma en su spec que Aseprite tiene la función antes de usarlo como oráculo; si no la tiene, se anota y se decide**); `G2` Grafx2 (solo interfaz gráfica: sesión manual del usuario que guarda ficheros); `DP` DPaint V en emulador (sesión manual y conversión a PNG fuera del repositorio). Un corpus es siempre un fichero guardado por el programa, nunca una captura de pantalla.
 - *Clase de unidad*: **núcleo** (sin ella no sale la primera versión pública, la del hito 8), **deseable** (entra si el plazo lo permite y no bloquea nada de lo núcleo) y **opcional** (la primera versión sale sin ella). Si una unidad núcleo dependiera de una deseable u opcional, la spec de la núcleo lo declara y se parte.
 - *Decisiones*: `D01`…`D30`, en la sección 8.
 
@@ -17,8 +17,8 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 | Hito | Unidades | Núcleo · deseable · opcional | Toca `px-core` o `px-raster` (solo con los cambios exactos que liste la spec, D02) | Dependencias nuevas posibles | Corpus |
 | --- | --- | --- | --- | --- | --- |
 | 3 · Capas, alfa y referencias | 10 (3.0 a 3.9) | 7 · 3 · 0 | 3.1 y 3.2 (no aditivas), 3.5 a 3.7 (comandos nuevos) | `miniz_oxide` directa para `.aseprite` (D10; ya está en el árbol) | `AS` por lotes (`specs/corpus-hito-3.md`) |
-| 4 · Herramientas de pixel art | 14 (4.1 a 4.14) | 8 · 4 · 2 | 4.1, 4.2, 4.5, 4.6, 4.7 si D17 lo pide | fuente (4.13, solo si falta rasterizador) | `G2` y `DP` manuales (lista única); `LS` en cuantizador y formas |
-| 5 · Animación | 14 (5.0 a 5.13) | 9 · 2 · 3 | 5.0 | `gif` (D25) | `LS` por lotes (GIF, hojas) |
+| 4 · Herramientas de pixel art | 14 (4.1 a 4.14) | 8 · 4 · 2 | 4.1, 4.2, 4.5, 4.6, 4.7 si D17 lo pide | fuente (4.13, solo si falta rasterizador) | `AS` en formas, relleno y cuantizador; `G2` y `DP` manuales (lista única) |
+| 5 · Animación | 14 (5.0 a 5.13) | 9 · 2 · 3 | 5.0 | `gif` (D25) | `AS` por lotes (GIF, hojas) |
 | 6 · Más formatos | 5 (6.1 a 6.5) | 0 · 3 · 2 | ninguna | posible `zip` | ficheros ajenos |
 | 7 · Estilo DPaint (opcional) | 8 (7.1 a 7.8) | 0 · 0 · 8 | 7.1 y 7.2 probables | ninguna | `DP` |
 | 8 · Automatización y lanzamiento | 10 (8.1 a 8.10) | 3 · 4 · 3 | 8.7 | scripting, portapapeles, i18n | — |
@@ -30,7 +30,7 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 
 **Aprobación de `px-core` y `px-raster` (D02).** El visto bueno a la spec de una unidad marcada vale como aprobación expresa **solo para los cambios exactos que la spec liste**; si durante la unidad hace falta algo más, se para y se pregunta. Las specs de 3.1 y 3.2 (modelo de capas) lo dicen de entrada: **no son aditivas**, y proponen el plan de migración (qué firmas y pruebas cambian, en qué commits y con qué orden).
 
-**Lista única de casos manuales por hito.** Al empezar cada hito (3, 4, 5 y, cuando toque, 7), antes de la primera unidad y sin contar como unidad, se escribe `specs/corpus-hito-N.md` con **todos** los casos que van a necesitar corpus ajeno, agrupados por programa y por secuencia de trabajo para que el usuario los genere de una sentada: identificador, nombre exacto del fichero (`golden/<programa>/h<N>-<id>.png`), procedimiento paso a paso y unidad que lo consume. Las specs de unidad citan los casos por identificador y no piden sesiones sueltas. Con `AS` y `LS` el procedimiento es el guion por lotes que ejecuta el usuario; con `G2` y `DP`, pasos de interfaz y un fichero guardado por caso.
+**Lista única de casos manuales por hito.** Al empezar cada hito (3, 4, 5 y, cuando toque, 7), antes de la primera unidad y sin contar como unidad, se escribe `specs/corpus-hito-N.md` con **todos** los casos que van a necesitar corpus ajeno, agrupados por programa y por secuencia de trabajo para que el usuario los genere de una sentada: identificador, nombre exacto del fichero (`golden/<programa>/h<N>-<id>.png`), procedimiento paso a paso y unidad que lo consume. Las specs de unidad citan los casos por identificador y no piden sesiones sueltas. Con `AS` el procedimiento es el guion por lotes que ejecuta el usuario; con `G2` y `DP`, pasos de interfaz y un fichero guardado por caso.
 
 ## 2. Mapa de funciones
 
@@ -38,11 +38,11 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 
 | ID | Función (original) | Qué hace | Hoy | Hito | Depende de | Riesgo | Corpus |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T01 | Pinceles integrados | Diez formas fijas (redondas y cuadradas) con tamaño de 1 a 100 px; el tamaño se cambia arrastrando y con teclas | no (solo 1 px) | 4 (4.3) | 3.3 | medio: la forma exacta de los redondos pequeños es una decisión nuestra | `LS` `G2` |
+| T01 | Pinceles integrados | Diez formas fijas (redondas y cuadradas) con tamaño de 1 a 100 px; el tamaño se cambia arrastrando y con teclas | no (solo 1 px) | 4 (4.3) | 3.3 | medio: la forma exacta de los redondos pequeños es una decisión nuestra | `AS` `G2` |
 | T02 | Mano alzada punteada (`s`) | Estampa el pincel en cada muestra del ratón sin unirlas; si se mueve rápido quedan huecos | no | 4 (4.3) | T01 | medio: depende del muestreo; se prueba con trazas de eventos grabadas | — |
-| T03 | Mano alzada continua (`d`) | Une las muestras con segmentos hechos con el pincel | parcial (lápiz de 1 px) | 4 (4.3) | T01 | bajo | `LS` |
-| T04 | Forma libre rellena (`D`) | Al soltar cierra el trazo con una recta y rellena el interior con el tipo de relleno activo | no | 4 (4.4) | T26, T10 | medio: regla de interior (par-impar) y borde | `LS` `G2` |
-| T05 | Línea (`v`) | Segmento con el grosor del pincel | parcial (1 px) | 4 (4.3) | T01 | bajo | `LS` `G2` |
+| T03 | Mano alzada continua (`d`) | Une las muestras con segmentos hechos con el pincel | parcial (lápiz de 1 px) | 4 (4.3) | T01 | bajo | `AS` |
+| T04 | Forma libre rellena (`D`) | Al soltar cierra el trazo con una recta y rellena el interior con el tipo de relleno activo | no | 4 (4.4) | T26, T10 | medio: regla de interior (par-impar) y borde | `AS` `G2` |
+| T05 | Línea (`v`) | Segmento con el grosor del pincel | parcial (1 px) | 4 (4.3) | T01 | bajo | `AS` `G2` |
 | T06 | Espaciado (requisito de la línea y de las formas sin relleno) | Elige cómo se reparten los sellos: continuo, uno cada N píxeles o N sellos en total | no | 4 (4.3) | T05 | medio: «N en total» sobre curvas y formas cerradas | — |
 | T07 | Trazas (`Ctrl` al arrastrar) | Deja pintada cada posición intermedia de la figura mientras se arrastra | no | 4 (4.3) | T05 | bajo: un solo paso de deshacer por gesto | — |
 | T08 | Restringir a un eje (`Mayús`) | Fuerza horizontal o vertical según el primer movimiento tras pulsar | no | 4 (4.3) | T05 | bajo | — |
@@ -54,16 +54,16 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 | T14 | Relleno envolvente | El pincel adaptado a la forma horizontal y vertical de la zona, como si se envolviera un sólido | no | 7 (7.6) | T13 | alto: deformación sin definición clara | `DP` |
 | T15 | Relleno en perspectiva | Mosaico del pincel proyectado en un plano 3D | no | 7 (7.2) | E03 | alto | `DP` |
 | T16 | Relleno de modo Halfbrite | Oscurece o aclara con la mitad de intensidad (solo modo de pantalla del Amiga) | — | descartada | — | — | — |
-| T17 | Degradados clásicos: horizontal, vertical y por línea | Reparten un rango de colores en esa dirección; el de «por línea» ajusta cada fila al contorno | no | 4 (4.7) | C16 | medio | `G2` `LS` |
+| T17 | Degradados clásicos: horizontal, vertical y por línea | Reparten un rango de colores en esa dirección; el de «por línea» ajusta cada fila al contorno | no | 4 (4.7) | C16 | medio | `G2` `AS` |
 | T18 | Degradado direccional recto y ajustado a la forma | La dirección se indica con una línea desde el centro; el ajustado sigue los contornos de la figura | no | 4 (4.7) | T17 | alto: definición propia de «seguir la forma» | `DP` |
 | T19 | Degradado radial: circular, contornos y luz | Irradia desde el punto elegido; contornos y luz tienen en cuenta la forma y se parecen entre sí | no | 4 (4.7) | T18 | alto: distancia al borde, sin definición en el manual | `DP` |
-| T20 | Tramado del degradado: aleatorio, de patrón y suave | Mezcla colores vecinos para reducir saltos; el aleatorio se controla con un deslizador y el suave es difusión de error | no | 4 (4.7) y 4.2 | C16 | medio: semilla fija para que sea reproducible | `LS` `G2` |
+| T20 | Tramado del degradado: aleatorio, de patrón y suave | Mezcla colores vecinos para reducir saltos; el aleatorio se controla con un deslizador y el suave es difusión de error | no | 4 (4.7) y 4.2 | C16 | medio: semilla fija para que sea reproducible | `AS` `G2` |
 | T21 | Relleno animado (`Alt`+clic) | Rellena en cada fotograma desde el mismo punto | no | 5 (5.9) | T10, 5.0 | medio: sin `Alt`; botón y tecla de alternancia en el panel de animación (D03, D24) | — |
 | T22 | Aerógrafo | Rocía el pincel: estilo aleatorio y estilo estándar que acumula opacidad; radio y caudal de 1 a 100; el estándar solo con pinceles redondos | no | 4 (4.11) | T01, M12 | medio: aleatoriedad con semilla por trazo; en indexado depende del contraste de la paleta | — |
-| T23 | Rectángulo (`r`, `R`) | Contorno con el pincel o relleno según el tipo activo; `Mayús` iguala los lados | no | 4 (4.4) | T05 | bajo | `LS` `G2` |
-| T24 | Círculo (`c`, `C`) | Desde el centro arrastrando el radio | no | 4 (4.4) | T05 | medio: algoritmo de píxeles exactos; las referencias pueden discrepar | `LS` `G2` |
+| T23 | Rectángulo (`r`, `R`) | Contorno con el pincel o relleno según el tipo activo; `Mayús` iguala los lados | no | 4 (4.4) | T05 | bajo | `AS` `G2` |
+| T24 | Círculo (`c`, `C`) | Desde el centro arrastrando el radio | no | 4 (4.4) | T05 | medio: algoritmo de píxeles exactos; las referencias pueden discrepar | `AS` `G2` |
 | T25 | Elipse (`e`, `E`) | Centro y dos radios; arrastrando en círculo se gira (el ángulo se muestra) | no | 4 (4.4; sin girar) y 4.12 (girada) | T24 | alto la girada: rasterizado entero | `DP` |
-| T26 | Polígono (`w`, `W`) | Un clic por esquina; `Espacio` lo cierra (solo relleno) | no | 4 (4.4) | T05 | medio | `LS` `G2` |
+| T26 | Polígono (`w`, `W`) | Un clic por esquina; `Espacio` lo cierra (solo relleno) | no | 4 (4.4) | T05 | medio | `AS` `G2` |
 | T27 | Contorno y relleno a la vez (`i` al elegir la herramienta de relleno) | Rellena la forma y la contornea con el pincel, que puede ser de otro color | no | 4 (4.4) | T23 a T26 | bajo: opción en el panel, no una letra | — |
 | T28 | Selector de pincel rectangular (`b`) | Recoge un rectángulo de la imagen como pincel propio; `Mayús` lo hace cuadrado | no | 4 (4.8) | 3.3 | medio | — |
 | T29 | Selector poligonal y a mano alzada | Recoge una zona irregular dibujando su contorno; `Espacio` lo cierra | no | 4 (4.8) | T28, T26 | medio | — |
@@ -96,13 +96,13 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 | C10 | Paleta por defecto | Restablece la paleta inicial | no | 4 (4.6) | — | bajo | — |
 | C11 | Paleta del pincel y restaurar paleta | Adoptar la paleta de un pincel cargado y volver | no | 4 (4.8) | 4.8 | bajo: «volver» lo da el deshacer | — |
 | C12 | Fondo → primer plano y Fondo ↔ primer plano en la imagen | Cambia (o intercambia) en toda la imagen los píxeles de un color por otro | no | 4 (4.6) | — | bajo: un `ReplaceColor` con deshacer, que el original no tiene | — |
-| C13 | Remapear | Reasigna los índices de la imagen a una paleta nueva por color más cercano | parcial (`nearest`, 2.8) | 4 (4.2) | 4.2 | medio | `LS` |
+| C13 | Remapear | Reasigna los índices de la imagen a una paleta nueva por color más cercano | parcial (`nearest`, 2.8) | 4 (4.2) | 4.2 | medio | `AS` |
 | C14 | Recomputar y escala RGB4 → RGB8 | Ajustes de los modos HAM y de 4 bits del Amiga | — | descartada | — | — | — |
 | C15 | Rangos (hasta 8 por imagen) | Lista ordenada de colores con posición, velocidad, transparencia por cuenta y tramado; la usan degradados, sombreado y ciclo | no | 4 (4.7) | 3.8 | alto: dónde vive y cómo se guarda (D17) | `DP` |
 | C16 | Elegir y recorrer rangos | Paso al rango anterior o siguiente sin abrir el editor | no | 4 (4.7) | C15 | bajo | — |
 | C17 | Ciclo de color (`Tab`) | Los colores de un rango giran entre sí; velocidad propia en fps (D23); la curva de velocidad exacta del original es opcional del 7 | no | 5 (5.8) (D23) | C15, `RotateColors` | medio: textura; puede reabrir la 14b | — |
 | C18 | Ciclo de un solo registro e híbrido | Un registro recorre colores fuera de la paleta; mezcla de ambos | no | 7 (7.6) | C17 | medio | `DP` |
-| C19 | Cuantizador (RGBA o gris con alfa a indexado con más de 256 colores) | Elige una paleta de N colores y reasigna los píxeles; opciones de tramado, de paleta ajena y de umbral de alfa | no | 4 (4.2) | 4.1 | alto: algoritmo, determinismo y coste a 8192² (D13) | `LS` |
+| C19 | Cuantizador (RGBA o gris con alfa a indexado con más de 256 colores) | Elige una paleta de N colores y reasigna los píxeles; opciones de tramado, de paleta ajena y de umbral de alfa | no | 4 (4.2) | 4.1 | alto: algoritmo, determinismo y coste a 8192² (D13) | `AS` |
 
 ### 2.3 Pincel propio
 
@@ -156,16 +156,16 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 | I01 | Abrir y guardar imagen | PNG por menú, soltar y `Ctrl+S` | sí | — | — | — | — |
 | I02 | Nombre, autor y copyright al guardar | Metadatos del fichero | no | 8 (8.7) | 3.8 | bajo | — |
 | I03 | Cargar varios ficheros como fotogramas | Una secuencia numerada se convierte en animación | no | 5 (5.7) | 5.0 | bajo | — |
-| I04 | Guardar un rango de fotogramas como imágenes numeradas | Exporta una secuencia | no | 5 (5.7) | 5.0 | bajo | `LS` |
+| I04 | Guardar un rango de fotogramas como imágenes numeradas | Exporta una secuencia | no | 5 (5.7) | 5.0 | bajo | `AS` |
 | I05 | Borrar fichero e imprimir | Los hace el sistema operativo | — | descartada | — | — | — |
-| I06 | Voltear la imagen (horizontal y vertical) | Espejo de toda la página (todos los fotogramas, un rango o uno) | no | 4 (4.1) | 4.1 | bajo: todas las celdas en un paso | `LS` |
+| I06 | Voltear la imagen (horizontal y vertical) | Espejo de toda la página (todos los fotogramas, un rango o uno) | no | 4 (4.1) | 4.1 | bajo: todas las celdas en un paso | `AS` |
 | I07 | Página de reserva: intercambiar (`j`), copiar a la reserva (`Ctrl+j`), fusionar delante o detrás, borrar | Segunda página de trabajo con su paleta propia; la fusión hace transparente el color de fondo | no | 3 (3.6) (D09) | 3.1 | medio | — |
-| I08 | Tamaño de página | Cambia el tamaño del lienzo; aquí, con ancla, recorte o ampliación y relleno | no | 4 (4.1) | 4.1 | medio: memoria doble en el paso | `LS` |
+| I08 | Tamaño de página | Cambia el tamaño del lienzo; aquí, con ancla, recorte o ampliación y relleno | no | 4 (4.1) | 4.1 | medio: memoria doble en el paso | `AS` |
 | I09 | Mostrar página (`S`) | Oculta la interfaz y enseña la imagen completa | no | 8 (8.8) | — | bajo | — |
 | I10 | Formato de pantalla, modos del Amiga, resolución y overscan | Ajustes de hardware | — | descartada | — | — | — |
 | I11 | Convertir modo | Entre RGBA, indexado, gris y gris con alfa, con informe | sí (2.20) | — | — | — | — |
 | I12 | Nueva imagen, Acerca de y Salir | Ya hechos (Archivo y Ayuda) | sí | — | — | — | — |
-| I13 | Formato con capas `.aseprite` (sin equivalente en el manual) | Guardar y abrir documentos con capas desde la especificación pública, por etapas (D10) | no | 3 (3.8; capas, celdas y paleta, un fotograma), 5 (5.5; fotogramas y etiquetas) y 6 (6.1; el resto) | 3.1 | alto: compromiso a largo plazo; dependencia directa de `miniz_oxide` | `LS` |
+| I13 | Formato con capas `.aseprite` (sin equivalente en el manual) | Guardar y abrir documentos con capas desde la especificación pública, por etapas (D10) | no | 3 (3.8; capas, celdas y paleta, un fotograma), 5 (5.5; fotogramas y etiquetas) y 6 (6.1; el resto) | 3.1 | alto: compromiso a largo plazo; dependencia directa de `miniz_oxide` | `AS` |
 
 ### 2.6 Animación
 
@@ -175,17 +175,17 @@ Estado: **aprobada** (2026-10-21), con las decisiones de la sección 8 y cuatro 
 | A02 | Navegación: anterior, siguiente, ir a, repetir el último «ir a», primero y último | Cambia el fotograma actual (cifras 1 a 6 en el original) | no | 5 (5.1) | A01 | bajo: las cifras ya están reservadas | — |
 | A03 | Reproducir: adelante, atrás, una vez, ping-pong y continuo; `Espacio` para; `r` invierte | Reproductor dentro de la app | no | 5 (5.3) | A01 | medio: reloj de la interfaz y coste de la textura por fotograma | — |
 | A04 | Rango de reproducción | Reproduce solo un tramo | no | 5 (5.3) | A03 | bajo | — |
-| A05 | Cadencia global o por fotograma | Imágenes por segundo o pausa propia en cada fotograma (el original usa jiffies, que se descartan) | no | 5 (5.0, 5.3) | A01 | bajo: milisegundos por fotograma | `LS` |
+| A05 | Cadencia global o por fotograma | Imágenes por segundo o pausa propia en cada fotograma (el original usa jiffies, que se descartan) | no | 5 (5.0, 5.3) | A01 | bajo: milisegundos por fotograma | `AS` |
 | A06 | Panel de control y deslizador de fotogramas | Botones y barra para navegar y reproducir | no | 5 (5.2) | A02 | medio: sitio en la pantalla (D29) | — |
-| A07 | Mesa de luz (`l`) | Muestra, atenuados, hasta cuatro fotogramas relativos al actual detrás del lienzo; atenuación de −255 a 255; fusión; bloqueo al rango | no | 5 (5.4) | A01, 3.2 | medio: atenuar en indexado | `LS` |
-| A08 | Paleta por fotograma | Varias paletas en una animación indexada | no | 5 (5.11) (opcional, D26) | A01 | alto: afecta a ordenar, convertir y GIF | `LS` |
+| A07 | Mesa de luz (`l`) | Muestra, atenuados, hasta cuatro fotogramas relativos al actual detrás del lienzo; atenuación de −255 a 255; fusión; bloqueo al rango | no | 5 (5.4) | A01, 3.2 | medio: atenuar en indexado | `AS` |
+| A08 | Paleta por fotograma | Varias paletas en una animación indexada | no | 5 (5.11) (opcional, D26) | A01 | alto: afecta a ordenar, convertir y GIF | `AS` |
 | A09 | Pintar animando | Cada sello cae en un fotograma distinto; el original lo activa con una tecla al pulsar, aquí es un botón y una tecla de alternancia (D24) | no | 5 (5.9) | A01, 4.3 | medio: sin `Alt` (D24) | — |
 | A10 | Pincel animado: recoger N fotogramas, dirección (adelante, atrás, ping-pong), duración, celda actual, usar, liberar, cargar y guardar | Pincel con varias celdas que avanza al pintar | no | 5 (5.10) | 4.8, A01 | alto | `DP` |
 | A11 | Mover (trayectoria de un pincel con distancia y giro por eje, cíclico, lento al entrar y al salir, orden de pintado, vista previa, estelas, cargar y guardar) | Anima un pincel sobre N fotogramas | no | 5 (5.12; solo plano, opcional, D26) y 7 (7.3; 3D) | A01, 4.8 | alto | `DP` |
 | A12 | Mover cámara | Desplaza y hace zoom de la página en N fotogramas, con envoltura | no | 7 (7.3) | A11 | alto | `DP` |
 | A13 | Método de memoria (comprimido o expandido) | Elige cómo se guarda la animación | — | descartada | — | — | — |
-| A14 | Cargar y guardar animación | Fichero de animación del original | no | 5 (GIF y APNG, 5.6, 5.7) y 6 (IFF ANIM) | A01 | medio | `LS` |
-| A15 | Etiquetas de animación y hojas de sprites (sin equivalente en el manual) | Tramos con nombre y dirección; exportar fotogramas en una hoja con metadatos | no | 5 (5.5, 5.7) | A01 | medio | `LS` |
+| A14 | Cargar y guardar animación | Fichero de animación del original | no | 5 (GIF y APNG, 5.6, 5.7) y 6 (IFF ANIM) | A01 | medio | `AS` |
+| A15 | Etiquetas de animación y hojas de sprites (sin equivalente en el manual) | Tramos con nombre y dirección; exportar fotogramas en una hoja con metadatos | no | 5 (5.5, 5.7) | A01 | medio | `AS` |
 
 ### 2.7 Efectos y vista
 
@@ -252,7 +252,7 @@ De los modos de pintura, el hito 4 trae Matte, Color, Reemplazar, translucidez y
 | 4.4 | núcleo | Formas: rectángulo, círculo, elipse (sin girar), polígono y forma libre rellena; relleno y contorno como opciones del panel; la caja con más de 16 herramientas · `px-raster`, `px-ui`, `px-app` | Dorados de contornos y rellenos; ninguna forma toca fuera del lienzo | D15 | medio: círculos pequeños y redondeo de la elipse |
 | 4.5 | núcleo | Relleno ampliado: sólido (ya hecho), patrón y «hasta el color de fondo»; **reescritura del relleno por filas** (aplazada del hito 2) · `px-raster`, `px-core` (solo lo que liste la spec), `px-ui` | Mismos resultados que el relleno actual en el corpus de la puerta 2.22, más rápido (cifras medidas) | D02, D22 | medio: no cambiar los topes de 14c |
 | 4.6 | núcleo | Paleta: copiar, intercambiar, degradado entre dos entradas, rangos de entradas con `Mayús` y `Ctrl`, borrar varias, paleta por defecto, cargar y guardar paleta, cambiar o intercambiar un color en toda la imagen · `px-core` (comandos nuevos, solo lo que liste la spec), `px-ui` | Cada operación con deshacer de un paso; la imagen no cambia al reordenar | D13 | bajo a medio |
-| 4.7 | deseable | Rangos y degradados: modelo de rango (hasta 8, cuentas con posición, tramado, velocidad en fps y transparencia por cuenta), editor y selector rápido; degradados horizontal, vertical, por línea, direccional recto y ajustado, radial circular, contornos y luz; tramado aleatorio, de patrón y suave · `px-core` o sesión según D17, `px-raster`, `px-ui` | Dorados lineales contra `LS` o `G2`; los radiales y ajustados con casos `DP` de la lista única o decisión propia anotada | D17, D18 | alto: dónde viven los rangos; contornos, luz y «ajustado» |
+| 4.7 | deseable | Rangos y degradados: modelo de rango (hasta 8, cuentas con posición, tramado, velocidad en fps y transparencia por cuenta), editor y selector rápido; degradados horizontal, vertical, por línea, direccional recto y ajustado, radial circular, contornos y luz; tramado aleatorio, de patrón y suave · `px-core` o sesión según D17, `px-raster`, `px-ui` | Dorados lineales contra `AS` (si tiene la función; se confirma en la spec) o `G2`; los radiales y ajustados con casos `DP` de la lista única o decisión propia anotada | D17, D18 | alto: dónde viven los rangos; contornos, luz y «ajustado» |
 | 4.8 | núcleo | Selector y menú `Pincel`: selector rectangular, poligonal, a mano alzada y varita; copiar con el botón izquierdo y cortar con el derecho; transparencia por color de fondo o por esquinas; punto de agarre; restaurar (`B`); excluir borde; voltear, girar 90°, mitad, doble, estirar, contorno y recorte, pincel de reserva, colores del pincel, cargar y guardar (PNG), copiar y pegar interno · `px-raster`, `px-ui`, `px-app` | Recoger y estampar da la imagen original; recoger, cortar y estampar equivale a mover; cada operación contra un modelo independiente | D12 | medio: escalado y volumen de la unidad |
 | 4.9 | deseable | Rejilla (separación X e Y, ajuste de las herramientas de trazo, superposición, ajuste visual) y simetría (punto con espejo y cíclica, orden N, centro colocable; mosaico) · `px-raster`, `px-ui` | Propiedad: la imagen resultante es simétrica; un solo paso de deshacer; la superposición no entra en la imagen | — | medio: replicar la salida de cada herramienta |
 | 4.10 | deseable | Modos de pintura: Matte, Color y Reemplazar (`F1` a `F3`), translucidez con porcentaje y Sombrear (usa 4.7); «ciclar al pintar» se decide en su spec (propuesta: con Sombrear); el motor de pintura recibe el modo como parámetro · `px-raster`, `px-ui`, `px-app` | Dorados de translucidez con tolerancia; en indexado, color más cercano; sin 4.7 la unidad sale sin Sombrear | D16 | medio: redondeo de la mezcla |
@@ -265,7 +265,7 @@ De los modos de pintura, el hito 4 trae Matte, Color, Reemplazar, translucidez y
 
 Parte de las celdas de 3.1: un fotograma más es una columna más, con las celdas vacías sin memoria y el aviso de presupuesto al crear fotogramas en lienzos grandes (D04). La mesa de luz y el ciclo de color se apoyan en la composición (3.2) y en los rangos (4.7). El hito 5 se hace después de la revisión de pantalla (D29), porque la línea de tiempo necesita sitio. `.aseprite` sigue por etapas (D10): fotogramas y etiquetas en 5.5.
 
-**Puerta del hito:** GIF y hojas de sprites verificados, con salida comparada con LibreSprite por lotes.
+**Puerta del hito:** GIF y hojas de sprites verificados, con salida comparada con Aseprite por lotes (cada unidad confirma en su spec que Aseprite tiene la función).
 
 | Unidad | Clase | Contenido · crates | Puerta de salida | Decisiones | Riesgo técnico |
 | --- | --- | --- | --- | --- | --- |
@@ -273,10 +273,10 @@ Parte de las celdas de 3.1: un fotograma más es una columna más, con las celda
 | 5.1 | núcleo | Navegación: fotograma actual, estado `3/12` en la barra, cifras 1 a 6 (anterior, siguiente, ir a…), borrar con rango (CLR) y copiar rango · `px-ui`, `px-app` | Recorrido con teclas y clics; el borrado con rango en un paso | D03 | bajo |
 | 5.2 | núcleo | Línea de tiempo y panel de animación: rejilla capas × fotogramas, cabezal, selección de rango, duración, y los controles de reproducción y de pintar animando · `px-ui` | Recorrido con clics reales; cabe en la ventana mínima | D29 | medio: espacio en pantalla |
 | 5.3 | núcleo | Reproducción: adelante, atrás, una vez, ping-pong y continuo, rango, parar con `Espacio`, `r` invierte, cadencia global o por fotograma · `px-ui`, `px-app` | La cadencia medida no se desvía más de lo fijado en la spec; un fotograma a 8192² no bloquea la interfaz | — | medio: reloj y textura |
-| 5.4 | núcleo | Mesa de luz: hasta cuatro fotogramas relativos, atenuación, bloqueo al rango, fusión (que aquí sí se puede deshacer) · `px-raster`, `px-ui` | Dorados de la mezcla atenuada contra `LS`; indexado atenuado con color más cercano | — | medio |
+| 5.4 | núcleo | Mesa de luz: hasta cuatro fotogramas relativos, atenuación, bloqueo al rango, fusión (que aquí sí se puede deshacer) · `px-raster`, `px-ui` | Dorados de la mezcla atenuada contra `AS` si Aseprite tiene la función (se confirma en la spec; si no, casos propios); indexado atenuado con color más cercano | — | medio |
 | 5.5 | núcleo | Etiquetas (nombre, rango, dirección; reproducir y exportar una) y `.aseprite`, etapa 2: fotogramas, duraciones y etiquetas · `px-core`, `px-ui`, `px-formats` | Ida y vuelta por `.aseprite`; sin etiquetas, el comportamiento anterior; fuzz del lector ampliado | D28 | medio |
 | 5.6 | núcleo | GIF: escribir y leer, bucle, retardos, transparencia, paleta global y local; usa el cuantizador (4.2) · `px-formats` | GIF abierto y decodificado por herramientas externas; ida y vuelta de fotogramas indexados sin pérdida | D25 | medio: LZW, descartes y límites antes de reservar; fuzz del lector |
-| 5.7 | núcleo | Hojas de sprites (fila, columna, rejilla, márgenes y metadatos) y secuencias de PNG numerados (exportar e importar); APNG si la crate lo permite · `px-formats`, `px-app` | Hoja idéntica a la de `LS` en los casos simples; la importación respeta el orden | — | bajo a medio |
+| 5.7 | núcleo | Hojas de sprites (fila, columna, rejilla, márgenes y metadatos) y secuencias de PNG numerados (exportar e importar); APNG si la crate lo permite · `px-formats`, `px-app` | Hoja idéntica a la de `AS` en los casos simples; la importación respeta el orden | — | bajo a medio |
 | 5.8 | deseable | Ciclo de color (`Tab`) con **velocidad propia en fps** (D23): los rangos de 4.7 giran sobre `RotateColors`; la curva de velocidad exacta del original queda como opcional del 7; se mide la subida de textura por si hay que retomar la 14b · `px-ui`, `px-app` | Visto bueno de la medida; el ciclo no ensucia el historial | D23 | medio |
 | 5.9 | deseable | Pintar animando (D24): cada sello cae en un fotograma distinto, **sin `Alt`**, con un botón y una tecla de alternancia en el panel de animación; relleno animado · `px-ui`, `px-app` | Un solo paso de deshacer por gesto; el estado se ve en el panel | D24 | medio |
 | 5.10 | opcional | Pincel animado: recoger fotogramas como celdas, dirección, duración, celda actual, usar, liberar, cargar y guardar · `px-raster`, `px-ui` | Recoger y estampar reproduce la animación original | — | alto |
@@ -296,10 +296,10 @@ Parte de las celdas de 3.1: un fotograma más es una columna más, con las celda
 
 ## 7. Corpus y oráculos
 
-- **Instalados** (`REFERENCIAS.md`): **Aseprite** (hito 3: generador y oráculo de los `.aseprite` y de sus PNG aplanados, por lotes), LibreSprite 1.3 (modo por lotes; lee `.aseprite`, exporta GIF, hojas y etiquetas, escala y recorta; hitos 4 y 5 hasta que se decida) y Grafx2 2.9 (solo interfaz gráfica). **DPaint V** en emulador, solo para el original.
+- **Instalados** (`REFERENCIAS.md`): **Aseprite** (hito 3: generador y oráculo de los `.aseprite` y de sus PNG aplanados, por lotes; hitos 4 y 5: formas, relleno, cuantización, GIF y hojas de sprites, donde tenga la función) y Grafx2 2.9 (solo interfaz gráfica; referencia manual donde el mapa ya la usa por algo propio). LibreSprite **ya no es oráculo de ninguna unidad** (sus dos PNG del hito 1 siguen en `golden/png/` como corpus ya hecho). **DPaint V** en emulador, solo para el original (hito 7).
 - **Corpus del hito 3** (decidido el 21 de octubre, cambia D10): la única referencia es Aseprite. Un script de Lua propio (`tools/corpus-h3/`) crea cada caso desde cero y guarda el `.aseprite`; el PNG aplanado sale de exportarlo con el modo por lotes; el usuario lo ejecuta, los resultados se commitean en `golden/aseprite/` y el CI no ejecuta Aseprite. Las pruebas de Pixoko comparan contra esos PNG con **tolerancia 0** (D07). Lista de casos: `specs/corpus-hito-3.md`.
-- **Corpus de LibreSprite** (hitos 4 y 5, sin cambios hasta decidir): PNG de referencia que el usuario genera con un script por lotes y se commitean; el CI no ejecuta LibreSprite.
-- **Lotes, no casos sueltos** (cambio 3 al dar el visto bueno): al empezar cada hito se escribe `specs/corpus-hito-N.md` (ver sección 1) con todos los casos de `G2`, `DP` y `LS` y su procedimiento exacto, para generarlos de una sentada. Esto resuelve D21. Previsión orientativa: hito 3, un lote `AS` (hecho: `corpus-hito-3.md`, 25 casos de capas, mezcla, celdas, indexado y ocultas); hito 4, `G2` (círculo, elipse, polígono, línea, rectángulo, patrón, degradados lineales) y `DP` (curva, elipse girada, degradados de contornos y luz, sombrear); hito 5, `LS` (GIF, hojas, etiquetas, mesa de luz). El detalle sale de las specs de cada hito, no de aquí.
+- **Corpus de Aseprite en los hitos 4 y 5** (decidido el 21 de octubre): mismo mecanismo que el del hito 3 (scripts propios, ejecuta el usuario, resultados en `golden/aseprite/`, el CI no ejecuta Aseprite) para formas, relleno, cuantización, GIF y hojas de sprites; la spec de cada unidad confirma antes que Aseprite tiene la función. LibreSprite desaparece como oráculo en todo el plan.
+- **Lotes, no casos sueltos** (cambio 3 al dar el visto bueno): al empezar cada hito se escribe `specs/corpus-hito-N.md` (ver sección 1) con todos los casos de `AS`, `G2` y `DP` y su procedimiento exacto, para generarlos de una sentada. Esto resuelve D21. Previsión orientativa: hito 3, un lote `AS` (hecho: `corpus-hito-3.md`, 25 casos de capas, mezcla, celdas, indexado y ocultas); hito 4, `G2` (círculo, elipse, polígono, línea, rectángulo, patrón, degradados lineales) y `DP` (curva, elipse girada, degradados de contornos y luz, sombrear); hito 5, `AS` (GIF, hojas, etiquetas, mesa de luz, donde Aseprite tenga la función). El detalle sale de las specs de cada hito, no de aquí.
 - **Cuantizador y mezcla**: no se compara bit a bit con otro programa, sino con una medida de error y una tolerancia escrita en la spec.
 - **Sin corpus ajeno** donde no haya oráculo: decisión propia anotada en la spec y propiedades.
 
@@ -313,9 +313,9 @@ Parte de las celdas de 3.1: un fotograma más es una columna más, con las celda
 | D04 | Tamaño de las celdas | Del tamaño del lienzo; las vacías no reservan memoria; aviso de presupuesto al crear capas o fotogramas en lienzos grandes |
 | D05 | Modo y paleta | Un modo por documento y la paleta en cada imagen; prueba de que todas las paletas del documento son idénticas tras cualquier operación |
 | D06 | Indexado y alfa | Indexado sin opacidad ni mezcla (atenuados con el motivo «convierte a RGBA»); pintar con alfa reemplaza el píxel |
-| D07 | Mezcla | Ocho modos con fórmulas propias de enteros documentadas. **La referencia es Aseprite** (oráculo de los PNG aplanados de `corpus-hito-3.md`; actualizada el 21 de octubre, tras decidir que LibreSprite no se usa en el hito 3). El objetivo es **tolerancia 0**; si los datos muestran diferencias de redondeo de ±1, se decide con ellos caso a caso y se anota en la spec de 3.2 o de 3.9 |
+| D07 | Mezcla | Ocho modos con fórmulas propias de enteros documentadas. **La referencia es Aseprite** (oráculo de los PNG aplanados de `corpus-hito-3.md`; actualizada el 21 de octubre, tras decidir que LibreSprite no se usa). El objetivo es **tolerancia 0**; si los datos muestran diferencias de redondeo de ±1, se decide con ellos caso a caso y se anota en la spec de 3.2 o de 3.9 |
 | D08 | Panel de capas | Ventana flotante (cerrable, no modal, no captura entrada fuera de su rectángulo) y menú `Capa` nuevo |
-| D10 | Formato con capas | `.aseprite` por etapas: capas, celdas y paleta con un fotograma en el hito 3; etiquetas y fotogramas en el 5; el resto en el 6. Los `.aseprite` del corpus y sus PNG de referencia los genera Aseprite con scripts propios (`corpus-hito-3.md`, cambio del 21 de octubre: antes los escribía Pixoko y los convertía LibreSprite); el usuario los ejecuta, se commitean y el CI no los ejecuta. Zlib sale de `miniz_oxide` si ya está en el árbol (lo está); se verifica con `cargo deny` y se anota en `docs/DEPENDENCIES.md` |
+| D10 | Formato con capas | `.aseprite` por etapas: capas, celdas y paleta con un fotograma en el hito 3; etiquetas y fotogramas en el 5; el resto en el 6. Los `.aseprite` del corpus y sus PNG de referencia los genera Aseprite con scripts propios (`corpus-hito-3.md`, cambio del 21 de octubre: antes los escribía Pixoko y los convertía otro programa); el usuario los ejecuta, se commitean y el CI no los ejecuta. Zlib sale de `miniz_oxide` si ya está en el árbol (lo está); se verifica con `cargo deny` y se anota en `docs/DEPENDENCIES.md` |
 | D16 | Modos de color | Sombrear en el hito 4 (usa los rangos y el degradado de 4.7); difuminar, mezclar, suavizar y mezcla viva en el 7 |
 | D21 | Corpus de DPaint | Resuelta por el cambio 3: lista única de casos al empezar cada hito |
 | D23 | Ciclo de color | Hito 5 con velocidad propia en fps; la curva de velocidad exacta del original queda como opcional del 7 |

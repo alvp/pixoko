@@ -1,6 +1,6 @@
 # Corpus del hito 3: capas, alfa y mezcla
 
-Estado: **generada el 21 de octubre de 2026 con Aseprite 1.3.18.6-dev (`golden/aseprite/`, 25 casos); pendiente de visto bueno**. No es una unidad (no cuenta en las 10 del hito; ver `mapa-funciones.md`, sección 1): es la lista única de casos con corpus ajeno, escrita antes de la primera unidad para generarlos de una sentada. No toca código de la aplicación.
+Estado: **aprobada** (21 de octubre de 2026; los 25 casos sin margen y la tolerancia 0 confirmados). Generada el 21 de octubre con Aseprite 1.3.18.6-dev (`golden/aseprite/`, 25 casos). Si un caso muestra ±1, se anota **caso por caso** en la spec de 3.2 o de 3.9, nunca como tolerancia general.
 
 **Decisión del usuario (21 de octubre de 2026): la única referencia es Aseprite**, como generador y oráculo de los `.aseprite` y de los PNG aplanados. No se usa LibreSprite en el hito 3. Cambia el flujo de D10: antes los `.aseprite` los escribía Pixoko (3.8) y LibreSprite los convertía; ahora los escribe Aseprite desde un script propio, así que **3.8 empieza leyendo un corpus que ya existe** y su escritura se prueba después (ida y vuelta, y abrir lo que escribe Pixoko con Aseprite por lotes).
 
@@ -90,7 +90,8 @@ Un módulo nuevo en `png_interop` (`crates/px-golden/tests/png_interop/aseprite_
 | --- | --- | --- |
 | 1 | Un caso correcto en memoria | `Ok` con su nombre |
 | 2 | Cada defecto en memoria: carpeta vacía; sin README; `.aseprite` sin PNG; PNG sin `.aseprite`; sin `.sha256`; hash de otra imagen; magia, tamaño, fotogramas o dimensiones fuera de la cabecera; dimensiones distintas a las del PNG; fichero ajeno; nombre con mayúsculas; más de 25 casos | `Err` con el mensaje del defecto (el control de que el corpus sabe fallar) |
-| 3 | La carpeta real `golden/aseprite/` | `Ok`; si la carpeta **no existe** avisa («corpus pendiente») y pasa; si existe y está vacía, falla |
+| 3 | La carpeta real `golden/aseprite/` | `Ok`; **siempre estricta**: si la carpeta no existe, está vacía, le falta un fichero o no tiene exactamente los 25 casos de la tabla (lista fija en la prueba), falla |
+| 4 | La comparación con la lista exacta, en memoria | Un caso que falta o que sobra da `Err` con su nombre |
 
 El test no ejecuta Aseprite ni lee las capas.
 
@@ -106,7 +107,7 @@ El script se escribió de memoria y a la primera ejecución real solo falló el 
 
 1. `app.params` funciona, pero los `--script-param` van **antes** de `--script`; si no, llega vacío.
 2. `Sprite(ancho, alto, ColorMode.X)`, `Palette(n)`, `Palette:setColor`, `Sprite:setPalette`, `Sprite.transparentColor`, `Image(ancho, alto, modo)`, `Image:putPixel(x, y, entero)`, `Sprite:newCel(capa, 1, imagen, Point)` y `Sprite:deleteCel` valen tal como se escribieron; un sprite nuevo trae una capa y se reutiliza sin celda que estorbe.
-3. `Layer.opacity` (0 a 255), `Layer.blendMode` con los nombres del enum y `Layer.isVisible` valen. Valores numéricos del enum de Lua, que `verificar.lua` imprime: Normal 3, Multiplicar 14, Trama (*Screen*) 15, Superponer 16, Oscurecer 17, Aclarar 18, Sumar (*Addition*) 29, Diferencia 23. **No son los códigos del fichero**: 3.8 los saca de la especificación pública.
+3. `Layer.opacity` (0 a 255), `Layer.blendMode` con los nombres del enum y `Layer.isVisible` valen. Valores numéricos del enum de Lua, que `verificar.lua` imprime: Normal 3, Multiplicar 14, Trama (*Screen*) 15, Superponer 16, Oscurecer 17, Aclarar 18, Sumar (*Addition*) 29, Diferencia 23. **No son los códigos del fichero y no se usan nunca**: los modos de mezcla del `.aseprite` se leen de la especificación pública del formato y **jamás de los números de Lua**.
 4. **El `.aseprite` conserva la parte de las celdas que sale del lienzo** (`celda 48x48 en (-8,-8)`, `celda 16x16 en (-16,-16)`, etc.): `celda-recortada` e `indexado-celdas` valen para lo que se pensó. Una capa sin celda se guarda sin celda (`celda-vacia`).
 5. `--save-as` aplana solo las capas **visibles**: el PNG de `capas-ocultas` no muestra el magenta de las ocultas.
 6. **PNG indexado:** los cuatro casos indexados salen como PNG indexado con **un solo índice transparente** (el 0, y el 7 en `indexado-transparente-7`), sin alfa por entrada de paleta. La paleta con alfa por entrada sigue siendo del hito 6.
@@ -118,5 +119,5 @@ El script se escribió de memoria y a la primera ejecución real solo falló el 
 1. **Aseprite como única referencia del hito 3**, con el flujo nuevo (los ficheros de entrada los escribe Aseprite; 3.8 empieza leyéndolos). `mapa-funciones.md` (D07, D10, el 3.2, el 3.8 y el 3.9), `PLAN-RESUMEN.md` y `REFERENCIAS.md` quedan corregidos. **Lo que dicen del hito 4 y del hito 5 sobre LibreSprite** (cuantizador, formas, GIF, hojas de sprites y etiquetas) **sigue igual hasta que decidas** si también pasan a Aseprite.
 2. **25 casos, el máximo.** Sin margen: añadir uno exige quitar otro.
 3. **Tolerancia 0** como objetivo y ±1 solo caso a caso con datos (ver arriba).
-4. **El test de la carpeta pasa con aviso si `golden/aseprite/` no existe** y es estricto si existe: así el CI sigue en verde hasta que commitees el corpus y no hay que acordarse de quitar un `#[ignore]`.
+4. **La prueba de la carpeta es siempre estricta** (decidido): falla si `golden/aseprite/` no existe o le falta un fichero, sin aviso ni excepción.
 5. **Capas y celdas fuera de este corpus** (opacidad de celda, grupos, tiles): al leerlas, 3.8 decide si avisa o falla; no hay caso aquí.
