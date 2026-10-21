@@ -203,10 +203,8 @@ pub fn show_toolbox(
             debug_assert_eq!(buttons.clone().count(), TOOLBOX_BUTTONS);
             for (index, button) in buttons.enumerate() {
                 let (x_u, y_u, w_u, h_u) = toolbox_button_rect_u(index);
-                let button_rect = Rect::from_min_size(
-                    at(x_u, y_u),
-                    vec2(w_u as f32 * u, h_u as f32 * u),
-                );
+                let button_rect =
+                    Rect::from_min_size(at(x_u, y_u), vec2(w_u as f32 * u, h_u as f32 * u));
                 let on = enabled(button.action, state);
                 let secondary = secondary_outcome(button, state);
                 let active = button.action == AppAction::SelectTool(state.tool);

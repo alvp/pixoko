@@ -26,14 +26,14 @@ El indicador de color y el panel de opciones son las dos piezas nuevas; el resto
 | Arriba | Barra de menús, siempre visible (el original la muestra con el botón derecho sobre la barra de título) | Existe, con 5 menús |
 | Izquierda | La página o lienzo, con zoom y desplazamiento | Existe |
 | Derecha, junto al lienzo | Panel de la paleta, con el indicador de color arriba y el editor de color debajo | Hecho (I.2a, I.3): a la derecha del lienzo, con una línea fina a cada lado |
-| Derecha, en el borde | Caja de herramientas: herramientas, botones de zoom y, debajo, el panel de opciones de la herramienta activa | Hecho (I.3): en el borde derecho, con un recuadro fijo de opciones de 99 × 138 u (hoy: nombre, atajo y `sin opciones`) |
+| Derecha, en el borde | Caja de herramientas: herramientas, botones de zoom y, debajo, el panel de opciones de la herramienta activa | Hecho (I.3 e I.4): en el borde derecho, una rejilla de iconos de 24 u en cuatro columnas y un recuadro fijo de opciones de 99 × 138 u (hoy: nombre, atajo y `sin opciones`) |
 | Abajo | Barra de estado con herramienta, coordenadas, color y avisos | Existe |
 
 **Hecho en I.3 (21 de octubre de 2026):** el orden de izquierda a derecha es lienzo, paleta y caja de herramientas, y el ancho mínimo de ventana (468 u) no cambió: 128 u de lienzo, 233 u de paleta y 107 u de caja. El lienzo empieza en `(0, 16·n)` y `chrome::window_layout` es la única función que conoce el orden. Spec: `specs/interfaz-caja-derecha.md`.
 
 Tres puntos que condicionan la geometría:
 
-- **Iconos.** Hoy las herramientas son botones de texto. Con la veintena de herramientas del programa de referencia, una columna de texto no cabe a la altura mínima: hacen falta iconos propios antes de añadir las herramientas de formas.
+- **Iconos.** Hecho en I.4 (21 de octubre de 2026): las herramientas, el zoom y el editor de la paleta usan 14 iconos propios de 16 × 16 (`assets/icons/`) sobre botones de 24 u con relieve; una rejilla de cuatro columnas deja sitio a 16 herramientas en el alto mínimo (con cinco filas, 17 a 20, el recuadro de opciones de 138 u ya no cabe y lo decide el hito 4). Spec: `specs/interfaz-iconos.md`.
 - **Panel de opciones.** Su altura se reserva siempre, también cuando la herramienta no tiene opciones, para que la caja no salte al cambiar de herramienta.
 - **Ocultar paneles.** F10 oculta la caja y la barra, y F9 solo la barra, como en el original. Es una mejora posterior; la barra de menús y la de estado se quedan siempre.
 
@@ -221,11 +221,11 @@ Orden de trabajo después del hito 2:
 4. **Iconos propios:** dibujados con Pixoko y exportados como recursos de la aplicación.
 5. **Menús del original:** se añaden a medida que llegan las funciones de cada hito.
 
-**Excepción transitoria (I.2a, 2026-10-20):** el indicador de color añade una banda de 36 u al panel de la paleta y el criterio del alto mínimo de ventana sube del 65 % al 72 % de 720 pt (518,4 pt; a `ppp` 1,5 la ventana mínima pasa de 468,0 a 516,0 pt). Con los iconos propios (I.4) las filas de botones del editor se reducen y el criterio **vuelve al 65 %**. Spec: `specs/interfaz-dos-colores.md`.
+**Excepción transitoria (I.2a, 2026-10-20; retirada en I.4, 2026-10-21: el criterio del alto es otra vez el 65 % de 720 pt, 468,0; ventana mínima de 341 u, 454,67 pt a `ppp` 1,5):** el indicador de color añade una banda de 36 u al panel de la paleta y el criterio del alto mínimo de ventana sube del 65 % al 72 % de 720 pt (518,4 pt; a `ppp` 1,5 la ventana mínima pasa de 468,0 a 516,0 pt). Con los iconos propios (I.4) las filas de botones del editor se redujeron a una y el criterio **volvió al 65 %**. Spec: `specs/interfaz-dos-colores.md`.
 
 Este documento es la entrada de la planificación de los hitos siguientes. La planificación lee además las secciones del manual que cada hito necesite, de una en una, y produce el mapa de funciones con su hito, sus dependencias y su riesgo.
 
-**Nota de I.3 sobre la excepción transitoria:** el recuadro fijo de opciones (138 u) sube el contenido de la caja de 193 a 335 u de los 351 u del panel mínimo: los mínimos de ventana no cambian (387 u de alto y 468 u de ancho). Con I.4 se libera altura en la caja y habrá que reevaluar ese recuadro fijo.
+**Nota de I.3 sobre la excepción transitoria:** el recuadro fijo de opciones (138 u) sube el contenido de la caja de 193 a 335 u de los 351 u del panel mínimo: los mínimos de ventana no cambian (387 u de alto y 468 u de ancho). I.4 reevaluó el recuadro fijo: se queda en 138 u (el contenido de la caja pasa a 250 u de 305 u; ver `specs/interfaz-iconos.md`, decisión 6).
 
 ## Decisiones del 21 de octubre de 2026
 

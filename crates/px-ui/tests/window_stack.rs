@@ -962,7 +962,11 @@ fn fila_10_los_botones_de_la_columna_golpean_en_su_sitio_con_el_panel_bajo() {
                 let (cx, cy) = centro_u(TOOL_BUTTONS.len() + i);
                 let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
                 let acciones: Vec<_> = bajo.clic(x, y).iter().filter_map(|f| f.columna).collect();
-                assert!(acciones.is_empty(), "ppp {ppp} panel 60 u: {}", button.label);
+                assert!(
+                    acciones.is_empty(),
+                    "ppp {ppp} panel 60 u: {}",
+                    button.label
+                );
             }
         }
     }

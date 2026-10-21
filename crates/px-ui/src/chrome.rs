@@ -89,7 +89,10 @@ pub fn tool_slot_u(slot: usize) -> (i64, i64) {
 /// # Panics
 /// Si `index` es 9 o más.
 pub fn toolbox_button_rect_u(index: usize) -> (i64, i64, i64, i64) {
-    assert!(index < TOOLBOX_BUTTONS, "la caja tiene {TOOLBOX_BUTTONS} botones");
+    assert!(
+        index < TOOLBOX_BUTTONS,
+        "la caja tiene {TOOLBOX_BUTTONS} botones"
+    );
     let (x, y) = if index < TOOL_LABELS.len() {
         tool_slot_u(index)
     } else {

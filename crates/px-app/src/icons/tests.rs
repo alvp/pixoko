@@ -41,10 +41,14 @@ fn fila_1_los_14_png_son_de_16x16_con_alfa_0_o_255_blancos_no_vacios_ni_llenos_y
         assert_eq!((w, h), (16, 16), "{nombre}");
         let mut opacos = 0;
         let mut mascara = Vec::new();
-        for px in rgba.chunks_exact(4) {
+        for px in rgba.as_chunks::<4>().0 {
             assert!(px[3] == 0 || px[3] == 255, "{nombre}: alfa {}", px[3]);
             if px[3] == 255 {
-                assert_eq!(&px[..3], &[255, 255, 255], "{nombre}: los opacos son blancos");
+                assert_eq!(
+                    &px[..3],
+                    &[255, 255, 255],
+                    "{nombre}: los opacos son blancos"
+                );
                 opacos += 1;
             }
             mascara.push(px[3] == 255);
@@ -68,10 +72,18 @@ fn fila_1_hay_un_fichero_por_icono_ninguno_de_mas_y_el_readme_dice_original_mit_
     esperados.sort();
     let mut hay: Vec<String> = std::fs::read_dir(carpeta())
         .expect("assets/icons existe")
-        .map(|e| e.expect("entrada").file_name().to_string_lossy().into_owned())
+        .map(|e| {
+            e.expect("entrada")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect();
     hay.sort();
-    assert_eq!(hay, esperados, "ficheros de más o de menos (sin pincel.png)");
+    assert_eq!(
+        hay, esperados,
+        "ficheros de más o de menos (sin pincel.png)"
+    );
     // Los nombres son los de la tabla de la spec.
     let nombres: Vec<&str> = Icon::ALL.iter().map(|i| i.file_stem()).collect();
     assert_eq!(
@@ -108,7 +120,9 @@ fn fila_1_hay_un_fichero_por_icono_ninguno_de_mas_y_el_readme_dice_original_mit_
 }
 
 /// Las texturas nuevas del fotograma: `(id, tamaño, opciones, píxeles)`.
-fn texturas_subidas(ctx: &egui::Context) -> Vec<(egui::TextureId, [usize; 2], TextureOptions, Vec<Color32>)> {
+fn texturas_subidas(
+    ctx: &egui::Context,
+) -> Vec<(egui::TextureId, [usize; 2], TextureOptions, Vec<Color32>)> {
     let mut salida = ctx.run_ui(RawInput::default(), |_| {});
     let subidas = salida
         .textures_delta
@@ -180,7 +194,14 @@ fn fila_2_un_png_corrupto_o_de_otro_tamano_da_un_error_claro_y_no_un_panico() {
     .expect("otro tamaño es un error");
     assert!(mal.to_string().contains("relleno"), "{mal}");
     assert!(
-        matches!(mal, IconError::Size { width: 8, height: 8, .. }),
+        matches!(
+            mal,
+            IconError::Size {
+                width: 8,
+                height: 8,
+                ..
+            }
+        ),
         "{mal:?}"
     );
 }
@@ -193,7 +214,7 @@ fn en_indexado(icono: Icon, tinta: Rgba) -> Vec<u8> {
         Palette::from_colors([Rgba::new(0, 0, 0, 0), tinta]).expect("paleta de dos entradas");
     paleta.set_transparent_index(Some(0)).expect("transparente");
     let mut imagen = Image::new_indexed(16, 16, paleta).expect("imagen indexada");
-    for (i, px) in rgba.chunks_exact(4).enumerate() {
+    for (i, px) in rgba.as_chunks::<4>().0.iter().enumerate() {
         let indice = u8::from(px[3] == 255);
         imagen
             .set_pixel((i % 16) as u32, (i / 16) as u32, Pixel::Indexed(indice))
@@ -205,7 +226,11 @@ fn en_indexado(icono: Icon, tinta: Rgba) -> Vec<u8> {
 #[test]
 fn fila_2_un_icono_retocado_y_guardado_en_indexado_se_carga_y_se_tinta_igual() {
     let referencia = decode("lapiz", &leer(Icon::Pencil)).expect("RGBA");
-    for tinta in [Rgba::opaque(255, 255, 255), Rgba::opaque(0, 0, 0), Rgba::opaque(200, 30, 30)] {
+    for tinta in [
+        Rgba::opaque(255, 255, 255),
+        Rgba::opaque(0, 0, 0),
+        Rgba::opaque(200, 30, 30),
+    ] {
         let indexado = en_indexado(Icon::Pencil, tinta);
         // Es de verdad un PNG indexado.
         assert_eq!(
@@ -215,10 +240,16 @@ fn fila_2_un_icono_retocado_y_guardado_en_indexado_se_carga_y_se_tinta_igual() {
         let cargado = decode("lapiz", &indexado).expect("el indexado se carga");
         assert_eq!(cargado.size, [16, 16]);
         // Mismos texels que el RGBA: solo cuenta el alfa; el color del retoque no importa.
-        assert_eq!(cargado.pixels, referencia.pixels, "tinta de dibujo {tinta:?}");
+        assert_eq!(
+            cargado.pixels, referencia.pixels,
+            "tinta de dibujo {tinta:?}"
+        );
     }
     // Tintado: blanco por la tinta da la tinta donde hay alfa y nada donde no.
-    for tinta in [Color32::from_rgb(0x39, 0xd0, 0xb2), Color32::from_rgb(0xe0, 0xe0, 0xe0)] {
+    for tinta in [
+        Color32::from_rgb(0x39, 0xd0, 0xb2),
+        Color32::from_rgb(0xe0, 0xe0, 0xe0),
+    ] {
         for texel in &referencia.pixels {
             if *texel == Color32::WHITE {
                 assert_eq!(tinta * *texel, tinta);

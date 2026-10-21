@@ -2119,7 +2119,10 @@ fn fila_11_el_tooltip_de_la_columna_lee_la_tabla_recibida() {
         assert!(!texto(0, &cambiada).contains("(d)"), "ppp {ppp}");
         assert!(texto(1, &cambiada).starts_with("Línea (v)"), "ppp {ppp}");
         assert!(texto(2, &cambiada).starts_with("Relleno (f)"), "ppp {ppp}");
-        assert!(texto(3, &cambiada).starts_with("Cuentagotas (,)"), "ppp {ppp}");
+        assert!(
+            texto(3, &cambiada).starts_with("Cuentagotas (,)"),
+            "ppp {ppp}"
+        );
 
         // Con la tabla vacía no hay ninguna letra, y los botones siguen funcionando.
         let vacia = Keymap::new(vec![]);

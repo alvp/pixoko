@@ -203,7 +203,10 @@ fn recoge(
                 textura: malla.texture_id,
                 rect: Rect::from_points(&puntos),
                 uv: Rect::from_points(&uvs),
-                color: malla.vertices.first().map_or(Color32::PLACEHOLDER, |v| v.color),
+                color: malla
+                    .vertices
+                    .first()
+                    .map_or(Color32::PLACEHOLDER, |v| v.color),
             });
         }
         Shape::Text(t) => textos.push(Pintado {
@@ -1326,7 +1329,11 @@ fn fila_3_con_256_entradas_anadir_da_el_aviso_y_ningun_op() {
             ColorChoice::Entry(5),
         );
         let f = banco.reposo();
-        assert_eq!(banco.tinta(&f, Icon::Add), TEXT_DISABLED, "ppp {ppp}: atenuado");
+        assert_eq!(
+            banco.tinta(&f, Icon::Add),
+            TEXT_DISABLED,
+            "ppp {ppp}: atenuado"
+        );
         assert_eq!(banco.tinta(&f, Icon::Remove), TEXT, "ppp {ppp}");
         assert_eq!(banco.tinta(&f, Icon::RotateLeft), TEXT);
         let f = banco.clic_boton(PaletteButton::Add);
@@ -3186,7 +3193,10 @@ mod fijar_transparente {
             let f = banco.clic_boton(PaletteButton::Transparent);
             assert_eq!(f.salida.op, None, "ppp {ppp}: no golpea");
             assert_eq!(f.salida.notice, None, "ppp {ppp}");
-            assert!(banco.ops.removal().is_none(), "ppp {ppp}: `Cancelar` cancela");
+            assert!(
+                banco.ops.removal().is_none(),
+                "ppp {ppp}: `Cancelar` cancela"
+            );
             assert_eq!(banco.choice, ColorChoice::Entry(3), "ppp {ppp}");
             assert_eq!(banco.ops.range_end(), Some(4), "ppp {ppp}: rango intacto");
 
@@ -3379,10 +3389,20 @@ mod iconos_editor {
         let (ppp, n) = (banco.ppp(), banco.n());
         let u = n as f32 / ppp;
         let rect = banco.rect_de_boton(button);
-        assert!(hay_rect(f, rect, l.face), "{contexto}: falta la cara {:?}", l.face);
+        assert!(
+            hay_rect(f, rect, l.face),
+            "{contexto}: falta la cara {:?}",
+            l.face
+        );
         let franjas = [
-            (Rect::from_min_size(rect.min, vec2(rect.width(), u)), l.top_left),
-            (Rect::from_min_size(rect.min, vec2(u, rect.height())), l.top_left),
+            (
+                Rect::from_min_size(rect.min, vec2(rect.width(), u)),
+                l.top_left,
+            ),
+            (
+                Rect::from_min_size(rect.min, vec2(u, rect.height())),
+                l.top_left,
+            ),
             (
                 Rect::from_min_size(pos2(rect.min.x, rect.max.y - u), vec2(rect.width(), u)),
                 l.bottom_right,
@@ -3413,7 +3433,10 @@ mod iconos_editor {
         );
         for esquina in [malla.rect.min, malla.rect.max] {
             for v in [esquina.x * ppp, esquina.y * ppp] {
-                assert!((v - v.round()).abs() <= 0.05, "{contexto}: esquina fuera de píxel: {v}");
+                assert!(
+                    (v - v.round()).abs() <= 0.05,
+                    "{contexto}: esquina fuera de píxel: {v}"
+                );
             }
         }
         assert!(
@@ -3444,17 +3467,57 @@ mod iconos_editor {
                 PaletteButton::RotateRight,
                 PaletteButton::Transparent,
             ] {
-                comprueba(&f, &banco, button, &look(false, true, false), &format!("{contexto} {button:?}"));
+                comprueba(
+                    &f,
+                    &banco,
+                    button,
+                    &look(false, true, false),
+                    &format!("{contexto} {button:?}"),
+                );
             }
             // Con 256 entradas, `Añadir` está desactivado; con una sola, `Quitar`.
-            let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen_indexada_256(), ColorChoice::Entry(5));
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_indexada_256(),
+                ColorChoice::Entry(5),
+            );
             let f = banco.reposo();
-            comprueba(&f, &banco, PaletteButton::Add, &look(false, false, false), &contexto);
-            comprueba(&f, &banco, PaletteButton::Remove, &look(false, true, false), &contexto);
-            let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen_una_entrada(), ColorChoice::Entry(0));
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Add,
+                &look(false, false, false),
+                &contexto,
+            );
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Remove,
+                &look(false, true, false),
+                &contexto,
+            );
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_una_entrada(),
+                ColorChoice::Entry(0),
+            );
             let f = banco.reposo();
-            comprueba(&f, &banco, PaletteButton::Remove, &look(false, false, false), &contexto);
-            comprueba(&f, &banco, PaletteButton::RotateRight, &look(false, true, false), &contexto);
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Remove,
+                &look(false, false, false),
+                &contexto,
+            );
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::RotateRight,
+                &look(false, true, false),
+                &contexto,
+            );
             // Hundido: la entrada elegida es la transparente.
             let mut banco = Banco::nuevo(
                 ppp,
@@ -3463,7 +3526,13 @@ mod iconos_editor {
                 ColorChoice::Entry(2),
             );
             let f = banco.reposo();
-            comprueba(&f, &banco, PaletteButton::Transparent, &look(true, true, false), &contexto);
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Transparent,
+                &look(true, true, false),
+                &contexto,
+            );
         }
     }
 
@@ -3474,14 +3543,37 @@ mod iconos_editor {
             let (x, y) = banco.centro_de_boton(PaletteButton::RotateLeft);
             banco.mueve(x, y);
             let f = banco.reposo();
-            comprueba(&f, &banco, PaletteButton::RotateLeft, &look(false, true, true), &format!("ppp {ppp}"));
-            comprueba(&f, &banco, PaletteButton::Add, &look(false, true, false), &format!("ppp {ppp}"));
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::RotateLeft,
+                &look(false, true, true),
+                &format!("ppp {ppp}"),
+            );
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Add,
+                &look(false, true, false),
+                &format!("ppp {ppp}"),
+            );
             // Un botón desactivado con el ratón encima sigue con la cara normal.
-            let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen_indexada_256(), ColorChoice::Entry(5));
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_indexada_256(),
+                ColorChoice::Entry(5),
+            );
             let (x, y) = banco.centro_de_boton(PaletteButton::Add);
             banco.mueve(x, y);
             let f = banco.reposo();
-            comprueba(&f, &banco, PaletteButton::Add, &look(false, false, true), &format!("ppp {ppp}"));
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Add,
+                &look(false, false, true),
+                &format!("ppp {ppp}"),
+            );
             // Con un gesto en curso todo se ve normal (los controles no responden).
             assert!(f.pinta_icono(&banco.iconos.set, Icon::Add));
         }
@@ -3501,7 +3593,10 @@ mod iconos_editor {
         ] {
             let real = palette_button_tooltip(boton, activo);
             assert_eq!(real, texto, "{boton:?} {activo}");
-            assert!(real.chars().all(|c| INTERFACE_CHARSET.contains(c)), "{real}");
+            assert!(
+                real.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+                "{real}"
+            );
             assert!(!real.contains('\n'), "sin segunda línea ni atajo");
         }
     }
@@ -3539,8 +3634,8 @@ mod iconos_editor {
 
     #[test]
     fn fila_8_pulsar_un_icono_habilitado_emite_widget_info_de_tipo_boton_con_su_rotulo() {
-        use egui::output::OutputEvent;
         use egui::Role;
+        use egui::output::OutputEvent;
         for (button, esperado) in [
             (PaletteButton::Add, "Añadir entrada"),
             (PaletteButton::RotateRight, "Rotar a la derecha"),
@@ -3553,9 +3648,22 @@ mod iconos_editor {
             let actual = banco.actual();
             banco.editor.sync(actual);
             let mut eventos = Vec::new();
-            for events in [vec![boton(pos, true, Modifiers::NONE)], vec![boton(pos, false, Modifiers::NONE)]] {
+            for events in [
+                vec![boton(pos, true, Modifiers::NONE)],
+                vec![boton(pos, false, Modifiers::NONE)],
+            ] {
                 let input = banco.entrada(events);
-                let Banco { ctx, scroll, view, image, choice, slots, editor, ops, .. } = &mut banco;
+                let Banco {
+                    ctx,
+                    scroll,
+                    view,
+                    image,
+                    choice,
+                    slots,
+                    editor,
+                    ops,
+                    ..
+                } = &mut banco;
                 let salida = ctx.run_ui(input, |ui| {
                     apply_scale(ui.ctx());
                     px_ui::status::show(ui, "lápiz · color 1 #000000", false);
@@ -3573,7 +3681,9 @@ mod iconos_editor {
                 salida.drop_without_applying_deltas();
             }
             assert!(
-                eventos.iter().any(|e| matches!(e, OutputEvent::Clicked(info)
+                eventos
+                    .iter()
+                    .any(|e| matches!(e, OutputEvent::Clicked(info)
                     if info.role == Role::Button
                         && info.label.as_deref() == Some(esperado)
                         && info.enabled)),
@@ -3590,24 +3700,60 @@ mod iconos_editor {
             let f = banco.clic_boton(PaletteButton::Add);
             assert_eq!(f.salida.op, Some(Add), "ppp {ppp}");
             let f = banco.clic_boton(PaletteButton::RotateLeft);
-            assert_eq!(f.salida.op, Some(Rotate { start: 0, len: 4, steps: -1 }), "ppp {ppp}");
+            assert_eq!(
+                f.salida.op,
+                Some(Rotate {
+                    start: 0,
+                    len: 4,
+                    steps: -1
+                }),
+                "ppp {ppp}"
+            );
             let f = banco.clic_boton(PaletteButton::RotateRight);
-            assert_eq!(f.salida.op, Some(Rotate { start: 0, len: 4, steps: 1 }), "ppp {ppp}");
+            assert_eq!(
+                f.salida.op,
+                Some(Rotate {
+                    start: 0,
+                    len: 4,
+                    steps: 1
+                }),
+                "ppp {ppp}"
+            );
             let f = banco.clic_boton(PaletteButton::Transparent);
-            assert_eq!(f.salida.op, Some(SetTransparent { index: Some(1) }), "ppp {ppp}");
+            assert_eq!(
+                f.salida.op,
+                Some(SetTransparent { index: Some(1) }),
+                "ppp {ppp}"
+            );
             // `Quitar` una entrada usada deja la quita pendiente: aparecen `Confirmar` y `Cancelar`.
             banco.clic_boton(PaletteButton::Remove);
             assert!(banco.ops.removal().is_some(), "ppp {ppp}");
             let f = banco.reposo();
             comprueba_botones(&f, &banco, &CON_QUITA, &format!("ppp {ppp}"));
             // Desactivados: 256 entradas y una sola entrada avisan, sin op.
-            let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen_indexada_256(), ColorChoice::Entry(5));
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_indexada_256(),
+                ColorChoice::Entry(5),
+            );
             let f = banco.clic_boton(PaletteButton::Add);
-            assert_eq!((f.salida.op, f.salida.notice.as_deref()), (None, Some("paleta llena: 256 entradas")));
-            let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen_una_entrada(), ColorChoice::Entry(0));
+            assert_eq!(
+                (f.salida.op, f.salida.notice.as_deref()),
+                (None, Some("paleta llena: 256 entradas"))
+            );
+            let mut banco = Banco::nuevo(
+                ppp,
+                PANTALLA_ALTA,
+                imagen_una_entrada(),
+                ColorChoice::Entry(0),
+            );
             let f = banco.clic_boton(PaletteButton::Remove);
             assert_eq!(f.salida.op, None);
-            assert_eq!(f.salida.notice.as_deref(), Some("no se puede quitar la única entrada"));
+            assert_eq!(
+                f.salida.notice.as_deref(),
+                Some("no se puede quitar la única entrada")
+            );
             // Con un gesto en curso no responde ninguno y nada cambia.
             let mut banco = banco_f(ppp, 1);
             banco.gesto_dibujo = true;
@@ -3619,7 +3765,8 @@ mod iconos_editor {
     }
 
     #[test]
-    fn fila_10_el_icono_de_transparente_tiene_dos_estados_en_el_mismo_rectangulo_y_tooltip_alternante() {
+    fn fila_10_el_icono_de_transparente_tiene_dos_estados_en_el_mismo_rectangulo_y_tooltip_alternante()
+     {
         for ppp in PPPS {
             let imagen = |marca| imagen_con(&[ROJO, VERDE, AZUL, NEGRO], marca, &[0, 1, 2, 3]);
             let mut rectangulos = Vec::new();
@@ -3629,10 +3776,21 @@ mod iconos_editor {
                 (None, 1, false),
                 (Some(1), 1, true),
             ] {
-                let mut banco = Banco::nuevo(ppp, PANTALLA_ALTA, imagen(marca), ColorChoice::Entry(activa));
+                let mut banco = Banco::nuevo(
+                    ppp,
+                    PANTALLA_ALTA,
+                    imagen(marca),
+                    ColorChoice::Entry(activa),
+                );
                 let f = banco.reposo();
                 let contexto = format!("ppp {ppp}, marca {marca:?}, activa {activa}");
-                comprueba(&f, &banco, PaletteButton::Transparent, &look(hundido, true, false), &contexto);
+                comprueba(
+                    &f,
+                    &banco,
+                    PaletteButton::Transparent,
+                    &look(hundido, true, false),
+                    &contexto,
+                );
                 let palette = banco.image.palette().expect("indexada");
                 let texto = px_ui::palette_ops::transparent_button_label(palette, activa);
                 assert_eq!(
@@ -3643,16 +3801,32 @@ mod iconos_editor {
                 assert_eq!(texto == "Quitar transparente", hundido, "{contexto}");
                 rectangulos.push(banco.rect_de_boton(PaletteButton::Transparent));
             }
-            assert!(rectangulos.windows(2).all(|p| p[0] == p[1]), "ppp {ppp}: mismo rectángulo");
+            assert!(
+                rectangulos.windows(2).all(|p| p[0] == p[1]),
+                "ppp {ppp}: mismo rectángulo"
+            );
             // Pulsar aplica `SetTransparentIndex` (un paso) y el icono cambia en el siguiente
             // fotograma, con la op aplicada.
             let mut banco = banco_f(ppp, 2);
             let id = banco.documento.main_image();
             let f = banco.clic_boton(PaletteButton::Transparent);
-            assert_eq!(f.salida.op, Some(PaletteOp::SetTransparent { index: Some(2) }), "ppp {ppp}");
-            banco.aplica(Command::SetTransparentIndex { image: id, index: Some(2) });
+            assert_eq!(
+                f.salida.op,
+                Some(PaletteOp::SetTransparent { index: Some(2) }),
+                "ppp {ppp}"
+            );
+            banco.aplica(Command::SetTransparentIndex {
+                image: id,
+                index: Some(2),
+            });
             let f = banco.reposo();
-            comprueba(&f, &banco, PaletteButton::Transparent, &look(true, true, false), &format!("ppp {ppp}: tras fijar"));
+            comprueba(
+                &f,
+                &banco,
+                PaletteButton::Transparent,
+                &look(true, true, false),
+                &format!("ppp {ppp}: tras fijar"),
+            );
         }
     }
 }

@@ -21,14 +21,14 @@ use px_core::Mode;
 use px_ui::chrome::{MENU_H_U, toolbar_width_u};
 use px_ui::color_edit::{Control, controls};
 use px_ui::edit_layout::{
-    BLOCK_GAP_U, BUTTON_COL_GAP_U, BUTTON_FULL_W_U, BUTTON_H_U, BUTTON_HALF_W_U, BUTTON_ROWS, BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, BUTTON_X_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U,
-    FIELD_X_U, FIRST_ROW_Y_U, GROUP_GAP_U, HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U,
-    LABEL_X_U, MIN_CANVAS_WIDTH_U, NOTICE_LINES, PaletteButton, PanelLayout, ROW_H_U,
-    SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_W_U, VALUE_X_U,
-    block_height_px, button_hit, button_rect_u, buttons_height_u, buttons_y_u, control_row_u,
-    edges_u, editor_height_u, editor_height_u_max, field_y_u, min_panel_height_px,
-    min_window_height_pt, min_window_width_pt, min_window_width_u, notice_y_u, panel_layout,
-    slider_hit,
+    BLOCK_GAP_U, BUTTON_COL_GAP_U, BUTTON_FULL_W_U, BUTTON_H_U, BUTTON_HALF_W_U, BUTTON_ROWS,
+    BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, BUTTON_X_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U,
+    FIRST_ROW_Y_U, GROUP_GAP_U, HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U, LABEL_X_U,
+    MIN_CANVAS_WIDTH_U, NOTICE_LINES, PaletteButton, PanelLayout, ROW_H_U, SEPARATOR_Y_U,
+    THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_W_U, VALUE_X_U, block_height_px,
+    button_hit, button_rect_u, buttons_height_u, buttons_y_u, control_row_u, edges_u,
+    editor_height_u, editor_height_u_max, field_y_u, min_panel_height_px, min_window_height_pt,
+    min_window_width_pt, min_window_width_u, notice_y_u, panel_layout, slider_hit,
 };
 use px_ui::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, visible_rows, visible_rows_reserved};
 use px_ui::status::bar_height_px;
@@ -1182,11 +1182,7 @@ fn button_hit_en_los_puntos_de_la_spec() {
             (-1, -1, None, None),
         ];
         for (x, y, iconos, quita) in casos {
-            assert_eq!(
-                button_hit(m, false, x, y, n),
-                iconos,
-                "n = {n}, ({x}, {y})"
-            );
+            assert_eq!(button_hit(m, false, x, y, n), iconos, "n = {n}, ({x}, {y})");
             assert_eq!(
                 button_hit(m, true, x, y, n),
                 quita,

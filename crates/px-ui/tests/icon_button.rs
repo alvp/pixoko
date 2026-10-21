@@ -7,7 +7,7 @@
 //! con el oscuro).
 
 use egui::Color32;
-use px_ui::icon_button::{BEVEL_U, BUTTON_U, GAP_U, ICON_U, PAD_U, PITCH_U, Look, look};
+use px_ui::icon_button::{BEVEL_U, BUTTON_U, GAP_U, ICON_U, Look, PAD_U, PITCH_U, look};
 use px_ui::theme::{
     ACCENT, BEVEL_DARK, BEVEL_LIGHT, SURFACE_0, SURFACE_1, SURFACE_2, SURFACE_3, TEXT,
     TEXT_DISABLED, contrast_ratio,
@@ -61,7 +61,10 @@ fn fila_7_el_icono_sobre_la_cara_cumple_4_5_normal_encima_y_activo_y_2_desactiva
     }
     // Colores del tema, no inventados.
     assert_eq!((normal.tint, activo.tint), (TEXT, ACCENT));
-    assert_eq!((normal.face, encima.face, activo.face), (SURFACE_2, SURFACE_3, SURFACE_0));
+    assert_eq!(
+        (normal.face, encima.face, activo.face),
+        (SURFACE_2, SURFACE_3, SURFACE_0)
+    );
 }
 
 #[test]
@@ -72,8 +75,11 @@ fn fila_7_el_borde_claro_cumple_3_con_la_cara_el_fondo_y_el_oscuro_y_el_oscuro_n
         assert_eq!(claro, BEVEL_LIGHT);
         assert_eq!(oscuro, BEVEL_DARK);
         assert_ne!(claro, oscuro);
-        for (contra, nombre) in [(l.face, "la cara"), (SURFACE_1, "el fondo"), (oscuro, "el oscuro")]
-        {
+        for (contra, nombre) in [
+            (l.face, "la cara"),
+            (SURFACE_1, "el fondo"),
+            (oscuro, "el oscuro"),
+        ] {
             let c = contrast_ratio(claro, contra);
             assert!(
                 c >= 3.0,
@@ -103,7 +109,7 @@ fn fila_7_hundido_se_distingue_de_normal_sin_depender_del_color() {
 
 #[test]
 fn propiedad_2_el_aspecto_solo_depende_de_las_tres_banderas_y_la_prioridad_es_hundido_encima_normal()
-{
+ {
     for (hundido, habilitado, encima) in combinaciones() {
         let l = look(hundido, habilitado, encima);
         // Misma entrada, mismo aspecto.

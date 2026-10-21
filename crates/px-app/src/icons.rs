@@ -83,7 +83,7 @@ pub fn decode(stem: &str, bytes: &[u8]) -> Result<ColorImage, IconError> {
         });
     }
     let mut rgba = to_rgba8(&png.image);
-    for px in rgba.chunks_exact_mut(4) {
+    for px in rgba.as_chunks_mut::<4>().0 {
         let value = if px[3] > 0 { 255 } else { 0 };
         px[..3].fill(value);
     }

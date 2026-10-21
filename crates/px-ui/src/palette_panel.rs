@@ -30,8 +30,7 @@ use crate::palette_grid::{
 };
 use crate::palette_ops::{
     DragEnd, PaletteOp, PaletteOps, blocked_reason, default_destination, drag_labels,
-    removal_prompt, removal_warning, rotation_range, transparent_toggle,
-    uses_entry,
+    removal_prompt, removal_warning, rotation_range, transparent_toggle, uses_entry,
 };
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, text_scale, ui_unit};

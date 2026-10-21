@@ -555,7 +555,14 @@ fn un_boton_deshabilitado_se_pinta_atenuado() {
         estado(Tool::Pencil, x5(), bloqueo(|l| l.gesture = true)),
     );
     let tinta = |banco: &Banco, indice: usize| {
-        let id = banco.iconos.set.get(TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).nth(indice).expect("botón").icon);
+        let id = banco.iconos.set.get(
+            TOOL_BUTTONS
+                .iter()
+                .chain(ZOOM_BUTTONS.iter())
+                .nth(indice)
+                .expect("botón")
+                .icon,
+        );
         banco
             .reposo()
             .malla_de(id.expect("textura"))
@@ -563,7 +570,11 @@ fn un_boton_deshabilitado_se_pinta_atenuado() {
             .color
     };
     assert_eq!(tinta(&libre, 1), TEXT);
-    assert_eq!(tinta(&con_gesto, 1), TEXT_DISABLED, "el deshabilitado va atenuado");
+    assert_eq!(
+        tinta(&con_gesto, 1),
+        TEXT_DISABLED,
+        "el deshabilitado va atenuado"
+    );
     // El zoom sigue habilitado con el gesto: su icono no cambia.
     assert_eq!(tinta(&libre, 5), tinta(&con_gesto, 5));
 }
@@ -1485,14 +1496,20 @@ mod iconos {
         let (ex, ey) = Banco::esquina_u(i);
         let (x, y) = (banco.x0() + ex * n, ey * n);
         let lado = BOTON_U * n;
-        assert!(hay(p, ppp, l.face, [x, y, x + lado, y + lado]), "{contexto}: falta la cara");
+        assert!(
+            hay(p, ppp, l.face, [x, y, x + lado, y + lado]),
+            "{contexto}: falta la cara"
+        );
         for (franja, color) in [
             ([x, y, x + lado, y + n], l.top_left),
             ([x, y, x + n, y + lado], l.top_left),
             ([x, y + lado - n, x + lado, y + lado], l.bottom_right),
             ([x + lado - n, y, x + lado, y + lado], l.bottom_right),
         ] {
-            assert!(hay(p, ppp, color, franja), "{contexto}: falta la franja {franja:?}");
+            assert!(
+                hay(p, ppp, color, franja),
+                "{contexto}: falta la franja {franja:?}"
+            );
         }
         let id = banco.iconos.set.get(icono_de(i)).expect("textura");
         let malla = p
@@ -1500,14 +1517,22 @@ mod iconos {
             .unwrap_or_else(|| panic!("{contexto}: no se pinta el icono {i}"));
         let d = (4 + l.offset_u) * n;
         let esperado = [x + d, y + d, x + d + 16 * n, y + d + 16 * n];
-        let real = [malla.rect.min.x, malla.rect.min.y, malla.rect.max.x, malla.rect.max.y];
+        let real = [
+            malla.rect.min.x,
+            malla.rect.min.y,
+            malla.rect.max.x,
+            malla.rect.max.y,
+        ];
         for (a, b) in real.iter().zip(esperado) {
             assert!(
                 (a * ppp - b as f32).abs() <= tolerancia_de_egui(ppp),
                 "{contexto}: icono {i} en {real:?} (pt) y no en {esperado:?} (px)"
             );
             // Esquinas en píxeles físicos enteros.
-            assert!((a * ppp - (a * ppp).round()).abs() <= tolerancia_de_egui(ppp), "{contexto}");
+            assert!(
+                (a * ppp - (a * ppp).round()).abs() <= tolerancia_de_egui(ppp),
+                "{contexto}"
+            );
         }
         assert_eq!(malla.color, l.tint, "{contexto}: tinta");
         assert!(
@@ -1524,18 +1549,54 @@ mod iconos {
             let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
             let p = banco.reposo();
             let contexto = format!("ppp {ppp}");
-            comprueba(&p, &banco, 4, &look(false, true, false), &format!("{contexto} normal"));
-            comprueba(&p, &banco, 5, &look(false, true, false), &format!("{contexto} zoom"));
-            comprueba(&p, &banco, 0, &look(true, true, false), &format!("{contexto} hundido"));
+            comprueba(
+                &p,
+                &banco,
+                4,
+                &look(false, true, false),
+                &format!("{contexto} normal"),
+            );
+            comprueba(
+                &p,
+                &banco,
+                5,
+                &look(false, true, false),
+                &format!("{contexto} zoom"),
+            );
+            comprueba(
+                &p,
+                &banco,
+                0,
+                &look(true, true, false),
+                &format!("{contexto} hundido"),
+            );
             // Con un gesto: las herramientas se atenúan (el activo, hundido y atenuado) y el zoom no.
             let banco = Banco::nuevo(
                 ppp,
                 estado(Tool::Pencil, x5(), bloqueo(|l| l.gesture = true)),
             );
             let p = banco.reposo();
-            comprueba(&p, &banco, 1, &look(false, false, false), &format!("{contexto} atenuado"));
-            comprueba(&p, &banco, 0, &look(true, false, false), &format!("{contexto} activo atenuado"));
-            comprueba(&p, &banco, 6, &look(false, true, false), &format!("{contexto} zoom libre"));
+            comprueba(
+                &p,
+                &banco,
+                1,
+                &look(false, false, false),
+                &format!("{contexto} atenuado"),
+            );
+            comprueba(
+                &p,
+                &banco,
+                0,
+                &look(true, false, false),
+                &format!("{contexto} activo atenuado"),
+            );
+            comprueba(
+                &p,
+                &banco,
+                6,
+                &look(false, true, false),
+                &format!("{contexto} zoom libre"),
+            );
             // Ningún texto de botón: lo pintado como texto no cae sobre ninguna casilla.
             let n = banco.n();
             for texto in &p.textos {
@@ -1543,10 +1604,7 @@ mod iconos {
                 for i in 0..9 {
                     let (ex, ey) = Banco::esquina_u(i);
                     let casilla = Rect::from_min_size(
-                        egui::pos2(
-                            (banco.x0() + ex * n) as f32 / ppp,
-                            (ey * n) as f32 / ppp,
-                        ),
+                        egui::pos2((banco.x0() + ex * n) as f32 / ppp, (ey * n) as f32 / ppp),
                         egui::vec2((BOTON_U * n) as f32 / ppp, (BOTON_U * n) as f32 / ppp),
                     );
                     assert!(
@@ -1559,7 +1617,8 @@ mod iconos {
             // Todo lo pintado por la caja cae dentro de ella.
             for malla in &p.mallas {
                 assert!(
-                    malla.rect.max.x * ppp <= (banco.x0() + COLUMNA_U * n) as f32 + tolerancia_de_egui(ppp)
+                    malla.rect.max.x * ppp
+                        <= (banco.x0() + COLUMNA_U * n) as f32 + tolerancia_de_egui(ppp)
                         && malla.rect.min.x * ppp >= banco.x0() as f32 - tolerancia_de_egui(ppp),
                     "{contexto}: icono fuera de la caja: {:?}",
                     malla.rect
@@ -1577,7 +1636,13 @@ mod iconos {
             let pos = en_puntos(ppp, banco.x0() + cx * n, cy * n);
             banco.fotograma(vec![mover(pos)]);
             let p = banco.fotograma(vec![]).0;
-            comprueba(&p, &banco, 2, &look(false, true, true), &format!("ppp {ppp}: encima"));
+            comprueba(
+                &p,
+                &banco,
+                2,
+                &look(false, true, true),
+                &format!("ppp {ppp}: encima"),
+            );
             assert_eq!(look(false, true, true).face, SURFACE_3);
             // Atenuado: con el ratón encima sigue con la cara normal.
             let banco = Banco::nuevo(
@@ -1586,7 +1651,13 @@ mod iconos {
             );
             banco.fotograma(vec![mover(pos)]);
             let p = banco.fotograma(vec![]).0;
-            comprueba(&p, &banco, 2, &look(false, false, true), &format!("ppp {ppp}: atenuado"));
+            comprueba(
+                &p,
+                &banco,
+                2,
+                &look(false, false, true),
+                &format!("ppp {ppp}: atenuado"),
+            );
         }
     }
 

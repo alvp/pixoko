@@ -2,6 +2,8 @@
 
 Estado: **aprobada** (2026-10-21; decisiones 1 a 11 como están, con las condiciones del visto bueno del final de la página, que **prevalecen sobre cualquier otra frase de ella**). Cambios previstos: `px-ui` y `px-app`. **No se toca `px-core` ni `px-raster`.** Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia. No se implementa ninguna opción de herramienta (hito 4).
 
+**Actualización de la unidad I.4 (2026-10-21), que prevalece:** la caja es una rejilla de iconos de 24 u en cuatro columnas (99 u, la caja sigue en 107 u): el recuadro de opciones (99 × 138 u) sube a y = 108, el contenido de la caja pasa de 335 a 250 u de los 305 u del panel mínimo y el alto mínimo de ventana baja a 341 u (341, 272,8, 454,67, 341 y 341 pt); el criterio es el 65 % de 720 pt (468,0) en lugar del 72 % (518,4); el ancho mínimo (468 u) no cambia. `show_toolbar` y `show_toolbar_with` se retiran. El recuadro de 138 u se queda: con 17 a 20 herramientas (cinco filas) ya no cabe y lo decide el hito 4. ([`interfaz-iconos.md`](interfaz-iconos.md)).
+
 Referencias: «Disposición de la pantalla» y «Opciones de herramienta» en `docs/DISENO-INTERFAZ.md`. Geometría, ventana mínima, respaldo B y bloqueos de columna y zoom: [`hito-2-menu-herramientas.md`](hito-2-menu-herramientas.md). Anillos, banda del indicador y criterio del 72 % (transitorio hasta I.4): [`interfaz-dos-colores.md`](interfaz-dos-colores.md). Gestos del ratón y botones laterales: [`interfaz-raton.md`](interfaz-raton.md) (el clic derecho en herramientas y zoom quedó aquí). Panel de paletas (233 u, línea derecha, pista): [`hito-2-panel-paletas.md`](hito-2-panel-paletas.md).
 
 ## Objetivo

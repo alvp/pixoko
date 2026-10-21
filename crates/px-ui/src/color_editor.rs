@@ -341,8 +341,7 @@ pub(crate) fn show(
             };
             let rect = geo.rect_u(x, y, width, height);
             let enabled = blocked_reason(button, view.len, view.has_destination).is_none();
-            let hovered =
-                pointer.is_some_and(|p| geo.panel_rect.contains(p) && rect.contains(p));
+            let hovered = pointer.is_some_and(|p| geo.panel_rect.contains(p) && rect.contains(p));
             let sunken = button == PaletteButton::Transparent && view.transparent_active;
             let look = look(sunken, enabled, hovered);
             match palette_icon(button) {
@@ -351,7 +350,8 @@ pub(crate) fn show(
                     &painter,
                     rect,
                     u,
-                    geo.rect_u(x + BUTTON_TEXT_X_U, y + BUTTON_TEXT_Y_U, 0, ROW_H_U).min,
+                    geo.rect_u(x + BUTTON_TEXT_X_U, y + BUTTON_TEXT_Y_U, 0, ROW_H_U)
+                        .min,
                     palette_button_tooltip(button, false),
                     &font,
                     &look,

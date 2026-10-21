@@ -85,12 +85,18 @@ fn paint_frame(painter: &Painter, rect: Rect, u: f32, look: &Look) {
         look.top_left,
     );
     painter.rect_filled(
-        Rect::from_min_size(pos2(rect.min.x, rect.max.y - bevel), vec2(rect.width(), bevel)),
+        Rect::from_min_size(
+            pos2(rect.min.x, rect.max.y - bevel),
+            vec2(rect.width(), bevel),
+        ),
         0.0,
         look.bottom_right,
     );
     painter.rect_filled(
-        Rect::from_min_size(pos2(rect.max.x - bevel, rect.min.y), vec2(bevel, rect.height())),
+        Rect::from_min_size(
+            pos2(rect.max.x - bevel, rect.min.y),
+            vec2(bevel, rect.height()),
+        ),
         0.0,
         look.bottom_right,
     );
