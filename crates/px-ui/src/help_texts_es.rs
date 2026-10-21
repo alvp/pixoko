@@ -3,8 +3,7 @@
 //! código. Límites que comprueban las pruebas: nombre ≤ 20 caracteres, descripción ≤ 8 líneas de 42
 //! columnas, todo dentro de `INTERFACE_CHARSET`.
 //!
-//! PENDIENTE DE REVISIÓN DEL USUARIO (visto bueno 5): los 22 textos de `HELP_ES` no están cerrados
-//! hasta que los confirme.
+//! Los 22 textos de `HELP_ES` los confirmó el usuario el 21 de octubre de 2026, sin cambios.
 
 use crate::help_texts::{HelpEntry, UiStrings};
 
