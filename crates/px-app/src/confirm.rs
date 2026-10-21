@@ -19,6 +19,9 @@ pub enum Request {
     SaveFallback {
         as_copy: bool,
     },
+    /// `Nueva capa` o `Duplicar` en una imagen en gris, repetida en 5 s: abre `Convertir modo…`
+    /// con «Gris con alfa» elegido (specs/hito-3-capas-interfaz.md, decisión 13).
+    LayersToGrayAlpha,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -183,6 +183,25 @@ pub fn open_convert_mode(modal: &mut Modal, from: Mode, locks: Locks) -> bool {
     true
 }
 
+/// Como [`open_convert_mode`] con `target` ya elegido como modo de destino (si es uno de los
+/// destinos de `from`).
+pub fn open_convert_mode_to(modal: &mut Modal, from: Mode, target: Mode, locks: Locks) -> bool {
+    let mut spec = convert_form(from);
+    if let Some(index) = targets(from).iter().position(|mode| *mode == target)
+        && let Some(field) = spec.fields.iter_mut().find(|f| f.id == FIELD_TARGET)
+        && let FieldKind::Choice { default, .. } = &mut field.kind
+    {
+        *default = index;
+    }
+    if !modal.open(DialogKind::ConvertMode, spec, locks) {
+        return false;
+    }
+    if let Modal::Open(dialog) = modal {
+        dialog.set_block(Some(PENDING_REASON.to_string()));
+    }
+    true
+}
+
 /// Lo que dice `convert_image(.., NOTHING)` de una conversión.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PaletteInfo {

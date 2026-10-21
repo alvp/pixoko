@@ -62,6 +62,10 @@ pub enum ClearPageError {
     OutOfMemory,
     /// La capa activa está oculta: no se pinta.
     HiddenLayer,
+    /// La capa activa está bloqueada: no se pinta.
+    LockedLayer,
+    /// La capa activa está oculta y bloqueada.
+    HiddenAndLockedLayer,
     Document(DocumentError),
 }
 
@@ -70,6 +74,8 @@ impl fmt::Display for ClearPageError {
         match self {
             ClearPageError::OutOfMemory => f.write_str("no hay memoria para borrar la página"),
             ClearPageError::HiddenLayer => f.write_str(HIDDEN_LAYER_NOTICE),
+            ClearPageError::LockedLayer => f.write_str(LOCKED_LAYER_NOTICE),
+            ClearPageError::HiddenAndLockedLayer => f.write_str(HIDDEN_AND_LOCKED_NOTICE),
             ClearPageError::Document(error) => write!(f, "{error}"),
         }
     }
@@ -100,6 +106,8 @@ pub struct Session {
     /// Posición de la capa activa en la última comprobación: si la capa desaparece, la activa
     /// pasa a la que ocupa esa posición (o a la última).
     active_pos: usize,
+    /// Bytes de celdas con píxeles en la última comprobación del aviso de presupuesto.
+    mem_seen: usize,
     /// Desplazamiento del panel de paletas; abrir un fichero lo reinicia.
     pub scroll: Scroll,
     /// Estado del panel entre fotogramas (desplazamiento de todo el panel y «mostrar la elegida»);
@@ -134,9 +142,11 @@ impl Session {
         let choice = initial_choice(document.canvas_image());
         let background = default_background(document.canvas_image());
         let active = document.layers()[0].id();
+        let mem_seen = document.materialized_bytes();
         Session {
             active,
             active_pos: 0,
+            mem_seen,
             saved_id: document.state_id(),
             document,
             choice,
@@ -222,15 +232,22 @@ impl Session {
         }
     }
 
-    /// Por qué la herramienta no puede pintar en la capa activa (hoy, solo si está oculta); el
+    /// Por qué la herramienta no puede pintar en la capa activa (oculta, bloqueada o ambas); el
     /// cuentagotas lee igualmente.
     pub fn paint_refusal(&self, tool: Tool) -> Option<&'static str> {
         let paints = matches!(tool, Tool::Pencil | Tool::Line | Tool::Fill | Tool::Eraser);
-        let hidden = self
-            .document
-            .layer(self.active)
-            .is_some_and(|layer| !layer.visible());
-        (paints && hidden).then_some(HIDDEN_LAYER_NOTICE)
+        let layer = self.document.layer(self.active);
+        let hidden = layer.is_some_and(|layer| !layer.visible());
+        let locked = layer.is_some_and(|layer| layer.locked());
+        if !paints {
+            return None;
+        }
+        match (hidden, locked) {
+            (true, true) => Some(HIDDEN_AND_LOCKED_NOTICE),
+            (true, false) => Some(HIDDEN_LAYER_NOTICE),
+            (false, true) => Some(LOCKED_LAYER_NOTICE),
+            (false, false) => None,
+        }
     }
 
     /// Por qué no se puede convertir el modo ahora: con varias capas hace falta `ConvertAll`.
@@ -258,7 +275,8 @@ impl Session {
         true
     }
 
-    /// Da el estado actual por guardado (ayudas de depuración que crean capas al abrir).
+    /// Da el estado actual por guardado (atajo de las pruebas).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn mark_unmodified(&mut self) {
         self.saved_id = self.document.state_id();
     }
@@ -425,8 +443,12 @@ impl Session {
         &mut self,
         reserve: &mut dyn FnMut(usize) -> bool,
     ) -> Result<bool, ClearPageError> {
-        if self.paint_refusal(Tool::Fill).is_some() {
-            return Err(ClearPageError::HiddenLayer);
+        if let Some(reason) = self.paint_refusal(Tool::Fill) {
+            return Err(match reason {
+                LOCKED_LAYER_NOTICE => ClearPageError::LockedLayer,
+                HIDDEN_AND_LOCKED_NOTICE => ClearPageError::HiddenAndLockedLayer,
+                _ => ClearPageError::HiddenLayer,
+            });
         }
         let id = self.active_cel();
         let Some(pixel) = self.pixel_of(Role::Background) else {
@@ -480,7 +502,8 @@ impl Session {
         })?;
         if changed {
             self.note_applied(self.full());
-            self.after_history_move(before);
+            let layers = self.layer_ids();
+            self.after_history_move(before, &layers);
             // El fondo por defecto es del modo: tras convertir se vuelve a elegir.
             self.background = default_background(self.document.canvas_image());
         }
@@ -490,6 +513,7 @@ impl Session {
     /// Deshace un paso y deja la selección válida para la paleta resultante.
     pub fn undo(&mut self) -> Result<(), DocumentError> {
         let before = self.choice;
+        let layers_before = self.layer_ids();
         let from = self.document.state_id();
         let result = self.document.undo();
         if result.is_ok() {
@@ -497,13 +521,14 @@ impl Session {
             let blocks = self.log.get(from).cloned().unwrap_or_else(|| self.full());
             self.note_dirty(&blocks);
         }
-        self.after_history_move(before);
+        self.after_history_move(before, &layers_before);
         result
     }
 
     /// Rehace un paso y deja la selección válida para la paleta resultante.
     pub fn redo(&mut self) -> Result<(), DocumentError> {
         let before = self.choice;
+        let layers_before = self.layer_ids();
         let result = self.document.redo();
         if result.is_ok() {
             // Rehacer hacia `to` toca lo mismo que tocó el paso al aplicarse.
@@ -511,13 +536,14 @@ impl Session {
             let blocks = self.log.get(to).cloned().unwrap_or_else(|| self.full());
             self.note_dirty(&blocks);
         }
-        self.after_history_move(before);
+        self.after_history_move(before, &layers_before);
         result
     }
 
-    fn after_history_move(&mut self, before: ColorChoice) {
+    fn after_history_move(&mut self, before: ColorChoice, layers_before: &[LayerId]) {
         // El rango no sobrevive a deshacer ni a rehacer.
         self.ops.clear_range();
+        self.follow_entering_layer(layers_before);
         self.normalize();
         self.reveal_if_choice_changed(before);
     }
@@ -846,6 +872,7 @@ impl Session {
         self.document = Document::new(image);
         self.active = self.document.layers()[0].id();
         self.active_pos = 0;
+        self.mem_seen = self.document.materialized_bytes();
         self.log.clear();
         self.dirty = None;
         self.saved_id = self.document.state_id();
@@ -911,6 +938,10 @@ impl Session {
 /// Por qué no se pinta: la capa activa está oculta.
 pub const HIDDEN_LAYER_NOTICE: &str = "la capa activa está oculta";
 
+/// Por qué no se pinta: la capa activa está bloqueada, u oculta y bloqueada.
+pub const LOCKED_LAYER_NOTICE: &str = "la capa activa está bloqueada";
+pub const HIDDEN_AND_LOCKED_NOTICE: &str = "la capa activa está oculta y bloqueada";
+
 /// Por qué no se convierte el modo con varias capas (`ConvertAll` es de la unidad 3.5).
 pub const CONVERT_LAYERS_NOTICE: &str =
     "no se puede convertir el modo con varias capas: deja una sola o espera a la unidad 3.5";
@@ -975,6 +1006,9 @@ mod convert_tests;
 mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;
+mod layer_ops;
+pub use layer_ops::*;
+
 #[cfg(test)]
 mod layer_ops_tests;
 #[cfg(test)]

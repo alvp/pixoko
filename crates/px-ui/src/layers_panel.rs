@@ -284,6 +284,15 @@ impl PanelState {
         self.open = !self.open;
     }
 
+    /// El rectángulo del panel en esta ventana sin guardar nada (para `F1` y los clics).
+    pub fn current_rect(&self, window_px: (i64, i64), n: u32) -> ScreenRect {
+        place(
+            self.pos_u.unwrap_or_else(|| default_pos_u(window_px, n)),
+            window_px,
+            n,
+        )
+    }
+
     /// El rectángulo del panel en esta ventana; guarda la posición ya recortada, así que cambiar
     /// de escala o de tamaño de ventana la conserva en `u`.
     pub fn rect(&mut self, window_px: (i64, i64), n: u32) -> ScreenRect {

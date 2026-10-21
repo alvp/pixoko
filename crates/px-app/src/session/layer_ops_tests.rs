@@ -23,8 +23,8 @@ use std::collections::BTreeSet;
 use proptest::prelude::*;
 use px_core::{BlendMode, ImageId, LayerId, Palette, PixelEdit, Rgba};
 use px_ui::actions::{LayerNav, Locks};
-use px_ui::dialog::Modal;
 use px_ui::canvas::CanvasEvent;
+use px_ui::dialog::Modal;
 use px_ui::pick::Picked;
 use px_ui::tool::{DropperSource, Tool, ToolAction, ToolEvent, ToolState};
 
@@ -49,7 +49,12 @@ fn lleno(ancho: u32, alto: u32, modo: Mode, pixel: Pixel) -> Image {
 }
 
 fn sesion_rgba(ancho: u32, alto: u32) -> Session {
-    Session::sample(Document::new(lleno(ancho, alto, Mode::Rgba, Pixel::Rgba(FONDO))))
+    Session::sample(Document::new(lleno(
+        ancho,
+        alto,
+        Mode::Rgba,
+        Pixel::Rgba(FONDO),
+    )))
 }
 
 fn ids(sesion: &Session) -> Vec<LayerId> {
@@ -57,7 +62,10 @@ fn ids(sesion: &Session) -> Vec<LayerId> {
 }
 
 fn posicion(sesion: &Session, id: LayerId) -> usize {
-    ids(sesion).iter().position(|c| *c == id).expect("la capa existe")
+    ids(sesion)
+        .iter()
+        .position(|c| *c == id)
+        .expect("la capa existe")
 }
 
 fn pinta(sesion: &mut Session, puntos: &[(u32, u32)], color: Rgba) {
@@ -78,7 +86,12 @@ fn pinta(sesion: &mut Session, puntos: &[(u32, u32)], color: Rgba) {
 }
 
 /// Un gesto de `herramienta` sobre la capa activa, como la app: primero la guardia.
-fn gesto(sesion: &mut Session, tools: &mut ToolState, herramienta: Tool, puntos: &[(i32, i32)]) -> bool {
+fn gesto(
+    sesion: &mut Session,
+    tools: &mut ToolState,
+    herramienta: Tool,
+    puntos: &[(i32, i32)],
+) -> bool {
     if sesion.paint_refusal(herramienta).is_some() {
         return false;
     }
@@ -126,7 +139,10 @@ fn fila_8_nueva_capa_va_encima_de_la_activa_y_pasa_a_ser_la_activa() {
     assert_eq!(ahora[3], capas[2], "la que estaba encima sigue encima");
     assert_eq!(sesion.active_layer(), ahora[2]);
     assert_eq!(sesion.document.layers()[2].name(), "Capa 4");
-    assert!(sesion.document.image(sesion.active_cel()).is_none(), "vacía: no reserva");
+    assert!(
+        sesion.document.image(sesion.active_cel()).is_none(),
+        "vacía: no reserva"
+    );
     assert!(sesion.modified());
     // Un solo paso de historia.
     sesion.undo().expect("deshacer");
@@ -150,19 +166,34 @@ fn fila_8_duplicar_copia_encima_conserva_el_bloqueo_y_la_copia_es_la_activa() {
     let copia = sesion.document.layers()[2].clone();
     assert_eq!(copia.id(), ahora[2]);
     assert_ne!(copia.id(), capas[1]);
-    assert_eq!(sesion.active_layer(), copia.id(), "la copia pasa a ser la activa");
+    assert_eq!(
+        sesion.active_layer(),
+        copia.id(),
+        "la copia pasa a ser la activa"
+    );
     assert!(copia.locked(), "conserva el bloqueo");
     assert_eq!(copia.opacity(), 128);
     assert_eq!(copia.name(), "Capa 2 copia");
-    let original = sesion.document.image(sesion.document.layers()[1].cel()).expect("píxeles");
-    let nueva = sesion.document.image(copia.cel()).expect("copia con píxeles");
+    let original = sesion
+        .document
+        .image(sesion.document.layers()[1].cel())
+        .expect("píxeles");
+    let nueva = sesion
+        .document
+        .image(copia.cel())
+        .expect("copia con píxeles");
     assert_eq!(original, nueva);
-    // Un solo paso: deshacer quita la copia y la activa vuelve a la vecina (la original).
+    // Un solo paso: deshacer quita la copia y la activa pasa a la que ocupa su puesto (regla de la
+    // vecina de 3.3: la que estaba encima).
     sesion.undo().expect("deshacer");
     assert_eq!(ids(&sesion).len(), 3);
-    assert_eq!(sesion.active_layer(), capas[1]);
+    assert_eq!(sesion.active_layer(), capas[2]);
     sesion.redo().expect("rehacer");
-    assert_eq!(sesion.active_layer(), ahora[2], "rehacer la copia la activa");
+    assert_eq!(
+        sesion.active_layer(),
+        ahora[2],
+        "rehacer la copia la activa"
+    );
 }
 
 #[test]
@@ -199,17 +230,26 @@ fn fila_8_quitar_pasa_a_la_vecina_y_deshacer_y_rehacer_siguen_a_la_entrada() {
     let informe = sesion.remove_layer();
     assert!(informe.changed);
     assert_eq!(ids(&sesion), [capas[0], capas[2]]);
-    assert!(capas[..1].iter().chain(&capas[2..]).any(|c| *c == sesion.active_layer()));
+    assert!(
+        capas[..1]
+            .iter()
+            .chain(&capas[2..])
+            .any(|c| *c == sesion.active_layer())
+    );
     // Deshacer `Quitar`: la capa que entra pasa a ser la activa.
     sesion.undo().expect("deshacer");
     assert_eq!(ids(&sesion), capas);
     assert_eq!(sesion.active_layer(), capas[1]);
-    // Rehacer `Nueva capa`: la nueva es la activa; deshacerla vuelve a la vecina.
+    // Rehacer `Nueva capa`: la nueva es la activa; deshacerla pasa a la que ocupa su puesto.
     sesion.set_active_layer(capas[0]).expect("existe");
     assert!(sesion.new_layer().changed);
     let nueva = sesion.active_layer();
     sesion.undo().expect("deshacer");
-    assert_eq!(sesion.active_layer(), capas[0]);
+    assert_eq!(
+        sesion.active_layer(),
+        capas[1],
+        "la que ocupa el puesto de la nueva"
+    );
     sesion.redo().expect("rehacer");
     assert_eq!(sesion.active_layer(), nueva);
 }
@@ -245,7 +285,11 @@ fn fila_8_las_propiedades_son_un_paso_cada_una_y_marcan_modificado() {
     assert!(sesion.set_layer_locked(capas[2], true).changed);
     assert!(sesion.rename_layer(capas[2], "Cielo".to_string()).changed);
     assert!(sesion.set_layer_opacity(capas[2], 100).changed);
-    assert!(sesion.set_layer_blend(capas[2], BlendMode::Multiply).changed);
+    assert!(
+        sesion
+            .set_layer_blend(capas[2], BlendMode::Multiply)
+            .changed
+    );
     assert_eq!(pasos(&sesion), base + 5);
     assert!(sesion.modified());
     // Repetir un valor no hace nada.
@@ -276,8 +320,17 @@ fn fila_9_bloqueada_oculta_o_ambas_ninguna_herramienta_dibuja_y_el_cuentagotas_s
         let copia = sesion.document.clone();
         let id = sesion.document.state_id();
         for herramienta in herramientas {
-            assert_eq!(sesion.paint_refusal(herramienta), Some(aviso), "{herramienta:?}");
-            assert!(!gesto(&mut sesion, &mut tools, herramienta, &[(1, 1), (5, 5)]));
+            assert_eq!(
+                sesion.paint_refusal(herramienta),
+                Some(aviso),
+                "{herramienta:?}"
+            );
+            assert!(!gesto(
+                &mut sesion,
+                &mut tools,
+                herramienta,
+                &[(1, 1), (5, 5)]
+            ));
         }
         assert_eq!(sesion.paint_refusal(Tool::Dropper), None);
         assert_eq!(sesion.document, copia);
@@ -291,7 +344,12 @@ fn fila_9_bloqueada_oculta_o_ambas_ninguna_herramienta_dibuja_y_el_cuentagotas_s
     sesion.set_layer_visible(capas[1], true);
     sesion.set_layer_locked(capas[1], false);
     assert_eq!(sesion.paint_refusal(Tool::Pencil), None);
-    assert!(gesto(&mut sesion, &mut tools, Tool::Pencil, &[(1, 1), (5, 5)]));
+    assert!(gesto(
+        &mut sesion,
+        &mut tools,
+        Tool::Pencil,
+        &[(1, 1), (5, 5)]
+    ));
 }
 
 #[test]
@@ -355,7 +413,10 @@ fn fila_10_el_aviso_al_crear_sale_con_el_peor_caso_por_encima_de_1_gib() {
         assert_eq!(aviso.is_some(), capas >= 5, "{capas} capas");
     }
     let texto = create_budget_notice(5 * celda, 2 * GIB, GIB).expect("aviso");
-    assert!(texto.contains("1,2 GiB") && texto.contains("2 GiB"), "{texto}");
+    assert!(
+        texto.contains("1,2 GiB") && texto.contains("2 GiB"),
+        "{texto}"
+    );
     // 4096² (64 MiB): a la decimoséptima; 1024² (4 MiB): nunca (256 × 4 MiB = 1 GiB).
     assert!(create_budget_notice(16 * 64 * MIB, 2 * GIB, GIB).is_none());
     assert!(create_budget_notice(17 * 64 * MIB, 2 * GIB, GIB).is_some());
@@ -365,14 +426,27 @@ fn fila_10_el_aviso_al_crear_sale_con_el_peor_caso_por_encima_de_1_gib() {
 #[test]
 fn fila_10_nueva_capa_y_duplicar_avisan_al_cruzar_el_peor_caso_de_verdad() {
     // 2048² RGBA = 16 MiB: la 65.ª capa pasa de 1 GiB de peor caso.
-    let mut sesion = Session::sample(Document::new(lleno(2048, 2048, Mode::Rgba, Pixel::Rgba(FONDO))));
+    let mut sesion = Session::sample(Document::new(lleno(
+        2048,
+        2048,
+        Mode::Rgba,
+        Pixel::Rgba(FONDO),
+    )));
     for n in 2..=64usize {
         let informe = sesion.new_layer();
-        assert!(informe.changed && informe.notice.is_none(), "capa {n}: {informe:?}");
+        assert!(
+            informe.changed && informe.notice.is_none(),
+            "capa {n}: {informe:?}"
+        );
     }
     let informe = sesion.new_layer();
     assert!(informe.changed, "la capa se crea igualmente");
-    assert!(informe.notice.expect("aviso de presupuesto").contains("GiB"));
+    assert!(
+        informe
+            .notice
+            .expect("aviso de presupuesto")
+            .contains("GiB")
+    );
 }
 
 #[test]
@@ -387,7 +461,10 @@ fn fila_10_el_aviso_al_pintar_sale_una_vez_por_cruce_y_no_al_deshacer_por_debajo
     assert!(sesion.memory_crossing_notice_with(umbral).is_none());
     // Materializar las celdas 2 y 3 (la 1 ya lo está): al llegar a 3 celdas se cruza.
     pinta(&mut sesion, &[(1, 1)], ROJO);
-    assert!(sesion.memory_crossing_notice_with(umbral).is_none(), "dos celdas");
+    assert!(
+        sesion.memory_crossing_notice_with(umbral).is_none(),
+        "dos celdas"
+    );
     let capa = ids(&sesion)[2];
     sesion.set_active_layer(capa).expect("existe");
     pinta(&mut sesion, &[(2, 2)], ROJO);
@@ -419,7 +496,9 @@ fn fila_10_sin_sitio_y_con_256_capas_son_avisos_con_el_documento_intacto() {
     assert!(informe.notice.is_some());
     assert_eq!(sesion.document, copia);
     assert_eq!(sesion.document.state_id(), id);
-    sesion.document.set_cells_limit(Document::DEFAULT_CELLS_LIMIT);
+    sesion
+        .document
+        .set_cells_limit(Document::DEFAULT_CELLS_LIMIT);
     // 256 capas: `TooManyLayers` y `LayerNav::can_add` en falso.
     while sesion.document.layers().len() < Document::MAX_LAYERS {
         assert!(sesion.new_layer().changed);
@@ -446,7 +525,10 @@ fn fila_11_en_gris_no_se_crea_ni_se_duplica_y_se_ofrece_pasar_a_gris_con_alfa() 
         assert!(!informe.changed);
         assert!(informe.offer_convert);
         let aviso = informe.notice.expect("aviso");
-        assert!(aviso.contains("gris con alfa") && aviso.contains("repite"), "{aviso}");
+        assert!(
+            aviso.contains("gris con alfa") && aviso.contains("repite"),
+            "{aviso}"
+        );
     }
     assert_eq!(sesion.document, copia);
     assert!(!sesion.document.can_undo());
@@ -456,24 +538,45 @@ fn fila_11_en_gris_no_se_crea_ni_se_duplica_y_se_ofrece_pasar_a_gris_con_alfa() 
 #[test]
 fn fila_11_repetir_la_orden_en_5_s_abre_convertir_modo_con_gris_con_alfa_elegido() {
     let mut confirmacion = Confirm::new();
-    assert_eq!(confirmacion.request(Request::LayersToGrayAlpha, 10.0), Confirmation::Armed);
-    assert_eq!(confirmacion.request(Request::LayersToGrayAlpha, 14.0), Confirmation::Confirmed);
-    assert_eq!(confirmacion.request(Request::LayersToGrayAlpha, 20.0), Confirmation::Armed);
+    assert_eq!(
+        confirmacion.request(Request::LayersToGrayAlpha, 10.0),
+        Confirmation::Armed
+    );
+    assert_eq!(
+        confirmacion.request(Request::LayersToGrayAlpha, 14.0),
+        Confirmation::Confirmed
+    );
+    assert_eq!(
+        confirmacion.request(Request::LayersToGrayAlpha, 20.0),
+        Confirmation::Armed
+    );
     // A los 6 s no vale: vuelve a avisar.
-    assert_eq!(confirmacion.request(Request::LayersToGrayAlpha, 26.0), Confirmation::Armed);
+    assert_eq!(
+        confirmacion.request(Request::LayersToGrayAlpha, 26.0),
+        Confirmation::Armed
+    );
     // El diálogo se abre con el destino ya elegido.
     let mut modal = Modal::default();
-    assert!(open_convert_mode_to(&mut modal, Mode::Gray, Mode::GrayAlpha, Locks::default()));
+    assert!(open_convert_mode_to(
+        &mut modal,
+        Mode::Gray,
+        Mode::GrayAlpha,
+        Locks::default()
+    ));
     let esperado = targets(Mode::Gray)
         .iter()
         .position(|modo| *modo == Mode::GrayAlpha)
         .expect("gris con alfa es un destino");
-    assert_eq!(modal.dialog().expect("abierto").chosen(FIELD_TARGET), Some(esperado));
+    assert_eq!(
+        modal.dialog().expect("abierto").chosen(FIELD_TARGET),
+        Some(esperado)
+    );
 }
 
 #[test]
 fn fila_11_indexado_sin_transparente_avisa_sin_ofrecer_y_con_transparente_crea() {
-    let paleta = Palette::from_colors([Rgba::opaque(0, 0, 0), Rgba::opaque(9, 9, 9)]).expect("paleta");
+    let paleta =
+        Palette::from_colors([Rgba::opaque(0, 0, 0), Rgba::opaque(9, 9, 9)]).expect("paleta");
     let sin = Image::new_indexed(4, 4, paleta.clone()).expect("imagen");
     let mut sesion = Session::sample(Document::new(sin));
     let copia = sesion.document.clone();
@@ -483,7 +586,9 @@ fn fila_11_indexado_sin_transparente_avisa_sin_ofrecer_y_con_transparente_crea()
     assert_eq!(sesion.document, copia);
     let mut con = paleta;
     con.set_transparent_index(Some(1)).expect("existe");
-    let mut sesion = Session::sample(Document::new(Image::new_indexed(4, 4, con).expect("imagen")));
+    let mut sesion = Session::sample(Document::new(
+        Image::new_indexed(4, 4, con).expect("imagen"),
+    ));
     assert!(sesion.new_layer().changed);
 }
 
@@ -521,11 +626,25 @@ fn fila_12_con_mayus_el_cuentagotas_lee_la_capa_activa_y_sin_ella_lo_visible() {
     sesion.set_active_layer(capas[2]).expect("existe");
     pinta(&mut sesion, &[(2, 2)], AZUL);
     sesion.set_active_layer(capas[1]).expect("existe");
-    assert_eq!(elige(&mut sesion, false, (2, 2)), vec![Picked::Color(AZUL)], "lo que se ve");
-    assert_eq!(elige(&mut sesion, true, (2, 2)), vec![Picked::Color(ROJO)], "la capa activa");
+    assert_eq!(
+        elige(&mut sesion, false, (2, 2)),
+        vec![Picked::Color(AZUL)],
+        "lo que se ve"
+    );
+    assert_eq!(
+        elige(&mut sesion, true, (2, 2)),
+        vec![Picked::Color(ROJO)],
+        "la capa activa"
+    );
     // Sobre un píxel sin nada en la activa: transparente con Mayús, el fondo sin ella.
-    assert_eq!(elige(&mut sesion, false, (5, 5)), vec![Picked::Color(FONDO)]);
-    assert_eq!(elige(&mut sesion, true, (5, 5)), vec![Picked::Color(Rgba::TRANSPARENT)]);
+    assert_eq!(
+        elige(&mut sesion, false, (5, 5)),
+        vec![Picked::Color(FONDO)]
+    );
+    assert_eq!(
+        elige(&mut sesion, true, (5, 5)),
+        vec![Picked::Color(Rgba::TRANSPARENT)]
+    );
 }
 
 #[test]

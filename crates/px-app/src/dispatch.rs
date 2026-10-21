@@ -14,7 +14,7 @@ use px_ui::tool::{ToolAction, ToolState};
 use px_ui::view::ViewOp;
 
 use crate::keys::select_tool;
-use crate::session::Session;
+use crate::session::{LayerReport, Session};
 
 /// Lo que dejó una acción despachada.
 #[derive(Clone, Debug, PartialEq)]
@@ -48,6 +48,21 @@ pub enum Dispatched {
     Help(HelpTarget),
     /// `Ayuda → Atajos de teclado…`: `App` abre la lista de atajos.
     Shortcuts,
+    /// Una acción del panel de capas que es de la ventana: lo muestra, lo oculta o lleva el foco.
+    LayerPanel(LayerPanelOp),
+    /// `Nueva capa` o `Duplicar` en gris: el aviso ofrece pasar a gris con alfa; repetir la orden en
+    /// 5 s abre `Convertir modo…` (la regla de la repetición la lleva `App`).
+    OfferGrayAlpha { notice: String, action: AppAction },
+}
+
+/// Lo que se le pide al panel de capas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayerPanelOp {
+    Toggle,
+    /// `Renombrar`: abre el panel y lleva el foco al nombre.
+    FocusName,
+    /// `Propiedades`: abre el panel y lo deja a la vista.
+    ShowProperties,
 }
 
 /// Lo que `dispatch` puede tocar, con los bloqueos de este fotograma.
@@ -55,6 +70,17 @@ pub struct Targets<'a> {
     pub session: &'a mut Session,
     pub tools: &'a mut ToolState,
     pub locks: Locks,
+}
+
+/// El resultado de una operación de capa: refresco, aviso y, en gris, la oferta de convertir.
+fn layer_done(action: AppAction, report: LayerReport) -> Dispatched {
+    match (report.offer_convert, report.notice) {
+        (true, Some(notice)) => Dispatched::OfferGrayAlpha { notice, action },
+        (_, notice) => Dispatched::Done {
+            refresh: report.changed,
+            notice,
+        },
+    }
 }
 
 fn done(refresh: bool) -> Dispatched {
@@ -103,6 +129,14 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::BackgroundColor => Dispatched::BackgroundColor,
         AppAction::ShowHelp(target) => Dispatched::Help(target),
         AppAction::ShowShortcuts => Dispatched::Shortcuts,
+        AppAction::ToggleLayerPanel => Dispatched::LayerPanel(LayerPanelOp::Toggle),
+        AppAction::RenameLayer => Dispatched::LayerPanel(LayerPanelOp::FocusName),
+        AppAction::LayerProperties => Dispatched::LayerPanel(LayerPanelOp::ShowProperties),
+        AppAction::NewLayer => layer_done(action, session.new_layer()),
+        AppAction::DuplicateLayer => layer_done(action, session.duplicate_layer()),
+        AppAction::RemoveLayer => layer_done(action, session.remove_layer()),
+        AppAction::LayerUp => layer_done(action, session.move_layer(1)),
+        AppAction::LayerDown => layer_done(action, session.move_layer(-1)),
         AppAction::SelectTool(tool) => {
             let image = Some(session.document.canvas_image());
             Dispatched::Done {

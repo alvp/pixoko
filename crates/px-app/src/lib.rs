@@ -9,7 +9,6 @@ mod confirm;
 mod convert_mode;
 #[cfg(test)]
 mod damero_guardado;
-mod debug_layers;
 mod demo;
 mod dialogs;
 mod dispatch;
@@ -33,7 +32,7 @@ use std::time::Duration;
 
 use crate::background_color::{background_from_values, open_background_color};
 use eframe::egui;
-use px_core::{Document, DocumentError};
+use px_core::{Document, DocumentError, Mode};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInput};
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
@@ -43,12 +42,14 @@ use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
 use px_ui::gestures::GestureMap;
-use px_ui::help::{HelpTarget, help_target_at};
+use px_ui::help::{HelpTarget, help_target_at, help_target_in_panel};
 use px_ui::key_events::{help_pressed, presses};
 use px_ui::keymap::Keymap;
 use px_ui::keymap_file::{Loaded, load_notice};
+use px_ui::layers_panel::PanelState;
+use px_ui::layers_panel_view::{PanelEvent, PanelView, show_layer_panel};
 use px_ui::licenses_view::licenses_form;
-use px_ui::menu::show_menu_in;
+use px_ui::menu::show_menu_full;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::options::{OptionsState, options_row_count};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
@@ -68,15 +69,14 @@ use crate::confirm::{
 use crate::convert_mode::{
     Analysis, CONVERTING_NOTICE, ConvertModeError, ConvertSync, History, PendingConvert, Plan,
     Start, SystemAnalyzer, convert_memory_notice, describe_converted, open_convert_mode,
-    plan_from_values, reserve_for_convert, start_convert, sync_convert,
+    open_convert_mode_to, plan_from_values, reserve_for_convert, start_convert, sync_convert,
 };
-use crate::debug_layers::{ENV_LAYERS, LayersRequest, apply_debug_layers, parse_layers};
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
     DialogKind, Dialogs, Finished, Outcome, RfdPicker, fallback_request, ignored_file_notice,
     new_gate, open_gate, unavailable_notice,
 };
-use crate::dispatch::{Dispatched, Targets, dispatch};
+use crate::dispatch::{Dispatched, LayerPanelOp, Targets, dispatch};
 use crate::dropper_once::DropperOnce;
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::keys::select_tool;
@@ -86,7 +86,10 @@ use crate::new_image::{
     open_new_image, spec_from_values, sync_form,
 };
 use crate::save_wait::{PendingSave, SAVING_NOTICE, StartSave, compose_pixels, start_save};
-use crate::session::{Session, describe_saved, describe_saved_dialog, with_flatten_notice};
+use crate::session::{
+    LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for,
+    with_flatten_notice,
+};
 use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
 use crate::title::{app_title_info, colors_label, status_line_fit, title_with_file, window_title};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
@@ -146,6 +149,8 @@ struct App {
     options: OptionsState,
     /// Las texturas de los iconos propios (I.4); vacío hasta que `main` las carga.
     icons: icons::Icons,
+    /// El panel de capas flotante (3.4): abierto o cerrado, posición y lista; no es del documento.
+    layers: PanelState,
     /// El diálogo modal abierto, si lo hay (Licencias o el de prueba).
     modal: Modal,
     /// Ayuda, lista de atajos y editor: sustitución con vuelta y captura de teclas (I.5).
@@ -187,9 +192,7 @@ impl App {
         canvas.set_checker_mesh(mesh_fallback_enabled(
             std::env::var(ENV_MESH).ok().as_deref(),
         ));
-        let mut session = Session::sample(document);
-        // Ayuda de depuración descartable (3.3): `PIXOKO_CAPAS=N[,K]`.
-        let startup_notice = debug_layers_from_env(&mut session);
+        let session = Session::sample(document);
         if let Ok(image) = flatten(&session.document) {
             canvas.set_image(&image);
         }
@@ -216,11 +219,12 @@ impl App {
             gestures,
             options: OptionsState::default(),
             icons: icons::Icons::empty(),
+            layers: PanelState::default(),
             modal: Modal::Closed,
             flow: Flow::new(Vec::new()),
             shortcuts: ShortcutStore::new(None),
             config_warned: false,
-            startup_notice,
+            startup_notice: None,
             modal_focus: None,
             demo_pending: demo_dialog_enabled(std::env::var(ENV_DEMO_DIALOG).ok().as_deref()),
             new_image: None,
@@ -265,12 +269,19 @@ impl App {
             (screen.width() * ppp).round() as i64,
             (screen.height() * ppp).round() as i64,
         );
+        let n = px_ui::text::text_scale(ppp);
         match ctx.input(|i| i.pointer.latest_pos()) {
-            Some(pos) => help_target_at(
-                ((pos.x * ppp).round() as i64, (pos.y * ppp).round() as i64),
-                window,
-                px_ui::text::text_scale(ppp),
-            ),
+            Some(pos) => {
+                let point = ((pos.x * ppp).round() as i64, (pos.y * ppp).round() as i64);
+                // El panel de capas flota encima de todo: la ayuda es la del control que haya debajo.
+                if self.layers.open
+                    && let Some(target) =
+                        help_target_in_panel(point, self.layers.current_rect(window, n), n)
+                {
+                    return target;
+                }
+                help_target_at(point, window, n)
+            }
             None => HelpTarget::Active,
         }
     }
@@ -355,17 +366,6 @@ impl App {
         }
     }
 
-    /// `PIXOKO_CAPAS` al abrir un documento (ayuda de depuración descartable): crea las capas y
-    /// avisa si no se pudo.
-    fn apply_debug_layers(&mut self, ctx: &egui::Context, text: &mut String) {
-        if let Some(extra) = debug_layers_from_env(&mut self.session) {
-            text.push_str(&format!(" · {extra}"));
-        }
-        if self.session.document.layers().len() > 1 {
-            self.finish::<std::convert::Infallible>(ctx, Ok(true));
-        }
-    }
-
     /// Abre `path` (del argumento, soltado o elegido en el diálogo). Con cambios sin guardar pide
     /// confirmación por repetición; con un gesto o un diálogo en curso se ignora. `ignored`:
     /// ficheros soltados de más. `confirmed`: el descarte ya se confirmó (Ctrl+O con cambios).
@@ -422,7 +422,6 @@ impl App {
         }
         let mut text = loaded.text.clone();
         self.session.install(loaded);
-        self.apply_debug_layers(ctx, &mut text);
         self.confirm.clear();
         self.dialogs.remember_dir(path);
         if ignored > 0 {
@@ -684,7 +683,30 @@ impl App {
                 ctx.request_repaint();
             }
             Dispatched::NewImage => self.begin_new_image(ctx),
-            Dispatched::ConvertMode => self.begin_convert_mode(ctx),
+            Dispatched::ConvertMode => self.begin_convert_mode(ctx, None),
+            Dispatched::LayerPanel(op) => match op {
+                LayerPanelOp::Toggle => {
+                    self.layers.toggle();
+                    ctx.request_repaint();
+                }
+                LayerPanelOp::FocusName => {
+                    self.layers.open = true;
+                    self.layers.focus_name = true;
+                    ctx.request_repaint();
+                }
+                LayerPanelOp::ShowProperties => {
+                    self.layers.open = true;
+                    ctx.request_repaint();
+                }
+            },
+            Dispatched::OfferGrayAlpha { notice, .. } => {
+                // Repetir la orden en 5 s abre `Convertir modo…` con «Gris con alfa» elegido.
+                let now = ctx.input(|i| i.time);
+                match self.confirm.request(Request::LayersToGrayAlpha, now) {
+                    Confirmation::Confirmed => self.begin_convert_mode(ctx, Some(Mode::GrayAlpha)),
+                    Confirmation::Armed => self.notify(ctx, notice),
+                }
+            }
             Dispatched::Licenses(true) => {
                 let locks = self.locks(ctx);
                 if self.modal.open(
@@ -788,7 +810,6 @@ impl App {
         }
         self.confirm.clear();
         let mut text = describe_new(&spec);
-        self.apply_debug_layers(ctx, &mut text);
         if self.session.take_discarded_text() {
             text = format!("{DOCUMENT_CHANGED_NOTICE} · {text}");
         }
@@ -799,7 +820,7 @@ impl App {
     }
 
     /// `Imagen → Convertir modo…`: abre el diálogo con el modo y el color activo de ahora.
-    fn begin_convert_mode(&mut self, ctx: &egui::Context) {
+    fn begin_convert_mode(&mut self, ctx: &egui::Context, target: Option<Mode>) {
         if let Some(reason) = self.session.convert_refusal() {
             self.notify(ctx, reason.to_string());
             return;
@@ -814,9 +835,79 @@ impl App {
             .and_then(|pixel| pixel_rgba(image, pixel));
         let state_id = self.session.document.state_id();
         let locks = self.locks(ctx);
-        if open_convert_mode(&mut self.modal, from, locks) {
+        let opened = match target {
+            Some(target) => open_convert_mode_to(&mut self.modal, from, target, locks),
+            None => open_convert_mode(&mut self.modal, from, locks),
+        };
+        if opened {
             self.modal_focus = None;
             self.convert = Some(ConvertSync::new(from, state_id, active));
+        }
+    }
+
+    /// Lo que pide un control del panel de capas: la misma regla de bloqueo que las acciones de
+    /// documento (un trazo, un diálogo o un campo de texto en curso lo impiden; el campo del propio
+    /// panel confirma al perder el foco, ya sin texto enfocado).
+    fn apply_panel_event(&mut self, ctx: &egui::Context, frame: &eframe::Frame, event: PanelEvent) {
+        use px_ui::actions::is_blocked;
+        use px_ui::layers_panel::PanelButton;
+        match event {
+            PanelEvent::Close => {
+                self.layers.open = false;
+                ctx.request_repaint();
+                return;
+            }
+            PanelEvent::Notice(text) => {
+                self.notify(ctx, text);
+                return;
+            }
+            PanelEvent::Button(button) => {
+                let action = match button {
+                    PanelButton::New => AppAction::NewLayer,
+                    PanelButton::Duplicate => AppAction::DuplicateLayer,
+                    PanelButton::Remove => AppAction::RemoveLayer,
+                    PanelButton::Up => AppAction::LayerUp,
+                    PanelButton::Down => AppAction::LayerDown,
+                };
+                self.apply_action(ctx, frame, action, Origin::Button);
+                return;
+            }
+            _ => {}
+        }
+        // `Locks` sin el campo de texto: el del nombre perdió el foco justo ahora.
+        let mut locks = self.locks(ctx);
+        locks.text_focus = false;
+        if is_blocked(AppAction::RenameLayer, locks, Origin::Button) {
+            return;
+        }
+        let report = match event {
+            PanelEvent::Select(id) => {
+                let _ = self.session.set_active_layer(id);
+                ctx.request_repaint();
+                LayerReport::default()
+            }
+            PanelEvent::StartRename(_) => {
+                self.layers.focus_name = true;
+                LayerReport::default()
+            }
+            PanelEvent::ToggleVisible(id) => {
+                let visible = self.session.document.layer(id).is_some_and(|l| l.visible());
+                self.session.set_layer_visible(id, !visible)
+            }
+            PanelEvent::ToggleLocked(id) => {
+                let locked = self.session.document.layer(id).is_some_and(|l| l.locked());
+                self.session.set_layer_locked(id, !locked)
+            }
+            PanelEvent::Rename(id, name) => self.session.rename_layer(id, name),
+            PanelEvent::Opacity(id, value) => self.session.set_layer_opacity(id, value),
+            PanelEvent::Blend(id, blend) => self.session.set_layer_blend(id, blend),
+            PanelEvent::Close | PanelEvent::Notice(_) | PanelEvent::Button(_) => {
+                LayerReport::default()
+            }
+        };
+        self.finish::<std::convert::Infallible>(ctx, Ok(report.changed));
+        if let Some(text) = report.notice {
+            self.notify(ctx, text);
         }
     }
 
@@ -1074,12 +1165,13 @@ impl eframe::App for App {
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
         let state = self.ui_state(&ctx);
-        if let Some(action) = show_menu_in(
+        if let Some(action) = show_menu_full(
             ui,
             &state,
             self.platform,
             self.canvas.background(),
             &self.keymap,
+            &self.session.layer_nav(),
         ) {
             actions.push((action, Origin::Menu));
         }
@@ -1192,6 +1284,35 @@ impl eframe::App for App {
                 }
             }
         }
+        // El panel de capas (3.4): flota sobre el lienzo y se muestra antes que él para que egui lo
+        // vea como la capa de encima. Con un diálogo modal, una conversión o un guardado en espera
+        // no responde a nada.
+        let panel_events = {
+            let screen = ctx.content_rect();
+            let ppp = ctx.pixels_per_point();
+            let window_px = (
+                (screen.width() * ppp).round() as i64,
+                (screen.height() * ppp).round() as i64,
+            );
+            let responsive = !(self.dialogs.pending()
+                || self.modal.is_open()
+                || self.pending_convert.is_some()
+                || self.pending_save.is_some());
+            show_layer_panel(
+                &ctx,
+                &PanelView {
+                    doc: &self.session.document,
+                    active: self.session.active_layer(),
+                    enabled: responsive,
+                    icons: &self.icons.set,
+                },
+                &mut self.layers,
+                window_px,
+            )
+        };
+        for event in panel_events {
+            self.apply_panel_event(&ctx, frame, event);
+        }
         let now = ctx.input(|i| i.time);
         if let Some(finished) = self.dialogs.poll(now) {
             self.finish_dialog(&ctx, finished);
@@ -1230,6 +1351,13 @@ impl eframe::App for App {
                 self.notify(&ctx, reason.to_string());
                 continue;
             }
+            // El cuentagotas lee lo que se ve; con `Mayús` al pulsar, solo la capa activa.
+            if let CanvasInput::Stroke(CanvasEvent::StrokeBegin(_)) = input
+                && !self.tools.busy()
+            {
+                let shift = ctx.input(|i| i.modifiers.shift);
+                self.tools.set_dropper_source(dropper_source_for(shift));
+            }
             let pixel = self.session.pixel_of(role);
             let result = self
                 .tools
@@ -1259,6 +1387,10 @@ impl eframe::App for App {
         self.pointer_actions(&raw_events, &mut actions);
         for (action, origin) in actions {
             self.apply_action(&ctx, frame, action, origin);
+        }
+        // Presupuesto (D04): un aviso, una vez, al cruzar 1 GiB de celdas con píxeles.
+        if let Some(text) = self.session.memory_crossing_notice() {
+            self.notify(&ctx, text);
         }
         // Foco del recuadro de opciones: otra herramienta por cualquier vía lo quita; el clic
         // derecho permitido en una herramienta lo da (después), salvo con un diálogo abierto.
@@ -1347,16 +1479,6 @@ impl eframe::App for App {
             self.title = title;
         }
         self.show_modal(&ctx);
-    }
-}
-
-/// `PIXOKO_CAPAS` al abrir un documento (ayuda de depuración descartable, 3.3): crea las capas y
-/// devuelve el aviso si el valor no vale o el modo no admite capas.
-fn debug_layers_from_env(session: &mut Session) -> Option<String> {
-    match parse_layers(std::env::var(ENV_LAYERS).ok().as_deref()) {
-        LayersRequest::None => None,
-        LayersRequest::Invalid(notice) => Some(notice),
-        LayersRequest::Create { count, active } => apply_debug_layers(session, count, active).err(),
     }
 }
 

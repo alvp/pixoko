@@ -7,8 +7,7 @@
 //!   `convert_refusal`, `layers_info`, `removal_needs_destination`, `begin_removal_for`,
 //!   `mark_unmodified`; `ClearPageError::HiddenLayer`; `with_flatten_notice`.
 //! - `crate::save_wait` (`SAVING_NOTICE`, `SAVE_SYNC_PIXELS`, `compose_pixels`, `start_save`,
-//!   `StartSave`, `PendingSave::tick`) y `crate::debug_layers` (`ENV_LAYERS`, `LayersRequest`,
-//!   `parse_layers`, `apply_debug_layers`).
+//!   `StartSave`, `PendingSave::tick`).
 //! - `TitleInfo.layers` pinta ` · capa {posición}/{total}` tras las coordenadas.
 
 use super::*;
@@ -25,7 +24,6 @@ use px_ui::dirty::BlockSet;
 use px_ui::tool::{Tool, ToolAction, ToolState};
 use px_ui::view::Zoom;
 
-use crate::debug_layers::{LayersRequest, apply_debug_layers, parse_layers};
 use crate::save_wait::{SAVE_SYNC_PIXELS, SAVING_NOTICE, StartSave, compose_pixels, start_save};
 use crate::title::{TitleInfo, title_text};
 
@@ -735,92 +733,6 @@ fn fila_12_el_titulo_lleva_la_capa_solo_con_mas_de_una() {
     assert_eq!(sesion.layers_info(), Some((2, 3)));
 }
 
-#[test]
-fn fila_12_la_variable_pide_de_2_a_256_capas_y_una_activa_valida() {
-    assert_eq!(parse_layers(None), LayersRequest::None);
-    assert_eq!(parse_layers(Some("")), LayersRequest::None);
-    assert_eq!(
-        parse_layers(Some("3")),
-        LayersRequest::Create {
-            count: 3,
-            active: 1
-        }
-    );
-    assert_eq!(
-        parse_layers(Some("3,2")),
-        LayersRequest::Create {
-            count: 3,
-            active: 2
-        }
-    );
-    assert_eq!(
-        parse_layers(Some("256,256")),
-        LayersRequest::Create {
-            count: 256,
-            active: 256
-        }
-    );
-    for malo in [
-        "3,4", "1", "0", "257", "x", "3,0", "3,", ",2", "-3", "3,2,1",
-    ] {
-        assert!(
-            matches!(parse_layers(Some(malo)), LayersRequest::Invalid(ref aviso) if aviso.contains("PIXOKO_CAPAS")),
-            "{malo:?}"
-        );
-    }
-}
-
-#[test]
-fn fila_12_las_capas_de_depuracion_llevan_bandas_y_el_documento_queda_sin_modificar() {
-    let mut sesion = sesion_rgba(64, 48);
-    apply_debug_layers(&mut sesion, 3, 2).expect("crear");
-    let capas = sesion.document.layers();
-    assert_eq!(capas.len(), 3);
-    assert_eq!(
-        capas
-            .iter()
-            .map(|c| c.name().to_string())
-            .collect::<Vec<_>>(),
-        ["Capa 1", "Capa 2", "Capa 3"]
-    );
-    assert_eq!(sesion.active_layer(), capas[1].id());
-    assert_eq!(capas[1].opacity(), 128, "las pares a 128");
-    assert_eq!(capas[2].opacity(), 255);
-    let celda = |i: usize| sesion.document.image(capas[i].cel()).expect("con banda");
-    assert_eq!(celda(1).get_pixel(5, 5), Ok(Pixel::Rgba(ROJO)));
-    assert_eq!(
-        celda(1).get_pixel(20, 5),
-        Ok(Pixel::Rgba(Rgba::TRANSPARENT))
-    );
-    assert_eq!(celda(2).get_pixel(20, 5), Ok(Pixel::Rgba(VERDE)));
-    assert_eq!(celda(2).get_pixel(5, 5), Ok(Pixel::Rgba(Rgba::TRANSPARENT)));
-    assert!(!sesion.modified());
-    // Deshacer las quita (es una ayuda de depuración).
-    while sesion.undo().is_ok() {}
-    assert_eq!(sesion.document.layers().len(), 1);
-    // Por defecto, la capa de abajo.
-    let mut otra = sesion_rgba(64, 48);
-    apply_debug_layers(&mut otra, 4, 1).expect("crear");
-    assert_eq!(otra.active_layer(), otra.document.layers()[0].id());
-    // Abrir otro documento y volver a aplicarla.
-    otra.new_image(rgba_lleno(32, 32, FONDO), true)
-        .expect("nueva");
-    apply_debug_layers(&mut otra, 3, 3).expect("crear");
-    assert_eq!(otra.document.layers().len(), 3);
-    assert_eq!(otra.active_layer(), otra.document.layers()[2].id());
-}
-
-#[test]
-fn fila_12_en_un_modo_sin_transparencia_avisa_y_deja_el_documento_intacto() {
-    let mut sesion = Session::sample(Document::new(Image::new(4, 4, Mode::Gray).expect("imagen")));
-    let copia = sesion.document.clone();
-    let aviso = apply_debug_layers(&mut sesion, 3, 1).expect_err("gris no admite capas");
-    assert!(!aviso.is_empty());
-    assert_eq!(sesion.document, copia);
-    assert!(!sesion.document.can_undo());
-    assert!(!sesion.modified());
-}
-
 // ---------------------------------------------------------------------------------------------
 // Propiedad 3: un gesto solo toca la capa activa y se deshace exactamente
 // ---------------------------------------------------------------------------------------------
@@ -875,7 +787,9 @@ proptest! {
                 _ => sesion.clear_page().map_err(|e| match e {
                     ClearPageError::Document(error) => error,
                     ClearPageError::OutOfMemory => DocumentError::OutOfMemory,
-                    ClearPageError::HiddenLayer => DocumentError::EmptyCommand,
+                    ClearPageError::HiddenLayer
+                    | ClearPageError::LockedLayer
+                    | ClearPageError::HiddenAndLockedLayer => DocumentError::EmptyCommand,
                 }),
             };
             match resultado {
