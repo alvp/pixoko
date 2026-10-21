@@ -16,8 +16,6 @@
 //! Este fichero es la fase de pruebas en rojo: la API de composición y `BlendMode` no existen
 //! todavía, así que no compila hasta la lógica A y B de la spec.
 //!
-//! Los `// SPEC?:` marcan dudas que la spec no resuelve; ahí la prueba solo comprueba lo que la
-//! spec dice y evita lo demás.
 
 use proptest::prelude::*;
 use px_core::{BlendMode, Command, Document, Image, Mode, Palette, Pixel, PixelEdit, Rgba};
@@ -1174,13 +1172,11 @@ proptest! {
 
         let entero = compose(&doc);
         let parte = compose_rect(&doc, r);
-        match &entero {
-            Ok(img) => {
-                prop_assert_eq!(parte, Ok(recorte(img, r)), "{:?}", r);
-            }
-            // SPEC?: si `compose` da `NoTransparency`, `compose_rect` de un rectángulo donde sí
-            // hay algo que dar podría dar `Ok`; la spec no lo fija y no se comprueba.
-            Err(_) => {}
+        // Si `compose` da `NoTransparency`, `compose_rect` de un rectángulo donde sí hay algo que
+        // dar puede dar `Ok` (la spec decide `NoTransparency` por los píxeles del rectángulo):
+        // solo se compara cuando el lienzo entero se compone.
+        if let Ok(img) = &entero {
+            prop_assert_eq!(parte, Ok(recorte(img, r)), "{:?}", r);
         }
 
         if let (Tipo::Rgba, Ok(img)) = (g.tipo, &entero) {
