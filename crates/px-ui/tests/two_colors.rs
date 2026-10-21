@@ -627,8 +627,8 @@ fn ppp_multiplos_de_0_05() -> impl Iterator<Item = f32> {
 }
 
 #[test]
-fn propiedad_3_minimos_de_ventana_a_los_cinco_ppp_y_criterio_del_72_por_ciento() {
-    for (ppp, alto) in PPPS.into_iter().zip([387.0, 309.6, 516.0, 387.0, 387.0]) {
+fn propiedad_3_minimos_de_ventana_a_los_cinco_ppp_y_criterio_del_65_por_ciento() {
+    for (ppp, alto) in PPPS.into_iter().zip([341.0, 272.8, 454.67, 341.0, 341.0]) {
         assert!(
             (min_window_height_pt(ppp) - alto).abs() < 0.01,
             "alto con {ppp}: {}",
@@ -644,13 +644,13 @@ fn propiedad_3_minimos_de_ventana_a_los_cinco_ppp_y_criterio_del_72_por_ciento()
 }
 
 #[test]
-fn propiedad_3_el_bloque_de_indexadas_mide_351_n_y_el_alto_minimo_sigue_la_formula() {
+fn propiedad_3_el_bloque_de_indexadas_mide_305_n_y_el_alto_minimo_sigue_la_formula() {
     for ppp in ppp_multiplos_de_0_05() {
         let n = i64::from(text_scale(ppp));
-        assert_eq!(block_height_px(Mode::Indexed, n as u32), 351 * n);
-        let alto = ((20 + 16 + 351) * n) as f32 / ppp;
+        assert_eq!(block_height_px(Mode::Indexed, n as u32), 305 * n);
+        let alto = ((20 + 16 + 305) * n) as f32 / ppp;
         assert!((min_window_height_pt(ppp) - alto).abs() < 0.01, "ppp {ppp}");
-        assert!(min_window_height_pt(ppp) <= 518.4 + 0.01, "alto con {ppp}");
+        assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
 }

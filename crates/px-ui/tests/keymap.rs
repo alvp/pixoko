@@ -58,10 +58,11 @@ use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key, 
 use px_ui::text::{INTERFACE_CHARSET, apply_scale, printable, replace_missing};
 use px_ui::theme::visuals;
 use px_ui::tool::{Tool, ToolAction, tool_action_for_key};
-use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, show_toolbar_with};
+use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::Zoom;
 
 mod common;
+use common::caja::{caja_con, centro_u};
 use common::zonas::caja_sola;
 use common::{Pintado, boton, contexto, en_puntos, modificadores, mover, n_de, pintado};
 
@@ -1290,7 +1291,7 @@ impl BancoUi {
         let estado = estado_ui();
         let mut elegida = None;
         let p = self.fotograma(events, |ui| {
-            elegida = show_toolbar_with(ui, &estado, "×5", km, platform);
+            elegida = caja_con(ui, &estado, "×5", km, platform);
         });
         (p, elegida)
     }
@@ -1309,7 +1310,7 @@ impl BancoUi {
     ) -> Vec<AppAction> {
         self.columna_en_reposo(km, platform);
         let n = n_de(self.ppp);
-        // Botones de 99 × 16 u con 4 u de margen; herramientas en `y = 4 + 18·i`.
+        // Botones de 24 × 24 u en una rejilla de cuatro columnas (specs/interfaz-iconos.md).
         let caja_x = caja_sola(
             (
                 (PANTALLA.x * self.ppp).round() as i64,
@@ -1318,11 +1319,8 @@ impl BancoUi {
             n as u32,
         )
         .x;
-        let pos = en_puntos(
-            self.ppp,
-            caja_x + (4 + 99 / 2) * n,
-            (4 + 18 * indice) * n + 8 * n,
-        );
+        let (cx_u, cy_u) = centro_u(indice as usize);
+        let pos = en_puntos(self.ppp, caja_x + cx_u * n, cy_u * n);
         let mut acciones = Vec::new();
         for events in [
             vec![mover(pos)],

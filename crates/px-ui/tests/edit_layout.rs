@@ -8,7 +8,7 @@
 //! entero, ±0,001, a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0 con `n = text_scale(ppp)`). De la spec de la
 //! ventana baja, en su parte pura: las filas 1 (`min_panel_height_px`, `min_window_height_pt`),
 //! 2 (una sola función para la altura del editor: `editor_height_u`, `editor_height_u_max`,
-//! `block_height_px`) y 3 (`panel_layout` con 241·n, 240·n, 200·n y 100·n). `editor_layout`,
+//! `block_height_px`) y 3 (`panel_layout` con 305·n, 304·n, 200·n y 100·n). `editor_layout`,
 //! `EditorLayout` y `EDITOR_HIDDEN_NOTICE` desaparecieron: la fila 18 de la spec del editor la
 //! sustituye la spec de la ventana baja.
 //!
@@ -21,8 +21,7 @@ use px_core::Mode;
 use px_ui::chrome::{MENU_H_U, toolbar_width_u};
 use px_ui::color_edit::{Control, controls};
 use px_ui::edit_layout::{
-    BLOCK_GAP_U, BUTTON_COL_GAP_U, BUTTON_FULL_W_U, BUTTON_H_U, BUTTON_HALF_W_U, BUTTON_ROW_GAP_U,
-    BUTTON_ROWS, BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, BUTTON_X_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U,
+    BLOCK_GAP_U, BUTTON_COL_GAP_U, BUTTON_FULL_W_U, BUTTON_H_U, BUTTON_HALF_W_U, BUTTON_ROWS, BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, BUTTON_X_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U,
     FIELD_X_U, FIRST_ROW_Y_U, GROUP_GAP_U, HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, LABEL_W_U,
     LABEL_X_U, MIN_CANVAS_WIDTH_U, NOTICE_LINES, PaletteButton, PanelLayout, ROW_H_U,
     SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_W_U, VALUE_X_U,
@@ -89,8 +88,8 @@ fn las_constantes_son_coherentes_entre_si() {
 
 #[test]
 fn la_altura_del_editor_depende_del_modo() {
-    // Indexadas: 186 más los botones de la unidad 11d (70 u y un margen de 4).
-    assert_eq!(editor_height_u(Mode::Indexed), 260);
+    // Indexadas: 186 más la fila de iconos de la unidad I.4 (24 u y un margen de 4).
+    assert_eq!(editor_height_u(Mode::Indexed), 214);
     assert_eq!(editor_height_u(Mode::Rgba), 186);
     assert_eq!(editor_height_u(Mode::GrayAlpha), 112);
     assert_eq!(editor_height_u(Mode::Gray), 94);
@@ -235,7 +234,7 @@ fn editor_height_u_max_es_el_mayor_de_los_modos() {
         .max()
         .expect("hay modos");
     assert_eq!(editor_height_u_max(), mayor);
-    assert_eq!(editor_height_u_max(), 260);
+    assert_eq!(editor_height_u_max(), 214);
 }
 
 #[test]
@@ -249,9 +248,9 @@ fn block_height_px_es_texto_una_fila_y_editor() {
                 "{modo:?}, n = {n}"
             );
         }
-        // Con la banda del indicador (36 u, I.2a) y los botones de 11d en indexadas: 351, 277,
-        // 203 y 185 u.
-        assert_eq!(block_height_px(Mode::Indexed, n), 351 * n_i);
+        // Con la banda del indicador (36 u, I.2a) y la fila de iconos de I.4 en indexadas: 305,
+        // 277, 203 y 185 u.
+        assert_eq!(block_height_px(Mode::Indexed, n), 305 * n_i);
         assert_eq!(block_height_px(Mode::Rgba, n), 277 * n_i);
         assert_eq!(block_height_px(Mode::GrayAlpha, n), 203 * n_i);
         assert_eq!(block_height_px(Mode::Gray, n), 185 * n_i);
@@ -261,10 +260,10 @@ fn block_height_px_es_texto_una_fila_y_editor() {
 // Fila 1 (parte pura de `edit_layout`).
 
 #[test]
-fn fila_1_min_panel_height_px_es_351n() {
+fn fila_1_min_panel_height_px_es_305n() {
     for n in [1u32, 2, 3] {
         let n_i = i64::from(n);
-        assert_eq!(min_panel_height_px(n), 351 * n_i, "n = {n}");
+        assert_eq!(min_panel_height_px(n), 305 * n_i, "n = {n}");
         // Sin literales: una fila, el texto y el editor del modo de mayor editor.
         assert_eq!(
             min_panel_height_px(n),
@@ -295,11 +294,11 @@ fn fila_1_el_minimo_cubre_el_bloque_de_todos_los_modos() {
 #[test]
 fn fila_1_min_window_height_pt_a_los_cinco_ppp() {
     let esperado = [
-        (1.0f32, 387.0f32),
-        (1.25, 309.6),
-        (1.5, 516.0),
-        (2.0, 387.0),
-        (3.0, 387.0),
+        (1.0f32, 341.0f32),
+        (1.25, 272.8),
+        (1.5, 454.67),
+        (2.0, 341.0),
+        (3.0, 341.0),
     ];
     for (ppp, puntos) in esperado {
         let medido = min_window_height_pt(ppp);
@@ -320,7 +319,7 @@ fn fila_1_min_window_height_pt_a_los_cinco_ppp() {
 }
 
 #[test]
-fn fila_1_el_minimo_no_pasa_del_72_por_ciento_de_720_y_deja_una_fila_con_el_editor() {
+fn fila_1_el_minimo_no_pasa_del_65_por_ciento_de_720_y_deja_una_fila_con_el_editor() {
     let mut mayor = 0.0f32;
     for ppp in PPPS {
         let n = text_scale(ppp);
@@ -333,9 +332,9 @@ fn fila_1_el_minimo_no_pasa_del_72_por_ciento_de_720_y_deja_una_fila_con_el_edit
         // Y la barra de estado.
         assert!(minimo > min_panel_height_px(n) as f32 / ppp, "ppp {ppp}");
     }
-    // El 72 % de 720 puntos, excepción transitoria hasta I.4 (antes el 65 %: 468 pt; specs/
-    // interfaz-dos-colores.md, decisión 5).
-    assert!(mayor <= 518.4, "el mayor de los cinco mide {mayor} pt");
+    // El 65 % de 720 puntos: con los iconos (I.4) se retira la excepción del 72 % de I.2a
+    // (specs/interfaz-iconos.md, decisión 9).
+    assert!(mayor <= 468.0, "el mayor de los cinco mide {mayor} pt");
 }
 
 // Fila 1b: ancho mínimo (columna de herramientas, ancho del panel y 128 u de lienzo).
@@ -411,7 +410,7 @@ fn fila_1b_min_window_width_pt_con_ppp_invalido_es_el_de_1() {
 #[test]
 fn fila_2_editor_height_u_coincide_con_la_derivacion_de_la_maqueta() {
     let esperado = [
-        (Mode::Indexed, 260),
+        (Mode::Indexed, 214),
         (Mode::Rgba, 186),
         (Mode::GrayAlpha, 112),
         (Mode::Gray, 94),
@@ -511,7 +510,7 @@ fn con_alto_700n_el_editor_se_ancla_al_fondo() {
     for n in ESCALAS {
         let n_i = i64::from(n);
         let esperado = [
-            (Mode::Indexed, 440),
+            (Mode::Indexed, 486),
             (Mode::Rgba, 514),
             (Mode::GrayAlpha, 588),
             (Mode::Gray, 606),
@@ -527,12 +526,12 @@ fn con_alto_700n_el_editor_se_ancla_al_fondo() {
                 "{modo:?}, n = {n}"
             );
         }
-        // 700n con 260n reservados: (700 − 260 − 77) / 14 = 25 filas.
+        // 700n con 214n reservados: (700 − 214 − 77) / 14 = 29 filas.
         assert_eq!(
             panel_layout(Mode::Indexed, 700 * n_i, n, 0).visible_rows,
-            25
+            29
         );
-        assert_eq!(visible_rows_reserved(700 * n_i, 260 * n_i, n), 25);
+        assert_eq!(visible_rows_reserved(700 * n_i, 214 * n_i, n), 29);
     }
 }
 
@@ -646,10 +645,10 @@ fn con_el_editor_visible_siempre_queda_una_fila_de_rejilla() {
 // Fila 3: alto del panel 241n, 240n, 200n y 100n.
 
 #[test]
-fn fila_3_con_241n_el_editor_cabe_y_la_rejilla_tiene_una_fila() {
+fn fila_3_con_el_bloque_justo_el_editor_cabe_y_la_rejilla_tiene_una_fila() {
     for n in ESCALAS {
         let n_i = i64::from(n);
-        for (modo, bloque) in [(Mode::Indexed, 351), (Mode::Rgba, 277)] {
+        for (modo, bloque) in [(Mode::Indexed, 305), (Mode::Rgba, 277)] {
             let layout = panel_layout(modo, bloque * n_i, n, 0);
             assert!(!layout.scrolling, "{modo:?}, n = {n}");
             assert_eq!(layout.offset_px, 0);
@@ -660,10 +659,10 @@ fn fila_3_con_241n_el_editor_cabe_y_la_rejilla_tiene_una_fila() {
 }
 
 #[test]
-fn fila_3_con_240n_y_offset_0_no_hay_salto_respecto_de_241n() {
+fn fila_3_con_un_pixel_menos_y_offset_0_no_hay_salto_respecto_del_bloque_justo() {
     for n in ESCALAS {
         let n_i = i64::from(n);
-        for (modo, bloque) in [(Mode::Indexed, 351), (Mode::Rgba, 277)] {
+        for (modo, bloque) in [(Mode::Indexed, 305), (Mode::Rgba, 277)] {
             let justo = panel_layout(modo, bloque * n_i, n, 0);
             let debajo = panel_layout(modo, (bloque - 1) * n_i, n, 0);
             assert!(debajo.scrolling, "{modo:?}, n = {n}");
@@ -718,7 +717,7 @@ fn fila_3_el_desplazamiento_se_recorta_y_baja_a_multiplo_de_n() {
     let modo = Mode::Indexed;
     let alto = 200 * n_i;
     let max = panel_layout(modo, alto, n, 0).max_offset_px;
-    assert_eq!(max, 151 * n_i);
+    assert_eq!(max, 105 * n_i);
     for (pedido, esperado) in [
         (-100, 0),
         (0, 0),
@@ -1084,15 +1083,27 @@ fn edges_u_no_incluye_las_filas_que_el_modo_no_tiene() {
     assert!(!gray.contains(&tercera_fila));
 }
 
-// Botones de la paleta (specs/hito-2-paleta-operaciones.md, filas 1 y 2).
+// Botones de la paleta: una fila de cinco iconos de 24 u y, con una quita pendiente, `Confirmar` y
+// `Cancelar` en texto en su lugar (specs/interfaz-iconos.md, decisiones 7 y 8). Antes: cuatro filas
+// de botones de texto (specs/hito-2-paleta-operaciones.md y hito-2-fijar-transparente.md, filas 1
+// y 2); las comprobaciones son las mismas con los rectángulos nuevos.
+
+const TODOS_LOS_BOTONES: [PaletteButton; 7] = [
+    PaletteButton::Add,
+    PaletteButton::Remove,
+    PaletteButton::Confirm,
+    PaletteButton::Cancel,
+    PaletteButton::RotateLeft,
+    PaletteButton::RotateRight,
+    PaletteButton::Transparent,
+];
 
 #[test]
-fn los_botones_miden_70_u_y_empiezan_en_186_solo_en_indexadas() {
-    assert_eq!(
-        BUTTON_ROWS * BUTTON_H_U + (BUTTON_ROWS - 1) * BUTTON_ROW_GAP_U,
-        70
-    );
-    assert_eq!(buttons_height_u(Mode::Indexed), 70);
+fn los_botones_miden_24_u_y_empiezan_en_186_solo_en_indexadas() {
+    assert_eq!(BUTTON_ROWS, 1);
+    assert_eq!(BUTTON_H_U, 24);
+    assert_eq!(BUTTON_ROWS * BUTTON_H_U, 24);
+    assert_eq!(buttons_height_u(Mode::Indexed), 24);
     assert_eq!(buttons_y_u(Mode::Indexed), 186);
     for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
         assert_eq!(buttons_height_u(modo), 0, "{modo:?}");
@@ -1102,50 +1113,36 @@ fn los_botones_miden_70_u_y_empiezan_en_186_solo_en_indexadas() {
             assert_eq!(button_rect_u(modo, boton), None, "{modo:?}, {boton:?}");
         }
     }
-    // Dos botones de la fila 1 y el hueco ocupan el ancho útil del texto.
+    // `Confirmar` y `Cancelar` y su hueco ocupan el ancho útil del texto.
     assert_eq!(2 * BUTTON_HALF_W_U + BUTTON_COL_GAP_U, BUTTON_FULL_W_U);
     assert_eq!(BUTTON_FULL_W_U, 225);
 }
-
-const TODOS_LOS_BOTONES: [PaletteButton; 6] = [
-    PaletteButton::Add,
-    PaletteButton::Remove,
-    PaletteButton::Confirm,
-    PaletteButton::Cancel,
-    PaletteButton::RotateLeft,
-    PaletteButton::RotateRight,
-];
 
 #[test]
 fn button_rect_u_sigue_la_tabla_de_la_maqueta() {
     let m = Mode::Indexed;
     assert_eq!(BUTTON_X_U, 4);
-    assert_eq!(
-        button_rect_u(m, PaletteButton::Add),
-        Some((4, 186, 110, 16))
-    );
+    // Los cinco iconos, en una fila: hueco de 1 u en un grupo y de 8 u entre grupos.
+    for (boton, x) in [
+        (PaletteButton::Add, 4),
+        (PaletteButton::Remove, 29),
+        (PaletteButton::RotateLeft, 61),
+        (PaletteButton::RotateRight, 86),
+        (PaletteButton::Transparent, 118),
+    ] {
+        assert_eq!(button_rect_u(m, boton), Some((x, 186, 24, 24)), "{boton:?}");
+    }
+    // `Confirmar` y `Cancelar`: texto, de 110 × 24 u.
     assert_eq!(
         button_rect_u(m, PaletteButton::Confirm),
-        button_rect_u(m, PaletteButton::Add)
-    );
-    assert_eq!(
-        button_rect_u(m, PaletteButton::Remove),
-        Some((119, 186, 110, 16))
+        Some((4, 186, 110, 24))
     );
     assert_eq!(
         button_rect_u(m, PaletteButton::Cancel),
-        button_rect_u(m, PaletteButton::Remove)
-    );
-    assert_eq!(
-        button_rect_u(m, PaletteButton::RotateLeft),
-        Some((4, 204, 225, 16))
-    );
-    assert_eq!(
-        button_rect_u(m, PaletteButton::RotateRight),
-        Some((4, 222, 225, 16))
+        Some((119, 186, 110, 24))
     );
     // El último botón acaba 4 u (el margen) antes del final del editor.
-    assert_eq!(240 + 16 + BLOCK_GAP_U, editor_height_u(m));
+    assert_eq!(186 + 24 + BLOCK_GAP_U, editor_height_u(m));
     // Ninguno pisa el aviso ni sale del panel.
     let fin_aviso = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
     for boton in TODOS_LOS_BOTONES {
@@ -1161,30 +1158,38 @@ fn button_hit_en_los_puntos_de_la_spec() {
     for n in ESCALAS {
         let k = i64::from(n);
         let m = Mode::Indexed;
+        // (x, y, con los iconos, con una quita pendiente)
         let casos = [
-            (4 * k, 186 * k, Some((Add, Confirm))),
-            (114 * k - 1, 186 * k, Some((Add, Confirm))),
-            (114 * k, 186 * k, None),
-            (119 * k - 1, 186 * k, None),
-            (119 * k, 186 * k, Some((Remove, Cancel))),
-            (229 * k - 1, 202 * k - 1, Some((Remove, Cancel))),
-            (10 * k, 202 * k, None),
-            (10 * k, 204 * k, Some((RotateLeft, RotateLeft))),
-            (10 * k, 222 * k, Some((RotateRight, RotateRight))),
-            (10 * k, 238 * k, None),
-            (3 * k, 204 * k, None),
-            (229 * k, 204 * k, None),
-            (-1, -1, None),
+            (4 * k, 186 * k, Some(Add), Some(Confirm)),
+            (28 * k - 1, 186 * k, Some(Add), Some(Confirm)),
+            (28 * k, 186 * k, None, Some(Confirm)),
+            (29 * k, 186 * k, Some(Remove), Some(Confirm)),
+            (53 * k - 1, 210 * k - 1, Some(Remove), Some(Confirm)),
+            (53 * k, 186 * k, None, Some(Confirm)),
+            (60 * k, 186 * k, None, Some(Confirm)),
+            (61 * k, 186 * k, Some(RotateLeft), Some(Confirm)),
+            (86 * k, 186 * k, Some(RotateRight), Some(Confirm)),
+            (110 * k, 186 * k, None, Some(Confirm)),
+            (114 * k, 186 * k, None, None),
+            (118 * k, 186 * k, Some(Transparent), None),
+            (119 * k, 186 * k, Some(Transparent), Some(Cancel)),
+            (142 * k - 1, 210 * k - 1, Some(Transparent), Some(Cancel)),
+            (142 * k, 186 * k, None, Some(Cancel)),
+            (229 * k - 1, 209 * k, None, Some(Cancel)),
+            (229 * k, 186 * k, None, None),
+            (10 * k, 185 * k, None, None),
+            (10 * k, 210 * k, None, None),
+            (-1, -1, None, None),
         ];
-        for (x, y, esperado) in casos {
+        for (x, y, iconos, quita) in casos {
             assert_eq!(
                 button_hit(m, false, x, y, n),
-                esperado.map(|e| e.0),
+                iconos,
                 "n = {n}, ({x}, {y})"
             );
             assert_eq!(
                 button_hit(m, true, x, y, n),
-                esperado.map(|e| e.1),
+                quita,
                 "n = {n}, ({x}, {y}) con quita"
             );
         }
@@ -1206,11 +1211,15 @@ fn los_bordes_de_los_botones_caen_en_pixeles_fisicos_enteros() {
             for u in [
                 x,
                 x + 1,
+                x + 4,
+                x + w - 4,
                 x + w - 1,
                 x + w,
                 x + BUTTON_TEXT_X_U,
                 y,
                 y + 1,
+                y + 4,
+                y + h - 4,
                 y + h - 1,
                 y + h,
                 y + BUTTON_TEXT_Y_U,
@@ -1233,36 +1242,26 @@ fn los_bordes_de_los_botones_caen_en_pixeles_fisicos_enteros() {
     }
 }
 
-// Unidad 21: botón «Fijar/Quitar transparente» (specs/hito-2-fijar-transparente.md, filas 1 y 2).
-// Las cifras de alturas, ventana y `panel_layout` ya están en las pruebas adaptadas de arriba;
-// aquí solo lo nuevo: la cuarta fila, `PaletteButton::Transparent`, `button_hit` y `edges_u`.
+// Unidad 21 (specs/hito-2-fijar-transparente.md, filas 1 y 2) con la fila de iconos de I.4: el
+// botón `Transparent` es el quinto icono; las cifras de alturas, ventana y `panel_layout` están en
+// las pruebas adaptadas de arriba.
 
-const BOTONES_U21: [PaletteButton; 7] = [
-    PaletteButton::Add,
-    PaletteButton::Remove,
-    PaletteButton::Confirm,
-    PaletteButton::Cancel,
-    PaletteButton::RotateLeft,
-    PaletteButton::RotateRight,
-    PaletteButton::Transparent,
-];
+const BOTONES_U21: [PaletteButton; 7] = TODOS_LOS_BOTONES;
 
 #[test]
-fn fila_1_u21_la_cuarta_fila_suma_70_u_y_deja_el_editor_en_260() {
-    assert_eq!(BUTTON_ROWS, 4);
-    assert_eq!(buttons_height_u(Mode::Indexed), 4 * 16 + 3 * 2);
-    assert_eq!(buttons_height_u(Mode::Indexed), 70);
-    // La derivación de la maqueta, con literales: 186 + 70 + 4.
+fn fila_1_u21_la_fila_de_iconos_suma_24_u_y_deja_el_editor_en_214() {
+    assert_eq!(buttons_height_u(Mode::Indexed), 24);
+    // La derivación de la maqueta, con literales: 186 + 24 + 4.
     assert_eq!(buttons_y_u(Mode::Indexed), 186);
-    assert_eq!(editor_height_u(Mode::Indexed), 186 + 70 + 4);
-    assert_eq!(editor_height_u(Mode::Indexed), 260);
+    assert_eq!(editor_height_u(Mode::Indexed), 186 + 24 + 4);
+    assert_eq!(editor_height_u(Mode::Indexed), 214);
     // Una sola función: el bloque, el mínimo y el último botón cuelgan de ella.
     let (_, y, _, h) = button_rect_u(Mode::Indexed, PaletteButton::Transparent).expect("botón");
     assert_eq!(y + h + BLOCK_GAP_U, editor_height_u(Mode::Indexed));
     for n in ESCALAS {
         let k = i64::from(n);
-        assert_eq!(block_height_px(Mode::Indexed, n), 351 * k);
-        assert_eq!(min_panel_height_px(n), 351 * k);
+        assert_eq!(block_height_px(Mode::Indexed, n), 305 * k);
+        assert_eq!(min_panel_height_px(n), 305 * k);
     }
     // Solo indexadas llevan botones: los demás modos no cambian (186, 94 y 112 u).
     for (modo, altura) in [(Mode::Rgba, 186), (Mode::Gray, 94), (Mode::GrayAlpha, 112)] {
@@ -1276,33 +1275,23 @@ fn fila_2_u21_button_rect_u_del_boton_transparente() {
     let m = Mode::Indexed;
     assert_eq!(
         button_rect_u(m, PaletteButton::Transparent),
-        Some((4, 240, 225, 16))
+        Some((118, 186, 24, 24))
     );
     let (x, y, w, h) = button_rect_u(m, PaletteButton::Transparent).expect("botón");
-    // Fila 4: 186 + 3 · 18, mismo ancho que los botones de rotar, mismo alto que todos.
-    assert_eq!(y, 186 + 3 * (BUTTON_H_U + BUTTON_ROW_GAP_U));
-    assert_eq!((x, w, h), (BUTTON_X_U, BUTTON_FULL_W_U, BUTTON_H_U));
-    let (_, y_der, _, _) = button_rect_u(m, PaletteButton::RotateRight).expect("botón");
-    assert_eq!(y, y_der + BUTTON_H_U + BUTTON_ROW_GAP_U);
-    // Las filas 1 a 3 siguen donde estaban.
-    assert_eq!(
-        button_rect_u(m, PaletteButton::Add),
-        Some((4, 186, 110, 16))
-    );
-    assert_eq!(
-        button_rect_u(m, PaletteButton::RotateLeft),
-        Some((4, 204, 225, 16))
-    );
-    assert_eq!(
-        button_rect_u(m, PaletteButton::RotateRight),
-        Some((4, 222, 225, 16))
-    );
-    // Ni pisa el aviso ni sale del panel ni se solapa con otro botón.
+    // Quinto icono de la fila: mismo `y` y mismo tamaño que los otros cuatro, 8 u tras el grupo
+    // de rotar.
+    let (xd, yd, wd, _) = button_rect_u(m, PaletteButton::RotateRight).expect("botón");
+    assert_eq!((y, w, h), (yd, BUTTON_H_U, BUTTON_H_U));
+    assert_eq!(x, xd + wd + 8);
+    // Ni pisa el aviso ni sale del panel ni se solapa con otro botón de la misma fila.
     let fin_aviso = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
     assert!(y >= fin_aviso);
     assert!(x >= 0 && x + w < PANEL_WIDTH_U);
     for otro in BOTONES_U21 {
-        if otro == PaletteButton::Transparent {
+        if matches!(
+            otro,
+            PaletteButton::Transparent | PaletteButton::Confirm | PaletteButton::Cancel
+        ) {
             continue;
         }
         let (ox, oy, ow, oh) = button_rect_u(m, otro).expect("botón");
@@ -1323,9 +1312,9 @@ fn fila_2_u21_los_modos_sin_botones_no_tienen_el_transparente() {
             let k = i64::from(n);
             for removing in [false, true] {
                 // El punto donde está el botón en indexadas y todo el alto del editor.
-                for y in [0, 190 * k, 240 * k, 248 * k, editor_height_u(modo) * k - 1] {
+                for y in [0, 190 * k, 200 * k, 210 * k, editor_height_u(modo) * k - 1] {
                     assert_eq!(
-                        button_hit(modo, removing, 10 * k, y, n),
+                        button_hit(modo, removing, 120 * k, y, n),
                         None,
                         "{modo:?}, n = {n}, y = {y}"
                     );
@@ -1343,38 +1332,36 @@ fn fila_2_u21_button_hit_en_los_puntos_del_boton_transparente() {
         let m = Mode::Indexed;
         let casos = [
             // Esquina superior izquierda y última esquina dentro del botón.
-            (4 * k, 240 * k, Some(Transparent)),
-            (228 * k, 255 * k, Some(Transparent)),
-            (229 * k - 1, 256 * k - 1, Some(Transparent)),
-            (10 * k, 248 * k, Some(Transparent)),
-            // A la izquierda, a la derecha, 1 u sobre el botón y bajo él.
-            (3 * k, 248 * k, None),
-            (229 * k, 248 * k, None),
-            (10 * k, 239 * k, None),
-            (10 * k, 256 * k, None),
+            (118 * k, 186 * k, Some(Transparent)),
+            (141 * k, 209 * k, Some(Transparent)),
+            (142 * k - 1, 210 * k - 1, Some(Transparent)),
+            (130 * k, 198 * k, Some(Transparent)),
+            // A la izquierda (hueco de grupo), a la derecha, 1 u sobre el botón y bajo él.
+            (117 * k, 198 * k, None),
+            (142 * k, 198 * k, None),
+            (130 * k, 185 * k, None),
+            (130 * k, 210 * k, None),
             // Un píxel físico fuera por cada lado.
-            (4 * k - 1, 240 * k, None),
-            (229 * k, 255 * k, None),
-            (10 * k, 240 * k - 1, None),
-            // El hueco entre la fila 3 y la fila 4 no es de ninguno.
-            (10 * k, 238 * k, None),
-            (10 * k, 240 * k - 1, None),
+            (118 * k - 1, 186 * k, None),
+            (142 * k, 209 * k, None),
+            (130 * k, 186 * k - 1, None),
         ];
         for (x, y, esperado) in casos {
-            for removing in [false, true] {
-                assert_eq!(
-                    button_hit(m, removing, x, y, n),
-                    esperado,
-                    "n = {n}, ({x}, {y}), removing = {removing}"
-                );
-            }
+            assert_eq!(
+                button_hit(m, false, x, y, n),
+                esperado,
+                "n = {n}, ({x}, {y})"
+            );
         }
-        // Las filas 1 a 3 siguen en sus puntos.
+        // Con una quita pendiente no hay iconos: solo `Confirmar` y `Cancelar` (decisión 8).
+        assert_eq!(button_hit(m, true, 130 * k, 198 * k, n), Some(Cancel));
+        assert_eq!(button_hit(m, true, 118 * k, 198 * k, n), None);
+        // Los demás iconos siguen en sus puntos.
         assert_eq!(button_hit(m, false, 4 * k, 186 * k, n), Some(Add));
         assert_eq!(button_hit(m, true, 4 * k, 186 * k, n), Some(Confirm));
-        assert_eq!(button_hit(m, false, 10 * k, 204 * k, n), Some(RotateLeft));
-        assert_eq!(button_hit(m, false, 10 * k, 222 * k, n), Some(RotateRight));
-        assert_eq!(button_hit(m, true, 10 * k, 222 * k, n), Some(RotateRight));
+        assert_eq!(button_hit(m, false, 70 * k, 198 * k, n), Some(RotateLeft));
+        assert_eq!(button_hit(m, false, 95 * k, 198 * k, n), Some(RotateRight));
+        assert_eq!(button_hit(m, true, 95 * k, 198 * k, n), Some(Confirm));
     }
 }
 
@@ -1384,17 +1371,17 @@ fn fila_2_u21_button_hit_recorre_todo_el_rectangulo_del_boton() {
     let k = i64::from(n);
     let m = Mode::Indexed;
     let (x, y, w, h) = button_rect_u(m, PaletteButton::Transparent).expect("botón");
-    for removing in [false, true] {
-        for py in (y - 2) * k..(y + h + 2) * k {
-            for px in ((x - 2) * k..(x + w + 2) * k).step_by(3) {
-                let dentro = px >= x * k && px < (x + w) * k && py >= y * k && py < (y + h) * k;
-                let esperado = dentro.then_some(PaletteButton::Transparent);
-                assert_eq!(
-                    button_hit(m, removing, px, py, n),
-                    esperado,
-                    "({px}, {py}), removing = {removing}"
-                );
-            }
+    for py in (y - 2) * k..(y + h + 2) * k {
+        for px in ((x - 2) * k..(x + w + 2) * k).step_by(3) {
+            let dentro = px >= x * k && px < (x + w) * k && py >= y * k && py < (y + h) * k;
+            let esperado = dentro.then_some(PaletteButton::Transparent);
+            assert_eq!(button_hit(m, false, px, py, n), esperado, "({px}, {py})");
+            // Con una quita pendiente el icono no golpea nunca.
+            assert_ne!(
+                button_hit(m, true, px, py, n),
+                Some(PaletteButton::Transparent),
+                "({px}, {py}) con quita"
+            );
         }
     }
 }
@@ -1406,19 +1393,20 @@ fn fila_2_u21_los_bordes_del_boton_estan_en_edges_u_y_son_enteros_a_los_cinco_pp
     for u in [
         x,
         x + 1,
+        x + 4,
+        x + w - 4,
         x + w - 1,
         x + w,
-        x + BUTTON_TEXT_X_U,
         y,
         y + 1,
+        y + 4,
+        y + h - 4,
         y + h - 1,
         y + h,
-        y + BUTTON_TEXT_Y_U,
-        y + BUTTON_TEXT_Y_U + ROW_H_U,
     ] {
         assert!(bordes.contains(&u), "falta el borde {u} en edges_u");
     }
-    assert!(bordes.contains(&240) && bordes.contains(&256));
+    assert!(bordes.contains(&186) && bordes.contains(&210));
     assert!(bordes.contains(&editor_height_u(Mode::Indexed)));
     for ppp in PPPS {
         let n = text_scale(ppp);

@@ -54,10 +54,11 @@ use px_ui::palette_grid::{CHECK_A, CHECK_B};
 use px_ui::stroke::Stroke;
 use px_ui::text::text_scale;
 use px_ui::tool::Tool;
-use px_ui::toolbar::{show_toolbar, zoom_label};
+use px_ui::toolbar::zoom_label;
 use px_ui::view::{Size, ViewOp, Zoom};
 
 mod common;
+use common::caja::caja;
 use common::zonas::caja_sola;
 use common::{
     PPPS, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, rueda_linea, tecla,
@@ -1494,7 +1495,7 @@ fn columna_con(ctx: &Context, etiqueta: &str) -> common::Pintado {
     let mut ultimo = None;
     for _ in 0..2 {
         let formas = fotograma(ctx, pantalla, vec![], |ui| {
-            show_toolbar(ui, &s, etiqueta);
+            caja(ui, &s, etiqueta);
         });
         ultimo = Some(pintado(&formas));
     }

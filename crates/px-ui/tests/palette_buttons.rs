@@ -23,7 +23,7 @@
 use egui::epaint::{ClippedShape, Shape};
 use egui::{
     Color32, Context, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelSource, MouseWheelUnit,
-    PointerButton, Pos2, RawInput, Rect, TouchPhase, Vec2, pos2, vec2,
+    PointerButton, Pos2, RawInput, Rect, TextureId, TouchPhase, Vec2, pos2, vec2,
 };
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::canvas::Canvas;
@@ -33,6 +33,7 @@ use px_ui::edit_layout::{
     BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_W_U, FIELD_X_U, PaletteButton, PanelLayout,
     ROW_H_U, TRACK_W_U, TRACK_X_U, button_rect_u, control_row_u, field_y_u, panel_layout,
 };
+use px_ui::icons::{Icon, IconSet};
 use px_ui::palette_grid::{
     self, CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, Grid, PANEL_WIDTH_U, PITCH_U, PanelView,
     drop_mark_rect, ring_rects,
@@ -42,12 +43,16 @@ use px_ui::palette_panel::{self, PanelOutput};
 use px_ui::status::bar_height_px;
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::{
-    ACCENT, DROP_MARK, RING_DEST, RING_RANGE, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM,
+    ACCENT, DROP_MARK, RING_DEST, RING_RANGE, SURFACE_0, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM,
+    TEXT_DISABLED,
 };
 use px_ui::view::ScreenRect;
 
+#[path = "common/iconos.rs"]
+mod iconos;
 #[path = "common/zonas.rs"]
 mod zonas;
+use iconos::IconosDePrueba;
 use zonas::panel_a_la_izquierda;
 
 // ---------------------------------------------------------------------------------------------
@@ -173,8 +178,30 @@ struct Pintado {
     color: Color32,
 }
 
-fn recoge(shape: &Shape, textos: &mut Vec<Pintado>, rects: &mut Vec<(Rect, Color32)>) {
+/// Una malla con textura (un icono): la textura, el rectángulo que cubre y el color de sus vértices
+/// (la tinta).
+#[derive(Clone, Copy, Debug)]
+struct Malla {
+    textura: TextureId,
+    rect: Rect,
+    color: Color32,
+}
+
+fn recoge(
+    shape: &Shape,
+    textos: &mut Vec<Pintado>,
+    rects: &mut Vec<(Rect, Color32)>,
+    mallas: &mut Vec<Malla>,
+) {
     match shape {
+        Shape::Mesh(malla) => {
+            let puntos: Vec<Pos2> = malla.vertices.iter().map(|v| v.pos).collect();
+            mallas.push(Malla {
+                textura: malla.texture_id,
+                rect: Rect::from_points(&puntos),
+                color: malla.vertices.first().map_or(Color32::PLACEHOLDER, |v| v.color),
+            });
+        }
         Shape::Text(t) => textos.push(Pintado {
             texto: t.galley.text().to_owned(),
             pos: t.pos,
@@ -183,7 +210,7 @@ fn recoge(shape: &Shape, textos: &mut Vec<Pintado>, rects: &mut Vec<(Rect, Color
         Shape::Rect(r) => rects.push((r.rect, r.fill)),
         Shape::Vec(formas) => {
             for forma in formas {
-                recoge(forma, textos, rects);
+                recoge(forma, textos, rects, mallas);
             }
         }
         _ => {}
@@ -209,6 +236,8 @@ struct Banco {
     editor: ColorEditor,
     /// Estado de las operaciones de paleta, entre fotogramas, como el de `Session`.
     ops: PaletteOps,
+    /// Los iconos de prueba (una textura blanca por icono).
+    iconos: IconosDePrueba,
     /// «Estado del documento» que se pasa a `ops.sync`; lo cambia el test (y `aplica`, `deshace`
     /// y `rehace`).
     doc_state: u64,
@@ -226,6 +255,7 @@ struct Fotograma {
     salida: PanelOutput,
     textos: Vec<Pintado>,
     rects: Vec<(Rect, Color32)>,
+    mallas: Vec<Malla>,
     formas: Vec<ClippedShape>,
 }
 
@@ -240,6 +270,23 @@ impl Fotograma {
 
     fn texto_pintado(&self, buscado: &str) -> Option<&Pintado> {
         self.textos.iter().find(|t| t.texto == buscado)
+    }
+
+    /// La malla del icono, si se pintó.
+    fn malla_de(&self, iconos: &IconSet, icono: Icon) -> Option<&Malla> {
+        let id = iconos.get(icono)?;
+        self.mallas.iter().find(|m| m.textura == id)
+    }
+
+    fn pinta_icono(&self, iconos: &IconSet, icono: Icon) -> bool {
+        self.malla_de(iconos, icono).is_some()
+    }
+
+    /// La tinta con que se pintó el icono.
+    fn tinta_de(&self, iconos: &IconSet, icono: Icon) -> Color32 {
+        self.malla_de(iconos, icono)
+            .unwrap_or_else(|| panic!("no se pinta el icono {icono:?}"))
+            .color
     }
 
     fn color_de(&self, buscado: &str) -> Color32 {
@@ -306,11 +353,15 @@ impl Banco {
         ctx.set_pixels_per_point(ppp);
         ctx.set_missing_glyph_policy(MissingGlyphPolicy::Panic);
         install_fonts(&ctx);
+        let iconos = IconosDePrueba::nuevos(&ctx);
         let mut banco = Banco {
             ctx,
             canvas: Canvas::new(),
             scroll: palette_grid::Scroll::default(),
-            view: PanelView::default(),
+            view: PanelView {
+                icons: iconos.set,
+                ..PanelView::default()
+            },
             pantalla,
             documento: Document::new(image.clone()),
             slots: SlotColors::defaults(image.mode()),
@@ -318,6 +369,7 @@ impl Banco {
             choice,
             editor: ColorEditor::default(),
             ops: PaletteOps::default(),
+            iconos,
             doc_state: 0,
             cancelaciones: 0,
             gesto_dibujo: false,
@@ -451,9 +503,9 @@ impl Banco {
         salida.textures_delta.clear();
         let formas: Vec<ClippedShape> = std::mem::take(&mut salida.shapes);
         let panel = resultado.expect("el panel se dibuja");
-        let (mut textos, mut rects) = (Vec::new(), Vec::new());
+        let (mut textos, mut rects, mut mallas) = (Vec::new(), Vec::new(), Vec::new());
         for clipped in &formas {
-            recoge(&clipped.shape, &mut textos, &mut rects);
+            recoge(&clipped.shape, &mut textos, &mut rects, &mut mallas);
         }
         if let Some(elegida) = panel.choice {
             self.choice = elegida;
@@ -463,6 +515,7 @@ impl Banco {
             salida: panel,
             textos,
             rects,
+            mallas,
             formas,
         }
     }
@@ -562,6 +615,11 @@ impl Banco {
             pos2((x * n) as f32 / ppp, (top + y * n) as f32 / ppp),
             vec2((w * n) as f32 / ppp, (h * n) as f32 / ppp),
         )
+    }
+
+    /// La tinta del icono en lo pintado en `f`.
+    fn tinta(&self, f: &Fotograma, icono: Icon) -> Color32 {
+        f.tinta_de(&self.iconos.set, icono)
     }
 
     /// Clic completo en el botón. Devuelve el fotograma de pulsar.
@@ -772,20 +830,60 @@ fn hay_rect(f: &Fotograma, esperado: Rect, color: Color32) -> bool {
         .any(|(r, relleno)| *relleno == color && cerca_rect(*r, esperado))
 }
 
-const ROTULOS: [(PaletteButton, &str); 6] = [
-    (PaletteButton::Add, "Añadir"),
-    (PaletteButton::Remove, "Quitar"),
+/// Los botones de texto: solo `Confirmar` y `Cancelar` (specs/interfaz-iconos.md, decisión 8).
+const ROTULOS: [(PaletteButton, &str); 2] = [
     (PaletteButton::Confirm, "Confirmar"),
     (PaletteButton::Cancel, "Cancelar"),
-    (PaletteButton::RotateLeft, "Rotar a la izquierda"),
-    (PaletteButton::RotateRight, "Rotar a la derecha"),
 ];
 
-/// Los botones de `visibles` se pintan con su rótulo en su sitio (texto en `(6, 1)` dentro del
-/// botón) y con fondo `SURFACE_2` (`SURFACE_3` con el cursor encima); los demás, no.
+/// Los botones de icono de la fila de la paleta.
+const ICONOS_DE_BOTON: [(PaletteButton, Icon); 5] = [
+    (PaletteButton::Add, Icon::Add),
+    (PaletteButton::Remove, Icon::Remove),
+    (PaletteButton::RotateLeft, Icon::RotateLeft),
+    (PaletteButton::RotateRight, Icon::RotateRight),
+    (PaletteButton::Transparent, Icon::Transparent),
+];
+
+/// Los botones de `visibles` se pintan en su sitio: los de icono, con la malla de 16 u a 4 u del
+/// borde del botón (o 1 u más abajo y a la derecha si está hundido) sobre una cara `SURFACE_2`
+/// (`SURFACE_3` con el cursor encima, `SURFACE_0` si está hundido); `Confirmar` y `Cancelar`, con
+/// su rótulo en `(6, 5)` dentro del botón y la misma cara. Los demás, no.
 fn comprueba_botones(f: &Fotograma, banco: &Banco, visibles: &[PaletteButton], contexto: &str) {
     let (ppp, n) = (banco.ppp(), banco.n());
     let top = banco.geo().top_px;
+    let iconos = banco.iconos.set;
+    for (button, icono) in ICONOS_DE_BOTON {
+        // `Transparent` lo comprueba `comprueba_boton` (su estado depende de la entrada).
+        if button == PaletteButton::Transparent {
+            continue;
+        }
+        if !visibles.contains(&button) {
+            assert!(
+                !f.pinta_icono(&iconos, icono),
+                "{contexto}: no debe pintarse el icono {icono:?}"
+            );
+            continue;
+        }
+        let rect = banco.rect_de_boton(button);
+        assert!(
+            hay_rect(f, rect, SURFACE_2) || hay_rect(f, rect, SURFACE_3),
+            "{contexto}: no hay cara del botón {button:?} en {rect:?}"
+        );
+        let malla = f
+            .malla_de(&iconos, icono)
+            .unwrap_or_else(|| panic!("{contexto}: no se pinta el icono {icono:?}"));
+        let (x, y, _, _) = rect_boton_u(button);
+        let esperado = Rect::from_min_size(
+            pos2(((x + 4) * n) as f32 / ppp, (top + (y + 4) * n) as f32 / ppp),
+            vec2((16 * n) as f32 / ppp, (16 * n) as f32 / ppp),
+        );
+        assert!(
+            cerca_rect(malla.rect, esperado),
+            "{contexto}: el icono {icono:?} está en {:?} y la maqueta dice {esperado:?}",
+            malla.rect
+        );
+    }
     for (button, nombre) in ROTULOS {
         if !visibles.contains(&button) {
             assert!(!f.pinta(nombre), "{contexto}: no debe pintarse {nombre:?}");
@@ -808,7 +906,7 @@ fn comprueba_botones(f: &Fotograma, banco: &Banco, visibles: &[PaletteButton], c
         let rect = banco.rect_de_boton(button);
         assert!(
             hay_rect(f, rect, SURFACE_2) || hay_rect(f, rect, SURFACE_3),
-            "{contexto}: no hay fondo del botón {nombre:?} en {rect:?}"
+            "{contexto}: no hay cara del botón {nombre:?} en {rect:?}"
         );
     }
 }
@@ -820,19 +918,15 @@ const NORMALES: [PaletteButton; 4] = [
     PaletteButton::RotateRight,
 ];
 
-const CON_QUITA: [PaletteButton; 4] = [
-    PaletteButton::Confirm,
-    PaletteButton::Cancel,
-    PaletteButton::RotateLeft,
-    PaletteButton::RotateRight,
-];
+/// Con una quita pendiente la fila de iconos desaparece: solo `Confirmar` y `Cancelar`.
+const CON_QUITA: [PaletteButton; 2] = [PaletteButton::Confirm, PaletteButton::Cancel];
 
 // ---------------------------------------------------------------------------------------------
 // Fila 2: los botones se pintan en su sitio y se pulsan donde la maqueta dice
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_2_los_botones_se_pintan_con_sus_rotulos_en_su_sitio_a_los_cinco_ppp() {
+fn fila_2_los_botones_se_pintan_con_sus_iconos_en_su_sitio_a_los_cinco_ppp() {
     for ppp in PPPS {
         let mut banco = banco_f(ppp, 1);
         let f = banco.reposo();
@@ -854,7 +948,7 @@ fn fila_2_los_botones_se_pintan_con_sus_rotulos_en_su_sitio_a_los_cinco_ppp() {
 }
 
 #[test]
-fn fila_2_con_quita_pendiente_se_pintan_confirmar_y_cancelar_en_lugar_de_anadir_y_quitar() {
+fn fila_2_con_quita_pendiente_se_pintan_confirmar_y_cancelar_en_lugar_de_los_iconos() {
     for ppp in PPPS {
         let mut banco = banco_p5(ppp, 3);
         let contexto = format!("ppp {ppp}");
@@ -883,15 +977,15 @@ fn fila_2_con_el_panel_desplazado_los_botones_se_pintan_y_se_pulsan_con_y_menos_
         );
         let (x, y) = banco.sobre_el_texto();
         let max = banco.max_offset();
-        assert!(max >= 133 * n, "ppp {ppp}: hay recorrido ({max})");
-        for offset in [126 * n, max] {
+        assert!(max >= 105 * n, "ppp {ppp}: hay recorrido ({max})");
+        for offset in [98 * n, max] {
             banco.rueda_en(x, y, -100_000 * n);
             banco.rueda(offset);
             assert_eq!(banco.view.offset_px, offset, "ppp {ppp}");
             let contexto = format!("ppp {ppp}, offset {offset}");
             let f = banco.reposo();
             assert_eq!(banco.geo().top_px, 91 * n - offset, "{contexto}");
-            // Con 126·n el botón de abajo asoma 3·n por debajo del panel: se pinta (egui no
+            // Con 98·n el botón de abajo asoma 3·n por debajo del panel: se pinta (egui no
             // descarta formas) y se recorta al panel, lo que comprueba la línea siguiente.
             comprueba_botones(&f, &banco, &NORMALES, &contexto);
             comprueba_dentro_del_panel(&f, banco.rect_panel(), &contexto);
@@ -960,7 +1054,7 @@ fn fila_2_lo_que_cae_fuera_del_panel_no_se_golpea_con_el_panel_desplazado() {
 }
 
 #[test]
-fn fila_2_en_rgba_gray_y_grayalpha_no_hay_botones_ni_texto_de_botones() {
+fn fila_2_en_rgba_gray_y_grayalpha_no_hay_botones_ni_iconos_ni_texto_de_botones() {
     for ppp in PPPS {
         for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
             let image = Image::new(64, 48, modo).expect("imagen");
@@ -970,6 +1064,12 @@ fn fila_2_en_rgba_gray_y_grayalpha_no_hay_botones_ni_texto_de_botones() {
             let f = banco.reposo();
             for (_, nombre) in ROTULOS {
                 assert!(!f.pinta_algo_con(nombre), "{contexto}: pinta {nombre:?}");
+            }
+            for (_, icono) in ICONOS_DE_BOTON {
+                assert!(
+                    !f.pinta_icono(&banco.iconos.set, icono),
+                    "{contexto}: pinta el icono {icono:?}"
+                );
             }
             assert!(
                 !f.pinta_algo_con("Rotar") && !f.pinta_algo_con("quitar"),
@@ -1151,7 +1251,10 @@ fn fila_2_show_editing_view_sin_ops_pinta_los_botones_pero_sin_estado() {
         let f = banco.clic_boton(PaletteButton::Remove);
         assert_eq!(f.salida.op, None, "ppp {ppp}");
         let f = banco.reposo();
-        assert!(f.pinta("Quitar") && !f.pinta("Confirmar"), "ppp {ppp}");
+        assert!(
+            f.pinta_icono(&banco.iconos.set, Icon::Remove) && !f.pinta("Confirmar"),
+            "ppp {ppp}"
+        );
         assert!(banco.ops.removal().is_none());
         // `Mayús` + clic no deja rango.
         banco.clic_muestra_con(1, MAYUS);
@@ -1208,9 +1311,9 @@ fn fila_3_con_256_entradas_anadir_da_el_aviso_y_ningun_op() {
             ColorChoice::Entry(5),
         );
         let f = banco.reposo();
-        assert_eq!(f.color_de("Añadir"), TEXT_DIM, "ppp {ppp}: atenuado");
-        assert_eq!(f.color_de("Quitar"), TEXT, "ppp {ppp}");
-        assert_eq!(f.color_de("Rotar a la izquierda"), TEXT);
+        assert_eq!(banco.tinta(&f, Icon::Add), TEXT_DISABLED, "ppp {ppp}: atenuado");
+        assert_eq!(banco.tinta(&f, Icon::Remove), TEXT, "ppp {ppp}");
+        assert_eq!(banco.tinta(&f, Icon::RotateLeft), TEXT);
         let f = banco.clic_boton(PaletteButton::Add);
         assert_eq!(f.salida.op, None, "ppp {ppp}");
         assert_eq!(
@@ -1396,7 +1499,11 @@ fn fila_5_la_transparente_no_tiene_destino_y_confirmar_avisa_hasta_elegir_uno() 
         let f = banco.reposo();
         assert!(f.pinta("quitar 3: pulsa un destino"), "ppp {ppp}");
         assert!(f.pinta("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
-        assert_eq!(f.color_de("Confirmar"), TEXT_DIM, "ppp {ppp}: desactivado");
+        assert_eq!(
+            f.color_de("Confirmar"),
+            TEXT_DISABLED,
+            "ppp {ppp}: desactivado"
+        );
         assert_eq!(f.color_de("Cancelar"), TEXT, "ppp {ppp}");
         assert!(!hay_anillo(&f, &banco, 4, 2, RING_DEST), "ppp {ppp}");
 
@@ -1458,10 +1565,14 @@ fn fila_5_con_una_entrada_quitar_avisa_y_no_deja_nada_pendiente() {
             ColorChoice::Entry(0),
         );
         let f = banco.reposo();
-        assert_eq!(f.color_de("Quitar"), TEXT_DIM, "ppp {ppp}: atenuado");
-        assert_eq!(f.color_de("Añadir"), TEXT, "ppp {ppp}");
         assert_eq!(
-            f.color_de("Rotar a la derecha"),
+            banco.tinta(&f, Icon::Remove),
+            TEXT_DISABLED,
+            "ppp {ppp}: atenuado"
+        );
+        assert_eq!(banco.tinta(&f, Icon::Add), TEXT, "ppp {ppp}");
+        assert_eq!(
+            banco.tinta(&f, Icon::RotateRight),
             TEXT,
             "ppp {ppp}: rotar nunca se atenúa"
         );
@@ -2240,8 +2351,8 @@ fn fila_13_un_rango_de_una_entrada_emite_el_rotate_de_len_1() {
         assert_eq!(banco.choice, ColorChoice::Entry(2));
         // El botón no está atenuado.
         let f = banco.reposo();
-        assert_eq!(f.color_de("Rotar a la derecha"), TEXT, "ppp {ppp}");
-        assert_eq!(f.color_de("Rotar a la izquierda"), TEXT, "ppp {ppp}");
+        assert_eq!(banco.tinta(&f, Icon::RotateRight), TEXT, "ppp {ppp}");
+        assert_eq!(banco.tinta(&f, Icon::RotateLeft), TEXT, "ppp {ppp}");
     }
 }
 
@@ -2471,30 +2582,44 @@ mod fijar_transparente {
         Some(PaletteOp::SetTransparent { index })
     }
 
-    /// Hay texto pintado (en alguna forma) con ese contenido exacto, en el rectángulo del botón
-    /// `Transparent` con el margen de la maqueta, y con el fondo del botón.
+    /// El botón `Transparent` se pinta en su sitio como icono y con el estado del rótulo: hundido
+    /// (cara `SURFACE_0`, icono `ACCENT`, 1 u abajo y a la derecha) si el rótulo es `QUITAR`; si no,
+    /// normal (cara `SURFACE_2` o `SURFACE_3`, icono `TEXT`). El rótulo mismo es del tooltip.
     fn comprueba_boton(f: &Fotograma, banco: &Banco, rotulo: &str, contexto: &str) {
         let (ppp, n) = (banco.ppp(), banco.n());
         let top = banco.geo().top_px;
         let (x, y, _, _) = rect_boton_u(PaletteButton::Transparent);
-        let pintado = f
-            .texto_pintado(rotulo)
-            .unwrap_or_else(|| panic!("{contexto}: no se pinta {rotulo:?}"));
-        let esperado = (
-            ((x + BUTTON_TEXT_X_U) * n) as f32,
-            (top + (y + BUTTON_TEXT_Y_U) * n) as f32,
+        let hundido = rotulo == QUITAR;
+        let malla = f
+            .malla_de(&banco.iconos.set, Icon::Transparent)
+            .unwrap_or_else(|| panic!("{contexto}: no se pinta el icono de {rotulo:?}"));
+        let desplazamiento = if hundido { 1 } else { 0 };
+        let esperado = Rect::from_min_size(
+            pos2(
+                ((x + 4 + desplazamiento) * n) as f32 / ppp,
+                (top + (y + 4 + desplazamiento) * n) as f32 / ppp,
+            ),
+            vec2((16 * n) as f32 / ppp, (16 * n) as f32 / ppp),
         );
         assert!(
-            cerca(pintado.pos.x * ppp, esperado.0) && cerca(pintado.pos.y * ppp, esperado.1),
-            "{contexto}: {rotulo:?} en ({}, {}) px y la maqueta dice {esperado:?}",
-            pintado.pos.x * ppp,
-            pintado.pos.y * ppp
+            cerca_rect(malla.rect, esperado),
+            "{contexto}: {rotulo:?}: el icono está en {:?} y la maqueta dice {esperado:?}",
+            malla.rect
+        );
+        assert_eq!(
+            malla.color,
+            if hundido { ACCENT } else { TEXT },
+            "{contexto}: {rotulo:?}"
         );
         let rect = banco.rect_de_boton(PaletteButton::Transparent);
-        assert!(
-            hay_rect(f, rect, SURFACE_2) || hay_rect(f, rect, SURFACE_3),
-            "{contexto}: no hay fondo del botón en {rect:?}"
-        );
+        if hundido {
+            assert!(hay_rect(f, rect, SURFACE_0), "{contexto}: cara hundida");
+        } else {
+            assert!(
+                hay_rect(f, rect, SURFACE_2) || hay_rect(f, rect, SURFACE_3),
+                "{contexto}: no hay cara del botón en {rect:?}"
+            );
+        }
     }
 
     /// Algún texto de la línea 2 (en `TEXT_DIM`) dice `transparente` y `alfa 0` a la vez.
@@ -2507,7 +2632,7 @@ mod fijar_transparente {
     // Fila 2: se pinta y se pulsa donde la maqueta dice.
 
     #[test]
-    fn fila_2_el_boton_se_pinta_con_el_rotulo_del_estado_a_los_cinco_ppp() {
+    fn fila_2_el_icono_se_pinta_con_el_estado_del_rotulo_a_los_cinco_ppp() {
         for ppp in PPPS {
             let contexto = format!("ppp {ppp}");
             // Sin marca: `Fijar`; con la activa marcada: `Quitar`; con otra marcada: `Fijar`.
@@ -2525,7 +2650,12 @@ mod fijar_transparente {
                 let f = banco.reposo();
                 let contexto = format!("{contexto}, marca {marca:?}");
                 comprueba_boton(&f, &banco, esperado, &contexto);
-                assert!(!f.pinta(otro), "{contexto}: solo un rótulo");
+                // El estado contrario se ve distinto (hundido o no): `otro` no se cumple.
+                assert_eq!(
+                    banco.tinta(&f, Icon::Transparent) == ACCENT,
+                    otro == FIJAR,
+                    "{contexto}: solo un estado"
+                );
                 // Las tres primeras filas siguen donde estaban.
                 comprueba_botones(&f, &banco, &NORMALES, &contexto);
                 comprueba_dentro_del_panel(&f, banco.rect_panel(), &contexto);
@@ -2545,7 +2675,7 @@ mod fijar_transparente {
             );
             let contexto = format!("ppp {ppp}");
             assert!(!banco.disposicion().scrolling, "{contexto}");
-            assert_eq!(banco.panel_h_px(), 351 * n, "{contexto}");
+            assert_eq!(banco.panel_h_px(), 305 * n, "{contexto}");
             let f = banco.reposo();
             comprueba_boton(&f, &banco, FIJAR, &contexto);
             comprueba_botones(&f, &banco, &NORMALES, &contexto);
@@ -2571,13 +2701,13 @@ mod fijar_transparente {
             // Dentro: la esquina y el último píxel físico; fuera: izquierda, derecha, 1 u sobre
             // el botón y bajo él.
             for (x, y, dentro) in [
-                (4 * n, 240 * n, true),
-                (229 * n - 1, 256 * n - 1, true),
-                (10 * n, 248 * n, true),
-                (3 * n, 248 * n, false),
-                (229 * n, 248 * n, false),
-                (10 * n, 239 * n, false),
-                (10 * n, 256 * n, false),
+                (118 * n, 186 * n, true),
+                (142 * n - 1, 210 * n - 1, true),
+                (130 * n, 198 * n, true),
+                (117 * n, 198 * n, false),
+                (142 * n, 198 * n, false),
+                (130 * n, 185 * n, false),
+                (130 * n, 210 * n, false),
             ] {
                 banco.historial.clear();
                 let f = banco.clic(x, top + y);
@@ -2661,7 +2791,6 @@ mod fijar_transparente {
             let f = banco.reposo();
             let contexto = format!("ppp {ppp}");
             comprueba_boton(&f, &banco, QUITAR, &contexto);
-            assert!(!f.pinta(FIJAR), "{contexto}");
             assert!(f.pinta("activa · transparente"), "{contexto}");
 
             banco.historial.clear();
@@ -2865,7 +2994,13 @@ mod fijar_transparente {
                 let mut banco =
                     Banco::nuevo(ppp, PANTALLA_ALTA, imagen, ColorChoice::Entry(activa));
                 let f = banco.reposo();
-                assert_eq!(f.color_de(rotulo), TEXT, "ppp {ppp}, {nombre}");
+                // Nunca atenuado: normal con `TEXT`, o hundido con `ACCENT` si es la marcada.
+                let esperado = if rotulo == QUITAR { ACCENT } else { TEXT };
+                assert_eq!(
+                    banco.tinta(&f, Icon::Transparent),
+                    esperado,
+                    "ppp {ppp}, {nombre}"
+                );
             }
         }
     }
@@ -3011,8 +3146,10 @@ mod fijar_transparente {
         assert!(!banco.editor.has_pending(), "no queda texto");
     }
 
+    /// Con una quita pendiente el icono no se ve ni golpea (specs/interfaz-iconos.md, decisión 8):
+    /// donde estaba cae `Cancelar`, y la quita se cancela además al cambiar el documento.
     #[test]
-    fn fila_9_con_una_quita_pendiente_el_boton_aplica_y_la_quita_se_cancela_al_cambiar_el_documento()
+    fn fila_9_con_una_quita_pendiente_el_icono_no_se_ve_ni_golpea_y_la_quita_se_cancela_al_cambiar_el_documento()
      {
         for ppp in PPPS {
             let mut banco = banco_p5(ppp, 3);
@@ -3024,21 +3161,24 @@ mod fijar_transparente {
             assert!(banco.ops.removal().is_some(), "ppp {ppp}");
             let f = banco.reposo();
             comprueba_botones(&f, &banco, &CON_QUITA, &format!("ppp {ppp}"));
-            comprueba_boton(
-                &f,
-                &banco,
-                FIJAR,
-                &format!("ppp {ppp}: sigue siendo el mismo"),
+            assert!(
+                !f.pinta_icono(&banco.iconos.set, Icon::Transparent),
+                "ppp {ppp}: el icono no se ve con una quita pendiente"
             );
             banco.historial.clear();
 
+            // Donde estaba el icono ahora está `Cancelar`: cancela la quita y no pide ninguna op.
             let f = banco.clic_boton(PaletteButton::Transparent);
-            assert_eq!(f.salida.op, op_de(Some(3)), "ppp {ppp}: no bloquea");
+            assert_eq!(f.salida.op, None, "ppp {ppp}: no golpea");
             assert_eq!(f.salida.notice, None, "ppp {ppp}");
+            assert!(banco.ops.removal().is_none(), "ppp {ppp}: `Cancelar` cancela");
             assert_eq!(banco.choice, ColorChoice::Entry(3), "ppp {ppp}");
             assert_eq!(banco.ops.range_end(), Some(4), "ppp {ppp}: rango intacto");
 
-            // La sesión aplica la op; en el siguiente fotograma la quita se cancela.
+            // De nuevo con la quita pendiente: si la sesión cambia el documento (aquí con la op
+            // que antes pedía el icono), en el siguiente fotograma la quita se cancela con aviso.
+            banco.clic_boton(PaletteButton::Remove);
+            assert!(banco.ops.removal().is_some(), "ppp {ppp}");
             banco.aplica(Command::SetTransparentIndex {
                 image: id,
                 index: Some(3),

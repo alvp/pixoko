@@ -17,7 +17,7 @@
 //!   en un lienzo con origen (0,0) y el puntero desplazado, en la primera y la última coordenada
 //!   física de cada píxel de la imagen, en las cuatro esquinas del lienzo y un píxel fuera; y
 //!   `Ajustar` centra la imagen en **ese** rectángulo (no en la ventana).
-//! - Fila 10 (respaldo B con la columna): con el panel de `200·n`, `100·n` y `297·n` de alto, la
+//! - Fila 10 (respaldo B con la columna): con el panel de `200·n`, `100·n` y `305·n` de alto, la
 //!   rueda solo mueve el panel; la columna y el menú no se desplazan y se pintan recortados a su
 //!   rectángulo; los botones de la columna y los deslizadores golpean en su sitio; sin avisos en la
 //!   barra; con alto ≥ bloque el desplazamiento vuelve a 0 en el mismo fotograma.
@@ -46,10 +46,11 @@ use px_ui::palette_panel::{self, PanelOutput};
 use px_ui::status;
 use px_ui::text::{apply_scale, text_scale};
 use px_ui::tool::Tool;
-use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, show_toolbar};
+use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::{MIN_VISIBLE, Size, View, ViewOp, Zoom};
 
 mod common;
+use common::caja::{caja, centro_u};
 use common::{
     PPPS, Pintado, boton, contexto, en_puntos, es_entero_fisico_en_egui, fotograma, mover, n_de,
     pintado, rueda_puntos, tolerancia_de_egui,
@@ -225,7 +226,7 @@ impl Banco {
             let r1 = ui.available_rect_before_wrap();
             status::show(ui, "lápiz · color 1 #000000", false);
             let r2 = ui.available_rect_before_wrap();
-            let columna = show_toolbar(ui, estado, "×5");
+            let columna = caja(ui, estado, "×5");
             let r3 = ui.available_rect_before_wrap();
             let panel = palette_panel::show_editing_view(
                 ui, image, *choice, scroll, view, enabled, slots, editor,
@@ -355,14 +356,10 @@ fn fila_7_los_botones_de_la_columna_golpean_en_su_sitio_dentro_de_la_pila() {
         let n = n_de(ppp);
         for ventana in ventanas(ppp) {
             let mut banco = Banco::nuevo(ppp, ventana, indexada());
-            let x = window_layout(ventana, n as u32).toolbar.x + (4 + 99 / 2) * n;
-            for (i, button) in TOOL_BUTTONS.iter().enumerate() {
-                let y = (16 + 4 + 18 * i as i64) * n + 8 * n;
-                let acciones: Vec<_> = banco.clic(x, y).iter().filter_map(|f| f.columna).collect();
-                assert_eq!(acciones, vec![button.action], "ppp {ppp}: {}", button.label);
-            }
-            for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
-                let y = (16 + 119 + 18 * i as i64) * n + 8 * n;
+            let caja = window_layout(ventana, n as u32).toolbar;
+            for (i, button) in TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).enumerate() {
+                let (cx, cy) = centro_u(i);
+                let (x, y) = (caja.x + cx * n, (16 + cy) * n);
                 let acciones: Vec<_> = banco.clic(x, y).iter().filter_map(|f| f.columna).collect();
                 assert_eq!(acciones, vec![button.action], "ppp {ppp}: {}", button.label);
             }
@@ -759,7 +756,7 @@ fn fila_9_ajustar_centra_la_imagen_en_el_rectangulo_del_lienzo_y_no_en_la_ventan
 // ---------------------------------------------------------------------------------------------
 
 /// Los tres altos de la fila 10, en `u`.
-const ALTOS_DEL_PANEL_U: [i64; 3] = [200, 100, 297];
+const ALTOS_DEL_PANEL_U: [i64; 3] = [200, 100, 305];
 
 fn banco_con_panel_de(ppp: f32, panel_u: i64) -> Banco {
     let n = n_de(ppp);
@@ -826,7 +823,7 @@ fn fila_10_la_columna_y_el_menu_no_se_desplazan_con_ningun_offset_px() {
             let textos_antes: Vec<(String, [i64; 2])> = textos_de_columna_y_menu(&antes, ppp);
             banco.rueda_en(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 15 * n);
             let despues = banco.reposo();
-            if panel_u < 297 {
+            if panel_u < 305 {
                 assert_eq!(banco.view.offset_px, 15 * n, "ppp {ppp} panel {panel_u} u");
             }
             // Mismos rectángulos con cualquier offset.
@@ -932,10 +929,10 @@ fn fila_10_los_botones_de_la_columna_golpean_en_su_sitio_con_el_panel_bajo() {
             let mut banco = banco_con_panel_de(ppp, panel_u);
             // Con el panel desplazado a un extremo la columna sigue en su sitio.
             let layout = window_layout(banco.ventana_px, n as u32);
-            let x = layout.toolbar.x + (4 + 99 / 2) * n;
             banco.rueda_en(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 20 * n);
             for (i, button) in TOOL_BUTTONS.iter().enumerate() {
-                let y = (16 + 4 + 18 * i as i64) * n + 8 * n;
+                let (cx, cy) = centro_u(i);
+                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
                 let acciones: Vec<_> = banco.clic(x, y).iter().filter_map(|f| f.columna).collect();
                 assert_eq!(
                     acciones,
@@ -945,20 +942,27 @@ fn fila_10_los_botones_de_la_columna_golpean_en_su_sitio_con_el_panel_bajo() {
                 );
             }
             for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
-                let y = (16 + 119 + 18 * i as i64) * n + 8 * n;
+                let (cx, cy) = centro_u(TOOL_BUTTONS.len() + i);
+                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
                 let acciones: Vec<_> = banco.clic(x, y).iter().filter_map(|f| f.columna).collect();
-                // El contenido (193 u) cabe en 200 u y en 297 u; en 100 u los botones de zoom
-                // quedan fuera de la columna recortada y no golpean nada.
-                let esperado = if panel_u >= 193 {
-                    vec![button.action]
-                } else {
-                    vec![]
-                };
+                // La fila de zoom (y = 80 a 104 u) cabe en 200 u y en 305 u y, con 100 u, su centro
+                // (y = 92 u) sigue dentro de la columna recortada.
                 assert_eq!(
-                    acciones, esperado,
+                    acciones,
+                    vec![button.action],
                     "ppp {ppp} panel {panel_u} u: {}",
                     button.label
                 );
+            }
+            // Con un panel de 60 u la fila de zoom queda fuera de la columna recortada y no golpea
+            // nada.
+            let mut bajo = banco_con_panel_de(ppp, 60);
+            let layout = window_layout(bajo.ventana_px, n as u32);
+            for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
+                let (cx, cy) = centro_u(TOOL_BUTTONS.len() + i);
+                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
+                let acciones: Vec<_> = bajo.clic(x, y).iter().filter_map(|f| f.columna).collect();
+                assert!(acciones.is_empty(), "ppp {ppp} panel 60 u: {}", button.label);
             }
         }
     }
@@ -968,7 +972,7 @@ fn fila_10_los_botones_de_la_columna_golpean_en_su_sitio_con_el_panel_bajo() {
 fn fila_10_un_clic_en_un_deslizador_del_editor_lo_golpea_con_el_panel_en_la_pila() {
     for ppp in PPPS {
         let n = n_de(ppp);
-        for panel_u in [200, 297] {
+        for panel_u in [200, 305] {
             let mut banco = banco_con_panel_de(ppp, panel_u);
             let layout = window_layout(banco.ventana_px, n as u32);
             if panel_u == 200 {
@@ -1057,10 +1061,10 @@ fn fila_10_con_alto_igual_o_mayor_que_el_bloque_el_desplazamiento_vuelve_a_0_en_
 fn fila_10_bajar_y_subir_la_ventana_no_mueve_la_columna_ni_el_menu() {
     for ppp in PPPS {
         let n = n_de(ppp);
-        let mut banco = banco_con_panel_de(ppp, 297);
+        let mut banco = banco_con_panel_de(ppp, 305);
         let alto = banco.reposo();
         let referencia = textos_de_columna_y_menu(&alto, ppp);
-        for panel_u in [200, 100, 297, 150, 297] {
+        for panel_u in [200, 100, 305, 150, 305] {
             banco.alto_de_panel(panel_u * n);
             banco.reposo();
             let f = banco.reposo();
@@ -1317,12 +1321,12 @@ mod caja_derecha {
     }
 
     /// Fila 9: la rueda sobre la caja (botones y cuerpo del recuadro) no hace zoom ni desplaza el
-    /// panel, con el respaldo B y con el alto del bloque (351 u).
+    /// panel, con el respaldo B y con el alto del bloque (305 u).
     #[test]
     fn fila_9_la_rueda_sobre_la_caja_no_hace_zoom_ni_desplaza_el_panel() {
         for ppp in PPPS {
             let n = n_de(ppp);
-            for panel_u in [200, 100, 351] {
+            for panel_u in [200, 100, 305] {
                 let mut banco = banco_con_panel_de(ppp, panel_u);
                 let layout = window_layout(banco.ventana_px, n as u32);
                 let zoom_antes = banco.reposo().info.zoom;
@@ -1356,12 +1360,12 @@ mod caja_derecha {
         }
     }
 
-    /// Fila 9: con el alto del bloque (351 u) el panel no se desplaza ni con la rueda encima.
+    /// Fila 9: con el alto del bloque (305 u) el panel no se desplaza ni con la rueda encima.
     #[test]
-    fn fila_9_con_351_u_el_panel_no_se_desplaza() {
+    fn fila_9_con_305_u_el_panel_no_se_desplaza() {
         for ppp in PPPS {
             let n = n_de(ppp);
-            let mut banco = banco_con_panel_de(ppp, 351);
+            let mut banco = banco_con_panel_de(ppp, 305);
             let layout = window_layout(banco.ventana_px, n as u32);
             assert!(!panel_layout(Mode::Indexed, banco.panel_h_px(), n as u32, 0).scrolling);
             banco.rueda_en(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
@@ -1375,7 +1379,7 @@ mod caja_derecha {
     fn fila_9_el_recuadro_de_opciones_se_recorta_a_la_caja_con_el_panel_bajo() {
         for ppp in PPPS {
             let n = n_de(ppp);
-            for panel_u in [100, 200, 351] {
+            for panel_u in [100, 200, 305] {
                 let mut banco = banco_con_panel_de(ppp, panel_u);
                 let antes = banco.reposo();
                 let layout = window_layout(banco.ventana_px, n as u32);
@@ -1429,19 +1433,10 @@ mod caja_derecha {
             let ventana = ventanas(ppp)[0];
             let layout = window_layout(ventana, n as u32);
             let mut banco = Banco::nuevo(ppp, ventana, indexada());
-            let x = layout.toolbar.x + (4 + 99 / 2) * n;
-            let botones = TOOL_BUTTONS
-                .iter()
-                .enumerate()
-                .map(|(i, b)| ((16 + 4 + 18 * i as i64) * n + 8 * n, b))
-                .chain(
-                    ZOOM_BUTTONS
-                        .iter()
-                        .enumerate()
-                        .map(|(i, b)| ((16 + 119 + 18 * i as i64) * n + 8 * n, b)),
-                );
-            for (y, button) in botones {
-                let pos = en_puntos(ppp, x, y);
+            let botones = TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).enumerate();
+            for (i, button) in botones {
+                let (cx, cy) = centro_u(i);
+                let pos = en_puntos(ppp, layout.toolbar.x + cx * n, (16 + cy) * n);
                 let mut acciones = Vec::new();
                 for events in [
                     vec![mover(pos)],

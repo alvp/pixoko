@@ -10,13 +10,15 @@
 //! capturas de pantalla.
 #![allow(dead_code)]
 
+pub mod caja;
+pub mod iconos;
 pub mod texturas;
 pub mod zonas;
 
 use egui::epaint::{ClippedShape, Shape};
 use egui::{
     Color32, Context, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelSource, MouseWheelUnit,
-    PointerButton, Pos2, RawInput, Rect, TouchPhase, Ui, Vec2, pos2, vec2,
+    PointerButton, Pos2, RawInput, Rect, TextureId, TouchPhase, Ui, Vec2, pos2, vec2,
 };
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 
@@ -232,10 +234,21 @@ pub struct Relleno {
     pub clip: Rect,
 }
 
+/// Una malla con textura (un icono): la textura, el rectángulo que cubren sus vértices, la tinta
+/// (el color de sus vértices) y su recorte.
+#[derive(Clone, Copy, Debug)]
+pub struct Malla {
+    pub textura: TextureId,
+    pub rect: Rect,
+    pub color: Color32,
+    pub clip: Rect,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Pintado {
     pub textos: Vec<Texto>,
     pub rellenos: Vec<Relleno>,
+    pub mallas: Vec<Malla>,
 }
 
 impl Pintado {
@@ -256,6 +269,11 @@ impl Pintado {
             .iter()
             .flat_map(|t| t.tramos.iter())
             .find(|tramo| tramo.texto.trim() == buscado)
+    }
+
+    /// La malla con esa textura (el icono), si se pintó.
+    pub fn malla_de(&self, textura: TextureId) -> Option<&Malla> {
+        self.mallas.iter().find(|m| m.textura == textura)
     }
 
     /// Todo el texto pintado, forma a forma.
@@ -296,6 +314,18 @@ fn recoge(shape: &Shape, clip: Rect, fuera: &mut Pintado) {
             fill: r.fill,
             clip,
         }),
+        Shape::Mesh(malla) => {
+            let puntos: Vec<Pos2> = malla.vertices.iter().map(|v| v.pos).collect();
+            fuera.mallas.push(Malla {
+                textura: malla.texture_id,
+                rect: Rect::from_points(&puntos),
+                color: malla
+                    .vertices
+                    .first()
+                    .map_or(Color32::PLACEHOLDER, |v| v.color),
+                clip,
+            });
+        }
         Shape::Vec(formas) => {
             for forma in formas {
                 recoge(forma, clip, fuera);

@@ -11,7 +11,7 @@
 use super::*;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-const ALTOS: [f32; 5] = [387.0, 309.6, 516.0, 387.0, 387.0];
+const ALTOS: [f32; 5] = [341.0, 272.8, 454.67, 341.0, 341.0];
 const ANCHOS: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
 
 // `min_enabled`.
@@ -85,10 +85,10 @@ fn fila_1_min_inner_size_es_el_de_min_window_height_pt_y_width_pt() {
 }
 
 #[test]
-fn fila_1_ningun_minimo_pasa_del_72_por_ciento_de_720_de_alto_ni_de_la_mitad_de_1366_de_ancho() {
+fn fila_1_ningun_minimo_pasa_del_65_por_ciento_de_720_de_alto_ni_de_la_mitad_de_1366_de_ancho() {
     for ppp in PPPS {
         let [ancho, alto] = min_inner_size(ppp, true).expect("activo");
-        assert!(alto <= 518.4, "ppp {ppp}: {alto} pt");
+        assert!(alto <= 468.0 + 0.01, "ppp {ppp}: {alto} pt");
         assert!(ancho <= 683.0, "ppp {ppp}: {ancho} pt");
         assert!(alto > 0.0 && ancho > 0.0);
         assert!(alto.is_finite() && ancho.is_finite());

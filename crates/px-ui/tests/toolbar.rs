@@ -2,37 +2,40 @@
 //! de la fila 7 «Geometría a las cinco escalas»; la pila completa está en `window_stack.rs` y la
 //! aritmética pura en `chrome.rs`).
 //!
-//! Banco de egui sin ventana (`Context::run_ui` con `RawInput` sintético): `show_toolbar` se pinta
+//! Banco de egui sin ventana (`Context::run_ui` con `RawInput` sintético): `show_toolbox` se pinta
 //! sola en una ventana vacía, así que la columna queda pegada al borde derecho (`common::zonas::caja_sola`). Se comprueba a las cinco
 //! escalas (`ppp` 1,0, 1,25, 1,5, 2,0 y 3,0), en píxeles físicos:
 //!
 //! - las tablas `TOOL_BUTTONS` y `ZOOM_BUTTONS`;
-//! - los 9 botones golpean en su sitio: herramientas en `y = 4 + 18·i`, zoom en `y = 119 + 18·i`,
-//!   de 99 × 16 u con 4 u de margen (primera y última coordenada física de cada botón dentro); el
+//! - los 9 botones golpean en su sitio: casillas de 24 × 24 u en una rejilla de cuatro columnas
+//!   (specs/interfaz-iconos.md; primera y última coordenada física de cada botón dentro); el
 //!   nivel de zoom y lo que queda fuera de la columna no golpean nada;
-//! - el activo se resalta con relleno `ACCENT` y texto `SURFACE_0` (contraste ≥ 4,5 con
-//!   `contrast_ratio`), la letra va en `TEXT_DIM` en los demás, y los deshabilitados se atenúan y
-//!   no responden (con las reglas de bloqueo del zoom: gesto, quita y campo de texto no lo apagan);
-//! - el nivel de zoom es un texto de 14 u en `y = 101`.
+//! - el activo se hunde (cara `SURFACE_0`, icono `ACCENT`; contraste ≥ 4,5 con `contrast_ratio`),
+//!   los demás llevan el icono en `TEXT`, y los deshabilitados se atenúan y no responden (con las
+//!   reglas de bloqueo del zoom: gesto, quita y campo de texto no lo apagan);
+//! - el nivel de zoom es un texto de 14 u en `y = 62`.
 //!
 //! Las posiciones pintadas se comparan con la tolerancia del redondeo de egui
 //! (`common::tolerancia_de_egui`: 1/32 pt, porque `Panel` y `allocate_rect` redondean a múltiplos pares de 1/32 pt).
 //!
 //! Supuestos sobre lo que la spec no fija (cualquier otro reparto cambiaría esta página):
-//! - `show_toolbar` crea su propio panel a la derecha de `ui` (como `status::show` y
+//! - `show_toolbox` crea su propio panel a la derecha de `ui` (como `status::show` y
 //!   `palette_panel::show`), de `toolbar_width_u()·n` píxeles de ancho;
 //! - el rótulo de zoom que recibe es el texto del nivel (`×12`, `1/8`, `—`) con o sin el prefijo
 //!   `Zoom `: el banco solo exige que el texto pintado lo contenga.
 
 use egui::{Context, Event, Vec2, vec2};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
-use px_ui::keymap::Keymap;
-use px_ui::theme::{ACCENT, SURFACE_0, TEXT_DIM, contrast_ratio};
+use px_ui::keymap::{Keymap, default_keymap};
+use px_ui::options::OptionsState;
+use px_ui::theme::{ACCENT, SURFACE_0, TEXT, TEXT_DISABLED, contrast_ratio};
 use px_ui::tool::Tool;
-use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, show_toolbar};
+use px_ui::toolbar::{TOOL_BUTTONS, ToolboxView, ZOOM_BUTTONS, show_toolbox};
 use px_ui::view::Zoom;
 
 mod common;
+use common::caja::centro_u;
+use common::iconos::IconosDePrueba;
 use common::zonas::caja_sola;
 use common::{
     PPPS, Pintado, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, tolerancia_de_egui,
@@ -46,19 +49,10 @@ const HERRAMIENTAS: [Tool; 5] = [
     Tool::Eraser,
 ];
 const PANTALLA: Vec2 = vec2(400.0, 600.0);
-/// Ancho de la columna y de sus botones, en `u`.
+/// Ancho de la columna, en `u`, y lado de un botón (casilla de 24 × 24 u).
 const COLUMNA_U: i64 = 107;
-const BOTON_W_U: i64 = 99;
-const BOTON_H_U: i64 = 16;
+const BOTON_U: i64 = 24;
 const MARGEN_U: i64 = 4;
-
-fn y_herramienta_u(i: i64) -> i64 {
-    4 + 18 * i
-}
-
-fn y_zoom_u(i: i64) -> i64 {
-    119 + 18 * i
-}
 
 fn estado(tool: Tool, zoom: Option<Zoom>, locks: Locks) -> UiState {
     UiState {
@@ -79,15 +73,19 @@ struct Banco {
     ppp: f32,
     estado: UiState,
     etiqueta: &'static str,
+    iconos: IconosDePrueba,
 }
 
 impl Banco {
     fn nuevo(ppp: f32, estado: UiState) -> Banco {
+        let ctx = contexto(ppp);
+        let iconos = IconosDePrueba::nuevos(&ctx);
         Banco {
-            ctx: contexto(ppp),
+            ctx,
             ppp,
             estado,
             etiqueta: "×5",
+            iconos,
         }
     }
 
@@ -107,11 +105,17 @@ impl Banco {
         .x
     }
 
-    /// Un fotograma: lo pintado y lo que devolvió `show_toolbar`.
+    /// Un fotograma: lo pintado y lo que devolvió `show_toolbox`.
     fn fotograma(&self, events: Vec<Event>) -> (Pintado, Option<AppAction>) {
         let mut accion = None;
         let formas = fotograma(&self.ctx, PANTALLA, events, |ui| {
-            accion = show_toolbar(ui, &self.estado, self.etiqueta);
+            let vista = ToolboxView {
+                state: &self.estado,
+                zoom_label: self.etiqueta,
+                options: &OptionsState::default(),
+                icons: &self.iconos.set,
+            };
+            accion = show_toolbox(ui, &vista, default_keymap(), Platform::Linux).action;
         });
         (pintado(&formas), accion)
     }
@@ -139,13 +143,17 @@ impl Banco {
         acciones
     }
 
-    /// Clic en el centro del botón de la fila `y_u`.
-    fn clic_en_boton(&self, y_u: i64) -> Vec<AppAction> {
+    /// Clic en el centro del botón `i` (0 a 4 las herramientas, 5 a 8 el zoom).
+    fn clic_en_boton(&self, i: usize) -> Vec<AppAction> {
         let n = self.n();
-        self.clic(
-            self.x0() + (MARGEN_U + BOTON_W_U / 2) * n,
-            y_u * n + BOTON_H_U * n / 2,
-        )
+        let (cx, cy) = centro_u(i);
+        self.clic(self.x0() + cx * n, cy * n)
+    }
+
+    /// Rectángulo `(x, y)` de la esquina del botón `i`, en `u` desde la esquina de la caja.
+    fn esquina_u(i: usize) -> (i64, i64) {
+        let (cx, cy) = centro_u(i);
+        (cx - BOTON_U / 2, cy - BOTON_U / 2)
     }
 }
 
@@ -216,7 +224,7 @@ fn fila_7_el_centro_de_cada_boton_de_herramienta_da_su_accion_a_las_cinco_escala
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
         for (i, button) in TOOL_BUTTONS.iter().enumerate() {
             assert_eq!(
-                banco.clic_en_boton(y_herramienta_u(i as i64)),
+                banco.clic_en_boton(i),
                 vec![button.action],
                 "ppp {ppp}: {}",
                 button.label
@@ -231,7 +239,7 @@ fn fila_7_el_centro_de_cada_boton_de_zoom_da_su_accion_a_las_cinco_escalas() {
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
         for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
             assert_eq!(
-                banco.clic_en_boton(y_zoom_u(i as i64)),
+                banco.clic_en_boton(TOOL_BUTTONS.len() + i),
                 vec![button.action],
                 "ppp {ppp}: {}",
                 button.label
@@ -245,22 +253,18 @@ fn fila_7_la_primera_y_la_ultima_coordenada_fisica_de_cada_boton_golpean() {
     for ppp in PPPS {
         let n = n_de(ppp);
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
-        let filas: Vec<(i64, AppAction)> = TOOL_BUTTONS
+        let casillas: Vec<(usize, AppAction)> = TOOL_BUTTONS
             .iter()
+            .chain(ZOOM_BUTTONS.iter())
             .enumerate()
-            .map(|(i, b)| (y_herramienta_u(i as i64), b.action))
-            .chain(
-                ZOOM_BUTTONS
-                    .iter()
-                    .enumerate()
-                    .map(|(i, b)| (y_zoom_u(i as i64), b.action)),
-            )
+            .map(|(i, b)| (i, b.action))
             .collect();
-        for (y_u, accion) in filas {
-            let (x0, y0) = (banco.x0() + MARGEN_U * n, y_u * n);
+        for (i, accion) in casillas {
+            let (cx_u, cy_u) = Banco::esquina_u(i);
+            let (x0, y0) = (banco.x0() + cx_u * n, cy_u * n);
             let (x1, y1) = (
-                banco.x0() + (MARGEN_U + BOTON_W_U) * n - 1,
-                (y_u + BOTON_H_U) * n - 1,
+                banco.x0() + (cx_u + BOTON_U) * n - 1,
+                (cy_u + BOTON_U) * n - 1,
             );
             for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
                 assert_eq!(
@@ -281,11 +285,11 @@ fn fila_7_el_nivel_de_zoom_y_lo_que_queda_lejos_de_los_botones_no_golpean_nada()
     for ppp in PPPS {
         let n = n_de(ppp);
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
-        let centro_x = banco.x0() + (MARGEN_U + BOTON_W_U / 2) * n;
-        // El nivel de zoom (y = 101 a 115): a 16 u del último botón de herramienta y a 11 u del
-        // primero de zoom.
+        let centro_x = banco.x0() + centro_u(1).0 * n;
+        // El nivel de zoom (y = 62 a 76): a 9 u de la última fila de herramientas y a 4 u de la
+        // de zoom; se pulsa a 16 u y 11 u de ellas, fuera del radio de interacción de egui.
         assert!(
-            banco.clic(centro_x, 108 * n).is_empty(),
+            banco.clic(centro_x, 69 * n).is_empty(),
             "ppp {ppp}: el nivel de zoom no es un botón"
         );
         // Fuera de la columna (a 40 u de su borde, en el lado del lienzo) no hay nada.
@@ -310,7 +314,7 @@ fn fila_7_todo_lo_pintado_cae_dentro_de_la_columna_y_de_sus_botones() {
             assert!(
                 r.min.x * p >= (banco.x0() + MARGEN_U * n) as f32 - tolerancia_de_egui(ppp)
                     && r.max.x * p
-                        <= (banco.x0() + (MARGEN_U + BOTON_W_U) * n) as f32
+                        <= (banco.x0() + (COLUMNA_U - MARGEN_U) * n) as f32
                             + tolerancia_de_egui(ppp),
                 "ppp {ppp}: {:?} se sale de la columna: {r:?}",
                 texto.texto
@@ -331,29 +335,31 @@ fn fila_7_todo_lo_pintado_cae_dentro_de_la_columna_y_de_sus_botones() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn el_activo_se_resalta_con_relleno_accent_en_su_boton_y_texto_surface_0() {
+fn el_activo_se_hunde_con_cara_surface_0_e_icono_accent_en_su_boton() {
     for ppp in PPPS {
         let n = n_de(ppp);
         for (i, tool) in HERRAMIENTAS.iter().enumerate() {
             let banco = Banco::nuevo(ppp, estado(*tool, x5(), Locks::default()));
             let pintado = banco.reposo();
+            // Solo el icono del activo lleva `ACCENT`, y va 1 u abajo y a la derecha en su botón.
             let acentos: Vec<_> = pintado
-                .rellenos
+                .mallas
                 .iter()
-                .filter(|r| r.fill == ACCENT)
+                .filter(|m| m.color == ACCENT)
                 .collect();
             assert_eq!(
                 acentos.len(),
                 1,
-                "ppp {ppp}: solo el activo ({tool:?}) lleva relleno ACCENT"
+                "ppp {ppp}: solo el activo ({tool:?}) lleva el icono ACCENT"
             );
-            let r = acentos[0].rect;
+            let (ex, ey) = Banco::esquina_u(i);
             let esperado = [
-                banco.x0() + MARGEN_U * n,
-                y_herramienta_u(i as i64) * n,
-                banco.x0() + (MARGEN_U + BOTON_W_U) * n,
-                (y_herramienta_u(i as i64) + BOTON_H_U) * n,
+                banco.x0() + (ex + 4 + 1) * n,
+                (ey + 4 + 1) * n,
+                banco.x0() + (ex + 4 + 1 + 16) * n,
+                (ey + 4 + 1 + 16) * n,
             ];
+            let r = acentos[0].rect;
             let real = [r.min.x * ppp, r.min.y * ppp, r.max.x * ppp, r.max.y * ppp];
             for (a, b) in real.iter().zip(esperado) {
                 assert!(
@@ -361,61 +367,60 @@ fn el_activo_se_resalta_con_relleno_accent_en_su_boton_y_texto_surface_0() {
                     "ppp {ppp}: {tool:?} {real:?} y no {esperado:?}"
                 );
             }
-            let rotulo = TOOL_BUTTONS[i].label;
-            let texto = pintado
-                .texto_con(rotulo)
-                .unwrap_or_else(|| panic!("ppp {ppp}: no se pinta {rotulo}"));
-            assert_eq!(
-                texto.color(),
-                SURFACE_0,
-                "ppp {ppp}: el rótulo del activo ({rotulo}) va en SURFACE_0"
+            // La cara del activo es `SURFACE_0` en el rectángulo del botón.
+            let cara = [
+                banco.x0() + ex * n,
+                ey * n,
+                banco.x0() + (ex + BOTON_U) * n,
+                (ey + BOTON_U) * n,
+            ];
+            assert!(
+                pintado.rellenos.iter().any(|r| {
+                    r.fill == SURFACE_0
+                        && [r.rect.min.x, r.rect.min.y, r.rect.max.x, r.rect.max.y]
+                            .iter()
+                            .zip(cara)
+                            .all(|(a, b)| (a * ppp - b as f32).abs() <= tolerancia_de_egui(ppp))
+                }),
+                "ppp {ppp}: {tool:?}: falta la cara hundida en {cara:?}"
             );
         }
     }
 }
 
 #[test]
-fn las_letras_de_los_botones_no_activos_van_en_text_dim() {
+fn los_atajos_ya_no_se_pintan_en_los_botones_y_salen_en_el_tooltip() {
+    // El atajo se dice en el tooltip (`tooltip_text`); en el botón solo queda el icono.
     for ppp in PPPS {
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
         let pintado = banco.reposo();
         for button in TOOL_BUTTONS.iter().skip(1) {
-            // El Borrador ya no tiene letra: no hay nada que pintar.
             let Some(letra) = letra_de(button.action).map(|c| c.to_string()) else {
                 continue;
             };
-            let tramo = pintado
-                .tramo(&letra)
-                .unwrap_or_else(|| panic!("ppp {ppp}: no se pinta la letra {letra}"));
-            assert_eq!(tramo.color, TEXT_DIM, "ppp {ppp}: letra {letra}");
+            assert!(
+                pintado.tramo(&letra).is_none(),
+                "ppp {ppp}: la letra {letra} no se pinta en el botón"
+            );
         }
     }
 }
 
 #[test]
-fn se_pintan_todos_los_rotulos_de_los_nueve_botones() {
+fn se_pintan_los_nueve_iconos_y_ningun_rotulo_de_boton() {
     let banco = Banco::nuevo(1.0, estado(Tool::Fill, x5(), Locks::default()));
     let pintado = banco.reposo();
-    for button in TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()) {
+    let texturas: Vec<_> = pintado.mallas.iter().map(|m| m.textura).collect();
+    assert_eq!(texturas.len(), 9, "nueve iconos, uno por botón");
+    for (i, a) in texturas.iter().enumerate() {
+        assert!(!texturas[i + 1..].contains(a), "iconos repetidos");
+    }
+    for button in ZOOM_BUTTONS.iter() {
         assert!(
-            pintado.texto_con(button.label).is_some(),
-            "no se pinta {:?}; hay {:?}",
+            pintado.texto_con(button.label).is_none(),
+            "el rótulo {:?} no se pinta en el botón; hay {:?}",
             button.label,
             pintado.todos_los_textos()
-        );
-    }
-}
-
-#[test]
-fn los_botones_de_zoom_no_llevan_letra_de_atajo() {
-    let banco = Banco::nuevo(1.0, estado(Tool::Pencil, x5(), Locks::default()));
-    let pintado = banco.reposo();
-    for button in ZOOM_BUTTONS.iter() {
-        let texto = pintado.texto_con(button.label).expect("rótulo de zoom");
-        assert_eq!(
-            texto.texto.trim(),
-            button.label,
-            "solo el rótulo, sin letra"
         );
     }
 }
@@ -425,7 +430,7 @@ fn los_botones_de_zoom_no_llevan_letra_de_atajo() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn el_nivel_de_zoom_es_un_texto_de_14_u_en_y_101() {
+fn el_nivel_de_zoom_es_un_texto_de_14_u_en_y_62() {
     for ppp in PPPS {
         let n = n_de(ppp);
         let banco = Banco::nuevo(ppp, estado(Tool::Pencil, x5(), Locks::default()));
@@ -437,10 +442,10 @@ fn el_nivel_de_zoom_es_un_texto_de_14_u_en_y_101() {
             )
         });
         assert!(
-            (texto.pos.y * ppp - (101 * n) as f32).abs() <= tolerancia_de_egui(ppp),
+            (texto.pos.y * ppp - (62 * n) as f32).abs() <= tolerancia_de_egui(ppp),
             "ppp {ppp}: el nivel empieza en y = {} px y no en {}",
             texto.pos.y * ppp,
-            101 * n
+            62 * n
         );
         assert!(
             (texto.tamano.y * ppp - (14 * n) as f32).abs() <= 0.05,
@@ -478,10 +483,10 @@ fn responden(banco: &Banco) -> ([bool; 5], [bool; 4]) {
     let mut herramientas = [false; 5];
     let mut zoom = [false; 4];
     for (i, button) in TOOL_BUTTONS.iter().enumerate() {
-        herramientas[i] = banco.clic_en_boton(y_herramienta_u(i as i64)) == vec![button.action];
+        herramientas[i] = banco.clic_en_boton(i) == vec![button.action];
     }
     for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
-        zoom[i] = banco.clic_en_boton(y_zoom_u(i as i64)) == vec![button.action];
+        zoom[i] = banco.clic_en_boton(TOOL_BUTTONS.len() + i) == vec![button.action];
     }
     (herramientas, zoom)
 }
@@ -543,31 +548,24 @@ fn en_zoom_max_acercar_no_responde() {
 
 #[test]
 fn un_boton_deshabilitado_se_pinta_atenuado() {
-    // El rótulo de `Línea` cambia de color al deshabilitarlo (no es el activo en ninguno de los dos).
+    // El icono de `Línea` cambia de tinta al deshabilitarlo (no es el activo en ninguno de los dos).
     let libre = Banco::nuevo(1.0, estado(Tool::Pencil, x5(), Locks::default()));
     let con_gesto = Banco::nuevo(
         1.0,
         estado(Tool::Pencil, x5(), bloqueo(|l| l.gesture = true)),
     );
-    let color_libre = libre.reposo().texto_con("Línea").expect("rótulo").aspecto();
-    let color_gris = con_gesto
-        .reposo()
-        .texto_con("Línea")
-        .expect("rótulo")
-        .aspecto();
-    assert_ne!(color_libre, color_gris, "el deshabilitado va atenuado");
-    // El zoom sigue habilitado con el gesto: su rótulo no cambia.
-    let zoom_libre = libre
-        .reposo()
-        .texto_con("Acercar")
-        .expect("rótulo")
-        .aspecto();
-    let zoom_gesto = con_gesto
-        .reposo()
-        .texto_con("Acercar")
-        .expect("rótulo")
-        .aspecto();
-    assert_eq!(zoom_libre, zoom_gesto);
+    let tinta = |banco: &Banco, indice: usize| {
+        let id = banco.iconos.set.get(TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).nth(indice).expect("botón").icon);
+        banco
+            .reposo()
+            .malla_de(id.expect("textura"))
+            .expect("icono pintado")
+            .color
+    };
+    assert_eq!(tinta(&libre, 1), TEXT);
+    assert_eq!(tinta(&con_gesto, 1), TEXT_DISABLED, "el deshabilitado va atenuado");
+    // El zoom sigue habilitado con el gesto: su icono no cambia.
+    assert_eq!(tinta(&libre, 5), tinta(&con_gesto, 5));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -608,17 +606,21 @@ mod caja_derecha {
         opciones: OptionsState,
         keymap: Keymap,
         tiempo: f64,
+        iconos: IconosDePrueba,
     }
 
     impl Caja {
         fn nueva(ppp: f32, estado: UiState) -> Caja {
+            let ctx = contexto(ppp);
+            let iconos = IconosDePrueba::nuevos(&ctx);
             Caja {
-                ctx: contexto(ppp),
+                ctx,
                 ppp,
                 estado,
                 opciones: OptionsState::default(),
                 keymap: default_keymap().clone(),
                 tiempo: 0.0,
+                iconos,
             }
         }
 
@@ -652,6 +654,7 @@ mod caja_derecha {
                     state: &self.estado,
                     zoom_label: "×5",
                     options: &self.opciones,
+                    icons: &self.iconos.set,
                 };
                 salida = Some(show_toolbox(ui, &vista, &self.keymap, LINUX));
             });
@@ -684,18 +687,14 @@ mod caja_derecha {
 
         fn centro_de_herramienta(&self, i: i64) -> (i64, i64) {
             let n = self.n();
-            (
-                self.x0() + (MARGEN_U + BOTON_W_U / 2) * n,
-                y_herramienta_u(i) * n + BOTON_H_U * n / 2,
-            )
+            let (cx, cy) = centro_u(i as usize);
+            (self.x0() + cx * n, cy * n)
         }
 
         fn centro_de_zoom(&self, i: i64) -> (i64, i64) {
             let n = self.n();
-            (
-                self.x0() + (MARGEN_U + BOTON_W_U / 2) * n,
-                y_zoom_u(i) * n + BOTON_H_U * n / 2,
-            )
+            let (cx, cy) = centro_u(5 + i as usize);
+            (self.x0() + cx * n, cy * n)
         }
 
         /// Rectángulo del recuadro de opciones en píxeles físicos.

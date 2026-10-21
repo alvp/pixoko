@@ -691,11 +691,11 @@ fn fila_3_el_editor_se_ve_siempre_y_la_rejilla_tiene_una_fila() {
 }
 
 #[test]
-fn fila_3_de_351n_a_350n_el_editor_y_la_rejilla_no_saltan() {
+fn fila_3_de_305n_a_304n_el_editor_y_la_rejilla_no_saltan() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
         let mut banco =
-            Banco::con_alto_de_panel(ppp, 351 * n, imagen_indexada_256(), ColorChoice::Entry(5));
+            Banco::con_alto_de_panel(ppp, 305 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let antes = banco.reposo();
         let cabecera_antes = antes
             .texto_pintado("editar índice 5")
@@ -703,9 +703,9 @@ fn fila_3_de_351n_a_350n_el_editor_y_la_rejilla_no_saltan() {
             .pos;
         assert!(!banco.disposicion().scrolling);
 
-        banco.alto_de_panel(350 * n);
+        banco.alto_de_panel(304 * n);
         let despues = banco.reposo();
-        assert!(banco.disposicion().scrolling, "ppp {ppp}: 350n desplaza");
+        assert!(banco.disposicion().scrolling, "ppp {ppp}: 304n desplaza");
         assert_eq!(banco.view.offset_px, 0);
         let cabecera_despues = despues
             .texto_pintado("editar índice 5")
@@ -786,7 +786,7 @@ fn fila_4_offset_px_siempre_es_multiplo_de_n_y_se_recorta_a_cero_y_al_maximo() {
         let mut banco =
             Banco::con_alto_de_panel(ppp, 200 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let max = banco.max_offset();
-        assert_eq!(max, 151 * n);
+        assert_eq!(max, 105 * n);
         let (x, y) = banco.sobre_el_texto();
         banco.mueve(x, y);
         // Subir con el desplazamiento a 0: se queda en 0.
@@ -876,20 +876,20 @@ fn fila_4_al_agrandar_hasta_el_bloque_offset_px_es_0_en_el_mismo_fotograma() {
             Banco::con_alto_de_panel(ppp, 200 * n, imagen_indexada_256(), ColorChoice::Entry(5));
         let (x, y) = banco.sobre_el_texto();
         banco.rueda_en(x, y, 100_000 * n);
-        assert_eq!(banco.view.offset_px, 151 * n);
+        assert_eq!(banco.view.offset_px, 105 * n);
 
         // Agrandar un poco: el máximo baja y el desplazamiento se recorta en el mismo fotograma.
         banco.alto_de_panel(220 * n);
         banco.reposo();
-        assert_eq!(banco.view.offset_px, 131 * n, "ppp {ppp}: 220n");
-        assert_eq!(banco.max_offset(), 131 * n);
+        assert_eq!(banco.view.offset_px, 85 * n, "ppp {ppp}: 220n");
+        assert_eq!(banco.max_offset(), 85 * n);
 
         // Hasta el bloque: 0 en el mismo fotograma, sin pista y con el editor en su sitio.
-        banco.alto_de_panel(351 * n);
+        banco.alto_de_panel(305 * n);
         let f = banco.reposo();
-        assert_eq!(banco.view.offset_px, 0, "ppp {ppp}: 351n");
+        assert_eq!(banco.view.offset_px, 0, "ppp {ppp}: 305n");
         assert!(!banco.disposicion().scrolling);
-        comprueba_barra(&f, &banco, &format!("ppp {ppp}, 351n"));
+        comprueba_barra(&f, &banco, &format!("ppp {ppp}, 305n"));
         let cabecera = f.texto_pintado("editar índice 5").expect("cabecera");
         assert!(cerca(
             cabecera.pos.y * ppp,
@@ -910,9 +910,9 @@ fn fila_4_la_barra_solo_se_pinta_con_desplazamiento_y_la_rejilla_no_pinta_la_suy
         let n = i64::from(text_scale(ppp));
         for (alto, desplaza) in [
             (700 * n, false),
-            (354 * n, false),
-            (351 * n, false),
-            (350 * n, true),
+            (308 * n, false),
+            (305 * n, false),
+            (304 * n, true),
             (200 * n, true),
             (100 * n, true),
         ] {
