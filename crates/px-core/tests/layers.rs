@@ -3754,9 +3754,9 @@ mod duplicar_y_bloquear {
             prop_assert!(doc == inicial, "deshacer hasta el principio");
             prop_assert_eq!(doc.materialized_bytes(), inicial.materialized_bytes());
 
-            for i in 1..=pasos {
+            for (i, estado) in estados.iter().enumerate().take(pasos + 1).skip(1) {
                 prop_assert_eq!(doc.redo(), Ok(()), "rehacer {}", i);
-                prop_assert_eq!(doc.state_id(), estados[i], "state_id al rehacer a {}", i);
+                prop_assert_eq!(doc.state_id(), *estado, "state_id al rehacer a {}", i);
                 invariantes(&doc)?;
             }
             prop_assert!(doc == final_, "rehacer hasta el final");
