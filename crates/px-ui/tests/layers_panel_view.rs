@@ -69,13 +69,18 @@ impl Banco {
         let mut canvas = Canvas::with_tile_side(64);
         canvas.load(&ctx, &DocSource(&doc)).expect("load");
         let activa = doc.layers()[doc.layers().len() / 2].id();
-        let mut estado = PanelState::default();
-        estado.open = abierto;
+        let estado = PanelState {
+            open: abierto,
+            ..PanelState::default()
+        };
         let mut banco = Banco {
             ctx,
             ppp,
             n: n_de(ppp) as u32,
-            ventana: ((ANCHO_PT * ppp).round() as i64, (ALTO_PT * ppp).round() as i64),
+            ventana: (
+                (ANCHO_PT * ppp).round() as i64,
+                (ALTO_PT * ppp).round() as i64,
+            ),
             canvas,
             doc,
             activa,
@@ -171,11 +176,26 @@ fn fila_7_cada_boton_el_ojo_el_candado_la_fila_y_cerrar_emiten_su_evento() {
         let capas: Vec<LayerId> = banco.doc.layers().iter().map(|l| l.id()).collect();
         // La fila 0 es la de arriba (la tercera capa).
         let casos: Vec<(RectU, PanelEvent)> = vec![
-            (button_u(PanelButton::New), PanelEvent::Button(PanelButton::New)),
-            (button_u(PanelButton::Duplicate), PanelEvent::Button(PanelButton::Duplicate)),
-            (button_u(PanelButton::Remove), PanelEvent::Button(PanelButton::Remove)),
-            (button_u(PanelButton::Up), PanelEvent::Button(PanelButton::Up)),
-            (button_u(PanelButton::Down), PanelEvent::Button(PanelButton::Down)),
+            (
+                button_u(PanelButton::New),
+                PanelEvent::Button(PanelButton::New),
+            ),
+            (
+                button_u(PanelButton::Duplicate),
+                PanelEvent::Button(PanelButton::Duplicate),
+            ),
+            (
+                button_u(PanelButton::Remove),
+                PanelEvent::Button(PanelButton::Remove),
+            ),
+            (
+                button_u(PanelButton::Up),
+                PanelEvent::Button(PanelButton::Up),
+            ),
+            (
+                button_u(PanelButton::Down),
+                PanelEvent::Button(PanelButton::Down),
+            ),
             (eye_u(0), PanelEvent::ToggleVisible(capas[2])),
             (lock_u(1), PanelEvent::ToggleLocked(capas[1])),
             (name_u(2), PanelEvent::Select(capas[0])),
@@ -184,8 +204,15 @@ fn fila_7_cada_boton_el_ojo_el_candado_la_fila_y_cerrar_emiten_su_evento() {
         for (rect, esperado) in casos {
             let pos = banco.centro(rect);
             let pasos = banco.clic(pos);
-            assert_eq!(Banco::eventos_de(&pasos), vec![esperado.clone()], "ppp {ppp}: {esperado:?}");
-            assert!(pasos.iter().all(|p| p.lienzo.is_empty()), "ppp {ppp}: el clic llegó al lienzo");
+            assert_eq!(
+                Banco::eventos_de(&pasos),
+                vec![esperado.clone()],
+                "ppp {ppp}: {esperado:?}"
+            );
+            assert!(
+                pasos.iter().all(|p| p.lienzo.is_empty()),
+                "ppp {ppp}: el clic llegó al lienzo"
+            );
         }
     }
 }
@@ -201,7 +228,10 @@ fn fila_7_con_una_capa_quitar_subir_y_bajar_estan_atenuados_y_no_responden() {
         }
         let pos = banco.centro(button_u(PanelButton::New));
         let pasos = banco.clic(pos);
-        assert_eq!(Banco::eventos_de(&pasos), vec![PanelEvent::Button(PanelButton::New)]);
+        assert_eq!(
+            Banco::eventos_de(&pasos),
+            vec![PanelEvent::Button(PanelButton::New)]
+        );
         let nav = layer_nav(&banco.doc, banco.activa);
         assert_eq!((nav.count, nav.active_pos, nav.can_add), (1, 0, true));
     }
@@ -238,7 +268,11 @@ fn fila_7_con_un_modal_abierto_el_panel_no_responde_a_nada() {
         banco.paso(vec![boton(barra, true)]);
         banco.paso(vec![mover(barra + vec2(60.0, 30.0))]);
         banco.paso(vec![boton(barra + vec2(60.0, 30.0), false)]);
-        assert_eq!(banco.estado.rect(banco.ventana, banco.n), antes, "ppp {ppp}");
+        assert_eq!(
+            banco.estado.rect(banco.ventana, banco.n),
+            antes,
+            "ppp {ppp}"
+        );
         assert!(banco.estado.open);
     }
 }
@@ -257,8 +291,14 @@ fn fila_7_la_barra_arrastra_el_panel_y_la_rueda_desplaza_la_lista() {
         let despues = banco.estado.rect(banco.ventana, banco.n);
         let k = i64::from(banco.n);
         let (dx, dy) = (despues.x - antes.x, despues.y - antes.y);
-        assert!((dx + (40.0 * ppp) as i64).abs() <= 2 * k, "ppp {ppp}: dx {dx}");
-        assert!((dy - (25.0 * ppp) as i64).abs() <= 2 * k, "ppp {ppp}: dy {dy}");
+        assert!(
+            (dx + (40.0 * ppp) as i64).abs() <= 2 * k,
+            "ppp {ppp}: dx {dx}"
+        );
+        assert!(
+            (dy - (25.0 * ppp) as i64).abs() <= 2 * k,
+            "ppp {ppp}: dy {dy}"
+        );
         assert_eq!((dx % k, dy % k), (0, 0), "a pasos de u");
         // La rueda sobre la lista baja 3 filas por muesca (10 capas: como mucho 4).
         let sobre_lista = banco.centro(name_u(1));
@@ -281,9 +321,18 @@ fn fila_12_un_clic_dentro_del_panel_no_llega_al_lienzo_y_uno_fuera_si() {
     for ppp in PPPS {
         let mut banco = Banco::nuevo(ppp, documento(3), true);
         // Un hueco del panel (entre la barra y la lista): dentro del rectángulo, sin control.
-        let hueco = banco.centro(RectU { x: 90, y: 18, w: 2, h: 2 });
+        let hueco = banco.centro(RectU {
+            x: 90,
+            y: 18,
+            w: 2,
+            h: 2,
+        });
         let pasos = banco.clic(hueco);
-        assert!(pasos.iter().all(|p| p.lienzo.is_empty()), "ppp {ppp}: dentro: {:?}", pasos.iter().map(|p| &p.lienzo).collect::<Vec<_>>());
+        assert!(
+            pasos.iter().all(|p| p.lienzo.is_empty()),
+            "ppp {ppp}: dentro: {:?}",
+            pasos.iter().map(|p| &p.lienzo).collect::<Vec<_>>()
+        );
         assert_eq!(Banco::eventos_de(&pasos), vec![]);
         // La rueda dentro del panel tampoco hace zoom en el lienzo.
         let zoom = banco.canvas.zoom();
@@ -343,7 +392,9 @@ fn propiedad_4_sin_comando_no_cambia_el_documento_ni_se_sube_ninguna_textura() {
             let paso = banco.paso(eventos);
             subidos += paso.subidos;
             assert!(
-                paso.eventos.iter().all(|e| matches!(e, PanelEvent::Select(_))),
+                paso.eventos
+                    .iter()
+                    .all(|e| matches!(e, PanelEvent::Select(_))),
                 "ppp {ppp}: {:?}",
                 paso.eventos
             );
@@ -353,7 +404,10 @@ fn propiedad_4_sin_comando_no_cambia_el_documento_ni_se_sube_ninguna_textura() {
         subidos += banco.paso(vec![]).subidos;
         banco.estado.open = true;
         subidos += banco.paso(vec![]).subidos;
-        assert_eq!(subidos, 0, "ppp {ppp}: se subieron {subidos} píxeles de textura");
+        assert_eq!(
+            subidos, 0,
+            "ppp {ppp}: se subieron {subidos} píxeles de textura"
+        );
         assert_eq!(banco.doc, copia);
         assert_eq!(banco.doc.state_id(), id);
         assert!(!banco.doc.can_redo());

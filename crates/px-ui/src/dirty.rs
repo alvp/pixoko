@@ -216,7 +216,8 @@ pub fn dirty_of(command: &Command, size: Size) -> BlockSet {
         | Command::PermutePalette { .. }
         | Command::AddPaletteEntry { .. }
         | Command::AddLayer { .. }
-        | Command::RenameLayer { .. } => {}
+        | Command::RenameLayer { .. }
+        | Command::SetLayerLocked { .. } => {}
         _ => return BlockSet::full(size.width, size.height),
     }
     set

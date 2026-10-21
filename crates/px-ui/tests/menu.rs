@@ -682,8 +682,12 @@ proptest! {
             if state.locks.dialog {
                 prop_assert!(!on, "{:?} con diálogo", action);
             }
-            // Con gesto o campo de texto, falso en todas salvo las cuatro de zoom.
-            if (state.locks.gesture || state.locks.text_focus) && !action.is_zoom() {
+            // Con gesto o campo de texto, falso en todas salvo las cuatro de zoom y `Mostrar panel`
+            // (3.4: abrir o cerrar el panel de capas no modifica el documento).
+            if (state.locks.gesture || state.locks.text_focus)
+                && !action.is_zoom()
+                && action != AppAction::ToggleLayerPanel
+            {
                 prop_assert!(!on, "{:?} con gesto o texto", action);
             }
             // Las acciones de zoom no se apagan por gesto, quita ni campo de texto (con el menú).

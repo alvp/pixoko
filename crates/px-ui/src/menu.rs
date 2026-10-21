@@ -4,7 +4,7 @@
 use egui::containers::menu::{MenuBar, MenuConfig, menu_style};
 use egui::{Button, Frame, Panel, Sense, Style, Ui, vec2};
 
-use crate::actions::{AppAction, Platform, UiState, enabled};
+use crate::actions::{AppAction, LayerNav, Platform, UiState, enabled, layer_enabled};
 use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
 use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
@@ -47,8 +47,8 @@ const fn item(label: &'static str, action: AppAction) -> MenuItem {
     }
 }
 
-/// Los cinco menús. Solo hay entradas de funciones que existen.
-pub const MENUS: [Menu; 5] = [
+/// Los seis menús. Solo hay entradas de funciones que existen.
+pub const MENUS: [Menu; 6] = [
     Menu {
         title: "Archivo",
         items: &[
@@ -76,6 +76,20 @@ pub const MENUS: [Menu; 5] = [
     Menu {
         title: "Imagen",
         items: &[item("Convertir modo…", AppAction::ConvertMode)],
+        submenus: &[],
+    },
+    Menu {
+        title: "Capa",
+        items: &[
+            item("Nueva capa", AppAction::NewLayer),
+            item("Duplicar", AppAction::DuplicateLayer),
+            item("Quitar", AppAction::RemoveLayer),
+            item("Subir", AppAction::LayerUp),
+            item("Bajar", AppAction::LayerDown),
+            item("Renombrar", AppAction::RenameLayer),
+            item("Propiedades", AppAction::LayerProperties),
+            item("Mostrar panel", AppAction::ToggleLayerPanel),
+        ],
         submenus: &[],
     },
     Menu {
@@ -223,6 +237,26 @@ pub fn show_menu_in(
     background: CanvasBackground,
     keymap: &Keymap,
 ) -> Option<AppAction> {
+    show_menu_full(
+        ui,
+        state,
+        platform,
+        background,
+        keymap,
+        &LayerNav::default(),
+    )
+}
+
+/// Como [`show_menu_in`] con la pila de capas, que atenúa `Quitar`, `Subir`, `Bajar`, `Nueva capa` y
+/// `Duplicar` cuando no se pueden hacer (la app pasa la suya).
+pub fn show_menu_full(
+    ui: &mut Ui,
+    state: &UiState,
+    platform: Platform,
+    background: CanvasBackground,
+    keymap: &Keymap,
+    layers: &LayerNav,
+) -> Option<AppAction> {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
     let u = ui_unit(ppp);
@@ -261,7 +295,15 @@ pub fn show_menu_in(
                                         ui.allocate_exact_size(vec2(width, u), Sense::hover());
                                     ui.painter().rect_filled(rect, 0.0, SURFACE_3);
                                 }
-                                if menu_entry(ui, &ctx, state, (keymap, platform), item, width, u) {
+                                if menu_entry(
+                                    ui,
+                                    &ctx,
+                                    (state, layers),
+                                    (keymap, platform),
+                                    item,
+                                    width,
+                                    u,
+                                ) {
                                     chosen = Some(item.action);
                                 }
                             }
@@ -290,13 +332,13 @@ pub fn show_menu_in(
 fn menu_entry(
     ui: &mut Ui,
     ctx: &egui::Context,
-    state: &UiState,
+    (state, layers): (&UiState, &LayerNav),
     (keymap, platform): (&Keymap, Platform),
     item: &MenuItem,
     width: f32,
     u: f32,
 ) -> bool {
-    let on = enabled(item.action, state);
+    let on = enabled(item.action, state) && layer_enabled(item.action, layers);
     let label = printable(ctx, item.label);
     let shortcut = shortcut_in(keymap, item.action, platform)
         .map(|s| shortcut_text(s, platform))

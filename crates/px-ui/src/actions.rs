@@ -56,6 +56,22 @@ pub enum AppAction {
     ShowHelp(HelpTarget),
     /// `Ayuda → Atajos de teclado…`: abre la lista de atajos.
     ShowShortcuts,
+    /// `Capa → Mostrar panel`: muestra u oculta el panel de capas (specs/hito-3-capas-interfaz.md).
+    ToggleLayerPanel,
+    /// `Capa → Nueva capa`: una capa vacía encima de la activa.
+    NewLayer,
+    /// `Capa → Duplicar`: la copia va justo encima de la activa.
+    DuplicateLayer,
+    /// `Capa → Quitar`.
+    RemoveLayer,
+    /// `Capa → Subir`: un puesto.
+    LayerUp,
+    /// `Capa → Bajar`: un puesto.
+    LayerDown,
+    /// `Capa → Renombrar`: lleva el foco al nombre en el panel.
+    RenameLayer,
+    /// `Capa → Propiedades`: lleva el foco a las opciones de la capa en el panel.
+    LayerProperties,
 }
 
 impl AppAction {
@@ -184,7 +200,7 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if matches!(action, AppAction::CanvasBackground(_)) {
         return locks.text_focus;
     }
-    if action.is_view() {
+    if action.is_view() || action == AppAction::ToggleLayerPanel {
         return locks.text_focus && origin == Origin::Key;
     }
     if action.changes_color() {
@@ -202,6 +218,39 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
 /// de archivo, ni un campo de texto enfocado, ni otro modal.
 pub fn can_open_dialog(locks: Locks) -> bool {
     !(locks.gesture || locks.dialog || locks.text_focus || locks.removal || locks.modal)
+}
+
+/// La pila de capas, lo que el menú y el panel necesitan para habilitar sus acciones (no entra en
+/// [`UiState`]: la app lo pasa a `show_menu_full`). El valor por defecto lo deja todo habilitado.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LayerNav {
+    /// Número de capas.
+    pub count: usize,
+    /// Posición de la activa desde abajo (0 es el fondo).
+    pub active_pos: usize,
+    /// Cabe una capa más (`count < 256`).
+    pub can_add: bool,
+}
+
+impl Default for LayerNav {
+    fn default() -> LayerNav {
+        LayerNav {
+            count: 3,
+            active_pos: 1,
+            can_add: true,
+        }
+    }
+}
+
+/// Si la acción de capa está habilitada con esta pila; lo que no es de capas siempre lo está.
+pub fn layer_enabled(action: AppAction, nav: &LayerNav) -> bool {
+    match action {
+        AppAction::RemoveLayer => nav.count > 1,
+        AppAction::LayerUp => nav.active_pos + 1 < nav.count,
+        AppAction::LayerDown => nav.active_pos > 0,
+        AppAction::NewLayer | AppAction::DuplicateLayer => nav.can_add,
+        _ => true,
+    }
 }
 
 /// Lo que la interfaz necesita saber para habilitar o deshabilitar el menú y la columna.

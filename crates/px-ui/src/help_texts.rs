@@ -4,7 +4,10 @@
 //! `help_texts_es` (solo datos, preparados para traducir en el hito 8); sin egui.
 
 use crate::actions::AppAction;
+use std::sync::LazyLock;
+
 use crate::help_texts_es::{HELP_ES, UI_ES};
+use crate::help_texts_layers_es::HELP_LAYERS_ES;
 use crate::tool::Tool;
 
 /// El texto de ayuda de una acción.
@@ -64,9 +67,16 @@ pub struct UiStrings {
     pub f1_reserved: &'static str,
 }
 
-/// La tabla de textos de ayuda (hoy en español: 22 entradas).
+/// La tabla de textos de ayuda (hoy en español: 22 entradas y las 8 de capas, en este orden).
 pub fn help_table() -> &'static [HelpEntry] {
-    &HELP_ES
+    static TABLE: LazyLock<Vec<HelpEntry>> = LazyLock::new(|| {
+        HELP_ES
+            .iter()
+            .chain(HELP_LAYERS_ES.iter())
+            .copied()
+            .collect()
+    });
+    TABLE.as_slice()
 }
 
 /// El texto fijo de la interfaz (hoy en español).
@@ -105,6 +115,14 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::Save => "file.save",
         AppAction::SaveAs => "file.save-as",
         AppAction::Quit => "file.quit",
+        AppAction::ToggleLayerPanel => "layer.panel",
+        AppAction::NewLayer => "layer.new",
+        AppAction::DuplicateLayer => "layer.duplicate",
+        AppAction::RemoveLayer => "layer.remove",
+        AppAction::LayerUp => "layer.up",
+        AppAction::LayerDown => "layer.down",
+        AppAction::RenameLayer => "layer.rename",
+        AppAction::LayerProperties => "layer.properties",
         _ => return None,
     })
 }
@@ -134,6 +152,14 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "file.save" => AppAction::Save,
         "file.save-as" => AppAction::SaveAs,
         "file.quit" => AppAction::Quit,
+        "layer.panel" => AppAction::ToggleLayerPanel,
+        "layer.new" => AppAction::NewLayer,
+        "layer.duplicate" => AppAction::DuplicateLayer,
+        "layer.remove" => AppAction::RemoveLayer,
+        "layer.up" => AppAction::LayerUp,
+        "layer.down" => AppAction::LayerDown,
+        "layer.rename" => AppAction::RenameLayer,
+        "layer.properties" => AppAction::LayerProperties,
         _ => return None,
     })
 }

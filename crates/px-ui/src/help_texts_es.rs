@@ -50,7 +50,7 @@ pub(crate) const HELP_ES: [HelpEntry; 22] = [
     entry(
         "tool.dropper",
         "Cuentagotas",
-        "Copia el color del píxel pulsado. En una imagen indexada elige su entrada de la paleta.",
+        "Copia el color del píxel pulsado. En una imagen indexada elige su entrada de la paleta. Con Mayús pulsada al hacer clic lee solo la capa activa; sin ella, lo que se ve.",
         Some("toma el color como primer plano"),
         Some("toma el color como fondo"),
     ),

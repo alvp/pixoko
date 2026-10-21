@@ -8,6 +8,7 @@ use crate::help_texts::{
     HelpEntry, action_of_key, help_entry, help_key, help_table, is_editable, ui,
 };
 use crate::keymap::Keymap;
+use crate::layers_panel::PanelHit;
 use crate::shortcut_editor::{fixed_chords, slots_of};
 use crate::tool::Tool;
 
@@ -30,6 +31,47 @@ pub enum HelpTarget {
     ZoomOut,
     ZoomFit,
     ZoomActual,
+    /// Un control del panel de capas (`F1` con el puntero encima).
+    Layer(LayerHelp),
+}
+
+/// El control del panel de capas del que se pide ayuda: una por acción de capa.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayerHelp {
+    Panel,
+    New,
+    Duplicate,
+    Remove,
+    Up,
+    Down,
+    Rename,
+    Properties,
+}
+
+/// La ayuda del control `hit` del panel: los cinco botones, el campo del nombre (renombrar), las
+/// filas y las demás opciones (propiedades) y el resto del panel (el propio panel).
+pub fn layer_help_for(hit: PanelHit) -> LayerHelp {
+    use crate::layers_panel::PanelButton;
+    match hit {
+        PanelHit::Button(PanelButton::New) => LayerHelp::New,
+        PanelHit::Button(PanelButton::Duplicate) => LayerHelp::Duplicate,
+        PanelHit::Button(PanelButton::Remove) => LayerHelp::Remove,
+        PanelHit::Button(PanelButton::Up) => LayerHelp::Up,
+        PanelHit::Button(PanelButton::Down) => LayerHelp::Down,
+        PanelHit::NameField => LayerHelp::Rename,
+        PanelHit::Eye(_)
+        | PanelHit::Lock(_)
+        | PanelHit::Name(_)
+        | PanelHit::OpacitySlider
+        | PanelHit::OpacityField
+        | PanelHit::BlendButton => LayerHelp::Properties,
+        PanelHit::Title
+        | PanelHit::Close
+        | PanelHit::Scrollbar
+        | PanelHit::Memory
+        | PanelHit::Count
+        | PanelHit::Body => LayerHelp::Panel,
+    }
 }
 
 impl HelpTarget {
@@ -42,6 +84,16 @@ impl HelpTarget {
             HelpTarget::ZoomOut => AppAction::ZoomOut,
             HelpTarget::ZoomFit => AppAction::ZoomFit,
             HelpTarget::ZoomActual => AppAction::ZoomActual,
+            HelpTarget::Layer(help) => match help {
+                LayerHelp::Panel => AppAction::ToggleLayerPanel,
+                LayerHelp::New => AppAction::NewLayer,
+                LayerHelp::Duplicate => AppAction::DuplicateLayer,
+                LayerHelp::Remove => AppAction::RemoveLayer,
+                LayerHelp::Up => AppAction::LayerUp,
+                LayerHelp::Down => AppAction::LayerDown,
+                LayerHelp::Rename => AppAction::RenameLayer,
+                LayerHelp::Properties => AppAction::LayerProperties,
+            },
         }
     }
 }
@@ -66,6 +118,18 @@ pub fn help_target_for_button(index: usize) -> Option<HelpTarget> {
         7 => HelpTarget::ZoomFit,
         _ => HelpTarget::ZoomActual,
     })
+}
+
+/// El destino de `F1` con el puntero en `point_px` (píxeles físicos de la ventana) si cae dentro del
+/// panel de capas, que está en `panel` (su rectángulo en esta ventana): la ayuda del control de
+/// debajo. `None` fuera del panel.
+pub fn help_target_in_panel(
+    point_px: (i64, i64),
+    panel: crate::view::ScreenRect,
+    n: u32,
+) -> Option<HelpTarget> {
+    crate::layers_panel::hit(point_px.0 - panel.x, point_px.1 - panel.y, n)
+        .map(|hit| HelpTarget::Layer(layer_help_for(hit)))
 }
 
 /// El destino de `F1` con el puntero en `point_px` (píxeles físicos de la ventana): el botón de la

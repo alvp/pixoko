@@ -64,7 +64,11 @@ fn texto_de_la_zona(clave: &str) -> String {
 #[test]
 fn fila_3_las_cuatro_teclas_dan_sus_acciones_y_la_tabla_no_tiene_conflictos() {
     let tabla = Keymap::default_scheme();
-    assert_eq!(tabla.conflicts(), vec![], "la propiedad de conflictos de I.1 e I.5");
+    assert_eq!(
+        tabla.conflicts(),
+        vec![],
+        "la propiedad de conflictos de I.1 e I.5"
+    );
     assert_eq!(tabla.rows().len(), 35);
     assert_eq!(tabla.rows().iter().filter(|f| f.command).count(), 9);
     for platform in PLATAFORMAS {
@@ -74,7 +78,11 @@ fn fila_3_las_cuatro_teclas_dan_sus_acciones_y_la_tabla_no_tiene_conflictos() {
             (')', AppAction::LayerUp),
             ('(', AppAction::LayerDown),
         ] {
-            assert_eq!(tabla.action_for(&pulsa(c), platform), Some(accion), "{c} en {platform:?}");
+            assert_eq!(
+                tabla.action_for(&pulsa(c), platform),
+                Some(accion),
+                "{c} en {platform:?}"
+            );
             // Un símbolo no cuenta `Mayús` ni `Alt` (como `<` y `[`), pero sí `Ctrl`/`Cmd`.
             let mut con_mayus = pulsa(c);
             con_mayus.shift = true;
@@ -107,11 +115,17 @@ fn fila_3_las_ocho_acciones_tienen_clave_texto_valido_y_son_editables() {
         assert!(is_editable(accion), "{clave}");
         let entrada = help_entry(clave).expect(clave);
         assert!(entrada.name.chars().count() <= 20, "{clave}: nombre largo");
-        assert!(wrap_text(entrada.description, ZONE_COLS).len() <= 8, "{clave}");
+        assert!(
+            wrap_text(entrada.description, ZONE_COLS).len() <= 8,
+            "{clave}"
+        );
         assert!(entrada.options.is_empty(), "{clave}");
         for texto in [entrada.name, entrada.description] {
             for c in texto.chars() {
-                assert!(INTERFACE_CHARSET.contains(c), "{clave}: {c:?} fuera del juego");
+                assert!(
+                    INTERFACE_CHARSET.contains(c),
+                    "{clave}: {c:?} fuera del juego"
+                );
             }
         }
     }
@@ -140,7 +154,10 @@ fn fila_3_la_ayuda_del_candado_dice_que_protege_pixeles_y_que_paleta_y_modo_afec
 fn fila_3_f1_sobre_cada_control_del_panel_da_la_ayuda_de_su_accion() {
     let esperado = [
         (PanelHit::Button(PanelButton::New), LayerHelp::New),
-        (PanelHit::Button(PanelButton::Duplicate), LayerHelp::Duplicate),
+        (
+            PanelHit::Button(PanelButton::Duplicate),
+            LayerHelp::Duplicate,
+        ),
         (PanelHit::Button(PanelButton::Remove), LayerHelp::Remove),
         (PanelHit::Button(PanelButton::Up), LayerHelp::Up),
         (PanelHit::Button(PanelButton::Down), LayerHelp::Down),
@@ -176,7 +193,12 @@ fn fila_3_f1_sobre_cada_control_del_panel_da_la_ayuda_de_su_accion() {
         assert_eq!(destino.action(Tool::Pencil), accion);
         for platform in PLATAFORMAS {
             let spec = help_form(destino, Tool::Pencil, &Keymap::default_scheme(), platform);
-            assert_eq!(spec.title, help_entry(help_key(accion).expect("clave")).expect("texto").name);
+            assert_eq!(
+                spec.title,
+                help_entry(help_key(accion).expect("clave"))
+                    .expect("texto")
+                    .name
+            );
         }
     }
 }
@@ -189,7 +211,11 @@ fn fila_3_con_un_gesto_o_un_campo_de_texto_solo_el_panel_se_deja_abrir() {
         ..Locks::default()
     };
     assert!(!is_blocked(AppAction::ToggleLayerPanel, gesto, Origin::Key));
-    assert!(!is_blocked(AppAction::ToggleLayerPanel, gesto, Origin::Menu));
+    assert!(!is_blocked(
+        AppAction::ToggleLayerPanel,
+        gesto,
+        Origin::Menu
+    ));
     for (accion, _) in ACCIONES.iter().skip(1) {
         assert!(is_blocked(*accion, gesto, Origin::Key), "{accion:?}");
         assert!(is_blocked(*accion, gesto, Origin::Button), "{accion:?}");
@@ -209,7 +235,10 @@ fn fila_3_con_un_gesto_o_un_campo_de_texto_solo_el_panel_se_deja_abrir() {
         assert!(is_blocked(accion, modal, Origin::Menu), "{accion:?}");
     }
     for (accion, _) in ACCIONES {
-        assert!(!is_blocked(accion, Locks::default(), Origin::Key), "{accion:?}");
+        assert!(
+            !is_blocked(accion, Locks::default(), Origin::Key),
+            "{accion:?}"
+        );
     }
 }
 
