@@ -27,8 +27,8 @@ La meta es reunir lo mejor de los editores de píxeles en uno solo, con cada fun
 | Referencias | Imágenes de referencia con opacidad y posición, capas de referencia, varios documentos en pestañas | 3 y 6 |
 | Herramientas de pixel art | Pincel, rectángulo y elipse, trazo pixel perfect, formas y polígonos rellenos, contorno, degradados, sombreado, pincel propio, simetría, patrones, modo mosaico, selección y transformaciones | 4 |
 | Animación | Fotogramas, celdas, línea de tiempo, onion skin, etiquetas, vista previa, exportar GIF y hojas de sprites | 5 |
-| Formatos | PNG (indexado y color), GIF, `.aseprite` desde su especificación pública, IFF ILBM y ANIM, BMP, PCX | 1, 5 y 6 |
-| Estilo DPaint V (opcional) | Ciclo de color, stencil, pinceles de animación, perspectiva: solo lo que el manual liste y el corpus confirme | 7 |
+| Formatos | PNG (indexado y color), GIF, `.aseprite` por etapas (capas y celdas en el hito 3, fotogramas y etiquetas en el 5, el resto en el 6), desde su especificación pública, IFF ILBM y ANIM, BMP, PCX | 1, 5 y 6 |
+| Estilo DPaint V (opcional) | Plantilla (stencil), pinceles de animación, perspectiva y modos de color (difuminar, mezclar, suavizar y mezcla viva): solo lo que el manual liste y el corpus confirme. El ciclo de color pasa a la animación (hito 5) | 7 |
 | Automatización | CLI sin ventana, scripting, servidor MCP para agentes | 8 |
 | Aplicación | Ventana y pantalla completa, HiDPI, atajos configurables, historial con panel, portapapeles, recuperación tras un cierre inesperado, traducciones, instaladores | 2 y 8 |
 
@@ -55,11 +55,11 @@ Versión en texto de la hoja de ruta, para quien lea el documento exportado a Ma
 | 0 · Fundaciones | Repo, CLAUDE.md, CI en tres sistemas, cargo-deny | CI verde: Linux, Windows y macOS compilan |
 | 1 · Núcleo y formatos | Color (`Rgba`), paleta con índice transparente, imagen en modos RGBA, indexado y grises, documento y comandos con deshacer, PNG indexado y RGBA | Ida y vuelta de PNG sin pérdida en el corpus |
 | 2 · Editor mínimo | Ventana, lienzo, zoom, lápiz, línea, relleno, cuentagotas, borrador y paleta; conversión RGB y HSL, reordenar la paleta, conversión entre modos, lienzos grandes y panel de paletas | Abrir, editar y guardar un PNG real en tres sistemas |
-| 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia | Dorados de mezcla en verde |
+| 3 · Capas, alfa y referencias | Capas, opacidad, mezcla, imágenes de referencia y el formato .aseprite con capas y celdas (por etapas) | Dorados de mezcla en verde |
 | 4 · Herramientas de pixel art | Pincel, rectángulo, elipse, degradados, sombreado, simetría, selección, cuantizador de color (RGBA a indexado con más de 256 colores) | Dorados contra referencias |
-| 5 · Animación | Fotogramas, línea de tiempo, onion skin, GIF | GIF y hojas de sprites verificados |
-| 6 · Más formatos | `.aseprite` desde su especificación, IFF, BMP, PCX | Corpus de ficheros ajenos se abre |
-| 7 · Estilo DPaint (opcional) | Ciclo de color, stencil, perspectiva, por caja negra | Casos del emulador en verde |
+| 5 · Animación | Fotogramas, línea de tiempo, onion skin, ciclo de color, GIF y etiquetas en .aseprite | GIF y hojas de sprites verificados |
+| 6 · Más formatos | `.aseprite` (el resto del formato, desde su especificación), IFF, BMP, PCX | Corpus de ficheros ajenos se abre |
+| 7 · Estilo DPaint (opcional) | Plantilla (stencil), perspectiva y modos de color (Smear, Blend, Smooth, Mix), por caja negra | Casos del emulador en verde |
 | 8 · Automatización y lanzamiento | CLI, scripting, MCP, traducciones, instaladores | Primera versión: instaladores y licencias revisadas |
 
 **Interfaz estilo programa de referencia, entre el hito 2 y el 3.** Cuatro unidades fijan la base que usarán las herramientas del hito 4: el teclado como tabla de datos con las letras del original, los dos colores y el ratón (botón derecho, rueda, botón central, botones extra reasignables y gestos del trackpad), la caja de herramientas a la derecha con un panel fijo de opciones, y los iconos propios. Los menús del original se añaden con cada función. El diseño completo está en `docs/DISENO-INTERFAZ.md`, y el manual de referencia se queda fuera del repositorio.
