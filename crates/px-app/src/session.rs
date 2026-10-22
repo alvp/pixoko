@@ -995,6 +995,8 @@ pub fn describe_saved_dialog(saved: &Saved) -> String {
 }
 
 #[cfg(test)]
+mod aseprite_tests;
+#[cfg(test)]
 mod aux_tests;
 #[cfg(test)]
 mod color_cycle_tests;

@@ -3765,3 +3765,430 @@ mod duplicar_y_bloquear {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Unidad 3.8, cambios C-01 a C-04 (specs/hito-3-aseprite.md, «Cambios en px-core»):
+// `LayerSpec`, `Document::from_layers`, `DocumentError::NoLayers` y `CelMismatch { layer }`.
+// Fila 1 (tres pruebas) y propiedad P2 (256 casos). Fase de pruebas en rojo: no compilan hasta
+// que existan. No se prueba `CelsTooLarge` aquí: pesaría GiB.
+// ---------------------------------------------------------------------------------------
+
+mod from_layers {
+    use super::*;
+    use px_core::{BlendMode, LayerSpec};
+
+    fn spec(
+        nombre: &str,
+        visible: bool,
+        opacity: u8,
+        blend: BlendMode,
+        locked: bool,
+        image: Option<Image>,
+    ) -> LayerSpec {
+        LayerSpec {
+            name: nombre.to_string(),
+            visible,
+            opacity,
+            blend,
+            locked,
+            image,
+        }
+    }
+
+    /// Capa visible, opaca, Normal y desbloqueada.
+    fn simple(nombre: &str, image: Option<Image>) -> LayerSpec {
+        spec(nombre, true, 255, BlendMode::Normal, false, image)
+    }
+
+    fn rgba_con(w: u32, h: u32, pixeles: &[(u32, u32, Rgba)]) -> Image {
+        let mut imagen = img_rgba(w, h);
+        for &(x, y, c) in pixeles {
+            imagen.set_pixel(x, y, Pixel::Rgba(c)).expect("píxel");
+        }
+        imagen
+    }
+
+    /// (a) Un documento RGBA correcto: ids `0..n`, historia vacía, `state_id` 0, propiedades y
+    /// celdas tal cual, y `==` con el construido a mano con comandos.
+    #[test]
+    fn fila_01_a_rgba_ids_historia_vacia_state_id_0_e_igual_al_construido_a_mano() {
+        let a = rgba_con(4, 3, &[(0, 0, ROJO), (3, 2, VERDE)]);
+        let c = rgba_con(4, 3, &[(1, 1, AZUL)]);
+        let d = Document::from_layers(
+            4,
+            3,
+            Mode::Rgba,
+            None,
+            vec![
+                simple("fondo", Some(a.clone())),
+                simple("vacía", None),
+                spec(
+                    "arriba",
+                    false,
+                    90,
+                    BlendMode::Multiply,
+                    true,
+                    Some(c.clone()),
+                ),
+            ],
+        )
+        .expect("documento correcto");
+
+        assert_eq!((d.width(), d.height(), d.mode()), (4, 3, Mode::Rgba));
+        assert!(d.palette().is_none());
+        assert_eq!(d.layers().len(), 3);
+        for (i, capa) in d.layers().iter().enumerate() {
+            assert_eq!(capa.id(), LayerId::from_raw(i as u32), "LayerId({i})");
+            assert_eq!(capa.cel(), ImageId::from_raw(i as u32), "ImageId({i})");
+        }
+        let nombres: Vec<&str> = d.layers().iter().map(Layer::name).collect();
+        assert_eq!(nombres, ["fondo", "vacía", "arriba"]);
+        let tercera = &d.layers()[2];
+        assert_eq!(
+            (
+                tercera.visible(),
+                tercera.opacity(),
+                tercera.blend(),
+                tercera.locked()
+            ),
+            (false, 90, BlendMode::Multiply, true)
+        );
+        assert_eq!(d.image(d.layers()[0].cel()), Some(&a));
+        assert_eq!(
+            d.image(d.layers()[1].cel()),
+            None,
+            "la celda vacía no reserva memoria"
+        );
+        assert_eq!(d.image(d.layers()[2].cel()), Some(&c));
+        assert_eq!(d.materialized_bytes(), 2 * 48);
+        // Historia vacía y estado inicial.
+        assert_eq!(d.state_id(), 0);
+        assert!(!d.can_undo() && !d.can_redo());
+        assert_eq!(d.history_bytes(), 0);
+
+        // El mismo documento hecho con `Document::new` y comandos.
+        let mut a_mano = Document::new(a);
+        let (id0, id1, id2) = (
+            LayerId::from_raw(0),
+            LayerId::from_raw(1),
+            LayerId::from_raw(2),
+        );
+        for orden in [
+            Command::RenameLayer {
+                layer: id0,
+                name: "fondo".to_string(),
+            },
+            Command::AddLayer {
+                name: "vacía".to_string(),
+                at: 1,
+            },
+            Command::AddLayer {
+                name: "arriba".to_string(),
+                at: 2,
+            },
+            pone_px(ImageId::from_raw(2), 1, 1, Pixel::Rgba(AZUL)),
+            Command::SetLayerOpacity {
+                layer: id2,
+                opacity: 90,
+            },
+            Command::SetLayerBlend {
+                layer: id2,
+                blend: BlendMode::Multiply,
+            },
+            Command::SetLayerVisible {
+                layer: id2,
+                visible: false,
+            },
+            Command::SetLayerLocked {
+                layer: id2,
+                locked: true,
+            },
+        ] {
+            assert!(a_mano.apply(orden).is_ok());
+        }
+        assert_eq!(a_mano.layer(id1).map(Layer::name), Some("vacía"));
+        assert!(a_mano == d, "el construido a mano es igual");
+        assert!(d == a_mano);
+    }
+
+    /// (b) Indexado con paleta, y los límites exactos se aceptan: 256 capas, nombre de 255 bytes.
+    #[test]
+    fn fila_01_b_indexado_y_limites_exactos_se_aceptan() {
+        let colores = [ROJO, VERDE, AZUL];
+        let paleta = |t: Option<u8>| {
+            let mut p = Palette::from_colors(colores).expect("paleta");
+            p.set_transparent_index(t).expect("índice transparente");
+            p
+        };
+        let p = paleta(Some(0));
+        let imagen = Image::filled_indexed(4, 3, p.clone(), 2).expect("imagen");
+        let d = Document::from_layers(
+            4,
+            3,
+            Mode::Indexed,
+            Some(p.clone()),
+            vec![simple("a", Some(imagen.clone())), simple("b", None)],
+        )
+        .expect("indexado correcto");
+        assert_eq!(d.mode(), Mode::Indexed);
+        assert_eq!(d.palette(), Some(&p));
+        assert_eq!(d.image(d.layers()[0].cel()), Some(&imagen));
+        assert_eq!(d.image(d.layers()[1].cel()), None);
+        assert_eq!(
+            (d.state_id(), d.can_undo(), d.history_bytes()),
+            (0, false, 0)
+        );
+
+        // 256 capas de 1 × 1 y un nombre de 255 bytes.
+        let nombre = "ñ".repeat(127) + "a";
+        assert_eq!(nombre.len(), 255);
+        let mut capas: Vec<LayerSpec> = (0..255).map(|i| simple(&format!("c{i}"), None)).collect();
+        capas.push(simple(&nombre, Some(img_rgba(1, 1))));
+        let d = Document::from_layers(1, 1, Mode::Rgba, None, capas).expect("256 capas");
+        assert_eq!(d.layers().len(), 256);
+        assert_eq!(d.layers()[255].name(), nombre);
+        assert_eq!(d.layers()[255].id(), LayerId::from_raw(255));
+    }
+
+    /// (c) Cada defecto aislado da su error y no se construye ningún documento.
+    #[test]
+    fn fila_01_c_cada_defecto_da_su_error_y_ningun_documento() {
+        let p3 = |t: Option<u8>| {
+            let mut p = Palette::from_colors([ROJO, VERDE, AZUL]).expect("paleta");
+            p.set_transparent_index(t).expect("índice transparente");
+            p
+        };
+        let indexada =
+            |paleta: &Palette| Image::filled_indexed(4, 3, paleta.clone(), 1).expect("imagen");
+        let otra = Palette::from_colors([ROJO, VERDE, BLANCO]).expect("otra paleta");
+        let ok_rgba = || simple("ok", Some(img_rgba(4, 3)));
+
+        #[allow(clippy::type_complexity)]
+        let casos: Vec<(&str, Result<Document, DocumentError>, DocumentError)> = vec![
+            (
+                "0 capas",
+                Document::from_layers(4, 3, Mode::Rgba, None, vec![]),
+                DocumentError::NoLayers,
+            ),
+            (
+                "257 capas",
+                Document::from_layers(
+                    1,
+                    1,
+                    Mode::Rgba,
+                    None,
+                    (0..257).map(|i| simple(&format!("c{i}"), None)).collect(),
+                ),
+                DocumentError::TooManyLayers { limit: 256 },
+            ),
+            (
+                "nombre de 256 bytes",
+                Document::from_layers(4, 3, Mode::Rgba, None, vec![simple(&"a".repeat(256), None)]),
+                DocumentError::LayerName {
+                    len: 256,
+                    limit: 255,
+                },
+            ),
+            (
+                "celda de otro tamaño",
+                Document::from_layers(
+                    4,
+                    3,
+                    Mode::Rgba,
+                    None,
+                    vec![ok_rgba(), simple("x", Some(img_rgba(3, 3)))],
+                ),
+                DocumentError::CelMismatch { layer: 1 },
+            ),
+            (
+                "celda de otro modo",
+                Document::from_layers(
+                    4,
+                    3,
+                    Mode::Rgba,
+                    None,
+                    vec![simple(
+                        "x",
+                        Some(Image::new(4, 3, Mode::Gray).expect("gris")),
+                    )],
+                ),
+                DocumentError::CelMismatch { layer: 0 },
+            ),
+            (
+                "celda con otra paleta",
+                Document::from_layers(
+                    4,
+                    3,
+                    Mode::Indexed,
+                    Some(p3(Some(0))),
+                    vec![simple("x", Some(indexada(&otra)))],
+                ),
+                DocumentError::CelMismatch { layer: 0 },
+            ),
+            (
+                "indexado con opacidad distinta de 255",
+                Document::from_layers(
+                    4,
+                    3,
+                    Mode::Indexed,
+                    Some(p3(Some(0))),
+                    vec![spec(
+                        "x",
+                        true,
+                        128,
+                        BlendMode::Normal,
+                        false,
+                        Some(indexada(&p3(Some(0)))),
+                    )],
+                ),
+                DocumentError::IndexedOpacity,
+            ),
+            (
+                "indexado con mezcla distinta de Normal",
+                Document::from_layers(
+                    4,
+                    3,
+                    Mode::Indexed,
+                    Some(p3(Some(0))),
+                    vec![spec(
+                        "x",
+                        true,
+                        255,
+                        BlendMode::Multiply,
+                        false,
+                        Some(indexada(&p3(Some(0)))),
+                    )],
+                ),
+                DocumentError::IndexedBlend,
+            ),
+            (
+                "celda vacía en indexado sin índice transparente",
+                Document::from_layers(4, 3, Mode::Indexed, Some(p3(None)), vec![simple("x", None)]),
+                DocumentError::NoTransparency {
+                    mode: Mode::Indexed,
+                },
+            ),
+            (
+                "celda vacía en grises (sin valor transparente)",
+                Document::from_layers(4, 3, Mode::Gray, None, vec![simple("x", None)]),
+                DocumentError::NoTransparency { mode: Mode::Gray },
+            ),
+        ];
+        for (nombre, resultado, esperado) in casos {
+            assert_eq!(resultado, Err(esperado), "{nombre}");
+        }
+    }
+
+    // -----------------------------------------------------------------------------------
+    // P2: `from_layers` no construye documentos inválidos.
+    // -----------------------------------------------------------------------------------
+
+    /// Una celda de 1 a 4 píxeles de lado y de cualquiera de los cuatro modos; `variante` decide
+    /// cuánto se parece a lo que pide el lienzo.
+    fn celda_de(variante: u8, w: u32, h: u32, modo: Mode, paleta: Option<&Palette>) -> Image {
+        let otra = Palette::from_colors([NEGRO, BLANCO]).expect("otra paleta");
+        let resultado = match variante {
+            // Coincide en todo (si se puede).
+            0 => match (modo, paleta) {
+                (Mode::Indexed, Some(p)) => Image::new_indexed(w, h, p.clone()),
+                (Mode::Indexed, None) => Image::new(w, h, Mode::Rgba),
+                (m, _) => Image::new(w, h, m),
+            },
+            // Otro tamaño.
+            1 => Image::new(w + 1, h, Mode::Rgba),
+            // Otro modo.
+            2 => Image::new(
+                w,
+                h,
+                if modo == Mode::Gray {
+                    Mode::GrayAlpha
+                } else {
+                    Mode::Gray
+                },
+            ),
+            // Otra paleta.
+            _ => Image::new_indexed(w, h, otra),
+        };
+        resultado.expect("celda de la prueba")
+    }
+
+    /// Las invariantes de un documento válido (spec, P2).
+    fn invariantes_p2(d: &Document) -> Result<(), TestCaseError> {
+        let n = d.layers().len();
+        prop_assert!((1..=Document::MAX_LAYERS).contains(&n), "{} capas", n);
+        for (i, capa) in d.layers().iter().enumerate() {
+            prop_assert!(
+                capa.name().len() <= Document::MAX_LAYER_NAME_BYTES,
+                "nombre de {}",
+                i
+            );
+            prop_assert_eq!(capa.id(), LayerId::from_raw(i as u32));
+            prop_assert_eq!(capa.cel(), ImageId::from_raw(i as u32));
+            if d.mode() == Mode::Indexed {
+                prop_assert_eq!(capa.opacity(), 255);
+                prop_assert_eq!(capa.blend(), BlendMode::Normal);
+            }
+            if let Some(imagen) = d.image(capa.cel()) {
+                prop_assert_eq!(
+                    (imagen.width(), imagen.height(), imagen.mode()),
+                    (d.width(), d.height(), d.mode())
+                );
+                prop_assert_eq!(imagen.palette(), d.palette());
+            }
+        }
+        prop_assert!(d.materialized_bytes() <= d.cells_limit());
+        prop_assert_eq!(d.state_id(), 0);
+        prop_assert!(!d.can_undo() && !d.can_redo());
+        prop_assert_eq!(d.history_bytes(), 0);
+        Ok(())
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// P2. Para listas arbitrarias de `LayerSpec` (tamaños, modos y paletas incoherentes,
+        /// opacidades, mezclas, nombres largos, 0 a 300 capas) y cualquier lienzo: o `Err`, o un
+        /// documento que cumple todas las invariantes.
+        #[test]
+        fn propiedad_2_from_layers_no_construye_documentos_invalidos(
+            (w, h) in (1u32..=4, 1u32..=4),
+            modo in prop::sample::select(vec![Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha]),
+            con_paleta in 0u8..4,
+            transparente in prop::option::of(0u8..2),
+            cantidad in prop_oneof![8 => 0usize..=5, 1 => Just(256usize), 1 => Just(257usize), 1 => Just(300usize)],
+            semillas in prop::collection::vec(
+                (
+                    prop::sample::select(vec![0usize, 1, 10, 255, 256, 300]),
+                    any::<u8>(),
+                    0usize..8,
+                    (any::<bool>(), any::<bool>()),
+                    prop_oneof![2 => Just(None), 5 => (0u8..4).prop_map(Some)],
+                ),
+                300,
+            ),
+        ) {
+            // `con_paleta`: 0 no hay paleta, 1 y 2 una de dos colores, 3 otra de un color.
+            let paleta = match con_paleta {
+                0 => None,
+                3 => Some(Palette::from_colors([ROJO]).expect("paleta")),
+                _ => {
+                    let mut p = Palette::from_colors([ROJO, VERDE]).expect("paleta");
+                    p.set_transparent_index(transparente).expect("transparente");
+                    Some(p)
+                }
+            };
+            let capas: Vec<LayerSpec> = semillas
+                .iter()
+                .take(cantidad)
+                .map(|(largo, opacidad, mezcla, (visible, bloqueada), variante)| {
+                    // Las muy numerosas llevan celdas vacías o de 1 × 1 para no pesar.
+                    let imagen = variante.map(|v| celda_de(v, w, h, modo, paleta.as_ref()));
+                    spec(&"a".repeat(*largo), *visible, *opacidad, BlendMode::ALL[*mezcla], *bloqueada, imagen)
+                })
+                .collect();
+            if let Ok(d) = Document::from_layers(w, h, modo, paleta, capas) {
+                invariantes_p2(&d)?;
+            }
+        }
+    }
+}

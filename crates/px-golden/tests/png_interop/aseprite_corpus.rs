@@ -18,7 +18,7 @@ use super::{Fichero, bytes_rgba, fichero, hash_bien_formado, lee_carpeta, raiz_d
 const MAX_CASOS: usize = 29;
 
 /// Los 29 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generar.sh`).
-const CASOS: [&str; MAX_CASOS] = [
+pub(super) const CASOS: [&str; MAX_CASOS] = [
     "rgba-una-capa",
     "capas-normal-tres",
     "capas-opacidad",
