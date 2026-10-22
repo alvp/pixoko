@@ -678,7 +678,10 @@ fn fila_b3_load_no_cambia_nada_e_install_reemplaza_y_vacia_el_registro_como_open
 
     // `load` lee y no cambia nada: ni documento, ni ruta, ni registro.
     let cargado = s.load(&ruta, Canvas::MAX_SIDE, true).expect("load");
-    assert_eq!((cargado.document.width(), cargado.document.height()), (90, 70));
+    assert_eq!(
+        (cargado.document.width(), cargado.document.height()),
+        (90, 70)
+    );
     assert_eq!(s.document.state_id(), estado);
     assert_eq!(
         s.document.image(s.document.main_image()),

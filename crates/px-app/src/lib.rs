@@ -75,8 +75,9 @@ use crate::convert_mode::{
 };
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
-    DialogKind, Dialogs, Finished, Outcome, RfdPicker, fallback_request, ignored_file_notice,
-    new_gate, open_gate, unavailable_notice,
+    DialogKind, Dialogs, Finished, Outcome, RfdPicker, SaveRoute, dialog_title, fallback_request,
+    ignored_file_notice, is_aseprite_path, new_gate, open_gate, proposed_save_name,
+    unavailable_notice,
 };
 use crate::dispatch::{Dispatched, LayerPanelOp, Targets, dispatch};
 use crate::dropper_once::DropperOnce;
@@ -95,8 +96,7 @@ use crate::save_wait::{
     EXPORTING_NOTICE, PendingSave, SAVING_NOTICE, StartSave, compose_pixels, start_save,
 };
 use crate::session::{
-    LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for,
-    with_flatten_notice,
+    LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for, saved_notice,
 };
 use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
 use crate::title::{app_title_info, colors_label, status_line_fit, title_with_file, window_title};
@@ -431,9 +431,9 @@ impl App {
                 return;
             }
         };
-        if let Err(error) = self
-            .canvas
-            .load_with(ctx, &loaded.image, &mut *self.tile_alloc)
+        if let Err(error) =
+            self.canvas
+                .load_with(ctx, &DocSource(&loaded.document), &mut *self.tile_alloc)
         {
             if from_cli {
                 eprintln!("px-app: {error}");
@@ -502,7 +502,7 @@ impl App {
                     self.confirm.clear();
                     self.dialogs.remember_dir(&saved.path);
                     let text = describe_saved_dialog(&saved);
-                    self.notify(ctx, with_flatten_notice(text, &self.session.document));
+                    self.notify(ctx, saved_notice(text, &saved, &self.session.document));
                 }
                 Err(error) => self.notify(ctx, error.to_string()),
             },
@@ -532,7 +532,7 @@ impl App {
                 self.confirm.clear();
                 self.dialogs.remember_dir(&saved.path);
                 let text = describe_saved(&saved);
-                self.notify(ctx, with_flatten_notice(text, &self.session.document));
+                self.notify(ctx, saved_notice(text, &saved, &self.session.document));
             }
             Err(error) => self.notify(ctx, error.to_string()),
         }
@@ -550,7 +550,9 @@ impl App {
                     Some(discard) => self.begin_dialog(ctx, frame, DialogKind::Open, discard),
                 }
             }
-            FileAction::Save if self.session.path().is_some() => self.save_file(ctx, false),
+            FileAction::Save if self.session.save_route() == SaveRoute::Direct => {
+                self.save_file(ctx, false);
+            }
             FileAction::Save => self.save_via_dialog(ctx, frame, DialogKind::Save),
             FileAction::SaveAs => self.save_via_dialog(ctx, frame, DialogKind::SaveAs),
         }
@@ -609,10 +611,28 @@ impl App {
         let now = ctx.input(|i| i.time);
         let path = self.session.path().map(Path::to_path_buf);
         let converted = self.session.converted();
-        if self
-            .dialogs
-            .begin(kind, discard, path.as_deref(), converted, now, Some(frame))
-        {
+        let layers = self.session.document.layers().len();
+        self.dialogs
+            .set_title(dialog_title(kind, layers, path.as_deref()));
+        // Con 2 o más capas, el diálogo de guardar propone `.aseprite` (specs/hito-3-aseprite.md).
+        let proposed = if kind != DialogKind::Open && layers >= 2 {
+            let name = proposed_save_name(path.as_deref(), layers);
+            Some(match &path {
+                Some(path) if !is_aseprite_path(path) => path.with_file_name(name),
+                Some(path) => path.clone(),
+                None => PathBuf::from(name),
+            })
+        } else {
+            path.clone()
+        };
+        if self.dialogs.begin(
+            kind,
+            discard,
+            proposed.as_deref(),
+            converted,
+            now,
+            Some(frame),
+        ) {
             self.confirm.clear();
             self.exporting = false;
             // El futuro empieza a ejecutarse al consultarlo: un fotograma ya.

@@ -8,7 +8,7 @@ use std::fmt;
 use px_core::{
     Allowed, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Pixel, Span,
 };
-use px_formats::write_png;
+use px_formats::{write_aseprite, write_png};
 use px_ui::color::{
     ColorChoice, Role, SlotBank, SlotColors, cell_count, cell_of_choice, choice_for_cell,
     clamp_choice, default_background, initial_choice, pixel_for_choice_with,
@@ -26,10 +26,11 @@ use px_ui::tool::Tool;
 use px_ui::view::Size;
 
 use self::merge_ops::MergeNote;
-use crate::dialogs::with_png_extension;
+use crate::dialogs::{SaveFormat, SaveRoute, is_aseprite_path, with_png_extension};
 use crate::files::{
-    FileError, MAX_FILE_BYTES, aux_cause, copy_path, describe_open_aux, describe_report,
-    file_label, is_aux_cause, load_png, untitled_path, write_atomic,
+    FileError, MAX_FILE_BYTES, Opened, aseprite_copy_reason, aux_cause, copy_path,
+    describe_open_aseprite, describe_open_aux, describe_report, file_label, is_aux_cause,
+    load_image, untitled_path, write_atomic,
 };
 use crate::new_image::BLACK_INDEX;
 
@@ -84,7 +85,7 @@ impl fmt::Display for ClearPageError {
 
 /// Un fichero leído y listo para instalar como documento (`Session::load` + `Session::install`).
 pub struct Loaded {
-    pub image: Image,
+    pub document: Document,
     /// El aviso de apertura.
     pub text: String,
     choice: ColorChoice,
@@ -780,21 +781,33 @@ impl Session {
         if self.modified() && !discard {
             return Err(FileError::Unsaved);
         }
-        let read = load_png(path, MAX_FILE_BYTES, max_side)?;
+        let opened = load_image(path, MAX_FILE_BYTES, max_side)?;
         let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-        let text = describe_open_aux(&file_label(&absolute), &read.image, &read.report, &read.aux);
-        // La razón de la copia: las conversiones y, al final, la causa de los auxiliares.
-        let mut reason = describe_report(&read.report);
-        if let Some(cause) = read.aux.appearance {
-            if !reason.is_empty() {
-                reason.push_str(", ");
+        let (document, text, conversion) = match opened {
+            Opened::Png(read) => {
+                let text =
+                    describe_open_aux(&file_label(&absolute), &read.image, &read.report, &read.aux);
+                // La razón de la copia: las conversiones y, al final, la causa de los auxiliares.
+                let mut reason = describe_report(&read.report);
+                if let Some(cause) = read.aux.appearance {
+                    if !reason.is_empty() {
+                        reason.push_str(", ");
+                    }
+                    reason.push_str(aux_cause(cause));
+                }
+                let conversion = (!reason.is_empty()).then_some(reason);
+                (Document::new(read.image), text, conversion)
             }
-            reason.push_str(aux_cause(cause));
-        }
-        let conversion = (!reason.is_empty()).then_some(reason);
-        let choice = initial_choice(&read.image);
+            Opened::Aseprite(read) => {
+                let text =
+                    describe_open_aseprite(&file_label(&absolute), &read.document, &read.report);
+                let conversion = aseprite_copy_reason(&read.report);
+                (read.document, text, conversion)
+            }
+        };
+        let choice = initial_choice(document.canvas_image());
         Ok(Loaded {
-            image: read.image,
+            document,
             text,
             choice,
             path: absolute,
@@ -805,7 +818,7 @@ impl Session {
     /// Reemplaza el documento por lo leído (historia y registro vacíos).
     pub fn install(&mut self, loaded: Loaded) {
         self.replace_document(
-            loaded.image,
+            loaded.document,
             loaded.choice,
             Some(loaded.path),
             loaded.conversion,
@@ -839,7 +852,7 @@ impl Session {
             Mode::Indexed => ColorChoice::Entry(BLACK_INDEX),
             _ => initial_choice(&image),
         };
-        self.replace_document(image, choice, None, None);
+        self.replace_document(Document::new(image), choice, None, None);
         Ok(())
     }
 
@@ -848,14 +861,14 @@ impl Session {
     /// son de la sesión y no se tocan.
     fn replace_document(
         &mut self,
-        image: Image,
+        document: Document,
         choice: ColorChoice,
         path: Option<PathBuf>,
         conversion: Option<String>,
     ) {
         self.conversion = conversion;
         self.choice = choice;
-        self.background = default_background(&image);
+        self.background = default_background(document.canvas_image());
         self.editing = Role::Foreground;
         // La ranura 9 es el fondo por defecto (transparente, o blanca en gris): abrir o crear la
         // restaura aunque se haya editado. Es la única excepción a «las ranuras duran la sesión».
@@ -870,9 +883,11 @@ impl Session {
         self.removal_cancelled |= self.ops.removal().is_some();
         self.ops.reset();
         self.editor.reset();
-        self.document = Document::new(image);
-        self.active = self.document.layers()[0].id();
-        self.active_pos = 0;
+        self.document = document;
+        // Un `.aseprite` con varias capas se abre con la de arriba activa; un documento de una
+        // capa, con la única.
+        self.active_pos = self.document.layers().len() - 1;
+        self.active = self.document.layers()[self.active_pos].id();
         self.mem_seen = self.document.materialized_bytes();
         self.log.clear();
         self.dirty = None;
@@ -888,7 +903,12 @@ impl Session {
 
     /// Guarda en la ruta elegida en un diálogo (specs/hito-2-dialogos-archivo.md, 4 y 5).
     pub fn save_to(&mut self, chosen: &Path) -> Result<Saved, FileError> {
-        let dest = with_png_extension(chosen.to_path_buf());
+        // El formato lo decide la extensión: `.aseprite` se respeta tal cual y todo lo demás es PNG.
+        let dest = if is_aseprite_path(chosen) {
+            chosen.to_path_buf()
+        } else {
+            with_png_extension(chosen.to_path_buf())
+        };
         // El sistema no preguntó por el nombre al que se añadió `.png`: no se pisa nada.
         if dest != chosen && std::fs::symlink_metadata(&dest).is_ok() {
             return Err(FileError::Exists(dest));
@@ -900,6 +920,18 @@ impl Session {
             return self.write_to(copy_path(&path), Some(reason));
         }
         self.write_to(dest, None)
+    }
+
+    /// `Ctrl+S`: guardar ya, o abrir el diálogo de guardar. Directo solo con ruta y si el formato
+    /// de la ruta conserva lo que hay: con 2 o más capas, solo `.aseprite` (un PNG con capas pide
+    /// elegir antes de aplanar).
+    pub fn save_route(&self) -> SaveRoute {
+        match &self.path {
+            Some(path) if self.document.layers().len() < 2 || is_aseprite_path(path) => {
+                SaveRoute::Direct
+            }
+            _ => SaveRoute::Dialog,
+        }
     }
 
     /// Guarda en la ruta del documento; sin ruta, en `untitled_path(new_dir)`. Si el fichero
@@ -924,8 +956,14 @@ impl Session {
     }
 
     fn write_to(&mut self, dest: PathBuf, copy_reason: Option<String>) -> Result<Saved, FileError> {
-        let image = flatten(&self.document).map_err(|error| FileError::Write(error.to_string()))?;
-        let bytes = write_png(&image).map_err(FileError::Png)?;
+        let bytes = match SaveFormat::of_path(&dest) {
+            SaveFormat::Aseprite => write_aseprite(&self.document).map_err(FileError::Aseprite)?,
+            SaveFormat::Png => {
+                let image =
+                    flatten(&self.document).map_err(|error| FileError::Write(error.to_string()))?;
+                write_png(&image).map_err(FileError::Png)?
+            }
+        };
         write_atomic(&dest, &bytes)?;
         self.path = Some(dest.clone());
         self.saved_id = self.document.state_id();
@@ -950,7 +988,8 @@ pub fn with_flatten_notice(text: String, document: &Document) -> String {
     if document.layers().len() < 2 {
         return text;
     }
-    let mut text = format!("{text} · se guarda aplanado; el formato con capas llega con .aseprite");
+    let mut text =
+        format!("{text} · se guarda aplanado; con Guardar como… .aseprite conservas las capas");
     let hidden = document
         .layers()
         .iter()
@@ -962,6 +1001,20 @@ pub fn with_flatten_notice(text: String, document: &Document) -> String {
         n => text.push_str(&format!(" · {n} capas ocultas no se guardan")),
     }
     text
+}
+
+/// El aviso de un guardado ya hecho: un `.aseprite` dice cuántas capas guarda; un PNG con varias
+/// capas dice que se guardó aplanado (`with_flatten_notice`).
+pub fn saved_notice(text: String, saved: &Saved, document: &Document) -> String {
+    if is_aseprite_path(&saved.path) {
+        let layers = document.layers().len();
+        format!(
+            "{text} · {layers} {}",
+            if layers == 1 { "capa" } else { "capas" }
+        )
+    } else {
+        with_flatten_notice(text, document)
+    }
 }
 
 /// Aviso al guardar. Con copia por conversión, explica por qué no se sobrescribió el original.

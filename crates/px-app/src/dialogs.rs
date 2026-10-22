@@ -38,6 +38,64 @@ pub enum DialogKind {
     SaveAs,
 }
 
+/// Formato de guardado de un documento (specs/hito-3-aseprite.md).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveFormat {
+    Png,
+    Aseprite,
+}
+
+impl SaveFormat {
+    /// El formato que decide la extensión de `path` (sin mirar mayúsculas): `.aseprite` es
+    /// `Aseprite`; cualquier otra cosa, `Png`.
+    pub fn of_path(path: &Path) -> SaveFormat {
+        if is_aseprite_path(path) {
+            SaveFormat::Aseprite
+        } else {
+            SaveFormat::Png
+        }
+    }
+}
+
+/// Qué hace `Ctrl+S`: guardar ya o abrir el diálogo de guardar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SaveRoute {
+    Direct,
+    Dialog,
+}
+
+/// La ruta termina en `.aseprite` (sin mirar mayúsculas).
+pub fn is_aseprite_path(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("aseprite"))
+}
+
+/// Nombre que propone el diálogo de guardar: con 2 o más capas o con ruta `.aseprite`,
+/// `{nombre}.aseprite`; si no, `{nombre}.png`; sin ruta, `sin-titulo.*`.
+pub fn proposed_save_name(path: Option<&Path>, layers: usize) -> String {
+    let aseprite = layers >= 2 || path.is_some_and(is_aseprite_path);
+    let extension = if aseprite { "aseprite" } else { "png" };
+    let stem = path.and_then(Path::file_stem).map_or_else(
+        || "sin-titulo".to_string(),
+        |stem| stem.to_string_lossy().into_owned(),
+    );
+    format!("{stem}.{extension}")
+}
+
+/// Título del diálogo de archivo: dice el formato.
+pub fn dialog_title(kind: DialogKind, layers: usize, path: Option<&Path>) -> &'static str {
+    match kind {
+        DialogKind::Open => "Abrir imagen (PNG o Aseprite)",
+        DialogKind::Save | DialogKind::SaveAs if layers >= 2 => {
+            "Guardar como .aseprite (con capas) o PNG (aplanado)"
+        }
+        DialogKind::Save | DialogKind::SaveAs => match path.map(SaveFormat::of_path) {
+            Some(SaveFormat::Aseprite) => "Guardar .aseprite",
+            _ => "Guardar PNG",
+        },
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DialogRequest {
     pub kind: DialogKind,
@@ -65,6 +123,8 @@ pub trait FilePicker {
     fn poll(&mut self) -> Option<Option<PathBuf>>;
     /// Abandona el diálogo pendiente: su resultado, si llega, se ignora.
     fn abandon(&mut self);
+    /// Título del próximo diálogo (dice el formato). Por defecto no se usa.
+    fn set_title(&mut self, _title: &'static str) {}
 }
 
 /// Extensiones del filtro de abrir. Los filtros del portal de Linux distinguen mayúsculas; en
@@ -73,6 +133,17 @@ pub trait FilePicker {
 const PNG_EXTENSIONS: &[&str] = &["png", "PNG", "Png"];
 #[cfg(not(target_os = "linux"))]
 const PNG_EXTENSIONS: &[&str] = &["png"];
+
+/// Extensiones de `.aseprite` y de los dos formatos juntos para el filtro de abrir.
+#[cfg(target_os = "linux")]
+const ASEPRITE_EXTENSIONS: &[&str] = &["aseprite", "ASEPRITE", "Aseprite"];
+#[cfg(not(target_os = "linux"))]
+const ASEPRITE_EXTENSIONS: &[&str] = &["aseprite"];
+#[cfg(target_os = "linux")]
+const ASEPRITE_OR_PNG_EXTENSIONS: &[&str] =
+    &["png", "PNG", "Png", "aseprite", "ASEPRITE", "Aseprite"];
+#[cfg(not(target_os = "linux"))]
+const ASEPRITE_OR_PNG_EXTENSIONS: &[&str] = &["png", "aseprite"];
 
 /// Nombre propuesto cuando el documento no tiene ruta.
 const UNTITLED_NAME: &str = "sin-titulo.png";
@@ -84,6 +155,7 @@ type PendingPick = Pin<Box<dyn Future<Output = Option<PathBuf>>>>;
 #[derive(Default)]
 pub struct RfdPicker {
     pending: Option<PendingPick>,
+    title: Option<&'static str>,
 }
 
 impl RfdPicker {
@@ -95,14 +167,26 @@ impl RfdPicker {
 impl FilePicker for RfdPicker {
     fn start(&mut self, request: &DialogRequest, parent: Option<&eframe::Frame>) {
         let mut dialog = rfd::AsyncFileDialog::new();
+        let title = self.title.take();
+        // Guardar con un nombre `.aseprite` propuesto ofrece los dos formatos, con ese primero.
+        let aseprite_first = request
+            .file_name
+            .as_deref()
+            .is_some_and(|name| is_aseprite_path(Path::new(name)));
         dialog = match request.kind {
             DialogKind::Open => dialog
-                .set_title("Abrir PNG")
+                .set_title(title.unwrap_or("Abrir imagen (PNG o Aseprite)"))
+                .add_filter("Imágenes (png, aseprite)", ASEPRITE_OR_PNG_EXTENSIONS)
                 .add_filter("PNG", PNG_EXTENSIONS)
+                .add_filter("Aseprite", ASEPRITE_EXTENSIONS)
                 .add_filter("Todos", &["*"]),
-            DialogKind::Save | DialogKind::SaveAs => {
-                dialog.set_title("Guardar PNG").add_filter("PNG", &["png"])
-            }
+            DialogKind::Save | DialogKind::SaveAs if aseprite_first => dialog
+                .set_title(title.unwrap_or("Guardar .aseprite"))
+                .add_filter("Aseprite (con capas)", &["aseprite"])
+                .add_filter("PNG (aplanado)", &["png"]),
+            DialogKind::Save | DialogKind::SaveAs => dialog
+                .set_title(title.unwrap_or("Guardar PNG"))
+                .add_filter("PNG", &["png"]),
         };
         if let Some(dir) = &request.dir {
             dialog = dialog.set_directory(dir);
@@ -146,6 +230,10 @@ impl FilePicker for RfdPicker {
     fn abandon(&mut self) {
         self.pending = None;
     }
+
+    fn set_title(&mut self, title: &'static str) {
+        self.title = Some(title);
+    }
 }
 
 struct Pending {
@@ -160,6 +248,8 @@ pub struct Dialogs {
     cwd: Option<PathBuf>,
     last_dir: Option<PathBuf>,
     pending: Option<Pending>,
+    /// Título del próximo diálogo, si la app lo fijó.
+    title: Option<&'static str>,
 }
 
 impl Dialogs {
@@ -170,7 +260,13 @@ impl Dialogs {
             cwd,
             last_dir: None,
             pending: None,
+            title: None,
         }
+    }
+
+    /// Fija el título del próximo diálogo (dice el formato); se gasta al abrirlo.
+    pub fn set_title(&mut self, title: &'static str) {
+        self.title = Some(title);
     }
 
     pub fn pending(&self) -> bool {
@@ -188,6 +284,7 @@ impl Dialogs {
         now: f64,
         parent: Option<&eframe::Frame>,
     ) -> bool {
+        let title = self.title.take();
         if self.pending.is_some() {
             return false;
         }
@@ -198,6 +295,9 @@ impl Dialogs {
             self.last_dir.as_deref(),
             self.cwd.as_deref(),
         );
+        if let Some(title) = title {
+            self.picker.set_title(title);
+        }
         self.picker.start(&request, parent);
         self.pending = Some(Pending {
             kind,
