@@ -25,15 +25,17 @@ El indicador de color y el panel de opciones son las dos piezas nuevas; el resto
 | --- | --- | --- |
 | Arriba | Barra de menús, siempre visible (el original la muestra con el botón derecho sobre la barra de título) | Existe, con 5 menús |
 | Izquierda | La página o lienzo, con zoom y desplazamiento | Existe |
-| Derecha, junto al lienzo | Panel de la paleta, con el indicador de color arriba y el editor de color debajo | Hecho (I.2a, I.3): a la derecha del lienzo, con una línea fina a cada lado |
+| Derecha, junto al lienzo | Panel de la paleta: el indicador de color grande arriba, la rejilla compacta, la fila de iconos de la paleta y, a demanda, el editor de color | Hecho (I.2a, I.3, C1): a la derecha del lienzo, con una línea fina a cada lado; el editor sale con `p` o con el clic derecho en el indicador |
 | Derecha, en el borde | Caja de herramientas: herramientas, botones de zoom y, debajo, el panel de opciones de la herramienta activa | Hecho (I.3 e I.4): en el borde derecho, una rejilla de iconos de 24 u en cuatro columnas y un recuadro fijo de opciones de 99 × 138 u (hoy: nombre, atajo y `sin opciones`) |
 | Abajo | Barra de estado con herramienta, coordenadas, color y avisos | Existe |
+
+**Hecho en C1 (22 de octubre de 2026):** el editor de color deja de estar siempre abierto (`p`, o clic derecho en el indicador; se cierra con `Esc`, con `p`, con un segundo clic derecho en el rectángulo que edita o al cambiar de documento) y la rejilla gana su espacio; el indicador son dos rectángulos de 40 × 24 y 64 × 32 u en una banda de 44 u (el borde del rol que edita el editor mide 2 u `ACCENT`); la rejilla es compacta (muestras de 12 u, huecos de 2 u, paso de 14 u); la información de la muestra sale en un tooltip y en la barra de estado; las cinco operaciones de paleta viven en una fila de iconos bajo la rejilla (28 u, con el editor abierto y cerrado). El bloque mide 277 u y la ventana mínima baja de 341 a **313 u** (417,33 pt a `ppp` 1,5), el suelo que pone el panel de capas flotante; el criterio del alto pasa del 65 % al **60 %** de 720 pt (432). El ancho mínimo (468 u) no cambia. Spec: `specs/ui-composition.md`.
 
 **Hecho en I.3 (21 de octubre de 2026):** el orden de izquierda a derecha es lienzo, paleta y caja de herramientas, y el ancho mínimo de ventana (468 u) no cambió: 128 u de lienzo, 233 u de paleta y 107 u de caja. El lienzo empieza en `(0, 16·n)` y `chrome::window_layout` es la única función que conoce el orden. Spec: `specs/interfaz-caja-derecha.md`.
 
 Tres puntos que condicionan la geometría:
 
-- **Iconos.** Hecho en I.4 (21 de octubre de 2026): las herramientas, el zoom y el editor de la paleta usan 14 iconos propios de 16 × 16 (`assets/icons/`) sobre botones de 24 u con relieve; una rejilla de cuatro columnas deja sitio a 16 herramientas en el alto mínimo (con cinco filas, 17 a 20, el recuadro de opciones de 138 u ya no cabe y lo decide el hito 4). Spec: `specs/interfaz-iconos.md`.
+- **Iconos.** Hecho en I.4 (21 de octubre de 2026): las herramientas, el zoom y el editor de la paleta usan 14 iconos propios de 16 × 16 (`assets/icons/`) sobre botones de 24 u con relieve; una rejilla de cuatro columnas dejaba sitio a 16 herramientas en el alto mínimo (con C1, el panel mínimo de 277 u aloja **12**, tres filas; con 13 o más el recuadro de opciones de 138 u ya no cabe y lo decide el hito 4). Spec: `specs/interfaz-iconos.md`.
 - **Panel de opciones.** Su altura se reserva siempre, también cuando la herramienta no tiene opciones, para que la caja no salte al cambiar de herramienta.
 - **Ocultar paneles.** F10 oculta la caja y la barra, y F9 solo la barra, como en el original. Es una mejora posterior; la barra de menús y la de estado se quedan siempre.
 
@@ -48,7 +50,7 @@ Pixoko pasa de un color activo a dos, primer plano y fondo, y el botón derecho 
 | Clic en una muestra de la paleta | Elige el primer plano |
 | Clic derecho en una muestra | Elige el fondo |
 | Clic en el indicador de color, o la tecla coma | Cuentagotas: clic elige el primer plano y clic derecho el fondo |
-| Clic derecho en el indicador de color | Lleva el foco al editor de color |
+| Clic derecho en el indicador de color | Abre el editor de color con el color de ese rectángulo (con el editor abierto: cambia de rectángulo; en el que se edita: lo cierra) |
 | Clic derecho en una herramienta | Lleva el foco al panel de opciones de esa herramienta (sección 6) |
 | Clic derecho en el selector de pincel | Restaura el último pincel propio |
 | Clic en el botón de zoom y clic derecho | Acerca y aleja |
@@ -111,6 +113,7 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 | Pincel de un píxel | `.` | no existe | 4 |
 | Texto, rejilla, simetría, lupa | `t`, `g`, `/`, `m` | no existen | por decidir |
 | Deshacer y borrar la página | `u` y `K` con `Mayús` (más `Ctrl+Z`) | `Ctrl+Z` | 2 |
+| Editor de color (abrir y cerrar) | `p` | no existe | C1 |
 | Color de primer plano, siguiente y anterior | `]` y `[` | cifras 1 a 9 | 2 |
 | Color de fondo, siguiente y anterior | `}` y `{` | no existe | 2 |
 | Zoom | `<` y `>`, rueda y `Home` | `+`, `-`, rueda y `Home` | 2 |
@@ -122,6 +125,8 @@ Las herramientas usan las letras del programa de referencia, y los atajos modern
 | Restringir el cursor y dejar trazas | `Mayus` y `Ctrl` mientras se dibuja | no existen | 4 |
 
 **Hecho en la unidad I.1 (2026-10-20, `specs/interfaz-teclado.md`):** `d v f ,` (herramientas), `u` (más `Ctrl+Z`), `]` y `[` (también `Av Pág` y `Re Pág`), `<` y `>` (además de `+`, `=` y `-`), `n`, `Inicio`; el Borrador quedó sin letra (desde el 21 de octubre tiene `k`) y las cifras 1 a 9 sin asignar. Lo demás de la tabla sigue pendiente en su hito.
+
+**Hecho en la unidad C1 (2026-10-22, `specs/ui-composition.md`):** `p` alterna el editor de color (`Ver → Editor de color`, editable en `Ayuda → Atajos de teclado…`); `p` ya no está reservada sin asignar. Siguen sin asignar `l i e` y `P L I E`.
 
 **Hecho en la unidad I.2a (2026-10-20, `specs/interfaz-dos-colores.md`):** `}` y `{` (también `Mayús`+`Av Pág` y `Mayús`+`Re Pág`) cambian el fondo, `K` borra la página con él (también `Editar → Borrar página`), el botón derecho pinta con el fondo, el indicador de color y los dos anillos del panel. Con un trazo en curso el color ya se puede cambiar (afecta al trazo siguiente).
 
@@ -224,7 +229,7 @@ Orden de trabajo después del hito 2:
 4. **Iconos propios:** dibujados con Pixoko y exportados como recursos de la aplicación.
 5. **Menús del original:** se añaden a medida que llegan las funciones de cada hito.
 
-**Excepción transitoria (I.2a, 2026-10-20; retirada en I.4, 2026-10-21: el criterio del alto es otra vez el 65 % de 720 pt, 468,0; ventana mínima de 341 u, 454,67 pt a `ppp` 1,5):** el indicador de color añade una banda de 36 u al panel de la paleta y el criterio del alto mínimo de ventana sube del 65 % al 72 % de 720 pt (518,4 pt; a `ppp` 1,5 la ventana mínima pasa de 468,0 a 516,0 pt). Con los iconos propios (I.4) las filas de botones del editor se redujeron a una y el criterio **volvió al 65 %**. Spec: `specs/interfaz-dos-colores.md`.
+**Excepción transitoria (I.2a, 2026-10-20; retirada en I.4, 2026-10-21: el criterio del alto es otra vez el 65 % de 720 pt, 468,0; ventana mínima de 341 u, 454,67 pt a `ppp` 1,5):** el indicador de color añade una banda de 36 u al panel de la paleta y el criterio del alto mínimo de ventana sube del 65 % al 72 % de 720 pt (518,4 pt; a `ppp` 1,5 la ventana mínima pasa de 468,0 a 516,0 pt). Con los iconos propios (I.4) las filas de botones del editor se redujeron a una y el criterio **volvió al 65 %**. Spec: `specs/interfaz-dos-colores.md`. **C1 (22 de octubre de 2026): el criterio del alto pasa del 65 % al 60 % de 720 pt (432 pt); ventana mínima de 313 u, 417,33 pt a `ppp` 1,5 (58,0 %).**
 
 Este documento es la entrada de la planificación de los hitos siguientes. La planificación lee además las secciones del manual que cada hito necesite, de una en una, y produce el mapa de funciones con su hito, sus dependencias y su riesgo.
 

@@ -8,6 +8,8 @@ Estado: **aprobada** (2026-10-18; decisiones 2, 3, 6 y 7 de la propuesta, con lo
 
 **Actualización de la unidad 21 (2026-10-20), que prevalece:** el editor de **indexadas** suma una cuarta fila de botones (`Fijar`/`Quitar transparente`, [`hito-2-fijar-transparente.md`](hito-2-fijar-transparente.md)): `editor_height_u(Indexed)` = **260** (RGBA 186, GrayAlpha 112 y Gray 94 no cambian). Cifras normativas ahora: bloque de indexadas y mínimo del panel **315·n**, ventana mínima **351, 280,8, 468,0, 351 y 351 pt** a `ppp` 1,0, 1,25, 1,5, 2,0 y 3,0 (`(20 + 16 + 315)·n/ppp`), `top_px` con el panel a 700·n **440·n** (28 filas) y el criterio de la prueba **«no pasa del 65 % de 720 pt (468,0)»** en lugar del 62 %. El ancho no cambia (468 u; 624 pt como máximo). **Es el último aumento de altura del editor** (iconos propios en la unidad de interfaz posterior al hito 2; otra operación de paleta irá al menú `Color` o a un menú contextual). Las cifras de 297, 333 y 446,4 de esta página son historia.
 
+**Actualización de la unidad C1 (2026-10-22), que prevalece:** el bloque `[banda · una fila de rejilla · fila de iconos · editor]` mide 277 u (antes 305; `panel_layout` y `block_height_px` conservan su firma, y `panel_layout_closed` y `block_height_closed_px` son los del editor cerrado, 91 u), la ventana mínima baja a 313 u y el criterio del alto al **60 %** de 720 pt (432). El editor arranca cerrado, pero abierto o cerrado el mínimo es el mismo: el suelo es el panel de capas (277 u). El respaldo del desplazamiento del panel entero se conserva. ([`ui-composition.md`](ui-composition.md))
+
 ## Lo que se ve
 
 Al reducir la altura funciona, pero se siente brusco: salto cuando el editor aparece o desaparece, parpadeo al arrastrar el borde y retraso.

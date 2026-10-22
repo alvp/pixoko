@@ -124,3 +124,16 @@ Las decisiones 1 a 12 como están, con:
 8. **Tooltip de la rejilla:** una prueba en el banco con hover simulado si egui lo permite; si no, va a la prueba manual (y lo digo).
 9. **El texto de ayuda `color.editor` va en un fichero aparte** (`help_texts_color_es.rs`) para que lo revises antes del commit final.
 10. Si hiciera falta algún cambio en `px-core` o `px-raster`: me paro y lo digo.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+Lo que la implementación hizo distinto de lo escrito arriba:
+
+1. **`cursor ·` se conserva** en las dos líneas de la muestra (tooltip y barra de estado), contra la decisión 7: el visto bueno pidió las mismas aserciones de texto en las 11 pruebas de mecanismo y esas cadenas lo llevan (`cursor · rango`, `cursor · activa · transparente`). La información es la de siempre (`cell_label_with` e `info_flags*`), con el puntero encima o, sin él, la de la muestra elegida.
+2. **Dónde está la información.** No en `PanelOutput` (las pruebas comparan salidas enteras entre fotogramas), sino en el contexto de egui: `palette_panel::panel_info(&Context) -> PanelInfo { lines, status_hint }`. `PanelOutput` solo ganó `close_editor` y perdió `editing`. La línea de estado la compone `title::status_for(usual, is_notice, hint)`.
+3. **Tooltip del indicador:** un solo área sobre los dos rectángulos y el puntero decide cuál (el pequeño manda donde se superponen); con dos áreas solapadas egui daba siempre el tooltip del grande (lo encontró la prueba de la fila 15).
+4. **`drop_mark_rect` y la captura de un arrastre** se calculan del hueco (`GAP_U`, `DROP_MARK_W_U`, `DROP_HALF_GAP_U` = 1): la barra de destino de 2 u llena el hueco de 2 u y la media separación de captura baja de 2 a 1 u.
+5. **Más pruebas anteriores con cambio de intención** (además de las 13 y la de `p`): `Escape` sin nada en curso pide cerrar el editor (`row_14_e_…_only_asks_to_close_the_editor`); las dos del desplazamiento del panel entero con botones (los botones asoman por arriba, no por abajo: otros desplazamientos); la regla de la caja en `chrome.rs` (3 filas de herramientas caben en 277 u, 4 no: el recuadro de opciones de 138 u y las 16 herramientas del hito 4 lo deciden entonces).
+6. **El tooltip de la rejilla sí se puede probar con hover simulado** (tiempo del fotograma y 8 fotogramas, como las del editor): las filas 13 y 15 lo comprueban; no queda nada para la prueba manual por ese motivo.
+7. **Orden de trabajo:** para adaptar las pruebas anteriores con el compilador delante se escribió antes la parte de geometría y panel de la lógica; las pruebas nuevas se escribieron después (y la de la fila 15 encontró el defecto 3). Se commitearon en el orden pedido: spec, adaptación, pruebas nuevas, lógica de `px-ui`, `px-app`.
+8. **Comentarios (política de L3).** Los nuevos van en inglés. Se tradujeron los comentarios de los ficheros de producción de `px-ui` que se tocaron (`palette_grid`, `edit_layout`, `palette_panel`, `color_editor`, `actions`, `help`, `help_texts`, `keymap`, `menu`, `lib`) y de `px-app/src/dispatch.rs`. **No** se tradujeron los de `px-app/src/lib.rs`, `session.rs` y `title.rs` (unas 380 líneas) ni los comentarios y mensajes de aserción de los ficheros de pruebas tocados (unas 1000 líneas de comentarios): quedan para L3b.

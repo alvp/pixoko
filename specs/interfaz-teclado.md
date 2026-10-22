@@ -2,6 +2,8 @@
 
 Estado: **aprobada** (2026-10-20; decisiones 1 a 9 como están, con los cambios del visto bueno del final de la página, que **prevalecen sobre cualquier otra frase de ella**: commit propio para la adaptación de las pruebas con la lista de cada aserción antigua y nueva; pruebas de tecla muerta, IME y `Option`+letra; `Alt`+letra no es la letra; `Re Pág` y `Av Pág` en la tabla; las tres funciones antiguas como vistas con prueba y `TODO`). Cambios: `px-ui` y `px-app`. **No se toca `px-core` ni `px-raster`.** Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia. Sin carga ni guardado en disco (hito 8).
 
+**Actualización de la unidad C1 (2026-10-22):** `p` ya no está sin asignar: alterna el editor de color (`AppAction::ToggleColorEditor`, fila 36 de la tabla, entrada `Ver → Editor de color`, editable en `Ayuda → Atajos de teclado…`). Siguen sin asignar `l i e` y `P L I E`. ([`ui-composition.md`](ui-composition.md))
+
 Referencias: esquema de teclas y reglas en `docs/DISENO-INTERFAZ.md` («Atajos de teclado»; «Dos colores y convenciones del ratón» para `K`, `{`, `}` y `Espacio`, que son de I.2). Capa de acciones, bloqueos, menú y columna: [`hito-2-menu-herramientas.md`](hito-2-menu-herramientas.md). Teclas `I` y `E`, `select_tool`, `gate_keys`: [`hito-2-cuentagotas-borrador.md`](hito-2-cuentagotas-borrador.md). Atajos `Ctrl+Z` y cifras 1 a 9: [`hito-2-lapiz-deshacer.md`](hito-2-lapiz-deshacer.md). `ColorChoice`, `Session.choice` y el panel: [`hito-2-panel-paletas.md`](hito-2-panel-paletas.md).
 
 ## Objetivo

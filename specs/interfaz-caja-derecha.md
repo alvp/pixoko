@@ -6,6 +6,8 @@ Estado: **aprobada** (2026-10-21; decisiones 1 a 11 como están, con las condici
 
 **Actualización del 21 de octubre de 2026, que prevalece:** el Borrador tiene la tecla `k`. La línea del atajo de su recuadro dice `tecla k` (donde esta página dice `sin tecla`) y su tooltip tiene tres líneas: `Borrador (k)`, `clic derecho: opciones` y `el clic derecho también borra con el fondo` (esta última habla del clic derecho en el lienzo). Las filas 4 y 7 y la prueba manual se leen así. Ver [`interfaz-teclado.md`](interfaz-teclado.md), «Actualización del 21 de octubre».
 
+**Actualización de la unidad C1 (2026-10-22), que prevalece:** el panel mínimo baja a 277 u y la caja (250 u) cabe con 27 u de holgura; con 4 filas de herramientas (300 u) ya no cabe (3 filas, 275 u, sí): lo decide el hito 4. ([`ui-composition.md`](ui-composition.md))
+
 Referencias: «Disposición de la pantalla» y «Opciones de herramienta» en `docs/DISENO-INTERFAZ.md`. Geometría, ventana mínima, respaldo B y bloqueos de columna y zoom: [`hito-2-menu-herramientas.md`](hito-2-menu-herramientas.md). Anillos, banda del indicador y criterio del 72 % (transitorio hasta I.4): [`interfaz-dos-colores.md`](interfaz-dos-colores.md). Gestos del ratón y botones laterales: [`interfaz-raton.md`](interfaz-raton.md) (el clic derecho en herramientas y zoom quedó aquí). Panel de paletas (233 u, línea derecha, pista): [`hito-2-panel-paletas.md`](hito-2-panel-paletas.md).
 
 ## Objetivo
