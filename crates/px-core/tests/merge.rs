@@ -192,7 +192,7 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    fn de(doc: &Document) -> Snapshot {
+    fn of(doc: &Document) -> Snapshot {
         Snapshot {
             doc: doc.clone(),
             can_undo_2: doc.can_undo(),
@@ -255,7 +255,7 @@ impl Snapshot {
 
 /// Aplica `cmd`, comprueba el resultado y que nada observable cambió.
 fn without_effect(doc: &mut Document, cmd: Command, expected: Result<bool, DocumentError>) {
-    let snapshot = Snapshot::de(doc);
+    let snapshot = Snapshot::of(doc);
     let context = format!("{cmd:?}");
     assert_eq!(doc.apply(cmd), expected, "{context}");
     snapshot.assert_equal(doc, &context);
@@ -286,7 +286,7 @@ fn applies_and_checks(
     remove: &[LayerId],
     image: Option<Image>,
 ) -> Result<(), String> {
-    let before = Snapshot::de(doc);
+    let before = Snapshot::of(doc);
     let layers_before = doc.layers().to_vec();
     let saved: usize = layers_before
         .iter()
@@ -368,7 +368,7 @@ fn applies_and_checks(
     );
 
     // Un solo paso: un `undo` devuelve las capas tal cual, y un `redo`, la combinación.
-    let after = Snapshot::de(doc);
+    let after = Snapshot::of(doc);
     doc.undo().map_err(|e| format!("undo: {e:?}"))?;
     requires!(
         doc.layers() == layers_before.as_slice(),
@@ -539,8 +539,8 @@ fn row_01_c_the_image_must_have_the_canvas_width_height_mode_and_palette() {
 
     // Indexado: la paleta ha de ser idéntica, índice transparente incluido.
     let palette_2 = [RED, GREEN, BLUE];
-    let mut di = Document::new(img_indexed(4, 3, &palette_2, Some(0)));
-    let (ia, ib) = (di.layers()[0].id(), adds(&mut di, "B", 1));
+    let mut indexed_doc = Document::new(img_indexed(4, 3, &palette_2, Some(0)));
+    let (ia, ib) = (indexed_doc.layers()[0].id(), adds(&mut indexed_doc, "B", 1));
     let with_i = |d: &Document, image_2: Option<Image>| combines(d, ia, &[ib], image_2);
     let bad_2 = [
         img_indexed(4, 3, &[RED, GREEN, C2], Some(0)),
@@ -551,15 +551,19 @@ fn row_01_c_the_image_must_have_the_canvas_width_height_mode_and_palette() {
         img_rgba(4, 3),
     ];
     for bad in bad_2 {
-        let cmd = with_i(&di, Some(bad));
-        without_effect(&mut di, cmd, Err(DocumentError::MergeImageMismatch));
+        let cmd = with_i(&indexed_doc, Some(bad));
+        without_effect(
+            &mut indexed_doc,
+            cmd,
+            Err(DocumentError::MergeImageMismatch),
+        );
     }
 
     // Con la paleta idéntica vale, y `None` (celda vacía) vale siempre y no se comprueba.
-    let good = Image::filled_indexed(4, 3, di.palette().expect("paleta").clone(), 2)
+    let good = Image::filled_indexed(4, 3, indexed_doc.palette().expect("paleta").clone(), 2)
         .expect("imagen indexada");
-    let cmd = with_i(&di, Some(good));
-    assert_eq!(di.apply(cmd), Ok(true));
+    let cmd = with_i(&indexed_doc, Some(good));
+    assert_eq!(indexed_doc.apply(cmd), Ok(true));
     let (mut d2, [a2, b2, _]) = doc_abc();
     let cmd = combines(&d2, a2, &[b2], None);
     assert_eq!(d2.apply(cmd), Ok(true));
@@ -624,7 +628,7 @@ fn row_01_e_plan_merge_is_read_only_and_gives_empty_bytes_and_peak() {
     let dd = adds(&mut d, "D", 3);
     let cc = cel(&d, c);
     assert_eq!(d.apply(sets(cc, 0, 0, RED)), Ok(true));
-    let snapshot = Snapshot::de(&d);
+    let snapshot = Snapshot::of(&d);
     let peak = d.materialized_bytes() + d.cel_bytes();
     assert_eq!(peak, 96 + 48);
 
@@ -818,7 +822,7 @@ fn plan_strategy(layers_2: RangeInclusive<usize>) -> impl Strategy<Value = PlanD
         })
 }
 
-fn pixel_de(mode_2: Mode, s: u8, palette_2: usize) -> Pixel {
+fn pixel_of(mode_2: Mode, s: u8, palette_2: usize) -> Pixel {
     let alpha_2 = [0u8, 128, 255, 255][usize::from(s % 4)];
     match mode_2 {
         Mode::Rgba if alpha_2 == 0 => Pixel::Rgba(T),
@@ -848,7 +852,7 @@ fn builds(plan: &PlanDoc) -> Document {
         img.set_pixel(
             u32::from(x) % plan.w,
             u32::from(y) % plan.h,
-            pixel_de(mode_2, s, plan.palette_2),
+            pixel_of(mode_2, s, plan.palette_2),
         )
         .expect("píxel de la capa 0");
     }
@@ -863,7 +867,7 @@ fn builds(plan: &PlanDoc) -> Document {
                 .map(|&(x, y, s)| PixelEdit {
                     x: u32::from(x) % plan.w,
                     y: u32::from(y) % plan.h,
-                    pixel: pixel_de(mode_2, s, plan.palette_2),
+                    pixel: pixel_of(mode_2, s, plan.palette_2),
                 })
                 .collect();
             d.apply(Command::SetPixels { image, pixels })
@@ -901,7 +905,7 @@ fn image_valid(doc: &Document, s: u8) -> Image {
             let index = u8::try_from(usize::from(s) % p.len()).unwrap_or(0);
             Image::filled_indexed(w, h, p.clone(), index).expect("imagen indexada")
         }
-        None => Image::filled(w, h, pixel_de(doc.mode(), s, 1)).expect("imagen"),
+        None => Image::filled(w, h, pixel_of(doc.mode(), s, 1)).expect("imagen"),
     }
 }
 
@@ -1031,7 +1035,7 @@ fn paints(doc: &Document, k: usize, pixels_2: &[(u8, u8, u8)]) -> Command {
             .map(|&(x, y, s)| PixelEdit {
                 x: u32::from(x) % doc.width(),
                 y: u32::from(y) % doc.height(),
-                pixel: pixel_de(mode_2, s, palette_2),
+                pixel: pixel_of(mode_2, s, palette_2),
             })
             .collect(),
     }
@@ -1175,7 +1179,7 @@ proptest! {
     ) {
         let mut doc = Document::new(image_base(kind, w, h, palette_2));
         doc.set_history_limit(usize::MAX);
-        let initial = Snapshot::de(&doc);
+        let initial = Snapshot::of(&doc);
         prop_assert_eq!(initial.history, 0);
         prop_assert_eq!(initial.state, 0);
         let mut oks = 0usize;
@@ -1197,7 +1201,7 @@ proptest! {
         }
 
         for order in &ops {
-            let before = Snapshot::de(&doc);
+            let before = Snapshot::of(&doc);
             let cmd = translates(&doc, order);
             let result = doc.apply(cmd);
             match &result {
@@ -1214,7 +1218,7 @@ proptest! {
             }
         }
 
-        let final_ = Snapshot::de(&doc);
+        let final_ = Snapshot::of(&doc);
         let mut undone = 0usize;
         while doc.undo().is_ok() {
             undone += 1;

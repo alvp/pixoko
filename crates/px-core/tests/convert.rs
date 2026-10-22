@@ -724,7 +724,7 @@ fn permissions() -> impl Strategy<Value = Allowed> {
 }
 
 /// Imagen Rgba de `w x h` con los primeros `w * h` colores de `v`.
-fn rgba_de(w: u32, h: u32, v: &[Rgba]) -> Image {
+fn rgba_of(w: u32, h: u32, v: &[Rgba]) -> Image {
     image_of_colors(w, h, &v[..(w * h) as usize])
 }
 
@@ -745,7 +745,7 @@ fn image_of_mode(mode: Mode) -> BoxedStrategy<Image> {
     let colors_2 = || prop::collection::vec(color(), 36);
     match mode {
         Mode::Rgba => (dims(), colors_2())
-            .prop_map(|((w, h), v)| rgba_de(w, h, &v))
+            .prop_map(|((w, h), v)| rgba_of(w, h, &v))
             .boxed(),
         Mode::GrayAlpha => (dims(), colors_2())
             .prop_map(|((w, h), v)| {
@@ -985,14 +985,14 @@ fn case_exact() -> impl Strategy<Value = (Image, Vec<Mode>)> {
     let rgba_gray = colors_2()
         .prop_map(|((w, h), v)| {
             let v: Vec<Rgba> = v.into_iter().map(gray_or_transparent).collect();
-            (rgba_de(w, h, &v), vec![Mode::GrayAlpha, Mode::Indexed])
+            (rgba_of(w, h, &v), vec![Mode::GrayAlpha, Mode::Indexed])
         })
         .boxed();
     let rgba_gray_opaque = colors_2()
         .prop_map(|((w, h), v)| {
             let v: Vec<Rgba> = v.into_iter().map(|c| rgba(c.r, c.r, c.r, 255)).collect();
             (
-                rgba_de(w, h, &v),
+                rgba_of(w, h, &v),
                 vec![Mode::Gray, Mode::GrayAlpha, Mode::Indexed],
             )
         })

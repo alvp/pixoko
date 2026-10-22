@@ -72,7 +72,7 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    fn de(doc: &Document) -> Snapshot {
+    fn of(doc: &Document) -> Snapshot {
         Snapshot {
             doc: doc.clone(),
             can_undo_2: doc.can_undo(),
@@ -93,7 +93,7 @@ impl Snapshot {
 
 /// Aplica `cmd`, comprueba el resultado y que nada observable cambió.
 fn without_effect(doc: &mut Document, cmd: Command, expected: Result<bool, DocumentError>) {
-    let snapshot = Snapshot::de(doc);
+    let snapshot = Snapshot::of(doc);
     let context = format!("{cmd:?}");
     assert_eq!(doc.apply(cmd), expected, "{context}");
     snapshot.assert_equal(doc, &context);

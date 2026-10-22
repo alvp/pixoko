@@ -196,7 +196,7 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    fn de(doc: &Document) -> Snapshot {
+    fn of(doc: &Document) -> Snapshot {
         Snapshot {
             doc: doc.clone(),
             can_undo_2: doc.can_undo(),
@@ -265,7 +265,7 @@ impl Snapshot {
 /// Aplica `cmd`, comprueba el resultado y que el documento, la historia y el `state_id` no
 /// cambiaron.
 fn without_effect(doc: &mut Document, cmd: Command, expected_2: Result<bool, DocumentError>) {
-    let snapshot = Snapshot::de(doc);
+    let snapshot = Snapshot::of(doc);
     let context = format!("{cmd:?}");
     assert_eq!(doc.apply(cmd), expected_2, "{context}");
     snapshot.assert_equal(doc, &context);
@@ -546,7 +546,7 @@ fn row_03_e_writing_outside_the_canvas_leaves_no_half_cel() {
     let mut d = doc_d();
     let b = adds(&mut d, "B", 1);
     let cb = cel(&d, b);
-    let snapshot = Snapshot::de(&d);
+    let snapshot = Snapshot::of(&d);
 
     let result = d.apply(sets(cb, 9, 9, C1));
     assert!(
@@ -1332,7 +1332,7 @@ fn row_10_c_a_failing_batch_leaves_no_materialized_cels() {
     let (ca, cb) = (ImageId::from_raw(0), cel(&d, b));
 
     let batch = Command::Batch(vec![row_0(cb, 4, C1), sets(ca, 9, 9, C2)]);
-    let snapshot = Snapshot::de(&d);
+    let snapshot = Snapshot::of(&d);
     let result = d.apply(batch);
     assert!(
         matches!(
@@ -1406,7 +1406,7 @@ fn row_11_b_redo_over_a_lower_limit_fails_and_can_be_retried() {
     d.undo().expect("deshacer");
 
     d.set_cells_limit(48);
-    let snapshot = Snapshot::de(&d);
+    let snapshot = Snapshot::of(&d);
     let result = d.redo();
     assert!(
         matches!(result, Err(DocumentError::CelsTooLarge { .. })),
@@ -1464,7 +1464,7 @@ fn row_11_e_a_batch_checks_all_empty_cels_before_running() {
     let (ca, cb, cc) = (cel(&d, a), cel(&d, b), cel(&d, c));
     // Cabe una celda más (48 + 48 = 96), pero el lote nombra dos vacías.
     d.set_cells_limit(96);
-    let snapshot = Snapshot::de(&d);
+    let snapshot = Snapshot::of(&d);
 
     let batch = Command::Batch(vec![
         sets(ca, 0, 0, C1),
@@ -2230,14 +2230,14 @@ proptest! {
         // inicial se construye con `AddLayer`, así que su historia no está vacía; se deshacen
         // exactamente los `Ok(true)` de la secuencia y se compara con el estado inicial (y
         // `history_bytes()` con el inicial, que es 0 si el plan no necesitó pasos).
-        let initial = Snapshot::de(&doc);
+        let initial = Snapshot::of(&doc);
         let mut steps = 0usize;
         for order in &commands {
             if let Step2::Apply(Ok(true)) = runs(&mut doc, order) {
                 steps += 1;
             }
         }
-        let final_ = Snapshot::de(&doc);
+        let final_ = Snapshot::of(&doc);
 
         for i in 0..steps {
             prop_assert_eq!(doc.undo(), Ok(()), "deshacer {}", i);
@@ -2283,7 +2283,7 @@ proptest! {
     ) {
         let mut doc = builds(&plan);
         for order in &commands {
-            let before = Snapshot::de(&doc);
+            let before = Snapshot::of(&doc);
             let unchanged = match runs(&mut doc, order) {
                 Step2::Apply(Ok(true)) | Step2::Limit => false,
                 Step2::Apply(_) | Step2::Undo(Err(_)) | Step2::Redo(Err(_)) => true,
@@ -2306,13 +2306,13 @@ proptest! {
         // SPEC?: en grises no se puede tener más de una capa (no hay valor transparente), así que
         // el plan nunca genera grises para esta propiedad.
         prop_assert!(doc.layers().len() >= 2);
-        let before = Snapshot::de(&doc);
+        let before = Snapshot::of(&doc);
         let ids_before = ids(&doc);
         let layer_2 = doc.layers()[choice % (doc.layers().len() - 1)].id();
 
         prop_assert_eq!(doc.apply(removes(layer_2)), Ok(true));
         prop_assert_eq!(doc.layers().len(), ids_before.len() - 1);
-        let after = Snapshot::de(&doc);
+        let after = Snapshot::of(&doc);
 
         prop_assert_eq!(doc.undo(), Ok(()));
         before.requires_state(&doc, "tras deshacer el borrado")?;
@@ -2795,7 +2795,7 @@ mod canvas_image {
         let (mut d, [_, b, _]) = three_layers();
         assert_eq!(d.apply(sets(cel(&d, b), 1, 1, C1)), Ok(true));
         d.undo().expect("deshacer");
-        let snapshot = Snapshot::de(&d);
+        let snapshot = Snapshot::of(&d);
         let copy = d.clone();
 
         let _ = d.canvas_image();

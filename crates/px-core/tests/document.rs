@@ -89,7 +89,7 @@ fn batch(commands: Vec<Command>) -> Command {
     Command::Batch(commands)
 }
 
-fn pixel_en(doc: &Document, x: u32, y: u32) -> Pixel {
+fn pixel_at(doc: &Document, x: u32, y: u32) -> Pixel {
     doc.image(ImageId::from_raw(0))
         .unwrap()
         .get_pixel(x, y)
@@ -302,7 +302,7 @@ fn row_apply_undo_redo() {
     let id = ImageId::from_raw(0);
 
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
     assert!(doc.can_undo());
     assert!(!doc.can_redo());
     let after_apply = doc.clone();
@@ -333,8 +333,8 @@ fn row_apply_new_clears_the_redo_stack() {
     assert!(!doc.can_redo());
     assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
 
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c2()));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c2()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c0()));
     let mut expected = doc_d();
     assert_eq!(expected.apply(s(id, &[b])), Ok(true));
     assert_eq!(doc, expected);
@@ -359,9 +359,9 @@ fn row_repeated_coordinates_in_the_same_set_pixels() {
         doc.apply(s(id, &[px(0, 0, c1()), px(0, 0, c2())])),
         Ok(true)
     );
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c2()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c2()));
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c0()));
     assert_eq!(doc, initial);
     assert!(!doc.can_undo());
 }
@@ -375,7 +375,7 @@ fn row_a_write_that_changes_and_restores_counts_as_a_change() {
         doc.apply(s(id, &[px(0, 0, c1()), px(0, 0, c0())])),
         Ok(true)
     );
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c0()));
     // El contenido es el mismo, pero hay un paso (de dos cambios).
     assert_eq!(doc, initial);
     assert!(doc.can_undo());
@@ -425,7 +425,7 @@ fn row_out_of_range() {
         doc.apply(s(id, &[px(0, 0, c1()), px(9, 9, c1())])),
         Err(failure_pixel(1, outside(9, 9, 4, 3)))
     );
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c0()));
     assert!(!doc.can_undo());
     assert_eq!(state(&doc), before);
 }
@@ -447,7 +447,7 @@ fn row_failure_after_repeated_writes_restores_the_original_value() {
         ],
     ));
     assert_eq!(r, Err(failure_pixel(3, outside(4, 3, 4, 3))));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c3()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c3()));
     assert_eq!(state(&doc), before);
 }
 
@@ -591,9 +591,9 @@ fn row_batch_is_a_single_step() {
     ]);
 
     assert_eq!(doc.apply(command), Ok(true));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c2()));
-    assert_eq!(pixel_en(&doc, 2, 0), Pixel::Rgba(c3()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c2()));
+    assert_eq!(pixel_at(&doc, 2, 0), Pixel::Rgba(c3()));
     assert_eq!(steps_undoable(&doc), 1);
     let after_apply = doc.clone();
 
@@ -603,9 +603,9 @@ fn row_batch_is_a_single_step() {
 
     assert_eq!(doc.redo(), Ok(()));
     assert_eq!(doc, after_apply);
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c2()));
-    assert_eq!(pixel_en(&doc, 2, 0), Pixel::Rgba(c3()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c2()));
+    assert_eq!(pixel_at(&doc, 2, 0), Pixel::Rgba(c3()));
 }
 
 #[test]
@@ -649,9 +649,9 @@ fn row_batch_with_an_inner_failure_changes_nothing() {
         doc.apply(out_of_range),
         Err(in_batch(1, failure_pixel(1, outside(9, 9, 4, 3))))
     );
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c0()));
-    assert_eq!(pixel_en(&doc, 2, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 2, 0), Pixel::Rgba(c0()));
     assert_eq!(state(&doc), before);
 
     // Batch anidado en el comando 1.
@@ -663,7 +663,7 @@ fn row_batch_with_an_inner_failure_changes_nothing() {
         doc.apply(nested),
         Err(in_batch(1, DocumentError::NestedBatch))
     );
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c0()));
     assert_eq!(state(&doc), before);
 }
 
@@ -714,9 +714,9 @@ fn row_limit_zero_keeps_only_the_last_step() {
 
     assert_eq!(doc.undo(), Ok(()));
     assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c1()));
-    assert_eq!(pixel_en(&doc, 2, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 2, 0), Pixel::Rgba(c0()));
 }
 
 #[test]
@@ -752,8 +752,8 @@ fn row_exact_limit_for_two_steps() {
     assert_eq!(doc.history_bytes(), cost_of_a_step());
     assert_eq!(doc.undo(), Ok(()));
     assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c1()));
-    assert_eq!(pixel_en(&doc, 2, 0), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 2, 0), Pixel::Rgba(c0()));
 }
 
 #[test]
@@ -776,8 +776,8 @@ fn row_a_step_bigger_than_the_limit_is_kept() {
     assert_eq!(doc.apply(s(id, &[px(0, 1, c2())])), Ok(true));
     assert_eq!(steps_undoable(&doc), 1);
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(pixel_en(&doc, 0, 1), Pixel::Rgba(c0()));
-    assert_eq!(pixel_en(&doc, 3, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 0, 1), Pixel::Rgba(c0()));
+    assert_eq!(pixel_at(&doc, 3, 0), Pixel::Rgba(c1()));
 }
 
 #[test]
@@ -828,7 +828,7 @@ fn shape(img: &Image) -> Shape {
 
 /// Píxel válido de un modo a partir de un valor pequeño. El 0 coincide con el valor
 /// inicial de la imagen, y los demás se repiten mucho: así abundan los no-ops.
-fn pixel_de(mode: Mode, colors_2: usize, value: u8) -> Pixel {
+fn pixel_of(mode: Mode, colors_2: usize, value: u8) -> Pixel {
     match mode {
         Mode::Rgba if value == 0 => Pixel::Rgba(Rgba::TRANSPARENT),
         Mode::Rgba => Pixel::Rgba(Rgba::new(value, 255 - value, value ^ 5, 255)),
@@ -958,12 +958,12 @@ fn cmd_raw(with_failures: bool) -> impl Strategy<Value = CmdRaw> {
 fn editing(f: Shape, e: &EditingRaw) -> PixelEdit {
     let mut x = e.xb % f.width;
     let mut y = e.yb % f.height;
-    let mut pixel = pixel_de(f.mode, f.colors_2, e.value);
+    let mut pixel = pixel_of(f.mode, f.colors_2, e.value);
     match e.fail {
         None => {}
         Some(Fail::OutsideX) => x = f.width + e.xb % 1000,
         Some(Fail::OutsideY) => y = f.height + e.yb % 1000,
-        Some(Fail::OtherMode) => pixel = pixel_de(other_mode(f.mode, e.value), 8, e.value),
+        Some(Fail::OtherMode) => pixel = pixel_of(other_mode(f.mode, e.value), 8, e.value),
         // En una imagen no indexada esto es un `ModeMismatch`.
         Some(Fail::IndexOutside) => pixel = Pixel::Indexed((f.colors_2 + e.value as usize) as u8),
     }
@@ -1059,7 +1059,7 @@ fn arb_command(f: Shape, id: ImageId, raw: &ArbRaw) -> Command {
                 .map(|e| PixelEdit {
                     x: e.x,
                     y: e.y,
-                    pixel: e.own.map_or(e.pixel, |v| pixel_de(f.mode, f.colors_2, v)),
+                    pixel: e.own.map_or(e.pixel, |v| pixel_of(f.mode, f.colors_2, v)),
                 })
                 .collect(),
         },

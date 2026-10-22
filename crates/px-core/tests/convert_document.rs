@@ -161,7 +161,7 @@ fn rejects(doc: &mut Document, cmd: Command, expected: DocumentError) {
 }
 
 /// Bytes de píxeles de una imagen, según `Image::byte_len`.
-fn bytes_de(img: &Image) -> usize {
+fn bytes_of(img: &Image) -> usize {
     Image::byte_len(img.width(), img.height(), img.mode()).unwrap()
 }
 
@@ -516,7 +516,7 @@ fn image_6() -> impl Strategy<Value = Image> {
     )
         .prop_map(|(mode, (w, h), colors_2, palette_2, t, idx)| {
             let n = (w * h) as usize;
-            let en = |i: usize| (i as u32 % w, i as u32 / w);
+            let coords_of = |i: usize| (i as u32 % w, i as u32 / w);
             let mut img = match mode {
                 Mode::Indexed => {
                     let mut p = Palette::from_colors(palette_2.iter().copied()).unwrap();
@@ -537,7 +537,7 @@ fn image_6() -> impl Strategy<Value = Image> {
                     Mode::Gray => Pixel::Gray(c.g),
                     Mode::Indexed => Pixel::Indexed((idx[i] as usize % palette_2.len()) as u8),
                 };
-                let (px, py) = en(i);
+                let (px, py) = coords_of(i);
                 img.set_pixel(px, py, pixel).unwrap();
             }
             img
@@ -573,7 +573,7 @@ fn alpha_of(v: u8) -> u8 {
 
 /// Píxel de un modo a partir de un valor pequeño; los de `Rgba` son grises si `v` es par.
 /// En `Indexed`, `v` se reduce módulo la longitud de la paleta (`len`).
-fn pixel_de(mode: Mode, len: usize, v: u8) -> Pixel {
+fn pixel_of(mode: Mode, len: usize, v: u8) -> Pixel {
     match mode {
         Mode::Rgba if v.is_multiple_of(2) => Pixel::Rgba(Rgba::new(v, v, v, alpha_of(v))),
         Mode::Rgba => Pixel::Rgba(Rgba::new(v, v ^ 0x55, v.wrapping_mul(3), alpha_of(v))),
@@ -598,9 +598,9 @@ fn length_of_palette(img: &Image) -> usize {
 /// Un píxel válido (o inválido, si `bad`) para la imagen actual.
 fn pixel_for(img: &Image, v: u8, bad: bool) -> Pixel {
     if bad {
-        pixel_de(other_mode(img.mode()), 8, v)
+        pixel_of(other_mode(img.mode()), 8, v)
     } else {
-        pixel_de(img.mode(), length_of_palette(img), v)
+        pixel_of(img.mode(), length_of_palette(img), v)
     }
 }
 
@@ -838,7 +838,7 @@ fn document_with_history(img: Image, sets: &[(u32, u32, u8)], undo: bool) -> Doc
     let id = ImageId::from_raw(0);
     for &(x, y, v) in sets {
         let img = image_of(&doc);
-        let pixel = pixel_de(img.mode(), length_of_palette(img), v);
+        let pixel = pixel_of(img.mode(), length_of_palette(img), v);
         let (x, y) = (x % img.width(), y % img.height());
         let _ = doc.apply(set(id, x, y, pixel));
     }
@@ -891,7 +891,7 @@ fn prop_atomicity(
         Shape::InBatch(n) => {
             let mut commands: Vec<Command> = (0..*n)
                 .map(|i| {
-                    let pixel = pixel_de(actual.mode(), length_of_palette(&actual), i as u8 + 2);
+                    let pixel = pixel_of(actual.mode(), length_of_palette(&actual), i as u8 + 2);
                     set(id, 0, 0, pixel)
                 })
                 .collect();
@@ -909,7 +909,7 @@ fn prop_atomicity(
             Ok(true) => {
                 // Coste del paso: los bytes de píxeles de la imagen anterior, más una cota
                 // para cabecera y paleta.
-                let previous = bytes_de(&actual);
+                let previous = bytes_of(&actual);
                 let growth = doc.history_bytes() - before.bytes;
                 prop_assert!(
                     (previous..=previous + 2048).contains(&growth),

@@ -106,7 +106,7 @@ fn batch(commands: Vec<Command>) -> Command {
     Command::Batch(commands)
 }
 
-fn pixel_en(doc: &Document, x: u32, y: u32) -> Pixel {
+fn pixel_at(doc: &Document, x: u32, y: u32) -> Pixel {
     image_of(doc).get_pixel(x, y).unwrap()
 }
 
@@ -356,7 +356,7 @@ fn row_03_the_different_previous_value_is_restored() {
     let after_fill = doc.clone();
 
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c2()));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c2()));
     checks_image(&doc, &[(1, 0, c2())], c0());
     assert_eq!(doc, with_a);
 
@@ -426,7 +426,7 @@ fn row_05_no_changes_is_ok_false() {
     assert_eq!(doc.history_bytes(), before.bytes);
     assert_eq!(state(&doc), before);
     assert_eq!(doc.redo(), Ok(()));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
 }
 
 #[test]
@@ -877,8 +877,8 @@ fn row_14_the_cost_does_not_depend_on_the_width() {
         let id = ImageId::from_raw(0);
         let spans = [sp(0, 0, width), sp(1, 0, width), sp(2, 0, width)];
         assert_eq!(doc.apply(fr(id, &spans, c1())), Ok(true));
-        assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
-        assert_eq!(pixel_en(&doc, width - 1, 2), Pixel::Rgba(c1()));
+        assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
+        assert_eq!(pixel_at(&doc, width - 1, 2), Pixel::Rgba(c1()));
         assert_eq!(steps_undoable(&doc), 1);
         doc.history_bytes()
     }
@@ -945,8 +945,8 @@ fn row_15_a_fill_bigger_than_the_limit_is_kept() {
     assert_eq!(doc.apply(fr(id, &[sp(0, 0, 1)], c2())), Ok(true));
     assert_eq!(steps_undoable(&doc), 1);
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
-    assert_eq!(pixel_en(&doc, 3, 2), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(c1()));
+    assert_eq!(pixel_at(&doc, 3, 2), Pixel::Rgba(c1()));
 }
 
 #[test]
@@ -1018,7 +1018,7 @@ fn row_16_index_outside_the_palette() {
             batch(vec![ok, fill(id, &[sp(0, 0, 2)], Pixel::Indexed(index_2))]),
             in_batch(1, expected),
         );
-        assert_eq!(pixel_en(&doc, 3, 2), Pixel::Indexed(0));
+        assert_eq!(pixel_at(&doc, 3, 2), Pixel::Indexed(0));
         assert!(!doc.can_undo());
     }
 }
@@ -1033,10 +1033,10 @@ fn row_16_indexed_1_is_valid_in_a_palette_of_2() {
         doc.apply(fill(id, &[sp(0, 0, 2)], Pixel::Indexed(1))),
         Ok(true)
     );
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Indexed(1));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Indexed(1));
-    assert_eq!(pixel_en(&doc, 2, 0), Pixel::Indexed(0));
-    assert_eq!(pixel_en(&doc, 0, 1), Pixel::Indexed(0));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Indexed(1));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Indexed(1));
+    assert_eq!(pixel_at(&doc, 2, 0), Pixel::Indexed(0));
+    assert_eq!(pixel_at(&doc, 0, 1), Pixel::Indexed(0));
     assert_eq!(doc.undo(), Ok(()));
     assert_eq!(doc, initial);
 
@@ -1053,8 +1053,8 @@ fn row_16_indexed_1_is_valid_in_a_palette_of_2() {
         doc.apply(batch(vec![ok, fill(id, &[sp(0, 0, 2)], Pixel::Indexed(1))])),
         Ok(true)
     );
-    assert_eq!(pixel_en(&doc, 3, 2), Pixel::Indexed(1));
-    assert_eq!(pixel_en(&doc, 1, 0), Pixel::Indexed(1));
+    assert_eq!(pixel_at(&doc, 3, 2), Pixel::Indexed(1));
+    assert_eq!(pixel_at(&doc, 1, 0), Pixel::Indexed(1));
     assert_eq!(steps_undoable(&doc), 1);
     assert_eq!(doc.undo(), Ok(()));
     assert_eq!(doc, initial);
@@ -1087,7 +1087,7 @@ fn checks_row_17(command: Command, expected: &[(u32, u32, Rgba)]) {
     for _ in 0..2 {
         assert_eq!(doc.undo(), Ok(()));
         assert_eq!(doc, original, "{command:?}");
-        assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c1()));
+        assert_eq!(pixel_at(&doc, 1, 0), Pixel::Rgba(c1()));
         assert_eq!(steps_undoable(&doc), 2);
         assert!(doc.can_redo());
 
@@ -1262,7 +1262,7 @@ fn shape(img: &Image) -> Shape {
 
 /// Píxel válido de un modo a partir de un valor pequeño. El 0 coincide con el valor
 /// inicial de la imagen, y los demás se repiten mucho: así abundan los no-ops.
-fn pixel_de(mode: Mode, colors_2: usize, value: u8) -> Pixel {
+fn pixel_of(mode: Mode, colors_2: usize, value: u8) -> Pixel {
     match mode {
         Mode::Rgba if value == 0 => Pixel::Rgba(Rgba::TRANSPARENT),
         Mode::Rgba => Pixel::Rgba(Rgba::new(value, 255 - value, value ^ 5, 255)),
@@ -1445,7 +1445,7 @@ fn set_free(f: Shape, id: ImageId, edits: &[(u32, u32, u8)]) -> Command {
             .map(|&(xb, yb, v)| PixelEdit {
                 x: xb % f.width,
                 y: yb % f.height,
-                pixel: pixel_de(f.mode, f.colors_2, v),
+                pixel: pixel_of(f.mode, f.colors_2, v),
             })
             .collect(),
     }
@@ -1477,7 +1477,7 @@ fn injects(f: Shape, cmd: Command, fail: FailSpan, k: u8) -> Command {
                 FailSpan::ListEmpty => spans.clear(),
                 // La imagen principal es la 0.
                 FailSpan::IdUnknown => image = ImageId::from_raw(1 + k as u32),
-                FailSpan::OtherMode => pixel = pixel_de(other_mode(f.mode, k), 8, k),
+                FailSpan::OtherMode => pixel = pixel_of(other_mode(f.mode, k), 8, k),
                 // En una imagen no indexada esto es un `ModeMismatch`.
                 FailSpan::IndexOutside => {
                     pixel = Pixel::Indexed((f.colors_2 + (k as usize % 4)) as u8)
@@ -1525,7 +1525,7 @@ fn injects(f: Shape, cmd: Command, fail: FailSpan, k: u8) -> Command {
 /// segunda pasada contra las hojas independientes (sin fallos aún: los fallos se inyectan
 /// al final), así que los píxeles sueltos caen dentro de los tramos y al revés.
 fn resolves(f: Shape, id: ImageId, sheets: &[Sheet]) -> Vec<Command> {
-    let pixel = |v: u8| pixel_de(f.mode, f.colors_2, v);
+    let pixel = |v: u8| pixel_of(f.mode, f.colors_2, v);
     let fill_2 = |spans: Vec<Span>, v: u8| Command::FillSpans {
         image: id,
         spans,
@@ -1731,7 +1731,7 @@ fn arb_command(f: Shape, id: ImageId, raw: &ArbRaw) -> Command {
                     x_end: b,
                 })
                 .collect(),
-            pixel: own.map_or(*pixel, |v| pixel_de(f.mode, f.colors_2, v)),
+            pixel: own.map_or(*pixel, |v| pixel_of(f.mode, f.colors_2, v)),
         },
         ArbRaw::Set { id: other, edits } => Command::SetPixels {
             image: other.map_or(id, ImageId::from_raw),
@@ -1740,7 +1740,7 @@ fn arb_command(f: Shape, id: ImageId, raw: &ArbRaw) -> Command {
                 .map(|&(xb, yb, v)| PixelEdit {
                     x: xb,
                     y: yb,
-                    pixel: pixel_de(f.mode, f.colors_2, v),
+                    pixel: pixel_of(f.mode, f.colors_2, v),
                 })
                 .collect(),
         },
@@ -2257,7 +2257,7 @@ proptest! {
         let previous = document_initial(img, &seed);
         let image_2 = image_of(&previous).clone();
         let f = shape(&image_2);
-        let pixel = pixel_de(f.mode, f.colors_2, value);
+        let pixel = pixel_of(f.mode, f.colors_2, value);
         let spans = spans_valid(f, &masks, cut);
         let pixels_2: Vec<PixelEdit> = spans
             .iter()
@@ -2290,7 +2290,7 @@ proptest! {
         value in 0u8..4,
     ) {
         let f = shape(&img);
-        let pixel = pixel_de(f.mode, f.colors_2, value);
+        let pixel = pixel_of(f.mode, f.colors_2, value);
         let spans = spans_valid(f, &masks, cut);
         let half: Vec<Span> = spans
             .iter()
@@ -2587,7 +2587,7 @@ mod limits {
             "InBatch con index 1 y el error del relleno"
         );
         assert_eq!(
-            pixel_en(&doc, 1, 0),
+            pixel_at(&doc, 1, 0),
             Pixel::Rgba(c0()),
             "el píxel de S se revierte"
         );

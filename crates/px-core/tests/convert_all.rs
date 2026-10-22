@@ -151,7 +151,7 @@ struct Snapshot {
 }
 
 impl Snapshot {
-    fn de(doc: &Document) -> Snapshot {
+    fn of(doc: &Document) -> Snapshot {
         Snapshot {
             doc: doc.clone(),
             can_undo_2: doc.can_undo(),
@@ -213,7 +213,7 @@ impl Snapshot {
 
 /// Aplica `cmd`, comprueba el resultado y que nada observable cambió.
 fn without_effect(doc: &mut Document, cmd: Command, expected_2: Result<bool, DocumentError>) {
-    let snapshot = Snapshot::de(doc);
+    let snapshot = Snapshot::of(doc);
     let context = format!("{cmd:?}");
     assert_eq!(doc.apply(cmd), expected_2, "{context}");
     snapshot.assert_equal(doc, &context);
@@ -226,7 +226,7 @@ fn convert_all(target: Mode, allowed: Allowed) -> Command {
 /// Tras un `ConvertAll` con `Ok(true)`: un solo `undo` devuelve lo de antes (documento, ids,
 /// modo y paleta del lienzo, `state_id`) y un `redo` lo de después.
 fn undoes_and_redoes(doc: &mut Document, before: &Snapshot) {
-    let after = Snapshot::de(doc);
+    let after = Snapshot::of(doc);
     doc.undo().expect("deshacer");
     assert_eq!(before.difference_state(doc), None, "tras deshacer");
     assert!(doc.can_redo());
@@ -236,7 +236,7 @@ fn undoes_and_redoes(doc: &mut Document, before: &Snapshot) {
 }
 
 /// El error de un `Result` sin exigir `Debug` al caso `Ok`.
-fn error_de<T>(r: Result<T, ConvertError>) -> ConvertError {
+fn error_of<T>(r: Result<T, ConvertError>) -> ConvertError {
     match r {
         Err(e) => e,
         Ok(_) => panic!("se esperaba un error"),
@@ -341,7 +341,7 @@ fn doc_gray_alpha() -> (Document, [LayerId; 3]) {
 #[test]
 fn row_03_a_rgba_to_gray_alpha_with_luma_in_one_step() {
     let (mut d, [a, b, c]) = doc_three(true);
-    let before = Snapshot::de(&d);
+    let before = Snapshot::of(&d);
     let layers_2 = d.layers().to_vec();
     let original_2: Vec<Option<Image>> =
         layers_2.iter().map(|l| d.image(l.cel()).cloned()).collect();
@@ -405,7 +405,7 @@ fn row_03_b_to_indexed_one_palette_for_all_with_the_transparent_at_0() {
         d.apply(sets(cel_2(&d, c), &[(0, 0, BLUE), (1, 1, GREEN)])),
         Ok(true)
     );
-    let before = Snapshot::de(&d);
+    let before = Snapshot::of(&d);
 
     assert_eq!(
         d.apply(convert_all(Mode::Indexed, Allowed::NOTHING)),
@@ -459,7 +459,7 @@ fn row_03_b_to_indexed_one_palette_for_all_with_the_transparent_at_0() {
 fn row_03_c_gray_alpha_and_indexed_to_rgba() {
     // Grises con alfa -> RGBA.
     let (mut d, [a, b, c]) = doc_gray_alpha();
-    let before = Snapshot::de(&d);
+    let before = Snapshot::of(&d);
     assert_eq!(d.apply(convert_all(Mode::Rgba, Allowed::NOTHING)), Ok(true));
     assert_eq!(d.mode(), Mode::Rgba);
     assert_eq!(d.palette(), None);
@@ -487,7 +487,7 @@ fn row_03_c_gray_alpha_and_indexed_to_rgba() {
         d.apply(set_px(cel_2(&d, c), &[(3, 2, Pixel::Indexed(1))])),
         Ok(true)
     );
-    let before = Snapshot::de(&d);
+    let before = Snapshot::of(&d);
     assert!(before.palette_2.is_some());
     assert_eq!(d.apply(convert_all(Mode::Rgba, Allowed::NOTHING)), Ok(true));
     assert_eq!(d.mode(), Mode::Rgba);
@@ -632,7 +632,7 @@ fn row_03_e_with_one_layer_convert_all_and_convert_mode_give_equal_documents() {
     let b = adds(&mut d, "B", 1);
     assert_eq!(d.apply(Command::RemoveLayer { layer: a }), Ok(true));
     assert_eq!(d.layers().len(), 1);
-    let before = Snapshot::de(&d);
+    let before = Snapshot::of(&d);
     assert_eq!(
         d.apply(convert_all(Mode::GrayAlpha, Allowed::NOTHING)),
         Ok(true)
@@ -701,7 +701,7 @@ fn row_04_a_the_report_sums_all_the_cels() {
     // `analyze_cels` da el mismo informe, y `convert_cels` también al convertir con permiso.
     let size = (d.width(), d.height());
     let cels = cels_2(&d);
-    let e = error_de(analyze_cels(
+    let e = error_of(analyze_cels(
         &cels,
         size,
         Mode::Rgba,
@@ -709,7 +709,7 @@ fn row_04_a_the_report_sums_all_the_cels() {
         Allowed::NOTHING,
     ));
     assert_eq!(e, ConvertError::LossNotAllowed { report: sum });
-    let e = error_de(convert_cels(
+    let e = error_of(convert_cels(
         &cels,
         size,
         Mode::Rgba,
@@ -761,7 +761,7 @@ fn row_04_b_the_union_of_colors_of_all_cels_counts() {
         .expect("cada una cabe");
     let both: Vec<Option<&Image>> = vec![Some(&a), Some(&b)];
     assert_eq!(
-        error_de(analyze_cels(
+        error_of(analyze_cels(
             &both,
             size,
             Mode::Rgba,
@@ -771,7 +771,7 @@ fn row_04_b_the_union_of_colors_of_all_cels_counts() {
         excess
     );
     assert_eq!(
-        error_de(convert_cels(
+        error_of(convert_cels(
             &both,
             size,
             Mode::Rgba,
@@ -821,7 +821,7 @@ fn row_04_b_the_union_of_colors_of_all_cels_counts() {
     assert_eq!(conversion.palette.expect("paleta").len(), 256);
     let cels: Vec<Option<&Image>> = vec![Some(&with_256), None];
     assert_eq!(
-        error_de(convert_cels(
+        error_of(convert_cels(
             &cels,
             (16, 16),
             Mode::Rgba,
@@ -831,7 +831,7 @@ fn row_04_b_the_union_of_colors_of_all_cels_counts() {
         excess
     );
     assert_eq!(
-        error_de(analyze_cels(
+        error_of(analyze_cels(
             &cels,
             (16, 16),
             Mode::Rgba,
@@ -909,7 +909,7 @@ fn row_04_d_convert_cels_and_analyze_cels_direct() {
         height: 32768,
     };
     assert_eq!(
-        error_de(convert_cels(
+        error_of(convert_cels(
             &nothing,
             (32768, 32768),
             Mode::GrayAlpha,
@@ -919,7 +919,7 @@ fn row_04_d_convert_cels_and_analyze_cels_direct() {
         large
     );
     assert_eq!(
-        error_de(analyze_cels(
+        error_of(analyze_cels(
             &nothing,
             (32768, 32768),
             Mode::GrayAlpha,
@@ -1065,7 +1065,7 @@ fn plan_strategy(layers_2: RangeInclusive<usize>) -> impl Strategy<Value = PlanD
         })
 }
 
-fn pixel_de(mode_2: Mode, s: u8, palette_2: usize) -> Pixel {
+fn pixel_of(mode_2: Mode, s: u8, palette_2: usize) -> Pixel {
     let alpha_2 = [0u8, 128, 255, 255][usize::from(s % 4)];
     match mode_2 {
         Mode::Rgba if alpha_2 == 0 => Pixel::Rgba(T),
@@ -1091,7 +1091,7 @@ fn builds(plan: &PlanDoc) -> Document {
         img.set_pixel(
             u32::from(x) % plan.w,
             u32::from(y) % plan.h,
-            pixel_de(mode_2, s, plan.palette_2),
+            pixel_of(mode_2, s, plan.palette_2),
         )
         .expect("píxel de la capa 0");
     }
@@ -1106,7 +1106,7 @@ fn builds(plan: &PlanDoc) -> Document {
                     (
                         u32::from(x) % plan.w,
                         u32::from(y) % plan.h,
-                        pixel_de(mode_2, s, plan.palette_2),
+                        pixel_of(mode_2, s, plan.palette_2),
                     )
                 })
                 .collect();
@@ -1207,7 +1207,7 @@ proptest! {
         for (m, with_luma, alpha_2, background) in steps {
             let target = mode_any(m);
             let allowed = Allowed { luma: with_luma, drop_alpha: alpha_2.then_some([background; 3]) };
-            let before = Snapshot::de(&doc);
+            let before = Snapshot::of(&doc);
 
             // `analyze_cels` y `convert_cels` sobre las celdas de ahora (no se prueba el mismo
             // modo de origen y destino).
@@ -1247,7 +1247,7 @@ proptest! {
                         prop_assert_eq!(doc.image(layer_2.cel()), expected.as_ref());
                     }
                     invariants(&doc)?;
-                    let after = Snapshot::de(&doc);
+                    let after = Snapshot::of(&doc);
                     doc.undo().map_err(|e| TestCaseError::fail(format!("{e:?}")))?;
                     if let Some(reason) = before.difference_state(&doc) {
                         return Err(TestCaseError::fail(format!("tras undo: {reason}")));
@@ -1343,7 +1343,7 @@ fn translates(doc: &Document, op: &Op) -> Command {
                     (
                         u32::from(x) % doc.width(),
                         u32::from(y) % doc.height(),
-                        pixel_de(doc.mode(), s, palette_2),
+                        pixel_of(doc.mode(), s, palette_2),
                     )
                 })
                 .collect();
@@ -1394,11 +1394,11 @@ proptest! {
     ) {
         let mut doc = builds(&plan);
         doc.set_history_limit(usize::MAX);
-        let initial = Snapshot::de(&doc);
+        let initial = Snapshot::of(&doc);
         let mut oks = 0usize;
 
         for order in &ops {
-            let before = Snapshot::de(&doc);
+            let before = Snapshot::of(&doc);
             let result = doc.apply(translates(&doc, order));
             match &result {
                 Ok(true) => {
@@ -1410,7 +1410,7 @@ proptest! {
             }
         }
 
-        let final_ = Snapshot::de(&doc);
+        let final_ = Snapshot::of(&doc);
         for i in 0..oks {
             prop_assert_eq!(doc.undo(), Ok(()), "deshacer {}", i);
         }

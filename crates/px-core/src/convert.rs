@@ -257,7 +257,7 @@ impl Iterator for Pixels<'_> {
 struct PaletteBuilder {
     /// Colores con `a > 0`, en orden de primera aparición.
     colors: Vec<Rgba>,
-    /// `(color empaquetado, posición en `colors`)`, ordenada por el color.
+    /// `(color empaquetado, posición coords_of `colors`)`, ordenada por el color.
     lookup: Vec<(u32, u8)>,
     has_transparent: bool,
 }

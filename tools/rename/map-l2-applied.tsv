@@ -9625,3 +9625,11 @@ id	lee_ok	read_ok	crates/px-formats/
 id	si	enabled	crates/px-formats/
 id	va	value_a	crates/px-formats/tests/aseprite.rs
 id	vb	value_b	crates/px-formats/tests/aseprite.rs
+id	bytes_de	bytes_of	crates/px-core/
+id	de	of	crates/px-core/
+id	di	indexed_doc	crates/px-core/
+id	en	coords_of	crates/px-core/
+id	error_de	error_of	crates/px-core/
+id	pixel_de	pixel_of	crates/px-core/
+id	pixel_en	pixel_at	crates/px-core/
+id	rgba_de	rgba_of	crates/px-core/
