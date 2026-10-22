@@ -316,5 +316,15 @@ Lo que la implementación precisó, sin salirse de `C-01` a `C-04` ni de `F-01` 
 6. **Pruebas anteriores**: además de lo listado, `tiles_tests.rs` (`cargado.image` ⇒ `cargado.document`); `propiedad_1_ida_y_vuelta_por_disco` no cambia (usaba `load_png`, no `Loaded`: el primer commit de adaptación la tocó por error y `e00de4d` lo corrige). Solo firmas y literales.
 7. **Pruebas**: 40 (39 en la ejecución normal y la `#[ignore]` de 2 GiB: 1,1 s en `--release`): `px-core` 4 (con P2), `px-formats` 28 en `aseprite.rs` (con P1, P3, P4 y la `#[ignore]`) y 1 en `aseprite_reserve.rs`, `px-golden` 2, `px-app` 5. Workspace: 4122 pasan (eran 4083), 0 fallan, 23 ignoradas.
 8. **Corpus**: los 29 componen igual que su PNG con tolerancia 0 fuera del dominio de la fórmula empírica de 3.2 y con error ≤ 2 dentro, sin ensancharlo. El bloqueo se confirmó con `capa-bloqueada` (banderas 3, 1, 3 y 0).
-9. **Fuzz**: 60 s con los 29 `.aseprite` como semillas, 520 652 ejecuciones, sin fallos (`docs/FUZZING.md`). La mutación «quitar el tope de 1032×» no la detecta ninguna prueba por resultado (sin él, la descompresión con tope también falla con `CelData`); el tope existe para no descomprimir de más, no para el resultado.
+9. **Fuzz**: 60 s con los 29 `.aseprite` como semillas, 520 652 ejecuciones, sin fallos (`docs/FUZZING.md`). La mutación «quitar el tope de 1032×» no la detectaba ninguna prueba por resultado (sin él, la descompresión con tope también falla con `CelData`); el tope existe para no descomprimir de más, no para el resultado. **Cerrado el 22 de octubre** (ver «Resultados»): una prueba mide el pico de RSS.
 10. **No medido**: tiempo de guardar o abrir un lienzo grande con muchas capas (la compresión es `miniz_oxide` nivel 6, de un solo hilo); si resulta lento, el nivel y el recorte de celdas son las palancas.
+
+## Resultados (2026-10-22)
+
+Después de cerrar la unidad:
+
+- **Fuzz de 10 minutos de `read_aseprite`** (2026-10-22): **578 371 ejecuciones en 601 segundos, sin ningún crash**; `fuzz/artifacts/read_aseprite/` vacío y `golden/` intacto (`git status golden/` limpio). Comando: el de `docs/FUZZING.md` con `-max_total_time=600`:
+  `cargo +nightly fuzz run read_aseprite fuzz/corpus/read_aseprite golden/aseprite -- -rss_limit_mb=4096 -timeout=10 -create_missing_dirs=1 -max_total_time=600`.
+- **Aseprite abre el `.aseprite` que escribe Pixoko** con capas, opacidad, mezclas, visibilidad, bloqueo y paleta correctos (comprobado a mano por el usuario; cierra R2 y R3).
+- **Prueba manual de los 10 pasos y revisión de procedencia**: bien.
+- **Regla de 1032× por celda**: prueba añadida en `crates/px-formats/tests/aseprite_reserve.rs`. Un flujo zlib **válido** de 128 MiB de ceros (unos 130 KB) en una celda que declara 512 MiB (razón de unas 4000×) da `CelData` con un pico de RSS de menos de 32 MiB; el control, el mismo flujo en una celda de 128 MiB, se descomprime (`Ok`) y sube el pico 64 MiB o más. **Mutación**: sin la regla, la prueba falla (el pico sube 254 MiB, con el mismo error `CelData`); restaurada, pasa.

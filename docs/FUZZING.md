@@ -64,4 +64,5 @@ cargo +nightly fuzz run read_aseprite fuzz/corpus/read_aseprite golden/aseprite 
 - Semillas: los 29 `.aseprite` de `golden/aseprite` (el directorio también trae PNG y README, que solo cuentan como entradas inválidas). Añade `-max_total_time=60` para una pasada corta.
 - Misma regla de limpieza: `git status golden/` debe quedar sin cambios al terminar.
 - Una pasada de 60 s al cerrar la unidad: 520 652 ejecuciones, sin fallos. No es puerta del CI.
+- Pasada de 10 minutos (2026-10-22, `-max_total_time=600`): 578 371 ejecuciones en 601 s, sin fallos.
 - `cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check` repite `advisories ok, bans ok, licenses ok, sources ok` (la lista de licencias de `fuzz/deny.toml` no cambia).
