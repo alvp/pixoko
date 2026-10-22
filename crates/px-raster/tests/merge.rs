@@ -517,11 +517,11 @@ struct Vector {
     nombre: &'static str,
     l_modo: BlendMode,
     l_opacidad: u8,
-    l: &'static [Rgba],
+    l: Vec<Rgba>,
     u_modo: BlendMode,
     u_opacidad: u8,
-    u: &'static [Rgba],
-    aseprite: &'static [Rgba],
+    u: Vec<Rgba>,
+    aseprite: Vec<Rgba>,
 }
 
 const L_COMUN: [Rgba; 2] = [c(200, 100, 50, 255), c(200, 100, 50, 100)];
@@ -533,7 +533,7 @@ fn vectores() -> [Vector; 4] {
             nombre: "1: L Normal 128, U Multiplicar 200",
             l_modo: BlendMode::Normal,
             l_opacidad: 128,
-            l: &[
+            l: vec![
                 c(200, 100, 50, 255),
                 c(200, 100, 50, 128),
                 c(0, 0, 0, 0),
@@ -541,13 +541,13 @@ fn vectores() -> [Vector; 4] {
             ],
             u_modo: BlendMode::Multiply,
             u_opacidad: 200,
-            u: &[
+            u: vec![
                 c(100, 200, 255, 255),
                 c(100, 200, 255, 255),
                 c(100, 200, 255, 255),
                 c(100, 200, 255, 100),
             ],
-            aseprite: &[
+            aseprite: vec![
                 c(99, 113, 104, 228),
                 c(99, 148, 165, 214),
                 c(100, 200, 255, 200),
@@ -558,31 +558,31 @@ fn vectores() -> [Vector; 4] {
             nombre: "2: L Multiplicar 255, U Normal 255",
             l_modo: BlendMode::Multiply,
             l_opacidad: 255,
-            l: &L_COMUN,
+            l: L_COMUN.to_vec(),
             u_modo: BlendMode::Normal,
             u_opacidad: 255,
-            u: &U_COMUN,
-            aseprite: &[c(100, 200, 255, 255), c(122, 178, 210, 191)],
+            u: U_COMUN.to_vec(),
+            aseprite: vec![c(100, 200, 255, 255), c(122, 178, 210, 191)],
         },
         Vector {
             nombre: "3: L Trama 128, U Normal 255",
             l_modo: BlendMode::Screen,
             l_opacidad: 128,
-            l: &L_COMUN,
+            l: L_COMUN.to_vec(),
             u_modo: BlendMode::Normal,
             u_opacidad: 255,
-            u: &U_COMUN,
-            aseprite: &[c(100, 200, 255, 255), c(113, 187, 229, 171)],
+            u: U_COMUN.to_vec(),
+            aseprite: vec![c(100, 200, 255, 255), c(113, 187, 229, 171)],
         },
         Vector {
             nombre: "4: L Normal 255, U Multiplicar 100",
             l_modo: BlendMode::Normal,
             l_opacidad: 255,
-            l: &L_COMUN,
+            l: L_COMUN.to_vec(),
             u_modo: BlendMode::Multiply,
             u_opacidad: 100,
-            u: &U_COMUN,
-            aseprite: &[c(153, 92, 50, 255), c(153, 120, 98, 136)],
+            u: U_COMUN.to_vec(),
+            aseprite: vec![c(153, 92, 50, 255), c(153, 120, 98, 136)],
         },
     ]
 }
@@ -595,11 +595,11 @@ fn fila_06_a_los_diez_pixeles_de_aseprite() {
             w,
             1,
             &[
-                Capa::rgba(v.l)
+                Capa::rgba(&v.l)
                     .modo(v.l_modo)
                     .opacidad(v.l_opacidad)
                     .bloqueada(),
-                Capa::rgba(v.u).modo(v.u_modo).opacidad(v.u_opacidad),
+                Capa::rgba(&v.u).modo(v.u_modo).opacidad(v.u_opacidad),
             ],
         );
         let [l, u] = <[LayerId; 2]>::try_from(ids(&doc)).expect("dos capas");
@@ -613,7 +613,7 @@ fn fila_06_a_los_diez_pixeles_de_aseprite() {
         let imagen = f.image.clone().expect("hay imagen");
         assert_eq!(imagen, capas_de(&doc, &[l, u]), "{}", v.nombre);
 
-        for (k, (obtenido, aseprite)) in rgba_de(&imagen).iter().zip(v.aseprite).enumerate() {
+        for (k, (obtenido, aseprite)) in rgba_de(&imagen).iter().zip(&v.aseprite).enumerate() {
             // El fondo ya compuesto (L contra el vacío) y el modo de U fijan el dominio empírico
             // de 3.2: solo ahí se admite ±1 en un canal; el alfa, nunca.
             let alfa_fondo = redondea_255(i128::from(v.l[k].a) * i128::from(v.l_opacidad));

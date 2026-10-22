@@ -535,16 +535,10 @@ struct Informe {
     fallo: Option<String>,
 }
 
-/// Compara `compose` del caso con su PNG: fuera del dominio, tolerancia 0 (el RGB bajo alfa 0 no
+/// Compara la imagen de un caso (`compose`, o lo que deja Aplanar) con su PNG: fuera del dominio, tolerancia 0 (el RGB bajo alfa 0 no
 /// se exige cuando el alfa de la composición y el del PNG son 0); dentro, el alfa es exacto y el
 /// error de cada canal RGB se acumula en el máximo de su grupo (`grupo(x, y)`) y debe ser como
 /// mucho `TOLERANCIA_EMPIRICA`.
-fn evalua(caso: &Caso, grupo: impl Fn(u32, u32) -> usize, grupos: usize) -> Informe {
-    let (compuesto, png) = compuesto_y_png(caso);
-    evalua_imagen(caso, &compuesto, &png, grupo, grupos)
-}
-
-/// Como [`evalua`] con la imagen ya calculada.
 fn evalua_imagen(
     caso: &Caso,
     compuesto: &Image,
@@ -755,6 +749,6 @@ fn fila_08_combinar_abajo_en_las_ocho_matrices_a_tolerancia_0() {
             celda, antes,
             "{nombre}: la matriz de dos capas se combina sin pérdida"
         );
-        exige_igual_imagen(&caso, &celda, &lee_png(nombre));
+        exige_igual_imagen(&caso, &celda, &lee_png(&caso.nombre));
     }
 }

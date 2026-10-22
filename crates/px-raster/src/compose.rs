@@ -14,7 +14,7 @@
 use std::error::Error;
 use std::fmt;
 
-use px_core::{BlendMode, Document, Image, ImageError, Mode, Rgba};
+use px_core::{BlendMode, Document, Image, ImageError, Layer, LayerId, Mode, Rgba};
 
 /// Rectángulo de píxeles del lienzo: esquina superior izquierda y tamaño.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -210,6 +210,28 @@ pub fn compose(doc: &Document) -> Result<Image, ComposeError> {
 /// Recorre las capas visibles con imagen de abajo arriba sobre un solo búfer de salida (el pico
 /// de memoria es la salida). Las celdas vacías y las capas ocultas no cuestan nada.
 pub fn compose_rect(doc: &Document, rect: Rect) -> Result<Image, ComposeError> {
+    compose_rect_of(doc, rect, Layer::visible)
+}
+
+/// La composición de **solo** las capas `layers`, en el orden del documento y **sin mirar su
+/// visibilidad**, sobre vacío (unidad 3.5: es lo que se combina). Con exactamente las capas
+/// visibles es `compose` byte a byte; mismos errores que [`compose_rect`].
+pub fn compose_layers(doc: &Document, layers: &[LayerId]) -> Result<Image, ComposeError> {
+    let rect = Rect {
+        x: 0,
+        y: 0,
+        width: doc.width(),
+        height: doc.height(),
+    };
+    compose_rect_of(doc, rect, |layer| layers.contains(&layer.id()))
+}
+
+/// El bucle de [`compose_rect`] y [`compose_layers`]: compone las capas que cumplen `include`.
+fn compose_rect_of(
+    doc: &Document,
+    rect: Rect,
+    include: impl Fn(&Layer) -> bool,
+) -> Result<Image, ComposeError> {
     if rect.width == 0 || rect.height == 0 {
         return Err(ComposeError::EmptyRect);
     }
@@ -234,7 +256,7 @@ pub fn compose_rect(doc: &Document, rect: Rect) -> Result<Image, ComposeError> {
     let any_visible = doc
         .layers()
         .iter()
-        .any(|layer| layer.visible() && doc.image(layer.cel()).is_some());
+        .any(|layer| include(layer) && doc.image(layer.cel()).is_some());
     if matches!(mode, Mode::Indexed | Mode::Gray) && transparent.is_none() && !any_visible {
         return Err(ComposeError::NoTransparency { mode });
     }
@@ -251,7 +273,7 @@ pub fn compose_rect(doc: &Document, rect: Rect) -> Result<Image, ComposeError> {
     let bpp = mode.bytes_per_pixel();
     let (x0, w) = (rect.x as usize * bpp, rect.width as usize * bpp);
     for layer in doc.layers() {
-        if !layer.visible() {
+        if !include(layer) {
             continue;
         }
         let Some(cel) = doc.image(layer.cel()) else {
