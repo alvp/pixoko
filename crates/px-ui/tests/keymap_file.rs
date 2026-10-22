@@ -65,8 +65,8 @@ fn editable() -> Vec<AppAction> {
 }
 
 /// Asigna una `Press` a una casilla de una acción, resolviendo un conflicto.
-fn assigns(tabla: &Keymap, action: AppAction, slot: Slot, p: Press, reassign: bool) -> Keymap {
-    let mut e = ShortcutEditor::new(action, tabla, Platform::Linux).unwrap();
+fn assigns(table: &Keymap, action: AppAction, slot: Slot, p: Press, reassign: bool) -> Keymap {
+    let mut e = ShortcutEditor::new(action, table, Platform::Linux).unwrap();
     e.begin_capture(slot);
     if let CaptureResult::Pending(_) = e.capture(Capture::Press(p)) {
         e.resolve(reassign);
@@ -427,10 +427,10 @@ proptest! {
     ) {
         let shortcuts = shortcuts_assignable();
         let actions = editable();
-        let mut tabla = default();
+        let mut table = default();
         for (action_2, secondary, shortcut_2, reassign, remove) in steps_2 {
             let action = actions[action_2 % actions.len()];
-            let mut e = ShortcutEditor::new(action, &tabla, Platform::Linux).unwrap();
+            let mut e = ShortcutEditor::new(action, &table, Platform::Linux).unwrap();
             let slot = if secondary { Slot::Secondary } else { Slot::Primary };
             if remove {
                 e.clear(slot);
@@ -442,13 +442,13 @@ proptest! {
                     e.resolve(reassign);
                 }
             }
-            tabla = e.accept();
+            table = e.accept();
         }
-        let text_2 = to_text(&tabla, &default());
+        let text_2 = to_text(&table, &default());
         let l = parse(text_2.as_bytes(), &default());
         prop_assert_eq!((l.ignored_lines, l.dropped_rows), (0, 0), "{}", text_2);
         prop_assert!(l.fatal.is_none());
-        prop_assert_eq!(&l.keymap, &tabla, "{}", text_2);
+        prop_assert_eq!(&l.keymap, &table, "{}", text_2);
     }
 }
 
@@ -462,15 +462,15 @@ fn property_1b_round_trip_with_all_the_combinations_of_the_table() {
     for action in editable() {
         for slot in [Slot::Primary, Slot::Secondary] {
             for p in &shortcuts {
-                let tabla = assigns(&default(), action, slot, *p, true);
-                let text_2 = to_text(&tabla, &default());
+                let table = assigns(&default(), action, slot, *p, true);
+                let text_2 = to_text(&table, &default());
                 let l = parse(text_2.as_bytes(), &default());
                 assert_eq!(
                     (l.ignored_lines, l.dropped_rows, l.fatal),
                     (0, 0, None),
                     "{action:?} {slot:?} {p:?}\n{text_2}"
                 );
-                assert_eq!(l.keymap, tabla, "{action:?} {slot:?} {p:?}\n{text_2}");
+                assert_eq!(l.keymap, table, "{action:?} {slot:?} {p:?}\n{text_2}");
                 checked += 1;
             }
         }

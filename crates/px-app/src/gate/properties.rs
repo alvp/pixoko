@@ -34,7 +34,7 @@ use super::common::*;
 fn cases(de_la_spec: u32) -> u32 {
     std::env::var("PROPTEST_CASES")
         .ok()
-        .and_then(|valor| valor.parse::<u32>().ok())
+        .and_then(|value| value.parse::<u32>().ok())
         .map_or(de_la_spec, |requested| requested.min(de_la_spec))
 }
 
@@ -82,8 +82,8 @@ fn model_random(mode_2: Mode, width: usize, height: usize, seed: u64) -> Model {
         }
         Mode::Indexed => {
             let cap = if r.until(4) == 0 { 40 } else { 8 };
-            let largo = 1 + r.until(cap);
-            m.palette = (0..largo)
+            let length = 1 + r.until(cap);
+            m.palette = (0..length)
                 .map(|_| {
                     [
                         r.until(256) as u8,
@@ -93,9 +93,9 @@ fn model_random(mode_2: Mode, width: usize, height: usize, seed: u64) -> Model {
                     ]
                 })
                 .collect();
-            m.transparent = (r.until(2) == 0).then(|| r.until(largo) as u8);
+            m.transparent = (r.until(2) == 0).then(|| r.until(length) as u8);
             for cel in &mut m.cels {
-                *cel = [r.until(largo) as u8, 0, 0, 0];
+                *cel = [r.until(length) as u8, 0, 0, 0];
             }
         }
         Mode::Gray => {
@@ -136,7 +136,7 @@ fn coord(m: &Model, v: &[u16; 6]) -> (i32, i32) {
     )
 }
 
-fn largo(m: &Model, bits: u16) -> i32 {
+fn length(m: &Model, bits: u16) -> i32 {
     1 + i32::from(bits) % (m.width.max(m.height) as i32 + 3)
 }
 
@@ -154,7 +154,7 @@ fn path_of(m: &Model, v: &[u16; 6]) -> Vec<(i32, i32)> {
     let mut path_2 = vec![point];
     for i in 0..=usize::from(v[5] % 3) {
         let (dx, dy) = DIRECTIONS[usize::from((v[2] >> (3 * i)) % 8)];
-        let n = largo(m, v[3] >> (4 * i));
+        let n = length(m, v[3] >> (4 * i));
         point = (point.0 + dx * n, point.1 + dy * n);
         path_2.push(point);
     }
@@ -170,7 +170,7 @@ fn action(m: &Model, kind: u8, v: &[u16; 6], with_save: bool) -> TestAction {
     let line = || {
         let a = coord(m, v);
         let (dx, dy) = DIRECTIONS[usize::from(v[2] % 8)];
-        let n = largo(m, v[3]);
+        let n = length(m, v[3]);
         TestStep::Line(a, (a.0 + dx * n, a.1 + dy * n), choice_of(m, v[4]))
     };
     let fill = || TestStep::Fill(coord(m, v), choice_of(m, v[4]));
@@ -194,12 +194,12 @@ fn action(m: &Model, kind: u8, v: &[u16; 6], with_save: bool) -> TestAction {
             let start_2 = usize::from(v[0]) % long_palette;
             TestStep::Rotate {
                 start_2: start_2 as u8,
-                largo: (1 + usize::from(v[1]) % (long_palette - start_2)) as u16,
+                length: (1 + usize::from(v[1]) % (long_palette - start_2)) as u16,
                 steps_2: i32::from(v[2] % 7) - 3,
             }
         }
         6 => line(),
-        7 if indexed => TestStep::Mover {
+        7 if indexed => TestStep::Move {
             de: (usize::from(v[0]) % long_palette) as u8,
             a: (usize::from(v[1]) % long_palette) as u8,
         },
@@ -228,7 +228,7 @@ fn save_and_reread(w: &mut World, t: &Work) {
         assert_eq!(saved.path, t.path_2().join("sin-titulo.png"));
     }
     w.mark_saved();
-    let read_2 = leer(&saved.path);
+    let read_2 = read_2_2(&saved.path);
     assert!(read_2.report.is_empty(), "relectura con conversiones");
     assert_equal(&read_2.image, &w.m.normalized(), "relectura tras save");
 }
@@ -360,12 +360,12 @@ proptest! {
                 1 => {
                     let target_2 = if converted_2 { free_copy(&actual) } else { actual.clone() };
                     let saved = save(&mut w.s, t.path_2()).expect("save");
-                    registrar(&mut w, &mut written, &saved, &target_2, converted_2);
+                    register(&mut w, &mut written, &saved, &target_2, converted_2);
                 }
                 2 => {
                     let target_2 = free_copy(&actual);
                     let saved = save_as(&mut w.s, t.path_2()).expect("save_as");
-                    registrar(&mut w, &mut written, &saved, &target_2, false);
+                    register(&mut w, &mut written, &saved, &target_2, false);
                 }
                 _ => {
                     let chosen = t.path_2().join(NAMES[*name_2]);
@@ -381,7 +381,7 @@ proptest! {
                         let copy = converted_2 && target_2 == actual;
                         let expected_2 = if copy { free_copy(&actual) } else { target_2 };
                         let saved = result.expect("save_to");
-                        registrar(&mut w, &mut written, &saved, &expected_2, copy);
+                        register(&mut w, &mut written, &saved, &expected_2, copy);
                     }
                 }
             }
@@ -397,7 +397,7 @@ proptest! {
         without_temporary(&there_is);
         prop_assert_eq!(there_is, expected_2_2_2.into_iter().collect::<Vec<_>>());
         for (path_2, model) in &written {
-            assert_equal(&leer(path_2).image, model, &format!("{}", path_2.display()));
+            assert_equal(&read_2_2(path_2).image, model, &format!("{}", path_2.display()));
         }
         if !written.contains_key(&source_2) {
             prop_assert_eq!(fs::read(&source_2).expect("leer el origen"), bytes_source);
@@ -464,7 +464,7 @@ const NAMES: [&str; 6] = ["a", "b.png", "C.PNG", "con espacios", "d.e", "otra.pn
 
 /// Tras un guardado que salió bien: destino y motivo de copia esperados, `modified` falso y
 /// relectura igual al modelo normalizado.
-fn registrar(
+fn register(
     w: &mut World,
     written: &mut BTreeMap<PathBuf, Model>,
     saved: &Saved,
@@ -477,7 +477,7 @@ fn registrar(
     assert_eq!(w.s.path(), Some(expected_2), "ruta tras guardar");
     assert!(!w.s.converted(), "sigue convertida tras guardar");
     assert_equal(
-        &leer(expected_2).image,
+        &read_2_2(expected_2).image,
         &w.m.normalized(),
         "relectura tras guardar",
     );

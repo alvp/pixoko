@@ -41,7 +41,7 @@ use common::textures::Textures;
 const RED: Rgba = Rgba::opaque(255, 0, 0);
 const GREEN: Rgba = Rgba::opaque(0, 255, 0);
 const BLUE: Rgba = Rgba::opaque(0, 0, 255);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 const YELLOW: Rgba = Rgba::opaque(255, 255, 0);
 const GREEN_YELLOWISH: Rgba = Rgba::opaque(128, 255, 0);
 
@@ -72,7 +72,7 @@ fn image_indexed(
 /// `F` de la spec: indexada de 4×1, paleta `[R, G, B, K]`, píxeles `[0, 1, 2, 3]`, sin
 /// transparente.
 fn image_f() -> Image {
-    image_indexed(4, 1, &[RED, GREEN, BLUE, NEGRO], None, &[0, 1, 2, 3])
+    image_indexed(4, 1, &[RED, GREEN, BLUE, TEST_BLACK], None, &[0, 1, 2, 3])
 }
 
 /// La imagen que queda al aplicar `SetPaletteColor` con `Document` (la referencia del test).
@@ -137,17 +137,17 @@ fn row_04_matches_to_rgba8_of_a_copy_with_set_palette_color() {
     // La paleta de la copia es [R, Y, B, K] y los píxeles siguen siendo [0, 1, 2, 3].
     assert_eq!(
         copy.palette().expect("indexada").colors(),
-        &[RED, YELLOW, BLUE, NEGRO]
+        &[RED, YELLOW, BLUE, TEST_BLACK]
     );
 }
 
 #[test]
 fn row_04_the_used_image_does_not_change() {
     let image_2 = image_f();
-    let antes = image_2.clone();
+    let before = image_2.clone();
     let _ = to_rgba8_with_entry(&image_2, 1, YELLOW);
     let _ = to_rgba8_with_entry(&image_2, 0, Rgba::new(1, 2, 3, 4));
-    assert_eq!(image_2, antes);
+    assert_eq!(image_2, before);
     assert_eq!(image_2.palette().expect("indexada").get(1), Ok(GREEN));
 }
 
@@ -254,7 +254,7 @@ fn a_non_indexed_image_gives_the_bytes_of_to_rgba8() {
         .set_pixel(0, 1, Pixel::GrayAlpha { gray: 5, alpha: 6 })
         .expect("dentro");
     for image_2 in [rgba, gray_2, gray_alpha] {
-        let antes = image_2.clone();
+        let before = image_2.clone();
         for index in [0u8, 1, 255] {
             assert_eq!(
                 to_rgba8_with_entry(&image_2, index, color),
@@ -263,7 +263,7 @@ fn a_non_indexed_image_gives_the_bytes_of_to_rgba8() {
                 image_2.mode()
             );
         }
-        assert_eq!(image_2, antes);
+        assert_eq!(image_2, before);
     }
 }
 
@@ -326,9 +326,9 @@ proptest! {
     fn property_4a_equal_to_to_rgba8_of_the_copy_with_set_palette_color(
         (image_2, index, color) in case()
     ) {
-        let antes = image_2.clone();
+        let before = image_2.clone();
         let obtained = to_rgba8_with_entry(&image_2, index, color);
-        prop_assert_eq!(&image_2, &antes, "la imagen usada no cambia");
+        prop_assert_eq!(&image_2, &before, "la imagen usada no cambia");
 
         let copy = with_set_palette_color(&image_2, index, color);
         prop_assert_eq!(&obtained, &to_rgba8(&copy));
@@ -363,7 +363,7 @@ struct Bench {
     /// Contenido de cada textura, compuesto en orden con los `TexturesDelta` de cada fotograma.
     textures_2: Textures,
     /// Deltas que llegaron en el último fotograma para la textura del lienzo.
-    deltas_ultimo: usize,
+    deltas_last: usize,
 }
 
 impl Bench {
@@ -373,7 +373,7 @@ impl Bench {
             ctx: Context::default(),
             canvas: Canvas::new(),
             textures_2: Textures::new(),
-            deltas_ultimo: 0,
+            deltas_last: 0,
         };
         bench.canvas.set_image(image_2);
         bench.frame();
@@ -397,14 +397,14 @@ impl Bench {
             canvas.show(ui);
         });
         let id = self.canvas.texture_id();
-        self.deltas_ultimo = 0;
+        self.deltas_last = 0;
         for (texture_2, deltas) in &output_2.textures_delta.set {
             for delta in deltas {
                 // Una sola baldosa con la imagen entera visible: cada cambio de valor reconstruye
                 // y sube la baldosa entera (un delta completo), como antes de las baldosas.
                 assert_eq!(delta.pos, None, "el lienzo sube la textura entera");
                 if Some(*texture_2) == id {
-                    self.deltas_ultimo += 1;
+                    self.deltas_last += 1;
                 }
             }
         }
@@ -470,21 +470,18 @@ fn row_19_three_equal_frames_upload_the_new_color_once_another_and_going_back_an
     // Amarillo, tres fotogramas seguidos: una sola subida.
     bench.previews(&image_2, 1, YELLOW);
     assert_eq!(bench.canvas.preview_uploads(), 1);
-    assert_eq!(
-        bench.deltas_ultimo, 1,
-        "el primer fotograma sube la textura"
-    );
+    assert_eq!(bench.deltas_last, 1, "el primer fotograma sube la textura");
     assert_eq!(bench.texture_2(), expected_with(&image_2, 1, YELLOW));
     for _ in 0..2 {
         bench.previews(&image_2, 1, YELLOW);
         assert_eq!(bench.canvas.preview_uploads(), 1, "el valor se repite");
-        assert_eq!(bench.deltas_ultimo, 0, "y no llega nada a la GPU");
+        assert_eq!(bench.deltas_last, 0, "y no llega nada a la GPU");
     }
     assert_eq!(bench.texture_2(), expected_with(&image_2, 1, YELLOW));
 
     // Fotogramas sin llamar a `preview_entry`: nada se vuelve a subir.
     bench.frame();
-    assert_eq!(bench.deltas_ultimo, 0);
+    assert_eq!(bench.deltas_last, 0);
     assert_eq!(bench.canvas.preview_uploads(), 1);
 
     // Un color nuevo: +1.
@@ -553,7 +550,7 @@ fn row_19_cancelling_with_end_preview_restores_the_document_bytes() {
 
     // Un segundo `end_preview` ya no hay vista previa: no sube nada.
     bench.the_preview_ends(&image_2);
-    assert_eq!(bench.deltas_ultimo, 0);
+    assert_eq!(bench.deltas_last, 0);
     assert_eq!(bench.texture_2(), expected(&image_2));
     assert_eq!(bench.canvas.preview_uploads(), 1);
 }
@@ -579,13 +576,13 @@ fn row_19_without_a_previous_preview_entry_end_preview_uploads_nothing() {
     let image_2 = image_f();
     let mut bench = Bench::with_image(&image_2);
     bench.the_preview_ends(&image_2);
-    assert_eq!(bench.deltas_ultimo, 0, "no llega ningún delta a la GPU");
+    assert_eq!(bench.deltas_last, 0, "no llega ningún delta a la GPU");
     assert_eq!(bench.canvas.preview_uploads(), 0);
     assert_eq!(bench.texture_2(), expected(&image_2));
     // Varias veces, también sin pánico.
     for _ in 0..3 {
         bench.the_preview_ends(&image_2);
-        assert_eq!(bench.deltas_ultimo, 0);
+        assert_eq!(bench.deltas_last, 0);
     }
 }
 
@@ -602,7 +599,7 @@ fn row_19_set_image_returns_the_texture_to_the_document() {
 
     // Ya no hay vista previa que terminar.
     bench.the_preview_ends(&image_2);
-    assert_eq!(bench.deltas_ultimo, 0);
+    assert_eq!(bench.deltas_last, 0);
     assert_eq!(bench.texture_2(), expected(&image_2));
 
     // Y el amarillo vuelve a ser un cambio respecto a lo último subido.
@@ -663,6 +660,6 @@ fn row_19_on_the_transparent_the_pixel_stays_with_alpha_0() {
         2,
         "el alfa guardado de la transparente no cambia lo que se ve"
     );
-    assert_eq!(bench.deltas_ultimo, 0);
+    assert_eq!(bench.deltas_last, 0);
     assert_eq!(bench.texture_2()[2].a(), 0);
 }

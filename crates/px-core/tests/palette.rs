@@ -18,7 +18,7 @@ fn traits_derived() {
 }
 
 #[test]
-fn max_colors_vale_256() {
+fn max_colors_is_256() {
     assert_eq!(Palette::MAX_COLORS, 256);
 }
 
@@ -136,9 +136,9 @@ fn push_with_255_and_with_256() {
     assert_eq!(p.push(c0()), Ok(255));
     assert_eq!(p.len(), 256);
 
-    let antes = p.clone();
+    let before = p.clone();
     assert_eq!(p.push(c1()), Err(PaletteError::TooManyColors));
-    assert_eq!(p, antes);
+    assert_eq!(p, before);
 }
 
 #[test]
@@ -147,9 +147,9 @@ fn set_replaces_or_fails_without_changes() {
     assert_eq!(p.set(1, c2()), Ok(()));
     assert_eq!(p.colors(), &[c0(), c2()]);
 
-    let antes = p.clone();
+    let before = p.clone();
     assert_eq!(p.set(2, c2()), Err(out_of_range(2, 2)));
-    assert_eq!(p, antes);
+    assert_eq!(p, before);
 }
 
 #[test]
@@ -166,10 +166,10 @@ fn set_transparent_index_out_of_range_keeps_the_previous() {
     assert_eq!(p.transparent_index(), None);
 
     p.set_transparent_index(Some(0)).unwrap();
-    let antes = p.clone();
+    let before = p.clone();
     assert_eq!(p.set_transparent_index(Some(2)), Err(out_of_range(2, 2)));
     assert_eq!(p.transparent_index(), Some(0));
-    assert_eq!(p, antes);
+    assert_eq!(p, before);
 
     let mut empty = Palette::new();
     assert_eq!(
@@ -266,35 +266,35 @@ fn operation() -> impl Strategy<Value = Op> {
 }
 
 fn applies(p: &mut Palette, op: &Op) -> Result<(), TestCaseError> {
-    let antes = p.clone();
-    let len_antes = antes.len();
+    let before = p.clone();
+    let len_before = before.len();
     match *op {
         Op::Push(c) => match p.push(c) {
             Ok(i) => {
-                prop_assert_eq!(i as usize, len_antes);
-                prop_assert_eq!(&p.colors()[..len_antes], antes.colors());
-                prop_assert_eq!(p.colors()[len_antes], c);
-                prop_assert_eq!(p.transparent_index(), antes.transparent_index());
+                prop_assert_eq!(i as usize, len_before);
+                prop_assert_eq!(&p.colors()[..len_before], before.colors());
+                prop_assert_eq!(p.colors()[len_before], c);
+                prop_assert_eq!(p.transparent_index(), before.transparent_index());
             }
-            Err(_) => prop_assert_eq!(&*p, &antes),
+            Err(_) => prop_assert_eq!(&*p, &before),
         },
         Op::Set(i, c) => match p.set(i, c) {
             Ok(()) => {
-                prop_assert_eq!(p.len(), len_antes);
-                for k in (0..len_antes).filter(|&k| k != i as usize) {
-                    prop_assert_eq!(p.colors()[k], antes.colors()[k]);
+                prop_assert_eq!(p.len(), len_before);
+                for k in (0..len_before).filter(|&k| k != i as usize) {
+                    prop_assert_eq!(p.colors()[k], before.colors()[k]);
                 }
                 prop_assert_eq!(p.get(i), Ok(c));
-                prop_assert_eq!(p.transparent_index(), antes.transparent_index());
+                prop_assert_eq!(p.transparent_index(), before.transparent_index());
             }
-            Err(_) => prop_assert_eq!(&*p, &antes),
+            Err(_) => prop_assert_eq!(&*p, &before),
         },
         Op::Transparent(t) => match p.set_transparent_index(t) {
             Ok(()) => {
-                prop_assert_eq!(p.colors(), antes.colors());
+                prop_assert_eq!(p.colors(), before.colors());
                 prop_assert_eq!(p.transparent_index(), t);
             }
-            Err(_) => prop_assert_eq!(&*p, &antes),
+            Err(_) => prop_assert_eq!(&*p, &before),
         },
     }
     prop_assert!(p.len() <= Palette::MAX_COLORS);
@@ -350,14 +350,14 @@ proptest! {
     fn push_until_fill(v in colors_2(0..=300)) {
         let mut p = Palette::new();
         for (k, c) in v.iter().enumerate() {
-            let antes = p.clone();
+            let before = p.clone();
             let r = p.push(*c);
             if k < Palette::MAX_COLORS {
                 prop_assert_eq!(r, Ok(k as u8));
                 prop_assert_eq!(p.colors()[k], *c);
             } else {
                 prop_assert_eq!(r, Err(PaletteError::TooManyColors));
-                prop_assert_eq!(&p, &antes);
+                prop_assert_eq!(&p, &before);
             }
         }
         prop_assert_eq!(p.len(), v.len().min(Palette::MAX_COLORS));
@@ -372,20 +372,20 @@ proptest! {
     ) {
         let mut p = Palette::from_colors(v).unwrap();
         let _ = p.set_transparent_index(transparent);
-        let antes = p.clone();
+        let before = p.clone();
         let len = p.len();
         let r = p.set(index, new);
         if (index as usize) < len {
             prop_assert_eq!(r, Ok(()));
             prop_assert_eq!(p.get(index), Ok(new));
             prop_assert_eq!(p.len(), len);
-            prop_assert_eq!(p.transparent_index(), antes.transparent_index());
+            prop_assert_eq!(p.transparent_index(), before.transparent_index());
             for k in (0..len).filter(|&k| k != index as usize) {
-                prop_assert_eq!(p.colors()[k], antes.colors()[k]);
+                prop_assert_eq!(p.colors()[k], before.colors()[k]);
             }
         } else {
             prop_assert_eq!(r, Err(PaletteError::IndexOutOfRange { index, len }));
-            prop_assert_eq!(&p, &antes);
+            prop_assert_eq!(&p, &before);
         }
     }
 
@@ -397,7 +397,7 @@ proptest! {
     ) {
         let mut p = Palette::from_colors(v).unwrap();
         let _ = p.set_transparent_index(previous);
-        let antes = p.clone();
+        let before = p.clone();
         let len = p.len();
 
         let r = p.set_transparent_index(Some(index));
@@ -406,8 +406,8 @@ proptest! {
             prop_assert_eq!(p.transparent_index(), Some(index));
         } else {
             prop_assert_eq!(r, Err(PaletteError::IndexOutOfRange { index, len }));
-            prop_assert_eq!(p.transparent_index(), antes.transparent_index());
-            prop_assert_eq!(&p, &antes);
+            prop_assert_eq!(p.transparent_index(), before.transparent_index());
+            prop_assert_eq!(&p, &before);
         }
 
         let t = p.transparent_index();

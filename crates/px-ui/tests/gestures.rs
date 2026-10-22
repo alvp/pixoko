@@ -111,11 +111,11 @@ fn scheme() -> Vec<GestureRow> {
 
 #[test]
 fn row_1_the_default_table_is_the_ten_rows_without_clashes() {
-    let tabla = GestureMap::default_scheme();
-    assert_eq!(tabla.rows(), scheme().as_slice());
-    assert!(tabla.conflicts().is_empty());
+    let table = GestureMap::default_scheme();
+    assert_eq!(table.rows(), scheme().as_slice());
+    assert!(table.conflicts().is_empty());
     for platform_2 in PLATFORMS {
-        let active = tabla
+        let active = table
             .rows()
             .iter()
             .filter(|f| f.active.includes(platform_2))
@@ -129,14 +129,14 @@ fn row_1_the_default_table_is_the_ten_rows_without_clashes() {
 #[test]
 fn row_2_resolving_the_five_buttons_with_all_the_modifiers() {
     use GestureAction::*;
-    let tabla = GestureMap::default_scheme();
+    let table = GestureMap::default_scheme();
     for platform_2 in PLATFORMS {
         for command in [false, true] {
             for shift in [false, true] {
                 for space in [false, true] {
                     for over in [false, true] {
                         let r = |b: Button| {
-                            tabla.resolve(
+                            table.resolve(
                                 &p(Input::Press(b), command, shift, space),
                                 over,
                                 platform_2,
@@ -160,11 +160,11 @@ fn row_2_resolving_the_five_buttons_with_all_the_modifiers() {
 #[test]
 fn row_2_wheel_scroll_and_pinch() {
     use GestureAction::*;
-    let tabla = GestureMap::default_scheme();
+    let table = GestureMap::default_scheme();
     for shift in [false, true] {
         for space in [false, true] {
             let wheel = |command| {
-                tabla.resolve(
+                table.resolve(
                     &p(Input::Wheel, command, shift, space),
                     true,
                     Platform::Linux,
@@ -173,7 +173,7 @@ fn row_2_wheel_scroll_and_pinch() {
             assert_eq!(wheel(false), Some(if shift { PanX } else { ZoomStep }));
             assert_eq!(wheel(true), None, "con command es del pellizco");
             let fingers = |command| {
-                tabla.resolve(
+                table.resolve(
                     &p(Input::Scroll, command, shift, space),
                     true,
                     Platform::Mac,
@@ -182,7 +182,7 @@ fn row_2_wheel_scroll_and_pinch() {
             assert_eq!(fingers(false), Some(Pan));
             assert_eq!(fingers(true), None);
             for command in [false, true] {
-                let pinch = tabla.resolve(
+                let pinch = table.resolve(
                     &p(Input::Pinch, command, shift, space),
                     true,
                     Platform::Windows,
@@ -193,7 +193,7 @@ fn row_2_wheel_scroll_and_pinch() {
     }
     // Fuera del lienzo no valen las filas del lienzo.
     assert_eq!(
-        tabla.resolve(
+        table.resolve(
             &p(Input::Wheel, false, false, false),
             false,
             Platform::Linux
@@ -201,7 +201,7 @@ fn row_2_wheel_scroll_and_pinch() {
         None
     );
     assert_eq!(
-        tabla.resolve(
+        table.resolve(
             &p(Input::Pinch, false, false, false),
             false,
             Platform::Linux
@@ -360,22 +360,22 @@ fn row_4_the_non_finite_ones_are_ignored() {
 
 #[test]
 fn row_9_reassigning_to_any_action_of_the_keyboard_table() {
-    let tabla = GestureMap::new(vec![row_2(
+    let table = GestureMap::new(vec![row_2(
         Input::Press(Button::Back),
         mods(None, None, None),
         GestureAction::App(AppAction::ColorNext),
         Scope::Window,
     )]);
     assert_eq!(
-        tabla.resolve(
+        table.resolve(
             &p(Input::Press(Button::Back), false, false, false),
             false,
             Platform::Linux
         ),
         Some(GestureAction::App(AppAction::ColorNext))
     );
-    assert!(tabla.conflicts().is_empty());
-    assert_eq!(tabla.rows().len(), 1);
+    assert!(table.conflicts().is_empty());
+    assert_eq!(table.rows().len(), 1);
 }
 
 #[test]
@@ -511,19 +511,19 @@ proptest! {
         command: bool, shift: bool, space: bool, over: bool,
         platform_2 in prop::sample::select(PLATFORMS.to_vec()),
     ) {
-        let tabla = GestureMap::default_scheme();
-        let inverse = GestureMap::new(tabla.rows().iter().rev().cloned().collect());
-        prop_assert!(tabla.conflicts().is_empty());
+        let table = GestureMap::default_scheme();
+        let inverse = GestureMap::new(table.rows().iter().rev().cloned().collect());
+        prop_assert!(table.conflicts().is_empty());
         let point = p(input, command, shift, space);
-        let result = tabla.resolve(&point, over, platform_2);
+        let result = table.resolve(&point, over, platform_2);
         prop_assert_eq!(result, inverse.resolve(&point, over, platform_2));
         prop_assert_eq!(result, oracle(&point, over));
     }
 
     #[test]
     fn property_1_each_row_is_reachable(index_2 in 0usize..10) {
-        let tabla = GestureMap::default_scheme();
-        let f = &tabla.rows()[index_2];
+        let table = GestureMap::default_scheme();
+        let f = &table.rows()[index_2];
         let point = Pointing {
             input: f.input,
             command: f.mods.command.unwrap_or(false),
@@ -531,7 +531,7 @@ proptest! {
             space: f.mods.space.unwrap_or(false),
         };
         for platform_2 in PLATFORMS {
-            prop_assert_eq!(tabla.resolve(&point, true, platform_2), Some(f.action));
+            prop_assert_eq!(table.resolve(&point, true, platform_2), Some(f.action));
         }
     }
 

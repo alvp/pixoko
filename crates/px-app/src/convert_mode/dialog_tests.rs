@@ -202,7 +202,7 @@ const ACTIVE: Rgba = Rgba::opaque(0x12, 0x34, 0x56);
 
 // --- Eventos sintéticos ---
 
-fn mover(pos: Pos2) -> InputEvent {
+fn move_pointer(pos: Pos2) -> InputEvent {
     InputEvent::PointerMoved(pos)
 }
 
@@ -444,7 +444,7 @@ struct Bench {
     trace: Vec<(bool, Option<Id>)>,
     /// El fotograma (índice en `trace`) en que `show_dialog` pintó el diálogo por primera vez.
     open_in: Option<usize>,
-    ultimo: Painted,
+    last_2_2: Painted,
 }
 
 impl Bench {
@@ -466,7 +466,7 @@ impl Bench {
             cancelled: 0,
             trace: Vec::new(),
             open_in: None,
-            ultimo: Painted::default(),
+            last_2_2: Painted::default(),
         }
     }
 
@@ -581,7 +581,7 @@ impl Bench {
         }
         self.trace
             .push((self.modal.is_open(), self.ctx.memory(|m| m.focused())));
-        self.ultimo = painted(&shapes);
+        self.last_2_2 = painted(&shapes);
     }
 
     fn rest(&mut self) {
@@ -592,7 +592,7 @@ impl Bench {
 
     /// Mueve, pulsa y suelta en `pos`: tres fotogramas, como los entrega winit.
     fn click(&mut self, pos: Pos2) {
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         self.frame(vec![button_2(pos, true)]);
         self.frame(vec![button_2(pos, false)]);
     }
@@ -607,10 +607,14 @@ impl Bench {
 
     /// El centro del texto visible `searched`: el exacto y, si no hay, el primero que lo contiene.
     fn center_of(&self, searched: &str) -> Pos2 {
-        self.ultimo
+        self.last_2_2
             .exact(searched)
-            .or_else(|| self.ultimo.visible().find(|t| t.text_2.contains(searched)))
-            .unwrap_or_else(|| panic!("no se pinta {searched:?}; hay {:?}", self.ultimo.list()))
+            .or_else(|| {
+                self.last_2_2
+                    .visible()
+                    .find(|t| t.text_2.contains(searched))
+            })
+            .unwrap_or_else(|| panic!("no se pinta {searched:?}; hay {:?}", self.last_2_2.list()))
             .rect()
             .center()
     }
@@ -627,14 +631,14 @@ impl Bench {
         self.rest();
         self.click_in("Imagen");
         assert!(
-            self.ultimo.exact("Convertir modo…").is_some(),
+            self.last_2_2.exact("Convertir modo…").is_some(),
             "el menú Imagen muestra la entrada; hay {:?}",
-            self.ultimo.list()
+            self.last_2_2.list()
         );
         assert!(
-            !self.ultimo.contains("Ctrl+") && !self.ultimo.contains("Cmd+"),
+            !self.last_2_2.contains("Ctrl+") && !self.last_2_2.contains("Cmd+"),
             "la entrada no tiene atajo; hay {:?}",
-            self.ultimo.list()
+            self.last_2_2.list()
         );
         let input = self.center_of("Convertir modo…");
         self.click(input);
@@ -694,9 +698,9 @@ impl Bench {
     }
 
     fn accept_disabled(&self) -> bool {
-        self.ultimo
+        self.last_2_2
             .exact("Aceptar")
-            .unwrap_or_else(|| panic!("no se pinta Aceptar; hay {:?}", self.ultimo.list()))
+            .unwrap_or_else(|| panic!("no se pinta Aceptar; hay {:?}", self.last_2_2.list()))
             .disabled()
     }
 
@@ -734,7 +738,7 @@ impl Bench {
             self.accepted.len(),
             self.cancelled,
             self.focus,
-            self.ultimo.list()
+            self.last_2_2.list()
         )
     }
 }
@@ -818,14 +822,14 @@ fn row_11_the_dialog_paints_title_targets_footer_and_buttons_at_both_windows() {
                 expected_2_2_2.extend(targets_2(from).into_iter().map(name_of));
                 for text_2 in expected_2_2_2 {
                     assert!(
-                        b.ultimo.exact(text_2).is_some(),
+                        b.last_2_2.exact(text_2).is_some(),
                         "ppp {ppp} {window:?} {from:?}: falta {text_2:?}; hay {:?}",
-                        b.ultimo.list()
+                        b.last_2_2.list()
                     );
                 }
                 // El modo actual no se ofrece: ni siquiera como opción.
                 assert!(
-                    b.ultimo.exact(name_of(from)).is_none(),
+                    b.last_2_2.exact(name_of(from)).is_none(),
                     "ppp {ppp} {window:?} {from:?}: se ofrece el modo actual"
                 );
             }
@@ -845,15 +849,15 @@ fn row_11_with_the_default_target_all_sources_have_accept_active_and_their_repor
         ] {
             let b = Bench::open(ppp, Window::Large, from);
             assert!(
-                b.ultimo.contains(expected_2),
+                b.last_2_2.contains(expected_2),
                 "ppp {ppp} {from:?}: falta {expected_2:?}; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert!(!b.accept_disabled(), "ppp {ppp} {from:?}");
             assert!(
-                !b.ultimo.contains(ERROR_PREFIX),
+                !b.last_2_2.contains(ERROR_PREFIX),
                 "ppp {ppp} {from:?}: no hay motivo; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert_eq!(b.count.calls, 1, "ppp {ppp} {from:?}: una llamada al abrir");
         }
@@ -871,7 +875,7 @@ fn row_11_the_report_changes_when_the_target_changes_and_only_then_recomputes() 
         let context = format!("ppp {ppp}");
         assert_eq!(b.count.calls, 1, "{context}: al abrir");
         assert!(
-            b.ultimo
+            b.last_2_2
                 .contains("Sin pérdidas. Paleta nueva de 4 colores."),
             "{context}"
         );
@@ -879,11 +883,11 @@ fn row_11_the_report_changes_when_the_target_changes_and_only_then_recomputes() 
         b.chooses_target(Mode::GrayAlpha);
         assert_eq!(b.count.calls, 2, "{context}: un destino nuevo");
         assert!(
-            b.ultimo.contains("Pierde el color en 3 píxeles."),
+            b.last_2_2.contains("Pierde el color en 3 píxeles."),
             "{context}: hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
-        assert!(!b.ultimo.contains("Paleta nueva"), "{context}");
+        assert!(!b.last_2_2.contains("Paleta nueva"), "{context}");
 
         // Reposo, casilla y clics en los demás campos: ningún cálculo más.
         b.rest();
@@ -896,18 +900,18 @@ fn row_11_the_report_changes_when_the_target_changes_and_only_then_recomputes() 
         b.chooses_target(Mode::Gray);
         assert_eq!(b.count.calls, 3, "{context}");
         assert!(
-            b.ultimo.contains("Pierde el color en 3 píxeles."),
+            b.last_2_2.contains("Pierde el color en 3 píxeles."),
             "{context}"
         );
         assert!(
-            b.ultimo.contains("Pierde el alfa en 2 píxeles."),
+            b.last_2_2.contains("Pierde el alfa en 2 píxeles."),
             "{context}"
         );
 
         b.chooses_target(Mode::Indexed);
         assert_eq!(b.count.calls, 4, "{context}");
         assert!(
-            b.ultimo
+            b.last_2_2
                 .contains("Sin pérdidas. Paleta nueva de 4 colores."),
             "{context}"
         );
@@ -999,14 +1003,14 @@ fn row_11_the_report_of_each_source_and_target_says_what_it_would_lose() {
             }
             for line in must {
                 assert!(
-                    b.ultimo.contains(line),
+                    b.last_2_2.contains(line),
                     "ppp {ppp} {from:?} a {target_2:?}: falta {line:?}; hay {:?}",
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
             }
             for line in not_must {
                 assert!(
-                    !b.ultimo.contains(line),
+                    !b.last_2_2.contains(line),
                     "ppp {ppp} {from:?} a {target_2:?}: sobra {line:?}"
                 );
             }
@@ -1029,9 +1033,9 @@ fn row_11_with_a_target_that_needs_permission_accept_is_dimmed_with_the_reason_v
                 b.chooses_target(Mode::GrayAlpha);
                 assert!(b.accept_disabled(), "{context}: falta el permiso");
                 assert!(
-                    b.ultimo.contains("falta: permitir perder el color"),
+                    b.last_2_2.contains("falta: permitir perder el color"),
                     "{context}: el motivo del pie es visible; hay {:?}",
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
                 assert_eq!(
                     b.dialog().block(),
@@ -1048,16 +1052,16 @@ fn row_11_with_a_target_that_needs_permission_accept_is_dimmed_with_the_reason_v
                 );
                 assert!(!b.accept_disabled(), "{context}: con la casilla marcada");
                 assert!(
-                    !b.ultimo.contains(ERROR_PREFIX),
+                    !b.last_2_2.contains(ERROR_PREFIX),
                     "{context}: ya no hay motivo; hay {:?}",
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
 
                 // Y desmarcarla lo vuelve a atenuar.
                 b.click_in(BOX);
                 assert!(b.accept_disabled(), "{context}");
                 assert!(
-                    b.ultimo.contains("falta: permitir perder el color"),
+                    b.last_2_2.contains("falta: permitir perder el color"),
                     "{context}"
                 );
             }
@@ -1073,10 +1077,11 @@ fn row_11_gray_asks_for_the_box_and_the_background_and_each_alpha_option_covers_
         b.chooses_target(Mode::Gray);
         assert!(b.accept_disabled(), "{}", context("sin nada"));
         assert!(
-            b.ultimo.contains("falta: perder el color; fondo del alfa"),
+            b.last_2_2
+                .contains("falta: perder el color; fondo del alfa"),
             "{}: {:?}",
             context("faltan la casilla y el fondo"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
 
         b.click_in(BOX);
@@ -1086,10 +1091,10 @@ fn row_11_gray_asks_for_the_box_and_the_background_and_each_alpha_option_covers_
             context("con la casilla y sin fondo")
         );
         assert!(
-            b.ultimo.contains("falta: elegir el fondo del alfa"),
+            b.last_2_2.contains("falta: elegir el fondo del alfa"),
             "{}: {:?}",
             context("falta el fondo"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
 
         for (option, background_2) in [
@@ -1099,12 +1104,12 @@ fn row_11_gray_asks_for_the_box_and_the_background_and_each_alpha_option_covers_
         ] {
             b.click_in(option);
             assert!(!b.accept_disabled(), "{}", context(option));
-            assert!(!b.ultimo.contains(ERROR_PREFIX), "{}", context(option));
+            assert!(!b.last_2_2.contains(ERROR_PREFIX), "{}", context(option));
             assert!(
-                b.ultimo.contains(background_2),
+                b.last_2_2.contains(background_2),
                 "{}: falta {background_2:?}; hay {:?}",
                 context(option),
-                b.ultimo.list()
+                b.last_2_2.list()
             );
         }
         assert_eq!(
@@ -1117,7 +1122,7 @@ fn row_11_gray_asks_for_the_box_and_the_background_and_each_alpha_option_covers_
         // «No perder el alfa» vuelve a pedir el fondo.
         b.click_in("No perder el alfa");
         assert!(b.accept_disabled());
-        assert!(b.ultimo.contains("falta: elegir el fondo del alfa"));
+        assert!(b.last_2_2.contains("falta: elegir el fondo del alfa"));
     }
 }
 
@@ -1143,12 +1148,12 @@ fn row_11_an_active_color_with_alpha_or_without_color_dims_accept_with_its_reaso
             b.click_in("Fondo: el color activo");
             assert!(b.accept_disabled(), "ppp {ppp} {active_2:?}");
             assert!(
-                b.ultimo.contains(reason_2),
+                b.last_2_2.contains(reason_2),
                 "ppp {ppp} {active_2:?}: falta {reason_2:?}; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert!(
-                !b.ultimo.contains("Fondo del alfa"),
+                !b.last_2_2.contains("Fondo del alfa"),
                 "ppp {ppp} {active_2:?}: no hay fondo válido"
             );
             // Otro fondo lo resuelve.
@@ -1171,7 +1176,7 @@ fn row_11_the_alpha_group_shows_only_with_a_gray_target_and_the_hexadecimal_only
             // Destino por defecto: ni casilla, ni grupo del alfa, ni hexadecimal.
             for text_2 in [BOX, ALPHA_LABEL, "Color"] {
                 assert!(
-                    b.ultimo.exact(text_2).is_none(),
+                    b.last_2_2.exact(text_2).is_none(),
                     "{}: {text_2}",
                     context("por defecto")
                 );
@@ -1182,12 +1187,12 @@ fn row_11_the_alpha_group_shows_only_with_a_gray_target_and_the_hexadecimal_only
             if from != Mode::GrayAlpha {
                 b.chooses_target(Mode::GrayAlpha);
                 assert!(
-                    b.ultimo.exact(BOX).is_some(),
+                    b.last_2_2.exact(BOX).is_some(),
                     "{}",
                     context("Gris con alfa")
                 );
                 assert!(
-                    b.ultimo.exact(ALPHA_LABEL).is_none(),
+                    b.last_2_2.exact(ALPHA_LABEL).is_none(),
                     "{}",
                     context("Gris con alfa")
                 );
@@ -1196,23 +1201,27 @@ fn row_11_the_alpha_group_shows_only_with_a_gray_target_and_the_hexadecimal_only
 
             // A Gris: el grupo del alfa con sus cinco opciones y, desde RGBA e indexado, la casilla.
             b.chooses_target(Mode::Gray);
-            assert!(b.ultimo.exact(ALPHA_LABEL).is_some(), "{}", context("Gris"));
+            assert!(
+                b.last_2_2.exact(ALPHA_LABEL).is_some(),
+                "{}",
+                context("Gris")
+            );
             for option in OPTIONS_OF_THE_ALPHA {
                 assert!(
-                    b.ultimo.exact(option).is_some(),
+                    b.last_2_2.exact(option).is_some(),
                     "{}: falta {option:?}; hay {:?}",
                     context("Gris"),
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
             }
             assert_eq!(
-                b.ultimo.exact(BOX).is_some(),
+                b.last_2_2.exact(BOX).is_some(),
                 from != Mode::GrayAlpha,
                 "{}",
                 context("la casilla solo desde RGBA e indexado")
             );
             assert!(
-                b.ultimo.exact("Color").is_none(),
+                b.last_2_2.exact("Color").is_none(),
                 "{}",
                 context("sin la opción del hexadecimal")
             );
@@ -1226,15 +1235,15 @@ fn row_11_the_alpha_group_shows_only_with_a_gray_target_and_the_hexadecimal_only
                 context("hexadecimal")
             );
             assert!(
-                b.ultimo.exact("Color").is_some(),
+                b.last_2_2.exact("Color").is_some(),
                 "{}",
                 context("hexadecimal")
             );
             assert!(
-                b.ultimo.contains("#808080"),
+                b.last_2_2.contains("#808080"),
                 "{}: nace en gris medio; hay {:?}",
                 context("hexadecimal"),
-                b.ultimo.list()
+                b.last_2_2.list()
             );
 
             // Otra opción lo oculta.
@@ -1245,7 +1254,7 @@ fn row_11_the_alpha_group_shows_only_with_a_gray_target_and_the_hexadecimal_only
                 context("otra opción")
             );
             assert!(
-                b.ultimo.exact("Color").is_none(),
+                b.last_2_2.exact("Color").is_none(),
                 "{}",
                 context("otra opción")
             );
@@ -1254,12 +1263,12 @@ fn row_11_the_alpha_group_shows_only_with_a_gray_target_and_the_hexadecimal_only
             b.click_in("Fondo: un color hexadecimal");
             b.chooses_target(targets_2(from)[0]);
             assert!(
-                b.ultimo.exact(ALPHA_LABEL).is_none(),
+                b.last_2_2.exact(ALPHA_LABEL).is_none(),
                 "{}",
                 context("destino 0")
             );
             assert!(
-                b.ultimo.exact("Color").is_none(),
+                b.last_2_2.exact("Color").is_none(),
                 "{}",
                 context("destino 0")
             );
@@ -1276,12 +1285,15 @@ fn row_11_from_gray_there_is_no_box_group_or_hexadecimal_with_any_target() {
             b.chooses_target(target_2);
             for text_2 in [BOX, ALPHA_LABEL, "Color"] {
                 assert!(
-                    b.ultimo.exact(text_2).is_none(),
+                    b.last_2_2.exact(text_2).is_none(),
                     "ppp {ppp} a {target_2:?}: sobra {text_2:?}"
                 );
             }
             assert!(!b.accept_disabled(), "ppp {ppp} a {target_2:?}: es exacto");
-            assert!(!b.ultimo.contains(ERROR_PREFIX), "ppp {ppp} a {target_2:?}");
+            assert!(
+                !b.last_2_2.contains(ERROR_PREFIX),
+                "ppp {ppp} a {target_2:?}"
+            );
         }
     }
 }
@@ -1304,16 +1316,17 @@ fn row_11_unreadable_hexadecimal_with_alpha_and_valid_each_give_their_error_or_n
             for text_2 in ["#12", "zz"] {
                 b.writes(text_2);
                 assert!(
-                    b.ultimo.contains(&format!("{ERROR_PREFIX}{short}")),
+                    b.last_2_2.contains(&format!("{ERROR_PREFIX}{short}")),
                     "{}: falta el error en línea; hay {:?}",
                     context(text_2),
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
                 assert!(
-                    b.ultimo.contains(&format!("{ERROR_PREFIX}Color: {short}")),
+                    b.last_2_2
+                        .contains(&format!("{ERROR_PREFIX}Color: {short}")),
                     "{}: falta el motivo del pie; hay {:?}",
                     context(text_2),
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
                 assert!(b.accept_disabled(), "{}", context(text_2));
             }
@@ -1327,11 +1340,11 @@ fn row_11_unreadable_hexadecimal_with_alpha_and_valid_each_give_their_error_or_n
                 context("#ff000080")
             );
             assert!(
-                b.ultimo
+                b.last_2_2
                     .contains(&format!("{ERROR_PREFIX}Color: el fondo no lleva alfa")),
                 "{}: falta el motivo del pie; hay {:?}",
                 context("#ff000080"),
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert!(b.accept_disabled(), "{}", context("#ff000080"));
 
@@ -1339,7 +1352,7 @@ fn row_11_unreadable_hexadecimal_with_alpha_and_valid_each_give_their_error_or_n
             b.writes("#ff0000");
             assert_eq!(b.dialog().reason(), None, "{}", context("#ff0000"));
             assert!(!b.accept_disabled(), "{}", context("#ff0000"));
-            assert!(!b.ultimo.contains(ERROR_PREFIX), "{}", context("#ff0000"));
+            assert!(!b.last_2_2.contains(ERROR_PREFIX), "{}", context("#ff0000"));
         }
     }
 }
@@ -1459,15 +1472,15 @@ fn row_11_with_more_than_256_colors_accept_is_not_activated_by_anything_and_expl
             let context = format!("ppp {ppp} {window:?}");
             assert!(b.accept_disabled(), "{context}");
             assert!(
-                b.ultimo
+                b.last_2_2
                     .contains("error: más de 256 colores: sin cuantizador"),
                 "{context}: el motivo del pie; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert!(
-                b.ultimo.contains("cuantizador"),
+                b.last_2_2.contains("cuantizador"),
                 "{context}: el informe lo explica; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert_eq!(
                 b.dialog().block(),
@@ -1642,7 +1655,7 @@ fn wheel_over_the_body(b: &mut Bench, notches: usize) {
         (layout.body.x + 3 * n) as f32 / b.ppp,
         (layout.body.y + layout.body.height / 2) as f32 / b.ppp,
     );
-    b.frame(vec![mover(pos)]);
+    b.frame(vec![move_pointer(pos)]);
     b.rest();
     for _ in 0..notches {
         b.frame(vec![wheel_line(false)]);
@@ -1652,7 +1665,7 @@ fn wheel_over_the_body(b: &mut Bench, notches: usize) {
 
 /// La `y` (en puntos) del texto pintado exacto, aunque quede recortado.
 fn y_de(b: &Bench, searched: &str) -> Option<f32> {
-    b.ultimo.shapes.iter().find_map(|f| match f {
+    b.last_2_2.shapes.iter().find_map(|f| match f {
         Shape2::Text(t) if t.text_2.trim() == searched => Some(t.pos.y),
         _ => None,
     })
@@ -1819,12 +1832,12 @@ fn row_11_at_the_minimum_the_wheel_scrolls_the_body_and_title_footer_and_buttons
                 after_fixed, before_fixed,
                 "{context}: título, pie y botones fijos"
             );
-            assert!(b.ultimo.exact("Aceptar").is_some(), "{context}");
-            assert!(b.ultimo.exact("Cancelar").is_some(), "{context}");
+            assert!(b.last_2_2.exact("Aceptar").is_some(), "{context}");
+            assert!(b.last_2_2.exact("Cancelar").is_some(), "{context}");
             // El motivo del pie sigue visible con el cuerpo desplazado.
             assert!(
-                b.ultimo.contains("error: ")
-                    || b.ultimo.contains("falta: ")
+                b.last_2_2.contains("error: ")
+                    || b.last_2_2.contains("falta: ")
                     || !b.accept_disabled(),
                 "{context}: si Aceptar está atenuado, el motivo se ve"
             );
@@ -1841,12 +1854,12 @@ fn row_11_at_the_minimum_the_reason_and_the_buttons_are_visible_with_the_body_at
         wheel_over_the_body(&mut b, 3);
         assert!(b.dialog().scroll_u() > 0, "ppp {ppp}");
         assert!(
-            b.ultimo.contains("falta: permitir perder el color"),
+            b.last_2_2.contains("falta: permitir perder el color"),
             "ppp {ppp}: el motivo del pie; hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
-        assert!(b.ultimo.exact("Aceptar").is_some());
-        assert!(b.ultimo.exact("Cancelar").is_some());
+        assert!(b.last_2_2.exact("Aceptar").is_some());
+        assert!(b.last_2_2.exact("Cancelar").is_some());
     }
 }
 
@@ -1861,7 +1874,7 @@ fn row_11_at_the_minimum_tab_brings_into_view_the_hexadecimal_that_was_outside()
             b.dialog().scroll_u() > 0,
             "ppp {ppp}: el foco en el hexadecimal desplaza el cuerpo"
         );
-        assert!(b.ultimo.exact("Cancelar").is_some());
+        assert!(b.last_2_2.exact("Cancelar").is_some());
         assert_eq!(
             b.focus_of_egui(),
             Some(Bench::id_de("fondo_hex")),
@@ -1879,11 +1892,11 @@ fn row_11_at_960_by_720_the_form_does_not_scroll_in_any_state() {
             let context = format!("ppp {ppp} {from:?} alfa {background_2}");
             assert_eq!(b.layout().max_scroll_u, 0, "{context}");
             let fixed_2 = ["Convertir modo", "Modo de destino", "Aceptar", "Cancelar"];
-            let antes: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
+            let before: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
             wheel_over_the_body(&mut b, 3);
             assert_eq!(b.dialog().scroll_u(), 0, "{context}");
             let after_2: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
-            assert_eq!(after_2, antes, "{context}: nada se mueve");
+            assert_eq!(after_2, before, "{context}: nada se mueve");
         }
     }
 }
@@ -1920,7 +1933,7 @@ fn failures_of_contrast(b: &Bench) -> (Vec<String>, usize) {
     };
     let mut failures = Vec::new();
     let mut checked = 0;
-    for (i, shape_2) in b.ultimo.shapes.iter().enumerate() {
+    for (i, shape_2) in b.last_2_2.shapes.iter().enumerate() {
         let Shape2::Text(t) = shape_2 else { continue };
         let visible = t.rect().intersect(t.clip);
         if t.text_2.trim().is_empty() || !visible.is_positive() || !area.contains_rect(visible) {
@@ -1930,7 +1943,7 @@ fn failures_of_contrast(b: &Bench) -> (Vec<String>, usize) {
             continue;
         }
         let probe = visible.shrink2(vec2(0.0, visible.height() * 0.25));
-        let Some(background_2) = fill_under(&b.ultimo.shapes, i, probe) else {
+        let Some(background_2) = fill_under(&b.last_2_2.shapes, i, probe) else {
             failures.push(format!("el texto {:?} no tiene relleno debajo", t.text_2));
             continue;
         };
@@ -2037,13 +2050,13 @@ fn row_11_no_dialog_state_paints_a_missing_glyph() {
         b.writes("#ff000080");
         let mut b = Bench::open_with(ppp, Window::Large, Mode::Rgba, rgba_of_257_colors(), None);
         assert!(
-            b.ultimo.contains("cuantizador"),
+            b.last_2_2.contains("cuantizador"),
             "ppp {ppp}: {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         put_gray(&mut b, 3);
         // Los textos pintados están en el juego.
-        for text_2 in b.ultimo.visible() {
+        for text_2 in b.last_2_2.visible() {
             assert!(in_the_set(&text_2.text_2), "ppp {ppp}: {:?}", text_2.text_2);
         }
     }
@@ -2070,7 +2083,7 @@ fn row_11_no_dialog_state_paints_a_missing_glyph() {
 // - El pie «más largo posible» se prueba con tres textos: un motivo de 37 con `error: ` (44 en
 //   total), la lista más larga de dos con `falta: ` (la de color y fondo, 38) y el límite físico
 //   de `falta: ` + 37 caracteres (44), aunque ningún texto real lo alcance.
-// - `faltan 3: color, background_2, valor` no se pinta (en el diálogo no es alcanzable y `footer_text` le
+// - `faltan 3: color, background_2, value` no se pinta (en el diálogo no es alcanzable y `footer_text` le
 //   pondría `error: `, ver `tests.rs`).
 // ---------------------------------------------------------------------------------------------
 
@@ -2083,7 +2096,7 @@ const MISSING_COLOR_AND_VALUE_20B: &str = "falta: perder el color; fondo válido
 fn footer_of(b: &Bench) -> Option<Text> {
     let r = b.layout().reason;
     let ppp = b.ppp;
-    b.ultimo
+    b.last_2_2
         .visible()
         .find(|t| {
             (t.pos.x * ppp - r.x as f32).abs() < 1.5 && (t.pos.y * ppp - r.y as f32).abs() < 1.5
@@ -2120,10 +2133,10 @@ fn row_7_20b_rgba_with_transparency_to_gray_follows_the_manual_test_case() {
             Some(MISSING_BOTH_20B),
             "{}: {:?}",
             ctx("sin nada"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(b.accept_disabled(), "{}", ctx("sin nada"));
-        assert!(!b.ultimo.contains(ERROR_PREFIX), "{}", ctx("sin nada"));
+        assert!(!b.last_2_2.contains(ERROR_PREFIX), "{}", ctx("sin nada"));
 
         // La casilla: queda el fondo, en el fotograma siguiente al clic.
         click_and_next(&mut b, BOX);
@@ -2132,7 +2145,7 @@ fn row_7_20b_rgba_with_transparency_to_gray_follows_the_manual_test_case() {
             Some(CHOOSE_BACKGROUND_20B),
             "{}: {:?}",
             ctx("casilla"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(b.accept_disabled(), "{}", ctx("casilla"));
 
@@ -2143,11 +2156,11 @@ fn row_7_20b_rgba_with_transparency_to_gray_follows_the_manual_test_case() {
             None,
             "{}: {:?}",
             ctx("blanco"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(!b.accept_disabled(), "{}", ctx("blanco"));
         assert_eq!(b.dialog().reason(), None, "{}", ctx("blanco"));
-        assert!(!b.ultimo.contains("falta:") && !b.ultimo.contains(ERROR_PREFIX));
+        assert!(!b.last_2_2.contains("falta:") && !b.last_2_2.contains(ERROR_PREFIX));
 
         // Volver a «No perder el alfa»: otra vez el fondo.
         click_and_next(&mut b, "No perder el alfa");
@@ -2186,16 +2199,16 @@ fn row_7_20b_rgba_with_transparency_to_gray_follows_the_manual_test_case() {
             Some(MISSING_COLOR_AND_VALUE_20B),
             "{}: {:?}",
             ctx("zz sin casilla"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(
-            b.ultimo.exact(&error_of_the_field(short)).is_some(),
+            b.last_2_2.exact(&error_of_the_field(short)).is_some(),
             "{}: el error del campo sigue junto al campo; hay {:?}",
             ctx("zz sin casilla"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(
-            !b.ultimo.contains(&format!("{ERROR_PREFIX}Color:")),
+            !b.last_2_2.contains(&format!("{ERROR_PREFIX}Color:")),
             "{}: el detalle no va en el pie",
             ctx("zz sin casilla")
         );
@@ -2209,10 +2222,10 @@ fn row_7_20b_rgba_with_transparency_to_gray_follows_the_manual_test_case() {
             Some(format!("{ERROR_PREFIX}Color: {short}")),
             "{}: {:?}",
             ctx("zz con casilla"),
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(
-            b.ultimo.exact(&error_of_the_field(short)).is_some(),
+            b.last_2_2.exact(&error_of_the_field(short)).is_some(),
             "{}",
             ctx("zz con casilla")
         );
@@ -2256,11 +2269,11 @@ fn row_7_20b_with_the_box_checked_before_writing_zz_the_footer_is_only_the_value
             footer_text(&b),
             Some(format!("{ERROR_PREFIX}Color: {short}")),
             "ppp {ppp}: {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
-        assert!(!b.ultimo.contains("falta:"), "ppp {ppp}");
+        assert!(!b.last_2_2.contains("falta:"), "ppp {ppp}");
         assert!(
-            b.ultimo.exact(&error_of_the_field(short)).is_some(),
+            b.last_2_2.exact(&error_of_the_field(short)).is_some(),
             "ppp {ppp}"
         );
         assert_eq!(b.dialog().summary(), None, "ppp {ppp}");
@@ -2280,7 +2293,7 @@ fn row_7_20b_the_hexadecimal_with_alpha_without_the_box_also_gives_color_and_val
             footer_text(&b).as_deref(),
             Some(MISSING_COLOR_AND_VALUE_20B),
             "ppp {ppp}: {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         assert!(b.accept_disabled(), "ppp {ppp}");
         b.mark("luma_gris", true);
@@ -2332,7 +2345,7 @@ fn checks_footer(b: &Bench, reason_2: &str, ctx: &str) {
     let t = footer_of(b).unwrap_or_else(|| {
         panic!(
             "{ctx}: no se pinta el pie {expected_2:?}; hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         )
     });
     assert_eq!(t.text_2.trim(), expected_2, "{ctx}");
@@ -2605,7 +2618,7 @@ const ACCENT: Color32 = px_ui::theme::ACCENT;
 const MIN_MARK_20B: f64 = 3.0;
 
 #[derive(Clone, Copy, Debug)]
-struct Disco {
+struct Disk {
     center: Pos2,
     radius: f32,
     fill: Color32,
@@ -2625,7 +2638,7 @@ struct Toolbox {
 
 #[derive(Debug, Default)]
 struct Marks {
-    discos: Vec<Disco>,
+    disks: Vec<Disk>,
     boxes: Vec<Toolbox>,
 }
 
@@ -2641,7 +2654,7 @@ fn collects_marks(shape: &Shape, outside: &mut Marks, order: &mut usize) {
     match shape {
         Shape::Circle(c) => {
             let (stroke_color, stroke_width) = stroke_visible(c.stroke);
-            outside.discos.push(Disco {
+            outside.disks.push(Disk {
                 center: c.center,
                 radius: c.radius,
                 fill: c.fill,
@@ -2688,9 +2701,9 @@ fn same_center(a: Pos2, b: Pos2, u: f32) -> bool {
 }
 
 /// Los aros (círculos con trazo `TOGGLE_EDGE`), de arriba abajo.
-fn rings(m: &Marks) -> Vec<Disco> {
-    let mut v: Vec<Disco> = m
-        .discos
+fn rings(m: &Marks) -> Vec<Disk> {
+    let mut v: Vec<Disk> = m
+        .disks
         .iter()
         .copied()
         .filter(|d| d.stroke_color == TOGGLE_EDGE)
@@ -2700,9 +2713,9 @@ fn rings(m: &Marks) -> Vec<Disco> {
 }
 
 /// Los puntos (círculos rellenos de `ACCENT`), de arriba abajo.
-fn points(m: &Marks) -> Vec<Disco> {
-    let mut v: Vec<Disco> = m
-        .discos
+fn points(m: &Marks) -> Vec<Disk> {
+    let mut v: Vec<Disk> = m
+        .disks
         .iter()
         .copied()
         .filter(|d| d.fill == ACCENT)
@@ -2738,11 +2751,11 @@ fn marks_square(m: &Marks, u: f32, y: f32) -> Vec<Toolbox> {
 }
 
 /// El relleno de un aro: el suyo o, si no tiene, el del último círculo relleno anterior y concéntrico.
-fn fill_of_ring(m: &Marks, ring: &Disco) -> Color32 {
+fn fill_of_ring(m: &Marks, ring: &Disk) -> Color32 {
     if ring.fill != Color32::TRANSPARENT {
         return ring.fill;
     }
-    m.discos
+    m.disks
         .iter()
         .filter(|d| d.order < ring.order && d.fill != Color32::TRANSPARENT)
         .rfind(|d| (d.center - ring.center).length() < 0.01)
@@ -2790,7 +2803,7 @@ fn asserts_markers(
         rings.len(),
         total,
         "{location}: un aro por opción de los grupos {groups:?}; círculos pintados {:?}",
-        m.discos
+        m.disks
     );
     let mut first_2 = 0;
     for &(id, options_2, chosen) in &groups {
@@ -2817,7 +2830,7 @@ fn asserts_markers(
                 FIELD_FILL,
                 "{location}: el aro {id}/{i} se rellena con el color del campo"
             );
-            let here: Vec<&Disco> = points
+            let here: Vec<&Disk> = points
                 .iter()
                 .filter(|p| same_center(p.center, ring.center, u))
                 .collect();
@@ -2897,11 +2910,11 @@ fn asserts_markers(
         }
         // Opción y casilla se distinguen por la forma: ningún círculo en la fila de la caja.
         assert!(
-            m.discos
+            m.disks
                 .iter()
                 .all(|d| (d.center.y - center.y).abs() > 3.0 * u),
             "{location}: hay un círculo en la fila de una casilla: {:?}",
-            m.discos
+            m.disks
         );
     }
     for ring in &rings {
@@ -3154,7 +3167,13 @@ fn row_11_convert_mode_the_focus_ring_is_the_same_on_option_and_on_box() {
             let shapes = b.raw();
             let x = b.layout().dialog.x;
             measures.push(asserts_ring(
-                &b.ultimo, &shapes, ppp, x, goal, label, &location,
+                &b.last_2_2,
+                &shapes,
+                ppp,
+                x,
+                goal,
+                label,
+                &location,
             ));
         }
         asserts_ring_measures(&measures, &location);

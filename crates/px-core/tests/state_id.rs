@@ -28,7 +28,7 @@ fn doc() -> Document {
 }
 
 /// Comando de un solo píxel.
-fn pone(image: ImageId, x: u32, y: u32, c: Rgba) -> Command {
+fn sets(image: ImageId, x: u32, y: u32, c: Rgba) -> Command {
     Command::SetPixels {
         image,
         pixels: vec![PixelEdit {
@@ -43,7 +43,7 @@ fn pone(image: ImageId, x: u32, y: u32, c: Rgba) -> Command {
 /// es transparente y los pasos de las pruebas no repiten píxel).
 fn step(doc: &mut Document, i: u32) {
     let id = ImageId::from_raw(0);
-    assert_eq!(doc.apply(pone(id, i, 0, color(1))), Ok(true), "paso {i}");
+    assert_eq!(doc.apply(sets(id, i, 0, color(1))), Ok(true), "paso {i}");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -68,10 +68,10 @@ fn row_25_the_clone_copies_the_id() {
     assert_ne!(clone.state_id(), 0);
     // El clon es independiente: editar uno no mueve el id del otro.
     let mut clone = clone;
-    let antes = d.state_id();
+    let before = d.state_id();
     step(&mut clone, 2);
-    assert_eq!(d.state_id(), antes);
-    assert_ne!(clone.state_id(), antes);
+    assert_eq!(d.state_id(), before);
+    assert_ne!(clone.state_id(), before);
 }
 
 #[test]
@@ -93,12 +93,12 @@ fn row_25_apply_without_changes_does_not_move_the_id() {
     let mut d = doc();
     let id = ImageId::from_raw(0);
     // Pintar de transparente una imagen transparente no cambia nada.
-    assert_eq!(d.apply(pone(id, 0, 0, color(0))), Ok(false));
+    assert_eq!(d.apply(sets(id, 0, 0, color(0))), Ok(false));
     assert_eq!(d.state_id(), 0);
     // Igual tras un paso real: repetir el mismo píxel y color no cambia nada.
     step(&mut d, 0);
     let a = d.state_id();
-    assert_eq!(d.apply(pone(id, 0, 0, color(1))), Ok(false));
+    assert_eq!(d.apply(sets(id, 0, 0, color(1))), Ok(false));
     assert_eq!(d.state_id(), a);
 }
 
@@ -107,15 +107,15 @@ fn row_25_apply_with_an_error_does_not_move_the_id() {
     // Fila 25: `apply` con error (píxel fuera) ⇒ sin cambio de id.
     let mut d = doc();
     let id = ImageId::from_raw(0);
-    assert!(d.apply(pone(id, 10, 10, color(1))).is_err());
+    assert!(d.apply(sets(id, 10, 10, color(1))).is_err());
     assert_eq!(d.state_id(), 0);
     // También con historia previa, y con un lote que falla a medias (la primera parte se
     // revierte y el id no se mueve).
     step(&mut d, 0);
     let a = d.state_id();
-    assert!(d.apply(pone(id, 4, 0, color(2))).is_err());
+    assert!(d.apply(sets(id, 4, 0, color(2))).is_err());
     assert_eq!(d.state_id(), a);
-    let batch = Command::Batch(vec![pone(id, 1, 1, color(2)), pone(id, 9, 9, color(2))]);
+    let batch = Command::Batch(vec![sets(id, 1, 1, color(2)), sets(id, 9, 9, color(2))]);
     assert!(d.apply(batch).is_err());
     assert_eq!(d.state_id(), a);
     // Un lote vacío es un error y tampoco lo mueve.
@@ -170,7 +170,7 @@ fn row_26_an_apply_after_undo_gives_a_never_used_id() {
     d.undo().unwrap();
     assert_eq!(d.state_id(), a);
     let id = ImageId::from_raw(0);
-    assert_eq!(d.apply(pone(id, 2, 0, color(2))), Ok(true));
+    assert_eq!(d.apply(sets(id, 2, 0, color(2))), Ok(true));
     let c = d.state_id();
     assert_ne!(c, a);
     assert_ne!(c, b);
@@ -183,7 +183,7 @@ fn row_26_an_apply_after_undo_gives_a_never_used_id() {
     // Deshacer C vuelve a `a`, no a `b`; y otro apply tampoco reutiliza ningún id.
     d.undo().unwrap();
     assert_eq!(d.state_id(), a);
-    assert_eq!(d.apply(pone(id, 3, 0, color(3))), Ok(true));
+    assert_eq!(d.apply(sets(id, 3, 0, color(3))), Ok(true));
     let e = d.state_id();
     for old in [0, a, b, c] {
         assert_ne!(e, old);
@@ -225,7 +225,7 @@ fn row_27_set_history_limit_changes_no_id() {
     }
     // Cinco pasos (el quinto, en otro píxel) para tener historia que descartar.
     let id = ImageId::from_raw(0);
-    assert_eq!(d.apply(pone(id, 0, 1, color(2))), Ok(true));
+    assert_eq!(d.apply(sets(id, 0, 1, color(2))), Ok(true));
     ids.push(d.state_id());
     assert_eq!(ids.len(), 6);
     let actual = d.state_id();
@@ -360,12 +360,12 @@ proptest! {
         records(&mut seen, &d, "inicio")?;
 
         for (n, op) in ops.iter().enumerate() {
-            let antes = d.state_id();
+            let before = d.state_id();
             let ctx = format!("paso {n}: {op:?}");
             match op {
                 Op::Apply { x, y, color: c } => {
                     let id = ImageId::from_raw(0);
-                    match d.apply(pone(id, *x, *y, color(*c))) {
+                    match d.apply(sets(id, *x, *y, color(*c))) {
                         Ok(true) => {
                             // Un id nuevo, que nunca se había dado.
                             let new = d.state_id();
@@ -374,7 +374,7 @@ proptest! {
                             prop_assert!(!d.can_redo(), "{}", ctx);
                         }
                         Ok(false) | Err(_) => {
-                            prop_assert_eq!(d.state_id(), antes, "{}: sin cambio, mismo id", ctx);
+                            prop_assert_eq!(d.state_id(), before, "{}: sin cambio, mismo id", ctx);
                         }
                     }
                 }
@@ -387,10 +387,10 @@ proptest! {
                             // `undo` seguido de `redo` devuelve el mismo id.
                             copy.undo().unwrap();
                             copy.redo().unwrap();
-                            prop_assert_eq!(copy.state_id(), antes, "{}: undo y redo", ctx);
+                            prop_assert_eq!(copy.state_id(), before, "{}: undo y redo", ctx);
                         }
                         Err(_) => {
-                            prop_assert_eq!(d.state_id(), antes, "{}: error sin cambio", ctx);
+                            prop_assert_eq!(d.state_id(), before, "{}: error sin cambio", ctx);
                         }
                     }
                 }
@@ -402,16 +402,16 @@ proptest! {
                             // `redo` seguido de `undo` devuelve el mismo id.
                             copy.redo().unwrap();
                             copy.undo().unwrap();
-                            prop_assert_eq!(copy.state_id(), antes, "{}: redo y undo", ctx);
+                            prop_assert_eq!(copy.state_id(), before, "{}: redo y undo", ctx);
                         }
                         Err(_) => {
-                            prop_assert_eq!(d.state_id(), antes, "{}: error sin cambio", ctx);
+                            prop_assert_eq!(d.state_id(), before, "{}: error sin cambio", ctx);
                         }
                     }
                 }
                 Op::Limit(bytes) => {
                     d.set_history_limit(*bytes);
-                    prop_assert_eq!(d.state_id(), antes, "{}: el límite no mueve el id", ctx);
+                    prop_assert_eq!(d.state_id(), before, "{}: el límite no mueve el id", ctx);
                 }
             }
             // Dos instantes con el mismo id tienen la misma imagen.

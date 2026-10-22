@@ -129,13 +129,13 @@ fn command(image: ImageId, spans: &[Span], pixel: Pixel) -> Result<Option<Comman
 /// pintados y nada más) y `undo` la restaura.
 fn checks_region(doc: &Document, seed: (i32, i32), spans: &[Span]) {
     let id = ImageId::from_raw(0);
-    let antes = snapshot(doc);
+    let before = snapshot(doc);
     assert_eq!(
         fill_command(doc, id, seed.0, seed.1, vc()),
         command(id, spans, vc()),
         "semilla {seed:?}"
     );
-    assert_eq!(snapshot(doc), antes, "fill_command no toca el documento");
+    assert_eq!(snapshot(doc), before, "fill_command no toca el documento");
 
     let mut expected = doc.image(id).unwrap().clone();
     for s in spans {
@@ -158,7 +158,7 @@ fn checks_error(
     pixel: Pixel,
     error: &DocumentError,
 ) {
-    let antes = snapshot(doc);
+    let before = snapshot(doc);
     assert_eq!(
         fill_command(doc, id, seed.0, seed.1, pixel),
         Err(error.clone()),
@@ -169,12 +169,12 @@ fn checks_error(
         Err(error.clone()),
         "flood_fill, semilla {seed:?}"
     );
-    assert_eq!(snapshot(doc), antes, "semilla {seed:?}");
+    assert_eq!(snapshot(doc), before, "semilla {seed:?}");
 }
 
 /// Comprueba que no hay nada que cambiar y que la historia no se toca.
 fn checks_outside(doc: &mut Document, id: ImageId, seed: (i32, i32), pixel: Pixel) {
-    let antes = snapshot(doc);
+    let before = snapshot(doc);
     assert_eq!(
         fill_command(doc, id, seed.0, seed.1, pixel),
         Ok(None),
@@ -185,7 +185,7 @@ fn checks_outside(doc: &mut Document, id: ImageId, seed: (i32, i32), pixel: Pixe
         Ok(false),
         "flood_fill, semilla {seed:?}"
     );
-    assert_eq!(snapshot(doc), antes, "semilla {seed:?}");
+    assert_eq!(snapshot(doc), before, "semilla {seed:?}");
 }
 
 // Una prueba por fila de la tabla de casos límite.
@@ -370,22 +370,22 @@ fn row_13_pixel_equal_to_the_seeds_is_outside() {
     let mut doc = doc_matrix(&["AAB", "ABB"]);
     with_redo(&mut doc, vc());
     let id = ImageId::from_raw(0);
-    let antes = snapshot(&doc);
-    assert!(!antes.1 && antes.2);
+    let before = snapshot(&doc);
+    assert!(!before.1 && before.2);
     // `C` igual al valor de la semilla: `A` en (0, 0) y `B` en (2, 0).
     checks_outside(&mut doc, id, (0, 0), va());
     checks_outside(&mut doc, id, (2, 0), vb());
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 
     // Con una pila de deshacer no vacía.
     let mut with_steps = doc_matrix(&["AAB", "ABB"]);
     let id = ImageId::from_raw(0);
     assert_eq!(flood_fill(&mut with_steps, id, 0, 0, vc()), Ok(true));
-    let antes = snapshot(&with_steps);
-    assert!(antes.1 && !antes.2 && antes.3 > 0);
+    let before = snapshot(&with_steps);
+    assert!(before.1 && !before.2 && before.3 > 0);
     checks_outside(&mut with_steps, id, (0, 0), vc());
     checks_outside(&mut with_steps, id, (2, 1), vb());
-    assert_eq!(snapshot(&with_steps), antes);
+    assert_eq!(snapshot(&with_steps), before);
 
     // Imagen recién creada: transparente con transparente.
     let mut new = Document::new(Image::new(2, 2, Mode::Rgba).unwrap());
@@ -407,13 +407,13 @@ fn row_14_indices_with_the_same_color_are_different_values() {
     let id = ImageId::from_raw(0);
     for fill in [Pixel::Indexed(2), Pixel::Indexed(1)] {
         // El índice 1 tiene el mismo color que el 0, pero es otro valor: la región es (0, 0).
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
         assert_eq!(
             fill_command(&doc, id, 0, 0, fill),
             command(id, &[sp(0, 0, 1)], fill),
             "relleno {fill:?}"
         );
-        assert_eq!(snapshot(&doc), antes);
+        assert_eq!(snapshot(&doc), before);
         // Y es un cambio real: `Ok(true)`, también con `Indexed(1)`.
         let mut copy = doc.clone();
         assert_eq!(flood_fill(&mut copy, id, 0, 0, fill), Ok(true));
@@ -482,7 +482,7 @@ fn row_15_equal_rgb_with_different_alpha_are_different_values() {
 }
 
 #[test]
-fn row_15_invisibles_with_different_rgb_are_different_values() {
+fn row_15_invisible_with_different_rgb_are_different_values() {
     // Comportamiento 2: (0,0,0,0) y (9,9,9,0) son distintos aunque ambos sean invisibles.
     let mut img = Image::new(2, 1, Mode::Rgba).unwrap();
     img.set_pixel(1, 0, Pixel::Rgba(rgba(9, 9, 9, 0))).unwrap();
@@ -747,7 +747,7 @@ fn row_16c_comb_2048() {
 
 /// Recorrido ingenuo pixel a pixel con cola: 4 vecinos y valor exacto (`get_pixel`).
 fn region_naive(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
-    let valor = img.get_pixel(sx, sy).unwrap();
+    let value = img.get_pixel(sx, sy).unwrap();
     let mut region = BTreeSet::new();
     let mut queue = VecDeque::new();
     region.insert((sx, sy));
@@ -758,7 +758,7 @@ fn region_naive(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
             let (Ok(nx), Ok(ny)) = (u32::try_from(nx), u32::try_from(ny)) else {
                 continue;
             };
-            if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(valor) {
+            if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(value) {
                 region.insert((nx, ny));
                 queue.push_back((nx, ny));
             }
@@ -871,7 +871,7 @@ impl Case {
         (i(self.seed.0), i(self.seed.1))
     }
 
-    fn valor(&self) -> Pixel {
+    fn value(&self) -> Pixel {
         self.image.get_pixel(self.seed.0, self.seed.1).unwrap()
     }
 }
@@ -1001,7 +1001,7 @@ fn step_previous(doc: &mut Document) {
 }
 
 /// Forma de los tramos (propiedad 2).
-fn checks_shape(img: &Image, valor: Pixel, spans: &[Span]) -> Result<(), TestCaseError> {
+fn checks_shape(img: &Image, value: Pixel, spans: &[Span]) -> Result<(), TestCaseError> {
     let (w, h) = (img.width(), img.height());
     let cap = width_usize(h) * width_usize(w.div_ceil(2));
     prop_assert!(spans.len() <= cap, "{} tramos > {}", spans.len(), cap);
@@ -1010,13 +1010,13 @@ fn checks_shape(img: &Image, valor: Pixel, spans: &[Span]) -> Result<(), TestCas
         prop_assert!(s.y < h && s.x_end <= w, "{:?} fuera de {}x{}", s, w, h);
         // Máximo: el píxel de la izquierda y el de la derecha, si existen, no valen lo de la semilla.
         if s.x_start > 0 {
-            prop_assert_ne!(img.get_pixel(s.x_start - 1, s.y).unwrap(), valor, "{:?}", s);
+            prop_assert_ne!(img.get_pixel(s.x_start - 1, s.y).unwrap(), value, "{:?}", s);
         }
         if s.x_end < w {
-            prop_assert_ne!(img.get_pixel(s.x_end, s.y).unwrap(), valor, "{:?}", s);
+            prop_assert_ne!(img.get_pixel(s.x_end, s.y).unwrap(), value, "{:?}", s);
         }
         for x in s.x_start..s.x_end {
-            prop_assert_eq!(img.get_pixel(x, s.y).unwrap(), valor, "({}, {})", x, s.y);
+            prop_assert_eq!(img.get_pixel(x, s.y).unwrap(), value, "({}, {})", x, s.y);
         }
     }
     for par in spans.windows(2) {
@@ -1049,11 +1049,11 @@ proptest! {
         let (mut doc, id) = case.document();
         let (sx, sy) = case.seed;
         let (x, y) = case.seed_i_32();
-        let valor = case.valor();
+        let value = case.value();
         let region = region_naive(&case.image, sx, sy);
 
         let result = fill_command(&doc, id, x, y, case.pixel);
-        let changes = case.pixel != valor;
+        let changes = case.pixel != value;
         match spans_of(result, id, case.pixel)? {
             None => prop_assert!(!changes, "Ok(None) con un píxel distinto del de la semilla"),
             Some(spans) => {
@@ -1080,12 +1080,12 @@ proptest! {
     fn shape_of_the_spans(case in cases()) {
         let (doc, id) = case.document();
         let (x, y) = case.seed_i_32();
-        let valor = case.valor();
+        let value = case.value();
         match spans_of(fill_command(&doc, id, x, y, case.pixel), id, case.pixel)? {
-            None => prop_assert_eq!(case.pixel, valor),
+            None => prop_assert_eq!(case.pixel, value),
             Some(spans) => {
                 prop_assert!(!spans.is_empty());
-                checks_shape(&case.image, valor, &spans)?;
+                checks_shape(&case.image, value, &spans)?;
             }
         }
     }
@@ -1098,7 +1098,7 @@ proptest! {
             step_previous(&mut doc);
         }
         let (x, y) = case.seed_i_32();
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
         let image_before = doc.image(id).unwrap().clone();
         // El paso previo puede haber cambiado la semilla (solo si es (0, 0)).
         let value_now = image_before.get_pixel(case.seed.0, case.seed.1).unwrap();
@@ -1106,25 +1106,25 @@ proptest! {
         // `fill_command` no cambia el documento.
         let c = fill_command(&doc, id, x, y, case.pixel);
         prop_assert!(c.is_ok(), "fill_command dio {:?}", c);
-        prop_assert_eq!(snapshot(&doc), antes.clone());
+        prop_assert_eq!(snapshot(&doc), before.clone());
 
         let changes = case.pixel != value_now;
         prop_assert_eq!(flood_fill(&mut doc, id, x, y, case.pixel), Ok(changes));
         if !changes {
-            prop_assert_eq!(snapshot(&doc), antes);
+            prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         }
         let fills = doc.image(id).unwrap().clone();
         prop_assert!(doc.can_undo());
         prop_assert!(!doc.can_redo());
-        prop_assert!(doc.history_bytes() > antes.3);
+        prop_assert!(doc.history_bytes() > before.3);
 
         // Un solo paso: un `undo` deja la imagen y la historia como estaban.
         prop_assert_eq!(doc.undo(), Ok(()));
         prop_assert_eq!(doc.image(id), Some(&image_before));
-        prop_assert_eq!(doc.can_undo(), antes.1);
+        prop_assert_eq!(doc.can_undo(), before.1);
         prop_assert!(doc.can_redo());
-        prop_assert_eq!(doc.history_bytes(), antes.3);
+        prop_assert_eq!(doc.history_bytes(), before.3);
 
         prop_assert_eq!(doc.redo(), Ok(()));
         prop_assert_eq!(doc.image(id), Some(&fills));
@@ -1137,8 +1137,8 @@ proptest! {
     fn repeat_and_no_ops(case in cases()) {
         let (mut doc, id) = case.document();
         let (x, y) = case.seed_i_32();
-        let valor = case.valor();
-        let changes = case.pixel != valor;
+        let value = case.value();
+        let changes = case.pixel != value;
 
         prop_assert_eq!(flood_fill(&mut doc, id, x, y, case.pixel), Ok(changes));
         // La segunda vez la semilla ya vale `pixel`: no hay nada que cambiar.
@@ -1153,7 +1153,7 @@ proptest! {
             prop_assert!(doc.can_redo());
             let after_undo = snapshot(&doc);
             // Mismo valor que la semilla (el original): no cambia nada.
-            prop_assert_eq!(flood_fill(&mut doc, id, x, y, valor), Ok(false));
+            prop_assert_eq!(flood_fill(&mut doc, id, x, y, value), Ok(false));
             prop_assert!(doc.can_redo());
             prop_assert_eq!(snapshot(&doc), after_undo.clone());
             // Semilla fuera del lienzo.
@@ -1175,18 +1175,18 @@ proptest! {
         foreign in any::<bool>(),
         raw in any::<u32>(),
     ) {
-        let (mut doc, principal) = case.document();
+        let (mut doc, main) = case.document();
         let (x, y) = if seed_of_the_case { case.seed_i_32() } else { (xr, yr) };
         let pixel = if uses_other_pixel { other_pixel } else { case.pixel };
-        let id = if foreign { ImageId::from_raw(raw) } else { principal };
+        let id = if foreign { ImageId::from_raw(raw) } else { main };
         let (w, h) = (i64::from(case.image.width()), i64::from(case.image.height()));
         let outside = x < 0 || y < 0 || i64::from(x) >= w || i64::from(y) >= h;
 
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
         // La imagen tal como estaba, antes de rellenar.
         let image_preview = doc.image(id).cloned();
         let c = fill_command(&doc, id, x, y, pixel);
-        prop_assert_eq!(snapshot(&doc), antes.clone());
+        prop_assert_eq!(snapshot(&doc), before.clone());
         let f = flood_fill(&mut doc, id, x, y, pixel);
 
         // `UnknownImage` > `Pixel` > fuera > igual.
@@ -1194,7 +1194,7 @@ proptest! {
             let e = DocumentError::UnknownImage(id);
             prop_assert_eq!(c, Err(e.clone()));
             prop_assert_eq!(f, Err(e));
-            prop_assert_eq!(snapshot(&doc), antes);
+            prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         };
         if let Some(e) = error_de_apply(&img, pixel) {
@@ -1204,20 +1204,20 @@ proptest! {
             );
             prop_assert_eq!(c, Err(e.clone()));
             prop_assert_eq!(f, Err(e));
-            prop_assert_eq!(snapshot(&doc), antes);
+            prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         }
         if outside {
             prop_assert_eq!(c, Ok(None));
             prop_assert_eq!(f, Ok(false));
-            prop_assert_eq!(snapshot(&doc), antes);
+            prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         }
         let (ux, uy) = (u32::try_from(x).unwrap(), u32::try_from(y).unwrap());
         if img.get_pixel(ux, uy).unwrap() == pixel {
             prop_assert_eq!(c, Ok(None));
             prop_assert_eq!(f, Ok(false));
-            prop_assert_eq!(snapshot(&doc), antes);
+            prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         }
         prop_assert!(
@@ -1398,7 +1398,7 @@ mod limits {
     fn row_03_with_cap_zero_the_cap_is_checked_last() {
         let doc = doc_matrix(&["AAA", "AAA"]);
         let id = ImageId::from_raw(0);
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
 
         let unknown = ImageId::from_raw(99);
         assert_eq!(
@@ -1421,7 +1421,7 @@ mod limits {
             fill_command_with_limit(&doc, id, 0, 0, vc(), 0),
             Err(too_much(0))
         );
-        assert_eq!(snapshot(&doc), antes, "ninguna llamada toca el documento");
+        assert_eq!(snapshot(&doc), before, "ninguna llamada toca el documento");
     }
 
     // Fila 4.
@@ -1553,13 +1553,13 @@ mod limits {
         fn cap_equal_to_the_oracle(case in cases(), l in 0usize..=40) {
             let (doc, id) = case.document();
             let (x, y) = case.seed_i_32();
-            let valor = case.valor();
+            let value = case.value();
             let region = region_naive(&case.image, case.seed.0, case.seed.1);
             let s = spans_maximums(&region);
 
             let with_cap = fill_command_with_limit(&doc, id, x, y, case.pixel, l);
             let without_cap = fill_command(&doc, id, x, y, case.pixel);
-            if case.pixel == valor {
+            if case.pixel == value {
                 prop_assert_eq!(with_cap, Ok(None));
             } else if s > l {
                 prop_assert_eq!(with_cap, Err(DocumentError::FillTooFragmented { limit: l }));
@@ -1587,19 +1587,19 @@ mod limits {
             foreign in any::<bool>(),
             raw in any::<u32>(),
         ) {
-            let (mut doc, principal) = case.document();
+            let (mut doc, main) = case.document();
             step_previous(&mut doc);
             let (x, y) = if seed_of_the_case { case.seed_i_32() } else { (xr, yr) };
             let pixel = if uses_other_pixel { other_pixel } else { case.pixel };
-            let id = if foreign { ImageId::from_raw(raw) } else { principal };
+            let id = if foreign { ImageId::from_raw(raw) } else { main };
             let (w, h) = (i64::from(case.image.width()), i64::from(case.image.height()));
             let outside = x < 0 || y < 0 || i64::from(x) >= w || i64::from(y) >= h;
 
-            let antes = snapshot(&doc);
+            let before = snapshot(&doc);
             let image_preview = doc.image(id).cloned();
             let c = fill_command_with_limit(&doc, id, x, y, pixel, l);
             // Con cualquier resultado, `fill_command_with_limit` solo lee.
-            prop_assert_eq!(snapshot(&doc), antes.clone());
+            prop_assert_eq!(snapshot(&doc), before.clone());
 
             // UnknownImage > Pixel > fuera > igual > tope.
             let Some(img) = image_preview else {
@@ -1639,9 +1639,9 @@ mod limits {
         fn cap_monotonic(case in cases(), a in cap_any(), b in cap_any()) {
             let (doc, id) = case.document();
             let (x, y) = case.seed_i_32();
-            let (smaller, mayor) = (a.min(b), a.max(b));
+            let (smaller, greater) = (a.min(b), a.max(b));
             let with_smaller = fill_command_with_limit(&doc, id, x, y, case.pixel, smaller);
-            let with_greater = fill_command_with_limit(&doc, id, x, y, case.pixel, mayor);
+            let with_greater = fill_command_with_limit(&doc, id, x, y, case.pixel, greater);
             if with_smaller.is_ok() {
                 // Ok(x) con L implica Ok(x) con cualquier L' >= L.
                 prop_assert_eq!(&with_greater, &with_smaller);
@@ -1654,7 +1654,7 @@ mod limits {
                 );
                 prop_assert_eq!(
                     with_greater,
-                    Err(DocumentError::FillTooFragmented { limit: mayor })
+                    Err(DocumentError::FillTooFragmented { limit: greater })
                 );
             }
         }

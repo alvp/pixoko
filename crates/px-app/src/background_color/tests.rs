@@ -78,14 +78,14 @@ const GRAY_DEFAULT: Rgba = Rgba::opaque(0x80, 0x80, 0x80);
 const BLUE_STEEL: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
 const BLUE_DARK: Rgba = Rgba::opaque(0x11, 0x22, 0x33);
 const WHITE: Rgba = Rgba::opaque(0xff, 0xff, 0xff);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 const TEST_RED: Rgba = Rgba::opaque(0xff, 0, 0);
 
 /// Los cinco fondos previos y el color con el que debe nacer el diálogo desde cada uno (el del
 /// sólido, `#808080` con el damero).
 const PREVIOUS: [(CanvasBackground, Rgba); 5] = [
     (CanvasBackground::Checker, GRAY_DEFAULT),
-    (CanvasBackground::Black, NEGRO),
+    (CanvasBackground::Black, TEST_BLACK),
     (CanvasBackground::Gray, Rgba::opaque(40, 40, 40)),
     (CanvasBackground::White, WHITE),
     (CanvasBackground::Custom(BLUE_DARK), BLUE_DARK),
@@ -268,7 +268,7 @@ fn row_4_the_constants_are_those_of_pieces() {
 fn row_4_background_color_form_valid_and_carries_title_buttons_a_hexadecimal_rgba_and_a_check() {
     for color in [
         GRAY_DEFAULT,
-        NEGRO,
+        TEST_BLACK,
         WHITE,
         BLUE_STEEL,
         Rgba::opaque(40, 40, 40),
@@ -384,13 +384,13 @@ fn row_4_with_a_lock_or_with_another_dialog_open_background_color_gives_false_an
         }
         // Con otro modal abierto, tampoco, y el abierto no cambia.
         let mut modal = open(CanvasBackground::Black);
-        let antes = modal.clone();
+        let before = modal.clone();
         assert!(!open_background_color(
             &mut modal,
             previous,
             Locks::default()
         ));
-        assert_eq!(modal, antes);
+        assert_eq!(modal, before);
     }
 }
 
@@ -499,14 +499,14 @@ fn row_4_with_alpha_less_than_ff_the_field_is_valid_but_rejected_with_the_reason
                 "{context}: `Aplicar` atenuado"
             );
             // `Accept` da `Rejected` con el motivo y no cambia nada.
-            let antes = dialog(&modal).clone();
+            let before = dialog(&modal).clone();
             assert_eq!(
                 accepts(&mut modal),
                 Reaction::Rejected(OPAQUE_REASON.to_string()),
                 "{context}"
             );
             assert!(modal.is_open(), "{context}: el diálogo sigue abierto");
-            assert_eq!(dialog(&modal), &antes, "{context}: no cambia nada");
+            assert_eq!(dialog(&modal), &before, "{context}: no cambia nada");
             // El mismo resultado tras `Intro` (que solo confirma el campo).
             confirms(&mut modal);
             assert_eq!(
@@ -617,7 +617,7 @@ fn row_4_enter_confirms_a_valid_text_and_keeps_the_invalid_one_with_its_error() 
 
         // Un texto inválido: `Intro` no lo descarta ni confirma, y el error sigue.
         let mut modal = open(previous);
-        let antes = confirmed(&modal);
+        let before = confirmed(&modal);
         writes(&mut modal, "zz");
         assert_eq!(
             presses(&mut modal, IN_THE_FIELD, DialogKey::Enter),
@@ -625,7 +625,7 @@ fn row_4_enter_confirms_a_valid_text_and_keeps_the_invalid_one_with_its_error() 
         );
         assert!(dialog(&modal).hex_pending(FIELD_COLOR));
         assert_eq!(text_of_the_field(&modal), "zz");
-        assert_eq!(confirmed(&modal), antes);
+        assert_eq!(confirmed(&modal), before);
         assert!(matches!(
             dialog(&modal).validity(FIELD_COLOR),
             Some(Validity::Invalid(_))
@@ -1028,11 +1028,11 @@ fn context_of(ppp: f32) -> Context {
 /// `src` (premultiplicado, como egui) por encima de `dst` opaco.
 fn above(dst: Color32, src: Color32) -> Color32 {
     let k = 1.0 - f32::from(src.a()) / 255.0;
-    let canal = |s: u8, d: u8| (f32::from(s) + f32::from(d) * k).round().clamp(0.0, 255.0) as u8;
+    let channel = |s: u8, d: u8| (f32::from(s) + f32::from(d) * k).round().clamp(0.0, 255.0) as u8;
     Color32::from_rgb(
-        canal(src.r(), dst.r()),
-        canal(src.g(), dst.g()),
-        canal(src.b(), dst.b()),
+        channel(src.r(), dst.r()),
+        channel(src.g(), dst.g()),
+        channel(src.b(), dst.b()),
     )
 }
 
@@ -1041,7 +1041,7 @@ fn above(dst: Color32, src: Color32) -> Color32 {
 fn paints_the_dialog(ppp: f32, dialog: &mut Dialog) -> Vec<Painted> {
     let ctx = context_of(ppp);
     let mut focus = None;
-    let mut ultimo = Vec::new();
+    let mut last_2_2 = Vec::new();
     let screen: Vec2 = vec2(960.0, 720.0);
     for frame in 0..6u32 {
         let input = RawInput {
@@ -1056,12 +1056,12 @@ fn paints_the_dialog(ppp: f32, dialog: &mut Dialog) -> Vec<Painted> {
         });
         output.textures_delta.clear();
         let shapes: Vec<ClippedShape> = std::mem::take(&mut output.shapes);
-        ultimo.clear();
+        last_2_2.clear();
         for clipped in &shapes {
-            flattens(&clipped.shape, clipped.clip_rect, &mut ultimo);
+            flattens(&clipped.shape, clipped.clip_rect, &mut last_2_2);
         }
     }
-    ultimo
+    last_2_2
 }
 
 /// Los fallos de contraste de los textos no atenuados y cuántos se comprobaron.
@@ -1083,8 +1083,8 @@ fn failures_of_contrast(painted: &[Painted]) -> (Vec<String>, usize) {
         let probe = visible.shrink2(vec2(0.0, visible.height() * 0.25));
         let mut background_2 = BACKGROUND;
         let mut there_is_fill = false;
-        for anterior in &painted[..i] {
-            if let Painted::Fill { rect, fill, clip } = anterior
+        for previous in &painted[..i] {
+            if let Painted::Fill { rect, fill, clip } = previous
                 && rect.intersect(*clip).expand(0.01).contains_rect(probe)
             {
                 there_is_fill = true;
@@ -1181,23 +1181,23 @@ fn row_4_the_dialog_paints_its_texts_with_contrast_of_at_least_4_5_and_the_reaso
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Directorio temporal propio del test; el guardián lo borra al soltarse.
-struct DirTemporal {
+struct TempDir {
     path_2: PathBuf,
 }
 
-impl DirTemporal {
-    fn new_2() -> DirTemporal {
+impl TempDir {
+    fn new_2() -> TempDir {
         let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let path_2 = std::env::temp_dir().join(format!(
             "pixoko-px-app-fondo-color-{}-{n}",
             std::process::id()
         ));
         fs::create_dir_all(&path_2).expect("crear el directorio temporal");
-        DirTemporal { path_2 }
+        TempDir { path_2 }
     }
 }
 
-impl Drop for DirTemporal {
+impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path_2);
     }
@@ -1359,7 +1359,7 @@ fn row_5_accepting_336699_gives_custom_in_the_canvas_the_menu_and_the_value_from
         for modified in MODIFIED {
             let context = format!("{previous:?}, modificada {modified}");
             let mut m = World::new_2(previous, modified);
-            let antes = m.snapshot();
+            let before = m.snapshot();
             assert!(m.opens(Locks::default()), "{context}");
             assert_eq!(m.modal.kind(), Some(DialogKind::BackgroundColor));
             // Mientras está abierto el fondo no cambia (sin vista previa en vivo).
@@ -1408,7 +1408,7 @@ fn row_5_accepting_336699_gives_custom_in_the_canvas_the_menu_and_the_value_from
             // Es solo visualización: la sesión, igual.
             assert_eq!(
                 m.snapshot(),
-                antes,
+                before,
                 "{context}: ningún paso de fondo toca la sesión"
             );
         }
@@ -1419,7 +1419,7 @@ fn row_5_accepting_336699_gives_custom_in_the_canvas_the_menu_and_the_value_from
 fn row_5_accepting_with_the_apply_button_and_with_the_default_also_gives_custom() {
     for (previous, color) in PREVIOUS {
         let mut m = World::new_2(previous, false);
-        let antes = m.snapshot();
+        let before = m.snapshot();
         assert!(m.opens(Locks::default()));
         let Reaction::Accepted(_) = m.event_2(Event::Accept) else {
             panic!("{previous:?}: Aplicar");
@@ -1429,7 +1429,7 @@ fn row_5_accepting_with_the_apply_button_and_with_the_default_also_gives_custom(
             CanvasBackground::Custom(color),
             "{previous:?}"
         );
-        assert_eq!(m.snapshot(), antes);
+        assert_eq!(m.snapshot(), before);
     }
 }
 
@@ -1438,13 +1438,13 @@ fn row_5_cancel_leaves_the_previous_background_whichever_it_is() {
     for (previous, _) in PREVIOUS {
         for modified in MODIFIED {
             let mut m = World::new_2(previous, modified);
-            let antes = m.snapshot();
+            let before = m.snapshot();
             assert!(m.opens(Locks::default()));
             m.writes("#336699");
             assert_eq!(m.event_2(Event::Cancel), Reaction::Cancelled);
             assert!(!m.modal.is_open());
             assert_eq!(m.background_2(), previous, "{previous:?}: cancelar");
-            assert_eq!(m.snapshot(), antes, "{previous:?}");
+            assert_eq!(m.snapshot(), before, "{previous:?}");
             // También con un texto confirmado (y con alfa) antes de cancelar.
             assert!(m.opens(Locks::default()));
             m.writes("#ff000080");
@@ -1455,7 +1455,7 @@ fn row_5_cancel_leaves_the_previous_background_whichever_it_is() {
                 previous,
                 "{previous:?}: cancelar tras confirmar"
             );
-            assert_eq!(m.snapshot(), antes);
+            assert_eq!(m.snapshot(), before);
         }
     }
 }
@@ -1464,7 +1464,7 @@ fn row_5_cancel_leaves_the_previous_background_whichever_it_is() {
 fn row_5_escape_leaves_the_previous_background_whichever_it_is() {
     for (previous, _) in PREVIOUS {
         let mut m = World::new_2(previous, false);
-        let antes = m.snapshot();
+        let before = m.snapshot();
         // Sin texto pendiente, `Escape` cancela a la primera.
         assert!(m.opens(Locks::default()));
         assert_eq!(m.presses(DialogKey::Escape), Reaction::Cancelled);
@@ -1478,7 +1478,7 @@ fn row_5_escape_leaves_the_previous_background_whichever_it_is() {
         assert_eq!(m.background_2(), previous);
         assert_eq!(m.presses(DialogKey::Escape), Reaction::Cancelled);
         assert_eq!(m.background_2(), previous, "{previous:?}");
-        assert_eq!(m.snapshot(), antes);
+        assert_eq!(m.snapshot(), before);
     }
 }
 
@@ -1486,7 +1486,7 @@ fn row_5_escape_leaves_the_previous_background_whichever_it_is() {
 fn row_5_quit_abandons_the_dialog_and_leaves_the_previous_background_whichever_it_is() {
     for (previous, _) in PREVIOUS {
         let mut m = World::new_2(previous, true);
-        let antes = m.snapshot();
+        let before = m.snapshot();
         assert!(m.opens(Locks::default()));
         m.writes("#336699");
         m.presses(DialogKey::Enter);
@@ -1495,7 +1495,7 @@ fn row_5_quit_abandons_the_dialog_and_leaves_the_previous_background_whichever_i
         assert!(m.modal.abandon());
         assert!(!m.modal.is_open());
         assert_eq!(m.background_2(), previous, "{previous:?}");
-        assert_eq!(m.snapshot(), antes);
+        assert_eq!(m.snapshot(), before);
         // Y no queda nada: otro `abandon` no hace nada y se puede reabrir con el color del fondo.
         assert!(!m.modal.abandon());
         assert!(m.opens(Locks::default()));
@@ -1508,11 +1508,11 @@ fn row_5_with_each_lock_open_background_color_gives_false_and_changes_nothing() 
     for (previous, _) in PREVIOUS {
         for (name_2, locks) in locks_one_by_one() {
             let mut m = World::new_2(previous, false);
-            let antes = m.snapshot();
+            let before = m.snapshot();
             assert!(!m.opens(locks), "{previous:?}, {name_2}");
             assert!(!m.modal.is_open(), "{previous:?}, {name_2}");
             assert_eq!(m.background_2(), previous);
-            assert_eq!(m.snapshot(), antes);
+            assert_eq!(m.snapshot(), before);
         }
         // Con los cinco a la vez, también.
         let mut m = World::new_2(previous, false);
@@ -1520,30 +1520,30 @@ fn row_5_with_each_lock_open_background_color_gives_false_and_changes_nothing() 
         // Un segundo `Color…` con el diálogo abierto no hace nada.
         assert!(m.opens(Locks::default()));
         m.writes("#336699");
-        let antes = m.modal.clone();
+        let before = m.modal.clone();
         assert!(!m.opens(Locks::default()));
-        assert_eq!(m.modal, antes);
+        assert_eq!(m.modal, before);
     }
 }
 
-type Operation = fn(&mut World, &DirTemporal);
+type Operation = fn(&mut World, &TempDir);
 
-fn op_set_image(m: &mut World, _: &DirTemporal) {
+fn op_set_image(m: &mut World, _: &TempDir) {
     let image_2 = m.image_2();
     m.canvas.set_image(&image_2);
 }
 
-fn op_set_owned_image(m: &mut World, _: &DirTemporal) {
+fn op_set_owned_image(m: &mut World, _: &TempDir) {
     m.canvas.set_owned_image(image_rgba());
 }
 
-fn op_new_image(m: &mut World, _: &DirTemporal) {
+fn op_new_image(m: &mut World, _: &TempDir) {
     let image_2 = Image::new(5, 4, Mode::Rgba).expect("imagen");
     m.session.new_image(image_2.clone(), true).expect("nueva");
     m.canvas.set_owned_image(image_2);
 }
 
-fn op_open_a_png(m: &mut World, dir: &DirTemporal) {
+fn op_open_a_png(m: &mut World, dir: &TempDir) {
     let path_2 = dir.path_2.join("abierta.png");
     fs::write(&path_2, write_png(&image_rgba()).expect("PNG")).expect("escribir");
     m.session.open(&path_2, 16384, true).expect("abrir");
@@ -1551,7 +1551,7 @@ fn op_open_a_png(m: &mut World, dir: &DirTemporal) {
     m.canvas.set_image(&image_2);
 }
 
-fn op_convert_mode(m: &mut World, _: &DirTemporal) {
+fn op_convert_mode(m: &mut World, _: &TempDir) {
     let allowed = Allowed {
         luma: true,
         drop_alpha: Some([0, 0, 0]),
@@ -1561,11 +1561,11 @@ fn op_convert_mode(m: &mut World, _: &DirTemporal) {
     m.canvas.set_image(&image_2);
 }
 
-fn op_undo(m: &mut World, _: &DirTemporal) {
+fn op_undo(m: &mut World, _: &TempDir) {
     m.session.undo().expect("hay algo que deshacer");
 }
 
-fn op_redo(m: &mut World, _: &DirTemporal) {
+fn op_redo(m: &mut World, _: &TempDir) {
     m.session.redo().expect("hay algo que rehacer");
 }
 
@@ -1588,7 +1588,7 @@ fn row_5_the_background_survives_set_image_set_owned_image_new_image_opening_a_p
 {
     for (previous, _) in PREVIOUS {
         for (name_2, operation) in operations_of_document() {
-            let dir = DirTemporal::new_2();
+            let dir = TempDir::new_2();
             let mut m = World::new_2(previous, false);
             operation(&mut m, &dir);
             assert_eq!(m.background_2(), previous, "{previous:?} tras {name_2}");
@@ -1600,7 +1600,7 @@ fn row_5_the_background_survives_set_image_set_owned_image_new_image_opening_a_p
 fn row_5_an_accepted_color_survives_the_document_operations() {
     for (previous, _) in PREVIOUS {
         for (name_2, operation) in operations_of_document() {
-            let dir = DirTemporal::new_2();
+            let dir = TempDir::new_2();
             let mut m = World::new_2(previous, false);
             assert!(m.opens(Locks::default()));
             m.writes("#336699");
@@ -1627,21 +1627,21 @@ fn row_5_each_background_step_leaves_the_session_equal_to_before() {
     // Una sola sesión recorre todos los pasos de fondo seguidos: `TestSnapshot` igual tras cada uno.
     for modified in MODIFIED {
         let mut m = World::new_2(CanvasBackground::Checker, modified);
-        let antes = m.snapshot();
+        let before = m.snapshot();
         for (previous, _) in PREVIOUS {
             m.canvas.set_background(previous);
-            assert_eq!(m.snapshot(), antes, "elegir {previous:?}");
+            assert_eq!(m.snapshot(), before, "elegir {previous:?}");
             assert!(m.opens(Locks::default()));
-            assert_eq!(m.snapshot(), antes, "abrir desde {previous:?}");
+            assert_eq!(m.snapshot(), before, "abrir desde {previous:?}");
             m.writes("#336699");
-            assert_eq!(m.snapshot(), antes, "teclear");
+            assert_eq!(m.snapshot(), before, "teclear");
             m.presses(DialogKey::Enter);
-            assert_eq!(m.snapshot(), antes, "confirmar");
+            assert_eq!(m.snapshot(), before, "confirmar");
             m.presses(DialogKey::Enter);
-            assert_eq!(m.snapshot(), antes, "aceptar desde {previous:?}");
+            assert_eq!(m.snapshot(), before, "aceptar desde {previous:?}");
             assert_eq!(m.background_2(), CanvasBackground::Custom(BLUE_STEEL));
         }
-        assert_eq!(m.snapshot(), antes);
+        assert_eq!(m.snapshot(), before);
     }
 }
 
@@ -1659,7 +1659,7 @@ fn row_5_a_second_color_with_custom_active_is_born_with_that_color() {
         assert_eq!(text_of_the_field(&m.modal), "#336699", "{previous:?}");
         assert_eq!(confirmed(&m.modal), BLUE_STEEL);
         assert_eq!(reason_2(&m.modal), None);
-        // Cancelarlo no cambia nada, y tras `Negro` nace en `#000000` (no recuerda el propio).
+        // Cancelarlo no cambia nada, y tras `Black` nace en `#000000` (no recuerda el propio).
         assert_eq!(m.event_2(Event::Cancel), Reaction::Cancelled);
         assert_eq!(m.background_2(), CanvasBackground::Custom(BLUE_STEEL));
         m.canvas.set_background(CanvasBackground::Black);
@@ -1727,7 +1727,7 @@ fn row_8_write_png_gives_the_same_bytes_with_any_background_and_the_reading_is_t
         .expect("imagen del documento");
     let state_id = doc.state_id();
     let bytes_rgba = to_rgba8(document);
-    let png_antes = write_png(document).expect("PNG antes");
+    let png_before = write_png(document).expect("PNG antes");
 
     let ctx = Context::default();
     let mut canvas = Canvas::new();
@@ -1759,7 +1759,7 @@ fn row_8_write_png_gives_the_same_bytes_with_any_background_and_the_reading_is_t
             // Y `write_png` da los mismos bytes con cada fondo.
             assert_eq!(
                 write_png(document).expect("PNG"),
-                png_antes,
+                png_before,
                 "{background_2:?}: mismos bytes del PNG"
             );
         }
@@ -1767,7 +1767,7 @@ fn row_8_write_png_gives_the_same_bytes_with_any_background_and_the_reading_is_t
     }
     // La lectura de vuelta es la imagen original, con alfa 0 donde era 0 y sin el color elegido ni
     // los grises del damero.
-    let read_2 = read_png(&png_antes).expect("el PNG se lee");
+    let read_2 = read_png(&png_before).expect("el PNG se lee");
     assert!(read_2.is_exact(), "sin conversiones al leer");
     assert_eq!(read_2.image, original);
     let read_2_2 = to_rgba8(&read_2.image);
@@ -1826,13 +1826,13 @@ fn text_hexadecimal() -> impl Strategy<Value = String> {
             prop::sample::select(vec!['z', 'g', '-', ' ', 'ñ']),
         )),
     )
-        .prop_map(|(hash, digits, antes, after_2, bad)| {
+        .prop_map(|(hash, digits, before, after_2, bad)| {
             let mut body: Vec<char> = digits.into_iter().map(char::from).collect();
             if let Some((i, c)) = bad {
                 let i = i % (body.len() + 1);
                 body.insert(i, c);
             }
-            let mut text_2 = " ".repeat(antes);
+            let mut text_2 = " ".repeat(before);
             if hash {
                 text_2.push('#');
             }
@@ -1885,7 +1885,7 @@ proptest! {
             writes(&mut modal, t);
         }
         let expected_2 = resolve_hex(text_2.as_deref(), Mode::Rgba, confirmed_before);
-        let antes = dialog(&modal).clone();
+        let before = dialog(&modal).clone();
         let reaction = accepts(&mut modal);
         match expected_2 {
             Ok(c) if c.a == 255 => {
@@ -1903,7 +1903,7 @@ proptest! {
                 // Alfa < 255: el campo vale y el conjunto no.
                 prop_assert_eq!(reaction, Reaction::Rejected(OPAQUE_REASON.to_string()));
                 prop_assert!(modal.is_open());
-                prop_assert_eq!(dialog(&modal), &antes);
+                prop_assert_eq!(dialog(&modal), &before);
                 prop_assert_eq!(dialog(&modal).validity(FIELD_COLOR), Some(Validity::Valid));
                 prop_assert_eq!(dialog(&modal).values(), None);
             }
@@ -1911,7 +1911,7 @@ proptest! {
                 // Inválido: el error en línea es el de `hex_notice` y el conjunto no vale.
                 prop_assert!(matches!(reaction, Reaction::Rejected(_)), "{:?}", reaction);
                 prop_assert!(modal.is_open());
-                prop_assert_eq!(dialog(&modal), &antes);
+                prop_assert_eq!(dialog(&modal), &before);
                 prop_assert_eq!(
                     dialog(&modal).validity(FIELD_COLOR),
                     Some(Validity::Invalid(hex_notice(&error).to_string()))
@@ -1999,7 +1999,7 @@ proptest! {
         let mut m = World::new_2(CanvasBackground::Checker, false);
         let mut model = CanvasBackground::Checker;
         for (n, step) in steps_2.into_iter().enumerate() {
-            let antes = m.snapshot();
+            let before = m.snapshot();
             let open = m.modal.is_open();
             let mut of_background = true;
             match &step {
@@ -2115,7 +2115,7 @@ proptest! {
             }
             // Un paso de fondo no toca la sesión.
             if of_background {
-                prop_assert_eq!(m.snapshot(), antes, "paso {}: {:?}", n, step);
+                prop_assert_eq!(m.snapshot(), before, "paso {}: {:?}", n, step);
             }
         }
     }

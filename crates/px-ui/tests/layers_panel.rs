@@ -346,12 +346,12 @@ fn row_5_dragging_by_the_bar_moves_in_steps_of_u_and_the_initial_position_sticks
         open: true,
         ..PanelState::default()
     };
-    let antes = state_2.rect(window_2, 2);
+    let before = state_2.rect(window_2, 2);
     state_2.drag(11, -7, 2); // 11 px = 5,5 u → 6 u y −7 px = −3,5 u → −4 u (redondeo)
     let after_2 = state_2.rect(window_2, 2);
-    assert_eq!((after_2.x - antes.x) % k, 0, "a pasos de u enteras");
-    assert_eq!((after_2.y - antes.y) % k, 0);
-    assert!((after_2.x - antes.x - 11).abs() <= 1 && (after_2.y - antes.y + 7).abs() <= 1);
+    assert_eq!((after_2.x - before.x) % k, 0, "a pasos de u enteras");
+    assert_eq!((after_2.y - before.y) % k, 0);
+    assert!((after_2.x - before.x - 11).abs() <= 1 && (after_2.y - before.y + 7).abs() <= 1);
 }
 
 // ---------------------------------------------------------------------------------------------

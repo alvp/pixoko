@@ -137,7 +137,7 @@ fn title_width_u(title: &str) -> i64 {
 
 /// Ancho del desplegable: `12 + max(rótulo + 2 + shortcut_2)·7`.
 fn dropdown_width_u(items: &[px_ui::menu::MenuItem], platform: Platform) -> i64 {
-    let mayor = items
+    let greater = items
         .iter()
         .map(|item| {
             let shortcut_2 = shortcut_for(item.action, platform)
@@ -146,7 +146,7 @@ fn dropdown_width_u(items: &[px_ui::menu::MenuItem], platform: Platform) -> i64 
         })
         .max()
         .unwrap_or(0) as i64;
-    12 + mayor * i64::from(ADVANCE_PX)
+    12 + greater * i64::from(ADVANCE_PX)
 }
 
 #[test]

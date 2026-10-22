@@ -195,15 +195,15 @@ fn row_01_bytes_per_pixel_is_4_1_1_2() {
 fn row_02_row_returns_the_row_or_none() {
     for mode in ALL_2 {
         let img = image_of_example(mode, 3, 2);
-        let largo = img.row_len();
-        assert_eq!(largo, 3 * bpp(mode), "{mode:?}");
+        let length = img.row_len();
+        assert_eq!(length, 3 * bpp(mode), "{mode:?}");
         for y in 0..2u32 {
             let row = img
                 .row(y)
                 .unwrap_or_else(|| panic!("{mode:?}: row({y}) es None"));
-            assert_eq!(row.len(), largo, "{mode:?} y = {y}");
-            let from = y as usize * largo;
-            assert_eq!(row, &img.bytes()[from..from + largo], "{mode:?} y = {y}");
+            assert_eq!(row.len(), length, "{mode:?} y = {y}");
+            let from = y as usize * length;
+            assert_eq!(row, &img.bytes()[from..from + length], "{mode:?} y = {y}");
         }
         assert_eq!(img.row(2), None, "{mode:?}");
         assert_eq!(img.row(u32::MAX), None, "{mode:?}");
@@ -402,7 +402,7 @@ fn row_08_try_clone_is_clone_without_sharing_memory() {
             );
 
             // Escribir en la copia no cambia el original.
-            let antes = original.clone();
+            let before = original.clone();
             let new = match mode {
                 Mode::Rgba => Pixel::Rgba(Rgba::new(250, 251, 252, 253)),
                 Mode::Indexed => Pixel::Indexed(2),
@@ -413,7 +413,7 @@ fn row_08_try_clone_is_clone_without_sharing_memory() {
                 },
             };
             copy.set_pixel(0, 0, new).unwrap();
-            assert_eq!(original, antes, "{mode:?} {w}x{h}");
+            assert_eq!(original, before, "{mode:?} {w}x{h}");
             assert_eq!(copy.get_pixel(0, 0), Ok(new), "{mode:?} {w}x{h}");
         }
     }
@@ -440,11 +440,11 @@ fn row_09_from_bytes_of_an_images_bytes_equals_it() {
 #[test]
 fn row_10_from_bytes_wrong_length_and_error_order() {
     for mode in NOT_INDEXED {
-        let largo = byte_len(3, 2, mode);
-        for found in [largo - 1, largo + 1, 0] {
+        let length = byte_len(3, 2, mode);
+        for found in [length - 1, length + 1, 0] {
             assert_eq!(
                 Image::from_bytes(3, 2, mode, vec![0; found]),
-                Err(wrong_length(largo, found)),
+                Err(wrong_length(length, found)),
                 "{mode:?} con {found} bytes"
             );
         }
@@ -686,11 +686,11 @@ proptest! {
         prop_assert_eq!(expected_2_2.len(), img.bytes().len());
         prop_assert_eq!(img.bytes(), &expected_2_2[..]);
 
-        let largo = w as usize * bpp(case.mode);
-        prop_assert_eq!(img.row_len(), largo);
+        let length = w as usize * bpp(case.mode);
+        prop_assert_eq!(img.row_len(), length);
         for y in 0..h {
-            let from = y as usize * largo;
-            prop_assert_eq!(img.row(y), Some(&expected_2_2[from..from + largo]), "y = {}", y);
+            let from = y as usize * length;
+            prop_assert_eq!(img.row(y), Some(&expected_2_2[from..from + length]), "y = {}", y);
         }
         prop_assert_eq!(img.row(h), None);
         prop_assert_eq!(img.row(u32::MAX), None);
@@ -749,8 +749,8 @@ proptest! {
         inside_of_the_palette in any::<bool>(),
     ) {
         let expected = byte_len(width, height, mode);
-        let largo = (expected as i64 + i64::from(d)).max(0) as usize;
-        let mut data: Vec<u8> = raw[..largo].to_vec();
+        let length = (expected as i64 + i64::from(d)).max(0) as usize;
+        let mut data: Vec<u8> = raw[..length].to_vec();
         if mode == Mode::Indexed && inside_of_the_palette {
             for b in &mut data {
                 *b = (usize::from(*b) % n) as u8;

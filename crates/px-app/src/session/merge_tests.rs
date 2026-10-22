@@ -139,7 +139,7 @@ fn row_9_merge_down_joins_the_active_with_the_one_below_and_the_active_one_retur
         .expect("opacidad");
     let (b, c) = (id(&session_2, 1), id(&session_2, 2));
     session_2.set_active_layer(c).expect("activa");
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
 
     let report = session_2.merge(MergeKind::Down);
     assert!(report.changed, "{report:?}");
@@ -166,7 +166,7 @@ fn row_9_merge_down_joins_the_active_with_the_one_below_and_the_active_one_retur
 
     // Deshacer: vuelve C con sus propiedades y la activa vuelve a C (nota de la combinación).
     session_2.undo().expect("deshacer");
-    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document, before);
     assert_eq!(session_2.active_layer(), c);
     // Rehacer: la activa es la superviviente.
     session_2.redo().expect("rehacer");
@@ -291,7 +291,7 @@ fn row_9_merge_visible_leaves_the_hidden_ones_and_needs_two_visible() {
         })
         .expect("bloquear");
     session_2.set_active_layer(d).expect("activa");
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
 
     assert_eq!(session_2.merge_refusal(MergeKind::Visible), None);
     let report = session_2.merge(MergeKind::Visible);
@@ -304,7 +304,7 @@ fn row_9_merge_visible_leaves_the_hidden_ones_and_needs_two_visible() {
     );
     assert_eq!(session_2.active_layer(), a);
     session_2.undo().expect("deshacer");
-    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document, before);
     assert_eq!(session_2.active_layer(), d);
 
     // Con una sola visible no hay nada que combinar.
@@ -340,7 +340,7 @@ fn row_9_flatten_removes_the_hidden_ones_asks_for_confirmation_and_is_undone_who
         })
         .expect("ocultar");
     session_2.set_active_layer(c).expect("activa");
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     assert_eq!(session_2.flatten_hidden_with_pixels(), 1);
 
     let report = session_2.merge(MergeKind::Flatten);
@@ -355,7 +355,7 @@ fn row_9_flatten_removes_the_hidden_ones_asks_for_confirmation_and_is_undone_who
     assert_eq!(session_2.document.layers().len(), 1);
     assert_eq!(session_2.active_layer(), id(&session_2, 0));
     session_2.undo().expect("deshacer");
-    assert_eq!(session_2.document, antes, "vuelven las tres con sus ids");
+    assert_eq!(session_2.document, before, "vuelven las tres con sus ids");
     assert_eq!(session_2.active_layer(), c);
     session_2.redo().expect("rehacer");
     assert_eq!(session_2.document.layers().len(), 1);
@@ -411,11 +411,11 @@ fn row_9_the_history_notice_comes_out_only_if_what_is_saved_exceeds_the_limit() 
         session_2.set_active_layer(b).expect("activa");
         let report = session_2.merge(MergeKind::Down);
         assert!(report.changed);
-        let dice = report
+        let says = report
             .notice
             .as_deref()
             .is_some_and(|t| t.contains("siguen en la historia hasta tu próxima edición"));
-        assert_eq!(dice, expected_2, "límite {limit_2}: {report:?}");
+        assert_eq!(says, expected_2, "límite {limit_2}: {report:?}");
     }
 }
 

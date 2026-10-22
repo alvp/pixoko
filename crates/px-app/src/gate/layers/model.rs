@@ -68,7 +68,7 @@ pub enum Order {
     Duplicate,
     Remove,
     /// `+1` sube un puesto y `-1` baja (la activa sigue siendo la misma).
-    Mover(i32),
+    Move(i32),
     /// Elegir la capa activa: no es un paso de historia.
     Activate(usize),
     Visible(usize, bool),
@@ -326,16 +326,16 @@ impl Stack {
         x >= 0 && y >= 0 && (x as usize) < self.width && (y as usize) < self.height
     }
 
-    /// Escribe `valor` en los puntos dentro del lienzo de la celda activa; devuelve si algo cambió.
+    /// Escribe `value` en los puntos dentro del lienzo de la celda activa; devuelve si algo cambió.
     /// Una celda vacía solo se materializa si algún píxel difiere del transparente.
-    fn paint(&mut self, points: &[(i32, i32)], valor: Cel4) -> bool {
+    fn paint(&mut self, points: &[(i32, i32)], value: Cel4) -> bool {
         let active_2 = self.active_2;
         let mut grid = self.grid(active_2);
         let mut change = false;
         for &p in points.iter().filter(|&&p| self.inside(p)) {
             let k = p.1 as usize * self.width + p.0 as usize;
-            if grid[k] != valor {
-                grid[k] = valor;
+            if grid[k] != value {
+                grid[k] = value;
                 change = true;
             }
         }
@@ -346,7 +346,7 @@ impl Stack {
     }
 
     /// Relleno por cola de 4 vecinos sobre la celda activa.
-    fn fill(&mut self, seed: (i32, i32), valor: Cel4) -> bool {
+    fn fill(&mut self, seed: (i32, i32), value: Cel4) -> bool {
         if !self.inside(seed) {
             return false;
         }
@@ -354,7 +354,7 @@ impl Stack {
         let mut grid = self.grid(active_2);
         let (width, height) = (self.width as i32, self.height as i32);
         let source_2 = grid[(seed.1 * width + seed.0) as usize];
-        if source_2 == valor {
+        if source_2 == value {
             return false;
         }
         let mut queue = std::collections::VecDeque::from([seed]);
@@ -363,7 +363,7 @@ impl Stack {
             if grid[k] != source_2 {
                 continue;
             }
-            grid[k] = valor;
+            grid[k] = value;
             for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
                 let (nx, ny) = (x + dx, y + dy);
                 if nx >= 0 && ny >= 0 && nx < width && ny < height {
@@ -447,7 +447,7 @@ impl Stack {
                 self.active_2 = self.active_2.min(self.layers_2.len() - 1);
                 STRUCTURE
             }
-            Order::Mover(delta) => {
+            Order::Move(delta) => {
                 let to = self.active_2 as i64 + i64::from(*delta);
                 if to < 0 || to >= self.layers_2.len() as i64 {
                     return NOTHING;
@@ -563,7 +563,7 @@ impl Stack {
         match (self.mode_2, target_2) {
             (Mode::Indexed, Mode::Rgba) => {
                 let palette = self.palette.clone().expect("paleta");
-                let resolver = |c: Cel4| {
+                let resolve = |c: Cel4| {
                     let color = palette.resolved(c[0]).expect("entrada");
                     if color.a == 0 {
                         [0, 0, 0, 0]
@@ -574,7 +574,7 @@ impl Stack {
                 for layer_2 in &mut self.layers_2 {
                     if let Some(cel) = &mut layer_2.cel {
                         for c in cel.iter_mut() {
-                            *c = resolver(*c);
+                            *c = resolve(*c);
                         }
                     }
                 }
@@ -623,11 +623,11 @@ fn effect(change: bool) -> Effect {
     if change { CHANGES } else { NOTHING }
 }
 
-fn changes_if<T: PartialEq>(field_2: &mut T, valor: T) -> Effect {
-    if *field_2 == valor {
+fn changes_if<T: PartialEq>(field_2: &mut T, value: T) -> Effect {
+    if *field_2 == value {
         NOTHING
     } else {
-        *field_2 = valor;
+        *field_2 = value;
         CHANGES
     }
 }

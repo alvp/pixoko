@@ -63,14 +63,14 @@ fn text_of_the_area(key: &str) -> String {
 
 #[test]
 fn row_3_the_four_keys_give_their_actions_and_the_table_has_no_conflicts() {
-    let tabla = Keymap::default_scheme();
+    let table = Keymap::default_scheme();
     assert_eq!(
-        tabla.conflicts(),
+        table.conflicts(),
         vec![],
         "la propiedad de conflictos de I.1 e I.5"
     );
-    assert_eq!(tabla.rows().len(), 35);
-    assert_eq!(tabla.rows().iter().filter(|f| f.command).count(), 9);
+    assert_eq!(table.rows().len(), 35);
+    assert_eq!(table.rows().iter().filter(|f| f.command).count(), 9);
     for platform in PLATFORMS {
         for (c, action_2) in [
             ('\'', AppAction::ToggleLayerPanel),
@@ -79,17 +79,17 @@ fn row_3_the_four_keys_give_their_actions_and_the_table_has_no_conflicts() {
             ('(', AppAction::LayerDown),
         ] {
             assert_eq!(
-                tabla.action_for(&presses_2(c), platform),
+                table.action_for(&presses_2(c), platform),
                 Some(action_2),
                 "{c} en {platform:?}"
             );
             // Un símbolo no cuenta `Mayús` ni `Alt` (como `<` y `[`), pero sí `Ctrl`/`Cmd`.
             let mut with_shift = presses_2(c);
             with_shift.shift = true;
-            assert_eq!(tabla.action_for(&with_shift, platform), Some(action_2));
+            assert_eq!(table.action_for(&with_shift, platform), Some(action_2));
             let mut with_command = presses_2(c);
             with_command.command = true;
-            assert_eq!(tabla.action_for(&with_command, platform), None);
+            assert_eq!(table.action_for(&with_command, platform), None);
         }
         // Las demás cuatro no tienen tecla por defecto y `l` / `L` siguen sin asignar (I.1).
         for action_2 in [
@@ -98,10 +98,10 @@ fn row_3_the_four_keys_give_their_actions_and_the_table_has_no_conflicts() {
             AppAction::RenameLayer,
             AppAction::LayerProperties,
         ] {
-            assert!(tabla.shown(action_2, platform).is_none(), "{action_2:?}");
+            assert!(table.shown(action_2, platform).is_none(), "{action_2:?}");
         }
         for c in ['l', 'L', 'p', 'i', 'e'] {
-            assert_eq!(tabla.action_for(&presses_2(c), platform), None, "{c}");
+            assert_eq!(table.action_for(&presses_2(c), platform), None, "{c}");
         }
     }
 }

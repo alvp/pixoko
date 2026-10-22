@@ -173,7 +173,7 @@ fn gray_extremes_0_and_255() {
 #[test]
 fn gray_alpha_3x2_gives_g_g_g_a() {
     let mut image_2 = Image::new(3, 2, Mode::GrayAlpha).unwrap();
-    let pares = [
+    let pairs = [
         (10u8, 200u8),
         (20, 190),
         (30, 0),
@@ -181,7 +181,7 @@ fn gray_alpha_3x2_gives_g_g_g_a() {
         (50, 128),
         (60, 1),
     ];
-    for (k, &(gray, alpha)) in pares.iter().enumerate() {
+    for (k, &(gray, alpha)) in pairs.iter().enumerate() {
         image_2
             .set_pixel(k as u32 % 3, k as u32 / 3, Pixel::GrayAlpha { gray, alpha })
             .unwrap();
@@ -607,10 +607,10 @@ proptest! {
 
     #[test]
     fn the_conversion_does_not_modify_the_image_and_is_deterministic(image_2 in image_indexed()) {
-        let antes = image_2.clone();
+        let before = image_2.clone();
         let a = to_rgba8(&image_2);
         let b = to_rgba8(&image_2);
-        prop_assert_eq!(&image_2, &antes);
+        prop_assert_eq!(&image_2, &before);
         prop_assert_eq!(a, b);
     }
 }

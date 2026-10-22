@@ -433,7 +433,7 @@ fn row_3b_digits_without_modifiers_do_nothing() {
     for platform in PLATFORMS {
         for slot in 1..=9u8 {
             let world = World::new_2(indexed(9, None), 0, 0);
-            let antes = world.snapshot();
+            let before = world.snapshot();
             // `key_actions` traducido: la tecla no da ninguna acción que despachar.
             assert_eq!(
                 action_for_shortcut(key_digit(slot), Modifiers::NONE, platform),
@@ -441,7 +441,7 @@ fn row_3b_digits_without_modifiers_do_nothing() {
                 "{platform:?} cifra {slot} (antes elegía la ranura)"
             );
             assert_eq!(world.session.choice, ColorChoice::Entry(0));
-            assert_eq!(world.snapshot(), antes);
+            assert_eq!(world.snapshot(), before);
         }
     }
 }
@@ -487,10 +487,10 @@ fn row_3b_in_rgba_the_slots_choose_the_color_slot() {
 #[test]
 fn row_3b_a_slot_without_a_swatch_changes_nothing() {
     let mut world = World::new_2(indexed(4, None), 0, 0);
-    let antes = world.snapshot();
+    let before = world.snapshot();
     let result = world.dispatches(AppAction::SelectColor(7), Origin::Key);
     assert_eq!(result, done(false));
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
 }
 
 #[test]
@@ -499,7 +499,7 @@ fn row_3b_command_1_gives_only_zoom_actual_and_does_not_change_choice() {
         let mut world = World::new_2(indexed(9, None), 0, 0);
         world.session.set_choice_revealing(ColorChoice::Entry(4));
         world.session.view.reveal = false;
-        let antes = world.snapshot();
+        let before = world.snapshot();
         let action = action_for_shortcut(Key::Num1, command(platform), platform)
             .expect("command+1 da una acción");
         assert_eq!(action, AppAction::ZoomActual, "{platform:?}");
@@ -508,7 +508,7 @@ fn row_3b_command_1_gives_only_zoom_actual_and_does_not_change_choice() {
         assert_eq!(result, Dispatched::View(ViewOp::Actual), "{platform:?}");
         assert_eq!(
             world.snapshot(),
-            antes,
+            before,
             "{platform:?}: no cambia choice ni nada"
         );
         assert_eq!(world.session.choice, ColorChoice::Entry(4));
@@ -679,7 +679,7 @@ fn row_4_the_three_dispatched_and_the_final_state_are_equal() {
             sources.push((Origin::Key, action));
         }
 
-        let antes = World::standard().snapshot();
+        let before = World::standard().snapshot();
         let results: Vec<(Origin, Dispatched, TestSnapshot)> = sources
             .iter()
             .map(|(origin, action)| {
@@ -706,15 +706,15 @@ fn row_4_the_three_dispatched_and_the_final_state_are_equal() {
         match case.expected {
             AppAction::Open => {
                 assert_eq!(*result, Dispatched::File(FileAction::Open));
-                assert_eq!(*after_2, antes, "Abrir no toca el documento");
+                assert_eq!(*after_2, before, "Abrir no toca el documento");
             }
             AppAction::Save => {
                 assert_eq!(*result, Dispatched::File(FileAction::Save));
-                assert_eq!(*after_2, antes);
+                assert_eq!(*after_2, before);
             }
             AppAction::SaveAs => {
                 assert_eq!(*result, Dispatched::File(FileAction::SaveAs));
-                assert_eq!(*after_2, antes);
+                assert_eq!(*after_2, before);
             }
             AppAction::Quit => assert_eq!(*result, Dispatched::Quit),
             AppAction::ZoomIn => assert_eq!(*result, Dispatched::View(ViewOp::ZoomIn)),
@@ -722,12 +722,12 @@ fn row_4_the_three_dispatched_and_the_final_state_are_equal() {
             AppAction::ShowLicenses => assert_eq!(*result, Dispatched::Licenses(true)),
             AppAction::Undo => {
                 assert_eq!(*result, done(true));
-                assert_ne!(after_2.state_id, antes.state_id);
+                assert_ne!(after_2.state_id, before.state_id);
                 assert!(after_2.can_redo);
             }
             AppAction::Redo => {
                 assert_eq!(*result, done(true));
-                assert_ne!(after_2.state_id, antes.state_id);
+                assert_ne!(after_2.state_id, before.state_id);
                 assert!(!after_2.can_redo);
             }
             AppAction::SelectTool(Tool::Eraser) => {
@@ -819,13 +819,13 @@ fn row_4_the_four_zoom_buttons_give_view_with_their_operation() {
         ("1:1", ViewOp::Actual),
     ] {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(
             world.dispatches(by_button_label(label), Origin::Button),
             Dispatched::View(op),
             "{label}"
         );
-        assert_eq!(world.snapshot(), antes, "el zoom no toca el documento");
+        assert_eq!(world.snapshot(), before, "el zoom no toca el documento");
     }
 }
 
@@ -858,10 +858,10 @@ fn row_4_close_licenses_gives_licenses_false_with_any_lock_and_source() {
 #[test]
 fn row_5_undo_and_redo_without_history_give_done_without_changes() {
     let mut world = World::new_2(rgba(), 0, 0);
-    let antes = world.snapshot();
+    let before = world.snapshot();
     assert_eq!(world.dispatches(AppAction::Undo, Origin::Menu), done(false));
     assert_eq!(world.dispatches(AppAction::Redo, Origin::Menu), done(false));
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
 }
 
 #[test]
@@ -893,7 +893,7 @@ fn row_5_with_a_gesture_dialog_or_text_all_those_that_are_not_zoom_give_blocked_
             // Gesto de verdad: trazo, deslizador y arrastre de muestra.
             for gesture in GESTURES {
                 let mut world = world_with_gesture(gesture);
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 // I.2a: con un trazo en curso el color se puede cambiar (afecta al trazo
                 // siguiente); con el deslizador o una muestra arrastrándose, no.
                 if matches!(action, AppAction::SelectColor(_))
@@ -913,7 +913,7 @@ fn row_5_with_a_gesture_dialog_or_text_all_those_that_are_not_zoom_give_blocked_
                 );
                 assert_eq!(
                     world.snapshot(),
-                    antes,
+                    before,
                     "{action:?} {origin:?} con {gesture:?}"
                 );
             }
@@ -923,7 +923,7 @@ fn row_5_with_a_gesture_dialog_or_text_all_those_that_are_not_zoom_give_blocked_
                 ("text_focus", locks_with(|l| l.text_focus = true)),
             ] {
                 let mut world = World::standard();
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 assert_eq!(
                     world.dispatches_with(action, origin, locks),
                     Dispatched::Blocked,
@@ -931,7 +931,7 @@ fn row_5_with_a_gesture_dialog_or_text_all_those_that_are_not_zoom_give_blocked_
                 );
                 assert_eq!(
                     world.snapshot(),
-                    antes,
+                    before,
                     "{action:?} {origin:?} con {name_2}"
                 );
             }
@@ -942,7 +942,7 @@ fn row_5_with_a_gesture_dialog_or_text_all_those_that_are_not_zoom_give_blocked_
 #[test]
 fn row_5_a_blocked_undo_does_not_consume_the_history() {
     let mut world = World::new_2(rgba(), 3, 0);
-    let antes = world.snapshot();
+    let before = world.snapshot();
     for locks in [
         locks_with(|l| l.gesture = true),
         locks_with(|l| l.dialog = true),
@@ -957,11 +957,11 @@ fn row_5_a_blocked_undo_does_not_consume_the_history() {
             world.dispatches_with(AppAction::Redo, Origin::Key, locks),
             Dispatched::Blocked
         );
-        assert_eq!(world.snapshot(), antes, "{locks:?}");
+        assert_eq!(world.snapshot(), before, "{locks:?}");
     }
     // Sin bloqueo, el mismo Undo sí deshace.
     assert_eq!(world.dispatches(AppAction::Undo, Origin::Menu), done(true));
-    assert_ne!(world.snapshot().state_id, antes.state_id);
+    assert_ne!(world.snapshot().state_id, before.state_id);
 }
 
 #[test]
@@ -984,14 +984,14 @@ fn row_5_with_a_pending_removal_only_select_color_and_show_licenses_give_blocked
 #[test]
 fn row_5_select_color_with_a_pending_removal_changes_neither_the_selection_nor_the_removal() {
     let mut world = world_with_a_pending_removal();
-    let antes = world.snapshot();
+    let before = world.snapshot();
     for slot in 1..=5 {
         assert_eq!(
             world.dispatches(AppAction::SelectColor(slot), Origin::Key),
             Dispatched::Blocked
         );
     }
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
     assert!(world.session.ops.removal().is_some());
 }
 
@@ -1025,7 +1025,7 @@ fn row_5_with_a_modal_only_close_licenses_and_quit_pass() {
     for action in all_the_actions() {
         for origin in SOURCES {
             let mut world = World::standard();
-            let antes = world.snapshot();
+            let before = world.snapshot();
             let result = world.dispatches_with(action, origin, locks);
             match action {
                 AppAction::CloseLicenses => {
@@ -1034,7 +1034,7 @@ fn row_5_with_a_modal_only_close_licenses_and_quit_pass() {
                 AppAction::Quit => assert_eq!(result, Dispatched::Quit, "{origin:?}"),
                 other => {
                     assert_eq!(result, Dispatched::Blocked, "{other:?} {origin:?}");
-                    assert_eq!(world.snapshot(), antes, "{other:?} {origin:?}");
+                    assert_eq!(world.snapshot(), before, "{other:?} {origin:?}");
                 }
             }
         }
@@ -1103,9 +1103,9 @@ fn row_5_open_save_and_save_as_give_file_and_do_not_touch_the_document() {
     ] {
         for origin in SOURCES {
             let mut world = World::standard();
-            let antes = world.snapshot();
+            let before = world.snapshot();
             assert_eq!(world.dispatches(action, origin), Dispatched::File(file));
-            assert_eq!(world.snapshot(), antes);
+            assert_eq!(world.snapshot(), before);
         }
     }
 }
@@ -1114,12 +1114,12 @@ fn row_5_open_save_and_save_as_give_file_and_do_not_touch_the_document() {
 fn row_5_show_licenses_gives_licenses_true() {
     for origin in SOURCES {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(
             world.dispatches(AppAction::ShowLicenses, origin),
             Dispatched::Licenses(true)
         );
-        assert_eq!(world.snapshot(), antes);
+        assert_eq!(world.snapshot(), before);
     }
 }
 
@@ -1161,13 +1161,13 @@ fn row_5b_a_b_and_c_stroke_slider_and_removal_do_not_block_the_zoom_with_any_sou
         for (action, op) in ZOOMS {
             for origin in SOURCES {
                 let mut world = creates();
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 assert_eq!(
                     world.dispatches(action, origin),
                     Dispatched::View(op),
                     "{name_2}: {action:?} {origin:?}"
                 );
-                assert_eq!(world.snapshot(), antes, "{name_2}: el zoom no toca nada");
+                assert_eq!(world.snapshot(), before, "{name_2}: el zoom no toca nada");
                 // `enabled` es verdadero con el zoom y la imagen que hacen falta.
                 let state_2 = world.ui_state(Zoom::from_int(5), world.locks());
                 assert!(enabled(action, &state_2), "{name_2}: {action:?}");
@@ -1181,13 +1181,13 @@ fn row_5b_d_with_a_focused_field_the_keys_are_blocked_and_the_menu_and_the_butto
     let locks = locks_with(|l| l.text_focus = true);
     for (action, op) in ZOOMS {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(
             world.dispatches_with(action, Origin::Key, locks),
             Dispatched::Blocked,
             "{action:?} por tecla"
         );
-        assert_eq!(world.snapshot(), antes);
+        assert_eq!(world.snapshot(), before);
         for origin in [Origin::Menu, Origin::Button] {
             assert_eq!(
                 world.dispatches_with(action, origin, locks),
@@ -1209,13 +1209,13 @@ fn row_5b_e_and_f_a_dialog_or_the_licenses_block_the_zoom_with_the_three_sources
         for (action, _) in ZOOMS {
             for origin in SOURCES {
                 let mut world = World::standard();
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 assert_eq!(
                     world.dispatches_with(action, origin, locks),
                     Dispatched::Blocked,
                     "{name_2}: {action:?} {origin:?}"
                 );
-                assert_eq!(world.snapshot(), antes);
+                assert_eq!(world.snapshot(), before);
             }
             let world = World::standard();
             let state_2 = world.ui_state(Zoom::from_int(5), locks);
@@ -1233,7 +1233,7 @@ fn row_5b_zoom_in_the_middle_of_a_stroke_does_not_cut_the_stroke_and_leaves_a_si
             let id = ImageId::from_raw(0);
             let pixel = world.session.active_pixel();
             starts_a_stroke(&mut world);
-            let mover = |world: &mut World, x: i32| {
+            let move_pointer = |world: &mut World, x: i32| {
                 world
                     .tools
                     .canvas_event_with(
@@ -1244,8 +1244,8 @@ fn row_5b_zoom_in_the_middle_of_a_stroke_does_not_cut_the_stroke_and_leaves_a_si
                     )
                     .expect("mover");
             };
-            mover(&mut world, 1);
-            let a_medias = world.snapshot();
+            move_pointer(&mut world, 1);
+            let half_way = world.snapshot();
 
             assert_eq!(
                 world.dispatches(action, origin),
@@ -1253,15 +1253,15 @@ fn row_5b_zoom_in_the_middle_of_a_stroke_does_not_cut_the_stroke_and_leaves_a_si
                 "{action:?} {origin:?}"
             );
             assert!(world.tools.busy(), "el trazo sigue tras {action:?}");
-            assert_eq!(world.snapshot(), a_medias);
+            assert_eq!(world.snapshot(), half_way);
             assert_eq!(
                 world.snapshot().state_id,
                 initial.state_id,
                 "intacto hasta soltar"
             );
 
-            mover(&mut world, 2);
-            mover(&mut world, 3);
+            move_pointer(&mut world, 2);
+            move_pointer(&mut world, 3);
             assert_eq!(world.snapshot().state_id, initial.state_id);
             world
                 .tools
@@ -1292,11 +1292,11 @@ fn row_5b_zoom_in_the_middle_of_a_stroke_does_not_cut_the_stroke_and_leaves_a_si
 fn row_12_quit_gives_dispatched_quit_with_any_source() {
     for origin in SOURCES {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(world.dispatches(AppAction::Quit, origin), Dispatched::Quit);
         assert_eq!(
             world.snapshot(),
-            antes,
+            before,
             "Salir no toca el documento (cierra `App`)"
         );
     }
@@ -1427,7 +1427,7 @@ proptest! {
         let mut model = real.session.document.clone();
 
         for (action, origin, locks) in sequence {
-            let antes = real.snapshot();
+            let before = real.snapshot();
             let per_source = real.dispatches_with(action, origin, locks);
             let per_menu = menu.dispatches_with(action, Origin::Menu, locks);
 
@@ -1458,7 +1458,7 @@ proptest! {
 
             // Un `Blocked` no cambia el estado; el zoom nunca cambia el documento ni la historia.
             if per_source == Dispatched::Blocked || action.is_zoom() {
-                prop_assert_eq!(real.snapshot(), antes.clone(), "{:?} {:?}", action, locks);
+                prop_assert_eq!(real.snapshot(), before.clone(), "{:?} {:?}", action, locks);
             }
 
             // El estado final es idéntico al de aplicar las mismas acciones con origen `Menu`.
@@ -1541,8 +1541,8 @@ fn row_13_the_four_actions_with_each_source_give_background_and_touch_nothing() 
         for b in BACKGROUNDS {
             for origin in SOURCES {
                 let (name_2, mut world) = world_of_the_case(case);
-                let antes = world.snapshot();
-                let extras_antes = extras(&world);
+                let before = world.snapshot();
+                let extras_before = extras(&world);
                 assert_eq!(
                     world.dispatches(action_of_background(b), origin),
                     Dispatched::Background(b),
@@ -1550,17 +1550,17 @@ fn row_13_the_four_actions_with_each_source_give_background_and_touch_nothing() 
                 );
                 // La foto de la fila 3b de la 17: `state_id`, `can_undo`, `can_redo`, imagen,
                 // elección, herramienta, quita pendiente y gesto, iguales.
-                assert_eq!(world.snapshot(), antes, "{name_2}: {b:?} con {origin:?}");
+                assert_eq!(world.snapshot(), before, "{name_2}: {b:?} con {origin:?}");
                 assert_eq!(
                     extras(&world),
-                    extras_antes,
+                    extras_before,
                     "{name_2}: {b:?} con {origin:?}"
                 );
-                assert_eq!(world.session.document.state_id(), antes.state_id);
-                assert_eq!(world.session.document.can_undo(), antes.can_undo);
-                assert_eq!(world.session.document.can_redo(), antes.can_redo);
-                assert_eq!(world.session.choice, antes.choice);
-                assert_eq!(world.tools.tool(), antes.tool);
+                assert_eq!(world.session.document.state_id(), before.state_id);
+                assert_eq!(world.session.document.can_undo(), before.can_undo);
+                assert_eq!(world.session.document.can_redo(), before.can_redo);
+                assert_eq!(world.session.choice, before.choice);
+                assert_eq!(world.tools.tool(), before.tool);
             }
         }
     }
@@ -1620,7 +1620,7 @@ fn row_13_each_lock_alone_and_the_dispatch_without_locks() {
             for (name_2, locks, locked_2) in cases {
                 for origin in SOURCES {
                     let (session_2, mut world) = world_of_the_case(case);
-                    let antes = world.snapshot();
+                    let before = world.snapshot();
                     let result = world.dispatches_with(action_of_background(b), origin, locks);
                     let expected_2 = if locked_2 {
                         Dispatched::Blocked
@@ -1631,7 +1631,7 @@ fn row_13_each_lock_alone_and_the_dispatch_without_locks() {
                         result, expected_2,
                         "{session_2}: {b:?} con {name_2} y {origin:?}"
                     );
-                    assert_eq!(world.snapshot(), antes, "{session_2}: {b:?} con {name_2}");
+                    assert_eq!(world.snapshot(), before, "{session_2}: {b:?} con {name_2}");
                 }
             }
         }
@@ -1647,7 +1647,7 @@ fn row_13_a_real_gesture_or_a_pending_removal_do_not_block_the_background() {
             for origin in SOURCES {
                 let mut world = world_with_gesture(gesture);
                 assert!(world.locks().gesture);
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 assert_eq!(
                     world.dispatches(action_of_background(b), origin),
                     Dispatched::Background(b),
@@ -1655,7 +1655,7 @@ fn row_13_a_real_gesture_or_a_pending_removal_do_not_block_the_background() {
                 );
                 assert_eq!(
                     world.snapshot(),
-                    antes,
+                    before,
                     "el gesto sigue en curso: {gesture:?}"
                 );
                 assert!(world.locks().gesture, "{gesture:?}");
@@ -1666,12 +1666,12 @@ fn row_13_a_real_gesture_or_a_pending_removal_do_not_block_the_background() {
         for origin in SOURCES {
             let mut world = world_with_a_pending_removal();
             assert!(world.locks().removal);
-            let antes = world.snapshot();
+            let before = world.snapshot();
             assert_eq!(
                 world.dispatches(action_of_background(b), origin),
                 Dispatched::Background(b)
             );
-            assert_eq!(world.snapshot(), antes, "la quita sigue pendiente");
+            assert_eq!(world.snapshot(), before, "la quita sigue pendiente");
             assert!(world.session.ops.removal().is_some());
         }
     }
@@ -1692,7 +1692,7 @@ fn row_13_with_combined_locks_only_dialog_modal_and_text_focus_count() {
             for b in BACKGROUNDS {
                 for origin in SOURCES {
                     let (session_2, mut world) = world_of_the_case(case);
-                    let antes = world.snapshot();
+                    let before = world.snapshot();
                     let locked_2 = locks.dialog || locks.modal || locks.text_focus;
                     let result = world.dispatches_with(action_of_background(b), origin, locks);
                     assert_eq!(
@@ -1703,7 +1703,7 @@ fn row_13_with_combined_locks_only_dialog_modal_and_text_focus_count() {
                     if !locked_2 {
                         assert_eq!(result, Dispatched::Background(b));
                     }
-                    assert_eq!(world.snapshot(), antes);
+                    assert_eq!(world.snapshot(), before);
                 }
             }
         }
@@ -1843,8 +1843,8 @@ fn row_6c_with_a_modal_dispatch_gives_blocked_in_all_but_close_licenses_and_quit
             for origin in SOURCES {
                 let (session_2, mut world) = world_of_the_case(case);
                 let locks = with_modal(&world);
-                let antes = world.snapshot();
-                let extras_antes = extras(&world);
+                let before = world.snapshot();
+                let extras_before = extras(&world);
                 let result = world.dispatches_with(*action, origin, locks);
                 let expected_2 = match action {
                     AppAction::CloseLicenses => Dispatched::Licenses(false),
@@ -1854,10 +1854,10 @@ fn row_6c_with_a_modal_dispatch_gives_blocked_in_all_but_close_licenses_and_quit
                 assert_eq!(result, expected_2, "{session_2}: {action:?} con {origin:?}");
                 assert_eq!(
                     world.snapshot(),
-                    antes,
+                    before,
                     "{session_2}: {action:?} con {origin:?} tocó el estado"
                 );
-                assert_eq!(extras(&world), extras_antes, "{session_2}: {action:?}");
+                assert_eq!(extras(&world), extras_before, "{session_2}: {action:?}");
             }
         }
     }
@@ -1897,7 +1897,7 @@ fn row_6c_with_a_modal_the_nine_slots_and_the_five_tools_change_nothing() {
     for origin in SOURCES {
         let mut world = World::new_2(indexed(9, None), 2, 1);
         let locks = with_modal(&world);
-        let antes = world.snapshot();
+        let before = world.snapshot();
         for slot in 1..=9u8 {
             assert_eq!(
                 world.dispatches_with(AppAction::SelectColor(slot), origin, locks),
@@ -1912,7 +1912,7 @@ fn row_6c_with_a_modal_the_nine_slots_and_the_five_tools_change_nothing() {
                 "{tool:?} con {origin:?}"
             );
         }
-        assert_eq!(world.snapshot(), antes, "{origin:?}");
+        assert_eq!(world.snapshot(), before, "{origin:?}");
     }
 }
 
@@ -1921,8 +1921,8 @@ fn row_6c_with_a_modal_undo_and_redo_do_not_consume_the_history_or_cancel_the_re
     for origin in SOURCES {
         let mut world = World::standard();
         let locks = with_modal(&world);
-        let antes = world.snapshot();
-        assert!(antes.can_undo && antes.can_redo);
+        let before = world.snapshot();
+        assert!(before.can_undo && before.can_redo);
         assert_eq!(
             world.dispatches_with(AppAction::Undo, origin, locks),
             Dispatched::Blocked
@@ -1931,7 +1931,7 @@ fn row_6c_with_a_modal_undo_and_redo_do_not_consume_the_history_or_cancel_the_re
             world.dispatches_with(AppAction::Redo, origin, locks),
             Dispatched::Blocked
         );
-        assert_eq!(world.snapshot(), antes, "{origin:?}");
+        assert_eq!(world.snapshot(), before, "{origin:?}");
 
         // Con una quita pendiente, deshacer bloqueado no la cancela (a diferencia de la fila 5).
         let mut world = world_with_a_pending_removal();
@@ -2029,8 +2029,8 @@ fn row_6c_a_dialog_open_with_show_licenses_closes_with_close_licenses_and_does_n
 fn row_6d_no_key_changes_the_state_with_a_modal_and_only_ctrl_q_on_linux_gives_quit() {
     let mut world = World::standard();
     let locks = with_modal(&world);
-    let antes = world.snapshot();
-    let extras_antes = extras(&world);
+    let before = world.snapshot();
+    let extras_before = extras(&world);
     let mut translated_2 = 0usize;
     let mut quits = 0usize;
     for &key in Key::ALL {
@@ -2057,8 +2057,8 @@ fn row_6d_no_key_changes_the_state_with_a_modal_and_only_ctrl_q_on_linux_gives_q
                     }
                     other_2 => panic!("{context}: con modal no puede dar {other_2:?}"),
                 }
-                assert_eq!(world.snapshot(), antes, "{context}");
-                assert_eq!(extras(&world), extras_antes, "{context}");
+                assert_eq!(world.snapshot(), before, "{context}");
+                assert_eq!(extras(&world), extras_before, "{context}");
             }
         }
     }
@@ -2109,7 +2109,7 @@ fn row_6d_the_tool_color_zoom_and_file_keys_give_blocked_with_a_modal() {
     for (key, modifiers) in cases {
         let mut world = World::standard();
         let locks = with_modal(&world);
-        let antes = world.snapshot();
+        let before = world.snapshot();
         let action = action_for_shortcut(key, modifiers, Platform::Linux)
             .unwrap_or_else(|| panic!("{key:?} con {modifiers:?} debería traducirse"));
         assert_eq!(
@@ -2117,7 +2117,7 @@ fn row_6d_the_tool_color_zoom_and_file_keys_give_blocked_with_a_modal() {
             Dispatched::Blocked,
             "{key:?} con {modifiers:?}: {action:?}"
         );
-        assert_eq!(world.snapshot(), antes, "{key:?} con {modifiers:?}");
+        assert_eq!(world.snapshot(), before, "{key:?} con {modifiers:?}");
     }
 }
 
@@ -2313,7 +2313,7 @@ fn locks_one_by_one() -> [(&'static str, Locks); 5] {
 fn row_9_new_image_gives_dispatched_new_image_with_each_source_and_touches_nothing() {
     for (name_2, mut world) in worlds_without_removes() {
         for origin in SOURCES {
-            let antes = (world.snapshot(), extras(&world));
+            let before = (world.snapshot(), extras(&world));
             let result = world.dispatches(AppAction::NewImage, origin);
             assert_eq!(result, Dispatched::NewImage, "{name_2}, {origin:?}");
             assert!(
@@ -2322,7 +2322,7 @@ fn row_9_new_image_gives_dispatched_new_image_with_each_source_and_touches_nothi
             );
             assert_eq!(
                 (world.snapshot(), extras(&world)),
-                antes,
+                before,
                 "{name_2}, {origin:?}: despachar no toca nada (lo hace App)"
             );
         }
@@ -2385,7 +2385,7 @@ fn row_9_each_lock_only_blocks_new_image_with_any_source_and_touches_nothing() {
     for (name_2, locks) in locks_one_by_one() {
         for origin in SOURCES {
             let mut world = World::standard();
-            let antes = (world.snapshot(), extras(&world));
+            let before = (world.snapshot(), extras(&world));
             assert_eq!(
                 world.dispatches_with(AppAction::NewImage, origin, locks),
                 Dispatched::Blocked,
@@ -2394,7 +2394,7 @@ fn row_9_each_lock_only_blocks_new_image_with_any_source_and_touches_nothing() {
             assert!(is_blocked(AppAction::NewImage, locks, origin), "{name_2}");
             assert_eq!(
                 (world.snapshot(), extras(&world)),
-                antes,
+                before,
                 "{name_2}, {origin:?}: un NewImage bloqueado no toca nada"
             );
         }
@@ -2458,13 +2458,13 @@ fn row_9_a_real_gesture_or_a_pending_removal_block_new_image() {
     // Un trazo en curso.
     let mut world = World::standard();
     starts_a_stroke(&mut world);
-    let antes = world.snapshot();
+    let before = world.snapshot();
     assert_eq!(
         world.dispatches(AppAction::NewImage, Origin::Menu),
         Dispatched::Blocked,
         "trazo"
     );
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
     assert!(!enabled(
         AppAction::NewImage,
         &world.ui_state(Zoom::from_int(5), world.locks())
@@ -2491,7 +2491,7 @@ fn row_9_a_real_gesture_or_a_pending_removal_block_new_image() {
     // Una quita de paleta pendiente: abrir un diálogo también se bloquea (regla literal de la 18).
     let mut world = world_with_a_pending_removal();
     assert!(world.locks().removal);
-    let antes = (world.snapshot(), extras(&world));
+    let before = (world.snapshot(), extras(&world));
     for origin in SOURCES {
         assert_eq!(
             world.dispatches(AppAction::NewImage, origin),
@@ -2499,7 +2499,7 @@ fn row_9_a_real_gesture_or_a_pending_removal_block_new_image() {
             "quita pendiente, {origin:?}"
         );
     }
-    assert_eq!((world.snapshot(), extras(&world)), antes);
+    assert_eq!((world.snapshot(), extras(&world)), before);
     assert!(!enabled(
         AppAction::NewImage,
         &world.ui_state(Zoom::from_int(5), world.locks())
@@ -2515,7 +2515,7 @@ fn row_9_with_the_new_image_dialog_open_everything_is_locked_except_quit() {
     let locks = with_modal(&world);
     assert!(locks.modal);
 
-    let antes = (world.snapshot(), extras(&world));
+    let before = (world.snapshot(), extras(&world));
     for action in all_the_actions().into_iter().chain([AppAction::NewImage]) {
         for origin in SOURCES {
             let expected_2 = match action {
@@ -2533,7 +2533,7 @@ fn row_9_with_the_new_image_dialog_open_everything_is_locked_except_quit() {
     }
     assert_eq!(
         (world.snapshot(), extras(&world)),
-        antes,
+        before,
         "con el diálogo abierto el documento no cambia"
     );
 }
@@ -2580,7 +2580,7 @@ fn row_9_quit_with_the_dialog_open_abandons_it_and_follows_the_close_rule() {
             );
         }
         // `App` lo abandona sin reacción y pregunta a la regla de cierre.
-        let antes = (world.snapshot(), extras(&world));
+        let before = (world.snapshot(), extras(&world));
         assert!(modal.abandon());
         assert!(!modal.is_open());
         let closes = close_allowed(modified, &mut confirm, 0.0);
@@ -2590,7 +2590,7 @@ fn row_9_quit_with_the_dialog_open_abandons_it_and_follows_the_close_rule() {
         }
         assert_eq!(
             (world.snapshot(), extras(&world)),
-            antes,
+            before,
             "no se creó nada: la sesión es la de antes"
         );
     }
@@ -2637,7 +2637,7 @@ fn row_10_convert_mode_gives_dispatched_convert_mode_with_each_source_and_each_m
  {
     for (name_2, mut world) in worlds_of_each_mode() {
         for origin in SOURCES {
-            let antes = (world.snapshot(), extras(&world));
+            let before = (world.snapshot(), extras(&world));
             let result = world.dispatches(AppAction::ConvertMode, origin);
             assert_eq!(result, Dispatched::ConvertMode, "{name_2}, {origin:?}");
             assert!(
@@ -2646,7 +2646,7 @@ fn row_10_convert_mode_gives_dispatched_convert_mode_with_each_source_and_each_m
             );
             assert_eq!(
                 (world.snapshot(), extras(&world)),
-                antes,
+                before,
                 "{name_2}, {origin:?}: despachar no toca nada (lo hace App)"
             );
         }
@@ -2666,10 +2666,10 @@ fn row_10_the_image_menu_entry_gives_dispatched_convert_mode() {
         .expect("Imagen tiene «Convertir modo…»");
     assert_eq!(input.action, AppAction::ConvertMode);
     for (name_2, mut world) in worlds_of_each_mode() {
-        let antes = world.snapshot();
+        let before = world.snapshot();
         let per_menu = world.dispatches(input.action, Origin::Menu);
         assert_eq!(per_menu, Dispatched::ConvertMode, "{name_2}");
-        assert_eq!(world.snapshot(), antes, "{name_2}");
+        assert_eq!(world.snapshot(), before, "{name_2}");
     }
     // El botón (la misma acción) da lo mismo.
     let mut per_menu = World::standard();
@@ -2701,7 +2701,7 @@ fn row_10_each_lock_blocks_convert_mode_with_each_source_and_each_mode_touching_
     for (name_world, mut world) in worlds_of_each_mode() {
         for (name_2, locks) in locks_one_by_one() {
             for origin in SOURCES {
-                let antes = (world.snapshot(), extras(&world));
+                let before = (world.snapshot(), extras(&world));
                 assert_eq!(
                     world.dispatches_with(AppAction::ConvertMode, origin, locks),
                     Dispatched::Blocked,
@@ -2713,7 +2713,7 @@ fn row_10_each_lock_blocks_convert_mode_with_each_source_and_each_mode_touching_
                 );
                 assert_eq!(
                     (world.snapshot(), extras(&world)),
-                    antes,
+                    before,
                     "{name_world}, {name_2}, {origin:?}: bloqueada no toca nada"
                 );
             }
@@ -2778,13 +2778,13 @@ fn row_10_a_real_gesture_or_a_pending_removal_block_convert_mode() {
     // Un trazo en curso.
     let mut world = World::standard();
     starts_a_stroke(&mut world);
-    let antes = world.snapshot();
+    let before = world.snapshot();
     assert_eq!(
         world.dispatches(AppAction::ConvertMode, Origin::Menu),
         Dispatched::Blocked,
         "trazo"
     );
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
     assert!(!enabled(
         AppAction::ConvertMode,
         &world.ui_state(Zoom::from_int(5), world.locks())
@@ -2811,7 +2811,7 @@ fn row_10_a_real_gesture_or_a_pending_removal_block_convert_mode() {
     // Una quita de paleta pendiente: abrir un diálogo también se bloquea (regla literal de la 18).
     let mut world = world_with_a_pending_removal();
     assert!(world.locks().removal);
-    let antes = (world.snapshot(), extras(&world));
+    let before = (world.snapshot(), extras(&world));
     for origin in SOURCES {
         assert_eq!(
             world.dispatches(AppAction::ConvertMode, origin),
@@ -2819,7 +2819,7 @@ fn row_10_a_real_gesture_or_a_pending_removal_block_convert_mode() {
             "quita pendiente, {origin:?}"
         );
     }
-    assert_eq!((world.snapshot(), extras(&world)), antes);
+    assert_eq!((world.snapshot(), extras(&world)), before);
     assert!(!enabled(
         AppAction::ConvertMode,
         &world.ui_state(Zoom::from_int(5), world.locks())
@@ -2839,7 +2839,7 @@ fn row_10_with_the_convert_dialog_open_everything_is_locked_except_quit() {
         let locks = with_modal(&world);
         assert!(locks.modal);
 
-        let antes = (world.snapshot(), extras(&world));
+        let before = (world.snapshot(), extras(&world));
         for action in all_the_actions()
             .into_iter()
             .chain([AppAction::NewImage, AppAction::ConvertMode])
@@ -2860,7 +2860,7 @@ fn row_10_with_the_convert_dialog_open_everything_is_locked_except_quit() {
         }
         assert_eq!(
             (world.snapshot(), extras(&world)),
-            antes,
+            before,
             "{name_world}: con el diálogo abierto el documento no cambia"
         );
     }
@@ -2871,12 +2871,12 @@ fn row_10_an_open_dialog_does_not_allow_opening_another_or_another_convert_mode(
     let world = World::standard();
     let mut modal = Modal::default();
     assert!(open_convert_mode(&mut modal, Mode::Indexed, world.locks()));
-    let antes = modal.clone();
+    let before = modal.clone();
     assert!(
         !open_convert_mode(&mut modal, Mode::Rgba, world.locks()),
         "ya hay uno abierto"
     );
-    assert_eq!(modal, antes, "no cambia el diálogo abierto");
+    assert_eq!(modal, before, "no cambia el diálogo abierto");
     assert!(!opens_licenses(&mut modal));
     assert!(!open_new_image(&mut modal, 16384, world.locks()));
     assert_eq!(modal.kind(), Some(ModalKind::ConvertMode));
@@ -2916,7 +2916,7 @@ fn row_10_quit_with_the_dialog_open_abandons_it_and_follows_the_close_rule() {
             );
         }
         // `App` lo abandona sin reacción y pregunta a la regla de cierre.
-        let antes = (world.snapshot(), extras(&world));
+        let before = (world.snapshot(), extras(&world));
         assert!(modal.abandon());
         assert!(!modal.is_open());
         let closes = close_allowed(modified, &mut confirm, 0.0);
@@ -2926,7 +2926,7 @@ fn row_10_quit_with_the_dialog_open_abandons_it_and_follows_the_close_rule() {
         }
         assert_eq!(
             (world.snapshot(), extras(&world)),
-            antes,
+            before,
             "no se convirtió nada: la sesión es la de antes"
         );
     }
@@ -2964,7 +2964,7 @@ fn row_10_the_zoom_does_not_change_with_the_new_action() {
 //   `NewImage`). Sin atajo: ninguna tecla la da.
 // - Los cinco bloqueos (`gesture`, `dialog`, `text_focus`, `removal`, `modal`) la bloquean, solos y
 //   combinados, con cualquier origen; un gesto de verdad y una quita pendiente también, mientras las
-//   cuatro fijas (`Negro`...) siguen dando `Dispatched::Background`.
+//   cuatro fijas (`Black`...) siguen dando `Dispatched::Background`.
 // - Con el diálogo de color abierto todo está bloqueado salvo `Quit`, que lo abandona sin aplicar
 //   nada y sigue la regla de cierre de siempre.
 //
@@ -2989,7 +2989,7 @@ fn row_3_color_gives_dispatched_background_color_with_each_source_and_each_mode_
     worlds.extend(worlds_without_removes());
     for (name_2, mut world) in worlds {
         for origin in SOURCES {
-            let antes = (world.snapshot(), extras(&world));
+            let before = (world.snapshot(), extras(&world));
             let result = world.dispatches(AppAction::BackgroundColor, origin);
             assert_eq!(result, Dispatched::BackgroundColor, "{name_2}, {origin:?}");
             assert!(
@@ -3001,7 +3001,7 @@ fn row_3_color_gives_dispatched_background_color_with_each_source_and_each_mode_
             );
             assert_eq!(
                 (world.snapshot(), extras(&world)),
-                antes,
+                before,
                 "{name_2}, {origin:?}: despachar no toca nada (lo hace App)"
             );
         }
@@ -3055,7 +3055,7 @@ fn row_3_each_lock_blocks_background_color_with_each_source_and_each_mode_touchi
     for (name_world, mut world) in worlds {
         for (name_2, locks) in locks_one_by_one() {
             for origin in SOURCES {
-                let antes = (world.snapshot(), extras(&world));
+                let before = (world.snapshot(), extras(&world));
                 assert_eq!(
                     world.dispatches_with(AppAction::BackgroundColor, origin, locks),
                     Dispatched::Blocked,
@@ -3067,7 +3067,7 @@ fn row_3_each_lock_blocks_background_color_with_each_source_and_each_mode_touchi
                 );
                 assert_eq!(
                     (world.snapshot(), extras(&world)),
-                    antes,
+                    before,
                     "{name_world}, {name_2}, {origin:?}: bloqueada no toca nada"
                 );
             }
@@ -3137,7 +3137,7 @@ fn row_3_a_real_gesture_or_a_pending_removal_block_color_and_not_the_four_fixed_
     ];
     let checks = |name_2: &str, world: &mut World| {
         for origin in SOURCES {
-            let antes = (world.snapshot(), extras(world));
+            let before = (world.snapshot(), extras(world));
             assert_eq!(
                 world.dispatches(AppAction::BackgroundColor, origin),
                 Dispatched::Blocked,
@@ -3161,7 +3161,7 @@ fn row_3_a_real_gesture_or_a_pending_removal_block_color_and_not_the_four_fixed_
             }
             assert_eq!(
                 (world.snapshot(), extras(world)),
-                antes,
+                before,
                 "{name_2}, {origin:?}: nada cambia"
             );
         }
@@ -3201,7 +3201,7 @@ fn row_3_with_the_color_dialog_open_everything_is_locked_except_quit() {
             );
             let locks = with_modal(&world);
             assert!(locks.modal);
-            let antes = (world.snapshot(), extras(&world));
+            let before = (world.snapshot(), extras(&world));
             for action in all_the_actions()
                 .into_iter()
                 .chain(BACKGROUNDS.map(action_of_background))
@@ -3227,7 +3227,7 @@ fn row_3_with_the_color_dialog_open_everything_is_locked_except_quit() {
             }
             assert_eq!(
                 (world.snapshot(), extras(&world)),
-                antes,
+                before,
                 "{name_world}: con el diálogo abierto el documento no cambia"
             );
         }
@@ -3243,12 +3243,12 @@ fn row_3_an_open_dialog_does_not_allow_opening_another_or_another_color() {
         CanvasBackground::Black,
         world.locks()
     ));
-    let antes = modal.clone();
+    let before = modal.clone();
     assert!(
         !open_background_color(&mut modal, CanvasBackground::White, world.locks()),
         "ya hay uno abierto"
     );
-    assert_eq!(modal, antes, "no cambia el diálogo abierto");
+    assert_eq!(modal, before, "no cambia el diálogo abierto");
     assert!(!opens_licenses(&mut modal));
     assert!(!open_new_image(&mut modal, 16384, world.locks()));
     assert!(!open_convert_mode(&mut modal, Mode::Indexed, world.locks()));
@@ -3286,7 +3286,7 @@ fn row_3_quit_with_the_color_dialog_open_abandons_it_and_follows_the_close_rule(
             );
         }
         // `App` lo abandona sin reacción y pregunta a la regla de cierre.
-        let antes = (world.snapshot(), extras(&world));
+        let before = (world.snapshot(), extras(&world));
         assert!(modal.abandon());
         assert!(!modal.is_open());
         let closes = close_allowed(modified, &mut confirm, 0.0);
@@ -3296,7 +3296,7 @@ fn row_3_quit_with_the_color_dialog_open_abandons_it_and_follows_the_close_rule(
         }
         assert_eq!(
             (world.snapshot(), extras(&world)),
-            antes,
+            before,
             "no se aplicó nada: la sesión es la de antes"
         );
     }
@@ -3342,27 +3342,27 @@ mod buttons_side {
             (PointerButton::Extra1, AppAction::Undo),
             (PointerButton::Extra2, AppAction::Redo),
         ] {
-            let mut lateral = World::standard();
+            let mut side = World::standard();
             let mut keyboard = World::standard();
             let [translated] = actions(&[presses(button_2, true)])[..] else {
                 panic!("una acción")
             };
             assert_eq!(translated, action);
-            let a = lateral.dispatches(translated, Origin::Button);
+            let a = side.dispatches(translated, Origin::Button);
             let b = keyboard.dispatches(action, Origin::Key);
             assert_eq!(a, b, "mismo Dispatched");
             assert_eq!(a, done(true));
-            assert_eq!(lateral.snapshot(), keyboard.snapshot(), "mismo estado");
+            assert_eq!(side.snapshot(), keyboard.snapshot(), "mismo estado");
         }
     }
 
     #[test]
     fn row_8_without_history_they_do_nothing() {
         let mut m = World::new_2(rgba(), 0, 0);
-        let antes = m.snapshot();
+        let before = m.snapshot();
         assert_eq!(m.dispatches(AppAction::Undo, Origin::Button), done(false));
         assert_eq!(m.dispatches(AppAction::Redo, Origin::Button), done(false));
-        assert_eq!(m.snapshot(), antes);
+        assert_eq!(m.snapshot(), before);
     }
 
     #[test]
@@ -3375,23 +3375,23 @@ mod buttons_side {
                 locks_with(|l| l.gesture = true),
             ] {
                 let mut m = World::standard();
-                let antes = m.snapshot();
+                let before = m.snapshot();
                 assert_eq!(
                     m.dispatches_with(action, Origin::Button, locks),
                     Dispatched::Blocked
                 );
-                assert_eq!(m.snapshot(), antes);
+                assert_eq!(m.snapshot(), before);
             }
         }
         // Con un trazo de verdad en curso no se deshace a mitad de trazo.
         let mut m = World::standard();
         starts_a_stroke(&mut m);
-        let antes = m.snapshot();
+        let before = m.snapshot();
         assert_eq!(
             m.dispatches(AppAction::Undo, Origin::Button),
             Dispatched::Blocked
         );
-        assert_eq!(m.snapshot(), antes);
+        assert_eq!(m.snapshot(), before);
     }
 
     #[test]
@@ -3434,8 +3434,8 @@ mod buttons_side {
             scope: Scope::Window,
             active: Platforms::All,
         }]);
-        let actions_of = |tabla: &GestureMap, button_2| {
-            window_actions(&[presses(button_2, true)], tabla, Platform::Windows)
+        let actions_of = |table: &GestureMap, button_2| {
+            window_actions(&[presses(button_2, true)], table, Platform::Windows)
         };
         assert_eq!(
             actions_of(&back_to_zoom, PointerButton::Extra1),
@@ -3562,7 +3562,7 @@ mod toolbox_right {
         ) {
             let levels: Vec<Zoom> = Zoom::levels().collect();
             let mut m = World::standard();
-            let antes = m.snapshot();
+            let before = m.snapshot();
             for (index_2, gesture, dialog, text_focus, level) in clicks {
                 let locks = Locks { gesture, dialog, text_focus, ..Locks::default() };
                 let zoom = Some(levels[level % levels.len()]);
@@ -3578,9 +3578,9 @@ mod toolbox_right {
                     }
                 }
                 let now = m.snapshot();
-                prop_assert_eq!(now.state_id, antes.state_id);
-                prop_assert_eq!(now.can_undo, antes.can_undo);
-                prop_assert_eq!(now.can_redo, antes.can_redo);
+                prop_assert_eq!(now.state_id, before.state_id);
+                prop_assert_eq!(now.can_undo, before.can_undo);
+                prop_assert_eq!(now.can_redo, before.can_redo);
             }
         }
     }

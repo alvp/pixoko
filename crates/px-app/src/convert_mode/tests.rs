@@ -806,9 +806,9 @@ fn row_1_open_convert_mode_gives_false_with_a_lock_or_with_another_dialog_open()
     }
     let mut modal = Modal::default();
     assert!(open_convert_mode(&mut modal, Mode::Rgba, Locks::default()));
-    let antes = modal.clone();
+    let before = modal.clone();
     assert!(!open_convert_mode(&mut modal, Mode::Gray, Locks::default()));
-    assert_eq!(modal, antes, "no cambia el diálogo abierto");
+    assert_eq!(modal, before, "no cambia el diálogo abierto");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -933,7 +933,7 @@ fn row_2_analyze_matches_classify_of_convert_image_without_permissions() {
 fn row_2_analyze_does_not_touch_the_document() {
     let document = Document::new(rgba_row_7());
     let id = ImageId::from_raw(0);
-    let antes = document.image(id).expect("imagen").clone();
+    let before = document.image(id).expect("imagen").clone();
     let state_id = document.state_id();
     for target in [Mode::Indexed, Mode::Gray, Mode::GrayAlpha] {
         let _ = analyze(document.image(id).expect("imagen"), target);
@@ -941,7 +941,7 @@ fn row_2_analyze_does_not_touch_the_document() {
     assert_eq!(document.state_id(), state_id);
     assert!(!document.can_undo());
     assert!(!document.can_redo());
-    assert_eq!(document.image(id), Some(&antes));
+    assert_eq!(document.image(id), Some(&before));
 }
 
 #[test]
@@ -2158,7 +2158,7 @@ fn row_5_the_two_history_texts_are_those_of_d7_and_do_not_come_out_together() {
 #[test]
 fn row_5_the_history_notice_only_comes_out_with_exact_or_lossy() {
     let image = gray_empty(100, 100);
-    for (name_2, analysis, sale) in [
+    for (name_2, analysis, leaves) in [
         ("Exact", Some(exact()), true),
         ("Exact con paleta", Some(exact_with_palette(3, true)), true),
         ("Lossy", Some(lost(2, 0)), true),
@@ -2175,7 +2175,11 @@ fn row_5_the_history_notice_only_comes_out_with_exact_or_lossy() {
             &image,
             history(0, 0),
         );
-        assert_eq!(contains(&text_2, "historial"), sale, "{name_2}: {text_2:?}");
+        assert_eq!(
+            contains(&text_2, "historial"),
+            leaves,
+            "{name_2}: {text_2:?}"
+        );
         checks_report(&text_2);
     }
 }
@@ -3525,7 +3529,7 @@ fn step() -> impl Strategy<Value = TestStep> {
 }
 
 /// Repite una secuencia de eventos y fotogramas sobre una imagen y comprueba la propiedad 4.
-fn reproduce(
+fn reproduces(
     from: Mode,
     image: &Image,
     steps_2: &[TestStep],
@@ -3639,8 +3643,8 @@ proptest! {
     ) {
         let active_2 = active_2_2()[active_2];
         for from in TEST_MODES {
-            reproduce(from, &image_of_mode(from), &steps_2, active_2)?;
-            reproduce(from, image_large(from), &steps_2, active_2)?;
+            reproduces(from, &image_of_mode(from), &steps_2, active_2)?;
+            reproduces(from, image_large(from), &steps_2, active_2)?;
         }
     }
 
@@ -3789,7 +3793,7 @@ fn row_12_measurement_of_report_apply_and_refresh_at_4096_and_8192() {
 // - `missing_text(&[Value])` (un valor inválido solo) no tiene texto fijado en D2 (en el diálogo el
 //   pie pinta el motivo del campo con `error: `), pero la propiedad 1 exige que toda lista no vacía
 //   empiece por `falta: ` o `faltan N: `. Solo se exige `falta: ` + el rótulo `background_2 válido`.
-// - `faltan 3: color, background_2, valor` es la forma con cuenta de la lista: como `falta: `, va sin
+// - `faltan 3: color, background_2, value` es la forma con cuenta de la lista: como `falta: `, va sin
 //   `error: ` delante (`footer_text` lo deja tal cual: aclaración del visto bueno). La fila 8 no lo
 //   pinta (en el diálogo no es alcanzable).
 // - `pending` con un análisis imposible (`TooManyColors`, `TooLarge`) da una lista vacía **también**
@@ -3811,11 +3815,11 @@ const MISSING_THREE: &str = "faltan 3: color, fondo, valor";
 fn lists_of_missing() -> Vec<Vec<Missing>> {
     let all_2 = [Missing::Luma, Missing::AlphaBackground, Missing::Value];
     (0..8u8)
-        .map(|mascara| {
+        .map(|mask| {
             all_2
                 .iter()
                 .enumerate()
-                .filter(|(i, _)| mascara & (1 << i) != 0)
+                .filter(|(i, _)| mask & (1 << i) != 0)
                 .map(|(_, m)| *m)
                 .collect()
         })
@@ -4194,7 +4198,7 @@ fn row_3_20b_the_seven_non_empty_lists_give_the_texts_of_d2_and_the_empty_one_no
 
 #[test]
 fn row_3_20b_the_texts_of_d2_measure_what_the_table_says() {
-    for (text_2, largo) in [
+    for (text_2, length) in [
         (MISSING_COLOR, 31),
         (CHOOSES_BACKGROUND, 31),
         (MISSING_BOTH, 38),
@@ -4202,7 +4206,7 @@ fn row_3_20b_the_texts_of_d2_measure_what_the_table_says() {
         (MISSING_BACKGROUND_AND_VALUE, 35),
         (MISSING_THREE, 29),
     ] {
-        assert_eq!(text_2.chars().count(), largo, "{text_2:?}");
+        assert_eq!(text_2.chars().count(), length, "{text_2:?}");
     }
 }
 
@@ -4246,8 +4250,8 @@ fn row_3_20b_footer_text_puts_error_only_on_what_does_not_start_with_missing() {
         "la forma con cuenta también es una lista"
     );
     // El motivo más largo sin `falta: ` (37) con su `error: ` llena las 44 columnas.
-    let largo = "m".repeat(37);
-    assert_eq!(px_ui::dialog_view::footer_text(&largo).chars().count(), 44);
+    let length = "m".repeat(37);
+    assert_eq!(px_ui::dialog_view::footer_text(&length).chars().count(), 44);
 }
 
 // --- Fila 4: orden fijo de `pending` ---
@@ -4422,8 +4426,8 @@ fn reason_per_table(
         Analysis::Lossy(r) => (r.color_lost > 0 && !luma, r.alpha_lost > 0 && alpha_2 == 0),
         Analysis::Exact { .. } => (false, false),
     };
-    let valor = alpha_2 == 3 && active_bad(active_2);
-    match (color, background_2, valor) {
+    let value = alpha_2 == 3 && active_bad(active_2);
+    match (color, background_2, value) {
         (false, false, false) => None,
         (true, false, false) => Some("falta: permitir perder el color".to_string()),
         (false, true, false) => Some("falta: elegir el fondo del alfa".to_string()),

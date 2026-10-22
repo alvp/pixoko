@@ -45,7 +45,7 @@ const CYAN: [u8; 3] = [66, 196, 206];
 const MAGENTA: [u8; 3] = [186, 64, 170];
 const ORANGE: [u8; 3] = [236, 132, 44];
 const WHITE: [u8; 3] = [255, 255, 255];
-const NEGRO: [u8; 3] = [0, 0, 0];
+const BLACK: [u8; 3] = [0, 0, 0];
 const GRAY: [u8; 3] = [128, 128, 128];
 const BLUE: [u8; 3] = [44, 92, 200];
 
@@ -128,7 +128,7 @@ impl Canvas {
     }
 
     /// Disco por desigualdad entera: `(x − cx)² + (y − cy)² ≤ r²`.
-    fn disco(&mut self, cx: i32, cy: i32, r: i32, c: Rgba) {
+    fn disk(&mut self, cx: i32, cy: i32, r: i32, c: Rgba) {
         for y in cy - r..=cy + r {
             for x in cx - r..=cx + r {
                 if (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r {
@@ -251,7 +251,7 @@ fn layers_opacity() -> Case {
             let rgb = if (x / 4 + y / 4) % 2 == 0 {
                 WHITE
             } else {
-                NEGRO
+                BLACK
             };
             base.put(x, y, color(rgb, 255));
         }
@@ -273,7 +273,7 @@ fn layers_opacity() -> Case {
 
 fn layers_alpha_source() -> Case {
     let mut background = Canvas::empty(32, 16);
-    for (k, rgb) in [WHITE, GRAY, BLUE, NEGRO].into_iter().enumerate() {
+    for (k, rgb) in [WHITE, GRAY, BLUE, BLACK].into_iter().enumerate() {
         background.rect(8 * k as i32, 0, 8 * (k as i32 + 1) - 1, 15, color(rgb, 255));
     }
     let mut source_2 = Canvas::empty(32, 16);
@@ -321,7 +321,7 @@ fn background_with_opacity() -> Case {
         }
     }
     let mut top = Canvas::empty(32, 32);
-    top.disco(16, 16, 9, color(ORANGE, 255));
+    top.disk(16, 16, 9, color(ORANGE, 255));
     top.rect(2, 2, 13, 13, color(CYAN, 128));
     Case {
         name_2: "background-with-opacity".to_string(),
@@ -717,7 +717,7 @@ fn row_11_with(produce: impl Fn(&Case) -> Image) {
 fn flattens(case: &Case) -> Image {
     let name_2 = &case.name_2;
     let mut doc = document(case);
-    let antes = compose(&doc).unwrap_or_else(|e| panic!("{name_2}: compose: {e:?}"));
+    let before = compose(&doc).unwrap_or_else(|e| panic!("{name_2}: compose: {e:?}"));
     let order = flatten_command(&doc).unwrap_or_else(|e| panic!("{name_2}: aplanar: {e:?}"));
     assert_eq!(doc.apply(order), Ok(true), "{name_2}: aplicar el aplanado");
     assert_eq!(doc.layers().len(), 1, "{name_2}: queda una sola capa");
@@ -726,12 +726,12 @@ fn flattens(case: &Case) -> Image {
         .unwrap_or_else(|| panic!("{name_2}: la celda aplanada tiene imagen"))
         .clone();
     assert_eq!(
-        cel_2, antes,
+        cel_2, before,
         "{name_2}: la celda es la composición de antes"
     );
     assert_eq!(
         compose(&doc).expect("compose tras aplanar"),
-        antes,
+        before,
         "{name_2}: componer tras aplanar da lo mismo que antes"
     );
     cel_2
@@ -769,7 +769,7 @@ fn row_08_merge_down_in_the_eight_matrices_at_tolerance_0() {
     for (name_2, mode) in MODES {
         let case = matrix(name_2, mode);
         let mut doc = document(&case);
-        let antes = compose(&doc).expect("compose");
+        let before = compose(&doc).expect("compose");
         let top = doc.layers()[1].id();
         let order = merge_down_command(&doc, top)
             .unwrap_or_else(|e| panic!("{name_2}: combinar abajo: {e:?}"));
@@ -780,7 +780,7 @@ fn row_08_merge_down_in_the_eight_matrices_at_tolerance_0() {
             .expect("celda combinada")
             .clone();
         assert_eq!(
-            cel_2, antes,
+            cel_2, before,
             "{name_2}: la matriz de dos capas se combina sin pérdida"
         );
         requires_equal_image(&case, &cel_2, &lee_png(&case.name_2));

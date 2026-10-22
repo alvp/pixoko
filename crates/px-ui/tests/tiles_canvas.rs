@@ -69,7 +69,7 @@ use px_ui::view::{Size, ViewOp, Zoom};
 
 mod common;
 use common::textures::{Texture, Textures};
-use common::{PPPS, button_2, button_of_2, context, key_2, mover};
+use common::{PPPS, button_2, button_of_2, context, key_2, move_pointer};
 
 mod tiles_support;
 use tiles_support::{
@@ -383,10 +383,10 @@ impl Bench {
         let far = start_2 + vec2(40.0, 40.0);
         let target_2 = start_2 + vec2(dx as f32 / self.ppp, dy as f32 / self.ppp);
         let steps_2 = [
-            vec![mover(start_2)],
+            vec![move_pointer(start_2)],
             vec![button_of_2(start_2, PointerButton::Middle, true)],
-            vec![mover(far)],
-            vec![mover(target_2)],
+            vec![move_pointer(far)],
+            vec![move_pointer(target_2)],
             vec![button_of_2(target_2, PointerButton::Middle, false)],
             vec![],
         ];
@@ -472,12 +472,12 @@ impl Bench {
     }
 
     /// Diferencias con el oráculo: las baldosas de `must` (visibles) tienen que ser idénticas a la
-    /// imagen esperada; las demás, idénticas a `antes` (si se da).
+    /// imagen esperada; las demás, idénticas a `before` (si se da).
     fn discrepancies(
         &self,
         expected: &[Color32],
         must: &[bool],
-        antes: Option<&[Texture]>,
+        before: Option<&[Texture]>,
     ) -> Vec<String> {
         let width_2 = self.image_2().width() as usize;
         let mut failures = Vec::new();
@@ -502,8 +502,8 @@ impl Bench {
                         "baldosa {i} ({r:?}) visible: {n} texels distintos del oráculo"
                     ));
                 }
-            } else if let Some(antes) = antes
-                && actual != antes[i]
+            } else if let Some(before) = before
+                && actual != before[i]
             {
                 failures.push(format!("baldosa {i} no visible: cambió su contenido"));
             }
@@ -688,17 +688,20 @@ fn row_b5_load_creates_a_nearest_texture_per_tile_of_the_clipped_size_uploaded_i
 
 #[test]
 fn row_b5_with_an_allocator_that_fails_at_tile_4_the_previous_canvas_stays_intact() {
-    let anterior = image_of(Mode::Rgba, 40, 24, 3);
-    let mut bench = Bench::simple(16, anterior.clone());
+    let previous = image_of(Mode::Rgba, 40, 24, 3);
+    let mut bench = Bench::simple(16, previous.clone());
     // Un lienzo con vista propia y un gesto de dibujo en curso.
     bench.go_to_level(N_X3);
     let center = pos2(80.0, 60.0);
-    bench.runs(vec![mover(center), button_2(center, true)], |_, _, _, _| {});
-    let antes = bench.rest_2_2();
-    let (zoom, rect) = (antes.info.zoom, antes.info.image_rect);
+    bench.runs(
+        vec![move_pointer(center), button_2(center, true)],
+        |_, _, _, _| {},
+    );
+    let before = bench.rest_2_2();
+    let (zoom, rect) = (before.info.zoom, before.info.image_rect);
     let ids = bench.ids();
     let contents = bench.contents();
-    let vivas = bench.ctx.tex_manager().read().num_allocated();
+    let live = bench.ctx.tex_manager().read().num_allocated();
 
     // 80×48 con baldosas de 16 son 15 baldosas: la 4.ª reserva falla.
     let new = image_of(Mode::Gray, 80, 48, 5);
@@ -710,9 +713,9 @@ fn row_b5_with_an_allocator_that_fails_at_tile_4_the_previous_canvas_stays_intac
     assert_eq!(fail.calls, 4, "la carga para en la baldosa que falla");
 
     // Sin texturas nuevas vivas, ahora ni tras el fotograma que libera lo que hubiera.
-    assert_eq!(bench.ctx.tex_manager().read().num_allocated(), vivas);
+    assert_eq!(bench.ctx.tex_manager().read().num_allocated(), live);
     let after = bench.rest_2_2();
-    assert_eq!(bench.ctx.tex_manager().read().num_allocated(), vivas);
+    assert_eq!(bench.ctx.tex_manager().read().num_allocated(), live);
     assert_eq!(bench.ids(), ids, "las texturas de antes");
     assert_eq!(
         after.uploads.total(&ids),
@@ -720,7 +723,7 @@ fn row_b5_with_an_allocator_that_fails_at_tile_4_the_previous_canvas_stays_intac
         "ni una subida de lo que ya estaba"
     );
     assert_eq!(bench.contents(), contents);
-    let failures = bench.discrepancies(&expected_2(&anterior), &vec![true; ids.len()], None);
+    let failures = bench.discrepancies(&expected_2(&previous), &vec![true; ids.len()], None);
     assert!(failures.is_empty(), "{failures:?}");
     let en_gpu: HashSet<TextureId> = bench.textures_2.ids().collect();
     for id in &en_gpu {
@@ -735,7 +738,7 @@ fn row_b5_with_an_allocator_that_fails_at_tile_4_the_previous_canvas_stays_intac
     assert_eq!(after.info.zoom, zoom);
     assert_eq!(after.info.image_rect, rect);
     assert_eq!(bench.tiles_2(), 6);
-    let followed = bench.runs(vec![mover(center + vec2(6.0, 0.0))], |_, _, _, _| {});
+    let followed = bench.runs(vec![move_pointer(center + vec2(6.0, 0.0))], |_, _, _, _| {});
     assert!(
         followed.entries.iter().any(|e| matches!(
             e,
@@ -771,7 +774,7 @@ fn row_b5_with_an_allocator_that_fails_at_tile_4_the_previous_canvas_stays_intac
 fn row_b5_if_the_first_load_fails_nothing_is_left() {
     let image_2 = image_of(Mode::Rgba, 40, 24, 3);
     let ctx = context(1.0);
-    let vivas = ctx.tex_manager().read().num_allocated();
+    let live = ctx.tex_manager().read().num_allocated();
     let mut canvas = Canvas::with_tile_side(16);
     let mut fail = Fail::after(3);
     assert_eq!(
@@ -781,7 +784,7 @@ fn row_b5_if_the_first_load_fails_nothing_is_left() {
     assert_eq!(canvas.tile_count(), 0);
     assert_eq!(canvas.texture_id(), None);
     assert!(canvas.texture_ids().is_empty());
-    assert_eq!(ctx.tex_manager().read().num_allocated(), vivas);
+    assert_eq!(ctx.tex_manager().read().num_allocated(), live);
 }
 
 #[test]
@@ -808,8 +811,8 @@ fn row_b5_an_image_of_side_16385_gives_too_large_with_max_16384_and_leaves_the_c
     bench.rest_2_2();
     assert_eq!(bench.tiles_2(), 8);
     // Con un lienzo anterior, el rechazo no lo toca.
-    let anterior = image_of(Mode::Rgba, 40, 24, 3);
-    let mut bench = Bench::simple(16, anterior);
+    let previous = image_of(Mode::Rgba, 40, 24, 3);
+    let mut bench = Bench::simple(16, previous);
     let ids = bench.ids();
     let large = Image::new(16385, 1, Mode::Gray).expect("imagen");
     assert!(matches!(
@@ -915,11 +918,11 @@ fn row_b5_sync_with_returns_out_of_memory_if_the_allocator_fails() {
 /// La operación `label_2` sobre el documento y su fotograma: las visibles son el oráculo y las no
 /// visibles siguen con su contenido de antes; el documento no lo toca el lienzo.
 fn step_b_6(bench: &mut Bench, label_2: &str, operation: impl FnOnce(&mut Bench) -> TestOutput) {
-    let antes = bench.contents();
+    let before = bench.contents();
     let output_2 = operation(bench);
     assert_eq!(output_2.sync, Ok(()), "{label_2}");
     let visible_2 = bench.visible_2();
-    let failures = bench.discrepancies(&expected_2(bench.image_2()), &visible_2, Some(&antes));
+    let failures = bench.discrepancies(&expected_2(bench.image_2()), &visible_2, Some(&before));
     assert!(failures.is_empty(), "{label_2}: {failures:?}");
     // Ni el estado ni la imagen del documento cambian por pintar, y en reposo no pasa nada.
     let (state_2, image_2) = (bench.doc.state_id(), bench.image_2().clone());
@@ -1109,7 +1112,7 @@ fn row_b6_the_non_visible_ones_keep_their_content_and_when_made_visible_they_are
     let visible_2 = bench.visible_2();
     assert_eq!(visible_2.iter().filter(|&&v| v).count(), 1, "{visible_2:?}");
     let id = ImageId::from_raw(0);
-    let antes = bench.contents();
+    let before = bench.contents();
     let stroke_2 = Command::SetPixels {
         image: id,
         pixels: (0..300)
@@ -1123,7 +1126,7 @@ fn row_b6_the_non_visible_ones_keep_their_content_and_when_made_visible_they_are
     };
     bench.applies(stroke_2);
     let after = bench.contents();
-    for (i, (a, t)) in antes.iter().zip(&after).enumerate() {
+    for (i, (a, t)) in before.iter().zip(&after).enumerate() {
         if !visible_2[i] {
             assert_eq!(a, t, "baldosa {i}: no se ve y no debe cambiar");
         }
@@ -1291,7 +1294,7 @@ fn row_b7_a_stroke_on_a_tile_outside_the_canvas_uploads_nothing_and_keeps_its_bl
     let mut bench = bench_300x200();
     let id = ImageId::from_raw(0);
     let ids = bench.ids();
-    let antes = bench.contents();
+    let before = bench.contents();
     // La baldosa 2 (x de 256 a 300, y de 0 a 128) no se ve: el bloque (4, 0) queda pendiente.
     let command = stroke_2(id, &[(270, 10), (271, 10)]);
     let dirty = model_of_pixels(&pixels_of(&command), 300, 200);
@@ -1299,7 +1302,7 @@ fn row_b7_a_stroke_on_a_tile_outside_the_canvas_uploads_nothing_and_keeps_its_bl
     checks_uploads(&bench, &output_2, &dirty, "baldosa no visible");
     assert_eq!(output_2.uploads.total(&ids), 0, "no sube nada");
     assert_eq!(bench.canvas.pending_blocks(), 1, "conserva el bloque");
-    assert_eq!(bench.contents(), antes, "la textura sigue como estaba");
+    assert_eq!(bench.contents(), before, "la textura sigue como estaba");
     // Sigue pendiente aunque pasen fotogramas.
     for _ in 0..3 {
         let rest_2_2 = bench.rest_2_2();
@@ -1338,7 +1341,7 @@ fn row_b7_at_rest_nothing_is_uploaded() {
     }
     // Ni moviendo el puntero sobre el lienzo ni con el ratón quieto.
     for pos in [pos2(10.0, 10.0), pos2(80.0, 60.0), pos2(150.0, 110.0)] {
-        let output_2 = bench.runs(vec![mover(pos)], |_, _, _, _| {});
+        let output_2 = bench.runs(vec![move_pointer(pos)], |_, _, _, _| {});
         assert_eq!(output_2.uploads.total(&ids), 0, "puntero en {pos:?}");
     }
     // Ni una invalidación vacía.
@@ -1936,9 +1939,9 @@ fn checks_b_8(ctx: &Context, ppp: f32, level: usize, background_2: CanvasBackgro
         ppp,
         &format!("{label_2} (con superposición)"),
     );
-    let antes = raster(&bench, &output_2);
+    let before = raster(&bench, &output_2);
     let failures = compares_b_8(
-        &antes,
+        &before,
         &g,
         bench.image_2(),
         &map,
@@ -1984,7 +1987,7 @@ fn checks_b_8(ctx: &Context, ppp: f32, level: usize, background_2: CanvasBackgro
         &format!("{label_2} tras soltar"),
     );
     assert!(failures.is_empty(), "{failures:#?}");
-    equal(&antes, &after_2, &label_2);
+    equal(&before, &after_2, &label_2);
     // Ninguna forma ni malla de superposición: lo pintado con y sin ella es lo mismo.
     assert!(
         shape_with == signature(&primitives),
@@ -2049,7 +2052,7 @@ fn row_b8_the_eraser_shows_the_chosen_background_and_the_erased_color_is_the_sam
             canvas.set_overlay(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"), &pend);
         });
         let g = Geom::de(&bench, N_X3);
-        let antes = raster(&bench, &output_2);
+        let before = raster(&bench, &output_2);
         // Lo borrado se ve exactamente como el fondo.
         for &(x, y, _) in &deleted_2 {
             let (px, py) = (
@@ -2066,11 +2069,11 @@ fn row_b8_the_eraser_shows_the_chosen_background_and_the_erased_color_is_the_sam
             let expected_2 =
                 Seen::de_color(background_in(background_2, px, py, g.source_2, g.cell));
             assert!(
-                antes.en(px, py).near(expected_2, TOL),
+                before.en(px, py).near(expected_2, TOL),
                 "{background_2:?} malla {mesh}: ({x}, {y}) no deja ver el fondo"
             );
         }
-        let failures = compares_b_8(&antes, &g, bench.image_2(), &map, background_2, "borrador");
+        let failures = compares_b_8(&before, &g, bench.image_2(), &map, background_2, "borrador");
         assert!(failures.is_empty(), "{failures:#?}");
         // Soltar con el borrador aplicado.
         let id = ImageId::from_raw(0);
@@ -2091,7 +2094,7 @@ fn row_b8_the_eraser_shows_the_chosen_background_and_the_erased_color_is_the_sam
         });
         let output_2 = bench.rest_2_2();
         let after_2 = raster(&bench, &output_2);
-        equal(&antes, &after_2, &format!("{background_2:?} malla {mesh}"));
+        equal(&before, &after_2, &format!("{background_2:?} malla {mesh}"));
     }
 }
 
@@ -2453,7 +2456,7 @@ fn checks_only_visible(bench: &Bench, output_2: &TestOutput, label_2: &str) {
 fn row_b10_the_preview_only_rebuilds_and_uploads_the_visible_tiles_and_counts_as_today() {
     let mut bench = bench_b_10();
     let ids = bench.ids();
-    let antes = bench.contents();
+    let before = bench.contents();
     let doc = bench.image_2().clone();
     assert_eq!(bench.canvas.preview_uploads(), 0);
 
@@ -2464,7 +2467,7 @@ fn row_b10_the_preview_only_rebuilds_and_uploads_the_visible_tiles_and_counts_as
     let failures = bench.discrepancies(
         &expected_with_input(&doc, 2, YELLOW),
         &bench.visible_2(),
-        Some(&antes),
+        Some(&before),
     );
     assert!(failures.is_empty(), "{failures:?}");
     for _ in 0..2 {
@@ -2483,7 +2486,7 @@ fn row_b10_the_preview_only_rebuilds_and_uploads_the_visible_tiles_and_counts_as
     let failures = bench.discrepancies(
         &expected_with_input(&doc, 2, GREEN_YELLOWISH),
         &bench.visible_2(),
-        Some(&antes),
+        Some(&before),
     );
     assert!(failures.is_empty(), "{failures:?}");
 
@@ -2494,7 +2497,7 @@ fn row_b10_the_preview_only_rebuilds_and_uploads_the_visible_tiles_and_counts_as
     let failures = bench.discrepancies(
         &expected_with_input(&doc, 2, YELLOW),
         &bench.visible_2(),
-        Some(&antes),
+        Some(&before),
     );
     assert!(failures.is_empty(), "{failures:?}");
     // El documento no cambia.
@@ -2671,7 +2674,7 @@ proptest! {
         for (n, (seed, level, dx, dy)) in steps_2.into_iter().enumerate() {
             bench.go_to_level(usize::from(level));
             bench.drags(i64::from(dx), i64::from(dy));
-            let antes = bench.contents();
+            let before = bench.contents();
             let output_2 = match step_of(&bench.doc, seed) {
                 Step::Applies(command) => bench.applies(command),
                 Step::Undo => bench.undoes(),
@@ -2680,7 +2683,7 @@ proptest! {
             };
             prop_assert_eq!(output_2.sync, Ok(()), "paso {}", n);
             let visible_2 = bench.visible_2();
-            let failures = bench.discrepancies(&expected_2(bench.image_2()), &visible_2, Some(&antes));
+            let failures = bench.discrepancies(&expected_2(bench.image_2()), &visible_2, Some(&before));
             prop_assert!(failures.is_empty(), "paso {} {:?}: {:?}", n, seed, failures);
         }
         bench.asks(ViewOp::Fit);
@@ -2780,7 +2783,7 @@ proptest! {
                 .collect()
         };
 
-        let mut ultimo: Vec<(u32, u32, Pixel)> = Vec::new();
+        let mut last_2: Vec<(u32, u32, Pixel)> = Vec::new();
         for f in 1..=frames {
             let pending_2 = if is_line {
                 line_until(f)
@@ -2795,7 +2798,7 @@ proptest! {
             prop_assert!(failures.is_empty(), "fotograma {}: {:?}", f, failures);
             prop_assert_eq!(bench.doc.state_id(), state_2);
             prop_assert_eq!(bench.image_2(), &initial);
-            ultimo = pending_2;
+            last_2 = pending_2;
         }
 
         // El final del gesto: aplicado, cancelado, con error o con Esc.
@@ -2809,7 +2812,7 @@ proptest! {
                 } else {
                     Some(Command::SetPixels {
                         image: id,
-                        pixels: ultimo.iter().map(|&(x, y, pixel)| PixelEdit { x, y, pixel }).collect(),
+                        pixels: last_2.iter().map(|&(x, y, pixel)| PixelEdit { x, y, pixel }).collect(),
                     })
                 };
                 bench.runs(vec![], move |_, canvas, doc, log| {

@@ -46,13 +46,13 @@ impl Bench {
     fn step_roles(
         &mut self,
         events: Vec<Event>,
-        antes: Option<fn(&mut Ui)>,
+        before: Option<fn(&mut Ui)>,
     ) -> (Vec<(CanvasInput, Role)>, Rect) {
         let mut result = None;
         let canvas = &mut self.canvas;
         let mut output_2 = self.ctx.run_ui(Bench::input_2(events), |ui| {
-            if let Some(antes) = antes {
-                antes(ui);
+            if let Some(before) = before {
+                before(ui);
             }
             let entries = canvas.interact_roles(ui);
             let info = canvas.paint(ui);
@@ -172,11 +172,11 @@ fn row_2_the_right_button_gives_the_background_in_all_the_stroke_events() {
 #[test]
 fn row_2_the_right_one_does_not_pan_and_the_middle_one_pans_without_emitting_a_stroke() {
     let mut bench = Bench::new_2();
-    let antes = bench.rect;
+    let before = bench.rect;
     let right = stroke_2(&mut bench, PointerButton::Secondary);
     assert!(!right.is_empty());
     let (_, rect) = bench.step_roles(vec![], None);
-    assert_eq!(rect, antes, "el derecho no mueve la vista");
+    assert_eq!(rect, before, "el derecho no mueve la vista");
 
     let (p0, p1) = (pos2(400.0, 300.0), pos2(440.0, 330.0));
     let mut all = Vec::new();
@@ -190,7 +190,7 @@ fn row_2_the_right_one_does_not_pan_and_the_middle_one_pans_without_emitting_a_s
     }
     assert_eq!(all, [], "el central no emite trazo");
     let (_, rect) = bench.step_roles(vec![], None);
-    assert_ne!(rect, antes, "el central desplaza");
+    assert_ne!(rect, before, "el central desplaza");
 }
 
 #[test]

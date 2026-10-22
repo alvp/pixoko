@@ -455,10 +455,10 @@ fn row_12_reset_all_asks_for_confirmation_cancel_does_nothing_and_accept_resets(
     assert_eq!(m.presses(SHORTCUTS_RESET, false), FlowOutcome::None);
     assert_eq!(m.class(), Some(DialogKind::ResetShortcuts));
     // Cancelar: vuelve a la lista y no cambia nada.
-    let antes = m.keymap.clone();
+    let before = m.keymap.clone();
     assert_eq!(m.cancels(), FlowOutcome::None);
     assert_eq!(m.class(), Some(DialogKind::ShortcutList));
-    assert_eq!(m.keymap, antes);
+    assert_eq!(m.keymap, before);
     // Aceptar: el esquema por defecto en vivo, y de vuelta a la lista.
     m.presses(SHORTCUTS_RESET, false);
     assert_eq!(m.accepts(), FlowOutcome::ResetAll);

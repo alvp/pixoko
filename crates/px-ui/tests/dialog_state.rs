@@ -479,7 +479,7 @@ fn row_3_the_check_limit_is_a_million_pixels() {
     assert_eq!(d.reason(), Some("demasiado grande".to_string()));
 }
 
-fn check_largo(_: &Values) -> Option<String> {
+fn check_length(_: &Values) -> Option<String> {
     Some("x".repeat(100))
 }
 
@@ -494,7 +494,7 @@ fn check_never(_: &Values) -> Option<String> {
 #[test]
 fn row_3_the_check_text_is_clipped_to_37_characters() {
     let mut spec = spec_with(vec![numeric("n", "Cuanto", 1, 10, 5)]);
-    spec.check = Some(check_largo);
+    spec.check = Some(check_length);
     let d = open(spec);
     assert!(!d.is_valid());
     let reason_2 = d.reason().expect("el check falla");
@@ -532,19 +532,19 @@ fn row_3_every_reason_measures_37_or_less_and_is_in_the_character_set() {
     // Rótulos de 12 caracteres, el máximo.
     let label_2 = "ABCDEFGHIJKL";
     assert_eq!(label_2.chars().count(), 12);
-    let mut mayor = 0;
+    let mut greater = 0;
     for text_2 in texts {
         let mut d = open(spec_with(vec![numeric("n", label_2, 1, 8192, 64)]));
         number(&mut d, "n", text_2);
         if let Some(r) = d.reason() {
-            mayor = mayor.max(r.chars().count());
+            greater = greater.max(r.chars().count());
             assert!(r.chars().count() <= 37, "{r:?}");
             assert!(in_the_set(&r), "{r:?}");
         }
         let mut d = open(hex_form_with_label(label_2));
         hex(&mut d, "color", text_2);
         if let Some(r) = d.reason() {
-            mayor = mayor.max(r.chars().count());
+            greater = greater.max(r.chars().count());
             assert!(r.chars().count() <= 37, "{r:?}");
             assert!(in_the_set(&r), "{r:?}");
         }
@@ -553,7 +553,7 @@ fn row_3_every_reason_measures_37_or_less_and_is_in_the_character_set() {
     let mut d = open(hex_form_with_label(label_2));
     hex(&mut d, "color", "#ff0000");
     assert_eq!(d.reason().expect("modo gris").chars().count(), 37);
-    assert_eq!(mayor, 37);
+    assert_eq!(greater, 37);
 }
 
 fn hex_form_with_label(label: &'static str) -> FormSpec {
@@ -745,11 +745,11 @@ fn row_3_spec_error_long_label() {
             },
         )])
     });
-    let largo: &'static str = Box::leak("x".repeat(43).into_boxed_str());
+    let length_2: &'static str = Box::leak("x".repeat(43).into_boxed_str());
     rejects("rótulo de casilla de 43", || {
         spec_with(vec![field_2(
             "c",
-            largo,
+            length_2,
             FieldKind::Check { default: false },
         )])
     });
@@ -1045,10 +1045,10 @@ fn row_4_the_numeric_text_is_stored_bounded_to_eleven_characters() {
     number(&mut d, "ancho", "123456789012345");
     assert_eq!(d.text("ancho"), Some("12345678901".to_string()));
     assert_eq!(d.reason(), Some("Ancho: máximo 10 cifras".to_string()));
-    let largo = "9".repeat(1_000_000);
-    number(&mut d, "ancho", &largo);
+    let length_2 = "9".repeat(1_000_000);
+    number(&mut d, "ancho", &length_2);
     let text_2 = d.text("ancho").expect("hay texto");
-    assert_eq!(text_2, bounded_text(&largo));
+    assert_eq!(text_2, bounded_text(&length_2));
     assert!(text_2.chars().count() <= 11);
     // Multibyte: se corta en frontera de carácter.
     number(&mut d, "alto", &"é".repeat(13));
@@ -1261,11 +1261,11 @@ fn row_4_accept_valid_delivers_what_was_confirmed_and_closes() {
         field: "opaco",
         on: true,
     });
-    let antes = dialog_of(&modal).values().expect("válido");
+    let before = dialog_of(&modal).values().expect("válido");
     let Reaction::Accepted(v) = modal.event(Event::Accept) else {
         panic!("se esperaba Accepted");
     };
-    assert_eq!(v, antes);
+    assert_eq!(v, before);
     assert_eq!(v.number("ancho"), Some(100));
     assert_eq!(v.number("alto"), Some(64));
     assert_eq!(v.choice("modo"), Some(1));
@@ -1323,11 +1323,11 @@ fn row_4_accept_invalid_gives_rejected_with_the_reason_without_changing_or_closi
         field: "ancho",
         text: "".into(),
     });
-    let antes = dialog_of(&modal).clone();
-    let reason_2 = antes.reason().expect("inválido");
+    let before = dialog_of(&modal).clone();
+    let reason_2 = before.reason().expect("inválido");
     assert_eq!(modal.event(Event::Accept), Reaction::Rejected(reason_2));
     assert!(modal.is_open());
-    assert_eq!(dialog_of(&modal), &antes);
+    assert_eq!(dialog_of(&modal), &before);
     // También con el `check` que falla.
     let mut modal = modal_open(all_kinds());
     modal.event(Event::Number {
@@ -1579,10 +1579,10 @@ fn row_4_accept_with_an_invalid_pending_one_is_rejected_without_changing_anythin
     let def = Rgba::new(0x33, 0x66, 0x99, 0x80);
     let mut d = open(hex_form(Mode::Rgba, def));
     hex(&mut d, "color", "zz");
-    let antes = d.clone();
+    let before = d.clone();
     let reason_2 = d.reason().expect("inválido");
     assert_eq!(d.event(Event::Accept), Reaction::Rejected(reason_2));
-    assert_eq!(d, antes);
+    assert_eq!(d, before);
     assert_eq!(d.text("color"), Some("zz".to_string()));
     assert!(d.hex_pending("color"));
     // Lo mismo a través del `Modal`: sigue abierto con el pendiente.
@@ -1913,13 +1913,16 @@ fn runs(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseError
             prop_assert!(!modal.is_open());
             continue;
         }
-        let antes = dialog_of(&modal).clone();
-        let valid_before = antes.is_valid();
-        let reason_before = antes.reason();
-        let values_before = antes.values();
-        let texts_before: Vec<Option<String>> = IDS.iter().map(|id| antes.text(id)).collect();
-        let pending_before: Vec<bool> =
-            IDS.iter().take(n).map(|id| antes.hex_pending(id)).collect();
+        let before = dialog_of(&modal).clone();
+        let valid_before = before.is_valid();
+        let reason_before = before.reason();
+        let values_before = before.values();
+        let texts_before: Vec<Option<String>> = IDS.iter().map(|id| before.text(id)).collect();
+        let pending_before: Vec<bool> = IDS
+            .iter()
+            .take(n)
+            .map(|id| before.hex_pending(id))
+            .collect();
         let visible_before = model.visible_2(&spec);
 
         let Some(event) = event else {
@@ -1936,8 +1939,8 @@ fn runs(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseError
         match (&event, reaction) {
             (Event::Accept, Reaction::Accepted(v)) => {
                 prop_assert!(valid_before, "Accepted con el conjunto inválido");
-                let antes_v = values_before.expect("válido: había valores");
-                prop_assert!(values_equal(&v, &antes_v, &pending_before));
+                let before_v = values_before.expect("válido: había valores");
+                prop_assert!(values_equal(&v, &before_v, &pending_before));
                 for i in 0..n {
                     let there_is = visible_before[i]
                         && !matches!(spec.fields[i].kind, FieldKind::ReadOnly { .. });
@@ -1955,7 +1958,7 @@ fn runs(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseError
                 prop_assert!(!valid_before, "Rejected con el conjunto válido");
                 prop_assert_eq!(Some(reason_2), reason_before);
                 prop_assert!(modal.is_open());
-                prop_assert_eq!(dialog_of(&modal), &antes);
+                prop_assert_eq!(dialog_of(&modal), &before);
             }
             (Event::Cancel, Reaction::Cancelled) => {
                 prop_assert!(!modal.is_open());
@@ -1969,7 +1972,7 @@ fn runs(recipe: &FormRecipe, events: &[EventRecipe]) -> Result<(), TestCaseError
                 if ignored {
                     prop_assert_eq!(
                         dialog_of(&modal),
-                        &antes,
+                        &before,
                         "un evento ignorado cambió el estado"
                     );
                 }
@@ -2410,13 +2413,13 @@ fn row_12_e2_set_report_gives_false_if_the_field_does_not_exist_or_is_not_read_o
             },
         ),
     ]));
-    let antes = d.clone();
+    let before = d.clone();
     for id in ["inexistente", "ancho", "modo", "opaco", "color", ""] {
         assert!(!d.set_report(id, "x".to_string()), "{id:?}");
-        assert_eq!(d, antes, "{id:?}: no cambió nada");
+        assert_eq!(d, before, "{id:?}: no cambió nada");
     }
     assert!(d.set_report("informe", "x".to_string()), "el ReadOnly sí");
-    assert_ne!(d, antes);
+    assert_ne!(d, before);
 }
 
 // --- E3 ---
@@ -2584,11 +2587,11 @@ fn row_12_e3_set_limit_note_gives_false_if_the_field_does_not_exist_or_is_not_nu
             },
         ),
     ]));
-    let antes = d.clone();
+    let before = d.clone();
     for id in ["inexistente", "modo", "opaco", "color", "informe", ""] {
         assert!(!d.set_limit_note(id, Some("nota")), "{id:?} con nota");
         assert!(!d.set_limit_note(id, None), "{id:?} sin nota");
-        assert_eq!(d, antes, "{id:?}: no cambió nada");
+        assert_eq!(d, before, "{id:?}: no cambió nada");
     }
     assert!(d.set_limit_note("ancho", Some("nota")), "el numérico sí");
 }
@@ -2663,9 +2666,9 @@ fn row_12_set_block_with_a_reason_makes_a_valid_dialog_invalid() {
 
 #[test]
 fn row_12_set_block_none_leaves_everything_as_before() {
-    let antes = dialog_20();
-    let values = antes.values();
-    let mut d = antes.clone();
+    let before = dialog_20();
+    let values = before.values();
+    let mut d = before.clone();
     d.set_block(Some("no cabe".to_string()));
     assert!(!d.is_valid());
     d.set_block(None);
@@ -2673,11 +2676,11 @@ fn row_12_set_block_none_leaves_everything_as_before() {
     assert_eq!(d.reason(), None);
     assert!(d.is_valid());
     assert_eq!(d.values(), values);
-    assert_eq!(d, antes, "el diálogo vuelve a ser el de antes");
+    assert_eq!(d, before, "el diálogo vuelve a ser el de antes");
     // Y `None` sobre un diálogo sin motivo no cambia nada.
-    let mut other_2 = antes.clone();
+    let mut other_2 = before.clone();
     other_2.set_block(None);
-    assert_eq!(other_2, antes);
+    assert_eq!(other_2, before);
 }
 
 #[test]
@@ -2763,12 +2766,12 @@ fn row_12_accept_with_an_external_reason_gives_rejected_and_does_not_touch_the_s
     number(&mut d, "ancho", "50");
     box_value(&mut d, "opaco", true);
     d.set_block(Some("no cabe".to_string()));
-    let antes = d.clone();
+    let before = d.clone();
     assert_eq!(
         d.event(Event::Accept),
         Reaction::Rejected("no cabe".to_string())
     );
-    assert_eq!(d, antes, "un Accept rechazado no cambia nada");
+    assert_eq!(d, before, "un Accept rechazado no cambia nada");
     // Mientras haya motivo, sigue rechazando.
     assert_eq!(
         d.event(Event::Accept),
@@ -2970,7 +2973,7 @@ fn dialog_20_b(check: Option<fn(&Values) -> Option<String>>) -> Dialog {
     Dialog::new(DialogKind::ConvertMode, spec_20b(check)).expect("spec válida")
 }
 
-fn check_largo_20b(_: &Values) -> Option<String> {
+fn check_length_20_b(_: &Values) -> Option<String> {
     Some("x".repeat(100))
 }
 
@@ -3028,7 +3031,7 @@ fn row_6_problems_does_not_count_a_hidden_field_even_if_it_has_something_invalid
 
 #[test]
 fn row_6_problems_gives_the_check_reason_without_clipping() {
-    let d = dialog_20_b(Some(check_largo_20b));
+    let d = dialog_20_b(Some(check_length_20_b));
     assert_eq!(problems(&d), vec!["x".repeat(100)]);
     // `reason()` sigue recortándolo a 37 como hoy.
     assert_eq!(d.reason(), Some("x".repeat(37)));
@@ -3049,9 +3052,9 @@ fn row_6_problems_does_not_include_the_external_reason_or_the_summary() {
 fn row_6_problems_does_not_change_the_dialog() {
     let mut d = dialog_20_b(None);
     number(&mut d, "ancho", "0");
-    let antes = d.clone();
+    let before = d.clone();
     let _ = problems(&d);
-    assert_eq!(d, antes);
+    assert_eq!(d, before);
 }
 
 #[test]
@@ -3090,7 +3093,7 @@ fn row_6_the_summary_goes_before_the_invalid_field_the_check_and_the_external_re
     assert_eq!(d.reason(), Some("Ancho: mínimo 1".to_string()));
 
     // `check` que falla.
-    let mut d = dialog_20_b(Some(check_largo_20b));
+    let mut d = dialog_20_b(Some(check_length_20_b));
     d.set_block(Some("motivo externo".to_string()));
     assert_eq!(d.reason(), Some("x".repeat(37)));
     d.set_summary(Some(MISSING_TWO.to_string()));
@@ -3109,12 +3112,12 @@ fn row_6_accept_with_a_summary_gives_rejected_with_the_summary_and_does_not_touc
     let mut d = dialog_20_b(None);
     number(&mut d, "ancho", "50");
     d.set_summary(Some(MISSING_TWO.to_string()));
-    let antes = d.clone();
+    let before = d.clone();
     assert_eq!(
         d.event(Event::Accept),
         Reaction::Rejected(MISSING_TWO.to_string())
     );
-    assert_eq!(d, antes, "un Accept rechazado no cambia nada");
+    assert_eq!(d, before, "un Accept rechazado no cambia nada");
     // Con un campo inválido a la vez, el resumen sigue ganando.
     number(&mut d, "ancho", "0");
     assert_eq!(
@@ -3150,26 +3153,26 @@ fn row_6_accept_with_a_summary_through_the_modal_does_not_close() {
 #[test]
 fn row_6_set_summary_none_leaves_the_dialog_the_same_as_before() {
     // Sobre un diálogo virgen.
-    let antes = dialog_20_b(None);
-    let mut d = antes.clone();
+    let before = dialog_20_b(None);
+    let mut d = before.clone();
     d.set_summary(None);
-    assert_eq!(d, antes);
+    assert_eq!(d, before);
     // Tras poner y quitar un resumen.
     d.set_summary(Some(MISSING_TWO.to_string()));
-    assert_ne!(d, antes, "el resumen forma parte del estado");
+    assert_ne!(d, before, "el resumen forma parte del estado");
     d.set_summary(None);
-    assert_eq!(d, antes);
+    assert_eq!(d, before);
     assert_eq!(d.summary(), None);
     assert_eq!(d.reason(), None);
-    assert_eq!(d.values(), antes.values());
+    assert_eq!(d.values(), before.values());
     // Con un campo inválido y un motivo externo de por medio.
-    let mut antes = dialog_20_b(None);
-    number(&mut antes, "alto", "0");
-    antes.set_block(Some("calculando el informe".to_string()));
-    let mut d = antes.clone();
+    let mut before = dialog_20_b(None);
+    number(&mut before, "alto", "0");
+    before.set_block(Some("calculando el informe".to_string()));
+    let mut d = before.clone();
     d.set_summary(Some("falta: algo".to_string()));
     d.set_summary(None);
-    assert_eq!(d, antes);
+    assert_eq!(d, before);
 }
 
 #[test]
@@ -3430,10 +3433,10 @@ fn row_a1_hex_committed_gives_none_if_the_field_is_not_hexadecimal() {
 fn row_a1_hex_committed_does_not_change_the_dialog() {
     let mut d = open(hex_form(Mode::Rgba, TEST_DEFAULT));
     hex(&mut d, "color", "zz");
-    let antes = d.clone();
+    let before = d.clone();
     let _ = d.hex_committed("color");
     let _ = d.hex_committed("nada");
-    assert_eq!(d, antes);
+    assert_eq!(d, before);
 }
 
 const TEXTS_RESOLVE: [&str; 22] = [

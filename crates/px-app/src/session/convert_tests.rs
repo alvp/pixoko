@@ -289,9 +289,9 @@ fn row_7_the_state_is_new_and_the_document_is_left_modified() {
         for target in targets_2(from) {
             let mut session = session_of(image_of(from));
             assert!(!session.modified());
-            let antes = session.document.state_id();
+            let before = session.document.state_id();
             assert_eq!(session.convert_mode(target, ALL), Ok(true));
-            assert_ne!(session.document.state_id(), antes, "{from:?} a {target:?}");
+            assert_ne!(session.document.state_id(), before, "{from:?} a {target:?}");
             assert!(session.modified(), "{from:?} a {target:?}");
         }
     }
@@ -451,12 +451,12 @@ fn row_7_the_same_mode_gives_ok_false_without_a_step_or_changes() {
         edits_pixel(&mut session, 0, 0, 77);
         session.undo().expect("deshacer");
         session.view.reveal = false;
-        let antes = snapshot(&session);
+        let before = snapshot(&session);
         let steps_2 = steps_of_undo(&session.document);
         assert!(session.document.can_redo());
         for allowed in [Allowed::NOTHING, ALL] {
             assert_eq!(session.convert_mode(mode, allowed), Ok(false), "{mode:?}");
-            assert_eq!(snapshot(&session), antes, "{mode:?}");
+            assert_eq!(snapshot(&session), before, "{mode:?}");
             assert_eq!(steps_of_undo(&session.document), steps_2, "{mode:?}");
         }
     }
@@ -574,7 +574,7 @@ fn session_with_history(image: Image) -> Session {
 #[test]
 fn row_8_loss_not_allowed_leaves_everything_intact() {
     let mut session = session_with_history(image_of(Mode::Rgba));
-    let antes = snapshot(&session);
+    let before = snapshot(&session);
     let steps_2 = steps_of_undo(&session.document);
     for allowed in [
         Allowed::NOTHING,
@@ -595,7 +595,7 @@ fn row_8_loss_not_allowed_leaves_everything_intact() {
             ),
             "{allowed:?}: {result:?}"
         );
-        assert_eq!(snapshot(&session), antes, "{allowed:?}");
+        assert_eq!(snapshot(&session), before, "{allowed:?}");
         assert_eq!(steps_of_undo(&session.document), steps_2);
     }
     // El informe lleva los contadores completos.
@@ -604,7 +604,7 @@ fn row_8_loss_not_allowed_leaves_everything_intact() {
             // Las tres ediciones dejaron opacos los tres primeros píxeles: color en los cuatro y
             // alfa en el último.
             assert_eq!((report.color_lost, report.alpha_lost), (4, 1));
-            assert_eq!(Analysis::Lossy(report), analyze(&antes.image, Mode::Gray));
+            assert_eq!(Analysis::Lossy(report), analyze(&before.image, Mode::Gray));
         }
         other_2 => panic!("{other_2:?}"),
     }
@@ -613,23 +613,23 @@ fn row_8_loss_not_allowed_leaves_everything_intact() {
 #[test]
 fn row_8_too_many_colors_leaves_everything_intact() {
     let mut session = session_with_history(rgba_of_257_colors());
-    let antes = snapshot(&session);
+    let before = snapshot(&session);
     assert_eq!(
         session.convert_mode(Mode::Indexed, ALL),
         Err(DocumentError::Convert(ConvertError::TooManyColors {
             at_least: 257
         }))
     );
-    assert_eq!(snapshot(&session), antes);
+    assert_eq!(snapshot(&session), before);
 }
 
 #[test]
 fn row_8_the_current_mode_gives_ok_false_and_leaves_everything_intact() {
     for mode in TEST_MODES {
         let mut session = session_with_history(image_of(mode));
-        let antes = snapshot(&session);
+        let before = snapshot(&session);
         assert_eq!(session.convert_mode(mode, ALL), Ok(false), "{mode:?}");
-        assert_eq!(snapshot(&session), antes, "{mode:?}");
+        assert_eq!(snapshot(&session), before, "{mode:?}");
     }
 }
 
@@ -640,9 +640,9 @@ fn row_8_an_error_changes_neither_the_redo_stack_nor_the_modified_mark() {
     session.undo().expect("deshacer");
     assert!(session.document.can_redo());
     assert!(!session.modified());
-    let antes = snapshot(&session);
+    let before = snapshot(&session);
     assert!(session.convert_mode(Mode::Gray, Allowed::NOTHING).is_err());
-    assert_eq!(snapshot(&session), antes);
+    assert_eq!(snapshot(&session), before);
     assert!(session.document.can_redo(), "el error no borra el rehacer");
     assert!(!session.modified());
 }
@@ -930,10 +930,10 @@ fn row_8_the_first_history_notice_matches_what_happens_c_greater_than_the_limit(
     let limit_2 = pixels_2 - 1;
     session.document.set_history_limit(limit_2);
     let used_2 = session.document.history_bytes();
-    let antes = image_current(&session).clone();
+    let before = image_current(&session).clone();
     assert_eq!(
         history_warning(
-            &antes,
+            &before,
             History {
                 limit: limit_2,
                 used: used_2
@@ -974,10 +974,10 @@ fn row_8_the_second_history_notice_matches_what_happens_the_oldest_are_ejected()
         used_2 > 2560 && used_2 <= limit_2,
         "la prueba necesita una historia que no quepa junto al paso nuevo: usado = {used_2}"
     );
-    let antes = image_current(&session).clone();
+    let before = image_current(&session).clone();
     assert_eq!(
         history_warning(
-            &antes,
+            &before,
             History {
                 limit: limit_2,
                 used: used_2
@@ -997,7 +997,7 @@ fn row_8_the_second_history_notice_matches_what_happens_the_oldest_are_ejected()
     assert!(session.document.history_bytes() <= limit_2, "ahora cabe");
     // La conversión se conserva: el último `undo` posible vuelve a la imagen de antes.
     session.undo().expect("deshacer la conversión");
-    assert_eq!(image_current(&session), &antes);
+    assert_eq!(image_current(&session), &before);
 }
 
 #[test]
@@ -1006,10 +1006,10 @@ fn row_8_without_a_history_notice_nothing_is_ejected() {
     // Por defecto: c ≪ límite/2.
     let mut session = gray_with_edits(20);
     let used_2 = session.document.history_bytes();
-    let antes = image_current(&session).clone();
+    let before = image_current(&session).clone();
     assert_eq!(
         history_warning(
-            &antes,
+            &before,
             History {
                 limit: session.document.history_limit(),
                 used: used_2
@@ -1026,10 +1026,10 @@ fn row_8_without_a_history_notice_nothing_is_ejected() {
     let limit_2 = pixels_2 + 2560;
     session.document.set_history_limit(limit_2);
     let used_2 = session.document.history_bytes();
-    let antes = image_current(&session).clone();
+    let before = image_current(&session).clone();
     assert_eq!(
         history_warning(
-            &antes,
+            &before,
             History {
                 limit: limit_2,
                 used: used_2
@@ -1066,10 +1066,10 @@ fn row_8_rgba_of_4096_with_the_default_limit_convert_undo_another_edit_undo() {
     let original = Image::new(4096, 4096, Mode::Rgba).expect("RGBA 4096²");
     let mut session = session_of(original);
     let limit_2 = session.document.history_limit();
-    let antes = image_current(&session).clone();
+    let before = image_current(&session).clone();
     assert_eq!(
         history_warning(
-            &antes,
+            &before,
             History {
                 limit: limit_2,
                 used: 0
@@ -1079,7 +1079,7 @@ fn row_8_rgba_of_4096_with_the_default_limit_convert_undo_another_edit_undo() {
         Some(NOTICE_HISTORY_ALL),
         "RGBA de 4096² con el límite por defecto: el primer aviso"
     );
-    drop(antes);
+    drop(before);
 
     let allowed = Allowed {
         luma: true,
@@ -1240,7 +1240,7 @@ proptest! {
 
         for (i, operation) in ops.iter().enumerate() {
             let context = format!("paso {i}: {operation:?}");
-            let antes = snapshot(&session);
+            let before = snapshot(&session);
             let mut changes = false;
             match operation {
                 Op::Convert { target_2, luma, background_2 } => {
@@ -1317,13 +1317,13 @@ proptest! {
             );
             // Un `Err` o un `Ok(false)` dejan todo igual.
             if !changes && !matches!(operation, Op::Undo | Op::Redo) {
-                prop_assert_eq!(snapshot(&session), antes.clone(), "{}", context);
+                prop_assert_eq!(snapshot(&session), before.clone(), "{}", context);
             }
             if !changes {
-                prop_assert_eq!(session.document.state_id(), antes.state_id, "{}", context);
-                prop_assert_eq!(session.document.history_bytes(), antes.history_bytes, "{}", context);
-                prop_assert_eq!(session.choice, antes.choice, "{}", context);
-                prop_assert_eq!(session.modified(), antes.modified, "{}", context);
+                prop_assert_eq!(session.document.state_id(), before.state_id, "{}", context);
+                prop_assert_eq!(session.document.history_bytes(), before.history_bytes, "{}", context);
+                prop_assert_eq!(session.choice, before.choice, "{}", context);
+                prop_assert_eq!(session.modified(), before.modified, "{}", context);
             }
         }
     }

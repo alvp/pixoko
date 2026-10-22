@@ -88,15 +88,15 @@ fn ext(level: Level, n: u32) -> i64 {
 }
 
 /// Una vista en el nivel dado y con el origen que sale de anclar en `anchor` (sin `clamp`).
-fn vista(viewport: Size, image_2: Size, level: Level, anchor: (i64, i64)) -> View {
+fn view(viewport: Size, image_2: Size, level: Level, anchor: (i64, i64)) -> View {
     let mut v = View::fit(viewport, image_2);
     v.set_zoom(level.zoom, anchor);
     v
 }
 
 /// El rectángulo de pantalla de una baldosa según la fórmula del contrato, con enteros.
-fn screen_expected(vista: &View, level: Level, r: TileRect) -> ScreenRect {
-    let (ox, oy) = vista.origin();
+fn screen_expected(view: &View, level: Level, r: TileRect) -> ScreenRect {
+    let (ox, oy) = view.origin();
     ScreenRect {
         x: ox + ext(level, r.x),
         y: oy + ext(level, r.y),
@@ -292,7 +292,7 @@ fn row_b1_screen_rect_covers_exactly_image_rect_without_overlaps_or_gaps() {
         let t = Tiling::new(image_2, side);
         for z in zooms_b1() {
             for anchor in [(0, 0), (310, 342), (-5000, 77), (900, -1234)] {
-                let v = vista(viewport, image_2, z, anchor);
+                let v = view(viewport, image_2, z, anchor);
                 let label_2 = format!("{w}×{h} T={side} ×{}/{} ancla {anchor:?}", z.num, z.den);
                 let frame = v.image_rect(image_2);
                 let screens: Vec<ScreenRect> =
@@ -359,7 +359,7 @@ fn row_b1_at_1_k_the_quad_goes_from_a_k_to_the_ceiling_of_b_k_from_the_origin() 
     let t = Tiling::new(image_2, 2048);
     for k in [2u32, 4, 8, 16, 32, 64] {
         let z = level(1, k);
-        let v = vista(Size::new(800, 600), image_2, z, (400, 300));
+        let v = view(Size::new(800, 600), image_2, z, (400, 300));
         let (ox, oy) = v.origin();
         for i in 0..number(&t) {
             let r = rect_de(&t, i);
@@ -387,7 +387,7 @@ fn row_b1_uv_from_0_to_1_with_integer_zoom() {
         let image_2 = Size::new(w, h);
         let t = Tiling::new(image_2, side);
         for z in [level(1, 1), level(2, 1), level(5, 1), level(64, 1)] {
-            let v = vista(viewport, image_2, z, (100, 100));
+            let v = view(viewport, image_2, z, (100, 100));
             for i in 0..number(&t) {
                 assert_eq!(
                     t.uv(i, &v),
@@ -421,7 +421,7 @@ fn row_b1_at_1_k_the_center_of_each_screen_pixel_samples_the_texel_s_by_k_minus_
         let t = Tiling::new(image_2, side);
         for k in [2u32, 4, 8, 16, 32, 64] {
             let z = level(1, k);
-            let v = vista(viewport, image_2, z, (450, 350));
+            let v = view(viewport, image_2, z, (450, 350));
             let (ox, oy) = v.origin();
             for i in 0..number(&t) {
                 let r = rect_de(&t, i);
@@ -469,7 +469,7 @@ fn row_b1_visible_is_that_the_quad_cuts_the_canvas_with_positive_area() {
             for viewport in [Size::new(160, 120), Size::new(97, 31), Size::new(1, 1)] {
                 for ax in (-400..=400).step_by(53) {
                     for ay in (-300..=300).step_by(71) {
-                        let v = vista(viewport, image_2, z, (ax, ay));
+                        let v = view(viewport, image_2, z, (ax, ay));
                         for i in 0..number(&t) {
                             let p = screen_of(&t, i, &v);
                             assert_eq!(
@@ -793,13 +793,13 @@ fn row_b2_union_is_commutative_associative_idempotent_and_with_a_neutral() {
 #[test]
 fn row_b2_union_with_another_size_does_nothing() {
     let mut a = with_pixels(300, 200, &[(5, 5)]);
-    let antes = a.clone();
+    let before = a.clone();
     a.union(&BlockSet::full(301, 200));
-    assert_eq!(a, antes);
+    assert_eq!(a, before);
     a.union(&BlockSet::full(300, 201));
-    assert_eq!(a, antes);
+    assert_eq!(a, before);
     a.union(&BlockSet::full(1, 1));
-    assert_eq!(a, antes);
+    assert_eq!(a, before);
     assert_eq!(a.size(), Size::new(300, 200));
 }
 
@@ -1079,7 +1079,9 @@ fn row_b4_the_four_alphas_and_the_indexed_one_with_transparent_and_duplicates_ap
                 let t = pixels_2[(y * WIDTH_B_4 + x) as usize];
                 match seen_2[usize::from(i)] {
                     None => seen_2[usize::from(i)] = Some(t),
-                    Some(antes) => assert_eq!(antes, t, "la entrada {i} siempre da el mismo texel"),
+                    Some(before) => {
+                        assert_eq!(before, t, "la entrada {i} siempre da el mismo texel")
+                    }
                 }
             }
         }
@@ -1251,7 +1253,7 @@ proptest! {
 
         // Pantalla: a cualquier zoom y origen entero.
         let z = levels()[index_level];
-        let v = vista(Size::new(vw, vh), image_2, z, (ax, ay));
+        let v = view(Size::new(vw, vh), image_2, z, (ax, ay));
         let frame = v.image_rect(image_2);
         prop_assert_eq!(frame.width, ext(z, width_2));
         prop_assert_eq!(frame.height, ext(z, height_2));
@@ -1288,13 +1290,17 @@ proptest! {
 // Q3 · Región
 // ---------------------------------------------------------------------------------------------
 
-/// Los píxeles cuyo `to_rgba8` cambia entre `antes` y `after_2` están todos en `dirty_2`.
-fn contains_what_changes(antes: &Image, after_2: &Image, dirty_2: &BlockSet) -> Result<(), String> {
-    if (antes.width(), antes.height()) != (after_2.width(), after_2.height()) {
+/// Los píxeles cuyo `to_rgba8` cambia entre `before` y `after_2` están todos en `dirty_2`.
+fn contains_what_changes(
+    before: &Image,
+    after_2: &Image,
+    dirty_2: &BlockSet,
+) -> Result<(), String> {
+    if (before.width(), before.height()) != (after_2.width(), after_2.height()) {
         return Err("el tamaño cambió".to_string());
     }
-    let (a, d) = (to_rgba8(antes), to_rgba8(after_2));
-    let width_2 = antes.width() as usize;
+    let (a, d) = (to_rgba8(before), to_rgba8(after_2));
+    let width_2 = before.width() as usize;
     for (i, (pa, pd)) in a
         .as_chunks::<4>()
         .0
@@ -1334,7 +1340,7 @@ proptest! {
         let mut log = ChangeLog::new();
         for (n, s) in steps_2.into_iter().enumerate() {
             let id = ImageId::from_raw(0);
-            let antes = doc.image(id).expect("imagen").clone();
+            let before = doc.image(id).expect("imagen").clone();
             match step_of(&doc, s) {
                 Step::Nothing => {}
                 Step::Applies(command) => {
@@ -1342,7 +1348,7 @@ proptest! {
                     if let Ok(true) = doc.apply(command.clone()) {
                         log.record(doc.state_id(), region.clone());
                         let after_2 = doc.image(id).expect("imagen");
-                        let ok = contains_what_changes(&antes, after_2, &region);
+                        let ok = contains_what_changes(&before, after_2, &region);
                         prop_assert!(ok.is_ok(), "paso {n} {command:?}: {:?}", ok.err());
                     }
                 }
@@ -1351,7 +1357,7 @@ proptest! {
                     if doc.undo().is_ok() {
                         let region = log.get(from_2).cloned().unwrap_or_else(|| BlockSet::full(width_2, height_2));
                         let after_2 = doc.image(id).expect("imagen");
-                        let ok = contains_what_changes(&antes, after_2, &region);
+                        let ok = contains_what_changes(&before, after_2, &region);
                         prop_assert!(ok.is_ok(), "paso {n} deshacer: {:?}", ok.err());
                     }
                 }
@@ -1360,7 +1366,7 @@ proptest! {
                         let towards = doc.state_id();
                         let region = log.get(towards).cloned().unwrap_or_else(|| BlockSet::full(width_2, height_2));
                         let after_2 = doc.image(id).expect("imagen");
-                        let ok = contains_what_changes(&antes, after_2, &region);
+                        let ok = contains_what_changes(&before, after_2, &region);
                         prop_assert!(ok.is_ok(), "paso {n} rehacer: {:?}", ok.err());
                     }
                 }
@@ -1408,10 +1414,10 @@ fn property_q3_fixed_cases_of_the_block_edges() {
         },
     ];
     for command in commands {
-        let antes = doc.image(id(&doc)).expect("imagen").clone();
+        let before = doc.image(id(&doc)).expect("imagen").clone();
         let region = dirty_of(&command, size_2);
         assert_eq!(doc.apply(command), Ok(true));
         let after_2 = doc.image(id(&doc)).expect("imagen");
-        assert_eq!(contains_what_changes(&antes, after_2, &region), Ok(()));
+        assert_eq!(contains_what_changes(&before, after_2, &region), Ok(()));
     }
 }

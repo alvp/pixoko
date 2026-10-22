@@ -77,13 +77,13 @@ fn row_10_the_three_layer_actions_have_a_key_valid_text_and_are_editable() {
 
 #[test]
 fn row_10_none_of_the_four_has_a_default_key_and_the_table_does_not_change() {
-    let tabla = Keymap::default_scheme();
-    assert_eq!(tabla.conflicts(), vec![]);
-    assert_eq!(tabla.rows().len(), 35);
-    assert_eq!(tabla.rows().iter().filter(|f| f.command).count(), 9);
+    let table = Keymap::default_scheme();
+    assert_eq!(table.conflicts(), vec![]);
+    assert_eq!(table.rows().len(), 35);
+    assert_eq!(table.rows().iter().filter(|f| f.command).count(), 9);
     for platform in PLATFORMS {
         for action_2 in THE_FOUR {
-            assert!(tabla.shown(action_2, platform).is_none(), "{action_2:?}");
+            assert!(table.shown(action_2, platform).is_none(), "{action_2:?}");
         }
     }
 }

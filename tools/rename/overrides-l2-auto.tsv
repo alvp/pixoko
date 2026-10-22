@@ -19,6 +19,7 @@ CELDA_ENLAZADA	TEST_CEL_LINKED	crates/px-formats/
 CHUNK_CAPA	TEST_CHUNK_LAYER	crates/px-formats/
 CHUNK_CELDA	TEST_CHUNK_CEL	crates/px-formats/
 CHUNK_CELDA_EXTRA	TEST_CHUNK_CEL_EXTRA	crates/px-formats/
+CHUNK_MASCARA	TEST_CHUNK_MASK	crates/px-formats/
 CHUNK_PALETA	TEST_CHUNK_PALETTE	crates/px-formats/
 COLUMNAS	TEST_COLUMNS	crates/px-ui/
 CONTADOR	TEST_COUNTER	crates/px-app/
@@ -68,6 +69,8 @@ Mando	TestControl	crates/px-app/
 Marcas	TestMarks	crates/px-ui/
 Memoria	TestMemory	crates/px-app/
 Modo	TestMode	crates/px-app/
+NEGRO	TEST_BLACK	crates/px-app/
+NEGRO	TEST_BLACK	crates/px-ui/
 Ninguno	TestNone	crates/px-app/
 PANTALLA	TEST_SCREEN	crates/px-ui/
 POR_DEFECTO	TEST_DEFAULT	crates/px-ui/
@@ -77,6 +80,7 @@ Paleta	Palette2	crates/px-core/
 Paso	TestStep	crates/px-app/
 Paso	Step2	crates/px-core/
 Pendiente	TestPending	crates/px-ui/
+Pulsar	TestPress	crates/px-ui/
 RELLENO_U	TEST_FILL_U	crates/px-ui/
 RELLENO_U	FILL_U_2	crates/px-ui/tests/dialog_layout.rs
 ROJO	TEST_RED	crates/px-app/
@@ -161,6 +165,7 @@ celdas	cels_2	crates/px-core/tests/convert_all.rs
 cerrado	closed_2	crates/px-ui/tests/licenses_view.rs
 cierres	closes_2	crates/px-ui/tests/dialog_open_focus.rs
 codigo	code_2	crates/px-formats/
+coincide	matches_2	crates/px-formats/tests/png.rs
 colores	colors_2	crates/px-core/
 colores	colors_2	crates/px-ui/
 columnas	columns_2	crates/px-ui/
@@ -283,6 +288,8 @@ invalidos	invalid_2	crates/px-core/tests/document.rs
 invalidos	invalid_2	crates/px-ui/
 izquierdo	left_2	crates/px-ui/
 lado	side_2	crates/px-app/
+largo	length_2	crates/px-ui/
+leer	read_2_2	crates/px-app/
 leido	read_2	crates/px-app/
 leidos	read_2_2	crates/px-app/
 lienzo	canvas_2	crates/px-app/src/new_image/tests.rs
@@ -441,6 +448,8 @@ tramos	spans_2	crates/px-ui/
 transparentes	transparent_2	crates/px-core/tests/convert.rs
 trazo	stroke_2	crates/px-ui/
 ultima	last_2	crates/px-app/
+ultimo	last_2_2	crates/px-app/
+ultimo	last_2	crates/px-ui/
 una	a_2	crates/px-app/
 una	a_2	crates/px-raster/tests/merge.rs
 usado	used_2	crates/px-app/

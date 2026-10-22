@@ -144,19 +144,19 @@ fn layer_simple(name_2: &str, image: Option<Image>) -> LayerSpec {
 
 /// Lo que compara «escribir y leer devuelve el mismo documento» (condición 1): sin ids.
 #[derive(Debug, PartialEq)]
-enum Valor {
+enum Value {
     Transparent,
     Pixel(Pixel),
 }
 
 /// El valor de un píxel de una capa: la celda vacía es transparente; «transparente» es alfa 0 en
 /// RGBA y el índice transparente en indexado.
-fn valor(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Valor {
+fn value(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Value {
     let Some(image) = doc.image(layer_2.cel()) else {
-        return Valor::Transparent;
+        return Value::Transparent;
     };
     let Ok(pixel) = image.get_pixel(x, y) else {
-        return Valor::Pixel(Pixel::Gray(0));
+        return Value::Pixel(Pixel::Gray(0));
     };
     let transparent = match pixel {
         Pixel::Rgba(c) => c.a == 0,
@@ -165,9 +165,9 @@ fn valor(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Valor {
         _ => false,
     };
     if transparent {
-        Valor::Transparent
+        Value::Transparent
     } else {
-        Valor::Pixel(pixel)
+        Value::Pixel(pixel)
     }
 }
 
@@ -216,7 +216,7 @@ fn same_content(a: &Document, b: &Document) -> Result<(), String> {
         }
         for y in 0..a.height() {
             for x in 0..a.width() {
-                let (va, vb) = (valor(a, ca, x, y), valor(b, cb, x, y));
+                let (va, vb) = (value(a, ca, x, y), value(b, cb, x, y));
                 if va != vb {
                     return Err(format!("capa {i}, píxel ({x}, {y}): {va:?} y {vb:?}"));
                 }
@@ -700,7 +700,7 @@ fn row_05_a_each_discardable_chunk_is_noted_and_warned() {
         ("extra de celda", cel_extra(), |k| {
             matches!(k, Ignored::CelExtra { .. })
         }),
-        ("máscara", mascara(), |k| matches!(k, Ignored::Mask { .. })),
+        ("máscara", mask(), |k| matches!(k, Ignored::Mask { .. })),
         ("trazo", stroke(), |k| matches!(k, Ignored::Path { .. })),
         ("conjunto de tiles", tileset(), |k| {
             matches!(k, Ignored::Tileset { .. })
@@ -1256,8 +1256,8 @@ fn row_09_b_header_frame_chunks_layers_and_canvas_wrong() {
         (
             "tamaño de cabecera distinto",
             patched(&|b| {
-                let largo = b.len() as u32;
-                put_u_32(b, OFF_TAM_FILE, largo + 1);
+                let length = b.len() as u32;
+                put_u_32(b, OFF_TAM_FILE, length + 1);
             }),
             is_any,
         ),
@@ -1281,8 +1281,8 @@ fn row_09_b_header_frame_chunks_layers_and_canvas_wrong() {
         (
             "fotograma que sale del fichero",
             patched(&|b| {
-                let largo = b.len() as u32;
-                put_u_32(b, OFF_FRAME_TAM, largo);
+                let length = b.len() as u32;
+                put_u_32(b, OFF_FRAME_TAM, length);
             }),
             is_any,
         ),
@@ -1720,7 +1720,7 @@ fn checks_writing(doc: &Document, bytes: &[u8]) -> FileRead {
     }
     // Celdas (Spec: Cel Chunk): rectángulo mínimo, sin chunk para las vacías o transparentes.
     let bpp = doc.mode().bytes_per_pixel();
-    let mut vistas = Vec::new();
+    let mut views = Vec::new();
     for (_, data) in &f.chunks[next + n..] {
         let c = decodes_cel(data);
         let layer_2 = usize::from(c.layer_2);
@@ -1748,12 +1748,12 @@ fn checks_writing(doc: &Document, bytes: &[u8]) -> FileRead {
             expected_2_2.extend(&image.bytes()[from..from + (x1 - x0) * bpp]);
         }
         assert_eq!(c.pixels, expected_2_2, "píxeles de la celda {layer_2}");
-        vistas.push(layer_2);
+        views.push(layer_2);
     }
-    let mut ordered = vistas.clone();
+    let mut ordered = views.clone();
     ordered.sort_unstable();
     ordered.dedup();
-    assert_eq!(ordered.len(), vistas.len(), "una celda por capa");
+    assert_eq!(ordered.len(), views.len(), "una celda por capa");
     f
 }
 
@@ -2239,8 +2239,8 @@ fn document_indexed(width: u32, height: u32) -> BoxedStrategy<Document> {
     let n = (width * height) as usize;
     (vec(any::<[u8; 4]>(), 2..=256), any::<u8>())
         .prop_flat_map(move |(colors, t)| {
-            let largo = colors.len();
-            let transparent = (usize::from(t) % largo) as u8;
+            let length = colors.len();
+            let transparent = (usize::from(t) % length) as u8;
             let cel = prop_oneof![1 => Just(None), 5 => vec(any::<u8>(), n).prop_map(Some)];
             let layer_idx = (name_of_layer(), any::<bool>(), any::<bool>(), cel);
             vec(layer_idx, 1..=6).prop_map(move |layers| {
@@ -2256,7 +2256,7 @@ fn document_indexed(width: u32, height: u32) -> BoxedStrategy<Document> {
                                     if v % 3 == 0 {
                                         transparent
                                     } else {
-                                        (usize::from(v) % largo) as u8
+                                        (usize::from(v) % length) as u8
                                     }
                                 })
                                 .collect();

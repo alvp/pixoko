@@ -49,16 +49,16 @@ impl Bits {
     }
 
     /// Campo numérico de `n` bits, LSB primero.
-    fn field(&mut self, valor: u32, n: u32) {
+    fn field(&mut self, value: u32, n: u32) {
         for i in 0..n {
-            self.bit(valor >> i);
+            self.bit(value >> i);
         }
     }
 
     /// Código de Huffman de `n` bits, MSB primero.
-    fn code_2(&mut self, valor: u32, n: u32) {
+    fn code_2(&mut self, value: u32, n: u32) {
         for i in (0..n).rev() {
-            self.bit(valor >> i);
+            self.bit(value >> i);
         }
     }
 
@@ -100,22 +100,22 @@ pub(super) fn z(n: u64) -> Vec<u8> {
     const ORDER: [usize; 19] = [
         16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
     ];
-    let mut largo_de = [0u32; 19];
-    largo_de[0] = 1;
-    largo_de[1] = 2;
-    largo_de[2] = 2;
-    let ultimo = ORDER.iter().rposition(|&s| largo_de[s] != 0).unwrap();
-    b.field((ultimo + 1 - 4) as u32, 4); // HCLEN
-    for &s in &ORDER[..=ultimo] {
-        b.field(largo_de[s], 3);
+    let mut length_of = [0u32; 19];
+    length_of[0] = 1;
+    length_of[1] = 2;
+    length_of[2] = 2;
+    let last = ORDER.iter().rposition(|&s| length_of[s] != 0).unwrap();
+    b.field((last + 1 - 4) as u32, 4); // HCLEN
+    for &s in &ORDER[..=last] {
+        b.field(length_of[s], 3);
     }
     // Códigos canónicos del alfabeto de longitudes: 0 -> '0', 1 -> '10', 2 -> '11'.
-    let mut longitudes = [0u32; 286 + 1];
-    longitudes[0] = 2;
-    longitudes[256] = 2;
-    longitudes[285] = 1;
-    longitudes[286] = 1; // el único código de distancia
-    for &l in &longitudes {
+    let mut lengths = [0u32; 286 + 1];
+    lengths[0] = 2;
+    lengths[256] = 2;
+    lengths[285] = 1;
+    lengths[286] = 1; // el único código de distancia
+    for &l in &lengths {
         match l {
             0 => b.code_2(0b0, 1),
             1 => b.code_2(0b10, 2),
@@ -141,14 +141,14 @@ pub(super) fn z(n: u64) -> Vec<u8> {
 // Ficheros con un IDAT dado y el modelo de `needed` de las pruebas.
 // ---------------------------------------------------------------------------------------
 
-/// Fichero con `antes` entre IHDR e IDAT y, si `idat` es `Some`, ese IDAT (ya comprimido).
+/// Fichero con `before` entre IHDR e IDAT y, si `idat` es `Some`, ese IDAT (ya comprimido).
 pub(super) fn file(
     width: u32,
     height: u32,
     prof: u8,
     color: u8,
     interlaced_2: bool,
-    antes: &[Vec<u8>],
+    before: &[Vec<u8>],
     idat: Option<&[u8]>,
 ) -> Vec<u8> {
     let mut ihdr = Vec::new();
@@ -157,7 +157,7 @@ pub(super) fn file(
     ihdr.extend([prof, color, 0, 0, u8::from(interlaced_2)]);
     let mut v = TEST_SIGNATURE.to_vec();
     v.extend(piece(b"IHDR", &ihdr));
-    for c in antes {
+    for c in before {
         v.extend(c);
     }
     if let Some(idat) = idat {
@@ -450,11 +450,11 @@ fn row8_invalid_palette_and_trns_beat_the_bound() {
     assert_eq!(error_de(&without_plte), PngError::InvalidPalette);
 
     // Indexado con tRNS de 3 entradas y PLTE de 2 (8192 × 8192, IDAT mínimo): `InvalidTrns`.
-    let trns_largo = Png::new(8192, 8192, 8, 3)
-        .antes(plte(&[(1, 1, 1), (2, 2, 2)]))
-        .antes(trns(&[0, 1, 2]))
+    let trns_length = Png::new(8192, 8192, 8, 3)
+        .before(plte(&[(1, 1, 1), (2, 2, 2)]))
+        .before(trns(&[0, 1, 2]))
         .bytes();
-    assert_eq!(error_de(&trns_largo), PngError::InvalidTrns);
+    assert_eq!(error_de(&trns_length), PngError::InvalidTrns);
 }
 
 #[test]
@@ -471,8 +471,8 @@ fn row8_truncated_in_the_middle_of_idat_is_decode() {
         .collect();
     let valid = Png::new(64, 64, 8, 0).swatches(&swatches).bytes();
     assert!(read_png(&valid).is_ok());
-    let (start, largo) = position_idat(&valid);
-    let cut = &valid[..start + 8 + largo / 2];
+    let (start, length) = position_idat(&valid);
+    let cut = &valid[..start + 8 + length / 2];
     let r = read_png(cut);
     assert!(es_decode(&r), "{r:?}");
 }

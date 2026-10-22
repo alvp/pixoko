@@ -183,9 +183,9 @@ fn row_5_everything_outside_leaves_the_stroke_empty_but_remembers_the_last_posit
 
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     assert_eq!(stroke.commit(&mut doc, id), Ok(false));
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 #[test]
@@ -298,22 +298,22 @@ fn row_9_strokes_that_change_nothing_do_not_touch_the_history() {
     assert_eq!(b.commit(&mut doc, id), Ok(true));
     // Un `undo` previo: queda algo que rehacer, y no debe perderse.
     assert_eq!(doc.undo(), Ok(()));
-    let antes = snapshot(&doc);
-    assert!(antes.1 && antes.2, "hay algo que deshacer y que rehacer");
+    let before = snapshot(&doc);
+    assert!(before.1 && before.2, "hay algo que deshacer y que rehacer");
 
     // Vacío: no llama a `apply`, que daría `EmptyCommand`.
     assert_eq!(Stroke::new(8, 8).commit(&mut doc, id), Ok(false));
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
     // Todo fuera del lienzo.
     let all_outside = stroke_with(8, 8, &[(-4, 2), (-1, 6)], pixel_a());
     assert!(all_outside.is_empty());
     assert_eq!(all_outside.commit(&mut doc, id), Ok(false));
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
     // Con el color que ya hay (el primer trazo dejó A en la fila 1).
     let equal = stroke_with(8, 8, &[(1, 1), (3, 1)], pixel_a());
     assert_eq!(equal.pixels().len(), 3);
     assert_eq!(equal.commit(&mut doc, id), Ok(false));
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
     assert!(doc.can_redo(), "el redo pendiente sigue ahí");
 }
 
@@ -321,7 +321,7 @@ fn row_9_strokes_that_change_nothing_do_not_touch_the_history() {
 fn row_10_a_pixel_of_another_mode_gives_an_error_and_does_not_touch_the_document() {
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     let stroke = stroke_with(8, 8, &[(1, 1), (3, 1)], Pixel::Indexed(0));
     assert_eq!(
         stroke.commit(&mut doc, id),
@@ -333,7 +333,7 @@ fn row_10_a_pixel_of_another_mode_gives_an_error_and_does_not_touch_the_document
             }
         })
     );
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 #[test]
@@ -390,18 +390,18 @@ fn fit_2(pos: &[Point], width: u32, height: u32, inside: bool) -> Vec<Point> {
 /// `Line` recortados al lienzo.
 fn oracle_set(pos: &[Point], width: u32, height: u32) -> BTreeSet<Point> {
     let mut set = BTreeSet::new();
-    let mut ultimo: Option<Point> = None;
+    let mut last_2: Option<Point> = None;
     for &p in pos {
-        match ultimo {
+        match last_2 {
             None => {
                 if inside(p, width, height) {
                     set.insert(p);
                 }
             }
-            Some(anterior) if anterior == p => {}
-            Some(anterior) => set.extend(Line::new(anterior, p).clip_to(width, height)),
+            Some(previous) if previous == p => {}
+            Some(previous) => set.extend(Line::new(previous, p).clip_to(width, height)),
         }
-        ultimo = Some(p);
+        last_2 = Some(p);
     }
     set
 }
@@ -411,22 +411,22 @@ fn oracle_set(pos: &[Point], width: u32, height: u32) -> BTreeSet<Point> {
 fn oracle_values(pos: &[Point], pixels_2: &[Pixel], width: u32, height: u32) -> Vec<PixelEdit> {
     let mut order: Vec<Point> = Vec::new();
     let mut values: HashMap<Point, Pixel> = HashMap::new();
-    let mut ultimo: Option<Point> = None;
+    let mut last_2: Option<Point> = None;
     for (&p, &pixel) in pos.iter().zip(pixels_2) {
-        if ultimo == Some(p) {
+        if last_2 == Some(p) {
             continue;
         }
-        let points: Vec<Point> = match ultimo {
+        let points: Vec<Point> = match last_2 {
             None if inside(p, width, height) => vec![p],
             None => vec![],
-            Some(anterior) => Line::new(anterior, p).clip_to(width, height).collect(),
+            Some(previous) => Line::new(previous, p).clip_to(width, height).collect(),
         };
         for q in points {
             if values.insert(q, pixel).is_none() {
                 order.push(q);
             }
         }
-        ultimo = Some(p);
+        last_2 = Some(p);
     }
     order
         .into_iter()
@@ -542,7 +542,7 @@ proptest! {
 const TEST_MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
 /// Hasta cuatro valores distintos por modo (`v` de 0 a 3), que caben en la paleta de 4 colores.
-fn valor(mode_2: Mode, v: u8) -> Pixel {
+fn value(mode_2: Mode, v: u8) -> Pixel {
     match mode_2 {
         Mode::Rgba => Pixel::Rgba(Rgba::new(v * 60, 10, v * 3, 255)),
         Mode::Indexed => Pixel::Indexed(v),
@@ -570,7 +570,7 @@ fn image_with_noise(mode_2: Mode, width: u32, height: u32, noise: &[u8]) -> Imag
     for y in 0..height {
         for x in 0..width {
             let v = noise[(y * width + x) as usize % noise.len()] % 3;
-            image.set_pixel(x, y, valor(mode_2, v)).unwrap();
+            image.set_pixel(x, y, value(mode_2, v)).unwrap();
         }
     }
     image
@@ -593,7 +593,7 @@ fn fill(doc: &mut Document, mode_2: Mode, v: u8) {
             (0..width).map(move |x| PixelEdit {
                 x,
                 y,
-                pixel: valor(mode_2, v),
+                pixel: value(mode_2, v),
             })
         })
         .collect();
@@ -613,7 +613,7 @@ fn check_a_step(
 ) -> Result<bool, TestCaseError> {
     let id = ImageId::from_raw(0);
     let image = image_of(doc);
-    let pixel = valor(mode_2, v);
+    let pixel = value(mode_2, v);
     let stroke = stroke_with(image.width(), image.height(), pos, pixel);
     let changes = stroke
         .pixels()
@@ -624,7 +624,7 @@ fn check_a_step(
         edited.set_pixel(e.x, e.y, e.pixel).unwrap();
     }
 
-    let antes = snapshot(doc);
+    let before = snapshot(doc);
     let result = stroke.commit(doc, id);
     prop_assert_eq!(result, Ok(changes));
     if changes {
@@ -638,7 +638,7 @@ fn check_a_step(
         prop_assert_eq!(doc.redo(), Ok(()));
         prop_assert_eq!(image_of(doc), edited);
     } else {
-        prop_assert_eq!(snapshot(doc), antes);
+        prop_assert_eq!(snapshot(doc), before);
     }
     Ok(changes)
 }
@@ -699,7 +699,7 @@ proptest! {
         if steps_2 >= 1 {
             prop_assert_eq!(doc.undo(), Ok(()));
             prop_assert!(doc.can_redo());
-            let new_2 = stroke_with(width, height, &[(0, 0)], valor(mode_2, 3));
+            let new_2 = stroke_with(width, height, &[(0, 0)], value(mode_2, 3));
             let id = ImageId::from_raw(0);
             prop_assert_eq!(new_2.commit(&mut doc, id), Ok(true));
             prop_assert!(!doc.can_redo());
@@ -734,7 +734,7 @@ proptest! {
             prop_assert_eq!(doc.undo(), Ok(()));
             actual = 0;
         }
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
 
         let stroke = match kind {
             // Vacío.
@@ -753,15 +753,15 @@ proptest! {
                         (x, y)
                     })
                     .collect();
-                stroke_with(width, height, &outside, valor(mode_2, 2))
+                stroke_with(width, height, &outside, value(mode_2, 2))
             }
             // Con el valor que ya tiene toda la imagen.
-            _ => stroke_with(width, height, &pos, valor(mode_2, actual)),
+            _ => stroke_with(width, height, &pos, value(mode_2, actual)),
         };
         if kind == 1 {
             prop_assert!(stroke.is_empty());
         }
         prop_assert_eq!(stroke.commit(&mut doc, id), Ok(false));
-        prop_assert_eq!(snapshot(&doc), antes);
+        prop_assert_eq!(snapshot(&doc), before);
     }
 }

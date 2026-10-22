@@ -187,8 +187,8 @@ fn builds(shape: Shape, content: Content) -> (Raw, Image) {
             let expected = Image::from_bytes_indexed(n, n, palette, data.clone()).unwrap();
             let rgb: Vec<u8> = colors.iter().flat_map(|c| [c.r, c.g, c.b]).collect();
             // tRNS: los alfas de las entradas hasta la última no opaca.
-            let ultimo = colors.iter().rposition(|c| c.a != 255).unwrap();
-            let trns: Vec<u8> = colors[..=ultimo].iter().map(|c| c.a).collect();
+            let last = colors.iter().rposition(|c| c.a != 255).unwrap();
+            let trns: Vec<u8> = colors[..=last].iter().map(|c| c.a).collect();
             let raw = Raw {
                 width: n,
                 height: n,
@@ -260,12 +260,12 @@ fn in_parallel(jobs: &[Combination]) {
                             let n = raw.width;
                             let needed = super::max_ratio::necessary(n, n, bpp, false);
                             let flow = z(needed);
-                            let antes = if color == 3 {
+                            let before = if color == 3 {
                                 vec![plte_black(256)]
                             } else {
                                 vec![]
                             };
-                            let bytes = file(n, n, 8, color, false, &antes, Some(&flow));
+                            let bytes = file(n, n, 8, color, false, &before, Some(&flow));
                             let r = read_png(&bytes)
                                 .unwrap_or_else(|e| panic!("{name_2}: rechazado: {e:?}"));
                             assert!(
@@ -377,7 +377,7 @@ fn types() -> Vec<(png::ColorType, png::BitDepth, usize)> {
 
 /// Muestra (x, y, canal) del relleno, de `bits` bits, derivada de `seed`.
 fn swatch(fill: Fill, seed: u64, bits: u32, x: usize, y: usize, c: usize) -> u16 {
-    let mascara = ((1u32 << bits) - 1) as u16;
+    let mask = ((1u32 << bits) - 1) as u16;
     let blend = |a: u64| {
         let mut s = seed ^ a.wrapping_mul(0x9E37_79B9_7F4A_7C15);
         s ^= s >> 30;
@@ -391,7 +391,7 @@ fn swatch(fill: Fill, seed: u64, bits: u32, x: usize, y: usize, c: usize) -> u16
         Fill::Bands => blend((x / 5 + (y / 3) * 7 + c * 1000) as u64 % 11),
         Fill::Noise => blend(((y * 64 + x) * 4 + c) as u64 + 77),
     };
-    (v as u16) & mascara
+    (v as u16) & mask
 }
 
 fn raw_random(
@@ -477,8 +477,8 @@ proptest! {
         let bits = prof as u8;
         let bpp = (channels as u64) * u64::from(bits);
         let needed = super::max_ratio::necessary(width, height, bpp, false);
-        let antes = if color_png == 3 { vec![plte_black(1 << bits)] } else { vec![] };
-        let bytes = file(width, height, bits, color_png, false, &antes, Some(&z(needed)));
+        let before = if color_png == 3 { vec![plte_black(1 << bits)] } else { vec![] };
+        let bytes = file(width, height, bits, color_png, false, &before, Some(&z(needed)));
         let r = read_png(&bytes);
         prop_assert!(r.is_ok(), "{:?}", r.as_ref().err());
     }

@@ -54,7 +54,7 @@ pub const TEST_CHUNK_CEL: u16 = 0x2005;
 pub const TEST_CHUNK_CEL_EXTRA: u16 = 0x2006;
 pub const CHUNK_PROFILE: u16 = 0x2007;
 pub const CHUNK_FILES: u16 = 0x2008;
-pub const CHUNK_MASCARA: u16 = 0x2016;
+pub const TEST_CHUNK_MASK: u16 = 0x2016;
 pub const CHUNK_STROKE: u16 = 0x2017;
 pub const CHUNK_LABELS: u16 = 0x2018;
 pub const TEST_CHUNK_PALETTE: u16 = 0x2019;
@@ -135,13 +135,13 @@ pub fn inflate(data: &[u8]) -> Vec<u8> {
 }
 
 /// Cambia un `DWORD` de un fichero ya construido (para fabricar defectos).
-pub fn put_u_32(bytes: &mut [u8], pos: usize, valor: u32) {
-    bytes[pos..pos + 4].copy_from_slice(&valor.to_le_bytes());
+pub fn put_u_32(bytes: &mut [u8], pos: usize, value: u32) {
+    bytes[pos..pos + 4].copy_from_slice(&value.to_le_bytes());
 }
 
 /// Cambia un `WORD` de un fichero ya construido (para fabricar defectos).
-pub fn put_u_16(bytes: &mut [u8], pos: usize, valor: u16) {
-    bytes[pos..pos + 2].copy_from_slice(&valor.to_le_bytes());
+pub fn put_u_16(bytes: &mut [u8], pos: usize, value: u16) {
+    bytes[pos..pos + 2].copy_from_slice(&value.to_le_bytes());
 }
 
 // ---------------------------------------------------------------------------------------
@@ -256,8 +256,8 @@ impl Cel {
                 w16(&mut d, self.width);
                 w16(&mut d, self.height);
                 w16(&mut d, 32); // bits por tile
-                for mascara in [0x1fff_ffffu32, 0x2000_0000, 0x4000_0000, 0x8000_0000] {
-                    w32(&mut d, mascara);
+                for mask in [0x1fff_ffffu32, 0x2000_0000, 0x4000_0000, 0x8000_0000] {
+                    w32(&mut d, mask);
                 }
                 d.extend([0u8; 10]);
                 d.extend(zlib(&self.pixels));
@@ -283,13 +283,13 @@ impl Cel {
 pub fn palette_new(
     tam: u32,
     first: u32,
-    ultimo: u32,
+    last: u32,
     entries: &[([u8; 4], Option<&str>)],
 ) -> Vec<u8> {
     let mut d = Vec::new();
     w32(&mut d, tam);
     w32(&mut d, first);
-    w32(&mut d, ultimo);
+    w32(&mut d, last);
     d.extend([0u8; 8]);
     for (rgba, name_2) in entries {
         w16(&mut d, u16::from(name_2.is_some())); // bandera 1 = lleva nombre
@@ -401,7 +401,7 @@ pub fn cel_extra() -> Vec<u8> {
 }
 
 /// Spec: Mask Chunk (0x2016), de 8 × 2 píxeles.
-pub fn mascara() -> Vec<u8> {
+pub fn mask() -> Vec<u8> {
     let mut d = Vec::new();
     wi16(&mut d, 0);
     wi16(&mut d, 0);
@@ -410,7 +410,7 @@ pub fn mascara() -> Vec<u8> {
     d.extend([0u8; 8]);
     string(&mut d, b"mascara");
     d.extend([0xFF, 0x0F]); // alto * ((ancho + 7) / 8) bytes
-    chunk(CHUNK_MASCARA, &d)
+    chunk(TEST_CHUNK_MASK, &d)
 }
 
 /// Spec: Path Chunk (0x2017): «Never used», sin estructura.

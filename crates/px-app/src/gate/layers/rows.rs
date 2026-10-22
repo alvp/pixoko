@@ -60,14 +60,14 @@ fn row_06_indexed_end_to_end() {
 
 fn history(mut w: World3) {
     let steps_2 = w.steps_2();
-    let ultimo = w.leer();
+    let last_2_2 = w.read_2_2();
     assert_eq!(w.undo_all(), steps_2, "deshacer hasta el principio");
     assert_eq!(w.s.document.state_id(), 0, "al principio, state_id 0");
     assert!(!w.s.modified(), "al principio no hay cambios");
     assert_eq!(w.m.layers_2.len(), 1, "al principio, el documento original");
     assert_eq!(w.redo_all(), steps_2, "rehacer hasta el final");
-    ultimo
-        .equal_content(&w.leer())
+    last_2_2
+        .equal_content(&w.read_2_2())
         .expect("el final es el final");
     assert!(w.s.modified());
 
@@ -181,9 +181,9 @@ fn save_and_reopen(indexed_2: bool) {
     w.m.canonical()
         .equal_content(&read.canonical())
         .expect("el reabierto es el documento guardado");
-    let antes = compose(&w.s.document).expect("compose");
+    let before = compose(&w.s.document).expect("compose");
     let after_2 = compose(&other.document).expect("compose");
-    equal_except_rgb_with_alpha_0(&antes, &after_2).expect("la composición sobrevive");
+    equal_except_rgb_with_alpha_0(&before, &after_2).expect("la composición sobrevive");
     if !indexed_2 {
         // Vector a mano de 3.2: Multiplicar de `SOURCE` sobre `TEST_BACKGROUND`.
         assert_eq!(
@@ -204,7 +204,7 @@ fn save_and_reopen(indexed_2: bool) {
     let png = read_png(&fs::read(&exported.path).expect("leer"))
         .expect("PNG")
         .image;
-    equal_except_rgb_with_alpha_0(&png, &antes).expect("el PNG exportado es la composición");
+    equal_except_rgb_with_alpha_0(&png, &before).expect("el PNG exportado es la composición");
     if !indexed_2 {
         assert_eq!(
             super::rgba_de(&png, 0, 0),
@@ -223,7 +223,7 @@ fn save_and_reopen(indexed_2: bool) {
     let png = read_png(&fs::read(&other_2).expect("leer"))
         .expect("PNG")
         .image;
-    equal_except_rgb_with_alpha_0(&png, &antes).expect("el PNG guardado es la composición");
+    equal_except_rgb_with_alpha_0(&png, &before).expect("el PNG guardado es la composición");
     // Con 3 o más capas y ruta PNG, `Ctrl+S` pide el diálogo (y propone `.aseprite`).
     assert_eq!(w.s.save_route(), SaveRoute::Dialog);
     assert_eq!(

@@ -222,3 +222,18 @@ Método de L1: mapa y script con léxico de Rust, con la lista previa de nombres
 - **Edición no mecánica**: `px-formats/tests/aseprite.rs` y `px-golden/tests/blend.rs` construían el nombre del caso con `format!("mezcla-{nombre}")`, donde `nombre` es también el nombre (español) de la capa dentro del fichero; la función `case_word` da el sufijo inglés (`blend-multiply`…) y deja la capa como está.
 - **README de `golden/aseprite/`**: su tabla de nombres se actualizó con los nombres nuevos (el hash de ese fichero cambia; los 96 restantes, no).
 - Un ejemplo de colisión conservadora revisada a mano: `tools/rename/reviewed-collisions.tsv` (3 filas, ninguna real).
+
+## Estado de la etapa L2 (2026-10-22)
+
+**Hecho:** todos los identificadores del código de pruebas (nombres de `#[test]`, ayudantes, variables locales, constantes, tipos, campos y variantes) de `px-core`, `px-raster`, `px-formats`, `px-ui`, `px-app` y `px-golden`: **8 089 identificadores distintos** (px-ui 4 396, px-app 2 522, px-core 1 149, px-formats 575, px-raster 423, px-golden 366) y unas 190 000 apariciones. P1 a P4 y P3b en verde; `cargo fmt`, `clippy -D warnings`, `cargo test --workspace` y `cargo deny` en verde. Un commit por crate (`px-core`, `px-raster`, `px-formats`, `px-golden`, `px-app`, `px-ui`) más uno final con la segunda pasada. Nada de producción cambia (P2: solo los 5 literales de L1).
+
+**Método.** (1) Glosario de unas 2 500 palabras (`tools/rename/glossary-l2.tsv`) y traductor palabra a palabra con frases hechas (`ida_y_vuelta` → `round_trip`, `por_defecto` → `default`…). (2) **Los 4 304 nombres de cuatro o más palabras (las frases de las pruebas) los traduje a mano**, por crate y en lotes, con `fila_NN_…` → `row_NN_…` y `propiedad_N_…` → `property_N_…` (`tools/rename/overrides-l2.tsv`); los más cortos salen del glosario. (3) Colisiones: `l2collide.py` busca, **por función** (ámbito real), los nombres nuevos que ya existen en ella, los elementos de módulo que taparían un nombre de producción, del preludio de `std` o importado por `use módulo::*`, los pares de nombres viejos que darían el mismo nuevo y las palabras reservadas; 461 resueltas con sufijo (`_2`) o prefijo `Test` (`overrides-l2-auto.tsv`). (4) Aplicación con el mismo léxico y el mismo mapa que L1 (`map-l2-applied.tsv`: viejo → nuevo por crate).
+
+**Dejado como estaba, anotado:**
+- `ci.rs` (protegido: solo sus comentarios, en L3) y todos los literales (textos visibles, mensajes de aserciones, nombres de capas del corpus).
+- Los nombres cortos conservan el **orden de las palabras del español** (`color_any`, `image_large`, `check_long`): el glosario traduce palabras, no gramática. Las frases largas, no.
+- Palabras que valen en los dos idiomas y son inglés en producción (`actual` en `ZoomActual`, `describe`, `modulo`): se quedan; `Actual` de producción no se toca.
+- Una palabra de un mensaje de aserción (`desplazo`) sigue en español dentro de su cadena (L3 no la toca tampoco: es texto).
+- Rarezas conocidas del método: `to_*` que no toman `&self` (clippy lo vigila: `al_nivel` pasó a `go_to_level`), `Box`/`None` y otros nombres del preludio (prefijo `Test`).
+
+**Pasa a L3** (comentarios): 18 263 líneas, `ci.rs` (24 líneas, con tu aprobación), `fuzz/` y los `Cargo.toml`/`deny.toml` de `fuzz/` y `px-render`; las menciones de nombres viejos que quedan en comentarios y entre comillas invertidas se actualizan con el mapa.

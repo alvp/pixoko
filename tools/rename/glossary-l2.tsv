@@ -321,6 +321,7 @@ camino	path
 caminos	paths
 campo	field
 campos	fields
+canal	channel
 canales	channels
 cancela	cancels
 cancelacion	cancellation
@@ -647,6 +648,7 @@ daria	would_give
 dato	datum
 datos	data
 de	of
+de_prueba	test
 debajo	below
 debe	must
 deben	must
@@ -792,8 +794,8 @@ directo	direct
 directorio	directory
 directos	direct
 diria	would_say
-disco	disc
-discos	discs
+disco	disk
+discos	disks
 discrepancias	discrepancies
 disena	designs
 diseno	design
@@ -1321,8 +1323,8 @@ lanza	throws
 lanzar	throw
 lapiz	pencil
 larga	long
-largo	long
-largos	long
+largo	length
+largos	lengths
 larguisimo	very_long
 las	the
 lateral	side
@@ -2458,5 +2460,3 @@ vuelven	return
 y	and
 ya	already
 zona	zone
-canal	channel
-de_prueba	test

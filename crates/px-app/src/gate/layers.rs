@@ -46,7 +46,7 @@ pub fn golden_aseprite() -> PathBuf {
 
 /// La ruta con sus enlaces y `..` resueltos: se canonicaliza el ancestro más largo que exista y se
 /// le añade el resto (la ruta puede no existir todavía).
-fn resolver(path_2: &Path) -> PathBuf {
+fn resolve(path_2: &Path) -> PathBuf {
     let absolute = std::path::absolute(path_2).unwrap_or_else(|_| path_2.to_path_buf());
     let mut rest: Vec<OsString> = Vec::new();
     let mut actual = absolute.clone();
@@ -59,9 +59,9 @@ fn resolver(path_2: &Path) -> PathBuf {
             return resolved;
         }
         match (actual.parent(), actual.file_name()) {
-            (Some(padre), Some(name_2)) => {
+            (Some(parent), Some(name_2)) => {
                 rest.push(name_2.to_os_string());
-                actual = padre.to_path_buf();
+                actual = parent.to_path_buf();
             }
             _ => return absolute,
         }
@@ -71,8 +71,8 @@ fn resolver(path_2: &Path) -> PathBuf {
 /// Pánico si `path_2` (de escritura) cuelga de `golden/aseprite/` o de `golden/png/`. Se le pasa
 /// **toda** ruta de escritura de la puerta de capas.
 pub fn outside_golden_aseprite(path_2: &Path) {
-    let forbidden = resolver(&golden_aseprite());
-    let target_2 = resolver(path_2);
+    let forbidden = resolve(&golden_aseprite());
+    let target_2 = resolve(path_2);
     assert!(
         !target_2.starts_with(&forbidden),
         "escritura prohibida en golden/aseprite: {} (resuelta a {})",

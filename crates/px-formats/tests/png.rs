@@ -194,7 +194,7 @@ struct Png {
     /// Si es `Some`, datos sin comprimir del IDAT tal cual (anula `swatches`).
     raw_fixed: Option<Vec<u8>>,
     /// Chunks ya serializados entre IHDR e IDAT.
-    antes: Vec<Vec<u8>>,
+    before: Vec<Vec<u8>>,
     /// Chunks ya serializados entre IDAT e IEND.
     after: Vec<Vec<u8>>,
     adler_xor: u32,
@@ -210,7 +210,7 @@ impl Png {
             interlaced_2: false,
             swatches: Vec::new(),
             raw_fixed: None,
-            antes: Vec::new(),
+            before: Vec::new(),
             after: Vec::new(),
             adler_xor: 0,
         }
@@ -226,8 +226,8 @@ impl Png {
         self
     }
 
-    fn antes(mut self, chunk: Vec<u8>) -> Png {
-        self.antes.push(chunk);
+    fn before(mut self, chunk: Vec<u8>) -> Png {
+        self.before.push(chunk);
         self
     }
 
@@ -260,7 +260,7 @@ impl Png {
         ihdr.extend([self.prof, self.color, 0, 0, u8::from(self.interlaced_2)]);
         let mut v = TEST_SIGNATURE.to_vec();
         v.extend(piece(b"IHDR", &ihdr));
-        for c in &self.antes {
+        for c in &self.before {
             v.extend(c);
         }
         v.extend(piece(b"IDAT", &zlib_stored(&self.raw(), self.adler_xor)));
@@ -291,13 +291,13 @@ fn walks(bytes: &[u8]) -> Result<Vec<Piece>, String> {
         let header = bytes
             .get(pos..pos + 8)
             .ok_or_else(|| format!("cabecera truncada en {pos}"))?;
-        let largo = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let length = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
         let kind: [u8; 4] = header[4..8].try_into().unwrap();
         let data = bytes
-            .get(pos + 8..pos + 8 + largo)
+            .get(pos + 8..pos + 8 + length)
             .ok_or_else(|| format!("datos truncados en {pos}"))?;
         let crc = bytes
-            .get(pos + 8 + largo..pos + 12 + largo)
+            .get(pos + 8 + length..pos + 12 + length)
             .ok_or_else(|| format!("CRC truncado en {pos}"))?;
         let mut body = kind.to_vec();
         body.extend(data);
@@ -309,7 +309,7 @@ fn walks(bytes: &[u8]) -> Result<Vec<Piece>, String> {
             start: pos,
             data: data.to_vec(),
         });
-        pos += 12 + largo;
+        pos += 12 + length;
         if kind == *b"IEND" {
             if pos != bytes.len() {
                 return Err(format!("sobran {} bytes tras IEND", bytes.len() - pos));
@@ -492,7 +492,7 @@ fn indexed_intact_at_1_2_4_and_8_bits() {
     for (prof, n, px) in cases {
         let png = Png::new(3, 1, prof, 3)
             .swatches(&px)
-            .antes(plte(&colors[..n]))
+            .before(plte(&colors[..n]))
             .bytes();
         let r = lee(&png);
         assert_eq!(r.image.mode(), Mode::Indexed, "{prof} bits");
@@ -512,8 +512,8 @@ fn indexed_with_short_trns_completes_with_255() {
     let colors = [(1, 2, 3), (4, 5, 6), (7, 8, 9)];
     let png = Png::new(3, 1, 8, 3)
         .swatches(&[0, 1, 2])
-        .antes(plte(&colors))
-        .antes(trns(&[0, 128]))
+        .before(plte(&colors))
+        .before(trns(&[0, 128]))
         .bytes();
     let r = lee(&png);
     assert_eq!(r.image.mode(), Mode::Indexed);
@@ -531,7 +531,7 @@ fn invalid_indexed_palette_and_indices() {
     // Píxel 5 con PLTE de 2.
     let outside = Png::new(2, 1, 8, 3)
         .swatches(&[0, 5])
-        .antes(plte(&[(1, 1, 1), (2, 2, 2)]))
+        .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .bytes();
     assert_eq!(
         error_de(&outside),
@@ -545,24 +545,24 @@ fn invalid_indexed_palette_and_indices() {
     // PLTE de 3 entradas a 1 bit (el máximo es 2).
     let too_many = Png::new(2, 1, 1, 3)
         .swatches(&[0, 1])
-        .antes(plte(&[(1, 1, 1), (2, 2, 2), (3, 3, 3)]))
+        .before(plte(&[(1, 1, 1), (2, 2, 2), (3, 3, 3)]))
         .bytes();
     assert_eq!(error_de(&too_many), PngError::InvalidPalette);
 
     // PLTE vacío: lo rechaza el crate.
     let empty = Png::new(2, 1, 8, 3)
         .swatches(&[0, 0])
-        .antes(piece(b"PLTE", &[]))
+        .before(piece(b"PLTE", &[]))
         .bytes();
     assert!(es_decode(&read_png(&empty)), "{:?}", read_png(&empty));
 
     // tRNS de 3 entradas con PLTE de 2.
-    let trns_largo = Png::new(2, 1, 8, 3)
+    let trns_length = Png::new(2, 1, 8, 3)
         .swatches(&[0, 1])
-        .antes(plte(&[(1, 1, 1), (2, 2, 2)]))
-        .antes(trns(&[0, 1, 2]))
+        .before(plte(&[(1, 1, 1), (2, 2, 2)]))
+        .before(trns(&[0, 1, 2]))
         .bytes();
-    assert_eq!(error_de(&trns_largo), PngError::InvalidTrns);
+    assert_eq!(error_de(&trns_length), PngError::InvalidTrns);
 }
 
 #[test]
@@ -665,7 +665,7 @@ fn gray_with_color_key_gives_gray_alpha_comparing_the_original_sample() {
     // Gris 8, clave 7.
     let r8 = lee(&Png::new(2, 1, 8, 0)
         .swatches(&[7, 8])
-        .antes(trns(&[0, 7]))
+        .before(trns(&[0, 7]))
         .bytes());
     assert_eq!(r8.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&r8.image), grays_alpha(&[(7, 0), (8, 255)]));
@@ -674,7 +674,7 @@ fn gray_with_color_key_gives_gray_alpha_comparing_the_original_sample() {
     // Gris 2 bits, clave 1: 1 -> 85 transparente, 2 -> 170 opaco.
     let r2 = lee(&Png::new(2, 1, 2, 0)
         .swatches(&[1, 2])
-        .antes(trns(&[0, 1]))
+        .before(trns(&[0, 1]))
         .bytes());
     assert_eq!(r2.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&r2.image), grays_alpha(&[(85, 0), (170, 255)]));
@@ -689,7 +689,7 @@ fn gray_with_color_key_gives_gray_alpha_comparing_the_original_sample() {
     // Gris 16, clave 0x0100: 0x0100 y 0x0101 se reducen a 1, pero solo la primera es la clave.
     let r16 = lee(&Png::new(2, 1, 16, 0)
         .swatches(&[0x0100, 0x0101])
-        .antes(trns(&[0x01, 0x00]))
+        .before(trns(&[0x01, 0x00]))
         .bytes());
     assert_eq!(r16.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&r16.image), grays_alpha(&[(1, 0), (1, 255)]));
@@ -704,7 +704,7 @@ fn rgb_with_color_key_keeps_the_rgb_and_gray_without_matches_is_opaque() {
     // tRNS de RGB: tres muestras de 2 bytes (1, 2, 3).
     let r = lee(&Png::new(2, 1, 8, 2)
         .swatches(&[1, 2, 3, 1, 2, 4])
-        .antes(trns(&[0, 1, 0, 2, 0, 3]))
+        .before(trns(&[0, 1, 0, 2, 0, 3]))
         .bytes());
     assert_eq!(r.image.mode(), Mode::Rgba);
     assert_eq!(pixels(&r.image), [rgba(1, 2, 3, 0), rgba(1, 2, 4, 255)]);
@@ -716,7 +716,7 @@ fn rgb_with_color_key_keeps_the_rgb_and_gray_without_matches_is_opaque() {
     // Gris con tRNS y ningún píxel igual a la clave: el modo lo decide el fichero.
     let g = lee(&Png::new(2, 1, 8, 0)
         .swatches(&[1, 2])
-        .antes(trns(&[0, 200]))
+        .before(trns(&[0, 200]))
         .bytes());
     assert_eq!(g.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&g.image), grays_alpha(&[(1, 255), (2, 255)]));
@@ -728,34 +728,34 @@ fn malformed_trns_in_gray_and_rgb_and_ignored_in_types_with_alpha() {
     // Gris con tRNS de 1 byte.
     let short = Png::new(1, 1, 8, 0)
         .swatches(&[1])
-        .antes(trns(&[7]))
+        .before(trns(&[7]))
         .bytes();
     assert_eq!(error_de(&short), PngError::InvalidTrns);
 
     // RGB con tRNS de 4 bytes.
     let rgb4 = Png::new(1, 1, 8, 2)
         .swatches(&[1, 2, 3])
-        .antes(trns(&[0, 1, 0, 2]))
+        .before(trns(&[0, 1, 0, 2]))
         .bytes();
     assert_eq!(error_de(&rgb4), PngError::InvalidTrns);
 
     // Gris de 2 bits con clave 9 (el máximo es 3).
     let outside = Png::new(1, 1, 2, 0)
         .swatches(&[1])
-        .antes(trns(&[0, 9]))
+        .before(trns(&[0, 9]))
         .bytes();
     assert_eq!(error_de(&outside), PngError::InvalidTrns);
 
     // GrayAlpha y RGBA con tRNS: PNG lo prohíbe, se ignora.
     let ga = lee(&Png::new(1, 1, 8, 4)
         .swatches(&[5, 6])
-        .antes(trns(&[0, 5]))
+        .before(trns(&[0, 5]))
         .bytes());
     assert_eq!(pixels(&ga.image), grays_alpha(&[(5, 6)]));
     assert!(ga.report.is_empty());
     let c = lee(&Png::new(1, 1, 8, 6)
         .swatches(&[1, 2, 3, 4])
-        .antes(trns(&[0, 1, 0, 2, 0, 3]))
+        .before(trns(&[0, 1, 0, 2, 0, 3]))
         .bytes());
     assert_eq!(pixels(&c.image), [rgba(1, 2, 3, 4)]);
     assert!(c.report.is_empty());
@@ -782,7 +782,7 @@ fn adam7_gives_the_same_image_as_non_interlaced() {
                 .swatches(&swatches)
                 .interlaced_2(interlaced_2);
             for c in &previous {
-                p = p.antes(c.clone());
+                p = p.before(c.clone());
             }
             lee(&p.bytes())
         };
@@ -823,7 +823,7 @@ fn auxiliary_chunks_change_neither_image_nor_report() {
     assert_eq!(without.report, [Conversion::RgbToRgba]);
     let mut with = base.clone();
     for c in auxiliary() {
-        with = with.antes(c);
+        with = with.before(c);
     }
     let r = lee(&with.bytes());
     // Los auxiliares no cambian ni la imagen ni el informe de conversiones; solo `aux` los refleja.
@@ -861,8 +861,8 @@ fn apng_reads_as_its_default_image() {
     fdat.extend(zlib_stored(&[0, 30, 40], 0));
     let png = Png::new(2, 1, 8, 0)
         .swatches(&[10, 20])
-        .antes(piece(b"acTL", &[0, 0, 0, 2, 0, 0, 0, 0]))
-        .antes(piece(b"fcTL", &fctl(0)))
+        .before(piece(b"acTL", &[0, 0, 0, 2, 0, 0, 0, 0]))
+        .before(piece(b"fcTL", &fctl(0)))
         .after(piece(b"fcTL", &fctl(1)))
         .after(piece(b"fdAT", &fdat))
         .bytes();
@@ -876,7 +876,7 @@ fn apng_reads_as_its_default_image() {
 fn unknown_critical_chunk_is_decode() {
     let png = Png::new(1, 1, 8, 0)
         .swatches(&[5])
-        .antes(piece(b"TeSt", &[1]))
+        .before(piece(b"TeSt", &[1]))
         .bytes();
     let r = read_png(&png);
     assert!(es_decode(&r), "{r:?}");
@@ -887,7 +887,7 @@ fn corrupt_files_are_decode_without_panic() {
     let gray16x16: Vec<u16> = (0..256).collect();
     let base = Png::new(16, 16, 8, 0).swatches(&gray16x16);
     let valid = base.bytes();
-    let (idat, largo_idat) = position_idat(&valid);
+    let (idat, length_idat) = position_idat(&valid);
 
     let mut cases: Vec<(&str, Vec<u8>)> = vec![("vacío", Vec::new())];
 
@@ -897,7 +897,7 @@ fn corrupt_files_are_decode_without_panic() {
 
     cases.push((
         "truncado a mitad de IDAT",
-        valid[..idat + 8 + largo_idat / 2].to_vec(),
+        valid[..idat + 8 + length_idat / 2].to_vec(),
     ));
     cases.push(("sin IEND", valid[..valid.len() - 12].to_vec()));
 
@@ -907,7 +907,7 @@ fn corrupt_files_are_decode_without_panic() {
     cases.push(("CRC erróneo en IHDR", crc_ihdr));
 
     let mut crc_idat = valid.clone();
-    crc_idat[idat + 8 + largo_idat + 3] ^= 0xFF;
+    crc_idat[idat + 8 + length_idat + 3] ^= 0xFF;
     cases.push(("CRC erróneo en IDAT", crc_idat));
 
     // Adler-32 erróneo, pero con el CRC del chunk recalculado (lo hace `piece`).
@@ -1187,13 +1187,13 @@ fn checks_invariants(img: &Image) -> Result<(), TestCaseError> {
         mode => {
             prop_assert!(img.palette().is_none());
             for p in all {
-                let coincide = matches!(
+                let matches_2 = matches!(
                     (mode, p),
                     (Mode::Rgba, Pixel::Rgba(_))
                         | (Mode::Gray, Pixel::Gray(_))
                         | (Mode::GrayAlpha, Pixel::GrayAlpha { .. })
                 );
-                prop_assert!(coincide, "píxel {:?} en modo {:?}", p, mode);
+                prop_assert!(matches_2, "píxel {:?} en modo {:?}", p, mode);
             }
         }
     }
@@ -1285,10 +1285,10 @@ proptest! {
         extra in vec(any::<u8>(), 1..=16),
     ) {
         let bytes = write_png(&img).unwrap();
-        for largo in 0..bytes.len() {
+        for length in 0..bytes.len() {
             prop_assert!(
-                read_png(&bytes[..largo]).is_err(),
-                "el prefijo de {} bytes (de {}) dio Ok", largo, bytes.len()
+                read_png(&bytes[..length]).is_err(),
+                "el prefijo de {} bytes (de {}) dio Ok", length, bytes.len()
             );
         }
         let mut with_garbage = bytes.clone();
@@ -1342,9 +1342,9 @@ proptest! {
         let mut png = Png::new(case.width as u32, case.height as u32, case.prof, 3)
             .swatches(&case.px)
             .interlaced_2(case.interlaced_2)
-            .antes(plte(&case.colors));
+            .before(plte(&case.colors));
         if !case.alphas.is_empty() {
-            png = png.antes(trns(&case.alphas));
+            png = png.before(trns(&case.alphas));
         }
         let r = read_png(&png.bytes()).unwrap();
         prop_assert!(r.report.is_empty());
@@ -1518,7 +1518,7 @@ proptest! {
             .interlaced_2(case.interlaced_2);
         if let Some(key) = &case.key {
             let data: Vec<u8> = key.iter().flat_map(|v| v.to_be_bytes()).collect();
-            png = png.antes(trns(&data));
+            png = png.before(trns(&data));
         }
         let r = read_png(&png.bytes()).unwrap();
         let (mode, expected_2_2, report) = model(&case);
@@ -1545,11 +1545,11 @@ proptest! {
             .palette()
             .map(|p| (0..p.len()).map(|i| p.resolved(i as u8).unwrap().a).collect())
             .unwrap_or_default();
-        let largo_trns = alphas.iter().rposition(|&a| a != 255).map_or(0, |i| i + 1);
+        let length_trns = alphas.iter().rposition(|&a| a != 255).map_or(0, |i| i + 1);
         let mut expected_2_2: Vec<[u8; 4]> = vec![*b"IHDR"];
         if img.mode() == Mode::Indexed {
             expected_2_2.push(*b"PLTE");
-            if largo_trns > 0 {
+            if length_trns > 0 {
                 expected_2_2.push(*b"tRNS");
             }
         }
@@ -1589,8 +1589,8 @@ proptest! {
             prop_assert_eq!(&plte.data, &rgb);
             let trns = pieces.iter().find(|t| t.kind == *b"tRNS");
             match trns {
-                Some(t) => prop_assert_eq!(&t.data[..], &alphas[..largo_trns]),
-                None => prop_assert_eq!(largo_trns, 0),
+                Some(t) => prop_assert_eq!(&t.data[..], &alphas[..length_trns]),
+                None => prop_assert_eq!(length_trns, 0),
             }
         }
 

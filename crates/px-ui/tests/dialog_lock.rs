@@ -245,7 +245,7 @@ fn row_6b_with_one_open_another_open_gives_false_with_any_lock_and_does_not_touc
             dialog_forms::all_kinds(),
             Locks::default()
         ));
-        let antes = open_2_2(&modal).expect("abierto").clone();
+        let before = open_2_2(&modal).expect("abierto").clone();
         // La app pone `modal: true` mientras hay uno abierto, pero la regla también se sostiene
         // sin ese bloqueo: un segundo `open` nunca sustituye al primero.
         assert!(
@@ -255,7 +255,7 @@ fn row_6b_with_one_open_another_open_gives_false_with_any_lock_and_does_not_touc
         assert!(modal.is_open(), "{locks:?}");
         assert_eq!(
             open_2_2(&modal).expect("sigue abierto"),
-            &antes,
+            &before,
             "{locks:?}: el diálogo abierto no cambia"
         );
     }

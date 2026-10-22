@@ -254,7 +254,7 @@ fn row_2_the_pencil_on_an_empty_cel_materializes_it_in_one_step_and_undo_empties
     session_2.set_active_layer(layer_b).expect("existe");
     session_2.slots.get_mut(Mode::Rgba).set(1, TEST_RED);
     session_2.choice = ColorChoice::Slot(1);
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     let cel_a = session_2.document.layers()[0].cel();
     let mut tools = ToolState::new();
     assert_eq!(
@@ -263,9 +263,9 @@ fn row_2_the_pencil_on_an_empty_cel_materializes_it_in_one_step_and_undo_empties
     );
     let image_2 = session_2.document.image(cel_b).expect("materializada");
     assert_eq!(image_2.get_pixel(3, 1), Ok(Pixel::Rgba(TEST_RED)));
-    assert_eq!(session_2.document.image(cel_a), antes.image(cel_a));
+    assert_eq!(session_2.document.image(cel_a), before.image(cel_a));
     session_2.undo().expect("un solo paso");
-    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document, before);
     assert!(session_2.document.image(cel_b).is_none());
     session_2.redo().expect("rehacer");
     assert!(session_2.document.image(cel_b).is_some());
@@ -281,16 +281,16 @@ fn row_2_without_memory_for_the_cel_the_document_stays_intact() {
     session_2.choice = ColorChoice::Slot(1);
     let limit_2 = session_2.document.cel_bytes();
     session_2.document.set_cells_limit(limit_2);
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     let mut tools = ToolState::new();
     let result = gesture(&mut session_2, &mut tools, Tool::Pencil, &[(1, 1), (4, 1)]);
     assert!(
         matches!(result, Err(DocumentError::CelsTooLarge { .. })),
         "{result:?}"
     );
-    assert_eq!(session_2.document, antes);
-    assert_eq!(session_2.document.state_id(), antes.state_id());
-    assert!(!session_2.document.can_undo() || antes.can_undo());
+    assert_eq!(session_2.document, before);
+    assert_eq!(session_2.document.state_id(), before.state_id());
+    assert!(!session_2.document.can_undo() || before.can_undo());
 }
 
 #[test]
@@ -300,9 +300,9 @@ fn row_2_clear_page_acts_on_the_active_one() {
     let layer_b = session_2.document.layers()[1].id();
     session_2.set_active_layer(layer_b).expect("existe");
     // Con el fondo transparente por defecto sobre una celda vacía no hay nada que cambiar.
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     assert_eq!(session_2.clear_page(), Ok(false));
-    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document, before);
     assert!(session_2.document.image(cel_b).is_none());
     // Con fondo rojo la rellena (se materializa) en un paso.
     session_2.slots.get_mut(Mode::Rgba).set(3, TEST_RED);
@@ -317,7 +317,7 @@ fn row_2_clear_page_acts_on_the_active_one() {
         Ok(Pixel::Rgba(TEST_RED))
     );
     session_2.undo().expect("un paso");
-    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document, before);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -339,7 +339,7 @@ fn row_6_with_the_active_one_hidden_nothing_paints_and_the_dropper_works() {
         assert_eq!(session_2.paint_refusal(tool_2), Some(HIDDEN), "{tool_2:?}");
     }
     assert_eq!(session_2.paint_refusal(Tool::Dropper), None);
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     let mut tools = ToolState::new();
     assert_eq!(
         gesture(&mut session_2, &mut tools, Tool::Pencil, &[(1, 1), (3, 1)]),
@@ -349,8 +349,8 @@ fn row_6_with_the_active_one_hidden_nothing_paints_and_the_dropper_works() {
     session_2.background = ColorChoice::Slot(3);
     assert_eq!(session_2.clear_page(), Err(ClearPageError::HiddenLayer));
     assert_eq!(ClearPageError::HiddenLayer.to_string(), HIDDEN);
-    assert_eq!(session_2.document, antes);
-    assert_eq!(session_2.document.state_id(), antes.state_id());
+    assert_eq!(session_2.document, before);
+    assert_eq!(session_2.document.state_id(), before.state_id());
     // Al mostrarla se vuelve a pintar.
     session_2
         .apply_layer(Command::SetLayerVisible {
@@ -477,11 +477,11 @@ fn row_10_removing_an_entry_another_cel_uses_asks_for_a_target() {
     assert!(session_2.removal_needs_destination(3));
     assert!(!session_2.removal_needs_destination(4));
     session_2.choice = ColorChoice::Entry(3);
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     assert!(session_2.begin_removal_for(3));
     assert_eq!(session_2.ops.removal().map(|r| r.index), Some(3));
     assert_eq!(
-        session_2.document, antes,
+        session_2.document, before,
         "pedir el destino no toca el documento"
     );
     // Confirmar con destino la quita de todas las celdas en un paso.
@@ -494,7 +494,7 @@ fn row_10_removing_an_entry_another_cel_uses_asks_for_a_target() {
     assert_eq!(image_2.get_pixel(2, 2), Ok(Pixel::Indexed(1)));
     assert_eq!(session_2.document.palette().expect("paleta").len(), 5);
     session_2.undo().expect("un paso");
-    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document, before);
 }
 
 #[test]
@@ -870,8 +870,8 @@ proptest! {
                 }
                 _ => {}
             }
-            let antes = session_2.document.clone();
-            let cels: Vec<ImageId> = antes.layers().iter().map(|l| l.cel()).collect();
+            let before = session_2.document.clone();
+            let cels: Vec<ImageId> = before.layers().iter().map(|l| l.cel()).collect();
             let active_2 = session_2.active_cel();
             let points = [
                 ((a % 14) as i32 - 1, (b % 11) as i32 - 1),
@@ -893,18 +893,18 @@ proptest! {
             match result {
                 Ok(true) => {
                     for cel in cels.iter().filter(|&&cel| cel != active_2) {
-                        prop_assert_eq!(session_2.document.image(*cel), antes.image(*cel));
+                        prop_assert_eq!(session_2.document.image(*cel), before.image(*cel));
                     }
                     let after_2 = session_2.document.clone();
                     session_2.undo().expect("deshacer");
-                    prop_assert_eq!(&session_2.document, &antes);
-                    prop_assert_eq!(session_2.document.state_id(), antes.state_id());
+                    prop_assert_eq!(&session_2.document, &before);
+                    prop_assert_eq!(session_2.document.state_id(), before.state_id());
                     session_2.redo().expect("rehacer");
                     prop_assert_eq!(&session_2.document, &after_2);
                 }
                 Ok(false) | Err(_) => {
-                    prop_assert_eq!(&session_2.document, &antes);
-                    prop_assert_eq!(session_2.document.state_id(), antes.state_id());
+                    prop_assert_eq!(&session_2.document, &before);
+                    prop_assert_eq!(session_2.document.state_id(), before.state_id());
                 }
             }
         }
@@ -939,14 +939,14 @@ fn oracle(document: &Document) -> Image {
                 let Some(cel) = document.image(layer_2.cel()) else {
                     continue;
                 };
-                let valor = cel.get_pixel(x, y).expect("dentro");
-                let count = match valor {
+                let value = cel.get_pixel(x, y).expect("dentro");
+                let count = match value {
                     Pixel::Rgba(color) => color.a != 0,
                     Pixel::Indexed(i) => Some(i) != transparent,
                     _ => true,
                 };
                 if count {
-                    pixel = valor;
+                    pixel = value;
                 }
             }
             output.set_pixel(x, y, pixel).expect("dentro");
@@ -1048,15 +1048,15 @@ proptest! {
         }
         prop_assert_eq!(consistent(&session_2.document), Ok(()));
         for &(kind, a, b, c) in &steps_2 {
-            let largo = session_2.document.palette().expect("paleta").len();
+            let length = session_2.document.palette().expect("paleta").len();
             let total = session_2.document.layers().len();
             let id = session_2.document.layers()[(a as usize) % total].id();
             session_2.set_active_layer(id).expect("existe");
             match kind {
                 0 => { let _ = session_2.apply_palette_op(PaletteOp::Add, false); }
-                1 | 2 if largo > 1 => {
-                    let index_2 = (b as usize % largo) as u8;
-                    let target_2 = ((usize::from(index_2) + 1 + c as usize % (largo - 1)) % largo) as u8;
+                1 | 2 if length > 1 => {
+                    let index_2 = (b as usize % length) as u8;
+                    let target_2 = ((usize::from(index_2) + 1 + c as usize % (length - 1)) % length) as u8;
                     session_2.choice = ColorChoice::Entry(index_2);
                     // Pedir destino ⇔ alguna celda (no solo la activa) usa la entrada.
                     prop_assert_eq!(
@@ -1065,22 +1065,22 @@ proptest! {
                     );
                     let _ = session_2.apply_palette_op(PaletteOp::Remove { index: index_2, into: target_2 }, false);
                 }
-                3 if largo > 1 => {
+                3 if length > 1 => {
                     let _ = session_2.apply_palette_op(
-                        PaletteOp::Move { from: (b as usize % largo) as u8, to: (c as usize % largo) as u8 },
+                        PaletteOp::Move { from: (b as usize % length) as u8, to: (c as usize % length) as u8 },
                         false,
                     );
                 }
                 4 => {
-                    let start_2 = (b as usize % largo) as u8;
+                    let start_2 = (b as usize % length) as u8;
                     let _ = session_2.apply_palette_op(
-                        PaletteOp::Rotate { start: start_2, len: 1 + (c as usize % (largo - usize::from(start_2))) as u16, steps: (c % 5) as i32 - 2 },
+                        PaletteOp::Rotate { start: start_2, len: 1 + (c as usize % (length - usize::from(start_2))) as u16, steps: (c % 5) as i32 - 2 },
                         false,
                     );
                 }
                 5 => {
                     let _ = session_2.apply_palette_op(
-                        PaletteOp::SetTransparent { index: (b % 4 != 0).then(|| (c as usize % largo) as u8) },
+                        PaletteOp::SetTransparent { index: (b % 4 != 0).then(|| (c as usize % length) as u8) },
                         false,
                     );
                 }
@@ -1088,7 +1088,7 @@ proptest! {
                     let cel = session_2.active_cel();
                     let _ = session_2.document.apply(Command::SetPixels {
                         image: cel,
-                        pixels: vec![PixelEdit { x: b % 4, y: c % 4, pixel: Pixel::Indexed((b as usize % largo) as u8) }],
+                        pixels: vec![PixelEdit { x: b % 4, y: c % 4, pixel: Pixel::Indexed((b as usize % length) as u8) }],
                     });
                 }
                 7 => { let _ = session_2.undo(); }

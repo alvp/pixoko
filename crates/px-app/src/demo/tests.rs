@@ -281,10 +281,10 @@ fn row_12_demo_notice_with_accepted_lists_what_was_accepted() {
                     "falta el rótulo {:?}: {text_2:?}",
                     n.label
                 );
-                let valor = values.number(n.id).expect("el numérico se entrega");
+                let value = values.number(n.id).expect("el numérico se entrega");
                 assert!(
-                    text_2.contains(&valor.to_string()),
-                    "falta el valor {valor} de {:?}: {text_2:?}",
+                    text_2.contains(&value.to_string()),
+                    "falta el valor {value} de {:?}: {text_2:?}",
                     n.label
                 );
             }

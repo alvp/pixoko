@@ -44,7 +44,7 @@ fn environment(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -
     move |name_2| {
         vars.iter()
             .find(|(key, _)| *key == name_2)
-            .map(|(_, valor)| (*valor).to_string())
+            .map(|(_, value)| (*value).to_string())
     }
 }
 
@@ -144,16 +144,16 @@ fn row_11_save_creates_the_folder_writes_atomically_and_reads_back_the_same() {
     let loaded = store.load(&default());
     assert_eq!(loaded.keymap, default());
     assert!(loaded.fatal.is_none());
-    let tabla = pencil_with_x();
-    store.save(&tabla, &default(), false).expect("guarda");
+    let table = pencil_with_x();
+    store.save(&table, &default(), false).expect("guarda");
     assert!(path_2.is_file());
     without_files_temporary(path_2.parent().unwrap());
     assert_eq!(
         fs::read_to_string(&path_2).unwrap(),
-        to_text(&tabla, &default())
+        to_text(&table, &default())
     );
     let mut other = ShortcutStore::new(Some(path_2.clone()));
-    assert_eq!(other.load(&default()).keymap, tabla);
+    assert_eq!(other.load(&default()).keymap, table);
     // Nada ignorado: sin copia `.bak`.
     assert!(!path_2.with_file_name("atajos.txt.bak").exists());
     // Sobrescribir otra vez tampoco la crea.
@@ -215,8 +215,8 @@ fn condition_3_reset_all_always_copies_and_leaves_only_the_header() {
     let dir = Folder::new();
     let path_2 = dir.path_2().join("atajos.txt");
     let bak = dir.path_2().join("atajos.txt.bak");
-    let tabla = pencil_with_x();
-    let saved = to_text(&tabla, &default());
+    let table = pencil_with_x();
+    let saved = to_text(&table, &default());
     fs::write(&path_2, &saved).unwrap();
     fs::write(&bak, "viejo").unwrap();
     let mut store = ShortcutStore::new(Some(path_2.clone()));

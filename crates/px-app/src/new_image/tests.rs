@@ -83,14 +83,14 @@ const RED_MIDDLE: Rgba = Rgba::new(0xff, 0, 0, 0x80);
 
 const TRANSPARENT: Background = Background::Transparent;
 const WHITE: Background = Background::White;
-const NEGRO: Background = Background::Black;
+const TEST_BLACK: Background = Background::Black;
 
 /// Los cuatro tipos de opción de un fondo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Type {
     Transparent,
     White,
-    Negro,
+    Black,
     Color,
 }
 
@@ -121,12 +121,12 @@ fn index_of_background(mode: Mode, kind: Type) -> Option<usize> {
     match (mode, kind) {
         (Mode::Gray, Type::Transparent) => None,
         (Mode::Gray, Type::White) => Some(0),
-        (Mode::Gray, Type::Negro) => Some(1),
+        (Mode::Gray, Type::Black) => Some(1),
         (Mode::Gray, Type::Color) => Some(2),
         (Mode::Indexed, Type::Color) => None,
         (_, Type::Transparent) => Some(0),
         (_, Type::White) => Some(1),
-        (_, Type::Negro) => Some(2),
+        (_, Type::Black) => Some(2),
         (_, Type::Color) => Some(3),
     }
 }
@@ -135,7 +135,7 @@ fn type_of(background_2: Background) -> Type {
     match background_2 {
         Background::Transparent => Type::Transparent,
         Background::White => Type::White,
-        Background::Black => Type::Negro,
+        Background::Black => Type::Black,
         Background::Color(_) => Type::Color,
     }
 }
@@ -147,7 +147,7 @@ fn backgrounds_valid(mode: Mode) -> Vec<Background> {
         Mode::Rgba => vec![
             TRANSPARENT,
             WHITE,
-            NEGRO,
+            TEST_BLACK,
             color(GRAY_OPAQUE),
             color(RED_MIDDLE),
             color(GRAY_MIDDLE),
@@ -155,12 +155,12 @@ fn backgrounds_valid(mode: Mode) -> Vec<Background> {
         Mode::GrayAlpha => vec![
             TRANSPARENT,
             WHITE,
-            NEGRO,
+            TEST_BLACK,
             color(GRAY_OPAQUE),
             color(GRAY_MIDDLE),
         ],
-        Mode::Gray => vec![WHITE, NEGRO, color(GRAY_OPAQUE)],
-        Mode::Indexed => vec![TRANSPARENT, WHITE, NEGRO],
+        Mode::Gray => vec![WHITE, TEST_BLACK, color(GRAY_OPAQUE)],
+        Mode::Indexed => vec![TRANSPARENT, WHITE, TEST_BLACK],
     }
 }
 
@@ -169,7 +169,7 @@ fn backgrounds_of_row_3() -> [Background; 6] {
     [
         TRANSPARENT,
         WHITE,
-        NEGRO,
+        TEST_BLACK,
         Background::Color(GRAY_OPAQUE),
         Background::Color(RED_MIDDLE),
         Background::Color(GRAY_MIDDLE),
@@ -787,10 +787,10 @@ fn row_3_spec_from_values_gives_none_if_visible_fields_are_missing() {
 fn row_3_spec_from_values_does_not_read_the_hidden_groups_and_they_keep_their_value() {
     let mut d = dialog(8192);
     // RGBA con Negro; luego Gris con su grupo por defecto (Blanco); luego Indexado.
-    put_background(&mut d, Mode::Rgba, NEGRO);
+    put_background(&mut d, Mode::Rgba, TEST_BLACK);
     assert_eq!(
         fields(&spec_de(&d).expect("rgba")),
-        (64, 64, Mode::Rgba, NEGRO)
+        (64, 64, Mode::Rgba, TEST_BLACK)
     );
     chooses(&mut d, "modo", index_of_mode(Mode::Gray));
     assert_eq!(
@@ -806,7 +806,7 @@ fn row_3_spec_from_values_does_not_read_the_hidden_groups_and_they_keep_their_va
     chooses(&mut d, "modo", index_of_mode(Mode::Rgba));
     assert_eq!(
         fields(&spec_de(&d).expect("rgba otra vez")),
-        (64, 64, Mode::Rgba, NEGRO),
+        (64, 64, Mode::Rgba, TEST_BLACK),
         "el grupo oculto conservaba su elección"
     );
 }
@@ -906,7 +906,7 @@ const TARGETS: [Mode; 4] = [Mode::Rgba, Mode::GrayAlpha, Mode::Gray, Mode::Index
 
 /// La tabla D1b, copiada tal cual: (nombre, fondo de origen, modos en los que puede existir ese
 /// fondo, casillas A RGBA / A Gris con alfa / A Gris / A Indexado).
-fn tabla_d1b() -> Vec<(&'static str, Background, Vec<Mode>, [TestBox; 4])> {
+fn table_d_1_b() -> Vec<(&'static str, Background, Vec<Mode>, [TestBox; 4])> {
     let all_2 = vec![Mode::Rgba, Mode::GrayAlpha, Mode::Gray, Mode::Indexed];
     let color = Background::Color;
     vec![
@@ -922,7 +922,7 @@ fn tabla_d1b() -> Vec<(&'static str, Background, Vec<Mode>, [TestBox; 4])> {
             ],
         ),
         ("blanco", WHITE, all_2.clone(), [Equal, Equal, Equal, Equal]),
-        ("negro", NEGRO, all_2, [Equal, Equal, Equal, Equal]),
+        ("negro", TEST_BLACK, all_2, [Equal, Equal, Equal, Equal]),
         (
             "color gris con alfa 255",
             color(GRAY_OPAQUE),
@@ -993,7 +993,7 @@ fn expected_2(box_value: TestBox, background_2: Background) -> Seen {
 
 #[test]
 fn row_4_carry_background_is_exactly_the_table_d1b() {
-    for (name_2, background_2, sources, boxes_2) in tabla_d1b() {
+    for (name_2, background_2, sources, boxes_2) in table_d_1_b() {
         for from in sources {
             for (to, box_value) in TARGETS.into_iter().zip(boxes_2) {
                 if from == to {
@@ -1026,7 +1026,7 @@ fn row_4_with_the_same_mode_the_background_is_kept() {
 fn row_4_white_and_black_are_never_reset() {
     for from in TEST_MODES {
         for to in TEST_MODES {
-            for background_2 in [WHITE, NEGRO] {
+            for background_2 in [WHITE, TEST_BLACK] {
                 assert_eq!(
                     translates(from, background_2, to),
                     Seen::Kept(background_2),
@@ -1039,7 +1039,7 @@ fn row_4_white_and_black_are_never_reset() {
 
 #[test]
 fn row_4_what_is_kept_is_admitted_by_the_new_mode_and_what_is_reset_goes_to_the_default() {
-    for (name_2, background_2, sources, _) in tabla_d1b() {
+    for (name_2, background_2, sources, _) in table_d_1_b() {
         for from in sources {
             for to in TEST_MODES {
                 match translates(from, background_2, to) {
@@ -1061,7 +1061,7 @@ fn row_4_what_is_kept_is_admitted_by_the_new_mode_and_what_is_reset_goes_to_the_
 #[test]
 fn row_4_the_notices_say_the_background_there_was_and_which_one_it_goes_back_to_and_fit() {
     let mut seen = HashSet::new();
-    for (_, background_2, sources, _) in tabla_d1b() {
+    for (_, background_2, sources, _) in table_d_1_b() {
         for from in sources {
             for to in TEST_MODES {
                 if let Seen::Reset(a, notice) = translates(from, background_2, to) {
@@ -1174,7 +1174,7 @@ fn lines_of_the_report(d: &Dialog) -> Vec<String> {
 
 #[test]
 fn row_4_sync_form_applies_the_table_when_changing_mode_and_warns_in_the_report() {
-    for (name_2, background_2, sources, boxes_2) in tabla_d1b() {
+    for (name_2, background_2, sources, boxes_2) in table_d_1_b() {
         for from in sources {
             for (to, box_value) in TARGETS.into_iter().zip(boxes_2) {
                 if from == to {
@@ -1471,7 +1471,7 @@ fn row_5_in_the_large_image_the_background_the_four_corners_and_the_center_are_v
 #[test]
 fn row_5_the_indexed_one_carries_the_d2_palette_with_white_black_and_transparent_at_their_indices()
 {
-    for background_2 in [TRANSPARENT, WHITE, NEGRO] {
+    for background_2 in [TRANSPARENT, WHITE, TEST_BLACK] {
         let image = builds_real(&spec_new(7, 5, Mode::Indexed, background_2));
         assert_eq!(
             image.palette(),
@@ -2056,7 +2056,7 @@ fn row_7_a_failure_leaves_the_session_and_the_canvas_equal() {
         let before_session = snapshot_of(&session);
         let before_canvas = canvas_2.frame(vec![]);
 
-        let spec = spec_new(30, 20, Mode::Indexed, NEGRO);
+        let spec = spec_new(30, 20, Mode::Indexed, TEST_BLACK);
         let mut false_value = False::new_2(failure);
         let result = creates(&mut session, &mut canvas_2, &spec, &mut false_value, false);
         assert_eq!(
@@ -2088,7 +2088,7 @@ fn row_7_on_success_session_and_canvas_are_replaced_once() {
             .clone(),
     );
     let old_2 = canvas_2.frame(vec![]).texture_2;
-    let spec = spec_new(30, 20, Mode::Indexed, NEGRO);
+    let spec = spec_new(30, 20, Mode::Indexed, TEST_BLACK);
     let mut false_value = False::new_2(Failure::TestNone);
     assert_eq!(
         creates(&mut session, &mut canvas_2, &spec, &mut false_value, false),
@@ -2129,7 +2129,7 @@ fn row_8_describe_new_says_size_mode_and_the_32_colors_only_for_the_indexed_one(
         "imagen nueva 64×64 · RGBA"
     );
     assert_eq!(
-        describe_new(&spec_new(5, 3, Mode::GrayAlpha, NEGRO)),
+        describe_new(&spec_new(5, 3, Mode::GrayAlpha, TEST_BLACK)),
         "imagen nueva 5×3 · gris con alfa"
     );
     assert_eq!(
@@ -2154,17 +2154,17 @@ fn backgrounds_with_color(mode: Mode, color: [u8; 4]) -> Vec<Background> {
         Mode::Rgba => vec![
             TRANSPARENT,
             WHITE,
-            NEGRO,
+            TEST_BLACK,
             Background::Color(Rgba::new(r, g, b, a)),
         ],
         Mode::GrayAlpha => vec![
             TRANSPARENT,
             WHITE,
-            NEGRO,
+            TEST_BLACK,
             Background::Color(Rgba::new(g, g, g, a)),
         ],
-        Mode::Gray => vec![WHITE, NEGRO, Background::Color(Rgba::opaque(g, g, g))],
-        Mode::Indexed => vec![TRANSPARENT, WHITE, NEGRO],
+        Mode::Gray => vec![WHITE, TEST_BLACK, Background::Color(Rgba::opaque(g, g, g))],
+        Mode::Indexed => vec![TRANSPARENT, WHITE, TEST_BLACK],
     }
 }
 
@@ -2230,7 +2230,7 @@ proptest! {
 /// Los fondos que se recorren como origen: los de la fila 3 y unos cuantos colores más (grises con
 /// todos los alfas relevantes, no grises, y el blanco y el negro como «Color…»).
 fn backgrounds_of_source() -> Vec<Background> {
-    let mut backgrounds = vec![TRANSPARENT, WHITE, NEGRO];
+    let mut backgrounds = vec![TRANSPARENT, WHITE, TEST_BLACK];
     for color in [
         GRAY_OPAQUE,
         GRAY_MIDDLE,
@@ -2540,10 +2540,10 @@ proptest! {
 
         for (i, g) in gestures.iter().enumerate() {
             let ctx = format!("paso {i}: {g:?}");
-            let antes = without_report(&d);
+            let before = without_report(&d);
             let mode_previous = mode_2;
             mode_2 = applies(&mut d, mode_2, g);
-            let change = without_report(&d) != antes;
+            let change = without_report(&d) != before;
             sync_form(&mut d, &mut sync);
 
             checks_form(&d, mode_2, &ctx)?;
@@ -2683,14 +2683,14 @@ fn property_4_session_new_image_with_unsaved_does_not_change_the_session_or_the_
     // cambios sin guardar y sin descarte la sesión no cambia.
     for mode in TEST_MODES {
         let mut session = session_2(true);
-        let antes = snapshot_of(&session);
+        let before = snapshot_of(&session);
         let image = builds_real(&spec_new(16, 8, mode, default_background(mode)));
         assert_eq!(
             session.new_image(image, false),
             Err(FileError::Unsaved),
             "{mode:?}"
         );
-        assert_eq!(snapshot_of(&session), antes, "{mode:?}");
+        assert_eq!(snapshot_of(&session), before, "{mode:?}");
     }
 }
 
@@ -2905,11 +2905,11 @@ fn after_translate(from: Mode, background_2: Background, to: Mode) -> (Backgroun
     }
 }
 
-/// El fondo y el aviso al descartar un texto inválido con `ultimo` confirmado (A1-1 y A1-4): si
+/// El fondo y el aviso al descartar un texto inválido con `last_2_2` confirmado (A1-1 y A1-4): si
 /// viaja, el aviso nuevo; si no, solo el de D1b de ese color.
-fn after_discard(from: Mode, ultimo: Rgba, to: Mode) -> (Background, String) {
-    match translates(from, Background::Color(ultimo), to) {
-        Seen::Kept(b) => (b, notice_discarded(ultimo)),
+fn after_discard(from: Mode, last_2_2: Rgba, to: Mode) -> (Background, String) {
+    match translates(from, Background::Color(last_2_2), to) {
+        Seen::Kept(b) => (b, notice_discarded(last_2_2)),
         Seen::Reset(b, notice) => (b, notice),
     }
 }
@@ -3049,18 +3049,18 @@ fn row_a1_invalid_text_without_a_previous_valid_one_to_indexed_says_indexed_with
 #[test]
 fn row_a1_with_a_previous_valid_one_the_last_confirmed_travels_or_only_the_d1b_notice_comes_out() {
     for from in SOURCES {
-        for ultimo in confirmed_of(from) {
+        for last_2_2 in confirmed_of(from) {
             for to in TEST_MODES.into_iter().filter(|m| *m != from) {
                 for text_2 in invalid_of(from) {
                     for path in PATHS {
-                        let ctx = format!("{from:?} {ultimo:?} → {to:?} {text_2:?} {path:?}");
-                        let (mut d, mut sync) = source_2(from, Some(ultimo), Some(text_2));
+                        let ctx = format!("{from:?} {last_2_2:?} → {to:?} {text_2:?} {path:?}");
+                        let (mut d, mut sync) = source_2(from, Some(last_2_2), Some(text_2));
                         until_the_change(&mut d, &mut sync, from, path);
                         changes_of_mode(&mut d, &mut sync, to);
 
-                        let (background_2, notice) = after_discard(from, ultimo, to);
+                        let (background_2, notice) = after_discard(from, last_2_2, to);
                         checks_translation(&d, from, to, background_2, Some(&notice), &ctx);
-                        if ultimo != GRAY_OPAQUE {
+                        if last_2_2 != GRAY_OPAQUE {
                             assert!(
                                 !text_of_the_report(&d).contains("#808080ff"),
                                 "{ctx}: nunca #808080ff si había un último confirmado"
@@ -3144,14 +3144,14 @@ fn row_a1_with_a_previous_valid_one_the_literal_examples_of_the_spec() {
             "Indexado sin Color: pasa a Transparente",
         ),
     ];
-    for (from, ultimo, to, notice) in cases {
-        let (mut d, mut sync) = source_2(from, Some(ultimo), Some("zz"));
+    for (from, last_2_2, to, notice) in cases {
+        let (mut d, mut sync) = source_2(from, Some(last_2_2), Some("zz"));
         until_the_change(&mut d, &mut sync, from, TestPath::Click);
         changes_of_mode(&mut d, &mut sync, to);
         assert_eq!(
             lines_of_notice(&d),
             vec![notice.to_string()],
-            "{from:?} {ultimo:?} → {to:?}"
+            "{from:?} {last_2_2:?} → {to:?}"
         );
     }
 }
@@ -3281,10 +3281,10 @@ fn row_a1_the_report_with_a_size_that_warns_and_indexed_fits_in_4_lines_of_42() 
         assert_eq!(lines.last(), lines_of_notice(d).last(), "{ctx}");
     };
     for from in SOURCES {
-        for ultimo in confirmed_of(from) {
+        for last_2_2 in confirmed_of(from) {
             for to in TEST_MODES.into_iter().filter(|m| *m != from) {
-                let ctx = format!("{from:?} {ultimo:?} → {to:?} con 5000 × 5000");
-                let (mut d, mut sync) = source_2(from, Some(ultimo), Some("zz"));
+                let ctx = format!("{from:?} {last_2_2:?} → {to:?} con 5000 × 5000");
+                let (mut d, mut sync) = source_2(from, Some(last_2_2), Some("zz"));
                 for field_2 in ["ancho", "alto"] {
                     step(
                         &mut d,
@@ -3430,8 +3430,8 @@ fn row_a1_if_the_last_confirmed_does_not_travel_only_the_d1b_notice_comes_out_on
 fn row_a1_a_hidden_invalid_text_does_not_warn() {
     for from in SOURCES {
         let options_2: &[Type] = match from {
-            Mode::Gray => &[Type::White, Type::Negro],
-            _ => &[Type::Transparent, Type::White, Type::Negro],
+            Mode::Gray => &[Type::White, Type::Black],
+            _ => &[Type::Transparent, Type::White, Type::Black],
         };
         for &kind in options_2 {
             for to in TEST_MODES.into_iter().filter(|m| *m != from) {
@@ -3455,7 +3455,7 @@ fn row_a1_a_hidden_invalid_text_does_not_warn() {
                 let background_2 = match kind {
                     Type::Transparent => TRANSPARENT,
                     Type::White => WHITE,
-                    _ => NEGRO,
+                    _ => TEST_BLACK,
                 };
                 let (expected_2, notice) = after_translate(from, background_2, to);
                 assert_eq!(
@@ -3476,7 +3476,7 @@ fn row_a1_a_hidden_invalid_text_does_not_warn() {
 
 #[test]
 fn row_a1_the_transfers_of_valid_values_of_d1b_stay_the_same_and_without_the_new_notice() {
-    for (name_2, background_2, sources, boxes_2) in tabla_d1b() {
+    for (name_2, background_2, sources, boxes_2) in table_d_1_b() {
         for from in sources {
             for (to, box_value) in TARGETS.into_iter().zip(boxes_2) {
                 if from == to {
@@ -3569,20 +3569,20 @@ proptest! {
         let from = SOURCES[from_2];
         let to = TEST_MODES[(index_of_mode(from) + jump) % 4];
         let confirmed = with_confirmed.then(|| confirmable(from, color));
-        let ultimo = confirmed.unwrap_or(GRAY_OPAQUE);
+        let last_2_2 = confirmed.unwrap_or(GRAY_OPAQUE);
         let text_2 = TEXTS_A_1.get(text_2).copied();
         let ctx = format!("{from:?} {confirmed:?} {text_2:?} → {to:?} clic {click}");
         let (mut d, mut sync) = source_2(from, confirmed, text_2);
         let reading = match text_2 {
-            Some(text_2) => parse_hex(text_2, from, ultimo).ok(),
-            None => Some(ultimo),
+            Some(text_2) => parse_hex(text_2, from, last_2_2).ok(),
+            None => Some(last_2_2),
         };
         match reading {
             None => {
                 let path = if click { TestPath::Click } else { TestPath::Intro };
                 until_the_change(&mut d, &mut sync, from, path);
                 changes_of_mode(&mut d, &mut sync, to);
-                let (background_2, notice) = after_discard(from, ultimo, to);
+                let (background_2, notice) = after_discard(from, last_2_2, to);
                 checks_translation(&d, from, to, background_2, Some(&notice), &ctx);
             }
             Some(color) => {
@@ -3673,10 +3673,10 @@ proptest! {
         let mut mode_2 = 0usize;
         for (i, g) in gestures.iter().enumerate() {
             let ctx = format!("paso {i}: {g:?}");
-            let antes = without_report(&d);
+            let before = without_report(&d);
             let mode_previous = mode_2;
             mode_2 = applies_a_1(&mut d, &mut sync, mode_2, g);
-            let change = without_report(&d) != antes;
+            let change = without_report(&d) != before;
             sync_form(&mut d, &mut sync);
 
             checks_form(&d, mode_2, &ctx)?;
@@ -3750,13 +3750,13 @@ proptest! {
         let from = SOURCES[from_2];
         let to = TEST_MODES[(index_of_mode(from) + jump) % 4];
         let confirmed = with_confirmed.then(|| confirmable(from, color));
-        let ultimo = confirmed.unwrap_or(GRAY_OPAQUE);
+        let last_2_2 = confirmed.unwrap_or(GRAY_OPAQUE);
         let text_2 = TEXTS_P_3[text_2];
         let ctx = format!("{from:?} {confirmed:?} {text_2:?} → {to:?}");
         let (mut d, mut sync) = source_2(from, confirmed, Some(text_2));
         let id = id_color(from).expect("color");
-        prop_assert_eq!(d.hex_committed(id), Some(ultimo), "{}", ctx);
-        match resolve_hex(Some(text_2), from, ultimo) {
+        prop_assert_eq!(d.hex_committed(id), Some(last_2_2), "{}", ctx);
+        match resolve_hex(Some(text_2), from, last_2_2) {
             Ok(c) => {
                 prop_assert_eq!(create_color(&d, from), c, "{}: Crear", ctx);
                 prop_assert_eq!(
@@ -3776,13 +3776,13 @@ proptest! {
                 prop_assert!(rejected, "{}: Crear debía rechazarse", ctx);
                 prop_assert_eq!(
                     read_background(&d, from),
-                    Some(Background::Color(ultimo)),
+                    Some(Background::Color(last_2_2)),
                     "{}: lectura del traslado",
                     ctx
                 );
                 until_the_change(&mut d, &mut sync, from, TestPath::Intro);
                 changes_of_mode(&mut d, &mut sync, to);
-                let (background_2, notice) = after_discard(from, ultimo, to);
+                let (background_2, notice) = after_discard(from, last_2_2, to);
                 checks_translation(&d, from, to, background_2, Some(&notice), &ctx);
             }
         }

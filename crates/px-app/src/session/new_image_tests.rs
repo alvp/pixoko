@@ -395,11 +395,11 @@ fn row_8_the_color_slots_are_not_touched() {
         .slots
         .get_mut(Mode::Gray)
         .set(3, Rgba::opaque(50, 50, 50));
-    let antes = session.slots.clone();
+    let before = session.slots.clone();
     session
         .new_image(image_new(Mode::Rgba), true)
         .expect("crear");
-    assert_eq!(session.slots, antes);
+    assert_eq!(session.slots, before);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -409,10 +409,10 @@ fn row_8_the_color_slots_are_not_touched() {
 #[test]
 fn row_8_with_changes_and_without_discard_it_gives_unsaved_and_changes_nothing() {
     let mut session = session_with_everything();
-    let antes = snapshot(&session);
+    let before = snapshot(&session);
     let result = session.new_image(image_new(Mode::Rgba), false);
     assert_eq!(result, Err(FileError::Unsaved));
-    assert_eq!(snapshot(&session), antes, "nada cambió");
+    assert_eq!(snapshot(&session), before, "nada cambió");
     assert!(!session.take_discarded_text(), "tampoco los avisos");
     assert!(!session.take_removal_cancelled());
 }

@@ -80,7 +80,7 @@ fn options_2() -> Vec<ColorChoice> {
 
 #[test]
 fn the_default_values_of_rgba() {
-    let tabla = SlotColors::defaults(Mode::Rgba);
+    let table = SlotColors::defaults(Mode::Rgba);
     let expected_2 = [
         Rgba::opaque(0, 0, 0),
         Rgba::opaque(255, 255, 255),
@@ -94,7 +94,7 @@ fn the_default_values_of_rgba() {
     ];
     for (i, color) in expected_2.into_iter().enumerate() {
         let slot = i as u8 + 1;
-        assert_eq!(tabla.get(slot), Some(color), "ranura {slot}");
+        assert_eq!(table.get(slot), Some(color), "ranura {slot}");
     }
 }
 
@@ -103,16 +103,16 @@ fn the_default_values_of_gray_and_gray_alpha() {
     let gray_2 = SlotColors::defaults(Mode::Gray);
     let with_alpha = SlotColors::defaults(Mode::GrayAlpha);
     for slot in 1..=9u8 {
-        let valor = if slot == 9 { 255 } else { (slot - 1) * 32 };
+        let value = if slot == 9 { 255 } else { (slot - 1) * 32 };
         assert_eq!(
             gray_2.get(slot),
-            Some(Rgba::opaque(valor, valor, valor)),
+            Some(Rgba::opaque(value, value, value)),
             "Gray, ranura {slot}"
         );
         let expected_2 = if slot == 9 {
             Rgba::TRANSPARENT
         } else {
-            Rgba::opaque(valor, valor, valor)
+            Rgba::opaque(value, value, value)
         };
         assert_eq!(
             with_alpha.get(slot),
@@ -125,10 +125,10 @@ fn the_default_values_of_gray_and_gray_alpha() {
 #[test]
 fn with_the_default_values_pixel_for_choice_with_is_pixel_for_choice() {
     for image in images() {
-        let tabla = SlotColors::defaults(image.mode());
+        let table = SlotColors::defaults(image.mode());
         for choice in options_2() {
             assert_eq!(
-                pixel_for_choice_with(&image, choice, &tabla),
+                pixel_for_choice_with(&image, choice, &table),
                 pixel_for_choice(&image, choice),
                 "{:?} {choice:?}",
                 image.mode()
@@ -140,10 +140,10 @@ fn with_the_default_values_pixel_for_choice_with_is_pixel_for_choice() {
 #[test]
 fn with_the_default_values_each_slot_gives_what_pixel_for_slot_gives() {
     for image in images() {
-        let tabla = SlotColors::defaults(image.mode());
+        let table = SlotColors::defaults(image.mode());
         for slot in 1..=9u8 {
             assert_eq!(
-                pixel_for_choice_with(&image, ColorChoice::Slot(slot), &tabla),
+                pixel_for_choice_with(&image, ColorChoice::Slot(slot), &table),
                 pixel_for_slot(&image, slot),
                 "{:?} ranura {slot}",
                 image.mode()
@@ -155,23 +155,23 @@ fn with_the_default_values_each_slot_gives_what_pixel_for_slot_gives() {
 #[test]
 fn with_the_default_values_the_swatches_and_labels_do_not_change() {
     for image in images() {
-        let tabla = SlotColors::defaults(image.mode());
+        let table = SlotColors::defaults(image.mode());
         // Hasta dos más allá de la última muestra: las inexistentes dan lo mismo (None, false).
         for cel in 0..cell_count(&image) + 2 {
             assert_eq!(
-                cell_color_with(&image, cel, &tabla),
+                cell_color_with(&image, cel, &table),
                 cell_color(&image, cel),
                 "{:?} celda {cel}",
                 image.mode()
             );
             assert_eq!(
-                cell_label_with(&image, cel, &tabla),
+                cell_label_with(&image, cel, &table),
                 cell_label(&image, cel),
                 "{:?} celda {cel}",
                 image.mode()
             );
             assert_eq!(
-                is_transparent_cell_with(&image, cel, &tabla),
+                is_transparent_cell_with(&image, cel, &table),
                 is_transparent_cell(&image, cel),
                 "{:?} celda {cel}",
                 image.mode()
@@ -179,7 +179,7 @@ fn with_the_default_values_the_swatches_and_labels_do_not_change() {
         }
         for choice in options_2() {
             assert_eq!(
-                choice_label_with(&image, choice, &tabla),
+                choice_label_with(&image, choice, &table),
                 choice_label(&image, choice),
                 "{:?} {choice:?}",
                 image.mode()
@@ -193,48 +193,48 @@ fn with_the_default_values_the_swatches_and_labels_do_not_change() {
 #[test]
 fn get_outside_1_to_9_gives_none() {
     for mode_2 in TEST_MODES {
-        let tabla = SlotColors::defaults(mode_2);
-        assert_eq!(tabla.get(0), None);
-        assert_eq!(tabla.get(10), None);
-        assert_eq!(tabla.get(255), None);
+        let table = SlotColors::defaults(mode_2);
+        assert_eq!(table.get(0), None);
+        assert_eq!(table.get(10), None);
+        assert_eq!(table.get(255), None);
         for slot in 1..=9 {
-            assert!(tabla.get(slot).is_some());
+            assert!(table.get(slot).is_some());
         }
     }
 }
 
 #[test]
 fn set_changes_only_that_slot() {
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    let original = tabla.clone();
-    assert!(tabla.set(3, rgba(1, 2, 3, 4)));
-    assert_eq!(tabla.get(3), Some(rgba(1, 2, 3, 4)));
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    let original = table.clone();
+    assert!(table.set(3, rgba(1, 2, 3, 4)));
+    assert_eq!(table.get(3), Some(rgba(1, 2, 3, 4)));
     for slot in (1..=9).filter(|r| *r != 3) {
-        assert_eq!(tabla.get(slot), original.get(slot), "ranura {slot}");
+        assert_eq!(table.get(slot), original.get(slot), "ranura {slot}");
     }
-    assert_ne!(tabla, original);
+    assert_ne!(table, original);
     // Volver al valor por defecto da la tabla original.
-    assert!(tabla.set(3, original.get(3).expect("existe")));
-    assert_eq!(tabla, original);
+    assert!(table.set(3, original.get(3).expect("existe")));
+    assert_eq!(table, original);
 }
 
 #[test]
 fn set_in_all_the_slots_from_1_to_9() {
-    let mut tabla = SlotColors::defaults(Mode::GrayAlpha);
+    let mut table = SlotColors::defaults(Mode::GrayAlpha);
     for slot in 1..=9u8 {
         let color = rgba(slot, slot, slot, 100 + slot);
-        assert!(tabla.set(slot, color), "ranura {slot}");
-        assert_eq!(tabla.get(slot), Some(color));
+        assert!(table.set(slot, color), "ranura {slot}");
+        assert_eq!(table.get(slot), Some(color));
     }
 }
 
 #[test]
 fn set_outside_1_to_9_gives_false_and_changes_nothing() {
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    let original = tabla.clone();
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    let original = table.clone();
     for slot in [0u8, 10, 11, 255] {
-        assert!(!tabla.set(slot, own()), "ranura {slot}");
-        assert_eq!(tabla, original, "ranura {slot}");
+        assert!(!table.set(slot, own()), "ranura {slot}");
+        assert_eq!(table, original, "ranura {slot}");
     }
 }
 
@@ -256,7 +256,7 @@ fn a_new_bench_has_all_the_default_tables() {
 #[test]
 fn the_bench_tables_are_independent_per_mode() {
     let mut bench = SlotBank::new();
-    let (rgba_antes, gray_before, alpha_before) = (
+    let (rgba_before, gray_before, alpha_before) = (
         bench.get(Mode::Rgba).clone(),
         bench.get(Mode::Gray).clone(),
         bench.get(Mode::GrayAlpha).clone(),
@@ -276,7 +276,7 @@ fn the_bench_tables_are_independent_per_mode() {
         Some(Rgba::opaque(200, 200, 200))
     );
     assert_eq!(bench.get(Mode::GrayAlpha), &alpha_before);
-    assert_ne!(bench.get(Mode::Rgba), &rgba_antes);
+    assert_ne!(bench.get(Mode::Rgba), &rgba_before);
 
     assert!(bench.get_mut(Mode::GrayAlpha).set(9, rgba(9, 9, 9, 255)));
     assert_eq!(bench.get(Mode::GrayAlpha).get(9), Some(rgba(9, 9, 9, 255)));
@@ -314,15 +314,15 @@ fn the_bench_can_be_cloned_and_compared() {
 #[test]
 fn rgba_an_edited_slot_is_drawn_with_its_color() {
     let image = image_2(Mode::Rgba);
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    assert!(tabla.set(3, YELLOW));
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    assert!(table.set(3, YELLOW));
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(3), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(3), &table),
         Some(Pixel::Rgba(YELLOW))
     );
     // Las demás no cambian.
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(2), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(2), &table),
         pixel_for_slot(&image, 2)
     );
     // Y las funciones sin `_with` siguen con los valores por defecto.
@@ -338,38 +338,38 @@ const YELLOW: Rgba = Rgba::opaque(255, 255, 0);
 fn rgba_the_swatch_and_the_labels_read_the_edited_slot() {
     // Fila 15: `cell_label(2)` da `color 3 #ffff00`.
     let image = image_2(Mode::Rgba);
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    tabla.set(3, YELLOW);
-    assert_eq!(cell_color_with(&image, 2, &tabla), Some(YELLOW));
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    table.set(3, YELLOW);
+    assert_eq!(cell_color_with(&image, 2, &table), Some(YELLOW));
     assert_eq!(
-        cell_label_with(&image, 2, &tabla).as_deref(),
+        cell_label_with(&image, 2, &table).as_deref(),
         Some("color 3 #ffff00")
     );
     assert_eq!(
-        choice_label_with(&image, ColorChoice::Slot(3), &tabla).as_deref(),
+        choice_label_with(&image, ColorChoice::Slot(3), &table).as_deref(),
         Some("color 3 #ffff00")
     );
-    assert!(!is_transparent_cell_with(&image, 2, &tabla));
+    assert!(!is_transparent_cell_with(&image, 2, &table));
 }
 
 #[test]
 fn rgba_slot_9_goes_from_transparent_to_opaque() {
     let image = image_2(Mode::Rgba);
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    assert!(is_transparent_cell_with(&image, 8, &tabla));
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    assert!(is_transparent_cell_with(&image, 8, &table));
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(9), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(9), &table),
         Some(Pixel::Rgba(Rgba::TRANSPARENT))
     );
     // Fila 15: la 9 (por defecto `(0,0,0,0)`) con A a 255.
-    assert!(tabla.set(9, Rgba::opaque(0, 0, 0)));
+    assert!(table.set(9, Rgba::opaque(0, 0, 0)));
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(9), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(9), &table),
         Some(Pixel::Rgba(Rgba::opaque(0, 0, 0)))
     );
-    assert!(!is_transparent_cell_with(&image, 8, &tabla));
+    assert!(!is_transparent_cell_with(&image, 8, &table));
     assert_eq!(
-        cell_color_with(&image, 8, &tabla),
+        cell_color_with(&image, 8, &table),
         Some(Rgba::opaque(0, 0, 0))
     );
 }
@@ -377,31 +377,31 @@ fn rgba_slot_9_goes_from_transparent_to_opaque() {
 #[test]
 fn rgba_a_slot_with_alpha_zero_is_transparent() {
     let image = image_2(Mode::Rgba);
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    tabla.set(2, rgba(255, 255, 255, 0));
-    assert!(is_transparent_cell_with(&image, 1, &tabla));
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    table.set(2, rgba(255, 255, 255, 0));
+    assert!(is_transparent_cell_with(&image, 1, &table));
 }
 
 #[test]
 fn gray_an_edited_slot_gives_pixel_gray_with_the_red() {
     let image = image_2(Mode::Gray);
-    let mut tabla = SlotColors::defaults(Mode::Gray);
+    let mut table = SlotColors::defaults(Mode::Gray);
     // Fila 15: Gray, `Slot(5)` (gris 128) con G a 200.
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(5), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(5), &table),
         Some(Pixel::Gray(128))
     );
-    assert!(tabla.set(5, Rgba::opaque(200, 200, 200)));
+    assert!(table.set(5, Rgba::opaque(200, 200, 200)));
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(5), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(5), &table),
         Some(Pixel::Gray(200))
     );
     assert_eq!(
-        cell_label_with(&image, 4, &tabla).as_deref(),
+        cell_label_with(&image, 4, &table).as_deref(),
         Some("color 5 gris 200")
     );
     assert_eq!(
-        cell_color_with(&image, 4, &tabla),
+        cell_color_with(&image, 4, &table),
         Some(Rgba::opaque(200, 200, 200))
     );
 }
@@ -409,59 +409,59 @@ fn gray_an_edited_slot_gives_pixel_gray_with_the_red() {
 #[test]
 fn gray_alpha_an_edited_slot_carries_gray_and_alpha() {
     let image = image_2(Mode::GrayAlpha);
-    let mut tabla = SlotColors::defaults(Mode::GrayAlpha);
-    assert!(tabla.set(9, rgba(40, 40, 40, 128)));
+    let mut table = SlotColors::defaults(Mode::GrayAlpha);
+    assert!(table.set(9, rgba(40, 40, 40, 128)));
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(9), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(9), &table),
         Some(Pixel::GrayAlpha {
             gray: 40,
             alpha: 128
         })
     );
     assert_eq!(
-        cell_label_with(&image, 8, &tabla).as_deref(),
+        cell_label_with(&image, 8, &table).as_deref(),
         Some("color 9 gris 40 alfa 128")
     );
-    assert!(!is_transparent_cell_with(&image, 8, &tabla));
+    assert!(!is_transparent_cell_with(&image, 8, &table));
 
     // A 255 se rotula sin alfa, y con alfa 0 es transparente.
-    assert!(tabla.set(2, rgba(77, 77, 77, 255)));
+    assert!(table.set(2, rgba(77, 77, 77, 255)));
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(2), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(2), &table),
         Some(Pixel::GrayAlpha {
             gray: 77,
             alpha: 255
         })
     );
     assert_eq!(
-        cell_label_with(&image, 1, &tabla).as_deref(),
+        cell_label_with(&image, 1, &table).as_deref(),
         Some("color 2 gris 77")
     );
-    assert!(tabla.set(3, rgba(10, 10, 10, 0)));
-    assert!(is_transparent_cell_with(&image, 2, &tabla));
+    assert!(table.set(3, rgba(10, 10, 10, 0)));
+    assert!(is_transparent_cell_with(&image, 2, &table));
 }
 
 #[test]
 fn in_indexed_the_edited_slots_do_not_count() {
     for image in [indexed_9(), indexed_3_with_transparent()] {
-        let mut tabla = SlotColors::defaults(Mode::Indexed);
+        let mut table = SlotColors::defaults(Mode::Indexed);
         for slot in 1..=9u8 {
-            tabla.set(slot, own());
+            table.set(slot, own());
         }
         for choice in options_2() {
             assert_eq!(
-                pixel_for_choice_with(&image, choice, &tabla),
+                pixel_for_choice_with(&image, choice, &table),
                 pixel_for_choice(&image, choice),
                 "{choice:?}"
             );
         }
         for cel in 0..cell_count(&image) + 2 {
             assert_eq!(
-                cell_color_with(&image, cel, &tabla),
+                cell_color_with(&image, cel, &table),
                 cell_color(&image, cel)
             );
             assert_eq!(
-                cell_label_with(&image, cel, &tabla),
+                cell_label_with(&image, cel, &table),
                 cell_label(&image, cel)
             );
         }
@@ -470,28 +470,28 @@ fn in_indexed_the_edited_slots_do_not_count() {
 
 #[test]
 fn choices_that_are_not_valid_stay_invalid_with_an_edited_table() {
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    tabla.set(1, own());
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    table.set(1, own());
     let image = image_2(Mode::Rgba);
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(0), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(0), &table),
         None
     );
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Slot(10), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Slot(10), &table),
         None
     );
     assert_eq!(
-        pixel_for_choice_with(&image, ColorChoice::Entry(0), &tabla),
+        pixel_for_choice_with(&image, ColorChoice::Entry(0), &table),
         None
     );
-    assert_eq!(cell_color_with(&image, 9, &tabla), None);
-    assert_eq!(cell_label_with(&image, 9, &tabla), None);
+    assert_eq!(cell_color_with(&image, 9, &table), None);
+    assert_eq!(cell_label_with(&image, 9, &table), None);
     assert_eq!(
-        choice_label_with(&image, ColorChoice::Slot(10), &tabla),
+        choice_label_with(&image, ColorChoice::Slot(10), &table),
         None
     );
-    assert!(!is_transparent_cell_with(&image, 9, &tabla));
+    assert!(!is_transparent_cell_with(&image, 9, &table));
 }
 
 // `ToolState::canvas_event_with` y `canvas_input_with`.
@@ -710,27 +710,27 @@ fn with_the_pixel_of_pixel_for_choice_the_with_variants_give_the_same_as_the_usu
 fn choice_label_with_labels_the_edited_slot() {
     // Como `slot_label`: `color 3 #ffff00`, `color 5 gray_2 200`, `color 9 transparent`.
     let rgba_img = image_2(Mode::Rgba);
-    let mut tabla = SlotColors::defaults(Mode::Rgba);
-    tabla.set(3, YELLOW);
+    let mut table = SlotColors::defaults(Mode::Rgba);
+    table.set(3, YELLOW);
     assert_eq!(
-        choice_label_with(&rgba_img, ColorChoice::Slot(3), &tabla).as_deref(),
+        choice_label_with(&rgba_img, ColorChoice::Slot(3), &table).as_deref(),
         Some("color 3 #ffff00")
     );
     assert_eq!(
-        choice_label_with(&rgba_img, ColorChoice::Slot(9), &tabla).as_deref(),
+        choice_label_with(&rgba_img, ColorChoice::Slot(9), &table).as_deref(),
         Some("color 9 transparente")
     );
-    tabla.set(9, Rgba::opaque(0, 0, 0));
+    table.set(9, Rgba::opaque(0, 0, 0));
     assert_eq!(
-        choice_label_with(&rgba_img, ColorChoice::Slot(9), &tabla).as_deref(),
+        choice_label_with(&rgba_img, ColorChoice::Slot(9), &table).as_deref(),
         Some("color 9 #000000")
     );
 
     let gray_2 = image_2(Mode::Gray);
-    let mut tabla = SlotColors::defaults(Mode::Gray);
-    tabla.set(5, Rgba::opaque(200, 200, 200));
+    let mut table = SlotColors::defaults(Mode::Gray);
+    table.set(5, Rgba::opaque(200, 200, 200));
     assert_eq!(
-        choice_label_with(&gray_2, ColorChoice::Slot(5), &tabla).as_deref(),
+        choice_label_with(&gray_2, ColorChoice::Slot(5), &table).as_deref(),
         Some("color 5 gris 200")
     );
 }

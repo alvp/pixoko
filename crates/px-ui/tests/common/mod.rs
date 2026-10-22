@@ -61,7 +61,7 @@ pub fn is_physical_integer_in_egui(points: f32, ppp: f32) -> bool {
 // Eventos sintéticos
 // ---------------------------------------------------------------------------------------------
 
-pub fn mover(pos: Pos2) -> Event {
+pub fn move_pointer(pos: Pos2) -> Event {
     Event::PointerMoved(pos)
 }
 

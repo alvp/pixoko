@@ -488,7 +488,7 @@ fn row_12_accept_converts_all_the_layers_in_one_step_and_it_can_be_undone() {
     let mut session_2 = Session::sample(doc);
     let active_2 = session_2.document.layers()[1].id();
     session_2.set_active_layer(active_2).expect("activa");
-    let antes = session_2.document.clone();
+    let before = session_2.document.clone();
     let allowed = Allowed {
         luma: false,
         drop_alpha: None,
@@ -504,7 +504,7 @@ fn row_12_accept_converts_all_the_layers_in_one_step_and_it_can_be_undone() {
     assert_eq!(session_2.active_layer(), active_2);
     assert!(session_2.modified());
     session_2.undo().expect("deshacer");
-    assert_eq!(session_2.document, antes, "un solo paso");
+    assert_eq!(session_2.document, before, "un solo paso");
     assert_eq!(session_2.document.mode(), Mode::Rgba);
     let _: &[Layer] = session_2.document.layers();
 }

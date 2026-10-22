@@ -51,7 +51,12 @@ def ambiguous() -> set[str]:
 # palabras válidas en inglés que aquí son inequívocamente españolas
 OVERRIDE_UNAMBIGUOUS = {"sin", "con", "pie", "solo", "mas", "hay", "dos", "alto", "caso", "banco", "paso", "tres", "ve", "dan", "da", "cada",
                         "fila", "modo", "mano", "mal", "mil", "nada", "cuando", "pero", "entre", "hasta", "tal", "casa", "cola", "cara",
-                        "pie", "rota", "sub", "radio", "mesa", "era", "ante", "novena"}
+                        "pie", "rota", "sub", "radio", "mesa", "era", "ante", "novena",
+                        # segunda pasada: palabras de las dos lenguas que aquí solo quedaban como español
+                        "antes", "valor", "largo", "negro", "vista", "ultimo", "tabla", "vale", "mover", "disco", "pone", "anterior",
+                        "mascara", "resolver", "para", "pulsar", "canal", "temporal", "discos", "sale", "reproduce", "vistas", "medias", "lateral",
+                        "padre", "leer", "registrar", "rodeo", "pinto", "dice", "vivas", "pares", "traduce", "coincide", "principal", "longitudes",
+                        "mayor", "primer", "largos", "coma", "giro", "finales"}
 
 
 import unicodedata

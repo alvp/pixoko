@@ -633,7 +633,7 @@ fn row_06_a_the_ten_pixels_of_aseprite() {
                 "{} píxel {k}: el alfa debe coincidir ({obtained:?} frente a {aseprite:?})",
                 v.name
             );
-            for (canal, o, a) in [
+            for (channel, o, a) in [
                 ("R", obtained.r, aseprite.r),
                 ("G", obtained.g, aseprite.g),
                 ("B", obtained.b, aseprite.b),
@@ -641,12 +641,12 @@ fn row_06_a_the_ten_pixels_of_aseprite() {
                 let dif = (i32::from(o) - i32::from(a)).abs();
                 assert!(
                     dif <= 2,
-                    "{} píxel {k}, canal {canal}: {o} frente a {a} (nunca más de 2)",
+                    "{} píxel {k}, canal {channel}: {o} frente a {a} (nunca más de 2)",
                     v.name
                 );
                 assert!(
                     dif <= tolerance,
-                    "{} píxel {k}, canal {canal}: {o} frente a {a}; dominio empírico: {in_domain}",
+                    "{} píxel {k}, canal {channel}: {o} frente a {a}; dominio empírico: {in_domain}",
                     v.name
                 );
             }
@@ -759,34 +759,34 @@ fn checks_abcd(doc: &Document) {
     let [a, b, c_, d] = ids4(doc);
     assert!(!doc.layer(b).expect("B").visible());
     assert!(doc.image(doc.layer(d).expect("D").cel()).is_none());
-    let antes = compose_2(doc);
+    let before = compose_2(doc);
 
     // Combinar visibles: A se queda, C y D se quitan, la oculta B no entra en `remove`.
     let cmd = merge_visible_command(doc).expect("combinar visibles");
     let f = fusion(&cmd);
     assert_eq!(f.target, a);
     assert_eq!(f.remove, [c_, d]);
-    assert_eq!(f.image.as_ref(), Some(&antes));
+    assert_eq!(f.image.as_ref(), Some(&before));
     assert_eq!(f.based_on, doc.state_id());
     let after = applied(doc, cmd);
     assert_eq!(ids(&after), [a, b], "quedan A y la oculta B");
     assert_eq!(after.layer(b), doc.layer(b), "la oculta no cambia");
     assert_eq!(after.layers().len(), 2);
-    assert_eq!(after.image(after.layers()[0].cel()), Some(&antes));
-    assert_eq!(compose_2(&after), antes);
+    assert_eq!(after.image(after.layers()[0].cel()), Some(&before));
+    assert_eq!(compose_2(&after), before);
 
     // Aplanar: además se quita la oculta.
     let cmd = flatten_command(doc).expect("aplanar");
     let f = fusion(&cmd);
     assert_eq!(f.target, a);
     assert_eq!(f.remove, [b, c_, d]);
-    assert_eq!(f.image.as_ref(), Some(&antes));
+    assert_eq!(f.image.as_ref(), Some(&before));
     assert_eq!(f.based_on, doc.state_id());
     let after = applied(doc, cmd);
     assert_eq!(ids(&after), [a]);
     assert_eq!(after.layers().len(), 1);
-    assert_eq!(after.image(after.layers()[0].cel()), Some(&antes));
-    assert_eq!(compose_2(&after), antes);
+    assert_eq!(after.image(after.layers()[0].cel()), Some(&before));
+    assert_eq!(compose_2(&after), before);
 }
 
 #[test]
@@ -820,13 +820,13 @@ fn row_07_b_visibility_variants_and_empty_ones() {
         ],
     );
     let [a, b, c_, d] = ids4(&doc);
-    let antes = compose_2(&doc);
+    let before = compose_2(&doc);
     let f = fusion(&merge_visible_command(&doc).expect("combinar visibles"));
     assert_eq!((f.target, f.remove.as_slice()), (b, [c_].as_slice()));
-    assert_eq!(f.image.as_ref(), Some(&antes));
+    assert_eq!(f.image.as_ref(), Some(&before));
     let f = fusion(&flatten_command(&doc).expect("aplanar"));
     assert_eq!((f.target, f.remove.as_slice()), (b, [a, c_, d].as_slice()));
-    assert_eq!(f.image.as_ref(), Some(&antes));
+    assert_eq!(f.image.as_ref(), Some(&before));
     assert_eq!(f.based_on, doc.state_id());
 
     // Una sola visible entre varias: combinar visibles no tiene nada que combinar; aplanar deja
@@ -883,7 +883,7 @@ fn row_07_b_visibility_variants_and_empty_ones() {
         ],
     );
     let [a, b, c_] = ids3(&empty_2);
-    let antes = compose_2(&empty_2);
+    let before = compose_2(&empty_2);
     let f = fusion(&merge_visible_command(&empty_2).expect("combinar vacías"));
     assert_eq!((f.target, f.remove.as_slice()), (b, [c_].as_slice()));
     assert_eq!(f.image, None);
@@ -894,7 +894,7 @@ fn row_07_b_visibility_variants_and_empty_ones() {
     assert_eq!(f.based_on, empty_2.state_id());
     let after = applied(&empty_2, cmd);
     assert_eq!(after.image(after.layers()[0].cel()), None);
-    assert_eq!(compose_2(&after), antes);
+    assert_eq!(compose_2(&after), before);
 }
 
 #[test]
@@ -1062,23 +1062,23 @@ fn with_visible(g: &DocGen, k: usize) -> DocGen {
 // ---------------------------------------------------------------------------------------
 
 fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
-    let antes_doc = document(g);
-    let antes = compose(&antes_doc).expect("hay índice transparente: compose no falla");
-    let visible: Vec<LayerId> = antes_doc
+    let before_doc = document(g);
+    let before = compose(&before_doc).expect("hay índice transparente: compose no falla");
+    let visible: Vec<LayerId> = before_doc
         .layers()
         .iter()
         .filter(|l| l.visible())
         .map(Layer::id)
         .collect();
     let nothing_that_do = if flatten {
-        antes_doc.layers().len() == 1 || visible.is_empty()
+        before_doc.layers().len() == 1 || visible.is_empty()
     } else {
         visible.len() < 2
     };
     let cmd = if flatten {
-        flatten_command(&antes_doc)
+        flatten_command(&before_doc)
     } else {
-        merge_visible_command(&antes_doc)
+        merge_visible_command(&before_doc)
     };
     let cmd = match cmd {
         Err(e) => {
@@ -1093,7 +1093,7 @@ fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
     let f = fusion(&cmd);
     prop_assert_eq!(f.target, visible[0]);
     let expected: Vec<LayerId> = if flatten {
-        ids(&antes_doc)
+        ids(&before_doc)
             .into_iter()
             .filter(|&id| id != visible[0])
             .collect()
@@ -1101,22 +1101,22 @@ fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
         visible[1..].to_vec()
     };
     prop_assert_eq!(&f.remove, &expected);
-    prop_assert_eq!(f.based_on, antes_doc.state_id());
+    prop_assert_eq!(f.based_on, before_doc.state_id());
     let no_with_image = visible.iter().all(|&id| {
-        antes_doc
-            .image(antes_doc.layer(id).unwrap().cel())
+        before_doc
+            .image(before_doc.layer(id).unwrap().cel())
             .is_none()
     });
     prop_assert_eq!(f.image.is_none(), no_with_image);
     if let Some(image_2) = &f.image {
-        prop_assert_eq!(image_2, &antes);
+        prop_assert_eq!(image_2, &before);
     }
 
-    let mut doc = antes_doc.clone();
+    let mut doc = before_doc.clone();
     prop_assert_eq!(doc.apply(cmd), Ok(true));
     // La vista no cambia: ni un byte.
-    prop_assert_eq!(compose(&doc), Ok(antes.clone()));
-    // La celda resultante es `compose(antes)` (o vacía).
+    prop_assert_eq!(compose(&doc), Ok(before.clone()));
+    // La celda resultante es `compose(before)` (o vacía).
     let cel = doc.layer(f.target).unwrap().cel();
     prop_assert_eq!(doc.image(cel), f.image.as_ref());
     let layer_2 = doc.layer(f.target).unwrap();
@@ -1129,10 +1129,10 @@ fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
     } else {
         prop_assert_eq!(
             doc.layers().len(),
-            antes_doc.layers().len() - (visible.len() - 1)
+            before_doc.layers().len() - (visible.len() - 1)
         );
         // Las ocultas quedan tal cual.
-        for l in antes_doc.layers().iter().filter(|l| !l.visible()) {
+        for l in before_doc.layers().iter().filter(|l| !l.visible()) {
             prop_assert_eq!(doc.layer(l.id()), Some(l));
         }
     }
@@ -1141,14 +1141,14 @@ fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
 
 fn checks_merge_down_on_the_background(g: &DocGen) -> Result<(), TestCaseError> {
     let g = with_visible(g, 0);
-    let antes_doc = document(&g);
-    let antes = compose(&antes_doc).expect("compose no falla");
-    let upper = antes_doc.layers()[1].id();
-    let cmd = merge_down_command(&antes_doc, upper).expect("las dos son visibles");
-    let mut doc = antes_doc.clone();
+    let before_doc = document(&g);
+    let before = compose(&before_doc).expect("compose no falla");
+    let upper = before_doc.layers()[1].id();
+    let cmd = merge_down_command(&before_doc, upper).expect("las dos son visibles");
+    let mut doc = before_doc.clone();
     prop_assert_eq!(doc.apply(cmd), Ok(true));
-    prop_assert_eq!(doc.layers().len(), antes_doc.layers().len() - 1);
-    prop_assert_eq!(compose(&doc), Ok(antes));
+    prop_assert_eq!(doc.layers().len(), before_doc.layers().len() - 1);
+    prop_assert_eq!(compose(&doc), Ok(before));
     Ok(())
 }
 
@@ -1259,29 +1259,29 @@ fn pixel_empty(doc: &Document) -> Pixel {
 }
 
 fn checks_model(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
-    let antes_doc = document(g);
-    let antes = compose(&antes_doc).expect("compose no falla");
-    let (l, u) = (antes_doc.layers()[k].id(), antes_doc.layers()[k + 1].id());
-    let cmd = merge_down_command(&antes_doc, u).expect("las dos son visibles");
+    let before_doc = document(g);
+    let before = compose(&before_doc).expect("compose no falla");
+    let (l, u) = (before_doc.layers()[k].id(), before_doc.layers()[k + 1].id());
+    let cmd = merge_down_command(&before_doc, u).expect("las dos son visibles");
     let f = fusion(&cmd);
     prop_assert_eq!(f.target, l);
     prop_assert_eq!(&f.remove, &vec![u]);
 
-    let mut doc = antes_doc.clone();
+    let mut doc = before_doc.clone();
     prop_assert_eq!(doc.apply(cmd), Ok(true));
-    prop_assert!(doc.materialized_bytes() <= antes_doc.materialized_bytes());
-    prop_assert_eq!(doc.layers().len(), antes_doc.layers().len() - 1);
+    prop_assert!(doc.materialized_bytes() <= before_doc.materialized_bytes());
+    prop_assert_eq!(doc.layers().len(), before_doc.layers().len() - 1);
 
     let result = doc.image(doc.layer(l).unwrap().cel());
     for y in 0..g.h {
         for x in 0..g.w {
             let obtained = result.map_or_else(
-                || pixel_empty(&antes_doc),
+                || pixel_empty(&before_doc),
                 |img| img.get_pixel(x, y).expect("píxel dentro"),
             );
             prop_assert_eq!(
                 obtained,
-                model(&antes_doc, k, x, y),
+                model(&before_doc, k, x, y),
                 "píxel ({}, {}) de la combinación de las capas {} y {}",
                 x,
                 y,
@@ -1291,7 +1291,7 @@ fn checks_model(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
         }
     }
     if k == 0 {
-        prop_assert_eq!(compose(&doc), Ok(antes));
+        prop_assert_eq!(compose(&doc), Ok(before));
     }
     Ok(())
 }
@@ -1308,11 +1308,11 @@ fn checks_undo(g: &DocGen, operation: u8, k: usize) -> Result<(), TestCaseError>
     } else {
         g.clone()
     };
-    let antes = document(&g);
+    let before = document(&g);
     let cmd = match operation {
-        0 => merge_down_command(&antes, antes.layers()[k + 1].id()),
-        1 => merge_visible_command(&antes),
-        _ => flatten_command(&antes),
+        0 => merge_down_command(&before, before.layers()[k + 1].id()),
+        1 => merge_visible_command(&before),
+        _ => flatten_command(&before),
     };
     let cmd = match cmd {
         Err(e) => {
@@ -1326,24 +1326,24 @@ fn checks_undo(g: &DocGen, operation: u8, k: usize) -> Result<(), TestCaseError>
         .remove
         .iter()
         .map(|id| {
-            let pos = antes.layers().iter().position(|l| l.id() == *id).unwrap();
-            (pos, antes.layers()[pos].clone())
+            let pos = before.layers().iter().position(|l| l.id() == *id).unwrap();
+            (pos, before.layers()[pos].clone())
         })
         .collect();
-    let goal_before = antes.layer(f.target).unwrap().clone();
+    let goal_before = before.layer(f.target).unwrap().clone();
 
-    let mut doc = antes.clone();
+    let mut doc = before.clone();
     prop_assert_eq!(doc.apply(cmd), Ok(true));
-    prop_assert_ne!(doc.state_id(), antes.state_id());
+    prop_assert_ne!(doc.state_id(), before.state_id());
     let after = doc.clone();
 
     prop_assert_eq!(doc.undo(), Ok(()));
-    prop_assert_eq!(doc.state_id(), antes.state_id());
-    prop_assert_eq!(ids(&doc), ids(&antes));
+    prop_assert_eq!(doc.state_id(), before.state_id());
+    prop_assert_eq!(ids(&doc), ids(&before));
     for (pos, original) in &removed {
         let ret = &doc.layers()[*pos];
         prop_assert_eq!(signature(ret), signature(original));
-        prop_assert_eq!(doc.image(original.cel()), antes.image(original.cel()));
+        prop_assert_eq!(doc.image(original.cel()), before.image(original.cel()));
         prop_assert!(
             ret == original,
             "la capa quitada {:?} no vuelve igual",
@@ -1351,7 +1351,10 @@ fn checks_undo(g: &DocGen, operation: u8, k: usize) -> Result<(), TestCaseError>
         );
     }
     prop_assert_eq!(doc.layer(f.target), Some(&goal_before));
-    prop_assert!(doc == antes, "tras deshacer el documento no es el de antes");
+    prop_assert!(
+        doc == before,
+        "tras deshacer el documento no es el de antes"
+    );
 
     prop_assert_eq!(doc.redo(), Ok(()));
     prop_assert_eq!(doc.state_id(), after.state_id());

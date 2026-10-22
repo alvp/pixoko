@@ -493,11 +493,11 @@ fn row_9_the_overlay_is_the_composition_and_on_release_the_texture_does_not_chan
     };
     let pending = overlay_pixels(&bench.doc, cel_b, pixels.clone());
     // Fotograma del trazo en curso: el documento no cambia.
-    let antes = bench.doc.clone();
+    let before = bench.doc.clone();
     bench.runs(|ctx, canvas, doc, _| {
         canvas.set_overlay(ctx, &DocSource(doc), &pending);
     });
-    assert_eq!(bench.doc, antes);
+    assert_eq!(bench.doc, before);
     let mut applied = bench.doc.clone();
     applied.apply(command.clone()).expect("aplicar");
     let oracle = expected_2(&compose(&applied).expect("compose"));

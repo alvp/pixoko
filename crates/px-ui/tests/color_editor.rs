@@ -77,7 +77,7 @@ use zones::panel_on_the_left;
 const RED: Rgba = Rgba::opaque(255, 0, 0);
 const GREEN: Rgba = Rgba::opaque(0, 255, 0);
 const BLUE: Rgba = Rgba::opaque(0, 0, 255);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 const YELLOW: Rgba = Rgba::opaque(255, 255, 0);
 
 const TEST_MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
@@ -85,7 +85,7 @@ const TEST_MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::Gray
 /// Indexada de 64×48 (zoom de ajuste 8 con el banco a ppp 1) con la paleta `[R, G, B, K]` de `F`.
 /// Es `F` de la spec con un lienzo más grande.
 fn image_f() -> Image {
-    let palette = Palette::from_colors([RED, GREEN, BLUE, NEGRO]).expect("paleta");
+    let palette = Palette::from_colors([RED, GREEN, BLUE, TEST_BLACK]).expect("paleta");
     Image::new_indexed(64, 48, palette).expect("imagen indexada")
 }
 
@@ -302,13 +302,13 @@ impl Geo {
         TRACK_W_U * self.n
     }
 
-    /// `x` (absoluta) de la posición de la pista que da `valor` de un máximo `max`.
-    fn x_de_valor(&self, valor: u32, max: u32) -> i64 {
-        self.x_hint() + slider_x(valor, self.width_hint(), max)
+    /// `x` (absoluta) de la posición de la pista que da `value` de un máximo `max`.
+    fn x_of_value(&self, value: u32, max: u32) -> i64 {
+        self.x_hint() + slider_x(value, self.width_hint(), max)
     }
 
     /// Valor que da un punto a `dx` píxeles del inicio de la pista.
-    fn valor_en(&self, dx: i64, control: Control) -> u32 {
+    fn value_in(&self, dx: i64, control: Control) -> u32 {
         slider_value_at(dx, self.width_hint(), control.max())
     }
 
@@ -818,8 +818,8 @@ fn sharpness_the_field_text_falls_on_whole_physical_pixels() {
             let field_2 = f
                 .text_painted("#0000ff")
                 .unwrap_or_else(|| panic!("ppp {ppp}: el campo no se pinta"));
-            for (axis, valor) in [("x", field_2.pos.x), ("y", field_2.pos.y)] {
-                let physical = f64::from(valor) * f64::from(ppp);
+            for (axis, value) in [("x", field_2.pos.x), ("y", field_2.pos.y)] {
+                let physical = f64::from(value) * f64::from(ppp);
                 // egui redondea el diseño a 1/32 de punto (`GUI_ROUNDING`): la forma pintada puede
                 // quedar a menos de 0,03 px de un píxel físico; el teselado redondea el texto al
                 // píxel (`round_text_to_pixels`), así que se pinta nítido.
@@ -1034,7 +1034,7 @@ const REASON_DIGIT: &str = "solo dígitos 0-9 y a-f";
 #[test]
 fn row_11_enter_with_invalid_keeps_the_focus_the_text_and_the_editor_notice() {
     let mut bench = bench_f(1.0, 2);
-    let antes = bench.image.clone();
+    let before = bench.image.clone();
     bench.focuses_field();
     bench.writes("zzz");
     assert_eq!(bench.editor.hex_display(), Some("zzz".to_owned()));
@@ -1059,7 +1059,7 @@ fn row_11_enter_with_invalid_keeps_the_focus_the_text_and_the_editor_notice() {
         f.paints(&format!("aviso: {REASON_DIGIT}")),
         "el editor muestra el aviso"
     );
-    assert_eq!(bench.image, antes, "el documento no cambia");
+    assert_eq!(bench.image, before, "el documento no cambia");
     assert!(bench.commits().is_empty());
 
     // Al teclear, el aviso desaparece.
@@ -1221,7 +1221,7 @@ fn row_16_with_the_field_focused_the_keyboard_belongs_to_the_field() {
     assert!(f.entries.is_empty());
 
     // Home, + y -: el lienzo no cambia la vista.
-    let vista = f.info.image_rect;
+    let view = f.info.image_rect;
     let keys = vec![
         key_2(Key::Home),
         key_2(Key::Plus),
@@ -1231,7 +1231,7 @@ fn row_16_with_the_field_focused_the_keyboard_belongs_to_the_field() {
     let f = bench.frame(keys.clone());
     assert!(gate_keys(&keys, f.wants_before).is_empty());
     assert_eq!(f.info.zoom, zoom_fit, "ni Home, ni +, ni - cambian el zoom");
-    assert_eq!(f.info.image_rect, vista, "ni la posición de la imagen");
+    assert_eq!(f.info.image_rect, view, "ni la posición de la imagen");
     assert_eq!(bench.editor.hex_display(), Some("ff00ab".to_owned()));
     assert!(bench.commits().is_empty());
 }
@@ -1381,15 +1381,15 @@ fn slider_pressing_on_the_track_sets_the_value_moving_changes_it_and_releasing_g
     for ppp in PPP_ALWAYS {
         // Entrada 1 de F: verde (0, 255, 0).
         let mut bench = bench_f(ppp, 1);
-        let antes = bench.image.clone();
+        let before = bench.image.clone();
         let geo = bench.geo();
         let y = geo.y_row(Control::Red);
         let dx_a = geo.width_hint() / 2;
         let dx_b = geo.width_hint() - 1;
         let (x_a, x_b) = (geo.x_hint() + dx_a, geo.x_hint() + dx_b);
-        let valor_a = geo.valor_en(dx_a, Control::Red);
-        let valor_b = geo.valor_en(dx_b, Control::Red);
-        assert_eq!(valor_b, Control::Red.max());
+        let value_a = geo.value_in(dx_a, Control::Red);
+        let value_b = geo.value_in(dx_b, Control::Red);
+        assert_eq!(value_b, Control::Red.max());
         assert_eq!(value_shown(&bench, Control::Red), 0);
 
         // Pulsar ya fija el valor bajo el puntero.
@@ -1399,20 +1399,20 @@ fn slider_pressing_on_the_track_sets_the_value_moving_changes_it_and_releasing_g
             bench.editor.dragging(),
             "ppp {ppp}: pulsar empieza el arrastre"
         );
-        assert_eq!(value_shown(&bench, Control::Red), valor_a, "ppp {ppp}");
+        assert_eq!(value_shown(&bench, Control::Red), value_a, "ppp {ppp}");
         assert_eq!(
             bench.editor.preview(),
-            Some((EditTarget::Entry(1), Rgba::opaque(valor_a as u8, 255, 0))),
+            Some((EditTarget::Entry(1), Rgba::opaque(value_a as u8, 255, 0))),
             "ppp {ppp}: el provisional solo cambia el canal rojo"
         );
         assert_eq!(f.output_2.commit, None, "ppp {ppp}: pulsar no confirma");
 
         // Mover con el botón pulsado lo cambia; el documento no se toca.
         let f = bench.moves(x_b, y);
-        assert_eq!(value_shown(&bench, Control::Red), valor_b, "ppp {ppp}");
+        assert_eq!(value_shown(&bench, Control::Red), value_b, "ppp {ppp}");
         assert_eq!(bench.editor.preview(), Some((EditTarget::Entry(1), YELLOW)));
         assert_eq!(f.output_2.commit, None);
-        assert_eq!(bench.image, antes, "ppp {ppp}: el documento no cambia");
+        assert_eq!(bench.image, before, "ppp {ppp}: el documento no cambia");
         assert!(f.entries.is_empty(), "ppp {ppp}: el lienzo no dibuja");
 
         // La muestra elegida del panel se pinta con el color provisional (y no con el guardado).
@@ -1440,7 +1440,7 @@ fn slider_pressing_on_the_track_sets_the_value_moving_changes_it_and_releasing_g
         bench.rest_2_2();
         bench.rest_2_2();
         assert_eq!(bench.commits().len(), 1, "ppp {ppp}: un solo commit");
-        assert_eq!(bench.image, antes);
+        assert_eq!(bench.image, before);
     }
 }
 
@@ -1449,7 +1449,7 @@ fn slider_the_x_is_limited_to_the_track_even_if_the_pointer_leaves_it_or_the_row
     let mut bench = bench_f(1.0, 1);
     let geo = bench.geo();
     let y = geo.y_row(Control::Red);
-    let x_a = geo.x_de_valor(100, Control::Red.max());
+    let x_a = geo.x_of_value(100, Control::Red.max());
     bench.moves(x_a, y);
     bench.presses_2(x_a, y);
     assert!(bench.editor.dragging());
@@ -1501,7 +1501,7 @@ fn slider_releasing_without_a_change_gives_none() {
     // Se aleja y vuelve al valor inicial antes de soltar.
     bench.moves(start_2, y);
     bench.presses_2(start_2, y);
-    let far = geo.x_de_valor(200, Control::Red.max());
+    let far = geo.x_of_value(200, Control::Red.max());
     bench.moves(far, y);
     assert_ne!(value_shown(&bench, Control::Red), 0);
     bench.moves(start_2, y);
@@ -1518,7 +1518,7 @@ fn slider_escape_cancels_restores_and_ignores_the_following_moves() {
     let geo = bench.geo();
     let y = geo.y_row(Control::Red);
     let max = Control::Red.max();
-    let (x_a, x_b) = (geo.x_de_valor(100, max), geo.x_de_valor(max, max));
+    let (x_a, x_b) = (geo.x_of_value(100, max), geo.x_of_value(max, max));
     bench.moves(x_a, y);
     bench.presses_2(x_a, y);
     bench.moves(x_b, y);
@@ -1553,7 +1553,7 @@ fn slider_losing_the_window_focus_cancels() {
     let geo = bench.geo();
     let y = geo.y_row(Control::Red);
     let max = Control::Red.max();
-    let (x_a, x_b) = (geo.x_de_valor(100, max), geo.x_de_valor(max, max));
+    let (x_a, x_b) = (geo.x_of_value(100, max), geo.x_of_value(max, max));
     bench.moves(x_a, y);
     bench.presses_2(x_a, y);
     bench.moves(x_b, y);
@@ -1577,7 +1577,7 @@ fn slider_with_a_drag_in_progress_the_grid_does_not_choose() {
     let mut bench = bench_f(1.0, 1);
     let geo = bench.geo();
     let y = geo.y_row(Control::Red);
-    let x_a = geo.x_de_valor(100, Control::Red.max());
+    let x_a = geo.x_of_value(100, Control::Red.max());
     bench.moves(x_a, y);
     bench.presses_2(x_a, y);
     assert!(bench.editor.dragging());
@@ -1625,10 +1625,10 @@ fn active_area_of_the_row_from_x_13u_included_to_201u_excluded_and_without_the_g
                 value_expected.is_some(),
                 "ppp {ppp}, {name_2}: ¿empieza el arrastre?"
             );
-            if let Some(valor) = value_expected {
+            if let Some(value) = value_expected {
                 assert_eq!(
                     value_shown(&bench, Control::Red),
-                    valor,
+                    value,
                     "ppp {ppp}, {name_2}"
                 );
             }
@@ -1640,7 +1640,7 @@ fn active_area_of_the_row_from_x_13u_included_to_201u_excluded_and_without_the_g
     let geo = bench.geo();
     let row_blue = control_row_u(geo.mode, Control::Blue).expect("tiene B");
     let y = geo.top_px + (row_blue + ROW_H_U) * geo.n;
-    let x = geo.x_de_valor(100, Control::Blue.max());
+    let x = geo.x_of_value(100, Control::Blue.max());
     assert_eq!(slider_hit(geo.mode, x, y - geo.top_px, geo.n as u32), None);
     bench.moves(x, y);
     bench.presses_2(x, y);
@@ -1657,11 +1657,11 @@ fn each_row_drags_its_control() {
         let mut bench = bench_f(1.0, 1);
         let geo = bench.geo();
         let y = geo.y_row(control);
-        let x = geo.x_de_valor(control.max() / 2, control.max());
+        let x = geo.x_of_value(control.max() / 2, control.max());
         bench.moves(x, y);
         bench.presses_2(x, y);
         assert!(bench.editor.dragging(), "{control:?}");
-        let expected_2 = geo.valor_en(x - geo.x_hint(), control);
+        let expected_2 = geo.value_in(x - geo.x_hint(), control);
         assert_eq!(value_shown(&bench, control), expected_2, "{control:?}");
     }
 }
@@ -1674,7 +1674,7 @@ fn gray_slider_of_gray_confirms_a_gray_slot() {
     let geo = bench.geo();
     let y = geo.y_row(Control::Gray);
     let max = Control::Gray.max();
-    let x = geo.x_de_valor(max, max);
+    let x = geo.x_of_value(max, max);
     bench.moves(x, y);
     bench.presses_2(x, y);
     assert!(bench.editor.dragging());
@@ -1721,11 +1721,11 @@ fn the_image_the_panel_receives_does_not_change_during_the_whole_flow() {
     // Arrastre confirmado, arrastre cancelado y hexadecimal: la imagen es la misma (el panel solo
     // devuelve `commit`; aplicarlo es de la sesión).
     let mut bench = bench_f(1.0, 1);
-    let antes = bench.image.clone();
+    let before = bench.image.clone();
     let geo = bench.geo();
     let y = geo.y_row(Control::Green);
     let max = Control::Green.max();
-    let x = geo.x_de_valor(10, max);
+    let x = geo.x_of_value(10, max);
     bench.moves(x, y);
     bench.presses_2(x, y);
     bench.releases(x, y);
@@ -1736,7 +1736,7 @@ fn the_image_the_panel_receives_does_not_change_during_the_whole_flow() {
     bench.focuses_field();
     bench.writes("#123456");
     bench.frame(vec![key_2(Key::Enter)]);
-    assert_eq!(bench.image, antes);
+    assert_eq!(bench.image, before);
     // Nada tocó `Pixel` alguno: la imagen es una indexada vacía de índice 0.
     assert_eq!(bench.image.get_pixel(0, 0), Ok(Pixel::Indexed(0)));
 }

@@ -24,7 +24,7 @@ fn row_1_min_enabled_is_false_only_with_the_value_1() {
 #[test]
 fn row_1_min_enabled_without_a_variable_or_with_any_other_value_is_true() {
     assert!(min_enabled(None));
-    for valor in [
+    for value in [
         "0",
         "",
         "2",
@@ -41,7 +41,7 @@ fn row_1_min_enabled_without_a_variable_or_with_any_other_value_is_true() {
         "\n",
         "PIXOKO_NO_MIN_SIZE",
     ] {
-        assert!(min_enabled(Some(valor)), "{valor:?} deja el mínimo activo");
+        assert!(min_enabled(Some(value)), "{value:?} deja el mínimo activo");
     }
 }
 
@@ -105,10 +105,10 @@ fn row_1_min_inner_size_with_the_environment_variable_combines_the_two_functions
             None,
             "ppp {ppp}"
         );
-        for valor in [None, Some("0"), Some("")] {
+        for value in [None, Some("0"), Some("")] {
             assert!(
-                min_inner_size(ppp, min_enabled(valor)).is_some(),
-                "ppp {ppp}, {valor:?}"
+                min_inner_size(ppp, min_enabled(value)).is_some(),
+                "ppp {ppp}, {value:?}"
             );
         }
     }

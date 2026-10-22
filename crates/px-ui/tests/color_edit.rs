@@ -38,7 +38,7 @@ use std::cell::Cell;
 const RED: Rgba = Rgba::opaque(255, 0, 0);
 const GREEN: Rgba = Rgba::opaque(0, 255, 0);
 const BLUE: Rgba = Rgba::opaque(0, 0, 255);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 const YELLOW: Rgba = Rgba::opaque(255, 255, 0);
 
 const CONTROLS: [Control; 8] = [
@@ -58,7 +58,7 @@ fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
 
 /// `F`: indexada 4×1, paleta `[R, G, B, K]`, píxeles `[0, 1, 2, 3]`.
 fn image_f() -> Image {
-    let palette = Palette::from_colors([RED, GREEN, BLUE, NEGRO]).expect("paleta válida");
+    let palette = Palette::from_colors([RED, GREEN, BLUE, TEST_BLACK]).expect("paleta válida");
     let mut image_2 = Image::new_indexed(4, 1, palette).expect("imagen válida");
     for x in 0..4u8 {
         image_2
@@ -101,8 +101,8 @@ fn drag(
     values: &[u32],
 ) -> Option<Commit> {
     assert!(editor.begin(control, values[0]), "begin aceptado");
-    for valor in &values[1..] {
-        editor.drag(*valor);
+    for value in &values[1..] {
+        editor.drag(*value);
     }
     let commit = editor.release();
     let saved = match commit {
@@ -180,7 +180,7 @@ fn the_saved_target_is_the_palette_or_the_slot_color() {
     let f = image_f();
     let slots = SlotColors::defaults(Mode::Rgba);
     assert_eq!(EditTarget::Entry(1).stored(&f, &slots), Some(GREEN));
-    assert_eq!(EditTarget::Entry(3).stored(&f, &slots), Some(NEGRO));
+    assert_eq!(EditTarget::Entry(3).stored(&f, &slots), Some(TEST_BLACK));
     assert_eq!(EditTarget::Entry(4).stored(&f, &slots), None);
 
     let image_2 = image_mode(Mode::Rgba);
@@ -211,16 +211,16 @@ fn the_stored_color_is_edited_not_the_resolved_one() {
 fn row_2_values_of_an_opaque_orange() {
     let color = Rgba::opaque(255, 128, 0);
     let hsl = Hsl::from_rgba(color);
-    let valor = |c| control_value(color, hsl, c);
-    assert_eq!(valor(Control::Red), 255);
-    assert_eq!(valor(Control::Green), 128);
-    assert_eq!(valor(Control::Blue), 0);
-    assert_eq!(valor(Control::Alpha), 255);
-    assert_eq!(valor(Control::Hue), 30);
-    assert_eq!(valor(Control::Saturation), 100);
-    assert_eq!(valor(Control::Lightness), 50);
-    assert_eq!(value_text(valor(Control::Blue)), "  0");
-    assert_eq!(value_text(valor(Control::Red)), "255");
+    let value = |c| control_value(color, hsl, c);
+    assert_eq!(value(Control::Red), 255);
+    assert_eq!(value(Control::Green), 128);
+    assert_eq!(value(Control::Blue), 0);
+    assert_eq!(value(Control::Alpha), 255);
+    assert_eq!(value(Control::Hue), 30);
+    assert_eq!(value(Control::Saturation), 100);
+    assert_eq!(value(Control::Lightness), 50);
+    assert_eq!(value_text(value(Control::Blue)), "  0");
+    assert_eq!(value_text(value(Control::Red)), "255");
 }
 
 #[test]
@@ -311,11 +311,11 @@ fn value_text_takes_three_columns_on_the_right() {
     assert_eq!(value_text(100), "100");
     assert_eq!(value_text(255), "255");
     assert_eq!(value_text(359), "359");
-    for valor in 0..=359u32 {
-        let text_2 = value_text(valor);
-        assert_eq!(text_2.chars().count(), 3, "{valor}");
-        assert_eq!(text_2.trim().parse::<u32>().ok(), Some(valor));
-        assert!(text_2.starts_with(' ') || valor >= 100);
+    for value in 0..=359u32 {
+        let text_2 = value_text(value);
+        assert_eq!(text_2.chars().count(), 3, "{value}");
+        assert_eq!(text_2.trim().parse::<u32>().ok(), Some(value));
+        assert!(text_2.starts_with(' ') || value >= 100);
     }
 }
 
@@ -481,19 +481,19 @@ fn row_3_slider_x_and_slider_value_at_are_monotonic() {
     for n in [1i64, 2, 3] {
         let width_2 = 184 * n;
         for maximum_2 in [100u32, 255, 359] {
-            let mut anterior = slider_x(0, width_2, maximum_2);
-            for valor in 1..=maximum_2 {
-                let actual = slider_x(valor, width_2, maximum_2);
-                assert!(actual >= anterior, "slider_x({valor}), n = {n}");
+            let mut previous = slider_x(0, width_2, maximum_2);
+            for value in 1..=maximum_2 {
+                let actual = slider_x(value, width_2, maximum_2);
+                assert!(actual >= previous, "slider_x({value}), n = {n}");
                 assert!((0..width_2).contains(&actual));
-                anterior = actual;
+                previous = actual;
             }
-            let mut anterior = slider_value_at(0, width_2, maximum_2);
+            let mut previous = slider_value_at(0, width_2, maximum_2);
             for x in 1..width_2 {
                 let actual = slider_value_at(x, width_2, maximum_2);
-                assert!(actual >= anterior, "slider_value_at({x}), n = {n}");
+                assert!(actual >= previous, "slider_value_at({x}), n = {n}");
                 assert!(actual <= maximum_2);
-                anterior = actual;
+                previous = actual;
             }
         }
     }
@@ -503,9 +503,9 @@ fn row_3_slider_x_and_slider_value_at_are_monotonic() {
 fn row_3_round_trip_with_maximum_100() {
     for n in [1i64, 2, 3] {
         let width_2 = 184 * n;
-        for valor in 0..=100u32 {
-            let x = slider_x(valor, width_2, 100);
-            assert_eq!(slider_value_at(x, width_2, 100), valor, "n = {n}");
+        for value in 0..=100u32 {
+            let x = slider_x(value, width_2, 100);
+            assert_eq!(slider_value_at(x, width_2, 100), value, "n = {n}");
         }
     }
 }
@@ -661,8 +661,8 @@ fn row_6_lightness_at_the_extremes_and_back_to_50() {
     let target_2 = EditTarget::Entry(0);
     let mut editor = editor_with(target_2, base);
 
-    let negro = drag(&mut editor, target_2, Control::Lightness, &[0]);
-    assert_eq!(negro.map(|c| c.color), Some(Rgba::opaque(0, 0, 0)));
+    let black = drag(&mut editor, target_2, Control::Lightness, &[0]);
+    assert_eq!(black.map(|c| c.color), Some(Rgba::opaque(0, 0, 0)));
     let of_return = drag(&mut editor, target_2, Control::Lightness, &[50]);
     assert_eq!(of_return.map(|c| c.color), Some(base));
 
@@ -724,10 +724,10 @@ fn row_6_a_sync_with_the_same_color_does_not_recompute_the_hsl() {
     let mut editor = editor_with(target_2, base);
     let commit = drag(&mut editor, target_2, Control::Saturation, &[0]);
     let gray_2 = commit.expect("cambió").color;
-    let antes = editor.shown();
+    let before = editor.shown();
     editor.sync(Some((target_2, gray_2)));
     editor.sync(Some((target_2, gray_2)));
-    assert_eq!(editor.shown(), antes);
+    assert_eq!(editor.shown(), before);
     assert_ne!(hue_shown(&editor), 0, "no se recalculó (daría 0)");
 }
 
@@ -750,7 +750,7 @@ fn sync_during_a_drag_changes_nothing() {
     let mut editor = editor_with(EditTarget::Entry(0), RED);
     assert!(editor.begin(Control::Green, 200));
     let during = editor.shown();
-    editor.sync(Some((EditTarget::Entry(3), NEGRO)));
+    editor.sync(Some((EditTarget::Entry(3), TEST_BLACK)));
     editor.sync(None);
     assert_eq!(editor.shown(), during);
     assert!(editor.dragging());
@@ -966,7 +966,7 @@ fn row_9_changing_swatch_in_the_same_frame_applies_to_the_original_target() {
     let mut editor = editor_with(original, BLUE);
     kind(&mut editor, original, BLUE, "#00ff00");
     // La muestra 3 (entrada 2 → entrada 3) se elige antes de perder el foco.
-    editor.sync(Some((EditTarget::Entry(3), NEGRO)));
+    editor.sync(Some((EditTarget::Entry(3), TEST_BLACK)));
     assert_eq!(
         editor.confirm_hex(Mode::Indexed, true),
         HexOutcome::Commit(Commit {
@@ -982,7 +982,7 @@ fn row_9_the_pending_alpha_is_that_of_the_original_base_color() {
     let base = rgba(0, 0, 255, 128);
     let mut editor = editor_with(original, base);
     kind(&mut editor, original, base, "#00ff00");
-    editor.sync(Some((EditTarget::Entry(3), NEGRO)));
+    editor.sync(Some((EditTarget::Entry(3), TEST_BLACK)));
     assert_eq!(
         editor.confirm_hex(Mode::Indexed, true),
         HexOutcome::Commit(Commit {
@@ -1110,7 +1110,7 @@ fn row_11_escape_reverts_the_text_without_a_notice() {
 fn the_invalid_hexadecimal_notice_lasts_until_the_target_or_the_color_changes() {
     let target_2 = EditTarget::Entry(2);
     for new_2 in [
-        Some((EditTarget::Entry(3), NEGRO)),
+        Some((EditTarget::Entry(3), TEST_BLACK)),
         Some((target_2, GREEN)),
         None,
     ] {
@@ -1363,10 +1363,10 @@ fn row_12_a_value_above_the_maximum_is_limited() {
     assert!(near(hsl.l(), 1.0));
 }
 
-fn end(control: Control, valor: u32) -> (Rgba, Hsl) {
+fn end(control: Control, value: u32) -> (Rgba, Hsl) {
     let red = (RED, Hsl::from_rgba(RED));
-    let (color, hsl) = apply_control(red, control, valor);
-    assert_eq!(hsl.to_rgba(color.a), color, "{control:?} {valor}");
+    let (color, hsl) = apply_control(red, control, value);
+    assert_eq!(hsl.to_rgba(color.a), color, "{control:?} {value}");
     (color, hsl)
 }
 
@@ -1386,8 +1386,8 @@ fn row_12_extremes_from_opaque_red() {
     assert_eq!(end(Control::Saturation, 100).0, RED);
     // Cada control (salvo el de alfa) a su máximo y a 0 conserva el alfa.
     for control in CONTROLS.into_iter().filter(|c| *c != Control::Alpha) {
-        for valor in [0, control.max()] {
-            assert_eq!(end(control, valor).0.a, 255, "{control:?}");
+        for value in [0, control.max()] {
+            assert_eq!(end(control, value).0.a, 255, "{control:?}");
         }
     }
 }
@@ -1415,21 +1415,21 @@ fn row_12_gray_alpha() {
 
 #[test]
 fn hsl_after_rgb_of_a_chromatic_color_is_from_rgba() {
-    let anterior = Hsl::new(120.0, 0.5, 0.5);
+    let previous = Hsl::new(120.0, 0.5, 0.5);
     for color in [
         Rgba::opaque(128, 128, 255),
         rgba(10, 200, 30, 7),
         Rgba::opaque(255, 0, 0),
     ] {
-        assert_eq!(hsl_after_rgb(anterior, color), Hsl::from_rgba(color));
+        assert_eq!(hsl_after_rgb(previous, color), Hsl::from_rgba(color));
     }
 }
 
 #[test]
 fn hsl_after_rgb_of_a_gray_keeps_the_previous_hue() {
-    let anterior = Hsl::new(120.0, 0.5, 0.5);
+    let previous = Hsl::new(120.0, 0.5, 0.5);
     let gray_2 = Rgba::opaque(128, 128, 128);
-    let new_2 = hsl_after_rgb(anterior, gray_2);
+    let new_2 = hsl_after_rgb(previous, gray_2);
     assert!(near(new_2.h(), 120.0), "h = {}", new_2.h());
     assert!(near(new_2.s(), 0.0));
     assert!(near(new_2.l(), Hsl::from_rgba(gray_2).l()));
@@ -1438,12 +1438,12 @@ fn hsl_after_rgb_of_a_gray_keeps_the_previous_hue() {
 
 #[test]
 fn hsl_after_rgb_of_black_and_white_keeps_hue_and_saturation() {
-    let anterior = Hsl::new(120.0, 0.5, 0.5);
+    let previous = Hsl::new(120.0, 0.5, 0.5);
     for (color, light) in [
         (Rgba::opaque(0, 0, 0), 0.0),
         (Rgba::opaque(255, 255, 255), 1.0),
     ] {
-        let new_2 = hsl_after_rgb(anterior, color);
+        let new_2 = hsl_after_rgb(previous, color);
         assert!(near(new_2.h(), 120.0), "h = {}", new_2.h());
         assert!(near(new_2.s(), 0.5), "s = {}", new_2.s());
         assert!(near(new_2.l(), light));
@@ -1496,7 +1496,7 @@ fn mode_s() -> impl Strategy<Value = Mode> {
     ]
 }
 
-fn valor_s() -> impl Strategy<Value = u32> {
+fn value_s() -> impl Strategy<Value = u32> {
     prop_oneof![
         any::<u32>(),
         0u32..=400,
@@ -1511,34 +1511,34 @@ fn check_control(
     mode_2: Mode,
     base: (Rgba, Hsl),
     control: Control,
-    valor: u32,
+    value: u32,
 ) -> Result<(), TestCaseError> {
     let (rgba0, hsl0) = base;
-    let (new_2, hsl) = apply_control(base, control, valor);
-    let limited = valor.min(control.max());
-    let canal = limited as u8;
-    // El resultado solo depende de `(base, control, valor)`.
-    prop_assert_eq!(apply_control(base, control, valor), (new_2, hsl));
+    let (new_2, hsl) = apply_control(base, control, value);
+    let limited = value.min(control.max());
+    let channel = limited as u8;
+    // El resultado solo depende de `(base, control, value)`.
+    prop_assert_eq!(apply_control(base, control, value), (new_2, hsl));
     // El alfa solo cambia con el control de alfa.
     if control != Control::Alpha {
         prop_assert_eq!(new_2.a, rgba0.a);
     }
     match control {
         Control::Red => {
-            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (canal, rgba0.g, rgba0.b));
+            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (channel, rgba0.g, rgba0.b));
         }
         Control::Green => {
-            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (rgba0.r, canal, rgba0.b));
+            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (rgba0.r, channel, rgba0.b));
         }
         Control::Blue => {
-            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (rgba0.r, rgba0.g, canal));
+            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (rgba0.r, rgba0.g, channel));
         }
         Control::Gray => {
-            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (canal, canal, canal));
+            prop_assert_eq!((new_2.r, new_2.g, new_2.b), (channel, channel, channel));
         }
         Control::Alpha => {
             prop_assert_eq!((new_2.r, new_2.g, new_2.b), (rgba0.r, rgba0.g, rgba0.b));
-            prop_assert_eq!(new_2.a, canal);
+            prop_assert_eq!(new_2.a, channel);
             // El `Hsl` no se toca con el alfa.
             prop_assert_eq!(hsl, hsl0);
         }
@@ -1581,26 +1581,26 @@ proptest! {
         hsl_raw in (0.0f32..360.0, 0.0f32..=1.0, 0.0f32..=1.0),
         variant in any::<bool>(),
         index_2 in 0usize..8,
-        valor in valor_s(),
+        value in value_s(),
     ) {
         let Some(base) = build_base(mode_2, channels, hsl_raw, variant) else {
             return Ok(());
         };
         let available = controls(mode_2);
         let control = available[index_2 % available.len()];
-        check_control(mode_2, base, control, valor)?;
+        check_control(mode_2, base, control, value)?;
     }
 
     #[test]
     fn prop_1_any_control_without_panic_even_if_the_mode_does_not_have_it(
         channels in (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>()),
         index_2 in 0usize..8,
-        valor in valor_s(),
+        value in value_s(),
     ) {
         let color = Rgba::new(channels.0, channels.1, channels.2, channels.3);
         let base = (color, Hsl::from_rgba(color));
         let control = CONTROLS[index_2];
-        let (new_2, hsl) = apply_control(base, control, valor);
+        let (new_2, hsl) = apply_control(base, control, value);
         prop_assert_eq!(hsl.to_rgba(new_2.a), new_2);
     }
 
@@ -1611,9 +1611,9 @@ proptest! {
         x0 in -100i64..2100,
         x1 in -100i64..2100,
     ) {
-        let (smaller, mayor) = (x0.min(x1), x0.max(x1));
+        let (smaller, greater) = (x0.min(x1), x0.max(x1));
         let a = slider_value_at(smaller, width_2, maximum_2);
-        let b = slider_value_at(mayor, width_2, maximum_2);
+        let b = slider_value_at(greater, width_2, maximum_2);
         prop_assert!(a <= b);
         prop_assert!(b <= maximum_2);
         prop_assert_eq!(slider_value_at(0, width_2, maximum_2), 0);
@@ -1629,13 +1629,13 @@ proptest! {
         x_raw in 0i64..2000,
     ) {
         let x = x_raw % width_2;
-        let valor = slider_value_at(x, width_2, maximum_2);
-        let ret = slider_x(valor, width_2, maximum_2);
+        let value = slider_value_at(x, width_2, maximum_2);
+        let ret = slider_x(value, width_2, maximum_2);
         // `⌈(w − 1)/max⌉`.
         let tolerance = (width_2 - 1 + i64::from(maximum_2) - 1) / i64::from(maximum_2);
         prop_assert!(
             (ret - x).abs() <= tolerance,
-            "x = {x}, valor = {valor}, vuelta = {ret}, tolerancia = {tolerance}"
+            "x = {x}, valor = {value}, vuelta = {ret}, tolerancia = {tolerance}"
         );
     }
 
@@ -1656,9 +1656,9 @@ proptest! {
         let hsl = Hsl::new(hue as f32, s as f32 / 100.0, l as f32 / 100.0);
         let color = hsl.to_rgba(alpha);
         let base = (color, hsl);
-        let (control, valor) = end;
+        let (control, value) = end;
         let initial = control_value(color, hsl, control);
-        let (lowered, hsl_lowered) = apply_control(base, control, valor);
+        let (lowered, hsl_lowered) = apply_control(base, control, value);
         let (returned, _) = apply_control((lowered, hsl_lowered), control, initial);
         prop_assert_eq!(returned, color);
     }
@@ -1745,8 +1745,8 @@ fn color_s() -> impl Strategy<Value = Rgba> {
 
 fn op_s() -> impl Strategy<Value = Op> {
     prop_oneof![
-        3 => (0usize..8, valor_s()).prop_map(|(i, v)| Op::Begin(CONTROLS[i], v)),
-        3 => valor_s().prop_map(Op::Drag),
+        3 => (0usize..8, value_s()).prop_map(|(i, v)| Op::Begin(CONTROLS[i], v)),
+        3 => value_s().prop_map(Op::Drag),
         3 => Just(Op::Release),
         2 => Just(Op::Cancel),
         2 => Just(Op::SyncActual),
@@ -1771,8 +1771,8 @@ proptest! {
                 Op::Begin(..) | Op::Cancel | Op::SyncActual | Op::Sync(_) if cancelled => {
                     continue;
                 }
-                Op::Begin(control, valor) => {
-                    let accepted = editor.begin(control, valor);
+                Op::Begin(control, value) => {
+                    let accepted = editor.begin(control, value);
                     let expected_2 = model.target_2.is_some()
                         && matches!(model.state_2, State::Rest);
                     prop_assert_eq!(accepted, expected_2);
@@ -1781,17 +1781,17 @@ proptest! {
                         model.state_2 = State::Live {
                             control,
                             base,
-                            provisional: apply_control(base, control, valor),
+                            provisional: apply_control(base, control, value),
                         };
                     }
                 }
-                Op::Drag(valor) => {
-                    editor.drag(valor);
+                Op::Drag(value) => {
+                    editor.drag(value);
                     if let State::Live { control, base, .. } = model.state_2 {
                         model.state_2 = State::Live {
                             control,
                             base,
-                            provisional: apply_control(base, control, valor),
+                            provisional: apply_control(base, control, value),
                         };
                     }
                 }
@@ -1819,19 +1819,19 @@ proptest! {
                 }
                 Op::SyncActual => {
                     let actual = model.target_2.map(|d| (d, model.rgba));
-                    let antes = editor.shown();
+                    let before = editor.shown();
                     editor.sync(actual);
                     model.sync(actual);
                     if matches!(model.state_2, State::Live { .. }) {
-                        prop_assert_eq!(editor.shown(), antes, "sync durante el arrastre");
+                        prop_assert_eq!(editor.shown(), before, "sync durante el arrastre");
                     }
                 }
                 Op::Sync(actual) => {
-                    let antes = editor.shown();
+                    let before = editor.shown();
                     editor.sync(actual);
                     if matches!(model.state_2, State::Live { .. }) {
                         // No hace nada con arrastre en curso.
-                        prop_assert_eq!(editor.shown(), antes, "sync durante el arrastre");
+                        prop_assert_eq!(editor.shown(), before, "sync durante el arrastre");
                     } else {
                         model.sync(actual);
                     }
@@ -1885,30 +1885,30 @@ fn oracle(text_2: &str, mode_2: Mode, actual: Rgba) -> Result<Rgba, HexError> {
     if characters.is_empty() {
         return Err(HexError::Empty);
     }
-    let largo = characters.len();
-    if !matches!(largo, 3 | 4 | 6 | 8) {
-        return Err(HexError::Length(largo));
+    let length_2 = characters.len();
+    if !matches!(length_2, 3 | 4 | 6 | 8) {
+        return Err(HexError::Length(length_2));
     }
     let mut values = Vec::new();
     for c in &characters {
-        let valor = match c {
+        let value = match c {
             '0'..='9' => *c as u8 - b'0',
             'a'..='f' => *c as u8 - b'a' + 10,
             'A'..='F' => *c as u8 - b'A' + 10,
             _ => return Err(HexError::Digit),
         };
-        values.push(valor);
+        values.push(value);
     }
-    let canal = |i: usize| -> u8 {
-        if largo <= 4 {
+    let channel = |i: usize| -> u8 {
+        if length_2 <= 4 {
             values[i] * 17
         } else {
             values[2 * i] * 16 + values[2 * i + 1]
         }
     };
-    let writes_alpha = largo == 4 || largo == 8;
-    let alpha = if writes_alpha { canal(3) } else { actual.a };
-    let color = Rgba::new(canal(0), canal(1), canal(2), alpha);
+    let writes_alpha = length_2 == 4 || length_2 == 8;
+    let alpha = if writes_alpha { channel(3) } else { actual.a };
+    let color = Rgba::new(channel(0), channel(1), channel(2), alpha);
     let is_gray = color.r == color.g && color.g == color.b;
     match mode_2 {
         Mode::Gray => {
@@ -1963,7 +1963,7 @@ fn text_hex_s() -> impl Strategy<Value = String> {
             8,
         ),
     )
-        .prop_map(|(largo, cs)| cs.into_iter().take(largo).collect::<String>());
+        .prop_map(|(length_2, cs)| cs.into_iter().take(length_2).collect::<String>());
     (
         0usize..=1,
         any::<bool>(),
@@ -2132,7 +2132,7 @@ fn row_7_it_queries_the_stored_one_of_the_original_target_not_the_current() {
     let original = EditTarget::Entry(2);
     let mut editor = editor_with(original, BLUE);
     kind(&mut editor, original, BLUE, "#00ff00");
-    editor.sync(Some((EditTarget::Entry(3), NEGRO)));
+    editor.sync(Some((EditTarget::Entry(3), TEST_BLACK)));
     let asked = Cell::new(None);
     let resolved = editor.confirm_hex_checked(Mode::Indexed, true, |target_2| {
         asked.set(Some(target_2));

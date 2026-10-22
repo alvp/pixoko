@@ -138,7 +138,7 @@ fn seen(doc: &Document, x: u32, y: u32) -> Rgba {
 fn row_3_the_line_over_an_empty_cel_is_a_clipped_setpixels_without_materializing_first() {
     let mut doc = doc_rgba(8, 6);
     let (_, cel) = layer_new(&mut doc, "B");
-    let antes = doc.clone();
+    let before = doc.clone();
     let bytes = doc.materialized_bytes();
     let mut tools = ToolState::new();
     tools.apply_action(ToolAction::Select(Tool::Line));
@@ -174,14 +174,14 @@ fn row_3_the_line_over_an_empty_cel_is_a_clipped_setpixels_without_materializing
         "la región sucia no está vacía"
     );
     doc.undo().expect("deshacer");
-    assert_eq!(doc, antes, "un paso: deshacer deja la celda vacía");
+    assert_eq!(doc, before, "un paso: deshacer deja la celda vacía");
 }
 
 #[test]
 fn row_3_the_fill_over_an_empty_cel_covers_the_canvas_with_one_span_per_row() {
     let mut doc = doc_rgba(9, 5);
     let (_, cel) = layer_new(&mut doc, "B");
-    let antes = doc.clone();
+    let before = doc.clone();
     let mut tools = ToolState::new();
     let change = gesture_2(
         &mut tools,
@@ -206,7 +206,7 @@ fn row_3_the_fill_over_an_empty_cel_covers_the_canvas_with_one_span_per_row() {
         "todo el lienzo queda sucio"
     );
     doc.undo().expect("deshacer");
-    assert_eq!(doc, antes);
+    assert_eq!(doc, before);
     assert!(doc.image(cel).is_none(), "deshacer la deja vacía otra vez");
 }
 
@@ -214,7 +214,7 @@ fn row_3_the_fill_over_an_empty_cel_covers_the_canvas_with_one_span_per_row() {
 fn row_3_filling_an_empty_cel_with_the_transparent_changes_nothing() {
     let mut doc = doc_rgba(6, 4);
     let (_, cel) = layer_new(&mut doc, "B");
-    let antes = doc.clone();
+    let before = doc.clone();
     let mut tools = ToolState::new();
     let change = gesture_2(
         &mut tools,
@@ -226,9 +226,9 @@ fn row_3_filling_an_empty_cel_with_the_transparent_changes_nothing() {
     )
     .expect("relleno");
     assert!(!change);
-    assert_eq!(doc, antes);
+    assert_eq!(doc, before);
     assert!(doc.image(cel).is_none());
-    assert_eq!(doc.state_id(), antes.state_id());
+    assert_eq!(doc.state_id(), before.state_id());
     assert!(tools.take_changes().is_empty());
 }
 
@@ -294,7 +294,7 @@ fn row_3_an_id_that_is_not_a_cel_is_still_unknown_image_in_raster_and_does_nothi
         fill_command(&doc, no, 1, 1, rgba(RED)),
         Err(DocumentError::UnknownImage(_))
     ));
-    let antes = doc.clone();
+    let before = doc.clone();
     let mut tools = ToolState::new();
     let change = gesture_2(
         &mut tools,
@@ -306,7 +306,7 @@ fn row_3_an_id_that_is_not_a_cel_is_still_unknown_image_in_raster_and_does_nothi
     )
     .expect("sin error");
     assert!(!change);
-    assert_eq!(doc, antes);
+    assert_eq!(doc, before);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ fn row_3_an_id_that_is_not_a_cel_is_still_unknown_image_in_raster_and_does_nothi
 fn row_4_the_eraser_on_an_empty_cel_does_nothing_or_materializes_it() {
     let mut doc = doc_rgba(6, 4);
     let (_, cel) = layer_new(&mut doc, "B");
-    let antes = doc.clone();
+    let before = doc.clone();
     let mut tools = ToolState::new();
     let change = gesture_2(
         &mut tools,
@@ -329,7 +329,7 @@ fn row_4_the_eraser_on_an_empty_cel_does_nothing_or_materializes_it() {
     )
     .expect("borrador");
     assert!(!change);
-    assert_eq!(doc, antes);
+    assert_eq!(doc, before);
     assert!(doc.image(cel).is_none());
     assert!(tools.take_changes().is_empty());
     assert!(
@@ -344,7 +344,7 @@ fn row_4_the_eraser_only_touches_the_active_layer_and_lets_what_is_below_show() 
     let cel_a = doc.layers()[0].cel();
     let (_, cel_b) = layer_new(&mut doc, "B");
     paints(&mut doc, cel_b, &[(1, 1), (2, 1), (3, 1)], rgba(RED));
-    let a_antes = doc.image(cel_a).cloned();
+    let to_before = doc.image(cel_a).cloned();
     assert_eq!(seen(&doc, 2, 1), RED);
     let mut tools = ToolState::new();
     let change = gesture_2(
@@ -366,7 +366,7 @@ fn row_4_the_eraser_only_touches_the_active_layer_and_lets_what_is_below_show() 
     );
     assert_eq!(
         doc.image(cel_a).cloned(),
-        a_antes,
+        to_before,
         "la capa de debajo no cambia"
     );
     assert_eq!(seen(&doc, 2, 1), TEST_BACKGROUND, "se ve lo de debajo");
@@ -388,10 +388,10 @@ fn row_4_the_eraser_on_a_gray_warns_and_changes_nothing() {
     image_2.set_pixel(1, 1, Pixel::Gray(200)).expect("dentro");
     let mut doc = Document::new(image_2);
     let cel = doc.layers()[0].cel();
-    let antes = doc.clone();
+    let before = doc.clone();
     let mut tools = ToolState::new();
     gesture_2(&mut tools, &mut doc, cel, None, Tool::Eraser, &[(1, 1)]).expect("borrador");
-    assert_eq!(doc, antes);
+    assert_eq!(doc, before);
     assert_eq!(
         tools.take_events(),
         vec![ToolEvent::Refused(EraseError::NoTransparency)]
@@ -484,8 +484,8 @@ fn row_5_the_layer_source_reads_the_active_cel_and_the_empty_one_is_transparent(
         chooses(&mut empty, cel_d, layer_2, (3, 3)),
         vec![Picked::Color(Rgba::TRANSPARENT)]
     );
-    let antes = empty.clone();
-    assert_eq!(empty, antes, "el cuentagotas no modifica el documento");
+    let before = empty.clone();
+    assert_eq!(empty, before, "el cuentagotas no modifica el documento");
 }
 
 #[test]
@@ -872,7 +872,7 @@ fn seed_of_layers() -> impl Strategy<Value = (u8, Layers, u8, TestStroke)> {
 }
 
 /// Un píxel del modo `mode_2` según `k` (con alfas 0, 1, 128 y 255; índices dentro de la paleta).
-fn pixel_para(mode_2: Mode, k: u32) -> Pixel {
+fn pixel_for(mode_2: Mode, k: u32) -> Pixel {
     tiles_support::pixel_de(mode_2, k, palette().len())
 }
 
@@ -905,7 +905,7 @@ proptest! {
                     .map(|j| PixelEdit {
                         x: a.wrapping_add(j.wrapping_mul(5)) % 12,
                         y: b.wrapping_add(j.wrapping_mul(3)) % 9,
-                        pixel: pixel_para(mode_2, a.wrapping_add(j)),
+                        pixel: pixel_for(mode_2, a.wrapping_add(j)),
                     })
                     .collect();
                 let _ = doc.apply(Command::SetPixels { image: cel, pixels });
@@ -918,7 +918,7 @@ proptest! {
         let cel = layer_active.cel();
         let edits: Vec<PixelEdit> = stroke_2
             .iter()
-            .map(|&(x, y, k)| PixelEdit { x, y, pixel: pixel_para(mode_2, k) })
+            .map(|&(x, y, k)| PixelEdit { x, y, pixel: pixel_for(mode_2, k) })
             .collect();
         // Sin repetidos: el último valor de cada coordenada es el que se aplica.
         let mut unique: Vec<PixelEdit> = Vec::new();

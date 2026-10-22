@@ -175,13 +175,13 @@ fn row_5_a_notch_is_an_anchored_step_and_three_notches_at_once_are_three() {
         Some(pixel),
         "el píxel bajo el cursor se conserva"
     );
-    let antes = b.zoom();
+    let before = b.zoom();
     b.step(vec![line(3.0)]);
-    assert_eq!(steps_of_zoom(antes, b.zoom()), 3, "antes de I.2b eran 1");
+    assert_eq!(steps_of_zoom(before, b.zoom()), 3, "antes de I.2b eran 1");
     assert_eq!(b.info.hover, Some(pixel));
-    let antes = b.zoom();
+    let before = b.zoom();
     b.step(vec![line(-1.0), line(-1.0)]);
-    assert_eq!(steps_of_zoom(antes, b.zoom()), -2, "un paso por muesca");
+    assert_eq!(steps_of_zoom(before, b.zoom()), -2, "un paso por muesca");
 }
 
 #[test]
@@ -393,17 +393,17 @@ fn row_8_wheel_assigned_to_scroll_and_fingers_to_zoom() {
         source_2 + vec2(0.0, 40.0),
         "desplaza 40 puntos por muesca"
     );
-    let antes = b.zoom();
+    let before = b.zoom();
     b.step(vec![fingers(0.0, 20.0)]);
     assert_eq!(
         b.zoom(),
-        antes,
+        before,
         "media muesca (20 de 40 puntos) no cruza el umbral"
     );
     b.step(vec![fingers(0.0, 20.0)]);
     assert_eq!(
         b.zoom(),
-        antes.zoom_in(),
+        before.zoom_in(),
         "40 puntos de dedos = una muesca = un paso"
     );
 }
@@ -479,7 +479,7 @@ fn row_11_the_sign_is_given_by_the_system_and_the_app_does_not_invert_it() {
         MouseWheelSource::Trackpad,
         MouseWheelSource::Momentum,
     ] {
-        let mover = |dy: f32| {
+        let move_pointer = |dy: f32| {
             let mut b = Bench::with_cursor();
             let source_2 = b.source_2();
             b.step(vec![event_wheel(
@@ -490,8 +490,8 @@ fn row_11_the_sign_is_given_by_the_system_and_the_app_does_not_invert_it() {
             )]);
             b.source_2().y - source_2.y
         };
-        assert_eq!(mover(9.0), 9.0, "{source:?}");
-        assert_eq!(mover(-9.0), -9.0, "{source:?}");
+        assert_eq!(move_pointer(9.0), 9.0, "{source:?}");
+        assert_eq!(move_pointer(-9.0), -9.0, "{source:?}");
     }
 }
 

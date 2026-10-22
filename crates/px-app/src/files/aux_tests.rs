@@ -224,7 +224,7 @@ const SCALES: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 /// Columnas del texto de un aviso en la barra a la ventana mínima (66 menos `notice: `).
 const COLUMNS_OF_TEXT: usize = 59;
 
-fn largo(text_2: &str) -> usize {
+fn length(text_2: &str) -> usize {
     text_2.chars().count()
 }
 
@@ -241,9 +241,9 @@ fn row_12_each_cause_with_its_suffix_fits_whole() {
     for (chunk, cause) in CAUSES {
         let sentence = format!("{cause}{SUFFIX}");
         assert!(
-            largo(&sentence) <= COLUMNS_OF_TEXT,
+            length(&sentence) <= COLUMNS_OF_TEXT,
             "{chunk:?}: {} columnas",
-            largo(&sentence)
+            length(&sentence)
         );
         assert!(in_the_character_set(&sentence), "{sentence}");
         // Y es lo que `describe_open_aux` pone al principio, que es lo que no se recorta.
@@ -251,17 +251,17 @@ fn row_12_each_cause_with_its_suffix_fits_whole() {
         assert!(text.starts_with(&sentence), "{text}");
     }
     // Las medidas de la spec.
-    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[0].1)), 55);
-    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[1].1)), 57);
-    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[2].1)), 49);
-    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[3].1)), 54);
-    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[4].1)), 55);
+    assert_eq!(length(&format!("{}{SUFFIX}", CAUSES[0].1)), 55);
+    assert_eq!(length(&format!("{}{SUFFIX}", CAUSES[1].1)), 57);
+    assert_eq!(length(&format!("{}{SUFFIX}", CAUSES[2].1)), 49);
+    assert_eq!(length(&format!("{}{SUFFIX}", CAUSES[3].1)), 54);
+    assert_eq!(length(&format!("{}{SUFFIX}", CAUSES[4].1)), 55);
 }
 
 #[test]
 fn row_12_the_save_sentence_with_a_15_character_name_fits_whole() {
     let name_2 = "casas-copia.png";
-    assert_eq!(largo(name_2), 15);
+    assert_eq!(length(name_2), 15);
     for (chunk, cause) in [CAUSES[0], CAUSES[4]] {
         let saved = Saved {
             path: PathBuf::from("/algun/directorio").join(name_2),
@@ -274,9 +274,9 @@ fn row_12_the_save_sentence_with_a_15_character_name_fits_whole() {
             "{chunk:?}"
         );
         assert!(
-            largo(&sentence) <= COLUMNS_OF_TEXT,
+            length(&sentence) <= COLUMNS_OF_TEXT,
             "{chunk:?}: {}",
-            largo(&sentence)
+            length(&sentence)
         );
         // Salvo el nombre, todo es texto fijo de la interfaz.
         let fixed = sentence.replace(name_2, "");
@@ -298,7 +298,7 @@ fn row_12_the_clause_with_the_four_labels_measures_40_or_less() {
     let text = notice(&[], &aux);
     let clause = text.rsplit(" · ").next().expect("cláusula");
     assert_eq!(clause, "ignorados: texto, Exif, animación, otros");
-    assert!(largo(clause) <= 40, "{} columnas", largo(clause));
+    assert!(length(clause) <= 40, "{} columnas", length(clause));
     assert!(in_the_character_set(&text), "{text}");
 }
 
@@ -356,7 +356,7 @@ proptest! {
         // La cláusula: solo los cuatro rótulos, en orden, y ≤ 40 columnas.
         if let Some(start_2) = text.find("ignorados:") {
             let clause = &text[start_2..];
-            prop_assert!(largo(clause) <= 40, "{}", clause);
+            prop_assert!(length(clause) <= 40, "{}", clause);
             prop_assert!(text[..start_2].ends_with(" · "), "{}", text);
             let labels: Vec<&str> = clause["ignorados:".len()..].split(',').map(str::trim).collect();
             let allowed = ["texto", "Exif", "animación", "otros"];

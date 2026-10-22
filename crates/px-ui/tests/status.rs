@@ -206,10 +206,10 @@ fn row_11_the_bar_measures_20_n_physical_pixels_and_the_canvas_is_the_rest() {
 
         // Con textos larguísimos (avisos de 400 caracteres, y con saltos de línea) el alto no
         // cambia.
-        let largo = "abcdefghij".repeat(40);
+        let length_2 = "abcdefghij".repeat(40);
         for (text_2, notice) in [
-            (largo.as_str(), true),
-            (largo.as_str(), false),
+            (length_2.as_str(), true),
+            (length_2.as_str(), false),
             ("primera línea\nsegunda línea\r\ntercera", true),
             ("日本語 😀 \u{202E}", true),
             ("", false),
@@ -227,14 +227,14 @@ fn row_11_the_bar_measures_20_n_physical_pixels_and_the_canvas_is_the_rest() {
 #[test]
 fn row_11_long_text_gives_40_characters_and_ends_in_an_ellipsis() {
     let bench = Bench::new_2(1.0, vec2(400.0, 300.0));
-    let largo = "abcdefghij".repeat(40);
-    assert_eq!(largo.chars().count(), 400);
-    let text_2 = bar_text(&bench.ctx, &largo, false, 40);
+    let length_2 = "abcdefghij".repeat(40);
+    assert_eq!(length_2.chars().count(), 400);
+    let text_2 = bar_text(&bench.ctx, &length_2, false, 40);
     assert_eq!(text_2.chars().count(), 40);
     assert!(text_2.ends_with('…'), "{text_2:?}");
     assert!(text_2.starts_with("abcdefghij"));
     // También con aviso: el prefijo cuenta dentro de las 40 columnas.
-    let notice = bar_text(&bench.ctx, &largo, true, 40);
+    let notice = bar_text(&bench.ctx, &length_2, true, 40);
     assert_eq!(notice.chars().count(), 40);
     assert!(notice.starts_with("aviso: abc"), "{notice:?}");
     assert!(notice.ends_with('…'));

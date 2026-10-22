@@ -64,7 +64,7 @@ use px_ui::view::Zoom;
 mod common;
 use common::toolbox::{center_u, toolbox_with};
 use common::zones::toolbox_single;
-use common::{Painted, button_2, context, in_points, modifiers_2, mover, n_de, painted};
+use common::{Painted, button_2, context, in_points, modifiers_2, move_pointer, n_de, painted};
 
 const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 const TEST_TOOLS: [Tool; 5] = [
@@ -112,7 +112,7 @@ fn with_command(key: KeyId, shift: bool, alt: bool) -> Press {
 
 /// Si la fila (o el atajo) vale en `platform`. El comodín cubre una variante más de `Platforms`.
 #[allow(unreachable_patterns)]
-fn vale_en(platforms: Platforms, platform: Platform) -> bool {
+fn is_in(platforms: Platforms, platform: Platform) -> bool {
     match platforms {
         Platforms::All => true,
         Platforms::Only(p) => p == platform,
@@ -413,7 +413,7 @@ fn row_1_there_are_31_active_rows_on_linux_and_30_on_windows_and_macos() {
         let active = km
             .rows()
             .iter()
-            .filter(|f| vale_en(f.active, platform))
+            .filter(|f| is_in(f.active, platform))
             .count();
         assert_eq!(active, expected_2, "filas activas en {platform:?}");
     }
@@ -1263,11 +1263,11 @@ impl BenchUi {
     }
 
     fn menu_in_rest(&mut self, km: &Keymap, platform: Platform) -> Painted {
-        let mut ultimo = self.menu(vec![], km, platform).0;
+        let mut last_2 = self.menu(vec![], km, platform).0;
         for _ in 0..5 {
-            ultimo = self.menu(vec![], km, platform).0;
+            last_2 = self.menu(vec![], km, platform).0;
         }
-        ultimo
+        last_2
     }
 
     /// Clic real (mover, pulsar y soltar) en `pos`; devuelve lo que eligió el menú.
@@ -1279,7 +1279,7 @@ impl BenchUi {
     ) -> Option<AppAction> {
         let mut chosen_2 = None;
         for events in [
-            vec![mover(pos)],
+            vec![move_pointer(pos)],
             vec![button_2(pos, true)],
             vec![button_2(pos, false)],
         ] {
@@ -1341,7 +1341,7 @@ impl BenchUi {
         let pos = in_points(self.ppp, toolbox_x + cx_u * n, cy_u * n);
         let mut actions = Vec::new();
         for events in [
-            vec![mover(pos)],
+            vec![move_pointer(pos)],
             vec![button_2(pos, true)],
             vec![button_2(pos, false)],
         ] {
@@ -1907,8 +1907,8 @@ fn row_10_tool_action_for_key_gives_the_same_as_the_table_where_its_type_allows(
     for platform in PLATFORMS {
         for &key in Key::ALL {
             for (bits, m) in combinations_real() {
-                let de_la_tabla = km.action_for(&press_from_key(key, m), platform);
-                let expected_2 = match de_la_tabla {
+                let of_the_table = km.action_for(&press_from_key(key, m), platform);
+                let expected_2 = match of_the_table {
                     Some(AppAction::SelectTool(tool)) => Some(ToolAction::Select(tool)),
                     // `Escape` cancela y no es de la tabla (es del lienzo).
                     _ if key == Key::Escape && m.is_none() => Some(ToolAction::Cancel),
@@ -2398,7 +2398,7 @@ fn property_1_without_clashes_and_with_command_only_the_nine_modern_ones_on_each
         let with_command: Vec<&Binding> = km
             .rows()
             .iter()
-            .filter(|f| f.command && vale_en(f.active, platform))
+            .filter(|f| f.command && is_in(f.active, platform))
             .collect();
         let expected_2 = if platform == Platform::Linux { 9 } else { 8 };
         assert_eq!(with_command.len(), expected_2, "{platform:?}");
@@ -2478,7 +2478,7 @@ proptest! {
             other_ctrl: false,
             repeat,
         };
-        let expected_2 = vale_en(row_2.active, platform).then_some(row_2.action);
+        let expected_2 = is_in(row_2.active, platform).then_some(row_2.action);
         prop_assert_eq!(
             km.action_for(&p, platform),
             expected_2,
@@ -2501,7 +2501,7 @@ fn property_2_exhaustive_each_active_row_is_reachable_and_the_inactive_one_does_
                 repeat: false,
             };
             let obtained = km.action_for(&p, platform);
-            if vale_en(row_2.active, platform) {
+            if is_in(row_2.active, platform) {
                 assert_eq!(obtained, Some(row_2.action), "fila {i} en {platform:?}");
             } else {
                 assert_eq!(
@@ -2537,7 +2537,7 @@ fn class_of(key: KeyId) -> Class {
 /// exacto y `Alt` y `other_ctrl` apagados, en cifras `Alt` y `other_ctrl` apagados, y en
 /// símbolos y teclas con nombre nada más (salvo `Re Pág` y `Av Pág`, con `shift` exacto).
 fn matches_2(row_2: &Binding, p: &Press, platform: Platform) -> bool {
-    if !vale_en(row_2.active, platform) || p.key != Some(row_2.key) || p.command != row_2.command {
+    if !is_in(row_2.active, platform) || p.key != Some(row_2.key) || p.command != row_2.command {
         return false;
     }
     if row_2.command {

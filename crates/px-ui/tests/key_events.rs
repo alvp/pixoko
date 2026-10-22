@@ -221,9 +221,9 @@ fn row_4_english_shift_comma_is_less_than_and_shift_period_is_greater_than() {
 fn row_4_the_less_than_with_shift_comma_is_not_the_comma() {
     // La misma tecla física (`,`) da cosas distintas según el texto: se compara el carácter.
     let smaller = presses(&[key_2(Key::Comma, Modifiers::SHIFT), text_2("<")]);
-    let coma = presses(&[key_2(Key::Comma, Modifiers::NONE), text_2(",")]);
+    let comma = presses(&[key_2(Key::Comma, Modifiers::NONE), text_2(",")]);
     assert_eq!(smaller[0].key, Some(KeyId::Char('<')));
-    assert_eq!(coma[0].key, Some(KeyId::Char(',')));
+    assert_eq!(comma[0].key, Some(KeyId::Char(',')));
 }
 
 #[test]
@@ -727,7 +727,7 @@ fn row_4_named_keys_always_count_by_the_key_and_with_any_modifier() {
             &[Some(AppAction::ZoomFit)],
         );
         // I.2a: con `Mayús` son el color de fondo; sin ella, el primer plano.
-        let (anterior, next) = if modifiers.shift {
+        let (previous, next) = if modifiers.shift {
             (AppAction::BackgroundPrev, AppAction::BackgroundNext)
         } else {
             (AppAction::ColorPrev, AppAction::ColorNext)
@@ -735,7 +735,7 @@ fn row_4_named_keys_always_count_by_the_key_and_with_any_modifier() {
         assert_actions(
             "Re Pág",
             &[key_2(Key::PageUp, modifiers)],
-            &[Some(anterior)],
+            &[Some(previous)],
         );
         assert_actions("Av Pág", &[key_2(Key::PageDown, modifiers)], &[Some(next)]);
     }
@@ -1080,11 +1080,11 @@ proptest! {
         alt in any::<bool>(),
         ctrl_loose in any::<bool>(),
         repeat in any::<bool>(),
-        antes in prop::collection::vec(event_any(), 0..6),
+        before in prop::collection::vec(event_any(), 0..6),
     ) {
         let modifiers = modifiers_of(false, ctrl_loose, false, alt);
         let with = |t: &str| {
-            let mut v: Vec<Event> = antes.iter().map(a_egui).collect();
+            let mut v: Vec<Event> = before.iter().map(a_egui).collect();
             let mut k = key_2(Key::D, modifiers);
             if let Event::Key { repeat: r, .. } = &mut k {
                 *r = repeat;

@@ -305,8 +305,8 @@ fn pngs_of_example() -> Vec<(&'static str, Vec<u8>, Vec<u8>)> {
             "indexado.png",
             Png::new(2, 1, 8, 3)
                 .swatches(&[1, 0])
-                .antes(plte(&[(1, 2, 3), (4, 5, 6)]))
-                .antes(trns(&[0, 128]))
+                .before(plte(&[(1, 2, 3), (4, 5, 6)]))
+                .before(trns(&[0, 128]))
                 .bytes(),
             vec![4, 5, 6, 128, 1, 2, 3, 0],
         ),
@@ -316,10 +316,10 @@ fn pngs_of_example() -> Vec<(&'static str, Vec<u8>, Vec<u8>)> {
 /// Un corpus válido: los PNG de ejemplo, cada uno con su `.sha256` correcto.
 fn corpus_valid() -> Vec<File> {
     let mut v = vec![file("README.md", "# golden/png\n")];
-    for (name_2, png, vista) in pngs_of_example() {
+    for (name_2, png, view) in pngs_of_example() {
         v.push(file(
             &format!("{name_2}.sha256"),
-            format!("{}\n", sha256_hex(&vista)),
+            format!("{}\n", sha256_hex(&view)),
         ));
         v.push(file(name_2, png));
     }
@@ -489,8 +489,8 @@ fn row_14_the_sha256_is_read_trimming_ends_and_with_upper_or_lower_case() {
 #[test]
 fn row_14_hash_with_a_changed_digit_names_the_file_and_the_two_hashes() {
     let good = hash_of_gray();
-    let ultimo = good.chars().last().unwrap();
-    let changed_last = if ultimo == '0' { '1' } else { '0' };
+    let last = good.chars().last().unwrap();
+    let changed_last = if last == '0' { '1' } else { '0' };
     let changed = format!("{}{changed_last}", &good[..63]);
     assert_ne!(changed, good);
     let corpus = with_content("gris.png.sha256", format!("{changed}\n").into_bytes());
@@ -621,16 +621,16 @@ fn row_16_gitattributes_covers_golden_with_binary_and_the_readme_goes_after() {
     let with_binary = rules
         .iter()
         .position(|(p, attributes)| covers_golden(p) && attributes.contains(&"binary"));
-    let para_md = rules.iter().position(|(p, _)| *p == "golden/**/*.md");
+    let for_md = rules.iter().position(|(p, _)| *p == "golden/**/*.md");
 
     let with_binary = with_binary.unwrap_or_else(|| {
         panic!(".gitattributes: ninguna línea cubre `golden/` con `binary`:\n{text}")
     });
-    let para_md = para_md
+    let for_md = for_md
         .unwrap_or_else(|| panic!(".gitattributes: falta la línea de `golden/**/*.md`:\n{text}"));
     assert!(
-        para_md > with_binary,
-        ".gitattributes: la línea de `golden/**/*.md` (regla {para_md}) debe ir después de la \
+        for_md > with_binary,
+        ".gitattributes: la línea de `golden/**/*.md` (regla {for_md}) debe ir después de la \
          de `binary` (regla {with_binary}), porque gana la última que casa:\n{text}"
     );
 }

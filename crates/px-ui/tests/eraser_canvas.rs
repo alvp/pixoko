@@ -37,7 +37,7 @@ const WIDTH: u32 = 64;
 const HEIGHT: u32 = 48;
 /// Píxeles del trazo: la fila 5, de `x = 10` a `x = 29`.
 const FIRST: i32 = 10;
-const ULTIMO: i32 = 29;
+const LAST: i32 = 29;
 const ROW: i32 = 5;
 
 fn blue() -> Pixel {
@@ -57,7 +57,7 @@ fn image_blue() -> Image {
 
 // Entradas sintéticas.
 
-fn mover(pos: Pos2) -> Event {
+fn move_pointer(pos: Pos2) -> Event {
     Event::PointerMoved(pos)
 }
 
@@ -304,19 +304,19 @@ impl Session {
     /// botón abajo. Devuelve los fotogramas, el primero el de la pulsación.
     fn drags_without_release(&mut self) -> Vec<TestFrame> {
         let start_2 = self.pos(FIRST, ROW);
-        let mut frames = vec![self.bench.frame(vec![mover(start_2)])];
+        let mut frames = vec![self.bench.frame(vec![move_pointer(start_2)])];
         frames.push(self.bench.frame(vec![left_2(start_2, true)]));
-        for x in FIRST + 1..=ULTIMO {
+        for x in FIRST + 1..=LAST {
             let p = self.pos(x, ROW);
-            frames.push(self.bench.frame(vec![mover(p)]));
+            frames.push(self.bench.frame(vec![move_pointer(p)]));
         }
         frames
     }
 }
 
-/// Posiciones `(x, y)` de los píxeles de la fila `ROW` de `FIRST` a `ULTIMO`.
+/// Posiciones `(x, y)` de los píxeles de la fila `ROW` de `FIRST` a `LAST`.
 fn the_twenty() -> Vec<(u32, u32)> {
-    (FIRST..=ULTIMO)
+    (FIRST..=LAST)
         .map(|x| (u32::try_from(x).unwrap(), u32::try_from(ROW).unwrap()))
         .collect()
 }
@@ -476,16 +476,16 @@ fn row_10_the_overlay_is_the_whole_stroke_in_the_order_of_the_pencil() {
         let until: Vec<(u32, u32)> = f.pending_2.iter().map(|e| (e.x, e.y)).collect();
         assert_eq!(until, the_twenty()[..i], "fotograma {i}: prefijo del trazo");
     }
-    let ultimo = frames.last_mut().expect("hay fotogramas");
-    let pending_2: Vec<(u32, u32)> = ultimo.pending_2.iter().map(|e| (e.x, e.y)).collect();
+    let last_2 = frames.last_mut().expect("hay fotogramas");
+    let pending_2: Vec<(u32, u32)> = last_2.pending_2.iter().map(|e| (e.x, e.y)).collect();
     assert_eq!(pending_2, the_twenty());
-    for editing in &ultimo.pending_2 {
+    for editing in &last_2.pending_2 {
         assert_eq!(editing.pixel, Pixel::Rgba(Rgba::TRANSPARENT));
     }
     // Y la textura compuesta del último fotograma lleva todos los píxeles pendientes (los veinte,
     // transparentes) y nada más.
     assert_eq!(
-        ultimo.texture_2.texels,
+        last_2.texture_2.texels,
         texture_expected(&s.bytes, the_twenty()),
         "la textura lleva el trazo entero"
     );
@@ -502,10 +502,10 @@ fn row_10_after_the_end_and_the_refresh_the_texture_is_the_document_with_those_t
     for mut f in s.drags_without_release() {
         f.output.textures_delta.clear();
     }
-    let ultimo = s.pos(ULTIMO, ROW);
+    let last_2 = s.pos(LAST, ROW);
 
     // Soltar: `Move` y `End` en el mismo fotograma; el documento cambia y la app hace `refresh`.
-    let mut f = s.bench.frame(vec![left_2(ultimo, false)]);
+    let mut f = s.bench.frame(vec![left_2(last_2, false)]);
     assert!(f.change, "End da Ok(true)");
     assert!(f.pending_2.is_empty(), "nada pendiente tras el End");
     assert!(!s.bench.tool.busy());
@@ -582,12 +582,12 @@ fn row_10_the_stroke_of_an_eraser_that_changes_nothing_leaves_document_and_textu
     // cambia lo visible) y al soltar no hay `Ok(true)` ni `refresh`: el documento no cambia y la
     // textura vuelve a ser el documento (los bloques de la superposición se regeneran).
     let mut s = Session::new();
-    // Primero se borra la fila 5 (de `FIRST` a `ULTIMO`) y se suelta.
+    // Primero se borra la fila 5 (de `FIRST` a `LAST`) y se suelta.
     for mut f in s.drags_without_release() {
         f.output.textures_delta.clear();
     }
-    let ultimo = s.pos(ULTIMO, ROW);
-    let mut f = s.bench.frame(vec![left_2(ultimo, false)]);
+    let last_2 = s.pos(LAST, ROW);
+    let mut f = s.bench.frame(vec![left_2(last_2, false)]);
     f.output.textures_delta.clear();
     assert!(f.change);
     let deleted = texture_expected(&s.bytes, the_twenty());
@@ -597,7 +597,7 @@ fn row_10_the_stroke_of_an_eraser_that_changes_nothing_leaves_document_and_textu
 
     // Segundo trazo por los mismos píxeles: durante el gesto la textura se ve igual.
     let start_2 = s.pos(FIRST, ROW);
-    let f = s.bench.step(vec![mover(start_2)]);
+    let f = s.bench.step(vec![move_pointer(start_2)]);
     assert_eq!(f.texture_2.texels, deleted);
     let f = s.bench.step(vec![left_2(start_2, true)]);
     assert_eq!(f.pending_2.len(), 1, "el borrador pinta la superposición");
@@ -606,7 +606,7 @@ fn row_10_the_stroke_of_an_eraser_that_changes_nothing_leaves_document_and_textu
         "borrar lo transparente no cambia lo visible"
     );
     let middle = s.pos(FIRST + 5, ROW);
-    let f = s.bench.step(vec![mover(middle)]);
+    let f = s.bench.step(vec![move_pointer(middle)]);
     assert!(!f.pending_2.is_empty());
     assert_eq!(f.texture_2.texels, deleted, "ni durante el trazo");
     assert_eq!(

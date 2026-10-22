@@ -396,9 +396,9 @@ fn row_4_sequence_of_scrolls_with_n_1() {
     // Hacia abajo del todo: se limita y no queda resto.
     assert_eq!(by(&mut s, 1_000_000_000_000, 1, 16, 5), (11, 0));
     assert_eq!(by(&mut s, 1, 1, 16, 5), (11, 0));
-    let antes = s;
+    let before = s;
     assert_eq!(by(&mut s, 0, 1, 16, 5), (11, 0));
-    assert_eq!(s, antes, "delta 0: sin cambio");
+    assert_eq!(s, before, "delta 0: sin cambio");
     // Extremos: sin pánico ni desbordamiento.
     assert_eq!(by(&mut s, i64::MIN, 1, 16, 5), (0, 0));
     assert_eq!(by(&mut s, i64::MAX, 1, 16, 5), (11, 0));
@@ -801,7 +801,7 @@ proptest! {
         let maximum_2 = max_first_row(total, visible_2);
         let mut scroll = Scroll::default();
         for d in deltas {
-            let antes = scroll;
+            let before = scroll;
             scroll.by(d, n, total, visible_2);
 
             prop_assert!(scroll.first_row <= maximum_2, "{:?} con máximo {}", scroll, maximum_2);
@@ -810,10 +810,10 @@ proptest! {
                 "rest {} fuera de 0..{}", scroll.rest, step
             );
             if d >= 0 {
-                prop_assert!(scroll.first_row >= antes.first_row);
+                prop_assert!(scroll.first_row >= before.first_row);
             }
             if d <= 0 {
-                prop_assert!(scroll.first_row <= antes.first_row);
+                prop_assert!(scroll.first_row <= before.first_row);
             }
             // Sin nada más que acumular en la última fila.
             if scroll.first_row == maximum_2 {
@@ -821,8 +821,8 @@ proptest! {
             }
 
             // Modelo con `i128`.
-            let sum = i128::from(antes.rest) + i128::from(d);
-            let rows_2 = antes.first_row as i128 + sum.div_euclid(step);
+            let sum = i128::from(before.rest) + i128::from(d);
+            let rows_2 = before.first_row as i128 + sum.div_euclid(step);
             let (row_2, rest_2) = if rows_2 < 0 || rows_2 > maximum_2 as i128 {
                 (rows_2.clamp(0, maximum_2 as i128), 0)
             } else if rows_2 == maximum_2 as i128 {

@@ -84,14 +84,14 @@ pub fn pixel_de(mode_2: Mode, k: u32, entries: usize) -> Pixel {
 pub fn image_of(mode_2: Mode, width_2: u32, height_2: u32, cel: u32) -> Image {
     let cel = cel.max(1);
     let entries = palette().len();
-    let valor = |x: u32, y: u32| pixel_de(mode_2, x / cel + 3 * (y / cel), entries);
+    let value = |x: u32, y: u32| pixel_de(mode_2, x / cel + 3 * (y / cel), entries);
     let mut image_2 = match mode_2 {
         Mode::Indexed => Image::new_indexed(width_2, height_2, palette()).expect("imagen indexada"),
         _ => Image::new(width_2, height_2, mode_2).expect("imagen"),
     };
     for y in 0..height_2 {
         for x in 0..width_2 {
-            image_2.set_pixel(x, y, valor(x, y)).expect("dentro");
+            image_2.set_pixel(x, y, value(x, y)).expect("dentro");
         }
     }
     image_2
@@ -352,10 +352,10 @@ pub fn step_of(doc: &Document, seed: Seed) -> Step {
             to: (b as usize % entries) as u8,
         }),
         8 => {
-            let giro = a as usize % entries;
+            let turn = a as usize % entries;
             with(Command::PermutePalette {
                 image: id,
-                order: (0..entries).map(|i| ((i + giro) % entries) as u8).collect(),
+                order: (0..entries).map(|i| ((i + turn) % entries) as u8).collect(),
             })
         }
         9 => with(Command::AddPaletteEntry {
@@ -412,6 +412,6 @@ pub fn image_random(mode_2: u8, width_2: u32, height_2: u32, cel: u32) -> Image 
 }
 
 /// El id de la imagen principal de un documento.
-pub fn principal(_doc: &Document) -> ImageId {
+pub fn main(_doc: &Document) -> ImageId {
     ImageId::from_raw(0)
 }

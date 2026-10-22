@@ -599,7 +599,7 @@ fn row_8_with_the_reserve_granted_it_clears_and_returns_true() {
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-fn png_en_disco(image: &Image) -> PathBuf {
+fn png_on_disk(image: &Image) -> PathBuf {
     let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
     let dir = std::env::temp_dir().join(format!("pixoko-dos-colores-{}-{n}", std::process::id()));
     fs::create_dir_all(&dir).expect("directorio");
@@ -628,7 +628,7 @@ fn row_10_opening_resets_the_background_the_editor_target_and_slot_9_but_no_othe
     let mut world = World::new_2(image_2(Mode::Rgba));
     dirties(&mut world.session);
     let new = image_2(Mode::Rgba);
-    let path = png_en_disco(&new);
+    let path = png_on_disk(&new);
     world.session.open(&path, 16384, true).expect("abrir");
     assert_eq!(world.session.background, ColorChoice::Slot(9));
     assert_eq!(world.session.editing, Role::Foreground);
@@ -655,7 +655,7 @@ fn row_10_opening_an_indexed_one_puts_the_background_on_the_transparent_entry() 
     let mut world = World::new_2(image_2(Mode::Rgba));
     let new = image_2(Mode::Indexed);
     let expected_2 = default_background(&new);
-    let path = png_en_disco(&new);
+    let path = png_on_disk(&new);
     world.session.open(&path, 16384, true).expect("abrir");
     let image = world.image_2();
     assert_eq!(world.session.background, default_background(image));
@@ -796,7 +796,7 @@ enum TestStep {
     ClickLeft(usize),
     ClickRight(usize),
     Next,
-    Anterior,
+    Previous,
     BackgroundNext,
     BackgroundPrevious,
     Dropper(Role, u32, u32),
@@ -813,7 +813,7 @@ fn step() -> impl Strategy<Value = TestStep> {
         (0usize..300).prop_map(TestStep::ClickLeft),
         (0usize..300).prop_map(TestStep::ClickRight),
         Just(TestStep::Next),
-        Just(TestStep::Anterior),
+        Just(TestStep::Previous),
         Just(TestStep::BackgroundNext),
         Just(TestStep::BackgroundPrevious),
         (any::<bool>(), 0u32..8, 0u32..4).prop_map(|(b, x, y)| TestStep::Dropper(
@@ -844,7 +844,7 @@ proptest! {
     ) {
         let mut world = World::new_2(image_2(TEST_MODES[mode_2]));
         for step in steps_2 {
-            let antes = (
+            let before = (
                 world.session.document.state_id(),
                 world.session.document.can_undo(),
                 world.session.document.can_redo(),
@@ -869,7 +869,7 @@ proptest! {
                     }
                 }
                 TestStep::Next => { world.dispatches(AppAction::ColorNext); }
-                TestStep::Anterior => { world.dispatches(AppAction::ColorPrev); }
+                TestStep::Previous => { world.dispatches(AppAction::ColorPrev); }
                 TestStep::BackgroundNext => { world.dispatches(AppAction::BackgroundNext); }
                 TestStep::BackgroundPrevious => { world.dispatches(AppAction::BackgroundPrev); }
                 TestStep::Dropper(role, x, y) => {
@@ -902,7 +902,7 @@ proptest! {
                         world.session.document.can_undo(),
                         world.session.document.can_redo(),
                     ),
-                    antes
+                    before
                 );
             }
         }
@@ -969,8 +969,8 @@ proptest! {
         } else {
             pixel_initial
         };
-        for (antes, after_2) in original.iter().zip(&after_2) {
-            if antes != after_2 {
+        for (before, after_2) in original.iter().zip(&after_2) {
+            if before != after_2 {
                 prop_assert_eq!(Some(*after_2), allowed);
                 prop_assert_ne!(tool_2(tool), Tool::Dropper);
             }

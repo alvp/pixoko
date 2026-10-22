@@ -66,8 +66,8 @@ mod common;
 mod dialog_forms;
 
 use common::{
-    PPPS, TestFill, Text, button_2, context, frame, in_points, key_2, modifiers_command, mover,
-    n_de, tolerance_of_egui, wheel_line,
+    PPPS, TestFill, Text, button_2, context, frame, in_points, key_2, modifiers_command,
+    move_pointer, n_de, tolerance_of_egui, wheel_line,
 };
 use dialog_forms::{all_kinds, huge, open};
 
@@ -325,7 +325,7 @@ fn rect_pt(r: ScreenRect, ppp: f32) -> Rect {
 }
 
 /// El rectángulo pintado (puntos) es el de `expected_2` (píxeles), con el redondeo de egui.
-fn coincide(painted: Rect, expected_2: ScreenRect, ppp: f32) -> bool {
+fn matches(painted: Rect, expected_2: ScreenRect, ppp: f32) -> bool {
     let tol = tolerance_of_egui(ppp);
     let near = |pt: f32, px: i64| (pt * ppp - px as f32).abs() <= tol;
     near(painted.min.x, expected_2.x)
@@ -565,14 +565,14 @@ impl Bench {
         self.frame(vec![])
     }
 
-    fn mover_a(&mut self, pos: Pos2) -> Paint {
-        self.frame(vec![mover(pos)]);
+    fn move_to(&mut self, pos: Pos2) -> Paint {
+        self.frame(vec![move_pointer(pos)]);
         self.rest_2_2()
     }
 
     /// Mueve, pulsa y suelta en `pos`, y deja un fotograma de reposo.
     fn click(&mut self, pos: Pos2) -> Paint {
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         self.frame(vec![button_2(pos, true)]);
         self.frame(vec![button_2(pos, false)]);
         self.rest_2_2()
@@ -836,7 +836,7 @@ struct Report {
     /// Textos deshabilitados, exentos.
     exempt_2: Vec<String>,
     /// `(descripción, foreground, background_2, mínimo required)` de cada comprobación.
-    pares: Vec<(String, Color32, Color32, f64)>,
+    pairs: Vec<(String, Color32, Color32, f64)>,
 }
 
 fn report_of(p: &Paint) -> Report {
@@ -864,7 +864,7 @@ fn report_of(p: &Paint) -> Report {
                     }
                     inf.checked_2 += 1;
                     let ratio = contrast_ratio(span.color, background_2.fill);
-                    inf.pares.push((
+                    inf.pairs.push((
                         format!("texto {:?}", span.text_2),
                         span.color,
                         background_2.fill,
@@ -889,7 +889,7 @@ fn report_of(p: &Paint) -> Report {
                     continue;
                 };
                 inf.checked_2 += 1;
-                inf.pares
+                inf.pairs
                     .push(("marca".into(), ACCENT, background_2.fill, TEST_MIN_MARK));
                 let ratio = contrast_ratio(ACCENT, background_2.fill);
                 if ratio < TEST_MIN_MARK {
@@ -910,7 +910,7 @@ fn report_of(p: &Paint) -> Report {
                     continue;
                 };
                 inf.checked_2 += 1;
-                inf.pares
+                inf.pairs
                     .push(("anillo".into(), ACCENT, background_2.fill, TEST_MIN_MARK));
                 let ratio = contrast_ratio(ACCENT, background_2.fill);
                 if ratio < TEST_MIN_MARK {
@@ -1005,23 +1005,23 @@ fn prepares(b: &mut Bench, scenario: &str) {
         "hover_aceptar" => {
             let p = b.rest_2_2();
             let c = center_of(&p, accept_label(&b.dialog));
-            b.frame(vec![mover(c)]);
+            b.frame(vec![move_pointer(c)]);
         }
         "hover_cancelar" => {
             let p = b.rest_2_2();
             let c = center_of(&p, cancel_label(&b.dialog));
-            b.frame(vec![mover(c)]);
+            b.frame(vec![move_pointer(c)]);
         }
         "hover_menos" => {
             let p = b.rest_2_2();
             let c = less(&p).first().expect("hay un −").center();
-            b.frame(vec![mover(c)]);
+            b.frame(vec![move_pointer(c)]);
         }
         "hover_aceptar_deshabilitado" => {
             number(b, "ancho", "abc");
             let p = b.rest_2_2();
             let c = center_of(&p, accept_label(&b.dialog));
-            b.frame(vec![mover(c)]);
+            b.frame(vec![move_pointer(c)]);
         }
         "limite_inferior" => number(b, "ancho", "1"),
         "limite_superior" => number(b, "ancho", "8192"),
@@ -1096,7 +1096,7 @@ fn row_9_with_errors_and_the_hexadecimal_the_marks_and_the_errors_are_painted_an
         assert!(en_warning(t), "ppp {ppp}: el motivo del pie va en WARNING");
         assert!(
             report_of(&p)
-                .pares
+                .pairs
                 .iter()
                 .any(|(_, fg, bg, min)| *fg == WARNING
                     && *min >= TEST_MIN_TEXT
@@ -1165,11 +1165,11 @@ fn row_9_the_painted_colors_are_in_the_pairs_table_with_their_minimum() {
                 bench.rest_2_2();
                 prepares(&mut bench, scenario);
                 let p = bench.rest_2_2();
-                for (desc, fg, bg, required) in report_of(&p).pares {
-                    let en_tabla = CONTRAST_PAIRS
+                for (desc, fg, bg, required) in report_of(&p).pairs {
+                    let in_table = CONTRAST_PAIRS
                         .iter()
                         .find(|&&(_, f, b, _)| f == fg && b == bg);
-                    let Some(&(name_2, _, _, minimum_2)) = en_tabla else {
+                    let Some(&(name_2, _, _, minimum_2)) = in_table else {
                         panic!(
                             "ppp {ppp} {window:?} {scenario}: {desc} se pinta con {fg:?} sobre \
                              {bg:?}, que no está en CONTRAST_PAIRS"
@@ -1283,7 +1283,7 @@ fn row_10_the_report_with_text_outside_the_set_paints_no_missing_glyphs() {
         assert!(all.contains("linea 1"), "ppp {ppp}");
         // También al recorrer el informe con la rueda (entran filas nuevas).
         let center = text_that_contains(&p, "linea 2").rect().center();
-        bench.mover_a(center);
+        bench.move_to(center);
         bench.wheel(true, 3);
         let p = bench.rest_2_2();
         let all = p.all_the_text();
@@ -1711,7 +1711,7 @@ fn row_10_the_area_fits_to_42_columns_advances_3_lines_per_notch_and_is_clipped(
 
         // El puntero sobre la zona.
         let center = text_that_contains(&p, "linea 2").rect().center();
-        bench.mover_a(center);
+        bench.move_to(center);
         bench.wheel(true, 1);
         assert_eq!(
             bench.dialog.first_line("informe"),
@@ -1734,7 +1734,7 @@ fn row_10_the_area_fits_to_42_columns_advances_3_lines_per_notch_and_is_clipped(
         assert_eq!(numbers_of_line(&p), [27, 28, 29, 30], "ppp {ppp}");
         // Sigue sobre la zona aunque el cuerpo se hubiera movido: se vuelve a poner el puntero.
         let center = text_that_contains(&p, "linea 28").rect().center();
-        bench.mover_a(center);
+        bench.move_to(center);
         bench.wheel(false, 1000);
         assert_eq!(bench.dialog.first_line("informe"), 0, "ppp {ppp}");
     }
@@ -1747,14 +1747,18 @@ fn row_10_a_long_report_line_is_cut_at_42_columns() {
         let mut bench = Bench::ready(ppp, Window::Minimum, open(spec));
         let p = bench.rest_2_2();
         // Las filas de solo `a`, en el orden en que se pintan (de arriba abajo).
-        let largos: Vec<usize> = p
+        let lengths: Vec<usize> = p
             .texts()
             .flat_map(|(_, t)| t.text_2.lines())
             .map(str::trim)
             .filter(|l| !l.is_empty() && l.chars().all(|c| c == 'a'))
             .map(|l| l.chars().count())
             .collect();
-        assert_eq!(largos, [42, 42, 16], "ppp {ppp}: 100 letras en 42 columnas");
+        assert_eq!(
+            lengths,
+            [42, 42, 16],
+            "ppp {ppp}: 100 letras en 42 columnas"
+        );
     }
 }
 
@@ -1825,13 +1829,13 @@ fn row_10_the_veil_consumes_click_drag_and_wheel_without_closing_or_reaching_wha
         for p in points {
             assert!(!dialog_2.contains(p), "ppp {ppp}: {p:?} cae en el diálogo");
         }
-        let antes = bench.dialog.clone();
+        let before = bench.dialog.clone();
         bench.reactions.clear();
         bench.behind.as_mut().expect("detrás").a_zero();
 
         for p in points {
             // Clic.
-            bench.frame(vec![mover(p)]);
+            bench.frame(vec![move_pointer(p)]);
             bench.rest_2_2();
             bench.frame(vec![button_2(p, true)]);
             bench.frame(vec![button_2(p, false)]);
@@ -1839,7 +1843,7 @@ fn row_10_the_veil_consumes_click_drag_and_wheel_without_closing_or_reaching_wha
             // Arrastre.
             let q = p + vec2(3.0, 2.0);
             bench.frame(vec![button_2(p, true)]);
-            bench.frame(vec![mover(q)]);
+            bench.frame(vec![move_pointer(q)]);
             bench.frame(vec![button_2(q, false)]);
             bench.rest_2_2();
             // Rueda, hacia los dos lados.
@@ -1853,7 +1857,7 @@ fn row_10_the_veil_consumes_click_drag_and_wheel_without_closing_or_reaching_wha
             "ppp {ppp}: el velo no cierra ni cambia nada: {:?}",
             bench.reactions
         );
-        assert_eq!(bench.dialog, antes, "ppp {ppp}: el diálogo no cambia");
+        assert_eq!(bench.dialog, before, "ppp {ppp}: el diálogo no cambia");
         let behind = bench.behind.as_ref().expect("detrás");
         assert!(
             behind.nothing_received(),
@@ -1882,7 +1886,7 @@ fn row_10_without_the_dialog_what_is_behind_does_receive_the_click_and_the_wheel
         );
         assert!(d.hovers_button >= 1, "ppp {ppp}");
 
-        bench.mover_a(over_canvas);
+        bench.move_to(over_canvas);
         bench.wheel(true, 2);
         bench.click(over_canvas);
         let d = bench.behind.as_ref().expect("detrás");
@@ -1903,7 +1907,7 @@ fn row_10_the_veil_does_not_close_with_a_click_outside_and_a_click_inside_on_bla
     for ppp in PPPS {
         let mut bench = Bench::ready(ppp, Window::Minimum, open(form()));
         let rects = bench.rects();
-        let antes = bench.dialog.clone();
+        let before = bench.dialog.clone();
         bench.reactions.clear();
         // Fuera del diálogo, en las cuatro esquinas de la ventana.
         let screen = bench.screen();
@@ -1923,7 +1927,7 @@ fn row_10_the_veil_does_not_close_with_a_click_outside_and_a_click_inside_on_bla
             "ppp {ppp}: {:?}",
             bench.reactions
         );
-        assert_eq!(state_2(&bench.dialog), state_2(&antes), "ppp {ppp}");
+        assert_eq!(state_2(&bench.dialog), state_2(&before), "ppp {ppp}");
     }
 }
 
@@ -1940,7 +1944,7 @@ fn checks_geometry(bench: &mut Bench, label_2: &str) {
     let (_, background_2) =
         fill_of_the_dialog(&p).unwrap_or_else(|| panic!("{location}: sin fondo SURFACE_1"));
     assert!(
-        coincide(background_2.rect, rects.dialog, ppp),
+        matches(background_2.rect, rects.dialog, ppp),
         "{location}: el diálogo pintado es {:?} y el de dialog_layout {:?}",
         background_2.rect,
         rects.dialog
@@ -1966,7 +1970,7 @@ fn checks_geometry(bench: &mut Bench, label_2: &str) {
     );
     for (expected_2, name_2) in [(rects.accept, "Aceptar"), (rect_cancel, "Cancelar")] {
         assert!(
-            p.fills().any(|(_, r)| coincide(r.rect, expected_2, ppp)),
+            p.fills().any(|(_, r)| matches(r.rect, expected_2, ppp)),
             "{location}: ningún relleno es el botón {name_2} ({expected_2:?})"
         );
     }
@@ -2125,7 +2129,7 @@ fn row_11_the_dialog_stays_centered_with_a_margin_of_8_u_in_the_minimum_window()
 fn pointer_on_the_body(bench: &mut Bench) {
     let body = rect_pt(bench.rects().body, bench.ppp);
     let pos = pos2(body.min.x + 3.0 * bench.u(), body.center().y);
-    bench.mover_a(pos);
+    bench.move_to(pos);
 }
 
 /// Posiciones (puntos) de los textos de título y pie.
@@ -2144,7 +2148,7 @@ fn fixed(p: &Paint, dialog: &Dialog) -> Vec<(String, Pos2)> {
 
 /// Cada texto de `after_2` (visible, en el cuerpo) estaba `delta` puntos más abajo antes, salvo los
 /// que acaban de entrar por abajo. Devuelve cuántos se han podido contrastar.
-fn shifted(antes: &Paint, after_2: &Paint, body: Rect, delta: f32, tol: f32) -> usize {
+fn shifted(before: &Paint, after_2: &Paint, body: Rect, delta: f32, tol: f32) -> usize {
     let visible_2 = |p: &Paint| -> Vec<(String, Pos2)> {
         p.texts()
             .map(|(_, t)| t)
@@ -2155,10 +2159,10 @@ fn shifted(antes: &Paint, after_2: &Paint, body: Rect, delta: f32, tol: f32) -> 
             .map(|t| (t.text_2.clone(), t.pos))
             .collect()
     };
-    let (antes, after_2) = (visible_2(antes), visible_2(after_2));
+    let (before, after_2) = (visible_2(before), visible_2(after_2));
     let mut contrasted = 0;
     for (text_2, pos) in &after_2 {
-        let was = antes.iter().any(|(t, q)| {
+        let was = before.iter().any(|(t, q)| {
             t == text_2 && (q.x - pos.x).abs() <= tol && (q.y - (pos.y + delta)).abs() <= tol
         });
         if was {
@@ -2240,19 +2244,19 @@ fn row_11_when_scrolling_the_body_what_is_visible_moves_the_same_and_title_and_f
             let u = bench.u();
             let tol = tolerance_of_egui(ppp) / ppp + 0.01;
             for notches in [1usize, 2] {
-                let antes = bench.rest_2_2();
-                let fixed_before = fixed(&antes, &bench.dialog);
-                let scroll_antes = bench.dialog.scroll_u();
+                let before = bench.rest_2_2();
+                let fixed_before = fixed(&before, &bench.dialog);
+                let scroll_before = bench.dialog.scroll_u();
                 bench.wheel(true, notches);
                 let after_2 = bench.rest_2_2();
-                let moved = bench.dialog.scroll_u() - scroll_antes;
+                let moved = bench.dialog.scroll_u() - scroll_before;
                 assert_eq!(moved, 42 * notches as i64, "ppp {ppp} {window:?}");
                 assert_eq!(
                     fixed(&after_2, &bench.dialog),
                     fixed_before,
                     "ppp {ppp} {window:?}: título y pie fijos"
                 );
-                let contrasted = shifted(&antes, &after_2, body, moved as f32 * u, tol);
+                let contrasted = shifted(&before, &after_2, body, moved as f32 * u, tol);
                 assert!(
                     contrasted >= 2,
                     "ppp {ppp} {window:?}: solo se contrastan {contrasted} textos del cuerpo"
@@ -2560,9 +2564,9 @@ fn row_11_a_ppp_and_window_change_repositions_without_losing_values_or_focus() {
         (Window::Minimum, Window::Large),
         (Window::Large, Window::Minimum),
     ];
-    for (antes, after_2) in changes_2 {
+    for (before, after_2) in changes_2 {
         for (va, vd) in windows {
-            let mut bench = with_state(antes, va);
+            let mut bench = with_state(before, va);
             let saved = state_2(&bench.dialog);
             let focus = bench.focus;
             assert!(focus.is_some());
@@ -2570,7 +2574,7 @@ fn row_11_a_ppp_and_window_change_repositions_without_losing_values_or_focus() {
 
             bench.changes(after_2, vd);
             bench.rest_2_2();
-            let location = format!("{antes} → {after_2}, {va:?} → {vd:?}");
+            let location = format!("{before} → {after_2}, {va:?} → {vd:?}");
             assert_eq!(
                 state_2(&bench.dialog),
                 saved,
@@ -2674,7 +2678,7 @@ mod marks {
     use egui::{Color32, Pos2, Rect};
 
     #[derive(Clone, Copy, Debug)]
-    pub struct Disco {
+    pub struct Disk {
         pub center: Pos2,
         pub radius: f32,
         pub fill: Color32,
@@ -2694,7 +2698,7 @@ mod marks {
 
     #[derive(Clone, Debug, Default)]
     pub struct TestMarks {
-        pub discos: Vec<Disco>,
+        pub disks: Vec<Disk>,
         pub boxes: Vec<Toolbox>,
         next: usize,
     }
@@ -2711,7 +2715,7 @@ mod marks {
         match shape {
             Shape::Circle(c) => {
                 let (stroke_color, stroke_width) = stroke_2(c.stroke);
-                outside.discos.push(Disco {
+                outside.disks.push(Disk {
                     center: c.center,
                     radius: c.radius,
                     fill: c.fill,
@@ -2749,7 +2753,7 @@ mod marks {
     }
 }
 
-use marks::{Disco, TestMarks, Toolbox, marks_of};
+use marks::{Disk, TestMarks, Toolbox, marks_of};
 
 /// Un fotograma: lo pintado (textos, trazos y rellenos) y los círculos y rectángulos crudos.
 struct Scene {
@@ -2821,9 +2825,9 @@ fn x_marks(b: &Bench) -> f32 {
 }
 
 /// Los aros (círculos con trazo `TOGGLE_EDGE`), de arriba abajo.
-fn rings(m: &TestMarks) -> Vec<Disco> {
-    let mut v: Vec<Disco> = m
-        .discos
+fn rings(m: &TestMarks) -> Vec<Disk> {
+    let mut v: Vec<Disk> = m
+        .disks
         .iter()
         .copied()
         .filter(|d| d.stroke_color == TOGGLE_EDGE)
@@ -2833,9 +2837,9 @@ fn rings(m: &TestMarks) -> Vec<Disco> {
 }
 
 /// Los puntos: círculos rellenos de `ACCENT`, de arriba abajo.
-fn points(m: &TestMarks) -> Vec<Disco> {
-    let mut v: Vec<Disco> = m
-        .discos
+fn points(m: &TestMarks) -> Vec<Disk> {
+    let mut v: Vec<Disk> = m
+        .disks
         .iter()
         .copied()
         .filter(|d| d.fill == ACCENT)
@@ -2872,11 +2876,11 @@ fn marks_square(m: &TestMarks, u: f32, y: f32) -> Vec<Toolbox> {
 }
 
 /// El relleno de un aro: el suyo o, si no tiene, el del último círculo relleno anterior y concéntrico.
-fn fill_of_ring(m: &TestMarks, ring: &Disco) -> Color32 {
+fn fill_of_ring(m: &TestMarks, ring: &Disk) -> Color32 {
     if ring.fill != Color32::TRANSPARENT {
         return ring.fill;
     }
-    m.discos
+    m.disks
         .iter()
         .filter(|d| d.order < ring.order && d.fill != Color32::TRANSPARENT)
         .rfind(|d| (d.center - ring.center).length() < 0.01)
@@ -2894,7 +2898,7 @@ fn asserts_options(b: &Bench, esc: &Scene, location: &str) {
         rings.len(),
         options_2.len(),
         "{location}: un aro por opción; círculos pintados {:?}",
-        esc.m.discos
+        esc.m.disks
     );
     let x = x_marks(b);
     let all_the_points = points(&esc.m);
@@ -2922,7 +2926,7 @@ fn asserts_options(b: &Bench, esc: &Scene, location: &str) {
             FIELD_FILL,
             "{location}: el aro de {option:?} se rellena con el color del campo"
         );
-        let here: Vec<&Disco> = all_the_points
+        let here: Vec<&Disk> = all_the_points
             .iter()
             .filter(|p| same_center(p.center, ring.center, u))
             .collect();
@@ -3018,11 +3022,11 @@ fn asserts_box(b: &Bench, esc: &Scene, location: &str) {
     }
     assert!(
         esc.m
-            .discos
+            .disks
             .iter()
             .all(|d| (d.center.y - center.y).abs() > 3.0 * u),
         "{location}: hay un círculo en la fila de la casilla: {:?}",
-        esc.m.discos
+        esc.m.disks
     );
 }
 
@@ -3145,7 +3149,7 @@ fn row_9_the_unchosen_option_is_a_ring_of_10_u_without_a_dot_and_with_the_fill_o
         // Por defecto es la primera: «Dos» y «Tres» son solo un aro.
         assert_eq!(bench.dialog.chosen("modo"), Some(0));
         let rings = rings(&esc.m);
-        assert_eq!(rings.len(), 3, "ppp {ppp}: tres aros; {:?}", esc.m.discos);
+        assert_eq!(rings.len(), 3, "ppp {ppp}: tres aros; {:?}", esc.m.disks);
         for ring in &rings[1..] {
             assert!(
                 points(&esc.m)
@@ -3244,7 +3248,7 @@ fn row_9_option_and_box_are_distinguished_by_shape_not_only_by_color() {
             // Y no hay opciones ni casilla «a medias»: sin ningún otro círculo con trazo.
             let with_stroke: Vec<_> = esc
                 .m
-                .discos
+                .disks
                 .iter()
                 .filter(|d| d.stroke_width > 0.0)
                 .collect();
@@ -3295,17 +3299,17 @@ fn row_10_the_focus_ring_of_an_option_and_of_a_box_exceeds_3_to_1_over_field_and
 fn row_10_toggle_edge_is_text_dim_and_is_in_contrast_pairs_with_minimum_3_and_they_are_11_pairs() {
     assert_eq!(TOGGLE_EDGE, px_ui::theme::TEXT_DIM);
     assert_eq!(CONTRAST_PAIRS.len(), 11, "los 10 de antes y el del aro");
-    let pares: Vec<_> = CONTRAST_PAIRS
+    let pairs: Vec<_> = CONTRAST_PAIRS
         .iter()
         .filter(|&&(_, f, b, _)| f == TOGGLE_EDGE && b == FIELD_FILL)
         .collect();
     // `TEXT_DIM` sobre `FIELD_FILL` no estaba (solo sobre el diálogo y con 4,5): el par es nuevo.
     assert_eq!(
-        pares.len(),
+        pairs.len(),
         1,
-        "un único par TOGGLE_EDGE sobre FIELD_FILL: {pares:?}"
+        "un único par TOGGLE_EDGE sobre FIELD_FILL: {pairs:?}"
     );
-    let &(name_2, _, _, minimum_2) = pares[0];
+    let &(name_2, _, _, minimum_2) = pairs[0];
     assert!(
         minimum_2 >= TEST_MIN_MARK,
         "{name_2}: la tabla pide {minimum_2}"
@@ -3350,10 +3354,10 @@ fn row_10_the_painted_border_of_options_and_box_is_in_the_pairs_table_with_its_b
         }
         assert_eq!(painted_2.len(), 4, "ppp {ppp}: tres aros y una caja");
         for (foreground, background_2) in painted_2 {
-            let en_tabla = CONTRAST_PAIRS
+            let in_table = CONTRAST_PAIRS
                 .iter()
                 .find(|&&(_, f, b, _)| f == foreground && b == background_2);
-            let Some(&(name_2, _, _, minimum_2)) = en_tabla else {
+            let Some(&(name_2, _, _, minimum_2)) = in_table else {
                 panic!(
                     "ppp {ppp}: {foreground:?} sobre {background_2:?} no está en CONTRAST_PAIRS"
                 );
@@ -3384,7 +3388,7 @@ fn row_10_the_bench_of_the_9_stays_without_failures_with_circles_and_measures_th
                 assert!(inf.checked_2 >= 8, "{location}: {}", inf.checked_2);
                 // El punto (círculo) y la marca (cuadrado) entran como «marca» sobre el campo.
                 assert!(
-                    inf.pares.iter().any(|(d, f, b, m)| d == "marca"
+                    inf.pairs.iter().any(|(d, f, b, m)| d == "marca"
                         && *f == ACCENT
                         && *b == FIELD_FILL
                         && *m == TEST_MIN_MARK),

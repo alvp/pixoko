@@ -62,14 +62,14 @@ use zones::panel_on_the_left;
 const RED: Rgba = Rgba::opaque(255, 0, 0);
 const GREEN: Rgba = Rgba::opaque(0, 255, 0);
 const BLUE: Rgba = Rgba::opaque(0, 0, 255);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 const YELLOW: Rgba = Rgba::opaque(255, 255, 0);
 
 const PPPS: [f32; 2] = [1.0, 2.0];
 
 /// Indexada de 64×48 con la paleta `[R, G, B, K]`.
 fn image_f() -> Image {
-    let palette = Palette::from_colors([RED, GREEN, BLUE, NEGRO]).expect("paleta");
+    let palette = Palette::from_colors([RED, GREEN, BLUE, TEST_BLACK]).expect("paleta");
     Image::new_indexed(64, 48, palette).expect("imagen indexada")
 }
 
@@ -213,11 +213,11 @@ impl Geo {
         TRACK_W_U * self.n
     }
 
-    fn x_de_valor(&self, valor: u32, max: u32) -> i64 {
-        self.x_hint() + slider_x(valor, self.width_hint(), max)
+    fn x_of_value(&self, value: u32, max: u32) -> i64 {
+        self.x_hint() + slider_x(value, self.width_hint(), max)
     }
 
-    fn valor_en(&self, dx: i64, control: Control) -> u32 {
+    fn value_in(&self, dx: i64, control: Control) -> u32 {
         slider_value_at(dx, self.width_hint(), control.max())
     }
 
@@ -523,7 +523,7 @@ impl Bench {
         self.refreshes();
     }
 
-    fn pone_color(&mut self, index: u8, color: Rgba) {
+    fn set_color(&mut self, index: u8, color: Rgba) {
         let image = ImageId::from_raw(0);
         self.applies(Command::SetPaletteColor {
             image,
@@ -695,8 +695,11 @@ fn row_3_from_305n_to_304n_the_editor_and_the_grid_do_not_jump() {
         let n = i64::from(text_scale(ppp));
         let mut bench =
             Bench::with_panel_height(ppp, 305 * n, image_indexed_256(), ColorChoice::Entry(5));
-        let antes = bench.rest_2_2();
-        let header_before = antes.text_painted("editar índice 5").expect("cabecera").pos;
+        let before = bench.rest_2_2();
+        let header_before = before
+            .text_painted("editar índice 5")
+            .expect("cabecera")
+            .pos;
         assert!(!bench.layout().scrolling);
 
         bench.height_of_panel(304 * n);
@@ -843,7 +846,7 @@ fn row_4_with_a_drag_in_progress_the_wheel_does_not_move_the_panel() {
         let mut bench = Bench::with_panel_height(ppp, 200 * n, image_f(), ColorChoice::Entry(1));
         let geo = bench.geo();
         let y = geo.y_row(Control::Red);
-        let x = geo.x_de_valor(128, Control::Red.max());
+        let x = geo.x_of_value(128, Control::Red.max());
         bench.moves(x, y);
         bench.presses_2(x, y);
         assert!(bench.editor.dragging(), "ppp {ppp}: el arrastre empieza");
@@ -949,7 +952,7 @@ fn row_5_a_click_on_a_slider_finds_the_control_with_y_minus_offset() {
 
         // El centro de la fila de R, ya desplazada, es R.
         let y_red = geo.y_row(Control::Red);
-        let x_a = geo.x_de_valor(128, Control::Red.max());
+        let x_a = geo.x_of_value(128, Control::Red.max());
         bench.moves(x_a, y_red);
         bench.presses_2(x_a, y_red);
         assert_eq!(
@@ -957,10 +960,10 @@ fn row_5_a_click_on_a_slider_finds_the_control_with_y_minus_offset() {
             Some(Control::Red),
             "ppp {ppp}: el control se halla con y − offset"
         );
-        let valor = geo.valor_en(x_a - geo.x_hint(), Control::Red);
+        let value = geo.value_in(x_a - geo.x_hint(), Control::Red);
         assert_eq!(
             bench.editor.preview(),
-            Some((EditTarget::Entry(1), Rgba::opaque(valor as u8, 255, 0)))
+            Some((EditTarget::Entry(1), Rgba::opaque(value as u8, 255, 0)))
         );
         // Soltar aplica a la entrada 1.
         let f = bench.releases(x_a, y_red);
@@ -968,7 +971,7 @@ fn row_5_a_click_on_a_slider_finds_the_control_with_y_minus_offset() {
             f.output_2.commit,
             Some(Commit {
                 target: EditTarget::Entry(1),
-                color: Rgba::opaque(valor as u8, 255, 0)
+                color: Rgba::opaque(value as u8, 255, 0)
             })
         );
 
@@ -1022,7 +1025,7 @@ fn row_5_outside_the_panel_rectangle_nothing_is_hit() {
         let mut bench = Bench::with_panel_height(ppp, 136 * n, image_f(), ColorChoice::Entry(1));
         let geo = bench.geo();
         assert_eq!(geo.top_px, 91 * n);
-        let x = geo.x_de_valor(128, 255);
+        let x = geo.x_of_value(128, 255);
         let y_blue = geo.y_row(Control::Blue);
         assert!(y_blue >= 136 * n, "B está fuera del panel");
         bench.moves(x, y_blue);
@@ -1111,7 +1114,7 @@ fn row_5_the_focused_field_and_the_drag_are_also_clipped_to_the_panel() {
         bench.click_on_the_canvas();
 
         let geo = bench.geo();
-        let (x, y) = (geo.x_de_valor(100, 255), geo.y_row(Control::Red));
+        let (x, y) = (geo.x_of_value(100, 255), geo.y_row(Control::Red));
         bench.moves(x, y);
         bench.presses_2(x, y);
         let f = bench.rest_2_2();
@@ -1126,7 +1129,7 @@ fn row_5_lowering_the_window_does_not_cancel_a_drag() {
         let mut bench = Bench::with_panel_height(ppp, 300 * n, image_f(), ColorChoice::Entry(1));
         let geo = bench.geo();
         let y = geo.y_row(Control::Red);
-        let x_a = geo.x_de_valor(128, Control::Red.max());
+        let x_a = geo.x_of_value(128, Control::Red.max());
         bench.moves(x_a, y);
         bench.presses_2(x_a, y);
         assert!(bench.editor.dragging(), "ppp {ppp}: el arrastre empieza");
@@ -1147,16 +1150,16 @@ fn row_5_lowering_the_window_does_not_cancel_a_drag() {
 
         // Seguir moviendo y soltar da el paso, con la geometría nueva.
         let geo = bench.geo();
-        let x_b = geo.x_de_valor(200, Control::Red.max());
+        let x_b = geo.x_of_value(200, Control::Red.max());
         let y_b = geo.y_row(Control::Green);
         bench.moves(x_b, y_b);
         bench.releases(x_b, y_b);
-        let valor = geo.valor_en(x_b - geo.x_hint(), Control::Red);
+        let value = geo.value_in(x_b - geo.x_hint(), Control::Red);
         assert_eq!(
             bench.commits(),
             vec![Commit {
                 target: EditTarget::Entry(1),
-                color: Rgba::opaque(valor as u8, 255, 0)
+                color: Rgba::opaque(value as u8, 255, 0)
             }],
             "ppp {ppp}: soltar aplica el valor de la `x` final"
         );
@@ -1438,7 +1441,7 @@ fn row_8_undoing_an_add_leaves_the_entry_non_existent() {
 #[test]
 fn row_9_the_color_changed_and_the_focus_is_lost() {
     let mut bench = bench_with_pending(image_f(), ColorChoice::Entry(2), "#00ff00");
-    bench.pone_color(2, RED);
+    bench.set_color(2, RED);
     bench.rest_2_2();
     assert!(bench.editor.has_pending());
     bench.click_on_the_canvas();
@@ -1453,7 +1456,7 @@ fn row_9_the_color_changed_and_the_focus_is_lost() {
 #[test]
 fn row_9_the_color_changed_and_it_is_left_without_a_target() {
     let mut bench = bench_with_pending(image_f(), ColorChoice::Entry(2), "#00ff00");
-    bench.pone_color(2, RED);
+    bench.set_color(2, RED);
     bench.choice = ColorChoice::Entry(200);
     let f = bench.rest_2_2();
     assert_eq!(f.output_2.commit, None);
@@ -1468,7 +1471,7 @@ fn row_9_the_color_changed_and_it_is_left_without_a_target() {
 #[test]
 fn row_9_undoing_a_set_palette_color_with_pending_text_discards() {
     let mut bench = bench_f(1.0, 2);
-    bench.pone_color(2, RED);
+    bench.set_color(2, RED);
     bench.rest_2_2();
     bench.focuses_field();
     bench.writes("#00ff00");
@@ -1485,7 +1488,7 @@ fn row_9_undoing_a_set_palette_color_with_pending_text_discards() {
 #[test]
 fn row_9_redoing_a_set_palette_color_with_pending_text_discards() {
     let mut bench = bench_f(1.0, 2);
-    bench.pone_color(2, RED);
+    bench.set_color(2, RED);
     bench.undoes();
     bench.rest_2_2();
     bench.focuses_field();
@@ -1503,7 +1506,7 @@ fn row_9_redoing_a_set_palette_color_with_pending_text_discards() {
 #[test]
 fn row_9_if_the_color_goes_back_to_the_base_one_it_is_applied() {
     let mut bench = bench_with_pending(image_f(), ColorChoice::Entry(2), "#00ff00");
-    bench.pone_color(2, RED);
+    bench.set_color(2, RED);
     bench.rest_2_2();
     bench.undoes();
     assert_eq!(bench.actual().map(|(_, c)| c), Some(BLUE));
@@ -1517,7 +1520,7 @@ fn row_9_if_the_color_goes_back_to_the_base_one_it_is_applied() {
 
     // Y con rehacer: cambia, vuelve a lo que era al rehacer el cambio y deshacerlo otra vez.
     let mut bench = bench_with_pending(image_f(), ColorChoice::Entry(2), "#00ff00");
-    bench.pone_color(2, RED);
+    bench.set_color(2, RED);
     bench.undoes();
     bench.redoes();
     bench.undoes();
@@ -1815,7 +1818,7 @@ fn row_11_dragging_a_slider_does_not_show_the_chosen_one() {
     bench.wheel(3 * PITCH_U * n);
     assert_eq!(bench.scroll.first_row, 3);
     let geo = bench.geo();
-    let (x, y) = (geo.x_de_valor(100, 255), geo.y_row(Control::Green));
+    let (x, y) = (geo.x_of_value(100, 255), geo.y_row(Control::Green));
     bench.moves(x, y);
     bench.presses_2(x, y);
     bench.moves(x + 10, y);

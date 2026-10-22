@@ -149,7 +149,7 @@ fn fractional(k: u32) -> Zoom {
 
 /// Vista con `zoom` y exactamente ese `origin` (con `pan`, que hace `clamp`): falla si `clamp` lo
 /// habría movido.
-fn vista_en(zoom: Zoom, origin: (i64, i64), viewport: Size, image: Size) -> View {
+fn view_in(zoom: Zoom, origin: (i64, i64), viewport: Size, image: Size) -> View {
     let mut v = View::fit(viewport, image);
     v.set_zoom(zoom, (0, 0));
     let (ox, oy) = v.origin();
@@ -341,7 +341,7 @@ fn row_a1_display_order_eq_and_hash_are_consistent() {
     // distintos en un conjunto.
     let different: HashSet<Zoom> = all_2.iter().copied().collect();
     assert_eq!(different.len(), 70);
-    let pares = [
+    let pairs = [
         (fractional(2), all_2[5]),
         (Zoom::ONE, zoom_integer(1)),
         (Zoom::ONE, fractional(2).zoom_in()),
@@ -349,7 +349,7 @@ fn row_a1_display_order_eq_and_hash_are_consistent() {
         (Zoom::MIN, Zoom::MIN.zoom_out()),
         (Zoom::MAX, zoom_integer(64)),
     ];
-    for (a, b) in pares {
+    for (a, b) in pairs {
         assert_eq!(a, b);
         assert_eq!(hash_de(a), hash_de(b), "{a}");
     }
@@ -470,13 +470,13 @@ const CANVAS_100: Size = Size {
     height: 100,
 };
 
-fn vista_a_1_4() -> View {
-    vista_en(fractional(4), (10, 20), CANVAS_100, IMAGE_10)
+fn view_a_1_4() -> View {
+    view_in(fractional(4), (10, 20), CANVAS_100, IMAGE_10)
 }
 
 #[test]
 fn row_a3_screen_to_image_at_1_4_with_origin_10_20() {
-    let v = vista_a_1_4();
+    let v = view_a_1_4();
     let cases: [(Point, Option<(u32, u32)>); 7] = [
         ((10, 20), Some((0, 0))),
         ((11, 20), Some((4, 0))),
@@ -498,7 +498,7 @@ fn row_a3_screen_to_image_at_1_4_with_origin_10_20() {
 
 #[test]
 fn row_a3_image_rect_measures_3_by_3_because_pixel_8_is_seen() {
-    let v = vista_a_1_4();
+    let v = view_a_1_4();
     let r = v.image_rect(IMAGE_10);
     assert_eq!((r.x, r.y), (10, 20));
     assert_eq!((r.width, r.height), (3, 3), "⌈10/4⌉ y no ⌊10/4⌋");
@@ -517,7 +517,7 @@ fn row_a3_image_rect_measures_3_by_3_because_pixel_8_is_seen() {
 
 #[test]
 fn row_a3_image_to_screen_at_1_4() {
-    let v = vista_a_1_4();
+    let v = view_a_1_4();
     let cases = [
         ((0, 0), (10, 20)),
         ((3, 3), (10, 20)),
@@ -532,7 +532,7 @@ fn row_a3_image_to_screen_at_1_4() {
 
 #[test]
 fn row_a3_round_trip_at_1_4() {
-    let v = vista_a_1_4();
+    let v = view_a_1_4();
     // pantalla → imagen → pantalla es la identidad dentro de la imagen.
     for sy in 20..23 {
         for sx in 10..13 {
@@ -565,7 +565,7 @@ fn row_a3_round_trip_at_1_4() {
 
 #[test]
 fn row_a3_pixel_block_at_1_4_only_exists_on_the_grid_and_measures_1_by_1() {
-    let v = vista_a_1_4();
+    let v = view_a_1_4();
     assert_eq!(v.pixel_block(0, 0), Some(((10, 20), (11, 21))));
     assert_eq!(v.pixel_block(4, 0), Some(((11, 20), (12, 21))));
     assert_eq!(v.pixel_block(8, 8), Some(((12, 22), (13, 23))));
@@ -577,12 +577,12 @@ fn row_a3_pixel_block_at_1_4_only_exists_on_the_grid_and_measures_1_by_1() {
 
 #[test]
 fn row_a3_pixel_block_at_integer_zoom_is_zoom_by_zoom_and_at_1_2_and_1_64_it_follows_the_grid() {
-    let v = vista_en(zoom_integer(3), (10, 20), CANVAS_100, IMAGE_10);
+    let v = view_in(zoom_integer(3), (10, 20), CANVAS_100, IMAGE_10);
     assert_eq!(v.pixel_block(2, 1), Some(((16, 23), (19, 26))));
     assert_eq!(v.pixel_block(0, 0), Some(((10, 20), (13, 23))));
-    let v = vista_en(Zoom::ONE, (10, 20), CANVAS_100, IMAGE_10);
+    let v = view_in(Zoom::ONE, (10, 20), CANVAS_100, IMAGE_10);
     assert_eq!(v.pixel_block(5, 5), Some(((15, 25), (16, 26))));
-    let v = vista_en(fractional(2), (10, 20), CANVAS_100, IMAGE_10);
+    let v = view_in(fractional(2), (10, 20), CANVAS_100, IMAGE_10);
     assert_eq!(v.pixel_block(6, 2), Some(((13, 21), (14, 22))));
     assert_eq!(v.pixel_block(6, 3), None);
     assert_eq!(v.pixel_block(5, 2), None);
@@ -638,14 +638,14 @@ fn row_a4_the_five_images_of_the_table_in_the_three_canvases() {
         Size::new(1600, 900),
         Size::new(128, 297),
     ];
-    let tabla: [(u32, [&str; 3]); 5] = [
+    let table: [(u32, [&str; 3]); 5] = [
         (1024, ["×1/2", "×1/2", "×1/8"]),
         (2048, ["×1/4", "×1/4", "×1/16"]),
         (4096, ["×1/8", "×1/8", "×1/32"]),
         (6000, ["×1/16", "×1/8", "×1/64"]),
         (8192, ["×1/16", "×1/16", "×1/64"]),
     ];
-    for (side, expected_2_2) in tabla {
+    for (side, expected_2_2) in table {
         for (canvas_2, expected_2) in canvases.iter().zip(expected_2_2) {
             checks_fit(*canvas_2, Size::new(side, side), expected_2);
         }
@@ -729,7 +729,7 @@ const CANVAS_800X600: Size = Size {
 };
 
 fn from_x_1() -> View {
-    vista_en(Zoom::ONE, (0, 0), CANVAS_800X600, IMAGE_1000)
+    view_in(Zoom::ONE, (0, 0), CANVAS_800X600, IMAGE_1000)
 }
 
 #[test]
@@ -961,18 +961,18 @@ proptest! {
         let mut v = View::fit(Size::new(800, 600), tam);
         v.set_zoom(all_2[from_2], anchor_preview);
         prop_assert_eq!(v.zoom(), all_2[from_2]);
-        let antes = v.screen_to_image_i32(anchor);
+        let before = v.screen_to_image_i32(anchor);
         v.set_zoom(all_2[until], anchor);
         prop_assert_eq!(v.zoom(), all_2[until]);
         let after_2 = v.screen_to_image_i32(anchor);
         let g = grid(until);
         prop_assert_eq!(
             after_2,
-            (antes.0.div_euclid(g) * g, antes.1.div_euclid(g) * g),
-            "{} → {}: antes {:?}", all_2[from_2], all_2[until], antes
+            (before.0.div_euclid(g) * g, before.1.div_euclid(g) * g),
+            "{} → {}: antes {:?}", all_2[from_2], all_2[until], before
         );
         if until >= 6 {
-            prop_assert_eq!(after_2, antes, "con un nivel ≥ ×1 el píxel es exacto");
+            prop_assert_eq!(after_2, before, "con un nivel ≥ ×1 el píxel es exacto");
         }
         // Un paso de zoom_in / zoom_out con la misma regla.
         let mut w = View::fit(Size::new(800, 600), tam);

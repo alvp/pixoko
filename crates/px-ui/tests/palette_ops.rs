@@ -44,7 +44,7 @@ const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 const RED: Rgba = Rgba::opaque(255, 0, 0);
 const GREEN: Rgba = Rgba::opaque(0, 255, 0);
 const BLUE: Rgba = Rgba::opaque(0, 0, 255);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 const X: Rgba = Rgba::opaque(200, 30, 30);
 const Y: Rgba = Rgba::opaque(10, 10, 240);
 
@@ -87,7 +87,7 @@ fn image_p_5(transparent: Option<u8>) -> Image {
 
 /// `F`: paleta `[R, G, B, K]`, píxeles `[0, 1, 2, 3]`.
 fn image_f(transparent: Option<u8>) -> Image {
-    image_with(&[RED, GREEN, BLUE, NEGRO], transparent, &[0, 1, 2, 3])
+    image_with(&[RED, GREEN, BLUE, TEST_BLACK], transparent, &[0, 1, 2, 3])
 }
 
 fn pixels_2(image_2: &Image) -> Vec<u8> {
@@ -245,11 +245,11 @@ fn row_3_add_summary() {
 
 #[test]
 fn row_3_the_selection_after_adding_is_the_new_one() {
-    for (active_2, largo) in [(0u8, 1usize), (1, 4), (3, 4), (254, 255)] {
+    for (active_2, length_2) in [(0u8, 1usize), (1, 4), (3, 4), (254, 255)] {
         assert_eq!(
-            choice_after(&PaletteOp::Add, active_2, largo),
-            largo as u8,
-            "activa {active_2}, largo {largo}"
+            choice_after(&PaletteOp::Add, active_2, length_2),
+            length_2 as u8,
+            "activa {active_2}, largo {length_2}"
         );
     }
 }
@@ -345,7 +345,7 @@ fn row_4_blocked_reason_of_remove_and_confirm() {
 
 #[test]
 fn rotate_and_cancel_are_never_disabled() {
-    for largo in [0usize, 1, 2, 255, 256] {
+    for length_2 in [0usize, 1, 2, 255, 256] {
         for target_2 in [false, true] {
             for button_2 in [
                 PaletteButton::RotateLeft,
@@ -353,9 +353,9 @@ fn rotate_and_cancel_are_never_disabled() {
                 PaletteButton::Cancel,
             ] {
                 assert_eq!(
-                    blocked_reason(button_2, largo, target_2),
+                    blocked_reason(button_2, length_2, target_2),
                     None,
-                    "{button_2:?}, largo {largo}, destino {target_2}"
+                    "{button_2:?}, largo {length_2}, destino {target_2}"
                 );
             }
         }
@@ -364,13 +364,13 @@ fn rotate_and_cancel_are_never_disabled() {
 
 #[test]
 fn blocked_reason_depends_only_on_what_the_spec_says() {
-    for largo in [1usize, 2, 100, 255, 256] {
+    for length_2 in [1usize, 2, 100, 255, 256] {
         for target_2 in [false, true] {
-            let add = blocked_reason(PaletteButton::Add, largo, target_2).is_some();
-            assert_eq!(add, largo >= 256, "Add, largo {largo}");
-            let remove = blocked_reason(PaletteButton::Remove, largo, target_2).is_some();
-            assert_eq!(remove, largo <= 1, "Remove, largo {largo}");
-            let confirm = blocked_reason(PaletteButton::Confirm, largo, target_2).is_some();
+            let add = blocked_reason(PaletteButton::Add, length_2, target_2).is_some();
+            assert_eq!(add, length_2 >= 256, "Add, largo {length_2}");
+            let remove = blocked_reason(PaletteButton::Remove, length_2, target_2).is_some();
+            assert_eq!(remove, length_2 <= 1, "Remove, largo {length_2}");
+            let confirm = blocked_reason(PaletteButton::Confirm, length_2, target_2).is_some();
             assert_eq!(confirm, !target_2, "Confirm, destino {target_2}");
         }
     }
@@ -716,8 +716,8 @@ fn row_5_the_transparent_is_readjusted_in_the_rest_when_looking_for_the_target()
     assert_eq!(default_destination(&after, 0), Some(1));
 
     // La transparente antes de la quitada: [T, D, W], quitando la 1.
-    let antes = palette(&[white, dark, white], Some(0));
-    assert_eq!(default_destination(&antes, 1), Some(0));
+    let before = palette(&[white, dark, white], Some(0));
+    assert_eq!(default_destination(&before, 1), Some(0));
 }
 
 #[test]
@@ -747,11 +747,11 @@ fn row_6_rotation_range_of_the_spec() {
 
 #[test]
 fn row_6_without_a_range_the_whole_palette_is_rotated() {
-    for largo in [1usize, 2, 5, 255, 256] {
-        assert_eq!(rotation_range(largo, 0, None), (0, largo as u16));
+    for length_2 in [1usize, 2, 5, 255, 256] {
+        assert_eq!(rotation_range(length_2, 0, None), (0, length_2 as u16));
         assert_eq!(
-            rotation_range(largo, (largo - 1) as u8, None),
-            (0, largo as u16),
+            rotation_range(length_2, (length_2 - 1) as u8, None),
+            (0, length_2 as u16),
             "la activa no importa sin rango"
         );
     }
@@ -774,22 +774,22 @@ fn row_11_a_one_entry_range_or_a_one_entry_palette_gives_length_1() {
 proptest! {
     #[test]
     fn rotation_range_is_the_minimum_and_the_length_of_the_span(
-        largo in 1usize..=256,
+        length_2 in 1usize..=256,
         active_raw in any::<u8>(),
         other_raw in proptest::option::of(any::<u8>()),
     ) {
-        let active_2 = (usize::from(active_raw) % largo) as u8;
-        let other_2 = other_raw.map(|raw_2| (usize::from(raw_2) % largo) as u8);
-        let (start_2, length) = rotation_range(largo, active_2, other_2);
+        let active_2 = (usize::from(active_raw) % length_2) as u8;
+        let other_2 = other_raw.map(|raw_2| (usize::from(raw_2) % length_2) as u8);
+        let (start_2, length) = rotation_range(length_2, active_2, other_2);
         match other_2 {
-            None => prop_assert_eq!((start_2, length), (0, largo as u16)),
+            None => prop_assert_eq!((start_2, length), (0, length_2 as u16)),
             Some(other_2) => {
                 prop_assert_eq!(start_2, active_2.min(other_2));
                 prop_assert_eq!(length, u16::from(active_2.max(other_2) - active_2.min(other_2)) + 1);
             }
         }
         prop_assert!(length >= 1);
-        prop_assert!(usize::from(start_2) + usize::from(length) <= largo);
+        prop_assert!(usize::from(start_2) + usize::from(length) <= length_2);
     }
 }
 
@@ -798,7 +798,7 @@ fn row_6_the_sign_of_rotate_colors_right_is_plus_1_over_f() {
     let mut doc = Document::new(image_f(None));
     let id = ImageId::from_raw(0);
     let initial = image_of(&doc, id).clone();
-    let [a, b, c, d] = [RED, GREEN, BLUE, NEGRO];
+    let [a, b, c, d] = [RED, GREEN, BLUE, TEST_BLACK];
 
     assert!(
         doc.apply(Command::RotateColors {
@@ -833,8 +833,8 @@ fn row_6_the_sign_of_rotate_colors_right_is_plus_1_over_f() {
 #[test]
 fn row_6_rotating_without_a_range_with_the_active_2_gives_the_same_as_the_direct_command() {
     for (steps_2, expected_2) in [
-        (1, vec![NEGRO, RED, GREEN, BLUE]),
-        (-1, vec![GREEN, BLUE, NEGRO, RED]),
+        (1, vec![TEST_BLACK, RED, GREEN, BLUE]),
+        (-1, vec![GREEN, BLUE, TEST_BLACK, RED]),
     ] {
         let mut doc = Document::new(image_f(None));
         let id = ImageId::from_raw(0);
@@ -862,8 +862,8 @@ fn row_6_with_a_range_from_1_to_3_from_the_1_and_the_active_one_1() {
     // `Mayús`+clic en la 3 desde `Entry(1)`: rango (1, 3).
     let (start_2, length) = rotation_range(4, 1, Some(3));
     for (steps_2, expected_2) in [
-        (1, vec![RED, NEGRO, GREEN, BLUE]),
-        (-1, vec![RED, BLUE, NEGRO, GREEN]),
+        (1, vec![RED, TEST_BLACK, GREEN, BLUE]),
+        (-1, vec![RED, BLUE, TEST_BLACK, GREEN]),
     ] {
         let mut doc = Document::new(image_f(None));
         let id = ImageId::from_raw(0);
@@ -892,7 +892,7 @@ fn row_6_with_the_transparent_inside_the_range_it_stays_in_its_slot() {
     .unwrap();
     let palette = image_of(&doc, id).palette().unwrap();
     assert_eq!(palette.transparent_index(), Some(3));
-    assert_eq!(palette.colors(), &[NEGRO, RED, GREEN, BLUE]);
+    assert_eq!(palette.colors(), &[TEST_BLACK, RED, GREEN, BLUE]);
 }
 
 #[test]
@@ -1258,7 +1258,7 @@ fn row_7_moving_from_0_to_2_in_f_gives_g_b_r_k_and_a_single_undo() {
         })
         .unwrap()
     );
-    assert_eq!(colors_of(&doc, id), vec![GREEN, BLUE, RED, NEGRO]);
+    assert_eq!(colors_of(&doc, id), vec![GREEN, BLUE, RED, TEST_BLACK]);
     assert_eq!(pixels_2(image_of(&doc, id)), vec![2, 0, 1, 3]);
     doc.undo().unwrap();
     assert_eq!(image_of(&doc, id), &initial);
@@ -1310,9 +1310,9 @@ fn row_7_move_drag_the_threshold_is_euclidean_and_scales_with_n() {
     assert!(!back_short.dragging());
     // Con n = 2 el umbral es de 8 px; con n = 3, de 12.
     for (n, just_before, just) in [(2u32, 7i64, 8i64), (3, 11, 12)] {
-        let mut antes = MoveDrag::press(0, (0, 0));
-        antes.update((just_before, 0), n, Some(1));
-        assert!(!antes.dragging(), "n={n}, {just_before} px");
+        let mut before = MoveDrag::press(0, (0, 0));
+        before.update((just_before, 0), n, Some(1));
+        assert!(!before.dragging(), "n={n}, {just_before} px");
         let mut now = MoveDrag::press(0, (0, 0));
         now.update((0, just), n, Some(1));
         assert!(now.dragging(), "n={n}, {just} px");
@@ -1478,19 +1478,19 @@ fn choice_any() -> impl Strategy<Value = ColorChoice> {
 proptest! {
     #[test]
     fn clamp_choice_in_indexed_gives_a_valid_idempotent_entry_and_respects_what_is_valid(
-        largo in 1usize..=256,
+        length_2 in 1usize..=256,
         choice_2 in choice_any(),
     ) {
-        let colors_2: Vec<Rgba> = (0..largo).map(|i| Rgba::opaque(i as u8, 0, 0)).collect();
+        let colors_2: Vec<Rgba> = (0..length_2).map(|i| Rgba::opaque(i as u8, 0, 0)).collect();
         let image_2 = image_with(&colors_2, None, &[0]);
         let result = clamp_choice(&image_2, choice_2);
         let ColorChoice::Entry(index_2) = result else {
             return Err(TestCaseError::fail(format!("no es Entry: {result:?}")));
         };
-        prop_assert!(usize::from(index_2) < largo);
+        prop_assert!(usize::from(index_2) < length_2);
         prop_assert_eq!(clamp_choice(&image_2, result), result);
         if let ColorChoice::Entry(i) = choice_2
-            && usize::from(i) < largo
+            && usize::from(i) < length_2
         {
             prop_assert_eq!(result, choice_2);
         }
@@ -1732,18 +1732,18 @@ fn notices() -> Vec<String> {
         stale_notice(StaleReason::Changed).to_string(),
     ];
     for button_2 in BUTTONS {
-        for largo in [0usize, 1, 2, 255, 256] {
+        for length_2 in [0usize, 1, 2, 255, 256] {
             for target_2 in [false, true] {
-                if let Some(reason_2) = blocked_reason(button_2, largo, target_2) {
+                if let Some(reason_2) = blocked_reason(button_2, length_2, target_2) {
                     notices.push(reason_2.to_string());
                 }
             }
         }
     }
     // Añadir: todos los números de entrada.
-    for largo in 1..=255usize {
-        for active_2 in [0u8, (largo - 1) as u8] {
-            notices.push(summary(&PaletteOp::Add, active_2, largo, false, false));
+    for length_2 in 1..=255usize {
+        for active_2 in [0u8, (length_2 - 1) as u8] {
+            notices.push(summary(&PaletteOp::Add, active_2, length_2, false, false));
         }
     }
     // Quitar: todas las parejas, con las cuatro combinaciones de `unused` y `was_transparent`.
@@ -2227,8 +2227,8 @@ fn model_drop_index(
     let column = (x + 2 * n).div_euclid(step);
     let row_2 = (y + 2 * n).div_euclid(step);
     let index_2 = (first as i128 + row_2) * COLUMNS as i128 + column;
-    let ultimo = count as i128 - 1;
-    Some(usize::try_from(index_2.min(ultimo)).expect("índice dentro"))
+    let last_2 = count as i128 - 1;
+    Some(usize::try_from(index_2.min(last_2)).expect("índice dentro"))
 }
 
 proptest! {
@@ -2262,9 +2262,9 @@ proptest! {
         }
 
         // Monótona en la fila: con `y` fijo, `x` mayor no da un índice menor.
-        let (smaller, mayor) = if x <= x2 { (x, x2) } else { (x2, x) };
-        if let (Some(a), Some(b)) = (grid.drop_index(smaller, y), grid.drop_index(mayor, y)) {
-            prop_assert!(a <= b, "x={} da {}, x={} da {}", smaller, a, mayor, b);
+        let (smaller, greater) = if x <= x2 { (x, x2) } else { (x2, x) };
+        if let (Some(a), Some(b)) = (grid.drop_index(smaller, y), grid.drop_index(greater, y)) {
+            prop_assert!(a <= b, "x={} da {}, x={} da {}", smaller, a, greater, b);
         }
     }
 
@@ -2291,8 +2291,8 @@ proptest! {
 
 #[derive(Clone, Debug)]
 enum TestAction {
-    Pulsar { from: u8, at: (i64, i64) },
-    Mover { at: (i64, i64), target: Option<u8> },
+    TestPress { from: u8, at: (i64, i64) },
+    Move { at: (i64, i64), target: Option<u8> },
     Release,
     Cancel,
 }
@@ -2303,9 +2303,9 @@ fn point() -> impl Strategy<Value = (i64, i64)> {
 
 fn action_2() -> impl Strategy<Value = TestAction> {
     prop_oneof![
-        2 => (0u8..6, point()).prop_map(|(from, at)| TestAction::Pulsar { from, at }),
+        2 => (0u8..6, point()).prop_map(|(from, at)| TestAction::TestPress { from, at }),
         6 => (point(), proptest::option::of(0u8..6))
-            .prop_map(|(at, target)| TestAction::Mover { at, target }),
+            .prop_map(|(at, target)| TestAction::Move { at, target }),
         2 => Just(TestAction::Release),
         1 => Just(TestAction::Cancel),
     ]
@@ -2321,7 +2321,7 @@ struct ModelDrag {
 }
 
 impl ModelDrag {
-    fn mover(&mut self, at: (i64, i64), n: u32, target: Option<u8>) {
+    fn move_pointer(&mut self, at: (i64, i64), n: u32, target: Option<u8>) {
         let dx = i128::from(at.0) - i128::from(self.start_2.0);
         let dy = i128::from(at.1) - i128::from(self.start_2.1);
         let threshold = 4 * i128::from(n);
@@ -2364,16 +2364,16 @@ proptest! {
         let mut model: Option<ModelDrag> = None;
         for action_2 in actions {
             match action_2 {
-                TestAction::Pulsar { from, at } => {
+                TestAction::TestPress { from, at } => {
                     if drag.is_none() {
                         drag = Some(MoveDrag::press(from, at));
                         model = Some(ModelDrag { from, start_2: at, crossed: false, target_2: None });
                     }
                 }
-                TestAction::Mover { at, target } => {
+                TestAction::Move { at, target } => {
                     if let (Some(real), Some(expected_2)) = (drag.as_mut(), model.as_mut()) {
                         real.update(at, n, target);
-                        expected_2.mover(at, n, target);
+                        expected_2.move_pointer(at, n, target);
                     }
                 }
                 TestAction::Release => {
@@ -2406,16 +2406,16 @@ proptest! {
         let mut model: Option<ModelDrag> = None;
         for action_2 in actions {
             match action_2 {
-                TestAction::Pulsar { from, at } => {
+                TestAction::TestPress { from, at } => {
                     if model.is_none() {
                         ops.begin_drag(from, at);
                         model = Some(ModelDrag { from, start_2: at, crossed: false, target_2: None });
                     }
                 }
-                TestAction::Mover { at, target } => {
+                TestAction::Move { at, target } => {
                     if let Some(expected_2) = model.as_mut() {
                         ops.drag().expect("hay arrastre").update(at, n, target);
-                        expected_2.mover(at, n, target);
+                        expected_2.move_pointer(at, n, target);
                     }
                 }
                 TestAction::Release => {
@@ -2454,28 +2454,28 @@ fn strategy_steps() -> impl Strategy<Value = i32> {
     ]
 }
 
-/// Una operación válida para una paleta de `largo` entradas, o `None` si el tipo no se puede.
-fn operation_valid(largo: usize, kind: u8, a: u8, b: u8, steps_2: i32) -> Option<PaletteOp> {
+/// Una operación válida para una paleta de `length_2` entradas, o `None` si el tipo no se puede.
+fn operation_valid(length_2: usize, kind: u8, a: u8, b: u8, steps_2: i32) -> Option<PaletteOp> {
     match kind % 4 {
-        0 => (largo < 256).then_some(PaletteOp::Add),
+        0 => (length_2 < 256).then_some(PaletteOp::Add),
         1 => {
-            if largo < 2 {
+            if length_2 < 2 {
                 return None;
             }
-            let index_2 = usize::from(a) % largo;
-            let target_2 = (index_2 + 1 + usize::from(b) % (largo - 1)) % largo;
+            let index_2 = usize::from(a) % length_2;
+            let target_2 = (index_2 + 1 + usize::from(b) % (length_2 - 1)) % length_2;
             Some(PaletteOp::Remove {
                 index: index_2 as u8,
                 into: target_2 as u8,
             })
         }
         2 => Some(PaletteOp::Move {
-            from: (usize::from(a) % largo) as u8,
-            to: (usize::from(b) % largo) as u8,
+            from: (usize::from(a) % length_2) as u8,
+            to: (usize::from(b) % length_2) as u8,
         }),
         _ => {
-            let start_2 = usize::from(a) % largo;
-            let length = 1 + usize::from(b) % (largo - start_2);
+            let start_2 = usize::from(a) % length_2;
+            let length = 1 + usize::from(b) % (length_2 - start_2);
             Some(PaletteOp::Rotate {
                 start: start_2 as u8,
                 len: length as u16,
@@ -2547,41 +2547,41 @@ fn selection_model(op: &PaletteOp, active_2: u8, new_2: &[u32]) -> usize {
 proptest! {
     #[test]
     fn property_3_entry_fate_and_choice_after_follow_the_identifier_model(
-        largo in 1usize..=256,
+        length_2 in 1usize..=256,
         kind in any::<u8>(),
         a in any::<u8>(),
         b in any::<u8>(),
         steps_2 in strategy_steps(),
         active_raw in any::<u8>(),
     ) {
-        let Some(op) = operation_valid(largo, kind, a, b, steps_2) else {
+        let Some(op) = operation_valid(length_2, kind, a, b, steps_2) else {
             return Ok(());
         };
-        let active_2 = (usize::from(active_raw) % largo) as u8;
-        let ids: Vec<u32> = (0..largo as u32).collect();
+        let active_2 = (usize::from(active_raw) % length_2) as u8;
+        let ids: Vec<u32> = (0..length_2 as u32).collect();
         let new_2 = model_apply(&op, &ids);
 
-        for input_2 in 0..largo {
+        for input_2 in 0..length_2 {
             prop_assert_eq!(
                 entry_fate(&op, input_2 as u8),
                 target_model(&op, &ids, &new_2, input_2),
                 "{:?}, entrada {}", op, input_2
             );
         }
-        let chosen_2 = choice_after(&op, active_2, largo);
+        let chosen_2 = choice_after(&op, active_2, length_2);
         prop_assert_eq!(usize::from(chosen_2), selection_model(&op, active_2, &new_2), "{:?}", op);
         prop_assert!(usize::from(chosen_2) < new_2.len());
     }
 
     #[test]
     fn property_3_the_model_matches_what_px_core_does(
-        largo in 1usize..=256,
+        length_2 in 1usize..=256,
         kind in any::<u8>(),
         a in any::<u8>(),
         b in any::<u8>(),
         steps_2 in strategy_steps(),
     ) {
-        let Some(op) = operation_valid(largo, kind, a, b, steps_2) else {
+        let Some(op) = operation_valid(length_2, kind, a, b, steps_2) else {
             return Ok(());
         };
         let color_de = |id: u32| {
@@ -2591,7 +2591,7 @@ proptest! {
                 Rgba::opaque(id as u8, 255 - id as u8, 7)
             }
         };
-        let ids: Vec<u32> = (0..largo as u32).collect();
+        let ids: Vec<u32> = (0..length_2 as u32).collect();
         let colors_2: Vec<Rgba> = ids.iter().map(|&id| color_de(id)).collect();
         let mut doc = Document::new(image_with(&colors_2, None, &[0]));
         let id = ImageId::from_raw(0);
@@ -2624,12 +2624,12 @@ proptest! {
         removed_raw in any::<usize>(),
     ) {
         let colors_2: Vec<Rgba> = colors_2.into_iter().map(|(r, g, b, a)| Rgba::new(r, g, b, a)).collect();
-        let largo = colors_2.len();
+        let length_2 = colors_2.len();
         let transparent = {
-            let t = transparent_raw % (largo + 1);
-            (t < largo).then_some(t as u8)
+            let t = transparent_raw % (length_2 + 1);
+            (t < length_2).then_some(t as u8)
         };
-        let index_2 = (removed_raw % largo) as u8;
+        let index_2 = (removed_raw % length_2) as u8;
         let palette = palette(&colors_2, transparent);
 
         let expected_2 = if transparent == Some(index_2) {
@@ -2645,7 +2645,7 @@ proptest! {
             };
             let goal = premultiplicado(resolved(usize::from(index_2)));
             let mut better: Option<(i64, usize)> = None;
-            for j in (0..largo).filter(|&j| j != usize::from(index_2)) {
+            for j in (0..length_2).filter(|&j| j != usize::from(index_2)) {
                 let other_2 = premultiplicado(resolved(j));
                 let distance: i64 = goal.iter().zip(other_2).map(|(&p, q)| (p - q) * (p - q)).sum();
                 if better.is_none_or(|(d, _)| distance < d) {
@@ -2657,7 +2657,7 @@ proptest! {
         prop_assert_eq!(default_destination(&palette, index_2), expected_2);
         if let Some(target_2) = default_destination(&palette, index_2) {
             prop_assert_ne!(target_2, index_2);
-            prop_assert!(usize::from(target_2) < largo);
+            prop_assert!(usize::from(target_2) < length_2);
         }
     }
 
@@ -2665,15 +2665,15 @@ proptest! {
     fn uses_entry_matches_counting_the_pixels(
         width_2 in 1u32..8,
         height_2 in 1u32..8,
-        largo in 1usize..8,
+        length_2 in 1usize..8,
         raw_2_2 in vec(any::<u8>(), 64),
     ) {
-        let colors_2: Vec<Rgba> = (0..largo).map(|i| Rgba::opaque(i as u8, 0, 0)).collect();
+        let colors_2: Vec<Rgba> = (0..length_2).map(|i| Rgba::opaque(i as u8, 0, 0)).collect();
         let mut image_2 = Image::new_indexed(width_2, height_2, palette(&colors_2, None)).unwrap();
-        let mut used_2 = vec![false; largo];
+        let mut used_2 = vec![false; length_2];
         for y in 0..height_2 {
             for x in 0..width_2 {
-                let index_2 = (usize::from(raw_2_2[(y * 8 + x) as usize]) % largo) as u8;
+                let index_2 = (usize::from(raw_2_2[(y * 8 + x) as usize]) % length_2) as u8;
                 image_2.set_pixel(x, y, Pixel::Indexed(index_2)).unwrap();
                 used_2[usize::from(index_2)] = true;
             }
@@ -2698,7 +2698,7 @@ mod set_transparent {
     const REMOVE: &str = "Quitar transparente";
 
     /// Lo que hace pulsar el botón con `active_2`: el `PaletteOp` y el comando de `px-core`.
-    fn pulsar(doc: &mut Document, active_2: u8) -> Result<bool, px_core::DocumentError> {
+    fn press(doc: &mut Document, active_2: u8) -> Result<bool, px_core::DocumentError> {
         let id = ImageId::from_raw(0);
         let palette = image_of(doc, id).palette().expect("indexada");
         let op = PaletteOp::SetTransparent {
@@ -2774,10 +2774,10 @@ mod set_transparent {
         assert_eq!(transparent_button_label(palette, 2), SET);
         assert_eq!(transparent_toggle(palette, 2), Some(2));
 
-        assert_eq!(pulsar(&mut doc, 2), Ok(true));
+        assert_eq!(press(&mut doc, 2), Ok(true));
         assert_eq!(mark(&doc), Some(2));
         assert_eq!(pixels_2(image_of(&doc, id)), vec![0, 1, 2, 3]);
-        assert_eq!(colors_of(&doc, id), vec![RED, GREEN, BLUE, NEGRO]);
+        assert_eq!(colors_of(&doc, id), vec![RED, GREEN, BLUE, TEST_BLACK]);
         assert_eq!(resolved(&doc, 2), Rgba::new(0, 0, 255, 0));
         assert_eq!(resolved(&doc, 1), GREEN);
         assert_eq!(label(&doc, 2), REMOVE);
@@ -2824,9 +2824,9 @@ mod set_transparent {
         );
         assert_eq!(resolved(&doc, 2), Rgba::new(0, 0, 255, 0));
 
-        assert_eq!(pulsar(&mut doc, 2), Ok(true));
+        assert_eq!(press(&mut doc, 2), Ok(true));
         assert_eq!(mark(&doc), None);
-        assert_eq!(colors_of(&doc, id), vec![RED, GREEN, BLUE, NEGRO]);
+        assert_eq!(colors_of(&doc, id), vec![RED, GREEN, BLUE, TEST_BLACK]);
         assert_eq!(pixels_2(image_of(&doc, id)), vec![0, 1, 2, 3]);
         assert_eq!(resolved(&doc, 2), BLUE, "vuelve a su alfa guardado");
         assert_eq!(label(&doc, 2), SET);
@@ -2846,7 +2846,7 @@ mod set_transparent {
 
     #[test]
     fn row_3_the_label_depends_only_on_whether_the_active_one_is_the_marked_one() {
-        let palette = palette(&[RED, GREEN, BLUE, NEGRO], Some(1));
+        let palette = palette(&[RED, GREEN, BLUE, TEST_BLACK], Some(1));
         for active_2 in 0..4u8 {
             let expected_2 = if active_2 == 1 { REMOVE } else { SET };
             assert_eq!(
@@ -2860,7 +2860,7 @@ mod set_transparent {
                 "{active_2}"
             );
         }
-        let without = self::palette(&[RED, GREEN, BLUE, NEGRO], None);
+        let without = self::palette(&[RED, GREEN, BLUE, TEST_BLACK], None);
         for active_2 in 0..4u8 {
             assert_eq!(transparent_button_label(&without, active_2), SET);
             assert_eq!(transparent_toggle(&without, active_2), Some(active_2));
@@ -2901,7 +2901,7 @@ mod set_transparent {
         assert_eq!(resolved(&doc, 1), Rgba::new(0, 255, 0, 0));
         assert_eq!(label(&doc, 3), SET);
 
-        assert_eq!(pulsar(&mut doc, 3), Ok(true));
+        assert_eq!(press(&mut doc, 3), Ok(true));
         assert_eq!(mark(&doc), Some(3));
         assert_eq!(resolved(&doc, 1), Rgba::new(0, 255, 0, 255));
         assert_eq!(resolved(&doc, 3), Rgba::new(0, 0, 0, 0));
@@ -2920,9 +2920,13 @@ mod set_transparent {
     #[test]
     fn row_4_with_stored_alpha_0_in_the_previous_one_it_stays_with_alpha_0() {
         let green_alpha_0 = Rgba::new(0, 255, 0, 0);
-        let image_2 = image_with(&[RED, green_alpha_0, BLUE, NEGRO], Some(1), &[0, 1, 2, 3]);
+        let image_2 = image_with(
+            &[RED, green_alpha_0, BLUE, TEST_BLACK],
+            Some(1),
+            &[0, 1, 2, 3],
+        );
         let mut doc = Document::new(image_2);
-        assert_eq!(pulsar(&mut doc, 3), Ok(true));
+        assert_eq!(press(&mut doc, 3), Ok(true));
         assert_eq!(mark(&doc), Some(3));
         assert_eq!(resolved(&doc, 1), green_alpha_0);
         doc.undo().unwrap();
@@ -2964,7 +2968,7 @@ mod set_transparent {
     /// `[0 = alpha 0, G, B, K]` con píxeles `[0, 1, 2, 3]`: una entrada anterior de alfa 0.
     fn with_one_of_alpha_0() -> Document {
         Document::new(image_with(
-            &[Rgba::new(5, 5, 5, 0), GREEN, BLUE, NEGRO],
+            &[Rgba::new(5, 5, 5, 0), GREEN, BLUE, TEST_BLACK],
             None,
             &[0, 1, 2, 3],
         ))
@@ -2978,7 +2982,7 @@ mod set_transparent {
         assert_eq!(eraser_pixel(image_of(&doc, id)), Ok(Pixel::Indexed(0)));
         assert_eq!(eraser_label(image_of(&doc, id)), "transparente (entrada 0)");
 
-        pulsar(&mut doc, 2).unwrap();
+        press(&mut doc, 2).unwrap();
         let image_2 = image_of(&doc, id);
         assert_eq!(eraser_pixel(image_2), Ok(Pixel::Indexed(2)));
         assert_eq!(eraser_label(image_2), "transparente");
@@ -2989,7 +2993,7 @@ mod set_transparent {
         assert!(!is_erasable(image_2, 0, 0), "alfa guardado 0");
 
         // `Remove`: vuelve a la primera de alfa 0 y los `Indexed(2)` (alfa guardado 255) cuentan.
-        pulsar(&mut doc, 2).unwrap();
+        press(&mut doc, 2).unwrap();
         let image_2 = image_of(&doc, id);
         assert_eq!(eraser_pixel(image_2), Ok(Pixel::Indexed(0)));
         assert_eq!(eraser_label(image_2), "transparente (entrada 0)");
@@ -3006,12 +3010,12 @@ mod set_transparent {
         );
         assert_eq!(eraser_label(image_of(&doc, id)), "sin índice transparente");
 
-        pulsar(&mut doc, 3).unwrap();
+        press(&mut doc, 3).unwrap();
         assert_eq!(eraser_pixel(image_of(&doc, id)), Ok(Pixel::Indexed(3)));
         assert_eq!(eraser_label(image_of(&doc, id)), "transparente");
         assert!(!is_erasable(image_of(&doc, id), 3, 0));
 
-        pulsar(&mut doc, 3).unwrap();
+        press(&mut doc, 3).unwrap();
         assert_eq!(
             eraser_pixel(image_of(&doc, id)),
             Err(EraseError::NoTransparentIndex)
@@ -3027,7 +3031,7 @@ mod set_transparent {
     fn palette_initial() -> Palette {
         let mut colors_2 = vec![Rgba::TRANSPARENT];
         colors_2.extend((1..32u8).map(|i| Rgba::opaque(i * 8, 255 - i * 8, i)));
-        colors_2[25] = NEGRO;
+        colors_2[25] = TEST_BLACK;
         palette(&colors_2, Some(0))
     }
 
@@ -3037,7 +3041,7 @@ mod set_transparent {
         image_2.set_pixel(3, 0, Pixel::Indexed(25)).unwrap();
         let mut doc = Document::new(image_2);
         let id = ImageId::from_raw(0);
-        let antes = visible_2(image_of(&doc, id));
+        let before = visible_2(image_of(&doc, id));
         assert_eq!(label(&doc, 0), REMOVE);
         assert_eq!(label(&doc, 25), SET);
         assert_eq!(
@@ -3045,11 +3049,11 @@ mod set_transparent {
             Some(25)
         );
 
-        assert_eq!(pulsar(&mut doc, 0), Ok(true));
+        assert_eq!(press(&mut doc, 0), Ok(true));
         assert_eq!(mark(&doc), None);
         let palette = image_of(&doc, id).palette().unwrap();
         assert_eq!(palette.get(0).unwrap(), Rgba::new(0, 0, 0, 0));
-        assert_eq!(visible_2(image_of(&doc, id)), antes, "mismo aspecto");
+        assert_eq!(visible_2(image_of(&doc, id)), before, "mismo aspecto");
         assert_eq!(label(&doc, 0), SET);
         // El borrador usa ahora la entrada 0 por la segunda rama.
         assert_eq!(eraser_pixel(image_of(&doc, id)), Ok(Pixel::Indexed(0)));
@@ -3058,7 +3062,7 @@ mod set_transparent {
         doc.undo().unwrap();
         assert_eq!(mark(&doc), Some(0));
         assert_eq!(label(&doc, 0), REMOVE);
-        assert_eq!(visible_2(image_of(&doc, id)), antes);
+        assert_eq!(visible_2(image_of(&doc, id)), before);
     }
 
     // Fila 10: límites.
@@ -3068,11 +3072,11 @@ mod set_transparent {
         let mut doc = Document::new(image_with(&[RED], None, &[0, 0, 0]));
         let id = ImageId::from_raw(0);
         assert_eq!(label(&doc, 0), SET);
-        assert_eq!(pulsar(&mut doc, 0), Ok(true));
+        assert_eq!(press(&mut doc, 0), Ok(true));
         assert_eq!(mark(&doc), Some(0));
         assert_eq!(label(&doc, 0), REMOVE);
         assert!(visible_2(image_of(&doc, id)).iter().all(|c| c.a == 0));
-        assert_eq!(pulsar(&mut doc, 0), Ok(true));
+        assert_eq!(press(&mut doc, 0), Ok(true));
         assert_eq!(mark(&doc), None);
         assert!(visible_2(image_of(&doc, id)).iter().all(|c| *c == RED));
         assert_eq!(
@@ -3090,24 +3094,24 @@ mod set_transparent {
     fn row_10_with_256_entries_set_at_255_and_remove_the_marked_at_0_or_at_the_last() {
         let colors_2 = palette_of_256();
         let mut doc = Document::new(image_with(&colors_2, None, &[0, 255]));
-        assert_eq!(pulsar(&mut doc, 255), Ok(true));
+        assert_eq!(press(&mut doc, 255), Ok(true));
         assert_eq!(mark(&doc), Some(255));
         assert_eq!(label(&doc, 255), REMOVE);
         assert_eq!(label(&doc, 254), SET);
-        assert_eq!(pulsar(&mut doc, 255), Ok(true));
+        assert_eq!(press(&mut doc, 255), Ok(true));
         assert_eq!(mark(&doc), None);
 
         for end in [0u8, 255] {
             let mut doc = Document::new(image_with(&colors_2, Some(end), &[0, 255]));
             assert_eq!(label(&doc, end), REMOVE, "marcada en {end}");
-            assert_eq!(pulsar(&mut doc, end), Ok(true));
+            assert_eq!(press(&mut doc, end), Ok(true));
             assert_eq!(mark(&doc), None);
             doc.undo().unwrap();
             assert_eq!(mark(&doc), Some(end));
         }
         // La marcada en 0 con la 255 activa: fijar reemplaza.
         let mut doc = Document::new(image_with(&colors_2, Some(0), &[0, 255]));
-        assert_eq!(pulsar(&mut doc, 255), Ok(true));
+        assert_eq!(press(&mut doc, 255), Ok(true));
         assert_eq!(mark(&doc), Some(255));
         assert_eq!(
             transparent_summary(Some(255), 255, Some(0)),
@@ -3122,18 +3126,18 @@ mod set_transparent {
             for input_2 in 0..=255u8 {
                 assert_eq!(entry_fate(&op, input_2), Fate::Same, "{index:?}, {input_2}");
             }
-            for largo in [1usize, 2, 4, 255, 256] {
+            for length_2 in [1usize, 2, 4, 255, 256] {
                 for active_2 in [0u8, 1, 3, 254, 255] {
-                    assert_eq!(choice_after(&op, active_2, largo), active_2, "{index:?}");
+                    assert_eq!(choice_after(&op, active_2, length_2), active_2, "{index:?}");
                 }
             }
         }
-        for largo in 0..=257usize {
+        for length_2 in 0..=257usize {
             for target_2 in [false, true] {
                 assert_eq!(
-                    blocked_reason(PaletteButton::Transparent, largo, target_2),
+                    blocked_reason(PaletteButton::Transparent, length_2, target_2),
                     None,
-                    "len {largo}"
+                    "len {length_2}"
                 );
             }
         }
@@ -3148,7 +3152,7 @@ mod set_transparent {
         ops.begin_removal(2, Some(0));
         assert!(ops.removal().is_some());
 
-        pulsar(&mut doc, 1).unwrap();
+        press(&mut doc, 1).unwrap();
         let op = PaletteOp::SetTransparent { index: Some(1) };
         // Selección intacta: la misma activa.
         assert_eq!(
@@ -3167,7 +3171,7 @@ mod set_transparent {
     fn row_10_undo_and_redo_do_not_move_the_selection_and_the_chosen_one_past_the_end_is_clipped() {
         let mut doc = Document::new(image_f(None));
         let id = ImageId::from_raw(0);
-        pulsar(&mut doc, 2).unwrap();
+        press(&mut doc, 2).unwrap();
         for step in 0..2 {
             for chosen_2 in [0u8, 2, 3, 7, 200] {
                 let image_2 = image_of(&doc, id);
@@ -3189,7 +3193,7 @@ mod set_transparent {
 
     // Propiedad 1: conmutador exacto.
 
-    fn canal() -> impl Strategy<Value = u8> {
+    fn channel() -> impl Strategy<Value = u8> {
         prop_oneof![Just(0u8), Just(255u8), any::<u8>()]
     }
 
@@ -3206,20 +3210,20 @@ mod set_transparent {
     proptest! {
         #[test]
         fn property_1_the_button_toggles_the_mark_and_touches_nothing_else(
-            colors_2 in vec((canal(), canal(), canal(), canal()), 1..=256),
+            colors_2 in vec((channel(), channel(), channel(), channel()), 1..=256),
             mark_raw in any::<usize>(),
             active_raw in any::<usize>(),
             raw_2_2 in vec(any::<u8>(), 1..=24),
         ) {
             let colors_2: Vec<Rgba> =
                 colors_2.into_iter().map(|(r, g, b, a)| Rgba::new(r, g, b, a)).collect();
-            let largo = colors_2.len();
+            let length_2 = colors_2.len();
             let mark_initial = {
-                let m = mark_raw % (largo + 1);
-                (m < largo).then_some(m as u8)
+                let m = mark_raw % (length_2 + 1);
+                (m < length_2).then_some(m as u8)
             };
-            let active_2 = (active_raw % largo) as u8;
-            let indices: Vec<u8> = raw_2_2.iter().map(|&c| (usize::from(c) % largo) as u8).collect();
+            let active_2 = (active_raw % length_2) as u8;
+            let indices: Vec<u8> = raw_2_2.iter().map(|&c| (usize::from(c) % length_2) as u8).collect();
 
             // Oráculo propio: rótulo e índice resultante.
             let is_the_marked = mark_initial == Some(active_2);
@@ -3233,7 +3237,7 @@ mod set_transparent {
 
             let mut doc = Document::new(original.clone());
             let id = ImageId::from_raw(0);
-            prop_assert_eq!(pulsar(&mut doc, active_2), Ok(true));
+            prop_assert_eq!(press(&mut doc, active_2), Ok(true));
             let after_2 = image_of(&doc, id).clone();
 
             // Solo cambia el índice: bytes de píxeles y colores guardados iguales.
@@ -3270,7 +3274,7 @@ mod set_transparent {
             // Una segunda pulsación con la misma activa: el rótulo y el índice salen del estado.
             let second_removes = mark_expected == Some(active_2);
             prop_assert_eq!(label(&doc, active_2), if second_removes { REMOVE } else { SET });
-            prop_assert_eq!(pulsar(&mut doc, active_2), Ok(true));
+            prop_assert_eq!(press(&mut doc, active_2), Ok(true));
             let second_expected = if second_removes { None } else { Some(active_2) };
             prop_assert_eq!(mark(&doc), second_expected);
             // Vuelve a la original si no había otra marca distinta de la activa.
@@ -3292,11 +3296,11 @@ mod summary_transparent {
     use super::*;
     use px_ui::palette_ops::transparent_summary;
 
-    fn summary_2(index: Option<u8>, active_2: u8, largo: usize) -> String {
+    fn summary_2(index: Option<u8>, active_2: u8, length_2: usize) -> String {
         summary(
             &PaletteOp::SetTransparent { index },
             active_2,
-            largo,
+            length_2,
             false,
             false,
         )

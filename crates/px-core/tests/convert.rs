@@ -153,7 +153,7 @@ fn grays(img: &Image) -> Vec<u8> {
         .collect()
 }
 
-fn pares(img: &Image) -> Vec<(u8, u8)> {
+fn pairs(img: &Image) -> Vec<(u8, u8)> {
     assert_eq!(img.mode(), Mode::GrayAlpha);
     pixels(img)
         .into_iter()
@@ -201,9 +201,9 @@ fn resolved(img: &Image) -> Vec<Rgba> {
 // Llamadas a `convert_image` que comprueban que la imagen de origen no cambia.
 
 fn converts(img: &Image, target: Mode, allowed: Allowed) -> Result<Conversion, ConvertError> {
-    let antes = img.clone();
+    let before = img.clone();
     let result = convert_image(img, target, allowed);
-    assert_eq!(img, &antes, "convert_image tocó la imagen de origen");
+    assert_eq!(img, &before, "convert_image tocó la imagen de origen");
     result
 }
 
@@ -315,7 +315,7 @@ fn row_01_gray_to_the_other_three_modes() {
     );
 
     let ga = ok(&source, Mode::GrayAlpha, N, 0, 0);
-    assert_eq!(pares(&ga), [(0, 255), (127, 255), (255, 255)]);
+    assert_eq!(pairs(&ga), [(0, 255), (127, 255), (255, 255)]);
 
     let indexed = ok(&source, Mode::Indexed, N, 0, 0);
     assert_eq!(
@@ -373,7 +373,7 @@ fn row_05_red_semitransparent() {
     let source = rgba_img(1, 1, &[(255, 0, 0, 128)]);
 
     let ga = ok(&source, Mode::GrayAlpha, L, 1, 0);
-    assert_eq!(pares(&ga), [(54, 128)]);
+    assert_eq!(pairs(&ga), [(54, 128)]);
 
     rejects(&source, Mode::Gray, L, 1, 1);
 
@@ -387,7 +387,7 @@ fn row_06_the_rgb_of_a_transparent_pixel_is_not_content() {
 
     // Transparente canónico, no (19, 0).
     let ga = ok(&source, Mode::GrayAlpha, N, 0, 0);
-    assert_eq!(pares(&ga), [(0, 0)]);
+    assert_eq!(pairs(&ga), [(0, 0)]);
 
     // Sin `luma`: el color de un `a = 0` no cuenta en ningún destino.
     let gray_2 = ok(&source, Mode::Gray, A, 0, 1);
@@ -627,8 +627,8 @@ fn row_17_composition_with_rounding_to_nearest() {
     let white = ok(&source, Mode::Gray, A, 0, 2);
     assert_eq!(grays(&white), [255, 227, 200]);
 
-    let negro = ok(&source, Mode::Gray, A0, 0, 2);
-    assert_eq!(grays(&negro), [0, 100, 200]);
+    let black = ok(&source, Mode::Gray, A0, 0, 2);
+    assert_eq!(grays(&black), [0, 100, 200]);
 }
 
 #[test]
@@ -688,7 +688,7 @@ fn luma_of_a_gray_is_the_gray_for_all_256_values() {
 /// Valores por canal que fuerzan grises, alfa 0 y repeticiones.
 const CHANNELS: [u8; 5] = [0, 1, 127, 128, 255];
 
-fn canal() -> impl Strategy<Value = u8> {
+fn channel() -> impl Strategy<Value = u8> {
     prop_oneof![any::<u8>(), prop::sample::select(CHANNELS.to_vec())]
 }
 
@@ -697,7 +697,7 @@ fn small() -> impl Strategy<Value = u8> {
 }
 
 fn background() -> impl Strategy<Value = [u8; 3]> {
-    (canal(), canal(), canal()).prop_map(|(r, g, b)| [r, g, b])
+    (channel(), channel(), channel()).prop_map(|(r, g, b)| [r, g, b])
 }
 
 /// Colores uniformes, del conjunto pequeño y grises con alfa de un conjunto pequeño.
@@ -706,7 +706,7 @@ fn color() -> impl Strategy<Value = Rgba> {
         (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>())
             .prop_map(|(r, g, b, a)| rgba(r, g, b, a)),
         (small(), small(), small(), small()).prop_map(|(r, g, b, a)| rgba(r, g, b, a)),
-        (canal(), small()).prop_map(|(v, a)| rgba(v, v, v, a)),
+        (channel(), small()).prop_map(|(v, a)| rgba(v, v, v, a)),
     ]
 }
 
@@ -812,7 +812,7 @@ fn oracle(img: &Image, target: Mode, background: Option<[u8; 3]>) -> Expected {
     };
     for c in resolved(img) {
         let is_gray = c.r == c.g && c.g == c.b;
-        let valor = match target {
+        let value = match target {
             Mode::Rgba | Mode::Indexed => Pixel::Rgba(if c.a == 0 { transparent() } else { c }),
             Mode::GrayAlpha => {
                 if c.a == 0 {
@@ -839,7 +839,7 @@ fn oracle(img: &Image, target: Mode, background: Option<[u8; 3]>) -> Expected {
                 } else {
                     luma_naive(c.r, c.g, c.b)
                 };
-                let valor = if c.a == 255 {
+                let value = if c.a == 255 {
                     gray_2
                 } else {
                     match background {
@@ -849,10 +849,10 @@ fn oracle(img: &Image, target: Mode, background: Option<[u8; 3]>) -> Expected {
                         None => 0,
                     }
                 };
-                Pixel::Gray(valor as u8)
+                Pixel::Gray(value as u8)
             }
         };
-        expected_2.values.push(valor);
+        expected_2.values.push(value);
     }
     expected_2
 }
@@ -1042,9 +1042,9 @@ fn prop_oracle(
     allowed: Allowed,
     other_background: [u8; 3],
 ) -> Result<(), TestCaseError> {
-    let antes = img.clone();
+    let before = img.clone();
     let result = convert_image(img, target, allowed);
-    prop_assert_eq!(img, &antes, "la imagen de origen cambió");
+    prop_assert_eq!(img, &before, "la imagen de origen cambió");
 
     if img.mode() == target {
         // No es una conversión: copia idéntica, sin informe, con cualquier permiso.
@@ -1238,9 +1238,9 @@ fn prop_palette(img: &Image) -> Result<(), TestCaseError> {
         }
     }
 
-    let antes = img.clone();
+    let before = img.clone();
     let result = convert_image(img, Mode::Indexed, Allowed::NOTHING);
-    prop_assert_eq!(img, &antes, "la imagen de origen cambió");
+    prop_assert_eq!(img, &before, "la imagen de origen cambió");
 
     if palette_2.len() > 256 {
         let error = result.err();
@@ -1338,7 +1338,7 @@ proptest! {
     }
 
     #[test]
-    fn luma_is_close_to_its_fraction_and_to_rec_709(r in canal(), g in canal(), b in canal()) {
+    fn luma_is_close_to_its_fraction_and_to_rec_709(r in channel(), g in channel(), b in channel()) {
         let l = i64::from(luma(r, g, b));
         let (r, g, b) = (i64::from(r), i64::from(g), i64::from(b));
         prop_assert!((256 * l - (54 * r + 183 * g + 19 * b)).abs() <= 128);
@@ -1348,8 +1348,8 @@ proptest! {
 
     #[test]
     fn luma_is_monotonic_in_each_channel(
-        r in canal(), g in canal(), b in canal(),
-        r2 in canal(), g2 in canal(), b2 in canal(),
+        r in channel(), g in channel(), b in channel(),
+        r2 in channel(), g2 in channel(), b2 in channel(),
     ) {
         let (r_height, r_under) = (r.max(r2), r.min(r2));
         let (g_height, g_under) = (g.max(g2), g.min(g2));
@@ -1362,7 +1362,7 @@ proptest! {
     // Propiedad 3: composición, a través de `Gray` con un fondo cualquiera.
     #[test]
     fn composition_with_rounding_to_nearest(
-        r in canal(), g in canal(), b in canal(),
+        r in channel(), g in channel(), b in channel(),
         a in prop_oneof![any::<u8>(), Just(0u8), Just(255u8), Just(128u8)],
         bg in background(),
     ) {
@@ -1444,7 +1444,7 @@ fn row_21_transparents_with_different_rgb_do_not_count_as_a_color() {
             Some(Type::Semi) => (50, 128),
         })
         .collect();
-    assert_eq!(pares(&img), expected_2_2);
+    assert_eq!(pairs(&img), expected_2_2);
 
     // Gray con el fondo blanco y con el negro: 300 + 2 píxeles pierden alfa, ninguno color.
     // Los transparentes dan el fondo; 152 y 25 son `comp(50, background, 128)` hechos a mano.
@@ -1471,7 +1471,7 @@ fn row_21_transparents_with_different_rgb_do_not_count_as_a_color() {
     rejects(&source, Mode::GrayAlpha, N, 1, 0);
     rejects(&source, Mode::Gray, A, 1, 302);
     let img = ok(&source, Mode::GrayAlpha, L, 1, 0);
-    assert_eq!(pares(&img).last(), Some(&(luma(200, 0, 0), 255)));
+    assert_eq!(pairs(&img).last(), Some(&(luma(200, 0, 0), 255)));
 }
 
 // Propiedad 7: umbral de 256 colores.

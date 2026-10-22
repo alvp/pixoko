@@ -69,7 +69,7 @@ use px_ui::view::{MIN_VISIBLE, ScreenRect, Size, ViewOp, Zoom};
 
 mod common;
 use common::textures::Textures;
-use common::{PPPS, button_of_2, context, in_points, key_2, mover, wheel_line};
+use common::{PPPS, button_of_2, context, in_points, key_2, move_pointer, wheel_line};
 
 const TEST_SCREEN: Vec2 = vec2(400.0, 300.0);
 const TOLERANCE: f32 = 0.02;
@@ -854,10 +854,10 @@ impl Bench {
         let far = start_2 + vec2(40.0, 40.0);
         let target_2 = start_2 + vec2(dx as f32 / self.ppp, dy as f32 / self.ppp);
         let steps_2 = [
-            vec![mover(start_2)],
+            vec![move_pointer(start_2)],
             vec![button_of_2(start_2, PointerButton::Middle, true)],
-            vec![mover(far)],
-            vec![mover(target_2)],
+            vec![move_pointer(far)],
+            vec![move_pointer(target_2)],
             vec![button_of_2(target_2, PointerButton::Middle, false)],
             vec![],
         ];
@@ -1304,8 +1304,8 @@ fn row_5_each_pixel_of_the_image_is_seen_exactly_like_shade_at_and_outside_the_b
 /// Fila 5, tras arrastrar `(dx, dy)`: el color de cada píxel físico de la imagen relativo a su
 /// esquina es el mismo que antes (el damero va con la imagen).
 fn row_5_after_dragging(ppp: f32, zoom: u32, offsets: &[(i64, i64)], mesh: bool) {
-    let (mut bench, antes) = row_5_scene(ppp, zoom, mesh);
-    let g0 = antes.geom;
+    let (mut bench, before) = row_5_scene(ppp, zoom, mesh);
+    let g0 = before.geom;
     let (mut x, mut y) = g0.source_2;
     for &(dx, dy) in offsets {
         let label_2 = format!("ppp {ppp} ×{zoom} arrastre ({dx}, {dy}) malla={mesh}");
@@ -1322,11 +1322,11 @@ fn row_5_after_dragging(ppp: f32, zoom: u32, offsets: &[(i64, i64)], mesh: bool)
         without_failures(&f, &label_2);
         for ry in 0..g0.height_2 {
             for rx in 0..g0.width_2 {
-                let antes_ = antes.buffer.en(g0.source_2.0 + rx, g0.source_2.1 + ry);
+                let before_ = before.buffer.en(g0.source_2.0 + rx, g0.source_2.1 + ry);
                 let after_ = after_2.buffer.en(g1.source_2.0 + rx, g1.source_2.1 + ry);
                 assert!(
-                    antes_.near(after_, TOLERANCE),
-                    "{label_2}: el píxel ({rx}, {ry}) relativo a la esquina era {antes_:?} y ahora es {after_:?}"
+                    before_.near(after_, TOLERANCE),
+                    "{label_2}: el píxel ({rx}, {ry}) relativo a la esquina era {before_:?} y ahora es {after_:?}"
                 );
             }
         }
@@ -1854,11 +1854,11 @@ fn stroke_of_the_eraser(ppp: f32, background_2: CanvasBackground, mesh: bool) {
         let b = a.block(x, y);
         for py in b.y..b.y + b.height {
             for px in b.x..b.x + b.width {
-                let antes = with_overlay.buffer.en(px, py);
+                let before = with_overlay.buffer.en(px, py);
                 let after_2 = after_release.buffer.en(px, py);
                 assert!(
-                    antes.near(after_2, TOLERANCE),
-                    "{label_2}: el píxel físico ({px}, {py}) de ({x}, {y}) se veía {antes:?} con la superposición y {after_2:?} tras soltar"
+                    before.near(after_2, TOLERANCE),
+                    "{label_2}: el píxel físico ({px}, {py}) de ({x}, {y}) se veía {before:?} con la superposición y {after_2:?} tras soltar"
                 );
             }
         }
@@ -1932,9 +1932,9 @@ fn row_8_with_the_view_at_the_extreme_the_quad_is_only_the_visible_strip_and_loo
                 let g = scene.geom;
                 let vp = bench.viewport();
                 // Quedan visibles `MIN_VISIBLE` píxeles por eje (View::clamp), como mucho.
-                let visible = |source_2: i64, largo: i64, canvas_2: u32| {
+                let visible = |source_2: i64, length_2: i64, canvas_2: u32| {
                     let from_2 = source_2.max(0);
-                    let until = (source_2 + largo).min(i64::from(canvas_2));
+                    let until = (source_2 + length_2).min(i64::from(canvas_2));
                     until - from_2
                 };
                 assert_eq!(
@@ -2040,7 +2040,7 @@ fn row_8_with_a_1x1_physical_pixel_canvas_there_is_no_panic_and_the_clip_is_none
         without_failures(&f, &label_2);
         // Y se puede arrastrar y hacer zoom sin pánico.
         bench.canvas.request_view(ViewOp::ZoomIn);
-        bench.runs(vec![mover(pos2(0.2 / ppp, 0.2 / ppp))], &[]);
+        bench.runs(vec![move_pointer(pos2(0.2 / ppp, 0.2 / ppp))], &[]);
         bench.runs(
             vec![wheel_line(true), key_2(Key::Home, Modifiers::NONE)],
             &[],
@@ -2283,12 +2283,12 @@ fn row_14_changing_the_background_in_the_middle_of_a_stroke_changes_the_next_fra
     let mut t = TestStroke::new_2(1.0);
     let state_id = t.doc.state_id();
     let bytes = to_rgba8(t.doc.image(ImageId::from_raw(0)).expect("imagen"));
-    let mover_a = |x| mover(x);
+    let move_to = |x| move_pointer(x);
     let start_2 = t.center(10, 5);
-    t.frame(vec![mover_a(start_2)]);
+    t.frame(vec![move_to(start_2)]);
     t.frame(vec![button_of_2(start_2, PointerButton::Primary, true)]);
     for x in 11..=14 {
-        t.frame(vec![mover_a(t.center(x, 5))]);
+        t.frame(vec![move_to(t.center(x, 5))]);
     }
     assert!(t.tool.busy(), "el trazo está en curso");
     let n_pending = t.pending_2().len();
@@ -2338,9 +2338,9 @@ fn row_14_changing_the_background_in_the_middle_of_a_stroke_changes_the_next_fra
     }
 
     // El trazo sigue con el fondo nuevo y, de vuelta a `Checker`, la textura es la misma.
-    t.frame(vec![mover_a(t.center(15, 5))]);
+    t.frame(vec![move_to(t.center(15, 5))]);
     t.bench.canvas.set_background(CanvasBackground::Checker);
-    let output_2 = t.frame(vec![mover_a(t.center(16, 5))]);
+    let output_2 = t.frame(vec![move_to(t.center(16, 5))]);
     assert_eq!(t.bench.canvas.checker_texture_id(), Some(checker_2));
     assert!(
         output_2.uploads_of(checker_2).is_empty(),
@@ -2589,24 +2589,24 @@ fn row_15_when_turning_off_the_mesh_mode_the_texture_path_returns() {
 #[derive(Clone, Copy, Debug)]
 enum Op {
     /// Mueve el puntero a una posición del lienzo, en milésimas de su ancho y alto.
-    Mover(u32, u32),
+    Move(u32, u32),
     Wheel(bool),
     More,
     Less,
     Start,
     /// Pulsa un botón (el central desplaza, el izquierdo dibuja) si no hay ninguno abajo.
-    Pulsar(bool),
+    TestPress(bool),
     Release,
 }
 
 fn a_op() -> impl Strategy<Value = Op> {
     prop_oneof![
-        3 => (0u32..1000, 0u32..1000).prop_map(|(x, y)| Op::Mover(x, y)),
+        3 => (0u32..1000, 0u32..1000).prop_map(|(x, y)| Op::Move(x, y)),
         2 => any::<bool>().prop_map(Op::Wheel),
         1 => Just(Op::More),
         1 => Just(Op::Less),
         1 => Just(Op::Start),
-        2 => any::<bool>().prop_map(Op::Pulsar),
+        2 => any::<bool>().prop_map(Op::TestPress),
         2 => Just(Op::Release),
     ]
 }
@@ -2633,25 +2633,25 @@ proptest! {
         let vp = painting.viewport();
         let mut pos = in_points(ppp, i64::from(vp.width) / 2, i64::from(vp.height) / 2);
         let mut button_2: Option<PointerButton> = None;
-        let mut sequence = vec![vec![mover(pos)]];
+        let mut sequence = vec![vec![move_pointer(pos)]];
         for op in ops {
             sequence.push(match op {
-                Op::Mover(fx, fy) => {
+                Op::Move(fx, fy) => {
                     let x = i64::from(fx) * i64::from(vp.width) / 1000;
                     let y = i64::from(fy) * i64::from(vp.height) / 1000;
                     pos = in_points(ppp, x, y);
-                    vec![mover(pos)]
+                    vec![move_pointer(pos)]
                 }
                 Op::Wheel(top) => vec![wheel_line(top)],
                 Op::More => vec![key_2(Key::Plus, Modifiers::NONE)],
                 Op::Less => vec![key_2(Key::Minus, Modifiers::NONE)],
                 Op::Start => vec![key_2(Key::Home, Modifiers::NONE)],
-                Op::Pulsar(central) if button_2.is_none() => {
+                Op::TestPress(central) if button_2.is_none() => {
                     let b = if central { PointerButton::Middle } else { PointerButton::Primary };
                     button_2 = Some(b);
                     vec![button_of_2(pos, b, true)]
                 }
-                Op::Pulsar(_) => vec![],
+                Op::TestPress(_) => vec![],
                 Op::Release => match button_2.take() {
                     Some(b) => vec![button_of_2(pos, b, false)],
                     None => vec![],
@@ -2987,8 +2987,8 @@ fn row_6_after_dragging(
 ) {
     let mut bench = Bench::new_with(ppp, image_of_alphas(), background_2, false);
     bench.with_zoom(zoom);
-    let antes = bench.scene(&[]);
-    let g0 = antes.geom;
+    let before = bench.scene(&[]);
+    let g0 = before.geom;
     let (mut x, mut y) = g0.source_2;
     for &(dx, dy) in offsets {
         let label_2 = format!("ppp {ppp} ×{zoom} {background_2:?} arrastre ({dx}, {dy})");
@@ -3008,11 +3008,11 @@ fn row_6_after_dragging(
         );
         for ry in 0..g0.height_2 {
             for rx in 0..g0.width_2 {
-                let antes_ = antes.buffer.en(g0.source_2.0 + rx, g0.source_2.1 + ry);
+                let before_ = before.buffer.en(g0.source_2.0 + rx, g0.source_2.1 + ry);
                 let after_ = after_2.buffer.en(g1.source_2.0 + rx, g1.source_2.1 + ry);
                 assert!(
-                    antes_.near(after_, TOLERANCE),
-                    "{label_2}: el píxel ({rx}, {ry}) relativo a la esquina era {antes_:?} y ahora es {after_:?}"
+                    before_.near(after_, TOLERANCE),
+                    "{label_2}: el píxel ({rx}, {ry}) relativo a la esquina era {before_:?} y ahora es {after_:?}"
                 );
             }
         }
@@ -3254,13 +3254,13 @@ fn row_7_custom_color_preview_entry_is_seen_over_the_color_the_same_as_after_end
                 let mut expected_2_2 = Vec::new();
                 for (n, color) in colors_2.into_iter().enumerate() {
                     bench.canvas.preview_entry(&bench.ctx, &indexed, 1, color);
-                    let vista = image_with_the_entry(&indexed, 1, color);
+                    let view = image_with_the_entry(&indexed, 1, color);
                     let scene = bench.scene(&[]);
                     let label_2 = format!("{label_2}, vista previa con {color:?}");
                     // Sin superposición propia ni damero, y cada píxel físico es el oráculo.
                     checks_base(&bench, &scene.output_2, background_2, false, &label_2);
                     assert_eq!(bench.canvas.checker_texture_id(), None, "{label_2}");
-                    without_failures(&failures(&scene, &vista, &[], background_2), &label_2);
+                    without_failures(&failures(&scene, &view, &[], background_2), &label_2);
                     // Una sola subida (la baldosa de la imagen) y ninguna del damero.
                     assert_eq!(
                         scene.output_2.uploads.len(),
@@ -3293,7 +3293,7 @@ fn row_7_custom_color_preview_entry_is_seen_over_the_color_the_same_as_after_end
                 // Fuera de los píxeles de la entrada editada, la vista previa se ve igual que antes
                 // y que después: solo cambian los de la entrada 1.
                 let g = after.geom;
-                for (color, vista) in &expected_2_2 {
+                for (color, view) in &expected_2_2 {
                     for py in g.source_2.1..g.source_2.1 + g.height_2 {
                         for px in g.source_2.0..g.source_2.0 + g.width_2 {
                             let (ix, iy) = (
@@ -3304,8 +3304,7 @@ fn row_7_custom_color_preview_entry_is_seen_over_the_color_the_same_as_after_end
                                 continue;
                             }
                             assert!(
-                                vista
-                                    .buffer
+                                view.buffer
                                     .en(px, py)
                                     .near(after.buffer.en(px, py), TOLERANCE),
                                 "{label_2}: el píxel ({px}, {py}) de otra entrada cambió con la vista previa de {color:?}"
@@ -3386,10 +3385,10 @@ fn row_8_custom_color_changing_the_background_in_the_middle_of_a_stroke_is_seen_
     let state_id = t.doc.state_id();
     let bytes = to_rgba8(t.doc.image(ImageId::from_raw(0)).expect("imagen"));
     let start_2 = t.center(10, 5);
-    t.frame(vec![mover(start_2)]);
+    t.frame(vec![move_pointer(start_2)]);
     t.frame(vec![button_of_2(start_2, PointerButton::Primary, true)]);
     for x in 11..=14 {
-        t.frame(vec![mover(t.center(x, 5))]);
+        t.frame(vec![move_pointer(t.center(x, 5))]);
     }
     assert!(t.tool.busy(), "el trazo está en curso");
     let n_pending = t.pending_2().len();
@@ -3463,9 +3462,9 @@ fn row_8_custom_color_changing_the_background_in_the_middle_of_a_stroke_is_seen_
 
     // El trazo no se cortó: sigue con otro fondo propio y termina en un solo paso de historia, con
     // los píxeles borrados sobre el fondo de ese momento.
-    t.frame(vec![mover(t.center(15, 5))]);
+    t.frame(vec![move_pointer(t.center(15, 5))]);
     t.bench.canvas.set_background(b);
-    let output_2 = t.frame(vec![mover(t.center(16, 5))]);
+    let output_2 = t.frame(vec![move_pointer(t.center(16, 5))]);
     assert_eq!(t.pending_2().len(), 7);
     assert_eq!(
         output_2.uploads.len(),

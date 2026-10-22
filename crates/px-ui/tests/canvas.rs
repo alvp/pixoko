@@ -277,10 +277,10 @@ fn dragging_with_the_middle_button_pans_the_image() {
     bench.canvas.set_image(&image_of_test());
     let mut f = bench.frame(vec![], None);
     Bench::clean(&mut f);
-    let antes = f.info.image_rect.expect("hay imagen");
+    let before = f.info.image_rect.expect("hay imagen");
 
     let start_2 = pos2(400.0, 300.0);
-    let pulsar = |pressed| Event::PointerButton {
+    let press = |pressed| Event::PointerButton {
         pos: start_2,
         button: PointerButton::Middle,
         pressed,
@@ -288,20 +288,20 @@ fn dragging_with_the_middle_button_pans_the_image() {
     };
     let mut f = bench.frame(vec![Event::PointerMoved(start_2)], None);
     Bench::clean(&mut f);
-    let mut f = bench.frame(vec![pulsar(true)], None);
+    let mut f = bench.frame(vec![press(true)], None);
     Bench::clean(&mut f);
     for step in 1..=4 {
         let pos = start_2 + vec2(10.0, 5.0) * step as f32;
         let mut f = bench.frame(vec![Event::PointerMoved(pos)], None);
         Bench::clean(&mut f);
     }
-    let mut f = bench.frame(vec![pulsar(false)], None);
+    let mut f = bench.frame(vec![press(false)], None);
     Bench::clean(&mut f);
     let after_2 = f.info.image_rect.expect("hay imagen");
-    let (dx, dy) = (after_2.min.x - antes.min.x, after_2.min.y - antes.min.y);
+    let (dx, dy) = (after_2.min.x - before.min.x, after_2.min.y - before.min.y);
     assert!(dx > 0.0 && dx <= 40.0 + 1e-3, "dx = {dx}");
     assert!(dy > 0.0 && dy <= 20.0 + 1e-3, "dy = {dy}");
-    assert!(near(after_2.width(), antes.width()), "el zoom no cambia");
+    assert!(near(after_2.width(), before.width()), "el zoom no cambia");
 }
 
 // ---------------------------------------------------------------------------------------------

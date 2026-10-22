@@ -215,7 +215,7 @@ fn row_5_indexed_dropper_one_event_per_new_pixel() {
     for previous in 0u8..=2 {
         let mut es = Scene::dropper(indexed_with_row_0());
         step_previous(&mut es.doc, es.id, previous);
-        let antes = es.state_2();
+        let before = es.state_2();
         assert!(!es.tool.busy());
 
         for (event, expected_2_2, busy) in sequence_of_row_5() {
@@ -223,7 +223,7 @@ fn row_5_indexed_dropper_one_event_per_new_pixel() {
             assert_eq!(es.events_2(), expected_2_2, "{event:?} (previo {previous})");
             assert_eq!(es.tool.busy(), busy, "{event:?}");
             assert_eq!(es.preview(), vec![], "{event:?}: sin vista previa");
-            assert_eq!(es.state_2(), antes, "{event:?}: el documento no cambia");
+            assert_eq!(es.state_2(), before, "{event:?}: el documento no cambia");
         }
     }
 }
@@ -314,10 +314,10 @@ fn the_dropper_does_not_change_the_document_in_any_mode() {
     for image in [rgba_single(), indexed_with_row_0(), gray_2, gray_alpha] {
         let mut es = Scene::dropper(image);
         step_previous(&mut es.doc, es.id, 2);
-        let antes = es.state_2();
+        let before = es.state_2();
         for event in [begin(1, 1), mov(2, 2), mov(0, 0), fin()] {
             assert!(!es.ev(event));
-            assert_eq!(es.state_2(), antes, "{event:?}");
+            assert_eq!(es.state_2(), before, "{event:?}");
         }
         assert_eq!(es.events_2().len(), 3);
         assert!(es.doc.can_redo(), "el rehacer sigue disponible");
@@ -440,7 +440,7 @@ fn row_6_indexed_chooses_the_entry_also_the_transparent_one() {
 fn row_7_starting_outside_chooses_nothing_but_leaves_the_gesture_busy() {
     for (x, y) in [(-1, 0), (8, 0), (0, 8), (0, -1), (MIN, MAX), (MAX, MAX)] {
         let mut es = Scene::dropper(rgba_single());
-        let antes = es.state_2();
+        let before = es.state_2();
         assert!(!es.ev(begin(x, y)));
         assert!(es.tool.busy(), "({x}, {y}): busy desde el Begin");
         assert_eq!(es.events_2(), vec![], "({x}, {y})");
@@ -448,7 +448,7 @@ fn row_7_starting_outside_chooses_nothing_but_leaves_the_gesture_busy() {
         assert!(!es.ev(fin()));
         assert!(!es.tool.busy(), "({x}, {y}): libre tras el End");
         assert_eq!(es.events_2(), vec![]);
-        assert_eq!(es.state_2(), antes);
+        assert_eq!(es.state_2(), before);
     }
 }
 
@@ -468,7 +468,7 @@ fn row_7_a_drag_that_starts_outside_and_enters_chooses_on_entering() {
 #[test]
 fn row_7_a_drag_that_leaves_neither_chooses_nor_cancels_and_on_returning_chooses_another() {
     let mut es = Scene::dropper(rgba_single());
-    let antes = es.state_2();
+    let before = es.state_2();
     assert!(!es.ev(begin(2, 2)));
     assert_eq!(es.events_2(), vec![of_rgba_single(2, 2)]);
     assert!(!es.ev(mov(20, 2)));
@@ -483,7 +483,7 @@ fn row_7_a_drag_that_leaves_neither_chooses_nor_cancels_and_on_returning_chooses
         vec![],
         "lo elegido se queda: nada más que decir"
     );
-    assert_eq!(es.state_2(), antes);
+    assert_eq!(es.state_2(), before);
 }
 
 // Fila 8: gesto y teclado.
@@ -525,7 +525,7 @@ fn row_8_during_an_eraser_stroke_select_and_escape_do_nothing() {
 #[test]
 fn row_8_during_a_dropper_drag_select_and_escape_do_nothing() {
     let mut es = Scene::dropper(rgba_single());
-    let antes = es.state_2();
+    let before = es.state_2();
     assert!(!es.ev(begin(2, 2)));
     assert!(!es.ev(mov(3, 2)));
     assert_eq!(
@@ -551,7 +551,7 @@ fn row_8_during_a_dropper_drag_select_and_escape_do_nothing() {
     assert_eq!(es.events_2(), vec![of_rgba_single(4, 2)]);
     assert!(!es.ev(fin()));
     assert!(!es.tool.busy());
-    assert_eq!(es.state_2(), antes);
+    assert_eq!(es.state_2(), before);
 }
 
 #[test]
@@ -575,12 +575,12 @@ fn row_8_after_the_end_select_does_change_tool() {
 fn escape_at_rest_with_the_new_tools_does_nothing() {
     for tool_2 in [Tool::Dropper, Tool::Eraser] {
         let mut es = Scene::new(rgba_blue(), tool_2);
-        let antes = es.state_2();
+        let before = es.state_2();
         assert!(!es.escape());
         assert_eq!(es.tool.tool(), tool_2);
         assert!(!es.tool.busy());
         assert_eq!(es.events_2(), vec![]);
-        assert_eq!(es.state_2(), antes);
+        assert_eq!(es.state_2(), before);
     }
 }
 
@@ -861,16 +861,16 @@ fn inside(image: &Image, pos: (i32, i32)) -> Option<(u32, u32)> {
 /// en este gesto.
 #[derive(Default)]
 struct Oracle {
-    ultimo: Option<(u32, u32)>,
+    last_2: Option<(u32, u32)>,
 }
 
 impl Oracle {
     fn visits(&mut self, image: &Image, pos: (i32, i32)) -> Option<Picked> {
         let (x, y) = inside(image, pos)?;
-        if self.ultimo == Some((x, y)) {
+        if self.last_2 == Some((x, y)) {
             return None;
         }
-        self.ultimo = Some((x, y));
+        self.last_2 = Some((x, y));
         Some(chosen_expected(image.get_pixel(x, y).unwrap()))
     }
 }
@@ -905,7 +905,7 @@ proptest! {
     ) {
         let mut es = Scene::dropper(image);
         step_previous(&mut es.doc, es.id, previous);
-        let antes = es.state_2();
+        let before = es.state_2();
 
         for (source_2, movements) in gestures {
             let mut oracle = Oracle::default();
@@ -920,14 +920,14 @@ proptest! {
                 if let Some(picked) = expected_2 {
                     matches_picked_at(es.image_2(), pos, picked)?;
                 }
-                prop_assert_eq!(es.state_2(), antes.clone(), "{:?}: el documento no cambia", event);
+                prop_assert_eq!(es.state_2(), before.clone(), "{:?}: el documento no cambia", event);
                 prop_assert!(es.tool.busy());
                 prop_assert!(es.preview().is_empty());
             }
             prop_assert!(!es.ev(fin()));
             prop_assert!(!es.tool.busy());
             prop_assert!(es.events_2().is_empty());
-            prop_assert_eq!(es.state_2(), antes.clone());
+            prop_assert_eq!(es.state_2(), before.clone());
         }
     }
 }

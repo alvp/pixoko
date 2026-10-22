@@ -68,9 +68,9 @@ impl Layers {
         for _ in 0..self.width {
             row.extend_from_slice(&self.background_2[..n]);
         }
-        for (i, ((x, py), valor)) in self.pencil.iter().enumerate() {
+        for (i, ((x, py), value)) in self.pencil.iter().enumerate() {
             if k > i && *py == y {
-                row[x * n..(x + 1) * n].copy_from_slice(&valor[..n]);
+                row[x * n..(x + 1) * n].copy_from_slice(&value[..n]);
             }
         }
         if k >= 4 && y == self.y_line {

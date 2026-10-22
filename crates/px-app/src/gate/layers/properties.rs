@@ -99,7 +99,7 @@ fn color(m: &Stack, n: u8) -> Cel4 {
 }
 
 /// Un segmento horizontal, vertical o a 45° que cabe en el lienzo desde `(x, y)`.
-fn segment_inside(m: &Stack, x: u8, y: u8, dir: u8, largo: u8) -> ((i32, i32), (i32, i32)) {
+fn segment_inside(m: &Stack, x: u8, y: u8, dir: u8, length: u8) -> ((i32, i32), (i32, i32)) {
     let (width, height) = (m.width as i32, m.height as i32);
     let start_2 = (i32::from(x) % width, i32::from(y) % height);
     const DIRS: [(i32, i32); 8] = [
@@ -119,7 +119,7 @@ fn segment_inside(m: &Stack, x: u8, y: u8, dir: u8, largo: u8) -> ((i32, i32), (
         _ => i32::MAX,
     };
     let maximum = until(start_2.0, dx, width).min(until(start_2.1, dy, height));
-    let steps_2 = i32::from(largo) % (maximum + 1);
+    let steps_2 = i32::from(length) % (maximum + 1);
     (
         start_2,
         (start_2.0 + dx * steps_2, start_2.1 + dy * steps_2),
@@ -132,8 +132,8 @@ fn concrete(a: &A, m: &Stack) -> Order {
         A::New => Order::New,
         A::Duplicate => Order::Duplicate,
         A::Remove => Order::Remove,
-        A::Raise => Order::Mover(1),
-        A::Lower => Order::Mover(-1),
+        A::Raise => Order::Move(1),
+        A::Lower => Order::Move(-1),
         A::Activate(i) => Order::Activate(layer_2(*i)),
         A::Visible(i, v) => Order::Visible(layer_2(*i), *v),
         A::Lock(i, v) => Order::Lock(layer_2(*i), *v),
@@ -234,9 +234,9 @@ proptest! {
             "{:?}",
             w.m.canonical().equal_content(&read.canonical())
         );
-        let antes = compose(&w.s.document).expect("compose");
+        let before = compose(&w.s.document).expect("compose");
         let after_2 = compose(&other.document).expect("compose");
-        prop_assert_eq!(equal_except_rgb_with_alpha_0(&antes, &after_2), Ok(()));
+        prop_assert_eq!(equal_except_rgb_with_alpha_0(&before, &after_2), Ok(()));
     }
 
     /// P2. Historia con capas: deshacer k veces da la instantánea anotada tras el paso `n − k`
@@ -251,11 +251,11 @@ proptest! {
     ) {
         let mut w = world(indexed_2, width, height);
         run(&mut w, &commands);
-        let (steps_2, final_) = (w.steps_2(), w.leer());
+        let (steps_2, final_) = (w.steps_2(), w.read_2_2());
         prop_assert_eq!(w.undo_all(), steps_2);
         prop_assert_eq!(w.s.document.state_id(), 0);
         prop_assert_eq!(w.redo_all(), steps_2);
-        prop_assert_eq!(final_.equal_content(&w.leer()), Ok(()));
+        prop_assert_eq!(final_.equal_content(&w.read_2_2()), Ok(()));
         // Un paso a paso desde el final, cada vez comprobado dentro de `undo` y `redo`.
         for _ in 0..steps_2 {
             w.undo();
@@ -263,7 +263,7 @@ proptest! {
         for _ in 0..steps_2 {
             w.redo();
         }
-        prop_assert_eq!(final_.equal_content(&w.leer()), Ok(()));
+        prop_assert_eq!(final_.equal_content(&w.read_2_2()), Ok(()));
     }
 }
 

@@ -161,13 +161,13 @@ fn the_rows_are_compacted_without_gaps_in_gray_and_gray_alpha() {
 #[test]
 fn the_controls_of_each_mode_have_a_row_and_go_from_top_to_bottom() {
     for mode_2 in TEST_MODES {
-        let mut anterior = None;
+        let mut previous = None;
         for control in controls(mode_2) {
             let row_2 = control_row_u(mode_2, *control).expect("cada control tiene fila");
-            if let Some(anterior) = anterior {
-                assert!(row_2 >= anterior + ROW_H_U, "{mode_2:?} {control:?}");
+            if let Some(previous) = previous {
+                assert!(row_2 >= previous + ROW_H_U, "{mode_2:?} {control:?}");
             }
-            anterior = Some(row_2);
+            previous = Some(row_2);
         }
     }
 }
@@ -190,14 +190,14 @@ fn the_field_and_the_notice_go_after_the_controls() {
 #[test]
 fn the_mockup_is_deduced_from_the_constants() {
     for mode_2 in TEST_MODES {
-        let ultimo = controls(mode_2)
+        let last_2 = controls(mode_2)
             .iter()
             .filter_map(|c| control_row_u(mode_2, *c))
             .max()
             .expect("hay controles");
         assert_eq!(
             field_y_u(mode_2),
-            ultimo + ROW_H_U + BLOCK_GAP_U,
+            last_2 + ROW_H_U + BLOCK_GAP_U,
             "{mode_2:?}"
         );
         assert_eq!(
@@ -232,12 +232,12 @@ fn block_px(mode_2: Mode, n: i64) -> i64 {
 
 #[test]
 fn editor_height_u_max_is_the_largest_of_the_modes() {
-    let mayor = TEST_MODES
+    let greater = TEST_MODES
         .iter()
         .map(|m| editor_height_u(*m))
         .max()
         .expect("hay modos");
-    assert_eq!(editor_height_u_max(), mayor);
+    assert_eq!(editor_height_u_max(), greater);
     assert_eq!(editor_height_u_max(), 214);
 }
 
@@ -324,11 +324,11 @@ fn row_1_min_window_height_pt_at_the_five_ppp() {
 
 #[test]
 fn row_1_the_minimum_does_not_pass_65_percent_of_720_and_leaves_one_row_with_the_editor() {
-    let mut mayor = 0.0f32;
+    let mut greater = 0.0f32;
     for ppp in PPPS {
         let n = text_scale(ppp);
         let minimum_2 = min_window_height_pt(ppp);
-        mayor = mayor.max(minimum_2);
+        greater = greater.max(minimum_2);
         assert!(
             minimum_2 >= min_panel_height_px(n) as f32 / ppp,
             "ppp {ppp}: {minimum_2} pt no deja sitio a una fila y al editor"
@@ -338,7 +338,7 @@ fn row_1_the_minimum_does_not_pass_65_percent_of_720_and_leaves_one_row_with_the
     }
     // El 65 % de 720 puntos: con los iconos (I.4) se retira la excepción del 72 % de I.2a
     // (specs/interfaz-iconos.md, decisión 9).
-    assert!(mayor <= 468.0, "el mayor de los cinco mide {mayor} pt");
+    assert!(greater <= 468.0, "el mayor de los cinco mide {greater} pt");
 }
 
 // Fila 1b: ancho mínimo (columna de herramientas, ancho del panel y 128 u de lienzo).
@@ -1540,8 +1540,8 @@ mod icons {
             removing in any::<bool>(),
         ) {
             let k = i64::from(n);
-            let tabla: &[(PaletteButton, RectU)] = if removing { &TEST_TEXTS } else { &ICONS };
-            let expected_2 = tabla
+            let table: &[(PaletteButton, RectU)] = if removing { &TEST_TEXTS } else { &ICONS };
+            let expected_2 = table
                 .iter()
                 .find(|(_, r)| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k)
                 .map(|(b, _)| *b);

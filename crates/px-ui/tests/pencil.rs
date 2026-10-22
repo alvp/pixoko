@@ -89,7 +89,7 @@ impl Bench {
         self.textures_2.get(id).expect("se ha subido su contenido")
     }
 
-    /// Ejecuta un fotograma como el de la app: `antes` (si lo hay) corre dentro del fotograma,
+    /// Ejecuta un fotograma como el de la app: `before` (si lo hay) corre dentro del fotograma,
     /// antes de `interact`; luego `interact`, `set_overlay` con la superposición dada (el trazo
     /// pendiente entero; vacía la quita), `sync` y `paint`. Aplica los `textures_delta` a
     /// `textures` y no los limpia (quien llama los mira y los limpia).
@@ -97,7 +97,7 @@ impl Bench {
         &mut self,
         events: Vec<Event>,
         overlay: Vec<(u32, u32, Rgba)>,
-        antes: Option<fn(&mut Ui)>,
+        before: Option<fn(&mut Ui)>,
     ) -> TestFrame {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
@@ -108,8 +108,8 @@ impl Bench {
         let canvas = &mut self.canvas;
         let image_2 = &self.image_2;
         let output = self.ctx.run_ui(input, |ui| {
-            if let Some(antes) = antes {
-                antes(ui);
+            if let Some(before) = before {
+                before(ui);
             }
             let events_2: Vec<CanvasEvent> = canvas
                 .interact_roles(ui)
@@ -151,7 +151,7 @@ impl Bench {
     fn step_roles_with(
         &mut self,
         events: Vec<Event>,
-        antes: Option<fn(&mut Ui)>,
+        before: Option<fn(&mut Ui)>,
     ) -> (Vec<(CanvasInput, Role)>, CanvasInfo) {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
@@ -162,8 +162,8 @@ impl Bench {
         let canvas = &mut self.canvas;
         let image_2 = &self.image_2;
         let mut output = self.ctx.run_ui(input, |ui| {
-            if let Some(antes) = antes {
-                antes(ui);
+            if let Some(before) = before {
+                before(ui);
             }
             let entries = canvas.interact_roles(ui);
             canvas.sync(ui.ctx(), image_2).expect("sync");
@@ -193,7 +193,7 @@ impl Bench {
 
 // Entradas sintéticas.
 
-fn mover(pos: Pos2) -> Event {
+fn move_pointer(pos: Pos2) -> Event {
     Event::PointerMoved(pos)
 }
 
@@ -312,8 +312,8 @@ impl Session {
     }
 
     /// Como `step`, pero con una función que corre dentro del fotograma antes de `interact`.
-    fn step_with(&mut self, events: Vec<Event>, antes: fn(&mut Ui)) -> Vec<CanvasEvent> {
-        let mut f = self.bench.frame(events, vec![], Some(antes));
+    fn step_with(&mut self, events: Vec<Event>, before: fn(&mut Ui)) -> Vec<CanvasEvent> {
+        let mut f = self.bench.frame(events, vec![], Some(before));
         f.output.textures_delta.clear();
         self.events_2.extend(f.events_2.iter().cloned());
         self.info = f.info;
@@ -389,7 +389,7 @@ fn drag(s: &mut Session, start_2: Pos2) -> Pos2 {
     let mut pos = start_2;
     for step in 1..=4 {
         pos = start_2 + vec2(10.0, 5.0) * step as f32;
-        s.step(vec![mover(pos)]);
+        s.step(vec![move_pointer(pos)]);
     }
     pos
 }
@@ -401,7 +401,7 @@ fn row_14_a_click_without_moving_emits_begin_and_end_and_paints_a_pixel() {
     let mut s = Session::new();
     let p = s.pos(10, 5);
     assert_eq!(
-        s.step(vec![mover(p)]),
+        s.step(vec![move_pointer(p)]),
         NOTHING,
         "pasar el ratón no hace nada"
     );
@@ -426,17 +426,17 @@ fn row_14_a_click_without_moving_emits_begin_and_end_and_paints_a_pixel() {
 fn a_dragged_stroke_emits_one_move_per_pointer_event() {
     let mut s = Session::new();
     let p = s.pos(10, 5);
-    s.step(vec![mover(p)]);
+    s.step(vec![move_pointer(p)]);
     assert_eq!(s.step(vec![left_2(p, true)]), [begin(10, 5)]);
     // Tres posiciones en un mismo fotograma: tres `Move`, en orden, sin perder ninguna.
     let ev = s.step(vec![
-        mover(s.pos(11, 5)),
-        mover(s.pos(12, 7)),
-        mover(s.pos(11, 9)),
+        move_pointer(s.pos(11, 5)),
+        move_pointer(s.pos(12, 7)),
+        move_pointer(s.pos(11, 9)),
     ]);
     assert_eq!(ev, [step_a(11, 5), step_a(12, 7), step_a(11, 9)]);
     // Y uno por fotograma cuando hay un evento por fotograma.
-    assert_eq!(s.step(vec![mover(s.pos(20, 9))]), [step_a(20, 9)]);
+    assert_eq!(s.step(vec![move_pointer(s.pos(20, 9))]), [step_a(20, 9)]);
     s.step(vec![left_2(s.pos(20, 9), false)]);
     assert_eq!(s.events_2.last(), Some(&CanvasEvent::StrokeEnd));
 
@@ -452,10 +452,10 @@ fn a_stroke_can_be_started_over_the_background_outside_the_image() {
     // A la izquierda de la imagen, dentro del lienzo: el píxel (-1, 5).
     let outside = s.pos(-1, 5);
     assert!(outside.x > 0.0 && outside.x < s.rect.min.x);
-    s.step(vec![mover(outside)]);
+    s.step(vec![move_pointer(outside)]);
     assert_eq!(s.step(vec![left_2(outside, true)]), [begin(-1, 5)]);
-    s.step(vec![mover(s.pos(0, 5))]);
-    s.step(vec![mover(s.pos(2, 5))]);
+    s.step(vec![move_pointer(s.pos(0, 5))]);
+    s.step(vec![move_pointer(s.pos(2, 5))]);
     s.step(vec![left_2(s.pos(2, 5), false)]);
     assert_eq!(
         without_moves_repeated(&s.events_2),
@@ -480,13 +480,13 @@ fn a_stroke_can_be_started_over_the_background_outside_the_image() {
 fn with_the_wheel_in_the_middle_of_a_stroke_each_position_uses_the_view_of_that_moment() {
     let mut s = Session::new();
     let p = s.pos(10, 5);
-    s.step(vec![mover(p)]);
+    s.step(vec![move_pointer(p)]);
     assert_eq!(s.step(vec![left_2(p, true)]), [begin(10, 5)]);
     // La rueda cambia el zoom (×13) anclado al cursor: el píxel bajo el cursor se conserva.
     s.step(vec![wheel(true)]);
     assert_eq!(Some(s.info.zoom), Zoom::from_int(13));
     let (rect, zoom) = (s.rect_actual(), s.info.zoom.scale(1));
-    let ev = s.step(vec![mover(center(rect, zoom, 12, 5))]);
+    let ev = s.step(vec![move_pointer(center(rect, zoom, 12, 5))]);
     assert_eq!(ev, [step_a(12, 5)]);
     s.step(vec![left_2(center(rect, zoom, 12, 5), false)]);
     assert_eq!(
@@ -500,16 +500,16 @@ fn with_the_wheel_in_the_middle_of_a_stroke_each_position_uses_the_view_of_that_
 #[test]
 fn row_15_the_middle_button_pans_and_does_not_draw() {
     let mut s = Session::new();
-    let antes = s.rect_actual();
+    let before = s.rect_actual();
     let start_2 = pos2(400.0, 300.0);
-    s.step(vec![mover(start_2)]);
+    s.step(vec![move_pointer(start_2)]);
     s.step(vec![button_2(start_2, PointerButton::Middle, true)]);
     let fin = drag(&mut s, start_2);
     s.step(vec![button_2(fin, PointerButton::Middle, false)]);
 
     assert_eq!(s.events_2, NOTHING, "ningún evento de trazo");
     let after_2 = s.rect_actual();
-    let (dx, dy) = (after_2.min.x - antes.min.x, after_2.min.y - antes.min.y);
+    let (dx, dy) = (after_2.min.x - before.min.x, after_2.min.y - before.min.y);
     assert!(dx > 0.0 && dx <= 40.0 + 1e-3, "dx = {dx}");
     assert!(dy > 0.0 && dy <= 20.0 + 1e-3, "dy = {dy}");
 }
@@ -517,9 +517,9 @@ fn row_15_the_middle_button_pans_and_does_not_draw() {
 #[test]
 fn row_15_the_left_with_space_down_when_pressed_pans_and_does_not_draw() {
     let mut s = Session::new();
-    let antes = s.rect_actual();
+    let before = s.rect_actual();
     let start_2 = pos2(400.0, 300.0);
-    s.step(vec![mover(start_2)]);
+    s.step(vec![move_pointer(start_2)]);
     s.step(vec![space(true)]);
     s.step(vec![left_2(start_2, true)]);
     let fin = drag(&mut s, start_2);
@@ -528,7 +528,7 @@ fn row_15_the_left_with_space_down_when_pressed_pans_and_does_not_draw() {
 
     assert_eq!(s.events_2, NOTHING, "ningún evento de trazo");
     let after_2 = s.rect_actual();
-    let (dx, dy) = (after_2.min.x - antes.min.x, after_2.min.y - antes.min.y);
+    let (dx, dy) = (after_2.min.x - before.min.x, after_2.min.y - before.min.y);
     assert!(dx > 0.0 && dx <= 40.0 + 1e-3, "dx = {dx}");
     assert!(dy > 0.0 && dy <= 20.0 + 1e-3, "dy = {dy}");
 }
@@ -542,25 +542,25 @@ fn row_15_the_left_with_space_down_when_pressed_pans_and_does_not_draw() {
 fn row_15_space_in_the_middle_of_a_stroke_cancels_it() {
     fn walk(key_2: Event) -> (Vec<(CanvasInput, Role)>, Rect, Rect, Mini) {
         let mut s = Session::new();
-        let antes = s.rect_actual();
+        let before = s.rect_actual();
         let (p0, p1, p2) = (s.pos(10, 5), s.pos(12, 5), s.pos(14, 5));
         let mut all = Vec::new();
-        let mut ultimo = antes;
+        let mut last_2 = before;
         let mut step = |s: &mut Session, events: Vec<Event>| {
             let (entries, info) = s.bench.step_roles(events);
-            ultimo = info.image_rect.expect("hay imagen");
+            last_2 = info.image_rect.expect("hay imagen");
             all.extend(entries.clone());
             entries
         };
-        step(&mut s, vec![mover(p0)]);
+        step(&mut s, vec![move_pointer(p0)]);
         let entries = step(&mut s, vec![left_2(p0, true)]);
         assert_eq!(
             entries,
             [(CanvasInput::Stroke(begin(10, 5)), Role::Foreground)]
         );
-        step(&mut s, vec![mover(p1)]);
+        step(&mut s, vec![move_pointer(p1)]);
         step(&mut s, vec![key_2]);
-        step(&mut s, vec![mover(p2)]);
+        step(&mut s, vec![move_pointer(p2)]);
         step(&mut s, vec![left_2(p2, false)]);
         let mut app = Mini::new_2();
         for (input_2, _) in &all {
@@ -569,10 +569,10 @@ fn row_15_space_in_the_middle_of_a_stroke_cancels_it() {
                 CanvasInput::Escape => app.stroke = None,
             }
         }
-        (all, antes, ultimo, app)
+        (all, before, last_2, app)
     }
 
-    let (with_space, antes, after_2, app) = walk(space(true));
+    let (with_space, before, after_2, app) = walk(space(true));
     let (with_escape, _, _, _) = walk(Event::Key {
         key: Key::Escape,
         physical_key: Some(Key::Escape),
@@ -587,7 +587,7 @@ fn row_15_space_in_the_middle_of_a_stroke_cancels_it() {
         .count();
     assert_eq!(escapes, 1, "una sola cancelación");
     assert_eq!(app.changed(), 0, "el trazo cancelado no deja píxeles");
-    assert_eq!(after_2, antes, "la vista no se mueve");
+    assert_eq!(after_2, before, "la vista no se mueve");
 
     // Con la tecla mantenida, las repeticiones no cancelan otra vez: una sola cancelación.
     // (egui marca `repeat` solo si la tecla ya estaba abajo, por eso va después de la pulsación.)
@@ -600,9 +600,9 @@ fn row_15_space_in_the_middle_of_a_stroke_cancels_it() {
     };
     let mut s = Session::new();
     let (p0, p1) = (s.pos(10, 5), s.pos(12, 5));
-    s.step(vec![mover(p0)]);
+    s.step(vec![move_pointer(p0)]);
     s.step(vec![left_2(p0, true)]);
-    s.step(vec![mover(p1)]);
+    s.step(vec![move_pointer(p1)]);
     let (first, _) = s.bench.step_roles(vec![space(true)]);
     let (second, _) = s.bench.step_roles(vec![repetition.clone()]);
     let (third, _) = s.bench.step_roles(vec![repetition]);
@@ -617,20 +617,20 @@ fn row_15_space_in_the_middle_of_a_stroke_cancels_it() {
 fn row_15_releasing_space_in_the_middle_of_a_pan_does_not_start_drawing() {
     let mut s = Session::new();
     let start_2 = pos2(400.0, 300.0);
-    s.step(vec![mover(start_2)]);
+    s.step(vec![move_pointer(start_2)]);
     s.step(vec![space(true)]);
     s.step(vec![left_2(start_2, true)]);
     let mut pos = start_2;
     for step in 1..=2 {
         pos = start_2 + vec2(10.0, 5.0) * step as f32;
-        s.step(vec![mover(pos)]);
+        s.step(vec![move_pointer(pos)]);
     }
     let a_half = s.rect_actual();
     s.step(vec![space(false)]);
     // El gesto no cambia hasta soltar: sigue desplazando y no hay `Begin`.
     for step in 3..=5 {
         pos = start_2 + vec2(10.0, 5.0) * step as f32;
-        s.step(vec![mover(pos)]);
+        s.step(vec![move_pointer(pos)]);
     }
     s.step(vec![left_2(pos, false)]);
     assert_eq!(s.events_2, NOTHING, "no se emite Begin ni nada");
@@ -643,27 +643,27 @@ fn row_15_releasing_space_in_the_middle_of_a_pan_does_not_start_drawing() {
 #[test]
 fn the_extra_buttons_do_nothing() {
     let mut s = Session::new();
-    let antes = s.rect_actual();
+    let before = s.rect_actual();
     let start_2 = pos2(400.0, 300.0);
-    s.step(vec![mover(start_2)]);
+    s.step(vec![move_pointer(start_2)]);
     s.step(vec![button_2(start_2, PointerButton::Extra1, true)]);
     let fin = drag(&mut s, start_2);
     s.step(vec![button_2(fin, PointerButton::Extra1, false)]);
     assert_eq!(s.events_2, NOTHING);
-    assert_eq!(s.rect_actual(), antes);
+    assert_eq!(s.rect_actual(), before);
 }
 
 #[test]
 fn a_second_button_during_a_stroke_is_ignored() {
     let mut s = Session::new();
     let (p0, p1, p2, p3) = (s.pos(10, 5), s.pos(12, 5), s.pos(14, 5), s.pos(16, 5));
-    s.step(vec![mover(p0)]);
+    s.step(vec![move_pointer(p0)]);
     s.step(vec![left_2(p0, true)]);
-    s.step(vec![mover(p1)]);
+    s.step(vec![move_pointer(p1)]);
     s.step(vec![button_2(p1, PointerButton::Secondary, true)]);
-    s.step(vec![mover(p2)]);
+    s.step(vec![move_pointer(p2)]);
     s.step(vec![button_2(p2, PointerButton::Secondary, false)]);
-    s.step(vec![mover(p3)]);
+    s.step(vec![move_pointer(p3)]);
     s.step(vec![left_2(p3, false)]);
     assert_eq!(
         without_moves_repeated(&s.events_2),
@@ -684,20 +684,20 @@ fn a_second_button_during_a_stroke_is_ignored() {
 fn stroke_open() -> Session {
     let mut s = Session::new();
     let (a, b) = (s.pos(30, 20), s.pos(40, 20));
-    s.step(vec![mover(a)]);
+    s.step(vec![move_pointer(a)]);
     assert_eq!(s.step(vec![left_2(a, true)]), [begin(30, 20)]);
-    assert_eq!(s.step(vec![mover(b)]), [step_a(40, 20)]);
+    assert_eq!(s.step(vec![move_pointer(b)]), [step_a(40, 20)]);
     s
 }
 
 /// Tras terminar un trazo no queda ninguno abierto: mover el ratón no emite nada y una pulsación
 /// nueva empieza uno nuevo.
 fn check_that_nothing_is_left_open(s: &mut Session) {
-    assert_eq!(s.step(vec![mover(s.pos(45, 22))]), NOTHING);
-    assert_eq!(s.step(vec![mover(s.pos(46, 23))]), NOTHING);
+    assert_eq!(s.step(vec![move_pointer(s.pos(45, 22))]), NOTHING);
+    assert_eq!(s.step(vec![move_pointer(s.pos(46, 23))]), NOTHING);
     let p = s.pos(5, 40);
     let from_2 = s.events_2.len();
-    s.step(vec![mover(p)]);
+    s.step(vec![move_pointer(p)]);
     assert_eq!(s.step(vec![left_2(p, true)]), [begin(5, 40)]);
     s.step(vec![left_2(p, false)]);
     assert_eq!(
@@ -756,7 +756,7 @@ fn row_16_when_losing_focus_the_stroke_ends_with_what_there_is() {
     // egui no suelta el botón al perder el foco: lo que venga después no es un trazo, ni
     // siquiera al soltar.
     let (c, d) = (s.pos(45, 22), s.pos(46, 23));
-    assert_eq!(s.step(vec![mover(c)]), NOTHING);
+    assert_eq!(s.step(vec![move_pointer(c)]), NOTHING);
     assert_eq!(s.step(vec![left_2(d, false)]), NOTHING);
     assert_eq!(
         s.events_2,
@@ -805,7 +805,7 @@ fn show_keeps_painting_the_same_as_interact_and_paint_without_an_overlay() {
 
     let sequence = [
         vec![],
-        vec![mover(pos2(300.0, 200.0))],
+        vec![move_pointer(pos2(300.0, 200.0))],
         vec![wheel(true)],
         vec![left_2(pos2(300.0, 200.0), true)],
         vec![left_2(pos2(300.0, 200.0), false)],
@@ -963,10 +963,10 @@ fn refresh_keeps_the_view_and_brings_the_texture_up_to_date() {
     let texture = bench.canvas.texture_id().expect("la textura está subida");
 
     // Un zoom previo, para que la vista no sea la de ajuste.
-    bench.step(vec![mover(pos2(300.0, 200.0))]);
+    bench.step(vec![move_pointer(pos2(300.0, 200.0))]);
     let f = bench.step(vec![wheel(true)]);
     assert_eq!(Some(f.info.zoom), Zoom::from_int(13));
-    let antes = f.info;
+    let before = f.info;
 
     image_2
         .set_pixel(5, 5, Pixel::Rgba(Rgba::opaque(0, 255, 0)))
@@ -977,8 +977,8 @@ fn refresh_keeps_the_view_and_brings_the_texture_up_to_date() {
     // El fotograma siguiente lleva el contenido nuevo de la misma textura.
     let mut f = bench.frame(vec![], vec![], None);
     assert_eq!(bench.canvas.texture_id(), Some(texture), "misma textura");
-    assert_eq!(f.info.image_rect, antes.image_rect, "la vista se conserva");
-    assert_eq!(f.info.zoom, antes.zoom);
+    assert_eq!(f.info.image_rect, before.image_rect, "la vista se conserva");
+    assert_eq!(f.info.zoom, before.zoom);
     let deltas = f
         .output
         .textures_delta
@@ -1003,7 +1003,7 @@ fn refresh_keeps_the_view_and_brings_the_texture_up_to_date() {
     // Y los fotogramas posteriores ya no la vuelven a subir.
     let mut f = bench.frame(vec![], vec![], None);
     assert!(!f.output.textures_delta.set.contains_key(&texture));
-    assert_eq!(f.info.image_rect, antes.image_rect);
+    assert_eq!(f.info.image_rect, before.image_rect);
     f.output.textures_delta.clear();
 }
 
@@ -1012,7 +1012,7 @@ fn refresh_with_another_size_behaves_like_set_image() {
     let mut bench = Bench::new_2();
     bench.canvas.set_image(&image_of_test());
     bench.step(vec![]);
-    bench.step(vec![mover(pos2(300.0, 200.0))]);
+    bench.step(vec![move_pointer(pos2(300.0, 200.0))]);
     let f = bench.step(vec![wheel(true)]);
     assert_eq!(Some(f.info.zoom), Zoom::from_int(13));
 
@@ -1046,30 +1046,30 @@ mod space {
     fn row_7_without_a_gesture_space_emits_nothing_and_is_still_the_hand() {
         let mut s = Session::new();
         let p = s.pos(10, 5);
-        s.step(vec![mover(p)]);
+        s.step(vec![move_pointer(p)]);
         let (entries, _) = s.bench.step_roles(vec![space(true)]);
         assert!(entries.is_empty(), "{entries:?}");
         // Sigue siendo la tecla de la mano: con ella abajo, el izquierdo desplaza.
-        let antes = s.rect_actual();
+        let before = s.rect_actual();
         s.step(vec![left_2(p, true)]);
-        s.step(vec![mover(p + vec2(10.0, 5.0))]);
-        s.step(vec![mover(p + vec2(20.0, 10.0))]);
+        s.step(vec![move_pointer(p + vec2(10.0, 5.0))]);
+        s.step(vec![move_pointer(p + vec2(20.0, 10.0))]);
         s.step(vec![left_2(p + vec2(20.0, 10.0), false)]);
         assert_eq!(s.events_2, NOTHING);
-        assert!(s.rect_actual().min.x > antes.min.x);
+        assert!(s.rect_actual().min.x > before.min.x);
     }
 
     #[test]
     fn row_7_a_scroll_in_progress_is_not_cancelled_with_space() {
         let mut s = Session::new();
         let p = s.pos(10, 5);
-        s.step(vec![mover(p)]);
+        s.step(vec![move_pointer(p)]);
         s.step(vec![button_2(p, PointerButton::Middle, true)]);
-        s.step(vec![mover(p + vec2(10.0, 5.0))]);
+        s.step(vec![move_pointer(p + vec2(10.0, 5.0))]);
         let a_half = s.rect_actual();
         let (entries, _) = s.bench.step_roles(vec![space(true)]);
         assert_eq!(escapes(&entries), 0);
-        s.step(vec![mover(p + vec2(20.0, 10.0))]);
+        s.step(vec![move_pointer(p + vec2(20.0, 10.0))]);
         assert!(
             s.rect_actual().min.x > a_half.min.x,
             "el desplazamiento continúa"
@@ -1090,9 +1090,10 @@ mod space {
         }
         let mut s = Session::new();
         let (p0, p1) = (s.pos(10, 5), s.pos(12, 5));
-        s.step(vec![mover(p0)]);
+        s.step(vec![move_pointer(p0)]);
         s.step(vec![left_2(p0, true)]);
-        s.bench.step_roles_with(vec![mover(p1)], Some(field_2));
+        s.bench
+            .step_roles_with(vec![move_pointer(p1)], Some(field_2));
         s.bench.step_roles_with(vec![], Some(field_2));
         assert!(s.bench.ctx.text_edit_focused(), "el campo tiene el foco");
         let (entries, _) = s.bench.step_roles_with(vec![space(true)], Some(field_2));
@@ -1101,7 +1102,9 @@ mod space {
             0,
             "con el foco en el campo, Espacio no cancela"
         );
-        let (entries, _) = s.bench.step_roles_with(vec![mover(p0)], Some(field_2));
+        let (entries, _) = s
+            .bench
+            .step_roles_with(vec![move_pointer(p0)], Some(field_2));
         assert!(
             entries
                 .iter()

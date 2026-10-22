@@ -26,7 +26,7 @@ use px_ui::layers_panel_view::{PanelEvent, PanelView, show_layer_panel};
 use px_ui::source::DocSource;
 
 mod common;
-use common::{PPPS, button_2, context, in_points, mover, n_de, wheel_line};
+use common::{PPPS, button_2, context, in_points, move_pointer, n_de, wheel_line};
 
 const WIDTH_PT: f32 = 900.0;
 const HEIGHT_PT: f32 = 600.0;
@@ -158,7 +158,7 @@ impl Bench {
     /// Mover, pulsar y soltar; devuelve todo lo que salió de los tres fotogramas.
     fn click(&mut self, pos: Pos2) -> Vec<Step> {
         vec![
-            self.step(vec![mover(pos)]),
+            self.step(vec![move_pointer(pos)]),
             self.step(vec![button_2(pos, true)]),
             self.step(vec![button_2(pos, false)]),
         ]
@@ -252,7 +252,7 @@ fn row_7_with_a_modal_open_the_panel_does_not_respond_to_anything() {
     for ppp in PPPS {
         let mut bench = Bench::new_2(ppp, document(8), true);
         bench.enabled_2 = false;
-        let antes = bench.state_2.rect(bench.window, bench.n);
+        let before = bench.state_2.rect(bench.window, bench.n);
         let scroll = bench.state_2.scroll;
         for rect in [
             button_u(PanelButton::New),
@@ -268,17 +268,17 @@ fn row_7_with_a_modal_open_the_panel_does_not_respond_to_anything() {
         }
         // Ni la rueda sobre la lista ni arrastrar la barra de título hacen nada.
         let over_list = bench.center(name_u(1));
-        bench.step(vec![mover(over_list)]);
+        bench.step(vec![move_pointer(over_list)]);
         bench.step(vec![wheel_line(false)]);
         assert_eq!(bench.state_2.scroll, scroll, "ppp {ppp}");
         let bar = bench.center(title_u());
-        bench.step(vec![mover(bar)]);
+        bench.step(vec![move_pointer(bar)]);
         bench.step(vec![button_2(bar, true)]);
-        bench.step(vec![mover(bar + vec2(60.0, 30.0))]);
+        bench.step(vec![move_pointer(bar + vec2(60.0, 30.0))]);
         bench.step(vec![button_2(bar + vec2(60.0, 30.0), false)]);
         assert_eq!(
             bench.state_2.rect(bench.window, bench.n),
-            antes,
+            before,
             "ppp {ppp}"
         );
         assert!(bench.state_2.open);
@@ -289,16 +289,16 @@ fn row_7_with_a_modal_open_the_panel_does_not_respond_to_anything() {
 fn row_7_the_bar_drags_the_panel_and_the_wheel_scrolls_the_list() {
     for ppp in PPPS {
         let mut bench = Bench::new_2(ppp, document(10), true);
-        let antes = bench.state_2.rect(bench.window, bench.n);
+        let before = bench.state_2.rect(bench.window, bench.n);
         let bar = bench.center(title_u());
-        bench.step(vec![mover(bar)]);
+        bench.step(vec![move_pointer(bar)]);
         bench.step(vec![button_2(bar, true)]);
         let target_2 = bar + vec2(-40.0, 25.0);
-        bench.step(vec![mover(target_2)]);
+        bench.step(vec![move_pointer(target_2)]);
         bench.step(vec![button_2(target_2, false)]);
         let after_2 = bench.state_2.rect(bench.window, bench.n);
         let k = i64::from(bench.n);
-        let (dx, dy) = (after_2.x - antes.x, after_2.y - antes.y);
+        let (dx, dy) = (after_2.x - before.x, after_2.y - before.y);
         assert!(
             (dx + (40.0 * ppp) as i64).abs() <= 2 * k,
             "ppp {ppp}: dx {dx}"
@@ -310,7 +310,7 @@ fn row_7_the_bar_drags_the_panel_and_the_wheel_scrolls_the_list() {
         assert_eq!((dx % k, dy % k), (0, 0), "a pasos de u");
         // La rueda sobre la lista baja 3 filas por muesca (10 capas: como mucho 4).
         let over_list = bench.center(name_u(1));
-        bench.step(vec![mover(over_list)]);
+        bench.step(vec![move_pointer(over_list)]);
         bench.step(vec![wheel_line(false)]);
         assert_eq!(bench.state_2.scroll, 3, "ppp {ppp}");
         bench.step(vec![wheel_line(false)]);
@@ -344,7 +344,7 @@ fn row_12_a_click_inside_the_panel_does_not_reach_the_canvas_and_one_outside_doe
         assert_eq!(Bench::events_of(&steps_2), vec![]);
         // La rueda dentro del panel tampoco hace zoom en el lienzo.
         let zoom = bench.canvas.zoom();
-        bench.step(vec![mover(gap)]);
+        bench.step(vec![move_pointer(gap)]);
         bench.step(vec![wheel_line(true)]);
         assert_eq!(bench.canvas.zoom(), zoom, "ppp {ppp}");
         // Fuera del panel (arriba a la izquierda, sobre la imagen) el clic empieza un trazo.
@@ -385,15 +385,15 @@ fn property_4_without_a_command_the_document_does_not_change_or_any_texture_is_u
         let bar = bench.center(title_u());
         let list = bench.center(name_u(2));
         let sequence: Vec<Vec<Event>> = vec![
-            vec![mover(list)],
+            vec![move_pointer(list)],
             vec![wheel_line(false)],
             vec![wheel_line(false)],
             vec![wheel_line(true)],
-            vec![mover(bar)],
+            vec![move_pointer(bar)],
             vec![button_2(bar, true)],
-            vec![mover(bar + vec2(30.0, 30.0))],
+            vec![move_pointer(bar + vec2(30.0, 30.0))],
             vec![button_2(bar + vec2(30.0, 30.0), false)],
-            vec![mover(Pos2::new(5.0, 5.0))],
+            vec![move_pointer(Pos2::new(5.0, 5.0))],
             vec![],
         ];
         for events_2 in sequence {

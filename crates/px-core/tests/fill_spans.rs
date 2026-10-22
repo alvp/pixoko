@@ -203,16 +203,16 @@ fn state(doc: &Document) -> State {
 
 /// `apply(cmd)` da exactamente `expected` y no toca nada observable.
 fn rejects(doc: &mut Document, cmd: Command, expected: DocumentError) {
-    let antes = state(doc);
+    let before = state(doc);
     assert_eq!(doc.apply(cmd.clone()), Err(expected), "{cmd:?}");
-    assert_eq!(state(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), before, "{cmd:?}");
 }
 
 /// `apply(cmd)` da `Ok(false)` y no toca nada observable.
 fn unchanged(doc: &mut Document, cmd: Command) {
-    let antes = state(doc);
+    let before = state(doc);
     assert_eq!(doc.apply(cmd.clone()), Ok(false), "{cmd:?}");
-    assert_eq!(state(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), before, "{cmd:?}");
 }
 
 /// Coste de la historia tras un relleno de una fila entera de `D` (un solo trozo).
@@ -415,16 +415,16 @@ fn row_05_no_changes_is_ok_false() {
     assert_eq!(doc.apply(set(id, &[px(0, 0, c1())])), Ok(true));
     assert_eq!(doc.undo(), Ok(()));
     assert!(doc.can_redo());
-    let antes = state(&doc);
+    let before = state(&doc);
     assert_eq!(
         doc.apply(fr(id, &[sp(0, 0, 4)], c0())),
         Ok(false),
         "relleno sin cambios"
     );
     assert!(doc.can_redo());
-    assert_eq!(doc.can_undo(), antes.can_undo);
-    assert_eq!(doc.history_bytes(), antes.bytes);
-    assert_eq!(state(&doc), antes);
+    assert_eq!(doc.can_undo(), before.can_undo);
+    assert_eq!(doc.history_bytes(), before.bytes);
+    assert_eq!(state(&doc), before);
     assert_eq!(doc.redo(), Ok(()));
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
 }
@@ -1262,15 +1262,15 @@ fn shape(img: &Image) -> Shape {
 
 /// Píxel válido de un modo a partir de un valor pequeño. El 0 coincide con el valor
 /// inicial de la imagen, y los demás se repiten mucho: así abundan los no-ops.
-fn pixel_de(mode: Mode, colors_2: usize, valor: u8) -> Pixel {
+fn pixel_de(mode: Mode, colors_2: usize, value: u8) -> Pixel {
     match mode {
-        Mode::Rgba if valor == 0 => Pixel::Rgba(Rgba::TRANSPARENT),
-        Mode::Rgba => Pixel::Rgba(Rgba::new(valor, 255 - valor, valor ^ 5, 255)),
-        Mode::Indexed => Pixel::Indexed((valor as usize % colors_2.max(1)) as u8),
-        Mode::Gray => Pixel::Gray(valor),
-        Mode::GrayAlpha if valor == 0 => Pixel::GrayAlpha { gray: 0, alpha: 0 },
+        Mode::Rgba if value == 0 => Pixel::Rgba(Rgba::TRANSPARENT),
+        Mode::Rgba => Pixel::Rgba(Rgba::new(value, 255 - value, value ^ 5, 255)),
+        Mode::Indexed => Pixel::Indexed((value as usize % colors_2.max(1)) as u8),
+        Mode::Gray => Pixel::Gray(value),
+        Mode::GrayAlpha if value == 0 => Pixel::GrayAlpha { gray: 0, alpha: 0 },
         Mode::GrayAlpha => Pixel::GrayAlpha {
-            gray: valor,
+            gray: value,
             alpha: 255,
         },
     }
@@ -1338,16 +1338,16 @@ enum SheetRaw {
     Fill {
         masks: Vec<u8>,
         cut: bool,
-        valor: u8,
+        value: u8,
     },
     FillCovers {
         set: usize,
-        valor: u8,
+        value: u8,
     },
     FillCopy {
         fill: usize,
         half: bool,
-        valor: u8,
+        value: u8,
     },
     Set {
         edits: Vec<(u32, u32, u8)>,
@@ -1401,11 +1401,11 @@ enum Cmd {
 fn sheet_raw() -> impl Strategy<Value = SheetRaw> {
     prop_oneof![
         3 => (masks(), any::<bool>(), 0u8..4)
-            .prop_map(|(masks, cut, valor)| SheetRaw::Fill { masks, cut, valor }),
+            .prop_map(|(masks, cut, value)| SheetRaw::Fill { masks, cut, value }),
         2 => (any::<usize>(), 0u8..4)
-            .prop_map(|(set, valor)| SheetRaw::FillCovers { set, valor }),
+            .prop_map(|(set, value)| SheetRaw::FillCovers { set, value }),
         2 => (any::<usize>(), any::<bool>(), 0u8..4)
-            .prop_map(|(fill, half, valor)| SheetRaw::FillCopy { fill, half, valor }),
+            .prop_map(|(fill, half, value)| SheetRaw::FillCopy { fill, half, value }),
         3 => edits().prop_map(|edits| SheetRaw::Set { edits }),
         3 => (any::<usize>(), edits())
             .prop_map(|(fill, edits)| SheetRaw::SetInside { fill, edits }),
@@ -1430,10 +1430,10 @@ fn sheet(with_failures: bool) -> impl Strategy<Value = Sheet> {
 
 /// Una hoja suelta o un `Batch` de 1 a 4 hojas (de 0 a 4 con fallos), con fallos o sin ellos.
 fn cmd(with_failures: bool) -> impl Strategy<Value = Cmd> {
-    let largo = if with_failures { 0..=4 } else { 1..=4 };
+    let length = if with_failures { 0..=4 } else { 1..=4 };
     prop_oneof![
         2 => sheet(with_failures).prop_map(Cmd::Sheet),
-        2 => prop::collection::vec(sheet(with_failures), largo).prop_map(Cmd::Batch),
+        2 => prop::collection::vec(sheet(with_failures), length).prop_map(Cmd::Batch),
     ]
 }
 
@@ -1536,8 +1536,8 @@ fn resolves(f: Shape, id: ImageId, sheets: &[Sheet]) -> Vec<Command> {
     let mut cmds: Vec<Option<Command>> = sheets
         .iter()
         .map(|h| match &h.raw {
-            SheetRaw::Fill { masks, cut, valor } => {
-                Some(fill_2(spans_valid(f, masks, *cut), *valor))
+            SheetRaw::Fill { masks, cut, value } => {
+                Some(fill_2(spans_valid(f, masks, *cut), *value))
             }
             SheetRaw::Set { edits } => Some(set_free(f, id, edits)),
             _ => None,
@@ -1559,7 +1559,7 @@ fn resolves(f: Shape, id: ImageId, sheets: &[Sheet]) -> Vec<Command> {
     // Segunda pasada: hojas que apuntan a otras del mismo lote.
     for (i, h) in sheets.iter().enumerate() {
         let new_2 = match &h.raw {
-            SheetRaw::FillCovers { set, valor } => {
+            SheetRaw::FillCovers { set, value } => {
                 let mut coords: Vec<(u32, u32)> = if sets.is_empty() {
                     vec![(0, 0)]
                 } else {
@@ -1571,9 +1571,9 @@ fn resolves(f: Shape, id: ImageId, sheets: &[Sheet]) -> Vec<Command> {
                 coords.sort_unstable();
                 coords.dedup();
                 let spans = coords.iter().map(|&(y, x)| sp(y, x, x + 1)).collect();
-                fill_2(spans, *valor)
+                fill_2(spans, *value)
             }
-            SheetRaw::FillCopy { fill, half, valor } => {
+            SheetRaw::FillCopy { fill, half, value } => {
                 let mut spans = if fills_2.is_empty() {
                     vec![sp(0, 0, 1)]
                 } else {
@@ -1582,7 +1582,7 @@ fn resolves(f: Shape, id: ImageId, sheets: &[Sheet]) -> Vec<Command> {
                 if *half {
                     spans.truncate(spans.len().div_ceil(2));
                 }
-                fill_2(spans, *valor)
+                fill_2(spans, *value)
             }
             SheetRaw::SetInside { fill, edits } => {
                 let spans_2 = if fills_2.is_empty() {
@@ -1766,10 +1766,10 @@ fn model_sheet(img: &mut Image, id: ImageId, cmd: &Command) -> Result<bool, Docu
             }
             let mut change = false;
             for (i, e) in pixels.iter().enumerate() {
-                let antes = img.get_pixel(e.x, e.y);
+                let before = img.get_pixel(e.x, e.y);
                 img.set_pixel(e.x, e.y, e.pixel)
                     .map_err(|source| failure_pixel(i, source))?;
-                if antes != Ok(e.pixel) {
+                if before != Ok(e.pixel) {
                     change = true;
                 }
             }
@@ -1888,7 +1888,7 @@ fn runs_model(initial: Document, ops: &[Op]) -> Result<(), TestCaseError> {
     let mut cursor = 0usize;
 
     for op in ops {
-        let antes = state(&doc);
+        let before = state(&doc);
         match op {
             Op::Apply(raw) => {
                 let cmd = command(f, id, raw);
@@ -1903,11 +1903,11 @@ fn runs_model(initial: Document, ops: &[Op]) -> Result<(), TestCaseError> {
                     }
                     Ok((_, false)) => {
                         prop_assert_eq!(real, Ok(false), "{:?}", cmd);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                     Err(e) => {
                         prop_assert_eq!(real, Err(e), "{:?}", cmd);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                 }
             }
@@ -1917,7 +1917,7 @@ fn runs_model(initial: Document, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor -= 1;
                 } else {
                     prop_assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
             Op::Redo => {
@@ -1926,7 +1926,7 @@ fn runs_model(initial: Document, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor += 1;
                 } else {
                     prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
         }
@@ -1961,14 +1961,14 @@ fn op_arb() -> impl Strategy<Value = OpArb> {
 fn applies_and_checks(
     doc: &mut Document,
     cmd: Command,
-    antes: &State,
+    before: &State,
 ) -> Result<(), TestCaseError> {
     match doc.apply(cmd.clone()) {
         Ok(true) => {
             prop_assert!(doc.can_undo());
             prop_assert!(!doc.can_redo());
         }
-        Ok(false) | Err(_) => prop_assert_eq!(&state(doc), antes, "{:?}", cmd),
+        Ok(false) | Err(_) => prop_assert_eq!(&state(doc), before, "{:?}", cmd),
     }
     Ok(())
 }
@@ -2221,22 +2221,22 @@ proptest! {
         }
 
         for op in &ops {
-            let antes = state(&doc);
+            let before = state(&doc);
             match op {
-                OpArb::Cmd(raw) => applies_and_checks(&mut doc, command(f, id, raw), &antes)?,
-                OpArb::Arb(raw) => applies_and_checks(&mut doc, arb_command(f, id, raw), &antes)?,
+                OpArb::Cmd(raw) => applies_and_checks(&mut doc, command(f, id, raw), &before)?,
+                OpArb::Arb(raw) => applies_and_checks(&mut doc, arb_command(f, id, raw), &before)?,
                 OpArb::Undo => match doc.undo() {
                     Ok(()) => prop_assert!(doc.can_redo()),
                     Err(e) => {
                         prop_assert_eq!(e, DocumentError::NothingToUndo);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                 },
                 OpArb::Redo => match doc.redo() {
                     Ok(()) => prop_assert!(doc.can_undo()),
                     Err(e) => {
                         prop_assert_eq!(e, DocumentError::NothingToRedo);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                 },
             }
@@ -2251,13 +2251,13 @@ proptest! {
         seed in prop::collection::vec(cmd(false), 0..=4),
         masks in masks(),
         cut in any::<bool>(),
-        valor in 0u8..4,
+        value in 0u8..4,
     ) {
         // Imagen con contenido previo (a menudo ruidoso), y una copia sin historia por rama.
         let previous = document_initial(img, &seed);
         let image_2 = image_of(&previous).clone();
         let f = shape(&image_2);
-        let pixel = pixel_de(f.mode, f.colors_2, valor);
+        let pixel = pixel_de(f.mode, f.colors_2, value);
         let spans = spans_valid(f, &masks, cut);
         let pixels_2: Vec<PixelEdit> = spans
             .iter()
@@ -2287,10 +2287,10 @@ proptest! {
         img in image_6(),
         masks in masks(),
         cut in any::<bool>(),
-        valor in 0u8..4,
+        value in 0u8..4,
     ) {
         let f = shape(&img);
-        let pixel = pixel_de(f.mode, f.colors_2, valor);
+        let pixel = pixel_de(f.mode, f.colors_2, value);
         let spans = spans_valid(f, &masks, cut);
         let half: Vec<Span> = spans
             .iter()
@@ -2511,14 +2511,14 @@ mod limits {
         let mut doc = uniform(368);
         with_undo_and_redo(&mut doc);
         let id = ImageId::from_raw(0);
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
 
         let spans = spans_of_a_pixel(CAP + 1);
         assert_eq!(spans.len(), CAP + 1);
         assert_eq!(doc.apply(fr(id, &spans, c1())), Err(too_much()));
         let after = snapshot(&doc);
         assert!(
-            after == antes,
+            after == before,
             "imagen, can_undo, can_redo, history_bytes y state_id iguales"
         );
         assert!(doc.can_redo(), "la pila de rehacer sigue viva");
@@ -2539,12 +2539,12 @@ mod limits {
         // trozos.
         let mut doc = toggles(184);
         let id = ImageId::from_raw(0);
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
         assert_eq!(
             doc.apply(fr(id, &rows_complete(184), c1())),
             Err(too_much())
         );
-        assert!(snapshot(&doc) == antes, "el documento no cambia");
+        assert!(snapshot(&doc) == before, "el documento no cambia");
     }
 
     #[test]
@@ -2574,7 +2574,7 @@ mod limits {
         let mut doc = uniform(368);
         with_undo_and_redo(&mut doc);
         let id = ImageId::from_raw(0);
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
 
         // `S` pinta una columna impar de la fila 0 (los tramos solo tocan columnas pares).
         let step = batch(vec![
@@ -2591,7 +2591,7 @@ mod limits {
             Pixel::Rgba(c0()),
             "el píxel de S se revierte"
         );
-        assert!(snapshot(&doc) == antes, "historia y estado intactos");
+        assert!(snapshot(&doc) == before, "historia y estado intactos");
     }
 
     // Fila 10.

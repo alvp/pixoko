@@ -83,7 +83,7 @@ fn ids(doc: &Document) -> Vec<(LayerId, ImageId)> {
     doc.layers().iter().map(|l| (l.id(), l.cel())).collect()
 }
 
-fn pone(image: ImageId, x: u32, y: u32, c: Rgba) -> Command {
+fn sets(image: ImageId, x: u32, y: u32, c: Rgba) -> Command {
     Command::SetPixels {
         image,
         pixels: vec![PixelEdit {
@@ -157,7 +157,7 @@ fn doc_abc() -> (Document, [LayerId; 3]) {
     let c = adds(&mut d, "C", 2);
     let (cb, cc) = (cel(&d, b), cel(&d, c));
     assert_eq!(d.apply(row_0(cb, C2)), Ok(true));
-    assert_eq!(d.apply(pone(cc, 1, 1, RED)), Ok(true));
+    assert_eq!(d.apply(sets(cc, 1, 1, RED)), Ok(true));
     adjusts(&mut d, a, 200, BlendMode::Multiply, true, false);
     adjusts(&mut d, b, 128, BlendMode::Screen, false, true);
     adjusts(&mut d, c, 90, BlendMode::Difference, true, true);
@@ -286,7 +286,7 @@ fn applies_and_checks(
     remove: &[LayerId],
     image: Option<Image>,
 ) -> Result<(), String> {
-    let antes = Snapshot::de(doc);
+    let before = Snapshot::de(doc);
     let layers_before = doc.layers().to_vec();
     let saved: usize = layers_before
         .iter()
@@ -298,7 +298,7 @@ fn applies_and_checks(
 
     let result = doc.apply(combines(doc, target, remove, image.clone()));
     requires!(result == Ok(true), "apply dio {result:?}");
-    requires!(doc.state_id() != antes.state, "state_id no es nuevo");
+    requires!(doc.state_id() != before.state, "state_id no es nuevo");
     requires!(doc.can_undo() && !doc.can_redo(), "pilas tras aplicar");
 
     // Las capas que quedan, en el mismo orden relativo; las quitadas desaparecen con su celda.
@@ -355,16 +355,16 @@ fn applies_and_checks(
     );
     // Memoria y coste de historia.
     requires!(
-        doc.materialized_bytes() == antes.materialized - saved + new,
+        doc.materialized_bytes() == before.materialized - saved + new,
         "materialized_bytes {} (antes {}, guardado {saved}, nueva {new})",
         doc.materialized_bytes(),
-        antes.materialized
+        before.materialized
     );
     requires!(
-        doc.history_bytes() >= antes.history + saved,
+        doc.history_bytes() >= before.history + saved,
         "history_bytes {} < {} + {saved}",
         doc.history_bytes(),
-        antes.history
+        before.history
     );
 
     // Un solo paso: un `undo` devuelve las capas tal cual, y un `redo`, la combinación.
@@ -374,7 +374,7 @@ fn applies_and_checks(
         doc.layers() == layers_before.as_slice(),
         "tras undo las capas no son las de antes"
     );
-    if let Some(reason) = antes.difference_state(doc) {
+    if let Some(reason) = before.difference_state(doc) {
         return Err(format!("tras undo: {reason}"));
     }
     doc.redo().map_err(|e| format!("redo: {e:?}"))?;
@@ -469,7 +469,7 @@ fn row_01_a_unknown_layers_invalid_remove_and_batch() {
     );
     without_effect(
         &mut d,
-        Command::Batch(vec![pone(ca, 2, 2, C2), with(a, &[b, c], state)]),
+        Command::Batch(vec![sets(ca, 2, 2, C2), with(a, &[b, c], state)]),
         Err(in_batch(1, DocumentError::NotBatchable)),
     );
 }
@@ -493,7 +493,7 @@ fn row_01_b_an_old_image_gives_stale_image_without_touching_anything() {
     // Lo mismo con una escritura de píxeles, y con una imagen que además no encaja: el estado
     // viejo se detecta antes que el desajuste de la imagen.
     let cb = cel(&d, b);
-    assert_eq!(d.apply(pone(cb, 3, 2, RED)), Ok(true));
+    assert_eq!(d.apply(sets(cb, 3, 2, RED)), Ok(true));
     let current = d.state_id();
     without_effect(
         &mut d,
@@ -623,7 +623,7 @@ fn row_01_e_plan_merge_is_read_only_and_gives_empty_bytes_and_peak() {
     let c = adds(&mut d, "C", 2);
     let dd = adds(&mut d, "D", 3);
     let cc = cel(&d, c);
-    assert_eq!(d.apply(pone(cc, 0, 0, RED)), Ok(true));
+    assert_eq!(d.apply(sets(cc, 0, 0, RED)), Ok(true));
     let snapshot = Snapshot::de(&d);
     let peak = d.materialized_bytes() + d.cel_bytes();
     assert_eq!(peak, 96 + 48);
@@ -931,7 +931,7 @@ proptest! {
     fn property_5_undoing_a_merge_returns_the_layers_as_they_were(
         plan in plan_strategy(2..=5),
         choice in any::<usize>(),
-        mascara in any::<u8>(),
+        mask in any::<u8>(),
         image_2 in 0u8..3,
         seed in any::<u8>(),
     ) {
@@ -940,7 +940,7 @@ proptest! {
         let t = choice % n;
         let target = doc.layers()[t].id();
         let mut remove: Vec<LayerId> = (0..n)
-            .filter(|&i| i != t && (mascara & (1u8 << i)) != 0)
+            .filter(|&i| i != t && (mask & (1u8 << i)) != 0)
             .map(|i| doc.layers()[i].id())
             .collect();
         if remove.is_empty() {
@@ -967,7 +967,7 @@ enum Op {
     /// capa desconocida en `remove`; 0 y 5, sin fallo.
     Merge {
         t: usize,
-        mascara: u8,
+        mask: u8,
         image_2: u8,
         seed: u8,
         failure: u8,
@@ -991,7 +991,7 @@ enum Op {
 fn op() -> BoxedStrategy<Op> {
     prop_oneof![
         6 => (any::<usize>(), any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>()).prop_map(
-            |(t, mascara, image_2, seed, failure)| Op::Merge { t, mascara, image_2, seed, failure }
+            |(t, mask, image_2, seed, failure)| Op::Merge { t, mask, image_2, seed, failure }
         ),
         2 => (0u8..4, any::<bool>()).prop_map(|(m, p)| Op::ConvertAll(m, p)),
         1 => (any::<usize>(), 0u8..4).prop_map(|(k, m)| Op::ConvertMode(k, m)),
@@ -1039,14 +1039,14 @@ fn paints(doc: &Document, k: usize, pixels_2: &[(u8, u8, u8)]) -> Command {
 
 /// Traduce una orden a `Command` con el documento vivo delante, para que los ids sean los del
 /// momento.
-fn traduce(doc: &Document, op: &Op) -> Command {
+fn translates(doc: &Document, op: &Op) -> Command {
     let n = doc.layers().len();
     let layer_2 = |k: &usize| doc.layers()[k % n].id();
     let cel = |k: &usize| doc.layers()[k % n].cel();
     match op {
         Op::Merge {
             t,
-            mascara,
+            mask,
             image_2,
             seed,
             failure,
@@ -1054,7 +1054,7 @@ fn traduce(doc: &Document, op: &Op) -> Command {
             let ti = t % n;
             let mut target = doc.layers()[ti].id();
             let mut remove: Vec<LayerId> = (0..n)
-                .filter(|&i| i != ti && (mascara & (1u8 << (i % 8))) != 0)
+                .filter(|&i| i != ti && (mask & (1u8 << (i % 8))) != 0)
                 .map(|i| doc.layers()[i].id())
                 .collect();
             if remove.is_empty() && n > 1 {
@@ -1197,15 +1197,15 @@ proptest! {
         }
 
         for order in &ops {
-            let antes = Snapshot::de(&doc);
-            let cmd = traduce(&doc, order);
+            let before = Snapshot::de(&doc);
+            let cmd = translates(&doc, order);
             let result = doc.apply(cmd);
             match &result {
                 Ok(true) => {
                     oks += 1;
-                    prop_assert_ne!(doc.state_id(), antes.state, "{:?}", order);
+                    prop_assert_ne!(doc.state_id(), before.state, "{:?}", order);
                 }
-                _ => antes.requires(&doc, &format!("{order:?} -> {result:?}"))?,
+                _ => before.requires(&doc, &format!("{order:?} -> {result:?}"))?,
             }
             if let Op::Merge { failure, .. } = order
                 && matches!(failure % 6, 1..=4)

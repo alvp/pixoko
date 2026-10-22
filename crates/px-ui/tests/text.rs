@@ -769,12 +769,12 @@ fn row_09_apply_scale_follows_the_ppp_and_does_not_touch_the_style_if_it_does_no
 
     // Segunda llamada seguida: el estilo ni cambia de valor ni se reescribe (con una copia del
     // `Arc` en la mano, cualquier escritura con `Arc::make_mut` lo habría clonado).
-    let antes = ctx.global_style();
+    let before = ctx.global_style();
     apply_scale(&ctx);
     let after_2 = ctx.global_style();
-    assert_eq!(*antes, *after_2);
+    assert_eq!(*before, *after_2);
     assert!(
-        std::sync::Arc::ptr_eq(&antes, &after_2),
+        std::sync::Arc::ptr_eq(&before, &after_2),
         "la segunda llamada reescribió el estilo"
     );
 }
@@ -886,14 +886,14 @@ fn row_15_empty_gives_empty_and_a_very_long_name_is_clipped() {
         assert_eq!(fit_text("", n, with), "");
         assert_eq!(fit_text("", n, without), "");
     }
-    let largo: String = (0..100_000)
+    let length_2: String = (0..100_000)
         .map(|i| char::from(b'a' + (i % 26) as u8))
         .collect();
-    let clipped = fit_text(&largo, 40, with);
+    let clipped = fit_text(&length_2, 40, with);
     assert_eq!(clipped.chars().count(), 40);
     assert!(clipped.ends_with('…'));
-    assert_eq!(&clipped[..39], &largo[..39]);
-    let without_points = fit_text(&largo, 40, without);
+    assert_eq!(&clipped[..39], &length_2[..39]);
+    let without_points = fit_text(&length_2, 40, without);
     assert_eq!(without_points.chars().count(), 40);
     assert!(without_points.ends_with("..."));
 }
@@ -934,8 +934,8 @@ proptest! {
     /// Propiedad 1: la escala no decrece con ppp.
     #[test]
     fn property_1_the_scale_does_not_decrease(a in -10.0_f32..40.0, b in -10.0_f32..40.0) {
-        let (smaller, mayor) = if a <= b { (a, b) } else { (b, a) };
-        prop_assert!(text_scale(smaller) <= text_scale(mayor), "{smaller} y {mayor}");
+        let (smaller, greater) = if a <= b { (a, b) } else { (b, a) };
+        prop_assert!(text_scale(smaller) <= text_scale(greater), "{smaller} y {greater}");
     }
 
     /// Propiedad 1: en [0,5; 8) difiere de ppp en no más de 0,5.
@@ -1120,9 +1120,9 @@ proptest! {
     ) {
         let has = |c: char| with_points || c != '…';
         let output_2 = fit_text(&text_2, max_chars, has);
-        let largo = text_2.chars().count();
+        let length_2 = text_2.chars().count();
         prop_assert!(output_2.chars().count() <= max_chars);
-        if largo <= max_chars {
+        if length_2 <= max_chars {
             prop_assert_eq!(&output_2, &text_2, "si cabe, queda igual");
         } else {
             let suffix = if with_points { "…" } else { "..." };

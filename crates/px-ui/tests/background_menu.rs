@@ -47,7 +47,9 @@ use px_ui::tool::Tool;
 use px_ui::view::Zoom;
 
 mod common;
-use common::{PPPS, button_2, context, frame, modifiers_2, mover, painted, tolerance_of_egui};
+use common::{
+    PPPS, button_2, context, frame, modifiers_2, move_pointer, painted, tolerance_of_egui,
+};
 
 const BACKGROUNDS: [CanvasBackground; 4] = [
     CanvasBackground::Checker,
@@ -698,7 +700,7 @@ fn row_13_the_previous_actions_are_enabled_the_same_as_before() {
 // hace `dialog_open_focus.rs` con `Ayuda → Licencias`, y mira lo pintado en orden.
 
 const BLUE_STEEL: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 
 /// Los seis fondos activos de la fila 2: los cuatro de siempre y dos colores propios (el segundo,
 /// negro: no salta a `Negro`).
@@ -708,7 +710,7 @@ const ACTIVE: [CanvasBackground; 6] = [
     CanvasBackground::Gray,
     CanvasBackground::White,
     CanvasBackground::Custom(BLUE_STEEL),
-    CanvasBackground::Custom(NEGRO),
+    CanvasBackground::Custom(TEST_BLACK),
 ];
 
 fn the_background_submenu() -> &'static Submenu {
@@ -802,7 +804,7 @@ fn row_2_background_checked_is_true_only_for_the_marked_action_with_any_backgrou
 fn row_2_with_a_custom_color_none_of_the_four_fixed_ones_is_marked_not_even_with_the_same_color() {
     for own in [
         CanvasBackground::Custom(BLUE_STEEL),
-        CanvasBackground::Custom(NEGRO),
+        CanvasBackground::Custom(TEST_BLACK),
         CanvasBackground::Custom(Rgba::opaque(255, 255, 255)),
         CanvasBackground::Custom(Rgba::opaque(40, 40, 40)),
     ] {
@@ -966,11 +968,11 @@ fn shapes_in_order(shapes_2: &[ClippedShape]) -> Vec<Shape2> {
 /// `src` (premultiplicado, como egui) por encima de `dst` opaco.
 fn above(dst: Color32, src: Color32) -> Color32 {
     let k = 1.0 - f32::from(src.a()) / 255.0;
-    let canal = |s: u8, d: u8| (f32::from(s) + f32::from(d) * k).round().clamp(0.0, 255.0) as u8;
+    let channel = |s: u8, d: u8| (f32::from(s) + f32::from(d) * k).round().clamp(0.0, 255.0) as u8;
     Color32::from_rgb(
-        canal(src.r(), dst.r()),
-        canal(src.g(), dst.g()),
-        canal(src.b(), dst.b()),
+        channel(src.r(), dst.r()),
+        channel(src.g(), dst.g()),
+        channel(src.b(), dst.b()),
     )
 }
 
@@ -1057,7 +1059,7 @@ impl BenchOfTheMenu {
 
     /// Mueve, pulsa y suelta en `pos`: tres fotogramas, como los entrega winit.
     fn click(&mut self, pos: Pos2) {
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         self.frame(vec![button_2(pos, true)]);
         self.frame(vec![button_2(pos, false)]);
     }
@@ -1159,28 +1161,28 @@ fn row_2_the_value_is_painted_only_with_a_custom_color_and_to_the_right_of_color
                 "ppp {ppp} {fixed_2:?}: sin color propio no se pinta ningún valor"
             );
         }
-        for (c, text_2) in [(BLUE_STEEL, "#336699"), (NEGRO, "#000000")] {
+        for (c, text_2) in [(BLUE_STEEL, "#336699"), (TEST_BLACK, "#000000")] {
             let active_2_2 = CanvasBackground::Custom(c);
             assert_eq!(background_value_text(active_2_2).as_deref(), Some(text_2));
             let bench = BenchOfTheMenu::open_2_2(ppp, active_2_2, without_locks());
-            let valor = bench.rect_de(text_2);
+            let value = bench.rect_de(text_2);
             let label_2 = bench.rect_de("Color…");
             // A la derecha de la etiqueta y en la misma fila.
             assert!(
-                valor.min.x >= label_2.max.x - 0.01,
-                "ppp {ppp}: el valor {valor:?} va a la derecha de {label_2:?}"
+                value.min.x >= label_2.max.x - 0.01,
+                "ppp {ppp}: el valor {value:?} va a la derecha de {label_2:?}"
             );
             assert!(
-                (valor.center().y - label_2.center().y).abs() <= 1.0,
-                "ppp {ppp}: el valor {valor:?} está en la fila de {label_2:?}"
+                (value.center().y - label_2.center().y).abs() <= 1.0,
+                "ppp {ppp}: el valor {value:?} está en la fila de {label_2:?}"
             );
             // Dentro de la fila (el relleno de la entrada marcada) y sin salirse por la derecha.
             let (row_2, _) = bench
                 .background_under(text_2)
                 .unwrap_or_else(|| panic!("ppp {ppp}: el valor no tiene relleno debajo"));
             assert!(
-                valor.max.x <= row_2.max.x + 0.01,
-                "ppp {ppp}: el valor {valor:?} cabe en la fila {row_2:?}"
+                value.max.x <= row_2.max.x + 0.01,
+                "ppp {ppp}: el valor {value:?} cabe en la fila {row_2:?}"
             );
             // Un solo valor pintado.
             let n = bench
@@ -1204,13 +1206,13 @@ fn row_2_the_value_has_contrast_of_at_least_4_5_over_its_marked_row_and_with_the
     // puntero) nunca lleva el valor: solo aparece con `Custom`, que marca la fila. NO PROBADO ese
     // tercer estado por eso. El color que se mide es el que sale por pantalla (el del glifo).
     for ppp in PPPS {
-        for (c, text_2) in [(BLUE_STEEL, "#336699"), (NEGRO, "#000000")] {
+        for (c, text_2) in [(BLUE_STEEL, "#336699"), (TEST_BLACK, "#000000")] {
             let active_2_2 = CanvasBackground::Custom(c);
             let mut bench = BenchOfTheMenu::open_2_2(ppp, active_2_2, without_locks());
             for state_2 in ["marcada", "con el ratón"] {
                 if state_2 == "con el ratón" {
                     let above = bench.center_of("Color…");
-                    bench.frame(vec![mover(above)]);
+                    bench.frame(vec![move_pointer(above)]);
                     bench.rest_2_2();
                 }
                 let (_, background_2) = bench
@@ -1769,7 +1771,7 @@ mod contrast_of_the_menu {
         }
 
         fn click(&mut self, pos: Pos2) {
-            self.frame(vec![mover(pos)]);
+            self.frame(vec![move_pointer(pos)]);
             self.frame(vec![button_2(pos, true)]);
             self.frame(vec![button_2(pos, false)]);
         }
@@ -1804,7 +1806,7 @@ mod contrast_of_the_menu {
                 None => self.frame(vec![Event::PointerGone]),
                 Some(row_2) => {
                     let pos = self.center(row_2);
-                    self.frame(vec![mover(pos)]);
+                    self.frame(vec![move_pointer(pos)]);
                 }
             }
             self.frame(vec![]);
@@ -1932,12 +1934,12 @@ mod contrast_of_the_menu {
     fn row_1_all_text_of_the_menus_has_contrast_4_5_over_its_real_fill() {
         let results = in_parallel(&PPPS, |&ppp| {
             let mut failures = Failures::default();
-            let mut pares = 0usize;
+            let mut pairs = 0usize;
             let mut different = BTreeSet::new();
             for background_2 in ACTIVE {
                 for e in walk(ppp, background_2, without_locks(), Platform::Linux) {
                     for m in &e.measures {
-                        pares += 1;
+                        pairs += 1;
                         different.insert((
                             m.text_2.clone(),
                             m.background_2.map(|f| f.to_array()),
@@ -1953,23 +1955,23 @@ mod contrast_of_the_menu {
                     }
                 }
             }
-            (failures, pares, different)
+            (failures, pairs, different)
         });
         let mut failures = Failures::default();
-        let mut pares = 0;
+        let mut pairs = 0;
         let mut different = BTreeSet::new();
         for (f, n, d) in results {
             failures.blend_2(f);
-            pares += n;
+            pairs += n;
             different.extend(d);
         }
         eprintln!(
-            "fila 1: {pares} medidas texto-fondo, {} pares (texto, relleno) distintos, 6 fondos x 5 escalas",
+            "fila 1: {pairs} medidas texto-fondo, {} pares (texto, relleno) distintos, 6 fondos x 5 escalas",
             different.len()
         );
         assert!(
-            pares >= MINIMUM_PAIRS_ROW_1,
-            "el recorrido solo midió {pares} pares: el banco no está abriendo los menús"
+            pairs >= MINIMUM_PAIRS_ROW_1,
+            "el recorrido solo midió {pairs} pares: el banco no está abriendo los menús"
         );
         assert!(failures.this_empty(), "{}", failures.summary_2());
     }
@@ -2044,8 +2046,8 @@ mod contrast_of_the_menu {
                         }
                     }
                     // El valor de `Color…`, solo con un color propio, en SURFACE_0.
-                    if let Some(valor) = background_value_text(background_2) {
-                        match e.measures.iter().find(|m| m.text_2 == valor) {
+                    if let Some(value) = background_value_text(background_2) {
+                        match e.measures.iter().find(|m| m.text_2 == value) {
                             Some(m) => {
                                 if m.screen != Some(SURFACE_0) || m.background_2 != Some(ACCENT) {
                                     failures.notes(place.clone(), m);
@@ -2053,7 +2055,7 @@ mod contrast_of_the_menu {
                             }
                             None => failures.notes_text(
                                 place.clone(),
-                                format!("no se pinta el valor {valor:?}"),
+                                format!("no se pinta el valor {value:?}"),
                             ),
                         }
                     }
@@ -2507,11 +2509,11 @@ mod contrast_of_the_menu {
                 .find(|i| background_checked(i.action, background_2))
                 .map(|i| mark(background_2, i))
                 .expect("siempre hay una marcada");
-            let valor = background_value_text(background_2);
+            let value = background_value_text(background_2);
             let mut failures = Failures::default();
             for e in two_menus(ppp, background_2, row_2) {
                 for m in &e.measures {
-                    let expected_2 = if m.text_2 == marked || valor.as_deref() == Some(m.text_2.as_str()) {
+                    let expected_2 = if m.text_2 == marked || value.as_deref() == Some(m.text_2.as_str()) {
                         SURFACE_0
                     } else {
                         TEXT

@@ -28,7 +28,7 @@ use px_ui::tool::{Tool, ToolState};
 use px_ui::view::{ViewOp, Zoom};
 
 mod common;
-use common::{PPPS, button_2, context, frame, in_points, mover, n_de, wheel_line};
+use common::{PPPS, button_2, context, frame, in_points, move_pointer, n_de, wheel_line};
 
 const TEST_SCREEN: Vec2 = vec2(800.0, 600.0);
 const POS_OF_THE_AREA: Pos2 = pos2(300.0, 200.0);
@@ -152,7 +152,7 @@ impl Bench {
 
     /// Mueve, pulsa y suelta en `pos`; devuelve los tres pasos.
     fn click(&mut self, pos: Pos2) -> [Step; 3] {
-        let a = self.step(vec![mover(pos)]);
+        let a = self.step(vec![move_pointer(pos)]);
         let b = self.step(vec![button_2(pos, true)]);
         let c = self.step(vec![button_2(pos, false)]);
         [a, b, c]
@@ -209,15 +209,15 @@ fn row_9b_with_the_area_open_hover_is_none_over_it_and_valid_outside() {
             let mut bench = Bench::new_2(ppp, order, true);
             let over = bench.over_the_area();
             let outside = bench.outside_of_the_area();
-            assert_eq!(bench.step(vec![mover(over)]).info.hover, None);
+            assert_eq!(bench.step(vec![move_pointer(over)]).info.hover, None);
             assert_eq!(bench.step(vec![]).info.hover, None);
-            let step = bench.step(vec![mover(outside)]);
+            let step = bench.step(vec![move_pointer(outside)]);
             assert!(
                 step.info.hover.is_some(),
                 "ppp {ppp} {order:?}: fuera del área hay hover"
             );
             // Y vuelve a ser `None` al regresar al área.
-            assert_eq!(bench.step(vec![mover(over)]).info.hover, None);
+            assert_eq!(bench.step(vec![move_pointer(over)]).info.hover, None);
         }
     }
 }
@@ -227,25 +227,25 @@ fn row_9b_with_the_area_open_the_wheel_does_not_change_the_zoom() {
     for ppp in PPPS {
         for order in COMMANDS {
             let mut bench = Bench::new_2(ppp, order, true);
-            let antes = bench.zoom();
+            let before = bench.zoom();
             let over = bench.over_the_area();
-            bench.step(vec![mover(over)]);
+            bench.step(vec![move_pointer(over)]);
             bench.step(vec![]);
             for top in [true, false] {
                 let step = bench.step(vec![wheel_line(top), wheel_line(top)]);
                 assert_eq!(
-                    step.info.zoom, antes,
+                    step.info.zoom, before,
                     "ppp {ppp} {order:?}: rueda arriba={top}"
                 );
             }
-            assert_eq!(bench.zoom(), antes);
+            assert_eq!(bench.zoom(), before);
             // Fuera del área la misma rueda sí hace zoom.
             let outside = bench.outside_of_the_area();
-            bench.step(vec![mover(outside)]);
+            bench.step(vec![move_pointer(outside)]);
             let step = bench.step(vec![wheel_line(true)]);
             assert_eq!(
                 step.info.zoom,
-                antes.zoom_in(),
+                before.zoom_in(),
                 "ppp {ppp} {order:?}: fuera del área"
             );
         }
@@ -257,23 +257,23 @@ fn row_9b_with_the_area_open_the_pinch_does_not_change_the_zoom() {
     for ppp in PPPS {
         for order in COMMANDS {
             let mut bench = Bench::new_2(ppp, order, true);
-            let antes = bench.zoom();
+            let before = bench.zoom();
             let over = bench.over_the_area();
-            bench.step(vec![mover(over)]);
+            bench.step(vec![move_pointer(over)]);
             bench.step(vec![]);
             for factor in [1.3, 0.7] {
                 let step = bench.step(vec![Event::Zoom(factor)]);
                 assert_eq!(
-                    step.info.zoom, antes,
+                    step.info.zoom, before,
                     "ppp {ppp} {order:?}: pellizco {factor}"
                 );
             }
             let outside = bench.outside_of_the_area();
-            bench.step(vec![mover(outside)]);
+            bench.step(vec![move_pointer(outside)]);
             let step = bench.step(vec![Event::Zoom(1.3)]);
             assert_eq!(
                 step.info.zoom,
-                antes.zoom_in(),
+                before.zoom_in(),
                 "ppp {ppp} {order:?}: fuera del área"
             );
         }
@@ -286,7 +286,7 @@ fn row_9b_a_stroke_started_before_opening_the_area_continues_and_ends_with_strok
         for order in COMMANDS {
             let mut bench = Bench::new_2(ppp, order, false);
             let start_2 = bench.outside_of_the_area();
-            bench.step(vec![mover(start_2)]);
+            bench.step(vec![move_pointer(start_2)]);
             let start_2_2 = bench.step(vec![button_2(start_2, true)]);
             assert!(
                 start_2_2.starts(),
@@ -300,7 +300,7 @@ fn row_9b_a_stroke_started_before_opening_the_area_continues_and_ends_with_strok
             let over = bench.over_the_area();
 
             // El puntero pasa por encima del área: el trazo sigue.
-            let step = bench.step(vec![mover(over)]);
+            let step = bench.step(vec![move_pointer(over)]);
             assert!(
                 !step.movements().is_empty(),
                 "ppp {ppp} {order:?}: el trazo debe seguir sobre el área: {:?}",
@@ -327,7 +327,7 @@ fn row_9b_a_stroke_started_before_opening_the_area_continues_and_ends_with_strok
                 "ppp {ppp} {order:?}: no es un clic del botón"
             );
             // Y el gesto terminó: un movimiento más no dibuja.
-            let after_2 = bench.step(vec![mover(start_2)]);
+            let after_2 = bench.step(vec![move_pointer(start_2)]);
             assert!(
                 !after_2.there_is_stroke(),
                 "ppp {ppp} {order:?}: {:?}",
@@ -349,25 +349,25 @@ fn row_9b_with_the_area_closed_the_click_draws_the_wheel_zooms_and_hover_is_vali
         // El punto donde estaría el botón.
         let pos = pos2(POS_OF_THE_AREA.x + 10.0, POS_OF_THE_AREA.y + 8.0);
 
-        let a = bench.step(vec![mover(pos)]);
+        let a = bench.step(vec![move_pointer(pos)]);
         assert!(a.info.hover.is_some(), "ppp {ppp}: hover válido");
         let b = bench.step(vec![button_2(pos, true)]);
         assert!(b.starts(), "ppp {ppp}: el clic dibuja: {:?}", b.entries);
         let c = bench.step(vec![button_2(pos, false)]);
         assert!(c.ends(), "ppp {ppp}");
 
-        let antes = bench.zoom();
+        let before = bench.zoom();
         let step = bench.step(vec![wheel_line(true)]);
         assert_eq!(
             step.info.zoom,
-            antes.zoom_in(),
+            before.zoom_in(),
             "ppp {ppp}: la rueda hace zoom"
         );
-        let antes = bench.zoom();
+        let before = bench.zoom();
         let step = bench.step(vec![Event::Zoom(1.3)]);
         assert_eq!(
             step.info.zoom,
-            antes.zoom_in(),
+            before.zoom_in(),
             "ppp {ppp}: el pellizco hace zoom"
         );
     }
@@ -456,7 +456,7 @@ impl BenchWithMenu {
 
     /// Mueve, pulsa y suelta en `pos` y devuelve los tres pasos.
     fn click(&mut self, pos: Pos2) -> [StepWithMenu; 3] {
-        let a = self.step(vec![mover(pos)]);
+        let a = self.step(vec![move_pointer(pos)]);
         let b = self.step(vec![button_2(pos, true)]);
         let c = self.step(vec![button_2(pos, false)]);
         [a, b, c]
@@ -523,20 +523,20 @@ fn row_9b_with_the_real_menu_open_a_click_on_save_does_not_draw_and_gives_save()
 fn row_9b_with_the_real_menu_open_the_wheel_and_the_pinch_do_not_change_the_zoom() {
     for ppp in PPPS {
         let mut bench = BenchWithMenu::new_2(ppp);
-        let antes = bench.step(vec![]).info.zoom;
+        let before = bench.step(vec![]).info.zoom;
         bench.opens_file();
         let save = bench.center_of_save();
-        bench.step(vec![mover(save)]);
+        bench.step(vec![move_pointer(save)]);
         bench.step(vec![]);
         assert_eq!(bench.step(vec![]).info.hover, None, "ppp {ppp}");
         let step = bench.step(vec![wheel_line(true)]);
         assert_eq!(
-            step.info.zoom, antes,
+            step.info.zoom, before,
             "ppp {ppp}: rueda sobre el desplegable"
         );
         let step = bench.step(vec![Event::Zoom(1.3)]);
         assert_eq!(
-            step.info.zoom, antes,
+            step.info.zoom, before,
             "ppp {ppp}: pellizco sobre el desplegable"
         );
     }
@@ -628,19 +628,19 @@ fn row_5b_a_half_made_stroke_with_request_view_zoom_in_changes_the_zoom_and_the_
         let p1 = pos2(430.0, 300.0);
         let p2 = pos2(460.0, 320.0);
 
-        s.step(vec![mover(p0)]);
+        s.step(vec![move_pointer(p0)]);
         let start_2_2 = s.step(vec![button_2(p0, true)]);
         assert!(start_2_2.starts(), "ppp {ppp}");
         assert!(s.tools.busy());
-        s.step(vec![mover(p1)]);
+        s.step(vec![move_pointer(p1)]);
         assert!(s.tools.busy());
 
-        let zoom_antes = s.bench.zoom();
+        let zoom_before = s.bench.zoom();
         s.bench.canvas.request_view(ViewOp::ZoomIn);
         let after = s.step(vec![]);
         assert_eq!(
             after.info.zoom,
-            zoom_antes.zoom_in(),
+            zoom_before.zoom_in(),
             "ppp {ppp}: el zoom cambia a mitad de trazo"
         );
         assert!(s.tools.busy(), "ppp {ppp}: el trazo sigue");
@@ -656,7 +656,7 @@ fn row_5b_a_half_made_stroke_with_request_view_zoom_in_changes_the_zoom_and_the_
         assert!(!s.doc.can_undo());
 
         // El siguiente StrokeMove usa la vista nueva.
-        let step = s.step(vec![mover(p2)]);
+        let step = s.step(vec![move_pointer(p2)]);
         let expected_2 = pixel_under(&step.info, ppp, p2);
         assert_eq!(step.movements(), vec![expected_2], "ppp {ppp}: vista nueva");
         assert!(s.tools.busy());
@@ -685,7 +685,7 @@ fn row_5b_a_half_made_stroke_with_request_view_zoom_in_changes_the_zoom_and_the_
 fn row_5b_several_view_requests_in_the_middle_of_a_stroke_are_still_a_single_step() {
     let mut s = Session::new(1.0);
     let p0 = pos2(400.0, 300.0);
-    s.step(vec![mover(p0)]);
+    s.step(vec![move_pointer(p0)]);
     s.step(vec![button_2(p0, true)]);
     for (i, op) in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual, ViewOp::Fit]
         .into_iter()
@@ -694,7 +694,7 @@ fn row_5b_several_view_requests_in_the_middle_of_a_stroke_are_still_a_single_ste
         s.bench.canvas.request_view(op);
         s.step(vec![]);
         assert!(s.tools.busy(), "tras {op:?}");
-        s.step(vec![mover(pos2(400.0 + 10.0 * i as f32, 310.0))]);
+        s.step(vec![move_pointer(pos2(400.0 + 10.0 * i as f32, 310.0))]);
     }
     s.step(vec![button_2(p0, false)]);
     assert!(!s.tools.busy());
@@ -711,13 +711,13 @@ fn row_5b_the_wheel_in_the_middle_of_a_stroke_keeps_changing_the_zoom_as_before(
     for ppp in PPPS {
         let mut s = Session::new(ppp);
         let p0 = pos2(400.0, 300.0);
-        s.step(vec![mover(p0)]);
+        s.step(vec![move_pointer(p0)]);
         s.step(vec![button_2(p0, true)]);
-        let antes = s.bench.zoom();
+        let before = s.bench.zoom();
         let step = s.step(vec![wheel_line(true)]);
         assert_eq!(
             step.info.zoom,
-            antes.zoom_in(),
+            before.zoom_in(),
             "ppp {ppp}: la rueda no cambia"
         );
         assert!(s.tools.busy(), "ppp {ppp}");

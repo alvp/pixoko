@@ -104,7 +104,7 @@ fn document(session: &Session) -> TestDocument {
 
 /// Un paso con `delta`, comprobando elección, `reveal` y documento.
 fn cycle(session: &mut Session, delta: i8, expected: ColorChoice, context: &str) {
-    let antes = document(session);
+    let before = document(session);
     let changes = session.choice != expected;
     session.view.reveal = false;
     session.cycle_choice(delta);
@@ -115,7 +115,7 @@ fn cycle(session: &mut Session, delta: i8, expected: ColorChoice, context: &str)
             "{context}: delta {delta} no muestra la fila elegida"
         );
     }
-    assert_eq!(document(session), antes, "{context}: delta {delta}");
+    assert_eq!(document(session), before, "{context}: delta {delta}");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -228,14 +228,14 @@ fn gray_and_gray_alpha_wrap_around_in_the_nine_slots() {
 fn in_modes_without_a_palette_there_are_always_nine_swatches() {
     for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
         let mut s = session_2(of_mode(mode));
-        let mut vistas = vec![s.choice];
+        let mut views = vec![s.choice];
         for _ in 0..9 {
             s.cycle_choice(1);
-            vistas.push(s.choice);
+            views.push(s.choice);
         }
         let expected_2_2: Vec<ColorChoice> =
             (0..=9u8).map(|i| ColorChoice::Slot(i % 9 + 1)).collect();
-        assert_eq!(vistas, expected_2_2, "{mode:?}");
+        assert_eq!(views, expected_2_2, "{mode:?}");
     }
 }
 
@@ -264,14 +264,14 @@ fn cycle_choice_does_not_touch_the_document_or_the_history_in_any_mode() {
     ];
     for image in images {
         let mut s = session_2(image);
-        let antes = document(&s);
-        assert!(antes.can_redo, "la sesión de prueba puede rehacer");
+        let before = document(&s);
+        assert!(before.can_redo, "la sesión de prueba puede rehacer");
         for _ in 0..30 {
             s.cycle_choice(1);
             s.cycle_choice(-1);
             s.cycle_choice(-1);
         }
-        assert_eq!(document(&s), antes, "{:?}", image_2(&s).mode());
+        assert_eq!(document(&s), before, "{:?}", image_2(&s).mode());
     }
 }
 
@@ -340,10 +340,10 @@ fn with_an_invalid_choice_cycle_choice_gives_the_initial_choice_in_both_directio
             let mut s = session_2(image.clone());
             let initial = initial_choice(image_2(&s));
             s.choice = invalid;
-            let antes = document(&s);
+            let before = document(&s);
             s.cycle_choice(delta);
             assert_eq!(s.choice, initial, "{name_2}: delta {delta}");
-            assert_eq!(document(&s), antes, "{name_2}: delta {delta}");
+            assert_eq!(document(&s), before, "{name_2}: delta {delta}");
         }
     }
 }

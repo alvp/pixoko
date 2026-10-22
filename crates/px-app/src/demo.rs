@@ -193,7 +193,7 @@ mod fill_tests {
 
     /// Recorrido ingenuo pixel a pixel con cola: 4 vecinos y valor exacto (`get_pixel`).
     fn region_naive(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
-        let valor = img.get_pixel(sx, sy).expect("dentro");
+        let value = img.get_pixel(sx, sy).expect("dentro");
         let mut region = BTreeSet::new();
         let mut queue = VecDeque::new();
         region.insert((sx, sy));
@@ -204,7 +204,7 @@ mod fill_tests {
                 let (Ok(nx), Ok(ny)) = (u32::try_from(nx), u32::try_from(ny)) else {
                     continue;
                 };
-                if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(valor) {
+                if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(value) {
                     region.insert((nx, ny));
                     queue.push_back((nx, ny));
                 }

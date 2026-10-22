@@ -141,9 +141,9 @@ fn row_2_open_new_image_returns_false_with_a_lock_or_with_another_dialog_open() 
         assert!(!modal.is_open(), "{locks:?}");
     }
     let mut modal = open(4096);
-    let antes = modal.clone();
+    let before = modal.clone();
     assert!(!open_new_image(&mut modal, 100, Locks::default()));
-    assert_eq!(modal, antes, "no cambia el diálogo abierto");
+    assert_eq!(modal, before, "no cambia el diálogo abierto");
 }
 
 #[test]
@@ -326,7 +326,7 @@ fn pixels_2(ppp: f32, window: Window) -> (i64, i64) {
 
 // --- Eventos sintéticos ---
 
-fn mover(pos: Pos2) -> InputEvent {
+fn move_pointer(pos: Pos2) -> InputEvent {
     InputEvent::PointerMoved(pos)
 }
 
@@ -563,7 +563,7 @@ struct Bench {
     trace: Vec<(bool, Option<Id>)>,
     /// El fotograma (índice en `trace`) en que `show_dialog` pintó el diálogo por primera vez.
     open_in: Option<usize>,
-    ultimo: Painted,
+    last_2_2: Painted,
 }
 
 impl Bench {
@@ -582,7 +582,7 @@ impl Bench {
             cancelled: 0,
             trace: Vec::new(),
             open_in: None,
-            ultimo: Painted::default(),
+            last_2_2: Painted::default(),
         }
     }
 
@@ -667,7 +667,7 @@ impl Bench {
         }
         self.trace
             .push((self.modal.is_open(), self.ctx.memory(|m| m.focused())));
-        self.ultimo = painted(&shapes);
+        self.last_2_2 = painted(&shapes);
     }
 
     fn rest(&mut self) {
@@ -678,7 +678,7 @@ impl Bench {
 
     /// Mueve, pulsa y suelta en `pos`: tres fotogramas, como los entrega winit.
     fn click(&mut self, pos: Pos2) {
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         self.frame(vec![button_2(pos, true)]);
         self.frame(vec![button_2(pos, false)]);
     }
@@ -691,10 +691,14 @@ impl Bench {
     /// El centro del texto visible `searched`: el exacto y, si no hay, el primero que lo contiene
     /// (como `dialog_open_focus.rs`, que busca las entradas del menú por contenido).
     fn center_of(&self, searched: &str) -> Pos2 {
-        self.ultimo
+        self.last_2_2
             .exact(searched)
-            .or_else(|| self.ultimo.visible().find(|t| t.text_2.contains(searched)))
-            .unwrap_or_else(|| panic!("no se pinta {searched:?}; hay {:?}", self.ultimo.list()))
+            .or_else(|| {
+                self.last_2_2
+                    .visible()
+                    .find(|t| t.text_2.contains(searched))
+            })
+            .unwrap_or_else(|| panic!("no se pinta {searched:?}; hay {:?}", self.last_2_2.list()))
             .rect()
             .center()
     }
@@ -711,9 +715,9 @@ impl Bench {
         self.rest();
         self.click_in("Archivo");
         assert!(
-            self.ultimo.contains("Ctrl+N"),
+            self.last_2_2.contains("Ctrl+N"),
             "el menú muestra el atajo; hay {:?}",
-            self.ultimo.list()
+            self.last_2_2.list()
         );
         let input = self.center_of("Nueva imagen…");
         self.click(input);
@@ -768,9 +772,9 @@ impl Bench {
     }
 
     fn create_disabled(&self) -> bool {
-        self.ultimo
+        self.last_2_2
             .exact("Crear")
-            .unwrap_or_else(|| panic!("no se pinta Crear; hay {:?}", self.ultimo.list()))
+            .unwrap_or_else(|| panic!("no se pinta Crear; hay {:?}", self.last_2_2.list()))
             .disabled()
     }
 
@@ -782,7 +786,7 @@ impl Bench {
             self.accepted.len(),
             self.cancelled,
             self.focus,
-            self.ultimo.list()
+            self.last_2_2.list()
         )
     }
 }
@@ -822,7 +826,7 @@ const NOTICES: [&str; 5] = [
 ];
 
 fn there_is_a_background_notice(b: &Bench) -> bool {
-    NOTICES.iter().any(|a| b.ultimo.contains(a))
+    NOTICES.iter().any(|a| b.last_2_2.contains(a))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -869,9 +873,9 @@ fn row_11_the_dialog_paints_title_footer_and_buttons_at_both_windows() {
             let b = Bench::open(ppp, window, 16384);
             for text_2 in ["Nueva imagen", "Crear", "Cancelar", "Ancho", "Alto", "Modo"] {
                 assert!(
-                    b.ultimo.exact(text_2).is_some(),
+                    b.last_2_2.exact(text_2).is_some(),
                     "ppp {ppp} {window:?}: falta {text_2:?}; hay {:?}",
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
             }
             assert!(!b.create_disabled(), "ppp {ppp} {window:?}: todo es válido");
@@ -894,21 +898,21 @@ fn row_11_at_960_by_720_the_whole_indexed_form_is_painted_with_its_report_and_th
             "Negro",
         ] {
             assert!(
-                b.ultimo.exact(text_2).is_some(),
+                b.last_2_2.exact(text_2).is_some(),
                 "ppp {ppp}: falta {text_2:?}; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
         }
         // Indexado no ofrece «Color…» ni el hexadecimal.
-        assert!(b.ultimo.exact("Color…").is_none(), "ppp {ppp}");
-        assert!(b.ultimo.exact("Color").is_none(), "ppp {ppp}");
+        assert!(b.last_2_2.exact("Color…").is_none(), "ppp {ppp}");
+        assert!(b.last_2_2.exact("Color").is_none(), "ppp {ppp}");
         // El informe y el rango visible.
-        assert!(b.ultimo.contains("Memoria: menos de 1 MiB"), "ppp {ppp}");
+        assert!(b.last_2_2.contains("Memoria: menos de 1 MiB"), "ppp {ppp}");
         assert!(
-            b.ultimo.contains("Paleta: 32 colores, el 0 transparente"),
+            b.last_2_2.contains("Paleta: 32 colores, el 0 transparente"),
             "ppp {ppp}"
         );
-        assert!(b.ultimo.contains("1-8192"), "ppp {ppp}: el rango visible");
+        assert!(b.last_2_2.contains("1-8192"), "ppp {ppp}: el rango visible");
     }
 }
 
@@ -938,25 +942,25 @@ fn row_11_typing_0_8193_empty_and_500_in_the_width_gives_inline_errors_and_creat
                         );
                         // En línea: `error: ` y el motivo.
                         assert!(
-                            b.ultimo.contains(&format!("{ERROR_PREFIX}{reason_2}")),
+                            b.last_2_2.contains(&format!("{ERROR_PREFIX}{reason_2}")),
                             "{context}: falta el error en línea; hay {:?}",
-                            b.ultimo.list()
+                            b.last_2_2.list()
                         );
                         // En el pie: `error: ` y `Width: reason_2`, con Crear atenuado.
                         assert!(
-                            b.ultimo
+                            b.last_2_2
                                 .contains(&format!("{ERROR_PREFIX}Ancho: {reason_2}")),
                             "{context}: falta el motivo del pie; hay {:?}",
-                            b.ultimo.list()
+                            b.last_2_2.list()
                         );
                         assert!(b.create_disabled(), "{context}: Crear atenuado");
                     }
                     None => {
                         assert_eq!(b.dialog().validity("ancho"), Some(Validity::Valid));
                         assert!(
-                            !b.ultimo.contains(ERROR_PREFIX),
+                            !b.last_2_2.contains(ERROR_PREFIX),
                             "{context}: no hay errores; hay {:?}",
-                            b.ultimo.list()
+                            b.last_2_2.list()
                         );
                         assert!(!b.create_disabled(), "{context}");
                     }
@@ -972,8 +976,8 @@ fn row_11_typing_in_the_height_gives_the_height_reason() {
         let mut b = Bench::open(ppp, Window::Large, 16384);
         b.focus_until(FocusTarget::Field("alto"));
         b.writes("8193");
-        assert!(b.ultimo.contains("error: máximo 8192"), "ppp {ppp}");
-        assert!(b.ultimo.contains("error: Alto: máximo 8192"), "ppp {ppp}");
+        assert!(b.last_2_2.contains("error: máximo 8192"), "ppp {ppp}");
+        assert!(b.last_2_2.contains("error: Alto: máximo 8192"), "ppp {ppp}");
         assert!(b.create_disabled(), "ppp {ppp}");
     }
 }
@@ -985,22 +989,22 @@ fn row_2_with_the_gpu_at_4096_the_range_and_the_error_say_graphics_card_in_the_b
             let mut b = Bench::open(ppp, window, 4096);
             let context = format!("ppp {ppp} {window:?}");
             assert!(
-                b.ultimo.contains("1-4096"),
+                b.last_2_2.contains("1-4096"),
                 "{context}: el rango visible; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             b.writes("5000");
             assert!(
-                b.ultimo.contains("error: máximo 4096 (tarjeta gráfica)"),
+                b.last_2_2.contains("error: máximo 4096 (tarjeta gráfica)"),
                 "{context}: error en línea; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             // El pie: `error: Width: máximo 4096 (tarjeta gráfica)` (43 caracteres, caben en 44).
             assert!(
-                b.ultimo
+                b.last_2_2
                     .contains("error: Ancho: máximo 4096 (tarjeta gráfica)"),
                 "{context}: motivo del pie; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             assert!(
                 b.create_disabled(),
@@ -1018,10 +1022,10 @@ fn row_2_with_the_gpu_at_4096_the_range_and_the_error_say_graphics_card_in_the_b
             b.focus_until(FocusTarget::Field("alto"));
             b.writes("5000");
             assert!(
-                b.ultimo
+                b.last_2_2
                     .contains("error: Alto: máximo 4096 (tarjeta gráfica)"),
                 "{context}: el alto dice lo mismo; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
         }
     }
@@ -1033,8 +1037,8 @@ fn row_11_minus_and_plus_change_the_width_one_by_one() {
         for window in WINDOWS {
             let mut b = Bench::open(ppp, window, 16384);
             let context = format!("ppp {ppp} {window:?}");
-            let more = b.ultimo.more();
-            let less = b.ultimo.less();
+            let more = b.last_2_2.more();
+            let less = b.last_2_2.less();
             assert_eq!(more.len(), 2, "{context}: un + por campo numérico");
             assert_eq!(less.len(), 2, "{context}: un − por campo numérico");
 
@@ -1047,7 +1051,7 @@ fn row_11_minus_and_plus_change_the_width_one_by_one() {
             );
             assert_eq!(b.dialog().text("alto"), Some("64".to_string()), "{context}");
             for _ in 0..2 {
-                let less = b.ultimo.less();
+                let less = b.last_2_2.less();
                 b.click(less[0].center());
                 b.rest();
             }
@@ -1056,7 +1060,7 @@ fn row_11_minus_and_plus_change_the_width_one_by_one() {
                 Some("63".to_string()),
                 "{context}"
             );
-            let more = b.ultimo.more();
+            let more = b.last_2_2.more();
             b.click(more[1].center());
             b.rest();
             assert_eq!(b.dialog().text("alto"), Some("65".to_string()), "{context}");
@@ -1080,8 +1084,8 @@ fn row_11_changing_mode_with_the_mouse_shows_only_the_background_group_of_that_m
             "{}",
             context("inicio")
         );
-        assert!(b.ultimo.exact("Transparente").is_some());
-        assert!(b.ultimo.exact("Color…").is_none());
+        assert!(b.last_2_2.exact("Transparente").is_some());
+        assert!(b.last_2_2.exact("Color…").is_none());
 
         for (mode_2, background_2, with_transparent) in [
             ("RGBA", "fondo_rgba", true),
@@ -1103,17 +1107,17 @@ fn row_11_changing_mode_with_the_mouse_shows_only_the_background_group_of_that_m
                     context(mode_2)
                 );
             }
-            assert!(b.ultimo.exact("Blanco").is_some(), "{}", context(mode_2));
-            assert!(b.ultimo.exact("Negro").is_some(), "{}", context(mode_2));
+            assert!(b.last_2_2.exact("Blanco").is_some(), "{}", context(mode_2));
+            assert!(b.last_2_2.exact("Negro").is_some(), "{}", context(mode_2));
             assert_eq!(
-                b.ultimo.exact("Transparente").is_some(),
+                b.last_2_2.exact("Transparente").is_some(),
                 with_transparent,
                 "{}: Gris no ofrece Transparente",
                 context(mode_2)
             );
             let with_color = mode_2 != "Indexado";
             assert_eq!(
-                b.ultimo.exact("Color…").is_some(),
+                b.last_2_2.exact("Color…").is_some(),
                 with_color,
                 "{}: «Color…»",
                 context(mode_2)
@@ -1147,11 +1151,11 @@ fn row_11_color_shows_the_hexadecimal_of_that_mode_only_and_validates_the_text()
                 );
             }
             assert!(
-                b.ultimo.exact("Color").is_some(),
+                b.last_2_2.exact("Color").is_some(),
                 "{context}: rótulo del hexadecimal"
             );
             assert!(
-                b.ultimo.contains("#808080"),
+                b.last_2_2.contains("#808080"),
                 "{context}: nace en gris medio"
             );
 
@@ -1166,9 +1170,9 @@ fn row_11_color_shows_the_hexadecimal_of_that_mode_only_and_validates_the_text()
                     "{context} {text_2}"
                 );
                 assert!(
-                    b.ultimo.contains(&format!("{ERROR_PREFIX}{short}")),
+                    b.last_2_2.contains(&format!("{ERROR_PREFIX}{short}")),
                     "{context} {text_2}: falta el error; hay {:?}",
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
                 assert!(b.create_disabled(), "{context} {text_2}");
             }
@@ -1186,10 +1190,10 @@ fn row_11_color_shows_the_hexadecimal_of_that_mode_only_and_validates_the_text()
                 }
                 Some(error) => {
                     assert!(
-                        b.ultimo
+                        b.last_2_2
                             .contains(&format!("{ERROR_PREFIX}{}", hex_notice(&error))),
                         "{context}: #ff0000; hay {:?}",
-                        b.ultimo.list()
+                        b.last_2_2.list()
                     );
                     assert!(b.create_disabled(), "{context}");
                 }
@@ -1198,10 +1202,10 @@ fn row_11_color_shows_the_hexadecimal_of_that_mode_only_and_validates_the_text()
             b.writes("#80808080");
             if mode_2 == "Gris" {
                 assert!(
-                    b.ultimo
+                    b.last_2_2
                         .contains(&format!("{ERROR_PREFIX}{}", hex_notice(&HexError::NoAlpha))),
                     "{context}: #80808080; hay {:?}",
-                    b.ultimo.list()
+                    b.last_2_2.list()
                 );
                 assert!(b.create_disabled(), "{context}");
             } else {
@@ -1223,7 +1227,7 @@ fn row_11_the_hexadecimal_shows_only_with_a_color_of_its_mode_when_changing_mode
         b.click_in("Color…");
         assert!(b.dialog().is_shown("color_rgba"), "ppp {ppp}");
         assert!(
-            b.ultimo.exact("Color").is_some(),
+            b.last_2_2.exact("Color").is_some(),
             "ppp {ppp}: rótulo del hexadecimal"
         );
 
@@ -1249,12 +1253,13 @@ fn row_11_the_hexadecimal_shows_only_with_a_color_of_its_mode_when_changing_mode
         for color in ["color_rgba", "color_gris_alfa", "color_gris"] {
             assert!(!b.dialog().is_shown(color), "ppp {ppp}: {color}");
         }
-        assert!(b.ultimo.exact("Color").is_none(), "ppp {ppp}");
-        assert!(b.ultimo.exact("Color…").is_none(), "ppp {ppp}");
+        assert!(b.last_2_2.exact("Color").is_none(), "ppp {ppp}");
+        assert!(b.last_2_2.exact("Color…").is_none(), "ppp {ppp}");
         assert!(
-            b.ultimo.contains("Indexado sin Color: pasa a Transparente"),
+            b.last_2_2
+                .contains("Indexado sin Color: pasa a Transparente"),
             "ppp {ppp}: dice qué fondo había y a cuál vuelve; hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
     }
 }
@@ -1268,20 +1273,20 @@ fn row_11_the_report_updates_after_each_size_change() {
     for ppp in PPPS {
         let mut b = Bench::open(ppp, Window::Large, 16384);
         let context = format!("ppp {ppp}");
-        assert!(b.ultimo.contains("Memoria: menos de 1 MiB"), "{context}");
+        assert!(b.last_2_2.contains("Memoria: menos de 1 MiB"), "{context}");
 
         b.writes("4097");
         b.focus_until(FocusTarget::Field("alto"));
         b.writes("4096");
         for line in report_text(Some((4097, 4096)), Mode::Indexed, None).lines() {
             assert!(
-                b.ultimo.contains(line),
+                b.last_2_2.contains(line),
                 "{context}: falta {line:?}; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
         }
         assert!(
-            b.ultimo
+            b.last_2_2
                 .contains("aviso: más de 16777216 px; puede ir lento"),
             "{context}"
         );
@@ -1290,13 +1295,13 @@ fn row_11_the_report_updates_after_each_size_change() {
 
         b.writes("64");
         assert!(
-            !b.ultimo.contains("aviso: más de"),
+            !b.last_2_2.contains("aviso: más de"),
             "{context}: el aviso desaparece al bajar el tamaño; hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
 
         b.writes("abc");
-        assert!(b.ultimo.contains("Memoria: —"), "{context}: sin valor");
+        assert!(b.last_2_2.contains("Memoria: —"), "{context}: sin valor");
         assert!(b.create_disabled(), "{context}");
     }
 }
@@ -1313,9 +1318,9 @@ fn row_11_changing_mode_with_transparent_to_gray_warns_in_the_report_until_the_n
         );
         b.click_in("Gris");
         assert!(
-            b.ultimo.contains("Gris sin Transparente: pasa a Blanco"),
+            b.last_2_2.contains("Gris sin Transparente: pasa a Blanco"),
             "{context}: falta el aviso; hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
         let spec = spec_of_the(&b).expect("spec");
         assert_eq!(
@@ -1327,7 +1332,7 @@ fn row_11_changing_mode_with_transparent_to_gray_warns_in_the_report_until_the_n
         // El aviso dura hasta que cambia otro valor del formulario.
         b.rest();
         assert!(
-            b.ultimo.contains("Gris sin Transparente: pasa a Blanco"),
+            b.last_2_2.contains("Gris sin Transparente: pasa a Blanco"),
             "{context}"
         );
         b.focus_until(FocusTarget::Field("ancho"));
@@ -1335,7 +1340,7 @@ fn row_11_changing_mode_with_transparent_to_gray_warns_in_the_report_until_the_n
         assert!(
             !there_is_a_background_notice(&b),
             "{context}: el aviso no sobrevive; hay {:?}",
-            b.ultimo.list()
+            b.last_2_2.list()
         );
     }
 }
@@ -1393,9 +1398,9 @@ fn row_11_a_color_that_does_not_fit_the_new_mode_goes_back_to_the_default_and_sa
 
             b.click_in(target_2);
             assert!(
-                b.ultimo.contains(notice),
+                b.last_2_2.contains(notice),
                 "{context}: falta {notice:?}; hay {:?}",
-                b.ultimo.list()
+                b.last_2_2.list()
             );
             let spec = spec_of_the(&b).expect("spec");
             assert_eq!(
@@ -1636,7 +1641,7 @@ fn wheel_over_the_body(b: &mut Bench, notches: usize) {
         (layout.body.x + 3 * n) as f32 / b.ppp,
         (layout.body.y + layout.body.height / 2) as f32 / b.ppp,
     );
-    b.frame(vec![mover(pos)]);
+    b.frame(vec![move_pointer(pos)]);
     b.rest();
     for _ in 0..notches {
         b.frame(vec![wheel_line(false)]);
@@ -1646,7 +1651,7 @@ fn wheel_over_the_body(b: &mut Bench, notches: usize) {
 
 /// La `y` (en puntos) del texto pintado exacto, aunque quede recortado.
 fn y_de(b: &Bench, searched: &str) -> Option<f32> {
-    b.ultimo.shapes.iter().find_map(|f| match f {
+    b.last_2_2.shapes.iter().find_map(|f| match f {
         Shape2::Text(t) if t.text_2.trim() == searched => Some(t.pos.y),
         _ => None,
     })
@@ -1710,10 +1715,10 @@ fn row_11_at_the_minimum_the_wheel_scrolls_the_body_and_title_footer_and_buttons
                 "{context}: título, pie y botones fijos"
             );
             assert!(
-                b.ultimo.exact("Crear").is_some(),
+                b.last_2_2.exact("Crear").is_some(),
                 "{context}: Crear se sigue viendo"
             );
-            assert!(b.ultimo.exact("Cancelar").is_some(), "{context}");
+            assert!(b.last_2_2.exact("Cancelar").is_some(), "{context}");
         }
     }
 }
@@ -1729,7 +1734,7 @@ fn row_11_at_the_minimum_tab_brings_into_view_the_hexadecimal_that_was_outside()
             b.dialog().scroll_u() > 0,
             "ppp {ppp}: el foco en el hexadecimal desplaza el cuerpo"
         );
-        assert!(b.ultimo.exact("Crear").is_some());
+        assert!(b.last_2_2.exact("Crear").is_some());
         assert_eq!(
             b.focus_of_egui(),
             Some(Bench::id_de("color_rgba")),
@@ -1748,7 +1753,7 @@ fn row_11_at_960_by_720_the_form_does_not_scroll() {
             }
             let context = format!("ppp {ppp}, con Color… {with_color}");
             assert_eq!(b.layout().max_scroll_u, 0, "{context}");
-            let antes: Vec<Option<f32>> = ["Nueva imagen", "Modo", "Crear", "Cancelar"]
+            let before: Vec<Option<f32>> = ["Nueva imagen", "Modo", "Crear", "Cancelar"]
                 .iter()
                 .map(|t| y_de(&b, t))
                 .collect();
@@ -1758,7 +1763,7 @@ fn row_11_at_960_by_720_the_form_does_not_scroll() {
                 .iter()
                 .map(|t| y_de(&b, t))
                 .collect();
-            assert_eq!(after_2, antes, "{context}: nada se mueve");
+            assert_eq!(after_2, before, "{context}: nada se mueve");
         }
     }
 }
@@ -1795,7 +1800,7 @@ fn failures_of_contrast(b: &Bench) -> (Vec<String>, usize) {
     };
     let mut failures = Vec::new();
     let mut checked = 0;
-    for (i, shape_2) in b.ultimo.shapes.iter().enumerate() {
+    for (i, shape_2) in b.last_2_2.shapes.iter().enumerate() {
         let Shape2::Text(t) = shape_2 else { continue };
         let visible = t.rect().intersect(t.clip);
         if t.text_2.trim().is_empty() || !visible.is_positive() || !area.contains_rect(visible) {
@@ -1805,7 +1810,7 @@ fn failures_of_contrast(b: &Bench) -> (Vec<String>, usize) {
             continue;
         }
         let probe = visible.shrink2(vec2(0.0, visible.height() * 0.25));
-        let Some(background_2) = fill_under(&b.ultimo.shapes, i, probe) else {
+        let Some(background_2) = fill_under(&b.last_2_2.shapes, i, probe) else {
             failures.push(format!("el texto {:?} no tiene relleno debajo", t.text_2));
             continue;
         };
@@ -1942,7 +1947,7 @@ const ACCENT: Color32 = px_ui::theme::ACCENT;
 const MIN_MARK_20B: f64 = 3.0;
 
 #[derive(Clone, Copy, Debug)]
-struct Disco {
+struct Disk {
     center: Pos2,
     radius: f32,
     fill: Color32,
@@ -1962,7 +1967,7 @@ struct Toolbox {
 
 #[derive(Debug, Default)]
 struct Marks {
-    discos: Vec<Disco>,
+    disks: Vec<Disk>,
     boxes: Vec<Toolbox>,
 }
 
@@ -1978,7 +1983,7 @@ fn collects_marks(shape: &Shape, outside: &mut Marks, order: &mut usize) {
     match shape {
         Shape::Circle(c) => {
             let (stroke_color, stroke_width) = stroke_visible(c.stroke);
-            outside.discos.push(Disco {
+            outside.disks.push(Disk {
                 center: c.center,
                 radius: c.radius,
                 fill: c.fill,
@@ -2025,9 +2030,9 @@ fn same_center(a: Pos2, b: Pos2, u: f32) -> bool {
 }
 
 /// Los aros (círculos con trazo `TOGGLE_EDGE`), de arriba abajo.
-fn rings(m: &Marks) -> Vec<Disco> {
-    let mut v: Vec<Disco> = m
-        .discos
+fn rings(m: &Marks) -> Vec<Disk> {
+    let mut v: Vec<Disk> = m
+        .disks
         .iter()
         .copied()
         .filter(|d| d.stroke_color == TOGGLE_EDGE)
@@ -2037,9 +2042,9 @@ fn rings(m: &Marks) -> Vec<Disco> {
 }
 
 /// Los puntos (círculos rellenos de `ACCENT`), de arriba abajo.
-fn points(m: &Marks) -> Vec<Disco> {
-    let mut v: Vec<Disco> = m
-        .discos
+fn points(m: &Marks) -> Vec<Disk> {
+    let mut v: Vec<Disk> = m
+        .disks
         .iter()
         .copied()
         .filter(|d| d.fill == ACCENT)
@@ -2075,11 +2080,11 @@ fn marks_square(m: &Marks, u: f32, y: f32) -> Vec<Toolbox> {
 }
 
 /// El relleno de un aro: el suyo o, si no tiene, el del último círculo relleno anterior y concéntrico.
-fn fill_of_ring(m: &Marks, ring: &Disco) -> Color32 {
+fn fill_of_ring(m: &Marks, ring: &Disk) -> Color32 {
     if ring.fill != Color32::TRANSPARENT {
         return ring.fill;
     }
-    m.discos
+    m.disks
         .iter()
         .filter(|d| d.order < ring.order && d.fill != Color32::TRANSPARENT)
         .rfind(|d| (d.center - ring.center).length() < 0.01)
@@ -2127,7 +2132,7 @@ fn asserts_markers(
         rings.len(),
         total,
         "{location}: un aro por opción de los grupos {groups:?}; círculos pintados {:?}",
-        m.discos
+        m.disks
     );
     let mut first_2 = 0;
     for &(id, options_2, chosen) in &groups {
@@ -2154,7 +2159,7 @@ fn asserts_markers(
                 FIELD_FILL,
                 "{location}: el aro {id}/{i} se rellena con el color del campo"
             );
-            let here: Vec<&Disco> = points
+            let here: Vec<&Disk> = points
                 .iter()
                 .filter(|p| same_center(p.center, ring.center, u))
                 .collect();
@@ -2234,11 +2239,11 @@ fn asserts_markers(
         }
         // Opción y casilla se distinguen por la forma: ningún círculo en la fila de la caja.
         assert!(
-            m.discos
+            m.disks
                 .iter()
                 .all(|d| (d.center.y - center.y).abs() > 3.0 * u),
             "{location}: hay un círculo en la fila de una casilla: {:?}",
-            m.discos
+            m.disks
         );
     }
     for ring in &rings {
@@ -2459,7 +2464,13 @@ fn row_11_new_image_the_focus_ring_surrounds_the_row_of_each_option_as_always() 
             let shapes = b.raw();
             let x = b.layout().dialog.x;
             measures.push(asserts_ring(
-                &b.ultimo, &shapes, ppp, x, goal, label, &location,
+                &b.last_2_2,
+                &shapes,
+                ppp,
+                x,
+                goal,
+                label,
+                &location,
             ));
         }
         asserts_ring_measures(&measures, &location);
@@ -2553,10 +2564,10 @@ fn color_ix_a1(mode: Mode) -> usize {
     if mode == Mode::Gray { 2 } else { 3 }
 }
 
-/// El fondo y el aviso que deja descartar un texto inválido con `ultimo` confirmado (A1-1 y A1-4).
-fn after_discarding_a1(from: Mode, ultimo: Rgba, to: Mode) -> (Background, String) {
-    match carry_background(from, Background::Color(ultimo), to) {
-        Carry::Kept(background_2) => (background_2, format!("{NOT_VALID_A1}{}", hex8_a1(ultimo))),
+/// El fondo y el aviso que deja descartar un texto inválido con `last_2_2` confirmado (A1-1 y A1-4).
+fn after_discarding_a1(from: Mode, last_2_2: Rgba, to: Mode) -> (Background, String) {
+    match carry_background(from, Background::Color(last_2_2), to) {
+        Carry::Kept(background_2) => (background_2, format!("{NOT_VALID_A1}{}", hex8_a1(last_2_2))),
         Carry::Reset {
             to: background_2,
             notice,
@@ -2629,7 +2640,7 @@ fn wheel_up_a1(b: &mut Bench) {
         (layout.body.x + 3 * n) as f32 / b.ppp,
         (layout.body.y + layout.body.height / 2) as f32 / b.ppp,
     );
-    b.frame(vec![mover(pos)]);
+    b.frame(vec![move_pointer(pos)]);
     b.rest();
     for _ in 0..4 {
         b.frame(vec![wheel_line(true)]);
@@ -2661,7 +2672,7 @@ fn click_with_trace_a1(b: &mut Bench, searched: &str, id: &'static str) -> Vec<S
     let pos = b.center_of(searched);
     let mut trace = Vec::new();
     for events in [
-        vec![mover(pos)],
+        vec![move_pointer(pos)],
         vec![button_2(pos, true)],
         vec![button_2(pos, false)],
         vec![],
@@ -2686,9 +2697,9 @@ fn key_with_trace_a1(b: &mut Bench, key: Key, id: &'static str) -> Vec<SnapshotA
     trace
 }
 
-/// El índice del fotograma en que cambió el modo (exactamente uno) respecto a `antes`.
-fn frame_of_the_change_a1(antes: Option<usize>, trace: &[SnapshotA1], ctx: &str) -> usize {
-    let mut previous = antes;
+/// El índice del fotograma en que cambió el modo (exactamente uno) respecto a `before`.
+fn frame_of_the_change_a1(before: Option<usize>, trace: &[SnapshotA1], ctx: &str) -> usize {
+    let mut previous = before;
     let mut changes_2 = Vec::new();
     for (i, snapshot) in trace.iter().enumerate() {
         if snapshot.mode_2 != previous {
@@ -2705,8 +2716,8 @@ fn frame_of_the_change_a1(antes: Option<usize>, trace: &[SnapshotA1], ctx: &str)
 }
 
 /// El resultado de A1 o A2 con el aviso, en el diálogo y pintado.
-fn checks_result_a1(b: &mut Bench, from: Mode, ultimo: Rgba, to: Mode, ctx: &str) {
-    let (background_2, notice) = after_discarding_a1(from, ultimo, to);
+fn checks_result_a1(b: &mut Bench, from: Mode, last_2_2: Rgba, to: Mode, ctx: &str) {
+    let (background_2, notice) = after_discarding_a1(from, last_2_2, to);
     assert_eq!(
         text_of_the_report(b.dialog()),
         report_text(Some((64, 64)), to, Some(&notice)),
@@ -2742,9 +2753,9 @@ fn checks_result_a1(b: &mut Bench, from: Mode, ultimo: Rgba, to: Mode, ctx: &str
         wheel_over_the_body(b, 3);
     }
     assert!(
-        b.ultimo.contains(&notice),
+        b.last_2_2.contains(&notice),
         "{ctx}: falta {notice:?} pintado; hay {:?}",
-        b.ultimo.list()
+        b.last_2_2.list()
     );
 }
 
@@ -2754,7 +2765,7 @@ fn row_a3_path_to_typing_zz_and_clicking_on_the_mode_the_field_is_already_revert
     for ppp in PPPS {
         for window in WINDOWS {
             for (from, confirmed, to) in CASES_A_1 {
-                let ultimo = confirmed.unwrap_or(DEFAULT_GRAY_A1);
+                let last_2_2 = confirmed.unwrap_or(DEFAULT_GRAY_A1);
                 let ctx = format!("A3 ppp {ppp} {window:?} {from:?} {confirmed:?} → {to:?}");
                 let id = color_id_a1(from).expect("color");
                 let mut b = Bench::open(ppp, window, 16384);
@@ -2768,9 +2779,9 @@ fn row_a3_path_to_typing_zz_and_clicking_on_the_mode_the_field_is_already_revert
                     );
                 }
 
-                let antes = b.dialog().chosen("modo");
+                let before = b.dialog().chosen("modo");
                 let trace = click_with_trace_a1(&mut b, label_a_1(to), id);
-                let change = frame_of_the_change_a1(antes, &trace, &ctx);
+                let change = frame_of_the_change_a1(before, &trace, &ctx);
                 let seen = &trace[change];
                 eprintln!("{ctx}: en el fotograma {change} del clic sync_form ve {seen:?}");
 
@@ -2782,13 +2793,13 @@ fn row_a3_path_to_typing_zz_and_clicking_on_the_mode_the_field_is_already_revert
                 );
                 assert_eq!(
                     seen.text_2,
-                    Some(hex_text(ultimo)),
+                    Some(hex_text(last_2_2)),
                     "{ctx}: traza {trace:?}"
                 );
-                assert_eq!(seen.confirmed, Some(ultimo), "{ctx}");
+                assert_eq!(seen.confirmed, Some(last_2_2), "{ctx}");
 
                 // Aun así, el aviso sale y el resultado es el de A1 o A2.
-                checks_result_a1(&mut b, from, ultimo, to, &ctx);
+                checks_result_a1(&mut b, from, last_2_2, to, &ctx);
             }
         }
     }
@@ -2799,7 +2810,7 @@ fn row_a4_path_b_zz_enter_and_click_on_the_mode_the_text_stays_pending_and_the_n
     for ppp in PPPS {
         for window in WINDOWS {
             for (from, confirmed, to) in CASES_A_1 {
-                let ultimo = confirmed.unwrap_or(DEFAULT_GRAY_A1);
+                let last_2_2 = confirmed.unwrap_or(DEFAULT_GRAY_A1);
                 let ctx = format!("A4 ppp {ppp} {window:?} {from:?} {confirmed:?} → {to:?}");
                 let id = color_id_a1(from).expect("color");
                 let mut b = Bench::open(ppp, window, 16384);
@@ -2819,9 +2830,9 @@ fn row_a4_path_b_zz_enter_and_click_on_the_mode_the_text_stays_pending_and_the_n
                     wheel_up_a1(&mut b);
                 }
 
-                let antes = b.dialog().chosen("modo");
+                let before = b.dialog().chosen("modo");
                 let trace = click_with_trace_a1(&mut b, label_a_1(to), id);
-                let change = frame_of_the_change_a1(antes, &trace, &ctx);
+                let change = frame_of_the_change_a1(before, &trace, &ctx);
                 let seen = &trace[change];
                 eprintln!("{ctx}: en el fotograma {change} del clic sync_form ve {seen:?}");
 
@@ -2834,9 +2845,9 @@ fn row_a4_path_b_zz_enter_and_click_on_the_mode_the_text_stays_pending_and_the_n
                     Some("zz".to_string()),
                     "{ctx}: traza {trace:?}"
                 );
-                assert_eq!(seen.confirmed, Some(ultimo), "{ctx}");
+                assert_eq!(seen.confirmed, Some(last_2_2), "{ctx}");
 
-                checks_result_a1(&mut b, from, ultimo, to, &ctx);
+                checks_result_a1(&mut b, from, last_2_2, to, &ctx);
                 // El campo del modo nuevo no conserva el texto.
                 if let Some(new_2) = color_id_a1(to) {
                     assert_ne!(b.dialog().text(new_2), Some("zz".to_string()), "{ctx}");
@@ -2856,7 +2867,7 @@ fn row_a4_path_b_with_tab_to_the_selector_and_change_with_the_keyboard() {
     for ppp in PPPS {
         for window in WINDOWS {
             for (from, confirmed, to) in cases {
-                let ultimo = confirmed.unwrap_or(DEFAULT_GRAY_A1);
+                let last_2_2 = confirmed.unwrap_or(DEFAULT_GRAY_A1);
                 let ctx =
                     format!("A4 teclado ppp {ppp} {window:?} {from:?} {confirmed:?} → {to:?}");
                 let id = color_id_a1(from).expect("color");
@@ -2875,9 +2886,9 @@ fn row_a4_path_b_with_tab_to_the_selector_and_change_with_the_keyboard() {
                 assert_eq!(b.dialog().text(id), Some("zz".to_string()), "{ctx}");
 
                 // Espacio elige la opción enfocada.
-                let antes = b.dialog().chosen("modo");
+                let before = b.dialog().chosen("modo");
                 let trace = key_with_trace_a1(&mut b, Key::Space, id);
-                let change = frame_of_the_change_a1(antes, &trace, &ctx);
+                let change = frame_of_the_change_a1(before, &trace, &ctx);
                 let seen = &trace[change];
                 eprintln!("{ctx}: en el fotograma {change} sync_form ve {seen:?}");
                 assert!(
@@ -2886,7 +2897,7 @@ fn row_a4_path_b_with_tab_to_the_selector_and_change_with_the_keyboard() {
                 );
                 assert_eq!(seen.text_2, Some("zz".to_string()), "{ctx}");
 
-                checks_result_a1(&mut b, from, ultimo, to, &ctx);
+                checks_result_a1(&mut b, from, last_2_2, to, &ctx);
             }
         }
     }

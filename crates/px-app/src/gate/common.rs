@@ -171,7 +171,7 @@ pub fn without_temporary(names: &[String]) {
 
 /// La ruta con sus enlaces y `..` resueltos: se canonicaliza el ancestro más largo que exista y se
 /// le añade el resto (la ruta puede no existir todavía).
-fn resolver(path_2: &Path) -> PathBuf {
+fn resolve(path_2: &Path) -> PathBuf {
     let absolute = std::path::absolute(path_2).unwrap_or_else(|_| path_2.to_path_buf());
     let mut rest: Vec<OsString> = Vec::new();
     let mut actual = absolute.clone();
@@ -184,9 +184,9 @@ fn resolver(path_2: &Path) -> PathBuf {
             return resolved;
         }
         match (actual.parent(), actual.file_name()) {
-            (Some(padre), Some(name_2)) => {
+            (Some(parent), Some(name_2)) => {
                 rest.push(name_2.to_os_string());
-                actual = padre.to_path_buf();
+                actual = parent.to_path_buf();
             }
             _ => return absolute,
         }
@@ -195,8 +195,8 @@ fn resolver(path_2: &Path) -> PathBuf {
 
 /// Pánico si `path_2` (de escritura) cuelga de `golden/png/`. Se le pasa **toda** ruta de escritura.
 pub fn outside_of_golden(path_2: &Path) {
-    let forbidden = resolver(&golden_png());
-    let target_2 = resolver(path_2);
+    let forbidden = resolve(&golden_png());
+    let target_2 = resolve(path_2);
     assert!(
         !target_2.starts_with(&forbidden),
         "escritura prohibida en golden/png: {} (resuelta a {})",
@@ -292,11 +292,11 @@ pub fn snapshot_of(dir: &Path) -> TestSnapshot {
     map
 }
 
-/// `Err` con todos los problemas si `after_2` no es `antes`: un fichero que falta, que aparece o
+/// `Err` con todos los problemas si `after_2` no es `before`: un fichero que falta, que aparece o
 /// con algún byte distinto.
-pub fn compare_snapshots(antes: &TestSnapshot, after_2: &TestSnapshot) -> Result<(), String> {
+pub fn compare_snapshots(before: &TestSnapshot, after_2: &TestSnapshot) -> Result<(), String> {
     let mut problems = Vec::new();
-    for (name_2, bytes) in antes {
+    for (name_2, bytes) in before {
         match after_2.get(name_2) {
             None => problems.push(format!("falta {name_2}")),
             Some(other_2_2) if other_2_2 != bytes => {
@@ -315,7 +315,7 @@ pub fn compare_snapshots(antes: &TestSnapshot, after_2: &TestSnapshot) -> Result
         }
     }
     for name_2 in after_2.keys() {
-        if !antes.contains_key(name_2) {
+        if !before.contains_key(name_2) {
             problems.push(format!("aparece {name_2}"));
         }
     }
@@ -439,7 +439,7 @@ fn packs(row: &[u16], prof: u8) -> Vec<u8> {
 }
 
 /// PNG entero sin entrelazar (chunks, CRC y deflate «stored» a mano): `swatches` va fila a fila y
-/// píxel a píxel, con los canales del tipo de color; `antes` son chunks ya serializados entre IHDR e
+/// píxel a píxel, con los canales del tipo de color; `before` son chunks ya serializados entre IHDR e
 /// IDAT. Es la forma de `session/aux_tests.rs`, sin importarla.
 pub fn png_raw(
     width: u32,
@@ -447,7 +447,7 @@ pub fn png_raw(
     prof: u8,
     color: u8,
     swatches: &[u16],
-    antes: &[Vec<u8>],
+    before: &[Vec<u8>],
 ) -> Vec<u8> {
     let channels = match color {
         2 => 3,
@@ -467,7 +467,7 @@ pub fn png_raw(
     ihdr.extend([prof, color, 0, 0, 0]);
     let mut v = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
     v.extend(piece(b"IHDR", &ihdr));
-    for c in antes {
+    for c in before {
         v.extend(c);
     }
     v.extend(piece(b"IDAT", &zlib_stored(&raw)));
@@ -476,9 +476,9 @@ pub fn png_raw(
 }
 
 /// Inserta chunks justo tras el IHDR (que acaba en el byte 33) de un PNG de `write_png`.
-pub fn with_chunks(bytes: &[u8], antes: &[Vec<u8>]) -> Vec<u8> {
+pub fn with_chunks(bytes: &[u8], before: &[Vec<u8>]) -> Vec<u8> {
     let mut v = bytes[..33].to_vec();
-    for c in antes {
+    for c in before {
         v.extend(c);
     }
     v.extend(&bytes[33..]);
@@ -504,10 +504,10 @@ pub fn types_of_chunks(bytes: &[u8]) -> Vec<[u8; 4]> {
     let mut types = Vec::new();
     let mut pos = 8usize;
     while pos + 8 <= bytes.len() {
-        let largo = u32::from_be_bytes(bytes[pos..pos + 4].try_into().expect("longitud")) as usize;
+        let length = u32::from_be_bytes(bytes[pos..pos + 4].try_into().expect("longitud")) as usize;
         let kind: [u8; 4] = bytes[pos + 4..pos + 8].try_into().expect("tipo");
         types.push(kind);
-        pos += 12 + largo;
+        pos += 12 + length;
     }
     types
 }
@@ -560,10 +560,10 @@ pub enum TestStep {
     ColorInput(u8, [u8; 4]),
     Rotate {
         start_2: u8,
-        largo: u16,
+        length: u16,
         steps_2: i32,
     },
-    Mover {
+    Move {
         de: u8,
         a: u8,
     },
@@ -634,13 +634,13 @@ fn stroke(path_2: &[(i32, i32)]) -> Vec<(i32, i32)> {
         return points;
     };
     points.push(first_2);
-    let mut ultimo = first_2;
+    let mut last_2_2 = first_2;
     for &next in &path_2[1..] {
-        if next == ultimo {
+        if next == last_2_2 {
             continue;
         }
-        points.extend(segment(ultimo, next));
-        ultimo = next;
+        points.extend(segment(last_2_2, next));
+        last_2_2 = next;
     }
     points
 }
@@ -843,7 +843,7 @@ impl Model {
     }
 
     fn delete(&mut self, path_2: &[(i32, i32)]) -> Effect {
-        let Some(valor) = self.value_deleted() else {
+        let Some(value) = self.value_deleted() else {
             return Effect {
                 rejected: true,
                 ..Effect::default()
@@ -854,7 +854,7 @@ impl Model {
             if let Some(i) = self.index_2(x, y)
                 && self.alpha_2(i) != 0
             {
-                self.cels[i] = valor;
+                self.cels[i] = value;
                 change = true;
             }
         }
@@ -964,25 +964,25 @@ impl Model {
             }
             TestStep::Rotate {
                 start_2,
-                largo,
+                length,
                 steps_2,
             } => {
-                let (start_2, largo) = (usize::from(*start_2), usize::from(*largo));
+                let (start_2, length) = (usize::from(*start_2), usize::from(*length));
                 assert!(
-                    start_2 + largo <= self.palette.len(),
+                    start_2 + length <= self.palette.len(),
                     "rango fuera de la paleta"
                 );
-                if largo < 2 {
+                if length < 2 {
                     return Effect::default();
                 }
-                let k = steps_2.rem_euclid(largo as i32) as usize;
+                let k = steps_2.rem_euclid(length as i32) as usize;
                 let original = self.palette.clone();
-                for i in 0..largo {
-                    self.palette[start_2 + (i + k) % largo] = original[start_2 + i];
+                for i in 0..length {
+                    self.palette[start_2 + (i + k) % length] = original[start_2 + i];
                 }
                 per_cel(self.palette != original)
             }
-            TestStep::Mover { de, a } => {
+            TestStep::Move { de, a } => {
                 let (de, a) = (usize::from(*de), usize::from(*a));
                 if de == a {
                     return Effect::default();
@@ -1180,7 +1180,7 @@ fn generated(name_2: &str, model: Model) -> Source {
 /// Las cuatro generadas de 37×23 (que no es múltiplo de nada).
 pub fn generated_2() -> Vec<Source> {
     // RGBA con píxeles de alfa 0 (con RGB distinto de cero) y de alfa 128.
-    let tabla = [
+    let table = [
         [255, 0, 0, 255],
         [0, 255, 0, 255],
         [0, 0, 255, 128],
@@ -1188,7 +1188,7 @@ pub fn generated_2() -> Vec<Source> {
         [10, 200, 200, 128],
         [90, 90, 90, 255],
     ];
-    let rgba = generate(Mode::Rgba, |x, y| tabla[(x + 2 * y) % tabla.len()]);
+    let rgba = generate(Mode::Rgba, |x, y| table[(x + 2 * y) % table.len()]);
     // Indexada de 5 colores con alfa propio y el índice 2 transparente.
     let mut indexed = generate(Mode::Indexed, |x, y| {
         [((x * 3 + y * 5 + x / 4) % 5) as u8, 0, 0, 0]
@@ -1423,7 +1423,7 @@ impl World {
     /// `modified`. Devuelve si hubo cambio.
     pub fn apply(&mut self, step: &TestStep) -> bool {
         let ctx = format!("{}: {step:?}", self.label_2);
-        let antes_id = self.s.document.state_id();
+        let before_id = self.s.document.state_id();
         let before_image = self.image_2().try_clone().expect("copia de la imagen");
         let can_undo = self.s.document.can_undo();
         let mut new_2 = self.m.clone();
@@ -1469,20 +1469,20 @@ impl World {
             }
             TestStep::Rotate {
                 start_2,
-                largo,
+                length,
                 steps_2,
             } => (
                 self.operation(
                     PaletteOp::Rotate {
                         start: *start_2,
-                        len: *largo,
+                        len: *length,
                         steps: *steps_2,
                     },
                     0,
                 ),
                 false,
             ),
-            TestStep::Mover { de, a } => (
+            TestStep::Move { de, a } => (
                 self.operation(PaletteOp::Move { from: *de, to: *a }, 0),
                 false,
             ),
@@ -1516,7 +1516,7 @@ impl World {
         assert_eq!(rejected, effect.rejected, "{ctx}: ¿se rechazó el borrador?");
         let after_id = self.s.document.state_id();
         if effect.change {
-            assert_ne!(antes_id, after_id, "{ctx}: el state_id no cambió");
+            assert_ne!(before_id, after_id, "{ctx}: el state_id no cambió");
             assert!(
                 self.used.insert(after_id),
                 "{ctx}: el state_id {after_id} ya se había usado"
@@ -1526,7 +1526,7 @@ impl World {
             self.snaps.push((after_id, new_2.clone()));
             self.pos += 1;
         } else {
-            assert_eq!(antes_id, after_id, "{ctx}: el state_id cambió sin cambio");
+            assert_eq!(before_id, after_id, "{ctx}: el state_id cambió sin cambio");
             assert_eq!(
                 self.s.document.can_undo(),
                 can_undo,
@@ -1711,30 +1711,30 @@ pub fn script_tools(m: &Model) -> Vec<TestStep> {
 /// repeticiones que no deben dar paso.
 pub fn script_palette(m: &Model) -> Vec<TestStep> {
     assert_eq!(m.mode_2, Mode::Indexed);
-    let largo = m.palette.len();
+    let length = m.palette.len();
     let mut steps_2 = vec![
         TestStep::ColorInput(0, [1, 2, 3, 255]),
         TestStep::ColorInput(0, [1, 2, 3, 255]),
         TestStep::Rotate {
             start_2: 0,
-            largo: largo as u16,
+            length: length as u16,
             steps_2: 1,
         },
     ];
-    if largo >= 2 {
-        steps_2.push(TestStep::Mover {
+    if length >= 2 {
+        steps_2.push(TestStep::Move {
             de: 0,
-            a: (largo - 1) as u8,
+            a: (length - 1) as u8,
         });
     }
-    if largo < 256 {
+    if length < 256 {
         steps_2.push(TestStep::Add { active_2: 0 });
-        steps_2.push(TestStep::ColorInput(largo as u8, [9, 8, 7, 200]));
+        steps_2.push(TestStep::ColorInput(length as u8, [9, 8, 7, 200]));
     }
-    steps_2.push(TestStep::Transparent(Some(1.min(largo - 1) as u8)));
+    steps_2.push(TestStep::Transparent(Some(1.min(length - 1) as u8)));
     steps_2.push(TestStep::Rotate {
         start_2: 0,
-        largo: largo.min(3) as u16,
+        length: length.min(3) as u16,
         steps_2: -1,
     });
     // Con el índice transparente fijado, el borrador ya escribe en él.
@@ -1777,7 +1777,7 @@ pub fn editing_that_changes(m: &Model) -> TestStep {
 }
 
 /// Lee un PNG del disco con `read_png`, con pánico si falla.
-pub fn leer(path_2: &Path) -> px_formats::PngRead {
+pub fn read_2_2(path_2: &Path) -> px_formats::PngRead {
     let bytes = fs::read(path_2).unwrap_or_else(|e| panic!("leer {}: {e}", path_2.display()));
     read_png(&bytes).unwrap_or_else(|e| panic!("read_png de {}: {e}", path_2.display()))
 }

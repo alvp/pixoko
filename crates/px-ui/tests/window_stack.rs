@@ -52,8 +52,8 @@ use px_ui::view::{MIN_VISIBLE, Size, View, ViewOp, Zoom};
 mod common;
 use common::toolbox::{center_u, toolbox_2};
 use common::{
-    PPPS, Painted, button_2, context, frame, in_points, is_physical_integer_in_egui, mover, n_de,
-    painted, tolerance_of_egui, wheel_points,
+    PPPS, Painted, button_2, context, frame, in_points, is_physical_integer_in_egui, move_pointer,
+    n_de, painted, tolerance_of_egui, wheel_points,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -266,13 +266,13 @@ impl Bench {
 
     fn moves(&mut self, x_px: i64, y_px: i64) -> TestFrame {
         let pos = in_points(self.ppp, x_px, y_px);
-        self.frame(vec![mover(pos)])
+        self.frame(vec![move_pointer(pos)])
     }
 
     /// Mueve, pulsa y suelta; devuelve los tres fotogramas.
     fn click(&mut self, x_px: i64, y_px: i64) -> [TestFrame; 3] {
         let pos = in_points(self.ppp, x_px, y_px);
-        let a = self.frame(vec![mover(pos)]);
+        let a = self.frame(vec![move_pointer(pos)]);
         let b = self.frame(vec![button_2(pos, true)]);
         let c = self.frame(vec![button_2(pos, false)]);
         [a, b, c]
@@ -536,13 +536,13 @@ impl Reference {
 
     fn hover(&mut self, x_px: i64, y_px: i64) -> Option<(u32, u32)> {
         let pos = inside_of_the_pixel(self.ppp, x_px, y_px);
-        self.frame(vec![mover(pos)]).0.hover
+        self.frame(vec![move_pointer(pos)]).0.hover
     }
 
     /// El `StrokeBegin` de un clic en `(x_px, y_px)`, si lo hay.
     fn starts(&mut self, x_px: i64, y_px: i64) -> Option<(i32, i32)> {
         let pos = inside_of_the_pixel(self.ppp, x_px, y_px);
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         let b = self.frame(vec![button_2(pos, true)]).1;
         self.frame(vec![button_2(pos, false)]);
         start_of(&b)
@@ -552,12 +552,12 @@ impl Reference {
 impl Bench {
     fn hover(&mut self, x_px: i64, y_px: i64) -> Option<(u32, u32)> {
         let pos = inside_of_the_pixel(self.ppp, x_px, y_px);
-        self.frame(vec![mover(pos)]).info.hover
+        self.frame(vec![move_pointer(pos)]).info.hover
     }
 
     fn starts(&mut self, x_px: i64, y_px: i64) -> Option<(i32, i32)> {
         let pos = inside_of_the_pixel(self.ppp, x_px, y_px);
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         let b = self.frame(vec![button_2(pos, true)]).entries;
         self.frame(vec![button_2(pos, false)]);
         start_of(&b)
@@ -828,15 +828,15 @@ fn row_10_the_column_and_the_menu_do_not_scroll_with_any_offset_px() {
         for panel_u in PANEL_HEIGHTS_U {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
-            let antes = bench.rest_2_2();
-            let texts_before: Vec<(String, [i64; 2])> = column_and_menu_texts(&antes, ppp);
+            let before = bench.rest_2_2();
+            let texts_before: Vec<(String, [i64; 2])> = column_and_menu_texts(&before, ppp);
             bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 15 * n);
             let after_2 = bench.rest_2_2();
             if panel_u < 305 {
                 assert_eq!(bench.view.offset_px, 15 * n, "ppp {ppp} panel {panel_u} u");
             }
             // Mismos rectángulos con cualquier offset.
-            assert_eq!(antes.rects, after_2.rects, "ppp {ppp} panel {panel_u} u");
+            assert_eq!(before.rects, after_2.rects, "ppp {ppp} panel {panel_u} u");
             // Mismos textos en los mismos sitios.
             assert_eq!(
                 texts_before,
@@ -999,13 +999,13 @@ fn row_10_a_click_on_an_editor_slider_hits_it_with_the_panel_in_the_stack() {
             let x_hint = layout.panel.x + TRACK_X_U * n;
             let x = x_hint + slider_x(128, TRACK_W_U * n, Control::Red.max());
             bench.moves(x, y);
-            let pulsar = bench.frame(vec![button_2(in_points(ppp, x, y), true)]);
+            let press = bench.frame(vec![button_2(in_points(ppp, x, y), true)]);
             assert_eq!(
                 bench.editor.dragging_control(),
                 Some(Control::Red),
                 "ppp {ppp} panel {panel_u} u: el clic debe coger el deslizador rojo"
             );
-            assert!(pulsar.column.is_none() && pulsar.menu.is_none());
+            assert!(press.column.is_none() && press.menu.is_none());
             let release_2 = bench.frame(vec![button_2(in_points(ppp, x, y), false)]);
             assert!(
                 release_2.panel.commit.is_some(),
@@ -1127,20 +1127,20 @@ proptest! {
         prop_assert_eq!(canvas_origin_px(n).1 % k, 0);
 
         let zoom = Zoom::from_int(zoom_n).expect("zoom válido");
-        let mut vista = View::fit(canvas_2, image_2);
-        vista.set_zoom(zoom, (i64::from(canvas_w) / 2, i64::from(canvas_h) / 2));
-        vista.pan(pan.0, pan.1, canvas_2, image_2);
+        let mut view = View::fit(canvas_2, image_2);
+        view.set_zoom(zoom, (i64::from(canvas_w) / 2, i64::from(canvas_h) / 2));
+        view.pan(pan.0, pan.1, canvas_2, image_2);
 
         // El puntero está en coordenadas de ventana; el lienzo resta su origen.
         let in_canvas = (pointer_x - x0, pointer_y - y0);
-        let shifted = vista.screen_to_image(in_canvas, image_2);
+        let shifted = view.screen_to_image(in_canvas, image_2);
         // Con origen (0,0) y el puntero ya restado, lo mismo.
-        let in_zero = vista.screen_to_image((pointer_x - x0, pointer_y - y0), image_2);
+        let in_zero = view.screen_to_image((pointer_x - x0, pointer_y - y0), image_2);
         prop_assert_eq!(shifted, in_zero);
 
         // Modelo: `floor((p − source_2) / zoom)` si cae dentro de la imagen.
         let z = zoom.scale(1);
-        let (ox, oy) = vista.origin();
+        let (ox, oy) = view.origin();
         let (ix, iy) = ((in_canvas.0 - ox).div_euclid(z), (in_canvas.1 - oy).div_euclid(z));
         let model = (ix >= 0 && iy >= 0 && ix < i64::from(width_2) && iy < i64::from(height_2))
             .then_some((ix as u32, iy as u32));
@@ -1148,8 +1148,8 @@ proptest! {
 
         // Ida y vuelta: el píxel devuelto contiene al puntero en el rectángulo que se le asigna.
         if let Some((px, py)) = shifted {
-            let (sx, sy) = vista.image_to_screen(px, py);
-            let (ex, ey) = vista.image_to_screen(px + 1, py + 1);
+            let (sx, sy) = view.image_to_screen(px, py);
+            let (ex, ey) = view.image_to_screen(px + 1, py + 1);
             prop_assert!(sx <= in_canvas.0 && in_canvas.0 < ex, "x: {} no está en [{}, {})", in_canvas.0, sx, ex);
             prop_assert!(sy <= in_canvas.1 && in_canvas.1 < ey, "y: {} no está en [{}, {})", in_canvas.1, sy, ey);
         }
@@ -1176,8 +1176,8 @@ proptest! {
     ) {
         let canvas_2 = Size::new(canvas_w, canvas_h);
         let image_2 = Size::new(width_2, height_2);
-        let vista = View::fit(canvas_2, image_2);
-        let rect = vista.image_rect(image_2);
+        let view = View::fit(canvas_2, image_2);
+        let rect = view.image_rect(image_2);
         let margin_left = rect.x;
         let margin_right = i64::from(canvas_w) - rect.x - rect.width;
         let margin_upper = rect.y;
@@ -1212,9 +1212,9 @@ mod toolbox_right {
     /// pinta el texto en el píxel entero más cercano; borroso sería medio píxel.
     const TOL_BLURRY_PX: f32 = 0.1;
 
-    /// Distancia de `valor` (px físicos) al múltiplo de `n` más cercano.
-    fn rest_of_n(valor: f32, n: i64) -> f32 {
-        let rest_2 = valor.rem_euclid(n as f32);
+    /// Distancia de `value` (px físicos) al múltiplo de `n` más cercano.
+    fn rest_of_n(value: f32, n: i64) -> f32 {
+        let rest_2 = value.rem_euclid(n as f32);
         rest_2.min(n as f32 - rest_2)
     }
 
@@ -1291,9 +1291,9 @@ mod toolbox_right {
             bench.rest_2_2();
             let y = layout.canvas.y + 100 * n;
             // Último píxel del lienzo: sí; primero del panel y de la caja y sus centros: no.
-            let ultimo = layout.canvas.x + layout.canvas.width - 1;
+            let last_2 = layout.canvas.x + layout.canvas.width - 1;
             assert!(
-                bench.hover(ultimo, y).is_some(),
+                bench.hover(last_2, y).is_some(),
                 "ppp {ppp}: el borde del lienzo"
             );
             for (name_2, x) in [
@@ -1345,7 +1345,7 @@ mod toolbox_right {
             for panel_u in [200, 100, 305] {
                 let mut bench = bench_with_panel_of(ppp, panel_u);
                 let layout = window_layout(bench.window_px, n as u32);
-                let zoom_antes = bench.rest_2_2().info.zoom;
+                let zoom_before = bench.rest_2_2().info.zoom;
                 for (name_2, x, y) in [
                     (
                         "un botón",
@@ -1368,7 +1368,7 @@ mod toolbox_right {
                     );
                     assert_eq!(
                         bench.rest_2_2().info.zoom,
-                        zoom_antes,
+                        zoom_before,
                         "ppp {ppp} panel {panel_u} u: {name_2} no hace zoom"
                     );
                 }
@@ -1397,7 +1397,7 @@ mod toolbox_right {
             let n = n_de(ppp);
             for panel_u in [100, 200, 305] {
                 let mut bench = bench_with_panel_of(ppp, panel_u);
-                let antes = bench.rest_2_2();
+                let before = bench.rest_2_2();
                 let layout = window_layout(bench.window_px, n as u32);
                 bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 20 * n);
                 let f = bench.rest_2_2();
@@ -1416,11 +1416,11 @@ mod toolbox_right {
                         .collect::<Vec<_>>()
                 };
                 let mut now = in_the_toolbox(&f.painted);
-                let mut antes_t = in_the_toolbox(&antes.painted);
+                let mut before_t = in_the_toolbox(&before.painted);
                 now.sort();
-                antes_t.sort();
+                before_t.sort();
                 assert_eq!(
-                    now, antes_t,
+                    now, before_t,
                     "ppp {ppp} panel {panel_u} u: la caja se movió"
                 );
                 assert!(!now.is_empty(), "ppp {ppp} panel {panel_u} u");
@@ -1455,7 +1455,7 @@ mod toolbox_right {
                 let pos = in_points(ppp, layout.toolbar.x + cx * n, (16 + cy) * n);
                 let mut actions = Vec::new();
                 for events in [
-                    vec![mover(pos)],
+                    vec![move_pointer(pos)],
                     vec![button_of_2(pos, PointerButton::Secondary, true)],
                     vec![button_of_2(pos, PointerButton::Secondary, false)],
                 ] {
@@ -1548,17 +1548,17 @@ mod toolbox_right {
             prop_assert_eq!(x0, 0);
             prop_assert_eq!(y0 % k, 0);
             let zoom = Zoom::from_int(zoom_n).expect("zoom válido");
-            let mut vista = View::fit(canvas_2, image_2);
-            vista.set_zoom(zoom, (i64::from(canvas_w) / 2, i64::from(canvas_h) / 2));
-            vista.pan(pan.0, pan.1, canvas_2, image_2);
+            let mut view = View::fit(canvas_2, image_2);
+            view.set_zoom(zoom, (i64::from(canvas_w) / 2, i64::from(canvas_h) / 2));
+            view.pan(pan.0, pan.1, canvas_2, image_2);
             let in_canvas = (pointer_x - x0, pointer_y - y0);
             prop_assert_eq!(
-                vista.screen_to_image(in_canvas, image_2),
-                vista.screen_to_image((pointer_x, pointer_y - y0), image_2)
+                view.screen_to_image(in_canvas, image_2),
+                view.screen_to_image((pointer_x, pointer_y - y0), image_2)
             );
-            if let Some((px, py)) = vista.screen_to_image(in_canvas, image_2) {
-                let (sx, sy) = vista.image_to_screen(px, py);
-                let (ex, ey) = vista.image_to_screen(px + 1, py + 1);
+            if let Some((px, py)) = view.screen_to_image(in_canvas, image_2) {
+                let (sx, sy) = view.image_to_screen(px, py);
+                let (ex, ey) = view.image_to_screen(px + 1, py + 1);
                 prop_assert!(sx <= in_canvas.0 && in_canvas.0 < ex);
                 prop_assert!(sy <= in_canvas.1 && in_canvas.1 < ey);
             }

@@ -115,13 +115,13 @@ fn row_12_the_other_texts_have_at_least_4_5_over_the_first_three_surfaces() {
 #[test]
 fn row_12_the_contrasts_measure_what_the_table_of_the_spec_says() {
     // Valores de la tabla (un decimal), sobre las superficies 0, 1, 2 y 3.
-    let tabla: [(&str, Color32, [f64; 4]); 4] = [
+    let table: [(&str, Color32, [f64; 4]); 4] = [
         ("TEXT", TEXT, [13.2, 11.8, 10.0, 7.6]),
         ("TEXT_DIM", TEXT_DIM, [6.9, 6.2, 5.2, 4.0]),
         ("ACCENT", ACCENT, [9.0, 8.0, 6.8, 5.2]),
         ("WARNING", WARNING, [7.1, 6.4, 5.4, 4.1]),
     ];
-    for (name_2, color, expected_2_2) in tabla {
+    for (name_2, color, expected_2_2) in table {
         for (surface, expected_2) in SURFACES.iter().zip(expected_2_2) {
             let c = contrast_ratio(color, *surface);
             assert!(

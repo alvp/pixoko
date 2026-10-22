@@ -135,7 +135,7 @@ fn apply(v: &mut View, op: &Op, vp: Size, img: Size) {
     }
 }
 
-fn vista(vp: Size, img: Size, ops: &[Op]) -> View {
+fn view(vp: Size, img: Size, ops: &[Op]) -> View {
     let mut v = View::fit(vp, img);
     for op in ops {
         apply(&mut v, op, vp, img);
@@ -291,7 +291,7 @@ fn check_geometry(
 /// (`floor(i / K) · K`; specs/hito-2-zoom-baldosas.md, decisión 4). Con `K = 1` es la misma
 /// igualdad de antes.
 fn check_anchor(
-    antes: &View,
+    before: &View,
     after_2: &View,
     anchor: (i64, i64),
     img: Size,
@@ -302,14 +302,14 @@ fn check_anchor(
         1
     };
     let expected_2 = |i: i128| i.div_euclid(grid) * grid;
-    let ix = expected_2(index_model(anchor.0, antes.origin().0, antes.zoom()));
-    let iy = expected_2(index_model(anchor.1, antes.origin().1, antes.zoom()));
+    let ix = expected_2(index_model(anchor.0, before.origin().0, before.zoom()));
+    let iy = expected_2(index_model(anchor.1, before.origin().1, before.zoom()));
     prop_assert_eq!(
         ix,
         index_model(anchor.0, after_2.origin().0, after_2.zoom()),
         "eje x: ancla {:?}, antes {:?}, después {:?}",
         anchor,
-        antes,
+        before,
         after_2
     );
     prop_assert_eq!(
@@ -317,7 +317,7 @@ fn check_anchor(
         index_model(anchor.1, after_2.origin().1, after_2.zoom()),
         "eje y: ancla {:?}, antes {:?}, después {:?}",
         anchor,
-        antes,
+        before,
         after_2
     );
     // Mismo índice implica mismo estado dentro/fuera y mismo píxel (el índice esperado, si cae
@@ -329,33 +329,33 @@ fn check_anchor(
     );
     if grid == 1 {
         prop_assert_eq!(
-            antes.screen_to_image(anchor, img),
+            before.screen_to_image(anchor, img),
             after_2.screen_to_image(anchor, img)
         );
     }
     Ok(())
 }
 
-/// Propiedad 5 sobre todos los cambios de zoom posibles desde `antes`.
+/// Propiedad 5 sobre todos los cambios de zoom posibles desde `before`.
 fn check_anchor_at_all_zooms(
-    antes: &View,
+    before: &View,
     anchor: (i64, i64),
     img: Size,
 ) -> Result<(), TestCaseError> {
     for n in 1..=64 {
-        let mut v = *antes;
+        let mut v = *before;
         v.set_zoom(zoom(n), anchor);
         prop_assert_eq!(v.zoom(), zoom(n));
-        check_anchor(antes, &v, anchor, img)?;
+        check_anchor(before, &v, anchor, img)?;
     }
-    let mut inside = *antes;
+    let mut inside = *before;
     inside.zoom_in(anchor);
-    prop_assert_eq!(inside.zoom(), antes.zoom().zoom_in());
-    check_anchor(antes, &inside, anchor, img)?;
-    let mut outside = *antes;
+    prop_assert_eq!(inside.zoom(), before.zoom().zoom_in());
+    check_anchor(before, &inside, anchor, img)?;
+    let mut outside = *before;
     outside.zoom_out(anchor);
-    prop_assert_eq!(outside.zoom(), antes.zoom().zoom_out());
-    check_anchor(antes, &outside, anchor, img)?;
+    prop_assert_eq!(outside.zoom(), before.zoom().zoom_out());
+    check_anchor(before, &outside, anchor, img)?;
     Ok(())
 }
 
@@ -710,7 +710,7 @@ proptest! {
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
         for n in 1..=64u32 {
-            let mut v = vista(vp, img, &ops);
+            let mut v = view(vp, img, &ops);
             v.set_zoom(zoom(n), anchor_final);
             prop_assert_eq!(v.zoom(), zoom(n));
             check_geometry(&v, img, pix, dev, far)?;
@@ -781,7 +781,7 @@ proptest! {
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
         for n in 1..=64u32 {
-            let mut v = vista(vp, img, &ops);
+            let mut v = view(vp, img, &ops);
             v.set_zoom(zoom(n), anchor_final);
             let z = n as i64;
             let (x, y) = (x % iw, y % ih);
@@ -799,9 +799,9 @@ proptest! {
                 ScreenRect { x: ox, y: oy, width: iw as i64 * z, height: ih as i64 * z }
             );
             // El último bloque termina exactamente en el borde del rectángulo.
-            let ultimo = v.image_to_screen(iw - 1, ih - 1);
-            prop_assert_eq!(ultimo.0 + z, rect.x + rect.width);
-            prop_assert_eq!(ultimo.1 + z, rect.y + rect.height);
+            let last_2 = v.image_to_screen(iw - 1, ih - 1);
+            prop_assert_eq!(last_2.0 + z, rect.x + rect.width);
+            prop_assert_eq!(last_2.1 + z, rect.y + rect.height);
         }
     }
 }
@@ -874,15 +874,15 @@ fn zoom_in_and_zoom_out_examples() {
     // Saturación: en el máximo, zoom_in no cambia nada; en el mínimo, zoom_out tampoco.
     let mut max = View::fit(tam(64, 64), tam(1, 1));
     assert_eq!(max.zoom(), Zoom::MAX);
-    let antes = max;
+    let before = max;
     max.zoom_in((17, -4));
-    assert_eq!(max, antes);
+    assert_eq!(max, before);
     let mut min = View::fit(tam(8, 8), img);
     min.set_zoom(Zoom::MIN, (0, 0));
     assert_eq!(min.zoom(), Zoom::MIN);
-    let antes = min;
+    let before = min;
     min.zoom_out((17, -4));
-    assert_eq!(min, antes);
+    assert_eq!(min, before);
 }
 
 #[test]
@@ -890,9 +890,9 @@ fn set_zoom_to_the_same_zoom_does_not_move_the_view() {
     let img = tam(30, 20);
     let mut v = View::fit(tam(200, 100), img);
     v.set_zoom(zoom(7), (33, 12));
-    let antes = v;
+    let before = v;
     v.set_zoom(zoom(7), (-500, 9999));
-    assert_eq!(v, antes);
+    assert_eq!(v, before);
 }
 
 proptest! {
@@ -908,8 +908,8 @@ proptest! {
         dev in (any::<u64>(), any::<u64>()),
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
-        let antes = vista(vp, img, &ops);
-        let rect = antes.image_rect(img);
+        let before = view(vp, img, &ops);
+        let rect = before.image_rect(img);
         let anchor = if inside {
             (
                 rect.x + (dev.0 % rect.width as u64) as i64,
@@ -919,9 +919,9 @@ proptest! {
             outside
         };
         if inside {
-            prop_assert!(antes.screen_to_image(anchor, img).is_some());
+            prop_assert!(before.screen_to_image(anchor, img).is_some());
         }
-        check_anchor_at_all_zooms(&antes, anchor, img)?;
+        check_anchor_at_all_zooms(&before, anchor, img)?;
     }
 
     /// Cambios de zoom encadenados con anclas distintas siguen conservando el bloque en cada paso.
@@ -934,9 +934,9 @@ proptest! {
         let img = tam(iw, ih);
         let mut v = View::fit(tam(300, 200), img);
         for (n, anchor) in steps_2 {
-            let antes = v;
+            let before = v;
             v.set_zoom(zoom(n), anchor);
-            check_anchor(&antes, &v, anchor, img)?;
+            check_anchor(&before, &v, anchor, img)?;
         }
     }
 
@@ -949,7 +949,7 @@ proptest! {
         anchor in (-(1i64 << 20)..=(1i64 << 20), -(1i64 << 20)..=(1i64 << 20)),
     ) {
         let (vp, img) = (tam(300, 200), tam(iw, ih));
-        let base = vista(vp, img, &ops);
+        let base = view(vp, img, &ops);
         let mut more = base;
         more.zoom_in(anchor);
         let mut expected_2 = base;
@@ -1014,7 +1014,7 @@ fn fit_each_zoom_with_the_exact_image() {
     // Una imagen de 3x2 en un viewport de 3z x 2z da exactamente z, y en uno de una unidad menos
     // en un eje da el nivel anterior de la escalera (z - 1, o 1/2 desde ×1).
     let img = tam(3, 2);
-    let anterior = |n: u32| {
+    let previous = |n: u32| {
         if n == 1 {
             Zoom::shrink(2).expect("1/2")
         } else {
@@ -1026,9 +1026,9 @@ fn fit_each_zoom_with_the_exact_image() {
         assert_eq!(v.zoom(), zoom(n), "viewport justo para ×{n}");
         assert_eq!(v.origin(), (0, 0));
         let v = View::fit(tam(3 * n - 1, 2 * n), img);
-        assert_eq!(v.zoom(), anterior(n), "falta 1 px de ancho para ×{n}");
+        assert_eq!(v.zoom(), previous(n), "falta 1 px de ancho para ×{n}");
         let v = View::fit(tam(3 * n, 2 * n - 1), img);
-        assert_eq!(v.zoom(), anterior(n), "falta 1 px de alto para ×{n}");
+        assert_eq!(v.zoom(), previous(n), "falta 1 px de alto para ×{n}");
     }
 }
 
@@ -1223,7 +1223,7 @@ proptest! {
         ops in vec(op(1 << 30), 0..4),
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
-        let without_clamp = vista(vp, img, &ops);
+        let without_clamp = view(vp, img, &ops);
         let mut v = without_clamp;
         v.clamp(vp, img);
         prop_assert_eq!(v.zoom(), without_clamp.zoom(), "clamp no cambia el zoom");
@@ -1244,7 +1244,7 @@ proptest! {
         ops in vec(op(1 << 12), 0..4),
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
-        let v = vista(vp, img, &ops);
+        let v = view(vp, img, &ops);
         if meets_visibility(&v, vp, img) {
             let mut c = v;
             c.clamp(vp, img);
@@ -1264,7 +1264,7 @@ proptest! {
         d in (-(1i64 << 22)..=(1i64 << 22), -(1i64 << 22)..=(1i64 << 22)),
     ) {
         let (vp, img) = (tam(vpw, vph), tam(iw, ih));
-        let mut start_2 = vista(vp, img, &ops);
+        let mut start_2 = view(vp, img, &ops);
         start_2.clamp(vp, img);
         let (ox, oy) = start_2.origin();
         let (ext_x, ext_y) = (
@@ -1397,7 +1397,7 @@ proptest! {
 
         // Una vista con origen y zoom arbitrarios (set_zoom no acota, así que el origen puede
         // quedar muy lejos del viewport).
-        let v = vista(vp, img, &ops);
+        let v = view(vp, img, &ops);
         let z = v.zoom();
         prop_assert!(Zoom::MIN <= z && z <= Zoom::MAX);
         // La geometría por bloques de `check_geometry` es la de los zooms enteros; los

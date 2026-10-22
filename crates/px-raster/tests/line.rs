@@ -385,13 +385,13 @@ fn row_line_command_diagonal_rgba() {
             editing(3, 3, pixel),
         ],
     };
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     assert_eq!(
         line_command(&doc, id, (0, 0), (3, 3), pixel),
         Ok(Some(expected))
     );
     // Solo lee: el documento queda igual.
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 #[test]
@@ -401,13 +401,13 @@ fn row_draw_line_completely_outside() {
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
 
     // En un documento nuevo.
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     assert_eq!(
         draw_line(&mut doc, id, (10, 10), (20, 20), pixel),
         Ok(false)
     );
     assert!(!doc.can_undo());
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 #[test]
@@ -419,11 +419,11 @@ fn row_draw_line_outside_with_history_and_redo() {
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 0), pixel), Ok(true));
     assert_eq!(draw_line(&mut doc, id, (0, 3), (3, 3), pixel), Ok(true));
     assert_eq!(doc.undo(), Ok(()));
-    let antes = snapshot(&doc);
-    assert!(antes.1 && antes.2);
+    let before = snapshot(&doc);
+    assert!(before.1 && before.2);
     for (a, b) in [((-9, -9), (-1, -1)), ((4, 0), (9, 0)), ((0, -3), (3, -3))] {
         assert_eq!(draw_line(&mut doc, id, a, b, pixel), Ok(false));
-        assert_eq!(snapshot(&doc), antes);
+        assert_eq!(snapshot(&doc), before);
     }
 }
 
@@ -433,10 +433,10 @@ fn row_draw_line_with_the_color_already_there() {
     let id = ImageId::from_raw(0);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 3), pixel), Ok(true));
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     // `apply` decide que no cambia nada y no añade paso.
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 3), pixel), Ok(false));
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 #[test]
@@ -444,7 +444,7 @@ fn row_draw_line_with_unknown_image() {
     let mut doc = doc_rgba(4, 4);
     let unknown = ImageId::from_raw(99);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     assert_eq!(
         draw_line(&mut doc, unknown, (0, 0), (3, 3), pixel),
         Err(DocumentError::UnknownImage(unknown))
@@ -453,7 +453,7 @@ fn row_draw_line_with_unknown_image() {
         line_command(&doc, unknown, (0, 0), (3, 3), pixel),
         Err(DocumentError::UnknownImage(unknown))
     );
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 /// Comportamiento 11: la imagen se busca antes de recortar, así que `UnknownImage` gana a `None`
@@ -472,7 +472,7 @@ fn row_unknown_image_beats_line_outside_the_canvas() {
         ((-3, 2), (2, -3)),
         ((MAX, MAX), (MIN, MAX)),
     ];
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     for (a, b) in outside {
         // Con una imagen que existe, la línea queda fuera: sin comando y sin cambios.
         assert_eq!(
@@ -496,7 +496,7 @@ fn row_unknown_image_beats_line_outside_the_canvas() {
             Err(DocumentError::UnknownImage(unknown)),
             "{a:?}->{b:?}"
         );
-        assert_eq!(snapshot(&doc), antes);
+        assert_eq!(snapshot(&doc), before);
     }
 }
 
@@ -504,7 +504,7 @@ fn row_unknown_image_beats_line_outside_the_canvas() {
 fn row_draw_line_with_pixel_of_another_mode() {
     let mut doc = doc_rgba(4, 4);
     let id = ImageId::from_raw(0);
-    let antes = snapshot(&doc);
+    let before = snapshot(&doc);
     assert_eq!(
         draw_line(&mut doc, id, (0, 0), (3, 3), Pixel::Gray(7)),
         Err(DocumentError::Pixel {
@@ -517,7 +517,7 @@ fn row_draw_line_with_pixel_of_another_mode() {
     );
     // La imagen queda intacta, también el primer píxel de la línea.
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(Rgba::TRANSPARENT));
-    assert_eq!(snapshot(&doc), antes);
+    assert_eq!(snapshot(&doc), before);
 }
 
 // Comportamientos que la tabla no lista como fila.
@@ -768,13 +768,13 @@ fn checks_step(a: Point, b: Point, p: Point, q: Point) -> Result<(), TestCaseErr
         i64::from(q.1) - i64::from(p.1),
     );
     prop_assert_eq!(px.abs().max(py.abs()), 1, "{:?} -> {:?}", p, q);
-    let (mayor, smaller, sign_greater, sign_smaller) = if dx.abs() >= dy.abs() {
+    let (greater, smaller, sign_greater, sign_smaller) = if dx.abs() >= dy.abs() {
         (px, py, dx.signum(), dy.signum())
     } else {
         (py, px, dy.signum(), dx.signum())
     };
     // El eje mayor es estrictamente monótono; el otro, monótono no estricto.
-    prop_assert_eq!(mayor, sign_greater, "eje mayor en {:?} -> {:?}", p, q);
+    prop_assert_eq!(greater, sign_greater, "eje mayor en {:?} -> {:?}", p, q);
     prop_assert!(
         smaller == 0 || smaller == sign_smaller,
         "eje menor en {:?} -> {:?}",
@@ -959,7 +959,7 @@ proptest! {
     ) {
         let color = Pixel::Rgba(rgba(200, 100, 50, 255));
         // Fondo con cuatro valores, uno de ellos el color de la línea: hay no-ops y cambios.
-        let valor = |k: u8| match k {
+        let value = |k: u8| match k {
             0 => Rgba::TRANSPARENT,
             1 => rgba(40, 50, 60, 255),
             2 => rgba(70, 80, 90, 255),
@@ -969,7 +969,7 @@ proptest! {
         for y in 0..height {
             for x in 0..width {
                 let k = background[usize::try_from(y * width + x).unwrap()];
-                image_2.set_pixel(x, y, Pixel::Rgba(valor(k))).unwrap();
+                image_2.set_pixel(x, y, Pixel::Rgba(value(k))).unwrap();
             }
         }
         let mut doc = Document::new(image_2);
@@ -985,19 +985,19 @@ proptest! {
         if preview == 2 {
             prop_assert_eq!(doc.undo(), Ok(()));
         }
-        let antes = snapshot(&doc);
+        let before = snapshot(&doc);
         let image_before = doc.image(id).unwrap().clone();
 
         let expected = model_clipped(a, b, width, height);
         let command = line_command(&doc, id, a, b, color);
         // `line_command` solo lee.
-        prop_assert_eq!(snapshot(&doc), antes.clone());
+        prop_assert_eq!(snapshot(&doc), before.clone());
 
         if expected.is_empty() {
             // Trazo vacío: `None`, y `draw_line` no toca nada.
             prop_assert_eq!(command, Ok(None));
             prop_assert_eq!(draw_line(&mut doc, id, a, b, color), Ok(false));
-            prop_assert_eq!(snapshot(&doc), antes);
+            prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         }
 
@@ -1050,11 +1050,11 @@ proptest! {
             prop_assert_eq!(with_apply.undo(), Ok(()));
             // `undo` deja la imagen igual que la copia previa.
             prop_assert_eq!(with_apply.image(id), Some(&image_before));
-            prop_assert_eq!(with_apply.can_undo(), antes.1);
+            prop_assert_eq!(with_apply.can_undo(), before.1);
             prop_assert!(with_apply.can_redo());
         } else {
             // Sin cambios no hay paso nuevo ni se toca la historia.
-            prop_assert_eq!(snapshot(&with_apply), antes);
+            prop_assert_eq!(snapshot(&with_apply), before);
         }
     }
 }

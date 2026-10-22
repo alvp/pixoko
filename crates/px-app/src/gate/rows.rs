@@ -215,18 +215,18 @@ fn row_2_the_image_comparator_knows_how_to_fail() {
 
 #[test]
 fn row_3_palette_of_the_indexed_ones() {
-    let mut vistas = 0;
+    let mut views = 0;
     for source in all()
         .into_iter()
         .filter(|f| mode_of_the_file(&f.bytes) == Mode::Indexed)
     {
-        vistas += 1;
+        views += 1;
         let t = Work::new_2();
         let mut w = open(&t, &source);
         let ctx = source.name_2.clone();
         let mut changes_2 = 0;
         for step in script_palette(&w.m) {
-            let antes_bytes = w.image_2().bytes().to_vec();
+            let before_bytes = w.image_2().bytes().to_vec();
             let before_colors = w.image_2().palette().expect("paleta").colors().to_vec();
             if w.apply(&step) {
                 changes_2 += 1;
@@ -234,7 +234,7 @@ fn row_3_palette_of_the_indexed_ones() {
             if let TestStep::Transparent(_) = step {
                 // `SetTransparent` solo mueve la marca: los índices y los colores guardados no cambian.
                 assert!(
-                    w.image_2().bytes() == &antes_bytes[..],
+                    w.image_2().bytes() == &before_bytes[..],
                     "{ctx}: SetTransparent cambió los índices"
                 );
                 assert_eq!(
@@ -253,8 +253,8 @@ fn row_3_palette_of_the_indexed_ones() {
         assert_eq!(w.undo_all(), changes_2, "{ctx}: undo hasta el principio");
     }
     assert!(
-        vistas >= 4,
-        "se esperaban al menos 4 indexadas y hubo {vistas}"
+        views >= 4,
+        "se esperaban al menos 4 indexadas y hubo {views}"
     );
 }
 
@@ -441,7 +441,7 @@ fn row_6_save_and_save_as_after_the_script() {
             "{ctx}: ruta tras save"
         );
         assert_equal(
-            &leer(&target_2).image,
+            &read_2_2(&target_2).image,
             &w.m.normalized(),
             &format!("{ctx}: relectura tras save"),
         );
@@ -456,7 +456,7 @@ fn row_6_save_and_save_as_after_the_script() {
 
         // `save_as`: `x-copy.png`, el fichero anterior intacto y la ruta nueva.
         w.apply(&editing_that_changes(&w.m));
-        let anterior = fs::read(&target_2).expect("leer lo guardado");
+        let previous = fs::read(&target_2).expect("leer lo guardado");
         let expected = free_copy(&target_2);
         let copy = save_as(&mut w.s, t.path_2()).unwrap_or_else(|e| panic!("{ctx}: save_as: {e}"));
         assert_eq!(copy.path, expected, "{ctx}: destino de save_as");
@@ -469,11 +469,11 @@ fn row_6_save_and_save_as_after_the_script() {
         );
         assert_eq!(
             fs::read(&target_2).expect("leer lo anterior"),
-            anterior,
+            previous,
             "{ctx}: save_as tocó el fichero anterior"
         );
         assert_equal(
-            &leer(&copy.path).image,
+            &read_2_2(&copy.path).image,
             &w.m.normalized(),
             &format!("{ctx}: relectura tras save_as"),
         );
@@ -503,7 +503,7 @@ fn row_6_save_and_save_as_after_the_script() {
             "{ctx}: el segundo save_as tocó la primera copia"
         );
         assert_equal(
-            &leer(&copy_2.path).image,
+            &read_2_2(&copy_2.path).image,
             &w2.m.normalized(),
             &format!("{ctx}: relectura tras el segundo save_as"),
         );
@@ -535,7 +535,7 @@ fn row_6_a_real_one_opened_directly_is_saved_in_the_work() {
         assert!(saved.copy_reason.is_none(), "{ctx}: copy_reason");
         w.mark_saved();
         assert_eq!(w.s.path(), Some(chosen.as_path()), "{ctx}: ruta");
-        assert_equal(&leer(&chosen).image, &w.m.normalized(), &ctx);
+        assert_equal(&read_2_2(&chosen).image, &w.m.normalized(), &ctx);
         assert_eq!(
             t.names(),
             vec!["guardado.png".to_string()],
@@ -612,7 +612,11 @@ fn row_7_dialogs_with_a_fake_picker() {
     w.mark_saved();
     assert_eq!(w.s.path(), Some(first_2.as_path()), "Save no fijó la ruta");
     assert_eq!(t.names(), vec!["mi-dibujo.png".to_string()]);
-    assert_equal(&leer(&first_2).image, &w.m.normalized(), "mi-dibujo.png");
+    assert_equal(
+        &read_2_2(&first_2).image,
+        &w.m.normalized(),
+        "mi-dibujo.png",
+    );
     let bytes_first = fs::read(&first_2).expect("leer mi-dibujo.png");
 
     // `SaveAs`: propone `mi-dibujo.png`, en el directorio de la ruta, y escribe lo elegido sin
@@ -643,7 +647,7 @@ fn row_7_dialogs_with_a_fake_picker() {
         bytes_first,
         "SaveAs tocó el primero"
     );
-    assert_equal(&leer(&other).image, &w.m.normalized(), "otra.png");
+    assert_equal(&read_2_2(&other).image, &w.m.normalized(), "otra.png");
     assert_eq!(
         t.names(),
         vec!["mi-dibujo.png".to_string(), "otra.png".to_string()]
@@ -789,27 +793,27 @@ fn row_8_reread_and_second_save_with_the_same_bytes() {
 
 #[test]
 fn row_9_golden_png_intact_at_the_end_of_the_gate() {
-    let antes = initial();
+    let before = initial();
     let mut names_expected: Vec<String> = REAL.iter().map(|n| (*n).to_string()).collect();
     names_expected.extend(REAL.iter().map(|n| format!("{n}.sha256")));
     names_expected.push("README.md".to_string());
     names_expected.sort();
     assert_eq!(
-        antes.keys().cloned().collect::<Vec<_>>(),
+        before.keys().cloned().collect::<Vec<_>>(),
         names_expected,
         "golden/png/ no tiene los 9 ficheros del corpus"
     );
 
     // Los 9 ficheros con los mismos bytes y ninguno más.
     let now = snapshot_of(&golden_png());
-    if let Err(problems) = compare_snapshots(antes, &now) {
+    if let Err(problems) = compare_snapshots(before, &now) {
         panic!("golden/png/ cambió: {problems}");
     }
     // El SHA-256 de cada PNG es el de la instantánea inicial.
     for name_2 in REAL {
         assert_eq!(
             sha256_hex(&now[name_2]),
-            sha256_hex(&antes[name_2]),
+            sha256_hex(&before[name_2]),
             "{name_2}: el SHA-256 cambió"
         );
     }
@@ -844,7 +848,7 @@ fn row_9_control_outside_golden_panics_with_the_folder_itself() {
 #[test]
 #[should_panic(expected = "escritura prohibida en golden/png")]
 fn row_9_control_outside_golden_panics_with_a_path_with_dot_dot() {
-    let rodeo = root_repo()
+    let detour = root_repo()
         .join("crates")
         .join("..")
         .join("golden")
@@ -852,7 +856,7 @@ fn row_9_control_outside_golden_panics_with_a_path_with_dot_dot() {
         .join("..")
         .join("png")
         .join("x.png");
-    outside_of_golden(&rodeo);
+    outside_of_golden(&detour);
 }
 
 #[test]
@@ -948,7 +952,7 @@ fn row_10_pngs_that_pixoko_converts_save_a_copy_first() {
         );
         assert_eq!(t.names(), names, "{ctx}: ficheros tras el primer save");
         assert_equal(
-            &leer(&copy).image,
+            &read_2_2(&copy).image,
             &model_0.normalized(),
             &format!("{ctx}: relectura de la copia"),
         );
@@ -972,7 +976,7 @@ fn row_10_pngs_that_pixoko_converts_save_a_copy_first() {
         );
         // La relectura da la imagen del modelo.
         assert_equal(
-            &leer(&copy).image,
+            &read_2_2(&copy).image,
             &w.m.normalized(),
             &format!("{ctx}: relectura tras el segundo save"),
         );
@@ -1000,7 +1004,7 @@ fn row_10_a_real_one_without_conversion_is_overwritten_in_the_work() {
             "{ctx}: ficheros del trabajo"
         );
         assert_equal(
-            &leer(&source_2).image,
+            &read_2_2(&source_2).image,
             &w.m.normalized(),
             &format!("{ctx}: relectura"),
         );

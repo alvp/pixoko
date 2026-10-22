@@ -25,7 +25,7 @@ fn traits_derived() {
 }
 
 #[test]
-fn max_bytes_vale_1_gib() {
+fn max_bytes_is_1_gib() {
     assert_eq!(Image::MAX_BYTES, 1usize << 30);
 }
 
@@ -356,12 +356,12 @@ fn get_pixel_at_corners_and_outside() {
 
 /// Escribe `pixel` en `(x, y)` y comprueba la ida y vuelta y que nada más cambia.
 fn writes_and_checks(img: &mut Image, x: u32, y: u32, pixel: Pixel) {
-    let antes = all_the_pixels(img);
+    let before = all_the_pixels(img);
     assert_eq!(img.set_pixel(x, y, pixel), Ok(()), "set_pixel({x}, {y})");
     assert_eq!(img.get_pixel(x, y), Ok(pixel), "get_pixel({x}, {y})");
     let after = all_the_pixels(img);
     let width = img.width();
-    for (k, (a, d)) in antes.iter().zip(&after).enumerate() {
+    for (k, (a, d)) in before.iter().zip(&after).enumerate() {
         let (kx, ky) = (k as u32 % width, k as u32 / width);
         if (kx, ky) != (x, y) {
             assert_eq!(a, d, "cambió el píxel ({kx}, {ky})");
@@ -747,14 +747,14 @@ proptest! {
     ) {
         let (x, y) = (xb % img.width(), yb % img.height());
         let pixel = pixel_valid(&img, bytes);
-        let antes = all_the_pixels(&img);
+        let before = all_the_pixels(&img);
 
         prop_assert_eq!(img.set_pixel(x, y, pixel), Ok(()));
         prop_assert_eq!(img.get_pixel(x, y), Ok(pixel));
 
         let after = all_the_pixels(&img);
         let width = img.width();
-        for (k, (a, d)) in antes.iter().zip(&after).enumerate() {
+        for (k, (a, d)) in before.iter().zip(&after).enumerate() {
             let (kx, ky) = (k as u32 % width, k as u32 / width);
             if (kx, ky) != (x, y) {
                 prop_assert_eq!(a, d, "cambió el píxel ({}, {})", kx, ky);
@@ -868,11 +868,11 @@ fn check_pixel_indexed_inside_the_palette_including_the_last() {
     assert_eq!(img.check_pixel(Pixel::Indexed(0)), Ok(()));
     assert_eq!(img.check_pixel(Pixel::Indexed(1)), Ok(()));
     // Paleta de 1, de 3 y de 256 (último índice, 255).
-    for (n, ultimo) in [(1usize, 0u8), (3, 2), (255, 254), (256, 255)] {
+    for (n, last) in [(1usize, 0u8), (3, 2), (255, 254), (256, 255)] {
         let img = creates(Mode::Indexed, 3, 2, n);
         assert_eq!(img.check_pixel(Pixel::Indexed(0)), Ok(()), "paleta de {n}");
         assert_eq!(
-            img.check_pixel(Pixel::Indexed(ultimo)),
+            img.check_pixel(Pixel::Indexed(last)),
             Ok(()),
             "último índice de una paleta de {n}"
         );
@@ -1019,16 +1019,16 @@ proptest! {
     /// `set_pixel(0, 0, p)` da `Err(e)` sobre una copia; y no cambia la imagen.
     #[test]
     fn check_pixel_agrees_with_set_pixel(img in image_small(), pixel in pixel_any()) {
-        let antes = img.clone();
+        let before = img.clone();
         let checked = img.check_pixel(pixel);
         let mut copy = img.clone();
         let written = copy.set_pixel(0, 0, pixel);
         prop_assert_eq!(&checked, &written, "{:?} en una imagen {:?}", pixel, img.mode());
         prop_assert_eq!(checked.is_ok(), written.is_ok());
-        prop_assert_eq!(&img, &antes);
+        prop_assert_eq!(&img, &before);
         // Si falla, `set_pixel` tampoco cambió su copia.
         if written.is_err() {
-            prop_assert_eq!(&copy, &antes);
+            prop_assert_eq!(&copy, &before);
         }
     }
 

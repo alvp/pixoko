@@ -21,7 +21,7 @@ use px_ui::canvas::{Canvas, CanvasInfo, CanvasInput};
 use px_ui::view::{Size, View, ViewOp, Zoom};
 
 mod common;
-use common::{PPPS, button_2, context, frame, key_2, modifiers_2, mover, near, wheel_line};
+use common::{PPPS, button_2, context, frame, key_2, modifiers_2, move_pointer, near, wheel_line};
 
 const CANVAS: Size = Size {
     width: 700,
@@ -40,7 +40,7 @@ fn zoom(n: u32) -> Zoom {
 
 /// Vista a ×`n` anclada en el centro, ya con `clamp`, y desplazada `(dx, dy)` (con `pan`, que
 /// también hace `clamp`).
-fn vista(n: u32, pan: (i64, i64)) -> View {
+fn view(n: u32, pan: (i64, i64)) -> View {
     let mut v = View::fit(CANVAS, IMAGE);
     v.set_zoom(zoom(n), CENTER);
     v.clamp(CANVAS, IMAGE);
@@ -87,9 +87,9 @@ fn views_with_the_center_over_the_image() -> Vec<(String, View)> {
     let mut v = Vec::new();
     for n in [1, 5, 64] {
         for d in [(0, 0), (7, -5), (-20, 15), (40, 30), (-45, -40)] {
-            let vista = vista(n, d);
-            if vista.screen_to_image(CENTER, IMAGE).is_some() {
-                v.push((format!("×{n} desplazada {d:?}"), vista));
+            let view = view(n, d);
+            if view.screen_to_image(CENTER, IMAGE).is_some() {
+                v.push((format!("×{n} desplazada {d:?}"), view));
             }
         }
     }
@@ -104,16 +104,16 @@ fn view_op_is_a_plain_type() {
 
 #[test]
 fn row_6_the_test_views_cover_x1_x5_and_x64_with_the_center_over_the_image() {
-    let vistas = views_with_the_center_over_the_image();
+    let views = views_with_the_center_over_the_image();
     for n in [1, 5, 64] {
         assert!(
-            vistas.iter().any(|(_, v)| v.zoom() == zoom(n)),
+            views.iter().any(|(_, v)| v.zoom() == zoom(n)),
             "falta ×{n}; hay {:?}",
-            vistas.iter().map(|(name_2, _)| name_2).collect::<Vec<_>>()
+            views.iter().map(|(name_2, _)| name_2).collect::<Vec<_>>()
         );
     }
     assert!(
-        vistas
+        views
             .iter()
             .any(|(_, v)| v.origin() != View::fit(CANVAS, IMAGE).origin())
     );
@@ -121,10 +121,10 @@ fn row_6_the_test_views_cover_x1_x5_and_x64_with_the_center_over_the_image() {
 
 #[test]
 fn row_6_zoom_in_zoom_out_and_actual_do_not_move_the_pixel_under_the_center() {
-    for (name_2, antes) in views_with_the_center_over_the_image() {
-        let pixel = antes.screen_to_image_i32(CENTER);
+    for (name_2, before) in views_with_the_center_over_the_image() {
+        let pixel = before.screen_to_image_i32(CENTER);
         for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual] {
-            let after_2 = applies(antes, op);
+            let after_2 = applies(before, op);
             // Con zoom ≥ ×1 el píxel es el mismo; a 1/K sube a la rejilla del nivel
             // (specs/hito-2-zoom-baldosas.md, decisión 4).
             let k = if after_2.zoom() < Zoom::ONE {
@@ -144,18 +144,22 @@ fn row_6_zoom_in_zoom_out_and_actual_do_not_move_the_pixel_under_the_center() {
 
 #[test]
 fn row_6_zoom_in_and_zoom_out_give_a_zoom_step() {
-    for (name_2, antes) in views_with_the_center_over_the_image() {
+    for (name_2, before) in views_with_the_center_over_the_image() {
         assert_eq!(
-            applies(antes, ViewOp::ZoomIn).zoom(),
-            antes.zoom().zoom_in(),
+            applies(before, ViewOp::ZoomIn).zoom(),
+            before.zoom().zoom_in(),
             "{name_2}"
         );
         assert_eq!(
-            applies(antes, ViewOp::ZoomOut).zoom(),
-            antes.zoom().zoom_out(),
+            applies(before, ViewOp::ZoomOut).zoom(),
+            before.zoom().zoom_out(),
             "{name_2}"
         );
-        assert_eq!(applies(antes, ViewOp::Actual).zoom(), Zoom::ONE, "{name_2}");
+        assert_eq!(
+            applies(before, ViewOp::Actual).zoom(),
+            Zoom::ONE,
+            "{name_2}"
+        );
     }
 }
 
@@ -167,7 +171,7 @@ fn row_6_fit_is_view_fit_centered_and_the_largest_level_that_fits() {
     assert_eq!(expected_2.origin(), (30, 10));
     for n in [1, 5, 64] {
         for d in [(0, 0), (7, -5), (-45, -40), (300, 200)] {
-            let v = vista(n, d);
+            let v = view(n, d);
             assert_eq!(applies(v, ViewOp::Fit), expected_2, "×{n} desplazada {d:?}");
         }
     }
@@ -176,27 +180,27 @@ fn row_6_fit_is_view_fit_centered_and_the_largest_level_that_fits() {
 #[test]
 fn row_6_x64_stays_at_x64_with_zoom_in() {
     for d in [(0, 0), (7, -5), (-45, -40), (900, 700)] {
-        let antes = vista(64, d);
-        let after_2 = applies(antes, ViewOp::ZoomIn);
+        let before = view(64, d);
+        let after_2 = applies(before, ViewOp::ZoomIn);
         assert_eq!(after_2.zoom(), Zoom::MAX, "{d:?}");
-        assert_eq!(after_2, antes, "{d:?}: ZoomIn en el máximo no cambia nada");
+        assert_eq!(after_2, before, "{d:?}: ZoomIn en el máximo no cambia nada");
     }
 }
 
 #[test]
 fn row_6_zoom_out_at_zoom_min_changes_nothing() {
     for d in [(0, 0), (7, -5), (-45, -40), (900, 700)] {
-        let antes = view_minimum(d);
-        assert_eq!(antes.zoom(), Zoom::MIN);
-        assert_eq!(applies(antes, ViewOp::ZoomOut), antes, "{d:?}");
+        let before = view_minimum(d);
+        assert_eq!(before.zoom(), Zoom::MIN);
+        assert_eq!(applies(before, ViewOp::ZoomOut), before, "{d:?}");
     }
 }
 
 #[test]
 fn row_6_actual_at_x1_changes_nothing() {
     for d in [(0, 0), (7, -5), (-45, -40)] {
-        let antes = vista(1, d);
-        assert_eq!(applies(antes, ViewOp::Actual), antes, "{d:?}");
+        let before = view(1, d);
+        assert_eq!(applies(before, ViewOp::Actual), before, "{d:?}");
     }
 }
 
@@ -204,9 +208,9 @@ fn row_6_actual_at_x1_changes_nothing() {
 fn row_6_all_the_operations_leave_the_view_with_clamp() {
     for n in [1, 5, 64] {
         for d in [(0, 0), (7, -5), (-45, -40), (900, 700), (-900, -700)] {
-            let antes = vista(n, d);
+            let before = view(n, d);
             for op in OPERATIONS {
-                let after_2 = applies(antes, op);
+                let after_2 = applies(before, op);
                 assert_eq!(
                     after_2,
                     with_clamp(after_2),
@@ -221,11 +225,11 @@ fn row_6_all_the_operations_leave_the_view_with_clamp() {
 fn row_6_apply_op_matches_the_model_set_zoom_at_the_center_plus_clamp() {
     for n in [1, 2, 5, 10, 33, 64] {
         for d in [(0, 0), (7, -5), (-45, -40), (900, 700), (-900, -700)] {
-            let antes = vista(n, d);
+            let before = view(n, d);
             for op in OPERATIONS {
                 assert_eq!(
-                    applies(antes, op),
-                    model(antes, op),
+                    applies(before, op),
+                    model(before, op),
                     "×{n} desplazada {d:?}: {op:?}"
                 );
             }
@@ -257,11 +261,11 @@ proptest! {
         let canvas_2 = Size::new(canvas_w, canvas_h);
         let image_2 = Size::new(width_2, height_2);
         let center = (i64::from(canvas_w) / 2, i64::from(canvas_h) / 2);
-        let mut antes = View::fit(canvas_2, image_2);
-        antes.set_zoom(zoom(n), center);
-        antes.pan(dx, dy, canvas_2, image_2);
+        let mut before = View::fit(canvas_2, image_2);
+        before.set_zoom(zoom(n), center);
+        before.pan(dx, dy, canvas_2, image_2);
         let op = OPERATIONS[op_i];
-        let mut after_2 = antes;
+        let mut after_2 = before;
         after_2.apply_op(op, canvas_2, image_2);
 
         // Termina en `clamp`.
@@ -271,20 +275,20 @@ proptest! {
 
         match op {
             ViewOp::Fit => prop_assert_eq!(after_2, View::fit(canvas_2, image_2)),
-            ViewOp::ZoomIn => prop_assert_eq!(after_2.zoom(), antes.zoom().zoom_in()),
-            ViewOp::ZoomOut => prop_assert_eq!(after_2.zoom(), antes.zoom().zoom_out()),
+            ViewOp::ZoomIn => prop_assert_eq!(after_2.zoom(), before.zoom().zoom_in()),
+            ViewOp::ZoomOut => prop_assert_eq!(after_2.zoom(), before.zoom().zoom_out()),
             ViewOp::Actual => prop_assert_eq!(after_2.zoom(), Zoom::ONE),
-            ViewOp::CenterOnCursor => prop_assert_eq!(after_2.zoom(), antes.zoom()),
+            ViewOp::CenterOnCursor => prop_assert_eq!(after_2.zoom(), before.zoom()),
         }
 
         // Modelo: `set_zoom` anclado en el centro y `clamp`.
         if op != ViewOp::Fit {
             let goal = match op {
-                ViewOp::ZoomIn => antes.zoom().zoom_in(),
-                ViewOp::ZoomOut => antes.zoom().zoom_out(),
+                ViewOp::ZoomIn => before.zoom().zoom_in(),
+                ViewOp::ZoomOut => before.zoom().zoom_out(),
                 _ => Zoom::ONE,
             };
-            let mut expected_2 = antes;
+            let mut expected_2 = before;
             expected_2.set_zoom(goal, center);
             expected_2.clamp(canvas_2, image_2);
             prop_assert_eq!(after_2, expected_2);
@@ -339,7 +343,7 @@ impl Bench {
 
     /// Un fotograma de reposo con el puntero en el centro del lienzo.
     fn with_the_pointer_at_the_center(&mut self) -> CanvasInfo {
-        self.info(vec![mover(pos2(400.0, 300.0))]);
+        self.info(vec![move_pointer(pos2(400.0, 300.0))]);
         self.info(vec![])
     }
 }
@@ -410,8 +414,8 @@ fn row_6_request_view_does_not_move_the_pixel_under_the_center_of_the_canvas() {
         for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual] {
             let mut bench = Bench::new_2(ppp);
             // El puntero queda en el centro del lienzo (la pantalla entera).
-            let antes = bench.with_the_pointer_at_the_center();
-            let pixel = antes.hover.expect("el centro está sobre la imagen");
+            let before = bench.with_the_pointer_at_the_center();
+            let pixel = before.hover.expect("el centro está sobre la imagen");
             bench.canvas.request_view(op);
             let after_2 = bench.info(vec![]);
             assert_eq!(
@@ -426,7 +430,7 @@ fn row_6_request_view_does_not_move_the_pixel_under_the_center_of_the_canvas() {
 #[test]
 fn row_6_request_view_fit_leaves_the_image_centered_in_the_canvas() {
     let mut bench = Bench::new_2(1.0);
-    bench.info(vec![mover(pos2(100.0, 100.0))]);
+    bench.info(vec![move_pointer(pos2(100.0, 100.0))]);
     // Aleja la vista: rueda hacia arriba dos veces con el puntero encima.
     bench.info(vec![wheel_line(true), wheel_line(true)]);
     assert_ne!(bench.canvas.zoom(), Some(zoom(12)));
@@ -446,22 +450,22 @@ fn row_6_at_zoom_min_and_max_the_requests_that_do_not_fit_change_nothing() {
         bench.info(vec![]);
     }
     assert_eq!(bench.canvas.zoom(), Some(Zoom::MIN));
-    let antes = bench.info(vec![]).image_rect;
+    let before = bench.info(vec![]).image_rect;
     bench.canvas.request_view(ViewOp::ZoomOut);
     let after_2 = bench.info(vec![]);
     assert_eq!(after_2.zoom, Zoom::MIN);
-    assert_eq!(after_2.image_rect, antes);
+    assert_eq!(after_2.image_rect, before);
 
     for _ in 0..80 {
         bench.canvas.request_view(ViewOp::ZoomIn);
         bench.info(vec![]);
     }
     assert_eq!(bench.canvas.zoom(), Some(Zoom::MAX));
-    let antes = bench.info(vec![]).image_rect;
+    let before = bench.info(vec![]).image_rect;
     bench.canvas.request_view(ViewOp::ZoomIn);
     let after_2 = bench.info(vec![]);
     assert_eq!(after_2.zoom, Zoom::MAX);
-    assert_eq!(after_2.image_rect, antes);
+    assert_eq!(after_2.image_rect, before);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -490,7 +494,7 @@ fn with_the_view_keys_disabled_home_plus_equals_and_minus_do_not_act_on_the_canv
 fn with_the_view_keys_disabled_the_wheel_and_the_pinch_keep_working() {
     let mut bench = Bench::new_2(1.0);
     bench.canvas.set_view_keys(false);
-    bench.info(vec![mover(pos2(400.0, 300.0))]);
+    bench.info(vec![move_pointer(pos2(400.0, 300.0))]);
     let info = bench.info(vec![wheel_line(true)]);
     assert_eq!(info.zoom, zoom(13), "la rueda no cambia");
     let info = bench.info(vec![Event::Zoom(1.2)]);
@@ -537,7 +541,7 @@ fn with_the_view_keys_disabled_a_stroke_keeps_working() {
     use px_ui::canvas::CanvasEvent;
     let mut bench = Bench::new_2(1.0);
     bench.canvas.set_view_keys(false);
-    bench.info(vec![mover(pos2(400.0, 300.0))]);
+    bench.info(vec![move_pointer(pos2(400.0, 300.0))]);
     let (_, start_2_2) = bench.frame(vec![button_2(pos2(400.0, 300.0), true)]);
     assert!(
         matches!(

@@ -343,10 +343,10 @@ fn row_apply_new_clears_the_redo_stack() {
 #[test]
 fn row_undo_and_redo_on_a_new_document() {
     let mut doc = doc_d();
-    let antes = state(&doc);
+    let before = state(&doc);
     assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
     assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
@@ -393,33 +393,33 @@ fn row_empty_commands_are_empty_command() {
     // En un documento nuevo.
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
     assert_eq!(doc.apply(s(id, &[])), Err(DocumentError::EmptyCommand));
     assert_eq!(doc.apply(batch(vec![])), Err(DocumentError::EmptyCommand));
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 
     // Con historia y con algo que rehacer: nada se toca.
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
     assert_eq!(doc.apply(s(id, &[px(1, 0, c1())])), Ok(true));
     assert_eq!(doc.undo(), Ok(()));
-    let antes = state(&doc);
-    assert!(antes.can_undo && antes.can_redo);
+    let before = state(&doc);
+    assert!(before.can_undo && before.can_redo);
     assert_eq!(doc.apply(s(id, &[])), Err(DocumentError::EmptyCommand));
     assert_eq!(doc.apply(batch(vec![])), Err(DocumentError::EmptyCommand));
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
 fn row_out_of_range() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
 
     assert_eq!(
         doc.apply(s(id, &[px(4, 0, c1())])),
         Err(failure_pixel(0, outside(4, 0, 4, 3)))
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 
     assert_eq!(
         doc.apply(s(id, &[px(0, 0, c1()), px(9, 9, c1())])),
@@ -427,7 +427,7 @@ fn row_out_of_range() {
     );
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
     assert!(!doc.can_undo());
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
@@ -435,7 +435,7 @@ fn row_failure_after_repeated_writes_restores_the_original_value() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c3())])), Ok(true));
-    let antes = state(&doc);
+    let before = state(&doc);
 
     let r = doc.apply(s(
         id,
@@ -448,7 +448,7 @@ fn row_failure_after_repeated_writes_restores_the_original_value() {
     ));
     assert_eq!(r, Err(failure_pixel(3, outside(4, 3, 4, 3))));
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c3()));
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
@@ -456,7 +456,7 @@ fn row_other_mode_and_index_outside_the_palette() {
     // Gray(1) en una imagen RGBA.
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
     let gray = PixelEdit {
         x: 0,
         y: 0,
@@ -472,12 +472,12 @@ fn row_other_mode_and_index_outside_the_palette() {
             }
         ))
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 
     // Indexed(9) en una imagen indexada con paleta de 2.
     let mut doc = Document::new(Image::new_indexed(4, 3, palette_of(2)).unwrap());
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
     let index_2 = PixelEdit {
         x: 0,
         y: 0,
@@ -490,28 +490,28 @@ fn row_other_mode_and_index_outside_the_palette() {
             ImageError::IndexNotInPalette { index: 9, len: 2 }
         ))
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
 fn row_image_unknown() {
     let mut doc = doc_d();
     let unknown = ImageId::from_raw(99);
-    let antes = state(&doc);
+    let before = state(&doc);
     assert_eq!(doc.image(unknown), None);
     assert_eq!(
         doc.apply(s(unknown, &[px(0, 0, c1())])),
         Err(DocumentError::UnknownImage(unknown))
     );
     assert_eq!(doc.image(unknown), None);
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
 fn check_order_of_set_pixels() {
     let mut doc = doc_d();
     let unknown = ImageId::from_raw(99);
-    let antes = state(&doc);
+    let before = state(&doc);
 
     // EmptyCommand gana a UnknownImage.
     assert_eq!(doc.apply(s(unknown, &[])), Err(DocumentError::EmptyCommand));
@@ -520,7 +520,7 @@ fn check_order_of_set_pixels() {
         doc.apply(s(unknown, &[px(9, 9, c1())])),
         Err(DocumentError::UnknownImage(unknown))
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
@@ -538,11 +538,11 @@ fn row_invalid_command_after_undo_keeps_redo() {
         assert_eq!(doc.apply(s(id, &[px(0, 0, c2())])), Ok(true));
         let with_a = doc.clone();
         assert_eq!(doc.undo(), Ok(()));
-        let antes = state(&doc);
+        let before = state(&doc);
 
         assert!(doc.apply(invalid.clone()).is_err(), "{invalid:?}");
         assert!(doc.can_redo(), "{invalid:?}");
-        assert_eq!(state(&doc), antes, "{invalid:?}");
+        assert_eq!(state(&doc), before, "{invalid:?}");
         assert_eq!(doc.redo(), Ok(()));
         assert_eq!(doc, with_a);
     }
@@ -552,11 +552,11 @@ fn row_invalid_command_after_undo_keeps_redo() {
 fn row_writing_the_value_already_there_changes_nothing() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c0())])), Ok(false));
     assert!(!doc.can_undo());
     assert_eq!(doc.history_bytes(), 0);
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
@@ -566,14 +566,14 @@ fn row_no_op_after_undo_keeps_redo() {
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
     let with_a = doc.clone();
     assert_eq!(doc.undo(), Ok(()));
-    let antes = state(&doc);
-    assert!(antes.can_redo);
+    let before = state(&doc);
+    assert!(before.can_redo);
 
     assert_eq!(doc.apply(s(id, &[px(0, 0, c0())])), Ok(false));
     assert!(doc.can_redo());
-    assert_eq!(doc.can_undo(), antes.can_undo);
-    assert_eq!(doc.history_bytes(), antes.bytes);
-    assert_eq!(state(&doc), antes);
+    assert_eq!(doc.can_undo(), before.can_undo);
+    assert_eq!(doc.history_bytes(), before.bytes);
+    assert_eq!(state(&doc), before);
 
     assert_eq!(doc.redo(), Ok(()));
     assert_eq!(doc, with_a);
@@ -625,11 +625,11 @@ fn row_batch_with_no_ops() {
 
     // Solo no-ops: sin paso y sin tocar la historia.
     let mut other = doc_d();
-    let antes = state(&other);
+    let before = state(&other);
     assert_eq!(other.apply(batch(vec![no_op.clone(), no_op])), Ok(false));
     assert!(!other.can_undo());
     assert_eq!(other.history_bytes(), 0);
-    assert_eq!(state(&other), antes);
+    assert_eq!(state(&other), before);
 }
 
 #[test]
@@ -637,7 +637,7 @@ fn row_batch_with_an_inner_failure_changes_nothing() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(3, 2, c2())])), Ok(true));
-    let antes = state(&doc);
+    let before = state(&doc);
 
     // Fuera de rango en el comando 1 (la escritura (1, 0) anterior al fallo se revierte).
     let out_of_range = batch(vec![
@@ -652,7 +652,7 @@ fn row_batch_with_an_inner_failure_changes_nothing() {
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
     assert_eq!(pixel_en(&doc, 1, 0), Pixel::Rgba(c0()));
     assert_eq!(pixel_en(&doc, 2, 0), Pixel::Rgba(c0()));
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 
     // Batch anidado en el comando 1.
     let nested = batch(vec![
@@ -664,20 +664,20 @@ fn row_batch_with_an_inner_failure_changes_nothing() {
         Err(in_batch(1, DocumentError::NestedBatch))
     );
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c0()));
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
 fn batch_with_empty_command_or_unknown_image_inside() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
 
     assert_eq!(
         doc.apply(batch(vec![s(id, &[px(0, 0, c1())]), s(id, &[])])),
         Err(in_batch(1, DocumentError::EmptyCommand))
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 
     let unknown = ImageId::from_raw(99);
     assert_eq!(
@@ -687,7 +687,7 @@ fn batch_with_empty_command_or_unknown_image_inside() {
         ])),
         Err(in_batch(1, DocumentError::UnknownImage(unknown)))
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 
     // Un lote vacío dentro de un lote es EmptyCommand en el comando interno, y un
     // lote dentro de otro, aunque esté vacío, es NestedBatch o EmptyCommand según
@@ -698,7 +698,7 @@ fn batch_with_empty_command_or_unknown_image_inside() {
         matches!(r, Err(DocumentError::InBatch { index: 1, .. })),
         "salió {r:?}"
     );
-    assert_eq!(state(&doc), antes);
+    assert_eq!(state(&doc), before);
 }
 
 #[test]
@@ -828,15 +828,15 @@ fn shape(img: &Image) -> Shape {
 
 /// Píxel válido de un modo a partir de un valor pequeño. El 0 coincide con el valor
 /// inicial de la imagen, y los demás se repiten mucho: así abundan los no-ops.
-fn pixel_de(mode: Mode, colors_2: usize, valor: u8) -> Pixel {
+fn pixel_de(mode: Mode, colors_2: usize, value: u8) -> Pixel {
     match mode {
-        Mode::Rgba if valor == 0 => Pixel::Rgba(Rgba::TRANSPARENT),
-        Mode::Rgba => Pixel::Rgba(Rgba::new(valor, 255 - valor, valor ^ 5, 255)),
-        Mode::Indexed => Pixel::Indexed((valor as usize % colors_2.max(1)) as u8),
-        Mode::Gray => Pixel::Gray(valor),
-        Mode::GrayAlpha if valor == 0 => Pixel::GrayAlpha { gray: 0, alpha: 0 },
+        Mode::Rgba if value == 0 => Pixel::Rgba(Rgba::TRANSPARENT),
+        Mode::Rgba => Pixel::Rgba(Rgba::new(value, 255 - value, value ^ 5, 255)),
+        Mode::Indexed => Pixel::Indexed((value as usize % colors_2.max(1)) as u8),
+        Mode::Gray => Pixel::Gray(value),
+        Mode::GrayAlpha if value == 0 => Pixel::GrayAlpha { gray: 0, alpha: 0 },
         Mode::GrayAlpha => Pixel::GrayAlpha {
-            gray: valor,
+            gray: value,
             alpha: 255,
         },
     }
@@ -861,7 +861,7 @@ enum Fail {
 struct EditingRaw {
     xb: u32,
     yb: u32,
-    valor: u8,
+    value: u8,
     fail: Option<Fail>,
 }
 
@@ -899,11 +899,11 @@ fn fail(with_failures: bool) -> impl Strategy<Value = Option<Fail>> {
 }
 
 fn editing_raw(with_failures: bool) -> impl Strategy<Value = EditingRaw> {
-    (any::<u32>(), any::<u32>(), 0u8..4, fail(with_failures)).prop_map(|(xb, yb, valor, fail)| {
+    (any::<u32>(), any::<u32>(), 0u8..4, fail(with_failures)).prop_map(|(xb, yb, value, fail)| {
         EditingRaw {
             xb,
             yb,
-            valor,
+            value,
             fail,
         }
     })
@@ -948,24 +948,24 @@ fn sub_raw(with_failures: bool) -> impl Strategy<Value = SubRaw> {
 
 /// `SetPixels` (tres de cada cuatro) o `Batch` de 0 a 4 comandos, con fallos o sin ellos.
 fn cmd_raw(with_failures: bool) -> impl Strategy<Value = CmdRaw> {
-    let largo = if with_failures { 0..=4 } else { 1..=4 };
+    let length = if with_failures { 0..=4 } else { 1..=4 };
     prop_oneof![
         3 => set_raw(with_failures).prop_map(CmdRaw::Set),
-        1 => prop::collection::vec(sub_raw(with_failures), largo).prop_map(CmdRaw::Batch),
+        1 => prop::collection::vec(sub_raw(with_failures), length).prop_map(CmdRaw::Batch),
     ]
 }
 
 fn editing(f: Shape, e: &EditingRaw) -> PixelEdit {
     let mut x = e.xb % f.width;
     let mut y = e.yb % f.height;
-    let mut pixel = pixel_de(f.mode, f.colors_2, e.valor);
+    let mut pixel = pixel_de(f.mode, f.colors_2, e.value);
     match e.fail {
         None => {}
         Some(Fail::OutsideX) => x = f.width + e.xb % 1000,
         Some(Fail::OutsideY) => y = f.height + e.yb % 1000,
-        Some(Fail::OtherMode) => pixel = pixel_de(other_mode(f.mode, e.valor), 8, e.valor),
+        Some(Fail::OtherMode) => pixel = pixel_de(other_mode(f.mode, e.value), 8, e.value),
         // En una imagen no indexada esto es un `ModeMismatch`.
-        Some(Fail::IndexOutside) => pixel = Pixel::Indexed((f.colors_2 + e.valor as usize) as u8),
+        Some(Fail::IndexOutside) => pixel = Pixel::Indexed((f.colors_2 + e.value as usize) as u8),
     }
     PixelEdit { x, y, pixel }
 }
@@ -1087,10 +1087,10 @@ fn model_set(
     }
     let mut change = false;
     for (i, e) in pixels.iter().enumerate() {
-        let antes = img.get_pixel(e.x, e.y);
+        let before = img.get_pixel(e.x, e.y);
         img.set_pixel(e.x, e.y, e.pixel)
             .map_err(|source| DocumentError::Pixel { pixel: i, source })?;
-        if antes != Ok(e.pixel) {
+        if before != Ok(e.pixel) {
             change = true;
         }
     }
@@ -1164,7 +1164,7 @@ fn runs_model(img: Image, ops: &[Op]) -> Result<(), TestCaseError> {
     let mut cursor = 0usize;
 
     for op in ops {
-        let antes = state(&doc);
+        let before = state(&doc);
         match op {
             Op::Apply(raw) => {
                 let cmd = command(f, id, raw);
@@ -1179,11 +1179,11 @@ fn runs_model(img: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     }
                     Ok((_, false)) => {
                         prop_assert_eq!(real, Ok(false), "{:?}", cmd);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                     Err(e) => {
                         prop_assert_eq!(real, Err(e), "{:?}", cmd);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                 }
             }
@@ -1193,7 +1193,7 @@ fn runs_model(img: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor -= 1;
                 } else {
                     prop_assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
             Op::Redo => {
@@ -1202,7 +1202,7 @@ fn runs_model(img: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor += 1;
                 } else {
                     prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
         }
@@ -1382,7 +1382,7 @@ proptest! {
         }
 
         for op in &ops {
-            let antes = state(&doc);
+            let before = state(&doc);
             match op {
                 OpArb::Apply(raw) => {
                     let cmd = arb_command(f, id, raw);
@@ -1391,30 +1391,30 @@ proptest! {
                             prop_assert!(doc.can_undo());
                             prop_assert!(!doc.can_redo());
                         }
-                        Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes, "{:?}", cmd),
+                        Ok(false) | Err(_) => prop_assert_eq!(state(&doc), before, "{:?}", cmd),
                     }
                 }
                 OpArb::Undo => match doc.undo() {
                     Ok(()) => prop_assert!(doc.can_redo()),
                     Err(e) => {
                         prop_assert_eq!(e, DocumentError::NothingToUndo);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                 },
                 OpArb::Redo => match doc.redo() {
                     Ok(()) => prop_assert!(doc.can_undo()),
                     Err(e) => {
                         prop_assert_eq!(e, DocumentError::NothingToRedo);
-                        prop_assert_eq!(state(&doc), antes);
+                        prop_assert_eq!(state(&doc), before);
                     }
                 },
                 OpArb::Limit(limit) => {
                     doc.set_history_limit(*limit);
                     prop_assert_eq!(doc.history_limit(), *limit);
                     // Cambiar el límite no toca el contenido ni la pila de rehacer.
-                    prop_assert_eq!(&doc, &antes.doc);
-                    prop_assert_eq!(doc.can_redo(), antes.can_redo);
-                    prop_assert_eq!(steps_redoable(&doc), antes.redoable);
+                    prop_assert_eq!(&doc, &before.doc);
+                    prop_assert_eq!(doc.can_redo(), before.can_redo);
+                    prop_assert_eq!(steps_redoable(&doc), before.redoable);
                 }
             }
         }

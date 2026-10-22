@@ -50,7 +50,7 @@ fn distance_circular(a: f32, b: f32) -> f32 {
 // Una prueba por fila de la tabla de casos límite.
 
 #[test]
-fn default_es_negro() {
+fn default_is_black() {
     assert_eq!(Hsl::default(), Hsl::new(0.0, 0.0, 0.0));
     let d = Hsl::default();
     assert_eq!((d.h(), d.s(), d.l()), (0.0, 0.0, 0.0));

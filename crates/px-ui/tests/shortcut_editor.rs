@@ -55,13 +55,13 @@ fn line() -> AppAction {
     AppAction::SelectTool(Tool::Line)
 }
 
-fn editor(action: AppAction, tabla: &Keymap) -> ShortcutEditor {
-    ShortcutEditor::new(action, tabla, Platform::Linux).expect("editable")
+fn editor(action: AppAction, table: &Keymap) -> ShortcutEditor {
+    ShortcutEditor::new(action, table, Platform::Linux).expect("editable")
 }
 
 /// Asigna `c` a la casilla `slot` de `action` (con el conflicto, `reassign`) y acepta.
-fn assigns(tabla: &Keymap, action: AppAction, slot: Slot, c: char, reassign: bool) -> Keymap {
-    let mut e = editor(action, tabla);
+fn assigns(table: &Keymap, action: AppAction, slot: Slot, c: char, reassign: bool) -> Keymap {
+    let mut e = editor(action, table);
     e.begin_capture(slot);
     if let CaptureResult::Pending(_) = e.capture(Capture::Press(press(c))) {
         e.resolve(reassign);
@@ -83,8 +83,8 @@ fn editable() -> Vec<AppAction> {
 
 #[test]
 fn row_5_the_boxes_of_the_default_table() {
-    let tabla = Keymap::default_scheme();
-    let slots = |a| slots_of(&tabla, a).slots;
+    let table = Keymap::default_scheme();
+    let slots = |a| slots_of(&table, a).slots;
     assert_eq!(slots(pencil()), vec![chord('d')]);
     assert_eq!(slots(AppAction::Undo), vec![chord('u')]);
     assert_eq!(slots(AppAction::Redo), vec![]);
@@ -110,11 +110,11 @@ fn row_5_the_boxes_of_the_default_table() {
     assert_eq!(slots(AppAction::ZoomActual), vec![]);
     // Fijas: las filas con `command` activas en la plataforma.
     assert_eq!(
-        slots_of(&tabla, AppAction::Undo).fixed,
+        slots_of(&table, AppAction::Undo).fixed,
         vec![chord_with(KeyId::Char('z'), true, false)]
     );
     assert_eq!(
-        slots_of(&tabla, AppAction::Redo).fixed,
+        slots_of(&table, AppAction::Redo).fixed,
         vec![
             chord_with(KeyId::Char('y'), true, false),
             chord_with(KeyId::Char('z'), true, true)
@@ -124,7 +124,7 @@ fn row_5_the_boxes_of_the_default_table() {
 
 #[test]
 fn row_5_only_the_editable_actions_have_an_editor() {
-    let tabla = Keymap::default_scheme();
+    let table = Keymap::default_scheme();
     for action in [
         AppAction::Open,
         AppAction::Save,
@@ -135,13 +135,13 @@ fn row_5_only_the_editable_actions_have_an_editor() {
         AppAction::SelectColor(3),
     ] {
         assert!(
-            ShortcutEditor::new(action, &tabla, Platform::Linux).is_none(),
+            ShortcutEditor::new(action, &table, Platform::Linux).is_none(),
             "{action:?}"
         );
     }
     assert_eq!(editable().len(), 28);
     for action in editable() {
-        assert!(ShortcutEditor::new(action, &tabla, Platform::Linux).is_some());
+        assert!(ShortcutEditor::new(action, &table, Platform::Linux).is_some());
     }
 }
 
@@ -490,7 +490,7 @@ enum Step {
     Capture2(u8, bool, bool),
     Remove(bool),
     Reset,
-    Resolver(bool),
+    Resolve(bool),
     Cancel,
     Accept,
 }
@@ -501,7 +501,7 @@ fn step() -> impl Strategy<Value = Step> {
         (0u8..40, any::<bool>(), any::<bool>()).prop_map(|(c, s, sh)| Step::Capture2(c, s, sh)),
         any::<bool>().prop_map(Step::Remove),
         Just(Step::Reset),
-        any::<bool>().prop_map(Step::Resolver),
+        any::<bool>().prop_map(Step::Resolve),
         Just(Step::Cancel),
         Just(Step::Accept),
     ]
@@ -526,14 +526,14 @@ proptest! {
     ) {
         let platform = PLATFORMS[platform_2];
         let default = Keymap::default_scheme();
-        let mut tabla = default.clone();
+        let mut table = default.clone();
         let mut touched: Vec<AppAction> = Vec::new();
         let mut open_2_2: Option<(AppAction, ShortcutEditor)> = None;
         for step in steps_2 {
             match step {
                 Step::Open(i) => {
                     let action = editable()[i];
-                    open_2_2 = ShortcutEditor::new(action, &tabla, platform).map(|e| (action, e));
+                    open_2_2 = ShortcutEditor::new(action, &table, platform).map(|e| (action, e));
                 }
                 Step::Capture2(c, secondary, shift) => {
                     if let Some((_, e)) = &mut open_2_2 {
@@ -553,7 +553,7 @@ proptest! {
                         e.reset();
                     }
                 }
-                Step::Resolver(reassign) => {
+                Step::Resolve(reassign) => {
                     if let Some((_, e)) = &mut open_2_2
                         && e.pending().is_some()
                     {
@@ -568,7 +568,7 @@ proptest! {
                         let new = e.accept();
                         // El borrador es una tabla válida.
                         prop_assert!(new.conflicts().is_empty());
-                        tabla = new;
+                        table = new;
                         touched.push(action);
                     }
                 }
@@ -577,14 +577,14 @@ proptest! {
                 prop_assert!(e.keymap().conflicts().is_empty());
             }
         }
-        prop_assert!(tabla.conflicts().is_empty());
+        prop_assert!(table.conflicts().is_empty());
         let modern = |k: &Keymap| k.rows().iter().filter(|r| r.command).cloned().collect::<Vec<_>>();
-        prop_assert_eq!(modern(&tabla).len(), 9);
+        prop_assert_eq!(modern(&table).len(), 9);
         for row_2 in modern(&default) {
-            prop_assert!(modern(&tabla).contains(&row_2), "{row_2:?}");
+            prop_assert!(modern(&table).contains(&row_2), "{row_2:?}");
         }
         for action in editable() {
-            let boxes_2 = slots_of(&tabla, action).slots;
+            let boxes_2 = slots_of(&table, action).slots;
             // Ninguna casilla repetida dentro de la acción.
             for (i, c) in boxes_2.iter().enumerate() {
                 prop_assert!(!boxes_2[..i].contains(c));
@@ -592,20 +592,20 @@ proptest! {
             if !touched.contains(&action) {
                 // Una acción que ningún `Accept` tocó puede haber perdido una casilla por un
                 // `Reasignar` de otra; si no, conserva las suyas.
-                let antes = slots_of(&default, action).slots;
-                prop_assert!(boxes_2.iter().all(|c| antes.contains(c)));
+                let before = slots_of(&default, action).slots;
+                prop_assert!(boxes_2.iter().all(|c| before.contains(c)));
             }
         }
         // Lo que se muestra funciona: la `Press` de cada atajo mostrado da su acción.
         for action in editable() {
-            if let Some(c) = tabla.shown(action, platform) {
+            if let Some(c) = table.shown(action, platform) {
                 let p = Press {
                     key: Some(c.key),
                     command: c.command,
                     shift: c.shift,
                     ..press('a')
                 };
-                prop_assert_eq!(tabla.action_for(&p, platform), Some(action));
+                prop_assert_eq!(table.action_for(&p, platform), Some(action));
             }
         }
     }

@@ -63,7 +63,7 @@ use zones::panel_on_the_left;
 const RED: Rgba = Rgba::opaque(255, 0, 0);
 const GREEN: Rgba = Rgba::opaque(0, 255, 0);
 const BLUE: Rgba = Rgba::opaque(0, 0, 255);
-const NEGRO: Rgba = Rgba::opaque(0, 0, 0);
+const TEST_BLACK: Rgba = Rgba::opaque(0, 0, 0);
 /// `X` y `Y` de la paleta `P5` (fila «colores intermedios» de `hito-2-color-cercano.md`).
 const X: Rgba = Rgba::opaque(200, 30, 30);
 const Y: Rgba = Rgba::opaque(10, 10, 240);
@@ -88,7 +88,7 @@ fn image_with(colors_2: &[Rgba], transparent: Option<u8>, pixels_2: &[u8]) -> Im
 
 /// `F`: `[R, G, B, K]` 4×1 con los píxeles `[0, 1, 2, 3]` (todas las entradas se usan).
 fn image_f() -> Image {
-    image_with(&[RED, GREEN, BLUE, NEGRO], None, &[0, 1, 2, 3])
+    image_with(&[RED, GREEN, BLUE, TEST_BLACK], None, &[0, 1, 2, 3])
 }
 
 /// `P5`: `[R, G, B, X, Y]` 5×1 con los píxeles `[0, 1, 2, 3, 3]` (la 4 no la usa nadie).
@@ -323,8 +323,8 @@ impl Geo {
         self.top_px + row_2 * self.n + ROW_H_U * self.n / 2
     }
 
-    fn x_de_valor(&self, valor: u32, max: u32) -> i64 {
-        TRACK_X_U * self.n + slider_x(valor, TRACK_W_U * self.n, max)
+    fn x_of_value(&self, value: u32, max: u32) -> i64 {
+        TRACK_X_U * self.n + slider_x(value, TRACK_W_U * self.n, max)
     }
 
     /// Centro del campo hexadecimal.
@@ -734,7 +734,7 @@ impl Bench {
         self.refreshes();
     }
 
-    fn pone_color(&mut self, index: u8, color: Rgba) {
+    fn set_color(&mut self, index: u8, color: Rgba) {
         let image = ImageId::from_raw(0);
         self.applies(Command::SetPaletteColor {
             image,
@@ -1705,9 +1705,9 @@ fn row_6_shift_click_sets_the_range_and_rotate_uses_it_and_keeps_it() {
 fn row_6_the_range_rings_and_the_range_flag_are_seen() {
     for ppp in PPPS {
         let mut bench = bench_f(ppp, 1);
-        let antes = bench.rest_2_2();
+        let before = bench.rest_2_2();
         assert!(
-            !there_is_ring(&antes, &bench, 2, 1, RING_RANGE),
+            !there_is_ring(&before, &bench, 2, 1, RING_RANGE),
             "ppp {ppp}"
         );
         let f = bench.click_swatch_with(3, SHIFT);
@@ -1856,7 +1856,7 @@ fn row_7_from_4n_the_drag_starts_with_the_bar_and_the_lines() {
         assert!(bench.operations().is_empty(), "ppp {ppp}");
         assert_eq!(bench.doc_state, 0);
 
-        // Hacia la 0 (la misma): sin barra y con `mover 0 a 0`... la línea de destino no es un
+        // Hacia la 0 (la misma): sin barra y con `move_pointer 0 a 0`... la línea de destino no es un
         // movimiento: no se pinta barra.
         let (x0, y0) = bench.swatch_center(0);
         let f = bench.moves(x0, y0);
@@ -2159,7 +2159,7 @@ fn row_9_with_a_slider_in_progress_the_buttons_and_the_swatches_do_nothing() {
         let mut bench = bench_p_5(ppp, 3);
         let geo = bench.geo();
         let (x, y) = (
-            geo.x_de_valor(128, Control::Red.max()),
+            geo.x_of_value(128, Control::Red.max()),
             geo.y_row(Control::Red),
         );
         bench.moves(x, y);
@@ -2489,7 +2489,7 @@ fn row_14_d_escape_with_a_slider_in_progress_cancels_only_the_slider() {
         let pending = bench.ops.removal();
         let geo = bench.geo();
         let (x, y) = (
-            geo.x_de_valor(10, Control::Red.max()),
+            geo.x_of_value(10, Control::Red.max()),
             geo.y_row(Control::Red),
         );
         bench.moves(x, y);
@@ -2557,7 +2557,7 @@ fn a_document_change_cancels_the_pending_removal_and_the_buttons_come_back() {
         checks_buttons(&f, &bench, &WITH_REMOVES, &format!("ppp {ppp}"));
         assert_eq!(bench.cancellations, 0);
         // Editar un color de otra entrada cambia el estado del documento.
-        bench.pone_color(0, Rgba::opaque(1, 2, 3));
+        bench.set_color(0, Rgba::opaque(1, 2, 3));
         let f = bench.rest_2_2();
         assert_eq!(bench.cancellations, 1, "ppp {ppp}: `sync` avisa una vez");
         assert!(bench.ops.removal().is_none(), "ppp {ppp}");
@@ -2597,7 +2597,7 @@ mod set_transparent {
 
     /// `[R, G with alpha saved 0, B, K]`, píxeles `[0, 1, 2, 3]`, con `mark` como transparente.
     fn image_alpha_0(mark: Option<u8>) -> Image {
-        image_with(&[RED, ALPHA_0, BLUE, NEGRO], mark, &[0, 1, 2, 3])
+        image_with(&[RED, ALPHA_0, BLUE, TEST_BLACK], mark, &[0, 1, 2, 3])
     }
 
     fn op_de(index: Option<u8>) -> Option<PaletteOp> {
@@ -2846,7 +2846,7 @@ mod set_transparent {
             let mut bench = Bench::new_2(
                 ppp,
                 SCREEN_HIGH,
-                image_with(&[RED, GREEN, BLUE, NEGRO], Some(1), &[0, 1, 2, 3]),
+                image_with(&[RED, GREEN, BLUE, TEST_BLACK], Some(1), &[0, 1, 2, 3]),
                 ColorChoice::Entry(3),
             );
             let f = bench.click_button(PaletteButton::Transparent);
@@ -3081,7 +3081,7 @@ mod set_transparent {
             let mut bench = bench_p_5(ppp, 3);
             let geo = bench.geo();
             let (x, y) = (
-                geo.x_de_valor(128, Control::Red.max()),
+                geo.x_of_value(128, Control::Red.max()),
                 geo.y_row(Control::Red),
             );
             bench.moves(x, y);
@@ -3273,7 +3273,7 @@ mod set_transparent_click_and_bar {
         for ppp in PPPS {
             for mark in [None, Some(0u8), Some(1), Some(3)] {
                 for active_2 in 0..4u8 {
-                    let image_2 = image_with(&[RED, GREEN, BLUE, NEGRO], mark, &[0, 1, 2, 3]);
+                    let image_2 = image_with(&[RED, GREEN, BLUE, TEST_BLACK], mark, &[0, 1, 2, 3]);
                     let expected_2 = transparent_toggle(image_2.palette().unwrap(), active_2);
                     assert_eq!(
                         expected_2,
@@ -3503,7 +3503,7 @@ mod icons_editor {
             let mut bench = Bench::new_2(
                 ppp,
                 SCREEN_HIGH,
-                image_with(&[RED, GREEN, BLUE, NEGRO], Some(2), &[0, 1, 2, 3]),
+                image_with(&[RED, GREEN, BLUE, TEST_BLACK], Some(2), &[0, 1, 2, 3]),
                 ColorChoice::Entry(2),
             );
             let f = bench.rest_2_2();
@@ -3742,7 +3742,7 @@ mod icons_editor {
     #[test]
     fn row_10_the_transparent_icon_has_two_states_in_the_same_rectangle_and_alternating_tooltip() {
         for ppp in PPPS {
-            let image_2 = |mark| image_with(&[RED, GREEN, BLUE, NEGRO], mark, &[0, 1, 2, 3]);
+            let image_2 = |mark| image_with(&[RED, GREEN, BLUE, TEST_BLACK], mark, &[0, 1, 2, 3]);
             let mut rectangles = Vec::new();
             for (mark, active_2, pressed) in [
                 (Some(3u8), 3u8, true),

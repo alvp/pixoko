@@ -271,11 +271,11 @@ fn performance_8_layers_c() {
 #[ignore = "rendimiento: a mano, en release, 2 GiB de celdas (specs/hito-3-capas-vista.md)"]
 fn performance_worst_case_of_a_tile_in_c() {
     let m = measures(8, 'c', &worst_case());
-    for (that, valor) in [
+    for (that, value) in [
         ("soltar", m.release_2),
         ("deshacer", m.undo),
         ("rehacer", m.redo),
     ] {
-        assert!(valor <= 700.0, "{that}: {m:?}");
+        assert!(value <= 700.0, "{that}: {m:?}");
     }
 }

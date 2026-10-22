@@ -241,8 +241,8 @@ fn aseprite(width: u16, height: u16) -> Vec<u8> {
 }
 
 /// PNG RGBA de 8 bits, liso, y su SHA-256 como lo escribiría el generador.
-fn png_smooth(width: u32, height: u32, valor: u8) -> (Vec<u8>, String) {
-    let raw = vec![valor; (width * height * 4) as usize];
+fn png_smooth(width: u32, height: u32, value: u8) -> (Vec<u8>, String) {
+    let raw = vec![value; (width * height * 4) as usize];
     let swatches: Vec<u16> = raw.iter().map(|&b| u16::from(b)).collect();
     let png = super::common::Png::new(width, height, 8, 6)
         .swatches(&swatches)

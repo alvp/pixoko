@@ -545,14 +545,14 @@ fn row_05_over_the_panel_or_the_bar_neither_hover_nor_stroke_nor_zoom() {
             );
 
             // La rueda sobre el panel o la barra no cambia el zoom del lienzo.
-            let antes = bench.rest_2_2(&image).info.zoom;
+            let before = bench.rest_2_2(&image).info.zoom;
             let f = bench.with_pointer(&image, choice, true, place, vec![wheel_lines(1.0)]);
             assert_eq!(
-                f.info.zoom, antes,
+                f.info.zoom, before,
                 "ppp {ppp}: la rueda sobre {name_2} cambia el zoom"
             );
             let f = bench.frame(&image, choice, true, vec![wheel_lines(-1.0)]);
-            assert_eq!(f.info.zoom, antes, "ppp {ppp}: rueda hacia abajo");
+            assert_eq!(f.info.zoom, before, "ppp {ppp}: rueda hacia abajo");
         }
     }
 }
@@ -569,13 +569,13 @@ fn row_05_with_200_pt_of_width_the_canvas_has_width_0_and_there_is_no_panic() {
             "ppp {ppp}: el lienzo mide {} px de ancho",
             f.rect_canvas.width() * ppp
         );
-        let zoom_antes = f.info.zoom;
+        let zoom_before = f.info.zoom;
         assert_eq!(f.info.hover, None, "ppp {ppp}");
 
         // `Home` sin efecto, y el puntero en varios sitios (sobre el panel recortado y sobre
         // la barra) no da `hover` ni trazos.
         let f = bench.frame(&image, choice, true, vec![key_2(Key::Home)]);
-        assert_eq!(f.info.zoom, zoom_antes, "ppp {ppp}: Home sin efecto");
+        assert_eq!(f.info.zoom, zoom_before, "ppp {ppp}: Home sin efecto");
         for place in [pos2(150.0, 300.0), pos2(20.0, 10.0), pos2(100.0, 595.0)] {
             let f = bench.frame(&image, choice, true, vec![Event::PointerMoved(place)]);
             assert_eq!(f.info.hover, None, "ppp {ppp}: hover en {place:?}");
@@ -1237,7 +1237,7 @@ fn show_the_wheel_over_the_panel_scrolls_the_rows_and_does_not_zoom() {
             "ppp {ppp}: {visible_2}"
         );
         let maximum = palette_grid::max_first_row(total, visible_2);
-        let zoom_antes = bench.rest_2_2(&image).info.zoom;
+        let zoom_before = bench.rest_2_2(&image).info.zoom;
         assert_eq!(bench.scroll, Scroll::default());
 
         let over_the_panel = pos2(100.0, 60.0);
@@ -1254,7 +1254,7 @@ fn show_the_wheel_over_the_panel_scrolls_the_rows_and_does_not_zoom() {
             3.min(maximum),
             "ppp {ppp}: una línea de rueda hacia abajo"
         );
-        assert_eq!(f.info.zoom, zoom_antes, "ppp {ppp}: la rueda no hace zoom");
+        assert_eq!(f.info.zoom, zoom_before, "ppp {ppp}: la rueda no hace zoom");
         assert_eq!(f.choice_2, None, "ppp {ppp}: la rueda no elige");
 
         // Hacia arriba vuelve a la fila 0 (y no pasa de ahí).
@@ -1262,7 +1262,7 @@ fn show_the_wheel_over_the_panel_scrolls_the_rows_and_does_not_zoom() {
         assert_eq!(bench.scroll.first_row, 0, "ppp {ppp}: hacia arriba");
         let f = bench.frame(&image, choice, true, vec![wheel_lines(1.0)]);
         assert_eq!(bench.scroll.first_row, 0, "ppp {ppp}: no baja de 0");
-        assert_eq!(f.info.zoom, zoom_antes);
+        assert_eq!(f.info.zoom, zoom_before);
 
         // Muchas líneas hacia abajo: se queda en la última fila posible.
         for _ in 0..10 {
@@ -1270,7 +1270,7 @@ fn show_the_wheel_over_the_panel_scrolls_the_rows_and_does_not_zoom() {
         }
         assert_eq!(bench.scroll.first_row, maximum, "ppp {ppp}: tope");
         let f = bench.rest_2_2(&image);
-        assert_eq!(f.info.zoom, zoom_antes);
+        assert_eq!(f.info.zoom, zoom_before);
     }
 }
 
@@ -1309,7 +1309,7 @@ fn show_the_wheel_over_the_canvas_zooms_and_does_not_scroll_the_panel() {
     for (ppp, height_2) in SCREENS_LOW {
         let mut bench = Bench::with_image(ppp, vec2(800.0, height_2), &image);
         let base = bench.rest_2_2(&image);
-        let zoom_antes = base.info.zoom;
+        let zoom_before = base.info.zoom;
         let over_the_canvas = pos2((base.rect_canvas.min.x + 800.0) / 2.0, 50.0);
         assert!(base.rect_canvas.contains(over_the_canvas));
 
@@ -1322,7 +1322,7 @@ fn show_the_wheel_over_the_canvas_zooms_and_does_not_scroll_the_panel() {
         );
         assert_eq!(
             f.info.zoom,
-            zoom_antes.zoom_in(),
+            zoom_before.zoom_in(),
             "ppp {ppp}: la rueda sobre el lienzo hace zoom"
         );
         assert_eq!(

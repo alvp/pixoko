@@ -13,3 +13,8 @@ Herramientas del renombrado a inglés (`specs/limpieza-1.md`). Nada de esto se e
 - `vocab.py`: vocabulario de los identificadores de producción (para revisar el glosario).
 - `verify.py baseline|check [--release]`: comprobaciones P1 a P4 y P3b de la spec; la línea base se toma antes
   de aplicar y vive en `~/.cache/pixoko-l1/`.
+
+Etapa L2 (identificadores de pruebas): `glossary-l2.tsv` (palabras), `overrides-l2.tsv` (traducciones manuales),
+`overrides-l2-auto.tsv` (colisiones resueltas), `map-l2-applied.tsv` (viejo → nuevo por crate, ya aplicado);
+`l2gen.py`, `l2collide.py`, `l2resolve.py`, `l2batch.py`, `l2finish.py`, `l2review.py`, `l2left.py` y `l2nonen.py`
+son las herramientas (se usaron en ese orden, un crate cada vez).

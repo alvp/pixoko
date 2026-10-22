@@ -32,7 +32,9 @@ use px_ui::licenses_view::{LICENSES_FIELD, clamp_first_line, licenses_form, wrap
 use px_ui::status::ADVANCE_PX;
 
 mod common;
-use common::{PPPS, Painted, button_2, context, frame, key_2, mover, n_de, painted, wheel_line};
+use common::{
+    PPPS, Painted, button_2, context, frame, key_2, move_pointer, n_de, painted, wheel_line,
+};
 
 /// `docs/THIRD-PARTY.md`, el texto que muestra el panel.
 const THIRD_PARTY: &str = include_str!("../../../docs/THIRD-PARTY.md");
@@ -300,7 +302,7 @@ impl Bench {
     /// Pone el puntero sobre el texto (el centro de la pantalla, que es el centro del diálogo) y
     /// espera un fotograma estable.
     fn with_pointer(&mut self) {
-        self.frame(vec![mover(pos2(300.0, 150.0))]);
+        self.frame(vec![move_pointer(pos2(300.0, 150.0))]);
         self.rest_2_2();
     }
 
@@ -371,9 +373,9 @@ fn row_11_the_wheel_advances_by_lines_and_the_first_painted_line_is_first_line()
         );
         bench.wheel(true, 3);
         assert!(bench.first() > after_a, "ppp {ppp}: más muescas, más abajo");
-        let antes = bench.first();
+        let before = bench.first();
         bench.wheel(false, 1);
-        assert!(bench.first() < antes, "ppp {ppp}: hacia arriba retrocede");
+        assert!(bench.first() < before, "ppp {ppp}: hacia arriba retrocede");
         bench.wheel(false, 1000);
         assert_eq!(bench.first(), 0, "ppp {ppp}: no baja de 0");
     }
@@ -460,7 +462,7 @@ fn row_11_the_close_button_closes_with_a_click() {
         let center = close.rect().center();
         let mut closed = false;
         for events in [
-            vec![mover(center)],
+            vec![move_pointer(center)],
             vec![button_2(center, true)],
             vec![button_2(center, false)],
         ] {
@@ -478,7 +480,7 @@ fn row_11_a_click_outside_the_button_does_not_close() {
     let mut closed = false;
     let pos = pos2(300.0, 150.0);
     for events in [
-        vec![mover(pos)],
+        vec![move_pointer(pos)],
         vec![button_2(pos, true)],
         vec![button_2(pos, false)],
     ] {
@@ -841,7 +843,7 @@ mod row_12 {
 
             // Con la rueda hasta el final, `total − 16`: son 16 las filas que caben.
             let center = pos2(bench.screen().x / 2.0, bench.screen().y / 2.0);
-            bench.frame(vec![mover(center)]);
+            bench.frame(vec![move_pointer(center)]);
             bench.rest_2_2();
             bench.frame((0..5000).map(|_| wheel_line(false)).collect());
             let p = bench.rest_2_2();
@@ -889,7 +891,7 @@ mod row_12 {
             }
             // El máximo de desplazamiento con THIRD_PARTY.
             let center = pos2(bench.screen().x / 2.0, bench.screen().y / 2.0);
-            bench.frame(vec![mover(center)]);
+            bench.frame(vec![move_pointer(center)]);
             bench.rest_2_2();
             bench.frame((0..5000).map(|_| wheel_line(false)).collect());
             let p = bench.rest_2_2();

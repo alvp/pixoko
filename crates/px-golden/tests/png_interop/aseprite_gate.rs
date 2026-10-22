@@ -43,7 +43,7 @@ fn lee(bytes: &[u8]) -> Result<px_formats::AsepriteRead, String> {
 
 /// El valor de un píxel de una capa: `None` si es transparente (celda vacía, alfa 0 en RGBA o
 /// índice transparente en indexado).
-fn valor(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Option<Pixel> {
+fn value(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Option<Pixel> {
     let image_2 = doc.image(layer_2.cel())?;
     let pixel = image_2.get_pixel(x, y).expect("píxel dentro del lienzo");
     let transparent = match pixel {
@@ -97,7 +97,7 @@ fn same_content(a: &Document, b: &Document) -> Result<(), String> {
         }
         for y in 0..a.height() {
             for x in 0..a.width() {
-                let (va, vb) = (valor(a, ca, x, y), valor(b, cb, x, y));
+                let (va, vb) = (value(a, ca, x, y), value(b, cb, x, y));
                 if va != vb {
                     return Err(format!("capa {i}, píxel ({x}, {y}): {va:?} y {vb:?}"));
                 }
@@ -134,7 +134,7 @@ fn equal_except_rgb_with_alpha_0(a: &Image, b: &Image) -> Result<(), String> {
 
 fn row_01(case: &str, flatten: bool) -> Result<Option<&'static str>, String> {
     let original = reads_document(case)?;
-    let antes = compose(&original).map_err(|e| format!("{case}: compose dio error: {e:?}"))?;
+    let before = compose(&original).map_err(|e| format!("{case}: compose dio error: {e:?}"))?;
     let mut doc = reads_document(case)?;
     let order = if flatten {
         flatten_command(&doc)
@@ -158,14 +158,14 @@ fn row_01(case: &str, flatten: bool) -> Result<Option<&'static str>, String> {
         ));
     }
     let after_2 = compose(&doc).map_err(|e| format!("{case}: compose dio error: {e:?}"))?;
-    if after_2 != antes {
+    if after_2 != before {
         return Err(format!("{case}: componer tras la orden no da lo de antes"));
     }
     // La composición tras la orden es la del PNG de Aseprite con las tolerancias de 3.2.
     evaluates_image(case, &original, &after_2, &lee_png(case))?;
     doc.undo().map_err(|e| format!("{case}: undo dio {e:?}"))?;
     if doc.layers().len() != original.layers().len()
-        || compose(&doc).map_err(|e| format!("{e:?}"))? != antes
+        || compose(&doc).map_err(|e| format!("{e:?}"))? != before
     {
         return Err(format!("{case}: deshacer no devuelve las capas"));
     }
@@ -219,9 +219,9 @@ fn row_02(case: &str) -> Result<(), String> {
             "{case}: la segunda escritura no da los mismos bytes"
         ));
     }
-    let antes = compose(&original).map_err(|e| format!("{case}: {e:?}"))?;
+    let before = compose(&original).map_err(|e| format!("{case}: {e:?}"))?;
     let after_2 = compose(&reopened.document).map_err(|e| format!("{case}: {e:?}"))?;
-    equal_except_rgb_with_alpha_0(&antes, &after_2).map_err(|e| format!("{case}: {e}"))?;
+    equal_except_rgb_with_alpha_0(&before, &after_2).map_err(|e| format!("{case}: {e}"))?;
     evaluates_image(case, &original, &after_2, &lee_png(case))
 }
 
@@ -340,9 +340,9 @@ fn structure(b: &[u8]) -> Result<Structure, String> {
             // §Layer Chunk: banderas 0, tipo 2, nivel hijo 4, ancho y alto 6 y 8, mezcla 10,
             // opacidad 12, tres bytes, nombre (WORD de longitud) en 16.
             0x2004 => {
-                let largo = usize::from(u16_le(b, data + 16)?);
+                let length = usize::from(u16_le(b, data + 16)?);
                 let name_2 = b
-                    .get(data + 18..data + 18 + largo)
+                    .get(data + 18..data + 18 + length)
                     .ok_or("nombre de capa fuera del fichero")?;
                 e.layers.push(LayerF {
                     at: data,
@@ -623,9 +623,9 @@ fn row_04_c_a_changed_field_of_the_written_file_makes_the_structure_fail() {
         ("cabecera: cuadrícula", 40, 1),
         ("magia", 4, 1),
     ];
-    for (field, pan, mascara) in mutations {
+    for (field, pan, mask) in mutations {
         let mut broken = written.clone();
-        broken[pan] ^= mascara;
+        broken[pan] ^= mask;
         let error = match structure(&broken) {
             Err(e) => e,
             Ok(other) => compares(case, &de_aseprite, &other).expect_err(field),
@@ -719,8 +719,8 @@ fn document_indexed(width: u32, height: u32) -> BoxedStrategy<Document> {
     let n = (width * height) as usize;
     (vec(any::<[u8; 4]>(), 2..=16), any::<u8>())
         .prop_flat_map(move |(colors, t)| {
-            let largo = colors.len();
-            let transparent = (usize::from(t) % largo) as u8;
+            let length = colors.len();
+            let transparent = (usize::from(t) % length) as u8;
             let cel_2 = prop_oneof![1 => Just(None), 5 => vec(any::<u8>(), n).prop_map(Some)];
             let a = (name_of_layer(), any::<bool>(), any::<bool>(), cel_2);
             vec(a, 1..=6).prop_map(move |layers| {
@@ -740,7 +740,7 @@ fn document_indexed(width: u32, height: u32) -> BoxedStrategy<Document> {
                                     if v % 3 == 0 {
                                         transparent
                                     } else {
-                                        (usize::from(v) % largo) as u8
+                                        (usize::from(v) % length) as u8
                                     }
                                 })
                                 .collect();
@@ -803,9 +803,9 @@ proptest! {
     fn property_4_the_composition_survives_saving_and_reopening(doc in document_any()) {
         let reopened = reopens(&doc)?;
         fail(same_content(&doc, &reopened))?;
-        let antes = fail(compose(&doc).map_err(|e| format!("{e:?}")))?;
+        let before = fail(compose(&doc).map_err(|e| format!("{e:?}")))?;
         let after_2 = fail(compose(&reopened).map_err(|e| format!("{e:?}")))?;
-        fail(equal_except_rgb_with_alpha_0(&antes, &after_2))?;
+        fail(equal_except_rgb_with_alpha_0(&before, &after_2))?;
         for flatten in [true, false] {
             let a = after(&doc, flatten)?;
             let b = after(&reopened, flatten)?;

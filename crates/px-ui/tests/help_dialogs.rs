@@ -19,7 +19,7 @@ use px_ui::theme::{TEXT, visuals};
 use px_ui::tool::Tool;
 
 mod common;
-use common::{PPPS, button_2, context, frame, key_2, mover, n_de, painted};
+use common::{PPPS, button_2, context, frame, key_2, move_pointer, n_de, painted};
 
 fn screen(ppp: f32) -> Vec2 {
     let n = n_de(ppp);
@@ -75,7 +75,7 @@ impl Bench {
     }
 
     fn click(&mut self, pos: Pos2) -> common::Painted {
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         self.frame(vec![button_2(pos, true)]);
         self.frame(vec![button_2(pos, false)]);
         self.rest_2_2()
@@ -107,10 +107,10 @@ fn center_of_line(p: &common::Painted, prefix: &str) -> Pos2 {
         .center()
 }
 
-fn help(target: HelpTarget, tabla: &Keymap) -> Dialog {
+fn help(target: HelpTarget, table: &Keymap) -> Dialog {
     Dialog::new(
         DialogKind::Help,
-        help_form(target, Tool::Pencil, tabla, Platform::Linux),
+        help_form(target, Tool::Pencil, table, Platform::Linux),
     )
     .unwrap()
 }
@@ -128,9 +128,9 @@ fn press(c: char) -> Press {
 
 #[test]
 fn row_2_the_shortcut_buttons_are_painted_and_a_click_gives_pressed_without_closing() {
-    let tabla = Keymap::default_scheme();
+    let table = Keymap::default_scheme();
     for ppp in PPPS {
-        let mut b = Bench::new_2(ppp, help(HelpTarget::Tool(Tool::Pencil), &tabla));
+        let mut b = Bench::new_2(ppp, help(HelpTarget::Tool(Tool::Pencil), &table));
         let p = b.rest_2_2();
         // El rótulo de la fila, el atajo y `without shortcut_2` se pintan; la ayuda tiene el nombre.
         for text_2 in [
@@ -177,8 +177,8 @@ fn row_2_the_shortcut_buttons_are_painted_and_a_click_gives_pressed_without_clos
 
 #[test]
 fn row_2_the_initial_focus_is_the_area_and_tab_walks_the_area_the_buttons_and_close() {
-    let tabla = Keymap::default_scheme();
-    let mut b = Bench::new_2(1.0, help(HelpTarget::Tool(Tool::Pencil), &tabla));
+    let table = Keymap::default_scheme();
+    let mut b = Bench::new_2(1.0, help(HelpTarget::Tool(Tool::Pencil), &table));
     assert_eq!(b.focus, Some(FocusTarget::Zone(HELP_ZONE)));
     b.presses_2(Key::Tab);
     assert_eq!(b.focus, Some(FocusTarget::Button(HELP_PRIMARY)));
@@ -208,10 +208,10 @@ fn row_2_the_initial_focus_is_the_area_and_tab_walks_the_area_the_buttons_and_cl
 
 #[test]
 fn row_8_the_editor_paints_its_buttons_and_remove_and_the_dimmed_ones_do_not_respond() {
-    let tabla = Keymap::default_scheme();
+    let table = Keymap::default_scheme();
     let mut dialog = Dialog::new(DialogKind::ShortcutEditor, editor_form()).unwrap();
     let editor =
-        ShortcutEditor::new(AppAction::SelectTool(Tool::Pencil), &tabla, Platform::Linux).unwrap();
+        ShortcutEditor::new(AppAction::SelectTool(Tool::Pencil), &table, Platform::Linux).unwrap();
     sync_editor_dialog(&mut dialog, &editor, Platform::Linux);
     let mut b = Bench::new_2(1.0, dialog);
     let p = b.rest_2_2();
@@ -265,9 +265,9 @@ fn row_8_the_editor_paints_its_buttons_and_remove_and_the_dimmed_ones_do_not_res
 
 #[test]
 fn row_12_the_shortcut_list_is_painted_and_its_buttons_respond() {
-    let tabla = Keymap::default_scheme();
+    let table = Keymap::default_scheme();
     let spec = shortcuts_form(
-        &tabla,
+        &table,
         Platform::Linux,
         &[AppAction::SelectTool(Tool::Fill)],
     );
@@ -298,9 +298,9 @@ fn row_12_the_shortcut_list_is_painted_and_its_buttons_respond() {
 #[test]
 fn row_2_the_22_help_texts_and_the_confirmation_are_painted_without_missing_glyphs() {
     // La política del banco es el pánico ante un glifo ausente: pintar cada ayuda lo comprueba.
-    let tabla = Keymap::default_scheme();
+    let table = Keymap::default_scheme();
     for input_2 in px_ui::help_texts::help_table() {
-        let spec = px_ui::help::help_form_for(input_2.key, &tabla, Platform::Linux).unwrap();
+        let spec = px_ui::help::help_form_for(input_2.key, &table, Platform::Linux).unwrap();
         let mut b = Bench::new_2(1.0, Dialog::new(DialogKind::Help, spec).unwrap());
         let p = b.rest_2_2();
         assert!(p.paints(input_2.name), "{}", input_2.key);

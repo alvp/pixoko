@@ -265,7 +265,7 @@ fn checks_geometry(
     prop_assert!(!overlap(l.accept, l.reason));
 
     // Las dimensiones son múltiplos de n.
-    for valor in [
+    for value in [
         d.width,
         d.height,
         l.title.height,
@@ -276,7 +276,7 @@ fn checks_geometry(
         l.accept.width,
         l.accept.height,
     ] {
-        prop_assert_eq!(valor % k, 0, "{} no es múltiplo de {}", valor, k);
+        prop_assert_eq!(value % k, 0, "{} no es múltiplo de {}", value, k);
     }
 
     // `max_scroll_u`: el contenido menos el cuerpo, 0 si cabe; con `Fill`, siempre 0.
@@ -515,9 +515,13 @@ fn row_7_at_960_by_720_pt_the_height_follows_65_plus_the_content_capped_at_the_w
             assert_eq!(short.dialog.height, 293 * k, "ppp {ppp}");
             assert_eq!(short.max_scroll_u, 0, "ppp {ppp}");
 
-            let largo = designs(window, n, CONTENTS[1], has_cancel);
-            assert_eq!(largo.dialog.height, height_max_u * k, "ppp {ppp}");
-            assert_eq!(largo.max_scroll_u, 5000 - (height_max_u - 65), "ppp {ppp}");
+            let length_2 = designs(window, n, CONTENTS[1], has_cancel);
+            assert_eq!(length_2.dialog.height, height_max_u * k, "ppp {ppp}");
+            assert_eq!(
+                length_2.max_scroll_u,
+                5000 - (height_max_u - 65),
+                "ppp {ppp}"
+            );
 
             // Con la ventana grande el `Fill` ocupa su contenido natural: 22 filas.
             let fill = designs(window, n, CONTENTS[2], has_cancel);
@@ -651,12 +655,12 @@ fn zone_rows_with_boxes_smaller_than_a_row_or_negative_gives_zero_without_panic(
 
 #[test]
 fn zone_rows_does_not_go_down_when_the_box_grows() {
-    let mut anterior = 0;
+    let mut previous = 0;
     for height_2 in 0..2000 {
         let rows_2 = zone_rows(height_2);
-        assert!(rows_2 >= anterior, "caja de {height_2} u");
-        assert!(rows_2 - anterior <= 1, "caja de {height_2} u");
-        anterior = rows_2;
+        assert!(rows_2 >= previous, "caja de {height_2} u");
+        assert!(rows_2 - previous <= 1, "caja de {height_2} u");
+        previous = rows_2;
     }
 }
 
@@ -841,9 +845,9 @@ fn row_8_with_the_content_shrunk_the_scroll_is_clipped_and_what_was_written_is_k
     );
     let l = dialog_layout(min_px, n, height_without_hex, false, true);
     assert_eq!(l.max_scroll_u, (height_without_hex - 252).max(0));
-    let antes = dialog.scroll_u();
-    dialog.set_scroll_u(antes.clamp(0, l.max_scroll_u));
-    assert_eq!(dialog.scroll_u(), antes.min(l.max_scroll_u));
+    let before = dialog.scroll_u();
+    dialog.set_scroll_u(before.clamp(0, l.max_scroll_u));
+    assert_eq!(dialog.scroll_u(), before.min(l.max_scroll_u));
     assert!((0..=l.max_scroll_u).contains(&dialog.scroll_u()));
 
     // Al mostrarlo otra vez conserva lo escrito (el pendiente).
@@ -882,86 +886,82 @@ fn row_8_licenses_with_fill_takes_its_natural_content_and_at_the_minimum_gives_1
 // Fila 8: ensure_visible
 // ---------------------------------------------------------------------------------------------
 
-const VISTA_U: i64 = 252;
+const VIEW_U: i64 = 252;
 
 #[test]
 fn row_8_ensure_visible_an_already_visible_element_moves_nothing() {
-    assert_eq!(ensure_visible(0, 0, 20, VISTA_U), 0);
-    assert_eq!(ensure_visible(10, 20, 40, VISTA_U), 10);
-    assert_eq!(ensure_visible(100, 100, 120, VISTA_U), 100);
-    assert_eq!(ensure_visible(100, 332, 352, VISTA_U), 100);
+    assert_eq!(ensure_visible(0, 0, 20, VIEW_U), 0);
+    assert_eq!(ensure_visible(10, 20, 40, VIEW_U), 10);
+    assert_eq!(ensure_visible(100, 100, 120, VIEW_U), 100);
+    assert_eq!(ensure_visible(100, 332, 352, VIEW_U), 100);
     // Justo en el borde inferior: el último `u` de la vista.
-    assert_eq!(ensure_visible(100, 332, 352, VISTA_U), 100);
-    assert_eq!(ensure_visible(0, 232, 252, VISTA_U), 0);
+    assert_eq!(ensure_visible(100, 332, 352, VIEW_U), 100);
+    assert_eq!(ensure_visible(0, 232, 252, VIEW_U), 0);
 }
 
 #[test]
 fn row_8_ensure_visible_from_above_raises_just_enough_to_the_edge_of_the_element() {
-    assert_eq!(ensure_visible(100, 50, 70, VISTA_U), 50);
-    assert_eq!(ensure_visible(500, 0, 20, VISTA_U), 0);
-    assert_eq!(ensure_visible(1000, 999, 1019, VISTA_U), 999);
+    assert_eq!(ensure_visible(100, 50, 70, VIEW_U), 50);
+    assert_eq!(ensure_visible(500, 0, 20, VIEW_U), 0);
+    assert_eq!(ensure_visible(1000, 999, 1019, VIEW_U), 999);
     // Un solo `u` por encima.
-    assert_eq!(ensure_visible(100, 99, 119, VISTA_U), 99);
+    assert_eq!(ensure_visible(100, 99, 119, VIEW_U), 99);
 }
 
 #[test]
 fn row_8_ensure_visible_from_below_lowers_just_enough_to_the_foot_of_the_element() {
-    assert_eq!(ensure_visible(0, 300, 320, VISTA_U), 320 - VISTA_U);
-    assert_eq!(ensure_visible(100, 400, 440, VISTA_U), 440 - VISTA_U);
+    assert_eq!(ensure_visible(0, 300, 320, VIEW_U), 320 - VIEW_U);
+    assert_eq!(ensure_visible(100, 400, 440, VIEW_U), 440 - VIEW_U);
     // Un solo `u` por debajo.
-    assert_eq!(ensure_visible(0, 233, 253, VISTA_U), 1);
+    assert_eq!(ensure_visible(0, 233, 253, VIEW_U), 1);
 }
 
 #[test]
 fn row_8_ensure_visible_half_way_leaves_the_whole_element() {
     // Cortado por arriba.
-    assert_eq!(ensure_visible(100, 90, 130, VISTA_U), 90);
+    assert_eq!(ensure_visible(100, 90, 130, VIEW_U), 90);
     // Cortado por abajo.
-    assert_eq!(ensure_visible(0, 240, 260, VISTA_U), 8);
-    assert_eq!(ensure_visible(100, 340, 380, VISTA_U), 380 - VISTA_U);
+    assert_eq!(ensure_visible(0, 240, 260, VIEW_U), 8);
+    assert_eq!(ensure_visible(100, 340, 380, VIEW_U), 380 - VIEW_U);
 }
 
 #[test]
 fn row_8_ensure_visible_with_an_element_taller_than_the_view_puts_its_top_edge_on_top() {
     for scroll in [0, 50, 100, 300, 5000] {
         assert_eq!(
-            ensure_visible(scroll, 100, 500, VISTA_U),
+            ensure_visible(scroll, 100, 500, VIEW_U),
             100,
             "scroll {scroll}"
         );
     }
     // Un `u` más alto que la vista.
-    assert_eq!(ensure_visible(0, 50, 50 + VISTA_U + 1, VISTA_U), 50);
+    assert_eq!(ensure_visible(0, 50, 50 + VIEW_U + 1, VIEW_U), 50);
     // Del alto exacto de la vista cabe: el borde superior arriba (o lo justo).
-    assert_eq!(ensure_visible(0, 100, 100 + VISTA_U, VISTA_U), 100);
-    assert_eq!(ensure_visible(500, 100, 100 + VISTA_U, VISTA_U), 100);
+    assert_eq!(ensure_visible(0, 100, 100 + VIEW_U, VIEW_U), 100);
+    assert_eq!(ensure_visible(500, 100, 100 + VIEW_U, VIEW_U), 100);
 }
 
 #[test]
 fn row_8_ensure_visible_with_the_content_shrunk_after_clipping_stays_inside_zero_to_max() {
     // El contenido pasa de 5000 u a 300 u con el desplazamiento en 500: el llamador lo recorta al
     // nuevo máximo (300 − 252 = 48) y después pide la vista del elemento enfocado.
-    let max = 300 - VISTA_U;
+    let max = 300 - VIEW_U;
     let clipped = 500i64.clamp(0, max);
     assert_eq!(clipped, 48);
     // El último elemento (280..300) ya se ve desde 48.
-    assert_eq!(ensure_visible(clipped, 280, 300, VISTA_U), 48);
+    assert_eq!(ensure_visible(clipped, 280, 300, VIEW_U), 48);
     // Uno de arriba (10..30) lleva el desplazamiento al principio.
-    assert_eq!(ensure_visible(clipped, 10, 30, VISTA_U), 10);
+    assert_eq!(ensure_visible(clipped, 10, 30, VIEW_U), 10);
     for (top, bottom) in [(0, 20), (10, 30), (100, 120), (280, 300)] {
-        let r = ensure_visible(clipped, top, bottom, VISTA_U);
+        let r = ensure_visible(clipped, top, bottom, VIEW_U);
         assert!((0..=max).contains(&r), "{top}..{bottom} da {r}");
-        assert!(r <= top && bottom <= r + VISTA_U, "{top}..{bottom} da {r}");
+        assert!(r <= top && bottom <= r + VIEW_U, "{top}..{bottom} da {r}");
     }
     // El contenido cabe entero (200 u): máximo 0.
-    let max = (200 - VISTA_U).max(0);
+    let max = (200 - VIEW_U).max(0);
     assert_eq!(max, 0);
     for (top, bottom) in [(0, 20), (150, 170), (180, 200)] {
-        assert_eq!(
-            ensure_visible(0, top, bottom, VISTA_U),
-            0,
-            "{top}..{bottom}"
-        );
+        assert_eq!(ensure_visible(0, top, bottom, VIEW_U), 0, "{top}..{bottom}");
     }
 }
 
@@ -1071,19 +1071,19 @@ proptest! {
         let (width_2, height_2) = minimum(ppp);
         let window = (width_2 + extra_width, height_2 + extra_height);
         let l = dialog_layout(window, n, content_u, false, has_cancel);
-        let vista = l.body.height / k;
+        let view = l.body.height / k;
         let max = l.max_scroll_u;
         let scroll = i64::from(seed_scroll) % (max + 1);
         let top = seed_top % (content_u + 1);
         let bottom = (top + height_element).min(content_u);
-        let r = ensure_visible(scroll, top, bottom, vista);
+        let r = ensure_visible(scroll, top, bottom, view);
 
         prop_assert!((0..=max).contains(&r), "resultado {} fuera de 0..={}", r, max);
-        if bottom - top > vista {
+        if bottom - top > view {
             prop_assert_eq!(r, top, "más alto que la vista: arriba");
         } else {
-            prop_assert!(r <= top && bottom <= r + vista, "el elemento no se ve");
-            if scroll <= top && bottom <= scroll + vista {
+            prop_assert!(r <= top && bottom <= r + view, "el elemento no se ve");
+            if scroll <= top && bottom <= scroll + view {
                 prop_assert_eq!(r, scroll, "ya visible: no se mueve");
             }
         }

@@ -33,7 +33,7 @@ mod common;
 #[path = "common/dialog_forms.rs"]
 mod dialog_forms;
 
-use common::{PPPS, button_2, context, frame, key_2, mover, n_de, painted};
+use common::{PPPS, button_2, context, frame, key_2, move_pointer, n_de, painted};
 use dialog_forms::all_kinds;
 
 /// La ventana mínima real de la escala (`468n × 333n` px) o 960 × 720 pt.
@@ -81,7 +81,7 @@ struct Application {
     /// El fotograma (índice en `trace`) en que `show_dialog` pintó el diálogo por primera vez.
     open_in: Option<usize>,
     /// Lo pintado en el último fotograma, para buscar entradas del menú.
-    ultimo: common::Painted,
+    last_2: common::Painted,
     /// Si está, un botón «Abrir formulario» (en una capa bajo el velo) abre este formulario con un
     /// clic: la misma apertura que el menú, para un diálogo con campos.
     form: Option<fn() -> FormSpec>,
@@ -100,7 +100,7 @@ impl Application {
             closes_2: 0,
             trace: Vec::new(),
             open_in: None,
-            ultimo: common::Painted::default(),
+            last_2: common::Painted::default(),
             form: None,
         }
     }
@@ -214,7 +214,7 @@ impl Application {
         }
         self.trace
             .push((self.modal.is_open(), self.ctx.memory(|m| m.focused())));
-        self.ultimo = painted(&shapes_2);
+        self.last_2 = painted(&shapes_2);
     }
 
     fn rest_2_2(&mut self) {
@@ -225,7 +225,7 @@ impl Application {
 
     /// Mueve, pulsa y suelta en `pos`: tres fotogramas, como los entrega winit.
     fn click(&mut self, pos: Pos2) {
-        self.frame(vec![mover(pos)]);
+        self.frame(vec![move_pointer(pos)]);
         self.frame(vec![button_2(pos, true)]);
         self.frame(vec![button_2(pos, false)]);
     }
@@ -237,12 +237,12 @@ impl Application {
 
     /// El centro del texto pintado `searched` en el último fotograma.
     fn center_of(&self, searched: &str) -> Pos2 {
-        self.ultimo
+        self.last_2
             .text_with(searched)
             .unwrap_or_else(|| {
                 panic!(
                     "no se pinta {searched:?}; hay {:?}",
-                    self.ultimo.all_the_texts()
+                    self.last_2.all_the_texts()
                 )
             })
             .rect()

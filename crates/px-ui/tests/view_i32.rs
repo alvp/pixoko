@@ -15,7 +15,7 @@ fn zoom(n: u32) -> Zoom {
 /// Zoom ×4 con origen (10, 10): se parte de un viewport del tamaño de la imagen (zoom 1 y
 /// origen (0, 0)), se sube a ×4 con el ancla en el origen y se desplaza 10 en cada eje (a 90
 /// píxeles visibles, más que `MIN_VISIBLE`, así que `pan` no acota nada).
-fn vista_x4_en_10_10() -> (View, Size) {
+fn view_x_4_in_10_10() -> (View, Size) {
     let tam = Size::new(100, 100);
     let mut v = View::fit(tam, tam);
     v.set_zoom(zoom(4), (0, 0));
@@ -27,7 +27,7 @@ fn vista_x4_en_10_10() -> (View, Size) {
 
 #[test]
 fn row_13_zoom_x4_with_origin_10_10() {
-    let (v, _) = vista_x4_en_10_10();
+    let (v, _) = view_x_4_in_10_10();
     assert_eq!(v.screen_to_image_i32((10, 10)), (0, 0));
     assert_eq!(v.screen_to_image_i32((9, 9)), (-1, -1));
     assert_eq!(
@@ -38,7 +38,7 @@ fn row_13_zoom_x4_with_origin_10_10() {
 
 #[test]
 fn the_four_pixel_blocks_and_the_signs_of_each_axis_are_independent() {
-    let (v, _) = vista_x4_en_10_10();
+    let (v, _) = view_x_4_in_10_10();
     // Dentro del primer bloque y en el siguiente.
     assert_eq!(v.screen_to_image_i32((13, 13)), (0, 0));
     assert_eq!(v.screen_to_image_i32((14, 14)), (1, 1));
@@ -59,7 +59,7 @@ fn the_four_pixel_blocks_and_the_signs_of_each_axis_are_independent() {
 
 #[test]
 fn inside_the_image_matches_screen_to_image() {
-    let (v, img) = vista_x4_en_10_10();
+    let (v, img) = view_x_4_in_10_10();
     for p in [(10, 10), (13, 25), (50, 60), (409, 409)] {
         // El bloque (99, 99) llega hasta 10 + 400 - 1 = 409.
         let (x, y) = v.screen_to_image(p, img).expect("dentro de la imagen");

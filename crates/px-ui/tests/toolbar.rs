@@ -38,7 +38,8 @@ use common::icons::IconsOfTest;
 use common::toolbox::center_u;
 use common::zones::toolbox_single;
 use common::{
-    PPPS, Painted, button_2, context, frame, in_points, mover, n_de, painted, tolerance_of_egui,
+    PPPS, Painted, button_2, context, frame, in_points, move_pointer, n_de, painted,
+    tolerance_of_egui,
 };
 
 const TEST_TOOLS: [Tool; 5] = [
@@ -109,13 +110,13 @@ impl Bench {
     fn frame(&self, events: Vec<Event>) -> (Painted, Option<AppAction>) {
         let mut action_2 = None;
         let shapes_2 = frame(&self.ctx, TEST_SCREEN, events, |ui| {
-            let vista = ToolboxView {
+            let view = ToolboxView {
                 state: &self.state_2,
                 zoom_label: self.label_2,
                 options: &OptionsState::default(),
                 icons: &self.icons_2.set,
             };
-            action_2 = show_toolbox(ui, &vista, default_keymap(), Platform::Linux).action;
+            action_2 = show_toolbox(ui, &view, default_keymap(), Platform::Linux).action;
         });
         (painted(&shapes_2), action_2)
     }
@@ -132,14 +133,14 @@ impl Bench {
         let pos = in_points(self.ppp, x_px, y_px);
         let mut actions = Vec::new();
         for events in [
-            vec![mover(pos)],
+            vec![move_pointer(pos)],
             vec![button_2(pos, true)],
             vec![button_2(pos, false)],
         ] {
             actions.extend(self.frame(events).1);
         }
         // Aparta el puntero para no dejar nada pulsado ni bajo el cursor.
-        self.frame(vec![mover(in_points(self.ppp, 3000, 3000))]);
+        self.frame(vec![move_pointer(in_points(self.ppp, 3000, 3000))]);
         actions
     }
 
@@ -180,12 +181,12 @@ fn letter_of(action: AppAction) -> Option<char> {
 
 #[test]
 fn tool_buttons_are_the_five_buttons_with_their_letter() {
-    let tabla: Vec<(&str, AppAction, Option<char>)> = TOOL_BUTTONS
+    let table: Vec<(&str, AppAction, Option<char>)> = TOOL_BUTTONS
         .iter()
         .map(|b| (b.label, b.action, letter_of(b.action)))
         .collect();
     assert_eq!(
-        tabla,
+        table,
         [
             ("Lápiz", AppAction::SelectTool(Tool::Pencil), Some('d')),
             ("Línea", AppAction::SelectTool(Tool::Line), Some('v')),
@@ -202,9 +203,9 @@ fn tool_buttons_are_the_five_buttons_with_their_letter() {
 
 #[test]
 fn zoom_buttons_are_the_four_buttons_without_a_letter() {
-    let tabla: Vec<(&str, AppAction)> = ZOOM_BUTTONS.iter().map(|b| (b.label, b.action)).collect();
+    let table: Vec<(&str, AppAction)> = ZOOM_BUTTONS.iter().map(|b| (b.label, b.action)).collect();
     assert_eq!(
-        tabla,
+        table,
         [
             ("Acercar", AppAction::ZoomIn),
             ("Alejar", AppAction::ZoomOut),
@@ -658,13 +659,13 @@ mod toolbox_right {
             };
             let mut output_2 = None;
             let mut outside = self.ctx.run_ui(input_2, |ui| {
-                let vista = ToolboxView {
+                let view = ToolboxView {
                     state: &self.state_2,
                     zoom_label: "×5",
                     options: &self.options_2,
                     icons: &self.icons_2.set,
                 };
-                output_2 = Some(show_toolbox(ui, &vista, &self.keymap, LINUX));
+                output_2 = Some(show_toolbox(ui, &view, &self.keymap, LINUX));
             });
             outside.textures_delta.clear();
             let shapes_2 = std::mem::take(&mut outside.shapes);
@@ -683,13 +684,13 @@ mod toolbox_right {
             let pos = in_points(self.ppp, x, y);
             let mut outputs = Vec::new();
             for events in [
-                vec![mover(pos)],
+                vec![move_pointer(pos)],
                 vec![button_of_2(pos, button_2, true)],
                 vec![button_of_2(pos, button_2, false)],
             ] {
                 outputs.push(self.frame(events).1);
             }
-            self.frame(vec![mover(in_points(self.ppp, 3000, 3000))]);
+            self.frame(vec![move_pointer(in_points(self.ppp, 3000, 3000))]);
             outputs
         }
 
@@ -925,7 +926,7 @@ mod toolbox_right {
                 (OPTIONS_BODY_Y_U + 10) * n,
             );
             toolbox_2.rest_2_2();
-            toolbox_2.frame(vec![mover(in_points(ppp, body.0, body.1))]);
+            toolbox_2.frame(vec![move_pointer(in_points(ppp, body.0, body.1))]);
             let (_, output_2) = toolbox_2.frame(vec![wheel_line(false)]);
             assert_eq!(
                 output_2.options_scroll_rows, 3,
@@ -933,7 +934,7 @@ mod toolbox_right {
             );
             assert_eq!(output_2.action, None);
             let (x, y) = toolbox_2.center_of_tool(0);
-            toolbox_2.frame(vec![mover(in_points(ppp, x, y))]);
+            toolbox_2.frame(vec![move_pointer(in_points(ppp, x, y))]);
             let (_, output_2) = toolbox_2.frame(vec![wheel_line(false)]);
             assert_eq!(
                 output_2.options_scroll_rows, 0,
@@ -1308,24 +1309,24 @@ mod toolbox_right {
                 let first = text_2.lines().next().expect("hay una línea").to_string();
                 let without_hover = toolbox_2.rest_2_2();
                 let count = |p: &Painted, t: &str| p.texts.iter().filter(|x| x.text_2 == t).count();
-                let antes = count(&without_hover, &first);
+                let before = count(&without_hover, &first);
                 let (x, y) = if i < 5 {
                     toolbox_2.center_of_tool(i as i64)
                 } else {
                     toolbox_2.center_of_zoom(i as i64 - 5)
                 };
                 let pos = in_points(ppp, x, y);
-                let mut ultimo = toolbox_2.frame(vec![mover(pos)]).0;
+                let mut last_2 = toolbox_2.frame(vec![move_pointer(pos)]).0;
                 for _ in 0..8 {
-                    ultimo = toolbox_2.frame(vec![]).0;
+                    last_2 = toolbox_2.frame(vec![]).0;
                 }
                 assert_eq!(
-                    count(&ultimo, &first),
-                    antes + 1,
+                    count(&last_2, &first),
+                    before + 1,
                     "ppp {ppp}: {label}: falta el tooltip {first:?}; hay {:?}",
-                    ultimo.all_the_texts()
+                    last_2.all_the_texts()
                 );
-                let line_2 = ultimo
+                let line_2 = last_2
                     .texts
                     .iter()
                     .rfind(|t| t.text_2 == first)
@@ -1337,14 +1338,14 @@ mod toolbox_right {
                 );
                 if let Some(second) = text_2.lines().nth(1) {
                     assert!(
-                        ultimo.paints(second),
+                        last_2.paints(second),
                         "ppp {ppp}: {label}: falta {second:?}"
                     );
                 }
                 // Sin el puntero encima, desaparece.
-                toolbox_2.frame(vec![mover(in_points(ppp, 3000, 3000))]);
+                toolbox_2.frame(vec![move_pointer(in_points(ppp, 3000, 3000))]);
                 let far = toolbox_2.frame(vec![]).0;
-                assert_eq!(count(&far, &first), antes, "ppp {ppp}: {label}");
+                assert_eq!(count(&far, &first), before, "ppp {ppp}: {label}");
             }
         }
     }
@@ -1357,7 +1358,7 @@ mod toolbox_right {
             state_2(Tool::Pencil, Some(Zoom::MAX), Locks::default()),
         );
         let (x, y) = toolbox_2.center_of_zoom(0); // Acercar, atenuado en ×64.
-        toolbox_2.frame(vec![mover(in_points(ppp, x, y))]);
+        toolbox_2.frame(vec![move_pointer(in_points(ppp, x, y))]);
         let mut p = toolbox_2.frame(vec![]).0;
         for _ in 0..8 {
             p = toolbox_2.frame(vec![]).0;
@@ -1439,9 +1440,9 @@ mod toolbox_right {
         ) {
             let mut e = OptionsState::default();
             let mut tool_2 = Tool::Pencil;
-            let mut antes;
+            let mut before;
             for ev in events_2 {
-                antes = e.focused;
+                before = e.focused;
                 match ev {
                     Ev::RightClickOnTool { allowed } => {
                         // Orden del fotograma: primero la pulsación fuera, luego el foco.
@@ -1464,7 +1465,7 @@ mod toolbox_right {
                         e.blur();
                         prop_assert!(!e.focused);
                     }
-                    Ev::PressInside => prop_assert_eq!(e.focused, antes),
+                    Ev::PressInside => prop_assert_eq!(e.focused, before),
                 }
                 prop_assert!(e.scroll_rows <= options_max_scroll(options_row_count(tool_2)));
             }
@@ -1648,7 +1649,7 @@ mod icons {
             let n = bench.n();
             let (cx, cy) = center_u(2);
             let pos = in_points(ppp, bench.x0() + cx * n, cy * n);
-            bench.frame(vec![mover(pos)]);
+            bench.frame(vec![move_pointer(pos)]);
             let p = bench.frame(vec![]).0;
             checks(
                 &p,
@@ -1660,7 +1661,7 @@ mod icons {
             assert_eq!(look(false, true, true).face, SURFACE_3);
             // Atenuado: con el ratón encima sigue con la cara normal.
             let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), lock(|l| l.gesture = true)));
-            bench.frame(vec![mover(pos)]);
+            bench.frame(vec![move_pointer(pos)]);
             let p = bench.frame(vec![]).0;
             checks(
                 &p,
@@ -1680,13 +1681,13 @@ mod icons {
             ..RawInput::default()
         };
         let mut output_2 = bench.ctx.run_ui(input_2, |ui| {
-            let vista = ToolboxView {
+            let view = ToolboxView {
                 state: &bench.state_2,
                 zoom_label: bench.label_2,
                 options: &OptionsState::default(),
                 icons: &bench.icons_2.set,
             };
-            show_toolbox(ui, &vista, default_keymap(), Platform::Linux);
+            show_toolbox(ui, &view, default_keymap(), Platform::Linux);
         });
         output_2.textures_delta.clear();
         output_2.platform_output.events.clone()
@@ -1701,7 +1702,7 @@ mod icons {
                 let n = bench.n();
                 let (cx, cy) = center_u(i);
                 let pos = in_points(ppp, bench.x0() + cx * n, cy * n);
-                let mut all_2 = events_2(&bench, vec![mover(pos)]);
+                let mut all_2 = events_2(&bench, vec![move_pointer(pos)]);
                 all_2.extend(events_2(&bench, vec![button_2(pos, true)]));
                 all_2.extend(events_2(&bench, vec![button_2(pos, false)]));
                 assert!(
@@ -1712,7 +1713,7 @@ mod icons {
                     "ppp {ppp}: {}: sin WidgetInfo de botón; hay {all_2:?}",
                     button.label
                 );
-                bench.frame(vec![mover(in_points(ppp, 3000, 3000))]);
+                bench.frame(vec![move_pointer(in_points(ppp, 3000, 3000))]);
             }
         }
     }

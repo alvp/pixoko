@@ -17,7 +17,7 @@ fn folder() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/icons")
 }
 
-fn leer(icon: Icon) -> Vec<u8> {
+fn read_2_2(icon: Icon) -> Vec<u8> {
     let path_2 = folder().join(format!("{}.png", icon.file_stem()));
     std::fs::read(&path_2).unwrap_or_else(|e| panic!("{}: {e}", path_2.display()))
 }
@@ -33,14 +33,14 @@ fn rgba_de(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
 fn row_1_the_14_pngs_are_16x16_with_alpha_0_or_255_white_neither_empty_nor_full_and_different() {
     let mut seen: HashSet<Vec<bool>> = HashSet::new();
     for icon in Icon::ALL {
-        let bytes = leer(icon);
+        let bytes = read_2_2(icon);
         let name_2 = icon.file_stem();
         // Lo incrustado es lo que hay en el disco.
         assert_eq!(embedded(icon), bytes.as_slice(), "{name_2}: include_bytes");
         let (w, h, rgba) = rgba_de(&bytes);
         assert_eq!((w, h), (16, 16), "{name_2}");
         let mut opaque = 0;
-        let mut mascara = Vec::new();
+        let mut mask = Vec::new();
         for px in rgba.as_chunks::<4>().0 {
             assert!(px[3] == 0 || px[3] == 255, "{name_2}: alfa {}", px[3]);
             if px[3] == 255 {
@@ -51,13 +51,13 @@ fn row_1_the_14_pngs_are_16x16_with_alpha_0_or_255_white_neither_empty_nor_full_
                 );
                 opaque += 1;
             }
-            mascara.push(px[3] == 255);
+            mask.push(px[3] == 255);
         }
         assert!(
             (1..256).contains(&opaque),
             "{name_2}: ni vacío ni lleno ({opaque} píxeles opacos)"
         );
-        assert!(seen.insert(mascara), "{name_2}: es igual que otro icono");
+        assert!(seen.insert(mask), "{name_2}: es igual que otro icono");
     }
     assert_eq!(seen.len(), 21);
 }
@@ -216,7 +216,7 @@ fn row_2_a_corrupt_png_or_of_another_size_gives_a_clear_error_and_not_a_panic() 
 /// El mismo dibujo que `icon`, guardado como lo haría Pixoko en modo indexado: dos entradas, la 0
 /// transparente y la 1 de `ink`, con la 0 marcada como transparente.
 fn in_indexed(icon: Icon, ink: Rgba) -> Vec<u8> {
-    let (_, _, rgba) = rgba_de(&leer(icon));
+    let (_, _, rgba) = rgba_de(&read_2_2(icon));
     let mut palette =
         Palette::from_colors([Rgba::new(0, 0, 0, 0), ink]).expect("paleta de dos entradas");
     palette
@@ -234,7 +234,7 @@ fn in_indexed(icon: Icon, ink: Rgba) -> Vec<u8> {
 
 #[test]
 fn row_2_a_retouched_icon_saved_as_indexed_loads_and_tints_the_same() {
-    let reference = decode("lapiz", &leer(Icon::Pencil)).expect("RGBA");
+    let reference = decode("lapiz", &read_2_2(Icon::Pencil)).expect("RGBA");
     for ink in [
         Rgba::opaque(255, 255, 255),
         Rgba::opaque(0, 0, 0),

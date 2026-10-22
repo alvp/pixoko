@@ -70,7 +70,7 @@ impl Scenario {
     }
 
     /// El píxel `(x, y)` de la capa `layer_2` (`None`: celda vacía o transparente).
-    fn valor(&self, layer_2: usize, x: usize, y: usize) -> [u8; 4] {
+    fn value(&self, layer_2: usize, x: usize, y: usize) -> [u8; 4] {
         match layer_2 {
             0 => self.v[0],
             1 if y.is_multiple_of(64) => self.v[2],
@@ -86,7 +86,7 @@ impl Scenario {
     fn row(&self, layer_2: usize, y: usize, output: &mut Vec<u8>) {
         output.clear();
         for x in 0..self.side_2 {
-            let c = self.valor(layer_2, x, y);
+            let c = self.value(layer_2, x, y);
             output.extend_from_slice(&c[..self.bpp()]);
         }
     }

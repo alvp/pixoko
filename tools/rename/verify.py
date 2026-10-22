@@ -253,7 +253,9 @@ def check(base, now):
         def mapstr(s):
             for o, n in list(R.ENVS.items()):  # primero las variables de entorno (pueden ir pegadas a otros literales)
                 s = s.replace(o, n)
-            s = re.sub(r"[A-Za-z_]\w*", lambda m: pairs.get(m.group(0), m.group(0)), s)
+            # los identificadores de producción renombrados (L1) no llegan al ejecutable salvo por `derive(Debug)`, y
+            # ninguno de ellos lo lleva; los de pruebas no se compilan en él. Aplicar el mapa a las cadenas
+            # estropearía el texto en español.
             for o, n in _MOVES.items():
                 s = s.replace(o, n)
             return s

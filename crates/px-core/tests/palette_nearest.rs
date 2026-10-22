@@ -32,12 +32,12 @@ fn palette_with_transparent(colors_2: &[Rgba], index: u8) -> Palette {
 /// fórmula, `Σ_c (c_p·a_p − c_q·a_q)² + 255²·(a_p − a_q)²`, en `i128`. No usa el
 /// vector premultiplicado ni comparte nada con la implementación.
 fn distance(p: Rgba, q: Rgba) -> i128 {
-    let canal = |cp: u8, cq: u8| {
+    let channel = |cp: u8, cq: u8| {
         let d = i128::from(cp) * i128::from(p.a) - i128::from(cq) * i128::from(q.a);
         d * d
     };
     let gives = i128::from(p.a) - i128::from(q.a);
-    canal(p.r, q.r) + canal(p.g, q.g) + canal(p.b, q.b) + 255 * 255 * gives * gives
+    channel(p.r, q.r) + channel(p.g, q.g) + channel(p.b, q.b) + 255 * 255 * gives * gives
 }
 
 /// Distancia de `query` a cada entrada de la paleta, por su valor resuelto.
@@ -239,7 +239,7 @@ fn semitransparents_go_to_the_entry_with_similar_alpha() {
 /// Valores por canal que fuerzan empates, duplicados y alfa 0.
 const CHANNELS: [u8; 5] = [0, 1, 127, 128, 255];
 
-fn canal() -> impl Strategy<Value = u8> {
+fn channel() -> impl Strategy<Value = u8> {
     prop_oneof![any::<u8>(), prop::sample::select(CHANNELS.to_vec())]
 }
 
@@ -430,9 +430,9 @@ macro_rules! properties {
                 #[test]
                 fn alpha_zero_goes_to_the_first_transparent(
                     p in palette_arbitrary($tam),
-                    r in canal(),
-                    g in canal(),
-                    b in canal(),
+                    r in channel(),
+                    g in channel(),
+                    b in channel(),
                 ) {
                     prop_alpha_zero(&p, r, g, b)?;
                 }
@@ -450,8 +450,8 @@ macro_rules! properties {
                 fn rgb_transparent_not_count(
                     p in palette_arbitrary($tam),
                     queries in prop::collection::vec(color(), 1..=4),
-                    rgb in (canal(), canal(), canal()),
-                    other_rgb in (canal(), canal(), canal()),
+                    rgb in (channel(), channel(), channel()),
+                    other_rgb in (channel(), channel(), channel()),
                 ) {
                     prop_transparent_rgb_does_not_count(&p, &queries, rgb, other_rgb)?;
                 }

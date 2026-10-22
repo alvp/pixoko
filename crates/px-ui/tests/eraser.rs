@@ -369,7 +369,7 @@ fn row_4a_an_already_transparent_zone_changes_nothing_or_creates_a_step() {
         .expect("dentro");
     let copy = image.clone();
     let mut es = Scene::new(image);
-    let antes = es.history();
+    let before = es.history();
     let state_id = es.doc.state_id();
 
     assert!(!es.ev(begin(2, 2)));
@@ -386,7 +386,7 @@ fn row_4a_an_already_transparent_zone_changes_nothing_or_creates_a_step() {
         Ok(Pixel::Rgba(rgba(255, 0, 0, 0))),
         "el RGB oculto sigue siendo 255, 0, 0"
     );
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert_eq!(es.doc.state_id(), state_id);
     assert!(!es.doc.can_undo());
 }
@@ -467,13 +467,13 @@ fn row_4b_after_an_undo_the_eraser_without_effect_does_not_clear_the_redo() {
     assert_eq!(es.doc.undo(), Ok(()));
     assert!(es.doc.can_redo());
     assert_eq!(es.image_2(), &copy);
-    let antes = es.history();
+    let before = es.history();
 
     es.ev(begin(2, 2));
     es.ev(mov(4, 2));
     assert!(!es.ev(fin()));
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert!(es.doc.can_redo(), "el rehacer sigue disponible");
 }
 
@@ -481,7 +481,7 @@ fn row_4b_after_an_undo_the_eraser_without_effect_does_not_clear_the_redo() {
 fn row_4_c(image: Image, error: EraseError) {
     let copy = image.clone();
     let mut es = Scene::new(image);
-    let antes = es.history();
+    let before = es.history();
     let state_id = es.doc.state_id();
     assert_eq!(eraser_pixel(&copy), Err(error));
 
@@ -503,7 +503,7 @@ fn row_4_c(image: Image, error: EraseError) {
     assert!(!es.tool.busy());
     assert_eq!(es.tool.take_events(), vec![], "ni en el End");
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert_eq!(es.doc.state_id(), state_id);
 }
 
@@ -773,7 +773,7 @@ fn row_15b_with_transparent_index_3_it_erases_to_3_and_skips_alpha_0_and_the_3_i
 fn row_15c_a_stroke_only_over_alpha_0_changes_nothing_creates_no_step_and_does_not_warn() {
     let copy = image_row_15(None);
     let mut es = Scene::new(copy.clone());
-    let antes = es.history();
+    let before = es.history();
     let state_id = es.doc.state_id();
 
     assert!(!es.ev(begin(1, 0)));
@@ -797,7 +797,7 @@ fn row_15c_a_stroke_only_over_alpha_0_changes_nothing_creates_no_step_and_does_n
     assert!(!es.ev(fin()), "Ok(false)");
     assert!(!es.tool.busy());
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert_eq!(es.doc.state_id(), state_id);
     assert!(!es.doc.can_undo());
     assert_eq!(es.tool.take_events(), vec![], "sin Refused");
@@ -807,14 +807,14 @@ fn row_15c_a_stroke_only_over_alpha_0_changes_nothing_creates_no_step_and_does_n
 fn row_15c_with_transparent_index_the_alpha_0_ones_are_also_skipped_without_warning() {
     let copy = image_row_15(Some(3));
     let mut es = Scene::new(copy.clone());
-    let antes = es.history();
+    let before = es.history();
     // (1,0) entrada 2, (2,0) entrada 4 y (4,0) `Indexed(3)`: los tres ya son transparentes.
     for (a, b) in [((1, 0), (2, 0)), ((4, 0), (4, 0))] {
         es.ev(begin(a.0, a.1));
         es.ev(mov(b.0, b.1));
         assert!(!es.ev(fin()), "{a:?}-{b:?}");
         assert_eq!(es.image_2(), &copy);
-        assert_eq!(es.history(), antes);
+        assert_eq!(es.history(), before);
         assert_eq!(es.tool.take_events(), vec![]);
     }
 }
@@ -824,13 +824,13 @@ fn row_15d_with_a_previous_undo_the_stroke_without_effect_does_not_clear_the_red
     let mut es = Scene::new(image_row_15(None));
     with_a_previous_undo(&mut es);
     let copy = es.image_2().clone();
-    let antes = es.history();
+    let before = es.history();
 
     es.ev(begin(1, 0));
     es.ev(mov(2, 0));
     assert!(!es.ev(fin()), "Ok(false)");
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert!(es.doc.can_redo(), "el rehacer sigue disponible");
     assert_eq!(es.tool.take_events(), vec![], "sin Refused");
 }
@@ -870,17 +870,17 @@ fn row_15_the_value_is_recomputed_on_each_press() {
 // valor resuelto con alfa 0 (`pixel_rgba`), no el índice; el valor de borrado se calcula aparte de
 // `eraser_pixel`, con las entradas guardadas.
 
-/// Paleta de seis entradas: las de `mascara` (bit `i` para la entrada `i`) con alfa guardado 0 y
+/// Paleta de seis entradas: las de `mask` (bit `i` para la entrada `i`) con alfa guardado 0 y
 /// el resto opacas; `transparent` fijado o no. Sin `transparent`, como mínimo la entrada `k`
 /// lleva alfa 0 (se fuerza).
-fn palette_varied(transparent: Option<u8>, mascara: u8, k: u8) -> Palette {
-    let mascara = if transparent.is_none() {
-        mascara | (1 << k)
+fn palette_varied(transparent: Option<u8>, mask: u8, k: u8) -> Palette {
+    let mask = if transparent.is_none() {
+        mask | (1 << k)
     } else {
-        mascara
+        mask
     };
     let mut palette = Palette::from_colors((0..6u8).map(|i| {
-        let alpha = if mascara & (1 << i) != 0 { 0 } else { 255 };
+        let alpha = if mask & (1 << i) != 0 { 0 } else { 255 };
         rgba(10 * i, 20, 30, alpha)
     }))
     .expect("paleta válida");
@@ -902,7 +902,7 @@ fn palette_indexed() -> impl Strategy<Value = Palette> {
         ],
         0u8..6,
     )
-        .prop_map(|(transparent, mascara, k)| palette_varied(transparent, mascara, k))
+        .prop_map(|(transparent, mask, k)| palette_varied(transparent, mask, k))
 }
 
 /// Imagen de 1 a 16 de lado en uno de los tres modos con borrado, con fondo variado; en indexada,
@@ -1003,9 +1003,9 @@ fn checks_property_1(
         prop_assert!(!eraser.ev(event), "{:?} no cambia el documento", event);
         prop_assert!(!pencil.ev(event));
         // Mismas posiciones que el lápiz con `eraser_pixel`, todas con el valor de borrado.
-        let vista = eraser.preview();
-        prop_assert_eq!(&vista, &pencil.preview(), "{:?}", event);
-        for editing in &vista {
+        let view = eraser.preview();
+        prop_assert_eq!(&view, &pencil.preview(), "{:?}", event);
+        for editing in &view {
             prop_assert_eq!(editing.pixel, deleted);
         }
         // El documento no cambia antes del `End`.

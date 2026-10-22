@@ -342,14 +342,14 @@ fn row_8_a_whole_line_outside_gives_no_step_and_does_not_clear_the_redo() {
     assert!(line_of_row_5(&mut es));
     assert_eq!(es.doc.undo(), Ok(()));
     assert!(es.doc.can_redo());
-    let antes = es.history();
+    let before = es.history();
 
     assert!(!es.ev(begin(-5, -5)));
     assert!(!es.ev(mov(-1, -1)));
     assert_eq!(es.preview(), vec![], "nada dentro del lienzo que mostrar");
     assert!(!es.ev(fin()), "Ok(false): fuera del lienzo");
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert!(es.doc.can_redo(), "el rehacer sigue disponible");
     assert!(!es.doc.can_undo());
 }
@@ -359,11 +359,11 @@ fn row_8_repeating_the_line_over_already_red_pixels_gives_no_step() {
     let mut es = Scene::rgba_8x8(Tool::Line);
     assert!(line_of_row_5(&mut es));
     let edited = es.image_2().clone();
-    let antes = es.history();
+    let before = es.history();
 
     assert!(!line_of_row_5(&mut es), "Ok(false): sin cambios");
     assert_eq!(es.image_2(), &edited);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     // Solo hay un paso: un `undo` lo deja todo como al principio.
     assert_eq!(es.doc.undo(), Ok(()));
     assert!(!es.doc.can_undo());
@@ -391,7 +391,7 @@ fn the_line_uses_the_color_of_the_slot_of_the_begin() {
 fn row_9_cancel_discards_the_line_and_the_gesture_stays_busy_until_released() {
     let mut es = Scene::rgba_8x8(Tool::Line);
     let copy = es.image_2().clone();
-    let antes = es.history();
+    let before = es.history();
     assert!(!es.ev(begin(1, 1)));
     assert!(!es.ev(mov(5, 1)));
     es.tool.apply_action(ToolAction::Cancel);
@@ -402,7 +402,7 @@ fn row_9_cancel_discards_the_line_and_the_gesture_stays_busy_until_released() {
     assert!(!es.ev(fin()));
     assert!(!es.tool.busy());
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
 }
 
 #[test]
@@ -410,13 +410,13 @@ fn row_9_cancelling_at_rest_does_nothing() {
     for tool_2 in TEST_TOOLS {
         let mut es = Scene::rgba_8x8(tool_2);
         let copy = es.image_2().clone();
-        let antes = es.history();
+        let before = es.history();
         es.tool.apply_action(ToolAction::Cancel);
         assert_eq!(es.tool.tool(), tool_2);
         assert!(!es.tool.busy());
         assert_eq!(es.preview(), vec![]);
         assert_eq!(es.image_2(), &copy);
-        assert_eq!(es.history(), antes);
+        assert_eq!(es.history(), before);
     }
 }
 
@@ -477,7 +477,7 @@ fn row_10_a_slot_without_color_leaves_the_gesture_busy_but_changes_nothing() {
         let mut es = Scene::new(indexed_image_8x8(), tool_2, 5);
         assert_eq!(pixel_for_slot(es.image_2(), 5), None);
         let copy = es.image_2().clone();
-        let antes = es.history();
+        let before = es.history();
 
         assert!(!es.ev(begin(2, 2)), "{tool_2:?}");
         assert!(es.tool.busy(), "{tool_2:?}: ocupado entre Begin y End");
@@ -491,7 +491,7 @@ fn row_10_a_slot_without_color_leaves_the_gesture_busy_but_changes_nothing() {
         assert!(!es.tool.busy(), "{tool_2:?}: no queda bloqueado");
 
         assert_eq!(es.image_2(), &copy);
-        assert_eq!(es.history(), antes);
+        assert_eq!(es.history(), before);
         es.tool.apply_action(ToolAction::Select(Tool::Fill));
         assert_eq!(es.tool.tool(), Tool::Fill, "{tool_2:?}: ya se puede");
     }
@@ -534,13 +534,13 @@ fn row_12_seeds_outside_the_canvas_do_nothing() {
     for (x, y) in [(-1, 0), (8, 0), (0, 8), (0, -1), (MIN, MAX)] {
         let mut es = Scene::rgba_8x8(Tool::Fill);
         let copy = es.image_2().clone();
-        let antes = es.history();
+        let before = es.history();
         assert!(!es.ev(begin(x, y)), "semilla ({x}, {y})");
         assert!(es.tool.busy());
         assert!(!es.ev(fin()));
         assert!(!es.tool.busy());
         assert_eq!(es.image_2(), &copy);
-        assert_eq!(es.history(), antes);
+        assert_eq!(es.history(), before);
     }
 }
 
@@ -550,12 +550,12 @@ fn row_12_a_seed_already_red_gives_no_step() {
     assert!(es.ev(begin(3, 3)));
     assert!(!es.ev(fin()));
     let fills = es.image_2().clone();
-    let antes = es.history();
+    let before = es.history();
 
     assert!(!es.ev(begin(3, 3)), "segundo clic igual: Ok(false)");
     assert!(!es.ev(fin()));
     assert_eq!(es.image_2(), &fills);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
 }
 
 #[test]
@@ -569,13 +569,13 @@ fn row_12_a_seed_already_red_after_an_undo_does_not_clear_the_redo() {
     assert_eq!(es.doc.undo(), Ok(()));
     assert!(es.doc.can_redo());
     assert_eq!(es.image_2(), &image_2);
-    let antes = es.history();
+    let before = es.history();
 
     es.slot = 3;
     assert!(!es.ev(begin(0, 0)), "la semilla ya vale el color activo");
     assert!(!es.ev(fin()));
     assert_eq!(es.image_2(), &image_2);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
     assert!(es.doc.can_redo(), "el rehacer sigue disponible");
 }
 
@@ -644,7 +644,7 @@ fn canvas_input_with_stroke_events_is_equivalent_to_canvas_event() {
 fn row_18_escape_before_the_release_cancels_the_line() {
     let mut es = Scene::rgba_8x8(Tool::Line);
     let copy = es.image_2().clone();
-    let antes = es.history();
+    let before = es.history();
     assert!(!es.ev(begin(1, 1)));
     assert!(!es.ev(mov(5, 1)));
     assert!(!es.escape(), "Escape: Ok(false)");
@@ -655,7 +655,7 @@ fn row_18_escape_before_the_release_cancels_the_line() {
     assert!(!es.ev(fin()));
     assert!(!es.tool.busy());
     assert_eq!(es.image_2(), &copy);
-    assert_eq!(es.history(), antes);
+    assert_eq!(es.history(), before);
 }
 
 // Fila 19.
@@ -689,12 +689,12 @@ fn escape_at_rest_with_any_tool_does_nothing() {
     for tool_2 in TEST_TOOLS {
         let mut es = Scene::rgba_8x8(tool_2);
         let copy = es.image_2().clone();
-        let antes = es.history();
+        let before = es.history();
         assert!(!es.escape());
         assert!(!es.tool.busy());
         assert_eq!(es.tool.tool(), tool_2);
         assert_eq!(es.image_2(), &copy);
-        assert_eq!(es.history(), antes);
+        assert_eq!(es.history(), before);
     }
 }
 
@@ -702,7 +702,7 @@ fn escape_at_rest_with_any_tool_does_nothing() {
 
 /// Recorrido ingenuo pixel a pixel con cola: 4 vecinos y valor exacto (`get_pixel`).
 fn region_naive(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
-    let valor = img.get_pixel(sx, sy).unwrap();
+    let value = img.get_pixel(sx, sy).unwrap();
     let mut region = BTreeSet::new();
     let mut queue = VecDeque::new();
     region.insert((sx, sy));
@@ -713,7 +713,7 @@ fn region_naive(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
             let (Ok(nx), Ok(ny)) = (u32::try_from(nx), u32::try_from(ny)) else {
                 continue;
             };
-            if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(valor) {
+            if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(value) {
                 region.insert((nx, ny));
                 queue.push_back((nx, ny));
             }
@@ -931,16 +931,16 @@ fn checks_view_preview(
     expected_2: &[PixelEdit],
     pixel: Pixel,
 ) -> Result<(), TestCaseError> {
-    let vista = es.preview();
-    prop_assert_eq!(vista.len(), expected_2.len(), "sin repetidos ni faltas");
-    for editing in &vista {
+    let view = es.preview();
+    prop_assert_eq!(view.len(), expected_2.len(), "sin repetidos ni faltas");
+    for editing in &view {
         prop_assert_eq!(editing.pixel, pixel);
     }
-    let a = set(vista.iter().map(|e| (e.x, e.y)));
+    let a = set(view.iter().map(|e| (e.x, e.y)));
     let b = set(expected_2.iter().map(|e| (e.x, e.y)));
     prop_assert_eq!(a, b);
     // Perezosa en cada fotograma: pedirla dos veces da lo mismo.
-    prop_assert_eq!(es.preview(), vista);
+    prop_assert_eq!(es.preview(), view);
     Ok(())
 }
 
@@ -1009,7 +1009,7 @@ proptest! {
         for (tool_2, source_2, movements) in gestures {
             es.tool.apply_action(ToolAction::Select(tool_2));
             prop_assert_eq!(es.tool.tool(), tool_2);
-            let antes = es.image_2().clone();
+            let before = es.image_2().clone();
             let mut true_value = usize::from(es.ev(begin(source_2.0, source_2.1)));
             for (x, y) in movements {
                 true_value += usize::from(es.ev(mov(x, y)));
@@ -1018,7 +1018,7 @@ proptest! {
             prop_assert!(true_value <= 1, "{:?}: {} pasos en un gesto", tool_2, true_value);
             prop_assert_eq!(
                 true_value == 1,
-                es.image_2() != &antes,
+                es.image_2() != &before,
                 "{:?}: Ok(true) si y solo si cambió la imagen",
                 tool_2
             );
@@ -1322,7 +1322,7 @@ mod limits_fill {
     fn row_11_a_too_fragmented_fill_gives_an_error_and_the_next_click_works() {
         let mut es = Scene::new(comb(), Tool::Fill, 3);
         let image_2 = es.image_2().clone();
-        let antes = es.history();
+        let before = es.history();
         let state_2 = es.doc.state_id();
 
         // Clic en (0, 0): el relleno se rechaza.
@@ -1342,7 +1342,7 @@ mod limits_fill {
             "no hay cambios que registrar"
         );
         assert!(es.image_2() == &image_2, "la imagen no cambia");
-        assert_eq!(es.history(), antes);
+        assert_eq!(es.history(), before);
         assert_eq!(es.doc.state_id(), state_2);
         assert!(!es.doc.can_undo());
 

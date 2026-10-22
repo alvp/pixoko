@@ -129,10 +129,10 @@ fn with_three_layers() -> (Session, [LayerId; 3]) {
 #[test]
 fn row_8_new_layer_goes_above_the_active_one_and_becomes_the_active_one() {
     let (mut session_2, layers_2) = with_three_layers();
-    let antes = session_2.document.state_id();
+    let before = session_2.document.state_id();
     let report = session_2.new_layer();
     assert!(report.changed && report.notice.is_none() && !report.offer_convert);
-    assert_ne!(session_2.document.state_id(), antes);
+    assert_ne!(session_2.document.state_id(), before);
     let now = ids(&session_2);
     assert_eq!(now.len(), 4);
     assert_eq!(&now[..2], &layers_2[..2]);
@@ -199,9 +199,9 @@ fn row_8_duplicate_copies_on_top_keeps_the_lock_and_the_copy_is_the_active_one()
 #[test]
 fn row_8_duplicating_an_empty_cel_leaves_the_copy_empty() {
     let (mut session_2, _) = with_three_layers();
-    let antes = session_2.document.materialized_bytes();
+    let before = session_2.document.materialized_bytes();
     assert!(session_2.duplicate_layer().changed);
-    assert_eq!(session_2.document.materialized_bytes(), antes);
+    assert_eq!(session_2.document.materialized_bytes(), before);
     assert!(session_2.document.image(session_2.active_cel()).is_none());
 }
 
@@ -685,13 +685,13 @@ proptest! {
         let mut session_2 = session_rgba(16, 12);
         let mut tools = ToolState::new();
         for (action, chance, x, y) in steps_2 {
-            let antes_ids: BTreeSet<LayerId> = ids(&session_2).into_iter().collect();
+            let before_ids: BTreeSet<LayerId> = ids(&session_2).into_iter().collect();
             let before_cels = cels(&session_2);
             let layer_2 = {
                 let v = ids(&session_2);
                 v[chance as usize % v.len()]
             };
-            let (undoes_or_redoes, pinto) = match action {
+            let (undoes_or_redoes, paint) = match action {
                 0 | 1 => { session_2.new_layer(); (false, false) }
                 2 => { session_2.duplicate_layer(); (false, false) }
                 3 => { session_2.remove_layer(); (false, false) }
@@ -716,18 +716,18 @@ proptest! {
             prop_assert!(now.contains(&session_2.active_layer()));
             // Sigue a la entrada: si deshacer o rehacer añade exactamente una capa, es la activa.
             if undoes_or_redoes {
-                let new_2_2: Vec<_> = now.difference(&antes_ids).collect();
+                let new_2_2: Vec<_> = now.difference(&before_ids).collect();
                 if new_2_2.len() == 1 {
                     prop_assert_eq!(*new_2_2[0], session_2.active_layer());
                 }
             }
             // Un gesto solo cambia la celda activa: las demás son iguales a antes.
-            if pinto {
+            if paint {
                 let active_cel = session_2.active_cel();
-                for ((cel, antes), (cel2, now)) in before_cels.iter().zip(cels(&session_2)) {
+                for ((cel, before), (cel2, now)) in before_cels.iter().zip(cels(&session_2)) {
                     prop_assert_eq!(*cel, cel2);
                     if *cel != active_cel {
-                        prop_assert_eq!(antes, &now);
+                        prop_assert_eq!(before, &now);
                     }
                 }
             }

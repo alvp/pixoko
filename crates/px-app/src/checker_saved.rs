@@ -249,7 +249,7 @@ fn checks(name_2: &str, image: &Image) {
         .expect("imagen del documento");
     let state_id = doc.state_id();
     let image_bytes = to_rgba8(image);
-    let png_antes = write_png(image).expect("PNG antes");
+    let png_before = write_png(image).expect("PNG antes");
 
     let ctx = Context::default();
     let mut textures = Textures::default();
@@ -345,7 +345,7 @@ fn checks(name_2: &str, image: &Image) {
 
     // El PNG: los mismos bytes antes y después, y leídos de vuelta son la imagen original.
     let png_after = write_png(image).expect("PNG después");
-    assert_eq!(png_after, png_antes, "{name_2}: mismos bytes del PNG");
+    assert_eq!(png_after, png_before, "{name_2}: mismos bytes del PNG");
     let read_2 = read_png(&png_after).expect("el PNG se lee");
     assert!(read_2.is_exact(), "{name_2}: sin conversiones al leer");
     // Una RGBA vuelve idéntica; una indexada, con su índice transparente convertido por el formato

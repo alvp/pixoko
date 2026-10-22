@@ -964,7 +964,7 @@ fn order_expected(d: &Dialog) -> Vec<FocusTarget> {
 
 /// El foco inicial de la decisión 7, escrito aparte.
 fn checks_initial(d: &Dialog, initial: FocusTarget) -> Result<(), TestCaseError> {
-    let primer_editable = d
+    let first_editable = d
         .spec()
         .fields
         .iter()
@@ -974,7 +974,7 @@ fn checks_initial(d: &Dialog, initial: FocusTarget) -> Result<(), TestCaseError>
         .fields
         .iter()
         .find(|f| d.is_shown(f.id) && matches!(f.kind, FieldKind::ReadOnly { .. }));
-    match (primer_editable, first_zone) {
+    match (first_editable, first_zone) {
         (Some(f), _) => match f.kind {
             FieldKind::Choice { options, .. } => {
                 prop_assert!(

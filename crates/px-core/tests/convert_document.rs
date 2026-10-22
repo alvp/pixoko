@@ -155,9 +155,9 @@ fn state(doc: &Document) -> State {
 
 /// `apply(cmd)` da exactamente `expected` y no toca nada observable.
 fn rejects(doc: &mut Document, cmd: Command, expected: DocumentError) {
-    let antes = state(doc);
+    let before = state(doc);
     assert_eq!(doc.apply(cmd.clone()), Err(expected), "{cmd:?}");
-    assert_eq!(state(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), before, "{cmd:?}");
 }
 
 /// Bytes de píxeles de una imagen, según `Image::byte_len`.
@@ -204,9 +204,9 @@ fn row_13_convert_and_undo() {
     assert_eq!(doc.history_bytes(), 0);
 
     // Con `luma`: un paso nuevo.
-    let id_antes = doc.state_id();
+    let id_before = doc.state_id();
     assert_eq!(doc.apply(convert_2(id, Mode::Gray, L)), Ok(true));
-    assert_ne!(doc.state_id(), id_antes);
+    assert_ne!(doc.state_id(), id_before);
     assert_eq!(image_of(&doc).mode(), Mode::Gray);
     assert_eq!(image_of(&doc), &gray_img(2, 1, &[54, 19]));
     assert!(doc.can_undo());
@@ -303,7 +303,7 @@ fn rejects_in_batch(
     index: usize,
     es: impl Fn(&DocumentError) -> bool,
 ) {
-    let antes = state(doc);
+    let before = state(doc);
     match doc.apply(cmd.clone()) {
         Err(DocumentError::InBatch { index: i, source }) => {
             assert_eq!(i, index, "índice del comando que falló en {cmd:?}");
@@ -311,7 +311,7 @@ fn rejects_in_batch(
         }
         other => panic!("se esperaba InBatch en {cmd:?} y salió {other:?}"),
     }
-    assert_eq!(state(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), before, "{cmd:?}");
 }
 
 #[test]
@@ -441,7 +441,7 @@ fn row_19_converting_to_the_current_mode_is_not_a_step() {
     );
     assert_eq!(doc.undo(), Ok(()));
     assert!(doc.can_redo());
-    let antes = state(&doc);
+    let before = state(&doc);
 
     // Con cualquier `allowed`, incluso con permisos de más: no se llama a `convert_image`.
     let permissions = [
@@ -459,10 +459,10 @@ fn row_19_converting_to_the_current_mode_is_not_a_step() {
             Ok(false),
             "{allowed:?}"
         );
-        assert_eq!(state(&doc), antes, "{allowed:?}");
+        assert_eq!(state(&doc), before, "{allowed:?}");
         assert!(doc.can_redo(), "no borra la pila de rehacer");
-        assert_eq!(doc.state_id(), antes.state_id);
-        assert_eq!(doc.history_bytes(), antes.bytes);
+        assert_eq!(doc.state_id(), before.state_id);
+        assert_eq!(doc.history_bytes(), before.bytes);
     }
 
     // Lo que había por rehacer sigue ahí.
@@ -481,7 +481,7 @@ fn mode_2() -> impl Strategy<Value = Mode> {
 
 const CHANNELS: [u8; 5] = [0, 1, 127, 128, 255];
 
-fn canal() -> impl Strategy<Value = u8> {
+fn channel() -> impl Strategy<Value = u8> {
     prop_oneof![any::<u8>(), prop::sample::select(CHANNELS.to_vec())]
 }
 
@@ -495,7 +495,7 @@ fn color() -> impl Strategy<Value = Rgba> {
         (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>())
             .prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a)),
         (small(), small(), small(), small()).prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a)),
-        (canal(), small()).prop_map(|(v, a)| Rgba::new(v, v, v, a)),
+        (channel(), small()).prop_map(|(v, a)| Rgba::new(v, v, v, a)),
     ]
 }
 
@@ -548,7 +548,7 @@ fn permissions() -> impl Strategy<Value = Allowed> {
     (
         prop_oneof![2 => Just(true), 1 => Just(false)],
         prop_oneof![
-            2 => (canal(), canal(), canal()).prop_map(|(r, g, b)| Some([r, g, b])),
+            2 => (channel(), channel(), channel()).prop_map(|(r, g, b)| Some([r, g, b])),
             1 => Just(None),
         ],
     )
@@ -557,7 +557,7 @@ fn permissions() -> impl Strategy<Value = Allowed> {
 
 /// Permisos para conversiones que no fallan por pérdida.
 fn all_the_permissions() -> impl Strategy<Value = Allowed> {
-    (canal(), canal(), canal()).prop_map(|(r, g, b)| Allowed {
+    (channel(), channel(), channel()).prop_map(|(r, g, b)| Allowed {
         luma: true,
         drop_alpha: Some([r, g, b]),
     })
@@ -596,7 +596,7 @@ fn length_of_palette(img: &Image) -> usize {
 }
 
 /// Un píxel válido (o inválido, si `bad`) para la imagen actual.
-fn pixel_para(img: &Image, v: u8, bad: bool) -> Pixel {
+fn pixel_for(img: &Image, v: u8, bad: bool) -> Pixel {
     if bad {
         pixel_de(other_mode(img.mode()), 8, v)
     } else {
@@ -652,11 +652,11 @@ fn model_set(img: &Image, pixels: &[PixelEdit]) -> Expected {
     let mut work = img.clone();
     let mut change = false;
     for e in pixels {
-        let antes = work.get_pixel(e.x, e.y);
+        let before = work.get_pixel(e.x, e.y);
         if work.set_pixel(e.x, e.y, e.pixel).is_err() {
             return Expected::Error;
         }
-        change |= antes != Ok(e.pixel);
+        change |= before != Ok(e.pixel);
     }
     if change {
         Expected::New(work)
@@ -698,7 +698,7 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
 
     for op in ops {
         let actual = instants[cursor].clone();
-        let antes = state(&doc);
+        let before = state(&doc);
         match op {
             Op::Set { edits, bad } => {
                 let pixels: Vec<PixelEdit> = edits
@@ -706,12 +706,12 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     .map(|&(x, y, v)| PixelEdit {
                         x,
                         y,
-                        pixel: pixel_para(&actual, v, *bad),
+                        pixel: pixel_for(&actual, v, *bad),
                     })
                     .collect();
                 let expected_2 = model_set(&actual, &pixels);
                 let real = doc.apply(Command::SetPixels { image: id, pixels });
-                applies_expected(real, expected_2, &mut instants, &mut cursor, &doc, &antes)?;
+                applies_expected(real, expected_2, &mut instants, &mut cursor, &doc, &before)?;
             }
             Op::Fill { y, x0, x1, v, bad } => {
                 let span = Span {
@@ -719,14 +719,14 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     x_start: *x0,
                     x_end: *x1,
                 };
-                let pixel = pixel_para(&actual, *v, *bad);
+                let pixel = pixel_for(&actual, *v, *bad);
                 let expected_2 = model_fill(&actual, span, pixel);
                 let real = doc.apply(Command::FillSpans {
                     image: id,
                     spans: vec![span],
                     pixel,
                 });
-                applies_expected(real, expected_2, &mut instants, &mut cursor, &doc, &antes)?;
+                applies_expected(real, expected_2, &mut instants, &mut cursor, &doc, &before)?;
             }
             Op::Convert {
                 target,
@@ -737,16 +737,16 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                 let real = doc.apply(convert_2(goal, *target, *allowed));
                 if unknown.is_some() {
                     prop_assert_eq!(real, Err(DocumentError::UnknownImage(goal)));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 } else if *target == actual.mode() {
                     // Convertir al modo actual no es un paso.
                     prop_assert_eq!(real, Ok(false));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 } else {
                     match convert_image(&actual, *target, *allowed) {
                         Ok(conversion) => {
                             prop_assert_eq!(real, Ok(true));
-                            prop_assert_ne!(doc.state_id(), antes.state_id);
+                            prop_assert_ne!(doc.state_id(), before.state_id);
                             instants.truncate(cursor + 1);
                             instants.push(conversion.image);
                             cursor += 1;
@@ -759,7 +759,7 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                         }
                         Err(e) => {
                             prop_assert_eq!(real, Err(DocumentError::Convert(e)));
-                            prop_assert_eq!(state(&doc), antes);
+                            prop_assert_eq!(state(&doc), before);
                         }
                     }
                 }
@@ -770,7 +770,7 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor -= 1;
                 } else {
                     prop_assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
             Op::Redo => {
@@ -779,7 +779,7 @@ fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor += 1;
                 } else {
                     prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
         }
@@ -808,7 +808,7 @@ fn applies_expected(
     instants: &mut Vec<Image>,
     cursor: &mut usize,
     doc: &Document,
-    antes: &State,
+    before: &State,
 ) -> Result<(), TestCaseError> {
     match expected_2 {
         Expected::New(new) => {
@@ -819,11 +819,11 @@ fn applies_expected(
         }
         Expected::WithoutChange => {
             prop_assert_eq!(real, Ok(false));
-            prop_assert_eq!(&state(doc), antes);
+            prop_assert_eq!(&state(doc), before);
         }
         Expected::Error => {
             prop_assert!(real.is_err(), "se esperaba un error y dio {:?}", real);
-            prop_assert_eq!(&state(doc), antes);
+            prop_assert_eq!(&state(doc), before);
         }
     }
     Ok(())
@@ -876,7 +876,7 @@ fn prop_atomicity(
 ) -> Result<(), TestCaseError> {
     let mut doc = document_with_history(img, &sets, undo);
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
     let actual = image_of(&doc).clone();
 
     match shape {
@@ -886,7 +886,7 @@ fn prop_atomicity(
                 doc.apply(convert_2(goal, target, allowed)),
                 Err(DocumentError::UnknownImage(goal))
             );
-            prop_assert_eq!(state(&doc), antes);
+            prop_assert_eq!(state(&doc), before);
         }
         Shape::InBatch(n) => {
             let mut commands: Vec<Command> = (0..*n)
@@ -900,32 +900,32 @@ fn prop_atomicity(
                 doc.apply(Command::Batch(commands)),
                 Err(in_batch(*n, DocumentError::NotBatchable))
             );
-            prop_assert_eq!(state(&doc), antes);
+            prop_assert_eq!(state(&doc), before);
         }
         Shape::Loose => match doc.apply(convert_2(id, target, allowed)) {
             Err(_) | Ok(false) => {
-                prop_assert_eq!(state(&doc), antes);
+                prop_assert_eq!(state(&doc), before);
             }
             Ok(true) => {
                 // Coste del paso: los bytes de píxeles de la imagen anterior, más una cota
                 // para cabecera y paleta.
-                let anterior = bytes_de(&actual);
-                let growth = doc.history_bytes() - antes.bytes;
+                let previous = bytes_de(&actual);
+                let growth = doc.history_bytes() - before.bytes;
                 prop_assert!(
-                    (anterior..=anterior + 2048).contains(&growth),
+                    (previous..=previous + 2048).contains(&growth),
                     "el paso cuesta {} y los píxeles anteriores son {}",
                     growth,
-                    anterior
+                    previous
                 );
                 prop_assert!(doc.can_undo());
                 prop_assert!(!doc.can_redo());
-                prop_assert_ne!(doc.state_id(), antes.state_id);
+                prop_assert_ne!(doc.state_id(), before.state_id);
 
                 // `undo` baja el coste al de antes y `redo` lo vuelve a subir.
                 let after_apply = doc.history_bytes();
                 let mut copy = doc.clone();
                 prop_assert_eq!(copy.undo(), Ok(()));
-                prop_assert_eq!(copy.history_bytes(), antes.bytes);
+                prop_assert_eq!(copy.history_bytes(), before.bytes);
                 prop_assert_eq!(copy.image(id), Some(&actual));
                 prop_assert_eq!(copy.redo(), Ok(()));
                 prop_assert_eq!(copy.history_bytes(), after_apply);
@@ -944,7 +944,7 @@ fn prop_limit(img: Image, limit: usize, ops: &[(Mode, Allowed)]) -> Result<(), T
 
     for &(target, allowed) in ops {
         let actual = image_of(&doc).clone();
-        let antes = state(&doc);
+        let before = state(&doc);
         match doc.apply(convert_2(id, target, allowed)) {
             Ok(true) => {
                 was_step = true;
@@ -953,7 +953,7 @@ fn prop_limit(img: Image, limit: usize, ops: &[(Mode, Allowed)]) -> Result<(), T
                 prop_assert_eq!(copy.undo(), Ok(()));
                 prop_assert_eq!(copy.image(id), Some(&actual));
             }
-            Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes),
+            Ok(false) | Err(_) => prop_assert_eq!(state(&doc), before),
         }
         let kept = steps_undoable(&doc);
         prop_assert!(

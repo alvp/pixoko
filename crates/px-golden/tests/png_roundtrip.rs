@@ -454,15 +454,15 @@ fn row_07_gray_of_1_2_and_4_bits_is_scaled() {
 fn row_08_sixteen_bits_reduce_with_rounding() {
     // (muestra de 16 bits, valor de 8 bits esperado). Redondeo, no el byte alto:
     // 0x01FF da 2 y no 1.
-    let tabla: [(u16, u8); 5] = [
+    let table: [(u16, u8); 5] = [
         (0x0000, 0),
         (0x0080, 0),
         (0x0081, 1),
         (0x01FF, 2),
         (0xFFFF, 255),
     ];
-    let m = |i: usize| tabla[i % 5].0;
-    let v = |i: usize| tabla[i % 5].1;
+    let m = |i: usize| table[i % 5].0;
+    let v = |i: usize| table[i % 5].1;
 
     // Gris 16.
     let swatches_g: Vec<u16> = (0..5).map(m).collect();
@@ -524,7 +524,7 @@ fn row_09_rgb_and_color_keys_trns() {
     // tRNS de gris 8 con clave 7 (dos bytes, big-endian) y píxeles [7, 8].
     let g8 = lee(&Png::new(2, 1, 8, 0)
         .swatches(&[7, 8])
-        .antes(trns(&[0, 7]))
+        .before(trns(&[0, 7]))
         .bytes());
     assert_eq!(g8.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels_2(&g8.image), grays_alpha(&[(7, 0), (8, 255)]));
@@ -534,7 +534,7 @@ fn row_09_rgb_and_color_keys_trns() {
     // Gris de 2 bits con clave 1 y píxeles [1, 2]: 1 -> 85 transparente, 2 -> 170 opaco.
     let g2 = lee(&Png::new(2, 1, 2, 0)
         .swatches(&[1, 2])
-        .antes(trns(&[0, 1]))
+        .before(trns(&[0, 1]))
         .bytes());
     assert_eq!(g2.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels_2(&g2.image), grays_alpha(&[(85, 0), (170, 255)]));
@@ -551,7 +551,7 @@ fn row_09_rgb_and_color_keys_trns() {
     // conserva con alfa 0.
     let c8 = lee(&Png::new(2, 1, 8, 2)
         .swatches(&[1, 2, 3, 1, 2, 4])
-        .antes(trns(&[0, 1, 0, 2, 0, 3]))
+        .before(trns(&[0, 1, 0, 2, 0, 3]))
         .bytes());
     assert_eq!(c8.image.mode(), Mode::Rgba);
     assert_eq!(pixels_2(&c8.image), [rgba(1, 2, 3, 0), rgba(1, 2, 4, 255)]);
@@ -565,7 +565,7 @@ fn row_09_rgb_and_color_keys_trns() {
     // de reducir. 0xFFFF se reduce a 255 y 0xFF00 a 254 (65280 / 257 = 254,01).
     let c16 = lee(&Png::new(2, 1, 16, 2)
         .swatches(&[0x0102, 0x0304, 0xFFFF, 0x0102, 0x0304, 0xFF00])
-        .antes(trns(&[0x01, 0x02, 0x03, 0x04, 0xFF, 0xFF]))
+        .before(trns(&[0x01, 0x02, 0x03, 0x04, 0xFF, 0xFF]))
         .bytes());
     assert_eq!(c16.image.mode(), Mode::Rgba);
     assert_eq!(
@@ -608,10 +608,10 @@ fn row_10_truncated_corrupt_files_or_with_garbage() {
 
     // CRC erróneo en IHDR (bytes 29..33: 8 de firma, 4 de longitud, 4 de tipo y 13 de
     // datos), en IDAT y en IEND (los 4 últimos bytes del fichero).
-    let (idat, largo_idat) = position_idat(&valid);
+    let (idat, length_idat) = position_idat(&valid);
     let positions = [
         ("IHDR", 32),
-        ("IDAT", idat + 8 + largo_idat + 3),
+        ("IDAT", idat + 8 + length_idat + 3),
         ("IEND", valid.len() - 1),
     ];
     for (name_2, pos) in positions {
@@ -637,7 +637,7 @@ fn row_11_invalid_palette_and_trns() {
     // Indexado de 8 bits con PLTE de 2 entradas y un píxel 5.
     let outside = Png::new(2, 1, 8, 3)
         .swatches(&[0, 5])
-        .antes(plte(&[(1, 1, 1), (2, 2, 2)]))
+        .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .bytes();
     assert_eq!(
         error_de(&outside),
@@ -651,24 +651,24 @@ fn row_11_invalid_palette_and_trns() {
     // tRNS de gris de 1 byte (debe ser de 2).
     let gray = Png::new(1, 1, 8, 0)
         .swatches(&[1])
-        .antes(trns(&[7]))
+        .before(trns(&[7]))
         .bytes();
     assert_eq!(error_de(&gray), PngError::InvalidTrns);
 
     // tRNS de RGB de 4 bytes (debe ser de 6).
     let rgb = Png::new(1, 1, 8, 2)
         .swatches(&[1, 2, 3])
-        .antes(trns(&[0, 1, 0, 2]))
+        .before(trns(&[0, 1, 0, 2]))
         .bytes();
     assert_eq!(error_de(&rgb), PngError::InvalidTrns);
 
     // tRNS de 3 entradas con PLTE de 2.
-    let largo = Png::new(2, 1, 8, 3)
+    let length = Png::new(2, 1, 8, 3)
         .swatches(&[0, 1])
-        .antes(plte(&[(1, 1, 1), (2, 2, 2)]))
-        .antes(trns(&[0, 1, 2]))
+        .before(plte(&[(1, 1, 1), (2, 2, 2)]))
+        .before(trns(&[0, 1, 2]))
         .bytes();
-    assert_eq!(error_de(&largo), PngError::InvalidTrns);
+    assert_eq!(error_de(&length), PngError::InvalidTrns);
 }
 
 #[test]

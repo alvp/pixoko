@@ -256,24 +256,24 @@ fn state(doc: &Document) -> State {
 
 /// `apply(cmd)` da exactamente `expected_2` y no toca nada observable.
 fn rejects(doc: &mut Document, cmd: Command, expected_2: DocumentError) {
-    let antes = state(doc);
+    let before = state(doc);
     assert_eq!(doc.apply(cmd.clone()), Err(expected_2), "{cmd:?}");
-    assert_eq!(state(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), before, "{cmd:?}");
 }
 
 /// `apply(cmd)` da `Ok(false)` y no toca nada observable (ni historia ni `state_id`).
 fn without_step(doc: &mut Document, cmd: Command) {
-    let antes = state(doc);
+    let before = state(doc);
     assert_eq!(doc.apply(cmd.clone()), Ok(false), "{cmd:?}");
-    assert_eq!(state(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), before, "{cmd:?}");
 }
 
 /// `apply(cmd)` da `Ok(true)`: un paso nuevo, con `state_id` nuevo y la pila de rehacer vacía.
 fn with_step(doc: &mut Document, cmd: Command) {
-    let id_antes = doc.state_id();
+    let id_before = doc.state_id();
     let steps_2 = steps_undoable(doc);
     assert_eq!(doc.apply(cmd.clone()), Ok(true), "{cmd:?}");
-    assert_ne!(doc.state_id(), id_antes, "{cmd:?}");
+    assert_ne!(doc.state_id(), id_before, "{cmd:?}");
     assert!(doc.can_undo(), "{cmd:?}");
     assert!(!doc.can_redo(), "{cmd:?}");
     assert_eq!(steps_undoable(doc), steps_2 + 1, "{cmd:?}");
@@ -283,15 +283,15 @@ fn with_step(doc: &mut Document, cmd: Command) {
 /// `history_bytes()` tras `redo` es el de tras `apply` y que `undo` baja al de antes.
 /// Devuelve cuánto subió `history_bytes()`.
 fn cost_of_the_step(doc: &mut Document, cmd: Command) -> usize {
-    let antes = doc.history_bytes();
+    let before = doc.history_bytes();
     assert_eq!(doc.apply(cmd.clone()), Ok(true), "{cmd:?}");
     let after_apply = doc.history_bytes();
-    assert!(after_apply >= antes, "{cmd:?}");
+    assert!(after_apply >= before, "{cmd:?}");
     assert_eq!(doc.undo(), Ok(()), "{cmd:?}");
-    assert_eq!(doc.history_bytes(), antes, "{cmd:?}");
+    assert_eq!(doc.history_bytes(), before, "{cmd:?}");
     assert_eq!(doc.redo(), Ok(()), "{cmd:?}");
     assert_eq!(doc.history_bytes(), after_apply, "{cmd:?}");
-    after_apply - antes
+    after_apply - before
 }
 
 // Tipos nuevos de la API.
@@ -396,14 +396,14 @@ fn row_02_same_color_out_of_range_and_transparent_entry() {
 fn row_03_permute_with_transparent() {
     let mut doc = doc_f(Some(0));
     let id = ImageId::from_raw(0);
-    let antes = resolved(image_of(&doc));
+    let before = resolved(image_of(&doc));
     let expected_2_2 = vec![
         Rgba::new(255, 0, 0, 0),
         Rgba::new(0, 255, 0, 255),
         Rgba::new(0, 0, 255, 255),
         Rgba::new(0, 0, 0, 255),
     ];
-    assert_eq!(antes, expected_2_2);
+    assert_eq!(before, expected_2_2);
 
     with_step(&mut doc, permutes(id, &[3, 2, 1, 0]));
     let img = image_of(&doc);
@@ -952,7 +952,7 @@ fn length() -> impl Strategy<Value = usize> {
 }
 
 /// El último índice de una paleta de `n` entradas.
-fn ultimo(n: usize) -> u8 {
+fn last(n: usize) -> u8 {
     u8::try_from(n.saturating_sub(1)).unwrap_or(u8::MAX)
 }
 
@@ -960,7 +960,7 @@ fn ultimo(n: usize) -> u8 {
 fn index_of_pixel(n: usize) -> impl Strategy<Value = u8> {
     prop_oneof![
         3 => (0..n).prop_map(|v| v as u8),
-        1 => Just(ultimo(n)),
+        1 => Just(last(n)),
     ]
 }
 
@@ -1007,7 +1007,7 @@ fn adjusts(v: u16, n: usize) -> usize {
 /// límite (`n`, que está fuera) o 255.
 fn index_u_8(v: u16, n: usize) -> u8 {
     match v % 8 {
-        0 => ultimo(n),
+        0 => last(n),
         1 => u8::try_from(n).unwrap_or(u8::MAX),
         2 => u8::MAX,
         _ => u8::try_from(usize::from(v / 8) % n.max(1)).unwrap_or(u8::MAX),
@@ -1153,7 +1153,7 @@ fn modulo(steps: i32, len: usize) -> usize {
 }
 
 /// Un píxel de la imagen actual, válido para su modo o (si `bad_2`) de otro modo.
-fn pixel_para(img: &Image, v: u8, bad_2: bool) -> Pixel {
+fn pixel_for(img: &Image, v: u8, bad_2: bool) -> Pixel {
     let n = length_of_palette(img).max(1);
     let alpha_2 = if v.is_multiple_of(2) { 0 } else { 255 };
     if bad_2 {
@@ -1178,7 +1178,7 @@ fn pixel_para(img: &Image, v: u8, bad_2: bool) -> Pixel {
 fn doc_with_history(img: Image, v: u8, undo: bool) -> Document {
     let mut doc = Document::new(img);
     let id = ImageId::from_raw(0);
-    let pixel = pixel_para(image_of(&doc), v, false);
+    let pixel = pixel_for(image_of(&doc), v, false);
     let _ = doc.apply(set(id, 0, 0, pixel));
     if undo {
         let _ = doc.undo();
@@ -1350,7 +1350,7 @@ fn checks_reorder(
 ) -> Result<(), TestCaseError> {
     let identity = order.iter().enumerate().all(|(i, &o)| usize::from(o) == i);
     let expected = oracle_reorder(img, order);
-    let antes = resolved(img);
+    let before = resolved(img);
 
     let mut doc = Document::new(img.clone());
     let real = doc.apply(cmd);
@@ -1361,7 +1361,7 @@ fn checks_reorder(
     prop_assert_eq!(palette_of(image_of(&doc)), palette_of(&expected));
     prop_assert_eq!(transparent_of(image_of(&doc)), transparent_of(&expected));
     // (b) Ningún color visible cambia.
-    prop_assert_eq!(resolved(image_of(&doc)), antes);
+    prop_assert_eq!(resolved(image_of(&doc)), before);
     checks_invariant(&doc, ImageId::from_raw(0))?;
 
     // Ida y vuelta.
@@ -1411,8 +1411,8 @@ fn prop_remove(img: Image, a: u16, b: u16) -> Result<(), TestCaseError> {
         into = (index + 1) % n;
     }
     let t = transparent_of(&img);
-    let pix_antes = pixels_of(&img);
-    let res_antes = resolved(&img);
+    let pix_before = pixels_of(&img);
+    let res_before = resolved(&img);
     let res_into = visible(old[into], t == Some(into as u8));
     let into_new = if into < index { into } else { into - 1 };
 
@@ -1438,17 +1438,17 @@ fn prop_remove(img: Image, a: u16, b: u16) -> Result<(), TestCaseError> {
     prop_assert_eq!(transparent_of(after), t_expected);
 
     // Los píxeles que no valían `index` resuelven igual; los que sí, al resuelto de `into`.
-    for (p, &v) in pix_antes.iter().enumerate() {
+    for (p, &v) in pix_before.iter().enumerate() {
         if usize::from(v) == index {
             prop_assert_eq!(res_after[p], res_into, "píxel {}", p);
         } else {
-            prop_assert_eq!(res_after[p], res_antes[p], "píxel {}", p);
+            prop_assert_eq!(res_after[p], res_before[p], "píxel {}", p);
         }
     }
 
     // Ningún píxel `>= len` y el recuento de `into'`.
     prop_assert!(pix_after.iter().all(|&v| usize::from(v) < n - 1));
-    let were_valid = |v: usize| pix_antes.iter().filter(|&&p| usize::from(p) == v).count();
+    let were_valid = |v: usize| pix_before.iter().filter(|&&p| usize::from(p) == v).count();
     let now = pix_after
         .iter()
         .filter(|&&p| usize::from(p) == into_new)
@@ -1543,7 +1543,7 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
 
     for op in ops {
         let actual = instants[cursor].clone();
-        let antes = state(&doc);
+        let before = state(&doc);
         match op {
             Op::Palette2 { kind, c, unknown } => {
                 let goal = if *unknown {
@@ -1557,15 +1557,15 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                 match expected_2 {
                     Expected::Err(e) => {
                         prop_assert_eq!(real, Err(e), "{:?}", cmd);
-                        prop_assert_eq!(state(&doc), antes, "{:?}", cmd);
+                        prop_assert_eq!(state(&doc), before, "{:?}", cmd);
                     }
                     Expected::WithoutStep => {
                         prop_assert_eq!(real, Ok(false), "{:?}", cmd);
-                        prop_assert_eq!(state(&doc), antes, "{:?}", cmd);
+                        prop_assert_eq!(state(&doc), before, "{:?}", cmd);
                     }
                     Expected::Step2 => {
                         prop_assert_eq!(real, Ok(true), "{:?}", cmd);
-                        prop_assert_ne!(doc.state_id(), antes.state_id);
+                        prop_assert_ne!(doc.state_id(), before.state_id);
                         new_step(&doc, id, &mut instants, &mut cursor);
                     }
                 }
@@ -1574,7 +1574,7 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                 let cmd = command_palette(*kind, c, id, length_of_palette(&actual));
                 let mut commands = Vec::new();
                 if *with_set {
-                    commands.push(set(id, 0, 0, pixel_para(&actual, c.kind, false)));
+                    commands.push(set(id, 0, 0, pixel_for(&actual, c.kind, false)));
                 }
                 commands.push(cmd);
                 let real = doc.apply(Command::Batch(commands));
@@ -1585,7 +1585,7 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                         DocumentError::NotBatchable
                     ))
                 );
-                prop_assert_eq!(state(&doc), antes);
+                prop_assert_eq!(state(&doc), before);
             }
             Op::Set { edits, bad_2 } => {
                 let pixels: Vec<PixelEdit> = edits
@@ -1593,12 +1593,12 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     .map(|&(x, y, v)| PixelEdit {
                         x,
                         y,
-                        pixel: pixel_para(&actual, v, *bad_2),
+                        pixel: pixel_for(&actual, v, *bad_2),
                     })
                     .collect();
                 match doc.apply(Command::SetPixels { image: id, pixels }) {
                     Ok(true) => new_step(&doc, id, &mut instants, &mut cursor),
-                    Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes),
+                    Ok(false) | Err(_) => prop_assert_eq!(state(&doc), before),
                 }
             }
             Op::Fill {
@@ -1613,14 +1613,14 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     x_start: *x0,
                     x_end: *x1,
                 };
-                let pixel = pixel_para(&actual, *v, *bad_2);
+                let pixel = pixel_for(&actual, *v, *bad_2);
                 match doc.apply(Command::FillSpans {
                     image: id,
                     spans: vec![span],
                     pixel,
                 }) {
                     Ok(true) => new_step(&doc, id, &mut instants, &mut cursor),
-                    Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes),
+                    Ok(false) | Err(_) => prop_assert_eq!(state(&doc), before),
                 }
             }
             Op::Convert { target, allowed } => {
@@ -1630,7 +1630,7 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     allowed: *allowed,
                 }) {
                     Ok(true) => new_step(&doc, id, &mut instants, &mut cursor),
-                    Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes),
+                    Ok(false) | Err(_) => prop_assert_eq!(state(&doc), before),
                 }
             }
             Op::Undo => {
@@ -1639,7 +1639,7 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor -= 1;
                 } else {
                     prop_assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
             Op::Redo => {
@@ -1648,7 +1648,7 @@ fn runs_sequence(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor += 1;
                 } else {
                     prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-                    prop_assert_eq!(state(&doc), antes);
+                    prop_assert_eq!(state(&doc), before);
                 }
             }
         }
@@ -1693,15 +1693,15 @@ fn prop_validation(
     shape: u8,
 ) -> Result<(), TestCaseError> {
     let mut doc = doc_with_history(img, v, undo);
-    let principal = ImageId::from_raw(0);
+    let main = ImageId::from_raw(0);
     let id = if unknown {
         ImageId::from_raw(1 + u32::from(c.a % 4))
     } else {
-        principal
+        main
     };
     let actual = image_of(&doc).clone();
     let cmd = command_palette(kind, &c, id, length_of_palette(&actual));
-    let antes = state(&doc);
+    let before = state(&doc);
 
     match shape % 4 {
         // Dentro de un `Batch`: `NotBatchable` gana a cualquier otro error del comando.
@@ -1711,18 +1711,16 @@ fn prop_validation(
                 doc.apply(batch),
                 Err(in_batch(0, DocumentError::NotBatchable))
             );
-            prop_assert_eq!(state(&doc), antes);
+            prop_assert_eq!(state(&doc), before);
         }
         3 => {
-            let batch = Command::Batch(vec![
-                set(principal, 0, 0, pixel_para(&actual, v ^ 1, false)),
-                cmd,
-            ]);
+            let batch =
+                Command::Batch(vec![set(main, 0, 0, pixel_for(&actual, v ^ 1, false)), cmd]);
             prop_assert_eq!(
                 doc.apply(batch),
                 Err(in_batch(1, DocumentError::NotBatchable))
             );
-            prop_assert_eq!(state(&doc), antes);
+            prop_assert_eq!(state(&doc), before);
         }
         _ => {
             let expected_2 = predicts((!unknown).then_some(&actual), id, &cmd);
@@ -1730,19 +1728,19 @@ fn prop_validation(
             match expected_2 {
                 Expected::Err(e) => {
                     prop_assert_eq!(real, Err(e), "{:?}", cmd);
-                    prop_assert_eq!(state(&doc), antes, "{:?}", cmd);
+                    prop_assert_eq!(state(&doc), before, "{:?}", cmd);
                 }
                 Expected::WithoutStep => {
                     prop_assert_eq!(real, Ok(false), "{:?}", cmd);
-                    prop_assert_eq!(state(&doc), antes, "{:?}", cmd);
+                    prop_assert_eq!(state(&doc), before, "{:?}", cmd);
                 }
                 Expected::Step2 => {
                     prop_assert_eq!(real, Ok(true), "{:?}", cmd);
-                    prop_assert_ne!(doc.state_id(), antes.state_id);
+                    prop_assert_ne!(doc.state_id(), before.state_id);
                     prop_assert!(doc.can_undo());
                     prop_assert!(!doc.can_redo());
-                    prop_assert_eq!(steps_undoable(&doc), antes.undoable + 1);
-                    checks_invariant(&doc, principal)?;
+                    prop_assert_eq!(steps_undoable(&doc), before.undoable + 1);
+                    checks_invariant(&doc, main)?;
                 }
             }
         }
@@ -1758,18 +1756,18 @@ fn measures(
     doc: &mut Document,
     cmd: &Command,
 ) -> Result<(Result<bool, DocumentError>, usize), TestCaseError> {
-    let antes = doc.history_bytes();
+    let before = doc.history_bytes();
     let real = doc.apply(cmd.clone());
     if real != Ok(true) {
-        prop_assert_eq!(doc.history_bytes(), antes);
+        prop_assert_eq!(doc.history_bytes(), before);
         return Ok((real, 0));
     }
     let after_apply = doc.history_bytes();
     prop_assert_eq!(doc.undo(), Ok(()));
-    prop_assert_eq!(doc.history_bytes(), antes);
+    prop_assert_eq!(doc.history_bytes(), before);
     prop_assert_eq!(doc.redo(), Ok(()));
     prop_assert_eq!(doc.history_bytes(), after_apply);
-    Ok((real, after_apply - antes))
+    Ok((real, after_apply - before))
 }
 
 fn prop_cost(
@@ -1805,12 +1803,12 @@ fn prop_cost(
             if real == Ok(true) {
                 let used = pixels_of(img).contains(index);
                 let cels = (img.width() as usize * img.height() as usize).div_ceil(64);
-                let mascara = if used { cels * 8 } else { 0 };
+                let mask = if used { cels * 8 } else { 0 };
                 prop_assert!(
-                    (mascara..=mascara + 512).contains(&cost),
+                    (mask..=mask + 512).contains(&cost),
                     "Remove subió {} con máscara {}",
                     cost,
-                    mascara
+                    mask
                 );
             }
         } else if real == Ok(true) {
@@ -1845,7 +1843,7 @@ fn prop_limit(img: Image, limit: usize, ops: &[(u8, Raw)]) -> Result<(), TestCas
 
     for (kind, c) in ops {
         let actual = image_of(&doc).clone();
-        let antes = state(&doc);
+        let before = state(&doc);
         let cmd = command_palette(*kind, c, id, length_of_palette(&actual));
         match doc.apply(cmd.clone()) {
             Ok(true) => {
@@ -1855,7 +1853,7 @@ fn prop_limit(img: Image, limit: usize, ops: &[(u8, Raw)]) -> Result<(), TestCas
                 prop_assert_eq!(copy.undo(), Ok(()), "{:?}", cmd);
                 prop_assert_eq!(copy.image(id), Some(&actual), "{:?}", cmd);
             }
-            Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes, "{:?}", cmd),
+            Ok(false) | Err(_) => prop_assert_eq!(state(&doc), before, "{:?}", cmd),
         }
         let kept = steps_undoable(&doc);
         prop_assert!(
@@ -1968,7 +1966,7 @@ fn prop_rotate(
     let n = old.len();
     let t = transparent_of(&img);
     let pix = pixels_of(&img);
-    let res_antes = resolved(&img);
+    let res_before = resolved(&img);
 
     // Rango válido (el inválido se prueba en la propiedad 5) y `steps` de varias clases.
     let start = adjusts(a, n);
@@ -1997,7 +1995,7 @@ fn prop_rotate(
 
     let mut doc = Document::new(img.clone());
     let id = ImageId::from_raw(0);
-    let antes = state(&doc);
+    let before = state(&doc);
     let real = doc.apply(rotates(id, start_u8, len_u16, steps));
     prop_assert_eq!(
         real,
@@ -2008,7 +2006,7 @@ fn prop_rotate(
         steps
     );
     if !changes {
-        prop_assert_eq!(state(&doc), antes);
+        prop_assert_eq!(state(&doc), before);
     }
     let after = image_of(&doc);
     prop_assert_eq!(palette_of(after), new.clone());
@@ -2022,7 +2020,7 @@ fn prop_rotate(
         // Los píxeles fuera del rango resuelven igual que antes.
         let usv = usize::from(v);
         if usv < start || usv >= start + len {
-            prop_assert_eq!(res_after[p], res_antes[p], "píxel {} fuera del rango", p);
+            prop_assert_eq!(res_after[p], res_before[p], "píxel {} fuera del rango", p);
         }
     }
     // Se conserva el multiconjunto de colores de la paleta.

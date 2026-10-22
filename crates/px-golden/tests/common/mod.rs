@@ -133,7 +133,7 @@ pub struct Png {
     /// Muestras por píxel y canal, fila a fila, en el orden de la imagen final.
     swatches: Vec<u16>,
     /// Chunks ya serializados entre IHDR e IDAT.
-    antes: Vec<Vec<u8>>,
+    before: Vec<Vec<u8>>,
 }
 
 impl Png {
@@ -144,7 +144,7 @@ impl Png {
             prof,
             color,
             swatches: Vec::new(),
-            antes: Vec::new(),
+            before: Vec::new(),
         }
     }
 
@@ -153,8 +153,8 @@ impl Png {
         self
     }
 
-    pub fn antes(mut self, chunk: Vec<u8>) -> Png {
-        self.antes.push(chunk);
+    pub fn before(mut self, chunk: Vec<u8>) -> Png {
+        self.before.push(chunk);
         self
     }
 
@@ -178,7 +178,7 @@ impl Png {
         ihdr.extend([self.prof, self.color, 0, 0, 0]);
         let mut v = SIGNATURE.to_vec();
         v.extend(piece(b"IHDR", &ihdr));
-        for c in &self.antes {
+        for c in &self.before {
             v.extend(c);
         }
         v.extend(piece(b"IDAT", &zlib_stored(&self.raw())));
@@ -206,13 +206,13 @@ pub fn walks(bytes: &[u8]) -> Result<Vec<Piece>, String> {
         let header = bytes
             .get(pos..pos + 8)
             .ok_or_else(|| format!("cabecera truncada en {pos}"))?;
-        let largo = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let length = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
         let kind: [u8; 4] = header[4..8].try_into().unwrap();
         let data = bytes
-            .get(pos + 8..pos + 8 + largo)
+            .get(pos + 8..pos + 8 + length)
             .ok_or_else(|| format!("datos truncados en {pos}"))?;
         let crc = bytes
-            .get(pos + 8 + largo..pos + 12 + largo)
+            .get(pos + 8 + length..pos + 12 + length)
             .ok_or_else(|| format!("CRC truncado en {pos}"))?;
         let mut body = kind.to_vec();
         body.extend(data);
@@ -224,7 +224,7 @@ pub fn walks(bytes: &[u8]) -> Result<Vec<Piece>, String> {
             start: pos,
             data: data.to_vec(),
         });
-        pos += 12 + largo;
+        pos += 12 + length;
         if kind == *b"IEND" {
             if pos != bytes.len() {
                 return Err(format!("sobran {} bytes tras IEND", bytes.len() - pos));

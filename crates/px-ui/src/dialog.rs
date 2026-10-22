@@ -758,7 +758,7 @@ impl Dialog {
         }
     }
 
-    /// Qué botones de un campo `Button` están atenuados: `[principal, second]`.
+    /// Qué botones de un campo `Button` están atenuados: `[main, second]`.
     pub fn button_disabled(&self, id: FieldId) -> Option<[bool; 2]> {
         match &self.states[self.index_of(id)?] {
             FieldState::Button { disabled } => Some(*disabled),

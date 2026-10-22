@@ -289,7 +289,7 @@ fn row_6_what_is_captured_works_as_a_row_of_the_table() {
             active: Platforms::All,
             shown: Platforms::All,
         };
-        let tabla = Keymap::new(vec![row_2]);
+        let table = Keymap::new(vec![row_2]);
         let press = match captures(&[key_2(Key::A, mods), text_2(&c.to_string())])
             .first()
             .unwrap()
@@ -298,7 +298,7 @@ fn row_6_what_is_captured_works_as_a_row_of_the_table() {
             other_2 => panic!("{other_2:?}"),
         };
         assert_eq!(
-            tabla.action_for(&press, Platform::Linux),
+            table.action_for(&press, Platform::Linux),
             Some(AppAction::ZoomFit),
             "{c:?}"
         );
@@ -386,9 +386,9 @@ proptest! {
                             active: Platforms::All,
                             shown: Platforms::All,
                         };
-                        let tabla = Keymap::new(vec![row_2]);
+                        let table = Keymap::new(vec![row_2]);
                         prop_assert_eq!(
-                            tabla.action_for(&press, Platform::Linux),
+                            table.action_for(&press, Platform::Linux),
                             Some(AppAction::ZoomFit)
                         );
                     }

@@ -62,8 +62,8 @@ mod common;
 use common::toolbox::toolbox_2;
 use common::zones::toolbox_single;
 use common::{
-    PPPS, button_2, context, frame, in_points, key_2, mover, n_de, painted, tolerance_of_egui,
-    wheel_line,
+    PPPS, button_2, context, frame, in_points, key_2, move_pointer, n_de, painted,
+    tolerance_of_egui, wheel_line,
 };
 
 /// Pantalla de A6, A7 y P1: la imagen de 64×48 ocupa el centro.
@@ -811,7 +811,7 @@ fn row_a6_the_wheel_goes_down_to_1_64_and_up_to_x64_with_the_pixel_under_the_poi
         let (pos, physical) = pointer_central(ppp);
         let info = bench.go_to_level(6);
         assert_eq!(info.zoom, Zoom::ONE);
-        bench.runs(vec![mover(pos)], &[]);
+        bench.runs(vec![move_pointer(pos)], &[]);
         let mut pixel = bench
             .rest_2_2()
             .hover
@@ -861,7 +861,7 @@ fn row_a6_the_wheel_outward_saturates_at_1_64_and_half_way_goes_down_one_level_p
         let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
         let (pos, _) = pointer_central(ppp);
         bench.go_to_level(6);
-        bench.runs(vec![mover(pos)], &[]);
+        bench.runs(vec![move_pointer(pos)], &[]);
         let expected_2_2 = [
             "×1/2", "×1/4", "×1/8", "×1/16", "×1/32", "×1/64", "×1/64", "×1/64",
         ];
@@ -894,22 +894,22 @@ fn row_a6_the_plus_and_minus_keys_at_the_extremes_do_not_change_the_level() {
             bench.runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[]);
         }
         assert_eq!(bench.canvas.zoom(), Some(Zoom::MIN), "ppp {ppp}");
-        let antes = bench.rest_2_2().image_rect;
+        let before = bench.rest_2_2().image_rect;
         let info = bench
             .runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom, Zoom::MIN, "ppp {ppp}: `-` satura");
-        assert_eq!(info.image_rect, antes, "ppp {ppp}");
+        assert_eq!(info.image_rect, before, "ppp {ppp}");
         for _ in 0..80 {
             bench.runs(vec![key_2(Key::Equals, Modifiers::NONE)], &[]);
         }
         assert_eq!(bench.canvas.zoom(), Some(Zoom::MAX), "ppp {ppp}");
-        let antes = bench.rest_2_2().image_rect;
+        let before = bench.rest_2_2().image_rect;
         let info = bench
             .runs(vec![key_2(Key::Plus, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom, Zoom::MAX, "ppp {ppp}: `+` satura");
-        assert_eq!(info.image_rect, antes, "ppp {ppp}");
+        assert_eq!(info.image_rect, before, "ppp {ppp}");
     }
 }
 
@@ -962,7 +962,7 @@ fn row_a6_hover_and_stroke_begin_at_each_pixel_of_the_grid_and_one_outside() {
                 );
                 let pos = bench.pos(p.0, p.1);
                 // hover
-                let rest_2_2 = bench.runs(vec![mover(pos)], &[]);
+                let rest_2_2 = bench.runs(vec![move_pointer(pos)], &[]);
                 assert_eq!(
                     rest_2_2.info.hover,
                     o_hover(f, p, g.source_2, (64, 48)),
@@ -1007,7 +1007,7 @@ fn row_a6_at_1_k_hover_and_stroke_begin_are_multiples_of_k_and_outside_hover_is_
                 let p = (g.source_2.0 + dx, g.source_2.1 + dy);
                 let pos = bench.pos(p.0, p.1);
                 let inside = (0..ext_x).contains(&dx) && (0..ext_y).contains(&dy);
-                let hover = bench.runs(vec![mover(pos)], &[]).info.hover;
+                let hover = bench.runs(vec![move_pointer(pos)], &[]).info.hover;
                 let begin = bench.runs(vec![button_2(pos, true)], &[]).stroke_2();
                 bench.runs(vec![button_2(pos, false)], &[]);
                 let expected_2 = (dx as i32 * k, dy as i32 * k);
@@ -1051,14 +1051,14 @@ fn row_a6_home_fit_and_request_view_give_that_of_a4() {
         checks_rect(&info, ppp, (2048, 1536), "ajuste inicial");
         let g = bench.geom(&info);
         let f = levels[better];
-        for (axis, source_2, vista, dim) in [
+        for (axis, source_2, view, dim) in [
             ("x", g.source_2.0, viewport.width, 2048),
             ("y", g.source_2.1, viewport.height, 1536),
         ] {
             let extent = o_extent(f, dim);
             assert!(
-                (2 * source_2 + extent - i64::from(vista)).abs() <= 1,
-                "ppp {ppp}: centrada en {axis} (origen {source_2}, extent {extent}, lienzo {vista})"
+                (2 * source_2 + extent - i64::from(view)).abs() <= 1,
+                "ppp {ppp}: centrada en {axis} (origen {source_2}, extent {extent}, lienzo {view})"
             );
         }
         // Home.
@@ -1204,7 +1204,7 @@ proptest! {
         let pos = pos2((p.0 as f32 + pan.0) / ppp, (p.1 as f32 + pan.1) / ppp);
         prop_assert_eq!((pos.x * ppp).round() as i64, p.0);
         prop_assert_eq!((pos.y * ppp).round() as i64, p.1);
-        let hover = bench.runs(vec![mover(pos)], &[]).info.hover;
+        let hover = bench.runs(vec![move_pointer(pos)], &[]).info.hover;
         prop_assert_eq!(hover, o_hover(f, p, g.source_2, (64, 48)), "{} ppp {} {:?}", label(f), ppp, p);
         let begin = bench.runs(vec![button_2(pos, true)], &[]).stroke_2();
         prop_assert_eq!(
@@ -1246,18 +1246,18 @@ fn gesture_2(
     moves: &[(i64, i64)],
 ) -> Vec<CanvasEvent> {
     let pos = |d: (i64, i64)| bench.pos(source_2.0 + d.0, source_2.1 + d.1);
-    let (start_2, ultimo, targets) = (
+    let (start_2, last_2, targets) = (
         pos(from_2),
         pos(*moves.last().expect("al menos un movimiento")),
         moves.iter().map(|d| pos(*d)).collect::<Vec<_>>(),
     );
     let mut events_2 = Vec::new();
-    events_2.extend(bench.runs(vec![mover(start_2)], &[]).stroke_2());
+    events_2.extend(bench.runs(vec![move_pointer(start_2)], &[]).stroke_2());
     events_2.extend(bench.runs(vec![button_2(start_2, true)], &[]).stroke_2());
     for target_2 in targets {
-        events_2.extend(bench.runs(vec![mover(target_2)], &[]).stroke_2());
+        events_2.extend(bench.runs(vec![move_pointer(target_2)], &[]).stroke_2());
     }
-    events_2.extend(bench.runs(vec![button_2(ultimo, false)], &[]).stroke_2());
+    events_2.extend(bench.runs(vec![button_2(last_2, false)], &[]).stroke_2());
     without_moves_repeated(&events_2)
 }
 
@@ -1518,14 +1518,14 @@ fn row_a8_the_level_label_is_zoom_and_the_display() {
 fn column_with(ctx: &Context, label_2: &str) -> common::Painted {
     let screen = vec2(400.0, 600.0);
     let s = state_2(Some(Zoom::ONE));
-    let mut ultimo = None;
+    let mut last_2 = None;
     for _ in 0..2 {
         let shapes_2 = frame(ctx, screen, vec![], |ui| {
             toolbox_2(ui, &s, label_2);
         });
-        ultimo = Some(painted(&shapes_2));
+        last_2 = Some(painted(&shapes_2));
     }
-    ultimo.expect("dos fotogramas")
+    last_2.expect("dos fotogramas")
 }
 
 #[test]

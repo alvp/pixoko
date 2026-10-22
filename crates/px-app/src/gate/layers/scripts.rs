@@ -97,9 +97,9 @@ pub fn script_rgba(w: &mut World3) {
         !w.apply(&Rename(2, "copiada".to_string())),
         "mismo nombre: ningún paso"
     );
-    assert!(w.apply(&Mover(-1)));
-    assert!(w.apply(&Mover(1)));
-    assert!(!w.apply(&Mover(1)), "en el extremo no hay paso");
+    assert!(w.apply(&Move(-1)));
+    assert!(w.apply(&Move(1)));
+    assert!(!w.apply(&Move(1)), "en el extremo no hay paso");
     w.apply(&Blend(2, BlendMode::Screen));
     w.apply(&Opacity(2, 200));
     // Oculta y bloqueada: pintar se rechaza sin paso.
@@ -179,8 +179,8 @@ pub fn script_indexed(w: &mut World3) {
     w.apply(&Activate(1));
     assert!(w.apply(&Duplicate));
     w.apply(&Rename(2, "copia".to_string()));
-    assert!(w.apply(&Mover(-1)));
-    assert!(w.apply(&Mover(1)));
+    assert!(w.apply(&Move(-1)));
+    assert!(w.apply(&Move(1)));
     w.apply(&Visible(2, false));
     assert!(!w.apply(&Pencil(vec![(5, 5)], i(1))));
     w.apply(&Visible(2, true));

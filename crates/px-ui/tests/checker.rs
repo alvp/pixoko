@@ -649,8 +649,8 @@ fn row_15_only_the_value_1_activates_the_mesh_fallback() {
 
 #[test]
 fn row_15_no_other_value_similar_to_1_activates_it() {
-    for valor in [" 1", "1 ", "11", "01", "yes", "on", "TRUE", "-1"] {
-        assert!(!mesh_fallback_enabled(Some(valor)), "{valor:?}");
+    for value in [" 1", "1 ", "11", "01", "yes", "on", "TRUE", "-1"] {
+        assert!(!mesh_fallback_enabled(Some(value)), "{value:?}");
     }
 }
 
@@ -682,8 +682,8 @@ fn color_per_phase(x: i64, y: i64, source_2: (i64, i64), cell: i64) -> Rgba {
 
 /// Bordes de las casillas del eje: el principio del área, cada borde de casilla estrictamente
 /// dentro y el final.
-fn borders(start_2: i64, largo: i64, source_2: i64, cell: i64) -> Vec<i64> {
-    let fin = start_2 + largo;
+fn borders(start_2: i64, length_2: i64, source_2: i64, cell: i64) -> Vec<i64> {
+    let fin = start_2 + length_2;
     let mut v = vec![start_2];
     let mut k = (start_2 - source_2).div_euclid(cell) + 1;
     while source_2 + k * cell < fin {
@@ -694,10 +694,10 @@ fn borders(start_2: i64, largo: i64, source_2: i64, cell: i64) -> Vec<i64> {
     v
 }
 
-/// Número de casillas que corta el eje: `⌈(start_2 + largo − source_2) / cell⌉ − ⌊(start_2 − source_2) /
+/// Número de casillas que corta el eje: `⌈(start_2 + length_2 − source_2) / cell⌉ − ⌊(start_2 − source_2) /
 /// cell⌋`.
-fn boxes_of_the_axis(start_2: i64, largo: i64, source_2: i64, cell: i64) -> i64 {
-    let ceiling = -(-(start_2 + largo - source_2)).div_euclid(cell);
+fn boxes_of_the_axis(start_2: i64, length_2: i64, source_2: i64, cell: i64) -> i64 {
+    let ceiling = -(-(start_2 + length_2 - source_2)).div_euclid(cell);
     ceiling - (start_2 - source_2).div_euclid(cell)
 }
 

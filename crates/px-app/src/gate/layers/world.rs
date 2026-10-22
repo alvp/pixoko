@@ -75,7 +75,7 @@ impl World3 {
     }
 
     /// La pila que hay ahora en la sesión.
-    pub fn leer(&self) -> Stack {
+    pub fn read_2_2(&self) -> Stack {
         Stack::of_document(&self.s.document, position_active(&self.s))
     }
 
@@ -86,7 +86,7 @@ impl World3 {
     /// Pila y composición iguales al modelo y «modificado» coherente con el estado guardado.
     pub fn check(&self) {
         let ctx = &self.label_2;
-        if let Err(e) = self.m.equal(&self.leer()) {
+        if let Err(e) = self.m.equal(&self.read_2_2()) {
             panic!("{ctx}: la sesión no es el modelo: {e}");
         }
         let of_the_session = compose(&self.s.document).map_err(|e| format!("{e:?}"));
@@ -182,7 +182,7 @@ impl World3 {
             Order::New => s.new_layer().changed,
             Order::Duplicate => s.duplicate_layer().changed,
             Order::Remove => s.remove_layer().changed,
-            Order::Mover(delta) => s.move_layer(*delta).changed,
+            Order::Move(delta) => s.move_layer(*delta).changed,
             Order::Activate(i) => {
                 let id = s.document.layers()[*i].id();
                 s.set_active_layer(id).expect("activar");
@@ -251,18 +251,18 @@ impl World3 {
     /// Aplica la orden a la sesión y al modelo y comprueba que coinciden. Devuelve si hubo cambio.
     pub fn apply(&mut self, order: &Order) -> bool {
         let ctx = format!("{}: {order:?}", self.label_2);
-        let antes_id = self.s.document.state_id();
+        let before_id = self.s.document.state_id();
         let active_before = self.m.active_2;
         let mut new_2 = self.m.clone();
         if let Order::Convert(Mode::Indexed) = order {
-            return self.convert_to_indexed(order, &ctx, antes_id, active_before);
+            return self.convert_to_indexed(order, &ctx, before_id, active_before);
         }
         let effect = new_2.apply(order);
         let change = self.in_session(order);
         assert_eq!(change, effect.changes, "{ctx}: ¿hubo paso de historia?");
         let id = self.s.document.state_id();
         if change {
-            assert_ne!(id, antes_id, "{ctx}: state_id sin cambiar");
+            assert_ne!(id, before_id, "{ctx}: state_id sin cambiar");
             assert!(self.used.insert(id), "{ctx}: state_id repetido");
             self.snaps.truncate(self.pos + 1);
             self.pos += 1;
@@ -276,7 +276,7 @@ impl World3 {
                 creates: matches!(order, Order::New | Order::Duplicate),
             });
         } else {
-            assert_eq!(id, antes_id, "{ctx}: state_id cambió sin paso");
+            assert_eq!(id, before_id, "{ctx}: state_id cambió sin paso");
         }
         self.m = new_2;
         self.check();
@@ -290,7 +290,7 @@ impl World3 {
         &mut self,
         order: &Order,
         ctx: &str,
-        antes_id: u64,
+        before_id: u64,
         active_before: usize,
     ) -> bool {
         match self.s.convert_all(Mode::Indexed, Allowed::NOTHING) {
@@ -319,7 +319,7 @@ impl World3 {
             }
             other_2 => {
                 assert!(
-                    !matches!(other_2, Ok(true)) && self.s.document.state_id() == antes_id,
+                    !matches!(other_2, Ok(true)) && self.s.document.state_id() == before_id,
                     "{ctx}: convertir {other_2:?} cambió el estado"
                 );
                 self.check();
@@ -349,14 +349,14 @@ impl World3 {
     /// Tras `undo` o `redo`: contenido igual al de la instantánea, `state_id` y la capa activa
     /// (la de antes del paso al deshacer una orden de estructura, la de después al rehacerla; en
     /// las demás no cambia).
-    fn after_history(&mut self, pos: usize, active_expected: Option<usize>, antes: LayerId) {
+    fn after_history(&mut self, pos: usize, active_expected: Option<usize>, before: LayerId) {
         let ctx = format!(
             "{} (instantánea {pos}, paso «{}»)",
             self.label_2, self.snaps[pos].order
         );
         let snap = &self.snaps[pos];
         assert_eq!(self.s.document.state_id(), snap.id, "{ctx}: state_id");
-        let read = self.leer();
+        let read = self.read_2_2();
         if let Err(e) = snap.stack.equal_content(&read) {
             panic!("{ctx}: la sesión no es la instantánea: {e}");
         }
@@ -366,14 +366,14 @@ impl World3 {
         let active_expected = self.active_in_boundary(pos).or(active_expected);
         match active_expected {
             Some(expected) => assert_eq!(read.active_2, expected, "{ctx}: capa activa"),
-            None => assert_eq!(self.s.active_layer(), antes, "{ctx}: la activa cambió"),
+            None => assert_eq!(self.s.active_layer(), before, "{ctx}: la activa cambió"),
         }
         self.m = read;
         self.check();
     }
 
     pub fn undo(&mut self) {
-        let antes = self.s.active_layer();
+        let before = self.s.active_layer();
         // Lo que depende del estado de antes de deshacer: la capa que creó el paso.
         let created = (self.pos > 0 && self.snaps[self.pos].creates)
             .then(|| self.s.document.layers()[self.snaps[self.pos].stack.active_2].id());
@@ -395,16 +395,16 @@ impl World3 {
         // posición, o a la última (`keep_active_layer`); si era otra, no cambia.
         let expected = if step.creates {
             let stay = self.snaps[self.pos - 1].stack.layers_2.len();
-            (Some(antes) == created).then(|| step.stack.active_2.min(stay - 1))
+            (Some(before) == created).then(|| step.stack.active_2.min(stay - 1))
         } else {
             step.structural.then_some(step.active_before)
         };
         self.pos -= 1;
-        self.after_history(self.pos, expected, antes);
+        self.after_history(self.pos, expected, before);
     }
 
     pub fn redo(&mut self) {
-        let antes = self.s.active_layer();
+        let before = self.s.active_layer();
         // Lo que depende del estado de antes de rehacer: la capa que quitará el paso.
         let removed = self.snaps.get(self.pos + 1).and_then(|step| {
             (step.structural && !step.creates && !step.fusion)
@@ -429,11 +429,11 @@ impl World3 {
         let expected = if step.creates || step.fusion {
             Some(step.stack.active_2)
         } else if step.structural {
-            (Some(antes) == removed).then_some(step.stack.active_2)
+            (Some(before) == removed).then_some(step.stack.active_2)
         } else {
             None
         };
-        self.after_history(self.pos, expected, antes);
+        self.after_history(self.pos, expected, before);
     }
 
     /// `undo` hasta el principio (y uno más, que debe fallar); devuelve cuántos hizo.
@@ -462,7 +462,7 @@ impl World3 {
     /// también: ni el documento ni la historia cambian.
     pub fn rejects_convert(&mut self, target_2: Mode) {
         assert!(self.s.document.layers().len() > 1);
-        let antes = self.s.document.state_id();
+        let before = self.s.document.state_id();
         assert!(
             self.s.convert_mode(target_2, Allowed::NOTHING).is_err(),
             "{}: convert_mode con varias capas debía dar error",
@@ -475,7 +475,7 @@ impl World3 {
             "{}: convertir a gris con alfa sin permiso debía dar error",
             self.label_2
         );
-        assert_eq!(self.s.document.state_id(), antes, "{}", self.label_2);
+        assert_eq!(self.s.document.state_id(), before, "{}", self.label_2);
         self.check();
     }
 }

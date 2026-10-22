@@ -366,7 +366,7 @@ fn row_11_opening_a_file_resets_the_view() {
 #[test]
 fn row_11_an_open_with_an_error_does_not_change_the_view() {
     let tmp = TmpDir::new();
-    let vista = PanelView {
+    let view = PanelView {
         offset_px: 30,
         rest_px: 1,
         last_visible: Some(3),
@@ -375,9 +375,9 @@ fn row_11_an_open_with_an_error_does_not_change_the_view() {
     };
     for discard in [false, true] {
         let mut session = Session::sample(Document::new(image_256()));
-        session.view = vista;
+        session.view = view;
         let result = session.open(&tmp.path().join("no-existe.png"), 16384, discard);
         assert!(result.is_err(), "discard {discard}");
-        assert_eq!(session.view, vista, "discard {discard}");
+        assert_eq!(session.view, view, "discard {discard}");
     }
 }

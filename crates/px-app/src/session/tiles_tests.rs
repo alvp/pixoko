@@ -407,7 +407,7 @@ fn row_b3_take_changes_of_the_line_and_the_fill() {
     let mut tools_2 = ToolState::new();
     // Línea de (5, 5) a (130, 70): sus píxeles son los que cambian, y su región son sus bloques.
     tools_2.apply_action(ToolAction::Select(Tool::Line));
-    let antes = s.document.image(id).expect("imagen").clone();
+    let before = s.document.image(id).expect("imagen").clone();
     let changes_2 = stroke_of_pencil(
         &mut s,
         &mut tools_2,
@@ -421,7 +421,7 @@ fn row_b3_take_changes_of_the_line_and_the_fill() {
     let mut changed = Vec::new();
     for y in 0..TEST_HEIGHT {
         for x in 0..TEST_WIDTH {
-            if antes.get_pixel(x, y) != after_2.get_pixel(x, y) {
+            if before.get_pixel(x, y) != after_2.get_pixel(x, y) {
                 changed.push((x, y));
             }
         }
@@ -957,7 +957,7 @@ struct TestSnapshot {
     path_2: Option<PathBuf>,
     modified_2: bool,
     textures: Vec<TextureId>,
-    vivas: usize,
+    live: usize,
     zoom: Option<px_ui::view::Zoom>,
 }
 
@@ -971,7 +971,7 @@ fn snapshot(app: &App, ctx: &Context) -> TestSnapshot {
         path_2: app.session.path().map(Path::to_path_buf),
         modified_2: app.session.modified(),
         textures: app.canvas.texture_ids(),
-        vivas: ctx.tex_manager().read().num_allocated(),
+        live: ctx.tex_manager().read().num_allocated(),
         zoom: app.canvas.zoom(),
     }
 }
@@ -1016,7 +1016,7 @@ fn row_b12_opening_with_the_failure_at_tile_3_warns_5_seconds_and_leaves_everyth
         &Image::new(2049, 1, Mode::Gray).expect("imagen"),
     );
     let (mut app, ctx) = app_with_history(&tmp);
-    let antes = snapshot(&app, &ctx);
+    let before = snapshot(&app, &ctx);
     app.tile_alloc = Fail::after(2);
     app.notice = None;
     // Con cambios sin guardar, abrir sin confirmar pide repetir: `confirmed` descarta de verdad.
@@ -1026,14 +1026,14 @@ fn row_b12_opening_with_the_failure_at_tile_3_warns_5_seconds_and_leaves_everyth
     assert_ne!(text_2, "", "hay un motivo");
     assert_eq!(
         snapshot(&app, &ctx),
-        antes,
+        before,
         "sesión, documento y lienzo intactos"
     );
     // El lienzo sigue pintando lo de antes, sin errores.
     let info = frame(&mut app, &ctx);
     assert_eq!(info.error, None);
     assert_eq!(app.canvas.tile_count(), 1);
-    assert_eq!(snapshot(&app, &ctx), antes);
+    assert_eq!(snapshot(&app, &ctx), before);
 }
 
 #[test]
@@ -1056,7 +1056,7 @@ fn row_b12_opening_without_a_failure_the_same_file_does_work() {
 fn row_b12_new_image_with_the_failure_warns_5_seconds_and_leaves_everything_as_it_was() {
     let tmp = Tmp::new_2();
     let (mut app, ctx) = app_with_history(&tmp);
-    let antes = snapshot(&app, &ctx);
+    let before = snapshot(&app, &ctx);
     let values_2 = Dialog::new(ModalKind::NewImage, new_image_form(Canvas::MAX_SIDE))
         .expect("el formulario es válido")
         .values()
@@ -1068,12 +1068,12 @@ fn row_b12_new_image_with_the_failure_warns_5_seconds_and_leaves_everything_as_i
     five_second_notice(&app, &ctx);
     assert_eq!(
         snapshot(&app, &ctx),
-        antes,
+        before,
         "sesión, documento y lienzo intactos"
     );
     let info = frame(&mut app, &ctx);
     assert_eq!(info.error, None);
-    assert_eq!(snapshot(&app, &ctx), antes);
+    assert_eq!(snapshot(&app, &ctx), before);
 
     // Control: con memoria, la nueva imagen de 64×64 sí reemplaza el documento.
     app.tile_alloc = Box::new(px_ui::tiles::SystemTileAlloc);
@@ -1095,8 +1095,8 @@ fn row_b12_new_image_with_the_failure_warns_5_seconds_and_leaves_everything_as_i
 fn row_b12_converting_with_the_failure_warns_5_seconds_undoes_and_leaves_redo_available() {
     let tmp = Tmp::new_2();
     let (mut app, ctx) = app_with_history(&tmp);
-    let antes = snapshot(&app, &ctx);
-    assert!(antes.can_undo && !antes.can_redo);
+    let before = snapshot(&app, &ctx);
+    assert!(before.can_undo && !before.can_redo);
     let (zoom, rect) = {
         let info = frame(&mut app, &ctx);
         (info.zoom, info.image_rect)
@@ -1117,16 +1117,16 @@ fn row_b12_converting_with_the_failure_warns_5_seconds_undoes_and_leaves_redo_av
     let after_2 = snapshot(&app, &ctx);
     assert!(after_2.can_redo, "rehacer disponible");
     assert!(after_2.can_undo, "los pasos de antes siguen");
-    assert_eq!(after_2.state_2, antes.state_2);
+    assert_eq!(after_2.state_2, before.state_2);
     assert_eq!(
-        after_2.image_2, antes.image_2,
+        after_2.image_2, before.image_2,
         "el documento es el de antes"
     );
     assert_eq!(after_2.image_2.mode(), Mode::Rgba);
-    assert_eq!(after_2.path_2, antes.path_2);
+    assert_eq!(after_2.path_2, before.path_2);
     // La vista del lienzo se conserva.
-    assert_eq!(after_2.zoom, antes.zoom);
-    assert_eq!(after_2.textures, antes.textures);
+    assert_eq!(after_2.zoom, before.zoom);
+    assert_eq!(after_2.textures, before.textures);
     let info = frame(&mut app, &ctx);
     assert_eq!((info.zoom, info.image_rect), (zoom, rect));
     assert_eq!(info.error, None);
@@ -1134,7 +1134,7 @@ fn row_b12_converting_with_the_failure_warns_5_seconds_undoes_and_leaves_redo_av
     app.tile_alloc = Box::new(px_ui::tiles::SystemTileAlloc);
     app.canvas.invalidate_all();
     frame(&mut app, &ctx);
-    assert_eq!(app.session.document.state_id(), antes.state_2);
+    assert_eq!(app.session.document.state_id(), before.state_2);
 }
 
 #[test]
@@ -1142,7 +1142,7 @@ fn row_b12_converting_without_a_failure_applies_the_conversion_and_refreshes_the
     // Control: sin fallo, el documento pasa a gris con alfa y la historia crece un paso.
     let tmp = Tmp::new_2();
     let (mut app, ctx) = app_with_history(&tmp);
-    let antes = app.session.document.state_id();
+    let before = app.session.document.state_id();
     let plan = Plan {
         target: Mode::GrayAlpha,
         allowed: Allowed {
@@ -1158,7 +1158,7 @@ fn row_b12_converting_without_a_failure_applies_the_conversion_and_refreshes_the
         .image(ImageId::from_raw(0))
         .expect("imagen");
     assert_eq!(image_2.mode(), Mode::GrayAlpha);
-    assert_ne!(app.session.document.state_id(), antes);
+    assert_ne!(app.session.document.state_id(), before);
     assert!(!app.session.document.can_redo());
     frame(&mut app, &ctx);
 }

@@ -481,14 +481,14 @@ fn row_7_indexed_of_256_one_step_per_press_in_both_directions() {
 #[test]
 fn row_7_indexed_of_9_wraps_around_in_both_directions_and_walks_all_the_entries() {
     let mut world = World::new_2(indexed(9), 0, 0);
-    let mut vistas = vec![world.session.choice];
+    let mut views = vec![world.session.choice];
     for _ in 0..9 {
         world.dispatches(AppAction::ColorNext, Origin::Key);
-        vistas.push(world.session.choice);
+        views.push(world.session.choice);
     }
     let expected_2_2: Vec<ColorChoice> = (0..=9u8).map(|i| ColorChoice::Entry(i % 9)).collect();
     assert_eq!(
-        vistas, expected_2_2,
+        views, expected_2_2,
         "nueve pasos hacia delante y vuelta al principio"
     );
     let mut back = vec![world.session.choice];
@@ -580,13 +580,13 @@ fn row_7_gray_and_gray_alpha_also_wrap_around_in_the_nine_slots() {
 fn row_7_choosing_a_color_does_not_change_the_document_or_the_history() {
     for image in [indexed(9), rgba(), gray(), gray_alpha()] {
         let mut world = World::new_2(image, 3, 1);
-        let antes = world.document();
+        let before = world.document();
         for _ in 0..12 {
             world.dispatches(AppAction::ColorNext, Origin::Key);
             world.dispatches(AppAction::ColorPrev, Origin::Key);
             world.dispatches(AppAction::ColorPrev, Origin::Key);
         }
-        assert_eq!(world.document(), antes, "{:?}", world.image_2().mode());
+        assert_eq!(world.document(), before, "{:?}", world.image_2().mode());
     }
 }
 
@@ -666,7 +666,7 @@ fn row_8_color_next_and_color_prev_are_blocked_with_each_lock_and_source_like_se
             let locks = locks_2(bits);
             for origin in SOURCES {
                 let mut world = World::standard();
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 let result = world.dispatches_with(action, origin, locks);
                 // Las mismas reglas que `SelectColor`: cualquier bloqueo (gesto, campo de texto,
                 // quita pendiente, diálogo y modal) la para.
@@ -687,10 +687,10 @@ fn row_8_color_next_and_color_prev_are_blocked_with_each_lock_and_source_like_se
                     "{action:?} se bloquea como SelectColor con {locks:?} y {origin:?}"
                 );
                 if locked_2 {
-                    assert_eq!(world.snapshot(), antes, "{action:?} con {locks:?}");
+                    assert_eq!(world.snapshot(), before, "{action:?} con {locks:?}");
                 } else {
                     assert_eq!(result, done(false));
-                    assert_ne!(world.session.choice, antes.choice);
+                    assert_ne!(world.session.choice, before.choice);
                 }
             }
         }
@@ -704,13 +704,13 @@ fn row_8_color_next_and_color_prev_are_blocked_with_each_lock_and_source_like_se
 fn row_8_color_next_and_color_prev_with_a_stroke_in_progress_are_still_allowed() {
     for action in [AppAction::ColorNext, AppAction::ColorPrev] {
         let mut world = world_with_gesture(TestGesture::Stroke);
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(
             world.dispatches(action, Origin::Key),
             done(false),
             "{action:?}"
         );
-        assert_ne!(world.session.choice, antes.choice, "{action:?}");
+        assert_ne!(world.session.choice, before.choice, "{action:?}");
         assert!(world.tools.busy(), "el trazo sigue en curso");
     }
 }
@@ -720,13 +720,13 @@ fn row_8_color_next_and_color_prev_do_nothing_with_the_slider_or_a_swatch_being_
     for gesture in [TestGesture::Slider, TestGesture::Swatch] {
         for action in [AppAction::ColorNext, AppAction::ColorPrev] {
             let mut world = world_with_gesture(gesture);
-            let antes = world.snapshot();
+            let before = world.snapshot();
             assert_eq!(
                 world.dispatches(action, Origin::Key),
                 Dispatched::Blocked,
                 "{gesture:?}: {action:?}"
             );
-            assert_eq!(world.snapshot(), antes, "{gesture:?}: {action:?}");
+            assert_eq!(world.snapshot(), before, "{gesture:?}: {action:?}");
         }
     }
 }
@@ -735,14 +735,14 @@ fn row_8_color_next_and_color_prev_do_nothing_with_the_slider_or_a_swatch_being_
 fn row_8_color_next_and_color_prev_are_blocked_with_a_pending_removal() {
     for action in [AppAction::ColorNext, AppAction::ColorPrev] {
         let mut world = world_with_a_pending_removal();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert!(world.locks().removal);
         assert_eq!(
             world.dispatches(action, Origin::Key),
             Dispatched::Blocked,
             "{action:?}"
         );
-        assert_eq!(world.snapshot(), antes, "{action:?}");
+        assert_eq!(world.snapshot(), before, "{action:?}");
     }
 }
 
@@ -752,7 +752,7 @@ fn row_8_center_on_cursor_is_blocked_only_by_a_modal_dialog_and_by_a_key_with_a_
         let locks = locks_2(bits);
         for origin in SOURCES {
             let mut world = World::standard();
-            let antes = world.snapshot();
+            let before = world.snapshot();
             let result = world.dispatches_with(AppAction::CenterOnCursor, origin, locks);
             let locked_2 =
                 locks.dialog || locks.modal || (locks.text_focus && origin == Origin::Key);
@@ -770,7 +770,7 @@ fn row_8_center_on_cursor_is_blocked_only_by_a_modal_dialog_and_by_a_key_with_a_
                 assert_eq!(result, Dispatched::View(ViewOp::CenterOnCursor));
             }
             // Es una acción de vista: no toca el documento ni la elección ni la herramienta.
-            assert_eq!(world.snapshot(), antes, "CenterOnCursor con {locks:?}");
+            assert_eq!(world.snapshot(), before, "CenterOnCursor con {locks:?}");
         }
     }
 }
@@ -779,21 +779,21 @@ fn row_8_center_on_cursor_is_blocked_only_by_a_modal_dialog_and_by_a_key_with_a_
 fn row_8_center_on_cursor_is_stopped_neither_by_a_real_gesture_nor_by_a_pending_removal() {
     for gesture in GESTURES {
         let mut world = world_with_gesture(gesture);
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(
             world.dispatches(AppAction::CenterOnCursor, Origin::Key),
             Dispatched::View(ViewOp::CenterOnCursor),
             "{gesture:?}"
         );
-        assert_eq!(world.snapshot(), antes, "{gesture:?}");
+        assert_eq!(world.snapshot(), before, "{gesture:?}");
     }
     let mut world = world_with_a_pending_removal();
-    let antes = world.snapshot();
+    let before = world.snapshot();
     assert_eq!(
         world.dispatches(AppAction::CenterOnCursor, Origin::Key),
         Dispatched::View(ViewOp::CenterOnCursor)
     );
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
 }
 
 #[test]
@@ -873,14 +873,14 @@ fn row_8_with_a_file_dialog_every_row_of_the_table_gives_blocked_also_home_page_
     );
     for (action, platform) in rows {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         let locks = locks_with(|l| l.dialog = true);
         assert_eq!(
             world.dispatches_with(action, Origin::Key, locks),
             Dispatched::Blocked,
             "{action:?} en {platform:?} con un diálogo de archivo"
         );
-        assert_eq!(world.snapshot(), antes, "{action:?} en {platform:?}");
+        assert_eq!(world.snapshot(), before, "{action:?} en {platform:?}");
     }
 }
 
@@ -888,7 +888,7 @@ fn row_8_with_a_file_dialog_every_row_of_the_table_gives_blocked_also_home_page_
 fn row_8_with_the_modal_panel_every_row_gives_blocked_except_quit() {
     for (action, platform) in rows_active() {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         let locks = locks_with(|l| l.modal = true);
         let result = world.dispatches_with(action, Origin::Key, locks);
         if action == AppAction::Quit {
@@ -901,7 +901,7 @@ fn row_8_with_the_modal_panel_every_row_gives_blocked_except_quit() {
                 "{action:?} en {platform:?} con el panel modal"
             );
         }
-        assert_eq!(world.snapshot(), antes, "{action:?} en {platform:?}");
+        assert_eq!(world.snapshot(), before, "{action:?} en {platform:?}");
     }
 }
 
@@ -919,13 +919,13 @@ fn row_8_with_a_modal_the_page_up_page_down_home_keys_give_blocked_and_end_gives
             assert_eq!(actions, expected.into_iter().collect::<Vec<_>>(), "{key:?}");
             for action in actions {
                 let mut world = World::standard();
-                let antes = world.snapshot();
+                let before = world.snapshot();
                 assert_eq!(
                     world.dispatches_with(action, Origin::Key, locks),
                     Dispatched::Blocked,
                     "{key:?} en {platform:?}"
                 );
-                assert_eq!(world.snapshot(), antes);
+                assert_eq!(world.snapshot(), before);
             }
         }
     }
@@ -1126,12 +1126,12 @@ fn row_9_the_dispatched_and_the_final_state_are_equal_from_the_menu_the_button_a
         }
 
         // Y lo que cada una hace.
-        let antes = World::standard().snapshot();
+        let before = World::standard().snapshot();
         let (_, result, after_2) = &results[0];
         match case.expected {
             AppAction::Undo => {
                 assert_eq!(*result, done(true));
-                assert_ne!(after_2.state_id, antes.state_id);
+                assert_ne!(after_2.state_id, before.state_id);
                 assert!(after_2.can_redo);
             }
             AppAction::SelectTool(Tool::Eraser) => {
@@ -1148,7 +1148,7 @@ fn row_9_the_dispatched_and_the_final_state_are_equal_from_the_menu_the_button_a
             AppAction::SelectTool(tool) => {
                 assert_eq!(*result, done(false));
                 assert_eq!(after_2.tool, tool);
-                assert_eq!(after_2.state_id, antes.state_id);
+                assert_eq!(after_2.state_id, before.state_id);
             }
             AppAction::ZoomIn => assert_eq!(*result, Dispatched::View(ViewOp::ZoomIn)),
             AppAction::ZoomOut => assert_eq!(*result, Dispatched::View(ViewOp::ZoomOut)),
@@ -1212,9 +1212,9 @@ fn eraser_k_chooses_the_eraser_with_or_without_caps_lock_and_shift_k_clears_the_
     world.dispatches(AppAction::SelectTool(Tool::Eraser), Origin::Key);
     assert_eq!(world.tools.tool(), Tool::Eraser);
     let mut world = World::standard();
-    let antes = world.snapshot();
+    let before = world.snapshot();
     world.dispatches(AppAction::ClearPage, Origin::Key);
-    assert_eq!(world.tools.tool(), antes.tool);
+    assert_eq!(world.tools.tool(), before.tool);
 }
 
 #[test]
@@ -1231,21 +1231,21 @@ fn eraser_k_does_not_act_with_a_focused_field_an_open_dialog_or_a_stroke_in_prog
         locks_with(|l| l.text_focus = true),
     ] {
         let mut world = World::standard();
-        let antes = world.snapshot();
+        let before = world.snapshot();
         assert_eq!(
             world.dispatches_with(AppAction::SelectTool(Tool::Eraser), Origin::Key, locks),
             Dispatched::Blocked
         );
-        assert_eq!(world.snapshot(), antes);
+        assert_eq!(world.snapshot(), before);
     }
     // Trazo en curso: bloqueada también.
     let mut world = world_with_gesture(TestGesture::Stroke);
-    let antes = world.snapshot();
+    let before = world.snapshot();
     assert_eq!(
         world.dispatches(AppAction::SelectTool(Tool::Eraser), Origin::Key),
         Dispatched::Blocked
     );
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
     assert_ne!(world.tools.tool(), Tool::Eraser);
 }
 
@@ -1282,12 +1282,12 @@ fn row_10_select_color_3_direct_in_rgba_chooses_slot_3() {
 #[test]
 fn row_10_select_color_keeps_blocking_as_before() {
     let mut world = world_with_a_pending_removal();
-    let antes = world.snapshot();
+    let before = world.snapshot();
     assert_eq!(
         world.dispatches(AppAction::SelectColor(1), Origin::Key),
         Dispatched::Blocked
     );
-    assert_eq!(world.snapshot(), antes);
+    assert_eq!(world.snapshot(), before);
 }
 
 #[test]

@@ -34,10 +34,10 @@ fn base() -> Png {
 }
 
 /// `base()` con esos chunks entre IHDR e IDAT y después del IDAT.
-fn with(antes: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
+fn with(before: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
     let mut png = base();
-    for c in antes {
-        png = png.antes(c.clone());
+    for c in before {
+        png = png.before(c.clone());
     }
     for c in after {
         png = png.after(c.clone());
@@ -45,12 +45,12 @@ fn with(antes: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
     png.bytes()
 }
 
-/// Inserta chunks en un PNG de `write_png` (un solo IDAT): `antes` justo tras el IHDR (que
+/// Inserta chunks en un PNG de `write_png` (un solo IDAT): `before` justo tras el IHDR (que
 /// acaba en el byte 33) y `after` justo antes del IEND (los últimos 12 bytes).
-fn inserts(bytes: &[u8], antes: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
+fn inserts(bytes: &[u8], before: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
     let iend = bytes.len() - 12;
     let mut v = bytes[..33].to_vec();
-    for c in antes {
+    for c in before {
         v.extend(c);
     }
     v.extend(&bytes[33..iend]);
@@ -87,8 +87,8 @@ fn c_srgb() -> Vec<u8> {
     piece(b"sRGB", &[0])
 }
 
-fn c_gamma(valor: u32) -> Vec<u8> {
-    piece(b"gAMA", &valor.to_be_bytes())
+fn c_gamma(value: u32) -> Vec<u8> {
+    piece(b"gAMA", &value.to_be_bytes())
 }
 
 /// Blanco D65 y primarios de sRGB, por este orden: blanco x e y, rojo, verde y azul.
@@ -170,7 +170,7 @@ fn row_1_without_auxiliaries_the_report_is_empty() {
 
     let indexed = Png::new(2, 1, 8, 3)
         .swatches(&[0, 1])
-        .antes(plte(&[(0, 0, 0), (255, 0, 0)]))
+        .before(plte(&[(0, 0, 0), (255, 0, 0)]))
         .bytes();
     let r = lee(&indexed);
     assert_eq!(r.aux, AuxReport::default());
@@ -494,13 +494,13 @@ fn row_6_declared_length_of_2_31_minus_1_with_a_short_file_is_decode() {
     for kind in [b"eXIf", b"iCCP", b"tEXt", b"teSt"] {
         let name_2 = String::from_utf8_lossy(kind).into_owned();
         // Antes del IDAT (tras el IHDR) y después (antes del IEND).
-        let mut antes = valid[..33].to_vec();
-        antes.extend(giant(kind));
-        antes.extend(&valid[33..]);
+        let mut before = valid[..33].to_vec();
+        before.extend(giant(kind));
+        before.extend(&valid[33..]);
         let mut after = valid[..iend].to_vec();
         after.extend(giant(kind));
         after.extend(&valid[iend..]);
-        for (location, bytes) in [("antes", antes), ("después", after)] {
+        for (location, bytes) in [("antes", before), ("después", after)] {
             let r = read_png(&bytes);
             assert!(es_decode(&r), "{name_2} {location} del IDAT: {r:?}");
         }
@@ -529,12 +529,12 @@ fn apng(with_actl: bool, extra: &[Vec<u8>]) -> Vec<u8> {
     fdat.extend(zlib_stored(&[0, 30, 40], 0));
     let mut png = Png::new(2, 1, 8, 0).swatches(&[10, 20]);
     for c in extra {
-        png = png.antes(c.clone());
+        png = png.before(c.clone());
     }
     if with_actl {
-        png = png.antes(c_actl());
+        png = png.before(c_actl());
     }
-    png.antes(piece(b"fcTL", &fctl(0)))
+    png.before(piece(b"fcTL", &fctl(0)))
         .after(piece(b"fcTL", &fctl(1)))
         .after(piece(b"fdAT", &fdat))
         .bytes()
@@ -570,7 +570,7 @@ fn row_7_fctl_without_actl_is_listed_but_does_not_trigger_the_copy() {
     // Un APNG roto: `fcTL` (y `fdAT`) sin `acTL`.
     let without_actl = Png::new(2, 1, 8, 0)
         .swatches(&[10, 20])
-        .antes(piece(b"fcTL", &fctl(0)))
+        .before(piece(b"fcTL", &fctl(0)))
         .bytes();
     let r = lee(&without_actl);
     assert_eq!(r.aux, report(&[AuxChunk::Animation], None));
@@ -615,9 +615,9 @@ proptest! {
         chunks in vec((aux_valid(), any::<bool>()), 0..=8),
     ) {
         let without_bytes = write_png(&img).unwrap();
-        let antes: Vec<Vec<u8>> = chunks.iter().filter(|(_, d)| !d).map(|(c, _)| c.clone()).collect();
+        let before: Vec<Vec<u8>> = chunks.iter().filter(|(_, d)| !d).map(|(c, _)| c.clone()).collect();
         let after: Vec<Vec<u8>> = chunks.iter().filter(|(_, d)| *d).map(|(c, _)| c.clone()).collect();
-        let with_bytes = inserts(&without_bytes, &antes, &after);
+        let with_bytes = inserts(&without_bytes, &before, &after);
 
         let without = read_png(&without_bytes).unwrap();
         let with = read_png(&with_bytes).unwrap();
@@ -648,7 +648,7 @@ struct Garbage {
 
 impl Garbage {
     fn bytes(&self) -> Vec<u8> {
-        let largo = if self.declares_of_more {
+        let length = if self.declares_of_more {
             u32::MAX >> 1
         } else {
             self.data.len() as u32
@@ -659,7 +659,7 @@ impl Garbage {
         if !self.crc_good {
             crc ^= 0xFF;
         }
-        let mut v = largo.to_be_bytes().to_vec();
+        let mut v = length.to_be_bytes().to_vec();
         v.extend(&body);
         v.extend(crc.to_be_bytes());
         v
@@ -721,9 +721,9 @@ proptest! {
         changes in vec((any::<usize>(), any::<u8>()), 1..=4),
     ) {
         let valid = write_png(&img).unwrap();
-        let antes: Vec<Vec<u8>> = chunks.iter().filter(|c| !c.after).map(Garbage::bytes).collect();
+        let before: Vec<Vec<u8>> = chunks.iter().filter(|c| !c.after).map(Garbage::bytes).collect();
         let after: Vec<Vec<u8>> = chunks.iter().filter(|c| c.after).map(Garbage::bytes).collect();
-        let mut bytes = inserts(&valid, &antes, &after);
+        let mut bytes = inserts(&valid, &before, &after);
         for (location, new_2) in changes {
             let i = location % bytes.len();
             bytes[i] = new_2;
@@ -772,8 +772,8 @@ impl CaseColor {
 }
 
 /// Bytes de un chunk con la longitud pedida: los de `base` recortados o completados con ceros.
-fn with_length(mut base: Vec<u8>, largo: usize) -> Vec<u8> {
-    base.resize(largo, 0);
+fn with_length(mut base: Vec<u8>, length: usize) -> Vec<u8> {
+    base.resize(length, 0);
     base
 }
 
@@ -786,11 +786,11 @@ fn case_color() -> impl Strategy<Value = CaseColor> {
             0u8..=1,
             select(vec![4usize, 4, 4, 3, 5, 0]),
         )
-            .prop_map(|(p, t, r, largo)| with_length(vec![p, t, 0, r], largo)),
+            .prop_map(|(p, t, r, length)| with_length(vec![p, t, 0, r], length)),
     );
     let srgb = proptest::option::of(
         (any::<u8>(), select(vec![1usize, 1, 1, 0, 2]))
-            .prop_map(|(v, largo)| with_length(vec![v], largo)),
+            .prop_map(|(v, length)| with_length(vec![v], length)),
     );
     let gamma = proptest::option::of(
         (
@@ -802,7 +802,7 @@ fn case_color() -> impl Strategy<Value = CaseColor> {
             ],
             select(vec![4usize, 4, 4, 3, 5]),
         )
-            .prop_map(|(g, largo)| with_length(g.to_be_bytes().to_vec(), largo)),
+            .prop_map(|(g, length)| with_length(g.to_be_bytes().to_vec(), length)),
     );
     let deviation = select(vec![0i64, 0, 0, 1000, -1000, 1001, -1001, 20_000, -20_000]);
     let chrm = proptest::option::of(
@@ -810,16 +810,16 @@ fn case_color() -> impl Strategy<Value = CaseColor> {
             proptest::array::uniform8(deviation),
             select(vec![32usize, 32, 32, 31, 33]),
         )
-            .prop_map(|(d, largo)| {
+            .prop_map(|(d, length)| {
                 let data: Vec<u8> = CHRM_SRGB
                     .iter()
                     .zip(d)
                     .flat_map(|(&v, d)| {
-                        let valor = u32::try_from((i64::from(v) + d).max(0)).unwrap();
-                        valor.to_be_bytes()
+                        let value = u32::try_from((i64::from(v) + d).max(0)).unwrap();
+                        value.to_be_bytes()
                     })
                     .collect();
-                with_length(data, largo)
+                with_length(data, length)
             }),
     );
     (any::<bool>(), iccp, cicp, srgb, gamma, chrm).prop_map(
@@ -871,9 +871,9 @@ fn found_expected(c: &CaseColor) -> Vec<AuxChunk> {
     if c.iccp.is_some() {
         found.push(AuxChunk::Icc);
     }
-    let mut with_size = |present: &Option<Vec<u8>>, largo: usize, kind: AuxChunk| {
+    let mut with_size = |present: &Option<Vec<u8>>, length: usize, kind: AuxChunk| {
         if let Some(d) = present {
-            found.push(if d.len() == largo {
+            found.push(if d.len() == length {
                 kind
             } else {
                 AuxChunk::Other

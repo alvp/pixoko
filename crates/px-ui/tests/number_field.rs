@@ -253,9 +253,9 @@ fn row_2_with_invalid_or_out_of_range_text_it_puts_the_default_value() {
         }
     }
     // Un millón de caracteres: sin pánico y el valor por defecto.
-    let largo = "9".repeat(1_000_000);
-    assert_eq!(step_number(&largo, 1, 8192, 7, 1), "7");
-    assert_eq!(step_number(&largo, 1, 8192, 7, -1), "7");
+    let length_2 = "9".repeat(1_000_000);
+    assert_eq!(step_number(&length_2, 1, 8192, 7, 1), "7");
+    assert_eq!(step_number(&length_2, 1, 8192, 7, -1), "7");
 }
 
 #[test]
@@ -302,9 +302,13 @@ fn row_2_bounded_text_limits_to_eleven_characters() {
     assert_eq!(bounded_text("12345678901"), "12345678901");
     assert_eq!(bounded_text("123456789012"), "12345678901");
     assert_eq!(bounded_text("abc"), "abc");
-    let largo = bounded_text(&"9".repeat(1_000_000));
-    assert_eq!(largo, "99999999999");
-    assert!(largo.capacity() <= 4096, "capacidad {}", largo.capacity());
+    let length_2 = bounded_text(&"9".repeat(1_000_000));
+    assert_eq!(length_2, "99999999999");
+    assert!(
+        length_2.capacity() <= 4096,
+        "capacidad {}",
+        length_2.capacity()
+    );
 }
 
 #[test]
@@ -320,9 +324,13 @@ fn row_2_bounded_text_cuts_at_a_character_boundary() {
         let a = bounded_text(&t);
         assert_eq!(a.chars().count(), 11, "{c:?}");
     }
-    let largo = bounded_text(&"🙂".repeat(1_000_000));
-    assert_eq!(largo.chars().count(), 11);
-    assert!(largo.capacity() <= 4096, "capacidad {}", largo.capacity());
+    let length_2 = bounded_text(&"🙂".repeat(1_000_000));
+    assert_eq!(length_2.chars().count(), 11);
+    assert!(
+        length_2.capacity() <= 4096,
+        "capacidad {}",
+        length_2.capacity()
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -341,15 +349,15 @@ fn oracle(text: &str, min: u32, max: u32) -> Result<u32, NumberError> {
     if first_2.len() == 11 {
         return Err(NumberError::TooLong);
     }
-    let valor = first_2
+    let value = first_2
         .iter()
         .fold(0u64, |acc, c| acc * 10 + (u64::from(*c) - u64::from('0')));
-    if valor < u64::from(min) {
+    if value < u64::from(min) {
         Err(NumberError::Below { min })
-    } else if valor > u64::from(max) {
+    } else if value > u64::from(max) {
         Err(NumberError::Above { max })
     } else {
-        Ok(valor as u32)
+        Ok(value as u32)
     }
 }
 

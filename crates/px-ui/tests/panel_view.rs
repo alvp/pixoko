@@ -19,22 +19,22 @@ use px_ui::palette_grid::{PanelView, Scroll, max_first_row, panel_thumb};
 
 #[test]
 fn panel_view_by_default_is_still_and_without_history() {
-    let vista = PanelView::default();
-    assert_eq!(vista.offset_px, 0);
-    assert_eq!(vista.rest_px, 0);
+    let view = PanelView::default();
+    assert_eq!(view.offset_px, 0);
+    assert_eq!(view.rest_px, 0);
     assert_eq!(
-        vista.last_visible, None,
+        view.last_visible, None,
         "el primer fotograma no tiene anterior"
     );
-    assert!(!vista.reveal);
-    assert_eq!(vista, PanelView::default());
+    assert!(!view.reveal);
+    assert_eq!(view, PanelView::default());
 }
 
 // Fila 4: `scroll_by`.
 
-fn per(vista: &mut PanelView, delta: i64, n: u32, max: i64) -> (i64, i64) {
-    vista.scroll_by(delta, n, max);
-    (vista.offset_px, vista.rest_px)
+fn per(view: &mut PanelView, delta: i64, n: u32, max: i64) -> (i64, i64) {
+    view.scroll_by(delta, n, max);
+    (view.offset_px, view.rest_px)
 }
 
 #[test]
@@ -55,9 +55,9 @@ fn row_4_loose_deltas_with_n_3() {
     // Hacia atrás: el resto se suma antes de dividir (1 − 2 = −1 → un paso atrás y resto 2).
     assert_eq!(per(&mut v, -2, 3, max), (9, 2));
     // Delta 0: sin cambios.
-    let antes = v;
+    let before = v;
     assert_eq!(per(&mut v, 0, 3, max), (9, 2));
-    assert_eq!(v, antes);
+    assert_eq!(v, before);
     // Mucho hacia arriba: se recorta a 0 y no queda resto.
     assert_eq!(per(&mut v, -100, 3, max), (0, 0));
 }
@@ -240,7 +240,7 @@ fn row_4_panel_thumb_goes_down_with_the_scroll_and_does_not_leave_the_track() {
         let n_i = i64::from(n);
         let (panel, block) = (200 * n_i, 241 * n_i);
         let max = (block - panel).div_euclid(n_i) * n_i;
-        let mut anterior = -1;
+        let mut previous = -1;
         let mut offset = 0;
         while offset <= max {
             let (y, height_2) = panel_thumb(offset, panel, block, n).expect("hay desplazamiento");
@@ -250,8 +250,8 @@ fn row_4_panel_thumb_goes_down_with_the_scroll_and_does_not_leave_the_track() {
                 y + height_2 <= panel,
                 "n = {n}, offset {offset}: se sale de la pista"
             );
-            assert!(y >= anterior, "n = {n}, offset {offset}: no baja");
-            anterior = y;
+            assert!(y >= previous, "n = {n}, offset {offset}: no baja");
+            previous = y;
             offset += n_i;
         }
         // Arriba del todo, arriba; abajo del todo, más abajo.
@@ -381,16 +381,16 @@ proptest! {
         prop_assume!(row_2 < total);
         let max = max_first_row(total, visible);
         prop_assume!(first <= max);
-        let antes = with(first, rest_2);
-        let after_2 = reveal(antes, row_2, total, visible);
+        let before = with(first, rest_2);
+        let after_2 = reveal(before, row_2, total, visible);
         // La fila queda dentro de la ventana de filas visibles.
         prop_assert!(after_2.first_row <= row_2 && row_2 < after_2.first_row + visible);
         prop_assert!(after_2.first_row <= max);
         // Mínimo movimiento: si ya se veía, no se mueve; si no, la distancia es la justa.
-        let ya_visible = antes.first_row <= row_2 && row_2 < antes.first_row + visible;
+        let ya_visible = before.first_row <= row_2 && row_2 < before.first_row + visible;
         if ya_visible {
-            prop_assert_eq!(after_2, antes);
-        } else if row_2 < antes.first_row {
+            prop_assert_eq!(after_2, before);
+        } else if row_2 < before.first_row {
             prop_assert_eq!(after_2.first_row, row_2);
             prop_assert_eq!(after_2.rest, 0);
         } else {

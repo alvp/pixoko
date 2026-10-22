@@ -8,13 +8,13 @@ use egui::{Key, Modifiers};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
 
 /// Los cinco booleanos de `Modifiers`, en el orden de una máscara de 5 bits.
-fn modifiers_2(mascara: u8) -> Modifiers {
+fn modifiers_2(mask: u8) -> Modifiers {
     Modifiers {
-        alt: mascara & 1 != 0,
-        ctrl: mascara & 2 != 0,
-        shift: mascara & 4 != 0,
-        mac_cmd: mascara & 8 != 0,
-        command: mascara & 16 != 0,
+        alt: mask & 1 != 0,
+        ctrl: mask & 2 != 0,
+        shift: mask & 4 != 0,
+        mac_cmd: mask & 8 != 0,
+        command: mask & 16 != 0,
     }
 }
 
@@ -221,8 +221,8 @@ fn row_22_walk_through_all_the_keys_and_combinations() {
     assert!(Key::ALL.len() > 100, "Key::ALL incluye todas las teclas");
     let (mut saved, mut open) = (0, 0);
     for key in Key::ALL.iter().copied() {
-        for mascara in 0..32u8 {
-            let m = modifiers_2(mascara);
+        for mask in 0..32u8 {
+            let m = modifiers_2(mask);
             // No entra en pánico (la llamada ya lo comprueba).
             let action_2 = file_action_for_key(key, m);
 

@@ -47,7 +47,7 @@ fn document(colors_2: impl Fn(usize, u32) -> Rgba) -> Document {
 
 fn measures<T>(label: &str, cap: Duration, f: impl FnOnce() -> T) -> T {
     let start = Instant::now();
-    let valor = f();
+    let value = f();
     let time = start.elapsed();
     println!(
         "{label}: {:.0} ms (tope {:.0} ms)",
@@ -55,7 +55,7 @@ fn measures<T>(label: &str, cap: Duration, f: impl FnOnce() -> T) -> T {
         cap.as_secs_f64() * 1e3
     );
     assert!(time <= cap, "{label}: {time:?} pasa de {cap:?}");
-    valor
+    value
 }
 
 fn report(doc: &Document, target: Mode, allowed: Allowed) -> bool {

@@ -481,17 +481,17 @@ fn row_04_a_translucent_background_values() {
     );
 
     // Empírica (4b). Los dos primeros son iguales al PNG de `blend-eight-background-translucent`.
-    let negro_150 = c(0, 0, 0, 150);
+    let black_150 = c(0, 0, 0, 150);
     assert_eq!(
-        composite_pixel(negro_150, c(255, 255, 255, 255), 255, BlendMode::Multiply),
+        composite_pixel(black_150, c(255, 255, 255, 255), 255, BlendMode::Multiply),
         c(43, 43, 43, 255)
     );
     assert_eq!(
-        composite_pixel(negro_150, c(255, 255, 255, 100), 255, BlendMode::Multiply),
+        composite_pixel(black_150, c(255, 255, 255, 100), 255, BlendMode::Multiply),
         c(42, 42, 42, 191)
     );
     assert_eq!(
-        composite_pixel(negro_150, c(255, 255, 255, 255), 255, BlendMode::Difference),
+        composite_pixel(black_150, c(255, 255, 255, 255), 255, BlendMode::Difference),
         c(255, 255, 255, 255)
     );
     // Superponer con opacidad 128 (αs = 128): el alfa de salida es 128 + 100 − 50 = 178.
@@ -782,9 +782,9 @@ fn row_06_grays_with_and_without_alpha() {
 
     // Gray (sin alfa) con una capa: la celda, tal cual.
     let mut cel_2 = image_2(3, 2, Mode::Gray);
-    for (k, valor) in [0u8, 10, 20, 30, 250, 255].into_iter().enumerate() {
+    for (k, value) in [0u8, 10, 20, 30, 250, 255].into_iter().enumerate() {
         cel_2
-            .set_pixel(k as u32 % 3, k as u32 / 3, Pixel::Gray(valor))
+            .set_pixel(k as u32 % 3, k as u32 / 3, Pixel::Gray(value))
             .expect("píxel");
     }
     let mut gray_2 = Document::new(cel_2.clone());
@@ -1248,7 +1248,7 @@ proptest! {
         let tol_real = model::tolerance_real(mode, ab);
         let tol_whole = model::tolerance_whole(mode, ab);
         let alpha_real = (255 * a_s + 255 * ab - a_s * ab, 255);
-        for (canal, cb, cs, cr) in [
+        for (channel, cb, cs, cr) in [
             ("R", back.r, src.r, output.r),
             ("G", back.g, src.g, output.g),
             ("B", back.b, src.b, output.b),
@@ -1258,7 +1258,7 @@ proptest! {
             prop_assert!(
                 model::meets(cr, real, tol_real),
                 "{:?} {}: Cr = {} y el modelo (αr real) {}/{} (tolerancia {:?})",
-                mode, canal, cr, real.0, real.1, tol_real
+                mode, channel, cr, real.0, real.1, tol_real
             );
             // Con el αr entero: ≤ TOLERANCIA_EMPIRICA dentro del dominio de 4b (ver
             // `tolerance_whole` fuera).
@@ -1266,7 +1266,7 @@ proptest! {
             prop_assert!(
                 model::meets(cr, integer, tol_whole),
                 "{:?} {}: Cr = {} y el modelo (αr entero) {}/{} (tolerancia {:?})",
-                mode, canal, cr, integer.0, integer.1, tol_whole
+                mode, channel, cr, integer.0, integer.1, tol_whole
             );
         }
     }
@@ -1287,11 +1287,11 @@ proptest! {
         let (mult, pattern, sum) = (en(BlendMode::Multiply), en(BlendMode::Screen), en(BlendMode::Add));
 
         for (k, (b, s)) in [(cb.0, cs.0), (cb.1, cs.1), (cb.2, cs.2)].into_iter().enumerate() {
-            let canal = |p: Rgba| [p.r, p.g, p.b][k];
-            prop_assert!(canal(dark) <= b && b <= canal(light), "Oscurecer ≤ Cb ≤ Aclarar");
-            prop_assert!(canal(mult) <= b.min(s), "Multiplicar ≤ min(Cb, Cs)");
-            prop_assert!(canal(pattern) >= b.max(s), "Trama ≥ max(Cb, Cs)");
-            prop_assert!(canal(sum) >= b.max(s), "Sumar ≥ max(Cb, Cs)");
+            let channel = |p: Rgba| [p.r, p.g, p.b][k];
+            prop_assert!(channel(dark) <= b && b <= channel(light), "Oscurecer ≤ Cb ≤ Aclarar");
+            prop_assert!(channel(mult) <= b.min(s), "Multiplicar ≤ min(Cb, Cs)");
+            prop_assert!(channel(pattern) >= b.max(s), "Trama ≥ max(Cb, Cs)");
+            prop_assert!(channel(sum) >= b.max(s), "Sumar ≥ max(Cb, Cs)");
         }
 
         // Diferencia es simétrica en Cb y Cs.

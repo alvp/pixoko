@@ -83,7 +83,7 @@ fn ids(doc: &Document) -> Vec<(LayerId, ImageId)> {
     doc.layers().iter().map(|l| (l.id(), l.cel())).collect()
 }
 
-fn pone_px(image: ImageId, edits: &[(u32, u32, Pixel)]) -> Command {
+fn set_px(image: ImageId, edits: &[(u32, u32, Pixel)]) -> Command {
     Command::SetPixels {
         image,
         pixels: edits
@@ -93,12 +93,12 @@ fn pone_px(image: ImageId, edits: &[(u32, u32, Pixel)]) -> Command {
     }
 }
 
-fn pone(image: ImageId, edits: &[(u32, u32, Rgba)]) -> Command {
+fn sets(image: ImageId, edits: &[(u32, u32, Rgba)]) -> Command {
     let v: Vec<(u32, u32, Pixel)> = edits
         .iter()
         .map(|&(x, y, c)| (x, y, Pixel::Rgba(c)))
         .collect();
-    pone_px(image, &v)
+    set_px(image, &v)
 }
 
 /// Rellena de `c` toda una celda RGBA de 4 x 3.
@@ -225,10 +225,10 @@ fn convert_all(target: Mode, allowed: Allowed) -> Command {
 
 /// Tras un `ConvertAll` con `Ok(true)`: un solo `undo` devuelve lo de antes (documento, ids,
 /// modo y paleta del lienzo, `state_id`) y un `redo` lo de después.
-fn undoes_and_redoes(doc: &mut Document, antes: &Snapshot) {
+fn undoes_and_redoes(doc: &mut Document, before: &Snapshot) {
     let after = Snapshot::de(doc);
     doc.undo().expect("deshacer");
-    assert_eq!(antes.difference_state(doc), None, "tras deshacer");
+    assert_eq!(before.difference_state(doc), None, "tras deshacer");
     assert!(doc.can_redo());
     doc.redo().expect("rehacer");
     assert_eq!(after.difference_state(doc), None, "tras rehacer");
@@ -262,7 +262,7 @@ fn doc_three(props: bool) -> (Document, [LayerId; 3]) {
     let c = adds(&mut d, "C", 2);
     let cc = cel_2(&d, c);
     let edits = [(3, 2, BLUE), (0, 0, Rgba::new(10, 10, 10, 255))];
-    assert_eq!(d.apply(pone(cc, &edits)), Ok(true));
+    assert_eq!(d.apply(sets(cc, &edits)), Ok(true));
     if props {
         adjusts(
             &mut d,
@@ -330,7 +330,7 @@ fn doc_gray_alpha() -> (Document, [LayerId; 3]) {
             alpha: 255,
         },
     )];
-    assert_eq!(d.apply(pone_px(cel_2(&d, c), &editing)), Ok(true));
+    assert_eq!(d.apply(set_px(cel_2(&d, c), &editing)), Ok(true));
     (d, [a, b, c])
 }
 
@@ -341,7 +341,7 @@ fn doc_gray_alpha() -> (Document, [LayerId; 3]) {
 #[test]
 fn row_03_a_rgba_to_gray_alpha_with_luma_in_one_step() {
     let (mut d, [a, b, c]) = doc_three(true);
-    let antes = Snapshot::de(&d);
+    let before = Snapshot::de(&d);
     let layers_2 = d.layers().to_vec();
     let original_2: Vec<Option<Image>> =
         layers_2.iter().map(|l| d.image(l.cel()).cloned()).collect();
@@ -383,9 +383,9 @@ fn row_03_a_rgba_to_gray_alpha_with_luma_in_one_step() {
     }
     // Dos celdas de 4 x 3 x 2 bytes.
     assert_eq!(d.materialized_bytes(), 48);
-    assert_ne!(d.state_id(), antes.state);
+    assert_ne!(d.state_id(), before.state);
 
-    undoes_and_redoes(&mut d, &antes);
+    undoes_and_redoes(&mut d, &before);
 }
 
 #[test]
@@ -402,10 +402,10 @@ fn row_03_b_to_indexed_one_palette_for_all_with_the_transparent_at_0() {
     let b = adds(&mut d, "B", 1);
     let c = adds(&mut d, "C", 2);
     assert_eq!(
-        d.apply(pone(cel_2(&d, c), &[(0, 0, BLUE), (1, 1, GREEN)])),
+        d.apply(sets(cel_2(&d, c), &[(0, 0, BLUE), (1, 1, GREEN)])),
         Ok(true)
     );
-    let antes = Snapshot::de(&d);
+    let before = Snapshot::de(&d);
 
     assert_eq!(
         d.apply(convert_all(Mode::Indexed, Allowed::NOTHING)),
@@ -428,7 +428,7 @@ fn row_03_b_to_indexed_one_palette_for_all_with_the_transparent_at_0() {
     let expected_2 = |v: [u8; 12]| -> Vec<Pixel> { v.into_iter().map(Pixel::Indexed).collect() };
     assert_eq!(indices(a), expected_2([1, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
     assert_eq!(indices(c), expected_2([3, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0]));
-    undoes_and_redoes(&mut d, &antes);
+    undoes_and_redoes(&mut d, &before);
 
     // Con más de una capa el transparente va en el 0 aunque ningún píxel sea transparente.
     let opaque_2 = Image::filled(4, 3, Pixel::Rgba(RED)).expect("imagen");
@@ -459,7 +459,7 @@ fn row_03_b_to_indexed_one_palette_for_all_with_the_transparent_at_0() {
 fn row_03_c_gray_alpha_and_indexed_to_rgba() {
     // Grises con alfa -> RGBA.
     let (mut d, [a, b, c]) = doc_gray_alpha();
-    let antes = Snapshot::de(&d);
+    let before = Snapshot::de(&d);
     assert_eq!(d.apply(convert_all(Mode::Rgba, Allowed::NOTHING)), Ok(true));
     assert_eq!(d.mode(), Mode::Rgba);
     assert_eq!(d.palette(), None);
@@ -473,7 +473,7 @@ fn row_03_c_gray_alpha_and_indexed_to_rgba() {
     assert_eq!(pixels(image_2(&d, c)), expected_c);
     // Dos celdas de 4 x 3 x 4 bytes.
     assert_eq!(d.materialized_bytes(), 96);
-    undoes_and_redoes(&mut d, &antes);
+    undoes_and_redoes(&mut d, &before);
 
     // Indexado -> RGBA: el lienzo pierde la paleta y `undo` se la devuelve.
     let mut img = img_indexed(4, 3, &[RED, GREEN, BLUE], Some(0));
@@ -484,11 +484,11 @@ fn row_03_c_gray_alpha_and_indexed_to_rgba() {
     let b = adds(&mut d, "B", 1);
     let c = adds(&mut d, "C", 2);
     assert_eq!(
-        d.apply(pone_px(cel_2(&d, c), &[(3, 2, Pixel::Indexed(1))])),
+        d.apply(set_px(cel_2(&d, c), &[(3, 2, Pixel::Indexed(1))])),
         Ok(true)
     );
-    let antes = Snapshot::de(&d);
-    assert!(antes.palette_2.is_some());
+    let before = Snapshot::de(&d);
+    assert!(before.palette_2.is_some());
     assert_eq!(d.apply(convert_all(Mode::Rgba, Allowed::NOTHING)), Ok(true));
     assert_eq!(d.mode(), Mode::Rgba);
     assert_eq!(d.palette(), None);
@@ -501,11 +501,11 @@ fn row_03_c_gray_alpha_and_indexed_to_rgba() {
     expected_c[11] = Pixel::Rgba(GREEN);
     assert_eq!(pixels(image_2(&d, c)), expected_c);
     assert_eq!(image_2(&d, a).palette(), None);
-    undoes_and_redoes(&mut d, &antes);
+    undoes_and_redoes(&mut d, &before);
     // Tras el `redo` de arriba el lienzo vuelve a estar en RGBA; tras un `undo`, con su paleta.
     d.undo().expect("deshacer");
-    assert_eq!(d.palette(), antes.palette_2.as_ref());
-    assert_eq!(image_2(&d, a).palette(), antes.palette_2.as_ref());
+    assert_eq!(d.palette(), before.palette_2.as_ref());
+    assert_eq!(image_2(&d, a).palette(), before.palette_2.as_ref());
 }
 
 #[test]
@@ -632,7 +632,7 @@ fn row_03_e_with_one_layer_convert_all_and_convert_mode_give_equal_documents() {
     let b = adds(&mut d, "B", 1);
     assert_eq!(d.apply(Command::RemoveLayer { layer: a }), Ok(true));
     assert_eq!(d.layers().len(), 1);
-    let antes = Snapshot::de(&d);
+    let before = Snapshot::de(&d);
     assert_eq!(
         d.apply(convert_all(Mode::GrayAlpha, Allowed::NOTHING)),
         Ok(true)
@@ -640,7 +640,7 @@ fn row_03_e_with_one_layer_convert_all_and_convert_mode_give_equal_documents() {
     assert_eq!(d.mode(), Mode::GrayAlpha);
     assert_eq!(d.palette(), None);
     assert!(d.image(cel_2(&d, b)).is_none());
-    undoes_and_redoes(&mut d, &antes);
+    undoes_and_redoes(&mut d, &before);
     assert_eq!(
         d.apply(convert_all(Mode::Indexed, Allowed::NOTHING)),
         Ok(true)
@@ -683,7 +683,7 @@ fn row_04_a_the_report_sums_all_the_cels() {
         (3, 0, Rgba::new(255, 0, 0, 128)),
         (0, 1, Rgba::new(0, 99, 0, 255)),
     ];
-    assert_eq!(d.apply(pone(cel_2(&d, b), &color)), Ok(true));
+    assert_eq!(d.apply(sets(cel_2(&d, b), &color)), Ok(true));
     let sum = ConversionReport {
         color_lost: 8,
         alpha_lost: 0,
@@ -787,7 +787,7 @@ fn row_04_b_the_union_of_colors_of_all_cels_counts() {
     let edits: Vec<(u32, u32, Pixel)> = (0..200usize)
         .map(|i| ((i % 20) as u32, (i / 20) as u32, Pixel::Rgba(color(i, 9))))
         .collect();
-    assert_eq!(d.apply(pone_px(cel_2(&d, layer_b), &edits)), Ok(true));
+    assert_eq!(d.apply(set_px(cel_2(&d, layer_b), &edits)), Ok(true));
     without_effect(
         &mut d,
         convert_all(Mode::Indexed, Allowed::NOTHING),
@@ -880,7 +880,7 @@ fn row_04_c_cels_too_large_before_reserving() {
             alpha: 255,
         },
     )];
-    assert_eq!(d.apply(pone_px(cel_2(&d, b), &editing)), Ok(true));
+    assert_eq!(d.apply(set_px(cel_2(&d, b), &editing)), Ok(true));
     assert_eq!(d.materialized_bytes(), 48);
 
     // Justo por debajo de 96: error con los datos de 3.1, sin tocar nada.
@@ -1111,8 +1111,7 @@ fn builds(plan: &PlanDoc) -> Document {
                 })
                 .collect();
             let image = d.layers()[i].cel();
-            d.apply(pone_px(image, &edits))
-                .expect("escribir en la capa");
+            d.apply(set_px(image, &edits)).expect("escribir en la capa");
         }
     }
     let indexed = mode_2 == Mode::Indexed;
@@ -1208,7 +1207,7 @@ proptest! {
         for (m, with_luma, alpha_2, background) in steps {
             let target = mode_any(m);
             let allowed = Allowed { luma: with_luma, drop_alpha: alpha_2.then_some([background; 3]) };
-            let antes = Snapshot::de(&doc);
+            let before = Snapshot::de(&doc);
 
             // `analyze_cels` y `convert_cels` sobre las celdas de ahora (no se prueba el mismo
             // modo de origen y destino).
@@ -1250,7 +1249,7 @@ proptest! {
                     invariants(&doc)?;
                     let after = Snapshot::de(&doc);
                     doc.undo().map_err(|e| TestCaseError::fail(format!("{e:?}")))?;
-                    if let Some(reason) = antes.difference_state(&doc) {
+                    if let Some(reason) = before.difference_state(&doc) {
                         return Err(TestCaseError::fail(format!("tras undo: {reason}")));
                     }
                     invariants(&doc)?;
@@ -1262,11 +1261,11 @@ proptest! {
                 }
                 (Ok(true), _) => prop_assert!(false, "ConvertAll aplicó lo que convert_cels rechaza"),
                 (Ok(false), _) => {
-                    prop_assert_eq!(target, antes.mode_2);
-                    antes.requires(&doc, "Ok(false)")?;
+                    prop_assert_eq!(target, before.mode_2);
+                    before.requires(&doc, "Ok(false)")?;
                 }
                 (Err(error), compared) => {
-                    antes.requires(&doc, &format!("{error:?}"))?;
+                    before.requires(&doc, &format!("{error:?}"))?;
                     if let (DocumentError::Convert(e), Some((_, Err(expected_2)))) = (error, compared) {
                         prop_assert_eq!(e, expected_2);
                     }
@@ -1310,7 +1309,7 @@ fn op() -> BoxedStrategy<Op> {
     .boxed()
 }
 
-fn traduce(doc: &Document, op: &Op) -> Command {
+fn translates(doc: &Document, op: &Op) -> Command {
     let n = doc.layers().len();
     let layer_2 = |k: &usize| doc.layers()[k % n].id();
     let cel = |k: &usize| doc.layers()[k % n].cel();
@@ -1348,7 +1347,7 @@ fn traduce(doc: &Document, op: &Op) -> Command {
                     )
                 })
                 .collect();
-            pone_px(cel(k), &edits)
+            set_px(cel(k), &edits)
         }
         Op::Pal(p, k, s) => {
             let image = cel(k);
@@ -1399,15 +1398,15 @@ proptest! {
         let mut oks = 0usize;
 
         for order in &ops {
-            let antes = Snapshot::de(&doc);
-            let result = doc.apply(traduce(&doc, order));
+            let before = Snapshot::de(&doc);
+            let result = doc.apply(translates(&doc, order));
             match &result {
                 Ok(true) => {
                     oks += 1;
-                    prop_assert_ne!(doc.state_id(), antes.state, "{:?}", order);
+                    prop_assert_ne!(doc.state_id(), before.state, "{:?}", order);
                     invariants(&doc)?;
                 }
-                _ => antes.requires(&doc, &format!("{order:?} -> {result:?}"))?,
+                _ => before.requires(&doc, &format!("{order:?} -> {result:?}"))?,
             }
         }
 

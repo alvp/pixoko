@@ -62,10 +62,10 @@ fn resets_peak() -> std::io::Result<()> {
 /// encima del RSS de antes de empezar.
 fn measures<T>(f: impl FnOnce() -> T) -> (T, u64) {
     resets_peak().expect("no se pudo reiniciar el máximo de RSS (/proc/self/clear_refs)");
-    let antes = field("VmRSS");
+    let before = field("VmRSS");
     let result = f();
     let peak = field("VmHWM");
-    (result, peak.saturating_sub(antes))
+    (result, peak.saturating_sub(before))
 }
 
 /// Un lienzo de 8 × 8 con una capa y una celda que declara `width × height` píxeles RGBA, con un

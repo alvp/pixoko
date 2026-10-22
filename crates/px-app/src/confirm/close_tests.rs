@@ -146,12 +146,12 @@ proptest! {
     ) {
         let mut confirm = Confirm::new();
         let mut now = 0.0;
-        let mut anterior = false;
+        let mut previous = false;
         for step in steps_2 {
             now += step;
             let closes = close_allowed(true, &mut confirm, now);
-            prop_assert!(!(anterior && closes), "dos cierres seguidos en {}", now);
-            anterior = closes;
+            prop_assert!(!(previous && closes), "dos cierres seguidos en {}", now);
+            previous = closes;
         }
     }
 }

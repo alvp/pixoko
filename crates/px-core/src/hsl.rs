@@ -93,7 +93,7 @@ fn clamp_unit(v: f32) -> f32 {
     if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) }
 }
 
-/// Canal en `[0, 1]` a 8 bits: `canal · 255` redondeado con la mitad alejándose de cero.
+/// Canal en `[0, 1]` a 8 bits: `channel · 255` redondeado con la mitad alejándose de cero.
 fn to_u8(channel: f32) -> u8 {
     (channel * 255.0).round().clamp(0.0, 255.0) as u8
 }

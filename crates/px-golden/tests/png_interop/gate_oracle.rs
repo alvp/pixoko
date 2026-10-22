@@ -99,7 +99,7 @@ impl Model {
 
     /// Mueve la entrada `de` a la posición `a` (como quitar e insertar) y remapea los píxeles y el
     /// índice transparente.
-    fn mover(&mut self, de: usize, a: usize) {
+    fn move_pointer(&mut self, de: usize, a: usize) {
         let mut order: Vec<usize> = (0..self.palette.len()).collect();
         let moved = order.remove(de);
         order.insert(a, moved);
@@ -116,7 +116,7 @@ impl Model {
 }
 
 /// El píxel de `Document` y la celda del modelo para el valor número `k` de ese modo.
-fn valor(mode: Mode, k: usize, entries: usize) -> (Pixel, [u8; 4]) {
+fn value(mode: Mode, k: usize, entries: usize) -> (Pixel, [u8; 4]) {
     let k8 = (k * 37 % 251) as u8;
     match mode {
         Mode::Rgba => {
@@ -152,7 +152,7 @@ fn edit(document: &mut Document, mut model: Model) -> Model {
     let mut pixels_2 = Vec::new();
     for (k, (x, y)) in points.iter().enumerate() {
         let (x, y) = (x % width, y % height);
-        let (pixel, cel_2) = valor(mode, k + 1, entries);
+        let (pixel, cel_2) = value(mode, k + 1, entries);
         pixels_2.push(PixelEdit {
             x: x as u32,
             y: y as u32,
@@ -168,7 +168,7 @@ fn edit(document: &mut Document, mut model: Model) -> Model {
         .expect("SetPixels");
 
     // `FillSpans`: tramos estrictamente ordenados, sin solapes.
-    let (pixel, cel_2) = valor(mode, 10, entries);
+    let (pixel, cel_2) = value(mode, 10, entries);
     let spans_2 = [(5, 2, 9), (6, 2, 9), (7, 0, width)];
     let mut spans = Vec::new();
     for (y, x0, x1) in spans_2 {
@@ -210,7 +210,7 @@ fn edit(document: &mut Document, mut model: Model) -> Model {
                     to: last as u8,
                 })
                 .expect("MovePaletteEntry");
-            model.mover(0, last);
+            model.move_pointer(0, last);
         }
 
         let transparent = 1.min(last) as u8;
@@ -299,13 +299,13 @@ fn row_11_control_a_model_with_one_pixel_changed_gives_another_sha256() {
 
         // Un píxel cambiado en el modelo (un canal, en cada uno de varios sitios): otro hash.
         for pixel in [0, model.cels.len() / 2, model.cels.len() - 1] {
-            for canal in 0..4 {
-                let mut vista = model.rgba();
-                vista[pixel * 4 + canal] ^= 1;
+            for channel in 0..4 {
+                let mut view = model.rgba();
+                view[pixel * 4 + channel] ^= 1;
                 assert_ne!(
-                    sha256_hex(&vista),
+                    sha256_hex(&view),
                     read_sha,
-                    "{name_2}: el modelo con el píxel {pixel} (canal {canal}) cambiado dio el mismo SHA-256"
+                    "{name_2}: el modelo con el píxel {pixel} (canal {channel}) cambiado dio el mismo SHA-256"
                 );
             }
         }
