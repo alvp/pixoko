@@ -261,9 +261,18 @@ Un objetivo nuevo, `fuzz/fuzz_targets/read_aseprite.rs`, con su `[[bin]]` en `fu
 
 Hito 5: fotogramas, duraciones, etiquetas y celdas enlazadas (5.5). Hito 6: grises (**candidato fácil**: la profundidad de 16 bits del formato es valor + alfa, es decir, `GrayAlpha`; con su caso de corpus `gris-alfa-capas`), grupos, mapas de tiles, referencia, opacidad de celda, z-index, los diez modos de mezcla restantes, paleta de 6 bits, perfil ICC, propiedades de usuario y conservar los chunks no entendidos.
 
-## Confirmación del bloqueo (paso previo; se rellena al recibir los ficheros)
+## Confirmación del bloqueo (paso previo; hecho el 22 de octubre)
 
-Pendiente. Cuando el usuario ejecute `tools/corpus-h3/generar.sh --nuevos` y pase `golden/aseprite/capa-bloqueada.*`, se listan los chunks de capa del caso con la script de la especificación (solo las tablas de «Layer Chunk») y se anota aquí qué bits de las banderas tiene cada una de las cuatro capas y si `locked = !Editable (bit 2)` se confirma o se corrige. Si no se confirma, las filas 2, 10 y 11 y el mapa de la capa cambian **antes** de escribir las pruebas.
+`golden/aseprite/capa-bloqueada.aseprite` (624 bytes, 16×16, 32 bpp, un fotograma) tiene los chunks, en orden: color profile `0x2007`, paleta antigua `0x0004`, cuatro capas `0x2004` y cuatro celdas `0x2005` (tipo 2, z-index 0, opacidad 255). Banderas de cada capa (§Layer Chunk: 1 = Visible, 2 = Editable), leídas con la script de la especificación (el desplazamiento del nombre es el 16, tras la mezcla y la opacidad):
+
+| Capa | Banderas | Visible (1) | Editable (2) | Lo que se esperaba |
+| --- | --- | --- | --- | --- |
+| `fondo` | 3 | sí | sí | visible y desbloqueada |
+| `bloqueada` | **1** | sí | **no** | visible y bloqueada |
+| `arriba` | 3 | sí | sí | visible y desbloqueada |
+| `oculta-bloqueada` | **0** | no | **no** | oculta y bloqueada |
+
+**La regla `locked = !Editable` (bit 2) se confirma**, y la visibilidad (bit 1) es independiente: la capa `bloqueada` sigue visible y la `oculta-bloqueada` combina las dos. Ninguna otra bandera aparece (4, 8, 16, 32 y 64 a cero) y las cuatro son de tipo 0, nivel 0, Normal y opacidad 255. El PNG aplanado (16×16) no contiene el magenta de la capa oculta y sí el verde y el marrón de la bloqueada, el gris del fondo y el azul y el amarillo de `arriba`: se ve lo visible, bloqueado o no. Las filas 2, 10 y 11 y el mapa de la capa quedan como están escritos.
 
 ## Visto bueno (2026-10-22; condiciones que prevalecen)
 

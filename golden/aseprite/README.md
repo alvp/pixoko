@@ -1,10 +1,10 @@
 # golden/aseprite
 
 Corpus del hito 3 (`specs/corpus-hito-3.md`): capas, opacidad, modos de mezcla, celdas con
-desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 28 casos.
+desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 29 casos.
 
 - **Programa:** Aseprite 1.3.18.6-dev
-- **Fecha:** 2026-10-21
+- **Fecha:** 2026-10-22
 - **Cómo se generó:** `tools/corpus-h3/generar.sh` (MIT, en este repositorio): un script de Lua
   propio crea cada caso desde cero y guarda el `.aseprite`; el PNG aplanado sale de abrir ese
   fichero y exportarlo con el modo por lotes del programa.
@@ -16,6 +16,7 @@ desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 28 casos.
 
 | Fichero | PNG aplanado |
 | --- | --- |
+| capa-bloqueada.aseprite | capa-bloqueada.png |
 | capas-alfa-fondo.aseprite | capas-alfa-fondo.png |
 | capas-alfa-origen.aseprite | capas-alfa-origen.png |
 | capas-normal-tres.aseprite | capas-normal-tres.png |
