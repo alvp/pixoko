@@ -22,19 +22,19 @@ use px_core::{BlendMode, Document, Image, Layer, LayerSpec, Mode, Palette, Pixel
 use px_formats::{AsepriteLimits, read_aseprite, write_aseprite, write_png};
 use px_raster::{MergeError, compose, flatten_command, merge_visible_command};
 
-use super::aseprite_corpus::{CASOS, comparar_con_lista, verificar};
-use super::aseprite_read::{evalua_imagen, golden, lee_documento, lee_png, rgba_de};
-use super::{lee_carpeta, raiz_del_repo};
+use super::aseprite_corpus::{CASES, compare_with_list, verify};
+use super::aseprite_read::{evaluates_image, golden, lee_png, reads_document, rgba_de};
+use super::{reads_folder, root_of_the_repo};
 
 /// Los casos de una sola capa: no hay nada que aplanar ni combinar (`NothingToMerge`).
-const DE_UNA_CAPA: [&str; 2] = ["rgba-one-layer", "indexed-palette-256"];
+const OF_A_LAYER: [&str; 2] = ["rgba-one-layer", "indexed-palette-256"];
 
-fn limites() -> AsepriteLimits {
+fn limits() -> AsepriteLimits {
     AsepriteLimits::default()
 }
 
 fn lee(bytes: &[u8]) -> Result<px_formats::AsepriteRead, String> {
-    read_aseprite(bytes, &limites()).map_err(|e| format!("read_aseprite dio error: {e}"))
+    read_aseprite(bytes, &limits()).map_err(|e| format!("read_aseprite dio error: {e}"))
 }
 
 // ---------------------------------------------------------------------------------------
@@ -43,16 +43,16 @@ fn lee(bytes: &[u8]) -> Result<px_formats::AsepriteRead, String> {
 
 /// El valor de un píxel de una capa: `None` si es transparente (celda vacía, alfa 0 en RGBA o
 /// índice transparente en indexado).
-fn valor(doc: &Document, capa: &Layer, x: u32, y: u32) -> Option<Pixel> {
-    let imagen = doc.image(capa.cel())?;
-    let pixel = imagen.get_pixel(x, y).expect("píxel dentro del lienzo");
-    let transparente = match pixel {
+fn valor(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Option<Pixel> {
+    let image_2 = doc.image(layer_2.cel())?;
+    let pixel = image_2.get_pixel(x, y).expect("píxel dentro del lienzo");
+    let transparent = match pixel {
         Pixel::Rgba(c) => c.a == 0,
         Pixel::Indexed(i) => doc.palette().and_then(Palette::transparent_index) == Some(i),
         Pixel::GrayAlpha { alpha, .. } => alpha == 0,
         _ => false,
     };
-    (!transparente).then_some(pixel)
+    (!transparent).then_some(pixel)
 }
 
 /// La igualdad de ida y vuelta de 3.8 (condición 1), sin ids: mismas capas en el mismo orden con
@@ -60,7 +60,7 @@ fn valor(doc: &Document, capa: &Layer, x: u32, y: u32) -> Option<Pixel> {
 /// transparente y mismo contenido de píxeles por capa (una celda vacía equivale a una
 /// transparente; dos píxeles transparentes son iguales aunque su RGB difiera; los demás, byte a
 /// byte).
-fn mismo_contenido(a: &Document, b: &Document) -> Result<(), String> {
+fn same_content(a: &Document, b: &Document) -> Result<(), String> {
     if (a.width(), a.height(), a.mode()) != (b.width(), b.height(), b.mode()) {
         return Err("lienzo distinto".to_string());
     }
@@ -79,7 +79,7 @@ fn mismo_contenido(a: &Document, b: &Document) -> Result<(), String> {
         ));
     }
     for (i, (ca, cb)) in a.layers().iter().zip(b.layers()).enumerate() {
-        let propiedades = |c: &Layer| {
+        let properties = |c: &Layer| {
             (
                 c.name().to_string(),
                 c.visible(),
@@ -88,11 +88,11 @@ fn mismo_contenido(a: &Document, b: &Document) -> Result<(), String> {
                 c.locked(),
             )
         };
-        if propiedades(ca) != propiedades(cb) {
+        if properties(ca) != properties(cb) {
             return Err(format!(
                 "capa {i}: propiedades {:?} y {:?}",
-                propiedades(ca),
-                propiedades(cb)
+                properties(ca),
+                properties(cb)
             ));
         }
         for y in 0..a.height() {
@@ -110,7 +110,7 @@ fn mismo_contenido(a: &Document, b: &Document) -> Result<(), String> {
 /// Dos composiciones iguales con la exención **exacta** de la decisión 3: el alfa es siempre
 /// exacto y un píxel con alfa mayor que 0 que difiera en cualquier canal falla; solo se exime el
 /// RGB cuando los dos píxeles tienen alfa 0.
-fn igual_salvo_rgb_con_alfa_0(a: &Image, b: &Image) -> Result<(), String> {
+fn equal_except_rgb_with_alpha_0(a: &Image, b: &Image) -> Result<(), String> {
     if (a.width(), a.height(), a.mode()) != (b.width(), b.height(), b.mode()) {
         return Err("composiciones de distinto tamaño o modo".to_string());
     }
@@ -132,67 +132,67 @@ fn igual_salvo_rgb_con_alfa_0(a: &Image, b: &Image) -> Result<(), String> {
 // Fila 1: aplanar y combinar visibles sobre los 29.
 // ---------------------------------------------------------------------------------------
 
-fn fila_01(caso: &str, aplanar: bool) -> Result<Option<&'static str>, String> {
-    let original = lee_documento(caso)?;
-    let antes = compose(&original).map_err(|e| format!("{caso}: compose dio error: {e:?}"))?;
-    let mut doc = lee_documento(caso)?;
-    let orden = if aplanar {
+fn row_01(case: &str, flatten: bool) -> Result<Option<&'static str>, String> {
+    let original = reads_document(case)?;
+    let antes = compose(&original).map_err(|e| format!("{case}: compose dio error: {e:?}"))?;
+    let mut doc = reads_document(case)?;
+    let order = if flatten {
         flatten_command(&doc)
     } else {
         merge_visible_command(&doc)
     };
-    let orden = match orden {
-        Ok(orden) => orden,
+    let order = match order {
+        Ok(order) => order,
         Err(MergeError::NothingToMerge) => return Ok(Some("NothingToMerge")),
-        Err(e) => return Err(format!("{caso}: la orden dio {e:?}")),
+        Err(e) => return Err(format!("{case}: la orden dio {e:?}")),
     };
-    let ocultas = doc.layers().iter().filter(|c| !c.visible()).count();
-    if doc.apply(orden) != Ok(true) {
-        return Err(format!("{caso}: la orden no dio Ok(true)"));
+    let hidden = doc.layers().iter().filter(|c| !c.visible()).count();
+    if doc.apply(order) != Ok(true) {
+        return Err(format!("{case}: la orden no dio Ok(true)"));
     }
-    let esperadas = if aplanar { 1 } else { 1 + ocultas };
-    if doc.layers().len() != esperadas {
+    let expected_2 = if flatten { 1 } else { 1 + hidden };
+    if doc.layers().len() != expected_2 {
         return Err(format!(
-            "{caso}: tras la orden hay {} capas y se esperaban {esperadas}",
+            "{case}: tras la orden hay {} capas y se esperaban {expected_2}",
             doc.layers().len()
         ));
     }
-    let despues = compose(&doc).map_err(|e| format!("{caso}: compose dio error: {e:?}"))?;
-    if despues != antes {
-        return Err(format!("{caso}: componer tras la orden no da lo de antes"));
+    let after_2 = compose(&doc).map_err(|e| format!("{case}: compose dio error: {e:?}"))?;
+    if after_2 != antes {
+        return Err(format!("{case}: componer tras la orden no da lo de antes"));
     }
     // La composición tras la orden es la del PNG de Aseprite con las tolerancias de 3.2.
-    evalua_imagen(caso, &original, &despues, &lee_png(caso))?;
-    doc.undo().map_err(|e| format!("{caso}: undo dio {e:?}"))?;
+    evaluates_image(case, &original, &after_2, &lee_png(case))?;
+    doc.undo().map_err(|e| format!("{case}: undo dio {e:?}"))?;
     if doc.layers().len() != original.layers().len()
         || compose(&doc).map_err(|e| format!("{e:?}"))? != antes
     {
-        return Err(format!("{caso}: deshacer no devuelve las capas"));
+        return Err(format!("{case}: deshacer no devuelve las capas"));
     }
     Ok(None)
 }
 
 #[test]
-fn fila_01_aplanar_y_combinar_visibles_dan_la_composicion_y_el_png() {
-    for aplanar in [true, false] {
-        let nombre = if aplanar {
+fn row_01_flatten_and_merge_visible_give_the_composition_and_the_png() {
+    for flatten in [true, false] {
+        let name_2 = if flatten {
             "aplanar"
         } else {
             "combinar visibles"
         };
-        let mut sin_orden = Vec::new();
-        let mut fallos = Vec::new();
-        for caso in CASOS {
-            match fila_01(caso, aplanar) {
-                Ok(Some(_)) => sin_orden.push(caso),
+        let mut without_order = Vec::new();
+        let mut failures = Vec::new();
+        for case in CASES {
+            match row_01(case, flatten) {
+                Ok(Some(_)) => without_order.push(case),
                 Ok(None) => {}
-                Err(e) => fallos.push(e),
+                Err(e) => failures.push(e),
             }
         }
-        assert!(fallos.is_empty(), "{nombre}:\n{}", fallos.join("\n"));
+        assert!(failures.is_empty(), "{name_2}:\n{}", failures.join("\n"));
         assert_eq!(
-            sin_orden, DE_UNA_CAPA,
-            "{nombre}: solo los casos de una capa dan NothingToMerge"
+            without_order, OF_A_LAYER,
+            "{name_2}: solo los casos de una capa dan NothingToMerge"
         );
     }
 }
@@ -201,34 +201,34 @@ fn fila_01_aplanar_y_combinar_visibles_dan_la_composicion_y_el_png() {
 // Fila 2: escribir y reabrir los 29.
 // ---------------------------------------------------------------------------------------
 
-fn fila_02(caso: &str) -> Result<(), String> {
-    let leido = lee(&golden(&format!("{caso}.aseprite")))?;
-    let original = leido.document;
-    let bytes = write_aseprite(&original).map_err(|e| format!("{caso}: write dio error: {e}"))?;
-    let reabierto = lee(&bytes).map_err(|e| format!("{caso}: {e}"))?;
-    if reabierto.report.lossy || reabierto.report.frames_in_file != 1 {
+fn row_02(case: &str) -> Result<(), String> {
+    let read = lee(&golden(&format!("{case}.aseprite")))?;
+    let original = read.document;
+    let bytes = write_aseprite(&original).map_err(|e| format!("{case}: write dio error: {e}"))?;
+    let reopened = lee(&bytes).map_err(|e| format!("{case}: {e}"))?;
+    if reopened.report.lossy || reopened.report.frames_in_file != 1 {
         return Err(format!(
-            "{caso}: lo escrito se relee con lossy {} y {} fotogramas",
-            reabierto.report.lossy, reabierto.report.frames_in_file
+            "{case}: lo escrito se relee con lossy {} y {} fotogramas",
+            reopened.report.lossy, reopened.report.frames_in_file
         ));
     }
-    mismo_contenido(&original, &reabierto.document).map_err(|e| format!("{caso}: {e}"))?;
-    let otra = write_aseprite(&reabierto.document).map_err(|e| format!("{caso}: {e}"))?;
-    if otra != bytes {
+    same_content(&original, &reopened.document).map_err(|e| format!("{case}: {e}"))?;
+    let other = write_aseprite(&reopened.document).map_err(|e| format!("{case}: {e}"))?;
+    if other != bytes {
         return Err(format!(
-            "{caso}: la segunda escritura no da los mismos bytes"
+            "{case}: la segunda escritura no da los mismos bytes"
         ));
     }
-    let antes = compose(&original).map_err(|e| format!("{caso}: {e:?}"))?;
-    let despues = compose(&reabierto.document).map_err(|e| format!("{caso}: {e:?}"))?;
-    igual_salvo_rgb_con_alfa_0(&antes, &despues).map_err(|e| format!("{caso}: {e}"))?;
-    evalua_imagen(caso, &original, &despues, &lee_png(caso))
+    let antes = compose(&original).map_err(|e| format!("{case}: {e:?}"))?;
+    let after_2 = compose(&reopened.document).map_err(|e| format!("{case}: {e:?}"))?;
+    equal_except_rgb_with_alpha_0(&antes, &after_2).map_err(|e| format!("{case}: {e}"))?;
+    evaluates_image(case, &original, &after_2, &lee_png(case))
 }
 
 #[test]
-fn fila_02_los_29_se_escriben_y_se_reabren_con_el_mismo_contenido() {
-    let fallos: Vec<String> = CASOS.iter().filter_map(|c| fila_02(c).err()).collect();
-    assert!(fallos.is_empty(), "{}", fallos.join("\n"));
+fn row_02_the_29_are_written_and_reopened_with_the_same_content() {
+    let failures: Vec<String> = CASES.iter().filter_map(|c| row_02(c).err()).collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -251,44 +251,44 @@ fn u32_le(b: &[u8], at: usize) -> Result<u32, String> {
 }
 
 #[derive(Debug)]
-struct CapaF {
+struct LayerF {
     /// Desplazamiento del primer byte de los datos del chunk.
     at: usize,
-    banderas: u16,
-    tipo: u16,
-    nivel: u16,
-    mezcla: u16,
-    opacidad: u8,
-    nombre: String,
+    flags: u16,
+    kind: u16,
+    level: u16,
+    blend: u16,
+    opacity_2: u8,
+    name_2: String,
 }
 
 #[derive(Debug)]
-struct CeldaF {
+struct CelF {
     at: usize,
-    capa: u16,
-    opacidad: u8,
-    tipo: u16,
+    layer_2: u16,
+    opacity_2: u8,
+    kind: u16,
     z: i16,
 }
 
 #[derive(Debug)]
-struct Estructura {
-    ancho: u16,
-    alto: u16,
-    profundidad: u16,
-    banderas: u32,
-    fotogramas: u16,
-    velocidad: u16,
-    transparente: u8,
-    colores: u16,
+struct Structure {
+    width: u16,
+    height: u16,
+    depth: u16,
+    flags: u32,
+    frames: u16,
+    speed: u16,
+    transparent: u8,
+    colors: u16,
     pixel: (u8, u8),
-    cuadricula: (u16, u16, u16, u16),
+    grid: (u16, u16, u16, u16),
     chunks: Vec<u16>,
-    capas: Vec<CapaF>,
-    celdas: Vec<CeldaF>,
+    layers: Vec<LayerF>,
+    cels: Vec<CelF>,
 }
 
-fn estructura(b: &[u8]) -> Result<Estructura, String> {
+fn structure(b: &[u8]) -> Result<Structure, String> {
     if b.len() < 144 {
         return Err("magia: el fichero no llega a la cabecera y el primer fotograma".to_string());
     }
@@ -301,78 +301,78 @@ fn estructura(b: &[u8]) -> Result<Estructura, String> {
     if u16_le(b, 128 + 4)? != 0xF1FA {
         return Err("magia del fotograma: no es 0xF1FA".to_string());
     }
-    let nuevos = u32_le(b, 128 + 12)?;
-    let cuenta = if nuevos == 0 {
+    let new = u32_le(b, 128 + 12)?;
+    let count = if new == 0 {
         u32::from(u16_le(b, 128 + 6)?)
     } else {
-        nuevos
+        new
     };
-    let mut e = Estructura {
-        ancho: u16_le(b, 8)?,
-        alto: u16_le(b, 10)?,
-        profundidad: u16_le(b, 12)?,
-        banderas: u32_le(b, 14)?,
-        fotogramas: u16_le(b, 6)?,
-        velocidad: u16_le(b, 18)?,
-        transparente: b[28],
-        colores: u16_le(b, 32)?,
+    let mut e = Structure {
+        width: u16_le(b, 8)?,
+        height: u16_le(b, 10)?,
+        depth: u16_le(b, 12)?,
+        flags: u32_le(b, 14)?,
+        frames: u16_le(b, 6)?,
+        speed: u16_le(b, 18)?,
+        transparent: b[28],
+        colors: u16_le(b, 32)?,
         pixel: (b[34], b[35]),
-        cuadricula: (
+        grid: (
             u16_le(b, 36)?,
             u16_le(b, 38)?,
             u16_le(b, 40)?,
             u16_le(b, 42)?,
         ),
         chunks: Vec::new(),
-        capas: Vec::new(),
-        celdas: Vec::new(),
+        layers: Vec::new(),
+        cels: Vec::new(),
     };
     let mut pos = 128 + 16;
-    for _ in 0..cuenta {
-        let tamano = u32_le(b, pos)? as usize;
-        let tipo = u16_le(b, pos + 4)?;
-        if tamano < 6 || pos + tamano > b.len() {
-            return Err(format!("chunk en {pos}: tamaño {tamano} fuera del fichero"));
+    for _ in 0..count {
+        let size = u32_le(b, pos)? as usize;
+        let kind = u16_le(b, pos + 4)?;
+        if size < 6 || pos + size > b.len() {
+            return Err(format!("chunk en {pos}: tamaño {size} fuera del fichero"));
         }
-        let datos = pos + 6;
-        e.chunks.push(tipo);
-        match tipo {
+        let data = pos + 6;
+        e.chunks.push(kind);
+        match kind {
             // §Layer Chunk: banderas 0, tipo 2, nivel hijo 4, ancho y alto 6 y 8, mezcla 10,
             // opacidad 12, tres bytes, nombre (WORD de longitud) en 16.
             0x2004 => {
-                let largo = usize::from(u16_le(b, datos + 16)?);
-                let nombre = b
-                    .get(datos + 18..datos + 18 + largo)
+                let largo = usize::from(u16_le(b, data + 16)?);
+                let name_2 = b
+                    .get(data + 18..data + 18 + largo)
                     .ok_or("nombre de capa fuera del fichero")?;
-                e.capas.push(CapaF {
-                    at: datos,
-                    banderas: u16_le(b, datos)?,
-                    tipo: u16_le(b, datos + 2)?,
-                    nivel: u16_le(b, datos + 4)?,
-                    mezcla: u16_le(b, datos + 10)?,
-                    opacidad: *b.get(datos + 12).ok_or("capa truncada")?,
-                    nombre: String::from_utf8_lossy(nombre).into_owned(),
+                e.layers.push(LayerF {
+                    at: data,
+                    flags: u16_le(b, data)?,
+                    kind: u16_le(b, data + 2)?,
+                    level: u16_le(b, data + 4)?,
+                    blend: u16_le(b, data + 10)?,
+                    opacity_2: *b.get(data + 12).ok_or("capa truncada")?,
+                    name_2: String::from_utf8_lossy(name_2).into_owned(),
                 });
             }
             // §Cel Chunk: capa 0, x 2, y 4, opacidad 6, tipo 7, z-index 9.
-            0x2005 => e.celdas.push(CeldaF {
-                at: datos,
-                capa: u16_le(b, datos)?,
-                opacidad: *b.get(datos + 6).ok_or("celda truncada")?,
-                tipo: u16_le(b, datos + 7)?,
-                z: u16_le(b, datos + 9)? as i16,
+            0x2005 => e.cels.push(CelF {
+                at: data,
+                layer_2: u16_le(b, data)?,
+                opacity_2: *b.get(data + 6).ok_or("celda truncada")?,
+                kind: u16_le(b, data + 7)?,
+                z: u16_le(b, data + 9)? as i16,
             }),
             _ => {}
         }
-        pos += tamano;
+        pos += size;
     }
     Ok(e)
 }
 
 /// Cuántas celdas del original **no** escribe Pixoko (3.8, decisión 9: una celda del todo fuera
 /// del lienzo o toda transparente no escribe chunk). Lista cerrada, por caso.
-fn celdas_que_no_se_escriben(caso: &str) -> usize {
-    match caso {
+fn cels_that_are_not_written(case: &str) -> usize {
+    match case {
         "cel-clipped" => 2,
         "cel-empty" => 1,
         _ => 0,
@@ -382,126 +382,118 @@ fn celdas_que_no_se_escriben(caso: &str) -> usize {
 /// Compara la estructura escrita por Pixoko con la que escribió Aseprite. Diferencias permitidas
 /// (lista cerrada, declarada en 3.8 y medida en la spec): sin chunk de paleta antigua `0x0004`
 /// (la paleta va en `0x2019` solo en indexado), número de colores 0 en RGBA y las celdas de
-/// `celdas_que_no_se_escriben`. Cualquier otra diferencia es `Err` con el campo.
-fn compara(caso: &str, aseprite: &Estructura, pixoko: &Estructura) -> Result<(), String> {
-    macro_rules! igual {
-        ($campo:expr, $a:expr, $p:expr) => {
+/// `cels_that_are_not_written`. Cualquier otra diferencia es `Err` con el campo.
+fn compares(case: &str, aseprite: &Structure, pixoko: &Structure) -> Result<(), String> {
+    macro_rules! equal {
+        ($field:expr, $a:expr, $p:expr) => {
             if $a != $p {
                 return Err(format!(
-                    "{caso}: {}: Aseprite {:?} y Pixoko {:?}",
-                    $campo, $a, $p
+                    "{case}: {}: Aseprite {:?} y Pixoko {:?}",
+                    $field, $a, $p
                 ));
             }
         };
     }
-    igual!("cabecera: ancho", aseprite.ancho, pixoko.ancho);
-    igual!("cabecera: alto", aseprite.alto, pixoko.alto);
-    igual!(
-        "cabecera: profundidad",
-        aseprite.profundidad,
-        pixoko.profundidad
-    );
-    igual!("cabecera: banderas", aseprite.banderas, pixoko.banderas);
-    igual!(
-        "cabecera: fotogramas",
-        aseprite.fotogramas,
-        pixoko.fotogramas
-    );
-    igual!("cabecera: velocidad", aseprite.velocidad, pixoko.velocidad);
-    igual!(
+    equal!("cabecera: ancho", aseprite.width, pixoko.width);
+    equal!("cabecera: alto", aseprite.height, pixoko.height);
+    equal!("cabecera: profundidad", aseprite.depth, pixoko.depth);
+    equal!("cabecera: banderas", aseprite.flags, pixoko.flags);
+    equal!("cabecera: fotogramas", aseprite.frames, pixoko.frames);
+    equal!("cabecera: velocidad", aseprite.speed, pixoko.speed);
+    equal!(
         "cabecera: índice transparente",
-        aseprite.transparente,
-        pixoko.transparente
+        aseprite.transparent,
+        pixoko.transparent
     );
-    igual!("cabecera: razón de píxel", aseprite.pixel, pixoko.pixel);
-    igual!(
-        "cabecera: cuadrícula",
-        aseprite.cuadricula,
-        pixoko.cuadricula
-    );
-    if aseprite.profundidad == 32 {
-        igual!("cabecera: número de colores (RGBA)", 0u16, pixoko.colores);
+    equal!("cabecera: razón de píxel", aseprite.pixel, pixoko.pixel);
+    equal!("cabecera: cuadrícula", aseprite.grid, pixoko.grid);
+    if aseprite.depth == 32 {
+        equal!("cabecera: número de colores (RGBA)", 0u16, pixoko.colors);
     } else {
-        igual!(
+        equal!(
             "cabecera: número de colores (indexado)",
-            aseprite.colores,
-            pixoko.colores
+            aseprite.colors,
+            pixoko.colors
         );
     }
     // Orden de chunks de lo escrito: perfil, paleta solo si es indexado, capas y celdas.
-    let mut esperado = vec![0x2007u16];
-    if aseprite.profundidad == 8 {
-        esperado.push(0x2019);
+    let mut expected = vec![0x2007u16];
+    if aseprite.depth == 8 {
+        expected.push(0x2019);
     }
-    esperado.extend(std::iter::repeat_n(0x2004, pixoko.capas.len()));
-    esperado.extend(std::iter::repeat_n(0x2005, pixoko.celdas.len()));
-    igual!("orden de chunks", esperado, pixoko.chunks);
-    let del_original: Vec<u16> = aseprite
+    expected.extend(std::iter::repeat_n(0x2004, pixoko.layers.len()));
+    expected.extend(std::iter::repeat_n(0x2005, pixoko.cels.len()));
+    equal!("orden de chunks", expected, pixoko.chunks);
+    let of_the_original: Vec<u16> = aseprite
         .chunks
         .iter()
         .copied()
         .filter(|&t| t != 0x0004)
         .collect();
-    let del_original_sin_celdas: Vec<u16> = del_original
+    let of_the_original_without_cels: Vec<u16> = of_the_original
         .iter()
         .copied()
         .filter(|&t| t != 0x2005 && t != 0x2019)
         .collect();
-    let del_escrito_sin_celdas: Vec<u16> = pixoko
+    let of_the_written_without_cels: Vec<u16> = pixoko
         .chunks
         .iter()
         .copied()
         .filter(|&t| t != 0x2005 && t != 0x2019)
         .collect();
-    igual!(
+    equal!(
         "chunks de perfil y capas",
-        del_original_sin_celdas,
-        del_escrito_sin_celdas
+        of_the_original_without_cels,
+        of_the_written_without_cels
     );
-    igual!("número de capas", aseprite.capas.len(), pixoko.capas.len());
-    for (i, (a, p)) in aseprite.capas.iter().zip(&pixoko.capas).enumerate() {
-        igual!(format!("capa {i}: banderas"), a.banderas, p.banderas);
-        igual!(format!("capa {i}: tipo"), a.tipo, p.tipo);
-        igual!(format!("capa {i}: nivel hijo"), a.nivel, p.nivel);
-        igual!(format!("capa {i}: mezcla"), a.mezcla, p.mezcla);
-        igual!(format!("capa {i}: opacidad"), a.opacidad, p.opacidad);
-        igual!(format!("capa {i}: nombre"), a.nombre, p.nombre);
+    equal!(
+        "número de capas",
+        aseprite.layers.len(),
+        pixoko.layers.len()
+    );
+    for (i, (a, p)) in aseprite.layers.iter().zip(&pixoko.layers).enumerate() {
+        equal!(format!("capa {i}: banderas"), a.flags, p.flags);
+        equal!(format!("capa {i}: tipo"), a.kind, p.kind);
+        equal!(format!("capa {i}: nivel hijo"), a.level, p.level);
+        equal!(format!("capa {i}: mezcla"), a.blend, p.blend);
+        equal!(format!("capa {i}: opacidad"), a.opacity_2, p.opacity_2);
+        equal!(format!("capa {i}: nombre"), a.name_2, p.name_2);
     }
-    let faltan = aseprite
-        .celdas
+    let missing = aseprite
+        .cels
         .iter()
-        .filter(|c| !pixoko.celdas.iter().any(|p| p.capa == c.capa))
+        .filter(|c| !pixoko.cels.iter().any(|p| p.layer_2 == c.layer_2))
         .count();
-    igual!(
+    equal!(
         "celdas del original que no se escriben",
-        celdas_que_no_se_escriben(caso),
-        faltan
+        cels_that_are_not_written(case),
+        missing
     );
-    for (i, p) in pixoko.celdas.iter().enumerate() {
-        let Some(a) = aseprite.celdas.iter().find(|c| c.capa == p.capa) else {
+    for (i, p) in pixoko.cels.iter().enumerate() {
+        let Some(a) = aseprite.cels.iter().find(|c| c.layer_2 == p.layer_2) else {
             return Err(format!(
-                "{caso}: celda {i}: Pixoko escribe una celda de la capa {} que Aseprite no tiene",
-                p.capa
+                "{case}: celda {i}: Pixoko escribe una celda de la capa {} que Aseprite no tiene",
+                p.layer_2
             ));
         };
-        igual!(format!("celda {i}: opacidad"), a.opacidad, p.opacidad);
-        igual!(format!("celda {i}: tipo"), a.tipo, p.tipo);
-        igual!(format!("celda {i}: z-index"), a.z, p.z);
+        equal!(format!("celda {i}: opacidad"), a.opacity_2, p.opacity_2);
+        equal!(format!("celda {i}: tipo"), a.kind, p.kind);
+        equal!(format!("celda {i}: z-index"), a.z, p.z);
     }
     Ok(())
 }
 
-fn fila_03(caso: &str) -> Result<(), String> {
-    let original = golden(&format!("{caso}.aseprite"));
-    let documento = lee(&original).map_err(|e| format!("{caso}: {e}"))?.document;
-    let escrito = write_aseprite(&documento).map_err(|e| format!("{caso}: {e}"))?;
-    compara(caso, &estructura(&original)?, &estructura(&escrito)?)
+fn row_03(case: &str) -> Result<(), String> {
+    let original = golden(&format!("{case}.aseprite"));
+    let document = lee(&original).map_err(|e| format!("{case}: {e}"))?.document;
+    let written = write_aseprite(&document).map_err(|e| format!("{case}: {e}"))?;
+    compares(case, &structure(&original)?, &structure(&written)?)
 }
 
 #[test]
-fn fila_03_la_estructura_escrita_es_la_de_aseprite_salvo_la_lista_cerrada() {
-    let fallos: Vec<String> = CASOS.iter().filter_map(|c| fila_03(c).err()).collect();
-    assert!(fallos.is_empty(), "{}", fallos.join("\n"));
+fn row_03_the_written_structure_is_aseprites_except_the_closed_list() {
+    let failures: Vec<String> = CASES.iter().filter_map(|c| row_03(c).err()).collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -509,48 +501,49 @@ fn fila_03_la_estructura_escrita_es_la_de_aseprite_salvo_la_lista_cerrada() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_04_a_el_corpus_sin_un_caso_o_con_uno_de_mas_falla() {
-    let carpeta = raiz_del_repo().join("golden/aseprite");
-    let ficheros = lee_carpeta(&carpeta);
+fn row_04_a_the_corpus_missing_a_case_or_with_an_extra_one_fails() {
+    let folder = root_of_the_repo().join("golden/aseprite");
+    let files = reads_folder(&folder);
     // La carpeta real está bien.
-    let casos = verificar(&ficheros).expect("golden/aseprite es válida");
-    comparar_con_lista(&casos, &CASOS).expect("los 29 casos de la lista");
+    let cases = verify(&files).expect("golden/aseprite es válida");
+    compare_with_list(&cases, &CASES).expect("los 29 casos de la lista");
     // Sin un caso (sus tres ficheros): el verificador no se queja (queda coherente), la lista sí.
-    for quitar in [CASOS[0], "mixed-rgba", "layer-locked"] {
-        let sin: Vec<_> = ficheros
+    for remove in [CASES[0], "mixed-rgba", "layer-locked"] {
+        let without: Vec<_> = files
             .iter()
-            .filter(|f| !f.nombre.starts_with(&format!("{quitar}.")))
+            .filter(|f| !f.name_2.starts_with(&format!("{remove}.")))
             .cloned()
             .collect();
-        let casos = verificar(&sin).expect("sin un caso queda coherente");
-        let error = comparar_con_lista(&casos, &CASOS).expect_err("falta un caso");
-        assert!(error.contains(quitar), "{error}");
+        let cases = verify(&without).expect("sin un caso queda coherente");
+        let error = compare_with_list(&cases, &CASES).expect_err("falta un caso");
+        assert!(error.contains(remove), "{error}");
     }
     // Con uno de más: tres ficheros nuevos (copias con otro nombre): 30 casos.
-    let mut con = ficheros.clone();
-    for sufijo in [".aseprite", ".png", ".png.sha256"] {
-        let origen = ficheros
+    let mut with = files.clone();
+    for suffix in [".aseprite", ".png", ".png.sha256"] {
+        let source_2 = files
             .iter()
-            .find(|f| f.nombre == format!("mixed-rgba{sufijo}"))
+            .find(|f| f.name_2 == format!("mixed-rgba{suffix}"))
             .expect("fichero de origen");
-        let mut copia = origen.clone();
-        copia.nombre = format!("caso-extra{sufijo}");
-        con.push(copia);
+        let mut copy = source_2.clone();
+        copy.name_2 = format!("caso-extra{suffix}");
+        with.push(copy);
     }
-    let error = verificar(&con).expect_err("30 casos pasan del máximo");
+    let error = verify(&with).expect_err("30 casos pasan del máximo");
     assert!(error.contains("hay 30 casos"), "{error}");
 }
 
 /// Un PNG con un canal de un píxel con alfa > 0 cambiado.
-fn con_un_pixel_cambiado(png: &Image) -> (Image, (u32, u32)) {
+fn with_one_pixel_changed(png: &Image) -> (Image, (u32, u32)) {
     for y in 0..png.height() {
         for x in 0..png.width() {
             let c = rgba_de(png, x, y);
             if c.a > 0 {
-                let mut otro = png.clone();
-                otro.set_pixel(x, y, Pixel::Rgba(Rgba::new(c.r ^ 1, c.g, c.b, c.a)))
+                let mut other_2 = png.clone();
+                other_2
+                    .set_pixel(x, y, Pixel::Rgba(Rgba::new(c.r ^ 1, c.g, c.b, c.a)))
                     .expect("píxel dentro");
-                return (otro, (x, y));
+                return (other_2, (x, y));
             }
         }
     }
@@ -558,71 +551,71 @@ fn con_un_pixel_cambiado(png: &Image) -> (Image, (u32, u32)) {
 }
 
 #[test]
-fn fila_04_b_un_pixel_cambiado_de_un_png_hace_fallar_la_composicion_y_el_hash() {
-    let caso = "mixed-rgba";
-    let doc = lee_documento(caso).expect("documento");
-    let compuesto = compose(&doc).expect("compose");
-    let png = lee_png(caso);
-    evalua_imagen(caso, &doc, &compuesto, &png).expect("el PNG original pasa");
-    let (cambiado, (x, y)) = con_un_pixel_cambiado(&png);
-    let error = evalua_imagen(caso, &doc, &compuesto, &cambiado).expect_err("un píxel distinto");
+fn row_04_b_a_changed_pixel_of_a_png_makes_the_composition_and_the_hash_fail() {
+    let case = "mixed-rgba";
+    let doc = reads_document(case).expect("documento");
+    let composite = compose(&doc).expect("compose");
+    let png = lee_png(case);
+    evaluates_image(case, &doc, &composite, &png).expect("el PNG original pasa");
+    let (changed, (x, y)) = with_one_pixel_changed(&png);
+    let error = evaluates_image(case, &doc, &composite, &changed).expect_err("un píxel distinto");
     assert!(
-        error.contains(caso) && error.contains(&format!("({x}, {y})")),
+        error.contains(case) && error.contains(&format!("({x}, {y})")),
         "{error}"
     );
     // El corpus también lo ve: el `.sha256` es el de la imagen original.
-    let mut ficheros = lee_carpeta(&raiz_del_repo().join("golden/aseprite"));
-    let png_nuevo = write_png(&cambiado).expect("write_png");
-    ficheros
+    let mut files = reads_folder(&root_of_the_repo().join("golden/aseprite"));
+    let png_new = write_png(&changed).expect("write_png");
+    files
         .iter_mut()
-        .find(|f| f.nombre == format!("{caso}.png"))
+        .find(|f| f.name_2 == format!("{case}.png"))
         .expect("el PNG del caso")
-        .bytes = png_nuevo;
-    let error = verificar(&ficheros).expect_err("el hash ya no coincide");
+        .bytes = png_new;
+    let error = verify(&files).expect_err("el hash ya no coincide");
     assert!(
-        error.contains(&format!("{caso}.png: el hash no coincide")),
+        error.contains(&format!("{case}.png: el hash no coincide")),
         "{error}"
     );
     // Un `.sha256` de otra imagen, lo mismo.
-    let mut ficheros = lee_carpeta(&raiz_del_repo().join("golden/aseprite"));
-    let otro = ficheros
+    let mut files = reads_folder(&root_of_the_repo().join("golden/aseprite"));
+    let other_2 = files
         .iter()
-        .find(|f| f.nombre == "blend-normal.png.sha256")
+        .find(|f| f.name_2 == "blend-normal.png.sha256")
         .expect("otro hash")
         .bytes
         .clone();
-    ficheros
+    files
         .iter_mut()
-        .find(|f| f.nombre == format!("{caso}.png.sha256"))
+        .find(|f| f.name_2 == format!("{case}.png.sha256"))
         .expect("su hash")
-        .bytes = otro;
-    assert!(verificar(&ficheros).is_err());
+        .bytes = other_2;
+    assert!(verify(&files).is_err());
 }
 
 /// Cambia un byte del fichero escrito y exige que la comparación de la fila 3 diga qué campo.
 #[test]
-fn fila_04_c_un_campo_cambiado_del_fichero_escrito_hace_fallar_la_estructura() {
-    let caso = "mixed-rgba";
-    let original = golden(&format!("{caso}.aseprite"));
-    let documento = lee(&original).expect("lee").document;
-    let escrito = write_aseprite(&documento).expect("write");
-    let de_aseprite = estructura(&original).expect("estructura del original");
-    let e = estructura(&escrito).expect("estructura de lo escrito");
-    compara(caso, &de_aseprite, &e).expect("sin mutar, coincide");
-    assert!(e.capas.len() >= 4 && !e.celdas.is_empty());
+fn row_04_c_a_changed_field_of_the_written_file_makes_the_structure_fail() {
+    let case = "mixed-rgba";
+    let original = golden(&format!("{case}.aseprite"));
+    let document = lee(&original).expect("lee").document;
+    let written = write_aseprite(&document).expect("write");
+    let de_aseprite = structure(&original).expect("estructura del original");
+    let e = structure(&written).expect("estructura de lo escrito");
+    compares(case, &de_aseprite, &e).expect("sin mutar, coincide");
+    assert!(e.layers.len() >= 4 && !e.cels.is_empty());
 
     // (campo esperado en el mensaje, desplazamiento, máscara que se aplica con XOR)
-    let mutaciones: Vec<(&str, usize, u8)> = vec![
-        ("capa 1: banderas", e.capas[1].at, 1),
-        ("capa 1: banderas", e.capas[1].at, 2),
-        ("capa 0: tipo", e.capas[0].at + 2, 1),
-        ("capa 0: nivel hijo", e.capas[0].at + 4, 1),
-        ("capa 2: mezcla", e.capas[2].at + 10, 1),
-        ("capa 2: opacidad", e.capas[2].at + 12, 1),
-        ("capa 3: nombre", e.capas[3].at + 18, 1),
-        ("celda 0: opacidad", e.celdas[0].at + 6, 0x80),
-        ("celda 0: tipo", e.celdas[0].at + 7, 1),
-        ("celda 0: z-index", e.celdas[0].at + 9, 1),
+    let mutations: Vec<(&str, usize, u8)> = vec![
+        ("capa 1: banderas", e.layers[1].at, 1),
+        ("capa 1: banderas", e.layers[1].at, 2),
+        ("capa 0: tipo", e.layers[0].at + 2, 1),
+        ("capa 0: nivel hijo", e.layers[0].at + 4, 1),
+        ("capa 2: mezcla", e.layers[2].at + 10, 1),
+        ("capa 2: opacidad", e.layers[2].at + 12, 1),
+        ("capa 3: nombre", e.layers[3].at + 18, 1),
+        ("celda 0: opacidad", e.cels[0].at + 6, 0x80),
+        ("celda 0: tipo", e.cels[0].at + 7, 1),
+        ("celda 0: z-index", e.cels[0].at + 9, 1),
         ("cabecera: ancho", 8, 1),
         ("cabecera: profundidad", 12, 8),
         ("cabecera: banderas", 14, 1),
@@ -630,16 +623,16 @@ fn fila_04_c_un_campo_cambiado_del_fichero_escrito_hace_fallar_la_estructura() {
         ("cabecera: cuadrícula", 40, 1),
         ("magia", 4, 1),
     ];
-    for (campo, desplazamiento, mascara) in mutaciones {
-        let mut roto = escrito.clone();
-        roto[desplazamiento] ^= mascara;
-        let error = match estructura(&roto) {
+    for (field, pan, mascara) in mutations {
+        let mut broken = written.clone();
+        broken[pan] ^= mascara;
+        let error = match structure(&broken) {
             Err(e) => e,
-            Ok(otra) => compara(caso, &de_aseprite, &otra).expect_err(campo),
+            Ok(other) => compares(case, &de_aseprite, &other).expect_err(field),
         };
         assert!(
-            error.contains(campo),
-            "cambiar un byte en {desplazamiento} debía dar «{campo}» y da: {error}"
+            error.contains(field),
+            "cambiar un byte en {pan} debía dar «{field}» y da: {error}"
         );
     }
 }
@@ -648,7 +641,7 @@ fn fila_04_c_un_campo_cambiado_del_fichero_escrito_hace_fallar_la_estructura() {
 // Propiedad 4: la composición sobrevive a guardar y reabrir.
 // ---------------------------------------------------------------------------------------
 
-fn nombre_de_capa() -> impl Strategy<Value = String> {
+fn name_of_layer() -> impl Strategy<Value = String> {
     "[a-zñ0-9]{1,12}"
 }
 
@@ -665,15 +658,15 @@ fn pixel_rgba() -> impl Strategy<Value = [u8; 4]> {
         .prop_map(|(c, a)| [c[0], c[1], c[2], a])
 }
 
-fn celda_rgba(n: usize) -> impl Strategy<Value = Option<Vec<u8>>> {
+fn cel_rgba(n: usize) -> impl Strategy<Value = Option<Vec<u8>>> {
     prop_oneof![
         1 => Just(None),
         5 => vec(pixel_rgba(), n).prop_map(|px| Some(px.concat())),
     ]
 }
 
-fn capa(
-    nombre: &str,
+fn layer_2(
+    name_2: &str,
     visible: bool,
     opacity: u8,
     blend: BlendMode,
@@ -681,7 +674,7 @@ fn capa(
     image: Option<Image>,
 ) -> LayerSpec {
     LayerSpec {
-        name: nombre.to_string(),
+        name: name_2.to_string(),
         visible,
         opacity,
         blend,
@@ -690,113 +683,113 @@ fn capa(
     }
 }
 
-fn documento_rgba(ancho: u32, alto: u32) -> BoxedStrategy<Document> {
-    let n = (ancho * alto) as usize;
-    let una = (
-        nombre_de_capa(),
+fn document_rgba(width: u32, height: u32) -> BoxedStrategy<Document> {
+    let n = (width * height) as usize;
+    let a = (
+        name_of_layer(),
         any::<bool>(),
         prop_oneof![1 => Just(255u8), 1 => any::<u8>()],
         0usize..8,
         any::<bool>(),
-        celda_rgba(n),
+        cel_rgba(n),
     );
-    vec(una, 1..=6)
-        .prop_map(move |capas| {
-            let specs = capas
+    vec(a, 1..=6)
+        .prop_map(move |layers| {
+            let specs = layers
                 .into_iter()
-                .map(|(nombre, visible, opacidad, modo, bloqueada, celda)| {
-                    let imagen = celda
-                        .map(|b| Image::from_bytes(ancho, alto, Mode::Rgba, b).expect("imagen"));
-                    capa(
-                        &nombre,
+                .map(|(name_2, visible, opacity_2, mode, locked, cel_2)| {
+                    let image_2 = cel_2
+                        .map(|b| Image::from_bytes(width, height, Mode::Rgba, b).expect("imagen"));
+                    layer_2(
+                        &name_2,
                         visible,
-                        opacidad,
-                        BlendMode::ALL[modo],
-                        bloqueada,
-                        imagen,
+                        opacity_2,
+                        BlendMode::ALL[mode],
+                        locked,
+                        image_2,
                     )
                 })
                 .collect();
-            Document::from_layers(ancho, alto, Mode::Rgba, None, specs).expect("documento RGBA")
+            Document::from_layers(width, height, Mode::Rgba, None, specs).expect("documento RGBA")
         })
         .boxed()
 }
 
-fn documento_indexado(ancho: u32, alto: u32) -> BoxedStrategy<Document> {
-    let n = (ancho * alto) as usize;
+fn document_indexed(width: u32, height: u32) -> BoxedStrategy<Document> {
+    let n = (width * height) as usize;
     (vec(any::<[u8; 4]>(), 2..=16), any::<u8>())
-        .prop_flat_map(move |(colores, t)| {
-            let largo = colores.len();
-            let transparente = (usize::from(t) % largo) as u8;
-            let celda = prop_oneof![1 => Just(None), 5 => vec(any::<u8>(), n).prop_map(Some)];
-            let una = (nombre_de_capa(), any::<bool>(), any::<bool>(), celda);
-            vec(una, 1..=6).prop_map(move |capas| {
-                let mut paleta =
-                    Palette::from_colors(colores.iter().map(|c| Rgba::new(c[0], c[1], c[2], c[3])))
+        .prop_flat_map(move |(colors, t)| {
+            let largo = colors.len();
+            let transparent = (usize::from(t) % largo) as u8;
+            let cel_2 = prop_oneof![1 => Just(None), 5 => vec(any::<u8>(), n).prop_map(Some)];
+            let a = (name_of_layer(), any::<bool>(), any::<bool>(), cel_2);
+            vec(a, 1..=6).prop_map(move |layers| {
+                let mut palette =
+                    Palette::from_colors(colors.iter().map(|c| Rgba::new(c[0], c[1], c[2], c[3])))
                         .expect("paleta");
-                paleta
-                    .set_transparent_index(Some(transparente))
+                palette
+                    .set_transparent_index(Some(transparent))
                     .expect("índice transparente");
-                let specs = capas
+                let specs = layers
                     .into_iter()
-                    .map(|(nombre, visible, bloqueada, celda)| {
-                        let imagen = celda.map(|b| {
+                    .map(|(name_2, visible, locked, cel_2)| {
+                        let image_2 = cel_2.map(|b| {
                             let indices = b
                                 .iter()
                                 .map(|&v| {
                                     if v % 3 == 0 {
-                                        transparente
+                                        transparent
                                     } else {
                                         (usize::from(v) % largo) as u8
                                     }
                                 })
                                 .collect();
-                            Image::from_bytes_indexed(ancho, alto, paleta.clone(), indices)
+                            Image::from_bytes_indexed(width, height, palette.clone(), indices)
                                 .expect("imagen indexada")
                         });
-                        capa(&nombre, visible, 255, BlendMode::Normal, bloqueada, imagen)
+                        layer_2(&name_2, visible, 255, BlendMode::Normal, locked, image_2)
                     })
                     .collect();
-                Document::from_layers(ancho, alto, Mode::Indexed, Some(paleta.clone()), specs)
+                Document::from_layers(width, height, Mode::Indexed, Some(palette.clone()), specs)
                     .expect("documento indexado")
             })
         })
         .boxed()
 }
 
-fn documento_cualquiera() -> impl Strategy<Value = Document> {
-    (1u32..=12, 1u32..=12, any::<bool>()).prop_flat_map(|(ancho, alto, indexado)| {
-        if indexado {
-            documento_indexado(ancho, alto)
+fn document_any() -> impl Strategy<Value = Document> {
+    (1u32..=12, 1u32..=12, any::<bool>()).prop_flat_map(|(width, height, indexed)| {
+        if indexed {
+            document_indexed(width, height)
         } else {
-            documento_rgba(ancho, alto)
+            document_rgba(width, height)
         }
     })
 }
 
-fn falla<T, E: std::fmt::Display>(r: Result<T, E>) -> Result<T, TestCaseError> {
+fn fail<T, E: std::fmt::Display>(r: Result<T, E>) -> Result<T, TestCaseError> {
     r.map_err(|e| TestCaseError::fail(e.to_string()))
 }
 
-fn reabre(doc: &Document) -> Result<Document, TestCaseError> {
-    let bytes = falla(write_aseprite(doc))?;
-    Ok(falla(lee(&bytes))?.document)
+fn reopens(doc: &Document) -> Result<Document, TestCaseError> {
+    let bytes = fail(write_aseprite(doc))?;
+    Ok(fail(lee(&bytes))?.document)
 }
 
-/// La composición (o el error) tras aplicar `orden` a `doc`; `None` si no hay nada que hacer.
-fn tras(doc: &Document, aplanar: bool) -> Result<Option<Image>, TestCaseError> {
+/// La composición (o el error) tras aplicar `order` a `doc`; `None` si no hay nada que hacer.
+fn after(doc: &Document, flatten: bool) -> Result<Option<Image>, TestCaseError> {
     let mut doc = doc.clone();
-    let orden = if aplanar {
+    let order = if flatten {
         flatten_command(&doc)
     } else {
         merge_visible_command(&doc)
     };
-    match orden {
+    match order {
         Err(MergeError::NothingToMerge) => Ok(None),
         Err(e) => Err(TestCaseError::fail(format!("la orden dio {e:?}"))),
-        Ok(orden) => {
-            falla(doc.apply(orden))?;
-            Ok(Some(falla(compose(&doc).map_err(|e| format!("{e:?}")))?))
+        Ok(order) => {
+            fail(doc.apply(order))?;
+            Ok(Some(fail(compose(&doc).map_err(|e| format!("{e:?}")))?))
         }
     }
 }
@@ -807,31 +800,31 @@ proptest! {
     /// P4. Guardar y reabrir no cambia la composición salvo el RGB de los píxeles con alfa 0, y
     /// aplanar y combinar visibles conmutan con guardar y reabrir con la misma exención.
     #[test]
-    fn propiedad_4_la_composicion_sobrevive_a_guardar_y_reabrir(doc in documento_cualquiera()) {
-        let reabierto = reabre(&doc)?;
-        falla(mismo_contenido(&doc, &reabierto))?;
-        let antes = falla(compose(&doc).map_err(|e| format!("{e:?}")))?;
-        let despues = falla(compose(&reabierto).map_err(|e| format!("{e:?}")))?;
-        falla(igual_salvo_rgb_con_alfa_0(&antes, &despues))?;
-        for aplanar in [true, false] {
-            let a = tras(&doc, aplanar)?;
-            let b = tras(&reabierto, aplanar)?;
+    fn property_4_the_composition_survives_saving_and_reopening(doc in document_any()) {
+        let reopened = reopens(&doc)?;
+        fail(same_content(&doc, &reopened))?;
+        let antes = fail(compose(&doc).map_err(|e| format!("{e:?}")))?;
+        let after_2 = fail(compose(&reopened).map_err(|e| format!("{e:?}")))?;
+        fail(equal_except_rgb_with_alpha_0(&antes, &after_2))?;
+        for flatten in [true, false] {
+            let a = after(&doc, flatten)?;
+            let b = after(&reopened, flatten)?;
             match (a, b) {
                 (None, None) => {}
-                (Some(a), Some(b)) => falla(igual_salvo_rgb_con_alfa_0(&a, &b))?,
+                (Some(a), Some(b)) => fail(equal_except_rgb_with_alpha_0(&a, &b))?,
                 (a, b) => prop_assert!(false, "una orden da {} y la otra {}", a.is_some(), b.is_some()),
             }
             // Escribir lo aplanado y reabrirlo es lo mismo que aplanar lo reabierto.
-            let mut plano = doc.clone();
-            let orden = if aplanar { flatten_command(&plano) } else { merge_visible_command(&plano) };
-            if let Ok(orden) = orden {
-                falla(plano.apply(orden))?;
-                let plano_reabierto = reabre(&plano)?;
+            let mut plane = doc.clone();
+            let order = if flatten { flatten_command(&plane) } else { merge_visible_command(&plane) };
+            if let Ok(order) = order {
+                fail(plane.apply(order))?;
+                let plane_reopened = reopens(&plane)?;
                 let (x, y) = (
-                    falla(compose(&plano).map_err(|e| format!("{e:?}")))?,
-                    falla(compose(&plano_reabierto).map_err(|e| format!("{e:?}")))?,
+                    fail(compose(&plane).map_err(|e| format!("{e:?}")))?,
+                    fail(compose(&plane_reopened).map_err(|e| format!("{e:?}")))?,
                 );
-                falla(igual_salvo_rgb_con_alfa_0(&x, &y))?;
+                fail(equal_except_rgb_with_alpha_0(&x, &y))?;
             }
         }
     }

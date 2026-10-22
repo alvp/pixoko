@@ -12,12 +12,12 @@
 
 pub mod sha256;
 
-pub const FIRMA: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+pub const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// CRC-32 de la especificación PNG (polinomio 0xEDB88320, bit a bit).
-pub fn crc32(datos: &[u8]) -> u32 {
+pub fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
-    for &b in datos {
+    for &b in data {
         crc ^= u32::from(b);
         for _ in 0..8 {
             crc = if crc & 1 != 0 {
@@ -31,9 +31,9 @@ pub fn crc32(datos: &[u8]) -> u32 {
 }
 
 /// Adler-32 de la especificación zlib (RFC 1950).
-pub fn adler32(datos: &[u8]) -> u32 {
+pub fn adler32(data: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
-    for &x in datos {
+    for &x in data {
         a = (a + u32::from(x)) % 65521;
         b = (b + a) % 65521;
     }
@@ -41,47 +41,47 @@ pub fn adler32(datos: &[u8]) -> u32 {
 }
 
 /// Flujo zlib con bloques deflate «stored» (sin comprimir).
-pub fn zlib_stored(datos: &[u8]) -> Vec<u8> {
+pub fn zlib_stored(data: &[u8]) -> Vec<u8> {
     let mut v = vec![0x78, 0x01];
-    if datos.is_empty() {
+    if data.is_empty() {
         v.extend([1, 0, 0, 0xFF, 0xFF]);
     } else {
-        let bloques = datos.chunks(65535).count();
-        for (i, bloque) in datos.chunks(65535).enumerate() {
-            v.push(u8::from(i + 1 == bloques));
-            let n = bloque.len() as u16;
+        let blocks = data.chunks(65535).count();
+        for (i, block) in data.chunks(65535).enumerate() {
+            v.push(u8::from(i + 1 == blocks));
+            let n = block.len() as u16;
             v.extend(n.to_le_bytes());
             v.extend((!n).to_le_bytes());
-            v.extend(bloque);
+            v.extend(block);
         }
     }
-    v.extend(adler32(datos).to_be_bytes());
+    v.extend(adler32(data).to_be_bytes());
     v
 }
 
 /// Chunk completo: longitud, tipo, datos y CRC.
-pub fn trozo(tipo: &[u8; 4], datos: &[u8]) -> Vec<u8> {
-    let mut v = Vec::with_capacity(12 + datos.len());
-    v.extend((datos.len() as u32).to_be_bytes());
-    v.extend(tipo);
-    v.extend(datos);
-    let mut cuerpo = tipo.to_vec();
-    cuerpo.extend(datos);
-    v.extend(crc32(&cuerpo).to_be_bytes());
+pub fn piece(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut v = Vec::with_capacity(12 + data.len());
+    v.extend((data.len() as u32).to_be_bytes());
+    v.extend(kind);
+    v.extend(data);
+    let mut body = kind.to_vec();
+    body.extend(data);
+    v.extend(crc32(&body).to_be_bytes());
     v
 }
 
-pub fn plte(colores: &[(u8, u8, u8)]) -> Vec<u8> {
-    let datos: Vec<u8> = colores.iter().flat_map(|&(r, g, b)| [r, g, b]).collect();
-    trozo(b"PLTE", &datos)
+pub fn plte(colors: &[(u8, u8, u8)]) -> Vec<u8> {
+    let data: Vec<u8> = colors.iter().flat_map(|&(r, g, b)| [r, g, b]).collect();
+    piece(b"PLTE", &data)
 }
 
-pub fn trns(datos: &[u8]) -> Vec<u8> {
-    trozo(b"tRNS", datos)
+pub fn trns(data: &[u8]) -> Vec<u8> {
+    piece(b"tRNS", data)
 }
 
 /// Canales por píxel de cada tipo de color PNG.
-pub fn canales(color: u8) -> usize {
+pub fn channels(color: u8) -> usize {
     match color {
         2 => 3,
         4 => 2,
@@ -92,16 +92,16 @@ pub fn canales(color: u8) -> usize {
 
 /// Empaqueta las muestras de una fila: sub-8 bits de más a menos significativo con relleno
 /// a byte, 8 bits tal cual y 16 bits en big-endian.
-pub fn empaqueta(fila: &[u16], prof: u8) -> Vec<u8> {
+pub fn packs(row: &[u16], prof: u8) -> Vec<u8> {
     match prof {
-        16 => fila.iter().flat_map(|v| v.to_be_bytes()).collect(),
-        8 => fila.iter().map(|&v| v as u8).collect(),
+        16 => row.iter().flat_map(|v| v.to_be_bytes()).collect(),
+        8 => row.iter().map(|&v| v as u8).collect(),
         _ => {
             let p = usize::from(prof);
-            fila.chunks(8 / p)
-                .map(|grupo| {
+            row.chunks(8 / p)
+                .map(|group| {
                     let mut byte = 0u8;
-                    for (i, &v) in grupo.iter().enumerate() {
+                    for (i, &v) in group.iter().enumerate() {
                         byte |= (v as u8) << (8 - p * (i + 1));
                     }
                     byte
@@ -112,44 +112,44 @@ pub fn empaqueta(fila: &[u16], prof: u8) -> Vec<u8> {
 }
 
 /// Datos sin comprimir del IDAT: cada fila con su byte de filtro 0 y las muestras empaquetadas.
-pub fn escaneos(ancho: usize, alto: usize, canales: usize, prof: u8, m: &[u16]) -> Vec<u8> {
-    let mut salida = Vec::new();
-    for y in 0..alto {
-        let fila = &m[y * ancho * canales..(y + 1) * ancho * canales];
-        salida.push(0);
-        salida.extend(empaqueta(fila, prof));
+pub fn scans(width: usize, height: usize, channels: usize, prof: u8, m: &[u16]) -> Vec<u8> {
+    let mut output = Vec::new();
+    for y in 0..height {
+        let row = &m[y * width * channels..(y + 1) * width * channels];
+        output.push(0);
+        output.extend(packs(row, prof));
     }
-    salida
+    output
 }
 
-/// Fichero PNG en construcción, sin entrelazado. Con `muestras` vacío no se genera ningún
+/// Fichero PNG en construcción, sin entrelazado. Con `swatches` vacío no se genera ningún
 /// dato de imagen (así se hacen ficheros de cabecera enorme y datos mínimos).
 #[derive(Clone)]
 pub struct Png {
-    ancho: u32,
-    alto: u32,
+    width: u32,
+    height: u32,
     prof: u8,
     color: u8,
     /// Muestras por píxel y canal, fila a fila, en el orden de la imagen final.
-    muestras: Vec<u16>,
+    swatches: Vec<u16>,
     /// Chunks ya serializados entre IHDR e IDAT.
     antes: Vec<Vec<u8>>,
 }
 
 impl Png {
-    pub fn new(ancho: u32, alto: u32, prof: u8, color: u8) -> Png {
+    pub fn new(width: u32, height: u32, prof: u8, color: u8) -> Png {
         Png {
-            ancho,
-            alto,
+            width,
+            height,
             prof,
             color,
-            muestras: Vec::new(),
+            swatches: Vec::new(),
             antes: Vec::new(),
         }
     }
 
-    pub fn muestras(mut self, m: &[u16]) -> Png {
-        self.muestras = m.to_vec();
+    pub fn swatches(mut self, m: &[u16]) -> Png {
+        self.swatches = m.to_vec();
         self
     }
 
@@ -158,88 +158,88 @@ impl Png {
         self
     }
 
-    fn crudo(&self) -> Vec<u8> {
-        if self.muestras.is_empty() {
+    fn raw(&self) -> Vec<u8> {
+        if self.swatches.is_empty() {
             return Vec::new();
         }
-        escaneos(
-            self.ancho as usize,
-            self.alto as usize,
-            canales(self.color),
+        scans(
+            self.width as usize,
+            self.height as usize,
+            channels(self.color),
             self.prof,
-            &self.muestras,
+            &self.swatches,
         )
     }
 
     pub fn bytes(&self) -> Vec<u8> {
         let mut ihdr = Vec::new();
-        ihdr.extend(self.ancho.to_be_bytes());
-        ihdr.extend(self.alto.to_be_bytes());
+        ihdr.extend(self.width.to_be_bytes());
+        ihdr.extend(self.height.to_be_bytes());
         ihdr.extend([self.prof, self.color, 0, 0, 0]);
-        let mut v = FIRMA.to_vec();
-        v.extend(trozo(b"IHDR", &ihdr));
+        let mut v = SIGNATURE.to_vec();
+        v.extend(piece(b"IHDR", &ihdr));
         for c in &self.antes {
             v.extend(c);
         }
-        v.extend(trozo(b"IDAT", &zlib_stored(&self.crudo())));
-        v.extend(trozo(b"IEND", &[]));
+        v.extend(piece(b"IDAT", &zlib_stored(&self.raw())));
+        v.extend(piece(b"IEND", &[]));
         v
     }
 }
 
 /// Un chunk encontrado por el recorredor: tipo, posición del campo de longitud y datos.
-pub struct Trozo {
-    pub tipo: [u8; 4],
-    pub inicio: usize,
-    pub datos: Vec<u8>,
+pub struct Piece {
+    pub kind: [u8; 4],
+    pub start: usize,
+    pub data: Vec<u8>,
 }
 
 /// Recorre la estructura de chunks de un fichero bien formado: firma, longitud, tipo, datos
 /// y CRC de cada chunk, hasta un IEND que termina exactamente en el último byte.
-pub fn recorre(bytes: &[u8]) -> Result<Vec<Trozo>, String> {
-    if bytes.len() < 8 || bytes[..8] != FIRMA {
+pub fn walks(bytes: &[u8]) -> Result<Vec<Piece>, String> {
+    if bytes.len() < 8 || bytes[..8] != SIGNATURE {
         return Err("firma incorrecta".into());
     }
     let mut pos = 8usize;
-    let mut trozos = Vec::new();
+    let mut pieces = Vec::new();
     loop {
-        let cabecera = bytes
+        let header = bytes
             .get(pos..pos + 8)
             .ok_or_else(|| format!("cabecera truncada en {pos}"))?;
-        let largo = u32::from_be_bytes(cabecera[..4].try_into().unwrap()) as usize;
-        let tipo: [u8; 4] = cabecera[4..8].try_into().unwrap();
-        let datos = bytes
+        let largo = u32::from_be_bytes(header[..4].try_into().unwrap()) as usize;
+        let kind: [u8; 4] = header[4..8].try_into().unwrap();
+        let data = bytes
             .get(pos + 8..pos + 8 + largo)
             .ok_or_else(|| format!("datos truncados en {pos}"))?;
         let crc = bytes
             .get(pos + 8 + largo..pos + 12 + largo)
             .ok_or_else(|| format!("CRC truncado en {pos}"))?;
-        let mut cuerpo = tipo.to_vec();
-        cuerpo.extend(datos);
-        if u32::from_be_bytes(crc.try_into().unwrap()) != crc32(&cuerpo) {
+        let mut body = kind.to_vec();
+        body.extend(data);
+        if u32::from_be_bytes(crc.try_into().unwrap()) != crc32(&body) {
             return Err(format!("CRC incorrecto en {pos}"));
         }
-        trozos.push(Trozo {
-            tipo,
-            inicio: pos,
-            datos: datos.to_vec(),
+        pieces.push(Piece {
+            kind,
+            start: pos,
+            data: data.to_vec(),
         });
         pos += 12 + largo;
-        if tipo == *b"IEND" {
+        if kind == *b"IEND" {
             if pos != bytes.len() {
                 return Err(format!("sobran {} bytes tras IEND", bytes.len() - pos));
             }
-            return Ok(trozos);
+            return Ok(pieces);
         }
     }
 }
 
 /// Posición del chunk IDAT y longitud de sus datos.
-pub fn posicion_idat(bytes: &[u8]) -> (usize, usize) {
-    let t = recorre(bytes)
+pub fn position_idat(bytes: &[u8]) -> (usize, usize) {
+    let t = walks(bytes)
         .unwrap()
         .into_iter()
-        .find(|t| t.tipo == *b"IDAT")
+        .find(|t| t.kind == *b"IDAT")
         .unwrap();
-    (t.inicio, t.datos.len())
+    (t.start, t.data.len())
 }

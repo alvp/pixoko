@@ -51,7 +51,7 @@ def ambiguous() -> set[str]:
 # palabras válidas en inglés que aquí son inequívocamente españolas
 OVERRIDE_UNAMBIGUOUS = {"sin", "con", "pie", "solo", "mas", "hay", "dos", "alto", "caso", "banco", "paso", "tres", "ve", "dan", "da", "cada",
                         "fila", "modo", "mano", "mal", "mil", "nada", "cuando", "pero", "entre", "hasta", "tal", "casa", "cola", "cara",
-                        "pie", "rota", "sub", "plan", "radio", "mesa", "era", "ante", "cargo", "novena"}
+                        "pie", "rota", "sub", "radio", "mesa", "era", "ante", "novena"}
 
 
 import unicodedata
@@ -156,6 +156,8 @@ def collect():
     uses: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for p in rs_files():
         rel = str(p.relative_to(ROOT))
+        if rel == "crates/px-golden/tests/ci.rs":
+            continue  # protegido: solo sus comentarios cambian (L3)
         c = crate_of(rel)
         for t in lex(p.read_text(encoding="utf-8")):
             if t.kind == "ident":

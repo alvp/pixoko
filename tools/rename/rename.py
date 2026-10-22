@@ -148,7 +148,13 @@ def comment_spans(s: str, rel: str, used_mods=frozenset()):
     return "`".join(parts)
 
 
+# ficheros que no se renombran aunque lleven palabras del glosario (`ci.rs`: solo sus comentarios, en L3)
+PROTECTED = {"crates/px-golden/tests/ci.rs"}
+
+
 def rename_rs(rel: str, src: str, used_mods=None):
+    if rel in PROTECTED:
+        return src, collections.Counter()
     if used_mods is None:  # primera pasada: qué módulos renombra el código de este fichero
         _, first = rename_rs(rel, src, frozenset())
         used_mods = frozenset(n for (k, n) in first if k == "mod")

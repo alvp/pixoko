@@ -7,18 +7,18 @@
 //! dimensiones y profundidad de color) y que sus dimensiones sean las del PNG.
 //!
 //! La prueba de la carpeta real es **siempre estricta**: falla si `golden/aseprite/` no existe,
-//! está vacía o no tiene exactamente los 29 casos de `CASOS` (los de la tabla de la spec).
+//! está vacía o no tiene exactamente los 29 casos de `CASES` (los de la tabla de la spec).
 
 use px_formats::read_png;
 
 use super::common::sha256::sha256_hex;
-use super::{Fichero, bytes_rgba, fichero, hash_bien_formado, lee_carpeta, raiz_del_repo};
+use super::{File, bytes_rgba, file, hash_well_formed, reads_folder, root_of_the_repo};
 
 /// Tope de casos de la spec (25, los tres de la ampliación de 3.2 y `layer-locked` de 3.8).
-const MAX_CASOS: usize = 29;
+const MAX_CASES: usize = 29;
 
 /// Los 29 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generate.sh`).
-pub(super) const CASOS: [&str; MAX_CASOS] = [
+pub(super) const CASES: [&str; MAX_CASES] = [
     "rgba-one-layer",
     "layers-normal-three",
     "layers-opacity",
@@ -50,28 +50,30 @@ pub(super) const CASOS: [&str; MAX_CASOS] = [
     "layer-locked",
 ];
 
-/// Falta o sobra algún caso respecto de `esperados` (`casos` ordenados).
-pub(super) fn comparar_con_lista(casos: &[String], esperados: &[&str]) -> Result<(), String> {
-    let faltan: Vec<&str> = esperados
+/// Falta o sobra algún caso respecto de `expected_2` (`cases` ordenados).
+pub(super) fn compare_with_list(cases: &[String], expected_2: &[&str]) -> Result<(), String> {
+    let missing: Vec<&str> = expected_2
         .iter()
         .copied()
-        .filter(|e| !casos.iter().any(|c| c == e))
+        .filter(|e| !cases.iter().any(|c| c == e))
         .collect();
-    let sobran: Vec<&String> = casos
+    let are_left: Vec<&String> = cases
         .iter()
-        .filter(|c| !esperados.contains(&c.as_str()))
+        .filter(|c| !expected_2.contains(&c.as_str()))
         .collect();
-    if faltan.is_empty() && sobran.is_empty() {
+    if missing.is_empty() && are_left.is_empty() {
         Ok(())
     } else {
-        Err(format!("faltan los casos {faltan:?} y sobran {sobran:?}"))
+        Err(format!(
+            "faltan los casos {missing:?} y sobran {are_left:?}"
+        ))
     }
 }
 
 /// `a-z`, `0-9` y guiones, sin guiones al principio, al final ni dobles.
-fn nombre_valido(nombre: &str) -> bool {
-    !nombre.is_empty()
-        && nombre.split('-').all(|t| {
+fn name_valid(name_2: &str) -> bool {
+    !name_2.is_empty()
+        && name_2.split('-').all(|t| {
             !t.is_empty()
                 && t.bytes()
                     .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
@@ -83,17 +85,17 @@ fn u16_le(b: &[u8], pos: usize) -> usize {
 }
 
 /// Comprueba la cabecera de un `.aseprite` y devuelve (ancho, alto).
-fn cabecera(bytes: &[u8]) -> Result<(usize, usize), String> {
+fn header(bytes: &[u8]) -> Result<(usize, usize), String> {
     if bytes.len() < 128 {
         return Err(format!(
             "solo tiene {} bytes (la cabecera es de 128)",
             bytes.len()
         ));
     }
-    let tamano = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
-    if tamano != bytes.len() {
+    let size = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+    if size != bytes.len() {
         return Err(format!(
-            "la cabecera dice {tamano} bytes y el fichero tiene {}",
+            "la cabecera dice {size} bytes y el fichero tiene {}",
             bytes.len()
         ));
     }
@@ -106,119 +108,119 @@ fn cabecera(bytes: &[u8]) -> Result<(usize, usize), String> {
             u16_le(bytes, 6)
         ));
     }
-    let (ancho, alto) = (u16_le(bytes, 8), u16_le(bytes, 10));
-    if !(16..=64).contains(&ancho) || !(16..=64).contains(&alto) {
-        return Err(format!("tamaño {ancho}x{alto} fuera de 16x16 a 64x64"));
+    let (width, height) = (u16_le(bytes, 8), u16_le(bytes, 10));
+    if !(16..=64).contains(&width) || !(16..=64).contains(&height) {
+        return Err(format!("tamaño {width}x{height} fuera de 16x16 a 64x64"));
     }
     match u16_le(bytes, 12) {
-        32 | 8 => Ok((ancho, alto)),
-        otra => Err(format!(
-            "profundidad de color {otra}: solo RGBA (32) o indexado (8)"
+        32 | 8 => Ok((width, height)),
+        other => Err(format!(
+            "profundidad de color {other}: solo RGBA (32) o indexado (8)"
         )),
     }
 }
 
 /// Todos los problemas juntos, uno por línea; `Ok` con los nombres de los casos comprobados.
-pub(super) fn verificar(ficheros: &[Fichero]) -> Result<Vec<String>, String> {
-    let buscar = |nombre: &str| ficheros.iter().find(|f| f.nombre == nombre);
-    let mut problemas = Vec::new();
-    let mut casos = Vec::new();
+pub(super) fn verify(files: &[File]) -> Result<Vec<String>, String> {
+    let search = |name_2: &str| files.iter().find(|f| f.name_2 == name_2);
+    let mut problems = Vec::new();
+    let mut cases = Vec::new();
 
-    if buscar("README.md").is_none() {
-        problemas.push("falta README.md (versión de Aseprite, fecha y origen)".to_string());
+    if search("README.md").is_none() {
+        problems.push("falta README.md (versión de Aseprite, fecha y origen)".to_string());
     }
-    for f in ficheros {
-        let n = f.nombre.as_str();
+    for f in files {
+        let n = f.name_2.as_str();
         if n == "README.md" {
             continue;
         }
-        if let Some(caso) = n.strip_suffix(".aseprite") {
-            casos.push(caso.to_string());
-        } else if let Some(caso) = n.strip_suffix(".png.sha256") {
-            if buscar(&format!("{caso}.png")).is_none() {
-                problemas.push(format!("{n}: no hay {caso}.png al lado"));
+        if let Some(case) = n.strip_suffix(".aseprite") {
+            cases.push(case.to_string());
+        } else if let Some(case) = n.strip_suffix(".png.sha256") {
+            if search(&format!("{case}.png")).is_none() {
+                problems.push(format!("{n}: no hay {case}.png al lado"));
             }
-        } else if let Some(caso) = n.strip_suffix(".png") {
-            if buscar(&format!("{caso}.aseprite")).is_none() {
-                problemas.push(format!("{n}: no hay {caso}.aseprite al lado"));
+        } else if let Some(case) = n.strip_suffix(".png") {
+            if search(&format!("{case}.aseprite")).is_none() {
+                problems.push(format!("{n}: no hay {case}.aseprite al lado"));
             }
         } else {
-            problemas.push(format!(
+            problems.push(format!(
                 "{n}: fichero ajeno (solo README.md, *.aseprite, *.png y *.png.sha256)"
             ));
         }
     }
 
-    if casos.is_empty() {
-        problemas.insert(
+    if cases.is_empty() {
+        problems.insert(
             0,
             "golden/aseprite no contiene ningún .aseprite: el corpus no puede estar vacío"
                 .to_string(),
         );
     }
-    if casos.len() > MAX_CASOS {
-        problemas.push(format!(
-            "hay {} casos y la spec admite {MAX_CASOS} como máximo",
-            casos.len()
+    if cases.len() > MAX_CASES {
+        problems.push(format!(
+            "hay {} casos y la spec admite {MAX_CASES} como máximo",
+            cases.len()
         ));
     }
 
-    for caso in &casos {
-        if !nombre_valido(caso) {
-            problemas.push(format!(
-                "{caso}.aseprite: el nombre debe ser minúsculas, dígitos y guiones"
+    for case in &cases {
+        if !name_valid(case) {
+            problems.push(format!(
+                "{case}.aseprite: el nombre debe ser minúsculas, dígitos y guiones"
             ));
         }
-        let dims = match cabecera(&buscar(&format!("{caso}.aseprite")).unwrap().bytes) {
+        let dims = match header(&search(&format!("{case}.aseprite")).unwrap().bytes) {
             Ok(d) => Some(d),
             Err(e) => {
-                problemas.push(format!("{caso}.aseprite: {e}"));
+                problems.push(format!("{case}.aseprite: {e}"));
                 None
             }
         };
-        let Some(png) = buscar(&format!("{caso}.png")) else {
-            problemas.push(format!("{caso}.aseprite: falta {caso}.png"));
+        let Some(png) = search(&format!("{case}.png")) else {
+            problems.push(format!("{case}.aseprite: falta {case}.png"));
             continue;
         };
-        let Some(hash) = buscar(&format!("{caso}.png.sha256")) else {
-            problemas.push(format!("{caso}.png: falta {caso}.png.sha256"));
+        let Some(hash) = search(&format!("{case}.png.sha256")) else {
+            problems.push(format!("{case}.png: falta {case}.png.sha256"));
             continue;
         };
-        let esperado = match hash_bien_formado(&hash.bytes) {
+        let expected = match hash_well_formed(&hash.bytes) {
             Ok(h) => h,
             Err(e) => {
-                problemas.push(format!("{caso}.png.sha256: hash mal formado: {e}"));
+                problems.push(format!("{case}.png.sha256: hash mal formado: {e}"));
                 continue;
             }
         };
-        let leido = match read_png(&png.bytes) {
+        let read = match read_png(&png.bytes) {
             Ok(r) => r,
             Err(e) => {
-                problemas.push(format!("{caso}.png: read_png dio error: {e}"));
+                problems.push(format!("{case}.png: read_png dio error: {e}"));
                 continue;
             }
         };
-        let (w, h) = (leido.image.width() as usize, leido.image.height() as usize);
+        let (w, h) = (read.image.width() as usize, read.image.height() as usize);
         if let Some((aw, ah)) = dims
             && (w, h) != (aw, ah)
         {
-            problemas.push(format!(
-                "{caso}: el .aseprite es de {aw}x{ah} y el PNG de {w}x{h}"
+            problems.push(format!(
+                "{case}: el .aseprite es de {aw}x{ah} y el PNG de {w}x{h}"
             ));
         }
-        let calculado = sha256_hex(&bytes_rgba(&leido.image));
-        if calculado != esperado {
-            problemas.push(format!(
-                "{caso}.png: el hash no coincide: esperado {esperado}, calculado {calculado}"
+        let computed = sha256_hex(&bytes_rgba(&read.image));
+        if computed != expected {
+            problems.push(format!(
+                "{case}.png: el hash no coincide: esperado {expected}, calculado {computed}"
             ));
         }
     }
 
-    if problemas.is_empty() {
-        casos.sort();
-        Ok(casos)
+    if problems.is_empty() {
+        cases.sort();
+        Ok(cases)
     } else {
-        Err(problemas.join("\n"))
+        Err(problems.join("\n"))
     }
 }
 
@@ -226,145 +228,145 @@ pub(super) fn verificar(ficheros: &[Fichero]) -> Result<Vec<String>, String> {
 // Filas 1 y 2: el verificador con ficheros en memoria.
 // ---------------------------------------------------------------------------------------
 
-/// Cabecera mínima válida de 128 bytes: 1 fotograma, `ancho` x `alto`, color de 32 bits.
-fn aseprite(ancho: u16, alto: u16) -> Vec<u8> {
+/// Cabecera mínima válida de 128 bytes: 1 fotograma, `width` x `height`, color de 32 bits.
+fn aseprite(width: u16, height: u16) -> Vec<u8> {
     let mut b = vec![0u8; 128];
     b[0..4].copy_from_slice(&128u32.to_le_bytes());
     b[4..6].copy_from_slice(&0xA5E0u16.to_le_bytes());
     b[6..8].copy_from_slice(&1u16.to_le_bytes());
-    b[8..10].copy_from_slice(&ancho.to_le_bytes());
-    b[10..12].copy_from_slice(&alto.to_le_bytes());
+    b[8..10].copy_from_slice(&width.to_le_bytes());
+    b[10..12].copy_from_slice(&height.to_le_bytes());
     b[12..14].copy_from_slice(&32u16.to_le_bytes());
     b
 }
 
 /// PNG RGBA de 8 bits, liso, y su SHA-256 como lo escribiría el generador.
-fn png_liso(ancho: u32, alto: u32, valor: u8) -> (Vec<u8>, String) {
-    let crudo = vec![valor; (ancho * alto * 4) as usize];
-    let muestras: Vec<u16> = crudo.iter().map(|&b| u16::from(b)).collect();
-    let png = super::common::Png::new(ancho, alto, 8, 6)
-        .muestras(&muestras)
+fn png_smooth(width: u32, height: u32, valor: u8) -> (Vec<u8>, String) {
+    let raw = vec![valor; (width * height * 4) as usize];
+    let swatches: Vec<u16> = raw.iter().map(|&b| u16::from(b)).collect();
+    let png = super::common::Png::new(width, height, 8, 6)
+        .swatches(&swatches)
         .bytes();
-    (png, sha256_hex(&crudo))
+    (png, sha256_hex(&raw))
 }
 
 /// Un caso correcto: `.aseprite`, `.png` y `.png.sha256`, más el README.
-fn corpus_bueno(nombre: &str) -> Vec<Fichero> {
-    let (png, hash) = png_liso(16, 16, 200);
+fn corpus_good(name_2: &str) -> Vec<File> {
+    let (png, hash) = png_smooth(16, 16, 200);
     vec![
-        fichero("README.md", "# golden/aseprite"),
-        fichero(&format!("{nombre}.aseprite"), aseprite(16, 16)),
-        fichero(&format!("{nombre}.png"), png),
-        fichero(&format!("{nombre}.png.sha256"), format!("{hash}\n")),
+        file("README.md", "# golden/aseprite"),
+        file(&format!("{name_2}.aseprite"), aseprite(16, 16)),
+        file(&format!("{name_2}.png"), png),
+        file(&format!("{name_2}.png.sha256"), format!("{hash}\n")),
     ]
 }
 
-fn sin(mut v: Vec<Fichero>, nombre: &str) -> Vec<Fichero> {
-    v.retain(|f| f.nombre != nombre);
+fn without(mut v: Vec<File>, name_2: &str) -> Vec<File> {
+    v.retain(|f| f.name_2 != name_2);
     v
 }
 
 #[test]
-fn aseprite_fila_1_un_corpus_correcto_pasa() {
+fn aseprite_row_1_a_correct_corpus_passes() {
     assert_eq!(
-        verificar(&corpus_bueno("rgba-one-layer")),
+        verify(&corpus_good("rgba-one-layer")),
         Ok(vec!["rgba-one-layer".to_string()])
     );
 }
 
 #[test]
-fn aseprite_fila_2_cada_defecto_da_error_con_su_mensaje() {
-    let (png_otro, hash_otro) = png_liso(16, 16, 7);
-    let mut hash_malo = corpus_bueno("a");
-    hash_malo[3] = fichero("a.png.sha256", hash_otro);
-    let mut magia = corpus_bueno("a");
-    magia[1].bytes[4] = 0;
-    let mut tamano = corpus_bueno("a");
-    tamano[1].bytes.push(0);
-    let mut dimensiones = corpus_bueno("a");
-    dimensiones[1] = fichero("a.aseprite", aseprite(32, 16));
-    let mut fuera_de_rango = corpus_bueno("a");
-    fuera_de_rango[1] = fichero("a.aseprite", aseprite(8, 8));
-    let mut dos_fotogramas = corpus_bueno("a");
-    dos_fotogramas[1].bytes[6] = 2;
-    let mut ajeno = corpus_bueno("a");
-    ajeno.push(fichero("notas.txt", "x"));
-    let mayusculas = corpus_bueno("Capa-Uno");
-    let mut otro_png = corpus_bueno("a");
-    otro_png[2] = fichero("a.png", png_otro);
-    let mut demasiados = corpus_bueno("caso-0");
-    for i in 1..=MAX_CASOS {
-        demasiados.extend(corpus_bueno(&format!("caso-{i}")).into_iter().skip(1));
+fn aseprite_row_2_each_defect_gives_an_error_with_its_message() {
+    let (png_other, hash_other) = png_smooth(16, 16, 7);
+    let mut hash_bad = corpus_good("a");
+    hash_bad[3] = file("a.png.sha256", hash_other);
+    let mut magic = corpus_good("a");
+    magic[1].bytes[4] = 0;
+    let mut size = corpus_good("a");
+    size[1].bytes.push(0);
+    let mut dimensions = corpus_good("a");
+    dimensions[1] = file("a.aseprite", aseprite(32, 16));
+    let mut out_of_range = corpus_good("a");
+    out_of_range[1] = file("a.aseprite", aseprite(8, 8));
+    let mut two_frames = corpus_good("a");
+    two_frames[1].bytes[6] = 2;
+    let mut foreign = corpus_good("a");
+    foreign.push(file("notas.txt", "x"));
+    let capitals = corpus_good("Capa-Uno");
+    let mut other_png = corpus_good("a");
+    other_png[2] = file("a.png", png_other);
+    let mut too_many = corpus_good("caso-0");
+    for i in 1..=MAX_CASES {
+        too_many.extend(corpus_good(&format!("caso-{i}")).into_iter().skip(1));
     }
 
-    let casos: Vec<(&str, Vec<Fichero>, &str)> = vec![
+    let cases: Vec<(&str, Vec<File>, &str)> = vec![
         ("vacía", Vec::new(), "no puede estar vacío"),
         (
             "sin README",
-            sin(corpus_bueno("a"), "README.md"),
+            without(corpus_good("a"), "README.md"),
             "falta README.md",
         ),
-        ("sin PNG", sin(corpus_bueno("a"), "a.png"), "falta a.png"),
+        ("sin PNG", without(corpus_good("a"), "a.png"), "falta a.png"),
         (
             "sin .sha256",
-            sin(corpus_bueno("a"), "a.png.sha256"),
+            without(corpus_good("a"), "a.png.sha256"),
             "falta a.png.sha256",
         ),
         (
             "PNG sin .aseprite",
-            sin(corpus_bueno("a"), "a.aseprite"),
+            without(corpus_good("a"), "a.aseprite"),
             "no hay a.aseprite",
         ),
-        ("hash de otra imagen", hash_malo, "el hash no coincide"),
-        ("magia", magia, "magia"),
-        ("tamaño de cabecera", tamano, "la cabecera dice"),
-        ("dimensiones distintas", dimensiones, "el PNG de 16x16"),
-        ("fuera de 16 a 64", fuera_de_rango, "fuera de 16x16 a 64x64"),
-        ("dos fotogramas", dos_fotogramas, "un fotograma"),
-        ("fichero ajeno", ajeno, "fichero ajeno"),
+        ("hash de otra imagen", hash_bad, "el hash no coincide"),
+        ("magia", magic, "magia"),
+        ("tamaño de cabecera", size, "la cabecera dice"),
+        ("dimensiones distintas", dimensions, "el PNG de 16x16"),
+        ("fuera de 16 a 64", out_of_range, "fuera de 16x16 a 64x64"),
+        ("dos fotogramas", two_frames, "un fotograma"),
+        ("fichero ajeno", foreign, "fichero ajeno"),
         (
             "nombre con mayúsculas",
-            mayusculas,
+            capitals,
             "minúsculas, dígitos y guiones",
         ),
-        ("PNG de otra imagen", otro_png, "el hash no coincide"),
-        ("más de 29", demasiados, "como máximo"),
+        ("PNG de otra imagen", other_png, "el hash no coincide"),
+        ("más de 29", too_many, "como máximo"),
     ];
-    for (descripcion, ficheros, fragmento) in casos {
-        match verificar(&ficheros) {
-            Ok(_) => panic!("{descripcion}: debía dar error"),
+    for (description, files, fragment) in cases {
+        match verify(&files) {
+            Ok(_) => panic!("{description}: debía dar error"),
             Err(e) => assert!(
-                e.contains(fragmento),
-                "{descripcion}: {e:?} no contiene {fragmento:?}"
+                e.contains(fragment),
+                "{description}: {e:?} no contiene {fragment:?}"
             ),
         }
     }
 }
 
 #[test]
-fn aseprite_fila_3_cada_aseprite_de_golden_tiene_su_png_y_su_sha256() {
-    let dir = raiz_del_repo().join("golden/aseprite");
-    let ficheros = lee_carpeta(&dir); // una carpeta que no existe es una vacía: `verificar` falla
-    match verificar(&ficheros) {
-        Ok(casos) => {
-            if let Err(e) = comparar_con_lista(&casos, &CASOS) {
+fn aseprite_row_3_each_golden_aseprite_has_its_png_and_its_sha256() {
+    let dir = root_of_the_repo().join("golden/aseprite");
+    let files = reads_folder(&dir); // una carpeta que no existe es una vacía: `verify` falla
+    match verify(&files) {
+        Ok(cases) => {
+            if let Err(e) = compare_with_list(&cases, &CASES) {
                 panic!("golden/aseprite no tiene los 29 casos de la spec: {e}");
             }
-            println!("golden/aseprite: {} casos comprobados", casos.len());
+            println!("golden/aseprite: {} casos comprobados", cases.len());
         }
         Err(e) => panic!("corpus de golden/aseprite con problemas:\n{e}"),
     }
 }
 
 #[test]
-fn aseprite_fila_4_la_lista_exacta_detecta_un_caso_que_falta_o_sobra() {
-    let todos: Vec<String> = CASOS.iter().map(|c| c.to_string()).collect();
-    assert_eq!(comparar_con_lista(&todos, &CASOS), Ok(()));
-    let sin_uno = &todos[1..];
-    let e = comparar_con_lista(sin_uno, &CASOS).unwrap_err();
+fn aseprite_row_4_the_exact_list_detects_a_missing_or_extra_case() {
+    let all: Vec<String> = CASES.iter().map(|c| c.to_string()).collect();
+    assert_eq!(compare_with_list(&all, &CASES), Ok(()));
+    let without_one = &all[1..];
+    let e = compare_with_list(without_one, &CASES).unwrap_err();
     assert!(e.contains("rgba-one-layer"), "{e}");
-    let mut con_uno_mas = todos.clone();
-    con_uno_mas.push("extra".to_string());
-    let e = comparar_con_lista(&con_uno_mas, &CASOS).unwrap_err();
+    let mut with_one_more = all.clone();
+    with_one_more.push("extra".to_string());
+    let e = compare_with_list(&with_one_more, &CASES).unwrap_err();
     assert!(e.contains("extra"), "{e}");
 }
