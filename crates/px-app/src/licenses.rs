@@ -96,7 +96,7 @@ mod tests {
         );
         assert_eq!(
             parse_args(&args(&["a.png", "--licencias"])),
-            Err("uso: px-app [archivo.png]".to_string())
+            Err("uso: px-app [archivo]".to_string())
         );
     }
 }

@@ -626,7 +626,7 @@ fn fila_11_el_aviso_dice_aplanado_solo_con_mas_de_una_capa() {
     assert_eq!(with_flatten_notice(texto(), &sesion.document), texto());
     let (_, _) = anade(&mut sesion, "B");
     let (capa_c, _) = anade(&mut sesion, "C");
-    let plano = " · se guarda aplanado; el formato con capas llega con .aseprite";
+    let plano = " · se guarda aplanado; con Guardar como… .aseprite conservas las capas";
     assert_eq!(
         with_flatten_notice(texto(), &sesion.document),
         format!("{}{plano}", texto())

@@ -80,6 +80,6 @@ fn dos_argumentos_dan_uso_y_codigo_dos() {
     assert!(out.stdout.is_empty());
     assert_eq!(
         String::from_utf8_lossy(&out.stderr),
-        "uso: px-app [archivo.png]\n"
+        "uso: px-app [archivo]\n"
     );
 }
