@@ -636,7 +636,7 @@ fn fila_10_en_la_muestra_los_cuadrados_siguen_el_mismo_patron_que_shade_at() {
 
 #[test]
 fn fila_15_la_variable_de_entorno_se_llama_pixoko_damero_malla() {
-    assert_eq!(ENV_MESH, "PIXOKO_DAMERO_MALLA");
+    assert_eq!(ENV_MESH, "PIXOKO_CHECKER_MESH");
 }
 
 #[test]

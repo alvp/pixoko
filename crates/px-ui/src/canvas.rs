@@ -302,7 +302,7 @@ impl Canvas {
         self.background
     }
 
-    /// Activa el respaldo por malla del damero (`PIXOKO_DAMERO_MALLA=1`).
+    /// Activa el respaldo por malla del damero (`PIXOKO_CHECKER_MESH=1`).
     pub fn set_checker_mesh(&mut self, enabled: bool) {
         self.checker_mesh = enabled;
     }

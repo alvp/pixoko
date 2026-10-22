@@ -311,7 +311,7 @@ pub enum Validity {
 #[non_exhaustive]
 pub enum DialogKind {
     Licenses,
-    /// El diálogo de prueba de `PIXOKO_DIALOGO_PRUEBA=1` (specs/hito-2-dialogos-modales.md,
+    /// El diálogo de prueba de `PIXOKO_TEST_DIALOG=1` (specs/hito-2-dialogos-modales.md,
     /// decisión 10): no cambia el documento.
     Demo,
     /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).

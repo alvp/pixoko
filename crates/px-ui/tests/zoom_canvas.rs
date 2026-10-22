@@ -21,7 +21,7 @@
 //!   uno de 1×1 píxel físico y con el color del oráculo de la 17b, muestreando la **textura
 //!   compuesta** de la baldosa (los `textures_delta` de cada fotograma); la superposición no añade
 //!   ninguna forma al fotograma, y ninguna forma es de área cero, con los cuatro fondos y con
-//!   `set_checker_mesh(true)` (lo que activa `PIXOKO_DAMERO_MALLA=1` en la app).
+//!   `set_checker_mesh(true)` (lo que activa `PIXOKO_CHECKER_MESH=1` en la app).
 //! - P1 (banco): `hover` y `StrokeBegin` de un puntero cualquiera son el oráculo con `round(v·ppp)`.
 //!
 //! Supuestos que la spec no fija del todo:
@@ -1802,7 +1802,7 @@ fn fila_a9_solo_se_ven_los_pixeles_de_la_rejilla_cada_uno_de_1x1_con_los_cuatro_
 
 #[test]
 fn fila_a9_con_el_respaldo_por_malla_del_damero_se_ve_igual() {
-    // `PIXOKO_DAMERO_MALLA=1` en la app es `Canvas::set_checker_mesh(true)`.
+    // `PIXOKO_CHECKER_MESH=1` en la app es `Canvas::set_checker_mesh(true)`.
     for ppp in PPPS {
         for k in [2, 4, 64] {
             comprueba_a9(ppp, k, CanvasBackground::Checker, true, true);

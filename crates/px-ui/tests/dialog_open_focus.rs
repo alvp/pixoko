@@ -16,7 +16,7 @@
 //!   desde el fotograma siguiente al de apertura y mantenerse en los demás.
 //! - Con el foco ahí: `AvPág`, `Fin`, `RePág` e `Inicio` desplazan la zona e `Intro` no cierra.
 //! - La variante sin menú (el diálogo abierto antes del primer fotograma, como con
-//!   `PIXOKO_DIALOGO_PRUEBA=1`) se comprueba igual, con Licencias y con un formulario con campos.
+//!   `PIXOKO_TEST_DIALOG=1`) se comprueba igual, con Licencias y con un formulario con campos.
 
 use egui::{Area, Context, Id, Key, Modifiers, Order, Pos2, Vec2, pos2, vec2};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
@@ -120,7 +120,7 @@ impl Aplicacion {
         self.ctx.set_visuals_of(egui::Theme::Dark, visuals(ppp));
     }
 
-    /// El diálogo ya abierto antes del primer fotograma (como `PIXOKO_DIALOGO_PRUEBA=1`).
+    /// El diálogo ya abierto antes del primer fotograma (como `PIXOKO_TEST_DIALOG=1`).
     fn con_dialogo(ppp: f32, ventana: Ventana, kind: DialogKind, spec: FormSpec) -> Aplicacion {
         let mut app = Aplicacion::nueva(ppp, ventana);
         assert!(app.modal.open(kind, spec, Locks::default()));
@@ -403,7 +403,7 @@ fn con_el_dialogo_abierto_por_el_menu_tab_va_a_cerrar_y_escape_cierra() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Sin menú: el diálogo abierto antes del primer fotograma (PIXOKO_DIALOGO_PRUEBA=1)
+// Sin menú: el diálogo abierto antes del primer fotograma (PIXOKO_TEST_DIALOG=1)
 // ---------------------------------------------------------------------------------------------
 
 #[test]

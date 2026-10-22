@@ -3,7 +3,7 @@
 //! La casilla mide `8·n` píxeles físicos (`n = text_scale(ppp)`) con cualquier zoom, y el damero
 //! está anclado a la esquina de la imagen: la casilla `(0, 0)` es A. El lienzo lo pinta como un
 //! solo cuadrilátero con una textura de 2×2 repetida ([`quad`]); [`cells`] enumera las casillas
-//! una a una y es el respaldo por malla (`PIXOKO_DAMERO_MALLA=1`) y el oráculo de las pruebas.
+//! una a una y es el respaldo por malla (`PIXOKO_CHECKER_MESH=1`) y el oráculo de las pruebas.
 
 use px_core::Rgba;
 
@@ -13,9 +13,9 @@ use crate::view::{ScreenRect, Size};
 /// Lado de una casilla, en píxeles de interfaz `u`.
 pub const CELL_U: i64 = 8;
 
-/// Variable de entorno de pruebas: `PIXOKO_DAMERO_MALLA=1` pinta el damero con una malla de
+/// Variable de entorno de pruebas: `PIXOKO_CHECKER_MESH=1` pinta el damero con una malla de
 /// casillas en vez de la textura repetida, para comparar los dos caminos sin recompilar.
-pub const ENV_MESH: &str = "PIXOKO_DAMERO_MALLA";
+pub const ENV_MESH: &str = "PIXOKO_CHECKER_MESH";
 
 /// El respaldo por malla está activo solo con el valor `1` de [`ENV_MESH`].
 pub fn mesh_fallback_enabled(value: Option<&str>) -> bool {
