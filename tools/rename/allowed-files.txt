@@ -41,3 +41,9 @@ tools/corpus-h3/generate.lua
 tools/corpus-h3/generate.sh
 tools/corpus-h3/merge-probe.lua
 tools/corpus-h3/verify.lua
+tools/rename/allowed-files.txt
+tools/rename/gen_map.py
+tools/rename/glossary.tsv
+tools/rename/map.tsv
+tools/rename/rename.py
+tools/rename/verify.py
