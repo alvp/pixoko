@@ -7,17 +7,17 @@
 //! dimensiones y profundidad de color) y que sus dimensiones sean las del PNG.
 //!
 //! La prueba de la carpeta real es **siempre estricta**: falla si `golden/aseprite/` no existe,
-//! está vacía o no tiene exactamente los 28 casos de `CASOS` (los de la tabla de la spec).
+//! está vacía o no tiene exactamente los 29 casos de `CASOS` (los de la tabla de la spec).
 
 use px_formats::read_png;
 
 use super::common::sha256::sha256_hex;
 use super::{Fichero, bytes_rgba, fichero, hash_bien_formado, lee_carpeta, raiz_del_repo};
 
-/// Tope de casos de la spec (25 y los tres de la ampliación).
-const MAX_CASOS: usize = 28;
+/// Tope de casos de la spec (25, los tres de la ampliación de 3.2 y `capa-bloqueada` de 3.8).
+const MAX_CASOS: usize = 29;
 
-/// Los 28 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generar.sh`).
+/// Los 29 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generar.sh`).
 const CASOS: [&str; MAX_CASOS] = [
     "rgba-una-capa",
     "capas-normal-tres",
@@ -47,6 +47,7 @@ const CASOS: [&str; MAX_CASOS] = [
     "mezcla-alfa-rejilla-multiplicar",
     "mezcla-alfa-rejilla-superponer",
     "fondo-con-opacidad",
+    "capa-bloqueada",
 ];
 
 /// Falta o sobra algún caso respecto de `esperados` (`casos` ordenados).
@@ -327,7 +328,7 @@ fn aseprite_fila_2_cada_defecto_da_error_con_su_mensaje() {
             "minúsculas, dígitos y guiones",
         ),
         ("PNG de otra imagen", otro_png, "el hash no coincide"),
-        ("más de 28", demasiados, "como máximo"),
+        ("más de 29", demasiados, "como máximo"),
     ];
     for (descripcion, ficheros, fragmento) in casos {
         match verificar(&ficheros) {
@@ -347,7 +348,7 @@ fn aseprite_fila_3_cada_aseprite_de_golden_tiene_su_png_y_su_sha256() {
     match verificar(&ficheros) {
         Ok(casos) => {
             if let Err(e) = comparar_con_lista(&casos, &CASOS) {
-                panic!("golden/aseprite no tiene los 28 casos de la spec: {e}");
+                panic!("golden/aseprite no tiene los 29 casos de la spec: {e}");
             }
             println!("golden/aseprite: {} casos comprobados", casos.len());
         }

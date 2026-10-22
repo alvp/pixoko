@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Corpus del hito 3 (specs/corpus-hito-3.md): genera en golden/aseprite/ los 28 casos con Aseprite
+# Corpus del hito 3 (specs/corpus-hito-3.md): genera en golden/aseprite/ los 29 casos con Aseprite
 # por lotes y deja, para cada uno, el .aseprite, el PNG aplanado y el .sha256 del PNG.
 #
 # Uso:
-#   tools/corpus-h3/generar.sh                  todos los casos (los 25 primeros deben salir IGUAL)
-#   tools/corpus-h3/generar.sh --nuevos         solo los tres casos añadidos (los de NUEVOS)
+#   tools/corpus-h3/generar.sh                  todos los casos (los 28 primeros deben salir IGUAL)
+#   tools/corpus-h3/generar.sh --nuevos         solo el caso añadido (el de NUEVOS)
 #   tools/corpus-h3/generar.sh --caso NOMBRE    solo ese (se puede repetir; también valen nombres sueltos)
 #   tools/corpus-h3/generar.sh --sobrescribir   (con cualquiera de los anteriores) deja que un caso
 #                                               ya existente cambie si sale distinto
@@ -30,7 +30,7 @@ ASEPRITE="${ASEPRITE:-aseprite}"
 SALIDA="${SALIDA:-$RAIZ/golden/aseprite}"
 LUA="$RAIZ/tools/corpus-h3/generar.lua"
 
-# Misma lista que la tabla de specs/corpus-hito-3.md (un caso por fila, 28 como máximo).
+# Misma lista que la tabla de specs/corpus-hito-3.md (un caso por fila, 29 como máximo).
 CASOS=(
   rgba-una-capa capas-normal-tres capas-opacidad capas-alfa-origen capas-alfa-fondo
   mezcla-normal mezcla-multiplicar mezcla-trama mezcla-superponer
@@ -39,9 +39,11 @@ CASOS=(
   indexado-capas indexado-transparente-7 indexado-paleta-256 indexado-celdas
   celda-desplazada celda-recortada celda-vacia capas-ocultas mixto-rgba
   mezcla-alfa-rejilla-multiplicar mezcla-alfa-rejilla-superponer fondo-con-opacidad
+  capa-bloqueada
 )
-# Los tres añadidos después de los 25 primeros (corpus-hito-3.md, «Casos añadidos»).
-NUEVOS=(mezcla-alfa-rejilla-multiplicar mezcla-alfa-rejilla-superponer fondo-con-opacidad)
+# El añadido después de los 28 primeros (corpus-hito-3.md, «Caso añadido para 3.8»). Los tres de la
+# ampliación de 3.2 ya están generados.
+NUEVOS=(capa-bloqueada)
 
 falta() { echo "falta $1" >&2; exit 1; }
 command -v "$ASEPRITE" >/dev/null || falta "$ASEPRITE (pasa ASEPRITE=/ruta/al/programa)"

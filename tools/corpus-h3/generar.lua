@@ -605,6 +605,37 @@ CASOS["mixto-rgba"] = function()
   guardar(s, "mixto-rgba")
 end
 
+-- Caso 29 (unidad 3.8): capas bloqueadas. El bloqueo se pone DESPUÉS de crear las celdas (una capa
+-- bloqueada podría rechazar `newCel`). Nada de esto toca la visibilidad: `bloqueada` es visible y
+-- bloqueada; `oculta-bloqueada`, las dos cosas a la vez.
+CASOS["capa-bloqueada"] = function()
+  local s = nuevo_sprite(16, 16, false, PALETA)
+  local fondo = capa(s, "fondo")
+  local medio = capa(s, "bloqueada")
+  local arriba = capa(s, "arriba")
+  local oculta = capa(s, "oculta-bloqueada", { visible = false })
+
+  celda(s, fondo, imagen(s, 16, 16, col("gris-claro")))
+
+  local a = imagen(s, 16, 16)
+  disco(a, 8, 8, 6, col("verde"))
+  rect(a, 0, 12, 15, 15, col("marron"))
+  celda(s, medio, a)
+
+  local b = imagen(s, 16, 16)
+  triangulo(b, 2, 2, 13, col("azul", 200))
+  diagonal(b, 0, 0, 16, col("amarillo"), 1)
+  celda(s, arriba, b)
+
+  celda(s, oculta, imagen(s, 16, 16, col("magenta")))
+
+  -- comprobar: Layer.isEditable = false bloquea la capa (no cambia isVisible) y el bloqueo se
+  -- guarda en el fichero.
+  medio.isEditable = false
+  oculta.isEditable = false
+  guardar(s, "capa-bloqueada")
+end
+
 local generar = CASOS[caso]
 if not generar then
   error("caso desconocido: " .. caso)

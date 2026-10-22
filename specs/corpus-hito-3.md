@@ -1,6 +1,6 @@
 # Corpus del hito 3: capas, alfa y mezcla
 
-Estado: **aprobada** (21 de octubre de 2026; los 25 casos sin margen y la tolerancia 0 confirmados). Generada el 21 de octubre con Aseprite 1.3.18.6-dev (`golden/aseprite/`, 25 casos). **Ampliada a 28 casos el 21 de octubre** (visto bueno a la spec de 3.2, «Casos añadidos»): los tres nuevos están escritos en `tools/corpus-h3/generar.lua`, **pendientes de generar** (los ejecuta el usuario con `tools/corpus-h3/generar.sh --nuevos`). Si un caso muestra ±1, se anota **caso por caso** en la spec de 3.2 o de 3.9, nunca como tolerancia general.
+Estado: **aprobada** (21 de octubre de 2026; los 25 casos sin margen y la tolerancia 0 confirmados). Generada el 21 de octubre con Aseprite 1.3.18.6-dev (`golden/aseprite/`, 25 casos). **Ampliada a 28 casos el 21 de octubre** (visto bueno a la spec de 3.2, «Casos añadidos»): los tres nuevos están escritos en `tools/corpus-h3/generar.lua`, **pendientes de generar** (los ejecuta el usuario con `tools/corpus-h3/generar.sh --nuevos`). **Ampliada a 29 casos el 22 de octubre** (visto bueno a la spec de 3.8, «Caso añadido para 3.8»): `capa-bloqueada`, escrito en `tools/corpus-h3/generar.lua` y **pendiente de generar** (lo ejecuta el usuario con `generar.sh --nuevos`; mientras no esté en `golden/aseprite/`, la prueba de la carpeta falla a propósito). Si un caso muestra ±1, se anota **caso por caso** en la spec de 3.2 o de 3.9, nunca como tolerancia general.
 
 **Decisión del usuario (21 de octubre de 2026): la única referencia es Aseprite**, como generador y oráculo de los `.aseprite` y de los PNG aplanados. No se usa LibreSprite en el hito 3. Cambia el flujo de D10: antes los `.aseprite` los escribía Pixoko (3.8) y LibreSprite los convertía; ahora los escribe Aseprite desde un script propio, así que **3.8 empieza leyendo un corpus que ya existe** y su escritura se prueba después (ida y vuelta, y abrir lo que escribe Pixoko con Aseprite por lotes).
 
@@ -29,13 +29,13 @@ Las tres juntas, con comprobación del resultado (esquinas `(196, 46, 52, 255)`,
 
 ## 1. Cómo se genera
 
-`tools/corpus-h3/generar.sh` (sin argumentos: los 28 casos; `--nuevos` o `--caso NOMBRE`: solo esos). Genera en una carpeta de prueba en disco y **compara byte a byte** con lo que ya hay en `golden/aseprite/`: un caso existente que sale igual se informa `IGUAL`; uno que sale distinto, `DISTINTO` (qué cambia: `.aseprite`, PNG o píxeles) y **no se sobrescribe** salvo con `--sobrescribir` (el script sale con 3); uno que no existe se copia. Regenerar los 25 primeros debe dar `IGUAL` en los 25; si no, se informa antes de tocar nada. Por caso: ejecuta `generar.lua` con `--script-param caso=<nombre>` y `salida=<carpeta>` (siempre **antes** de `--script`; comprobado: si no, `app.params` llega vacío), comprueba que existe el `.aseprite`, lo abre y exporta el PNG, y escribe `X.png.sha256` con **Pillow** (herramienta independiente, no Pixoko): SHA-256 de la RGBA de 8 bits, alfa directo, sin cabecera ni dimensiones, el mismo criterio de `golden/png/`. Al final rehace `golden/aseprite/README.md` con la versión de Aseprite y la fecha de esa ejecución, el origen de las imágenes (dibujos propios, ningún recurso del programa) y la tabla de ficheros. `--verificar` vuelca capas y celdas de lo generado (`verificar.lua`) para mirar a ojo. No se commitea nada solo.
+`tools/corpus-h3/generar.sh` (sin argumentos: los 29 casos; `--nuevos` o `--caso NOMBRE`: solo esos). Genera en una carpeta de prueba en disco y **compara byte a byte** con lo que ya hay en `golden/aseprite/`: un caso existente que sale igual se informa `IGUAL`; uno que sale distinto, `DISTINTO` (qué cambia: `.aseprite`, PNG o píxeles) y **no se sobrescribe** salvo con `--sobrescribir` (el script sale con 3); uno que no existe se copia. Regenerar los 28 primeros debe dar `IGUAL` en los 28; si no, se informa antes de tocar nada. Por caso: ejecuta `generar.lua` con `--script-param caso=<nombre>` y `salida=<carpeta>` (siempre **antes** de `--script`; comprobado: si no, `app.params` llega vacío), comprueba que existe el `.aseprite`, lo abre y exporta el PNG, y escribe `X.png.sha256` con **Pillow** (herramienta independiente, no Pixoko): SHA-256 de la RGBA de 8 bits, alfa directo, sin cabecera ni dimensiones, el mismo criterio de `golden/png/`. Al final rehace `golden/aseprite/README.md` con la versión de Aseprite y la fecha de esa ejecución, el origen de las imágenes (dibujos propios, ningún recurso del programa) y la tabla de ficheros. `--verificar` vuelca capas y celdas de lo generado (`verificar.lua`) para mirar a ojo. No se commitea nada solo.
 
 Se necesita `python3` con Pillow; si falta, el script lo dice. Las carpetas de prueba van a `~/.cache`, no a `/tmp`.
 
 ## 2. Casos
 
-Nombre de fichero: minúsculas, dígitos y guiones. Cada caso son tres ficheros: `X.aseprite`, `X.png` (aplanado) y `X.png.sha256`. **28 casos, el máximo** (25 y los tres de «Casos añadidos»): si hace falta uno más, se fusionan dos. Todos tienen **un fotograma**, tamaños de 16×16 a 64×64 y paleta propia. «Opacidad» es la de la capa; la de celda queda para el hito 6. Capas de abajo arriba. Colores: nombres de la paleta propia de 16 entradas de `generar.lua` (`negro`, `blanco`, `rojo`, …); **A** y **B** son dos tablas de 8 colores RGB del script, con blanco, negro y valores sin patrón (37, 201, 143, 211, 17, 99) para que el redondeo se vea.
+Nombre de fichero: minúsculas, dígitos y guiones. Cada caso son tres ficheros: `X.aseprite`, `X.png` (aplanado) y `X.png.sha256`. **29 casos, el máximo** (25, los tres de «Casos añadidos» y el de «Caso añadido para 3.8»): si hace falta uno más, se fusionan dos. Todos tienen **un fotograma**, tamaños de 16×16 a 64×64 y paleta propia. «Opacidad» es la de la capa; la de celda queda para el hito 6. Capas de abajo arriba. Colores: nombres de la paleta propia de 16 entradas de `generar.lua` (`negro`, `blanco`, `rojo`, …); **A** y **B** son dos tablas de 8 colores RGB del script, con blanco, negro y valores sin patrón (37, 201, 143, 211, 17, 99) para que el redondeo se vea.
 
 **Unidades** (de `mapa-funciones.md`): 3.1 modelo de capas, 3.2 composición, 3.5 aplanar y exportar, 3.8 `.aseprite` etapa 1, 3.9 puerta. Todos los casos los usa 3.8 (lectura: estructura y propiedades declaradas; ida y vuelta) y 3.9 (la composición del documento leído da el PNG); la columna dice quién más.
 
@@ -92,6 +92,14 @@ Mismos criterios que los demás (dibujos y colores propios, paleta propia, un fo
 | `mezcla-alfa-rejilla-superponer` | 64×32 | 2 | Igual, con la capa `fuente` en **Superponer** y **opacidad 128** (el alfa 127 con opacidad 128 da `127·128/255 = 63,75`: separa el redondeo del truncamiento del alfa por opacidad) | 3.2, 3.9 |
 | `fondo-con-opacidad` | 32×32 | 2 | `base` con **opacidad 128 y modo Multiplicar** sobre el lienzo transparente (colores A por columnas de 4 px; alfa por filas de 4 px: 255, 223, 191, 159, 127, 95, 63 y 0, este último con RGB distinto de 0) y `arriba` (Normal, opacidad 255: un disco naranja opaco y un rectángulo cian con alfa 128) | 3.2 (capa de abajo con opacidad), 3.9 |
 
+### Caso añadido para 3.8 (22 de octubre; confirma cómo se guarda el bloqueo)
+
+Mismos criterios que los demás (dibujos y colores propios, paleta propia, un fotograma, tolerancia 0). Hasta aquí ninguna capa del corpus estaba bloqueada, así que la regla «bloqueada = bandera «Editable» (bit 2) apagada» de la spec de 3.8 era una inferencia de la tabla de la especificación pública. Este caso la comprueba con datos.
+
+| Fichero | Tam. | Capas | Contenido | También |
+| --- | --- | --- | --- | --- |
+| `capa-bloqueada` | 16×16 | 4 | `fondo` (gris claro opaco), `bloqueada` (**visible y bloqueada**: disco verde y banda marrón), `arriba` (triángulo azul con alfa 200 y diagonal amarilla; ni oculta ni bloqueada) y `oculta-bloqueada` (**invisible y bloqueada**, magenta a todo el lienzo); Normal, opacidad 255. El bloqueo se pone con la propiedad de bloqueo de la API de Lua tras crear las celdas (`Layer.isEditable = false`, marcada `comprobar`: es de memoria y no se ha ejecutado) | 3.8 (bloqueo y visibilidad independientes), 3.9 |
+
 ## 3. Prueba del corpus (`px-golden`)
 
 Un módulo nuevo en `png_interop` (`crates/px-golden/tests/png_interop/aseprite_corpus.rs`; sin ejecutable nuevo), con el mismo criterio de `golden/png/`: cada `X.aseprite` tiene su `X.png` y su `X.png.sha256`, y el hash de la RGBA que `read_png` da del PNG es el del `.sha256`. Además, como 3.8 aún no existe, se mira la **cabecera de 128 bytes** de la especificación pública (tamaño igual a la longitud del fichero, magia `0xA5E0`, un fotograma, 16 a 64 de ancho y alto, 32 u 8 bits de color) y que sus dimensiones sean las del PNG.
@@ -99,8 +107,8 @@ Un módulo nuevo en `png_interop` (`crates/px-golden/tests/png_interop/aseprite_
 | Fila | Qué | Resultado |
 | --- | --- | --- |
 | 1 | Un caso correcto en memoria | `Ok` con su nombre |
-| 2 | Cada defecto en memoria: carpeta vacía; sin README; `.aseprite` sin PNG; PNG sin `.aseprite`; sin `.sha256`; hash de otra imagen; magia, tamaño, fotogramas o dimensiones fuera de la cabecera; dimensiones distintas a las del PNG; fichero ajeno; nombre con mayúsculas; más de 25 casos | `Err` con el mensaje del defecto (el control de que el corpus sabe fallar) |
-| 3 | La carpeta real `golden/aseprite/` | `Ok`; **siempre estricta**: si la carpeta no existe, está vacía, le falta un fichero o no tiene exactamente los 28 casos de la tabla (lista fija en la prueba), falla |
+| 2 | Cada defecto en memoria: carpeta vacía; sin README; `.aseprite` sin PNG; PNG sin `.aseprite`; sin `.sha256`; hash de otra imagen; magia, tamaño, fotogramas o dimensiones fuera de la cabecera; dimensiones distintas a las del PNG; fichero ajeno; nombre con mayúsculas; más de 29 casos | `Err` con el mensaje del defecto (el control de que el corpus sabe fallar) |
+| 3 | La carpeta real `golden/aseprite/` | `Ok`; **siempre estricta**: si la carpeta no existe, está vacía, le falta un fichero o no tiene exactamente los 29 casos de la tabla (lista fija en la prueba), falla |
 | 4 | La comparación con la lista exacta, en memoria | Un caso que falta o que sobra da `Err` con su nombre |
 
 El test no ejecuta Aseprite ni lee las capas.
@@ -127,7 +135,7 @@ El script se escribió de memoria y a la primera ejecución real solo falló el 
 ## 6. Decisiones que debes confirmar
 
 1. **Aseprite como única referencia del hito 3**, con el flujo nuevo (los ficheros de entrada los escribe Aseprite; 3.8 empieza leyéndolos). `mapa-funciones.md` (D07, D10, el 3.2, el 3.8 y el 3.9), `PLAN-RESUMEN.md` y `REFERENCIAS.md` quedan corregidos. **Lo que dicen del hito 4 y del hito 5 sobre LibreSprite** (cuantizador, formas, GIF, hojas de sprites y etiquetas) **sigue igual hasta que decidas** si también pasan a Aseprite.
-2. **28 casos, el máximo** (25 y tres añadidos el 21 de octubre). Sin margen: añadir uno exige quitar otro.
+2. **29 casos, el máximo** (25, tres añadidos el 21 de octubre y `capa-bloqueada` el 22). Sin margen: añadir uno exige quitar otro.
 3. **Tolerancia 0** como objetivo y ±1 solo caso a caso con datos (ver arriba).
 4. **La prueba de la carpeta es siempre estricta** (decidido): falla si `golden/aseprite/` no existe o le falta un fichero, sin aviso ni excepción.
 5. **Capas y celdas fuera de este corpus** (opacidad de celda, grupos, tiles): al leerlas, 3.8 decide si avisa o falla; no hay caso aquí.
