@@ -1,6 +1,6 @@
 # Hito 3 · Resumen del cierre
 
-Solo notas: no es una spec de comportamiento ni tiene tests. Estado del hito: **cerrado a falta de la prueba manual de la unidad 3.9** ([`hito-3-puerta.md`](hito-3-puerta.md), lista de 15 pasos en Linux, Windows y macOS) **y de los dos fuzzers de 10 minutos**; pasa a «cerrado» en un commit de una línea cuando el usuario los confirme. Reparto y decisiones: [`mapa-funciones.md`](mapa-funciones.md) (sección 3 y decisiones D02 y D04 a D10). Cada punto remite a la spec que lo decidió, que sigue siendo la fuente; nada de lo que sigue es nuevo salvo las cifras de la fila 10 de la 3.9 y los dos hallazgos de «Defectos conocidos».
+Solo notas: no es una spec de comportamiento ni tiene tests. Estado del hito: **cerrado** (22 de octubre): la prueba manual de la unidad 3.9 ([`hito-3-puerta.md`](hito-3-puerta.md)) salió bien en Linux, Windows y macOS y los dos fuzzers de 10 minutos terminaron sin crash; los resultados están en esa spec. Reparto y decisiones: [`mapa-funciones.md`](mapa-funciones.md) (sección 3 y decisiones D02 y D04 a D10). Cada punto remite a la spec que lo decidió, que sigue siendo la fuente; nada de lo que sigue es nuevo salvo las cifras de la fila 10 de la 3.9 y los dos hallazgos de «Defectos conocidos».
 
 ## Unidades
 
@@ -49,6 +49,7 @@ Solo las que ya constan en una spec, con su enlace; las de la unidad 3.9 son nue
 | Vista con 8 capas de 8192² | fotograma ≤ 9,7 ms; recomponer al soltar o deshacer ≤ 127 ms; peor caso de una baldosa 583 ms | [`hito-3-capas-vista.md`](hito-3-capas-vista.md) |
 | Combinar abajo, combinar visibles y aplanar, 8 × 8192² | 0,24 s, 3,9 s y 9,2 s; `ConvertAll` de 8 × 4096² a gris con alfa, 0,73 s | [`hito-3-combinar.md`](hito-3-combinar.md) |
 | Fuzz de `read_aseprite` | 520 652 ejecuciones en 60 s y 578 371 en 10 minutos, sin fallos | [`hito-3-aseprite.md`](hito-3-aseprite.md), «Resultados» |
+| **Unidad 3.9: fuzzers de cierre** | `read_png` y `read_aseprite`, 601 s cada uno, sin crash; ejecuciones: no anotado | [`hito-3-puerta.md`](hito-3-puerta.md), «Resultado de los fuzzers» |
 | **Unidad 3.9: RGBA 8192² con 4 capas** (release, un hilo, Linux) | pintar 1,63 s; combinar visibles 0,78 s; `undo` y `redo` en microsegundos; exportar el PNG aplanado 1,14 s; **guardar el `.aseprite` 1,44 s** (912 639 bytes); reabrir 0,59 s; pico de RSS de todo el recorrido **1571 MiB** | [`hito-3-puerta.md`](hito-3-puerta.md), corrección 5 |
 | **Unidad 3.9: indexado 6000² con 4 capas** | pintar 0,66 s; combinar visibles 0,06 s; exportar 0,11 s; guardar 0,25 s (122 944 bytes); reabrir 0,20 s; pico **231 MiB** | ídem |
 | **Unidad 3.9: peor caso de guardar** (4 capas de 8192² RGBA de ruido, que no comprimen) | escribir **29,5 s**, 879 MiB de salida y pico de 2421 MiB; abrir 2,8 s | ídem |
@@ -59,7 +60,9 @@ Solo las que ya constan en una spec, con su enlace; las de la unidad 3.9 son nue
 
 Medido el 22 de octubre con `cargo deny --locked check`: `advisories ok, bans ok, licenses ok, sources ok` y **los mismos 17 avisos `duplicate`** de la línea base de [`docs/DEPENDENCIES.md`](../docs/DEPENDENCIES.md); el hito 3 no añadió ninguno (`miniz_oxide` ya estaba). **Decisión (22 de octubre): se aceptan sin `skip`** (un `skip` taparía un duplicado nuevo) y se vuelven a mirar al actualizar `eframe`, `rfd` o `png`. El fuzzer se comprueba con `cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check`.
 
-## Pendiente para cerrar el hito
+## Cierre del hito
 
-1. **Prueba manual** de los 15 pasos de [`hito-3-puerta.md`](hito-3-puerta.md), en Linux, Windows y macOS (con Aseprite abriendo lo que escribe Pixoko en los tres y su versión anotada; `Cmd+Q` en macOS; soltar ficheros solo en X11).
-2. **Fuzzers de 10 minutos** de `read_png` y `read_aseprite` (los lanza el usuario; comandos exactos en la sección «Fuzzers» de la spec de la 3.9) y su resultado en «Resultado de los fuzzers» de esa spec.
+Sin nada pendiente (22 de octubre). Resultados completos, tal como los comunicó el usuario, en «Resultado de la prueba manual» y «Resultado de los fuzzers» de [`hito-3-puerta.md`](hito-3-puerta.md):
+
+1. **Prueba manual:** Aseprite abre lo que escribe Pixoko en Linux (1.3.18.6-dev), Windows (1.3) y macOS (1.3); `Cmd+Q` con cambios sin guardar en macOS: avisa como la x.
+2. **Fuzzers de 10 minutos:** `read_png` y `read_aseprite`, 601 s cada uno, sin crash; número de ejecuciones: no anotado.

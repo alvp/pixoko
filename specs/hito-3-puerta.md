@@ -204,9 +204,28 @@ Lo que la implementación y las medidas precisaron, sin tocar `px-core` (salvo e
 6. **Condición 6 (a), decidida con esas cifras.** El caso pedido (4 capas de 8192² RGBA) guarda en **1,44 s** con contenido que comprime, pero en **29,5 s** con ruido; **por el peor caso, el guardado de un `.aseprite` ahora dice «Guardando…» antes de empezar** (el mecanismo de dos fotogramas de siempre), con el umbral de siempre (2²⁴ píxeles) contado sobre **celdas con imagen** (`save_wait::aseprite_pixels` y `save_pixels`; un PNG sigue contando los píxeles de capa visible a componer): con 2²⁴ píxeles el peor caso son unos 1,8 s. Código de producción en `px-app` (`save_wait.rs` y `request_save` de `lib.rs`), commit aparte (`ad066fe`) y fácil de revertir si prefieres medir solo el caso de rayas; prueba de la secuencia en `fila_10_un_aseprite_grande_pide_guardando_y_espera_los_fotogramas_de_siempre` (el pegamento de `lib.rs` no se prueba sin ventana, como en la 22). **No pasa de un minuto**, pero con el tope de 2 GiB de celdas (8 capas de 8192²) el ruido llegaría, **por extrapolación lineal mía, sin medir**, a ~59 s: **riesgo anotado para el hito 8 (barra de progreso)** en `hito-3-resumen.md`.
 7. **Mutación real del escritor (decisión 8), al cierre y restaurada** (`git checkout`; el árbol de `px-formats` quedó limpio): (a) **`blend_to_code(Multiply)` de 1 a 2**: fallan 4 de las 7 de `px-golden` (filas 2 y 3, 4c y la propiedad 4; la fila 3 dice `capa 0: propiedades … Multiply … Screen`); (b) **el escritor ignora el bloqueo** (siempre escribe «Editable»): fallan 3 (filas 2 y 3 y la propiedad 4; la 3 dice `capa 0: banderas`). Restaurado, pasan las 7.
 8. **Propiedades:** 128 casos la 4 y 64, 64 y 32 las 1 a 3 como en la spec, y además **500, 500 y 200 casos una vez** (cambiando el número y devolviéndolo) sin fallos. Las propiedades 1 y 3 documentan lo que ya decía 3.8: guardar como `.aseprite` un indexado sin índice transparente da error y no deja fichero.
-9. **Cierre:** `cargo fmt`, `clippy --workspace --all-targets --locked -- -D warnings` y `cargo test --workspace --locked` limpios: **4144 pasan** (eran 4122), 0 fallan y 26 ignoradas (eran 23); `cargo deny` de la raíz y del fuzzer, `advisories ok, bans ok, licenses ok, sources ok` con los 17 duplicados de la línea base, ninguno nuevo; `git status golden/` limpio y ningún `.pixoko-tmp` ni `target/pixoko-gate`. Sin `license-auditor` (no hay dependencias ni cambios en `px-core`, `px-raster` o `px-formats` más que el comentario de `main_image`). Resultado de los fuzzers: pendiente de que los lances.
+9. **Cierre:** `cargo fmt`, `clippy --workspace --all-targets --locked -- -D warnings` y `cargo test --workspace --locked` limpios: **4144 pasan** (eran 4122), 0 fallan y 26 ignoradas (eran 23); `cargo deny` de la raíz y del fuzzer, `advisories ok, bans ok, licenses ok, sources ok` con los 17 duplicados de la línea base, ninguno nuevo; `git status golden/` limpio y ningún `.pixoko-tmp` ni `target/pixoko-gate`. Sin `license-auditor` (no hay dependencias ni cambios en `px-core`, `px-raster` o `px-formats` más que el comentario de `main_image`). Resultado de los fuzzers y de la prueba manual: ver sus secciones al final.
 
 ## Resultado de los fuzzers
 
-Pendiente: los lanza el usuario al cierre, con el código ya fijado (comandos de «Fuzzers»); su resultado (ejecuciones, segundos, fallos, `golden/` intacto) se anota aquí, en su propio commit, tal como lo comunique.
+Lanzados por el usuario al cierre, con el código ya fijado (comandos de «Fuzzers»); resultado tal como lo comunicó el 22 de octubre:
 
+| Fuzzer | Ejecuciones | Segundos | Fallos |
+| --- | --- | --- | --- |
+| `read_png` | no anotado | 601 | sin crash |
+| `read_aseprite` | no anotado | 601 | sin crash |
+
+El usuario no comunicó el número de ejecuciones ni el estado de `golden/` tras los fuzzers; no se inventan.
+
+## Resultado de la prueba manual
+
+Hecha por el usuario el 22 de octubre en Linux, Windows y macOS (lista de 15 pasos de arriba); resultado: salió bien en los tres. Datos anotados, tal como los comunicó:
+
+| Sistema | Aseprite abre lo que escribe Pixoko | Versión de Aseprite |
+| --- | --- | --- |
+| Linux | sí | 1.3.18.6-dev |
+| Windows | sí | 1.3 |
+| macOS | sí | 1.3 |
+
+- `Cmd+Q` con cambios sin guardar en macOS (paso 13, antes «no está probado»): avisa como la x.
+- No se anotaron más datos de los pasos (tiempos del paso 10, X11 del paso 14, HiDPI del 12).
