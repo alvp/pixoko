@@ -134,7 +134,7 @@ pub fn zoom_label(zoom: Option<Zoom>) -> String {
 /// Tercera línea del tooltip del Borrador: lo que hace el clic derecho **en el lienzo**.
 pub const ERASER_RIGHT_CLICK_HINT: &str = "el clic derecho también borra con el fondo";
 
-/// Tooltip de un botón, leído de la tabla del teclado: `Nombre (atajo)` (solo el nombre si no hay
+/// Tooltip de un botón, leído de la tabla del teclado: `Nombre (shortcut_2)` (solo el nombre si no hay
 /// atajo) y, en una segunda línea, lo que hace el clic derecho del botón; el Borrador añade una
 /// tercera con el clic derecho del lienzo.
 pub fn tooltip_text(button: &Button, keymap: &Keymap, platform: Platform) -> String {

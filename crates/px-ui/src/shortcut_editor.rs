@@ -461,8 +461,8 @@ impl ShortcutEditor {
     }
 }
 
-/// El formulario del editor: dos filas de casilla con `Quitar`, el mensaje, el conflicto con sus
-/// dos botones, los fijos y `Restablecer`. `sync_editor_dialog` pone el contenido.
+/// El formulario del editor: dos filas de casilla con `Remove`, el mensaje, el conflicto con sus
+/// dos botones, los fijos y `Reset`. `sync_editor_dialog` pone el contenido.
 pub fn editor_form() -> FormSpec {
     let strings = ui();
     let button = |id, label, text: &str, aside| FieldSpec {

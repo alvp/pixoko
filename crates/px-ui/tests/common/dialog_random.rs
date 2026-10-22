@@ -108,17 +108,17 @@ pub fn form_recipe() -> impl Strategy<Value = FormRecipe> {
 }
 
 /// El `check` de los formularios al azar: falla si la suma de los numéricos visibles es impar.
-pub fn check_suma(values: &Values) -> Option<String> {
-    let suma: u64 = IDS
+pub fn check_sum(values: &Values) -> Option<String> {
+    let sum: u64 = IDS
         .iter()
         .filter_map(|id| values.number(id))
         .map(u64::from)
         .sum();
-    (suma % 2 == 1).then(|| "suma impar".to_string())
+    (sum % 2 == 1).then(|| "suma impar".to_string())
 }
 
-/// El mensaje de `check_suma`.
-pub const SUMA_IMPAR: &str = "suma impar";
+/// El mensaje de `check_sum`.
+pub const SUM_ODD: &str = "suma impar";
 
 /// La spec de una receta. Siempre es válida.
 pub fn build(recipe: &FormRecipe) -> FormSpec {
@@ -199,7 +199,7 @@ pub fn build(recipe: &FormRecipe) -> FormSpec {
         fields,
         check: recipe
             .check
-            .then_some(check_suma as fn(&Values) -> Option<String>),
+            .then_some(check_sum as fn(&Values) -> Option<String>),
     }
 }
 

@@ -17,12 +17,12 @@ use px_ui::keymap_file::{Fatal, Loaded, MAX_BYTES, MAX_LINES, load_notice, parse
 use px_ui::shortcut_editor::{CaptureResult, ShortcutEditor, Slot, slots_of};
 use px_ui::tool::Tool;
 
-fn defecto() -> Keymap {
+fn default() -> Keymap {
     Keymap::default_scheme()
 }
 
-fn lee(texto: &str) -> Loaded {
-    parse(texto.as_bytes(), &defecto())
+fn lee(text_2: &str) -> Loaded {
+    parse(text_2.as_bytes(), &default())
 }
 
 fn chord(c: char) -> Chord {
@@ -44,19 +44,19 @@ fn press(c: char) -> Press {
     }
 }
 
-fn lapiz() -> AppAction {
+fn pencil() -> AppAction {
     AppAction::SelectTool(Tool::Pencil)
 }
 
-fn linea() -> AppAction {
+fn line() -> AppAction {
     AppAction::SelectTool(Tool::Line)
 }
 
-fn relleno() -> AppAction {
+fn fill() -> AppAction {
     AppAction::SelectTool(Tool::Fill)
 }
 
-fn editables() -> Vec<AppAction> {
+fn editable() -> Vec<AppAction> {
     help_table()
         .iter()
         .filter_map(|e| action_of_key(e.key))
@@ -65,17 +65,17 @@ fn editables() -> Vec<AppAction> {
 }
 
 /// Asigna una `Press` a una casilla de una acción, resolviendo un conflicto.
-fn asigna(tabla: &Keymap, action: AppAction, slot: Slot, p: Press, reasignar: bool) -> Keymap {
+fn assigns(tabla: &Keymap, action: AppAction, slot: Slot, p: Press, reassign: bool) -> Keymap {
     let mut e = ShortcutEditor::new(action, tabla, Platform::Linux).unwrap();
     e.begin_capture(slot);
     if let CaptureResult::Pending(_) = e.capture(Capture::Press(p)) {
-        e.resolve(reasignar);
+        e.resolve(reassign);
     }
     e.accept()
 }
 
 /// Los atajos asignables: letras (con y sin `Mayús`), cifras, símbolos y las teclas con nombre.
-fn atajos_asignables() -> Vec<Press> {
+fn shortcuts_assignable() -> Vec<Press> {
     let mut v = Vec::new();
     for c in b' '..=b'~' {
         let c = c as char;
@@ -111,37 +111,37 @@ fn atajos_asignables() -> Vec<Press> {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_la_tabla_por_defecto_da_solo_la_cabecera() {
-    let texto = to_text(&defecto(), &defecto());
-    let utiles: Vec<&str> = texto
+fn row_9_the_default_table_gives_only_the_header() {
+    let text_2 = to_text(&default(), &default());
+    let useful: Vec<&str> = text_2
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .collect();
-    assert_eq!(utiles, ["pixoko-atajos 1"], "{texto}");
-    assert_eq!(texto.lines().next(), Some("pixoko-atajos 1"));
-    let cargado = lee(&texto);
-    assert_eq!(cargado.keymap, defecto());
-    assert_eq!((cargado.ignored_lines, cargado.dropped_rows), (0, 0));
-    assert!(cargado.fatal.is_none() && cargado.conflicted.is_empty());
-    assert_eq!(load_notice(&cargado), None);
+    assert_eq!(useful, ["pixoko-atajos 1"], "{text_2}");
+    assert_eq!(text_2.lines().next(), Some("pixoko-atajos 1"));
+    let loaded = lee(&text_2);
+    assert_eq!(loaded.keymap, default());
+    assert_eq!((loaded.ignored_lines, loaded.dropped_rows), (0, 0));
+    assert!(loaded.fatal.is_none() && loaded.conflicted.is_empty());
+    assert_eq!(load_notice(&loaded), None);
 }
 
 #[test]
-fn fila_9_solo_se_escribe_lo_que_difiere_compactado_y_en_orden() {
+fn row_9_only_what_differs_is_written_compacted_and_in_order() {
     // Lápiz: `d` pasa a `x`; Siguiente color: se quita la principal; Borrar página: `Mayús+K`.
-    let mut t = asigna(&defecto(), lapiz(), Slot::Primary, press('x'), false);
+    let mut t = assigns(&default(), pencil(), Slot::Primary, press('x'), false);
     let mut e = ShortcutEditor::new(AppAction::ColorNext, &t, Platform::Linux).unwrap();
     e.clear(Slot::Primary);
     t = e.accept();
-    let texto = to_text(&t, &defecto());
-    let lineas: Vec<&str> = texto
+    let text_2 = to_text(&t, &default());
+    let lines: Vec<&str> = text_2
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .collect();
     assert_eq!(
-        lineas,
+        lines,
         [
             "pixoko-atajos 1",
             "tool.pencil 1 x",
@@ -149,24 +149,24 @@ fn fila_9_solo_se_escribe_lo_que_difiere_compactado_y_en_orden() {
             "color.next 1 pagedown",
             "color.next 2 none",
         ],
-        "{texto}"
+        "{text_2}"
     );
-    assert_eq!(lee(&texto).keymap, t, "ida y vuelta exacta");
+    assert_eq!(lee(&text_2).keymap, t, "ida y vuelta exacta");
 }
 
 #[test]
-fn fila_9_la_gramatica_de_los_atajos() {
-    let valido = |atajo: &str| {
-        let l = lee(&format!("pixoko-atajos 1\ntool.pencil 1 {atajo}\n"));
-        (l.ignored_lines, slots_of(&l.keymap, lapiz()).slots)
+fn row_9_the_grammar_of_the_shortcuts() {
+    let valid = |shortcut_2: &str| {
+        let l = lee(&format!("pixoko-atajos 1\ntool.pencil 1 {shortcut_2}\n"));
+        (l.ignored_lines, slots_of(&l.keymap, pencil()).slots)
     };
-    assert_eq!(valido("x"), (0, vec![chord('x')]));
-    assert_eq!(valido(">"), (0, vec![chord('>')]));
-    assert_eq!(valido("["), (0, vec![chord('[')]));
-    assert_eq!(valido("+"), (0, vec![chord('+')]));
-    assert_eq!(valido("3"), (0, vec![chord('3')]));
+    assert_eq!(valid("x"), (0, vec![chord('x')]));
+    assert_eq!(valid(">"), (0, vec![chord('>')]));
+    assert_eq!(valid("["), (0, vec![chord('[')]));
+    assert_eq!(valid("+"), (0, vec![chord('+')]));
+    assert_eq!(valid("3"), (0, vec![chord('3')]));
     assert_eq!(
-        valido("shift+k"),
+        valid("shift+k"),
         (
             0,
             vec![Chord {
@@ -177,7 +177,7 @@ fn fila_9_la_gramatica_de_los_atajos() {
         )
     );
     assert_eq!(
-        valido("pagedown"),
+        valid("pagedown"),
         (
             0,
             vec![Chord {
@@ -188,17 +188,17 @@ fn fila_9_la_gramatica_de_los_atajos() {
         )
     );
     assert_eq!(
-        valido("shift+pageup").1,
+        valid("shift+pageup").1,
         vec![Chord {
             key: KeyId::PageUp,
             command: false,
             shift: true
         }]
     );
-    assert_eq!(valido("home").1.len(), 1);
-    assert_eq!(valido("none"), (0, vec![]), "none vacía la casilla");
+    assert_eq!(valid("home").1.len(), 1);
+    assert_eq!(valid("none"), (0, vec![]), "none vacía la casilla");
     // Mal formados o no asignables: la línea se ignora y la tabla queda como estaba.
-    for malo in [
+    for bad in [
         "X",
         "shift+",
         "shift+x ",
@@ -214,19 +214,19 @@ fn fila_9_la_gramatica_de_los_atajos() {
         "",
         "none none",
     ] {
-        let l = lee(&format!("pixoko-atajos 1\ntool.pencil 1 {malo}\n"));
-        if malo == "shift+x " {
+        let l = lee(&format!("pixoko-atajos 1\ntool.pencil 1 {bad}\n"));
+        if bad == "shift+x " {
             // El espacio final se recorta: es `shift+x`, válida.
             assert_eq!(l.ignored_lines, 0);
             continue;
         }
-        assert_eq!(l.ignored_lines, 1, "{malo:?}");
-        assert_eq!(l.keymap, defecto(), "{malo:?}");
+        assert_eq!(l.ignored_lines, 1, "{bad:?}");
+        assert_eq!(l.keymap, default(), "{bad:?}");
     }
     // Tabuladores, CRLF, comentarios y líneas vacías valen.
     let l = lee("pixoko-atajos 1\r\n# nota\r\n\r\ntool.pencil\t1\tx\r\n");
     assert_eq!(
-        (l.ignored_lines, slots_of(&l.keymap, lapiz()).slots),
+        (l.ignored_lines, slots_of(&l.keymap, pencil()).slots),
         (0, vec![chord('x')])
     );
 }
@@ -236,17 +236,17 @@ fn fila_9_la_gramatica_de_los_atajos() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_los_casos_fatales_dan_la_tabla_por_defecto_y_su_aviso() {
-    let ilegible = parse(&[0xff, 0xfe, 0x80], &defecto());
-    assert_eq!(ilegible.fatal, Some(Fatal::Unreadable));
-    assert_eq!(ilegible.keymap, defecto());
+fn row_10_the_fatal_cases_give_the_default_table_and_its_notice() {
+    let unreadable = parse(&[0xff, 0xfe, 0x80], &default());
+    assert_eq!(unreadable.fatal, Some(Fatal::Unreadable));
+    assert_eq!(unreadable.keymap, default());
     assert_eq!(
-        load_notice(&ilegible).as_deref(),
+        load_notice(&unreadable).as_deref(),
         Some("atajos: fichero ilegible, se usan los de fábrica")
     );
     let version = lee("pixoko-atajos 2\ntool.pencil 1 x\n");
     assert_eq!(version.fatal, Some(Fatal::Version));
-    assert_eq!(version.keymap, defecto());
+    assert_eq!(version.keymap, default());
     assert_eq!(
         load_notice(&version).as_deref(),
         Some("atajos: versión desconocida, se usan los de fábrica")
@@ -255,20 +255,20 @@ fn fila_10_los_casos_fatales_dan_la_tabla_por_defecto_y_su_aviso() {
     assert!(lee("tool.pencil 1 x\n").fatal.is_some());
     assert!(lee("").fatal.is_some());
     // Demasiado grande y demasiadas líneas.
-    let grande = vec![b'#'; MAX_BYTES + 1];
-    assert_eq!(parse(&grande, &defecto()).fatal, Some(Fatal::TooBig));
-    let mut muchas = String::from("pixoko-atajos 1\n");
+    let large = vec![b'#'; MAX_BYTES + 1];
+    assert_eq!(parse(&large, &default()).fatal, Some(Fatal::TooBig));
+    let mut many = String::from("pixoko-atajos 1\n");
     for _ in 0..=MAX_LINES {
-        muchas.push_str("tool.pencil 1 x\n");
+        many.push_str("tool.pencil 1 x\n");
     }
-    assert_eq!(lee(&muchas).fatal, Some(Fatal::TooBig));
-    for l in [&ilegible, &version] {
+    assert_eq!(lee(&many).fatal, Some(Fatal::TooBig));
+    for l in [&unreadable, &version] {
         assert!(load_notice(l).unwrap().chars().count() <= 60);
     }
 }
 
 #[test]
-fn fila_10_las_lineas_malas_se_ignoran_y_las_buenas_se_aplican() {
+fn row_10_bad_lines_are_ignored_and_good_ones_are_applied() {
     let l = lee("pixoko-atajos 1\n\
         tool.pencil 1 x\n\
         file.save 1 g\n\
@@ -283,9 +283,9 @@ fn fila_10_las_lineas_malas_se_ignoran_y_las_buenas_se_aplican() {
     // la casilla 2 de Relleno (gana la primera); la casilla 3 de Línea no existe pero es válida
     // (vacía un extra que no hay) y no cuenta como mala.
     assert_eq!(l.ignored_lines, 5, "{l:?}");
-    assert_eq!(slots_of(&l.keymap, lapiz()).slots, vec![chord('x')]);
+    assert_eq!(slots_of(&l.keymap, pencil()).slots, vec![chord('x')]);
     assert_eq!(
-        slots_of(&l.keymap, relleno()).slots,
+        slots_of(&l.keymap, fill()).slots,
         vec![chord('w'), chord('e')]
     );
     assert!(l.keymap.conflicts().is_empty());
@@ -296,27 +296,27 @@ fn fila_10_las_lineas_malas_se_ignoran_y_las_buenas_se_aplican() {
 }
 
 #[test]
-fn fila_10_un_choque_a_mano_gana_la_primera_fila_y_se_cuenta() {
+fn row_10_a_hand_made_clash_the_first_row_wins_and_it_is_counted() {
     // Lápiz con `f` (la de Relleno): en la tabla el Lápiz va antes, gana el Lápiz y a Relleno se le
     // quita; las dos son del usuario si Relleno también se escribe.
     let l = lee("pixoko-atajos 1\ntool.pencil 1 f\ntool.fill 1 f\n");
     assert!(l.keymap.conflicts().is_empty());
-    assert_eq!(slots_of(&l.keymap, lapiz()).slots, vec![chord('f')]);
+    assert_eq!(slots_of(&l.keymap, pencil()).slots, vec![chord('f')]);
     assert_eq!(
-        slots_of(&l.keymap, relleno()).slots,
+        slots_of(&l.keymap, fill()).slots,
         vec![],
         "pierde la segunda"
     );
     assert_eq!(l.dropped_rows, 1);
-    assert!(l.conflicted.contains(&relleno()));
-    let aviso = load_notice(&l).unwrap();
-    assert_eq!(aviso, "atajos: 1 repetidos");
-    assert!(aviso.chars().count() <= 60);
-    let los_dos =
+    assert!(l.conflicted.contains(&fill()));
+    let notice = load_notice(&l).unwrap();
+    assert_eq!(notice, "atajos: 1 repetidos");
+    assert!(notice.chars().count() <= 60);
+    let the_two =
         lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\ntool.fill 1 q\ntool.fill 2 q\n");
     // La misma tecla dos veces en una acción: queda una.
-    assert_eq!(slots_of(&los_dos.keymap, relleno()).slots, vec![chord('q')]);
-    assert!(los_dos.keymap.conflicts().is_empty());
+    assert_eq!(slots_of(&the_two.keymap, fill()).slots, vec![chord('q')]);
+    assert!(the_two.keymap.conflicts().is_empty());
     assert_eq!(
         load_notice(&lee("pixoko-atajos 1\ntool.fill 9 x\n")).as_deref(),
         Some("atajos: 1 línea ignorada")
@@ -328,44 +328,41 @@ fn fila_10_un_choque_a_mano_gana_la_primera_fila_y_se_cuenta() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn condicion_1_un_atajo_por_defecto_nuevo_nunca_quita_el_del_usuario() {
+fn condition_1_a_new_default_shortcut_never_removes_the_users() {
     // Esquema «de una versión futura»: el Relleno estrena la `x`, que el usuario ya tiene en el Lápiz.
-    let guardado = to_text(
-        &asigna(&defecto(), lapiz(), Slot::Primary, press('x'), false),
-        &defecto(),
+    let saved = to_text(
+        &assigns(&default(), pencil(), Slot::Primary, press('x'), false),
+        &default(),
     );
-    let mut filas: Vec<Binding> = defecto().rows().to_vec();
-    for fila in &mut filas {
-        if fila.action == relleno() {
-            fila.key = KeyId::Char('x');
+    let mut rows_2: Vec<Binding> = default().rows().to_vec();
+    for row_2 in &mut rows_2 {
+        if row_2.action == fill() {
+            row_2.key = KeyId::Char('x');
         }
     }
     // El Relleno nuevo va ANTES que el Lápiz en la tabla: la «primera fila» sería la suya.
-    let (relleno_filas, resto): (Vec<_>, Vec<_>) =
-        filas.into_iter().partition(|f| f.action == relleno());
-    let nuevo_defecto = Keymap::new(relleno_filas.into_iter().chain(resto).collect());
-    let l = parse(guardado.as_bytes(), &nuevo_defecto);
+    let (fill_rows, rest_2): (Vec<_>, Vec<_>) =
+        rows_2.into_iter().partition(|f| f.action == fill());
+    let new_default = Keymap::new(fill_rows.into_iter().chain(rest_2).collect());
+    let l = parse(saved.as_bytes(), &new_default);
     assert_eq!(
-        slots_of(&l.keymap, lapiz()).slots,
+        slots_of(&l.keymap, pencil()).slots,
         vec![chord('x')],
         "el atajo del usuario se conserva"
     );
     assert_eq!(
-        slots_of(&l.keymap, relleno()).slots,
+        slots_of(&l.keymap, fill()).slots,
         vec![],
         "la acción nueva queda sin atajo"
     );
     assert!(l.keymap.conflicts().is_empty());
-    assert_eq!(l.conflicted, vec![relleno()], "marca `conflicto`");
+    assert_eq!(l.conflicted, vec![fill()], "marca `conflicto`");
     assert_eq!(l.dropped_rows, 1);
     assert_eq!(load_notice(&l).as_deref(), Some("atajos: 1 repetidos"));
     // Lo guardado después sigue diciendo lo del usuario.
-    let relee = parse(
-        to_text(&l.keymap, &nuevo_defecto).as_bytes(),
-        &nuevo_defecto,
-    );
-    assert_eq!(slots_of(&relee.keymap, lapiz()).slots, vec![chord('x')]);
-    assert!(relee.keymap.conflicts().is_empty());
+    let rereads = parse(to_text(&l.keymap, &new_default).as_bytes(), &new_default);
+    assert_eq!(slots_of(&rereads.keymap, pencil()).slots, vec![chord('x')]);
+    assert!(rereads.keymap.conflicts().is_empty());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -374,8 +371,8 @@ fn condicion_1_un_atajo_por_defecto_nuevo_nunca_quita_el_del_usuario() {
 
 /// La cota de lo que `parse` construye: las filas por defecto más dos por acción editable (más un
 /// margen de casillas por acción), nunca más.
-fn cota_de_filas() -> usize {
-    defecto().rows().len() + 8 * editables().len()
+fn bound_of_rows() -> usize {
+    default().rows().len() + 8 * editable().len()
 }
 
 proptest! {
@@ -385,36 +382,36 @@ proptest! {
     /// entra en pánico, lo construido está acotado, no hay conflictos y las nueve filas con
     /// `command` siguen intactas.
     #[test]
-    fn propiedad_1a_bytes_aleatorios_no_hacen_panico_ni_reservan_de_mas(
+    fn property_1a_random_bytes_do_not_panic_or_reserve_too_much(
         bytes in proptest::collection::vec(any::<u8>(), 0..4096),
-        con_cabecera in any::<bool>(),
-        relleno in 0usize..200_000,
+        with_header in any::<bool>(),
+        fill in 0usize..200_000,
     ) {
-        let mut entrada = Vec::new();
-        if con_cabecera {
-            entrada.extend_from_slice(b"pixoko-atajos 1\n");
+        let mut input_2 = Vec::new();
+        if with_header {
+            input_2.extend_from_slice(b"pixoko-atajos 1\n");
         }
-        entrada.extend_from_slice(&bytes);
+        input_2.extend_from_slice(&bytes);
         // Y una entrada enorme de una sola línea: se rechaza o se ignora sin recorrerla entera.
-        let mut enorme = entrada.clone();
-        enorme.extend(std::iter::repeat_n(b'a', relleno));
-        for e in [&entrada, &enorme] {
-            let l = parse(e, &defecto());
-            prop_assert!(l.keymap.rows().len() <= cota_de_filas());
+        let mut huge = input_2.clone();
+        huge.extend(std::iter::repeat_n(b'a', fill));
+        for e in [&input_2, &huge] {
+            let l = parse(e, &default());
+            prop_assert!(l.keymap.rows().len() <= bound_of_rows());
             prop_assert!(l.keymap.conflicts().is_empty());
-            let modernas: Vec<_> = l.keymap.rows().iter().filter(|r| r.command).collect();
-            prop_assert_eq!(modernas.len(), 9);
+            let modern: Vec<_> = l.keymap.rows().iter().filter(|r| r.command).collect();
+            prop_assert_eq!(modern.len(), 9);
             prop_assert!(l.ignored_lines <= MAX_LINES + 1);
             if e.len() > MAX_BYTES {
                 prop_assert_eq!(l.fatal, Some(Fatal::TooBig));
-                prop_assert_eq!(&l.keymap, &defecto());
+                prop_assert_eq!(&l.keymap, &default());
             }
             if l.fatal.is_some() {
-                prop_assert_eq!(&l.keymap, &defecto());
+                prop_assert_eq!(&l.keymap, &default());
                 prop_assert!(load_notice(&l).is_some());
             }
-            if let Some(aviso) = load_notice(&l) {
-                prop_assert!(aviso.chars().count() <= 60);
+            if let Some(notice) = load_notice(&l) {
+                prop_assert!(notice.chars().count() <= 60);
             }
         }
     }
@@ -422,79 +419,79 @@ proptest! {
     /// Propiedad 1b (secuencias): lo que se escribe se lee igual, para cualquier tabla alcanzable
     /// desde el editor.
     #[test]
-    fn propiedad_1b_ida_y_vuelta_de_cualquier_tabla_alcanzable(
-        pasos in proptest::collection::vec(
+    fn property_1b_round_trip_of_any_reachable_table(
+        steps_2 in proptest::collection::vec(
             (0usize..17, any::<bool>(), 0usize..120, any::<bool>(), any::<bool>()),
             0..16,
         ),
     ) {
-        let atajos = atajos_asignables();
-        let acciones = editables();
-        let mut tabla = defecto();
-        for (accion, secundaria, atajo, reasignar, quitar) in pasos {
-            let action = acciones[accion % acciones.len()];
+        let shortcuts = shortcuts_assignable();
+        let actions = editable();
+        let mut tabla = default();
+        for (action_2, secondary, shortcut_2, reassign, remove) in steps_2 {
+            let action = actions[action_2 % actions.len()];
             let mut e = ShortcutEditor::new(action, &tabla, Platform::Linux).unwrap();
-            let slot = if secundaria { Slot::Secondary } else { Slot::Primary };
-            if quitar {
+            let slot = if secondary { Slot::Secondary } else { Slot::Primary };
+            if remove {
                 e.clear(slot);
             } else {
                 e.begin_capture(slot);
                 if let CaptureResult::Pending(_) =
-                    e.capture(Capture::Press(atajos[atajo % atajos.len()]))
+                    e.capture(Capture::Press(shortcuts[shortcut_2 % shortcuts.len()]))
                 {
-                    e.resolve(reasignar);
+                    e.resolve(reassign);
                 }
             }
             tabla = e.accept();
         }
-        let texto = to_text(&tabla, &defecto());
-        let l = parse(texto.as_bytes(), &defecto());
-        prop_assert_eq!((l.ignored_lines, l.dropped_rows), (0, 0), "{}", texto);
+        let text_2 = to_text(&tabla, &default());
+        let l = parse(text_2.as_bytes(), &default());
+        prop_assert_eq!((l.ignored_lines, l.dropped_rows), (0, 0), "{}", text_2);
         prop_assert!(l.fatal.is_none());
-        prop_assert_eq!(&l.keymap, &tabla, "{}", texto);
+        prop_assert_eq!(&l.keymap, &tabla, "{}", text_2);
     }
 }
 
 /// Propiedad 1b (todas las combinaciones): cada acción editable con cada atajo asignable en cada
 /// una de las dos casillas se escribe y se lee igual (con la reasignación si choca).
 #[test]
-fn propiedad_1b_ida_y_vuelta_con_todas_las_combinaciones_de_la_tabla() {
-    let atajos = atajos_asignables();
-    assert!(atajos.len() > 90);
-    let mut comprobadas = 0usize;
-    for action in editables() {
+fn property_1b_round_trip_with_all_the_combinations_of_the_table() {
+    let shortcuts = shortcuts_assignable();
+    assert!(shortcuts.len() > 90);
+    let mut checked = 0usize;
+    for action in editable() {
         for slot in [Slot::Primary, Slot::Secondary] {
-            for p in &atajos {
-                let tabla = asigna(&defecto(), action, slot, *p, true);
-                let texto = to_text(&tabla, &defecto());
-                let l = parse(texto.as_bytes(), &defecto());
+            for p in &shortcuts {
+                let tabla = assigns(&default(), action, slot, *p, true);
+                let text_2 = to_text(&tabla, &default());
+                let l = parse(text_2.as_bytes(), &default());
                 assert_eq!(
                     (l.ignored_lines, l.dropped_rows, l.fatal),
                     (0, 0, None),
-                    "{action:?} {slot:?} {p:?}\n{texto}"
+                    "{action:?} {slot:?} {p:?}\n{text_2}"
                 );
-                assert_eq!(l.keymap, tabla, "{action:?} {slot:?} {p:?}\n{texto}");
-                comprobadas += 1;
+                assert_eq!(l.keymap, tabla, "{action:?} {slot:?} {p:?}\n{text_2}");
+                checked += 1;
             }
         }
     }
-    assert_eq!(comprobadas, 28 * 2 * atajos.len());
+    assert_eq!(checked, 28 * 2 * shortcuts.len());
 }
 
 /// Los atajos mostrados siguen funcionando tras leer un fichero cualquiera (la tabla leída es una
 /// tabla válida de verdad).
 #[test]
-fn lo_leido_funciona_como_tabla() {
+fn what_was_read_works_as_a_table() {
     let l = lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\n");
-    for (c, esperado) in [
-        ('x', Some(lapiz())),
-        ('y', Some(linea())),
+    for (c, expected_2) in [
+        ('x', Some(pencil())),
+        ('y', Some(line())),
         ('d', None),
         ('v', None),
     ] {
         assert_eq!(
             l.keymap.action_for(&press(c), Platform::Linux),
-            esperado,
+            expected_2,
             "{c}"
         );
     }

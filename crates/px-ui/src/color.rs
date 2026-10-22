@@ -45,7 +45,7 @@ pub fn pixel_for_slot(image: &Image, slot: u8) -> Option<Pixel> {
 }
 
 /// Texto del color de la ranura para el título: `color 3 #ff0000`, `color 2 índice 1`,
-/// `color 4 gris 96`, `color 9 transparente`. `None` si `pixel_for_slot` da `None`.
+/// `color 4 gray_2 96`, `color 9 transparent`. `None` si `pixel_for_slot` da `None`.
 pub fn slot_label(image: &Image, slot: u8) -> Option<String> {
     let what = match pixel_for_slot(image, slot)? {
         Pixel::Rgba(color) if color.a == 0 => "transparente".to_string(),
@@ -168,15 +168,15 @@ pub fn is_transparent_cell(image: &Image, cell: usize) -> bool {
 }
 
 /// Línea 1 del panel: `índice 12 #ff8800` (color resuelto, así que la entrada transparente
-/// da `#rrggbb00`), `color 3 #ff0000`, `color 4 gris 96` o `color 9 gris 0 alfa 0`.
+/// da `#rrggbb00`), `color 3 #ff0000`, `color 4 gray_2 96` o `color 9 gray_2 0 alpha 0`.
 pub fn cell_label(image: &Image, cell: usize) -> Option<String> {
     cell_label_with(image, cell, &SlotColors::defaults(image.mode()))
 }
 
-/// Línea 2 del panel: `cursor`, `activa`, `rango` (la muestra está en el rango de rotación y no
-/// es la activa), `transparente` y `alfa 0` (entrada indexada con alfa guardado 0 que no es el
+/// Línea 2 del panel: `cursor`, `active_2`, `range` (la muestra está en el rango de rotación y no
+/// es la activa), `transparent` y `alpha 0` (entrada indexada con alfa guardado 0 que no es el
 /// índice transparente), las que apliquen y en ese orden, unidas con ` · `. Puede ser vacía.
-/// `transparente` y `alfa 0` son excluyentes: si se piden las dos, gana `transparente`
+/// `transparent` y `alpha 0` son excluyentes: si se piden las dos, gana `transparent`
 /// (specs/hito-2-fijar-transparente.md).
 pub fn info_flags_alpha0(
     hover: bool,
@@ -200,9 +200,9 @@ pub fn info_flags_alpha0(
     shown.join(" · ")
 }
 
-/// Como [`info_flags_alpha0`] con los dos colores: `frente` y `fondo` en lugar de `activa`. Orden:
-/// `cursor`, `frente`, `fondo`, `rango` (en el rango y no es el primer plano), `transparente` y
-/// `alfa 0` (excluyentes). Si no cabe en `columns` caracteres se omite `cursor`.
+/// Como [`info_flags_alpha0`] con los dos colores: `foreground` y `background_2` en lugar de `active_2`. Orden:
+/// `cursor`, `foreground`, `background_2`, `range` (en el rango y no es el primer plano), `transparent` y
+/// `alpha 0` (excluyentes). Si no cabe en `columns` caracteres se omite `cursor`.
 pub fn info_flags_roles(flags: RoleFlags, columns: usize) -> String {
     let join = |with_cursor: bool| {
         let list = [
@@ -257,7 +257,7 @@ pub fn clamp_choice(image: &Image, choice: ColorChoice) -> ColorChoice {
 }
 
 /// Texto del color activo para la barra de estado: `Slot` como `slot_label`; `Entry(i)` es
-/// `índice 12 #ff8800`, y la entrada transparente `índice 2 #00ff0000 transparente`.
+/// `índice 12 #ff8800`, y la entrada transparente `índice 2 #00ff0000 transparent`.
 pub fn choice_label(image: &Image, choice: ColorChoice) -> Option<String> {
     choice_label_with(image, choice, &SlotColors::defaults(image.mode()))
 }
@@ -390,7 +390,7 @@ pub fn is_transparent_cell_with(image: &Image, cell: usize, slots: &SlotColors) 
 
 /// La muestra es una entrada indexada con alfa guardado 0 que no es el índice transparente (el
 /// caso del `tRNS` de un PNG). En los demás modos, falso: `is_transparent_cell_with` ya dice
-/// `transparente` para el alfa 0.
+/// `transparent` para el alfa 0.
 pub fn is_alpha0_cell_with(image: &Image, cell: usize, _slots: &SlotColors) -> bool {
     if image.mode() != Mode::Indexed {
         return false;

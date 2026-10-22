@@ -18,7 +18,7 @@ thread_local! {
     static CHECK_CALLS: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Veces que se ha llamado a `check_grande` en este hilo desde el último `reset_check_calls`.
+/// Veces que se ha llamado a `check_large` en este hilo desde el último `reset_check_calls`.
 pub fn check_calls() -> usize {
     CHECK_CALLS.with(Cell::get)
 }
@@ -27,12 +27,12 @@ pub fn reset_check_calls() {
     CHECK_CALLS.with(|c| c.set(0));
 }
 
-/// La comprobación cruzada de `all_kinds`: `ancho × alto` no pasa de un millón de píxeles.
-fn check_grande(values: &Values) -> Option<String> {
+/// La comprobación cruzada de `all_kinds`: `width_2 × height_2` no pasa de un millón de píxeles.
+fn check_large(values: &Values) -> Option<String> {
     CHECK_CALLS.with(|c| c.set(c.get() + 1));
-    let ancho = u64::from(values.number("ancho")?);
-    let alto = u64::from(values.number("alto")?);
-    if ancho * alto > 1_000_000 {
+    let width_2 = u64::from(values.number("ancho")?);
+    let height_2 = u64::from(values.number("alto")?);
+    if width_2 * height_2 > 1_000_000 {
         Some("demasiado grande".into())
     } else {
         None
@@ -42,7 +42,7 @@ fn check_grande(values: &Values) -> Option<String> {
 /// Dos numéricos (1 a 8192, por defecto 64), un grupo de tres opciones, un hexadecimal que solo se
 /// muestra con la opción 2 (`#336699`), una casilla y un informe de 30 líneas con 4 filas.
 pub fn all_kinds() -> FormSpec {
-    let informe = (1..=30)
+    let report = (1..=30)
         .map(|n| format!("linea {n}"))
         .collect::<Vec<_>>()
         .join("\n");
@@ -102,13 +102,13 @@ pub fn all_kinds() -> FormSpec {
                 id: "informe",
                 label: "Informe",
                 kind: FieldKind::ReadOnly {
-                    text: informe,
+                    text: report,
                     rows: Rows::Fixed(4),
                 },
                 shown_when: None,
             },
         ],
-        check: Some(check_grande),
+        check: Some(check_large),
     }
 }
 

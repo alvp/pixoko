@@ -160,7 +160,7 @@ pub fn total_rows(count: usize) -> usize {
 }
 
 /// Filas enteras que caben en un panel de `panel_h_px` píxeles físicos de alto:
-/// `floor((alto − 41·n) / (14·n))`, 0 si es negativo. Cada fila cuenta su hueco final.
+/// `floor((height_2 − 41·n) / (14·n))`, 0 si es negativo. Cada fila cuenta su hueco final.
 pub fn visible_rows(panel_h_px: i64, n: u32) -> usize {
     let n = scale(n);
     let available = panel_h_px.saturating_sub(GRID_Y_U * n);
@@ -374,7 +374,7 @@ impl PanelView {
     }
 }
 
-/// Indicador del desplazamiento del panel entero: `(y, alto)` relativos a la pista, que mide
+/// Indicador del desplazamiento del panel entero: `(y, height_2)` relativos a la pista, que mide
 /// `panel_h_px`. Alto mínimo `2·n`. `None` si el panel cabe (`block_h_px ≤ panel_h_px`).
 pub fn panel_thumb(offset_px: i64, panel_h_px: i64, block_h_px: i64, n: u32) -> Option<(i64, i64)> {
     if panel_h_px <= 0 || block_h_px <= panel_h_px {
@@ -391,7 +391,7 @@ pub fn panel_thumb(offset_px: i64, panel_h_px: i64, block_h_px: i64, n: u32) -> 
     ))
 }
 
-/// Indicador del desplazamiento: `(y, alto)` relativos a la pista, que mide `visible·14·n`.
+/// Indicador del desplazamiento: `(y, height_2)` relativos a la pista, que mide `visible·14·n`.
 /// Alto mínimo `2·n`. `None` si no hace falta (`total ≤ visible`) o no se ve ninguna fila.
 pub fn thumb(first_row: usize, visible: usize, total: usize, n: u32) -> Option<(i64, i64)> {
     if visible == 0 || total <= visible {
@@ -463,7 +463,7 @@ fn indicator_rect(x: i64, y: i64, size: i64, n: u32) -> ScreenRect {
 }
 
 /// Los dos rectángulos del indicador en píxeles físicos desde la esquina del panel: `(primer
-/// plano, fondo)`. El pequeño se pinta encima del grande.
+/// plano, fondo)`. El pequeño se paints above del large.
 pub fn indicator_rects(n: u32) -> (ScreenRect, ScreenRect) {
     (
         indicator_rect(IND_FG_X_U, IND_FG_Y_U, IND_FG_SIZE_U, n),

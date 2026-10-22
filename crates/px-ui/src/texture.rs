@@ -7,7 +7,7 @@ use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use crate::canvas::CanvasError;
 use crate::tiles::{TileAlloc, TileRect};
 
-/// Bytes RGBA de la imagen, `ancho · alto · 4`, fila a fila (la de arriba primero) y con alfa
+/// Bytes RGBA de la imagen, `width_2 · height_2 · 4`, fila a fila (la de arriba primero) y con alfa
 /// directo (no premultiplicado).
 ///
 /// - RGBA: tal cual.
@@ -15,7 +15,7 @@ use crate::tiles::{TileAlloc, TileRect};
 ///   transparente da `a = 0` y conserva su RGB.
 /// - Gris: `(g, g, g, 255)`. Gris con alfa: `(g, g, g, a)`.
 ///
-/// Reserva `4 · ancho · alto` bytes: quien la llame comprueba antes que el tamaño cabe en una
+/// Reserva `4 · width_2 · height_2` bytes: quien la llame comprueba antes que el tamaño cabe en una
 /// textura. Recorre `Image::bytes`; `pixel_rgba` es la misma conversión para un solo píxel.
 pub fn to_rgba8(image: &Image) -> Vec<u8> {
     let (width, height) = (image.width(), image.height());

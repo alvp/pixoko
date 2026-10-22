@@ -49,7 +49,7 @@ const HEX_TEXT_MAX_CHARS: usize = 64;
 /// Alto de una zona de solo lectura.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rows {
-    /// Muestra `min(filas, líneas)` filas y se desplaza por dentro si hay más.
+    /// Muestra `min(rows_2, líneas)` filas y se desplaza por dentro si hay más.
     Fixed(usize),
     /// Ocupa todo el cuerpo del diálogo (solo vale como único campo).
     Fill,
@@ -314,11 +314,11 @@ pub enum DialogKind {
     /// El diálogo de prueba de `PIXOKO_TEST_DIALOG=1` (specs/hito-2-dialogos-modales.md,
     /// decisión 10): no cambia el documento.
     Demo,
-    /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).
+    /// `Archivo → Nueva image_2…` (specs/hito-2-nueva-imagen.md).
     NewImage,
-    /// `Imagen → Convertir modo…` (specs/hito-2-convertir-modo.md).
+    /// `TestImage → Convertir mode_2…` (specs/hito-2-convertir-modo.md).
     ConvertMode,
-    /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md).
+    /// `Ver → Fondo del canvas_2 → Color…` (specs/hito-2-fondo-color.md).
     BackgroundColor,
     /// `F1`: la ayuda de la herramienta o del botón (specs/interfaz-ayuda.md).
     Help,
@@ -326,7 +326,7 @@ pub enum DialogKind {
     ShortcutList,
     /// El editor de atajo de una acción.
     ShortcutEditor,
-    /// La confirmación de `Restablecer todo`.
+    /// La confirmación de `Reset all`.
     ResetShortcuts,
 }
 
@@ -378,7 +378,7 @@ pub enum Event {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Reaction {
     None,
-    /// `Aceptar` con algo inválido: el motivo.
+    /// `Accept` con algo inválido: el motivo.
     Rejected(String),
     Accepted(Values),
     Cancelled,
@@ -569,7 +569,7 @@ impl Dialog {
     }
 
     /// El resumen, si lo hay; si no, el motivo del primer campo visible inválido
-    /// (`etiqueta: motivo`) o, con todos válidos, el de la comprobación cruzada (recortado) y, por
+    /// (`label_2: reason_2`) o, con todos válidos, el de la comprobación cruzada (recortado) y, por
     /// último, el motivo externo. `None` si todo vale.
     pub fn reason(&self) -> Option<String> {
         if let Some(summary) = &self.summary {
@@ -589,7 +589,7 @@ impl Dialog {
         self.block.clone()
     }
 
-    /// Los motivos de los campos visibles inválidos (`etiqueta: motivo`, en el orden de los
+    /// Los motivos de los campos visibles inválidos (`label_2: reason_2`, en el orden de los
     /// campos) y, con todos válidos, el de la comprobación cruzada; sin recortar. No incluye el
     /// motivo externo ni el resumen.
     pub fn problems(&self) -> Vec<String> {
@@ -697,7 +697,7 @@ impl Dialog {
     }
 
     /// La opción elegida de un grupo, aunque el formulario no sea válido (la necesita quien
-    /// traslada valores entre grupos, como `Nueva imagen`).
+    /// traslada valores entre grupos, como `Nueva image_2`).
     pub fn chosen(&self, id: FieldId) -> Option<usize> {
         match &self.states[self.index_of(id)?] {
             FieldState::Choice(selected) => Some(*selected),
@@ -758,7 +758,7 @@ impl Dialog {
         }
     }
 
-    /// Qué botones de un campo `Button` están atenuados: `[principal, segundo]`.
+    /// Qué botones de un campo `Button` están atenuados: `[principal, second]`.
     pub fn button_disabled(&self, id: FieldId) -> Option<[bool; 2]> {
         match &self.states[self.index_of(id)?] {
             FieldState::Button { disabled } => Some(*disabled),

@@ -24,7 +24,7 @@ use px_ui::pick::{
 use px_ui::shortcuts::{action_for_key, file_action_for_key};
 use px_ui::tool::{Tool, ToolAction, status_text, tool_action_for_key, tool_color_label};
 
-const TODAS: [Tool; 5] = [
+const TEST_ALL: [Tool; 5] = [
     Tool::Pencil,
     Tool::Line,
     Tool::Fill,
@@ -39,50 +39,50 @@ fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
 }
 
 /// Imagen RGBA de 8×8 vacía (todo `(0, 0, 0, 0)`).
-fn imagen_rgba() -> Image {
+fn image_rgba() -> Image {
     Image::new(8, 8, Mode::Rgba).expect("imagen válida")
 }
 
-fn imagen_gris() -> Image {
+fn image_gray() -> Image {
     Image::new(8, 8, Mode::Gray).expect("imagen válida")
 }
 
 /// Imagen de gris con alfa de 8×8 vacía (todo `{ gray: 0, alpha: 0 }`).
-fn imagen_gris_alfa() -> Image {
+fn image_gray_alpha() -> Image {
     Image::new(8, 8, Mode::GrayAlpha).expect("imagen válida")
 }
 
-fn paleta_de_5() -> Palette {
+fn palette_of_5() -> Palette {
     Palette::from_colors((1..=5).map(|i| Rgba::opaque(10 * i, 0, 0))).expect("paleta válida")
 }
 
 /// Indexada de 5 entradas con el índice 3 transparente; todo el lienzo vale `Indexed(0)`.
-fn indexada_con_transparente() -> Image {
-    let mut paleta = paleta_de_5();
-    paleta.set_transparent_index(Some(3)).expect("existe");
-    Image::new_indexed(8, 8, paleta).expect("imagen válida")
+fn indexed_with_transparent() -> Image {
+    let mut palette = palette_of_5();
+    palette.set_transparent_index(Some(3)).expect("existe");
+    Image::new_indexed(8, 8, palette).expect("imagen válida")
 }
 
-fn indexada_sin_transparente() -> Image {
-    Image::new_indexed(8, 8, paleta_de_5()).expect("imagen válida")
+fn indexed_without_transparent() -> Image {
+    Image::new_indexed(8, 8, palette_of_5()).expect("imagen válida")
 }
 
 /// Indexada de 16 entradas, con la 12 en `#ff8800`.
-fn indexada_de_16() -> Image {
-    let mut colores: Vec<Rgba> = (0..16).map(|i| Rgba::opaque(i * 8, 0, 0)).collect();
-    colores[12] = Rgba::opaque(255, 136, 0);
-    let paleta = Palette::from_colors(colores).expect("paleta válida");
-    Image::new_indexed(8, 8, paleta).expect("imagen válida")
+fn indexed_of_16() -> Image {
+    let mut colors_2: Vec<Rgba> = (0..16).map(|i| Rgba::opaque(i * 8, 0, 0)).collect();
+    colors_2[12] = Rgba::opaque(255, 136, 0);
+    let palette = Palette::from_colors(colors_2).expect("paleta válida");
+    Image::new_indexed(8, 8, palette).expect("imagen válida")
 }
 
-fn con_pixel(mut image: Image, x: u32, y: u32, pixel: Pixel) -> Image {
+fn with_pixel(mut image: Image, x: u32, y: u32, pixel: Pixel) -> Image {
     image.set_pixel(x, y, pixel).expect("dentro");
     image
 }
 
 /// Las cinco combinaciones de modificadores de la fila 1 más `ctrl` y `command` a la vez (lo que
 /// da egui en Linux) y `mac_cmd` y `command` a la vez (macOS).
-fn modificadores_de_la_fila_1() -> Vec<Modifiers> {
+fn modifiers_of_row_1() -> Vec<Modifiers> {
     vec![
         Modifiers::SHIFT,
         Modifiers::ALT,
@@ -105,7 +105,7 @@ fn modificadores_de_la_fila_1() -> Vec<Modifiers> {
 // Fila 1: teclas y rótulos.
 
 #[test]
-fn fila_1_coma_es_cuentagotas_y_e_ya_no_es_borrador_sin_modificadores() {
+fn row_1_comma_is_dropper_and_e_is_no_longer_eraser_without_modifiers() {
     assert_eq!(
         tool_action_for_key(Key::Comma, Modifiers::NONE),
         Some(ToolAction::Select(Tool::Dropper))
@@ -114,9 +114,9 @@ fn fila_1_coma_es_cuentagotas_y_e_ya_no_es_borrador_sin_modificadores() {
 }
 
 #[test]
-fn fila_1_con_cualquier_modificador_coma_no_hace_nada() {
+fn row_1_with_any_modifier_comma_does_nothing() {
     let key = Key::Comma;
-    for modifiers in modificadores_de_la_fila_1() {
+    for modifiers in modifiers_of_row_1() {
         assert_eq!(
             tool_action_for_key(key, modifiers),
             None,
@@ -126,24 +126,24 @@ fn fila_1_con_cualquier_modificador_coma_no_hace_nada() {
 }
 
 #[test]
-fn fila_1_d_v_f_y_escape_con_las_teclas_nuevas() {
-    for (key, accion) in [
+fn row_1_d_v_f_and_escape_with_the_new_keys() {
+    for (key, action_2) in [
         (Key::D, ToolAction::Select(Tool::Pencil)),
         (Key::V, ToolAction::Select(Tool::Line)),
         (Key::F, ToolAction::Select(Tool::Fill)),
         (Key::Escape, ToolAction::Cancel),
     ] {
-        assert_eq!(tool_action_for_key(key, Modifiers::NONE), Some(accion));
+        assert_eq!(tool_action_for_key(key, Modifiers::NONE), Some(action_2));
     }
 }
 
 #[test]
-fn fila_1_action_for_key_y_file_action_for_key_dan_none_para_coma() {
-    let mut combinaciones = modificadores_de_la_fila_1();
-    combinaciones.push(Modifiers::NONE);
-    combinaciones.push(Modifiers::COMMAND | Modifiers::SHIFT);
+fn row_1_action_for_key_and_file_action_for_key_give_none_for_comma() {
+    let mut combinations = modifiers_of_row_1();
+    combinations.push(Modifiers::NONE);
+    combinations.push(Modifiers::COMMAND | Modifiers::SHIFT);
     let key = Key::Comma;
-    for modifiers in combinaciones {
+    for modifiers in combinations {
         assert_eq!(
             action_for_key(key, modifiers),
             None,
@@ -158,13 +158,13 @@ fn fila_1_action_for_key_y_file_action_for_key_dan_none_para_coma() {
 }
 
 #[test]
-fn fila_1_los_nombres_de_las_herramientas_nuevas() {
+fn row_1_the_names_of_the_new_tools() {
     assert_eq!(Tool::Dropper.label(), "cuentagotas");
     assert_eq!(Tool::Eraser.label(), "borrador");
 }
 
 #[test]
-fn fila_1_texto_de_estado_del_borrador_y_del_cuentagotas() {
+fn row_1_status_text_of_the_eraser_and_the_dropper() {
     assert_eq!(
         status_text(Tool::Eraser, Some("transparente")),
         "borrador · transparente"
@@ -178,8 +178,8 @@ fn fila_1_texto_de_estado_del_borrador_y_del_cuentagotas() {
 }
 
 #[test]
-fn fila_1_lapiz_linea_relleno_y_cuentagotas_dan_el_color_activo_en_rgba() {
-    let image = imagen_rgba();
+fn row_1_pencil_line_fill_and_dropper_give_the_active_color_in_rgba() {
+    let image = image_rgba();
     let slots = SlotColors::defaults(Mode::Rgba);
     for tool in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Dropper] {
         assert_eq!(
@@ -191,8 +191,8 @@ fn fila_1_lapiz_linea_relleno_y_cuentagotas_dan_el_color_activo_en_rgba() {
 }
 
 #[test]
-fn fila_1_el_color_activo_de_una_indexada_es_la_entrada_elegida() {
-    let image = indexada_de_16();
+fn row_1_the_active_color_of_an_indexed_one_is_the_chosen_entry() {
+    let image = indexed_of_16();
     let slots = SlotColors::defaults(Mode::Indexed);
     for tool in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Dropper] {
         assert_eq!(
@@ -204,25 +204,25 @@ fn fila_1_el_color_activo_de_una_indexada_es_la_entrada_elegida() {
 }
 
 #[test]
-fn fila_1_el_color_activo_usa_las_ranuras_que_se_le_pasan() {
-    let image = imagen_rgba();
+fn row_1_the_active_color_uses_the_slots_it_is_given() {
+    let image = image_rgba();
     let mut slots = SlotColors::defaults(Mode::Rgba);
     assert!(slots.set(3, rgba(10, 20, 30, 128)));
     for tool in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Dropper] {
-        let etiqueta = tool_color_label(tool, &image, ColorChoice::Slot(3), &slots);
+        let label_2 = tool_color_label(tool, &image, ColorChoice::Slot(3), &slots);
         assert_eq!(
-            etiqueta,
+            label_2,
             choice_label_with(&image, ColorChoice::Slot(3), &slots),
             "{tool:?}"
         );
-        assert_eq!(etiqueta, Some("color 3 #0a141e80".to_string()), "{tool:?}");
+        assert_eq!(label_2, Some("color 3 #0a141e80".to_string()), "{tool:?}");
     }
 }
 
 #[test]
-fn fila_1_con_una_eleccion_que_no_vale_las_otras_herramientas_dan_none() {
+fn row_1_with_a_choice_that_is_not_valid_the_other_tools_give_none() {
     // `choice_label_with` da `None` para una ranura 0 y para una entrada en una imagen sin paleta.
-    let image = imagen_rgba();
+    let image = image_rgba();
     let slots = SlotColors::defaults(Mode::Rgba);
     for tool in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Dropper] {
         for choice in [ColorChoice::Slot(0), ColorChoice::Entry(0)] {
@@ -241,15 +241,15 @@ fn fila_1_con_una_eleccion_que_no_vale_las_otras_herramientas_dan_none() {
 }
 
 #[test]
-fn fila_1_el_borrador_da_lo_que_escribe_y_no_el_color_activo() {
-    let casos = [
-        (imagen_rgba(), "transparente"),
-        (imagen_gris_alfa(), "transparente"),
-        (indexada_con_transparente(), "transparente"),
-        (indexada_sin_transparente(), "sin índice transparente"),
-        (imagen_gris(), "sin transparencia"),
+fn row_1_the_eraser_gives_what_it_writes_and_not_the_active_color() {
+    let cases = [
+        (image_rgba(), "transparente"),
+        (image_gray_alpha(), "transparente"),
+        (indexed_with_transparent(), "transparente"),
+        (indexed_without_transparent(), "sin índice transparente"),
+        (image_gray(), "sin transparencia"),
     ];
-    for (image, esperado) in casos {
+    for (image, expected_2) in cases {
         let slots = SlotColors::defaults(image.mode());
         for choice in [
             ColorChoice::Slot(3),
@@ -258,7 +258,7 @@ fn fila_1_el_borrador_da_lo_que_escribe_y_no_el_color_activo() {
         ] {
             assert_eq!(
                 tool_color_label(Tool::Eraser, &image, choice, &slots),
-                Some(esperado.to_string()),
+                Some(expected_2.to_string()),
                 "{:?} con {choice:?}",
                 image.mode()
             );
@@ -267,9 +267,9 @@ fn fila_1_el_borrador_da_lo_que_escribe_y_no_el_color_activo() {
 }
 
 #[test]
-fn fila_1_el_borrador_no_depende_de_que_la_eleccion_valga() {
+fn row_1_the_eraser_does_not_depend_on_the_choice_being_valid() {
     // Spec: el borrador da `Some(eraser_label(image))` siempre, valga o no la elección.
-    let image = imagen_rgba();
+    let image = image_rgba();
     let slots = SlotColors::defaults(Mode::Rgba);
     for choice in [ColorChoice::Slot(0), ColorChoice::Entry(200)] {
         assert_eq!(
@@ -281,12 +281,12 @@ fn fila_1_el_borrador_no_depende_de_que_la_eleccion_valga() {
 }
 
 #[test]
-fn fila_1_la_linea_completa_del_borrador() {
-    let image = imagen_rgba();
+fn row_1_the_complete_eraser_line() {
+    let image = image_rgba();
     let slots = SlotColors::defaults(Mode::Rgba);
-    let etiqueta = tool_color_label(Tool::Eraser, &image, ColorChoice::Slot(3), &slots);
+    let label_2 = tool_color_label(Tool::Eraser, &image, ColorChoice::Slot(3), &slots);
     assert_eq!(
-        status_text(Tool::Eraser, etiqueta.as_deref()),
+        status_text(Tool::Eraser, label_2.as_deref()),
         "borrador · transparente"
     );
 }
@@ -294,49 +294,46 @@ fn fila_1_la_linea_completa_del_borrador() {
 // Fila 2: `eraser_pixel` y sus textos.
 
 #[test]
-fn fila_2_eraser_pixel_en_rgba_y_en_gris_con_alfa() {
+fn row_2_eraser_pixel_in_rgba_and_in_gray_alpha() {
     assert_eq!(
-        eraser_pixel(&imagen_rgba()),
+        eraser_pixel(&image_rgba()),
         Ok(Pixel::Rgba(Rgba::TRANSPARENT))
     );
     assert_eq!(
-        eraser_pixel(&imagen_gris_alfa()),
+        eraser_pixel(&image_gray_alpha()),
         Ok(Pixel::GrayAlpha { gray: 0, alpha: 0 })
     );
 }
 
 #[test]
-fn fila_2_eraser_pixel_en_indexada_con_transparente_3() {
+fn row_2_eraser_pixel_in_indexed_with_transparent_3() {
     assert_eq!(
-        eraser_pixel(&indexada_con_transparente()),
+        eraser_pixel(&indexed_with_transparent()),
         Ok(Pixel::Indexed(3))
     );
 }
 
 #[test]
-fn fila_2_eraser_pixel_en_los_modos_que_no_pueden_borrar() {
+fn row_2_eraser_pixel_in_the_modes_that_cannot_erase() {
     assert_eq!(
-        eraser_pixel(&indexada_sin_transparente()),
+        eraser_pixel(&indexed_without_transparent()),
         Err(EraseError::NoTransparentIndex)
     );
-    assert_eq!(
-        eraser_pixel(&imagen_gris()),
-        Err(EraseError::NoTransparency)
-    );
+    assert_eq!(eraser_pixel(&image_gray()), Err(EraseError::NoTransparency));
 }
 
 #[test]
-fn fila_2_eraser_pixel_sigue_el_indice_transparente_de_la_paleta() {
+fn row_2_eraser_pixel_follows_the_transparent_index_of_the_palette() {
     for t in 0..5u8 {
-        let mut paleta = paleta_de_5();
-        paleta.set_transparent_index(Some(t)).expect("existe");
-        let image = Image::new_indexed(4, 4, paleta).expect("imagen válida");
+        let mut palette = palette_of_5();
+        palette.set_transparent_index(Some(t)).expect("existe");
+        let image = Image::new_indexed(4, 4, palette).expect("imagen válida");
         assert_eq!(eraser_pixel(&image), Ok(Pixel::Indexed(t)));
     }
 }
 
 #[test]
-fn fila_2_los_textos_de_los_errores() {
+fn row_2_the_error_texts() {
     assert_eq!(
         EraseError::NoTransparentIndex.to_string(),
         "esta imagen no tiene índice transparente"
@@ -348,10 +345,10 @@ fn fila_2_los_textos_de_los_errores() {
 }
 
 #[test]
-fn fila_2_los_tipos_derivan_lo_que_pide_la_spec() {
-    fn copia<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
-    copia::<EraseError>();
-    copia::<Picked>();
+fn row_2_the_types_derive_what_the_spec_asks() {
+    fn copy<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
+    copy::<EraseError>();
+    copy::<Picked>();
     assert_ne!(EraseError::NoTransparentIndex, EraseError::NoTransparency);
     assert_ne!(Picked::Entry(1), Picked::Entry(2));
     assert_ne!(Picked::Entry(1), Picked::Color(Rgba::TRANSPARENT));
@@ -359,25 +356,25 @@ fn fila_2_los_tipos_derivan_lo_que_pide_la_spec() {
 }
 
 #[test]
-fn eraser_label_por_modo() {
-    assert_eq!(eraser_label(&imagen_rgba()), "transparente");
-    assert_eq!(eraser_label(&imagen_gris_alfa()), "transparente");
-    assert_eq!(eraser_label(&indexada_con_transparente()), "transparente");
+fn eraser_label_per_mode() {
+    assert_eq!(eraser_label(&image_rgba()), "transparente");
+    assert_eq!(eraser_label(&image_gray_alpha()), "transparente");
+    assert_eq!(eraser_label(&indexed_with_transparent()), "transparente");
     assert_eq!(
-        eraser_label(&indexada_sin_transparente()),
+        eraser_label(&indexed_without_transparent()),
         "sin índice transparente"
     );
-    assert_eq!(eraser_label(&imagen_gris()), "sin transparencia");
+    assert_eq!(eraser_label(&image_gray()), "sin transparencia");
 }
 
 // `is_erasable`.
 
 #[test]
-fn is_erasable_en_rgba_omite_el_alfa_0_aunque_el_rgb_oculto_no_sea_0() {
-    let image = imagen_rgba();
-    let image = con_pixel(image, 1, 1, Pixel::Rgba(rgba(255, 0, 0, 0)));
-    let image = con_pixel(image, 2, 1, Pixel::Rgba(rgba(0, 0, 0, 1)));
-    let image = con_pixel(image, 3, 1, Pixel::Rgba(rgba(0, 0, 255, 255)));
+fn is_erasable_in_rgba_skips_alpha_0_even_if_the_hidden_rgb_is_not_0() {
+    let image = image_rgba();
+    let image = with_pixel(image, 1, 1, Pixel::Rgba(rgba(255, 0, 0, 0)));
+    let image = with_pixel(image, 2, 1, Pixel::Rgba(rgba(0, 0, 0, 1)));
+    let image = with_pixel(image, 3, 1, Pixel::Rgba(rgba(0, 0, 255, 255)));
     assert!(!is_erasable(&image, 0, 0), "(0, 0, 0, 0)");
     assert!(!is_erasable(&image, 1, 1), "(255, 0, 0, 0)");
     assert!(is_erasable(&image, 2, 1), "alfa 1");
@@ -385,11 +382,11 @@ fn is_erasable_en_rgba_omite_el_alfa_0_aunque_el_rgb_oculto_no_sea_0() {
 }
 
 #[test]
-fn is_erasable_en_gris_con_alfa_mira_solo_el_alfa() {
-    let image = imagen_gris_alfa();
-    let image = con_pixel(image, 1, 0, Pixel::GrayAlpha { gray: 7, alpha: 0 });
-    let image = con_pixel(image, 2, 0, Pixel::GrayAlpha { gray: 0, alpha: 1 });
-    let image = con_pixel(
+fn is_erasable_in_gray_alpha_looks_only_at_the_alpha() {
+    let image = image_gray_alpha();
+    let image = with_pixel(image, 1, 0, Pixel::GrayAlpha { gray: 7, alpha: 0 });
+    let image = with_pixel(image, 2, 0, Pixel::GrayAlpha { gray: 0, alpha: 1 });
+    let image = with_pixel(
         image,
         3,
         0,
@@ -405,18 +402,18 @@ fn is_erasable_en_gris_con_alfa_mira_solo_el_alfa() {
 }
 
 #[test]
-fn is_erasable_en_indexada_con_transparente_omite_solo_ese_indice() {
-    let image = indexada_con_transparente();
-    let image = con_pixel(image, 1, 0, Pixel::Indexed(3));
-    let image = con_pixel(image, 2, 0, Pixel::Indexed(4));
+fn is_erasable_in_indexed_with_transparent_skips_only_that_index() {
+    let image = indexed_with_transparent();
+    let image = with_pixel(image, 1, 0, Pixel::Indexed(3));
+    let image = with_pixel(image, 2, 0, Pixel::Indexed(4));
     assert!(is_erasable(&image, 0, 0), "Indexed(0)");
     assert!(!is_erasable(&image, 1, 0), "Indexed(3) es el transparente");
     assert!(is_erasable(&image, 2, 0), "Indexed(4)");
 }
 
 #[test]
-fn is_erasable_es_falso_fuera_de_la_imagen_en_todos_los_modos() {
-    let opaca = |image: Image, pixel| {
+fn is_erasable_is_false_outside_the_image_in_all_modes() {
+    let opaque = |image: Image, pixel| {
         let (w, h) = (image.width(), image.height());
         let mut image = image;
         for y in 0..h {
@@ -426,18 +423,18 @@ fn is_erasable_es_falso_fuera_de_la_imagen_en_todos_los_modos() {
         }
         image
     };
-    let imagenes = [
-        opaca(imagen_rgba(), Pixel::Rgba(rgba(1, 2, 3, 255))),
-        opaca(
-            imagen_gris_alfa(),
+    let images = [
+        opaque(image_rgba(), Pixel::Rgba(rgba(1, 2, 3, 255))),
+        opaque(
+            image_gray_alpha(),
             Pixel::GrayAlpha {
                 gray: 9,
                 alpha: 255,
             },
         ),
-        opaca(indexada_con_transparente(), Pixel::Indexed(0)),
+        opaque(indexed_with_transparent(), Pixel::Indexed(0)),
     ];
-    for image in &imagenes {
+    for image in &images {
         assert!(is_erasable(image, 7, 7), "{:?}: dentro", image.mode());
         for (x, y) in [(8, 0), (0, 8), (8, 8), (u32::MAX, 0), (0, u32::MAX)] {
             assert!(
@@ -452,13 +449,13 @@ fn is_erasable_es_falso_fuera_de_la_imagen_en_todos_los_modos() {
 // Spec: «el borrador cambiaría ese píxel». En gris y en indexada sin transparente no escribe nada,
 // así que no cambia ninguno. La página no lo dice con estas palabras.
 #[test]
-fn is_erasable_es_falso_donde_el_borrador_no_puede_escribir() {
-    let gris = con_pixel(imagen_gris(), 1, 1, Pixel::Gray(200));
-    let sin = con_pixel(indexada_sin_transparente(), 1, 1, Pixel::Indexed(2));
+fn is_erasable_is_false_where_the_eraser_cannot_write() {
+    let gray_2 = with_pixel(image_gray(), 1, 1, Pixel::Gray(200));
+    let without = with_pixel(indexed_without_transparent(), 1, 1, Pixel::Indexed(2));
     for (x, y) in [(0, 0), (1, 1), (7, 7)] {
-        assert!(!is_erasable(&gris, x, y), "gris ({x}, {y})");
+        assert!(!is_erasable(&gray_2, x, y), "gris ({x}, {y})");
         assert!(
-            !is_erasable(&sin, x, y),
+            !is_erasable(&without, x, y),
             "indexada sin transparente ({x}, {y})"
         );
     }
@@ -467,21 +464,21 @@ fn is_erasable_es_falso_donde_el_borrador_no_puede_escribir() {
 // `picked_at` y `pick_notice`.
 
 #[test]
-fn picked_at_en_indexada_da_la_entrada_tambien_la_transparente() {
-    let image = indexada_con_transparente();
-    let image = con_pixel(image, 1, 0, Pixel::Indexed(3));
-    let image = con_pixel(image, 2, 0, Pixel::Indexed(4));
+fn picked_at_in_indexed_gives_the_entry_also_the_transparent_one() {
+    let image = indexed_with_transparent();
+    let image = with_pixel(image, 1, 0, Pixel::Indexed(3));
+    let image = with_pixel(image, 2, 0, Pixel::Indexed(4));
     assert_eq!(picked_at(&image, 0, 0), Some(Picked::Entry(0)));
     assert_eq!(picked_at(&image, 1, 0), Some(Picked::Entry(3)));
     assert_eq!(picked_at(&image, 2, 0), Some(Picked::Entry(4)));
 }
 
 #[test]
-fn picked_at_en_rgba_da_el_valor_exacto_con_su_alfa() {
-    let image = imagen_rgba();
-    let image = con_pixel(image, 1, 1, Pixel::Rgba(rgba(10, 20, 30, 128)));
-    let image = con_pixel(image, 2, 1, Pixel::Rgba(rgba(10, 20, 30, 0)));
-    let image = con_pixel(image, 3, 1, Pixel::Rgba(rgba(10, 20, 30, 255)));
+fn picked_at_in_rgba_gives_the_exact_value_with_its_alpha() {
+    let image = image_rgba();
+    let image = with_pixel(image, 1, 1, Pixel::Rgba(rgba(10, 20, 30, 128)));
+    let image = with_pixel(image, 2, 1, Pixel::Rgba(rgba(10, 20, 30, 0)));
+    let image = with_pixel(image, 3, 1, Pixel::Rgba(rgba(10, 20, 30, 255)));
     assert_eq!(
         picked_at(&image, 1, 1),
         Some(Picked::Color(rgba(10, 20, 30, 128)))
@@ -497,8 +494,8 @@ fn picked_at_en_rgba_da_el_valor_exacto_con_su_alfa() {
 }
 
 #[test]
-fn picked_at_en_gris_da_r_igual_g_igual_b_y_alfa_255() {
-    let image = con_pixel(imagen_gris(), 4, 4, Pixel::Gray(96));
+fn picked_at_in_gray_gives_r_equal_g_equal_b_and_alpha_255() {
+    let image = with_pixel(image_gray(), 4, 4, Pixel::Gray(96));
     assert_eq!(
         picked_at(&image, 4, 4),
         Some(Picked::Color(rgba(96, 96, 96, 255)))
@@ -510,9 +507,9 @@ fn picked_at_en_gris_da_r_igual_g_igual_b_y_alfa_255() {
 }
 
 #[test]
-fn picked_at_en_gris_con_alfa_conserva_el_alfa_incluido_el_0() {
-    let image = imagen_gris_alfa();
-    let image = con_pixel(
+fn picked_at_in_gray_alpha_keeps_the_alpha_including_the_0() {
+    let image = image_gray_alpha();
+    let image = with_pixel(
         image,
         1,
         0,
@@ -521,7 +518,7 @@ fn picked_at_en_gris_con_alfa_conserva_el_alfa_incluido_el_0() {
             alpha: 200,
         },
     );
-    let image = con_pixel(image, 2, 0, Pixel::GrayAlpha { gray: 7, alpha: 0 });
+    let image = with_pixel(image, 2, 0, Pixel::GrayAlpha { gray: 7, alpha: 0 });
     assert_eq!(
         picked_at(&image, 1, 0),
         Some(Picked::Color(rgba(7, 7, 7, 200)))
@@ -533,15 +530,15 @@ fn picked_at_en_gris_con_alfa_conserva_el_alfa_incluido_el_0() {
 }
 
 #[test]
-fn picked_at_fuera_de_la_imagen_es_none_en_todos_los_modos() {
-    let imagenes = [
-        imagen_rgba(),
-        imagen_gris(),
-        imagen_gris_alfa(),
-        indexada_con_transparente(),
-        indexada_sin_transparente(),
+fn picked_at_outside_the_image_is_none_in_all_modes() {
+    let images = [
+        image_rgba(),
+        image_gray(),
+        image_gray_alpha(),
+        indexed_with_transparent(),
+        indexed_without_transparent(),
     ];
-    for image in &imagenes {
+    for image in &images {
         for (x, y) in [(8, 0), (0, 8), (8, 8), (u32::MAX, 0), (0, u32::MAX)] {
             assert_eq!(
                 picked_at(image, x, y),
@@ -555,7 +552,7 @@ fn picked_at_fuera_de_la_imagen_es_none_en_todos_los_modos() {
 }
 
 #[test]
-fn pick_notice_solo_avisa_de_un_color_con_alfa_0() {
+fn pick_notice_only_warns_about_a_color_with_alpha_0() {
     assert_eq!(
         pick_notice(&Picked::Color(rgba(10, 20, 30, 0))),
         Some("píxel transparente copiado tal cual (#0a141e00)".to_string())
@@ -570,7 +567,7 @@ fn pick_notice_solo_avisa_de_un_color_con_alfa_0() {
 }
 
 #[test]
-fn pick_notice_no_avisa_de_una_entrada_ni_de_la_transparente() {
+fn pick_notice_does_not_warn_about_an_entry_or_the_transparent_one() {
     for i in [0, 1, 3, 255] {
         assert_eq!(pick_notice(&Picked::Entry(i)), None, "Entry({i})");
     }
@@ -578,7 +575,7 @@ fn pick_notice_no_avisa_de_una_entrada_ni_de_la_transparente() {
 
 // Propiedad 3: teclas.
 
-fn modificadores(bits: u8) -> Modifiers {
+fn modifiers_2(bits: u8) -> Modifiers {
     Modifiers {
         alt: bits & 1 != 0,
         ctrl: bits & 2 != 0,
@@ -589,13 +586,13 @@ fn modificadores(bits: u8) -> Modifiers {
 }
 
 /// Lo que debe dar `tool_action_for_key`, escrito aparte de la implementación.
-fn accion_esperada(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
-    let sin_modificadores = !(modifiers.alt
+fn action_expected(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
+    let without_modifiers = !(modifiers.alt
         || modifiers.ctrl
         || modifiers.shift
         || modifiers.mac_cmd
         || modifiers.command);
-    if !sin_modificadores {
+    if !without_modifiers {
         return None;
     }
     match key {
@@ -609,16 +606,16 @@ fn accion_esperada(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
     }
 }
 
-fn comprueba_teclas(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError> {
-    let accion = tool_action_for_key(key, modifiers);
+fn checks_keys(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError> {
+    let action_2 = tool_action_for_key(key, modifiers);
     prop_assert_eq!(
-        accion,
-        accion_esperada(key, modifiers),
+        action_2,
+        action_expected(key, modifiers),
         "{:?} con {:?}",
         key,
         modifiers
     );
-    if accion.is_some() {
+    if action_2.is_some() {
         prop_assert!(
             matches!(
                 key,
@@ -650,21 +647,21 @@ fn comprueba_teclas(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError>
 
 proptest! {
     #[test]
-    fn propiedad_3_teclas_por_muestreo(
+    fn property_3_keys_by_sampling(
         key in prop::sample::select(Key::ALL.to_vec()),
         bits in 0u8..32,
     ) {
-        comprueba_teclas(key, modificadores(bits))?;
+        checks_keys(key, modifiers_2(bits))?;
     }
 }
 
 #[test]
-fn propiedad_3_teclas_exhaustiva_key_all_por_las_32_combinaciones() {
+fn property_3_exhaustive_keys_key_all_by_the_32_combinations() {
     assert!(!Key::ALL.is_empty());
     for &key in Key::ALL {
         for bits in 0..32 {
-            let modifiers = modificadores(bits);
-            if let Err(e) = comprueba_teclas(key, modifiers) {
+            let modifiers = modifiers_2(bits);
+            if let Err(e) = checks_keys(key, modifiers) {
                 panic!("{e}");
             }
         }
@@ -672,18 +669,18 @@ fn propiedad_3_teclas_exhaustiva_key_all_por_las_32_combinaciones() {
 }
 
 #[test]
-fn propiedad_3_cada_herramienta_tiene_su_tecla_sin_modificadores() {
+fn property_3_each_tool_has_its_key_without_modifiers() {
     // Las cinco herramientas se alcanzan, cada una con una sola tecla distinta (el Borrador, con `k`).
-    let mut alcanzadas = Vec::new();
+    let mut reached = Vec::new();
     for &key in Key::ALL {
         if let Some(ToolAction::Select(tool)) = tool_action_for_key(key, Modifiers::NONE) {
-            alcanzadas.push((tool, key));
+            reached.push((tool, key));
         }
     }
-    assert_eq!(alcanzadas.len(), TODAS.len(), "{alcanzadas:?}");
-    for tool in TODAS {
+    assert_eq!(reached.len(), TEST_ALL.len(), "{reached:?}");
+    for tool in TEST_ALL {
         assert_eq!(
-            alcanzadas.iter().filter(|(t, _)| *t == tool).count(),
+            reached.iter().filter(|(t, _)| *t == tool).count(),
             1,
             "{tool:?}"
         );
@@ -692,69 +689,69 @@ fn propiedad_3_cada_herramienta_tiene_su_tecla_sin_modificadores() {
 
 // Fila 14: regla de la entrada de alfa 0.
 //
-// Paleta de 5: `[azul, rojo, (0,255,0,α0), azul claro, (9,9,9,α0)]`. El valor de borrado en
+// Paleta de 5: `[blue, red, (0,255,0,α0), blue light, (9,9,9,α0)]`. El valor de borrado en
 // indexado es, por orden: `transparent_index` si está fijado; si no, la primera entrada cuyo alfa
 // guardado es 0; si no, `Err(NoTransparentIndex)`. Se recalcula siempre, no se guarda nada.
 
-const ENTRADA_2_ALFA_0: Rgba = Rgba::new(0, 255, 0, 0);
-const ENTRADA_4_ALFA_0: Rgba = Rgba::new(9, 9, 9, 0);
+const ENTRY_2_ALPHA_0: Rgba = Rgba::new(0, 255, 0, 0);
+const ENTRY_4_ALPHA_0: Rgba = Rgba::new(9, 9, 9, 0);
 
 /// La paleta de la fila 14, sin `transparent_index`: las entradas 2 y 4 con alfa 0.
-fn paleta_fila_14() -> Palette {
+fn palette_row_14() -> Palette {
     Palette::from_colors([
         Rgba::opaque(0, 0, 255),
         Rgba::opaque(255, 0, 0),
-        ENTRADA_2_ALFA_0,
+        ENTRY_2_ALPHA_0,
         Rgba::opaque(100, 150, 255),
-        ENTRADA_4_ALFA_0,
+        ENTRY_4_ALPHA_0,
     ])
     .expect("paleta válida")
 }
 
-fn imagen_fila_14(paleta: Palette) -> Image {
-    Image::new_indexed(8, 8, paleta).expect("imagen válida")
+fn image_row_14(palette: Palette) -> Image {
+    Image::new_indexed(8, 8, palette).expect("imagen válida")
 }
 
 /// Caso (a): sin `transparent_index`, con las entradas 2 y 4 de alfa 0.
-fn caso_14a() -> Image {
-    imagen_fila_14(paleta_fila_14())
+fn case_14_a() -> Image {
+    image_row_14(palette_row_14())
 }
 
 /// Caso (b): `transparent_index = Some(3)` y las entradas 2 y 4 con alfa 0.
-fn caso_14b() -> Image {
-    let mut paleta = paleta_fila_14();
-    paleta.set_transparent_index(Some(3)).expect("existe");
-    imagen_fila_14(paleta)
+fn case_14_b() -> Image {
+    let mut palette = palette_row_14();
+    palette.set_transparent_index(Some(3)).expect("existe");
+    image_row_14(palette)
 }
 
 /// Caso (c): `transparent_index = Some(4)` y la entrada 2 con alfa 0 (la 4, con el alfa que se pida).
-fn caso_14c(alfa_de_la_4: u8) -> Image {
-    let mut paleta = paleta_fila_14();
-    paleta
-        .set(4, Rgba::new(9, 9, 9, alfa_de_la_4))
+fn case_14_c(alpha_of_the_4: u8) -> Image {
+    let mut palette = palette_row_14();
+    palette
+        .set(4, Rgba::new(9, 9, 9, alpha_of_the_4))
         .expect("existe");
-    paleta.set_transparent_index(Some(4)).expect("existe");
-    imagen_fila_14(paleta)
+    palette.set_transparent_index(Some(4)).expect("existe");
+    image_row_14(palette)
 }
 
 /// Caso (d): sin `transparent_index` y con solo la entrada 4 de alfa 0 (la 2 es opaca).
-fn caso_14d() -> Image {
-    let mut paleta = paleta_fila_14();
-    paleta.set(2, Rgba::opaque(0, 255, 0)).expect("existe");
-    imagen_fila_14(paleta)
+fn case_14_d() -> Image {
+    let mut palette = palette_row_14();
+    palette.set(2, Rgba::opaque(0, 255, 0)).expect("existe");
+    image_row_14(palette)
 }
 
 #[test]
-fn fila_14a_sin_transparent_index_gana_la_primera_entrada_de_alfa_0_no_la_ultima() {
-    let image = caso_14a();
+fn row_14a_without_transparent_index_the_first_alpha_0_entry_wins_not_the_last() {
+    let image = case_14_a();
     assert_eq!(image.palette().unwrap().transparent_index(), None);
     assert_eq!(eraser_pixel(&image), Ok(Pixel::Indexed(2)));
     assert_eq!(eraser_label(&image), "transparente (entrada 2)");
 }
 
 #[test]
-fn fila_14a_tool_color_label_y_status_text_del_borrador() {
-    let image = caso_14a();
+fn row_14a_tool_color_label_and_status_text_of_the_eraser() {
+    let image = case_14_a();
     let slots = SlotColors::defaults(Mode::Indexed);
     // El borrador no usa la elección: valga o no, el texto es el mismo.
     for choice in [
@@ -762,14 +759,14 @@ fn fila_14a_tool_color_label_y_status_text_del_borrador() {
         ColorChoice::Entry(3),
         ColorChoice::Slot(9),
     ] {
-        let etiqueta = tool_color_label(Tool::Eraser, &image, choice, &slots);
+        let label_2 = tool_color_label(Tool::Eraser, &image, choice, &slots);
         assert_eq!(
-            etiqueta,
+            label_2,
             Some("transparente (entrada 2)".to_string()),
             "{choice:?}"
         );
         assert_eq!(
-            status_text(Tool::Eraser, etiqueta.as_deref()),
+            status_text(Tool::Eraser, label_2.as_deref()),
             "borrador · transparente (entrada 2)",
             "{choice:?}"
         );
@@ -777,9 +774,9 @@ fn fila_14a_tool_color_label_y_status_text_del_borrador() {
 }
 
 #[test]
-fn fila_14a_las_otras_herramientas_siguen_dando_el_color_activo() {
+fn row_14a_the_other_tools_keep_giving_the_active_color() {
     // La regla nueva solo toca al borrador.
-    let image = caso_14a();
+    let image = case_14_a();
     let slots = SlotColors::defaults(Mode::Indexed);
     for tool in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Dropper] {
         assert_eq!(
@@ -791,13 +788,13 @@ fn fila_14a_las_otras_herramientas_siguen_dando_el_color_activo() {
 }
 
 #[test]
-fn fila_14b_con_transparent_index_gana_aunque_una_entrada_anterior_tenga_alfa_0() {
-    let image = caso_14b();
-    let paleta = image.palette().unwrap();
-    assert_eq!(paleta.get(2).unwrap().a, 0, "la 2 es anterior y de alfa 0");
-    assert_eq!(paleta.get(4).unwrap().a, 0);
+fn row_14b_with_transparent_index_it_wins_even_if_an_earlier_entry_has_alpha_0() {
+    let image = case_14_b();
+    let palette = image.palette().unwrap();
+    assert_eq!(palette.get(2).unwrap().a, 0, "la 2 es anterior y de alfa 0");
+    assert_eq!(palette.get(4).unwrap().a, 0);
     assert_eq!(eraser_pixel(&image), Ok(Pixel::Indexed(3)));
-    // Sin `(entrada N)`: solo se usa la regla 2 cuando no hay `transparent_index`.
+    // Sin `(input_2 N)`: solo se usa la regla 2 cuando no hay `transparent_index`.
     assert_eq!(eraser_label(&image), "transparente");
     let slots = SlotColors::defaults(Mode::Indexed);
     assert_eq!(
@@ -814,69 +811,69 @@ fn fila_14b_con_transparent_index_gana_aunque_una_entrada_anterior_tenga_alfa_0(
 }
 
 #[test]
-fn fila_14b_con_transparent_index_en_una_entrada_opaca_tambien_gana() {
+fn row_14b_with_transparent_index_on_an_opaque_entry_it_also_wins() {
     // El índice fijado manda aunque su alfa guardado no sea 0 (`resolved` lo pone a 0).
-    let mut paleta = paleta_fila_14();
-    paleta.set_transparent_index(Some(0)).expect("existe");
-    let image = imagen_fila_14(paleta);
+    let mut palette = palette_row_14();
+    palette.set_transparent_index(Some(0)).expect("existe");
+    let image = image_row_14(palette);
     assert_eq!(eraser_pixel(&image), Ok(Pixel::Indexed(0)));
     assert_eq!(eraser_label(&image), "transparente");
 }
 
 #[test]
-fn fila_14c_con_transparent_index_4_gana_la_4_no_la_2() {
-    for alfa_de_la_4 in [0, 255] {
-        let image = caso_14c(alfa_de_la_4);
+fn row_14c_with_transparent_index_4_the_4_wins_not_the_2() {
+    for alpha_of_the_4 in [0, 255] {
+        let image = case_14_c(alpha_of_the_4);
         assert_eq!(image.palette().unwrap().get(2).unwrap().a, 0);
         assert_eq!(
             eraser_pixel(&image),
             Ok(Pixel::Indexed(4)),
-            "alfa guardado de la 4 = {alfa_de_la_4}"
+            "alfa guardado de la 4 = {alpha_of_the_4}"
         );
         assert_eq!(eraser_label(&image), "transparente");
     }
 }
 
 #[test]
-fn fila_14d_sin_transparent_index_y_solo_la_entrada_4_de_alfa_0() {
-    let image = caso_14d();
+fn row_14d_without_transparent_index_and_only_entry_4_with_alpha_0() {
+    let image = case_14_d();
     assert_eq!(image.palette().unwrap().transparent_index(), None);
     assert_eq!(eraser_pixel(&image), Ok(Pixel::Indexed(4)));
     assert_eq!(eraser_label(&image), "transparente (entrada 4)");
     let slots = SlotColors::defaults(Mode::Indexed);
-    let etiqueta = tool_color_label(Tool::Eraser, &image, ColorChoice::Entry(1), &slots);
-    assert_eq!(etiqueta.as_deref(), Some("transparente (entrada 4)"));
+    let label_2 = tool_color_label(Tool::Eraser, &image, ColorChoice::Entry(1), &slots);
+    assert_eq!(label_2.as_deref(), Some("transparente (entrada 4)"));
     assert_eq!(
-        status_text(Tool::Eraser, etiqueta.as_deref()),
+        status_text(Tool::Eraser, label_2.as_deref()),
         "borrador · transparente (entrada 4)"
     );
 }
 
 /// Cambia el color guardado de una entrada de la imagen principal con un comando.
-fn edita_entrada(doc: &mut Document, index: u8, color: Rgba) {
+fn edits_input(doc: &mut Document, index: u8, color: Rgba) {
     let image = ImageId::from_raw(0);
-    let comando = Command::SetPaletteColor {
+    let command = Command::SetPaletteColor {
         image,
         index,
         color,
     };
-    assert_eq!(doc.apply(comando), Ok(true));
+    assert_eq!(doc.apply(command), Ok(true));
 }
 
 #[test]
-fn fila_14e_tras_editar_la_paleta_el_valor_de_borrado_se_calcula_de_nuevo() {
-    let mut doc = Document::new(caso_14a());
+fn row_14e_after_editing_the_palette_the_erase_value_is_computed_again() {
+    let mut doc = Document::new(case_14_a());
     let id = ImageId::from_raw(0);
     assert_eq!(eraser_pixel(doc.image(id).unwrap()), Ok(Pixel::Indexed(2)));
 
     // La entrada 2 pasa a alfa 255: queda la 4.
-    edita_entrada(&mut doc, 2, Rgba::opaque(0, 255, 0));
+    edits_input(&mut doc, 2, Rgba::opaque(0, 255, 0));
     let image = doc.image(id).unwrap();
     assert_eq!(eraser_pixel(image), Ok(Pixel::Indexed(4)));
     assert_eq!(eraser_label(image), "transparente (entrada 4)");
 
     // Y si ya no queda ninguna: el aviso de siempre.
-    edita_entrada(&mut doc, 4, Rgba::opaque(9, 9, 9));
+    edits_input(&mut doc, 4, Rgba::opaque(9, 9, 9));
     let image = doc.image(id).unwrap();
     assert_eq!(eraser_pixel(image), Err(EraseError::NoTransparentIndex));
     assert_eq!(eraser_label(image), "sin índice transparente");
@@ -896,60 +893,60 @@ fn fila_14e_tras_editar_la_paleta_el_valor_de_borrado_se_calcula_de_nuevo() {
 }
 
 #[test]
-fn fila_14e_una_sola_entrada_de_alfa_0_que_se_vuelve_opaca_no_deja_ninguna() {
-    let mut doc = Document::new(caso_14d());
+fn row_14e_a_single_alpha_0_entry_that_becomes_opaque_leaves_none() {
+    let mut doc = Document::new(case_14_d());
     let id = ImageId::from_raw(0);
     assert_eq!(eraser_pixel(doc.image(id).unwrap()), Ok(Pixel::Indexed(4)));
-    edita_entrada(&mut doc, 4, Rgba::opaque(9, 9, 9));
+    edits_input(&mut doc, 4, Rgba::opaque(9, 9, 9));
     let image = doc.image(id).unwrap();
     assert_eq!(eraser_pixel(image), Err(EraseError::NoTransparentIndex));
     assert_eq!(eraser_label(image), "sin índice transparente");
 }
 
 #[test]
-fn fila_14e_fijar_transparent_index_cambia_el_valor_en_el_siguiente_calculo() {
-    let mut doc = Document::new(caso_14a());
+fn row_14e_setting_transparent_index_changes_the_value_in_the_next_computation() {
+    let mut doc = Document::new(case_14_a());
     let id = ImageId::from_raw(0);
     assert_eq!(eraser_pixel(doc.image(id).unwrap()), Ok(Pixel::Indexed(2)));
-    let comando = Command::SetTransparentIndex {
+    let command = Command::SetTransparentIndex {
         image: id,
         index: Some(3),
     };
-    assert_eq!(doc.apply(comando), Ok(true));
+    assert_eq!(doc.apply(command), Ok(true));
     let image = doc.image(id).unwrap();
     assert_eq!(eraser_pixel(image), Ok(Pixel::Indexed(3)));
     assert_eq!(eraser_label(image), "transparente");
 }
 
 #[test]
-fn fila_14_una_paleta_con_alfa_parcial_no_cuenta_como_alfa_0() {
+fn row_14_a_palette_with_partial_alpha_does_not_count_as_alpha_0() {
     // Solo el alfa guardado exactamente 0 vale: alfa 1 no.
-    let paleta = Palette::from_colors([
+    let palette = Palette::from_colors([
         Rgba::opaque(0, 0, 255),
         Rgba::new(1, 2, 3, 1),
         Rgba::new(1, 2, 3, 128),
     ])
     .expect("paleta válida");
-    let image = Image::new_indexed(4, 4, paleta).expect("imagen válida");
+    let image = Image::new_indexed(4, 4, palette).expect("imagen válida");
     assert_eq!(eraser_pixel(&image), Err(EraseError::NoTransparentIndex));
     assert_eq!(eraser_label(&image), "sin índice transparente");
 }
 
 #[test]
-fn fila_14_los_demas_modos_no_cambian_con_la_regla_nueva() {
-    assert_eq!(eraser_label(&imagen_rgba()), "transparente");
-    assert_eq!(eraser_label(&imagen_gris_alfa()), "transparente");
-    assert_eq!(eraser_label(&imagen_gris()), "sin transparencia");
+fn row_14_the_other_modes_do_not_change_with_the_new_rule() {
+    assert_eq!(eraser_label(&image_rgba()), "transparente");
+    assert_eq!(eraser_label(&image_gray_alpha()), "transparente");
+    assert_eq!(eraser_label(&image_gray()), "sin transparencia");
 }
 
 // `is_erasable` con la regla nueva (decisión 2: «ya transparente» es el valor resuelto con alfa 0).
 
 #[test]
-fn is_erasable_en_indexada_sin_transparent_index_omite_las_entradas_de_alfa_0() {
-    let image = caso_14a();
-    let image = con_pixel(image, 1, 0, Pixel::Indexed(2));
-    let image = con_pixel(image, 2, 0, Pixel::Indexed(4));
-    let image = con_pixel(image, 3, 0, Pixel::Indexed(1));
+fn is_erasable_in_indexed_without_transparent_index_skips_the_alpha_0_entries() {
+    let image = case_14_a();
+    let image = with_pixel(image, 1, 0, Pixel::Indexed(2));
+    let image = with_pixel(image, 2, 0, Pixel::Indexed(4));
+    let image = with_pixel(image, 3, 0, Pixel::Indexed(1));
     assert!(is_erasable(&image, 0, 0), "Indexed(0), azul");
     assert!(!is_erasable(&image, 1, 0), "Indexed(2), alfa 0");
     assert!(!is_erasable(&image, 2, 0), "Indexed(4), alfa 0");
@@ -957,14 +954,14 @@ fn is_erasable_en_indexada_sin_transparent_index_omite_las_entradas_de_alfa_0() 
 }
 
 #[test]
-fn is_erasable_con_transparent_index_omite_tambien_otras_entradas_de_alfa_0() {
+fn is_erasable_with_transparent_index_also_skips_other_alpha_0_entries() {
     // Con `transparent_index = 3`: el índice 3 y las entradas 2 y 4 (alfa 0 guardado) ya son
     // transparentes; no pasan a `Indexed(3)`.
-    let image = caso_14b();
-    let image = con_pixel(image, 1, 0, Pixel::Indexed(2));
-    let image = con_pixel(image, 2, 0, Pixel::Indexed(4));
-    let image = con_pixel(image, 3, 0, Pixel::Indexed(3));
-    let image = con_pixel(image, 4, 0, Pixel::Indexed(1));
+    let image = case_14_b();
+    let image = with_pixel(image, 1, 0, Pixel::Indexed(2));
+    let image = with_pixel(image, 2, 0, Pixel::Indexed(4));
+    let image = with_pixel(image, 3, 0, Pixel::Indexed(3));
+    let image = with_pixel(image, 4, 0, Pixel::Indexed(1));
     assert!(is_erasable(&image, 0, 0), "Indexed(0)");
     assert!(!is_erasable(&image, 1, 0), "Indexed(2)");
     assert!(!is_erasable(&image, 2, 0), "Indexed(4)");
@@ -973,11 +970,11 @@ fn is_erasable_con_transparent_index_omite_tambien_otras_entradas_de_alfa_0() {
 }
 
 #[test]
-fn is_erasable_con_transparent_index_fijado_a_una_entrada_opaca_omite_su_indice() {
+fn is_erasable_with_transparent_index_set_to_an_opaque_entry_skips_its_index() {
     // El valor resuelto del índice transparente tiene alfa 0 aunque el guardado no.
-    let image = caso_14c(255);
-    let image = con_pixel(image, 1, 0, Pixel::Indexed(4));
-    let image = con_pixel(image, 2, 0, Pixel::Indexed(2));
+    let image = case_14_c(255);
+    let image = with_pixel(image, 1, 0, Pixel::Indexed(4));
+    let image = with_pixel(image, 2, 0, Pixel::Indexed(2));
     assert!(
         !is_erasable(&image, 1, 0),
         "Indexed(4), resuelto con alfa 0"
@@ -987,11 +984,11 @@ fn is_erasable_con_transparent_index_fijado_a_una_entrada_opaca_omite_su_indice(
 }
 
 #[test]
-fn is_erasable_sin_ninguna_entrada_de_alfa_0_ni_indice_sigue_siendo_falso() {
-    let image = caso_14d();
-    let mut paleta = image.palette().unwrap().clone();
-    paleta.set(4, Rgba::opaque(9, 9, 9)).expect("existe");
-    let image = imagen_fila_14(paleta);
+fn is_erasable_without_any_alpha_0_entry_or_index_is_still_false() {
+    let image = case_14_d();
+    let mut palette = image.palette().unwrap().clone();
+    palette.set(4, Rgba::opaque(9, 9, 9)).expect("existe");
+    let image = image_row_14(palette);
     for (x, y) in [(0, 0), (3, 3)] {
         assert!(!is_erasable(&image, x, y), "({x}, {y})");
     }

@@ -13,7 +13,7 @@
 //! - Fila 5b (parte pura): los bloqueos del zoom, uno por bloqueo, con los tres orígenes.
 //!
 //! Decisiones donde la spec no fija un detalle (anotadas aquí y en el informe):
-//! - `Ctrl+Mayús+Q` en Linux da `None`: `Salir` se trata como `Abrir` (`command` sin `Mayús` ni
+//! - `Ctrl+Mayús+Q` en Linux da `None`: `Salir` se trata como `Open` (`command` sin `Mayús` ni
 //!   `Alt`); la spec solo dice «`command`+`Q` solo en Linux».
 //! - `Quit` con `modal` y otro bloqueo (por ejemplo `gesture`): la regla (2) deja pasar a `Quit` y
 //!   las siguientes reglas se siguen aplicando en orden, así que el otro bloqueo lo frena.
@@ -29,17 +29,17 @@ use px_ui::tool::{Tool, ToolAction, tool_action_for_key};
 use px_ui::view::Zoom;
 
 mod common;
-use common::{modificadores, modificadores_command};
+use common::{modifiers_2, modifiers_command};
 
-const HERRAMIENTAS: [Tool; 5] = [
+const TEST_TOOLS: [Tool; 5] = [
     Tool::Pencil,
     Tool::Line,
     Tool::Fill,
     Tool::Dropper,
     Tool::Eraser,
 ];
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
-const ORIGENES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const SOURCES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
 const ZOOMS: [AppAction; 4] = [
     AppAction::ZoomIn,
     AppAction::ZoomOut,
@@ -49,7 +49,7 @@ const ZOOMS: [AppAction; 4] = [
 
 /// Todas las acciones posibles: las 11 de la tabla del menú, `CloseLicenses`, las cinco
 /// herramientas y las nueve ranuras de color.
-fn todas_las_acciones() -> Vec<AppAction> {
+fn all_the_actions() -> Vec<AppAction> {
     let mut v = vec![
         AppAction::Open,
         AppAction::Save,
@@ -64,7 +64,7 @@ fn todas_las_acciones() -> Vec<AppAction> {
         AppAction::ShowLicenses,
         AppAction::CloseLicenses,
     ];
-    v.extend(HERRAMIENTAS.map(AppAction::SelectTool));
+    v.extend(TEST_TOOLS.map(AppAction::SelectTool));
     v.extend((1..=9).map(AppAction::SelectColor));
     v
 }
@@ -77,7 +77,7 @@ fn es_zoom(action: AppAction) -> bool {
 }
 
 /// Las 32 combinaciones de los cinco bloqueos.
-fn bloqueos(bits: u8) -> Locks {
+fn locks_2(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
         stroke: false,
@@ -88,14 +88,14 @@ fn bloqueos(bits: u8) -> Locks {
     }
 }
 
-fn solo(f: impl FnOnce(&mut Locks)) -> Locks {
+fn only(f: impl FnOnce(&mut Locks)) -> Locks {
     let mut locks = Locks::default();
     f(&mut locks);
     locks
 }
 
 /// Estado con historia, zoom ×5 y todo lo demás en reposo: nada deshabilita por sí mismo.
-fn estado(zoom: Option<Zoom>, locks: Locks) -> UiState {
+fn state_2(zoom: Option<Zoom>, locks: Locks) -> UiState {
     UiState {
         can_undo: true,
         can_redo: true,
@@ -113,20 +113,20 @@ fn zoom_x5() -> Option<Zoom> {
 // Tipos y funciones sencillas
 // ---------------------------------------------------------------------------------------------
 
-fn assert_plano<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
-fn assert_con_defecto<T: Default>() {}
+fn assert_plane<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
+fn assert_with_default<T: Default>() {}
 
 #[test]
-fn los_tipos_de_la_capa_de_acciones_son_planos() {
-    assert_plano::<AppAction>();
-    assert_plano::<Origin>();
-    assert_plano::<Platform>();
-    assert_plano::<Locks>();
-    assert_con_defecto::<Locks>();
+fn the_types_of_the_action_layer_are_plain() {
+    assert_plane::<AppAction>();
+    assert_plane::<Origin>();
+    assert_plane::<Platform>();
+    assert_plane::<Locks>();
+    assert_with_default::<Locks>();
 }
 
 #[test]
-fn locks_por_defecto_es_todo_falso() {
+fn locks_by_default_is_all_false() {
     let locks = Locks::default();
     assert!(!locks.gesture);
     assert!(!locks.dialog);
@@ -136,25 +136,25 @@ fn locks_por_defecto_es_todo_falso() {
 }
 
 #[test]
-fn ignores_repeat_es_solo_open_save_saveas_y_quit() {
-    for action in todas_las_acciones() {
-        let esperado = matches!(
+fn ignores_repeat_is_only_open_save_saveas_and_quit() {
+    for action in all_the_actions() {
+        let expected_2 = matches!(
             action,
             AppAction::Open | AppAction::Save | AppAction::SaveAs | AppAction::Quit
         );
-        assert_eq!(action.ignores_repeat(), esperado, "{action:?}");
+        assert_eq!(action.ignores_repeat(), expected_2, "{action:?}");
     }
 }
 
 #[test]
-fn is_zoom_es_solo_las_cuatro_de_zoom() {
-    for action in todas_las_acciones() {
+fn is_zoom_is_only_the_four_zoom_ones() {
+    for action in all_the_actions() {
         assert_eq!(action.is_zoom(), es_zoom(action), "{action:?}");
     }
 }
 
 #[test]
-fn platform_current_sigue_el_sistema_de_compilacion() {
+fn platform_current_follows_the_build_system() {
     #[cfg(target_os = "linux")]
     assert_eq!(Platform::current(), Platform::Linux);
     #[cfg(target_os = "windows")]
@@ -172,7 +172,7 @@ fn platform_current_sigue_el_sistema_de_compilacion() {
 /// todo; (4) zoom: con `text_focus` solo si el origen es `Key`; (5) el resto: `gesture` o
 /// `text_focus`, y `removal` solo `SelectColor` y las acciones que abren un diálogo (hoy, solo
 /// `ShowLicenses`; unidad 18, decisión D2); (6) nada.
-fn bloqueada_segun_el_modelo(action: AppAction, locks: Locks, origin: Origin) -> bool {
+fn locked_according_to_the_model(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if action == AppAction::CloseLicenses {
         return false;
     }
@@ -192,14 +192,14 @@ fn bloqueada_segun_el_modelo(action: AppAction, locks: Locks, origin: Origin) ->
 }
 
 #[test]
-fn fila_5_is_blocked_coincide_con_el_modelo_en_todas_las_combinaciones() {
-    for action in todas_las_acciones() {
+fn row_5_is_blocked_matches_the_model_in_all_the_combinations() {
+    for action in all_the_actions() {
         for bits in 0..32 {
-            let locks = bloqueos(bits);
-            for origin in ORIGENES {
+            let locks = locks_2(bits);
+            for origin in SOURCES {
                 assert_eq!(
                     is_blocked(action, locks, origin),
-                    bloqueada_segun_el_modelo(action, locks, origin),
+                    locked_according_to_the_model(action, locks, origin),
                     "{action:?} con {locks:?} y {origin:?}"
                 );
             }
@@ -208,9 +208,9 @@ fn fila_5_is_blocked_coincide_con_el_modelo_en_todas_las_combinaciones() {
 }
 
 #[test]
-fn fila_5_sin_bloqueos_nada_esta_bloqueado() {
-    for action in todas_las_acciones() {
-        for origin in ORIGENES {
+fn row_5_without_locks_nothing_is_blocked() {
+    for action in all_the_actions() {
+        for origin in SOURCES {
             assert!(
                 !is_blocked(action, Locks::default(), origin),
                 "{action:?} con {origin:?}"
@@ -220,8 +220,8 @@ fn fila_5_sin_bloqueos_nada_esta_bloqueado() {
 }
 
 #[test]
-fn fila_5_regla_1_close_licenses_nunca_se_bloquea() {
-    let todo = Locks {
+fn row_5_rule_1_close_licenses_is_never_blocked() {
+    let all = Locks {
         gesture: true,
         stroke: false,
         dialog: true,
@@ -229,27 +229,23 @@ fn fila_5_regla_1_close_licenses_nunca_se_bloquea() {
         removal: true,
         modal: true,
     };
-    for origin in ORIGENES {
-        assert!(!is_blocked(AppAction::CloseLicenses, todo, origin));
+    for origin in SOURCES {
+        assert!(!is_blocked(AppAction::CloseLicenses, all, origin));
         for bits in 0..32 {
-            assert!(!is_blocked(
-                AppAction::CloseLicenses,
-                bloqueos(bits),
-                origin
-            ));
+            assert!(!is_blocked(AppAction::CloseLicenses, locks_2(bits), origin));
         }
     }
 }
 
 #[test]
-fn fila_5_regla_2_con_modal_solo_pasan_close_licenses_y_quit() {
-    let locks = solo(|l| l.modal = true);
-    for action in todas_las_acciones() {
-        for origin in ORIGENES {
-            let pasa = matches!(action, AppAction::CloseLicenses | AppAction::Quit);
+fn row_5_rule_2_with_a_modal_only_close_licenses_and_quit_pass() {
+    let locks = only(|l| l.modal = true);
+    for action in all_the_actions() {
+        for origin in SOURCES {
+            let passes = matches!(action, AppAction::CloseLicenses | AppAction::Quit);
             assert_eq!(
                 is_blocked(action, locks, origin),
-                !pasa,
+                !passes,
                 "{action:?} con modal y {origin:?}"
             );
         }
@@ -257,14 +253,14 @@ fn fila_5_regla_2_con_modal_solo_pasan_close_licenses_y_quit() {
 }
 
 #[test]
-fn fila_5_regla_3_con_dialogo_todo_esta_bloqueado_tambien_el_zoom() {
-    let locks = solo(|l| l.dialog = true);
-    for action in todas_las_acciones() {
-        for origin in ORIGENES {
-            let esperado = action != AppAction::CloseLicenses;
+fn row_5_rule_3_with_a_dialog_everything_is_blocked_also_the_zoom() {
+    let locks = only(|l| l.dialog = true);
+    for action in all_the_actions() {
+        for origin in SOURCES {
+            let expected_2 = action != AppAction::CloseLicenses;
             assert_eq!(
                 is_blocked(action, locks, origin),
-                esperado,
+                expected_2,
                 "{action:?} con dialog y {origin:?}"
             );
         }
@@ -272,12 +268,12 @@ fn fila_5_regla_3_con_dialogo_todo_esta_bloqueado_tambien_el_zoom() {
 }
 
 #[test]
-fn fila_5_regla_4_el_zoom_ignora_gesto_y_quita_y_solo_las_teclas_paran_con_texto() {
+fn row_5_rule_4_the_zoom_ignores_gesture_and_removal_and_only_the_keys_stop_with_text() {
     for action in ZOOMS {
-        for origin in ORIGENES {
+        for origin in SOURCES {
             for locks in [
-                solo(|l| l.gesture = true),
-                solo(|l| l.removal = true),
+                only(|l| l.gesture = true),
+                only(|l| l.removal = true),
                 Locks {
                     gesture: true,
                     removal: true,
@@ -289,20 +285,20 @@ fn fila_5_regla_4_el_zoom_ignora_gesto_y_quita_y_solo_las_teclas_paran_con_texto
                     "{action:?} con {locks:?} y {origin:?}"
                 );
             }
-            let texto = solo(|l| l.text_focus = true);
+            let text_2 = only(|l| l.text_focus = true);
             assert_eq!(
-                is_blocked(action, texto, origin),
+                is_blocked(action, text_2, origin),
                 origin == Origin::Key,
                 "{action:?} con text_focus y {origin:?}"
             );
             // Gesto y texto a la vez: manda el texto, que solo para a las teclas.
-            let ambos = Locks {
+            let both = Locks {
                 gesture: true,
                 text_focus: true,
                 ..Locks::default()
             };
             assert_eq!(
-                is_blocked(action, ambos, origin),
+                is_blocked(action, both, origin),
                 origin == Origin::Key,
                 "{action:?} con gesture y text_focus y {origin:?}"
             );
@@ -311,23 +307,23 @@ fn fila_5_regla_4_el_zoom_ignora_gesto_y_quita_y_solo_las_teclas_paran_con_texto
 }
 
 #[test]
-fn fila_5_regla_5_el_resto_para_con_gesto_o_texto_y_la_quita_solo_para_las_ranuras_y_los_dialogos()
-{
-    for action in todas_las_acciones() {
+fn row_5_rule_5_the_rest_stops_with_a_gesture_or_text_and_the_removal_only_stops_the_slots_and_the_dialogs()
+ {
+    for action in all_the_actions() {
         if es_zoom(action) || action == AppAction::CloseLicenses {
             continue;
         }
-        for origin in ORIGENES {
+        for origin in SOURCES {
             assert!(
-                is_blocked(action, solo(|l| l.gesture = true), origin),
+                is_blocked(action, only(|l| l.gesture = true), origin),
                 "{action:?} con gesture y {origin:?}"
             );
             assert!(
-                is_blocked(action, solo(|l| l.text_focus = true), origin),
+                is_blocked(action, only(|l| l.text_focus = true), origin),
                 "{action:?} con text_focus y {origin:?}"
             );
             assert_eq!(
-                is_blocked(action, solo(|l| l.removal = true), origin),
+                is_blocked(action, only(|l| l.removal = true), origin),
                 matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses),
                 "{action:?} con removal y {origin:?}"
             );
@@ -336,15 +332,16 @@ fn fila_5_regla_5_el_resto_para_con_gesto_o_texto_y_la_quita_solo_para_las_ranur
 }
 
 #[test]
-fn fila_5_quit_y_show_licenses_tambien_las_frena_un_gesto_y_solo_show_licenses_una_quita() {
+fn row_5_quit_and_show_licenses_are_also_stopped_by_a_gesture_and_only_show_licenses_by_a_removal()
+{
     for action in [AppAction::Quit, AppAction::ShowLicenses] {
-        for origin in ORIGENES {
-            assert!(is_blocked(action, solo(|l| l.gesture = true), origin));
-            assert!(is_blocked(action, solo(|l| l.dialog = true), origin));
-            assert!(is_blocked(action, solo(|l| l.text_focus = true), origin));
+        for origin in SOURCES {
+            assert!(is_blocked(action, only(|l| l.gesture = true), origin));
+            assert!(is_blocked(action, only(|l| l.dialog = true), origin));
+            assert!(is_blocked(action, only(|l| l.text_focus = true), origin));
             // Una quita pendiente no frena `Quit`; sí frena abrir un diálogo (D2).
             assert_eq!(
-                is_blocked(action, solo(|l| l.removal = true), origin),
+                is_blocked(action, only(|l| l.removal = true), origin),
                 action == AppAction::ShowLicenses
             );
         }
@@ -352,27 +349,27 @@ fn fila_5_quit_y_show_licenses_tambien_las_frena_un_gesto_y_solo_show_licenses_u
 }
 
 #[test]
-fn fila_5_quit_con_modal_pasa_pero_un_gesto_a_la_vez_lo_para() {
-    let modal = solo(|l| l.modal = true);
-    let modal_y_gesto = Locks {
+fn row_5_quit_with_a_modal_passes_but_a_gesture_at_the_same_time_stops_it() {
+    let modal = only(|l| l.modal = true);
+    let modal_and_gesture = Locks {
         modal: true,
         gesture: true,
         ..Locks::default()
     };
-    for origin in ORIGENES {
+    for origin in SOURCES {
         assert!(!is_blocked(AppAction::Quit, modal, origin));
-        assert!(is_blocked(AppAction::Quit, modal_y_gesto, origin));
+        assert!(is_blocked(AppAction::Quit, modal_and_gesture, origin));
     }
 }
 
 #[test]
-fn fila_5_enabled_es_falso_exactamente_donde_is_blocked_con_origen_menu() {
+fn row_5_enabled_is_false_exactly_where_is_blocked_with_menu_source() {
     // Con historia y zoom ×5, `enabled` solo depende del bloqueo en todas las acciones.
-    for action in todas_las_acciones() {
+    for action in all_the_actions() {
         for bits in 0..32 {
-            let locks = bloqueos(bits);
+            let locks = locks_2(bits);
             assert_eq!(
-                enabled(action, &estado(zoom_x5(), locks)),
+                enabled(action, &state_2(zoom_x5(), locks)),
                 !is_blocked(action, locks, Origin::Menu),
                 "{action:?} con {locks:?}"
             );
@@ -385,12 +382,12 @@ fn fila_5_enabled_es_falso_exactamente_donde_is_blocked_con_origen_menu() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_5b_a_b_y_c_gesto_deslizador_y_quita_no_bloquean_el_zoom_con_ningun_origen() {
+fn row_5b_a_b_and_c_gesture_slider_and_removal_do_not_block_the_zoom_with_any_source() {
     // (a) trazo del lápiz, (b) deslizador del editor y (c) quita pendiente: `gesture` es la
     // reunión de (a) y (b) y `removal` es (c).
     for locks in [
-        solo(|l| l.gesture = true),
-        solo(|l| l.removal = true),
+        only(|l| l.gesture = true),
+        only(|l| l.removal = true),
         Locks {
             gesture: true,
             removal: true,
@@ -398,11 +395,11 @@ fn fila_5b_a_b_y_c_gesto_deslizador_y_quita_no_bloquean_el_zoom_con_ningun_orige
         },
     ] {
         for action in ZOOMS {
-            for origin in ORIGENES {
+            for origin in SOURCES {
                 assert!(!is_blocked(action, locks, origin), "{action:?} {origin:?}");
             }
             assert!(
-                enabled(action, &estado(zoom_x5(), locks)),
+                enabled(action, &state_2(zoom_x5(), locks)),
                 "{action:?} con {locks:?}"
             );
         }
@@ -410,37 +407,37 @@ fn fila_5b_a_b_y_c_gesto_deslizador_y_quita_no_bloquean_el_zoom_con_ningun_orige
 }
 
 #[test]
-fn fila_5b_d_con_un_campo_enfocado_solo_las_teclas_se_bloquean() {
-    let locks = solo(|l| l.text_focus = true);
+fn row_5b_d_with_a_focused_field_only_the_keys_are_blocked() {
+    let locks = only(|l| l.text_focus = true);
     for action in ZOOMS {
         assert!(is_blocked(action, locks, Origin::Key), "{action:?}");
         assert!(!is_blocked(action, locks, Origin::Menu), "{action:?}");
         assert!(!is_blocked(action, locks, Origin::Button), "{action:?}");
-        assert!(enabled(action, &estado(zoom_x5(), locks)), "{action:?}");
+        assert!(enabled(action, &state_2(zoom_x5(), locks)), "{action:?}");
     }
 }
 
 #[test]
-fn fila_5b_e_un_dialogo_abierto_bloquea_el_zoom_con_los_tres_origenes() {
-    let locks = solo(|l| l.dialog = true);
+fn row_5b_e_an_open_dialog_blocks_the_zoom_with_the_three_sources() {
+    let locks = only(|l| l.dialog = true);
     for action in ZOOMS {
-        for origin in ORIGENES {
+        for origin in SOURCES {
             assert!(is_blocked(action, locks, origin), "{action:?} {origin:?}");
         }
-        assert!(!enabled(action, &estado(zoom_x5(), locks)), "{action:?}");
+        assert!(!enabled(action, &state_2(zoom_x5(), locks)), "{action:?}");
     }
 }
 
 #[test]
-fn fila_5b_f_el_panel_de_licencias_bloquea_el_zoom_y_deja_pasar_solo_cerrar_y_salir() {
-    let locks = solo(|l| l.modal = true);
+fn row_5b_f_the_licenses_panel_blocks_the_zoom_and_only_lets_close_and_quit_through() {
+    let locks = only(|l| l.modal = true);
     for action in ZOOMS {
-        for origin in ORIGENES {
+        for origin in SOURCES {
             assert!(is_blocked(action, locks, origin), "{action:?} {origin:?}");
         }
-        assert!(!enabled(action, &estado(zoom_x5(), locks)), "{action:?}");
+        assert!(!enabled(action, &state_2(zoom_x5(), locks)), "{action:?}");
     }
-    for origin in ORIGENES {
+    for origin in SOURCES {
         assert!(!is_blocked(AppAction::CloseLicenses, locks, origin));
         assert!(!is_blocked(AppAction::Quit, locks, origin));
     }
@@ -457,7 +454,7 @@ fn fila_5b_f_el_panel_de_licencias_bloquea_el_zoom_y_deja_pasar_solo_cerrar_y_sa
 /// salir solo en Linux (sin `Mayús`). Sin
 /// `command`: `+`, `=`, `-`, `Home`, `Re Pág` y `Av Pág` con cualquier otro modificador, y con
 /// **ningún** modificador `d v f ,`, `u`, `n`, `[` y `]` (las cifras ya no hacen nada).
-fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppAction> {
+fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAction> {
     if m.command {
         if m.alt {
             return None;
@@ -511,15 +508,15 @@ fn atajo_esperado(key: Key, m: Modifiers, platform: Platform) -> Option<AppActio
 }
 
 #[test]
-fn fila_3_action_for_shortcut_sobre_key_all_por_32_combinaciones_y_3_plataformas() {
+fn row_3_action_for_shortcut_over_key_all_by_32_combinations_and_3_platforms() {
     assert!(!Key::ALL.is_empty());
-    for platform in PLATAFORMAS {
+    for platform in PLATFORMS {
         for &key in Key::ALL {
             for bits in 0..32 {
-                let m = modificadores(bits);
+                let m = modifiers_2(bits);
                 assert_eq!(
                     action_for_shortcut(key, m, platform),
-                    atajo_esperado(key, m, platform),
+                    shortcut_expected(key, m, platform),
                     "{key:?} con {m:?} en {platform:?}"
                 );
             }
@@ -528,12 +525,12 @@ fn fila_3_action_for_shortcut_sobre_key_all_por_32_combinaciones_y_3_plataformas
 }
 
 #[test]
-fn fila_3_escape_da_none_con_cualquier_combinacion() {
+fn row_3_escape_gives_none_with_any_combination() {
     // `Escape` no es una acción: lo ordena `Canvas::interact_ordered` con los eventos de trazo.
-    for platform in PLATAFORMAS {
+    for platform in PLATFORMS {
         for bits in 0..32 {
             assert_eq!(
-                action_for_shortcut(Key::Escape, modificadores(bits), platform),
+                action_for_shortcut(Key::Escape, modifiers_2(bits), platform),
                 None,
                 "{platform:?} con {bits:#07b}"
             );
@@ -542,8 +539,8 @@ fn fila_3_escape_da_none_con_cualquier_combinacion() {
 }
 
 #[test]
-fn fila_3_command_q_solo_sale_en_linux() {
-    let linux = modificadores_command(false);
+fn row_3_command_q_only_quits_on_linux() {
+    let linux = modifiers_command(false);
     assert_eq!(
         action_for_shortcut(Key::Q, linux, Platform::Linux),
         Some(AppAction::Quit)
@@ -555,26 +552,26 @@ fn fila_3_command_q_solo_sale_en_linux() {
     for platform in [Platform::Windows, Platform::Mac] {
         for bits in 0..32 {
             assert_eq!(
-                action_for_shortcut(Key::Q, modificadores(bits), platform),
+                action_for_shortcut(Key::Q, modifiers_2(bits), platform),
                 None,
                 "{platform:?} con {bits:#07b}"
             );
         }
     }
     // Sin `command`, la `Q` sola no hace nada en ninguna plataforma.
-    for platform in PLATAFORMAS {
+    for platform in PLATFORMS {
         assert_eq!(action_for_shortcut(Key::Q, Modifiers::NONE, platform), None);
     }
 }
 
 #[test]
-fn fila_3_ctrl_mayus_q_y_alt_q_no_salen_en_linux() {
-    // Decisión: `Salir` se trata como `Abrir` (`command` sin `Mayús` ni `Alt`).
-    let mut con_mayus = modificadores_command(false);
-    con_mayus.shift = true;
-    let mut con_alt = modificadores_command(false);
-    con_alt.alt = true;
-    for m in [con_mayus, con_alt] {
+fn row_3_ctrl_shift_q_and_alt_q_do_not_quit_on_linux() {
+    // Decisión: `Salir` se trata como `Open` (`command` sin `Mayús` ni `Alt`).
+    let mut with_shift = modifiers_command(false);
+    with_shift.shift = true;
+    let mut with_alt = modifiers_command(false);
+    with_alt.alt = true;
+    for m in [with_shift, with_alt] {
         assert_eq!(
             action_for_shortcut(Key::Q, m, Platform::Linux),
             None,
@@ -584,36 +581,36 @@ fn fila_3_ctrl_mayus_q_y_alt_q_no_salen_en_linux() {
 }
 
 #[test]
-fn fila_3_las_teclas_de_zoom_valen_sin_command_y_con_cualquier_otro_modificador() {
-    for platform in PLATAFORMAS {
-        for (key, accion) in [
+fn row_3_the_zoom_keys_work_without_command_and_with_any_other_modifier() {
+    for platform in PLATFORMS {
+        for (key, action_2) in [
             (Key::Plus, AppAction::ZoomIn),
             (Key::Equals, AppAction::ZoomIn),
             (Key::Minus, AppAction::ZoomOut),
             (Key::Home, AppAction::ZoomFit),
         ] {
             for bits in 0..32 {
-                let m = modificadores(bits);
-                let esperado = (!m.command).then_some(accion);
+                let m = modifiers_2(bits);
+                let expected_2 = (!m.command).then_some(action_2);
                 assert_eq!(
                     action_for_shortcut(key, m, platform),
-                    esperado,
+                    expected_2,
                     "{key:?} con {m:?} en {platform:?}"
                 );
             }
             // `+` se teclea con Mayús en muchas distribuciones: sigue siendo zoom.
             assert_eq!(
                 action_for_shortcut(key, Modifiers::SHIFT, platform),
-                Some(accion)
+                Some(action_2)
             );
         }
     }
 }
 
 #[test]
-fn fila_3_cada_tecla_de_herramienta_y_de_color_vale_sin_modificadores_en_las_tres_plataformas() {
-    for platform in PLATAFORMAS {
-        for (key, accion) in [
+fn row_3_each_tool_and_color_key_works_without_modifiers_on_the_three_platforms() {
+    for platform in PLATFORMS {
+        for (key, action_2) in [
             (Key::D, AppAction::SelectTool(Tool::Pencil)),
             (Key::V, AppAction::SelectTool(Tool::Line)),
             (Key::F, AppAction::SelectTool(Tool::Fill)),
@@ -624,11 +621,11 @@ fn fila_3_cada_tecla_de_herramienta_y_de_color_vale_sin_modificadores_en_las_tre
         ] {
             assert_eq!(
                 action_for_shortcut(key, Modifiers::NONE, platform),
-                Some(accion)
+                Some(action_2)
             );
             // Con cualquier modificador (también `command`) no hacen nada.
             for bits in 1..32 {
-                let m = modificadores(bits);
+                let m = modifiers_2(bits);
                 assert_eq!(
                     action_for_shortcut(key, m, platform),
                     None,
@@ -640,44 +637,48 @@ fn fila_3_cada_tecla_de_herramienta_y_de_color_vale_sin_modificadores_en_las_tre
 }
 
 #[test]
-fn fila_3_compone_las_tres_funciones_de_teclas_existentes_sin_cambiarlas() {
-    for platform in PLATAFORMAS {
+fn row_3_composes_the_three_existing_key_functions_without_changing_them() {
+    for platform in PLATFORMS {
         for &key in Key::ALL {
             for bits in 0..32 {
-                let m = modificadores(bits);
-                let atajo = action_for_shortcut(key, m, platform);
+                let m = modifiers_2(bits);
+                let shortcut_2 = action_for_shortcut(key, m, platform);
                 if let Some(file) = file_action_for_key(key, m) {
-                    let esperado = match file {
+                    let expected_2 = match file {
                         FileAction::Open => AppAction::Open,
                         FileAction::Save => AppAction::Save,
                         FileAction::SaveAs => AppAction::SaveAs,
                     };
-                    assert_eq!(atajo, Some(esperado), "{key:?} con {m:?}");
+                    assert_eq!(shortcut_2, Some(expected_2), "{key:?} con {m:?}");
                 }
                 match tool_action_for_key(key, m) {
                     Some(ToolAction::Select(tool)) => {
                         assert_eq!(
-                            atajo,
+                            shortcut_2,
                             Some(AppAction::SelectTool(tool)),
                             "{key:?} con {m:?}"
                         );
                     }
                     Some(ToolAction::Cancel) => {
-                        assert_eq!(atajo, None, "Escape no es una acción: {m:?}");
+                        assert_eq!(shortcut_2, None, "Escape no es una acción: {m:?}");
                     }
                     None => {}
                 }
                 match action_for_key(key, m) {
-                    Some(Action::Undo) => assert_eq!(atajo, Some(AppAction::Undo)),
-                    Some(Action::Redo) => assert_eq!(atajo, Some(AppAction::Redo)),
+                    Some(Action::Undo) => assert_eq!(shortcut_2, Some(AppAction::Undo)),
+                    Some(Action::Redo) => assert_eq!(shortcut_2, Some(AppAction::Redo)),
                     Some(Action::SelectColor(n)) => {
-                        assert_eq!(atajo, Some(AppAction::SelectColor(n)), "{key:?} con {m:?}");
+                        assert_eq!(
+                            shortcut_2,
+                            Some(AppAction::SelectColor(n)),
+                            "{key:?} con {m:?}"
+                        );
                     }
                     Some(Action::ColorNext) => {
-                        assert_eq!(atajo, Some(AppAction::ColorNext), "{key:?} con {m:?}");
+                        assert_eq!(shortcut_2, Some(AppAction::ColorNext), "{key:?} con {m:?}");
                     }
                     Some(Action::ColorPrev) => {
-                        assert_eq!(atajo, Some(AppAction::ColorPrev), "{key:?} con {m:?}");
+                        assert_eq!(shortcut_2, Some(AppAction::ColorPrev), "{key:?} con {m:?}");
                     }
                     None => {}
                 }
@@ -687,12 +688,12 @@ fn fila_3_compone_las_tres_funciones_de_teclas_existentes_sin_cambiarlas() {
 }
 
 #[test]
-fn fila_3_las_tres_funciones_anteriores_siguen_dando_none_para_command_q_y_command_1() {
+fn row_3_the_three_previous_functions_still_give_none_for_command_q_and_command_1() {
     // Sin choque: las funciones existentes no conocen las teclas nuevas.
     for m in [
         Modifiers::COMMAND,
-        modificadores_command(false),
-        modificadores_command(true),
+        modifiers_command(false),
+        modifiers_command(true),
     ] {
         for key in [Key::Q, Key::Num1] {
             assert_eq!(file_action_for_key(key, m), None, "{key:?} con {m:?}");
@@ -703,7 +704,7 @@ fn fila_3_las_tres_funciones_anteriores_siguen_dando_none_para_command_q_y_comma
 }
 
 /// La pulsación que hace un `Shortcut` (la tecla que muestra, con `command` y `Mayús` si los lleva).
-fn pulsado(shortcut: Shortcut) -> Press {
+fn pressed_2(shortcut: Shortcut) -> Press {
     Press {
         key: Some(shortcut.key),
         command: shortcut.command,
@@ -715,17 +716,17 @@ fn pulsado(shortcut: Shortcut) -> Press {
 }
 
 #[test]
-fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
-    let mut con_atajo = 0;
+fn row_3_each_shortcut_shown_gives_the_action_of_its_entry_round_trip() {
+    let mut with_shortcut = 0;
     for menu in MENUS.iter() {
         for item in menu.items {
-            for platform in PLATAFORMAS {
+            for platform in PLATFORMS {
                 let Some(shortcut) = shortcut_for(item.action, platform) else {
                     continue;
                 };
-                con_atajo += 1;
+                with_shortcut += 1;
                 assert_eq!(
-                    Keymap::default_scheme().action_for(&pulsado(shortcut), platform),
+                    Keymap::default_scheme().action_for(&pressed_2(shortcut), platform),
                     Some(item.action),
                     "{} ({:?}) en {platform:?}",
                     item.label,
@@ -735,15 +736,15 @@ fn fila_3_cada_atajo_mostrado_da_la_accion_de_su_entrada_ida_y_vuelta() {
         }
     }
     // 12 entradas con atajo en Linux y 11 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
-    // `Salir`; con `Nueva imagen…` de la unidad 19 y `Borrar página` de I.2a): 16 + 15 + 15 = 46.
-    assert_eq!(con_atajo, 16 + 15 + 15);
+    // `Salir`; con `Nueva image_2…` de la unidad 19 y `Borrar página` de I.2a): 16 + 15 + 15 = 46.
+    assert_eq!(with_shortcut, 16 + 15 + 15);
 }
 
 // ---------------------------------------------------------------------------------------------
 // Fila 3b: las teclas 1 a 9 ya no eligen color (unidad I.1)
 // ---------------------------------------------------------------------------------------------
 
-const DIGITOS: [(Key, u8); 9] = [
+const DIGITS: [(Key, u8); 9] = [
     (Key::Num1, 1),
     (Key::Num2, 2),
     (Key::Num3, 3),
@@ -756,9 +757,9 @@ const DIGITOS: [(Key, u8); 9] = [
 ];
 
 #[test]
-fn fila_3b_los_digitos_sin_modificadores_no_hacen_nada_en_las_tres_plataformas() {
-    for platform in PLATAFORMAS {
-        for (key, slot) in DIGITOS {
+fn row_3b_digits_without_modifiers_do_nothing_on_the_three_platforms() {
+    for platform in PLATFORMS {
+        for (key, slot) in DIGITS {
             assert_eq!(
                 action_for_shortcut(key, Modifiers::NONE, platform),
                 None,
@@ -769,12 +770,12 @@ fn fila_3b_los_digitos_sin_modificadores_no_hacen_nada_en_las_tres_plataformas()
 }
 
 #[test]
-fn fila_3b_command_y_1_da_solo_zoom_actual_y_nunca_select_color() {
-    for platform in PLATAFORMAS {
+fn row_3b_command_and_1_gives_only_zoom_actual_and_never_select_color() {
+    for platform in PLATFORMS {
         for m in [
             Modifiers::COMMAND,
-            modificadores_command(false),
-            modificadores_command(true),
+            modifiers_command(false),
+            modifiers_command(true),
         ] {
             assert_eq!(
                 action_for_shortcut(Key::Num1, m, platform),
@@ -783,13 +784,9 @@ fn fila_3b_command_y_1_da_solo_zoom_actual_y_nunca_select_color() {
             );
         }
         // Ningún otro dígito con `command` hace nada.
-        for (key, _) in DIGITOS.iter().filter(|(_, slot)| *slot != 1) {
+        for (key, _) in DIGITS.iter().filter(|(_, slot)| *slot != 1) {
             assert_eq!(
-                action_for_shortcut(
-                    *key,
-                    modificadores_command(platform == Platform::Mac),
-                    platform
-                ),
+                action_for_shortcut(*key, modifiers_command(platform == Platform::Mac), platform),
                 None,
                 "{key:?} en {platform:?}"
             );
@@ -798,10 +795,10 @@ fn fila_3b_command_y_1_da_solo_zoom_actual_y_nunca_select_color() {
 }
 
 #[test]
-fn fila_3b_num1_con_mayus_alt_o_combinados_da_none() {
-    for platform in PLATAFORMAS {
-        let command = modificadores_command(platform == Platform::Mac);
-        let command_mayus = Modifiers {
+fn row_3b_num1_with_shift_alt_or_combined_gives_none() {
+    for platform in PLATFORMS {
+        let command = modifiers_command(platform == Platform::Mac);
+        let command_shift = Modifiers {
             shift: true,
             ..command
         };
@@ -809,16 +806,16 @@ fn fila_3b_num1_con_mayus_alt_o_combinados_da_none() {
             alt: true,
             ..command
         };
-        for (nombre, m) in [
+        for (name_2, m) in [
             ("Mayús", Modifiers::SHIFT),
             ("Alt", Modifiers::ALT),
-            ("command+Mayús", command_mayus),
+            ("command+Mayús", command_shift),
             ("command+Alt", command_alt),
         ] {
             assert_eq!(
                 action_for_shortcut(Key::Num1, m, platform),
                 None,
-                "{nombre} en {platform:?}"
+                "{name_2} en {platform:?}"
             );
         }
     }
@@ -834,13 +831,13 @@ fn fila_3b_num1_con_mayus_alt_o_combinados_da_none() {
 // mostrados) ya están adaptadas.
 
 #[test]
-fn fila_9_nueva_imagen_no_repite_con_la_tecla_mantenida() {
+fn row_9_new_image_does_not_repeat_with_the_held_key() {
     assert!(AppAction::NewImage.ignores_repeat());
     // Y la lista completa pasa a ser las cuatro de fichero y esta.
-    let mut todas = todas_las_acciones();
-    todas.push(AppAction::NewImage);
-    for action in todas {
-        let esperado = matches!(
+    let mut all_2 = all_the_actions();
+    all_2.push(AppAction::NewImage);
+    for action in all_2 {
+        let expected_2 = matches!(
             action,
             AppAction::Open
                 | AppAction::Save
@@ -848,47 +845,47 @@ fn fila_9_nueva_imagen_no_repite_con_la_tecla_mantenida() {
                 | AppAction::Quit
                 | AppAction::NewImage
         );
-        assert_eq!(action.ignores_repeat(), esperado, "{action:?}");
+        assert_eq!(action.ignores_repeat(), expected_2, "{action:?}");
     }
 }
 
 #[test]
-fn fila_9_nueva_imagen_abre_un_dialogo_y_no_es_zoom() {
+fn row_9_new_image_opens_a_dialog_and_is_not_zoom() {
     assert!(AppAction::NewImage.opens_dialog());
     assert!(!AppAction::NewImage.is_zoom());
-    let mut todas = todas_las_acciones();
-    todas.push(AppAction::NewImage);
-    for action in todas {
-        let esperado = matches!(action, AppAction::ShowLicenses | AppAction::NewImage);
-        assert_eq!(action.opens_dialog(), esperado, "{action:?}");
+    let mut all_2 = all_the_actions();
+    all_2.push(AppAction::NewImage);
+    for action in all_2 {
+        let expected_2 = matches!(action, AppAction::ShowLicenses | AppAction::NewImage);
+        assert_eq!(action.opens_dialog(), expected_2, "{action:?}");
     }
 }
 
 #[test]
-fn fila_9_is_blocked_de_nueva_imagen_la_frena_cualquier_bloqueo_con_cualquier_origen() {
-    for origin in ORIGENES {
+fn row_9_is_blocked_of_new_image_any_lock_stops_it_with_any_source() {
+    for origin in SOURCES {
         assert!(
             !is_blocked(AppAction::NewImage, Locks::default(), origin),
             "{origin:?} sin bloqueos"
         );
-        for (nombre, locks) in [
-            ("gesture", solo(|l| l.gesture = true)),
-            ("dialog", solo(|l| l.dialog = true)),
-            ("text_focus", solo(|l| l.text_focus = true)),
+        for (name_2, locks) in [
+            ("gesture", only(|l| l.gesture = true)),
+            ("dialog", only(|l| l.dialog = true)),
+            ("text_focus", only(|l| l.text_focus = true)),
             // Regla literal de la 18: la quita pendiente también frena abrir un diálogo.
-            ("removal", solo(|l| l.removal = true)),
-            ("modal", solo(|l| l.modal = true)),
+            ("removal", only(|l| l.removal = true)),
+            ("modal", only(|l| l.modal = true)),
         ] {
             assert!(
                 is_blocked(AppAction::NewImage, locks, origin),
-                "{nombre}, {origin:?}"
+                "{name_2}, {origin:?}"
             );
         }
     }
     for bits in 1..32u8 {
-        for origin in ORIGENES {
+        for origin in SOURCES {
             assert!(
-                is_blocked(AppAction::NewImage, bloqueos(bits), origin),
+                is_blocked(AppAction::NewImage, locks_2(bits), origin),
                 "{bits:05b}, {origin:?}"
             );
         }
@@ -896,11 +893,11 @@ fn fila_9_is_blocked_de_nueva_imagen_la_frena_cualquier_bloqueo_con_cualquier_or
 }
 
 #[test]
-fn fila_9_enabled_de_nueva_imagen_es_lo_contrario_de_is_blocked_con_origen_menu() {
+fn row_9_enabled_of_new_image_is_the_opposite_of_is_blocked_with_menu_source() {
     for zoom in [None, zoom_x5()] {
         for bits in 0..32u8 {
-            let locks = bloqueos(bits);
-            let state = estado(zoom, locks);
+            let locks = locks_2(bits);
+            let state = state_2(zoom, locks);
             assert_eq!(
                 enabled(AppAction::NewImage, &state),
                 !is_blocked(AppAction::NewImage, locks, Origin::Menu),
@@ -920,8 +917,8 @@ fn fila_9_enabled_de_nueva_imagen_es_lo_contrario_de_is_blocked_con_origen_menu(
 }
 
 #[test]
-fn fila_9_shortcut_for_de_nueva_imagen_va_y_vuelve_por_action_for_shortcut() {
-    for platform in PLATAFORMAS {
+fn row_9_shortcut_for_of_new_image_goes_and_returns_through_action_for_shortcut() {
+    for platform in PLATFORMS {
         let shortcut = shortcut_for(AppAction::NewImage, platform).expect("tiene atajo");
         assert_eq!(
             shortcut,
@@ -933,7 +930,7 @@ fn fila_9_shortcut_for_de_nueva_imagen_va_y_vuelve_por_action_for_shortcut() {
             "{platform:?}"
         );
         assert_eq!(
-            Keymap::default_scheme().action_for(&pulsado(shortcut), platform),
+            Keymap::default_scheme().action_for(&pressed_2(shortcut), platform),
             Some(AppAction::NewImage),
             "{platform:?}"
         );
@@ -941,15 +938,15 @@ fn fila_9_shortcut_for_de_nueva_imagen_va_y_vuelve_por_action_for_shortcut() {
 }
 
 #[test]
-fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola_no_la_dan() {
-    for platform in PLATAFORMAS {
-        let command = modificadores_command(platform == Platform::Mac);
+fn row_9_command_n_gives_new_image_on_the_three_platforms_and_shift_alt_or_n_alone_do_not() {
+    for platform in PLATFORMS {
+        let command = modifiers_command(platform == Platform::Mac);
         assert_eq!(
             action_for_shortcut(Key::N, command, platform),
             Some(AppAction::NewImage),
             "command+N en {platform:?}"
         );
-        let command_mayus = Modifiers {
+        let command_shift = Modifiers {
             shift: true,
             ..command
         };
@@ -957,22 +954,22 @@ fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola
             alt: true,
             ..command
         };
-        let command_mayus_alt = Modifiers {
+        let command_shift_alt = Modifiers {
             shift: true,
             alt: true,
             ..command
         };
-        for (nombre, m) in [
+        for (name_2, m) in [
             ("Mayús+N", Modifiers::SHIFT),
             ("Alt+N", Modifiers::ALT),
-            ("command+Mayús+N", command_mayus),
+            ("command+Mayús+N", command_shift),
             ("command+Alt+N", command_alt),
-            ("command+Mayús+Alt+N", command_mayus_alt),
+            ("command+Mayús+Alt+N", command_shift_alt),
         ] {
             assert_eq!(
                 action_for_shortcut(Key::N, m, platform),
                 None,
-                "{nombre} en {platform:?}"
+                "{name_2} en {platform:?}"
             );
         }
         // La `n` sola ya no es `None`: centra bajo el cursor (unidad I.1).
@@ -985,19 +982,19 @@ fn fila_9_command_n_da_nueva_imagen_en_las_tres_plataformas_y_mayus_alt_o_n_sola
 }
 
 #[test]
-fn fila_9_n_con_ctrl_o_mac_cmd_pero_sin_command_no_es_el_atajo() {
+fn row_9_n_with_ctrl_or_mac_cmd_but_without_command_is_not_the_shortcut() {
     // `command` es lo que cuenta: en macOS, `Ctrl` solo no lo activa.
-    let ctrl_solo = Modifiers {
+    let ctrl_only = Modifiers {
         ctrl: true,
         ..Modifiers::NONE
     };
-    let cmd_solo = Modifiers {
+    let cmd_only = Modifiers {
         mac_cmd: true,
         ..Modifiers::NONE
     };
-    for platform in PLATAFORMAS {
-        assert_eq!(action_for_shortcut(Key::N, ctrl_solo, platform), None);
-        assert_eq!(action_for_shortcut(Key::N, cmd_solo, platform), None);
+    for platform in PLATFORMS {
+        assert_eq!(action_for_shortcut(Key::N, ctrl_only, platform), None);
+        assert_eq!(action_for_shortcut(Key::N, cmd_only, platform), None);
     }
 }
 
@@ -1011,8 +1008,8 @@ fn fila_9_n_con_ctrl_o_mac_cmd_pero_sin_command_no_es_el_atajo() {
 // pruebas de la 17 y la 19 que enumeran listas fijas de acciones no la incluyen y no cambian.
 
 #[test]
-fn fila_10_convertir_modo_no_tiene_atajo_en_ninguna_plataforma() {
-    for platform in PLATAFORMAS {
+fn row_10_convert_mode_has_no_shortcut_on_any_platform() {
+    for platform in PLATFORMS {
         assert_eq!(
             shortcut_for(AppAction::ConvertMode, platform),
             None,
@@ -1022,12 +1019,12 @@ fn fila_10_convertir_modo_no_tiene_atajo_en_ninguna_plataforma() {
 }
 
 #[test]
-fn fila_10_ninguna_tecla_con_ninguna_combinacion_da_convertir_modo() {
+fn row_10_no_key_with_no_combination_gives_convert_mode() {
     assert!(!Key::ALL.is_empty());
-    for platform in PLATAFORMAS {
+    for platform in PLATFORMS {
         for &key in Key::ALL {
             for bits in 0..32 {
-                let m = modificadores(bits);
+                let m = modifiers_2(bits);
                 assert_ne!(
                     action_for_shortcut(key, m, platform),
                     Some(AppAction::ConvertMode),
@@ -1039,13 +1036,13 @@ fn fila_10_ninguna_tecla_con_ninguna_combinacion_da_convertir_modo() {
 }
 
 #[test]
-fn fila_10_convertir_modo_no_repite_con_la_tecla_mantenida_y_las_demas_siguen_igual() {
+fn row_10_convert_mode_does_not_repeat_with_the_held_key_and_the_others_stay_the_same() {
     assert!(!AppAction::ConvertMode.ignores_repeat());
-    let mut todas = todas_las_acciones();
-    todas.push(AppAction::NewImage);
-    todas.push(AppAction::ConvertMode);
-    for action in todas {
-        let esperado = matches!(
+    let mut all_2 = all_the_actions();
+    all_2.push(AppAction::NewImage);
+    all_2.push(AppAction::ConvertMode);
+    for action in all_2 {
+        let expected_2 = matches!(
             action,
             AppAction::Open
                 | AppAction::Save
@@ -1053,51 +1050,51 @@ fn fila_10_convertir_modo_no_repite_con_la_tecla_mantenida_y_las_demas_siguen_ig
                 | AppAction::Quit
                 | AppAction::NewImage
         );
-        assert_eq!(action.ignores_repeat(), esperado, "{action:?}");
+        assert_eq!(action.ignores_repeat(), expected_2, "{action:?}");
     }
 }
 
 #[test]
-fn fila_10_convertir_modo_abre_un_dialogo_y_no_es_zoom() {
+fn row_10_convert_mode_opens_a_dialog_and_is_not_zoom() {
     assert!(AppAction::ConvertMode.opens_dialog());
     assert!(!AppAction::ConvertMode.is_zoom());
-    let mut todas = todas_las_acciones();
-    todas.push(AppAction::NewImage);
-    todas.push(AppAction::ConvertMode);
-    for action in todas {
-        let esperado = matches!(
+    let mut all_2 = all_the_actions();
+    all_2.push(AppAction::NewImage);
+    all_2.push(AppAction::ConvertMode);
+    for action in all_2 {
+        let expected_2 = matches!(
             action,
             AppAction::ShowLicenses | AppAction::NewImage | AppAction::ConvertMode
         );
-        assert_eq!(action.opens_dialog(), esperado, "{action:?}");
+        assert_eq!(action.opens_dialog(), expected_2, "{action:?}");
     }
 }
 
 #[test]
-fn fila_10_is_blocked_de_convertir_modo_la_frena_cada_bloqueo_con_cualquier_origen() {
-    for origin in ORIGENES {
+fn row_10_is_blocked_of_convert_mode_each_lock_stops_it_with_any_source() {
+    for origin in SOURCES {
         assert!(
             !is_blocked(AppAction::ConvertMode, Locks::default(), origin),
             "{origin:?} sin bloqueos"
         );
-        for (nombre, locks) in [
-            ("gesture", solo(|l| l.gesture = true)),
-            ("dialog", solo(|l| l.dialog = true)),
-            ("text_focus", solo(|l| l.text_focus = true)),
+        for (name_2, locks) in [
+            ("gesture", only(|l| l.gesture = true)),
+            ("dialog", only(|l| l.dialog = true)),
+            ("text_focus", only(|l| l.text_focus = true)),
             // Regla literal de la 18: la quita pendiente también frena abrir un diálogo.
-            ("removal", solo(|l| l.removal = true)),
-            ("modal", solo(|l| l.modal = true)),
+            ("removal", only(|l| l.removal = true)),
+            ("modal", only(|l| l.modal = true)),
         ] {
             assert!(
                 is_blocked(AppAction::ConvertMode, locks, origin),
-                "{nombre}, {origin:?}"
+                "{name_2}, {origin:?}"
             );
         }
     }
     for bits in 1..32u8 {
-        for origin in ORIGENES {
+        for origin in SOURCES {
             assert!(
-                is_blocked(AppAction::ConvertMode, bloqueos(bits), origin),
+                is_blocked(AppAction::ConvertMode, locks_2(bits), origin),
                 "{bits:05b}, {origin:?}"
             );
         }
@@ -1105,11 +1102,11 @@ fn fila_10_is_blocked_de_convertir_modo_la_frena_cada_bloqueo_con_cualquier_orig
 }
 
 #[test]
-fn fila_10_enabled_de_convertir_modo_es_lo_contrario_de_is_blocked_con_origen_menu() {
+fn row_10_enabled_of_convert_mode_is_the_opposite_of_is_blocked_with_menu_source() {
     for zoom in [None, zoom_x5()] {
         for bits in 0..32u8 {
-            let locks = bloqueos(bits);
-            let state = estado(zoom, locks);
+            let locks = locks_2(bits);
+            let state = state_2(zoom, locks);
             assert_eq!(
                 enabled(AppAction::ConvertMode, &state),
                 !is_blocked(AppAction::ConvertMode, locks, Origin::Menu),
@@ -1129,9 +1126,9 @@ fn fila_10_enabled_de_convertir_modo_es_lo_contrario_de_is_blocked_con_origen_me
 }
 
 #[test]
-fn fila_10_con_el_dialogo_abierto_solo_pasa_quit_y_convertir_modo_queda_bloqueada() {
-    let modal = solo(|l| l.modal = true);
-    for origin in ORIGENES {
+fn row_10_with_the_dialog_open_only_quit_passes_and_convert_mode_stays_blocked() {
+    let modal = only(|l| l.modal = true);
+    for origin in SOURCES {
         assert!(
             is_blocked(AppAction::ConvertMode, modal, origin),
             "{origin:?}"
@@ -1142,29 +1139,29 @@ fn fila_10_con_el_dialogo_abierto_solo_pasa_quit_y_convertir_modo_queda_bloquead
 }
 
 #[test]
-fn fila_10_el_zoom_no_cambia_con_la_accion_nueva() {
+fn row_10_the_zoom_does_not_change_with_the_new_action() {
     // El zoom solo se bloquea con `text_focus` desde el teclado; un gesto o una quita pendiente no
     // lo paran (y sí paran `ConvertMode`).
     for zoom in ZOOMS {
-        for origin in ORIGENES {
-            assert!(!is_blocked(zoom, solo(|l| l.gesture = true), origin));
-            assert!(!is_blocked(zoom, solo(|l| l.removal = true), origin));
+        for origin in SOURCES {
+            assert!(!is_blocked(zoom, only(|l| l.gesture = true), origin));
+            assert!(!is_blocked(zoom, only(|l| l.removal = true), origin));
             assert_eq!(
-                is_blocked(zoom, solo(|l| l.text_focus = true), origin),
+                is_blocked(zoom, only(|l| l.text_focus = true), origin),
                 origin == Origin::Key,
                 "{zoom:?}, {origin:?}"
             );
         }
     }
-    for origin in ORIGENES {
+    for origin in SOURCES {
         assert!(is_blocked(
             AppAction::ConvertMode,
-            solo(|l| l.gesture = true),
+            only(|l| l.gesture = true),
             origin
         ));
         assert!(is_blocked(
             AppAction::ConvertMode,
-            solo(|l| l.removal = true),
+            only(|l| l.removal = true),
             origin
         ));
     }

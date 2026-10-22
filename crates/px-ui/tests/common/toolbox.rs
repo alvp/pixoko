@@ -16,7 +16,7 @@ use px_ui::options::OptionsState;
 use px_ui::toolbar::{ToolboxView, show_toolbox};
 
 /// Pinta la caja con la tabla de teclas dada y devuelve la acción del botón pulsado.
-pub fn caja_con(
+pub fn toolbox_with(
     ui: &mut Ui,
     state: &UiState,
     zoom_label: &str,
@@ -32,17 +32,17 @@ pub fn caja_con(
     show_toolbox(ui, &view, keymap, platform).action
 }
 
-/// Como [`caja_con`] con la tabla por defecto y la plataforma actual.
-pub fn caja(ui: &mut Ui, state: &UiState, zoom_label: &str) -> Option<AppAction> {
-    caja_con(ui, state, zoom_label, default_keymap(), Platform::current())
+/// Como [`toolbox_with`] con la tabla por defecto y la plataforma actual.
+pub fn toolbox_2(ui: &mut Ui, state: &UiState, zoom_label: &str) -> Option<AppAction> {
+    toolbox_with(ui, state, zoom_label, default_keymap(), Platform::current())
 }
 
 /// Centro `(x_u, y_u)` del botón `i` de la caja: 0 a 4 las herramientas, 5 a 8 el zoom.
-pub fn centro_u(i: usize) -> (i64, i64) {
-    let (columna, y) = if i < 5 {
+pub fn center_u(i: usize) -> (i64, i64) {
+    let (column, y) = if i < 5 {
         ((i % 4) as i64, 4 + 25 * (i / 4) as i64)
     } else {
         ((i - 5) as i64, 80)
     };
-    (4 + 25 * columna + 12, y + 12)
+    (4 + 25 * column + 12, y + 12)
 }

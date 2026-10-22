@@ -13,20 +13,20 @@ use px_ui::theme::{
     contrast_ratio, visuals,
 };
 
-fn cerca(a: f64, b: f64, tolerancia: f64) -> bool {
-    (a - b).abs() <= tolerancia
+fn near(a: f64, b: f64, tolerance: f64) -> bool {
+    (a - b).abs() <= tolerance
 }
 
-const SUPERFICIES: [Color32; 4] = [SURFACE_0, SURFACE_1, SURFACE_2, SURFACE_3];
+const SURFACES: [Color32; 4] = [SURFACE_0, SURFACE_1, SURFACE_2, SURFACE_3];
 
 #[test]
-fn fila_12_contraste_de_blanco_con_negro_es_21() {
+fn row_12_contrast_of_white_with_black_is_21() {
     let c = contrast_ratio(Color32::WHITE, Color32::BLACK);
-    assert!(cerca(c, 21.0, 1e-6), "{c}");
+    assert!(near(c, 21.0, 1e-6), "{c}");
 }
 
 #[test]
-fn fila_12_un_color_consigo_mismo_da_1() {
+fn row_12_a_color_with_itself_gives_1() {
     for color in [
         Color32::WHITE,
         Color32::BLACK,
@@ -34,27 +34,27 @@ fn fila_12_un_color_consigo_mismo_da_1() {
         Color32::from_gray(0x76),
     ] {
         let c = contrast_ratio(color, color);
-        assert!(cerca(c, 1.0, 1e-9), "{color:?}: {c}");
+        assert!(near(c, 1.0, 1e-9), "{color:?}: {c}");
     }
 }
 
 #[test]
-fn fila_12_el_gris_767676_sobre_blanco_da_4_54_y_los_argumentos_conmutan() {
-    let gris = Color32::from_rgb(0x76, 0x76, 0x76);
-    let directo = contrast_ratio(gris, Color32::WHITE);
-    let inverso = contrast_ratio(Color32::WHITE, gris);
-    assert!(cerca(directo, 4.54, 0.01), "{directo}");
-    assert!(cerca(directo, inverso, 1e-12), "{directo} y {inverso}");
+fn row_12_gray_767676_over_white_gives_4_54_and_the_arguments_commute() {
+    let gray_2 = Color32::from_rgb(0x76, 0x76, 0x76);
+    let direct = contrast_ratio(gray_2, Color32::WHITE);
+    let inverse = contrast_ratio(Color32::WHITE, gray_2);
+    assert!(near(direct, 4.54, 0.01), "{direct}");
+    assert!(near(direct, inverse, 1e-12), "{direct} y {inverse}");
     let (a, b) = (
         Color32::from_rgb(0x39, 0xd0, 0xb2),
         Color32::from_gray(0x24),
     );
-    assert!(cerca(contrast_ratio(a, b), contrast_ratio(b, a), 1e-12));
+    assert!(near(contrast_ratio(a, b), contrast_ratio(b, a), 1e-12));
 }
 
 #[test]
-fn fila_12_las_superficies_y_el_texto_son_grises_con_los_valores_de_la_spec() {
-    let esperados = [
+fn row_12_the_surfaces_and_the_text_are_grays_with_the_values_of_the_spec() {
+    let expected_2_2 = [
         (SURFACE_0, 0x1a),
         (SURFACE_1, 0x24),
         (SURFACE_2, 0x30),
@@ -62,8 +62,12 @@ fn fila_12_las_superficies_y_el_texto_son_grises_con_los_valores_de_la_spec() {
         (TEXT, 0xe0),
         (TEXT_DIM, 0xa3),
     ];
-    for (color, gris) in esperados {
-        assert_eq!(color, Color32::from_rgb(gris, gris, gris), "{color:?}");
+    for (color, gray_2) in expected_2_2 {
+        assert_eq!(
+            color,
+            Color32::from_rgb(gray_2, gray_2, gray_2),
+            "{color:?}"
+        );
         assert!(
             color.r() == color.g() && color.g() == color.b(),
             "{color:?} no es neutro"
@@ -74,42 +78,42 @@ fn fila_12_las_superficies_y_el_texto_son_grises_con_los_valores_de_la_spec() {
 }
 
 #[test]
-fn fila_12_todos_los_colores_son_opacos_y_distintos() {
-    let colores = [
+fn row_12_all_the_colors_are_opaque_and_different() {
+    let colors_2 = [
         SURFACE_0, SURFACE_1, SURFACE_2, SURFACE_3, TEXT, TEXT_DIM, ACCENT, WARNING,
     ];
-    for (i, a) in colores.iter().enumerate() {
+    for (i, a) in colors_2.iter().enumerate() {
         assert_eq!(a.a(), 255, "{a:?} no es opaco");
-        for b in &colores[i + 1..] {
+        for b in &colors_2[i + 1..] {
             assert_ne!(a, b);
         }
     }
 }
 
 #[test]
-fn fila_12_el_texto_tiene_contraste_de_al_menos_7_sobre_las_cuatro_superficies() {
-    for superficie in SUPERFICIES {
-        let c = contrast_ratio(TEXT, superficie);
-        assert!(c >= 7.0, "TEXT sobre {superficie:?}: {c}");
+fn row_12_the_text_has_contrast_of_at_least_7_over_the_four_surfaces() {
+    for surface in SURFACES {
+        let c = contrast_ratio(TEXT, surface);
+        assert!(c >= 7.0, "TEXT sobre {surface:?}: {c}");
     }
 }
 
 #[test]
-fn fila_12_los_demas_textos_tienen_al_menos_4_5_sobre_las_tres_primeras_superficies() {
-    for (nombre, texto) in [
+fn row_12_the_other_texts_have_at_least_4_5_over_the_first_three_surfaces() {
+    for (name_2, text_2) in [
         ("TEXT_DIM", TEXT_DIM),
         ("ACCENT", ACCENT),
         ("WARNING", WARNING),
     ] {
-        for superficie in &SUPERFICIES[..3] {
-            let c = contrast_ratio(texto, *superficie);
-            assert!(c >= 4.5, "{nombre} sobre {superficie:?}: {c}");
+        for surface in &SURFACES[..3] {
+            let c = contrast_ratio(text_2, *surface);
+            assert!(c >= 4.5, "{name_2} sobre {surface:?}: {c}");
         }
     }
 }
 
 #[test]
-fn fila_12_los_contrastes_miden_lo_que_dice_la_tabla_de_la_spec() {
+fn row_12_the_contrasts_measure_what_the_table_of_the_spec_says() {
     // Valores de la tabla (un decimal), sobre las superficies 0, 1, 2 y 3.
     let tabla: [(&str, Color32, [f64; 4]); 4] = [
         ("TEXT", TEXT, [13.2, 11.8, 10.0, 7.6]),
@@ -117,19 +121,19 @@ fn fila_12_los_contrastes_miden_lo_que_dice_la_tabla_de_la_spec() {
         ("ACCENT", ACCENT, [9.0, 8.0, 6.8, 5.2]),
         ("WARNING", WARNING, [7.1, 6.4, 5.4, 4.1]),
     ];
-    for (nombre, color, esperados) in tabla {
-        for (superficie, esperado) in SUPERFICIES.iter().zip(esperados) {
-            let c = contrast_ratio(color, *superficie);
+    for (name_2, color, expected_2_2) in tabla {
+        for (surface, expected_2) in SURFACES.iter().zip(expected_2_2) {
+            let c = contrast_ratio(color, *surface);
             assert!(
-                cerca(c, esperado, 0.06),
-                "{nombre} sobre {superficie:?}: {c}, tabla {esperado}"
+                near(c, expected_2, 0.06),
+                "{name_2} sobre {surface:?}: {c}, tabla {expected_2}"
             );
         }
     }
 }
 
 #[test]
-fn fila_12_visuals_usa_las_superficies_en_modo_oscuro() {
+fn row_12_visuals_uses_the_surfaces_in_dark_mode() {
     for ppp in [1.0_f32, 1.5, 2.0, 3.0] {
         let v = visuals(ppp);
         assert!(v.dark_mode, "ppp {ppp}");
@@ -145,12 +149,12 @@ fn fila_12_visuals_usa_las_superficies_en_modo_oscuro() {
 }
 
 #[test]
-fn fila_12_visuals_no_tiene_esquinas_redondeadas_ni_sombras() {
+fn row_12_visuals_has_no_rounded_corners_or_shadows() {
     for ppp in [1.0_f32, 1.5, 2.0, 3.0] {
         let v = visuals(ppp);
         assert_eq!(v.window_corner_radius, CornerRadius::ZERO, "ppp {ppp}");
         assert_eq!(v.menu_corner_radius, CornerRadius::ZERO, "ppp {ppp}");
-        for (nombre, widget) in [
+        for (name_2, widget) in [
             ("noninteractive", &v.widgets.noninteractive),
             ("inactive", &v.widgets.inactive),
             ("hovered", &v.widgets.hovered),
@@ -160,7 +164,7 @@ fn fila_12_visuals_no_tiene_esquinas_redondeadas_ni_sombras() {
             assert_eq!(
                 widget.corner_radius,
                 CornerRadius::ZERO,
-                "ppp {ppp}: {nombre}"
+                "ppp {ppp}: {name_2}"
             );
         }
         assert_eq!(v.window_shadow, Shadow::NONE, "ppp {ppp}");
@@ -169,11 +173,11 @@ fn fila_12_visuals_no_tiene_esquinas_redondeadas_ni_sombras() {
 }
 
 #[test]
-fn fila_12_los_trazos_de_visuals_son_multiplos_de_la_unidad_de_interfaz() {
+fn row_12_the_strokes_of_visuals_are_multiples_of_the_interface_unit() {
     for ppp in [1.0_f32, 1.25, 1.5, 2.0, 2.5, 3.0] {
         let u = ui_unit(ppp);
         let v = visuals(ppp);
-        let trazos = [
+        let strokes = [
             ("window_stroke", v.window_stroke.width),
             (
                 "noninteractive.bg",
@@ -192,17 +196,17 @@ fn fila_12_los_trazos_de_visuals_son_multiplos_de_la_unidad_de_interfaz() {
             ("active.fg", v.widgets.active.fg_stroke.width),
             ("open.fg", v.widgets.open.fg_stroke.width),
         ];
-        for (nombre, ancho) in trazos {
-            let multiplos = f64::from(ancho) / f64::from(u);
+        for (name_2, width_2) in strokes {
+            let multiples = f64::from(width_2) / f64::from(u);
             assert!(
-                cerca(multiplos, multiplos.round(), 1e-3),
-                "ppp {ppp}: {nombre} mide {ancho} pt, {multiplos} unidades de {u} pt"
+                near(multiples, multiples.round(), 1e-3),
+                "ppp {ppp}: {name_2} mide {width_2} pt, {multiples} unidades de {u} pt"
             );
         }
     }
 }
 
 #[test]
-fn fila_12_el_prefijo_de_aviso_es_aviso_dos_puntos_y_espacio() {
+fn row_12_the_notice_prefix_is_notice_colon_and_space() {
     assert_eq!(NOTICE_PREFIX, "aviso: ");
 }

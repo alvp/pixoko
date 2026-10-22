@@ -19,7 +19,7 @@ use crate::keymap::{Chord, KeyId, Press};
 /// aparte). Si el texto es una letra de otra escritura (ruso, griego…) vale el de la tecla de
 /// egui, como hace `egui-winit` con el portapapeles. No dan carácter una tecla muerta (sin
 /// texto), una vocal con acento, un texto de varios caracteres ni un símbolo que no es ASCII
-/// (`∂` de `Option`+`d`). Las teclas con nombre (`Inicio`, `Re Pág`, `Av Pág`) valen siempre.
+/// (`∂` de `Option`+`d`). Las teclas con nombre (`Start`, `Re Pág`, `Av Pág`) valen siempre.
 pub fn presses(events: &[Event]) -> Vec<Press> {
     let mut out = Vec::new();
     for (i, event) in events.iter().enumerate() {

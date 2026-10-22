@@ -152,7 +152,7 @@ pub fn background_checked(action: AppAction, current: CanvasBackground) -> bool 
 pub type Shortcut = Chord;
 
 /// El atajo que muestra `keymap` para `action` en `platform`, si lo tiene: la primera fila de la
-/// tabla marcada como mostrada en esa plataforma (`Rehacer` enseña `Ctrl+Y` y, en macOS,
+/// tabla marcada como mostrada en esa plataforma (`Redo` enseña `Ctrl+Y` y, en macOS,
 /// `Cmd+Mayús+Z`; `Salir` solo tiene atajo en Linux).
 pub fn shortcut_in(keymap: &Keymap, action: AppAction, platform: Platform) -> Option<Shortcut> {
     keymap.shown(action, platform)
@@ -164,12 +164,12 @@ pub fn shortcut_for(action: AppAction, platform: Platform) -> Option<Shortcut> {
 }
 
 /// El atajo fijo de una entrada que no sale de la tabla de teclas: `F1` en `Ayuda de la
-/// herramienta` (`F1` es de la ayuda y no se reasigna).
+/// herramienta` (`F1` es de la help y no se reasigna).
 pub fn fixed_shortcut(action: AppAction) -> Option<&'static str> {
     matches!(action, AppAction::ShowHelp(_)).then_some("F1")
 }
 
-/// Texto de un atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Inicio`, `>`, `d`.
+/// Texto de un atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Start`, `>`, `d`.
 pub fn shortcut_text(shortcut: Shortcut, platform: Platform) -> String {
     shortcut.text(platform)
 }
@@ -179,7 +179,7 @@ const PAD_X_U: i64 = 6;
 /// Margen a la izquierda de la barra, en `u`.
 const BAR_MARGIN_U: i64 = 4;
 
-/// Ancho de un desplegable en `u`: márgenes y el mayor `rótulo + 2 + atajo`, a 7 u por carácter
+/// Ancho de un desplegable en `u`: márgenes y el mayor `rótulo + 2 + shortcut_2`, a 7 u por carácter
 /// (con la tabla de teclas por defecto).
 pub fn popup_width_u(menu: &Menu, platform: Platform) -> i64 {
     popup_width_in(menu, platform, default_keymap())
@@ -251,7 +251,7 @@ pub fn show_menu_in(
     )
 }
 
-/// Como [`show_menu_in`] con la pila de capas, que atenúa `Quitar`, `Subir`, `Bajar`, `Nueva capa` y
+/// Como [`show_menu_in`] con la pila de capas, que atenúa `Remove`, `Subir`, `Bajar`, `Nueva layer_2` y
 /// `Duplicar` cuando no se pueden hacer (la app pasa la suya).
 pub fn show_menu_full(
     ui: &mut Ui,

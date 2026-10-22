@@ -33,14 +33,14 @@ use px_ui::view::ScreenRect;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 const ALTOS_PT: [f32; 5] = [341.0, 272.8, 454.67, 341.0, 341.0];
-const ANCHOS_PT: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const WIDTHS_PT: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
 fn n_de(ppp: f32) -> i64 {
     i64::from(text_scale(ppp))
 }
 
-fn cerca_pt(a: f32, b: f32) -> bool {
+fn near_pt(a: f32, b: f32) -> bool {
     (a - b).abs() <= 0.01
 }
 
@@ -49,7 +49,7 @@ fn cerca_pt(a: f32, b: f32) -> bool {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_las_constantes_valen_lo_que_dice_la_spec() {
+fn row_7_the_constants_are_worth_what_the_spec_says() {
     assert_eq!(MENU_H_U, 16);
     assert_eq!(TOOLBAR_CONTENT_H_U, 250);
     assert_eq!(toolbar_width_u(), 107);
@@ -60,19 +60,19 @@ fn fila_7_las_constantes_valen_lo_que_dice_la_spec() {
 }
 
 #[test]
-fn fila_7_el_ancho_de_la_columna_se_deriva_de_la_rejilla_de_iconos() {
+fn row_7_the_column_width_is_derived_from_the_icon_grid() {
     assert_eq!(TOOLBOX_COLUMNS, 4);
-    let boton = TOOLBOX_COLUMNS * BUTTON_U + (TOOLBOX_COLUMNS - 1) * GAP_U;
-    assert_eq!(boton, 99);
-    assert_eq!(toolbar_button_width_u(), boton);
-    assert_eq!(toolbar_width_u(), 2 * 4 + boton);
+    let button_2 = TOOLBOX_COLUMNS * BUTTON_U + (TOOLBOX_COLUMNS - 1) * GAP_U;
+    assert_eq!(button_2, 99);
+    assert_eq!(toolbar_button_width_u(), button_2);
+    assert_eq!(toolbar_width_u(), 2 * 4 + button_2);
     assert_eq!(toolbar_width_u(), 107);
 }
 
 #[test]
-fn fila_7_tool_labels_son_los_rotulos_de_tool_buttons_sin_la_letra() {
-    let rotulos: Vec<&str> = TOOL_BUTTONS.iter().map(|b| b.label).collect();
-    assert_eq!(rotulos, TOOL_LABELS);
+fn row_7_tool_labels_are_the_labels_of_tool_buttons_without_the_letter() {
+    let labels: Vec<&str> = TOOL_BUTTONS.iter().map(|b| b.label).collect();
+    assert_eq!(labels, TOOL_LABELS);
     assert_eq!(
         TOOL_LABELS,
         ["Lápiz", "Línea", "Relleno", "Cuentagotas", "Borrador"]
@@ -80,39 +80,39 @@ fn fila_7_tool_labels_son_los_rotulos_de_tool_buttons_sin_la_letra() {
 }
 
 #[test]
-fn fila_7_los_nueve_botones_caben_en_la_columna_sin_tocar_el_borde_y_no_se_solapan() {
+fn row_7_the_nine_buttons_fit_in_the_column_without_touching_the_edge_and_do_not_overlap() {
     // Herramientas: dos filas de botones de 24 u en y = 4 y 29 (hueco de 1 u); zoom: una fila en
     // y = 80.
-    let alto = 24;
-    let herramientas: Vec<(i64, i64)> = (0..2).map(|i| (4 + 25 * i, alto)).collect();
-    let zoom: Vec<(i64, i64)> = vec![(80, alto)];
-    assert_eq!(herramientas.last().map(|(y, h)| y + h), Some(53));
+    let height_2 = 24;
+    let tools: Vec<(i64, i64)> = (0..2).map(|i| (4 + 25 * i, height_2)).collect();
+    let zoom: Vec<(i64, i64)> = vec![(80, height_2)];
+    assert_eq!(tools.last().map(|(y, h)| y + h), Some(53));
     assert_eq!(zoom.last().map(|(y, h)| y + h), Some(104));
-    let separador = (57, 1);
-    let nivel = (62, 14);
+    let separator = (57, 1);
+    let level = (62, 14);
 
-    let mut todos: Vec<(i64, i64)> = herramientas.clone();
-    todos.push(separador);
-    todos.push(nivel);
-    todos.extend(zoom.iter().copied());
-    for pareja in todos.windows(2) {
-        let (a, b) = (pareja[0], pareja[1]);
+    let mut all_2: Vec<(i64, i64)> = tools.clone();
+    all_2.push(separator);
+    all_2.push(level);
+    all_2.extend(zoom.iter().copied());
+    for pair in all_2.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
         assert!(a.0 + a.1 <= b.0, "{a:?} se solapa con {b:?}");
     }
     // Margen de 4 u a cada lado: 4 + 99 + 4 = 107, sin tocar el borde.
     let x0 = 4;
-    let ancho = toolbar_button_width_u();
+    let width_2 = toolbar_button_width_u();
     assert!(x0 > 0);
-    assert!(x0 + ancho < toolbar_width_u());
-    assert_eq!(x0 + ancho + 4, toolbar_width_u());
+    assert!(x0 + width_2 < toolbar_width_u());
+    assert_eq!(x0 + width_2 + 4, toolbar_width_u());
     // Dos filas seguidas de un mismo grupo dejan 1 u entre ellas.
-    for pareja in herramientas.windows(2).chain(zoom.windows(2)) {
-        assert_eq!(pareja[1].0 - (pareja[0].0 + pareja[0].1), 1);
+    for pair in tools.windows(2).chain(zoom.windows(2)) {
+        assert_eq!(pair[1].0 - (pair[0].0 + pair[0].1), 1);
     }
 }
 
 #[test]
-fn fila_7_el_contenido_de_250_u_cabe_en_los_305_u_del_panel_minimo() {
+fn row_7_the_250_u_content_fits_in_the_305_u_of_the_minimum_panel() {
     // Fila de zoom (termina en 104), 4 u, el recuadro de opciones de 138 u y 4 u de margen.
     assert_eq!(80 + 24 + 4 + 138 + 4, TOOLBAR_CONTENT_H_U);
     assert_eq!(TOOLBAR_CONTENT_H_U, 250);
@@ -131,18 +131,18 @@ fn fila_7_el_contenido_de_250_u_cabe_en_los_305_u_del_panel_minimo() {
 // ---------------------------------------------------------------------------------------------
 
 /// Ancho de un título como botón: `chars·7 + 12` (6 u de margen a cada lado del texto).
-fn ancho_de_titulo_u(titulo: &str) -> i64 {
-    titulo.chars().count() as i64 * i64::from(ADVANCE_PX) + 12
+fn title_width_u(title: &str) -> i64 {
+    title.chars().count() as i64 * i64::from(ADVANCE_PX) + 12
 }
 
-/// Ancho del desplegable: `12 + max(rótulo + 2 + atajo)·7`.
-fn ancho_de_desplegable_u(items: &[px_ui::menu::MenuItem], platform: Platform) -> i64 {
+/// Ancho del desplegable: `12 + max(rótulo + 2 + shortcut_2)·7`.
+fn dropdown_width_u(items: &[px_ui::menu::MenuItem], platform: Platform) -> i64 {
     let mayor = items
         .iter()
         .map(|item| {
-            let atajo = shortcut_for(item.action, platform)
+            let shortcut_2 = shortcut_for(item.action, platform)
                 .map_or(0, |s| shortcut_text(s, platform).chars().count());
-            item.label.chars().count() + 2 + atajo
+            item.label.chars().count() + 2 + shortcut_2
         })
         .max()
         .unwrap_or(0) as i64;
@@ -150,31 +150,31 @@ fn ancho_de_desplegable_u(items: &[px_ui::menu::MenuItem], platform: Platform) -
 }
 
 #[test]
-fn fila_7_los_titulos_del_menu_suman_249_u_y_caben_con_su_margen_en_el_ancho_minimo() {
-    let anchos: Vec<i64> = MENUS.iter().map(|m| ancho_de_titulo_u(m.title)).collect();
-    assert_eq!(anchos, [61, 54, 54, 40, 33, 47]);
-    let total: i64 = anchos.iter().sum();
+fn row_7_the_menu_titles_add_249_u_and_fit_with_their_margin_in_the_minimum_width() {
+    let widths: Vec<i64> = MENUS.iter().map(|m| title_width_u(m.title)).collect();
+    assert_eq!(widths, [61, 54, 54, 40, 33, 47]);
+    let total: i64 = widths.iter().sum();
     assert_eq!(total, 289);
     assert!(4 + total < min_window_width_u());
 }
 
 #[test]
-fn fila_7_el_desplegable_de_ver_mide_208_u_y_es_el_mas_ancho() {
-    for platform in PLATAFORMAS {
-        let anchos: Vec<(&str, i64)> = MENUS
+fn row_7_the_view_dropdown_measures_208_u_and_is_the_widest() {
+    for platform in PLATFORMS {
+        let widths: Vec<(&str, i64)> = MENUS
             .iter()
-            .map(|m| (m.title, ancho_de_desplegable_u(m.items, platform)))
+            .map(|m| (m.title, dropdown_width_u(m.items, platform)))
             .collect();
-        let ver = anchos
+        let see = widths
             .iter()
             .find(|(t, _)| *t == "Ver")
             .expect("menú Ver")
             .1;
-        assert_eq!(ver, 12 + (20 + 2 + 6) * 7, "{platform:?}");
-        assert_eq!(ver, 208);
-        for (titulo, ancho) in anchos {
-            assert!(ancho <= 208, "{titulo} en {platform:?}: {ancho}");
-            assert!(ancho < min_window_width_u(), "{titulo} en {platform:?}");
+        assert_eq!(see, 12 + (20 + 2 + 6) * 7, "{platform:?}");
+        assert_eq!(see, 208);
+        for (title, width_2) in widths {
+            assert!(width_2 <= 208, "{title} en {platform:?}: {width_2}");
+            assert!(width_2 < min_window_width_u(), "{title} en {platform:?}");
         }
     }
 }
@@ -196,15 +196,15 @@ fn area(r: ScreenRect) -> i64 {
     r.width * r.height
 }
 
-fn se_solapan(a: ScreenRect, b: ScreenRect) -> bool {
+fn overlap_2(a: ScreenRect, b: ScreenRect) -> bool {
     a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
-fn dentro(r: ScreenRect, ventana: (i64, i64)) -> bool {
-    r.x >= 0 && r.y >= 0 && r.x + r.width <= ventana.0 && r.y + r.height <= ventana.1
+fn inside(r: ScreenRect, window: (i64, i64)) -> bool {
+    r.x >= 0 && r.y >= 0 && r.x + r.width <= window.0 && r.y + r.height <= window.1
 }
 
-fn cinco(layout: &WindowLayout) -> [(&'static str, ScreenRect); 5] {
+fn five(layout: &WindowLayout) -> [(&'static str, ScreenRect); 5] {
     [
         ("menu", layout.menu),
         ("toolbar", layout.toolbar),
@@ -214,12 +214,12 @@ fn cinco(layout: &WindowLayout) -> [(&'static str, ScreenRect); 5] {
     ]
 }
 
-/// Invariantes de `window_layout` con la ventana de `ventana` píxeles físicos y la escala `n`.
-fn comprueba_layout(ventana: (i64, i64), n: u32) -> Result<(), TestCaseError> {
+/// Invariantes de `window_layout` con la ventana de `window` píxeles físicos y la escala `n`.
+fn checks_layout(window: (i64, i64), n: u32) -> Result<(), TestCaseError> {
     let k = i64::from(n);
-    let (w, h) = ventana;
-    let layout = window_layout(ventana, n);
-    let franja = h - (MENU_H_U + 20) * k;
+    let (w, h) = window;
+    let layout = window_layout(window, n);
+    let band = h - (MENU_H_U + 20) * k;
     // Medidas de la spec: menú de 16·n, barra de 20·n, columna de 107·n y panel de 233·n, a la derecha del lienzo.
     prop_assert_eq!(layout.menu, rect(0, 0, w, MENU_H_U * k));
     prop_assert_eq!(layout.status, rect(0, h - 20 * k, w, 20 * k));
@@ -229,7 +229,7 @@ fn comprueba_layout(ventana: (i64, i64), n: u32) -> Result<(), TestCaseError> {
             w - toolbar_width_u() * k,
             MENU_H_U * k,
             toolbar_width_u() * k,
-            franja
+            band
         )
     );
     prop_assert_eq!(
@@ -238,7 +238,7 @@ fn comprueba_layout(ventana: (i64, i64), n: u32) -> Result<(), TestCaseError> {
             w - (toolbar_width_u() + PANEL_WIDTH_U) * k,
             MENU_H_U * k,
             PANEL_WIDTH_U * k,
-            franja
+            band
         )
     );
     // El lienzo es lo que queda tras quitar menú, columna, panel y barra.
@@ -248,78 +248,73 @@ fn comprueba_layout(ventana: (i64, i64), n: u32) -> Result<(), TestCaseError> {
             0,
             MENU_H_U * k,
             w - (toolbar_width_u() + PANEL_WIDTH_U) * k,
-            franja
+            band
         )
     );
     prop_assert_eq!(canvas_origin_px(n), (0, 16 * k));
     prop_assert_eq!(canvas_origin_px(n), (layout.canvas.x, layout.canvas.y));
 
     // Recubren la ventana sin huecos ni solapes: dentro, disjuntos y con el área total.
-    let rects = cinco(&layout);
-    let mut suma = 0;
-    for (nombre, r) in rects {
-        prop_assert!(r.width >= 0 && r.height >= 0, "{}: {:?}", nombre, r);
-        prop_assert!(
-            dentro(r, ventana),
-            "{} fuera de la ventana: {:?}",
-            nombre,
-            r
-        );
-        suma += area(r);
+    let rects = five(&layout);
+    let mut sum = 0;
+    for (name_2, r) in rects {
+        prop_assert!(r.width >= 0 && r.height >= 0, "{}: {:?}", name_2, r);
+        prop_assert!(inside(r, window), "{} fuera de la ventana: {:?}", name_2, r);
+        sum += area(r);
     }
-    prop_assert_eq!(suma, w * h, "huecos o solapes");
+    prop_assert_eq!(sum, w * h, "huecos o solapes");
     for (i, (na, a)) in rects.iter().enumerate() {
         for (nb, b) in &rects[i + 1..] {
-            prop_assert!(!se_solapan(*a, *b), "{} y {} se solapan", na, nb);
+            prop_assert!(!overlap_2(*a, *b), "{} y {} se solapan", na, nb);
         }
     }
     Ok(())
 }
 
-fn comprueba(ventana: (i64, i64), n: u32) {
-    if let Err(e) = comprueba_layout(ventana, n) {
+fn checks(window: (i64, i64), n: u32) {
+    if let Err(e) = checks_layout(window, n) {
         panic!("{e}");
     }
 }
 
 /// Ventana por defecto (960 × 720 pt) y mínima, en píxeles físicos, a `ppp`.
-fn ventanas(ppp: f32) -> [(i64, i64); 2] {
+fn windows(ppp: f32) -> [(i64, i64); 2] {
     let n = n_de(ppp);
-    let minima = (
+    let minimum = (
         min_window_width_u() * n,
         i64::from(bar_height_px(n as u32)) + MENU_H_U * n + min_panel_height_px(n as u32),
     );
-    let defecto = ((960.0 * ppp).round() as i64, (720.0 * ppp).round() as i64);
-    [defecto, minima]
+    let default = ((960.0 * ppp).round() as i64, (720.0 * ppp).round() as i64);
+    [default, minimum]
 }
 
 #[test]
-fn fila_7_window_layout_cumple_la_geometria_a_las_cinco_escalas() {
+fn row_7_window_layout_meets_the_geometry_at_the_five_scales() {
     for ppp in PPPS {
         let n = text_scale(ppp);
-        for ventana in ventanas(ppp) {
-            comprueba(ventana, n);
+        for window in windows(ppp) {
+            checks(window, n);
         }
     }
 }
 
 #[test]
-fn fila_7_el_origen_del_lienzo_es_0_16n() {
-    for (ppp, origen) in PPPS
+fn row_7_the_canvas_origin_is_0_16n() {
+    for (ppp, source_2) in PPPS
         .iter()
         .zip([(0, 16), (0, 16), (0, 32), (0, 32), (0, 48)])
     {
-        assert_eq!(canvas_origin_px(text_scale(*ppp)), origen, "ppp {ppp}");
+        assert_eq!(canvas_origin_px(text_scale(*ppp)), source_2, "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_7_la_columna_y_el_panel_ocupan_el_alto_de_la_franja_central() {
+fn row_7_the_column_and_the_panel_take_the_height_of_the_central_strip() {
     for ppp in PPPS {
         let n = n_de(ppp);
-        for ventana in ventanas(ppp) {
-            let layout = window_layout(ventana, n as u32);
-            assert_eq!(layout.toolbar.height, ventana.1 - 36 * n);
+        for window in windows(ppp) {
+            let layout = window_layout(window, n as u32);
+            assert_eq!(layout.toolbar.height, window.1 - 36 * n);
             assert_eq!(layout.panel.height, layout.toolbar.height);
             assert_eq!(layout.canvas.height, layout.toolbar.height);
             assert!(layout.toolbar.height >= TOOLBAR_CONTENT_H_U * n);
@@ -332,42 +327,42 @@ fn fila_7_la_columna_y_el_panel_ocupan_el_alto_de_la_franja_central() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_alto_minimo_a_las_cinco_escalas() {
-    for (ppp, esperado) in PPPS.iter().zip(ALTOS_PT) {
+fn row_8_minimum_height_at_the_five_scales() {
+    for (ppp, expected_2) in PPPS.iter().zip(ALTOS_PT) {
         let real = min_window_height_pt(*ppp);
         assert!(
-            cerca_pt(real, esperado),
-            "ppp {ppp}: {real} y no {esperado}"
+            near_pt(real, expected_2),
+            "ppp {ppp}: {real} y no {expected_2}"
         );
     }
 }
 
 #[test]
-fn fila_8_ancho_minimo_en_u_y_en_pt_a_las_cinco_escalas() {
+fn row_8_minimum_width_in_u_and_in_pt_at_the_five_scales() {
     assert_eq!(min_window_width_u(), 468);
     assert_eq!(
         min_window_width_u(),
         toolbar_width_u() + PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
     );
-    for (ppp, esperado) in PPPS.iter().zip(ANCHOS_PT) {
+    for (ppp, expected_2) in PPPS.iter().zip(WIDTHS_PT) {
         let real = min_window_width_pt(*ppp);
         assert!(
-            cerca_pt(real, esperado),
-            "ppp {ppp}: {real} y no {esperado}"
+            near_pt(real, expected_2),
+            "ppp {ppp}: {real} y no {expected_2}"
         );
     }
 }
 
 #[test]
-fn fila_8_un_ppp_invalido_da_el_minimo_de_1_0() {
+fn row_8_an_invalid_ppp_gives_the_minimum_of_1_0() {
     for ppp in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.0, -0.5] {
-        assert!(cerca_pt(min_window_height_pt(ppp), 341.0), "alto con {ppp}");
-        assert!(cerca_pt(min_window_width_pt(ppp), 468.0), "ancho con {ppp}");
+        assert!(near_pt(min_window_height_pt(ppp), 341.0), "alto con {ppp}");
+        assert!(near_pt(min_window_width_pt(ppp), 468.0), "ancho con {ppp}");
     }
 }
 
 #[test]
-fn fila_8_el_alto_no_pasa_del_65_por_ciento_de_720_y_el_ancho_no_pasa_de_683() {
+fn row_8_the_height_does_not_pass_65_percent_of_720_and_the_width_does_not_pass_683() {
     for ppp in PPPS {
         assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
@@ -375,31 +370,37 @@ fn fila_8_el_alto_no_pasa_del_65_por_ciento_de_720_y_el_ancho_no_pasa_de_683() {
 }
 
 #[test]
-fn fila_8_el_alto_es_barra_mas_menu_mas_panel_minimo_y_el_ancho_columna_panel_y_128_u() {
+fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_column_panel_and_128_u() {
     for ppp in PPPS {
         let n = n_de(ppp);
-        let alto = (i64::from(bar_height_px(n as u32))
+        let height_2 = (i64::from(bar_height_px(n as u32))
             + MENU_H_U * n
             + min_panel_height_px(n as u32)) as f32
             / ppp;
-        assert!(cerca_pt(min_window_height_pt(ppp), alto), "alto con {ppp}");
-        let ancho = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
-        assert!(cerca_pt(min_window_width_pt(ppp), ancho), "ancho con {ppp}");
+        assert!(
+            near_pt(min_window_height_pt(ppp), height_2),
+            "alto con {ppp}"
+        );
+        let width_2 = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
+        assert!(
+            near_pt(min_window_width_pt(ppp), width_2),
+            "ancho con {ppp}"
+        );
     }
 }
 
 #[test]
-fn fila_8_el_lienzo_minimo_mide_128n_por_305n_pixeles() {
-    for (ppp, esperado) in
+fn row_8_the_minimum_canvas_measures_128n_by_305n_pixels() {
+    for (ppp, expected_2) in
         PPPS.iter()
             .zip([(128, 305), (128, 305), (256, 610), (256, 610), (384, 915)])
     {
         let n = n_de(*ppp);
-        let minima = ventanas(*ppp)[1];
-        let layout = window_layout(minima, n as u32);
+        let minimum = windows(*ppp)[1];
+        let layout = window_layout(minimum, n as u32);
         assert_eq!(
             (layout.canvas.width, layout.canvas.height),
-            esperado,
+            expected_2,
             "ppp {ppp}"
         );
         assert_eq!(
@@ -410,12 +411,18 @@ fn fila_8_el_lienzo_minimo_mide_128n_por_305n_pixeles() {
 }
 
 #[test]
-fn fila_8_la_ventana_minima_en_pixeles_fisicos_es_entera_a_las_cinco_escalas() {
+fn row_8_the_minimum_window_in_physical_pixels_is_whole_at_the_five_scales() {
     for ppp in PPPS {
-        let ancho = min_window_width_pt(ppp) * ppp;
-        let alto = min_window_height_pt(ppp) * ppp;
-        assert!((ancho - ancho.round()).abs() <= 0.001, "ancho con {ppp}");
-        assert!((alto - alto.round()).abs() <= 0.001, "alto con {ppp}");
+        let width_2 = min_window_width_pt(ppp) * ppp;
+        let height_2 = min_window_height_pt(ppp) * ppp;
+        assert!(
+            (width_2 - width_2.round()).abs() <= 0.001,
+            "ancho con {ppp}"
+        );
+        assert!(
+            (height_2 - height_2.round()).abs() <= 0.001,
+            "alto con {ppp}"
+        );
     }
 }
 
@@ -424,19 +431,25 @@ fn fila_8_la_ventana_minima_en_pixeles_fisicos_es_entera_a_las_cinco_escalas() {
 // ---------------------------------------------------------------------------------------------
 
 /// `ppp` de 1,0 a 4,0 en pasos de 0,05 sin acumular error de coma flotante.
-fn ppp_del_paso(i: u32) -> f32 {
+fn ppp_of_the_step(i: u32) -> f32 {
     (100 + 5 * i) as f32 / 100.0
 }
 
 #[test]
-fn propiedad_3_los_minimos_siguen_la_formula_y_cumplen_las_dos_reglas_en_todos_los_ppp() {
+fn property_3_the_minimums_follow_the_formula_and_meet_the_two_rules_at_all_ppp() {
     for i in 0..=60 {
-        let ppp = ppp_del_paso(i);
+        let ppp = ppp_of_the_step(i);
         let n = n_de(ppp);
-        let alto = ((20 + MENU_H_U + 305) * n) as f32 / ppp;
-        let ancho = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
-        assert!(cerca_pt(min_window_height_pt(ppp), alto), "alto con {ppp}");
-        assert!(cerca_pt(min_window_width_pt(ppp), ancho), "ancho con {ppp}");
+        let height_2 = ((20 + MENU_H_U + 305) * n) as f32 / ppp;
+        let width_2 = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
+        assert!(
+            near_pt(min_window_height_pt(ppp), height_2),
+            "alto con {ppp}"
+        );
+        assert!(
+            near_pt(min_window_width_pt(ppp), width_2),
+            "ancho con {ppp}"
+        );
         assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
@@ -446,22 +459,22 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn propiedad_3_el_reparto_es_entero_y_recubre_cualquier_ventana_desde_el_minimo(
-        paso in 0u32..=60,
-        extra_ancho in 0i64..=3000,
-        extra_alto in 0i64..=3000,
+    fn property_3_the_split_is_integer_and_covers_any_window_from_the_minimum(
+        step in 0u32..=60,
+        extra_width in 0i64..=3000,
+        extra_height in 0i64..=3000,
     ) {
-        let ppp = ppp_del_paso(paso);
+        let ppp = ppp_of_the_step(step);
         let n = text_scale(ppp);
         let k = i64::from(n);
-        let minima = (
+        let minimum = (
             min_window_width_u() * k,
             i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n),
         );
-        let ventana = (minima.0 + extra_ancho, minima.1 + extra_alto);
-        comprueba_layout(ventana, n)?;
+        let window = (minimum.0 + extra_width, minimum.1 + extra_height);
+        checks_layout(window, n)?;
         // El lienzo nunca baja de su mínimo.
-        let layout = window_layout(ventana, n);
+        let layout = window_layout(window, n);
         prop_assert!(layout.canvas.width >= MIN_CANVAS_WIDTH_U * k);
         prop_assert!(layout.canvas.height >= min_panel_height_px(n));
     }
@@ -471,7 +484,7 @@ proptest! {
 // Unidad I.3 (specs/interfaz-caja-derecha.md): orden de las zonas, mínimos y geometría de la caja
 // ---------------------------------------------------------------------------------------------
 
-mod caja_derecha {
+mod toolbox_right {
     use super::*;
     use px_ui::chrome::{
         OPTIONS_BODY_H_U, OPTIONS_BODY_ROWS, OPTIONS_BODY_W_U, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U,
@@ -479,20 +492,20 @@ mod caja_derecha {
         OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U, OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U, ZOOM_Y_U,
     };
 
-    const ALTO_MAX_PT: f32 = 468.0;
-    const ANCHO_MAX_PT: f32 = 683.0;
+    const HEIGHT_MAX_PT: f32 = 468.0;
+    const WIDTH_MAX_PT: f32 = 683.0;
 
     /// Fila 1: **la única prueba que conoce el orden de las zonas** (lienzo, panel, caja).
     #[test]
-    fn fila_1_el_orden_es_lienzo_panel_y_caja_en_el_borde_derecho() {
+    fn row_1_the_order_is_canvas_panel_and_toolbox_on_the_right_edge() {
         for ppp in PPPS {
             let n = n_de(ppp);
-            for ventana in ventanas(ppp) {
-                let l = window_layout(ventana, n as u32);
+            for window in windows(ppp) {
+                let l = window_layout(window, n as u32);
                 assert_eq!(l.canvas.x, 0, "ppp {ppp}");
                 assert_eq!(l.canvas.x + l.canvas.width, l.panel.x, "ppp {ppp}");
                 assert_eq!(l.panel.x + l.panel.width, l.toolbar.x, "ppp {ppp}");
-                assert_eq!(l.toolbar.x + l.toolbar.width, ventana.0, "ppp {ppp}");
+                assert_eq!(l.toolbar.x + l.toolbar.width, window.0, "ppp {ppp}");
                 assert_eq!(l.panel.width, 233 * n);
                 assert_eq!(l.toolbar.width, 107 * n);
                 assert_eq!(canvas_origin_px(n as u32), (0, 16 * n));
@@ -503,28 +516,28 @@ mod caja_derecha {
     /// Fila 2: el alto mínimo baja (I.4), el ancho no cambia y los dos techos se cumplen; el
     /// contenido de la caja cabe.
     #[test]
-    fn fila_2_el_alto_minimo_baja_el_ancho_no_y_cumplen_los_techos() {
-        for ((ppp, alto), ancho) in PPPS.iter().zip(ALTOS_PT).zip(ANCHOS_PT) {
-            assert!(cerca_pt(min_window_height_pt(*ppp), alto), "ppp {ppp}");
-            assert!(cerca_pt(min_window_width_pt(*ppp), ancho), "ppp {ppp}");
-            assert!(min_window_height_pt(*ppp) <= ALTO_MAX_PT, "ppp {ppp}");
-            assert!(min_window_width_pt(*ppp) <= ANCHO_MAX_PT, "ppp {ppp}");
+    fn row_2_the_minimum_height_goes_down_the_width_does_not_and_they_meet_the_ceilings() {
+        for ((ppp, height_2), width_2) in PPPS.iter().zip(ALTOS_PT).zip(WIDTHS_PT) {
+            assert!(near_pt(min_window_height_pt(*ppp), height_2), "ppp {ppp}");
+            assert!(near_pt(min_window_width_pt(*ppp), width_2), "ppp {ppp}");
+            assert!(min_window_height_pt(*ppp) <= HEIGHT_MAX_PT, "ppp {ppp}");
+            assert!(min_window_width_pt(*ppp) <= WIDTH_MAX_PT, "ppp {ppp}");
             let n = n_de(*ppp);
             assert!(
                 TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32),
                 "ppp {ppp}: la caja no cabe en el panel mínimo"
             );
         }
-        for invalido in [f32::NAN, 0.0, -1.0, f32::INFINITY] {
-            assert!(cerca_pt(min_window_height_pt(invalido), 341.0));
-            assert!(cerca_pt(min_window_width_pt(invalido), 468.0));
+        for invalid in [f32::NAN, 0.0, -1.0, f32::INFINITY] {
+            assert!(near_pt(min_window_height_pt(invalid), 341.0));
+            assert!(near_pt(min_window_width_pt(invalid), 468.0));
         }
         assert_eq!(min_window_width_u(), 468);
     }
 
     /// Fila 3: las constantes y las relaciones del recuadro de opciones.
     #[test]
-    fn fila_3_el_recuadro_de_opciones_tiene_la_geometria_de_la_spec() {
+    fn row_3_the_options_box_has_the_geometry_of_the_spec() {
         assert_eq!(
             (OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U),
             (4, 108, 99, 138)
@@ -565,34 +578,34 @@ mod caja_derecha {
 
         /// Propiedad 1: reparto entero, adyacente y recubridor con cualquier ancho (también impar).
         #[test]
-        fn propiedad_1_el_reparto_con_la_caja_a_la_derecha_es_entero_adyacente_y_cabe(
-            paso in 0u32..=60,
+        fn property_1_the_split_with_the_toolbox_on_the_right_is_integer_adjacent_and_fits(
+            step in 0u32..=60,
             extra_w in 0i64..=700,
             extra_h in 0i64..=500,
         ) {
-            let ppp = 1.0 + paso as f32 * 0.05;
+            let ppp = 1.0 + step as f32 * 0.05;
             let n = text_scale(ppp);
             let k = i64::from(n);
-            let minima = (
+            let minimum = (
                 min_window_width_u() * k,
                 i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n),
             );
-            let ventana = (minima.0 + extra_w, minima.1 + extra_h);
-            comprueba_layout(ventana, n)?;
-            let l = window_layout(ventana, n);
-            prop_assert_eq!(l.toolbar.x + l.toolbar.width, ventana.0);
+            let window = (minimum.0 + extra_w, minimum.1 + extra_h);
+            checks_layout(window, n)?;
+            let l = window_layout(window, n);
+            prop_assert_eq!(l.toolbar.x + l.toolbar.width, window.0);
             prop_assert_eq!(l.panel.x + l.panel.width, l.toolbar.x);
             prop_assert_eq!(l.canvas.x, 0);
             prop_assert_eq!(l.canvas.x + l.canvas.width, l.panel.x);
             prop_assert_eq!(canvas_origin_px(n), (0, 16 * k));
             prop_assert!(l.toolbar.height >= TOOLBAR_CONTENT_H_U * k);
             // Alto y ancho mínimos: la fórmula y los dos techos.
-            let alto = (i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n)) as f32 / ppp;
-            prop_assert!((min_window_height_pt(ppp) - alto).abs() <= 0.01);
-            prop_assert!(min_window_height_pt(ppp) <= ALTO_MAX_PT);
-            let ancho = (min_window_width_u() * k) as f32 / ppp;
-            prop_assert!((min_window_width_pt(ppp) - ancho).abs() <= 0.01);
-            prop_assert!(min_window_width_pt(ppp) <= ANCHO_MAX_PT);
+            let height_2 = (i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n)) as f32 / ppp;
+            prop_assert!((min_window_height_pt(ppp) - height_2).abs() <= 0.01);
+            prop_assert!(min_window_height_pt(ppp) <= HEIGHT_MAX_PT);
+            let width_2 = (min_window_width_u() * k) as f32 / ppp;
+            prop_assert!((min_window_width_pt(ppp) - width_2).abs() <= 0.01);
+            prop_assert!(min_window_width_pt(ppp) <= WIDTH_MAX_PT);
         }
     }
 }
@@ -614,20 +627,20 @@ mod icons {
 
     type RectU = (i64, i64, i64, i64);
 
-    fn solapan(a: RectU, b: RectU) -> bool {
+    fn overlap(a: RectU, b: RectU) -> bool {
         a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3
     }
 
     /// Los nueve botones escritos con los literales de la spec: casillas de 24 × 24 u con un hueco
     /// de 1 u (herramientas en las casillas 0 a 4; zoom en una fila en y = 80).
-    fn botones_de_la_spec() -> Vec<RectU> {
-        let herramientas = (0..5).map(|i| (4 + 25 * (i % 4), 4 + 25 * (i / 4), 24, 24));
+    fn buttons_of_the_spec() -> Vec<RectU> {
+        let tools = (0..5).map(|i| (4 + 25 * (i % 4), 4 + 25 * (i / 4), 24, 24));
         let zoom = (0..4).map(|i| (4 + 25 * i, 80, 24, 24));
-        herramientas.chain(zoom).collect()
+        tools.chain(zoom).collect()
     }
 
     #[test]
-    fn fila_3_la_caja_tiene_la_geometria_de_la_rejilla_de_iconos() {
+    fn row_3_the_toolbox_has_the_geometry_of_the_icon_grid() {
         assert_eq!((TOOLBOX_COLUMNS, TOOL_ROWS, TOOL_SLOTS), (4, 2, 8));
         assert_eq!((BUTTON_U, GAP_U), (24, 1));
         for slot in 0..TOOL_SLOTS {
@@ -638,9 +651,9 @@ mod icons {
                 "casilla {slot}"
             );
         }
-        let esperados = botones_de_la_spec();
-        for (i, esperado) in esperados.iter().enumerate() {
-            assert_eq!(toolbox_button_rect_u(i), *esperado, "botón {i}");
+        let expected_2_2 = buttons_of_the_spec();
+        for (i, expected_2) in expected_2_2.iter().enumerate() {
+            assert_eq!(toolbox_button_rect_u(i), *expected_2, "botón {i}");
         }
         assert_eq!(TOOLS_Y_U, 4);
         assert_eq!(TOOLBAR_SEPARATOR_Y_U, 57);
@@ -663,19 +676,19 @@ mod icons {
         // Capacidad para el pincel del hito 4: 5 herramientas y el pincel caben en las casillas.
         assert!(TOOL_SLOTS > TOOL_BUTTONS.len());
         // Ninguna pieza se solapa ni toca el borde de la caja (4 u de margen a cada lado).
-        let mut piezas = esperados;
-        piezas.push((4, 57, 99, 1)); // separador
-        piezas.push((8, 62, 91, 14)); // texto del zoom
-        piezas.push((OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U));
-        for (i, a) in piezas.iter().enumerate() {
+        let mut pieces = expected_2_2;
+        pieces.push((4, 57, 99, 1)); // separador
+        pieces.push((8, 62, 91, 14)); // texto del zoom
+        pieces.push((OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U));
+        for (i, a) in pieces.iter().enumerate() {
             assert!(a.0 >= 4 && a.0 + a.2 <= 107 - 4, "pieza {i}: {a:?}");
             assert!(
                 a.1 >= 4 && a.1 + a.3 <= TOOLBAR_CONTENT_H_U - 4,
                 "pieza {i}: {a:?}"
             );
-            for (j, b) in piezas.iter().enumerate().skip(i + 1) {
+            for (j, b) in pieces.iter().enumerate().skip(i + 1) {
                 assert!(
-                    !solapan(*a, *b),
+                    !overlap(*a, *b),
                     "las piezas {i} y {j} se solapan: {a:?} {b:?}"
                 );
             }
@@ -683,11 +696,11 @@ mod icons {
         // Todo es entero y múltiplo de `n` desde la esquina de la caja, a las cinco escalas.
         for ppp in PPPS {
             let n = n_de(ppp);
-            for (i, p) in piezas.iter().enumerate() {
+            for (i, p) in pieces.iter().enumerate() {
                 for u in [p.0, p.1, p.2, p.3] {
-                    let fisico = (u * n) as f32 / ppp * ppp;
+                    let physical = (u * n) as f32 / ppp * ppp;
                     assert!(
-                        (fisico - fisico.round()).abs() <= 0.001,
+                        (physical - physical.round()).abs() <= 0.001,
                         "ppp {ppp}, pieza {i}"
                     );
                 }
@@ -696,11 +709,14 @@ mod icons {
     }
 
     #[test]
-    fn fila_5_los_minimos_y_la_regla_del_alto_de_la_caja_con_cuatro_y_con_cinco_filas() {
-        for ((ppp, alto), ancho) in PPPS.iter().zip(ALTOS_PT).zip(ANCHOS_PT) {
-            assert!(cerca_pt(min_window_height_pt(*ppp), alto), "alto con {ppp}");
+    fn row_5_the_minimums_and_the_toolbox_height_rule_with_four_and_with_five_rows() {
+        for ((ppp, height_2), width_2) in PPPS.iter().zip(ALTOS_PT).zip(WIDTHS_PT) {
             assert!(
-                cerca_pt(min_window_width_pt(*ppp), ancho),
+                near_pt(min_window_height_pt(*ppp), height_2),
+                "alto con {ppp}"
+            );
+            assert!(
+                near_pt(min_window_width_pt(*ppp), width_2),
                 "ancho con {ppp}"
             );
             assert!(min_window_height_pt(*ppp) <= 468.0 + 0.01, "alto con {ppp}");
@@ -715,19 +731,19 @@ mod icons {
             );
             // …con 4 filas de herramientas (16) aún cabe, con 5 filas (17 a 20) la regla falla:
             // lo que guarda el recuadro de 138 u hasta que el hito 4 decida.
-            let con_filas = |filas: i64| (TOOLBAR_CONTENT_H_U + (filas - TOOL_ROWS) * 25) * n;
+            let with_rows = |rows_2: i64| (TOOLBAR_CONTENT_H_U + (rows_2 - TOOL_ROWS) * 25) * n;
             assert!(
-                con_filas(4) <= min_panel_height_px(n as u32),
+                with_rows(4) <= min_panel_height_px(n as u32),
                 "ppp {ppp}: 4 filas"
             );
             assert!(
-                con_filas(5) > min_panel_height_px(n as u32),
+                with_rows(5) > min_panel_height_px(n as u32),
                 "ppp {ppp}: 5 filas"
             );
         }
-        for invalido in [f32::NAN, f32::INFINITY, 0.0, -1.0] {
-            assert!(cerca_pt(min_window_height_pt(invalido), 341.0));
-            assert!(cerca_pt(min_window_width_pt(invalido), 468.0));
+        for invalid in [f32::NAN, f32::INFINITY, 0.0, -1.0] {
+            assert!(near_pt(min_window_height_pt(invalid), 341.0));
+            assert!(near_pt(min_window_width_pt(invalid), 468.0));
         }
         assert_eq!(min_window_width_u(), 468);
     }
@@ -737,58 +753,58 @@ mod icons {
 
         /// Propiedad 1: geometría entera, sin solapes, que cabe, y mínimos con su fórmula y techos.
         #[test]
-        fn propiedad_1_la_caja_y_los_minimos_son_enteros_caben_y_cumplen_los_techos(
-            paso in 0u32..=60,
+        fn property_1_the_toolbox_and_the_minimums_are_integers_fit_and_meet_the_ceilings(
+            step in 0u32..=60,
             extra_w in 0i64..=700,
             extra_h in 0i64..=500,
         ) {
-            let ppp = ppp_del_paso(paso);
+            let ppp = ppp_of_the_step(step);
             let n = text_scale(ppp);
             let k = i64::from(n);
-            let minima = (
+            let minimum = (
                 min_window_width_u() * k,
                 i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n),
             );
-            let ventana = (minima.0 + extra_w, minima.1 + extra_h);
-            comprueba_layout(ventana, n)?;
-            let l = window_layout(ventana, n);
+            let window = (minimum.0 + extra_w, minimum.1 + extra_h);
+            checks_layout(window, n)?;
+            let l = window_layout(window, n);
             // Cada botón, el separador, el texto del zoom y el recuadro caben en la caja y no se
             // solapan; el contenido cabe en el alto de la caja.
-            let mut piezas: Vec<RectU> = (0..9).map(toolbox_button_rect_u).collect();
-            piezas.push((4, 57, 99, 1));
-            piezas.push((8, 62, 91, 14));
-            piezas.push((OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U));
-            for (i, a) in piezas.iter().enumerate() {
+            let mut pieces: Vec<RectU> = (0..9).map(toolbox_button_rect_u).collect();
+            pieces.push((4, 57, 99, 1));
+            pieces.push((8, 62, 91, 14));
+            pieces.push((OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U));
+            for (i, a) in pieces.iter().enumerate() {
                 prop_assert!(a.0 >= 0 && (a.0 + a.2) * k <= l.toolbar.width);
                 prop_assert!((a.1 + a.3) * k <= l.toolbar.height);
-                for b in piezas.iter().skip(i + 1) {
-                    prop_assert!(!solapan(*a, *b));
+                for b in pieces.iter().skip(i + 1) {
+                    prop_assert!(!overlap(*a, *b));
                 }
             }
             prop_assert!(TOOLBAR_CONTENT_H_U * k <= l.toolbar.height);
             prop_assert!(block_height_px(Mode::Indexed, n) <= l.panel.height);
-            let alto = ((20 + MENU_H_U + 305) * k) as f32 / ppp;
-            prop_assert!((min_window_height_pt(ppp) - alto).abs() <= 0.01);
+            let height_2 = ((20 + MENU_H_U + 305) * k) as f32 / ppp;
+            prop_assert!((min_window_height_pt(ppp) - height_2).abs() <= 0.01);
             prop_assert!(min_window_height_pt(ppp) <= 468.0 + 0.01);
-            let ancho = (min_window_width_u() * k) as f32 / ppp;
-            prop_assert!((min_window_width_pt(ppp) - ancho).abs() <= 0.01);
+            let width_2 = (min_window_width_u() * k) as f32 / ppp;
+            prop_assert!((min_window_width_pt(ppp) - width_2).abs() <= 0.01);
             prop_assert!(min_window_width_pt(ppp) <= 683.0);
         }
 
         /// Propiedad 3 (la caja): un punto golpea como mucho un botón y exactamente el de su
         /// rectángulo; en los huecos no golpea nada; es total.
         #[test]
-        fn propiedad_3_toolbox_hit_da_el_boton_de_su_rectangulo_y_nada_en_los_huecos(
+        fn property_3_toolbox_hit_gives_the_button_of_its_rectangle_and_nothing_in_the_gaps(
             n in 1u32..=8,
             x in -60i64..=1000,
             y in -60i64..=2200,
         ) {
             let k = i64::from(n);
-            let rects = botones_de_la_spec();
-            let esperado = rects
+            let rects = buttons_of_the_spec();
+            let expected_2 = rects
                 .iter()
                 .position(|r| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k);
-            prop_assert_eq!(toolbox_hit(x, y, n), esperado);
+            prop_assert_eq!(toolbox_hit(x, y, n), expected_2);
         }
     }
 }

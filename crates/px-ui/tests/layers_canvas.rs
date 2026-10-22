@@ -2,8 +2,8 @@
 //! de egui sin ventana y propiedad 1 (la vista incremental es la composición).
 //!
 //! Mismo banco que `tiles_canvas.rs`, reducido: `Context::run_ui` con `RawInput` sintético, el
-//! `TexturesDelta` de cada fotograma aplicado **en orden** con `common::textures::Texturas` y la
-//! textura resultante comparada con el oráculo: `esperado(compose(doc))`, esto es,
+//! `TexturesDelta` de cada fotograma aplicado **en orden** con `common::textures::Textures` y la
+//! textura resultante comparada con el oráculo: `expected_2(compose(doc))`, esto es,
 //! `Color32::from_rgba_unmultiplied` de cada píxel de la composición completa. Orden de un
 //! fotograma, como en la app: `interact` → (cambios del documento con `invalidate`) →
 //! `set_overlay` → `sync` con `DocSource` → `paint`.
@@ -25,55 +25,55 @@ use px_ui::source::{DocSource, OverlayCache, overlay_pixels};
 use px_ui::view::{Size, ViewOp};
 
 mod common;
-use common::contexto;
-use common::textures::Texturas;
+use common::context;
+use common::textures::Textures;
 
 mod tiles_support;
-use tiles_support::{B, esperado, imagen_de, modelo_de_pixeles, modelo_lleno, pixel_de};
+use tiles_support::{B, expected_2, image_of, model_full, model_of_pixels, pixel_de};
 
-const ANCHO: u32 = 130;
-const ALTO: u32 = 70;
-const ROJO: Rgba = Rgba::opaque(255, 0, 0);
-const AZUL: Rgba = Rgba::opaque(0, 0, 255);
+const WIDTH: u32 = 130;
+const HEIGHT: u32 = 70;
+const RED: Rgba = Rgba::opaque(255, 0, 0);
+const BLUE: Rgba = Rgba::opaque(0, 0, 255);
 
 fn rgba(color: Rgba) -> Pixel {
     Pixel::Rgba(color)
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     canvas: Canvas,
     doc: Document,
     log: ChangeLog,
-    texturas: Texturas,
+    textures_2: Textures,
 }
 
-impl Banco {
-    fn nuevo(doc: Document) -> Banco {
-        let ctx = contexto(1.0);
+impl Bench {
+    fn new_2(doc: Document) -> Bench {
+        let ctx = context(1.0);
         let mut canvas = Canvas::with_tile_side(64);
         canvas.load(&ctx, &DocSource(&doc)).expect("load");
-        let mut banco = Banco {
+        let mut bench = Bench {
             ctx,
             canvas,
             doc,
             log: ChangeLog::new(),
-            texturas: Texturas::new(),
+            textures_2: Textures::new(),
         };
         for _ in 0..3 {
-            banco.corre(|_, _, _, _| {});
+            bench.runs(|_, _, _, _| {});
         }
-        banco
+        bench
     }
 
     /// Un fotograma. Devuelve los píxeles subidos a las texturas del lienzo (suma de las áreas de
     /// los deltas, completos y parciales).
-    fn corre<F>(&mut self, fase: F) -> usize
+    fn runs<F>(&mut self, phase: F) -> usize
     where
         F: FnOnce(&Context, &mut Canvas, &mut Document, &mut ChangeLog),
     {
-        let mut fase = Some(fase);
-        let entrada = RawInput {
+        let mut phase = Some(phase);
+        let input_2 = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(200.0, 150.0))),
             ..RawInput::default()
         };
@@ -81,49 +81,49 @@ impl Banco {
         let doc = &mut self.doc;
         let log = &mut self.log;
         let ids: BTreeSet<TextureId> = canvas.texture_ids().into_iter().collect();
-        let mut salida = self.ctx.run_ui(entrada, |ui| {
+        let mut output_2 = self.ctx.run_ui(input_2, |ui| {
             canvas.interact_roles(ui);
-            if let Some(fase) = fase.take() {
-                fase(ui.ctx(), canvas, doc, log);
+            if let Some(phase) = phase.take() {
+                phase(ui.ctx(), canvas, doc, log);
             }
             canvas.sync(ui.ctx(), &DocSource(doc)).expect("sync");
             canvas.paint(ui);
         });
-        let mut subidos = 0;
-        for (id, deltas) in &salida.textures_delta.set {
+        let mut uploaded = 0;
+        for (id, deltas) in &output_2.textures_delta.set {
             if !ids.contains(id) {
                 continue;
             }
             for delta in deltas {
-                let egui::ImageData::Color(imagen) = &delta.image;
-                subidos += imagen.size[0] * imagen.size[1];
+                let egui::ImageData::Color(image_2) = &delta.image;
+                uploaded += image_2.size[0] * image_2.size[1];
             }
         }
-        self.texturas.aplica(&salida.textures_delta);
-        salida.textures_delta.clear();
-        subidos
+        self.textures_2.applies(&output_2.textures_delta);
+        output_2.textures_delta.clear();
+        uploaded
     }
 
     /// `dirty_of`, `apply`, registro y aviso al lienzo: lo que hace `Session`.
-    fn aplica(&mut self, comando: Command) -> (Result<bool, DocumentError>, usize) {
-        let mut resultado = Ok(false);
-        let subidos = self.corre(|_, canvas, doc, log| {
-            let region = dirty_of(&comando, Size::new(doc.width(), doc.height()));
-            resultado = doc.apply(comando);
-            if let Ok(true) = resultado {
+    fn applies(&mut self, command: Command) -> (Result<bool, DocumentError>, usize) {
+        let mut result = Ok(false);
+        let uploaded = self.runs(|_, canvas, doc, log| {
+            let region = dirty_of(&command, Size::new(doc.width(), doc.height()));
+            result = doc.apply(command);
+            if let Ok(true) = result {
                 log.record(doc.state_id(), region.clone());
                 canvas.invalidate(&region);
             }
         });
-        (resultado, subidos)
+        (result, uploaded)
     }
 
-    fn deshace(&mut self) -> usize {
-        self.corre(|_, canvas, doc, log| {
-            let desde = doc.state_id();
+    fn undoes(&mut self) -> usize {
+        self.runs(|_, canvas, doc, log| {
+            let from_2 = doc.state_id();
             if doc.undo().is_ok() {
                 let region = log
-                    .get(desde)
+                    .get(from_2)
                     .cloned()
                     .unwrap_or_else(|| BlockSet::full(doc.width(), doc.height()));
                 canvas.invalidate(&region);
@@ -131,8 +131,8 @@ impl Banco {
         })
     }
 
-    fn rehace(&mut self) -> usize {
-        self.corre(|_, canvas, doc, log| {
+    fn redoes(&mut self) -> usize {
+        self.runs(|_, canvas, doc, log| {
             if doc.redo().is_ok() {
                 let region = log
                     .get(doc.state_id())
@@ -144,111 +144,111 @@ impl Banco {
     }
 
     /// Las diferencias entre la textura de todas las baldosas y la composición del documento.
-    fn discrepancias(&self) -> Vec<(u32, u32)> {
-        let Ok(compuesta) = compose(&self.doc) else {
+    fn discrepancies(&self) -> Vec<(u32, u32)> {
+        let Ok(composite) = compose(&self.doc) else {
             return Vec::new();
         };
-        let oraculo = esperado(&compuesta);
-        let ancho = self.doc.width() as usize;
+        let oracle = expected_2(&composite);
+        let width_2 = self.doc.width() as usize;
         let ids = self.canvas.texture_ids();
-        let mut fallos = Vec::new();
+        let mut failures = Vec::new();
         for (i, id) in ids.iter().enumerate() {
             let r = self.canvas.tile_rect(i);
             for y in r.y..r.y + r.height {
                 for x in r.x..r.x + r.width {
-                    let visto = self
-                        .texturas
+                    let seen = self
+                        .textures_2
                         .texel(*id, (x - r.x) as usize, (y - r.y) as usize);
-                    if visto != Some(oraculo[y as usize * ancho + x as usize]) {
-                        fallos.push((x, y));
+                    if seen != Some(oracle[y as usize * width_2 + x as usize]) {
+                        failures.push((x, y));
                     }
                 }
             }
         }
-        fallos
+        failures
     }
 
-    fn contenidos(&self) -> Vec<Vec<Color32>> {
+    fn contents(&self) -> Vec<Vec<Color32>> {
         self.canvas
             .texture_ids()
             .iter()
             .map(|id| {
-                let textura = self.texturas.get(*id).expect("textura");
-                textura.texels.clone()
+                let texture_2 = self.textures_2.get(*id).expect("textura");
+                texture_2.texels.clone()
             })
             .collect()
     }
 }
 
-/// Píxeles de las baldosas de 64 que cubren los bloques de `modelo` (recortados a la imagen).
-fn area_de(modelo: &BTreeSet<(u32, u32)>) -> usize {
-    modelo
+/// Píxeles de las baldosas de 64 que cubren los bloques de `model` (recortados a la imagen).
+fn area_de(model: &BTreeSet<(u32, u32)>) -> usize {
+    model
         .iter()
         .map(|&(bx, by)| {
-            let ancho = (ANCHO - bx * B).min(B) as usize;
-            let alto = (ALTO - by * B).min(B) as usize;
-            ancho * alto
+            let width_2 = (WIDTH - bx * B).min(B) as usize;
+            let height_2 = (HEIGHT - by * B).min(B) as usize;
+            width_2 * height_2
         })
         .sum()
 }
 
-fn doc_de_tres_capas() -> Document {
-    let mut doc = Document::new(imagen_de(Mode::Rgba, ANCHO, ALTO, 5));
-    for nombre in ["B", "C"] {
+fn three_layer_doc() -> Document {
+    let mut doc = Document::new(image_of(Mode::Rgba, WIDTH, HEIGHT, 5));
+    for name_2 in ["B", "C"] {
         let at = doc.layers().len();
         doc.apply(Command::AddLayer {
-            name: nombre.to_string(),
+            name: name_2.to_string(),
             at,
         })
         .expect("capa");
     }
-    let (capa_b, celda_b) = (doc.layers()[1].id(), doc.layers()[1].cel());
-    let (capa_c, celda_c) = (doc.layers()[2].id(), doc.layers()[2].cel());
-    let puntos: Vec<PixelEdit> = (0..ANCHO)
+    let (layer_b, cel_b) = (doc.layers()[1].id(), doc.layers()[1].cel());
+    let (layer_c, cel_c) = (doc.layers()[2].id(), doc.layers()[2].cel());
+    let points: Vec<PixelEdit> = (0..WIDTH)
         .step_by(3)
         .map(|x| PixelEdit {
             x,
-            y: (x * 7) % ALTO,
+            y: (x * 7) % HEIGHT,
             pixel: rgba(Rgba::new(200, 100, 50, 200)),
         })
         .collect();
     doc.apply(Command::SetPixels {
-        image: celda_b,
-        pixels: puntos.clone(),
+        image: cel_b,
+        pixels: points.clone(),
     })
     .expect("pintar");
     doc.apply(Command::SetPixels {
-        image: celda_c,
-        pixels: puntos
+        image: cel_c,
+        pixels: points
             .iter()
             .map(|e| PixelEdit {
-                pixel: rgba(AZUL),
+                pixel: rgba(BLUE),
                 ..*e
             })
             .collect(),
     })
     .expect("pintar");
     doc.apply(Command::SetLayerOpacity {
-        layer: capa_b,
+        layer: layer_b,
         opacity: 128,
     })
     .expect("opacidad");
     doc.apply(Command::SetLayerBlend {
-        layer: capa_b,
+        layer: layer_b,
         blend: BlendMode::Multiply,
     })
     .expect("mezcla");
     doc.apply(Command::SetLayerVisible {
-        layer: capa_c,
+        layer: layer_c,
         visible: false,
     })
     .expect("ocultar");
     doc
 }
 
-fn trazo(celda: ImageId, x0: u32, y: u32, n: u32, color: Rgba) -> Command {
+fn stroke_2(cel: ImageId, x0: u32, y: u32, n: u32, color: Rgba) -> Command {
     Command::SetPixels {
-        image: celda,
+        image: cel,
         pixels: (0..n)
             .map(|i| PixelEdit {
                 x: x0 + i,
@@ -264,23 +264,23 @@ fn trazo(celda: ImageId, x0: u32, y: u32, n: u32, color: Rgba) -> Command {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_las_baldosas_de_varias_capas_son_la_composicion() {
-    let banco = Banco::nuevo(doc_de_tres_capas());
-    assert_eq!(banco.canvas.tile_count(), 6);
-    assert_eq!(banco.discrepancias(), vec![]);
+fn row_7_the_tiles_of_several_layers_are_the_composition() {
+    let bench = Bench::new_2(three_layer_doc());
+    assert_eq!(bench.canvas.tile_count(), 6);
+    assert_eq!(bench.discrepancies(), vec![]);
 }
 
 #[test]
-fn fila_7_las_baldosas_de_un_indexado_con_capas_son_la_composicion() {
-    let mut doc = Document::new(imagen_de(Mode::Indexed, ANCHO, ALTO, 7));
+fn row_7_the_tiles_of_an_indexed_one_with_layers_are_the_composition() {
+    let mut doc = Document::new(image_of(Mode::Indexed, WIDTH, HEIGHT, 7));
     doc.apply(Command::AddLayer {
         name: "B".to_string(),
         at: 1,
     })
     .expect("capa");
-    let celda_b = doc.layers()[1].cel();
+    let cel_b = doc.layers()[1].cel();
     doc.apply(Command::SetPixels {
-        image: celda_b,
+        image: cel_b,
         pixels: (0..40)
             .map(|x| PixelEdit {
                 x,
@@ -290,33 +290,33 @@ fn fila_7_las_baldosas_de_un_indexado_con_capas_son_la_composicion() {
             .collect(),
     })
     .expect("pintar");
-    let banco = Banco::nuevo(doc);
-    assert_eq!(banco.discrepancias(), vec![]);
+    let bench = Bench::new_2(doc);
+    assert_eq!(bench.discrepancies(), vec![]);
 }
 
 #[test]
-fn fila_7_con_una_capa_las_texturas_son_las_de_hoy_y_la_transparencia_deja_ver_el_fondo() {
-    let imagen = imagen_de(Mode::Rgba, ANCHO, ALTO, 4);
-    let banco = Banco::nuevo(Document::new(imagen.clone()));
-    let oraculo = esperado(&imagen);
-    let ancho = ANCHO as usize;
-    for (i, id) in banco.canvas.texture_ids().iter().enumerate() {
-        let r = banco.canvas.tile_rect(i);
+fn row_7_with_one_layer_the_textures_are_todays_and_the_transparency_shows_the_background() {
+    let image_2 = image_of(Mode::Rgba, WIDTH, HEIGHT, 4);
+    let bench = Bench::new_2(Document::new(image_2.clone()));
+    let oracle = expected_2(&image_2);
+    let width_2 = WIDTH as usize;
+    for (i, id) in bench.canvas.texture_ids().iter().enumerate() {
+        let r = bench.canvas.tile_rect(i);
         for y in r.y..r.y + r.height {
             for x in r.x..r.x + r.width {
                 assert_eq!(
-                    banco
-                        .texturas
+                    bench
+                        .textures_2
                         .texel(*id, (x - r.x) as usize, (y - r.y) as usize),
-                    Some(oraculo[y as usize * ancho + x as usize])
+                    Some(oracle[y as usize * width_2 + x as usize])
                 );
             }
         }
     }
     // Una composición toda transparente da texels de alfa 0: se ve el damero o el fondo elegido.
-    let vacio = Document::new(Image::new(ANCHO, ALTO, Mode::Rgba).expect("imagen"));
-    let banco = Banco::nuevo(vacio);
-    assert!(banco.contenidos().iter().flatten().all(|c| c.a() == 0));
+    let empty = Document::new(Image::new(WIDTH, HEIGHT, Mode::Rgba).expect("imagen"));
+    let bench = Bench::new_2(empty);
+    assert!(bench.contents().iter().flatten().all(|c| c.a() == 0));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -324,21 +324,21 @@ fn fila_7_con_una_capa_las_texturas_son_las_de_hoy_y_la_transparencia_deja_ver_e
 // ---------------------------------------------------------------------------------------------
 
 /// Un documento de una sola capa, oculta, en cada modo; el indexado sin índice transparente.
-fn doc_con_la_unica_capa_oculta(modo: Mode) -> Document {
-    let imagen = match modo {
+fn doc_with_the_only_layer_hidden(mode_2: Mode) -> Document {
+    let image_2 = match mode_2 {
         Mode::Indexed => Image::new_indexed(
-            ANCHO,
-            ALTO,
+            WIDTH,
+            HEIGHT,
             px_core::Palette::from_colors([Rgba::opaque(1, 2, 3), Rgba::opaque(4, 5, 6)])
                 .expect("paleta"),
         )
         .expect("imagen"),
-        _ => Image::new(ANCHO, ALTO, modo).expect("imagen"),
+        _ => Image::new(WIDTH, HEIGHT, mode_2).expect("imagen"),
     };
-    let mut doc = Document::new(imagen);
-    let capa = doc.layers()[0].id();
+    let mut doc = Document::new(image_2);
+    let layer_2 = doc.layers()[0].id();
     doc.apply(Command::SetLayerVisible {
-        layer: capa,
+        layer: layer_2,
         visible: false,
     })
     .expect("ocultar");
@@ -346,24 +346,24 @@ fn doc_con_la_unica_capa_oculta(modo: Mode) -> Document {
 }
 
 #[test]
-fn con_todas_las_capas_ocultas_el_lienzo_carga_y_se_ve_transparente_en_todos_los_modos() {
-    for modo in [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed, Mode::Gray] {
-        let doc = doc_con_la_unica_capa_oculta(modo);
-        let ctx = contexto(1.0);
+fn with_all_layers_hidden_the_canvas_loads_and_looks_transparent_in_all_modes() {
+    for mode_2 in [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed, Mode::Gray] {
+        let doc = doc_with_the_only_layer_hidden(mode_2);
+        let ctx = context(1.0);
         let mut canvas = Canvas::with_tile_side(64);
-        let cargado = canvas.load(&ctx, &DocSource(&doc));
-        assert_eq!(cargado, Ok(()), "{modo:?}: cargar el lienzo");
-        let mut banco = Banco::nuevo(doc);
+        let loaded = canvas.load(&ctx, &DocSource(&doc));
+        assert_eq!(loaded, Ok(()), "{mode_2:?}: cargar el lienzo");
+        let mut bench = Bench::new_2(doc);
         for _ in 0..2 {
-            banco.corre(|_, _, _, _| {});
+            bench.runs(|_, _, _, _| {});
         }
-        let todo_transparente = banco
-            .contenidos()
+        let all_transparent = bench
+            .contents()
             .iter()
-            .all(|baldosa| baldosa.iter().all(|&c| c == Color32::TRANSPARENT));
+            .all(|tile| tile.iter().all(|&c| c == Color32::TRANSPARENT));
         assert!(
-            todo_transparente,
-            "{modo:?}: la vista es el fondo del lienzo"
+            all_transparent,
+            "{mode_2:?}: la vista es el fondo del lienzo"
         );
     }
 }
@@ -373,94 +373,97 @@ fn con_todas_las_capas_ocultas_el_lienzo_carga_y_se_ve_transparente_en_todos_los
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_un_trazo_deshacer_y_rehacer_suben_solo_los_bloques_del_trazo() {
-    let mut banco = Banco::nuevo(doc_de_tres_capas());
-    let celda_b = banco.doc.layers()[1].cel();
+fn row_8_a_stroke_undo_and_redo_upload_only_the_blocks_of_the_stroke() {
+    let mut bench = Bench::new_2(three_layer_doc());
+    let cel_b = bench.doc.layers()[1].cel();
     // 40 píxeles en la fila 10 desde x = 50: cruzan los bloques (0, 0) y (1, 0).
-    let comando = trazo(celda_b, 50, 10, 40, ROJO);
-    let puntos: Vec<(u32, u32)> = (50..90).map(|x| (x, 10)).collect();
-    let esperado_subido = area_de(&modelo_de_pixeles(&puntos, ANCHO, ALTO));
+    let command = stroke_2(cel_b, 50, 10, 40, RED);
+    let points: Vec<(u32, u32)> = (50..90).map(|x| (x, 10)).collect();
+    let expected_uploaded = area_de(&model_of_pixels(&points, WIDTH, HEIGHT));
     assert!(
-        esperado_subido < (ANCHO * ALTO) as usize,
+        expected_uploaded < (WIDTH * HEIGHT) as usize,
         "la prueba necesita un trazo parcial"
     );
-    let (resultado, subidos) = banco.aplica(comando);
-    assert_eq!(resultado, Ok(true));
-    assert_eq!(subidos, esperado_subido, "solo los bloques del trazo");
-    assert_eq!(banco.discrepancias(), vec![]);
-    assert_eq!(banco.deshace(), esperado_subido);
-    assert_eq!(banco.discrepancias(), vec![]);
-    assert_eq!(banco.rehace(), esperado_subido);
-    assert_eq!(banco.discrepancias(), vec![]);
-    assert_eq!(banco.corre(|_, _, _, _| {}), 0, "en reposo no se sube nada");
+    let (result, uploaded) = bench.applies(command);
+    assert_eq!(result, Ok(true));
+    assert_eq!(uploaded, expected_uploaded, "solo los bloques del trazo");
+    assert_eq!(bench.discrepancies(), vec![]);
+    assert_eq!(bench.undoes(), expected_uploaded);
+    assert_eq!(bench.discrepancies(), vec![]);
+    assert_eq!(bench.redoes(), expected_uploaded);
+    assert_eq!(bench.discrepancies(), vec![]);
+    assert_eq!(bench.runs(|_, _, _, _| {}), 0, "en reposo no se sube nada");
 }
 
 #[test]
-fn fila_8_añadir_y_renombrar_no_ensucian_y_los_demas_comandos_de_capa_ensucian_todo() {
-    let mut banco = Banco::nuevo(doc_de_tres_capas());
-    let todo = area_de(&modelo_lleno(ANCHO, ALTO));
-    assert_eq!(todo, (ANCHO * ALTO) as usize);
-    let capa = banco.doc.layers()[1].id();
-    let (r, subidos) = banco.aplica(Command::AddLayer {
+fn row_8_add_and_rename_do_not_dirty_and_the_other_layer_commands_dirty_everything() {
+    let mut bench = Bench::new_2(three_layer_doc());
+    let all = area_de(&model_full(WIDTH, HEIGHT));
+    assert_eq!(all, (WIDTH * HEIGHT) as usize);
+    let layer_2 = bench.doc.layers()[1].id();
+    let (r, uploaded) = bench.applies(Command::AddLayer {
         name: "D".to_string(),
         at: 3,
     });
     assert_eq!(r, Ok(true));
-    assert_eq!(subidos, 0);
-    let (r, subidos) = banco.aplica(Command::RenameLayer {
-        layer: capa,
+    assert_eq!(uploaded, 0);
+    let (r, uploaded) = bench.applies(Command::RenameLayer {
+        layer: layer_2,
         name: "Z".to_string(),
     });
     assert_eq!(r, Ok(true));
-    assert_eq!(subidos, 0);
-    assert_eq!(banco.discrepancias(), vec![]);
-    let ordenes = [
+    assert_eq!(uploaded, 0);
+    assert_eq!(bench.discrepancies(), vec![]);
+    let commands = [
         Command::SetLayerOpacity {
-            layer: capa,
+            layer: layer_2,
             opacity: 90,
         },
         Command::SetLayerVisible {
-            layer: capa,
+            layer: layer_2,
             visible: false,
         },
         Command::SetLayerBlend {
-            layer: capa,
+            layer: layer_2,
             blend: BlendMode::Screen,
         },
-        Command::MoveLayer { layer: capa, to: 0 },
-        Command::RemoveLayer { layer: capa },
+        Command::MoveLayer {
+            layer: layer_2,
+            to: 0,
+        },
+        Command::RemoveLayer { layer: layer_2 },
     ];
-    for orden in ordenes {
-        let nombre = format!("{orden:?}");
-        let (r, subidos) = banco.aplica(orden);
-        assert_eq!(r, Ok(true), "{nombre}");
-        assert_eq!(subidos, todo, "{nombre}");
-        assert_eq!(banco.discrepancias(), vec![], "{nombre}");
-        assert_eq!(banco.deshace(), todo, "{nombre}: deshacer");
-        assert_eq!(banco.discrepancias(), vec![], "{nombre}: deshacer");
-        assert_eq!(banco.rehace(), todo, "{nombre}: rehacer");
-        assert_eq!(banco.discrepancias(), vec![], "{nombre}: rehacer");
+    for order in commands {
+        let name_2 = format!("{order:?}");
+        let (r, uploaded) = bench.applies(order);
+        assert_eq!(r, Ok(true), "{name_2}");
+        assert_eq!(uploaded, all, "{name_2}");
+        assert_eq!(bench.discrepancies(), vec![], "{name_2}");
+        assert_eq!(bench.undoes(), all, "{name_2}: deshacer");
+        assert_eq!(bench.discrepancies(), vec![], "{name_2}: deshacer");
+        assert_eq!(bench.redoes(), all, "{name_2}: rehacer");
+        assert_eq!(bench.discrepancies(), vec![], "{name_2}: rehacer");
     }
 }
 
 #[test]
-fn fila_8_con_zoom_una_baldosa_fuera_de_la_vista_se_pone_al_dia_al_verse() {
-    let mut banco = Banco::nuevo(doc_de_tres_capas());
+fn row_8_with_zoom_a_tile_outside_the_view_catches_up_when_seen() {
+    let mut bench = Bench::new_2(three_layer_doc());
     for _ in 0..4 {
-        banco.canvas.request_view(ViewOp::ZoomIn);
+        bench.canvas.request_view(ViewOp::ZoomIn);
     }
-    banco.corre(|_, _, _, _| {});
-    let celda_b = banco.doc.layers()[1].cel();
-    let (r, _) = banco.aplica(trazo(celda_b, 120, 65, 8, ROJO));
+    bench.runs(|_, _, _, _| {});
+    let cel_b = bench.doc.layers()[1].cel();
+    let (r, _) = bench.applies(stroke_2(cel_b, 120, 65, 8, RED));
     assert_eq!(r, Ok(true));
     for _ in 0..4 {
-        banco.canvas.request_view(ViewOp::ZoomOut);
+        bench.canvas.request_view(ViewOp::ZoomOut);
     }
     for _ in 0..3 {
-        banco.corre(|_, _, _, _| {});
+        bench.runs(|_, _, _, _| {});
     }
-    assert_eq!(banco.canvas.pending_blocks(), 0);
-    assert_eq!(banco.discrepancias(), vec![]);
+    assert_eq!(bench.canvas.pending_blocks(), 0);
+    assert_eq!(bench.discrepancies(), vec![]);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -468,86 +471,82 @@ fn fila_8_con_zoom_una_baldosa_fuera_de_la_vista_se_pone_al_dia_al_verse() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_la_superposicion_es_la_composicion_y_al_soltar_la_textura_no_cambia() {
-    let mut doc = doc_de_tres_capas();
+fn row_9_the_overlay_is_the_composition_and_on_release_the_texture_does_not_change() {
+    let mut doc = three_layer_doc();
     // C visible y a opacidad 128 encima: el trazo en B se mezcla con ella.
-    let capa_c = doc.layers()[2].id();
+    let layer_c = doc.layers()[2].id();
     doc.apply(Command::SetLayerVisible {
-        layer: capa_c,
+        layer: layer_c,
         visible: true,
     })
     .expect("mostrar");
     doc.apply(Command::SetLayerOpacity {
-        layer: capa_c,
+        layer: layer_c,
         opacity: 128,
     })
     .expect("opacidad");
-    let mut banco = Banco::nuevo(doc);
-    let celda_b = banco.doc.layers()[1].cel();
-    let comando = trazo(celda_b, 20, 21, 30, ROJO);
-    let Command::SetPixels { pixels, .. } = &comando else {
+    let mut bench = Bench::new_2(doc);
+    let cel_b = bench.doc.layers()[1].cel();
+    let command = stroke_2(cel_b, 20, 21, 30, RED);
+    let Command::SetPixels { pixels, .. } = &command else {
         unreachable!()
     };
-    let pendiente = overlay_pixels(&banco.doc, celda_b, pixels.clone());
+    let pending = overlay_pixels(&bench.doc, cel_b, pixels.clone());
     // Fotograma del trazo en curso: el documento no cambia.
-    let antes = banco.doc.clone();
-    banco.corre(|ctx, canvas, doc, _| {
-        canvas.set_overlay(ctx, &DocSource(doc), &pendiente);
+    let antes = bench.doc.clone();
+    bench.runs(|ctx, canvas, doc, _| {
+        canvas.set_overlay(ctx, &DocSource(doc), &pending);
     });
-    assert_eq!(banco.doc, antes);
-    let mut aplicado = banco.doc.clone();
-    aplicado.apply(comando.clone()).expect("aplicar");
-    let oraculo = esperado(&compose(&aplicado).expect("compose"));
-    let durante = banco.contenidos();
-    let ancho = ANCHO as usize;
-    for (i, id) in banco.canvas.texture_ids().iter().enumerate() {
-        let r = banco.canvas.tile_rect(i);
+    assert_eq!(bench.doc, antes);
+    let mut applied = bench.doc.clone();
+    applied.apply(command.clone()).expect("aplicar");
+    let oracle = expected_2(&compose(&applied).expect("compose"));
+    let during = bench.contents();
+    let width_2 = WIDTH as usize;
+    for (i, id) in bench.canvas.texture_ids().iter().enumerate() {
+        let r = bench.canvas.tile_rect(i);
         for y in r.y..r.y + r.height {
             for x in r.x..r.x + r.width {
                 assert_eq!(
-                    banco
-                        .texturas
+                    bench
+                        .textures_2
                         .texel(*id, (x - r.x) as usize, (y - r.y) as usize),
-                    Some(oraculo[y as usize * ancho + x as usize]),
+                    Some(oracle[y as usize * width_2 + x as usize]),
                     "durante el trazo, ({x}, {y})"
                 );
             }
         }
     }
     // Soltar: se aplica el comando, se descarta la superposición y se sube lo sucio.
-    let (r, _) = banco.aplica(comando);
+    let (r, _) = bench.applies(command);
     assert_eq!(r, Ok(true));
-    assert_eq!(banco.canvas.overlay_blocks(), 0);
-    assert_eq!(
-        banco.contenidos(),
-        durante,
-        "al soltar no cambia ningún píxel"
-    );
-    assert_eq!(banco.discrepancias(), vec![]);
+    assert_eq!(bench.canvas.overlay_blocks(), 0);
+    assert_eq!(bench.contents(), during, "al soltar no cambia ningún píxel");
+    assert_eq!(bench.discrepancies(), vec![]);
 }
 
 #[test]
-fn fila_9_el_borrador_en_curso_muestra_lo_de_debajo() {
-    let mut doc = doc_de_tres_capas();
-    let celda_b = doc.layers()[1].cel();
-    doc.apply(trazo(celda_b, 10, 30, 20, ROJO)).expect("pintar");
-    let mut banco = Banco::nuevo(doc);
-    let borrar = trazo(celda_b, 12, 30, 10, Rgba::TRANSPARENT);
-    let Command::SetPixels { pixels, .. } = &borrar else {
+fn row_9_the_eraser_in_progress_shows_what_is_below() {
+    let mut doc = three_layer_doc();
+    let cel_b = doc.layers()[1].cel();
+    doc.apply(stroke_2(cel_b, 10, 30, 20, RED)).expect("pintar");
+    let mut bench = Bench::new_2(doc);
+    let delete = stroke_2(cel_b, 12, 30, 10, Rgba::TRANSPARENT);
+    let Command::SetPixels { pixels, .. } = &delete else {
         unreachable!()
     };
-    let pendiente = overlay_pixels(&banco.doc, celda_b, pixels.clone());
-    banco.corre(|ctx, canvas, doc, _| {
-        canvas.set_overlay(ctx, &DocSource(doc), &pendiente);
+    let pending = overlay_pixels(&bench.doc, cel_b, pixels.clone());
+    bench.runs(|ctx, canvas, doc, _| {
+        canvas.set_overlay(ctx, &DocSource(doc), &pending);
     });
-    let mut aplicado = banco.doc.clone();
-    aplicado.apply(borrar).expect("aplicar");
-    let oraculo = esperado(&compose(&aplicado).expect("compose"));
-    let (id, r) = (banco.canvas.texture_ids()[0], banco.canvas.tile_rect(0));
+    let mut applied = bench.doc.clone();
+    applied.apply(delete).expect("aplicar");
+    let oracle = expected_2(&compose(&applied).expect("compose"));
+    let (id, r) = (bench.canvas.texture_ids()[0], bench.canvas.tile_rect(0));
     for x in 12..22u32 {
         assert_eq!(
-            banco.texturas.texel(id, x as usize, 30),
-            Some(oraculo[30 * ANCHO as usize + x as usize]),
+            bench.textures_2.texel(id, x as usize, 30),
+            Some(oracle[30 * WIDTH as usize + x as usize]),
             "x = {x} (baldosa en {},{})",
             r.x,
             r.y
@@ -559,11 +558,11 @@ fn fila_9_el_borrador_en_curso_muestra_lo_de_debajo() {
 // Propiedad 1: la vista incremental es la composición
 // ---------------------------------------------------------------------------------------------
 
-type Semilla = (u8, u32, u32, u32, u32);
+type Seed = (u8, u32, u32, u32, u32);
 
-type Capas = Vec<(u8, u8, u8, u8)>;
+type Layers = Vec<(u8, u8, u8, u8)>;
 
-fn semillas() -> impl Strategy<Value = (u8, Capas, Vec<Semilla>)> {
+fn seeds() -> impl Strategy<Value = (u8, Layers, Vec<Seed>)> {
     (
         0u8..3,
         prop::collection::vec((0u8..4, 0u8..8, 0u8..3, 0u8..4), 0..4),
@@ -588,77 +587,77 @@ proptest! {
     /// de `compose(doc)`; con un `SetPixels` o `FillSpans` se subió exactamente el área de los
     /// bloques anotados (y con cualquier paso, nunca más que la imagen entera).
     #[test]
-    fn propiedad_1_la_vista_incremental_es_la_composicion(
-        (modo, capas, pasos) in semillas(),
+    fn property_1_the_incremental_view_is_the_composition(
+        (mode_2, layers, steps_2) in seeds(),
     ) {
-        let modo = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(modo)];
-        let mut doc = Document::new(imagen_de(modo, ANCHO, ALTO, 6));
-        for (i, &(contenido, opacidad, mezcla, visible)) in capas.iter().enumerate() {
+        let mode_2 = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(mode_2)];
+        let mut doc = Document::new(image_of(mode_2, WIDTH, HEIGHT, 6));
+        for (i, &(content, opacity_2, blend_2, visible)) in layers.iter().enumerate() {
             let at = doc.layers().len();
             if doc.apply(Command::AddLayer { name: format!("C{i}"), at }).is_err() {
                 continue;
             }
             let id = doc.layers()[at].id();
-            let celda = doc.layers()[at].cel();
-            if contenido != 0 {
+            let cel = doc.layers()[at].cel();
+            if content != 0 {
                 let _ = doc.apply(Command::SetPixels {
-                    image: celda,
+                    image: cel,
                     pixels: (0..30)
                         .map(|j| PixelEdit {
-                            x: (j * 13 + u32::from(contenido)) % ANCHO,
-                            y: (j * 7) % ALTO,
-                            pixel: pixel_de(modo, j + u32::from(opacidad), 8),
+                            x: (j * 13 + u32::from(content)) % WIDTH,
+                            y: (j * 7) % HEIGHT,
+                            pixel: pixel_de(mode_2, j + u32::from(opacity_2), 8),
                         })
                         .collect(),
                 });
             }
-            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 128, 200, 254, 1, 77, 255][usize::from(opacidad)] });
-            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(mezcla) * 3 % 8] });
+            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 128, 200, 254, 1, 77, 255][usize::from(opacity_2)] });
+            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(blend_2) * 3 % 8] });
             let _ = doc.apply(Command::SetLayerVisible { layer: id, visible: visible != 0 });
         }
-        let mut banco = Banco::nuevo(doc);
-        prop_assert_eq!(banco.discrepancias(), vec![]);
-        let total = (ANCHO * ALTO) as usize;
-        for (n, &(tipo, a, b, c, d)) in pasos.iter().enumerate() {
-            let capas = banco.doc.layers().len();
-            let capa = banco.doc.layers()[a as usize % capas].clone();
-            let pixel = pixel_de(modo, d, 8);
-            let (subidos, exacto) = match tipo {
+        let mut bench = Bench::new_2(doc);
+        prop_assert_eq!(bench.discrepancies(), vec![]);
+        let total = (WIDTH * HEIGHT) as usize;
+        for (n, &(kind, a, b, c, d)) in steps_2.iter().enumerate() {
+            let layers = bench.doc.layers().len();
+            let layer_2 = bench.doc.layers()[a as usize % layers].clone();
+            let pixel = pixel_de(mode_2, d, 8);
+            let (uploaded, exact) = match kind {
                 0..=3 => {
                     let pixels: Vec<PixelEdit> = (0..1 + b % 25)
                         .map(|j| PixelEdit {
-                            x: c.wrapping_add(j * 11) % ANCHO,
-                            y: d.wrapping_add(j * 5) % ALTO,
+                            x: c.wrapping_add(j * 11) % WIDTH,
+                            y: d.wrapping_add(j * 5) % HEIGHT,
                             pixel,
                         })
                         .collect();
-                    let puntos: Vec<(u32, u32)> = pixels.iter().map(|e| (e.x, e.y)).collect();
-                    let esperado = area_de(&modelo_de_pixeles(&puntos, ANCHO, ALTO));
-                    let (r, subidos) = banco.aplica(Command::SetPixels { image: capa.cel(), pixels });
-                    (subidos, (r == Ok(true)).then_some(esperado).or(Some(0)))
+                    let points: Vec<(u32, u32)> = pixels.iter().map(|e| (e.x, e.y)).collect();
+                    let expected_2 = area_de(&model_of_pixels(&points, WIDTH, HEIGHT));
+                    let (r, uploaded) = bench.applies(Command::SetPixels { image: layer_2.cel(), pixels });
+                    (uploaded, (r == Ok(true)).then_some(expected_2).or(Some(0)))
                 }
                 4 | 5 => {
-                    let y = b % ALTO;
-                    let x0 = c % ANCHO;
-                    let spans = vec![Span { y, x_start: x0, x_end: x0 + 1 + d % (ANCHO - x0) }];
-                    let puntos: Vec<(u32, u32)> =
+                    let y = b % HEIGHT;
+                    let x0 = c % WIDTH;
+                    let spans = vec![Span { y, x_start: x0, x_end: x0 + 1 + d % (WIDTH - x0) }];
+                    let points: Vec<(u32, u32)> =
                         (spans[0].x_start..spans[0].x_end).map(|x| (x, y)).collect();
-                    let esperado = area_de(&modelo_de_pixeles(&puntos, ANCHO, ALTO));
-                    let (r, subidos) = banco.aplica(Command::FillSpans { image: capa.cel(), spans, pixel });
-                    (subidos, (r == Ok(true)).then_some(esperado).or(Some(0)))
+                    let expected_2 = area_de(&model_of_pixels(&points, WIDTH, HEIGHT));
+                    let (r, uploaded) = bench.applies(Command::FillSpans { image: layer_2.cel(), spans, pixel });
+                    (uploaded, (r == Ok(true)).then_some(expected_2).or(Some(0)))
                 }
-                6 => (banco.aplica(Command::SetLayerOpacity { layer: capa.id(), opacity: (b % 256) as u8 }).1, None),
-                7 => (banco.aplica(Command::SetLayerVisible { layer: capa.id(), visible: b % 2 == 0 }).1, None),
-                8 => (banco.aplica(Command::SetLayerBlend { layer: capa.id(), blend: BlendMode::ALL[b as usize % 8] }).1, None),
-                9 => (banco.aplica(Command::MoveLayer { layer: capa.id(), to: b as usize % capas }).1, None),
-                10 => (banco.deshace(), None),
-                _ => (banco.rehace(), None),
+                6 => (bench.applies(Command::SetLayerOpacity { layer: layer_2.id(), opacity: (b % 256) as u8 }).1, None),
+                7 => (bench.applies(Command::SetLayerVisible { layer: layer_2.id(), visible: b % 2 == 0 }).1, None),
+                8 => (bench.applies(Command::SetLayerBlend { layer: layer_2.id(), blend: BlendMode::ALL[b as usize % 8] }).1, None),
+                9 => (bench.applies(Command::MoveLayer { layer: layer_2.id(), to: b as usize % layers }).1, None),
+                10 => (bench.undoes(), None),
+                _ => (bench.redoes(), None),
             };
-            prop_assert!(subidos <= total, "paso {n}: subió más que la imagen entera");
-            if let Some(esperado) = exacto {
-                prop_assert_eq!(subidos, esperado, "paso {}: solo los bloques anotados", n);
+            prop_assert!(uploaded <= total, "paso {n}: subió más que la imagen entera");
+            if let Some(expected_2) = exact {
+                prop_assert_eq!(uploaded, expected_2, "paso {}: solo los bloques anotados", n);
             }
-            prop_assert_eq!(banco.discrepancias(), vec![], "paso {}", n);
+            prop_assert_eq!(bench.discrepancies(), vec![], "paso {}", n);
         }
     }
 }
@@ -669,37 +668,37 @@ proptest! {
 
 /// Lo que ocurre en un fotograma además de pintar la superposición.
 #[derive(Clone, Copy, Debug)]
-enum Accion {
-    Nada,
-    Deshacer,
-    Rehacer,
+enum TestAction {
+    Nothing,
+    Undo,
+    Redo,
     /// Soltar el trazo: se aplica y la superposición se descarta.
-    Soltar,
+    Release,
 }
 
 /// Un fotograma de la app: la acción sobre el documento, los colores del trazo pendiente (con o
 /// sin caché) y `set_overlay`; vacío es descartar la superposición.
-fn fotograma(
-    banco: &mut Banco,
+fn frame(
+    bench: &mut Bench,
     cache: Option<&mut OverlayCache>,
-    activa: ImageId,
-    pendiente: &[PixelEdit],
-    accion: Accion,
+    active_2: ImageId,
+    pending: &[PixelEdit],
+    action_2: TestAction,
 ) {
-    banco.corre(|ctx, canvas, doc, log| {
-        match accion {
-            Accion::Nada => {}
-            Accion::Deshacer => {
-                let desde = doc.state_id();
+    bench.runs(|ctx, canvas, doc, log| {
+        match action_2 {
+            TestAction::Nothing => {}
+            TestAction::Undo => {
+                let from_2 = doc.state_id();
                 if doc.undo().is_ok() {
                     let region = log
-                        .get(desde)
+                        .get(from_2)
                         .cloned()
                         .unwrap_or_else(|| BlockSet::full(doc.width(), doc.height()));
                     canvas.invalidate(&region);
                 }
             }
-            Accion::Rehacer => {
+            TestAction::Redo => {
                 if doc.redo().is_ok() {
                     let region = log
                         .get(doc.state_id())
@@ -708,34 +707,34 @@ fn fotograma(
                     canvas.invalidate(&region);
                 }
             }
-            Accion::Soltar => {
-                let comando = Command::SetPixels {
-                    image: activa,
-                    pixels: pendiente.to_vec(),
+            TestAction::Release => {
+                let command = Command::SetPixels {
+                    image: active_2,
+                    pixels: pending.to_vec(),
                 };
-                let region = dirty_of(&comando, Size::new(doc.width(), doc.height()));
-                if let Ok(true) = doc.apply(comando) {
+                let region = dirty_of(&command, Size::new(doc.width(), doc.height()));
+                if let Ok(true) = doc.apply(command) {
                     log.record(doc.state_id(), region.clone());
                     canvas.invalidate(&region);
                 }
             }
         }
-        let pendiente = if matches!(accion, Accion::Soltar) {
+        let pending = if matches!(action_2, TestAction::Release) {
             &[][..]
         } else {
-            pendiente
+            pending
         };
-        let colores = match cache {
+        let colors_2 = match cache {
             Some(cache) => cache
-                .colors(doc, activa, pendiente.iter().copied())
+                .colors(doc, active_2, pending.iter().copied())
                 .to_vec(),
-            None => overlay_pixels(doc, activa, pendiente.iter().copied()),
+            None => overlay_pixels(doc, active_2, pending.iter().copied()),
         };
-        canvas.set_overlay(ctx, &DocSource(doc), &colores);
+        canvas.set_overlay(ctx, &DocSource(doc), &colors_2);
     });
 }
 
-type PasoDeTrazo = (u8, u32, u32, u32, u32);
+type StepOfStroke = (u8, u32, u32, u32, u32);
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
@@ -745,84 +744,84 @@ proptest! {
     /// rehacer a mitad de trazo, cambio de zoom y cambio de capa activa, las texturas son
     /// idénticas píxel a píxel después de cada fotograma.
     #[test]
-    fn el_cache_de_la_superposicion_no_cambia_lo_que_se_ve(
-        (modo, capas, _) in semillas(),
-        pasos in prop::collection::vec((0u8..9, any::<u32>(), any::<u32>(), any::<u32>(), any::<u32>()), 1..14),
+    fn the_overlay_cache_does_not_change_what_is_seen(
+        (mode_2, layers, _) in seeds(),
+        steps_2 in prop::collection::vec((0u8..9, any::<u32>(), any::<u32>(), any::<u32>(), any::<u32>()), 1..14),
     ) {
-        let modo = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(modo)];
-        let mut doc = Document::new(imagen_de(modo, ANCHO, ALTO, 6));
-        for (i, &(contenido, opacidad, mezcla, visible)) in capas.iter().enumerate() {
+        let mode_2 = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(mode_2)];
+        let mut doc = Document::new(image_of(mode_2, WIDTH, HEIGHT, 6));
+        for (i, &(content, opacity_2, blend_2, visible)) in layers.iter().enumerate() {
             let at = doc.layers().len();
             if doc.apply(Command::AddLayer { name: format!("C{i}"), at }).is_err() {
                 continue;
             }
             let id = doc.layers()[at].id();
-            let celda = doc.layers()[at].cel();
-            if contenido != 0 {
+            let cel = doc.layers()[at].cel();
+            if content != 0 {
                 let _ = doc.apply(Command::SetPixels {
-                    image: celda,
+                    image: cel,
                     pixels: (0..30)
                         .map(|j| PixelEdit {
-                            x: (j * 13 + u32::from(contenido)) % ANCHO,
-                            y: (j * 7) % ALTO,
-                            pixel: pixel_de(modo, j + u32::from(opacidad), 8),
+                            x: (j * 13 + u32::from(content)) % WIDTH,
+                            y: (j * 7) % HEIGHT,
+                            pixel: pixel_de(mode_2, j + u32::from(opacity_2), 8),
                         })
                         .collect(),
                 });
             }
-            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 128, 200, 254, 1, 77, 255][usize::from(opacidad)] });
-            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(mezcla) * 3 % 8] });
+            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 128, 200, 254, 1, 77, 255][usize::from(opacity_2)] });
+            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(blend_2) * 3 % 8] });
             let _ = doc.apply(Command::SetLayerVisible { layer: id, visible: visible != 0 });
         }
-        let mut con = Banco::nuevo(doc.clone());
-        let mut sin = Banco::nuevo(doc);
+        let mut with = Bench::new_2(doc.clone());
+        let mut without = Bench::new_2(doc);
         let mut cache = OverlayCache::default();
-        let mut pendiente: Vec<PixelEdit> = Vec::new();
-        let mut activa = con.doc.layers()[0].cel();
-        let generar = |n: u32, a: u32, b: u32, c: u32| -> Vec<PixelEdit> {
+        let mut pending: Vec<PixelEdit> = Vec::new();
+        let mut active_2 = with.doc.layers()[0].cel();
+        let generate = |n: u32, a: u32, b: u32, c: u32| -> Vec<PixelEdit> {
             (0..n)
                 .map(|j| PixelEdit {
-                    x: a.wrapping_add(j.wrapping_mul(11)) % ANCHO,
-                    y: b.wrapping_add(j.wrapping_mul(5)) % ALTO,
-                    pixel: pixel_de(modo, c.wrapping_add(j), 8),
+                    x: a.wrapping_add(j.wrapping_mul(11)) % WIDTH,
+                    y: b.wrapping_add(j.wrapping_mul(5)) % HEIGHT,
+                    pixel: pixel_de(mode_2, c.wrapping_add(j), 8),
                 })
                 .collect()
         };
-        for (n, &(tipo, a, b, c, d)) in pasos.iter().enumerate() {
-            let paso: PasoDeTrazo = (tipo, a, b, c, d);
-            let mut accion = Accion::Nada;
-            match paso.0 {
+        for (n, &(kind, a, b, c, d)) in steps_2.iter().enumerate() {
+            let step: StepOfStroke = (kind, a, b, c, d);
+            let mut action_2 = TestAction::Nothing;
+            match step.0 {
                 // El trazo crece (el lápiz y el borrador).
-                0..=2 => pendiente.extend(generar(1 + a % 40, b, c, d)),
+                0..=2 => pending.extend(generate(1 + a % 40, b, c, d)),
                 // Cambia de forma (la goma elástica de la línea).
-                3 => pendiente = generar(1 + a % 60, b, c, d),
+                3 => pending = generate(1 + a % 60, b, c, d),
                 // Esc: se cancela.
-                4 => pendiente.clear(),
-                5 => accion = Accion::Deshacer,
-                6 => accion = Accion::Rehacer,
+                4 => pending.clear(),
+                5 => action_2 = TestAction::Undo,
+                6 => action_2 = TestAction::Redo,
                 7 => {
-                    let capas = con.doc.layers().len();
-                    activa = con.doc.layers()[a as usize % capas].cel();
+                    let layers = with.doc.layers().len();
+                    active_2 = with.doc.layers()[a as usize % layers].cel();
                 }
                 _ => {
-                    if !pendiente.is_empty() {
-                        accion = Accion::Soltar;
+                    if !pending.is_empty() {
+                        action_2 = TestAction::Release;
                     }
                 }
             }
             // El zoom cambia entre fotogramas en los dos lienzos a la vez.
             if b % 5 == 0 {
-                let operacion = if b % 2 == 0 { ViewOp::ZoomIn } else { ViewOp::ZoomOut };
-                con.canvas.request_view(operacion);
-                sin.canvas.request_view(operacion);
+                let operation = if b % 2 == 0 { ViewOp::ZoomIn } else { ViewOp::ZoomOut };
+                with.canvas.request_view(operation);
+                without.canvas.request_view(operation);
             }
-            fotograma(&mut con, Some(&mut cache), activa, &pendiente, accion);
-            fotograma(&mut sin, None, activa, &pendiente, accion);
-            if matches!(accion, Accion::Soltar) {
-                pendiente.clear();
+            frame(&mut with, Some(&mut cache), active_2, &pending, action_2);
+            frame(&mut without, None, active_2, &pending, action_2);
+            if matches!(action_2, TestAction::Release) {
+                pending.clear();
             }
-            prop_assert_eq!(con.doc.state_id(), sin.doc.state_id());
-            prop_assert!(con.contenidos() == sin.contenidos(), "paso {} ({:?}): las texturas difieren", n, accion);
+            prop_assert_eq!(with.doc.state_id(), without.doc.state_id());
+            prop_assert!(with.contents() == without.contents(), "paso {} ({:?}): las texturas difieren", n, action_2);
         }
     }
 }

@@ -59,26 +59,26 @@ use px_ui::toolbar::zoom_label;
 use px_ui::view::{Size, ViewOp, Zoom};
 
 mod common;
-use common::toolbox::caja;
-use common::zones::caja_sola;
+use common::toolbox::toolbox_2;
+use common::zones::toolbox_single;
 use common::{
-    PPPS, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, rueda_linea, tecla,
-    tolerancia_de_egui,
+    PPPS, button_2, context, frame, in_points, key_2, mover, n_de, painted, tolerance_of_egui,
+    wheel_line,
 };
 
 /// Pantalla de A6, A7 y P1: la imagen de 64×48 ocupa el centro.
-const PANTALLA: Vec2 = vec2(800.0, 600.0);
+const TEST_SCREEN: Vec2 = vec2(800.0, 600.0);
 /// Pantalla de A9: a 1/2 la imagen de 256×192 mide 128×96 píxeles físicos y cabe a `ppp` 1.
-const PANTALLA_A9: Vec2 = vec2(160.0, 120.0);
-const TOLERANCIA: f32 = 0.02;
+const SCREEN_A_9: Vec2 = vec2(160.0, 120.0);
+const TOLERANCE: f32 = 0.02;
 const DESPLAZO_X: f64 = 0.0013;
 const DESPLAZO_Y: f64 = 0.0007;
 
-const ROJO: Rgba = Rgba::opaque(255, 0, 0);
-const TRANSPARENTE: Rgba = Rgba::new(0, 0, 0, 0);
-const ROJO_MEDIO: Rgba = Rgba::new(255, 0, 0, 128);
+const RED: Rgba = Rgba::opaque(255, 0, 0);
+const TRANSPARENT: Rgba = Rgba::new(0, 0, 0, 0);
+const RED_MIDDLE: Rgba = Rgba::new(255, 0, 0, 128);
 
-const FONDOS: [CanvasBackground; 4] = [
+const BACKGROUNDS: [CanvasBackground; 4] = [
     CanvasBackground::Checker,
     CanvasBackground::Black,
     CanvasBackground::Gray,
@@ -86,22 +86,22 @@ const FONDOS: [CanvasBackground; 4] = [
 ];
 
 /// Un píxel pendiente: posición y color (el que tendrá en la imagen).
-type Pendiente = (u32, u32, Rgba);
+type TestPending = (u32, u32, Rgba);
 
 // ---------------------------------------------------------------------------------------------
 // Oráculo (fracciones e i128, sin llamar a las funciones bajo prueba)
 // ---------------------------------------------------------------------------------------------
 
-type Fraccion = (i128, i128);
+type Fraction = (i128, i128);
 
 /// Los 70 niveles de la decisión 2, de menor a mayor.
-fn escalera() -> Vec<Fraccion> {
-    let mut niveles: Vec<Fraccion> = [64, 32, 16, 8, 4, 2].iter().map(|&k| (1, k)).collect();
-    niveles.extend((1..=64).map(|n| (n, 1)));
-    niveles
+fn ladder() -> Vec<Fraction> {
+    let mut levels: Vec<Fraction> = [64, 32, 16, 8, 4, 2].iter().map(|&k| (1, k)).collect();
+    levels.extend((1..=64).map(|n| (n, 1)));
+    levels
 }
 
-fn rotulo((num, den): Fraccion) -> String {
+fn label((num, den): Fraction) -> String {
     if den == 1 {
         format!("×{num}")
     } else {
@@ -109,65 +109,73 @@ fn rotulo((num, den): Fraccion) -> String {
     }
 }
 
-fn suelo(n: i128, d: i128) -> i128 {
+fn floor(n: i128, d: i128) -> i128 {
     let q = n / d;
     if n % d != 0 && n < 0 { q - 1 } else { q }
 }
 
-fn techo(n: i128, d: i128) -> i128 {
-    -suelo(-n, d)
+fn ceiling(n: i128, d: i128) -> i128 {
+    -floor(-n, d)
 }
 
-fn o_extent(f: Fraccion, n: i64) -> i64 {
-    techo(i128::from(n) * f.0, f.1) as i64
+fn o_extent(f: Fraction, n: i64) -> i64 {
+    ceiling(i128::from(n) * f.0, f.1) as i64
 }
 
 /// Píxel de imagen bajo el punto `p` de un eje, o `None`.
-fn o_eje(f: Fraccion, p: i64, origen: i64, dim: u32) -> Option<u32> {
-    let d = i128::from(p) - i128::from(origen);
+fn o_axis(f: Fraction, p: i64, source_2: i64, dim: u32) -> Option<u32> {
+    let d = i128::from(p) - i128::from(source_2);
     if d < 0 {
         return None;
     }
-    let indice = suelo(d * f.1, f.0);
-    (indice < i128::from(dim)).then_some(indice as u32)
+    let index_2 = floor(d * f.1, f.0);
+    (index_2 < i128::from(dim)).then_some(index_2 as u32)
 }
 
 /// Lo mismo, con signo y sin recortar a la imagen (lo que emite `StrokeBegin`).
-fn o_eje_i32(f: Fraccion, p: i64, origen: i64) -> i32 {
-    let d = i128::from(p) - i128::from(origen);
-    suelo(d * f.1, f.0).clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
+fn or_axis_i32(f: Fraction, p: i64, source_2: i64) -> i32 {
+    let d = i128::from(p) - i128::from(source_2);
+    floor(d * f.1, f.0).clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
 }
 
-fn o_hover(f: Fraccion, p: (i64, i64), origen: (i64, i64), tam: (u32, u32)) -> Option<(u32, u32)> {
+fn o_hover(
+    f: Fraction,
+    p: (i64, i64),
+    source_2: (i64, i64),
+    tam: (u32, u32),
+) -> Option<(u32, u32)> {
     Some((
-        o_eje(f, p.0, origen.0, tam.0)?,
-        o_eje(f, p.1, origen.1, tam.1)?,
+        o_axis(f, p.0, source_2.0, tam.0)?,
+        o_axis(f, p.1, source_2.1, tam.1)?,
     ))
 }
 
-fn o_stroke(f: Fraccion, p: (i64, i64), origen: (i64, i64)) -> (i32, i32) {
-    (o_eje_i32(f, p.0, origen.0), o_eje_i32(f, p.1, origen.1))
+fn o_stroke(f: Fraction, p: (i64, i64), source_2: (i64, i64)) -> (i32, i32) {
+    (
+        or_axis_i32(f, p.0, source_2.0),
+        or_axis_i32(f, p.1, source_2.1),
+    )
 }
 
-/// Índice del mayor nivel con `extent ≤ lienzo` en los dos ejes (0 si ninguno cabe).
-fn o_mejor_nivel(viewport: Size, image: (u32, u32)) -> usize {
-    let niveles = escalera();
-    (0..niveles.len())
+/// Índice del mayor nivel con `extent ≤ canvas_2` en los dos ejes (0 si ninguno cabe).
+fn o_better_level(viewport: Size, image: (u32, u32)) -> usize {
+    let levels = ladder();
+    (0..levels.len())
         .rev()
         .find(|&i| {
-            o_extent(niveles[i], i64::from(image.0)) <= i64::from(viewport.width)
-                && o_extent(niveles[i], i64::from(image.1)) <= i64::from(viewport.height)
+            o_extent(levels[i], i64::from(image.0)) <= i64::from(viewport.width)
+                && o_extent(levels[i], i64::from(image.1)) <= i64::from(viewport.height)
         })
         .unwrap_or(0)
 }
 
-/// Granularidad del nivel `indice`: su `K` si es fraccionario y 1 si no.
-fn rejilla(indice: usize) -> i32 {
-    if indice < 6 { 1 << (6 - indice) } else { 1 }
+/// Granularidad del nivel `index_2`: su `K` si es fraccionario y 1 si no.
+fn grid(index_2: usize) -> i32 {
+    if index_2 < 6 { 1 << (6 - index_2) } else { 1 }
 }
 
 /// El píxel bajo el ancla tras pasar a un nivel con la granularidad `g` (decisión 4).
-fn sube_a_la_rejilla(pixel: (u32, u32), g: i32) -> (u32, u32) {
+fn goes_up_to_the_grid(pixel: (u32, u32), g: i32) -> (u32, u32) {
     let g = g as u32;
     (pixel.0 / g * g, pixel.1 / g * g)
 }
@@ -177,40 +185,40 @@ fn sube_a_la_rejilla(pixel: (u32, u32), g: i32) -> (u32, u32) {
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Clone)]
-struct Imagen {
-    ancho: u32,
-    alto: u32,
-    pixeles: Vec<Rgba>,
+struct TestImage {
+    width_2: u32,
+    height_2: u32,
+    pixels_2: Vec<Rgba>,
 }
 
-impl Imagen {
+impl TestImage {
     /// Cada píxel tiene un color distinto según su posición (opaco).
-    fn degradado(ancho: u32, alto: u32) -> Imagen {
-        let mut pixeles = Vec::new();
-        for y in 0..alto {
-            for x in 0..ancho {
-                pixeles.push(Rgba::opaque(
+    fn gradient(width_2: u32, height_2: u32) -> TestImage {
+        let mut pixels_2 = Vec::new();
+        for y in 0..height_2 {
+            for x in 0..width_2 {
+                pixels_2.push(Rgba::opaque(
                     (x % 256) as u8,
                     (y % 256) as u8,
                     ((x * 5 + y * 3) % 251) as u8,
                 ));
             }
         }
-        Imagen {
-            ancho,
-            alto,
-            pixeles,
+        TestImage {
+            width_2,
+            height_2,
+            pixels_2,
         }
     }
 
     fn pixel(&self, x: u32, y: u32) -> Rgba {
-        self.pixeles[(y * self.ancho + x) as usize]
+        self.pixels_2[(y * self.width_2 + x) as usize]
     }
 
     fn image(&self) -> Image {
-        let mut image = Image::new(self.ancho, self.alto, Mode::Rgba).expect("imagen válida");
-        for y in 0..self.alto {
-            for x in 0..self.ancho {
+        let mut image = Image::new(self.width_2, self.height_2, Mode::Rgba).expect("imagen válida");
+        for y in 0..self.height_2 {
+            for x in 0..self.width_2 {
                 image
                     .set_pixel(x, y, Pixel::Rgba(self.pixel(x, y)))
                     .expect("dentro");
@@ -220,14 +228,14 @@ impl Imagen {
     }
 
     fn texels(&self) -> Vec<Color32> {
-        self.pixeles
+        self.pixels_2
             .iter()
             .map(|c| Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a))
             .collect()
     }
 }
 
-fn imagen_64x48() -> Image {
+fn image_64x48() -> Image {
     Image::new(64, 48, Mode::Rgba).expect("imagen válida")
 }
 
@@ -237,23 +245,23 @@ fn imagen_64x48() -> Image {
 
 /// Lo que se ve: color premultiplicado, como egui.
 #[derive(Clone, Copy, Debug)]
-struct Visto {
+struct Seen {
     r: f32,
     g: f32,
     b: f32,
     a: f32,
 }
 
-impl Visto {
-    const VACIO: Visto = Visto {
+impl Seen {
+    const EMPTY: Seen = Seen {
         r: 0.0,
         g: 0.0,
         b: 0.0,
         a: 0.0,
     };
 
-    fn de_color(c: Color32) -> Visto {
-        Visto {
+    fn de_color(c: Color32) -> Seen {
+        Seen {
             r: f32::from(c.r()) / 255.0,
             g: f32::from(c.g()) / 255.0,
             b: f32::from(c.b()) / 255.0,
@@ -262,9 +270,9 @@ impl Visto {
     }
 
     /// `src` por encima de `self` (alfa premultiplicado).
-    fn debajo_de(self, src: Visto) -> Visto {
+    fn below_of(self, src: Seen) -> Seen {
         let k = 1.0 - src.a;
-        Visto {
+        Seen {
             r: src.r + self.r * k,
             g: src.g + self.g * k,
             b: src.b + self.b * k,
@@ -272,47 +280,53 @@ impl Visto {
         }
     }
 
-    fn por(self, otro: Visto) -> Visto {
-        Visto {
-            r: self.r * otro.r,
-            g: self.g * otro.g,
-            b: self.b * otro.b,
-            a: self.a * otro.a,
+    fn per(self, other_2: Seen) -> Seen {
+        Seen {
+            r: self.r * other_2.r,
+            g: self.g * other_2.g,
+            b: self.b * other_2.b,
+            a: self.a * other_2.a,
         }
     }
 
-    fn cerca(&self, otro: Visto, tolerancia: f32) -> bool {
-        (self.r - otro.r).abs() <= tolerancia
-            && (self.g - otro.g).abs() <= tolerancia
-            && (self.b - otro.b).abs() <= tolerancia
-            && (self.a - otro.a).abs() <= tolerancia
+    fn near(&self, other_2: Seen, tolerance: f32) -> bool {
+        (self.r - other_2.r).abs() <= tolerance
+            && (self.g - other_2.g).abs() <= tolerance
+            && (self.b - other_2.b).abs() <= tolerance
+            && (self.a - other_2.a).abs() <= tolerance
     }
 }
 
-fn gris(c: Rgba) -> Color32 {
+fn gray_2(c: Rgba) -> Color32 {
     Color32::from_rgb(c.r, c.g, c.b)
 }
 
 /// Color del fondo elegido bajo la transparencia en el píxel físico `(px, py)`: el oráculo de la
 /// 17b (`background_fill` y `shade_at`).
-fn fondo_en(fondo: CanvasBackground, px: i64, py: i64, origen: (i64, i64), cell: i64) -> Color32 {
-    match background_fill(fondo) {
-        Fill::Checker => gris(shade_at(px, py, origen, cell).color()),
-        Fill::Solid(color) => gris(color),
+fn background_in(
+    background_2: CanvasBackground,
+    px: i64,
+    py: i64,
+    source_2: (i64, i64),
+    cell: i64,
+) -> Color32 {
+    match background_fill(background_2) {
+        Fill::Checker => gray_2(shade_at(px, py, source_2, cell).color()),
+        Fill::Solid(color) => gray_2(color),
     }
 }
 
 /// Un color con alfa directo por encima de un fondo opaco.
-fn compone(fondo: Color32, color: Rgba) -> Visto {
-    let encima = Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
-    Visto::de_color(fondo).debajo_de(Visto::de_color(encima))
+fn composes(background_2: Color32, color: Rgba) -> Seen {
+    let above = Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
+    Seen::de_color(background_2).below_of(Seen::de_color(above))
 }
 
 // ---------------------------------------------------------------------------------------------
 // Rasterizador a mano (el de `checker_canvas.rs`)
 // ---------------------------------------------------------------------------------------------
 
-fn baricentricas(p: (f64, f64), a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<[f64; 3]> {
+fn barycentric(p: (f64, f64), a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Option<[f64; 3]> {
     let area = (b.0 - a.0) * (c.1 - a.1) - (c.0 - a.0) * (b.1 - a.1);
     if area.abs() < 1e-12 {
         return None;
@@ -324,67 +338,67 @@ fn baricentricas(p: (f64, f64), a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> 
 }
 
 /// Texturas conocidas para el muestreo.
-struct Texturas {
-    imagen: TextureId,
-    ancho: usize,
-    alto: usize,
+struct Textures {
+    image_2: TextureId,
+    width_2: usize,
+    height_2: usize,
     texels: Vec<Color32>,
-    damero: Option<TextureId>,
+    checker_2: Option<TextureId>,
 }
 
 /// Texel de la textura 2×2 del damero (por filas `A, B, B, A`) con `NEAREST` y envoltura `Repeat`.
-fn texel_del_damero(u: f64, v: f64) -> Visto {
+fn texel_of_the_checker(u: f64, v: f64) -> Seen {
     let tx = ((u * 2.0).floor() as i64).rem_euclid(2);
     let ty = ((v * 2.0).floor() as i64).rem_euclid(2);
     let c = if (tx + ty) % 2 == 0 { CHECK_A } else { CHECK_B };
-    Visto::de_color(gris(c))
+    Seen::de_color(gray_2(c))
 }
 
 struct Buffer {
-    ancho: usize,
-    alto: usize,
-    pixeles: Vec<Visto>,
+    width_2: usize,
+    height_2: usize,
+    pixels_2: Vec<Seen>,
 }
 
 impl Buffer {
-    fn en(&self, x: i64, y: i64) -> Visto {
+    fn en(&self, x: i64, y: i64) -> Seen {
         assert!(
-            x >= 0 && y >= 0 && (x as usize) < self.ancho && (y as usize) < self.alto,
+            x >= 0 && y >= 0 && (x as usize) < self.width_2 && (y as usize) < self.height_2,
             "({x}, {y}) fuera del búfer de {}×{}",
-            self.ancho,
-            self.alto
+            self.width_2,
+            self.height_2
         );
-        self.pixeles[y as usize * self.ancho + x as usize]
+        self.pixels_2[y as usize * self.width_2 + x as usize]
     }
 }
 
-/// Pinta `primitivas`, en orden, en un búfer de `ancho × alto` píxeles físicos, muestreando cada
+/// Pinta `primitives`, en orden, en un búfer de `width_2 × height_2` píxeles físicos, muestreando cada
 /// píxel en su centro (algo desplazado). La textura de la imagen se muestrea con `NEAREST` en su uv
 /// interpolado, **sin** envoltura (se recorta al borde); la del damero, con envoltura; las mallas
 /// de colores de vértice y los rellenos usan el color de sus vértices.
-fn rasteriza(
-    primitivas: &[ClippedPrimitive],
+fn rasterizes(
+    primitives: &[ClippedPrimitive],
     ppp: f32,
-    ancho: usize,
-    alto: usize,
-    tex: &Texturas,
+    width_2: usize,
+    height_2: usize,
+    tex: &Textures,
 ) -> Buffer {
     let ppp = f64::from(ppp);
-    let mut pixeles = vec![Visto::VACIO; ancho * alto];
-    for primitiva in primitivas {
-        let Primitive::Mesh(malla) = &primitiva.primitive else {
+    let mut pixels_2 = vec![Seen::EMPTY; width_2 * height_2];
+    for primitive in primitives {
+        let Primitive::Mesh(mesh) = &primitive.primitive else {
             continue;
         };
-        let clip = primitiva.clip_rect;
+        let clip = primitive.clip_rect;
         let (cx0, cy0) = (f64::from(clip.min.x) * ppp, f64::from(clip.min.y) * ppp);
         let (cx1, cy1) = (f64::from(clip.max.x) * ppp, f64::from(clip.max.y) * ppp);
-        let es_imagen = malla.texture_id == tex.imagen;
-        let es_damero = tex.damero == Some(malla.texture_id);
-        for triangulo in malla.indices.as_chunks::<3>().0 {
+        let is_image = mesh.texture_id == tex.image_2;
+        let is_checker = tex.checker_2 == Some(mesh.texture_id);
+        for triangle in mesh.indices.as_chunks::<3>().0 {
             let v = [
-                &malla.vertices[triangulo[0] as usize],
-                &malla.vertices[triangulo[1] as usize],
-                &malla.vertices[triangulo[2] as usize],
+                &mesh.vertices[triangle[0] as usize],
+                &mesh.vertices[triangle[1] as usize],
+                &mesh.vertices[triangle[2] as usize],
             ];
             let p = v.map(|v| (f64::from(v.pos.x) * ppp, f64::from(v.pos.y) * ppp));
             let min_x = p.iter().map(|q| q.0).fold(f64::INFINITY, f64::min);
@@ -395,98 +409,98 @@ fn rasteriza(
             let y0 = (min_y.floor() - 1.0).max(cy0.floor()).max(0.0) as usize;
             let x1 = (max_x.ceil() + 1.0)
                 .min(cx1.ceil())
-                .min(ancho as f64)
+                .min(width_2 as f64)
                 .max(0.0) as usize;
             let y1 = (max_y.ceil() + 1.0)
                 .min(cy1.ceil())
-                .min(alto as f64)
+                .min(height_2 as f64)
                 .max(0.0) as usize;
             let area =
                 (p[1].0 - p[0].0) * (p[2].1 - p[0].1) - (p[2].0 - p[0].0) * (p[1].1 - p[0].1);
             if area.abs() < 1e-12 {
                 continue;
             }
-            let tintes = v.map(|v| Visto::de_color(v.color));
-            let plano =
-                !es_imagen && !es_damero && v[0].color == v[1].color && v[1].color == v[2].color;
-            let aristas = [(p[0], p[1]), (p[1], p[2]), (p[2], p[0])];
+            let tints = v.map(|v| Seen::de_color(v.color));
+            let plane =
+                !is_image && !is_checker && v[0].color == v[1].color && v[1].color == v[2].color;
+            let edges = [(p[0], p[1]), (p[1], p[2]), (p[2], p[0])];
             for py in y0..y1 {
                 let sy = py as f64 + 0.5 + DESPLAZO_Y;
                 if sy < cy0 || sy > cy1 {
                     continue;
                 }
-                let (mut izq, mut der) = (f64::INFINITY, f64::NEG_INFINITY);
-                for (a, b) in aristas {
-                    let (bajo, alto_) = if a.1 <= b.1 { (a, b) } else { (b, a) };
-                    if sy < bajo.1 || sy > alto_.1 {
+                let (mut left, mut right) = (f64::INFINITY, f64::NEG_INFINITY);
+                for (a, b) in edges {
+                    let (under, height_) = if a.1 <= b.1 { (a, b) } else { (b, a) };
+                    if sy < under.1 || sy > height_.1 {
                         continue;
                     }
-                    if alto_.1 == bajo.1 {
-                        izq = izq.min(a.0.min(b.0));
-                        der = der.max(a.0.max(b.0));
+                    if height_.1 == under.1 {
+                        left = left.min(a.0.min(b.0));
+                        right = right.max(a.0.max(b.0));
                     } else {
-                        let t = (sy - bajo.1) / (alto_.1 - bajo.1);
-                        let x = bajo.0 + t * (alto_.0 - bajo.0);
-                        izq = izq.min(x);
-                        der = der.max(x);
+                        let t = (sy - under.1) / (height_.1 - under.1);
+                        let x = under.0 + t * (height_.0 - under.0);
+                        left = left.min(x);
+                        right = right.max(x);
                     }
                 }
-                if izq > der {
+                if left > right {
                     continue;
                 }
-                let desde = ((izq.max(cx0) - 0.5 - DESPLAZO_X).ceil().max(x0 as f64)) as usize;
-                let hasta = (der.min(cx1) - 0.5 - DESPLAZO_X)
+                let from_2 = ((left.max(cx0) - 0.5 - DESPLAZO_X).ceil().max(x0 as f64)) as usize;
+                let until = (right.min(cx1) - 0.5 - DESPLAZO_X)
                     .floor()
                     .min(x1 as f64 - 1.0);
-                if hasta < 0.0 {
+                if until < 0.0 {
                     continue;
                 }
-                for px in desde..=(hasta as usize) {
+                for px in from_2..=(until as usize) {
                     let s = (px as f64 + 0.5 + DESPLAZO_X, sy);
-                    let color = if plano {
-                        tintes[0]
+                    let color = if plane {
+                        tints[0]
                     } else {
-                        let Some(w) = baricentricas(s, p[0], p[1], p[2]) else {
+                        let Some(w) = barycentric(s, p[0], p[1], p[2]) else {
                             continue;
                         };
                         let wf = w.map(|w| w as f32);
-                        let tinte = Visto {
-                            r: wf[0] * tintes[0].r + wf[1] * tintes[1].r + wf[2] * tintes[2].r,
-                            g: wf[0] * tintes[0].g + wf[1] * tintes[1].g + wf[2] * tintes[2].g,
-                            b: wf[0] * tintes[0].b + wf[1] * tintes[1].b + wf[2] * tintes[2].b,
-                            a: wf[0] * tintes[0].a + wf[1] * tintes[1].a + wf[2] * tintes[2].a,
+                        let tint = Seen {
+                            r: wf[0] * tints[0].r + wf[1] * tints[1].r + wf[2] * tints[2].r,
+                            g: wf[0] * tints[0].g + wf[1] * tints[1].g + wf[2] * tints[2].g,
+                            b: wf[0] * tints[0].b + wf[1] * tints[1].b + wf[2] * tints[2].b,
+                            a: wf[0] * tints[0].a + wf[1] * tints[1].a + wf[2] * tints[2].a,
                         };
-                        if es_imagen || es_damero {
+                        if is_image || is_checker {
                             let u = w[0] * f64::from(v[0].uv.x)
                                 + w[1] * f64::from(v[1].uv.x)
                                 + w[2] * f64::from(v[2].uv.x);
                             let t = w[0] * f64::from(v[0].uv.y)
                                 + w[1] * f64::from(v[1].uv.y)
                                 + w[2] * f64::from(v[2].uv.y);
-                            let texel = if es_imagen {
-                                let tx = ((u * tex.ancho as f64).floor().max(0.0) as usize)
-                                    .min(tex.ancho - 1);
-                                let ty = ((t * tex.alto as f64).floor().max(0.0) as usize)
-                                    .min(tex.alto - 1);
-                                Visto::de_color(tex.texels[ty * tex.ancho + tx])
+                            let texel = if is_image {
+                                let tx = ((u * tex.width_2 as f64).floor().max(0.0) as usize)
+                                    .min(tex.width_2 - 1);
+                                let ty = ((t * tex.height_2 as f64).floor().max(0.0) as usize)
+                                    .min(tex.height_2 - 1);
+                                Seen::de_color(tex.texels[ty * tex.width_2 + tx])
                             } else {
-                                texel_del_damero(u, t)
+                                texel_of_the_checker(u, t)
                             };
-                            texel.por(tinte)
+                            texel.per(tint)
                         } else {
-                            tinte
+                            tint
                         }
                     };
-                    let destino = &mut pixeles[py * ancho + px];
-                    *destino = destino.debajo_de(color);
+                    let target_2 = &mut pixels_2[py * width_2 + px];
+                    *target_2 = target_2.below_of(color);
                 }
             }
         }
     }
     Buffer {
-        ancho,
-        alto,
-        pixeles,
+        width_2,
+        height_2,
+        pixels_2,
     }
 }
 
@@ -495,43 +509,43 @@ fn rasteriza(
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
-enum Capa {
-    Relleno {
+enum Layer {
+    TestFill {
         rect: Rect,
     },
-    Malla {
-        textura: TextureId,
+    TestMesh {
+        texture_2: TextureId,
         vertices: Vec<Vertex>,
         indices: Vec<u32>,
     },
 }
 
-fn recoge(shape: &Shape, salida: &mut Vec<Capa>) {
+fn collects(shape: &Shape, output_2: &mut Vec<Layer>) {
     match shape {
-        Shape::Rect(r) => salida.push(Capa::Relleno { rect: r.rect }),
-        Shape::Mesh(m) => salida.push(Capa::Malla {
-            textura: m.texture_id,
+        Shape::Rect(r) => output_2.push(Layer::TestFill { rect: r.rect }),
+        Shape::Mesh(m) => output_2.push(Layer::TestMesh {
+            texture_2: m.texture_id,
             vertices: m.vertices.clone(),
             indices: m.indices.clone(),
         }),
-        Shape::Vec(formas) => {
-            for forma in formas {
-                recoge(forma, salida);
+        Shape::Vec(shapes_2) => {
+            for shape_2 in shapes_2 {
+                collects(shape_2, output_2);
             }
         }
         _ => {}
     }
 }
 
-fn capas_de(formas: &[ClippedShape]) -> Vec<Capa> {
+fn layers_of(shapes_2: &[ClippedShape]) -> Vec<Layer> {
     let mut v = Vec::new();
-    for clipped in formas {
-        recoge(&clipped.shape, &mut v);
+    for clipped in shapes_2 {
+        collects(&clipped.shape, &mut v);
     }
     v
 }
 
-fn caja_pos(vertices: &[Vertex]) -> Rect {
+fn toolbox_pos(vertices: &[Vertex]) -> Rect {
     let mut r = Rect::NOTHING;
     for v in vertices {
         r.extend_with(v.pos);
@@ -539,7 +553,7 @@ fn caja_pos(vertices: &[Vertex]) -> Rect {
     r
 }
 
-fn caja_uv(vertices: &[Vertex]) -> [f32; 4] {
+fn toolbox_uv(vertices: &[Vertex]) -> [f32; 4] {
     let mut r = Rect::NOTHING;
     for v in vertices {
         r.extend_with(v.uv);
@@ -548,7 +562,7 @@ fn caja_uv(vertices: &[Vertex]) -> [f32; 4] {
 }
 
 /// Área de los triángulos de una malla, en píxeles físicos cuadrados (el menor de todos).
-fn menor_area_fisica(vertices: &[Vertex], indices: &[u32], ppp: f32) -> Option<f64> {
+fn smaller_area_physical(vertices: &[Vertex], indices: &[u32], ppp: f32) -> Option<f64> {
     let k = f64::from(ppp);
     indices
         .as_chunks::<3>()
@@ -556,9 +570,9 @@ fn menor_area_fisica(vertices: &[Vertex], indices: &[u32], ppp: f32) -> Option<f
         .iter()
         .map(|t| {
             let [a, b, c] = t.map(|i| vertices[i as usize].pos);
-            let cruz = f64::from(b.x - a.x) * f64::from(c.y - a.y)
+            let cross = f64::from(b.x - a.x) * f64::from(c.y - a.y)
                 - f64::from(c.x - a.x) * f64::from(b.y - a.y);
-            cruz.abs() / 2.0 * k * k
+            cross.abs() / 2.0 * k * k
         })
         .reduce(f64::min)
 }
@@ -567,16 +581,16 @@ fn menor_area_fisica(vertices: &[Vertex], indices: &[u32], ppp: f32) -> Option<f
 // El banco
 // ---------------------------------------------------------------------------------------------
 
-struct Salida {
-    formas: Vec<ClippedShape>,
+struct TestOutput {
+    shapes_2: Vec<ClippedShape>,
     info: CanvasInfo,
-    entradas: Vec<CanvasInput>,
+    entries: Vec<CanvasInput>,
 }
 
-impl Salida {
+impl TestOutput {
     /// Solo los eventos de trazo, en orden.
-    fn trazo(&self) -> Vec<CanvasEvent> {
-        self.entradas
+    fn stroke_2(&self) -> Vec<CanvasEvent> {
+        self.entries
             .iter()
             .filter_map(|e| match e {
                 CanvasInput::Stroke(ev) => Some(*ev),
@@ -589,55 +603,55 @@ impl Salida {
 /// Geometría de lo pintado, en píxeles físicos.
 #[derive(Clone, Copy, Debug)]
 struct Geom {
-    origen: (i64, i64),
+    source_2: (i64, i64),
     viewport: Size,
     cell: i64,
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     ppp: f32,
-    pantalla: Vec2,
+    screen: Vec2,
     canvas: Canvas,
     /// El documento (lo que `sync` y `set_overlay` reciben): no cambia en estas pruebas.
-    documento: Image,
+    document: Image,
     /// Lo que la prueba sabe de la imagen (el oráculo), si la necesita.
-    imagen: Option<Imagen>,
+    image_2: Option<TestImage>,
     /// El contenido de las texturas tal como egui lo entrega a la GPU: se aplican los
     /// `textures_delta` de **cada** fotograma, en orden.
-    compuestas: common::textures::Texturas,
+    composite_2: common::textures::Textures,
 }
 
-impl Banco {
-    fn con_image(ppp: f32, pantalla: Vec2, image: &Image) -> Banco {
+impl Bench {
+    fn with_image(ppp: f32, screen: Vec2, image: &Image) -> Bench {
         let mut canvas = Canvas::new();
         canvas.set_image(image);
-        let mut banco = Banco {
-            ctx: contexto(ppp),
+        let mut bench = Bench {
+            ctx: context(ppp),
             ppp,
-            pantalla,
+            screen,
             canvas,
-            documento: image.clone(),
-            imagen: None,
-            compuestas: common::textures::Texturas::new(),
+            document: image.clone(),
+            image_2: None,
+            composite_2: common::textures::Textures::new(),
         };
         for _ in 0..3 {
-            banco.reposo();
+            bench.rest_2_2();
         }
-        banco
+        bench
     }
 
-    fn nuevo(ppp: f32, pantalla: Vec2, imagen: Imagen) -> Banco {
-        let mut banco = Banco::con_image(ppp, pantalla, &imagen.image());
-        banco.imagen = Some(imagen);
-        banco
+    fn new_2(ppp: f32, screen: Vec2, image_2: TestImage) -> Bench {
+        let mut bench = Bench::with_image(ppp, screen, &image_2.image());
+        bench.image_2 = Some(image_2);
+        bench
     }
 
-    fn con_fondo(mut self, fondo: CanvasBackground, malla: bool) -> Banco {
-        self.canvas.set_background(fondo);
-        self.canvas.set_checker_mesh(malla);
+    fn with_background(mut self, background_2: CanvasBackground, mesh: bool) -> Bench {
+        self.canvas.set_background(background_2);
+        self.canvas.set_checker_mesh(mesh);
         for _ in 0..2 {
-            self.reposo();
+            self.rest_2_2();
         }
         self
     }
@@ -645,68 +659,68 @@ impl Banco {
     /// Un fotograma, en el orden de la app: `interact_ordered`, `set_overlay` con la superposición
     /// dada (el trazo pendiente entero; vacío la quita), `sync` y `paint`. Aplica los cambios de
     /// textura del fotograma (completos y parciales) antes de devolver las formas.
-    fn corre(&mut self, events: Vec<Event>, overlay: &[Pendiente]) -> Salida {
-        let entrada = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.pantalla)),
+    fn runs(&mut self, events: Vec<Event>, overlay: &[TestPending]) -> TestOutput {
+        let input_2 = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.screen)),
             events,
             ..RawInput::default()
         };
-        let mut resultado = None;
+        let mut result = None;
         let canvas = &mut self.canvas;
-        let documento = &self.documento;
-        let mut salida = self.ctx.run_ui(entrada, |ui| {
-            let entradas = canvas
+        let document = &self.document;
+        let mut output_2 = self.ctx.run_ui(input_2, |ui| {
+            let entries = canvas
                 .interact_roles(ui)
                 .into_iter()
                 .map(|(input, _)| input)
                 .collect::<Vec<_>>();
-            canvas.set_overlay(ui.ctx(), documento, overlay);
+            canvas.set_overlay(ui.ctx(), document, overlay);
             canvas
-                .sync(ui.ctx(), documento)
+                .sync(ui.ctx(), document)
                 .expect("el documento se carga");
             let info = canvas.paint(ui);
-            resultado = Some((info, entradas));
+            result = Some((info, entries));
         });
         // Sin los cambios de la fuente de egui (`Managed(0)`): el banco no pinta texto.
-        let mut delta: TexturesDelta = salida.textures_delta.clone();
+        let mut delta: TexturesDelta = output_2.textures_delta.clone();
         delta.set.remove(&TextureId::Managed(0));
         delta.free.remove(&TextureId::Managed(0));
-        self.compuestas.aplica(&delta);
+        self.composite_2.applies(&delta);
         // La copia no se entrega a la GPU: egui exige vaciarla antes de soltarla.
         delta.clear();
-        salida.textures_delta.clear();
-        let formas = std::mem::take(&mut salida.shapes);
-        let (info, entradas) = resultado.expect("el lienzo se dibuja");
-        Salida {
-            formas,
+        output_2.textures_delta.clear();
+        let shapes_2 = std::mem::take(&mut output_2.shapes);
+        let (info, entries) = result.expect("el lienzo se dibuja");
+        TestOutput {
+            shapes_2,
             info,
-            entradas,
+            entries,
         }
     }
 
-    fn reposo(&mut self) -> CanvasInfo {
-        self.corre(vec![], &[]).info
+    fn rest_2_2(&mut self) -> CanvasInfo {
+        self.runs(vec![], &[]).info
     }
 
-    fn pide(&mut self, op: ViewOp) -> CanvasInfo {
+    fn asks(&mut self, op: ViewOp) -> CanvasInfo {
         self.canvas.request_view(op);
-        self.reposo()
+        self.rest_2_2()
     }
 
-    /// Lleva el zoom al nivel `indice` de la escalera (0 = 1/64, 6 = ×1, 69 = ×64) con peticiones de
+    /// Lleva el zoom al nivel `index_2` de la escalera (0 = 1/64, 6 = ×1, 69 = ×64) con peticiones de
     /// vista, empezando por ×1 anclado en el centro.
-    fn al_nivel(&mut self, indice: usize) -> CanvasInfo {
-        let mut info = self.pide(ViewOp::Actual);
-        for _ in 6..indice {
-            info = self.pide(ViewOp::ZoomIn);
+    fn go_to_level(&mut self, index_2: usize) -> CanvasInfo {
+        let mut info = self.asks(ViewOp::Actual);
+        for _ in 6..index_2 {
+            info = self.asks(ViewOp::ZoomIn);
         }
-        for _ in indice..6 {
-            info = self.pide(ViewOp::ZoomOut);
+        for _ in index_2..6 {
+            info = self.asks(ViewOp::ZoomOut);
         }
         assert_eq!(
             info.zoom.to_string(),
-            rotulo(escalera()[indice]),
-            "ppp {}: el banco no llegó al nivel {indice}",
+            label(ladder()[index_2]),
+            "ppp {}: el banco no llegó al nivel {index_2}",
             self.ppp
         );
         info
@@ -715,8 +729,8 @@ impl Banco {
     /// Tamaño del lienzo en píxeles físicos (todo el espacio de `ui`).
     fn viewport(&self) -> Size {
         Size::new(
-            (self.pantalla.x * self.ppp).round() as u32,
-            (self.pantalla.y * self.ppp).round() as u32,
+            (self.screen.x * self.ppp).round() as u32,
+            (self.screen.y * self.ppp).round() as u32,
         )
     }
 
@@ -724,7 +738,7 @@ impl Banco {
         let rect = info.image_rect.expect("hay imagen");
         let ppp = self.ppp;
         Geom {
-            origen: (
+            source_2: (
                 (rect.min.x * ppp).round() as i64,
                 (rect.min.y * ppp).round() as i64,
             ),
@@ -735,23 +749,23 @@ impl Banco {
 
     /// Posición en puntos de un píxel físico (más una fracción que no cambia el redondeo).
     fn pos(&self, x: i64, y: i64) -> Pos2 {
-        en_puntos(self.ppp, x, y)
+        in_points(self.ppp, x, y)
     }
 
     /// Las texturas para rasterizar: la **compuesta** de la baldosa 0 (la imagen de A9 cabe en una
     /// sola baldosa, y con la superposición ya escrita en ella) y la del damero.
-    fn texturas(&self) -> Texturas {
+    fn textures_2(&self) -> Textures {
         let id = self.canvas.texture_id().expect("hay textura de la imagen");
-        let compuesta = self
-            .compuestas
+        let composite = self
+            .composite_2
             .get(id)
             .expect("la baldosa se subió y sus cambios se aplicaron");
-        Texturas {
-            imagen: id,
-            ancho: compuesta.tamano[0],
-            alto: compuesta.tamano[1],
-            texels: compuesta.texels.clone(),
-            damero: self.canvas.checker_texture_id(),
+        Textures {
+            image_2: id,
+            width_2: composite.size_2[0],
+            height_2: composite.size_2[1],
+            texels: composite.texels.clone(),
+            checker_2: self.canvas.checker_texture_id(),
         }
     }
 }
@@ -761,8 +775,8 @@ impl Banco {
 // ---------------------------------------------------------------------------------------------
 
 /// El puntero queda en el centro de la pantalla, sobre la imagen de 64×48 centrada.
-fn puntero_central(ppp: f32) -> (Pos2, (i64, i64)) {
-    let pos = pos2(PANTALLA.x / 2.0, PANTALLA.y / 2.0);
+fn pointer_central(ppp: f32) -> (Pos2, (i64, i64)) {
+    let pos = pos2(TEST_SCREEN.x / 2.0, TEST_SCREEN.y / 2.0);
     (
         pos,
         ((pos.x * ppp).round() as i64, (pos.y * ppp).round() as i64),
@@ -770,128 +784,129 @@ fn puntero_central(ppp: f32) -> (Pos2, (i64, i64)) {
 }
 
 /// `image_rect` mide `extent/ppp` en cada eje (`extent` por el oráculo).
-fn comprueba_rect(info: &CanvasInfo, ppp: f32, tam: (u32, u32), etiqueta: &str) {
-    let f = escalera()[escalera()
+fn checks_rect(info: &CanvasInfo, ppp: f32, tam: (u32, u32), label_2: &str) {
+    let f = ladder()[ladder()
         .iter()
-        .position(|n| rotulo(*n) == info.zoom.to_string())
+        .position(|n| label(*n) == info.zoom.to_string())
         .expect("nivel de la escalera")];
     let rect = info.image_rect.expect("hay imagen");
-    let (ancho, alto) = (
+    let (width_2, height_2) = (
         o_extent(f, i64::from(tam.0)) as f32,
         o_extent(f, i64::from(tam.1)) as f32,
     );
     assert!(
-        (rect.width() * ppp - ancho).abs() <= 0.02 && (rect.height() * ppp - alto).abs() <= 0.02,
-        "{etiqueta}: el rectángulo mide {}×{} px físicos y debía medir {ancho}×{alto}",
+        (rect.width() * ppp - width_2).abs() <= 0.02
+            && (rect.height() * ppp - height_2).abs() <= 0.02,
+        "{label_2}: el rectángulo mide {}×{} px físicos y debía medir {width_2}×{height_2}",
         rect.width() * ppp,
         rect.height() * ppp
     );
 }
 
 #[test]
-fn fila_a6_la_rueda_baja_hasta_1_64_y_sube_hasta_x64_con_el_pixel_bajo_el_puntero() {
-    let niveles = escalera();
+fn row_a6_the_wheel_goes_down_to_1_64_and_up_to_x64_with_the_pixel_under_the_pointer() {
+    let levels = ladder();
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        let (pos, fisico) = puntero_central(ppp);
-        let info = banco.al_nivel(6);
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        let (pos, physical) = pointer_central(ppp);
+        let info = bench.go_to_level(6);
         assert_eq!(info.zoom, Zoom::ONE);
-        banco.corre(vec![mover(pos)], &[]);
-        let mut pixel = banco
-            .reposo()
+        bench.runs(vec![mover(pos)], &[]);
+        let mut pixel = bench
+            .rest_2_2()
             .hover
             .expect("el centro está sobre la imagen");
-        let mut indice = 6usize;
+        let mut index_2 = 6usize;
         // Ocho muescas hacia fuera: 1/2, 1/4, …, 1/64 y satura (dos muescas de más).
-        let mut pasos: Vec<bool> = vec![false; 8];
+        let mut steps_2: Vec<bool> = vec![false; 8];
         // Y 70 hacia dentro: ×2, …, ×64 y satura (la escalera tiene 69 pasos).
-        pasos.extend(vec![true; 70]);
-        for (n, acerca) in pasos.into_iter().enumerate() {
-            let salida = banco.corre(vec![rueda_linea(acerca)], &[]);
-            indice = if acerca {
-                (indice + 1).min(69)
+        steps_2.extend(vec![true; 70]);
+        for (n, zooms_in) in steps_2.into_iter().enumerate() {
+            let output_2 = bench.runs(vec![wheel_line(zooms_in)], &[]);
+            index_2 = if zooms_in {
+                (index_2 + 1).min(69)
             } else {
-                indice.saturating_sub(1)
+                index_2.saturating_sub(1)
             };
-            let etiqueta = format!("ppp {ppp} muesca {n} → {}", rotulo(niveles[indice]));
+            let label_2 = format!("ppp {ppp} muesca {n} → {}", label(levels[index_2]));
             assert_eq!(
-                salida.info.zoom.to_string(),
-                rotulo(niveles[indice]),
-                "{etiqueta}"
+                output_2.info.zoom.to_string(),
+                label(levels[index_2]),
+                "{label_2}"
             );
-            assert_eq!(banco.canvas.zoom(), Some(salida.info.zoom), "{etiqueta}");
+            assert_eq!(bench.canvas.zoom(), Some(output_2.info.zoom), "{label_2}");
             // El píxel bajo el puntero sube a la rejilla del nivel nuevo (exacto con zoom ≥ ×1).
-            pixel = sube_a_la_rejilla(pixel, rejilla(indice));
+            pixel = goes_up_to_the_grid(pixel, grid(index_2));
             assert_eq!(
-                salida.info.hover,
+                output_2.info.hover,
                 Some(pixel),
-                "{etiqueta}: píxel bajo el puntero"
+                "{label_2}: píxel bajo el puntero"
             );
             // Y es el del oráculo con el `physical()` de egui.
-            let g = banco.geom(&salida.info);
+            let g = bench.geom(&output_2.info);
             assert_eq!(
-                salida.info.hover,
-                o_hover(niveles[indice], fisico, g.origen, (64, 48)),
-                "{etiqueta}: oráculo"
+                output_2.info.hover,
+                o_hover(levels[index_2], physical, g.source_2, (64, 48)),
+                "{label_2}: oráculo"
             );
-            comprueba_rect(&salida.info, ppp, (64, 48), &etiqueta);
+            checks_rect(&output_2.info, ppp, (64, 48), &label_2);
         }
-        assert_eq!(banco.canvas.zoom(), Some(Zoom::MAX), "ppp {ppp}");
+        assert_eq!(bench.canvas.zoom(), Some(Zoom::MAX), "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_a6_la_rueda_hacia_fuera_satura_en_1_64_y_a_mitad_de_camino_baja_un_nivel_por_muesca() {
+fn row_a6_the_wheel_outward_saturates_at_1_64_and_half_way_goes_down_one_level_per_notch() {
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        let (pos, _) = puntero_central(ppp);
-        banco.al_nivel(6);
-        banco.corre(vec![mover(pos)], &[]);
-        let esperados = [
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        let (pos, _) = pointer_central(ppp);
+        bench.go_to_level(6);
+        bench.runs(vec![mover(pos)], &[]);
+        let expected_2_2 = [
             "×1/2", "×1/4", "×1/8", "×1/16", "×1/32", "×1/64", "×1/64", "×1/64",
         ];
-        for (n, esperado) in esperados.iter().enumerate() {
-            let info = banco.corre(vec![rueda_linea(false)], &[]).info;
-            assert_eq!(info.zoom.to_string(), *esperado, "ppp {ppp} muesca {n}");
+        for (n, expected_2) in expected_2_2.iter().enumerate() {
+            let info = bench.runs(vec![wheel_line(false)], &[]).info;
+            assert_eq!(info.zoom.to_string(), *expected_2, "ppp {ppp} muesca {n}");
         }
-        assert_eq!(banco.canvas.zoom(), Some(Zoom::MIN));
+        assert_eq!(bench.canvas.zoom(), Some(Zoom::MIN));
         // A 1/64 la imagen de 64×48 es un solo píxel físico y sigue bajo el puntero.
-        let info = banco.reposo();
+        let info = bench.rest_2_2();
         assert_eq!(info.hover, Some((0, 0)), "ppp {ppp}");
-        comprueba_rect(&info, ppp, (64, 48), "1/64");
+        checks_rect(&info, ppp, (64, 48), "1/64");
     }
 }
 
 #[test]
-fn fila_a6_las_teclas_mas_y_menos_en_los_extremos_no_cambian_el_nivel() {
+fn row_a6_the_plus_and_minus_keys_at_the_extremes_do_not_change_the_level() {
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        banco.al_nivel(6);
-        let info = banco
-            .corre(vec![tecla(Key::Minus, Modifiers::NONE)], &[])
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        bench.go_to_level(6);
+        let info = bench
+            .runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom.to_string(), "×1/2", "ppp {ppp}");
-        let info = banco
-            .corre(vec![tecla(Key::Plus, Modifiers::NONE)], &[])
+        let info = bench
+            .runs(vec![key_2(Key::Plus, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom, Zoom::ONE, "ppp {ppp}");
         for _ in 0..8 {
-            banco.corre(vec![tecla(Key::Minus, Modifiers::NONE)], &[]);
+            bench.runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[]);
         }
-        assert_eq!(banco.canvas.zoom(), Some(Zoom::MIN), "ppp {ppp}");
-        let antes = banco.reposo().image_rect;
-        let info = banco
-            .corre(vec![tecla(Key::Minus, Modifiers::NONE)], &[])
+        assert_eq!(bench.canvas.zoom(), Some(Zoom::MIN), "ppp {ppp}");
+        let antes = bench.rest_2_2().image_rect;
+        let info = bench
+            .runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom, Zoom::MIN, "ppp {ppp}: `-` satura");
         assert_eq!(info.image_rect, antes, "ppp {ppp}");
         for _ in 0..80 {
-            banco.corre(vec![tecla(Key::Equals, Modifiers::NONE)], &[]);
+            bench.runs(vec![key_2(Key::Equals, Modifiers::NONE)], &[]);
         }
-        assert_eq!(banco.canvas.zoom(), Some(Zoom::MAX), "ppp {ppp}");
-        let antes = banco.reposo().image_rect;
-        let info = banco
-            .corre(vec![tecla(Key::Plus, Modifiers::NONE)], &[])
+        assert_eq!(bench.canvas.zoom(), Some(Zoom::MAX), "ppp {ppp}");
+        let antes = bench.rest_2_2().image_rect;
+        let info = bench
+            .runs(vec![key_2(Key::Plus, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom, Zoom::MAX, "ppp {ppp}: `+` satura");
         assert_eq!(info.image_rect, antes, "ppp {ppp}");
@@ -901,71 +916,71 @@ fn fila_a6_las_teclas_mas_y_menos_en_los_extremos_no_cambian_el_nivel() {
 /// Puntos de un eje que se prueban: el píxel físico anterior a la imagen, el siguiente, y, por cada
 /// píxel de la rejilla, su primer y su último píxel físico (a 1/K son el mismo y se miran todos; con
 /// zoom ≥ ×1 se miran los tres primeros y los tres últimos píxeles de la imagen).
-fn puntos_del_eje(f: Fraccion, origen: i64, dim: u32) -> Vec<i64> {
+fn points_of_the_axis(f: Fraction, source_2: i64, dim: u32) -> Vec<i64> {
     let extent = o_extent(f, i64::from(dim));
-    let mut v = vec![origen - 1, origen + extent];
+    let mut v = vec![source_2 - 1, source_2 + extent];
     if f.1 > 1 {
-        v.extend(origen..origen + extent);
+        v.extend(source_2..source_2 + extent);
         return v;
     }
-    let lado = f.0 as i64;
+    let side = f.0 as i64;
     let dim = i64::from(dim);
     for i in [0, 1, 2, dim - 3, dim - 2, dim - 1] {
-        v.push(origen + i * lado);
-        v.push(origen + (i + 1) * lado - 1);
+        v.push(source_2 + i * side);
+        v.push(source_2 + (i + 1) * side - 1);
     }
     v
 }
 
 #[test]
-fn fila_a6_hover_y_stroke_begin_en_cada_pixel_de_la_rejilla_y_uno_fuera() {
-    let niveles = escalera();
+fn row_a6_hover_and_stroke_begin_at_each_pixel_of_the_grid_and_one_outside() {
+    let levels = ladder();
     // 1/64, 1/8, 1/4, 1/2, ×1 y ×3.
     for ppp in PPPS {
-        for indice in [0usize, 3, 4, 5, 6, 8] {
-            let f = niveles[indice];
-            let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-            let info = banco.al_nivel(indice);
-            let g = banco.geom(&info);
+        for index_2 in [0usize, 3, 4, 5, 6, 8] {
+            let f = levels[index_2];
+            let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+            let info = bench.go_to_level(index_2);
+            let g = bench.geom(&info);
             let (ext_x, ext_y) = (o_extent(f, 64), o_extent(f, 48));
-            let fila = g.origen.1 + ext_y / 2;
-            let columna = g.origen.0 + ext_x / 2;
-            let mut puntos: Vec<(i64, i64)> = puntos_del_eje(f, g.origen.0, 64)
+            let row_2 = g.source_2.1 + ext_y / 2;
+            let column = g.source_2.0 + ext_x / 2;
+            let mut points: Vec<(i64, i64)> = points_of_the_axis(f, g.source_2.0, 64)
                 .into_iter()
-                .map(|x| (x, fila))
+                .map(|x| (x, row_2))
                 .collect();
-            puntos.extend(
-                puntos_del_eje(f, g.origen.1, 48)
+            points.extend(
+                points_of_the_axis(f, g.source_2.1, 48)
                     .into_iter()
-                    .map(|y| (columna, y)),
+                    .map(|y| (column, y)),
             );
-            for p in puntos {
-                let etiqueta = format!(
+            for p in points {
+                let label_2 = format!(
                     "ppp {ppp} {} punto físico {p:?} (origen {:?})",
-                    rotulo(f),
-                    g.origen
+                    label(f),
+                    g.source_2
                 );
-                let pos = banco.pos(p.0, p.1);
+                let pos = bench.pos(p.0, p.1);
                 // hover
-                let reposo = banco.corre(vec![mover(pos)], &[]);
+                let rest_2_2 = bench.runs(vec![mover(pos)], &[]);
                 assert_eq!(
-                    reposo.info.hover,
-                    o_hover(f, p, g.origen, (64, 48)),
-                    "{etiqueta}: hover"
+                    rest_2_2.info.hover,
+                    o_hover(f, p, g.source_2, (64, 48)),
+                    "{label_2}: hover"
                 );
                 // StrokeBegin (con signo, sin recortar a la imagen).
-                let pulsa = banco.corre(vec![boton(pos, true)], &[]);
+                let presses_2 = bench.runs(vec![button_2(pos, true)], &[]);
                 assert_eq!(
-                    pulsa.trazo(),
-                    vec![CanvasEvent::StrokeBegin(o_stroke(f, p, g.origen))],
-                    "{etiqueta}: StrokeBegin"
+                    presses_2.stroke_2(),
+                    vec![CanvasEvent::StrokeBegin(o_stroke(f, p, g.source_2))],
+                    "{label_2}: StrokeBegin"
                 );
                 // Se suelta para el siguiente punto.
-                let suelta = banco.corre(vec![boton(pos, false)], &[]);
+                let releases = bench.runs(vec![button_2(pos, false)], &[]);
                 assert_eq!(
-                    suelta.trazo().last(),
+                    releases.stroke_2().last(),
                     Some(&CanvasEvent::StrokeEnd),
-                    "{etiqueta}"
+                    "{label_2}"
                 );
             }
         }
@@ -973,13 +988,13 @@ fn fila_a6_hover_y_stroke_begin_en_cada_pixel_de_la_rejilla_y_uno_fuera() {
 }
 
 #[test]
-fn fila_a6_a_1_k_hover_y_stroke_begin_son_multiplos_de_k_y_fuera_hover_es_none() {
+fn row_a6_at_1_k_hover_and_stroke_begin_are_multiples_of_k_and_outside_hover_is_none() {
     for ppp in PPPS {
-        for (indice, k) in [(5usize, 2i32), (4, 4), (0, 64)] {
-            let f = escalera()[indice];
-            let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-            let info = banco.al_nivel(indice);
-            let g = banco.geom(&info);
+        for (index_2, k) in [(5usize, 2i32), (4, 4), (0, 64)] {
+            let f = ladder()[index_2];
+            let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+            let info = bench.go_to_level(index_2);
+            let g = bench.geom(&info);
             let (ext_x, ext_y) = (o_extent(f, 64), o_extent(f, 48));
             for (dx, dy) in [
                 (0, 0),
@@ -989,22 +1004,22 @@ fn fila_a6_a_1_k_hover_y_stroke_begin_son_multiplos_de_k_y_fuera_hover_es_none()
                 (ext_x, 0),
                 (0, ext_y),
             ] {
-                let p = (g.origen.0 + dx, g.origen.1 + dy);
-                let pos = banco.pos(p.0, p.1);
-                let dentro = (0..ext_x).contains(&dx) && (0..ext_y).contains(&dy);
-                let hover = banco.corre(vec![mover(pos)], &[]).info.hover;
-                let begin = banco.corre(vec![boton(pos, true)], &[]).trazo();
-                banco.corre(vec![boton(pos, false)], &[]);
-                let esperado = (dx as i32 * k, dy as i32 * k);
+                let p = (g.source_2.0 + dx, g.source_2.1 + dy);
+                let pos = bench.pos(p.0, p.1);
+                let inside = (0..ext_x).contains(&dx) && (0..ext_y).contains(&dy);
+                let hover = bench.runs(vec![mover(pos)], &[]).info.hover;
+                let begin = bench.runs(vec![button_2(pos, true)], &[]).stroke_2();
+                bench.runs(vec![button_2(pos, false)], &[]);
+                let expected_2 = (dx as i32 * k, dy as i32 * k);
                 assert_eq!(
                     begin,
-                    vec![CanvasEvent::StrokeBegin(esperado)],
+                    vec![CanvasEvent::StrokeBegin(expected_2)],
                     "ppp {ppp} 1/{k} ({dx}, {dy})"
                 );
-                if dentro {
-                    assert_eq!(hover, Some((esperado.0 as u32, esperado.1 as u32)));
-                    assert_eq!(esperado.0 % k, 0);
-                    assert_eq!(esperado.1 % k, 0);
+                if inside {
+                    assert_eq!(hover, Some((expected_2.0 as u32, expected_2.1 as u32)));
+                    assert_eq!(expected_2.0 % k, 0);
+                    assert_eq!(expected_2.1 % k, 0);
                 } else {
                     assert_eq!(hover, None, "ppp {ppp} 1/{k} ({dx}, {dy}) está fuera");
                 }
@@ -1014,125 +1029,129 @@ fn fila_a6_a_1_k_hover_y_stroke_begin_son_multiplos_de_k_y_fuera_hover_es_none()
 }
 
 /// Imagen de 2048×1536 (cabe en la textura de 2048 de egui) para que Ajustar caiga en fracciones.
-fn imagen_grande() -> Image {
+fn image_large() -> Image {
     Image::new(2048, 1536, Mode::Rgba).expect("imagen válida")
 }
 
 #[test]
-fn fila_a6_home_fit_y_request_view_dan_lo_de_a4() {
-    let niveles = escalera();
+fn row_a6_home_fit_and_request_view_give_that_of_a4() {
+    let levels = ladder();
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_grande());
-        let viewport = banco.viewport();
-        let mejor = o_mejor_nivel(viewport, (2048, 1536));
-        let esperado = rotulo(niveles[mejor]);
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_large());
+        let viewport = bench.viewport();
+        let better = o_better_level(viewport, (2048, 1536));
+        let expected_2 = label(levels[better]);
         // El ajuste inicial.
-        let info = banco.reposo();
-        assert_eq!(info.zoom.to_string(), esperado, "ppp {ppp}: ajuste inicial");
-        comprueba_rect(&info, ppp, (2048, 1536), "ajuste inicial");
-        let g = banco.geom(&info);
-        let f = niveles[mejor];
-        for (eje, origen, vista, dim) in [
-            ("x", g.origen.0, viewport.width, 2048),
-            ("y", g.origen.1, viewport.height, 1536),
+        let info = bench.rest_2_2();
+        assert_eq!(
+            info.zoom.to_string(),
+            expected_2,
+            "ppp {ppp}: ajuste inicial"
+        );
+        checks_rect(&info, ppp, (2048, 1536), "ajuste inicial");
+        let g = bench.geom(&info);
+        let f = levels[better];
+        for (axis, source_2, vista, dim) in [
+            ("x", g.source_2.0, viewport.width, 2048),
+            ("y", g.source_2.1, viewport.height, 1536),
         ] {
             let extent = o_extent(f, dim);
             assert!(
-                (2 * origen + extent - i64::from(vista)).abs() <= 1,
-                "ppp {ppp}: centrada en {eje} (origen {origen}, extent {extent}, lienzo {vista})"
+                (2 * source_2 + extent - i64::from(vista)).abs() <= 1,
+                "ppp {ppp}: centrada en {axis} (origen {source_2}, extent {extent}, lienzo {vista})"
             );
         }
         // Home.
-        banco.pide(ViewOp::Actual);
-        assert_eq!(banco.canvas.zoom(), Some(Zoom::ONE));
-        let info = banco
-            .corre(vec![tecla(Key::Home, Modifiers::NONE)], &[])
+        bench.asks(ViewOp::Actual);
+        assert_eq!(bench.canvas.zoom(), Some(Zoom::ONE));
+        let info = bench
+            .runs(vec![key_2(Key::Home, Modifiers::NONE)], &[])
             .info;
-        assert_eq!(info.zoom.to_string(), esperado, "ppp {ppp}: Home");
+        assert_eq!(info.zoom.to_string(), expected_2, "ppp {ppp}: Home");
         // request_view(Fit) desde otro nivel.
-        banco.pide(ViewOp::Actual);
-        let info = banco.pide(ViewOp::Fit);
-        assert_eq!(info.zoom.to_string(), esperado, "ppp {ppp}: Fit");
+        bench.asks(ViewOp::Actual);
+        let info = bench.asks(ViewOp::Fit);
+        assert_eq!(info.zoom.to_string(), expected_2, "ppp {ppp}: Fit");
         assert_eq!(
-            banco.geom(&info).origen,
-            g.origen,
+            bench.geom(&info).source_2,
+            g.source_2,
             "ppp {ppp}: Fit centra igual"
         );
         // request_view(ZoomOut) y (ZoomIn) desde el ajuste: un nivel.
-        let info = banco.pide(ViewOp::ZoomOut);
+        let info = bench.asks(ViewOp::ZoomOut);
         assert_eq!(
             info.zoom.to_string(),
-            rotulo(niveles[mejor.saturating_sub(1)]),
+            label(levels[better.saturating_sub(1)]),
             "ppp {ppp}: ZoomOut"
         );
-        banco.pide(ViewOp::Fit);
-        let info = banco.pide(ViewOp::ZoomIn);
+        bench.asks(ViewOp::Fit);
+        let info = bench.asks(ViewOp::ZoomIn);
         assert_eq!(
             info.zoom.to_string(),
-            rotulo(niveles[(mejor + 1).min(69)]),
+            label(levels[(better + 1).min(69)]),
             "ppp {ppp}: ZoomIn"
         );
-        comprueba_rect(&info, ppp, (2048, 1536), "tras ZoomIn");
+        checks_rect(&info, ppp, (2048, 1536), "tras ZoomIn");
     }
 }
 
 /// La malla de la textura de la imagen (la de la única baldosa de una imagen pequeña).
-fn malla_de_la_imagen(banco: &Banco, formas: &[ClippedShape]) -> (Vec<Vertex>, Vec<u32>) {
-    let id = banco.canvas.texture_id().expect("hay textura de la imagen");
-    let mut mallas: Vec<(Vec<Vertex>, Vec<u32>)> = capas_de(formas)
+fn image_mesh(bench: &Bench, shapes_2: &[ClippedShape]) -> (Vec<Vertex>, Vec<u32>) {
+    let id = bench.canvas.texture_id().expect("hay textura de la imagen");
+    let mut meshes: Vec<(Vec<Vertex>, Vec<u32>)> = layers_of(shapes_2)
         .into_iter()
-        .filter_map(|capa| match capa {
-            Capa::Malla {
-                textura,
+        .filter_map(|layer_2| match layer_2 {
+            Layer::TestMesh {
+                texture_2,
                 vertices,
                 indices,
-            } if textura == id => Some((vertices, indices)),
+            } if texture_2 == id => Some((vertices, indices)),
             _ => None,
         })
         .collect();
     assert_eq!(
-        mallas.len(),
+        meshes.len(),
         1,
         "con una sola baldosa, una sola malla de la imagen"
     );
-    mallas.remove(0)
+    meshes.remove(0)
 }
 
 #[test]
-fn fila_a6_la_malla_de_la_imagen_es_un_cuadrilatero_de_extent_pixeles_con_el_uv_desplazado() {
-    let niveles = escalera();
+fn row_a6_the_image_mesh_is_a_quad_of_extent_pixels_with_the_shifted_uv() {
+    let levels = ladder();
     // 1/64, 1/32, 1/8, 1/2, ×1, ×2 y ×6.
     for ppp in PPPS {
-        for indice in [0usize, 1, 3, 5, 6, 7, 11] {
-            let f = niveles[indice];
-            let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-            banco.al_nivel(indice);
-            let salida = banco.corre(vec![], &[]);
-            let g = banco.geom(&salida.info);
-            let (vertices, indices) = malla_de_la_imagen(&banco, &salida.formas);
-            let etiqueta = format!("ppp {ppp} {}", rotulo(f));
-            assert_eq!(vertices.len(), 4, "{etiqueta}: un cuadrilátero");
-            assert_eq!(indices.len(), 6, "{etiqueta}");
+        for index_2 in [0usize, 1, 3, 5, 6, 7, 11] {
+            let f = levels[index_2];
+            let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+            bench.go_to_level(index_2);
+            let output_2 = bench.runs(vec![], &[]);
+            let g = bench.geom(&output_2.info);
+            let (vertices, indices) = image_mesh(&bench, &output_2.shapes_2);
+            let label_2 = format!("ppp {ppp} {}", label(f));
+            assert_eq!(vertices.len(), 4, "{label_2}: un cuadrilátero");
+            assert_eq!(indices.len(), 6, "{label_2}");
             // Ocupa `extent` píxeles físicos desde el origen.
             let (ext_x, ext_y) = (o_extent(f, 64) as f32, o_extent(f, 48) as f32);
-            let caja = caja_pos(&vertices);
-            let esperada = Rect::from_min_max(
-                pos2(g.origen.0 as f32 / ppp, g.origen.1 as f32 / ppp),
+            let toolbox_2 = toolbox_pos(&vertices);
+            let expected = Rect::from_min_max(
+                pos2(g.source_2.0 as f32 / ppp, g.source_2.1 as f32 / ppp),
                 pos2(
-                    (g.origen.0 as f32 + ext_x) / ppp,
-                    (g.origen.1 as f32 + ext_y) / ppp,
+                    (g.source_2.0 as f32 + ext_x) / ppp,
+                    (g.source_2.1 as f32 + ext_y) / ppp,
                 ),
             );
             assert!(
-                (caja.min.x - esperada.min.x).abs() <= 2e-3
-                    && (caja.min.y - esperada.min.y).abs() <= 2e-3
-                    && (caja.max.x - esperada.max.x).abs() <= 2e-3
-                    && (caja.max.y - esperada.max.y).abs() <= 2e-3,
-                "{etiqueta}: la malla ocupa {caja:?} y debía ocupar {esperada:?}"
+                (toolbox_2.min.x - expected.min.x).abs() <= 2e-3
+                    && (toolbox_2.min.y - expected.min.y).abs() <= 2e-3
+                    && (toolbox_2.max.x - expected.max.x).abs() <= 2e-3
+                    && (toolbox_2.max.y - expected.max.y).abs() <= 2e-3,
+                "{label_2}: la malla ocupa {toolbox_2:?} y debía ocupar {expected:?}"
             );
-            // uv: de 0 a 1 con zoom ≥ ×1; con 1/K, `(x·K + 0,5 − K/2) / lado` desde el borde.
-            let uv = caja_uv(&vertices);
-            let esperado = if f.1 == 1 {
+            // uv: de 0 a 1 con zoom ≥ ×1; con 1/K, `(x·K + 0,5 − K/2) / side` desde el borde.
+            let uv = toolbox_uv(&vertices);
+            let expected_2 = if f.1 == 1 {
                 [0.0, 0.0, 1.0, 1.0]
             } else {
                 let k = f.1 as f32;
@@ -1143,13 +1162,13 @@ fn fila_a6_la_malla_de_la_imagen_es_un_cuadrilatero_de_extent_pixeles_con_el_uv_
                     (ext_y * k + 0.5 - k / 2.0) / 48.0,
                 ]
             };
-            for (a, b) in uv.iter().zip(esperado) {
+            for (a, b) in uv.iter().zip(expected_2) {
                 assert!(
                     (a - b).abs() <= 1e-4,
-                    "{etiqueta}: uv {uv:?} y debía ser {esperado:?}"
+                    "{label_2}: uv {uv:?} y debía ser {expected_2:?}"
                 );
             }
-            comprueba_rect(&salida.info, ppp, (64, 48), &etiqueta);
+            checks_rect(&output_2.info, ppp, (64, 48), &label_2);
         }
     }
 }
@@ -1162,36 +1181,36 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(24))]
 
     #[test]
-    fn propiedad_p1_hover_y_stroke_begin_de_un_puntero_cualquiera_son_el_oraculo(
+    fn property_p1_hover_and_stroke_begin_of_any_pointer_are_the_oracle(
         ppp_i in 0usize..5,
-        indice in 0usize..70,
+        index_2 in 0usize..70,
         x_frac in 0.0f64..1.0,
         y_frac in 0.0f64..1.0,
-        despl in (-0.4f32..0.4, -0.4f32..0.4),
+        pan in (-0.4f32..0.4, -0.4f32..0.4),
     ) {
         let ppp = PPPS[ppp_i];
-        let f = escalera()[indice];
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        let info = banco.al_nivel(indice);
-        let g = banco.geom(&info);
+        let f = ladder()[index_2];
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        let info = bench.go_to_level(index_2);
+        let g = bench.geom(&info);
         // Un píxel físico cualquiera del lienzo (no el del borde) más una fracción que no cambia
         // `round(v·ppp)`.
-        let ancho = i64::from(g.viewport.width);
-        let alto = i64::from(g.viewport.height);
+        let width_2 = i64::from(g.viewport.width);
+        let height_2 = i64::from(g.viewport.height);
         let p = (
-            1 + (x_frac * (ancho - 3) as f64) as i64,
-            1 + (y_frac * (alto - 3) as f64) as i64,
+            1 + (x_frac * (width_2 - 3) as f64) as i64,
+            1 + (y_frac * (height_2 - 3) as f64) as i64,
         );
-        let pos = pos2((p.0 as f32 + despl.0) / ppp, (p.1 as f32 + despl.1) / ppp);
+        let pos = pos2((p.0 as f32 + pan.0) / ppp, (p.1 as f32 + pan.1) / ppp);
         prop_assert_eq!((pos.x * ppp).round() as i64, p.0);
         prop_assert_eq!((pos.y * ppp).round() as i64, p.1);
-        let hover = banco.corre(vec![mover(pos)], &[]).info.hover;
-        prop_assert_eq!(hover, o_hover(f, p, g.origen, (64, 48)), "{} ppp {} {:?}", rotulo(f), ppp, p);
-        let begin = banco.corre(vec![boton(pos, true)], &[]).trazo();
+        let hover = bench.runs(vec![mover(pos)], &[]).info.hover;
+        prop_assert_eq!(hover, o_hover(f, p, g.source_2, (64, 48)), "{} ppp {} {:?}", label(f), ppp, p);
+        let begin = bench.runs(vec![button_2(pos, true)], &[]).stroke_2();
         prop_assert_eq!(
             begin,
-            vec![CanvasEvent::StrokeBegin(o_stroke(f, p, g.origen))],
-            "{} ppp {} {:?}", rotulo(f), ppp, p
+            vec![CanvasEvent::StrokeBegin(o_stroke(f, p, g.source_2))],
+            "{} ppp {} {:?}", label(f), ppp, p
         );
     }
 }
@@ -1200,54 +1219,54 @@ proptest! {
 // A7 · Trazo a 1/4
 // ---------------------------------------------------------------------------------------------
 
-fn rojo() -> Pixel {
-    Pixel::Rgba(ROJO)
+fn red() -> Pixel {
+    Pixel::Rgba(RED)
 }
 
 /// Quita los `StrokeMove` que repiten la posición anterior (soltar sin moverse repite la última).
-fn sin_moves_repetidos(eventos: &[CanvasEvent]) -> Vec<CanvasEvent> {
-    let mut salida: Vec<CanvasEvent> = Vec::new();
-    let mut ultima: Option<(i32, i32)> = None;
-    for e in eventos {
+fn without_moves_repeated(events_2: &[CanvasEvent]) -> Vec<CanvasEvent> {
+    let mut output_2: Vec<CanvasEvent> = Vec::new();
+    let mut last: Option<(i32, i32)> = None;
+    for e in events_2 {
         match e {
-            CanvasEvent::StrokeMove(p) if ultima == Some(*p) => continue,
-            CanvasEvent::StrokeBegin(p) | CanvasEvent::StrokeMove(p) => ultima = Some(*p),
-            CanvasEvent::StrokeEnd => ultima = None,
+            CanvasEvent::StrokeMove(p) if last == Some(*p) => continue,
+            CanvasEvent::StrokeBegin(p) | CanvasEvent::StrokeMove(p) => last = Some(*p),
+            CanvasEvent::StrokeEnd => last = None,
         }
-        salida.push(*e);
+        output_2.push(*e);
     }
-    salida
+    output_2
 }
 
 /// Un gesto: pulsa en `(ox + a.0, oy + a.1)`, mueve por cada punto de `moves` y suelta en el último.
-fn gesto(
-    banco: &mut Banco,
-    origen: (i64, i64),
-    desde: (i64, i64),
+fn gesture_2(
+    bench: &mut Bench,
+    source_2: (i64, i64),
+    from_2: (i64, i64),
     moves: &[(i64, i64)],
 ) -> Vec<CanvasEvent> {
-    let pos = |d: (i64, i64)| banco.pos(origen.0 + d.0, origen.1 + d.1);
-    let (inicio, ultimo, destinos) = (
-        pos(desde),
+    let pos = |d: (i64, i64)| bench.pos(source_2.0 + d.0, source_2.1 + d.1);
+    let (start_2, ultimo, targets) = (
+        pos(from_2),
         pos(*moves.last().expect("al menos un movimiento")),
         moves.iter().map(|d| pos(*d)).collect::<Vec<_>>(),
     );
-    let mut eventos = Vec::new();
-    eventos.extend(banco.corre(vec![mover(inicio)], &[]).trazo());
-    eventos.extend(banco.corre(vec![boton(inicio, true)], &[]).trazo());
-    for destino in destinos {
-        eventos.extend(banco.corre(vec![mover(destino)], &[]).trazo());
+    let mut events_2 = Vec::new();
+    events_2.extend(bench.runs(vec![mover(start_2)], &[]).stroke_2());
+    events_2.extend(bench.runs(vec![button_2(start_2, true)], &[]).stroke_2());
+    for target_2 in targets {
+        events_2.extend(bench.runs(vec![mover(target_2)], &[]).stroke_2());
     }
-    eventos.extend(banco.corre(vec![boton(ultimo, false)], &[]).trazo());
-    sin_moves_repetidos(&eventos)
+    events_2.extend(bench.runs(vec![button_2(ultimo, false)], &[]).stroke_2());
+    without_moves_repeated(&events_2)
 }
 
 /// Aplica los eventos a un `Stroke` de 64×48 y devuelve sus píxeles (sin aplicarlo).
-fn pixeles_del_trazo(eventos: &[CanvasEvent]) -> Vec<(u32, u32)> {
+fn pixels_of_the_stroke(events_2: &[CanvasEvent]) -> Vec<(u32, u32)> {
     let mut stroke = Stroke::new(64, 48);
-    for e in eventos {
+    for e in events_2 {
         match e {
-            CanvasEvent::StrokeBegin(p) | CanvasEvent::StrokeMove(p) => stroke.move_to(*p, rojo()),
+            CanvasEvent::StrokeBegin(p) | CanvasEvent::StrokeMove(p) => stroke.move_to(*p, red()),
             CanvasEvent::StrokeEnd => {}
         }
     }
@@ -1255,15 +1274,15 @@ fn pixeles_del_trazo(eventos: &[CanvasEvent]) -> Vec<(u32, u32)> {
 }
 
 #[test]
-fn fila_a7_un_trazo_a_1_4_va_por_la_rejilla_en_un_solo_paso() {
+fn row_a7_a_stroke_at_1_4_goes_along_the_grid_in_a_single_step() {
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        let info = banco.al_nivel(4);
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        let info = bench.go_to_level(4);
         assert_eq!(info.zoom.to_string(), "×1/4");
-        let origen = banco.geom(&info).origen;
-        let eventos = gesto(&mut banco, origen, (2, 1), &[(5, 1)]);
+        let source_2 = bench.geom(&info).source_2;
+        let events_2 = gesture_2(&mut bench, source_2, (2, 1), &[(5, 1)]);
         assert_eq!(
-            eventos,
+            events_2,
             vec![
                 CanvasEvent::StrokeBegin((8, 4)),
                 CanvasEvent::StrokeMove((20, 4)),
@@ -1272,32 +1291,32 @@ fn fila_a7_un_trazo_a_1_4_va_por_la_rejilla_en_un_solo_paso() {
             "ppp {ppp}"
         );
         // Los 13 píxeles de la línea de (8, 4) a (20, 4), sin huecos y en orden.
-        let esperados: Vec<(u32, u32)> = (8..=20).map(|x| (x, 4)).collect();
-        assert_eq!(pixeles_del_trazo(&eventos), esperados, "ppp {ppp}");
+        let expected_2_2: Vec<(u32, u32)> = (8..=20).map(|x| (x, 4)).collect();
+        assert_eq!(pixels_of_the_stroke(&events_2), expected_2_2, "ppp {ppp}");
 
         // Un solo `SetPixels` (un solo paso): un `undo` restaura la imagen.
-        let original = imagen_64x48();
+        let original = image_64x48();
         let mut doc = Document::new(original.clone());
         let mut stroke = Stroke::new(64, 48);
-        for e in &eventos {
+        for e in &events_2 {
             match e {
                 CanvasEvent::StrokeBegin(p) | CanvasEvent::StrokeMove(p) => {
-                    stroke.move_to(*p, rojo())
+                    stroke.move_to(*p, red())
                 }
                 CanvasEvent::StrokeEnd => {}
             }
         }
         let id = ImageId::from_raw(0);
         assert_eq!(stroke.commit(&mut doc, id), Ok(true));
-        let imagen = doc.image(ImageId::from_raw(0)).expect("hay imagen");
-        assert_eq!(imagen.get_pixel(8, 4), Ok(rojo()));
-        assert_eq!(imagen.get_pixel(20, 4), Ok(rojo()));
+        let image_2 = doc.image(ImageId::from_raw(0)).expect("hay imagen");
+        assert_eq!(image_2.get_pixel(8, 4), Ok(red()));
+        assert_eq!(image_2.get_pixel(20, 4), Ok(red()));
         assert_eq!(
-            imagen.get_pixel(14, 4),
-            Ok(rojo()),
+            image_2.get_pixel(14, 4),
+            Ok(red()),
             "sin huecos en coordenadas de imagen"
         );
-        assert_eq!(imagen.get_pixel(21, 4), Ok(Pixel::Rgba(TRANSPARENTE)));
+        assert_eq!(image_2.get_pixel(21, 4), Ok(Pixel::Rgba(TRANSPARENT)));
         assert!(doc.can_undo());
         assert_eq!(doc.undo(), Ok(()));
         assert!(!doc.can_undo(), "un solo paso");
@@ -1310,15 +1329,15 @@ fn fila_a7_un_trazo_a_1_4_va_por_la_rejilla_en_un_solo_paso() {
 }
 
 #[test]
-fn fila_a7_un_trazo_que_sale_por_la_izquierda_y_vuelve_se_une_con_line_y_recorta() {
+fn row_a7_a_stroke_that_leaves_on_the_left_and_comes_back_is_joined_with_line_and_clipped() {
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        let info = banco.al_nivel(4);
-        let origen = banco.geom(&info).origen;
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        let info = bench.go_to_level(4);
+        let source_2 = bench.geom(&info).source_2;
         // (2, 1) → (-3, 1) → (6, 1): a 1/4, (8, 4), (-12, 4) y (24, 4).
-        let eventos = gesto(&mut banco, origen, (2, 1), &[(-3, 1), (6, 1)]);
+        let events_2 = gesture_2(&mut bench, source_2, (2, 1), &[(-3, 1), (6, 1)]);
         assert_eq!(
-            eventos,
+            events_2,
             vec![
                 CanvasEvent::StrokeBegin((8, 4)),
                 CanvasEvent::StrokeMove((-12, 4)),
@@ -1328,24 +1347,24 @@ fn fila_a7_un_trazo_que_sale_por_la_izquierda_y_vuelve_se_une_con_line_y_recorta
             "ppp {ppp}"
         );
         // Las dos líneas se recortan a la imagen: la unión es x de 0 a 24 en la fila 4.
-        let pixeles = pixeles_del_trazo(&eventos);
-        let conjunto: HashSet<(u32, u32)> = pixeles.iter().copied().collect();
-        let esperado: HashSet<(u32, u32)> = (0..=24).map(|x| (x, 4)).collect();
-        assert_eq!(pixeles.len(), conjunto.len(), "sin repetidos");
-        assert_eq!(conjunto, esperado, "ppp {ppp}");
+        let pixels_2 = pixels_of_the_stroke(&events_2);
+        let set: HashSet<(u32, u32)> = pixels_2.iter().copied().collect();
+        let expected_2: HashSet<(u32, u32)> = (0..=24).map(|x| (x, 4)).collect();
+        assert_eq!(pixels_2.len(), set.len(), "sin repetidos");
+        assert_eq!(set, expected_2, "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_a7_un_trazo_que_sale_por_la_derecha_y_vuelve_se_recorta_a_la_imagen() {
+fn row_a7_a_stroke_that_leaves_on_the_right_and_comes_back_is_clipped_to_the_image() {
     for ppp in PPPS {
-        let mut banco = Banco::con_image(ppp, PANTALLA, &imagen_64x48());
-        let info = banco.al_nivel(4);
-        let origen = banco.geom(&info).origen;
+        let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
+        let info = bench.go_to_level(4);
+        let source_2 = bench.geom(&info).source_2;
         // (14, 1) → (20, 1) → (13, 1): a 1/4, (56, 4), (80, 4) y (52, 4); la imagen acaba en 63.
-        let eventos = gesto(&mut banco, origen, (14, 1), &[(20, 1), (13, 1)]);
+        let events_2 = gesture_2(&mut bench, source_2, (14, 1), &[(20, 1), (13, 1)]);
         assert_eq!(
-            eventos,
+            events_2,
             vec![
                 CanvasEvent::StrokeBegin((56, 4)),
                 CanvasEvent::StrokeMove((80, 4)),
@@ -1354,9 +1373,9 @@ fn fila_a7_un_trazo_que_sale_por_la_derecha_y_vuelve_se_recorta_a_la_imagen() {
             ],
             "ppp {ppp}"
         );
-        let conjunto: HashSet<(u32, u32)> = pixeles_del_trazo(&eventos).into_iter().collect();
-        let esperado: HashSet<(u32, u32)> = (52..=63).map(|x| (x, 4)).collect();
-        assert_eq!(conjunto, esperado, "ppp {ppp}");
+        let set: HashSet<(u32, u32)> = pixels_of_the_stroke(&events_2).into_iter().collect();
+        let expected_2: HashSet<(u32, u32)> = (52..=63).map(|x| (x, 4)).collect();
+        assert_eq!(set, expected_2, "ppp {ppp}");
     }
 }
 
@@ -1364,7 +1383,7 @@ fn fila_a7_un_trazo_que_sale_por_la_derecha_y_vuelve_se_recorta_a_la_imagen() {
 // A8 · Menú y columna
 // ---------------------------------------------------------------------------------------------
 
-fn estado(zoom: Option<Zoom>) -> UiState {
+fn state_2(zoom: Option<Zoom>) -> UiState {
     UiState {
         can_undo: true,
         can_redo: true,
@@ -1374,109 +1393,111 @@ fn estado(zoom: Option<Zoom>) -> UiState {
     }
 }
 
-fn nivel(indice: usize) -> Zoom {
-    Zoom::levels().nth(indice).expect("nivel de la escalera")
+fn level(index_2: usize) -> Zoom {
+    Zoom::levels().nth(index_2).expect("nivel de la escalera")
 }
 
 #[test]
-fn fila_a8_las_acciones_de_zoom_a_lo_largo_de_la_escalera() {
+fn row_a8_the_zoom_actions_along_the_ladder() {
     // Zoom::MIN, 1/2, ×1, ×5 y Zoom::MAX.
-    let casos: [(&str, Zoom); 5] = [
+    let cases: [(&str, Zoom); 5] = [
         ("1/64", Zoom::MIN),
-        ("1/2", nivel(5)),
+        ("1/2", level(5)),
         ("×1", Zoom::ONE),
         ("×5", Zoom::from_int(5).expect("×5")),
         ("×64", Zoom::MAX),
     ];
-    for (nombre, zoom) in casos {
-        let s = estado(Some(zoom));
+    for (name_2, zoom) in cases {
+        let s = state_2(Some(zoom));
         assert_eq!(
             enabled(AppAction::ZoomOut, &s),
-            nombre != "1/64",
-            "ZoomOut con {nombre}"
+            name_2 != "1/64",
+            "ZoomOut con {name_2}"
         );
         assert_eq!(
             enabled(AppAction::ZoomIn, &s),
-            nombre != "×64",
-            "ZoomIn con {nombre}"
+            name_2 != "×64",
+            "ZoomIn con {name_2}"
         );
         assert_eq!(
             enabled(AppAction::ZoomActual, &s),
-            nombre != "×1",
-            "ZoomActual con {nombre}"
+            name_2 != "×1",
+            "ZoomActual con {name_2}"
         );
-        assert!(enabled(AppAction::ZoomFit, &s), "ZoomFit con {nombre}");
+        assert!(enabled(AppAction::ZoomFit, &s), "ZoomFit con {name_2}");
     }
     // Los niveles de la escalera, todos: Alejar solo se apaga en el mínimo y Acercar solo en el máximo.
     for (i, zoom) in Zoom::levels().enumerate() {
-        let s = estado(Some(zoom));
+        let s = state_2(Some(zoom));
         assert_eq!(enabled(AppAction::ZoomOut, &s), i != 0, "{zoom}");
         assert_eq!(enabled(AppAction::ZoomIn, &s), i != 69, "{zoom}");
         assert_eq!(enabled(AppAction::ZoomActual, &s), i != 6, "{zoom}");
         assert!(enabled(AppAction::ZoomFit, &s), "{zoom}");
     }
     // Sin imagen, ninguna.
-    let s = estado(None);
-    for accion in [
+    let s = state_2(None);
+    for action_2 in [
         AppAction::ZoomOut,
         AppAction::ZoomIn,
         AppAction::ZoomActual,
         AppAction::ZoomFit,
     ] {
-        assert!(!enabled(accion, &s), "{accion:?} sin imagen");
+        assert!(!enabled(action_2, &s), "{action_2:?} sin imagen");
     }
 }
 
 #[test]
-fn fila_a8_los_bloqueos_de_la_17_no_cambian() {
-    let zoom = Some(nivel(5));
-    let con = |f: fn(&mut Locks)| {
+fn row_a8_the_locks_of_the_17_do_not_change() {
+    let zoom = Some(level(5));
+    let with = |f: fn(&mut Locks)| {
         let mut locks = Locks::default();
         f(&mut locks);
         UiState {
             locks,
-            ..estado(zoom)
+            ..state_2(zoom)
         }
     };
     // El zoom solo se bloquea con un campo de texto y desde el teclado; con un gesto, no.
-    for accion in [
+    for action_2 in [
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomActual,
         AppAction::ZoomFit,
     ] {
-        let texto = Locks {
+        let text_2 = Locks {
             text_focus: true,
             ..Locks::default()
         };
         assert!(
-            is_blocked(accion, texto, Origin::Key),
-            "{accion:?} con texto desde el teclado"
+            is_blocked(action_2, text_2, Origin::Key),
+            "{action_2:?} con texto desde el teclado"
         );
         assert!(
-            !is_blocked(accion, texto, Origin::Menu),
-            "{accion:?} con texto desde el menú"
+            !is_blocked(action_2, text_2, Origin::Menu),
+            "{action_2:?} con texto desde el menú"
         );
-        let gesto = Locks {
+        let gesture_2 = Locks {
             gesture: true,
             ..Locks::default()
         };
-        assert!(!is_blocked(accion, gesto, Origin::Key));
-        assert!(enabled(accion, &con(|l| l.gesture = true)) == enabled(accion, &estado(zoom)));
+        assert!(!is_blocked(action_2, gesture_2, Origin::Key));
         assert!(
-            !enabled(accion, &con(|l| l.dialog = true)),
-            "{accion:?} con un diálogo"
+            enabled(action_2, &with(|l| l.gesture = true)) == enabled(action_2, &state_2(zoom))
         );
         assert!(
-            !enabled(accion, &con(|l| l.modal = true)),
-            "{accion:?} con un modal"
+            !enabled(action_2, &with(|l| l.dialog = true)),
+            "{action_2:?} con un diálogo"
+        );
+        assert!(
+            !enabled(action_2, &with(|l| l.modal = true)),
+            "{action_2:?} con un modal"
         );
     }
 }
 
 #[test]
-fn fila_a8_el_rotulo_del_nivel_es_zoom_y_el_display() {
-    assert_eq!(zoom_label(Some(nivel(5))), "Zoom ×1/2");
+fn row_a8_the_level_label_is_zoom_and_the_display() {
+    assert_eq!(zoom_label(Some(level(5))), "Zoom ×1/2");
     assert_eq!(zoom_label(Some(Zoom::MIN)), "Zoom ×1/64");
     assert_eq!(
         zoom_label(Some(Zoom::from_int(12).expect("×12"))),
@@ -1494,59 +1515,59 @@ fn fila_a8_el_rotulo_del_nivel_es_zoom_y_el_display() {
 }
 
 /// Un fotograma de la columna sola con el rótulo dado; lo pintado en el segundo (el estable).
-fn columna_con(ctx: &Context, etiqueta: &str) -> common::Pintado {
-    let pantalla = vec2(400.0, 600.0);
-    let s = estado(Some(Zoom::ONE));
+fn column_with(ctx: &Context, label_2: &str) -> common::Painted {
+    let screen = vec2(400.0, 600.0);
+    let s = state_2(Some(Zoom::ONE));
     let mut ultimo = None;
     for _ in 0..2 {
-        let formas = fotograma(ctx, pantalla, vec![], |ui| {
-            caja(ui, &s, etiqueta);
+        let shapes_2 = frame(ctx, screen, vec![], |ui| {
+            toolbox_2(ui, &s, label_2);
         });
-        ultimo = Some(pintado(&formas));
+        ultimo = Some(painted(&shapes_2));
     }
     ultimo.expect("dos fotogramas")
 }
 
 #[test]
-fn fila_a8_zoom_1_2_zoom_1_64_y_zoom_x12_caben_en_la_columna_a_las_cinco_escalas() {
-    let niveles = [nivel(5), Zoom::MIN, Zoom::from_int(12).expect("×12")];
+fn row_a8_zoom_1_2_zoom_1_64_and_zoom_x12_fit_in_the_column_at_the_five_scales() {
+    let levels = [level(5), Zoom::MIN, Zoom::from_int(12).expect("×12")];
     for ppp in PPPS {
         let n = n_de(ppp);
         // La fuente real, con `MissingGlyphPolicy::Panic`: un glifo ausente (`×`) sería un pánico.
-        let ctx = contexto(ppp);
-        for zoom in niveles {
-            let etiqueta = zoom_label(Some(zoom));
-            let pintado = columna_con(&ctx, &etiqueta);
-            let texto = pintado.texto_con(&etiqueta).unwrap_or_else(|| {
+        let ctx = context(ppp);
+        for zoom in levels {
+            let label_2 = zoom_label(Some(zoom));
+            let painted = column_with(&ctx, &label_2);
+            let text_2 = painted.text_with(&label_2).unwrap_or_else(|| {
                 panic!(
-                    "ppp {ppp}: no se pinta `{etiqueta}`; hay {:?}",
-                    pintado.todos_los_textos()
+                    "ppp {ppp}: no se pinta `{label_2}`; hay {:?}",
+                    painted.all_the_texts()
                 )
             });
             assert_eq!(
-                texto.texto, etiqueta,
+                text_2.text_2, label_2,
                 "ppp {ppp}: el texto se pinta entero, sin recorte"
             );
             // La columna va pegada al borde derecho de la pantalla de 400 × 600 pt.
-            let caja_x = caja_sola(
+            let toolbox_x = toolbox_single(
                 ((400.0 * ppp).round() as i64, (600.0 * ppp).round() as i64),
                 n as u32,
             )
             .x;
-            let limite = (caja_x + (TOOLBAR_MARGIN_U + toolbar_button_width_u()) * n) as f32;
+            let limit = (toolbox_x + (TOOLBAR_MARGIN_U + toolbar_button_width_u()) * n) as f32;
             assert!(
-                texto.rect().max.x * ppp <= limite + tolerancia_de_egui(ppp),
-                "ppp {ppp}: `{etiqueta}` termina en {} px y el botón acaba en {limite}",
-                texto.rect().max.x * ppp
+                text_2.rect().max.x * ppp <= limit + tolerance_of_egui(ppp),
+                "ppp {ppp}: `{label_2}` termina en {} px y el botón acaba en {limit}",
+                text_2.rect().max.x * ppp
             );
             assert!(
-                texto.rect().max.x <= texto.clip.max.x + 1e-3,
-                "ppp {ppp}: `{etiqueta}` queda fuera del recorte de la columna ({:?} frente a {:?})",
-                texto.rect(),
-                texto.clip
+                text_2.rect().max.x <= text_2.clip.max.x + 1e-3,
+                "ppp {ppp}: `{label_2}` queda fuera del recorte de la columna ({:?} frente a {:?})",
+                text_2.rect(),
+                text_2.clip
             );
             // 10 caracteres como mucho: 70 u de avance caben en los 99 u del botón.
-            assert!(etiqueta.chars().count() <= 10);
+            assert!(label_2.chars().count() <= 10);
         }
     }
 }
@@ -1557,18 +1578,18 @@ fn fila_a8_zoom_1_2_zoom_1_64_y_zoom_x12_caben_en_la_columna_a_las_cinco_escalas
 
 /// Las celdas `K×K` de la rejilla (filas 1 y 2, hasta 12 columnas), rellenas **enteras**, con un
 /// color por columna: rojo, transparente (el borrador) y rojo con alfa 128.
-fn pendientes_para(k: i64) -> Vec<Pendiente> {
-    let colores = [ROJO, TRANSPARENTE, ROJO_MEDIO];
-    let columnas = ((256 + k - 1) / k).min(12);
+fn pending_for(k: i64) -> Vec<TestPending> {
+    let colors_2 = [RED, TRANSPARENT, RED_MIDDLE];
+    let columns_2 = ((256 + k - 1) / k).min(12);
     let mut v = Vec::new();
-    for gx in 0..columnas {
+    for gx in 0..columns_2 {
         for gy in 1..=2i64 {
             for dy in 0..k {
                 for dx in 0..k {
                     v.push((
                         (gx * k + dx) as u32,
                         (gy * k + dy) as u32,
-                        colores[(gx % 3) as usize],
+                        colors_2[(gx % 3) as usize],
                     ));
                 }
             }
@@ -1577,16 +1598,16 @@ fn pendientes_para(k: i64) -> Vec<Pendiente> {
     v
 }
 
-struct Fallos {
+struct Failures {
     total: usize,
-    primeros: Vec<String>,
+    first_2: Vec<String>,
 }
 
-impl Fallos {
-    fn anota(&mut self, mensaje: impl FnOnce() -> String) {
+impl Failures {
+    fn notes(&mut self, message: impl FnOnce() -> String) {
         self.total += 1;
-        if self.primeros.len() < 5 {
-            self.primeros.push(mensaje());
+        if self.first_2.len() < 5 {
+            self.first_2.push(message());
         }
     }
 }
@@ -1594,68 +1615,73 @@ impl Fallos {
 /// Todos los píxeles físicos del lienzo se ven como el oráculo: dentro de la imagen, el píxel `s·K`
 /// de la imagen (o el pendiente, que lo sustituye, solo si cae en la rejilla) sobre el fondo
 /// elegido; fuera, `BACKGROUND`.
-fn compara_con_el_oraculo(
+fn compares_with_the_oracle(
     buffer: &Buffer,
     g: &Geom,
     k: i64,
-    imagen: &Imagen,
-    pendientes: &[Pendiente],
-    fondo: CanvasBackground,
-    etiqueta: &str,
-) -> Fallos {
-    let mapa: HashMap<(u32, u32), Rgba> = pendientes.iter().map(|&(x, y, c)| ((x, y), c)).collect();
+    image_2: &TestImage,
+    pending_2: &[TestPending],
+    background_2: CanvasBackground,
+    label_2: &str,
+) -> Failures {
+    let map: HashMap<(u32, u32), Rgba> = pending_2.iter().map(|&(x, y, c)| ((x, y), c)).collect();
     let ext = (
-        (i64::from(imagen.ancho) + k - 1) / k,
-        (i64::from(imagen.alto) + k - 1) / k,
+        (i64::from(image_2.width_2) + k - 1) / k,
+        (i64::from(image_2.height_2) + k - 1) / k,
     );
-    let mut fallos = Fallos {
+    let mut failures = Failures {
         total: 0,
-        primeros: Vec::new(),
+        first_2: Vec::new(),
     };
-    for py in 0..buffer.alto as i64 {
-        for px in 0..buffer.ancho as i64 {
-            let (sx, sy) = (px - g.origen.0, py - g.origen.1);
-            let dentro = (0..ext.0).contains(&sx) && (0..ext.1).contains(&sy);
-            let esperado = if dentro {
+    for py in 0..buffer.height_2 as i64 {
+        for px in 0..buffer.width_2 as i64 {
+            let (sx, sy) = (px - g.source_2.0, py - g.source_2.1);
+            let inside = (0..ext.0).contains(&sx) && (0..ext.1).contains(&sy);
+            let expected_2 = if inside {
                 let (ix, iy) = ((sx * k) as u32, (sy * k) as u32);
-                let color = mapa
+                let color = map
                     .get(&(ix, iy))
                     .copied()
-                    .unwrap_or_else(|| imagen.pixel(ix, iy));
-                compone(fondo_en(fondo, px, py, g.origen, g.cell), color)
+                    .unwrap_or_else(|| image_2.pixel(ix, iy));
+                composes(
+                    background_in(background_2, px, py, g.source_2, g.cell),
+                    color,
+                )
             } else {
-                Visto::de_color(BACKGROUND)
+                Seen::de_color(BACKGROUND)
             };
-            let visto = buffer.en(px, py);
-            if !visto.cerca(esperado, TOLERANCIA) {
-                fallos.anota(|| {
+            let seen = buffer.en(px, py);
+            if !seen.near(expected_2, TOLERANCE) {
+                failures.notes(|| {
                     format!(
-                        "{etiqueta}: el píxel físico ({px}, {py}) se ve {visto:?} y debía verse {esperado:?} (dentro de la imagen: {dentro})"
+                        "{label_2}: el píxel físico ({px}, {py}) se ve {seen:?} y debía verse {expected_2:?} (dentro de la imagen: {inside})"
                     )
                 });
             }
         }
     }
-    fallos
+    failures
 }
 
 /// Resumen de la estructura de un fotograma (cada forma: tipo, textura, caja y vértices, a una
 /// milésima de punto). Dos fotogramas con la misma firma tienen las mismas formas: la
 /// superposición, que es parte de la textura de la baldosa, **no añade ni cambia ninguna** (ni
 /// rectángulos de color o de fondo por píxel pendiente, ni cuadriláteros del damero, ni mallas).
-fn firma(capas: &[Capa]) -> Vec<String> {
-    let milesimas = |r: Rect| {
+fn signature(layers: &[Layer]) -> Vec<String> {
+    let thousandths = |r: Rect| {
         [r.min.x, r.min.y, r.max.x, r.max.y].map(|c| (f64::from(c) * 1000.0).round() as i64)
     };
-    capas
+    layers
         .iter()
-        .map(|capa| match capa {
-            Capa::Relleno { rect } => format!("relleno {:?}", milesimas(*rect)),
-            Capa::Malla {
-                textura, vertices, ..
+        .map(|layer_2| match layer_2 {
+            Layer::TestFill { rect } => format!("relleno {:?}", thousandths(*rect)),
+            Layer::TestMesh {
+                texture_2,
+                vertices,
+                ..
             } => format!(
-                "malla {textura:?} {:?} {} vértices",
-                milesimas(caja_pos(vertices)),
+                "malla {texture_2:?} {:?} {} vértices",
+                thousandths(toolbox_pos(vertices)),
                 vertices.len()
             ),
         })
@@ -1664,190 +1690,191 @@ fn firma(capas: &[Capa]) -> Vec<String> {
 
 /// Ninguna forma de área cero: ni rectángulos vacíos ni triángulos degenerados, antes y después de
 /// teselar.
-fn sin_formas_de_area_cero(
-    formas: &[ClippedShape],
-    primitivas: &[ClippedPrimitive],
+fn without_zero_area_shapes(
+    shapes_2: &[ClippedShape],
+    primitives: &[ClippedPrimitive],
     ppp: f32,
-    etiqueta: &str,
+    label_2: &str,
 ) {
-    for capa in capas_de(formas) {
-        match capa {
-            Capa::Relleno { rect } => assert!(
+    for layer_2 in layers_of(shapes_2) {
+        match layer_2 {
+            Layer::TestFill { rect } => assert!(
                 rect.width() > 0.0 && rect.height() > 0.0,
-                "{etiqueta}: rectángulo de área cero {rect:?}"
+                "{label_2}: rectángulo de área cero {rect:?}"
             ),
-            Capa::Malla {
+            Layer::TestMesh {
                 vertices, indices, ..
             } => {
-                if let Some(area) = menor_area_fisica(&vertices, &indices, ppp) {
+                if let Some(area) = smaller_area_physical(&vertices, &indices, ppp) {
                     assert!(
                         area > 1e-6,
-                        "{etiqueta}: triángulo degenerado (área {area} px²)"
+                        "{label_2}: triángulo degenerado (área {area} px²)"
                     );
                 }
             }
         }
     }
-    for primitiva in primitivas {
-        if let Primitive::Mesh(malla) = &primitiva.primitive
-            && let Some(area) = menor_area_fisica(&malla.vertices, &malla.indices, ppp)
+    for primitive in primitives {
+        if let Primitive::Mesh(mesh) = &primitive.primitive
+            && let Some(area) = smaller_area_physical(&mesh.vertices, &mesh.indices, ppp)
         {
             assert!(
                 area > 1e-6,
-                "{etiqueta}: triángulo degenerado tras teselar (área {area} px²)"
+                "{label_2}: triángulo degenerado tras teselar (área {area} px²)"
             );
         }
     }
 }
 
 /// Un banco a `ppp`, con el degradado de 256×192 a 1/`k` y el fondo elegido.
-fn banco_a9(ppp: f32, k: i64, fondo: CanvasBackground, malla: bool) -> Banco {
-    let imagen = Imagen::degradado(256, 192);
-    let indice = 6 - (k as u32).trailing_zeros() as usize;
-    let mut banco = Banco::nuevo(ppp, PANTALLA_A9, imagen).con_fondo(fondo, malla);
-    banco.al_nivel(indice);
-    banco
+fn bench_a_9(ppp: f32, k: i64, background_2: CanvasBackground, mesh: bool) -> Bench {
+    let image_2 = TestImage::gradient(256, 192);
+    let index_2 = 6 - (k as u32).trailing_zeros() as usize;
+    let mut bench = Bench::new_2(ppp, SCREEN_A_9, image_2).with_background(background_2, mesh);
+    bench.go_to_level(index_2);
+    bench
 }
 
-fn comprueba_a9(ppp: f32, k: i64, fondo: CanvasBackground, malla: bool, con_superposicion: bool) {
-    let mut banco = banco_a9(ppp, k, fondo, malla);
-    let pendientes = if con_superposicion {
-        pendientes_para(k)
+fn checks_a_9(ppp: f32, k: i64, background_2: CanvasBackground, mesh: bool, with_overlay: bool) {
+    let mut bench = bench_a_9(ppp, k, background_2, mesh);
+    let pending_2 = if with_overlay {
+        pending_for(k)
     } else {
         Vec::new()
     };
     // El fotograma de referencia (sin superposición) y el de la prueba, tras `set_overlay`.
-    let sin = banco.corre(vec![], &[]);
-    let salida = banco.corre(vec![], &pendientes);
-    let etiqueta = format!(
-        "ppp {ppp} ×1/{k} fondo {fondo:?}{}{}",
-        if malla { " (malla)" } else { "" },
-        if con_superposicion {
+    let without = bench.runs(vec![], &[]);
+    let output_2 = bench.runs(vec![], &pending_2);
+    let label_2 = format!(
+        "ppp {ppp} ×1/{k} fondo {background_2:?}{}{}",
+        if mesh { " (malla)" } else { "" },
+        if with_overlay {
             ""
         } else {
             " sin superposición"
         }
     );
     assert_eq!(
-        salida.info.zoom.to_string(),
+        output_2.info.zoom.to_string(),
         format!("×1/{k}"),
-        "{etiqueta}"
+        "{label_2}"
     );
     // La textura compuesta de la baldosa es la imagen con los píxeles pendientes escritos (el
     // texel nuevo es el color pendiente premultiplicado; el viejo no está).
-    let imagen = banco.imagen.as_ref().expect("imagen del banco");
-    let mut texels = imagen.texels();
-    for &(x, y, c) in &pendientes {
-        texels[(y * imagen.ancho + x) as usize] =
+    let image_2 = bench.image_2.as_ref().expect("imagen del banco");
+    let mut texels = image_2.texels();
+    for &(x, y, c) in &pending_2 {
+        texels[(y * image_2.width_2 + x) as usize] =
             Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a);
     }
-    let compuesta = banco
-        .compuestas
-        .get(banco.canvas.texture_id().expect("hay textura"))
+    let composite = bench
+        .composite_2
+        .get(bench.canvas.texture_id().expect("hay textura"))
         .expect("la baldosa se subió");
     assert_eq!(
-        compuesta.tamano,
-        [imagen.ancho as usize, imagen.alto as usize],
-        "{etiqueta}"
+        composite.size_2,
+        [image_2.width_2 as usize, image_2.height_2 as usize],
+        "{label_2}"
     );
     assert!(
-        compuesta.texels == texels,
-        "{etiqueta}: la textura compuesta no es la imagen con los píxeles pendientes escritos"
+        composite.texels == texels,
+        "{label_2}: la textura compuesta no es la imagen con los píxeles pendientes escritos"
     );
     // Ninguna forma de superposición: las formas son las del fotograma sin ella.
     assert_eq!(
-        firma(&capas_de(&salida.formas)),
-        firma(&capas_de(&sin.formas)),
-        "{etiqueta}: la superposición no debe añadir ni cambiar ninguna forma"
+        signature(&layers_of(&output_2.shapes_2)),
+        signature(&layers_of(&without.shapes_2)),
+        "{label_2}: la superposición no debe añadir ni cambiar ninguna forma"
     );
-    let primitivas = banco.ctx.tessellate(salida.formas.clone(), ppp);
-    sin_formas_de_area_cero(&salida.formas, &primitivas, ppp, &etiqueta);
-    let viewport = banco.viewport();
-    let buffer = rasteriza(
-        &primitivas,
+    let primitives = bench.ctx.tessellate(output_2.shapes_2.clone(), ppp);
+    without_zero_area_shapes(&output_2.shapes_2, &primitives, ppp, &label_2);
+    let viewport = bench.viewport();
+    let buffer = rasterizes(
+        &primitives,
         ppp,
         viewport.width as usize,
         viewport.height as usize,
-        &banco.texturas(),
+        &bench.textures_2(),
     );
-    let g = banco.geom(&salida.info);
-    let imagen = banco.imagen.as_ref().expect("imagen del banco");
-    let fallos = compara_con_el_oraculo(&buffer, &g, k, imagen, &pendientes, fondo, &etiqueta);
+    let g = bench.geom(&output_2.info);
+    let image_2 = bench.image_2.as_ref().expect("imagen del banco");
+    let failures =
+        compares_with_the_oracle(&buffer, &g, k, image_2, &pending_2, background_2, &label_2);
     assert_eq!(
-        fallos.total, 0,
-        "{etiqueta}: {} píxeles físicos mal; los primeros: {:#?}",
-        fallos.total, fallos.primeros
+        failures.total, 0,
+        "{label_2}: {} píxeles físicos mal; los primeros: {:#?}",
+        failures.total, failures.first_2
     );
 }
 
 #[test]
-fn fila_a9_control_sin_superposicion_cada_pixel_de_pantalla_muestra_el_pixel_s_por_k() {
+fn row_a9_control_without_overlay_each_screen_pixel_shows_the_pixel_s_by_k() {
     for ppp in PPPS {
         for k in [2, 4, 64] {
-            comprueba_a9(ppp, k, CanvasBackground::Checker, false, false);
+            checks_a_9(ppp, k, CanvasBackground::Checker, false, false);
         }
     }
 }
 
 #[test]
-fn fila_a9_solo_se_ven_los_pixeles_de_la_rejilla_cada_uno_de_1x1_con_los_cuatro_fondos() {
+fn row_a9_only_the_pixels_of_the_grid_are_seen_each_one_1x1_with_the_four_backgrounds() {
     for ppp in PPPS {
         for k in [2, 4, 64] {
-            for fondo in FONDOS {
-                comprueba_a9(ppp, k, fondo, false, true);
+            for background_2 in BACKGROUNDS {
+                checks_a_9(ppp, k, background_2, false, true);
             }
         }
     }
 }
 
 #[test]
-fn fila_a9_con_el_respaldo_por_malla_del_damero_se_ve_igual() {
+fn row_a9_with_the_mesh_fallback_the_checker_looks_the_same() {
     // `PIXOKO_CHECKER_MESH=1` en la app es `Canvas::set_checker_mesh(true)`.
     for ppp in PPPS {
         for k in [2, 4, 64] {
-            comprueba_a9(ppp, k, CanvasBackground::Checker, true, true);
+            checks_a_9(ppp, k, CanvasBackground::Checker, true, true);
         }
     }
 }
 
 #[test]
-fn fila_a9_los_pixeles_fuera_de_la_rejilla_no_dejan_ninguna_forma_visible() {
+fn row_a9_the_pixels_outside_the_grid_leave_no_visible_shape() {
     // Una superposición solo de píxeles fuera de la rejilla (ni `x` ni `y` múltiplos de K) no cambia
     // lo que se ve respecto a no tener superposición.
     for ppp in PPPS {
         for k in [2i64, 4, 64] {
-            let fuera: Vec<Pendiente> = (0..12)
-                .map(|i| ((i * k + 1) as u32, (k + 1) as u32, ROJO))
-                .chain((0..12).map(|i| ((i * k) as u32, (k + 1) as u32, TRANSPARENTE)))
-                .chain((0..12).map(|i| ((i * k + 1) as u32, k as u32, ROJO_MEDIO)))
+            let outside: Vec<TestPending> = (0..12)
+                .map(|i| ((i * k + 1) as u32, (k + 1) as u32, RED))
+                .chain((0..12).map(|i| ((i * k) as u32, (k + 1) as u32, TRANSPARENT)))
+                .chain((0..12).map(|i| ((i * k + 1) as u32, k as u32, RED_MIDDLE)))
                 .filter(|&(x, y, _)| x < 256 && y < 192)
                 .collect();
-            let mut banco = banco_a9(ppp, k, CanvasBackground::Checker, false);
-            let viewport = banco.viewport();
-            let render = |banco: &mut Banco, overlay: &[Pendiente]| {
-                let salida = banco.corre(vec![], overlay);
-                let primitivas = banco.ctx.tessellate(salida.formas.clone(), ppp);
-                let buffer = rasteriza(
-                    &primitivas,
+            let mut bench = bench_a_9(ppp, k, CanvasBackground::Checker, false);
+            let viewport = bench.viewport();
+            let render = |bench: &mut Bench, overlay: &[TestPending]| {
+                let output_2 = bench.runs(vec![], overlay);
+                let primitives = bench.ctx.tessellate(output_2.shapes_2.clone(), ppp);
+                let buffer = rasterizes(
+                    &primitives,
                     ppp,
                     viewport.width as usize,
                     viewport.height as usize,
-                    &banco.texturas(),
+                    &bench.textures_2(),
                 );
-                (buffer, firma(&capas_de(&salida.formas)))
+                (buffer, signature(&layers_of(&output_2.shapes_2)))
             };
-            let (sin, formas_sin) = render(&mut banco, &[]);
-            let (con, formas_con) = render(&mut banco, &fuera);
+            let (without, shapes_without) = render(&mut bench, &[]);
+            let (with, shapes_with) = render(&mut bench, &outside);
             assert_eq!(
-                formas_sin, formas_con,
+                shapes_without, shapes_with,
                 "ppp {ppp} ×1/{k}: la superposición no añade ninguna forma"
             );
-            for (i, (a, b)) in sin.pixeles.iter().zip(&con.pixeles).enumerate() {
+            for (i, (a, b)) in without.pixels_2.iter().zip(&with.pixels_2).enumerate() {
                 assert!(
-                    a.cerca(*b, TOLERANCIA),
+                    a.near(*b, TOLERANCE),
                     "ppp {ppp} ×1/{k}: el píxel físico ({}, {}) se ve distinto con píxeles fuera de la rejilla ({a:?} frente a {b:?})",
-                    i % sin.ancho,
-                    i / sin.ancho
+                    i % without.width_2,
+                    i / without.width_2
                 );
             }
         }

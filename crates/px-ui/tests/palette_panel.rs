@@ -40,14 +40,14 @@ use px_ui::view::Zoom;
 
 #[path = "common/zones.rs"]
 mod zones;
-use zones::panel_a_la_izquierda;
+use zones::panel_on_the_left;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba
 // ---------------------------------------------------------------------------------------------
 
 /// Imagen RGBA de 64×48 con un píxel de cada color en las esquinas.
-fn imagen_rgba() -> Image {
+fn image_rgba() -> Image {
     let mut image = Image::new(64, 48, Mode::Rgba).expect("imagen válida");
     image
         .set_pixel(0, 0, Pixel::Rgba(Rgba::opaque(255, 0, 0)))
@@ -60,8 +60,8 @@ fn imagen_rgba() -> Image {
 
 /// Indexada de 64×48 con `count` colores distintos (1 a 256), el último `#ffffff80` si
 /// `count == 256` y el índice transparente en el 17 si existe.
-fn imagen_indexada(count: usize) -> Image {
-    let colores: Vec<Rgba> = (0..count)
+fn image_indexed(count: usize) -> Image {
+    let colors_2: Vec<Rgba> = (0..count)
         .map(|i| {
             if i == 255 {
                 Rgba::new(255, 255, 255, 128)
@@ -70,7 +70,7 @@ fn imagen_indexada(count: usize) -> Image {
             }
         })
         .collect();
-    let mut palette = Palette::from_colors(colores).expect("paleta de 1 a 256 colores");
+    let mut palette = Palette::from_colors(colors_2).expect("paleta de 1 a 256 colores");
     if count > 17 {
         palette
             .set_transparent_index(Some(17))
@@ -79,67 +79,67 @@ fn imagen_indexada(count: usize) -> Image {
     Image::new_indexed(64, 48, palette).expect("imagen indexada")
 }
 
-fn imagen_de(mode: Mode) -> Image {
+fn image_of(mode: Mode) -> Image {
     match mode {
-        Mode::Indexed => imagen_indexada(256),
+        Mode::Indexed => image_indexed(256),
         other => Image::new(64, 48, other).expect("imagen válida"),
     }
 }
 
-const MODOS: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
+const TEST_MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
 // ---------------------------------------------------------------------------------------------
 // Banco
 // ---------------------------------------------------------------------------------------------
 
-struct Banco {
+struct Bench {
     ctx: Context,
     canvas: Canvas,
     scroll: Scroll,
-    pantalla: Vec2,
+    screen: Vec2,
 }
 
-struct Fotograma {
+struct TestFrame {
     /// Lo que quedaba libre justo antes del lienzo: pantalla menos la barra y el panel.
-    rect_lienzo: Rect,
-    entradas: Vec<CanvasInput>,
+    rect_canvas: Rect,
+    entries: Vec<CanvasInput>,
     info: CanvasInfo,
     /// Lo que devolvió `palette_panel::show`.
-    eleccion: Option<ColorChoice>,
+    choice_2: Option<ColorChoice>,
 }
 
-impl Banco {
-    /// Contexto de `pantalla` puntos a `ppp`, con la fuente instalada y calentado.
-    fn nuevo(ppp: f32, pantalla: Vec2) -> Banco {
+impl Bench {
+    /// Contexto de `screen` puntos a `ppp`, con la fuente instalada y calentado.
+    fn new_2(ppp: f32, screen: Vec2) -> Bench {
         let ctx = Context::default();
         ctx.set_pixels_per_point(ppp);
         ctx.set_missing_glyph_policy(MissingGlyphPolicy::Panic);
         install_fonts(&ctx);
-        let banco = Banco {
+        let bench = Bench {
             ctx,
             canvas: Canvas::new(),
             scroll: Scroll::default(),
-            pantalla,
+            screen,
         };
         for _ in 0..2 {
-            let salida = banco.ctx.run_ui(banco.entrada(vec![]), |ui| {
+            let output_2 = bench.ctx.run_ui(bench.input_2(vec![]), |ui| {
                 apply_scale(ui.ctx());
             });
-            salida.drop_without_applying_deltas();
+            output_2.drop_without_applying_deltas();
         }
-        banco
+        bench
     }
 
     /// Banco con `image` ya puesta en el lienzo.
-    fn con_imagen(ppp: f32, pantalla: Vec2, image: &Image) -> Banco {
-        let mut banco = Banco::nuevo(ppp, pantalla);
-        banco.canvas.set_image(image);
-        banco
+    fn with_image(ppp: f32, screen: Vec2, image: &Image) -> Bench {
+        let mut bench = Bench::new_2(ppp, screen);
+        bench.canvas.set_image(image);
+        bench
     }
 
-    fn entrada(&self, events: Vec<Event>) -> RawInput {
+    fn input_2(&self, events: Vec<Event>) -> RawInput {
         RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.pantalla)),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.screen)),
             events,
             ..RawInput::default()
         }
@@ -156,66 +156,66 @@ impl Banco {
     /// Ejecuta un fotograma con los eventos dados: aplica la escala, monta la barra, el panel
     /// (con `choice`, el `scroll` del banco y `enabled`) y después el lienzo, como la app.
     /// Limpia los cambios de textura (egui entra en pánico si se sueltan sin aplicar).
-    fn fotograma(
+    fn frame(
         &mut self,
         image: &Image,
         choice: ColorChoice,
         enabled: bool,
         events: Vec<Event>,
-    ) -> Fotograma {
-        let input = self.entrada(events);
-        let mut resultado = None;
+    ) -> TestFrame {
+        let input = self.input_2(events);
+        let mut result = None;
         let canvas = &mut self.canvas;
         let scroll = &mut self.scroll;
-        let mut salida = self.ctx.run_ui(input, |ui| {
+        let mut output_2 = self.ctx.run_ui(input, |ui| {
             apply_scale(ui.ctx());
             px_ui::status::show(ui, "lápiz · color 1 #000000", false);
-            let (eleccion, (rect_lienzo, entradas, info)) = panel_a_la_izquierda(
+            let (choice_2, (rect_canvas, entries, info)) = panel_on_the_left(
                 ui,
                 |ui| palette_panel::show(ui, image, choice, scroll, enabled),
                 |ui| {
-                    let rect_lienzo = ui.available_rect_before_wrap();
-                    let entradas = canvas
+                    let rect_canvas = ui.available_rect_before_wrap();
+                    let entries = canvas
                         .interact_roles(ui)
                         .into_iter()
                         .map(|(input, _)| input)
                         .collect::<Vec<_>>();
                     let info = canvas.paint(ui);
-                    (rect_lienzo, entradas, info)
+                    (rect_canvas, entries, info)
                 },
             );
-            resultado = Some((rect_lienzo, entradas, info, eleccion));
+            result = Some((rect_canvas, entries, info, choice_2));
         });
-        salida.textures_delta.clear();
-        let (rect_lienzo, entradas, info, eleccion) = resultado.expect("el lienzo se dibuja");
-        Fotograma {
-            rect_lienzo,
-            entradas,
+        output_2.textures_delta.clear();
+        let (rect_canvas, entries, info, choice_2) = result.expect("el lienzo se dibuja");
+        TestFrame {
+            rect_canvas,
+            entries,
             info,
-            eleccion,
+            choice_2,
         }
     }
 
     /// Fotograma sin eventos, con la selección inicial de la imagen y el panel activo.
-    fn reposo(&mut self, image: &Image) -> Fotograma {
-        self.fotograma(image, initial_choice(image), true, vec![])
+    fn rest_2_2(&mut self, image: &Image) -> TestFrame {
+        self.frame(image, initial_choice(image), true, vec![])
     }
 
     /// Mueve el puntero a `pos` (un fotograma) y luego ejecuta `events` en otro.
-    fn con_puntero(
+    fn with_pointer(
         &mut self,
         image: &Image,
         choice: ColorChoice,
         enabled: bool,
         pos: Pos2,
         events: Vec<Event>,
-    ) -> Fotograma {
-        self.fotograma(image, choice, enabled, vec![Event::PointerMoved(pos)]);
-        self.fotograma(image, choice, enabled, events)
+    ) -> TestFrame {
+        self.frame(image, choice, enabled, vec![Event::PointerMoved(pos)]);
+        self.frame(image, choice, enabled, events)
     }
 }
 
-fn rueda_lineas(delta_y: f32) -> Event {
+fn wheel_lines(delta_y: f32) -> Event {
     Event::MouseWheel {
         unit: MouseWheelUnit::Line,
         delta: vec2(0.0, delta_y),
@@ -225,7 +225,7 @@ fn rueda_lineas(delta_y: f32) -> Event {
     }
 }
 
-fn rueda_puntos(delta_y: f32) -> Event {
+fn wheel_points(delta_y: f32) -> Event {
     Event::MouseWheel {
         unit: MouseWheelUnit::Point,
         delta: vec2(0.0, delta_y),
@@ -235,7 +235,7 @@ fn rueda_puntos(delta_y: f32) -> Event {
     }
 }
 
-fn tecla(key: Key) -> Event {
+fn key_2(key: Key) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -245,7 +245,7 @@ fn tecla(key: Key) -> Event {
     }
 }
 
-fn boton(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
+fn button_2(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
     Event::PointerButton {
         pos,
         button,
@@ -254,20 +254,20 @@ fn boton(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
     }
 }
 
-fn primario(pos: Pos2, pressed: bool) -> Event {
-    boton(pos, PointerButton::Primary, pressed)
+fn primary(pos: Pos2, pressed: bool) -> Event {
+    button_2(pos, PointerButton::Primary, pressed)
 }
 
 /// Tolerancia en píxeles físicos: `egui` redondea los rectángulos de los paneles a 1/32 de punto
 /// (error máximo de 1/64 pt, o sea 0,023 px a 1,5× y 0,047 px a 3×), como en `status.rs`.
-const TOLERANCIA_PX: f32 = 0.05;
+const TOLERANCE_PX: f32 = 0.05;
 
-fn cerca(a: f32, b: f32, tolerancia: f32) -> bool {
-    (a - b).abs() <= tolerancia
+fn near(a: f32, b: f32, tolerance: f32) -> bool {
+    (a - b).abs() <= tolerance
 }
 
 /// Punto en píxeles físicos de la ventana a puntos.
-fn en_puntos(ppp: f32, x_px: f32, y_px: f32) -> Pos2 {
+fn in_points(ppp: f32, x_px: f32, y_px: f32) -> Pos2 {
     pos2(x_px / ppp, y_px / ppp)
 }
 
@@ -279,41 +279,47 @@ fn zoom(n: u32) -> Zoom {
 // Geometría de las muestras, a partir de las constantes de `palette_grid`
 // ---------------------------------------------------------------------------------------------
 
-/// Centro de la muestra `indice` en píxeles físicos de la ventana, con la primera fila visible
-/// `primera_fila`. El panel empieza en (0, 0) de la ventana.
-fn centro_de_muestra_px(n: u32, indice: usize, primera_fila: usize) -> (f32, f32) {
+/// Centro de la muestra `index_2` en píxeles físicos de la ventana, con la primera fila visible
+/// `first_row`. El panel empieza en (0, 0) de la ventana.
+fn swatch_center_px(n: u32, index_2: usize, first_row: usize) -> (f32, f32) {
     let n = i64::from(n);
-    let columna = (indice % COLUMNS) as i64;
-    let fila = (indice / COLUMNS) as i64 - primera_fila as i64;
-    let x = (GRID_X_U + columna * PITCH_U) * n + CELL_U * n / 2;
-    let y = (GRID_Y_U + fila * PITCH_U) * n + CELL_U * n / 2;
+    let column = (index_2 % COLUMNS) as i64;
+    let row_2 = (index_2 / COLUMNS) as i64 - first_row as i64;
+    let x = (GRID_X_U + column * PITCH_U) * n + CELL_U * n / 2;
+    let y = (GRID_Y_U + row_2 * PITCH_U) * n + CELL_U * n / 2;
     (x as f32, y as f32)
 }
 
-/// Una elección distinta de la de la muestra `indice`, para que devolverla sea un cambio.
-fn otra_eleccion(image: &Image, indice: usize) -> ColorChoice {
+/// Una elección distinta de la de la muestra `index_2`, para que devolverla sea un cambio.
+fn other_choice(image: &Image, index_2: usize) -> ColorChoice {
     let total = cell_count(image);
-    choice_for_cell(image, (indice + 1) % total).expect("la muestra existe")
+    choice_for_cell(image, (index_2 + 1) % total).expect("la muestra existe")
 }
 
 /// Pulsa (y suelta) el botón `button` en `(x_px, y_px)` y devuelve lo que `show` devolvió al
 /// pulsar y al soltar.
-fn clic(
-    banco: &mut Banco,
+fn click(
+    bench: &mut Bench,
     image: &Image,
     choice: ColorChoice,
     enabled: bool,
     button: PointerButton,
     (x_px, y_px): (f32, f32),
 ) -> (Option<ColorChoice>, Option<ColorChoice>) {
-    let pos = en_puntos(banco.ppp(), x_px, y_px);
-    let pulsado = banco
-        .con_puntero(image, choice, enabled, pos, vec![boton(pos, button, true)])
-        .eleccion;
-    let soltado = banco
-        .fotograma(image, choice, enabled, vec![boton(pos, button, false)])
-        .eleccion;
-    (pulsado, soltado)
+    let pos = in_points(bench.ppp(), x_px, y_px);
+    let pressed_2 = bench
+        .with_pointer(
+            image,
+            choice,
+            enabled,
+            pos,
+            vec![button_2(pos, button, true)],
+        )
+        .choice_2;
+    let released = bench
+        .frame(image, choice, enabled, vec![button_2(pos, button, false)])
+        .choice_2;
+    (pressed_2, released)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -321,170 +327,169 @@ fn clic(
 // ---------------------------------------------------------------------------------------------
 
 /// Un caso de la fila 5, en píxeles físicos (salvo la pantalla, en puntos).
-struct CasoPanel {
+struct CasePanel {
     ppp: f32,
     /// Ancho del panel.
     panel: f32,
     /// Lienzo: ancho y alto.
-    lienzo: (f32, f32),
+    canvas_2: (f32, f32),
     zoom: u32,
     /// Esquina superior izquierda de la imagen y su tamaño, desde la esquina de la ventana.
-    imagen_min: (f32, f32),
-    imagen_tamano: (f32, f32),
+    image_min: (f32, f32),
+    image_size: (f32, f32),
     /// Centro del píxel (2, 3).
-    puntero: (f32, f32),
+    pointer: (f32, f32),
 }
 
-const PANTALLA_GRANDE: Vec2 = vec2(800.0, 600.0);
+const SCREEN_LARGE: Vec2 = vec2(800.0, 600.0);
 
-fn casos_fila_5() -> [CasoPanel; 3] {
+fn cases_row_5() -> [CasePanel; 3] {
     [
-        CasoPanel {
+        CasePanel {
             ppp: 1.0,
             panel: 233.0,
-            lienzo: (567.0, 580.0),
+            canvas_2: (567.0, 580.0),
             zoom: 8,
-            imagen_min: (260.0, 98.0),
-            imagen_tamano: (512.0, 384.0),
-            puntero: (280.0, 126.0),
+            image_min: (260.0, 98.0),
+            image_size: (512.0, 384.0),
+            pointer: (280.0, 126.0),
         },
-        CasoPanel {
+        CasePanel {
             ppp: 2.0,
             panel: 466.0,
-            lienzo: (1134.0, 1160.0),
+            canvas_2: (1134.0, 1160.0),
             zoom: 17,
-            imagen_min: (489.0, 172.0),
-            imagen_tamano: (1088.0, 816.0),
-            puntero: (531.5, 231.5),
+            image_min: (489.0, 172.0),
+            image_size: (1088.0, 816.0),
+            pointer: (531.5, 231.5),
         },
-        CasoPanel {
+        CasePanel {
             ppp: 1.5,
             panel: 466.0,
-            lienzo: (734.0, 860.0),
+            canvas_2: (734.0, 860.0),
             zoom: 11,
-            imagen_min: (481.0, 166.0),
-            imagen_tamano: (704.0, 528.0),
-            puntero: (508.5, 204.5),
+            image_min: (481.0, 166.0),
+            image_size: (704.0, 528.0),
+            pointer: (508.5, 204.5),
         },
     ]
 }
 
 /// El zoom de ajuste es el del lienzo recortado por el panel y la barra, y la imagen cae donde
 /// dice la spec.
-fn comprueba_ajuste(f: &Fotograma, caso: &CasoPanel) {
-    let ppp = caso.ppp;
-    assert_eq!(f.info.zoom, zoom(caso.zoom), "ppp {ppp}: zoom de ajuste");
-    let imagen = f.info.image_rect.expect("hay imagen");
-    let min = (imagen.min.x * ppp, imagen.min.y * ppp);
-    let tamano = (imagen.width() * ppp, imagen.height() * ppp);
+fn checks_fit(f: &TestFrame, case: &CasePanel) {
+    let ppp = case.ppp;
+    assert_eq!(f.info.zoom, zoom(case.zoom), "ppp {ppp}: zoom de ajuste");
+    let image_2 = f.info.image_rect.expect("hay imagen");
+    let min = (image_2.min.x * ppp, image_2.min.y * ppp);
+    let size_2 = (image_2.width() * ppp, image_2.height() * ppp);
     assert!(
-        cerca(min.0, caso.imagen_min.0, TOLERANCIA_PX)
-            && cerca(min.1, caso.imagen_min.1, TOLERANCIA_PX),
+        near(min.0, case.image_min.0, TOLERANCE_PX) && near(min.1, case.image_min.1, TOLERANCE_PX),
         "ppp {ppp}: la imagen empieza en {min:?} px, se esperaba {:?}",
-        caso.imagen_min
+        case.image_min
     );
     assert!(
-        cerca(tamano.0, caso.imagen_tamano.0, TOLERANCIA_PX)
-            && cerca(tamano.1, caso.imagen_tamano.1, TOLERANCIA_PX),
-        "ppp {ppp}: la imagen mide {tamano:?} px, se esperaba {:?}",
-        caso.imagen_tamano
+        near(size_2.0, case.image_size.0, TOLERANCE_PX)
+            && near(size_2.1, case.image_size.1, TOLERANCE_PX),
+        "ppp {ppp}: la imagen mide {size_2:?} px, se esperaba {:?}",
+        case.image_size
     );
 }
 
 #[test]
-fn fila_05_el_panel_quita_su_ancho_al_lienzo_y_home_ajusta_al_resto() {
-    let image = imagen_rgba();
-    for caso in casos_fila_5() {
-        let ppp = caso.ppp;
-        let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-        let f = banco.reposo(&image);
+fn row_05_the_panel_takes_its_width_from_the_canvas_and_home_fits_to_the_rest() {
+    let image = image_rgba();
+    for case in cases_row_5() {
+        let ppp = case.ppp;
+        let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+        let f = bench.rest_2_2(&image);
 
         // El rectángulo del lienzo: pantalla menos el panel (a la izquierda) y la barra (abajo).
-        let rect = f.rect_lienzo;
+        let rect = f.rect_canvas;
         assert!(
-            cerca(rect.min.x * ppp, caso.panel, TOLERANCIA_PX),
+            near(rect.min.x * ppp, case.panel, TOLERANCE_PX),
             "ppp {ppp}: el lienzo empieza en {} px, el panel mide {} px",
             rect.min.x * ppp,
-            caso.panel
+            case.panel
         );
-        assert!(cerca(rect.min.y, 0.0, 1e-3), "ppp {ppp}: {rect:?}");
+        assert!(near(rect.min.y, 0.0, 1e-3), "ppp {ppp}: {rect:?}");
         assert!(
-            cerca(rect.max.x, PANTALLA_GRANDE.x, 1e-3),
+            near(rect.max.x, SCREEN_LARGE.x, 1e-3),
             "ppp {ppp}: {rect:?}"
         );
         assert!(
-            cerca(rect.width() * ppp, caso.lienzo.0, TOLERANCIA_PX)
-                && cerca(rect.height() * ppp, caso.lienzo.1, TOLERANCIA_PX),
+            near(rect.width() * ppp, case.canvas_2.0, TOLERANCE_PX)
+                && near(rect.height() * ppp, case.canvas_2.1, TOLERANCE_PX),
             "ppp {ppp}: lienzo de {}×{} px, se esperaba {:?}",
             rect.width() * ppp,
             rect.height() * ppp,
-            caso.lienzo
+            case.canvas_2
         );
-        comprueba_ajuste(&f, &caso);
+        checks_fit(&f, &case);
 
         // Se cambia el zoom con la rueda (con el puntero sobre el lienzo) y `Home` lo devuelve.
-        let centro = rect.center();
-        let f = banco.con_puntero(
+        let center = rect.center();
+        let f = bench.with_pointer(
             &image,
             initial_choice(&image),
             true,
-            centro,
-            vec![rueda_lineas(1.0)],
+            center,
+            vec![wheel_lines(1.0)],
         );
         assert_eq!(
             Some(f.info.zoom),
-            Zoom::from_int(caso.zoom + 1),
+            Zoom::from_int(case.zoom + 1),
             "ppp {ppp}: la rueda sobre el lienzo sube un paso"
         );
-        let f = banco.fotograma(&image, initial_choice(&image), true, vec![tecla(Key::Home)]);
-        comprueba_ajuste(&f, &caso);
+        let f = bench.frame(&image, initial_choice(&image), true, vec![key_2(Key::Home)]);
+        checks_fit(&f, &case);
     }
 }
 
 #[test]
-fn fila_05_el_puntero_sobre_el_pixel_2_3_da_ese_pixel() {
-    let image = imagen_rgba();
-    for caso in casos_fila_5() {
-        let ppp = caso.ppp;
-        let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-        let f = banco.reposo(&image);
-        assert_eq!(f.info.zoom, zoom(caso.zoom), "ppp {ppp}");
+fn row_05_the_pointer_over_pixel_2_3_gives_that_pixel() {
+    let image = image_rgba();
+    for case in cases_row_5() {
+        let ppp = case.ppp;
+        let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+        let f = bench.rest_2_2(&image);
+        assert_eq!(f.info.zoom, zoom(case.zoom), "ppp {ppp}");
 
-        let sobre_el_pixel = en_puntos(ppp, caso.puntero.0, caso.puntero.1);
-        let f = banco.fotograma(
+        let over_the_pixel = in_points(ppp, case.pointer.0, case.pointer.1);
+        let f = bench.frame(
             &image,
             initial_choice(&image),
             true,
-            vec![Event::PointerMoved(sobre_el_pixel)],
+            vec![Event::PointerMoved(over_the_pixel)],
         );
         assert_eq!(
             f.info.hover,
             Some((2, 3)),
-            "ppp {ppp}: el puntero en {sobre_el_pixel:?} pt"
+            "ppp {ppp}: el puntero en {over_the_pixel:?} pt"
         );
-        assert!(f.entradas.is_empty());
+        assert!(f.entries.is_empty());
 
         // Contraste: pulsar ahí sí empieza un trazo en ese píxel, así que la ausencia de
         // eventos sobre el panel y la barra no es un banco que no recoge nada.
-        let f = banco.fotograma(
+        let f = bench.frame(
             &image,
             initial_choice(&image),
             true,
-            vec![primario(sobre_el_pixel, true)],
+            vec![primary(over_the_pixel, true)],
         );
         assert_eq!(
-            f.entradas,
+            f.entries,
             vec![CanvasInput::Stroke(CanvasEvent::StrokeBegin((2, 3)))],
             "ppp {ppp}"
         );
-        let f = banco.fotograma(
+        let f = bench.frame(
             &image,
             initial_choice(&image),
             true,
-            vec![primario(sobre_el_pixel, false)],
+            vec![primary(over_the_pixel, false)],
         );
         assert!(
-            f.entradas
+            f.entries
                 .contains(&CanvasInput::Stroke(CanvasEvent::StrokeEnd)),
             "ppp {ppp}"
         );
@@ -492,105 +497,105 @@ fn fila_05_el_puntero_sobre_el_pixel_2_3_da_ese_pixel() {
 }
 
 #[test]
-fn fila_05_sobre_el_panel_o_la_barra_ni_hover_ni_trazo_ni_zoom() {
-    let image = imagen_rgba();
+fn row_05_over_the_panel_or_the_bar_neither_hover_nor_stroke_nor_zoom() {
+    let image = image_rgba();
     let choice = initial_choice(&image);
-    for caso in casos_fila_5() {
-        let ppp = caso.ppp;
-        let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-        let base = banco.reposo(&image);
-        let sobre_el_pixel = en_puntos(ppp, caso.puntero.0, caso.puntero.1);
+    for case in cases_row_5() {
+        let ppp = case.ppp;
+        let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+        let base = bench.rest_2_2(&image);
+        let over_the_pixel = in_points(ppp, case.pointer.0, case.pointer.1);
 
         // Sobre el panel (100, 100) pt y sobre la barra: la franja de abajo.
-        for (nombre, sitio) in [
+        for (name_2, place) in [
             ("el panel", pos2(100.0, 100.0)),
             ("la barra", pos2(500.0, 595.0)),
         ] {
             assert!(
-                !base.rect_lienzo.contains(sitio),
-                "ppp {ppp}: {nombre} cae fuera del lienzo"
+                !base.rect_canvas.contains(place),
+                "ppp {ppp}: {name_2} cae fuera del lienzo"
             );
-            let f = banco.fotograma(&image, choice, true, vec![Event::PointerMoved(sitio)]);
-            assert_eq!(f.info.hover, None, "ppp {ppp}: hover sobre {nombre}");
-            assert!(f.entradas.is_empty(), "ppp {ppp}: {:?}", f.entradas);
+            let f = bench.frame(&image, choice, true, vec![Event::PointerMoved(place)]);
+            assert_eq!(f.info.hover, None, "ppp {ppp}: hover sobre {name_2}");
+            assert!(f.entries.is_empty(), "ppp {ppp}: {:?}", f.entries);
 
             // Pulsar, arrastrar por encima del lienzo y soltar: ningún trazo.
-            let f = banco.fotograma(&image, choice, true, vec![primario(sitio, true)]);
+            let f = bench.frame(&image, choice, true, vec![primary(place, true)]);
             assert!(
-                f.entradas.is_empty(),
-                "ppp {ppp}: pulsar en {nombre}: {:?}",
-                f.entradas
+                f.entries.is_empty(),
+                "ppp {ppp}: pulsar en {name_2}: {:?}",
+                f.entries
             );
-            let f = banco.fotograma(
+            let f = bench.frame(
                 &image,
                 choice,
                 true,
-                vec![Event::PointerMoved(sobre_el_pixel)],
+                vec![Event::PointerMoved(over_the_pixel)],
             );
             assert!(
-                f.entradas.is_empty(),
-                "ppp {ppp}: arrastre desde {nombre}: {:?}",
-                f.entradas
+                f.entries.is_empty(),
+                "ppp {ppp}: arrastre desde {name_2}: {:?}",
+                f.entries
             );
-            let f = banco.fotograma(&image, choice, true, vec![primario(sobre_el_pixel, false)]);
+            let f = bench.frame(&image, choice, true, vec![primary(over_the_pixel, false)]);
             assert!(
-                f.entradas.is_empty(),
-                "ppp {ppp}: soltar tras {nombre}: {:?}",
-                f.entradas
+                f.entries.is_empty(),
+                "ppp {ppp}: soltar tras {name_2}: {:?}",
+                f.entries
             );
 
             // La rueda sobre el panel o la barra no cambia el zoom del lienzo.
-            let antes = banco.reposo(&image).info.zoom;
-            let f = banco.con_puntero(&image, choice, true, sitio, vec![rueda_lineas(1.0)]);
+            let antes = bench.rest_2_2(&image).info.zoom;
+            let f = bench.with_pointer(&image, choice, true, place, vec![wheel_lines(1.0)]);
             assert_eq!(
                 f.info.zoom, antes,
-                "ppp {ppp}: la rueda sobre {nombre} cambia el zoom"
+                "ppp {ppp}: la rueda sobre {name_2} cambia el zoom"
             );
-            let f = banco.fotograma(&image, choice, true, vec![rueda_lineas(-1.0)]);
+            let f = bench.frame(&image, choice, true, vec![wheel_lines(-1.0)]);
             assert_eq!(f.info.zoom, antes, "ppp {ppp}: rueda hacia abajo");
         }
     }
 }
 
 #[test]
-fn fila_05_con_200_pt_de_ancho_el_lienzo_tiene_ancho_0_y_no_hay_panico() {
-    let image = imagen_rgba();
+fn row_05_with_200_pt_of_width_the_canvas_has_width_0_and_there_is_no_panic() {
+    let image = image_rgba();
     let choice = initial_choice(&image);
     for ppp in [1.0_f32, 1.5, 2.0] {
-        let mut banco = Banco::con_imagen(ppp, vec2(200.0, 600.0), &image);
-        let f = banco.reposo(&image);
+        let mut bench = Bench::with_image(ppp, vec2(200.0, 600.0), &image);
+        let f = bench.rest_2_2(&image);
         assert!(
-            (f.rect_lienzo.width() * ppp).round() <= 0.0,
+            (f.rect_canvas.width() * ppp).round() <= 0.0,
             "ppp {ppp}: el lienzo mide {} px de ancho",
-            f.rect_lienzo.width() * ppp
+            f.rect_canvas.width() * ppp
         );
         let zoom_antes = f.info.zoom;
         assert_eq!(f.info.hover, None, "ppp {ppp}");
 
         // `Home` sin efecto, y el puntero en varios sitios (sobre el panel recortado y sobre
         // la barra) no da `hover` ni trazos.
-        let f = banco.fotograma(&image, choice, true, vec![tecla(Key::Home)]);
+        let f = bench.frame(&image, choice, true, vec![key_2(Key::Home)]);
         assert_eq!(f.info.zoom, zoom_antes, "ppp {ppp}: Home sin efecto");
-        for sitio in [pos2(150.0, 300.0), pos2(20.0, 10.0), pos2(100.0, 595.0)] {
-            let f = banco.fotograma(&image, choice, true, vec![Event::PointerMoved(sitio)]);
-            assert_eq!(f.info.hover, None, "ppp {ppp}: hover en {sitio:?}");
-            let f = banco.fotograma(&image, choice, true, vec![primario(sitio, true)]);
-            assert!(f.entradas.is_empty(), "ppp {ppp}: {:?}", f.entradas);
-            let f = banco.fotograma(&image, choice, true, vec![primario(sitio, false)]);
-            assert!(f.entradas.is_empty(), "ppp {ppp}: {:?}", f.entradas);
+        for place in [pos2(150.0, 300.0), pos2(20.0, 10.0), pos2(100.0, 595.0)] {
+            let f = bench.frame(&image, choice, true, vec![Event::PointerMoved(place)]);
+            assert_eq!(f.info.hover, None, "ppp {ppp}: hover en {place:?}");
+            let f = bench.frame(&image, choice, true, vec![primary(place, true)]);
+            assert!(f.entries.is_empty(), "ppp {ppp}: {:?}", f.entries);
+            let f = bench.frame(&image, choice, true, vec![primary(place, false)]);
+            assert!(f.entries.is_empty(), "ppp {ppp}: {:?}", f.entries);
         }
         // Y con una imagen indexada de 256 colores (rejilla grande) y la rueda sobre el panel.
-        let grande = imagen_indexada(256);
-        banco.canvas.set_image(&grande);
-        let choice = initial_choice(&grande);
-        banco.fotograma(
-            &grande,
+        let large = image_indexed(256);
+        bench.canvas.set_image(&large);
+        let choice = initial_choice(&large);
+        bench.frame(
+            &large,
             choice,
             true,
             vec![Event::PointerMoved(pos2(100.0, 100.0))],
         );
-        banco.fotograma(&grande, choice, true, vec![rueda_lineas(-1.0)]);
-        banco.fotograma(&grande, choice, true, vec![rueda_lineas(1.0)]);
+        bench.frame(&large, choice, true, vec![wheel_lines(-1.0)]);
+        bench.frame(&large, choice, true, vec![wheel_lines(1.0)]);
     }
 }
 
@@ -598,27 +603,27 @@ fn fila_05_con_200_pt_de_ancho_el_lienzo_tiene_ancho_0_y_no_hay_panico() {
 // Fila 12: los textos caben y se maquetan con `MissingGlyphPolicy::Panic`
 // ---------------------------------------------------------------------------------------------
 
-const PPP_FILA_12: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
+const PPP_ROW_12: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 
 /// Todos los textos del panel: `cell_label` de todas las muestras de cada modo e `info_flags`
 /// en las ocho combinaciones.
-fn textos_del_panel() -> Vec<String> {
-    let mut textos = Vec::new();
-    for mode in MODOS {
-        let image = imagen_de(mode);
+fn texts_of_the_panel() -> Vec<String> {
+    let mut texts = Vec::new();
+    for mode in TEST_MODES {
+        let image = image_of(mode);
         for cell in 0..cell_count(&image) {
-            textos.push(cell_label(&image, cell).expect("la muestra existe"));
+            texts.push(cell_label(&image, cell).expect("la muestra existe"));
         }
     }
     // Paletas con alfa y sin él, de varios tamaños.
     for count in [1, 3, 17, 18, 255] {
-        let image = imagen_indexada(count);
+        let image = image_indexed(count);
         for cell in 0..cell_count(&image) {
-            textos.push(cell_label(&image, cell).expect("la muestra existe"));
+            texts.push(cell_label(&image, cell).expect("la muestra existe"));
         }
     }
     for bits in 0..8 {
-        textos.push(info_flags_alpha0(
+        texts.push(info_flags_alpha0(
             bits & 1 != 0,
             bits & 2 != 0,
             false,
@@ -626,12 +631,12 @@ fn textos_del_panel() -> Vec<String> {
             false,
         ));
     }
-    textos
+    texts
 }
 
 #[test]
-fn fila_12_los_textos_mas_largos_miden_20_y_30_caracteres() {
-    let image = imagen_indexada(256);
+fn row_12_the_longest_texts_measure_20_and_30_characters() {
+    let image = image_indexed(256);
     assert_eq!(
         cell_label(&image, 255).as_deref(),
         Some("índice 255 #ffffff80")
@@ -651,17 +656,17 @@ fn fila_12_los_textos_mas_largos_miden_20_y_30_caracteres() {
             .count(),
         30
     );
-    let mas_largo = textos_del_panel()
+    let more_long_2 = texts_of_the_panel()
         .iter()
         .map(|t| t.chars().count())
         .max()
         .unwrap();
-    assert_eq!(mas_largo, 30, "ningún texto del panel supera los 30");
+    assert_eq!(more_long_2, 30, "ningún texto del panel supera los 30");
 }
 
 #[test]
-fn fila_12_columns_de_los_225_u_utiles_es_32_con_cualquier_n() {
-    for ppp in PPP_FILA_12 {
+fn row_12_columns_of_the_225_useful_u_is_32_with_any_n() {
+    for ppp in PPP_ROW_12 {
         let n = text_scale(ppp);
         assert_eq!(
             columns(palette_grid::TEXT_WIDTH_U as f32 * n as f32, ppp),
@@ -673,69 +678,69 @@ fn fila_12_columns_de_los_225_u_utiles_es_32_con_cualquier_n() {
 }
 
 #[test]
-fn fila_12_cada_texto_se_maqueta_sin_panico_y_cabe_sin_recorte() {
-    let textos = textos_del_panel();
-    for ppp in PPP_FILA_12 {
-        let banco = Banco::nuevo(ppp, PANTALLA_GRANDE);
+fn row_12_each_text_is_laid_out_without_panic_and_fits_without_clipping() {
+    let texts = texts_of_the_panel();
+    for ppp in PPP_ROW_12 {
+        let bench = Bench::new_2(ppp, SCREEN_LARGE);
         let n = text_scale(ppp);
-        let maximo = columns(palette_grid::TEXT_WIDTH_U as f32 * n as f32, ppp);
-        assert_eq!(maximo, 32);
-        let ancho_util_px = (palette_grid::TEXT_WIDTH_U * i64::from(n)) as f32;
+        let maximum_2 = columns(palette_grid::TEXT_WIDTH_U as f32 * n as f32, ppp);
+        assert_eq!(maximum_2, 32);
+        let width_useful_px = (palette_grid::TEXT_WIDTH_U * i64::from(n)) as f32;
 
         // Todo sale de `INTERFACE_CHARSET`.
-        for texto in &textos {
-            for c in texto.chars() {
+        for text_2 in &texts {
+            for c in text_2.chars() {
                 assert!(
                     INTERFACE_CHARSET.contains(c),
-                    "ppp {ppp}: {texto:?} lleva {c:?}, que no está en INTERFACE_CHARSET"
+                    "ppp {ppp}: {text_2:?} lleva {c:?}, que no está en INTERFACE_CHARSET"
                 );
             }
             assert!(
-                texto.chars().count() <= maximo,
-                "ppp {ppp}: {texto:?} no cabe en {maximo} columnas"
+                text_2.chars().count() <= maximum_2,
+                "ppp {ppp}: {text_2:?} no cabe en {maximum_2} columnas"
             );
             // `fit_text` no recorta nada.
-            let recortado = with_glyph_check(&banco.ctx, |has| fit_text(texto, maximo, has));
-            assert_eq!(&recortado, texto, "ppp {ppp}");
+            let clipped = with_glyph_check(&bench.ctx, |has| fit_text(text_2, maximum_2, has));
+            assert_eq!(&clipped, text_2, "ppp {ppp}");
         }
 
         // Maquetado con la política `Panic`, y el ancho cabe en los 225 u útiles.
-        let mut anchos = Vec::new();
-        let salida = banco.ctx.run_ui(banco.entrada(vec![]), |ui| {
+        let mut widths = Vec::new();
+        let output_2 = bench.ctx.run_ui(bench.input_2(vec![]), |ui| {
             apply_scale(ui.ctx());
-            let fuente = FontId::proportional(font_size_points(ui.ctx().pixels_per_point()));
+            let source = FontId::proportional(font_size_points(ui.ctx().pixels_per_point()));
             ui.ctx().fonts_mut(|f| {
-                for texto in &textos {
-                    let galeria =
-                        f.layout_no_wrap(texto.clone(), fuente.clone(), egui::Color32::WHITE);
-                    anchos.push((texto.clone(), galeria.size().x * ppp));
+                for text_2 in &texts {
+                    let gallery =
+                        f.layout_no_wrap(text_2.clone(), source.clone(), egui::Color32::WHITE);
+                    widths.push((text_2.clone(), gallery.size().x * ppp));
                 }
             });
         });
-        salida.drop_without_applying_deltas();
-        assert_eq!(anchos.len(), textos.len());
-        for (texto, ancho) in anchos {
+        output_2.drop_without_applying_deltas();
+        assert_eq!(widths.len(), texts.len());
+        for (text_2, width_2) in widths {
             assert!(
-                ancho <= ancho_util_px + 0.5,
-                "ppp {ppp}: {texto:?} mide {ancho} px y caben {ancho_util_px}"
+                width_2 <= width_useful_px + 0.5,
+                "ppp {ppp}: {text_2:?} mide {width_2} px y caben {width_useful_px}"
             );
         }
     }
 }
 
 #[test]
-fn fila_12_el_panel_pinta_cada_modo_con_el_cursor_en_la_ultima_muestra_sin_panico() {
-    for ppp in PPP_FILA_12 {
-        for mode in MODOS {
-            let image = imagen_de(mode);
-            let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-            let n = banco.n();
-            let ultima = cell_count(&image) - 1;
-            let (x, y) = centro_de_muestra_px(n, ultima, 0);
-            let pos = en_puntos(ppp, x, y);
+fn row_12_the_panel_paints_each_mode_with_the_cursor_on_the_last_swatch_without_panic() {
+    for ppp in PPP_ROW_12 {
+        for mode in TEST_MODES {
+            let image = image_of(mode);
+            let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+            let n = bench.n();
+            let last = cell_count(&image) - 1;
+            let (x, y) = swatch_center_px(n, last, 0);
+            let pos = in_points(ppp, x, y);
             let choice = initial_choice(&image);
-            banco.con_puntero(&image, choice, true, pos, vec![]);
-            banco.fotograma(&image, choice, true, vec![Event::PointerMoved(pos)]);
+            bench.with_pointer(&image, choice, true, pos, vec![]);
+            bench.frame(&image, choice, true, vec![Event::PointerMoved(pos)]);
         }
     }
 }
@@ -745,51 +750,51 @@ fn fila_12_el_panel_pinta_cada_modo_con_el_cursor_en_la_ultima_muestra_sin_panic
 // ---------------------------------------------------------------------------------------------
 
 /// Los `ppp` que se prueban siempre.
-const PPP_SIEMPRE: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
+const PPP_ALWAYS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 
 /// Todos los múltiplos de 0,05 entre 1 y 4.
-fn ppp_multiplos_de_0_05() -> impl Iterator<Item = f32> {
+fn ppp_multiples_of_0_05() -> impl Iterator<Item = f32> {
     (20..=80).map(|i| i as f32 / 20.0)
 }
 
 /// Cada borde de la maqueta, en puntos por `ppp`, es un entero de píxeles físicos (±0,001) y
 /// múltiplo de `n`.
-fn comprueba_nitidez(ppp: f32) {
+fn checks_sharpness(ppp: f32) {
     let n = text_scale(ppp);
     let u = ui_unit(ppp);
-    let aristas = palette_grid::edges_u();
-    assert!(!aristas.is_empty(), "edges_u no devuelve ningún borde");
-    for k in aristas {
-        let fisico = k as f64 * f64::from(u) * f64::from(ppp);
+    let edges = palette_grid::edges_u();
+    assert!(!edges.is_empty(), "edges_u no devuelve ningún borde");
+    for k in edges {
+        let physical = k as f64 * f64::from(u) * f64::from(ppp);
         assert!(
-            (fisico - fisico.round()).abs() <= 0.001,
-            "ppp {ppp}: el borde {k} u cae en {fisico} px físicos"
+            (physical - physical.round()).abs() <= 0.001,
+            "ppp {ppp}: el borde {k} u cae en {physical} px físicos"
         );
         assert_eq!(
-            (fisico.round() as i64) % i64::from(n),
+            (physical.round() as i64) % i64::from(n),
             0,
-            "ppp {ppp}: el borde {k} u ({fisico} px) no es múltiplo de n = {n}"
+            "ppp {ppp}: el borde {k} u ({physical} px) no es múltiplo de n = {n}"
         );
     }
 }
 
 #[test]
-fn propiedad_3_los_bordes_caen_en_pixeles_fisicos_enteros_a_los_ppp_de_la_spec() {
-    for ppp in PPP_SIEMPRE {
-        comprueba_nitidez(ppp);
+fn property_3_the_borders_fall_on_whole_physical_pixels_at_the_ppp_of_the_spec() {
+    for ppp in PPP_ALWAYS {
+        checks_sharpness(ppp);
     }
 }
 
 #[test]
-fn propiedad_3_los_bordes_caen_en_pixeles_fisicos_enteros_en_todos_los_multiplos_de_0_05() {
-    for ppp in ppp_multiplos_de_0_05() {
-        comprueba_nitidez(ppp);
+fn property_3_the_borders_fall_on_whole_physical_pixels_at_all_the_multiples_of_0_05() {
+    for ppp in ppp_multiples_of_0_05() {
+        checks_sharpness(ppp);
     }
 }
 
 #[test]
-fn propiedad_3_las_aristas_incluyen_los_bordes_del_panel_y_de_la_rejilla() {
-    let aristas = palette_grid::edges_u();
+fn property_3_the_edges_include_the_borders_of_the_panel_and_the_grid() {
+    let edges = palette_grid::edges_u();
     for k in [
         0,
         PANEL_WIDTH_U,
@@ -804,81 +809,81 @@ fn propiedad_3_las_aristas_incluyen_los_bordes_del_panel_y_de_la_rejilla() {
         GRID_Y_U + CELL_U,
         GRID_X_U + PITCH_U,
     ] {
-        assert!(aristas.contains(&k), "falta el borde {k} u en edges_u()");
+        assert!(edges.contains(&k), "falta el borde {k} u en edges_u()");
     }
 }
 
 #[test]
-fn propiedad_3_el_panel_real_mide_233_n_pixeles_fisicos_y_termina_en_el_borde_derecho() {
-    let image = imagen_rgba();
-    let ancho_u = PANEL_WIDTH_U as f32;
-    for ppp in PPP_SIEMPRE {
-        let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-        let n = banco.n() as f32;
+fn property_3_the_real_panel_measures_233_n_physical_pixels_and_ends_at_the_right_edge() {
+    let image = image_rgba();
+    let width_u = PANEL_WIDTH_U as f32;
+    for ppp in PPP_ALWAYS {
+        let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+        let n = bench.n() as f32;
         // El panel real, sin ranura: directamente en el `Ui` raíz, tras la barra de estado.
-        let mut rect_lienzo = None;
-        let mut formas = Vec::new();
+        let mut rect_canvas = None;
+        let mut shapes_2 = Vec::new();
         for _ in 0..2 {
-            let mut salida = banco.ctx.run_ui(banco.entrada(vec![]), |ui| {
+            let mut output_2 = bench.ctx.run_ui(bench.input_2(vec![]), |ui| {
                 apply_scale(ui.ctx());
                 px_ui::status::show(ui, "lápiz · color 1 #000000", false);
-                palette_panel::show(ui, &image, initial_choice(&image), &mut banco.scroll, true);
-                rect_lienzo = Some(ui.available_rect_before_wrap());
+                palette_panel::show(ui, &image, initial_choice(&image), &mut bench.scroll, true);
+                rect_canvas = Some(ui.available_rect_before_wrap());
             });
-            salida.textures_delta.clear();
-            formas = std::mem::take(&mut salida.shapes);
+            output_2.textures_delta.clear();
+            shapes_2 = std::mem::take(&mut output_2.shapes);
         }
-        let rect_lienzo = rect_lienzo.expect("el lienzo se reparte");
+        let rect_canvas = rect_canvas.expect("el lienzo se reparte");
 
         // Lo que el panel quita al lienzo: mide `233·n` px y termina en el borde derecho.
         assert!(
-            cerca(
-                (PANTALLA_GRANDE.x - rect_lienzo.max.x) * ppp,
-                ancho_u * n,
-                TOLERANCIA_PX
+            near(
+                (SCREEN_LARGE.x - rect_canvas.max.x) * ppp,
+                width_u * n,
+                TOLERANCE_PX
             ),
             "ppp {ppp}: el panel mide {} px, se esperaba {}",
-            (PANTALLA_GRANDE.x - rect_lienzo.max.x) * ppp,
-            ancho_u * n
+            (SCREEN_LARGE.x - rect_canvas.max.x) * ppp,
+            width_u * n
         );
-        assert!(cerca(rect_lienzo.min.x, 0.0, 1e-3), "ppp {ppp}");
-        assert!(cerca(rect_lienzo.min.y, 0.0, 1e-3), "ppp {ppp}");
+        assert!(near(rect_canvas.min.x, 0.0, 1e-3), "ppp {ppp}");
+        assert!(near(rect_canvas.min.y, 0.0, 1e-3), "ppp {ppp}");
 
         // Y el fondo pintado (`SURFACE_1`) del panel termina en el borde derecho con ese ancho.
         let mut rects = Vec::new();
-        for clipped in &formas {
-            recoge_rectangulos(&clipped.shape, &mut rects);
+        for clipped in &shapes_2 {
+            collects_rectangles(&clipped.shape, &mut rects);
         }
-        let del_panel: Vec<Rect> = rects
+        let of_the_panel: Vec<Rect> = rects
             .iter()
-            .filter(|(_, relleno)| *relleno == SURFACE_1)
+            .filter(|(_, fill)| *fill == SURFACE_1)
             .map(|(rect, _)| *rect)
             .filter(|rect| {
-                cerca(rect.max.x, PANTALLA_GRANDE.x, TOLERANCIA_PX / ppp)
-                    && cerca(rect.min.y * ppp, 0.0, TOLERANCIA_PX)
+                near(rect.max.x, SCREEN_LARGE.x, TOLERANCE_PX / ppp)
+                    && near(rect.min.y * ppp, 0.0, TOLERANCE_PX)
             })
             .collect();
         assert!(
-            !del_panel.is_empty(),
+            !of_the_panel.is_empty(),
             "ppp {ppp}: ningún rectángulo SURFACE_1 termina en el borde derecho"
         );
         assert!(
-            del_panel
+            of_the_panel
                 .iter()
-                .any(|rect| cerca(rect.width() * ppp, ancho_u * n, TOLERANCIA_PX)),
-            "ppp {ppp}: ningún fondo del panel mide {} px: {del_panel:?}",
-            ancho_u * n
+                .any(|rect| near(rect.width() * ppp, width_u * n, TOLERANCE_PX)),
+            "ppp {ppp}: ningún fondo del panel mide {} px: {of_the_panel:?}",
+            width_u * n
         );
     }
 }
 
 /// Rectángulos rellenos de una forma, con su color de relleno (aplana `Shape::Vec`).
-fn recoge_rectangulos(shape: &Shape, salida: &mut Vec<(Rect, egui::Color32)>) {
+fn collects_rectangles(shape: &Shape, output_2: &mut Vec<(Rect, egui::Color32)>) {
     match shape {
-        Shape::Rect(rect) => salida.push((rect.rect, rect.fill)),
-        Shape::Vec(formas) => {
-            for forma in formas {
-                recoge_rectangulos(forma, salida);
+        Shape::Rect(rect) => output_2.push((rect.rect, rect.fill)),
+        Shape::Vec(shapes_2) => {
+            for shape_2 in shapes_2 {
+                collects_rectangles(shape_2, output_2);
             }
         }
         _ => {}
@@ -890,101 +895,101 @@ fn recoge_rectangulos(shape: &Shape, salida: &mut Vec<(Rect, egui::Color32)>) {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn show_pulsar_el_centro_de_una_muestra_elige_esa_muestra_en_una_indexada_de_256() {
-    let image = imagen_indexada(256);
-    for ppp in PPP_SIEMPRE {
-        let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-        let n = banco.n();
-        banco.reposo(&image);
+fn show_pressing_the_center_of_a_swatch_chooses_that_swatch_in_an_indexed_of_256() {
+    let image = image_indexed(256);
+    for ppp in PPP_ALWAYS {
+        let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+        let n = bench.n();
+        bench.rest_2_2(&image);
         for cell in [0usize, 1, 8, 15, 16, 17, 200, 254, 255] {
-            let esperado = choice_for_cell(&image, cell).expect("la muestra existe");
-            let actual = otra_eleccion(&image, cell);
-            let (pulsado, soltado) = clic(
-                &mut banco,
+            let expected_2 = choice_for_cell(&image, cell).expect("la muestra existe");
+            let actual = other_choice(&image, cell);
+            let (pressed_2, released) = click(
+                &mut bench,
                 &image,
                 actual,
                 true,
                 PointerButton::Primary,
-                centro_de_muestra_px(n, cell, 0),
+                swatch_center_px(n, cell, 0),
             );
             assert_eq!(
-                pulsado,
-                Some(esperado),
+                pressed_2,
+                Some(expected_2),
                 "ppp {ppp}: pulsar la muestra {cell}"
             );
-            assert_eq!(esperado, ColorChoice::Entry(cell as u8));
-            assert_eq!(soltado, None, "ppp {ppp}: soltar no elige (muestra {cell})");
+            assert_eq!(expected_2, ColorChoice::Entry(cell as u8));
+            assert_eq!(
+                released, None,
+                "ppp {ppp}: soltar no elige (muestra {cell})"
+            );
         }
     }
 }
 
 #[test]
-fn show_pulsar_una_muestra_elige_slot_en_rgba_gray_y_gray_alpha() {
+fn show_pressing_a_swatch_chooses_slot_in_rgba_gray_and_gray_alpha() {
     for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
-        let image = imagen_de(mode);
-        let mut banco = Banco::con_imagen(1.0, PANTALLA_GRANDE, &image);
-        banco.reposo(&image);
+        let image = image_of(mode);
+        let mut bench = Bench::with_image(1.0, SCREEN_LARGE, &image);
+        bench.rest_2_2(&image);
         for cell in 0..cell_count(&image) {
-            let (pulsado, _) = clic(
-                &mut banco,
+            let (pressed_2, _) = click(
+                &mut bench,
                 &image,
-                otra_eleccion(&image, cell),
+                other_choice(&image, cell),
                 true,
                 PointerButton::Primary,
-                centro_de_muestra_px(1, cell, 0),
+                swatch_center_px(1, cell, 0),
             );
             assert_eq!(
-                pulsado,
+                pressed_2,
                 Some(ColorChoice::Slot(cell as u8 + 1)),
                 "{mode:?}: muestra {cell}"
             );
-            assert_eq!(pulsado, choice_for_cell(&image, cell));
+            assert_eq!(pressed_2, choice_for_cell(&image, cell));
         }
     }
 }
 
 #[test]
-fn show_con_filas_desplazadas_la_muestra_pulsada_es_la_que_se_ve() {
+fn show_with_scrolled_rows_the_pressed_swatch_is_the_one_that_is_seen() {
     // Pantalla baja: pocas filas visibles de las 16.
-    let image = imagen_indexada(256);
-    for (ppp, alto) in [(1.0_f32, 200.0_f32), (2.0, 150.0)] {
-        let mut banco = Banco::con_imagen(ppp, vec2(800.0, alto), &image);
-        let n = banco.n();
-        let panel_h_px = (alto * ppp) as i64 - i64::from(bar_height_px(n));
-        let visibles = palette_grid::visible_rows(panel_h_px, n);
+    let image = image_indexed(256);
+    for (ppp, height_2) in [(1.0_f32, 200.0_f32), (2.0, 150.0)] {
+        let mut bench = Bench::with_image(ppp, vec2(800.0, height_2), &image);
+        let n = bench.n();
+        let panel_h_px = (height_2 * ppp) as i64 - i64::from(bar_height_px(n));
+        let visible_2 = palette_grid::visible_rows(panel_h_px, n);
         let total = palette_grid::total_rows(256);
         assert!(
-            visibles >= 3 && visibles < total,
-            "ppp {ppp}: {visibles} filas"
+            visible_2 >= 3 && visible_2 < total,
+            "ppp {ppp}: {visible_2} filas"
         );
 
-        let primera = 2usize;
-        banco.scroll = Scroll {
-            first_row: primera,
+        let first = 2usize;
+        bench.scroll = Scroll {
+            first_row: first,
             rest: 0,
         };
-        banco.reposo(&image);
-        assert_eq!(
-            banco.scroll.first_row, primera,
-            "ppp {ppp}: reposo no mueve"
-        );
-        for (fila_visible, columna) in [(0usize, 0usize), (1, 5), (visibles - 1, 15)] {
-            let cell = (primera + fila_visible) * COLUMNS + columna;
-            let (pulsado, _) = clic(
-                &mut banco,
+        bench.rest_2_2(&image);
+        assert_eq!(bench.scroll.first_row, first, "ppp {ppp}: reposo no mueve");
+        for (row_visible, column) in [(0usize, 0usize), (1, 5), (visible_2 - 1, 15)] {
+            let cell = (first + row_visible) * COLUMNS + column;
+            let (pressed_2, _) = click(
+                &mut bench,
                 &image,
-                otra_eleccion(&image, cell),
+                other_choice(&image, cell),
                 true,
                 PointerButton::Primary,
-                centro_de_muestra_px(n, cell, primera),
+                swatch_center_px(n, cell, first),
             );
             assert_eq!(
-                pulsado,
+                pressed_2,
                 Some(ColorChoice::Entry(cell as u8)),
-                "ppp {ppp}: muestra {cell} con la fila {primera} arriba"
+                "ppp {ppp}: muestra {cell} con la fila {first} arriba"
             );
         }
-        assert_eq!(banco.scroll.first_row, primera, "elegir no desplaza");
+        assert_eq!(bench.scroll.first_row, first, "elegir no desplaza");
     }
 }
 
@@ -993,34 +998,34 @@ fn show_con_filas_desplazadas_la_muestra_pulsada_es_la_que_se_ve() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn show_los_clics_en_huecos_y_fuera_de_la_rejilla_no_eligen() {
-    let image = imagen_indexada(256);
-    for ppp in PPP_SIEMPRE {
-        let mut banco = Banco::con_imagen(ppp, PANTALLA_GRANDE, &image);
-        let n = i64::from(banco.n());
+fn show_clicks_in_gaps_and_outside_the_grid_do_not_choose() {
+    let image = image_indexed(256);
+    for ppp in PPP_ALWAYS {
+        let mut bench = Bench::with_image(ppp, SCREEN_LARGE, &image);
+        let n = i64::from(bench.n());
         let choice = ColorChoice::Entry(5);
-        banco.reposo(&image);
+        bench.rest_2_2(&image);
 
-        let (cx, cy) = centro_de_muestra_px(n as u32, 0, 0);
-        let mitad_hueco = GAP_U * n / 2;
-        let posiciones = [
+        let (cx, cy) = swatch_center_px(n as u32, 0, 0);
+        let half_gap = GAP_U * n / 2;
+        let positions = [
             // Hueco entre la columna 0 y la 1, a la altura de la fila 0.
             (
                 "hueco horizontal",
-                ((GRID_X_U + CELL_U) * n + mitad_hueco) as f32,
+                ((GRID_X_U + CELL_U) * n + half_gap) as f32,
                 cy,
             ),
             // Hueco entre la fila 0 y la 1, a la altura de la columna 0.
             (
                 "hueco vertical",
                 cx,
-                ((GRID_Y_U + CELL_U) * n + mitad_hueco) as f32,
+                ((GRID_Y_U + CELL_U) * n + half_gap) as f32,
             ),
             // Esquina de huecos.
             (
                 "esquina de huecos",
-                ((GRID_X_U + CELL_U) * n + mitad_hueco) as f32,
-                ((GRID_Y_U + CELL_U) * n + mitad_hueco) as f32,
+                ((GRID_X_U + CELL_U) * n + half_gap) as f32,
+                ((GRID_Y_U + CELL_U) * n + half_gap) as f32,
             ),
             // Margen izquierdo, antes de la rejilla.
             ("margen izquierdo", (GRID_X_U * n / 2) as f32, cy),
@@ -1046,171 +1051,174 @@ fn show_los_clics_en_huecos_y_fuera_de_la_rejilla_no_eligen() {
             // En el hueco tras la última fila y la última columna.
             (
                 "hueco de la última muestra",
-                ((GRID_X_U + 15 * PITCH_U + CELL_U) * n + mitad_hueco) as f32,
-                ((GRID_Y_U + 15 * PITCH_U + CELL_U) * n + mitad_hueco) as f32,
+                ((GRID_X_U + 15 * PITCH_U + CELL_U) * n + half_gap) as f32,
+                ((GRID_Y_U + 15 * PITCH_U + CELL_U) * n + half_gap) as f32,
             ),
         ];
-        for (nombre, x, y) in posiciones {
-            let (pulsado, soltado) = clic(
-                &mut banco,
+        for (name_2, x, y) in positions {
+            let (pressed_2, released) = click(
+                &mut bench,
                 &image,
                 choice,
                 true,
                 PointerButton::Primary,
                 (x, y),
             );
-            assert_eq!(pulsado, None, "ppp {ppp}: pulsar en {nombre} ({x}, {y}) px");
-            assert_eq!(soltado, None, "ppp {ppp}: soltar en {nombre}");
+            assert_eq!(
+                pressed_2, None,
+                "ppp {ppp}: pulsar en {name_2} ({x}, {y}) px"
+            );
+            assert_eq!(released, None, "ppp {ppp}: soltar en {name_2}");
         }
     }
 }
 
 #[test]
-fn show_un_clic_en_una_muestra_que_no_existe_no_elige() {
+fn show_a_click_on_a_swatch_that_does_not_exist_does_not_choose() {
     // RGBA: solo las 9 primeras; la columna 9 de la fila 0 está vacía. Y una indexada de 3.
-    for image in [imagen_rgba(), imagen_indexada(3)] {
+    for image in [image_rgba(), image_indexed(3)] {
         let count = cell_count(&image);
-        let mut banco = Banco::con_imagen(1.0, PANTALLA_GRANDE, &image);
-        banco.reposo(&image);
+        let mut bench = Bench::with_image(1.0, SCREEN_LARGE, &image);
+        bench.rest_2_2(&image);
         let choice = initial_choice(&image);
         for cell in [count, count + 1, 15, 16, 255] {
-            let (pulsado, _) = clic(
-                &mut banco,
+            let (pressed_2, _) = click(
+                &mut bench,
                 &image,
                 choice,
                 true,
                 PointerButton::Primary,
-                centro_de_muestra_px(1, cell, 0),
+                swatch_center_px(1, cell, 0),
             );
-            assert_eq!(pulsado, None, "{count} muestras: la {cell} no existe");
+            assert_eq!(pressed_2, None, "{count} muestras: la {cell} no existe");
         }
     }
 }
 
 #[test]
-fn show_una_fila_que_no_se_ve_no_se_elige() {
+fn show_a_row_that_is_not_seen_is_not_chosen() {
     // Pantalla de 146 pt a ppp 1: el panel mide 126 px y solo se ven 3 filas (la banda del
     // indicador, de I.2a, ocupa 36 u más que antes).
-    let image = imagen_indexada(256);
-    let mut banco = Banco::con_imagen(1.0, vec2(800.0, 146.0), &image);
-    let n = banco.n();
+    let image = image_indexed(256);
+    let mut bench = Bench::with_image(1.0, vec2(800.0, 146.0), &image);
+    let n = bench.n();
     let panel_h_px = 146 - i64::from(bar_height_px(n));
     assert_eq!(palette_grid::visible_rows(panel_h_px, n), 3);
     let choice = ColorChoice::Entry(5);
-    banco.reposo(&image);
+    bench.rest_2_2(&image);
 
     // La fila 3 (la cuarta) empieza dentro del panel (a 119 px) pero no se ve.
-    let (x, y) = centro_de_muestra_px(n, 3 * COLUMNS, 0);
+    let (x, y) = swatch_center_px(n, 3 * COLUMNS, 0);
     assert!(y < panel_h_px as f32, "la fila oculta cae dentro del panel");
-    let (pulsado, _) = clic(
-        &mut banco,
+    let (pressed_2, _) = click(
+        &mut bench,
         &image,
         choice,
         true,
         PointerButton::Primary,
         (x, y),
     );
-    assert_eq!(pulsado, None, "la fila 3 no se ve");
+    assert_eq!(pressed_2, None, "la fila 3 no se ve");
     // La fila 2 sí.
-    let (pulsado, _) = clic(
-        &mut banco,
+    let (pressed_2, _) = click(
+        &mut bench,
         &image,
         choice,
         true,
         PointerButton::Primary,
-        centro_de_muestra_px(n, 2 * COLUMNS + 4, 0),
+        swatch_center_px(n, 2 * COLUMNS + 4, 0),
     );
-    assert_eq!(pulsado, Some(ColorChoice::Entry(36)));
+    assert_eq!(pressed_2, Some(ColorChoice::Entry(36)));
 }
 
 #[test]
-fn show_los_botones_derecho_y_central_no_eligen() {
-    let image = imagen_indexada(256);
-    let mut banco = Banco::con_imagen(1.0, PANTALLA_GRANDE, &image);
-    banco.reposo(&image);
+fn show_the_right_and_middle_buttons_do_not_choose() {
+    let image = image_indexed(256);
+    let mut bench = Bench::with_image(1.0, SCREEN_LARGE, &image);
+    bench.rest_2_2(&image);
     for button in [PointerButton::Secondary, PointerButton::Middle] {
-        let (pulsado, soltado) = clic(
-            &mut banco,
+        let (pressed_2, released) = click(
+            &mut bench,
             &image,
             ColorChoice::Entry(5),
             true,
             button,
-            centro_de_muestra_px(1, 200, 0),
+            swatch_center_px(1, 200, 0),
         );
-        assert_eq!(pulsado, None, "{button:?}");
-        assert_eq!(soltado, None, "{button:?}");
+        assert_eq!(pressed_2, None, "{button:?}");
+        assert_eq!(released, None, "{button:?}");
     }
     // Contraste: el botón izquierdo en el mismo sitio sí elige.
-    let (pulsado, _) = clic(
-        &mut banco,
+    let (pressed_2, _) = click(
+        &mut bench,
         &image,
         ColorChoice::Entry(5),
         true,
         PointerButton::Primary,
-        centro_de_muestra_px(1, 200, 0),
+        swatch_center_px(1, 200, 0),
     );
-    assert_eq!(pulsado, Some(ColorChoice::Entry(200)));
+    assert_eq!(pressed_2, Some(ColorChoice::Entry(200)));
 }
 
 #[test]
-fn show_con_un_gesto_en_curso_enabled_falso_no_elige() {
-    for mode in MODOS {
-        let image = imagen_de(mode);
-        let mut banco = Banco::con_imagen(1.0, PANTALLA_GRANDE, &image);
-        banco.reposo(&image);
+fn show_with_a_gesture_in_progress_enabled_false_does_not_choose() {
+    for mode in TEST_MODES {
+        let image = image_of(mode);
+        let mut bench = Bench::with_image(1.0, SCREEN_LARGE, &image);
+        bench.rest_2_2(&image);
         let cell = cell_count(&image) - 1;
-        let choice = otra_eleccion(&image, cell);
-        let (pulsado, soltado) = clic(
-            &mut banco,
+        let choice = other_choice(&image, cell);
+        let (pressed_2, released) = click(
+            &mut bench,
             &image,
             choice,
             false,
             PointerButton::Primary,
-            centro_de_muestra_px(1, cell, 0),
+            swatch_center_px(1, cell, 0),
         );
-        assert_eq!(pulsado, None, "{mode:?}: enabled falso");
-        assert_eq!(soltado, None, "{mode:?}: enabled falso");
+        assert_eq!(pressed_2, None, "{mode:?}: enabled falso");
+        assert_eq!(released, None, "{mode:?}: enabled falso");
         // Contraste con `enabled` verdadero.
-        let (pulsado, _) = clic(
-            &mut banco,
+        let (pressed_2, _) = click(
+            &mut bench,
             &image,
             choice,
             true,
             PointerButton::Primary,
-            centro_de_muestra_px(1, cell, 0),
+            swatch_center_px(1, cell, 0),
         );
-        assert_eq!(pulsado, choice_for_cell(&image, cell), "{mode:?}");
+        assert_eq!(pressed_2, choice_for_cell(&image, cell), "{mode:?}");
     }
 }
 
 #[test]
-fn show_sin_eventos_no_elige_nada() {
-    let image = imagen_indexada(256);
-    let mut banco = Banco::con_imagen(1.0, PANTALLA_GRANDE, &image);
+fn show_without_events_chooses_nothing() {
+    let image = image_indexed(256);
+    let mut bench = Bench::with_image(1.0, SCREEN_LARGE, &image);
     for _ in 0..3 {
-        assert_eq!(banco.reposo(&image).eleccion, None);
+        assert_eq!(bench.rest_2_2(&image).choice_2, None);
     }
     // Un puntero que solo pasa por encima de una muestra tampoco elige.
-    let (x, y) = centro_de_muestra_px(1, 200, 0);
-    let f = banco.fotograma(
+    let (x, y) = swatch_center_px(1, 200, 0);
+    let f = bench.frame(
         &image,
         ColorChoice::Entry(0),
         true,
-        vec![Event::PointerMoved(en_puntos(1.0, x, y))],
+        vec![Event::PointerMoved(in_points(1.0, x, y))],
     );
-    assert_eq!(f.eleccion, None);
+    assert_eq!(f.choice_2, None);
 }
 
 // ---------------------------------------------------------------------------------------------
 // `show`: la rueda
 // ---------------------------------------------------------------------------------------------
 
-/// Casos `(ppp, alto de pantalla en pt)` con muchas filas y poca altura.
-const PANTALLAS_BAJAS: [(f32, f32); 2] = [(1.0, 200.0), (2.0, 150.0)];
+/// Casos `(ppp, height_2 de screen en pt)` con muchas filas y poca altura.
+const SCREENS_LOW: [(f32, f32); 2] = [(1.0, 200.0), (2.0, 150.0)];
 
-fn filas_visibles(banco: &Banco) -> (usize, usize) {
-    let n = banco.n();
-    let panel_h_px = (banco.pantalla.y * banco.ppp()) as i64 - i64::from(bar_height_px(n));
+fn rows_visible(bench: &Bench) -> (usize, usize) {
+    let n = bench.n();
+    let panel_h_px = (bench.screen.y * bench.ppp()) as i64 - i64::from(bar_height_px(n));
     (
         palette_grid::visible_rows(panel_h_px, n),
         palette_grid::total_rows(256),
@@ -1218,96 +1226,99 @@ fn filas_visibles(banco: &Banco) -> (usize, usize) {
 }
 
 #[test]
-fn show_la_rueda_sobre_el_panel_desplaza_las_filas_y_no_hace_zoom() {
-    let image = indexada_con_lienzo();
+fn show_the_wheel_over_the_panel_scrolls_the_rows_and_does_not_zoom() {
+    let image = indexed_with_canvas();
     let choice = initial_choice(&image);
-    for (ppp, alto) in PANTALLAS_BAJAS {
-        let mut banco = Banco::con_imagen(ppp, vec2(800.0, alto), &image);
-        let (visibles, total) = filas_visibles(&banco);
-        assert!(visibles >= 1 && visibles < total, "ppp {ppp}: {visibles}");
-        let maxima = palette_grid::max_first_row(total, visibles);
-        let zoom_antes = banco.reposo(&image).info.zoom;
-        assert_eq!(banco.scroll, Scroll::default());
+    for (ppp, height_2) in SCREENS_LOW {
+        let mut bench = Bench::with_image(ppp, vec2(800.0, height_2), &image);
+        let (visible_2, total) = rows_visible(&bench);
+        assert!(
+            visible_2 >= 1 && visible_2 < total,
+            "ppp {ppp}: {visible_2}"
+        );
+        let maximum = palette_grid::max_first_row(total, visible_2);
+        let zoom_antes = bench.rest_2_2(&image).info.zoom;
+        assert_eq!(bench.scroll, Scroll::default());
 
-        let sobre_el_panel = pos2(100.0, 60.0);
+        let over_the_panel = pos2(100.0, 60.0);
         // Una línea de rueda hacia abajo son 3 filas.
-        let f = banco.con_puntero(
+        let f = bench.with_pointer(
             &image,
             choice,
             true,
-            sobre_el_panel,
-            vec![rueda_lineas(-1.0)],
+            over_the_panel,
+            vec![wheel_lines(-1.0)],
         );
         assert_eq!(
-            banco.scroll.first_row,
-            3.min(maxima),
+            bench.scroll.first_row,
+            3.min(maximum),
             "ppp {ppp}: una línea de rueda hacia abajo"
         );
         assert_eq!(f.info.zoom, zoom_antes, "ppp {ppp}: la rueda no hace zoom");
-        assert_eq!(f.eleccion, None, "ppp {ppp}: la rueda no elige");
+        assert_eq!(f.choice_2, None, "ppp {ppp}: la rueda no elige");
 
         // Hacia arriba vuelve a la fila 0 (y no pasa de ahí).
-        banco.fotograma(&image, choice, true, vec![rueda_lineas(1.0)]);
-        assert_eq!(banco.scroll.first_row, 0, "ppp {ppp}: hacia arriba");
-        let f = banco.fotograma(&image, choice, true, vec![rueda_lineas(1.0)]);
-        assert_eq!(banco.scroll.first_row, 0, "ppp {ppp}: no baja de 0");
+        bench.frame(&image, choice, true, vec![wheel_lines(1.0)]);
+        assert_eq!(bench.scroll.first_row, 0, "ppp {ppp}: hacia arriba");
+        let f = bench.frame(&image, choice, true, vec![wheel_lines(1.0)]);
+        assert_eq!(bench.scroll.first_row, 0, "ppp {ppp}: no baja de 0");
         assert_eq!(f.info.zoom, zoom_antes);
 
         // Muchas líneas hacia abajo: se queda en la última fila posible.
         for _ in 0..10 {
-            banco.fotograma(&image, choice, true, vec![rueda_lineas(-1.0)]);
+            bench.frame(&image, choice, true, vec![wheel_lines(-1.0)]);
         }
-        assert_eq!(banco.scroll.first_row, maxima, "ppp {ppp}: tope");
-        let f = banco.reposo(&image);
+        assert_eq!(bench.scroll.first_row, maximum, "ppp {ppp}: tope");
+        let f = bench.rest_2_2(&image);
         assert_eq!(f.info.zoom, zoom_antes);
     }
 }
 
 #[test]
-fn show_la_rueda_en_puntos_son_pixeles_fisicos() {
+fn show_the_wheel_in_points_is_physical_pixels() {
     // Con n = 2 (ppp 2), una fila son 28 px físicos = 14 pt: `delta · ppp`.
-    let image = indexada_con_lienzo();
+    let image = indexed_with_canvas();
     let choice = initial_choice(&image);
-    let mut banco = Banco::con_imagen(2.0, vec2(800.0, 150.0), &image);
-    let n = banco.n();
-    let fila_pt = (palette_grid::PITCH_U * i64::from(n)) as f32 / banco.ppp();
-    banco.reposo(&image);
-    let sobre_el_panel = pos2(100.0, 60.0);
-    banco.con_puntero(
+    let mut bench = Bench::with_image(2.0, vec2(800.0, 150.0), &image);
+    let n = bench.n();
+    let row_pt = (palette_grid::PITCH_U * i64::from(n)) as f32 / bench.ppp();
+    bench.rest_2_2(&image);
+    let over_the_panel = pos2(100.0, 60.0);
+    bench.with_pointer(
         &image,
         choice,
         true,
-        sobre_el_panel,
-        vec![rueda_puntos(-fila_pt)],
+        over_the_panel,
+        vec![wheel_points(-row_pt)],
     );
-    assert_eq!(banco.scroll.first_row, 1, "una fila exacta");
+    assert_eq!(bench.scroll.first_row, 1, "una fila exacta");
     // Media fila no mueve las filas: se acumula (la fila no se corta).
-    banco.fotograma(&image, choice, true, vec![rueda_puntos(-fila_pt / 2.0)]);
-    assert_eq!(banco.scroll.first_row, 1, "media fila se acumula");
-    banco.fotograma(&image, choice, true, vec![rueda_puntos(-fila_pt / 2.0)]);
-    assert_eq!(banco.scroll.first_row, 2, "las dos mitades suman una fila");
+    bench.frame(&image, choice, true, vec![wheel_points(-row_pt / 2.0)]);
+    assert_eq!(bench.scroll.first_row, 1, "media fila se acumula");
+    bench.frame(&image, choice, true, vec![wheel_points(-row_pt / 2.0)]);
+    assert_eq!(bench.scroll.first_row, 2, "las dos mitades suman una fila");
     // Hacia arriba, de vuelta.
-    banco.fotograma(&image, choice, true, vec![rueda_puntos(fila_pt * 2.0)]);
-    assert_eq!(banco.scroll.first_row, 0);
+    bench.frame(&image, choice, true, vec![wheel_points(row_pt * 2.0)]);
+    assert_eq!(bench.scroll.first_row, 0);
 }
 
 #[test]
-fn show_la_rueda_sobre_el_lienzo_hace_zoom_y_no_desplaza_el_panel() {
-    let image = indexada_con_lienzo();
+fn show_the_wheel_over_the_canvas_zooms_and_does_not_scroll_the_panel() {
+    let image = indexed_with_canvas();
     let choice = initial_choice(&image);
-    for (ppp, alto) in PANTALLAS_BAJAS {
-        let mut banco = Banco::con_imagen(ppp, vec2(800.0, alto), &image);
-        let base = banco.reposo(&image);
+    for (ppp, height_2) in SCREENS_LOW {
+        let mut bench = Bench::with_image(ppp, vec2(800.0, height_2), &image);
+        let base = bench.rest_2_2(&image);
         let zoom_antes = base.info.zoom;
-        let sobre_el_lienzo = pos2((base.rect_lienzo.min.x + 800.0) / 2.0, 50.0);
-        assert!(base.rect_lienzo.contains(sobre_el_lienzo));
+        let over_the_canvas = pos2((base.rect_canvas.min.x + 800.0) / 2.0, 50.0);
+        assert!(base.rect_canvas.contains(over_the_canvas));
 
-        let f = banco.con_puntero(
+        let f = bench.with_pointer(
             &image,
             choice,
             true,
-            sobre_el_lienzo,
-            vec![rueda_lineas(1.0)],
+            over_the_canvas,
+            vec![wheel_lines(1.0)],
         );
         assert_eq!(
             f.info.zoom,
@@ -1315,7 +1326,7 @@ fn show_la_rueda_sobre_el_lienzo_hace_zoom_y_no_desplaza_el_panel() {
             "ppp {ppp}: la rueda sobre el lienzo hace zoom"
         );
         assert_eq!(
-            banco.scroll,
+            bench.scroll,
             Scroll::default(),
             "ppp {ppp}: la rueda sobre el lienzo no desplaza el panel"
         );
@@ -1323,36 +1334,36 @@ fn show_la_rueda_sobre_el_lienzo_hace_zoom_y_no_desplaza_el_panel() {
 }
 
 #[test]
-fn show_con_enabled_falso_el_panel_sigue_desplazando() {
-    let image = indexada_con_lienzo();
+fn show_with_enabled_false_the_panel_keeps_scrolling() {
+    let image = indexed_with_canvas();
     let choice = initial_choice(&image);
-    let mut banco = Banco::con_imagen(1.0, vec2(800.0, 200.0), &image);
-    banco.reposo(&image);
-    banco.con_puntero(
+    let mut bench = Bench::with_image(1.0, vec2(800.0, 200.0), &image);
+    bench.rest_2_2(&image);
+    bench.with_pointer(
         &image,
         choice,
         false,
         pos2(100.0, 60.0),
-        vec![rueda_lineas(-1.0)],
+        vec![wheel_lines(-1.0)],
     );
-    assert!(banco.scroll.first_row > 0, "desplaza aunque no elija");
+    assert!(bench.scroll.first_row > 0, "desplaza aunque no elija");
 }
 
 /// Indexada de 256 con la imagen ya lista para el lienzo.
-fn indexada_con_lienzo() -> Image {
-    imagen_indexada(256)
+fn indexed_with_canvas() -> Image {
+    image_indexed(256)
 }
 
 #[test]
-fn show_el_banco_usa_el_mismo_ancho_de_panel_que_las_constantes() {
+fn show_the_bench_uses_the_same_panel_width_as_the_constants() {
     // Sanidad del banco: a ppp 1 el panel son PANEL_WIDTH_U puntos y la muestra 0 queda donde
     // dicen las constantes.
-    let image = imagen_rgba();
-    let mut banco = Banco::con_imagen(1.0, PANTALLA_GRANDE, &image);
-    let f = banco.reposo(&image);
-    assert!(cerca(f.rect_lienzo.min.x, PANEL_WIDTH_U as f32, 0.05));
+    let image = image_rgba();
+    let mut bench = Bench::with_image(1.0, SCREEN_LARGE, &image);
+    let f = bench.rest_2_2(&image);
+    assert!(near(f.rect_canvas.min.x, PANEL_WIDTH_U as f32, 0.05));
     assert_eq!(
-        centro_de_muestra_px(1, 0, 0),
+        swatch_center_px(1, 0, 0),
         (
             (GRID_X_U + CELL_U / 2) as f32,
             (GRID_Y_U + CELL_U / 2) as f32

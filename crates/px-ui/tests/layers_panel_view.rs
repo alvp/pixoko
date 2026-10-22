@@ -26,15 +26,15 @@ use px_ui::layers_panel_view::{PanelEvent, PanelView, show_layer_panel};
 use px_ui::source::DocSource;
 
 mod common;
-use common::{PPPS, boton, contexto, en_puntos, mover, n_de, rueda_linea};
+use common::{PPPS, button_2, context, in_points, mover, n_de, wheel_line};
 
-const ANCHO_PT: f32 = 900.0;
-const ALTO_PT: f32 = 600.0;
+const WIDTH_PT: f32 = 900.0;
+const HEIGHT_PT: f32 = 600.0;
 
-fn documento(capas: usize) -> Document {
-    let imagen = Image::new(64, 48, Mode::Rgba).expect("imagen");
-    let mut doc = Document::new(imagen);
-    for i in 1..capas {
+fn document(layers: usize) -> Document {
+    let image_2 = Image::new(64, 48, Mode::Rgba).expect("imagen");
+    let mut doc = Document::new(image_2);
+    for i in 1..layers {
         doc.apply(Command::AddLayer {
             name: format!("Capa {}", i + 1),
             at: i,
@@ -44,81 +44,81 @@ fn documento(capas: usize) -> Document {
     doc
 }
 
-struct Paso {
-    eventos: Vec<PanelEvent>,
-    lienzo: Vec<CanvasInput>,
-    subidos: usize,
+struct Step {
+    events_2: Vec<PanelEvent>,
+    canvas_2: Vec<CanvasInput>,
+    uploaded: usize,
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     ppp: f32,
     n: u32,
-    ventana: (i64, i64),
+    window: (i64, i64),
     canvas: Canvas,
     doc: Document,
-    activa: LayerId,
-    estado: PanelState,
-    habilitado: bool,
-    iconos: IconSet,
+    active_2: LayerId,
+    state_2: PanelState,
+    enabled_2: bool,
+    icons_2: IconSet,
 }
 
-impl Banco {
-    fn nuevo(ppp: f32, doc: Document, abierto: bool) -> Banco {
-        let ctx = contexto(ppp);
+impl Bench {
+    fn new_2(ppp: f32, doc: Document, open_2_2: bool) -> Bench {
+        let ctx = context(ppp);
         let mut canvas = Canvas::with_tile_side(64);
         canvas.load(&ctx, &DocSource(&doc)).expect("load");
-        let activa = doc.layers()[doc.layers().len() / 2].id();
-        let estado = PanelState {
-            open: abierto,
+        let active_2 = doc.layers()[doc.layers().len() / 2].id();
+        let state_2 = PanelState {
+            open: open_2_2,
             ..PanelState::default()
         };
-        let mut banco = Banco {
+        let mut bench = Bench {
             ctx,
             ppp,
             n: n_de(ppp) as u32,
-            ventana: (
-                (ANCHO_PT * ppp).round() as i64,
-                (ALTO_PT * ppp).round() as i64,
+            window: (
+                (WIDTH_PT * ppp).round() as i64,
+                (HEIGHT_PT * ppp).round() as i64,
             ),
             canvas,
             doc,
-            activa,
-            estado,
-            habilitado: true,
-            iconos: IconSet::default(),
+            active_2,
+            state_2,
+            enabled_2: true,
+            icons_2: IconSet::default(),
         };
         for _ in 0..3 {
-            banco.paso(vec![]);
+            bench.step(vec![]);
         }
-        banco
+        bench
     }
 
-    fn paso(&mut self, eventos: Vec<Event>) -> Paso {
-        let entrada = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(ANCHO_PT, ALTO_PT))),
-            events: eventos,
+    fn step(&mut self, events_2: Vec<Event>) -> Step {
+        let input_2 = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(WIDTH_PT, HEIGHT_PT))),
+            events: events_2,
             ..RawInput::default()
         };
-        let (ventana, doc, activa, habilitado) =
-            (self.ventana, &self.doc, self.activa, self.habilitado);
-        let (estado, canvas, iconos) = (&mut self.estado, &mut self.canvas, &self.iconos);
+        let (window, doc, active_2, enabled_2) =
+            (self.window, &self.doc, self.active_2, self.enabled_2);
+        let (state_2, canvas, icons_2) = (&mut self.state_2, &mut self.canvas, &self.icons_2);
         let ids: Vec<_> = canvas.texture_ids();
         let mut panel = Vec::new();
-        let mut lienzo = Vec::new();
-        let mut salida = self.ctx.run_ui(entrada, |ui| {
+        let mut canvas_2 = Vec::new();
+        let mut output_2 = self.ctx.run_ui(input_2, |ui| {
             panel = show_layer_panel(
                 ui.ctx(),
                 &PanelView {
                     doc,
-                    active: activa,
-                    enabled: habilitado,
-                    icons: iconos,
+                    active: active_2,
+                    enabled: enabled_2,
+                    icons: icons_2,
                 },
-                estado,
-                ventana,
+                state_2,
+                window,
             );
-            lienzo = canvas
+            canvas_2 = canvas
                 .interact_roles(ui)
                 .into_iter()
                 .map(|(input, _)| input)
@@ -126,29 +126,29 @@ impl Banco {
             canvas.sync(ui.ctx(), &DocSource(doc)).expect("sync");
             canvas.paint(ui);
         });
-        let mut subidos = 0;
-        for (id, deltas) in &salida.textures_delta.set {
+        let mut uploaded = 0;
+        for (id, deltas) in &output_2.textures_delta.set {
             if !ids.contains(id) {
                 continue;
             }
             for delta in deltas {
-                let egui::ImageData::Color(imagen) = &delta.image;
-                subidos += imagen.size[0] * imagen.size[1];
+                let egui::ImageData::Color(image_2) = &delta.image;
+                uploaded += image_2.size[0] * image_2.size[1];
             }
         }
-        salida.textures_delta.clear();
-        Paso {
-            eventos: panel,
-            lienzo,
-            subidos,
+        output_2.textures_delta.clear();
+        Step {
+            events_2: panel,
+            canvas_2,
+            uploaded,
         }
     }
 
     /// El centro de `r` (en `u` del panel) en puntos de la pantalla.
-    fn centro(&mut self, r: RectU) -> Pos2 {
-        let panel = self.estado.rect(self.ventana, self.n);
+    fn center(&mut self, r: RectU) -> Pos2 {
+        let panel = self.state_2.rect(self.window, self.n);
         let k = i64::from(self.n);
-        en_puntos(
+        in_points(
             self.ppp,
             panel.x + (r.x + r.w / 2) * k,
             panel.y + (r.y + r.h / 2) * k,
@@ -156,16 +156,16 @@ impl Banco {
     }
 
     /// Mover, pulsar y soltar; devuelve todo lo que salió de los tres fotogramas.
-    fn clic(&mut self, pos: Pos2) -> Vec<Paso> {
+    fn click(&mut self, pos: Pos2) -> Vec<Step> {
         vec![
-            self.paso(vec![mover(pos)]),
-            self.paso(vec![boton(pos, true)]),
-            self.paso(vec![boton(pos, false)]),
+            self.step(vec![mover(pos)]),
+            self.step(vec![button_2(pos, true)]),
+            self.step(vec![button_2(pos, false)]),
         ]
     }
 
-    fn eventos_de(pasos: &[Paso]) -> Vec<PanelEvent> {
-        pasos.iter().flat_map(|p| p.eventos.clone()).collect()
+    fn events_of(steps_2: &[Step]) -> Vec<PanelEvent> {
+        steps_2.iter().flat_map(|p| p.events_2.clone()).collect()
     }
 }
 
@@ -174,12 +174,12 @@ impl Banco {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_cada_boton_el_ojo_el_candado_la_fila_y_cerrar_emiten_su_evento() {
+fn row_7_each_button_the_eye_the_lock_the_row_and_close_emit_their_event() {
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, documento(3), true);
-        let capas: Vec<LayerId> = banco.doc.layers().iter().map(|l| l.id()).collect();
+        let mut bench = Bench::new_2(ppp, document(3), true);
+        let layers: Vec<LayerId> = bench.doc.layers().iter().map(|l| l.id()).collect();
         // La fila 0 es la de arriba (la tercera capa).
-        let casos: Vec<(RectU, PanelEvent)> = vec![
+        let cases: Vec<(RectU, PanelEvent)> = vec![
             (
                 button_u(PanelButton::New),
                 PanelEvent::Button(PanelButton::New),
@@ -200,21 +200,21 @@ fn fila_7_cada_boton_el_ojo_el_candado_la_fila_y_cerrar_emiten_su_evento() {
                 button_u(PanelButton::Down),
                 PanelEvent::Button(PanelButton::Down),
             ),
-            (eye_u(0), PanelEvent::ToggleVisible(capas[2])),
-            (lock_u(1), PanelEvent::ToggleLocked(capas[1])),
-            (name_u(2), PanelEvent::Select(capas[0])),
+            (eye_u(0), PanelEvent::ToggleVisible(layers[2])),
+            (lock_u(1), PanelEvent::ToggleLocked(layers[1])),
+            (name_u(2), PanelEvent::Select(layers[0])),
             (close_u(), PanelEvent::Close),
         ];
-        for (rect, esperado) in casos {
-            let pos = banco.centro(rect);
-            let pasos = banco.clic(pos);
+        for (rect, expected_2) in cases {
+            let pos = bench.center(rect);
+            let steps_2 = bench.click(pos);
             assert_eq!(
-                Banco::eventos_de(&pasos),
-                vec![esperado.clone()],
-                "ppp {ppp}: {esperado:?}"
+                Bench::events_of(&steps_2),
+                vec![expected_2.clone()],
+                "ppp {ppp}: {expected_2:?}"
             );
             assert!(
-                pasos.iter().all(|p| p.lienzo.is_empty()),
+                steps_2.iter().all(|p| p.canvas_2.is_empty()),
                 "ppp {ppp}: el clic llegó al lienzo"
             );
         }
@@ -222,34 +222,38 @@ fn fila_7_cada_boton_el_ojo_el_candado_la_fila_y_cerrar_emiten_su_evento() {
 }
 
 #[test]
-fn fila_7_con_una_capa_quitar_subir_y_bajar_estan_atenuados_y_no_responden() {
+fn row_7_with_one_layer_remove_raise_and_lower_are_dimmed_and_do_not_respond() {
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, documento(1), true);
-        for boton in [PanelButton::Remove, PanelButton::Up, PanelButton::Down] {
-            let pos = banco.centro(button_u(boton));
-            let pasos = banco.clic(pos);
-            assert_eq!(Banco::eventos_de(&pasos), vec![], "ppp {ppp}: {boton:?}");
+        let mut bench = Bench::new_2(ppp, document(1), true);
+        for button_2 in [PanelButton::Remove, PanelButton::Up, PanelButton::Down] {
+            let pos = bench.center(button_u(button_2));
+            let steps_2 = bench.click(pos);
+            assert_eq!(
+                Bench::events_of(&steps_2),
+                vec![],
+                "ppp {ppp}: {button_2:?}"
+            );
         }
-        let pos = banco.centro(button_u(PanelButton::New));
-        let pasos = banco.clic(pos);
+        let pos = bench.center(button_u(PanelButton::New));
+        let steps_2 = bench.click(pos);
         assert_eq!(
-            Banco::eventos_de(&pasos),
+            Bench::events_of(&steps_2),
             vec![PanelEvent::Button(PanelButton::New)]
         );
-        let nav = layer_nav(&banco.doc, banco.activa);
+        let nav = layer_nav(&bench.doc, bench.active_2);
         assert_eq!((nav.count, nav.active_pos, nav.can_add), (1, 0, true));
     }
 }
 
 #[test]
-fn fila_7_con_un_modal_abierto_el_panel_no_responde_a_nada() {
+fn row_7_with_a_modal_open_the_panel_does_not_respond_to_anything() {
     // Condición 2: `enabled = false` es lo que la app pasa con un diálogo modal (o una conversión
     // o un guardado en espera) abierto.
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, documento(8), true);
-        banco.habilitado = false;
-        let antes = banco.estado.rect(banco.ventana, banco.n);
-        let scroll = banco.estado.scroll;
+        let mut bench = Bench::new_2(ppp, document(8), true);
+        bench.enabled_2 = false;
+        let antes = bench.state_2.rect(bench.window, bench.n);
+        let scroll = bench.state_2.scroll;
         for rect in [
             button_u(PanelButton::New),
             eye_u(0),
@@ -258,43 +262,43 @@ fn fila_7_con_un_modal_abierto_el_panel_no_responde_a_nada() {
             close_u(),
             title_u(),
         ] {
-            let pos = banco.centro(rect);
-            let pasos = banco.clic(pos);
-            assert_eq!(Banco::eventos_de(&pasos), vec![], "ppp {ppp}: {rect:?}");
+            let pos = bench.center(rect);
+            let steps_2 = bench.click(pos);
+            assert_eq!(Bench::events_of(&steps_2), vec![], "ppp {ppp}: {rect:?}");
         }
         // Ni la rueda sobre la lista ni arrastrar la barra de título hacen nada.
-        let sobre_lista = banco.centro(name_u(1));
-        banco.paso(vec![mover(sobre_lista)]);
-        banco.paso(vec![rueda_linea(false)]);
-        assert_eq!(banco.estado.scroll, scroll, "ppp {ppp}");
-        let barra = banco.centro(title_u());
-        banco.paso(vec![mover(barra)]);
-        banco.paso(vec![boton(barra, true)]);
-        banco.paso(vec![mover(barra + vec2(60.0, 30.0))]);
-        banco.paso(vec![boton(barra + vec2(60.0, 30.0), false)]);
+        let over_list = bench.center(name_u(1));
+        bench.step(vec![mover(over_list)]);
+        bench.step(vec![wheel_line(false)]);
+        assert_eq!(bench.state_2.scroll, scroll, "ppp {ppp}");
+        let bar = bench.center(title_u());
+        bench.step(vec![mover(bar)]);
+        bench.step(vec![button_2(bar, true)]);
+        bench.step(vec![mover(bar + vec2(60.0, 30.0))]);
+        bench.step(vec![button_2(bar + vec2(60.0, 30.0), false)]);
         assert_eq!(
-            banco.estado.rect(banco.ventana, banco.n),
+            bench.state_2.rect(bench.window, bench.n),
             antes,
             "ppp {ppp}"
         );
-        assert!(banco.estado.open);
+        assert!(bench.state_2.open);
     }
 }
 
 #[test]
-fn fila_7_la_barra_arrastra_el_panel_y_la_rueda_desplaza_la_lista() {
+fn row_7_the_bar_drags_the_panel_and_the_wheel_scrolls_the_list() {
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, documento(10), true);
-        let antes = banco.estado.rect(banco.ventana, banco.n);
-        let barra = banco.centro(title_u());
-        banco.paso(vec![mover(barra)]);
-        banco.paso(vec![boton(barra, true)]);
-        let destino = barra + vec2(-40.0, 25.0);
-        banco.paso(vec![mover(destino)]);
-        banco.paso(vec![boton(destino, false)]);
-        let despues = banco.estado.rect(banco.ventana, banco.n);
-        let k = i64::from(banco.n);
-        let (dx, dy) = (despues.x - antes.x, despues.y - antes.y);
+        let mut bench = Bench::new_2(ppp, document(10), true);
+        let antes = bench.state_2.rect(bench.window, bench.n);
+        let bar = bench.center(title_u());
+        bench.step(vec![mover(bar)]);
+        bench.step(vec![button_2(bar, true)]);
+        let target_2 = bar + vec2(-40.0, 25.0);
+        bench.step(vec![mover(target_2)]);
+        bench.step(vec![button_2(target_2, false)]);
+        let after_2 = bench.state_2.rect(bench.window, bench.n);
+        let k = i64::from(bench.n);
+        let (dx, dy) = (after_2.x - antes.x, after_2.y - antes.y);
         assert!(
             (dx + (40.0 * ppp) as i64).abs() <= 2 * k,
             "ppp {ppp}: dx {dx}"
@@ -305,14 +309,14 @@ fn fila_7_la_barra_arrastra_el_panel_y_la_rueda_desplaza_la_lista() {
         );
         assert_eq!((dx % k, dy % k), (0, 0), "a pasos de u");
         // La rueda sobre la lista baja 3 filas por muesca (10 capas: como mucho 4).
-        let sobre_lista = banco.centro(name_u(1));
-        banco.paso(vec![mover(sobre_lista)]);
-        banco.paso(vec![rueda_linea(false)]);
-        assert_eq!(banco.estado.scroll, 3, "ppp {ppp}");
-        banco.paso(vec![rueda_linea(false)]);
-        assert_eq!(banco.estado.scroll, 4, "ppp {ppp}");
-        banco.paso(vec![rueda_linea(true)]);
-        assert_eq!(banco.estado.scroll, 1, "ppp {ppp}");
+        let over_list = bench.center(name_u(1));
+        bench.step(vec![mover(over_list)]);
+        bench.step(vec![wheel_line(false)]);
+        assert_eq!(bench.state_2.scroll, 3, "ppp {ppp}");
+        bench.step(vec![wheel_line(false)]);
+        assert_eq!(bench.state_2.scroll, 4, "ppp {ppp}");
+        bench.step(vec![wheel_line(true)]);
+        assert_eq!(bench.state_2.scroll, 1, "ppp {ppp}");
     }
 }
 
@@ -321,34 +325,34 @@ fn fila_7_la_barra_arrastra_el_panel_y_la_rueda_desplaza_la_lista() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_12_un_clic_dentro_del_panel_no_llega_al_lienzo_y_uno_fuera_si() {
+fn row_12_a_click_inside_the_panel_does_not_reach_the_canvas_and_one_outside_does() {
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, documento(3), true);
+        let mut bench = Bench::new_2(ppp, document(3), true);
         // Un hueco del panel (entre la barra y la lista): dentro del rectángulo, sin control.
-        let hueco = banco.centro(RectU {
+        let gap = bench.center(RectU {
             x: 90,
             y: 18,
             w: 2,
             h: 2,
         });
-        let pasos = banco.clic(hueco);
+        let steps_2 = bench.click(gap);
         assert!(
-            pasos.iter().all(|p| p.lienzo.is_empty()),
+            steps_2.iter().all(|p| p.canvas_2.is_empty()),
             "ppp {ppp}: dentro: {:?}",
-            pasos.iter().map(|p| &p.lienzo).collect::<Vec<_>>()
+            steps_2.iter().map(|p| &p.canvas_2).collect::<Vec<_>>()
         );
-        assert_eq!(Banco::eventos_de(&pasos), vec![]);
+        assert_eq!(Bench::events_of(&steps_2), vec![]);
         // La rueda dentro del panel tampoco hace zoom en el lienzo.
-        let zoom = banco.canvas.zoom();
-        banco.paso(vec![mover(hueco)]);
-        banco.paso(vec![rueda_linea(true)]);
-        assert_eq!(banco.canvas.zoom(), zoom, "ppp {ppp}");
+        let zoom = bench.canvas.zoom();
+        bench.step(vec![mover(gap)]);
+        bench.step(vec![wheel_line(true)]);
+        assert_eq!(bench.canvas.zoom(), zoom, "ppp {ppp}");
         // Fuera del panel (arriba a la izquierda, sobre la imagen) el clic empieza un trazo.
-        let fuera = Pos2::new(20.0, 20.0);
-        let pasos = banco.clic(fuera);
+        let outside = Pos2::new(20.0, 20.0);
+        let steps_2 = bench.click(outside);
         assert!(
-            pasos.iter().any(|p| p
-                .lienzo
+            steps_2.iter().any(|p| p
+                .canvas_2
                 .iter()
                 .any(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeBegin(_))))),
             "ppp {ppp}: fuera del panel el clic debe llegar al lienzo"
@@ -357,14 +361,14 @@ fn fila_12_un_clic_dentro_del_panel_no_llega_al_lienzo_y_uno_fuera_si() {
 }
 
 #[test]
-fn fila_12_con_el_panel_cerrado_no_tapa_ni_responde() {
-    let mut banco = Banco::nuevo(1.0, documento(3), false);
-    let paso = banco.paso(vec![]);
-    assert!(paso.eventos.is_empty());
+fn row_12_with_the_panel_closed_it_neither_covers_nor_responds() {
+    let mut bench = Bench::new_2(1.0, document(3), false);
+    let step = bench.step(vec![]);
+    assert!(step.events_2.is_empty());
     // Con el panel cerrado, un clic donde estaría el panel es del lienzo.
-    let donde = Pos2::new(600.0, 100.0);
-    let pasos = banco.clic(donde);
-    assert!(pasos.iter().any(|p| !p.lienzo.is_empty()));
+    let location = Pos2::new(600.0, 100.0);
+    let steps_2 = bench.click(location);
+    assert!(steps_2.iter().any(|p| !p.canvas_2.is_empty()));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -372,48 +376,48 @@ fn fila_12_con_el_panel_cerrado_no_tapa_ni_responde() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn propiedad_4_sin_comando_no_cambia_el_documento_ni_se_sube_ninguna_textura() {
+fn property_4_without_a_command_the_document_does_not_change_or_any_texture_is_uploaded() {
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, documento(9), true);
-        let copia = banco.doc.clone();
-        let id = banco.doc.state_id();
-        let mut subidos = 0;
-        let barra = banco.centro(title_u());
-        let lista = banco.centro(name_u(2));
-        let secuencia: Vec<Vec<Event>> = vec![
-            vec![mover(lista)],
-            vec![rueda_linea(false)],
-            vec![rueda_linea(false)],
-            vec![rueda_linea(true)],
-            vec![mover(barra)],
-            vec![boton(barra, true)],
-            vec![mover(barra + vec2(30.0, 30.0))],
-            vec![boton(barra + vec2(30.0, 30.0), false)],
+        let mut bench = Bench::new_2(ppp, document(9), true);
+        let copy = bench.doc.clone();
+        let id = bench.doc.state_id();
+        let mut uploaded = 0;
+        let bar = bench.center(title_u());
+        let list = bench.center(name_u(2));
+        let sequence: Vec<Vec<Event>> = vec![
+            vec![mover(list)],
+            vec![wheel_line(false)],
+            vec![wheel_line(false)],
+            vec![wheel_line(true)],
+            vec![mover(bar)],
+            vec![button_2(bar, true)],
+            vec![mover(bar + vec2(30.0, 30.0))],
+            vec![button_2(bar + vec2(30.0, 30.0), false)],
             vec![mover(Pos2::new(5.0, 5.0))],
             vec![],
         ];
-        for eventos in secuencia {
-            let paso = banco.paso(eventos);
-            subidos += paso.subidos;
+        for events_2 in sequence {
+            let step = bench.step(events_2);
+            uploaded += step.uploaded;
             assert!(
-                paso.eventos
+                step.events_2
                     .iter()
                     .all(|e| matches!(e, PanelEvent::Select(_))),
                 "ppp {ppp}: {:?}",
-                paso.eventos
+                step.events_2
             );
         }
         // Cerrar y abrir tampoco.
-        banco.estado.open = false;
-        subidos += banco.paso(vec![]).subidos;
-        banco.estado.open = true;
-        subidos += banco.paso(vec![]).subidos;
+        bench.state_2.open = false;
+        uploaded += bench.step(vec![]).uploaded;
+        bench.state_2.open = true;
+        uploaded += bench.step(vec![]).uploaded;
         assert_eq!(
-            subidos, 0,
-            "ppp {ppp}: se subieron {subidos} píxeles de textura"
+            uploaded, 0,
+            "ppp {ppp}: se subieron {uploaded} píxeles de textura"
         );
-        assert_eq!(banco.doc, copia);
-        assert_eq!(banco.doc.state_id(), id);
-        assert!(!banco.doc.can_redo());
+        assert_eq!(bench.doc, copy);
+        assert_eq!(bench.doc.state_id(), id);
+        assert!(!bench.doc.can_redo());
     }
 }

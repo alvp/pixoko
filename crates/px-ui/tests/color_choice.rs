@@ -21,20 +21,20 @@ use px_ui::color::{
     pixel_for_choice, pixel_for_slot,
 };
 
-fn imagen(mode: Mode) -> Image {
+fn image_2(mode: Mode) -> Image {
     Image::new(4, 4, mode).unwrap()
 }
 
 /// Indexada con los colores dados y el índice transparente indicado.
-fn indexada_con(colores: Vec<Rgba>, transparente: Option<u8>) -> Image {
-    let mut paleta = Palette::from_colors(colores).unwrap();
-    paleta.set_transparent_index(transparente).unwrap();
-    Image::new_indexed(4, 4, paleta).unwrap()
+fn indexed_with(colors_2: Vec<Rgba>, transparent: Option<u8>) -> Image {
+    let mut palette = Palette::from_colors(colors_2).unwrap();
+    palette.set_transparent_index(transparent).unwrap();
+    Image::new_indexed(4, 4, palette).unwrap()
 }
 
 /// Indexada de `n` entradas opacas y distintas entre sí, sin índice transparente.
-fn indexada(n: usize) -> Image {
-    indexada_con(
+fn indexed(n: usize) -> Image {
+    indexed_with(
         (0..n)
             .map(|i| Rgba::opaque(i as u8, 255 - i as u8, 7))
             .collect(),
@@ -47,23 +47,23 @@ fn rgba(r: u8, g: u8, b: u8) -> Rgba {
 }
 
 /// Las cuatro formas de imagen que se prueban siempre: tres sin paleta, y indexadas de 3 y 256.
-fn todas() -> Vec<(&'static str, Image)> {
+fn all_2() -> Vec<(&'static str, Image)> {
     vec![
-        ("rgba", imagen(Mode::Rgba)),
-        ("gray", imagen(Mode::Gray)),
-        ("gray alpha", imagen(Mode::GrayAlpha)),
-        ("indexada de 1", indexada(1)),
-        ("indexada de 3", indexada(3)),
-        ("indexada de 9", indexada(9)),
-        ("indexada de 256", indexada(256)),
+        ("rgba", image_2(Mode::Rgba)),
+        ("gray", image_2(Mode::Gray)),
+        ("gray alpha", image_2(Mode::GrayAlpha)),
+        ("indexada de 1", indexed(1)),
+        ("indexada de 3", indexed(3)),
+        ("indexada de 9", indexed(9)),
+        ("indexada de 256", indexed(256)),
     ]
 }
 
-fn sin_paleta() -> Vec<(&'static str, Image)> {
+fn without_palette() -> Vec<(&'static str, Image)> {
     vec![
-        ("rgba", imagen(Mode::Rgba)),
-        ("gray", imagen(Mode::Gray)),
-        ("gray alpha", imagen(Mode::GrayAlpha)),
+        ("rgba", image_2(Mode::Rgba)),
+        ("gray", image_2(Mode::Gray)),
+        ("gray alpha", image_2(Mode::GrayAlpha)),
     ]
 }
 
@@ -71,32 +71,32 @@ fn sin_paleta() -> Vec<(&'static str, Image)> {
 
 #[test]
 fn color_choice_es_copy_debug_y_comparable() {
-    fn comprueba<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
-    comprueba::<ColorChoice>();
+    fn checks<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
+    checks::<ColorChoice>();
     assert_ne!(ColorChoice::Slot(3), ColorChoice::Entry(3));
     assert_eq!(ColorChoice::Entry(3), ColorChoice::Entry(3));
 }
 
 #[test]
-fn from_u8_da_una_ranura() {
+fn from_u8_gives_a_slot() {
     assert_eq!(ColorChoice::from(3u8), ColorChoice::Slot(3));
     assert_eq!(ColorChoice::from(0u8), ColorChoice::Slot(0));
     assert_eq!(ColorChoice::from(255u8), ColorChoice::Slot(255));
-    let eleccion: ColorChoice = 9u8.into();
-    assert_eq!(eleccion, ColorChoice::Slot(9));
+    let choice_2: ColorChoice = 9u8.into();
+    assert_eq!(choice_2, ColorChoice::Slot(9));
 }
 
 #[test]
-fn pixel_for_choice_con_una_ranura_es_pixel_for_slot_en_los_cuatro_modos() {
-    let imagenes = [
-        imagen(Mode::Rgba),
-        imagen(Mode::Gray),
-        imagen(Mode::GrayAlpha),
-        indexada(3),
-        indexada(9),
-        indexada(256),
+fn pixel_for_choice_with_a_slot_is_pixel_for_slot_in_the_four_modes() {
+    let images = [
+        image_2(Mode::Rgba),
+        image_2(Mode::Gray),
+        image_2(Mode::GrayAlpha),
+        indexed(3),
+        indexed(9),
+        indexed(256),
     ];
-    for image in &imagenes {
+    for image in &images {
         for n in 0..=10u8 {
             assert_eq!(
                 pixel_for_choice(image, ColorChoice::Slot(n)),
@@ -108,38 +108,38 @@ fn pixel_for_choice_con_una_ranura_es_pixel_for_slot_en_los_cuatro_modos() {
     }
     // Con ejemplos concretos: la ranura vale también en las indexadas, como hoy.
     assert_eq!(
-        pixel_for_choice(&indexada(3), ColorChoice::Slot(3)),
+        pixel_for_choice(&indexed(3), ColorChoice::Slot(3)),
         Some(Pixel::Indexed(2))
     );
-    assert_eq!(pixel_for_choice(&indexada(3), ColorChoice::Slot(4)), None);
+    assert_eq!(pixel_for_choice(&indexed(3), ColorChoice::Slot(4)), None);
 }
 
 #[test]
-fn pixel_for_choice_con_una_entrada_en_una_indexada() {
-    let image = indexada(256);
+fn pixel_for_choice_with_an_entry_in_an_indexed_one() {
+    let image = indexed(256);
     for i in [0u8, 1, 8, 200, 255] {
         assert_eq!(
             pixel_for_choice(&image, ColorChoice::Entry(i)),
             Some(Pixel::Indexed(i))
         );
     }
-    let tres = indexada(3);
+    let three = indexed(3);
     assert_eq!(
-        pixel_for_choice(&tres, ColorChoice::Entry(2)),
+        pixel_for_choice(&three, ColorChoice::Entry(2)),
         Some(Pixel::Indexed(2))
     );
-    assert_eq!(pixel_for_choice(&tres, ColorChoice::Entry(3)), None);
-    assert_eq!(pixel_for_choice(&tres, ColorChoice::Entry(255)), None);
+    assert_eq!(pixel_for_choice(&three, ColorChoice::Entry(3)), None);
+    assert_eq!(pixel_for_choice(&three, ColorChoice::Entry(255)), None);
 }
 
 #[test]
-fn pixel_for_choice_con_una_entrada_en_una_imagen_no_indexada_es_none() {
-    for (nombre, image) in sin_paleta() {
+fn pixel_for_choice_with_an_entry_in_a_non_indexed_image_is_none() {
+    for (name_2, image) in without_palette() {
         for i in [0u8, 1, 8, 200, 255] {
             assert_eq!(
                 pixel_for_choice(&image, ColorChoice::Entry(i)),
                 None,
-                "{nombre}, Entry({i})"
+                "{name_2}, Entry({i})"
             );
         }
     }
@@ -148,16 +148,16 @@ fn pixel_for_choice_con_una_entrada_en_una_imagen_no_indexada_es_none() {
 // Fila 8 (parte de px-ui): `initial_choice`.
 
 #[test]
-fn fila_8_initial_choice() {
-    assert_eq!(initial_choice(&imagen(Mode::Rgba)), ColorChoice::Slot(1));
-    assert_eq!(initial_choice(&imagen(Mode::Gray)), ColorChoice::Slot(1));
+fn row_8_initial_choice() {
+    assert_eq!(initial_choice(&image_2(Mode::Rgba)), ColorChoice::Slot(1));
+    assert_eq!(initial_choice(&image_2(Mode::Gray)), ColorChoice::Slot(1));
     assert_eq!(
-        initial_choice(&imagen(Mode::GrayAlpha)),
+        initial_choice(&image_2(Mode::GrayAlpha)),
         ColorChoice::Slot(1)
     );
     for n in [1usize, 2, 3, 9, 256] {
         assert_eq!(
-            initial_choice(&indexada(n)),
+            initial_choice(&indexed(n)),
             ColorChoice::Entry(0),
             "indexada de {n}"
         );
@@ -165,36 +165,36 @@ fn fila_8_initial_choice() {
 }
 
 #[test]
-fn la_eleccion_inicial_vale_para_su_imagen() {
-    for (nombre, image) in todas() {
-        let inicial = initial_choice(&image);
+fn the_initial_choice_is_valid_for_its_image() {
+    for (name_2, image) in all_2() {
+        let initial = initial_choice(&image);
         assert!(
-            pixel_for_choice(&image, inicial).is_some(),
-            "{nombre}: {inicial:?}"
+            pixel_for_choice(&image, initial).is_some(),
+            "{name_2}: {initial:?}"
         );
-        assert_eq!(cell_of_choice(&image, inicial), Some(0), "{nombre}");
-        assert_eq!(choice_for_cell(&image, 0), Some(inicial), "{nombre}");
+        assert_eq!(cell_of_choice(&image, initial), Some(0), "{name_2}");
+        assert_eq!(choice_for_cell(&image, 0), Some(initial), "{name_2}");
     }
 }
 
 // `cell_count`.
 
 #[test]
-fn cell_count_es_la_paleta_o_nueve() {
+fn cell_count_is_the_palette_or_nine() {
     assert_eq!(SLOTS, 9);
-    for (nombre, image) in sin_paleta() {
-        assert_eq!(cell_count(&image), 9, "{nombre}");
+    for (name_2, image) in without_palette() {
+        assert_eq!(cell_count(&image), 9, "{name_2}");
     }
     for n in [1usize, 2, 3, 9, 10, 255, 256] {
-        assert_eq!(cell_count(&indexada(n)), n, "indexada de {n}");
+        assert_eq!(cell_count(&indexed(n)), n, "indexada de {n}");
     }
 }
 
 // Fila 6: elegir (parte de px-ui).
 
 #[test]
-fn fila_6_indexada_de_256_clic_en_la_200_y_en_la_8_y_teclas_1_y_9() {
-    let image = indexada(256);
+fn row_6_indexed_of_256_click_on_the_200_and_on_the_8_and_keys_1_and_9() {
+    let image = indexed(256);
     assert_eq!(choice_for_cell(&image, 200), Some(ColorChoice::Entry(200)));
     assert_eq!(
         pixel_for_choice(&image, ColorChoice::Entry(200)),
@@ -215,8 +215,8 @@ fn fila_6_indexada_de_256_clic_en_la_200_y_en_la_8_y_teclas_1_y_9() {
 }
 
 #[test]
-fn fila_6_rgba_clic_en_la_2_y_tecla_3() {
-    let image = imagen(Mode::Rgba);
+fn row_6_rgba_click_on_the_2_and_key_3() {
+    let image = image_2(Mode::Rgba);
     assert_eq!(choice_for_cell(&image, 2), Some(ColorChoice::Slot(3)));
     assert_eq!(key_choice(&image, 3), Some(ColorChoice::Slot(3)));
     assert_eq!(
@@ -231,8 +231,8 @@ fn fila_6_rgba_clic_en_la_2_y_tecla_3() {
 }
 
 #[test]
-fn fila_6_gray_clic_en_la_8() {
-    let image = imagen(Mode::Gray);
+fn row_6_gray_click_on_the_8() {
+    let image = image_2(Mode::Gray);
     assert_eq!(choice_for_cell(&image, 8), Some(ColorChoice::Slot(9)));
     assert_eq!(key_choice(&image, 9), Some(ColorChoice::Slot(9)));
     assert_eq!(
@@ -243,8 +243,8 @@ fn fila_6_gray_clic_en_la_8() {
 }
 
 #[test]
-fn fila_6_indexada_de_3_la_tecla_9_no_existe() {
-    let image = indexada(3);
+fn row_6_indexed_of_3_the_9_key_does_not_exist() {
+    let image = indexed(3);
     assert_eq!(key_choice(&image, 9), None);
     for n in 4..=9u8 {
         assert_eq!(key_choice(&image, n), None, "tecla {n}");
@@ -257,25 +257,25 @@ fn fila_6_indexada_de_3_la_tecla_9_no_existe() {
         );
     }
     // La selección no cambia: se modela como «si es `None`, se conserva».
-    let mut seleccion = ColorChoice::Entry(1);
-    if let Some(nueva) = key_choice(&image, 9) {
-        seleccion = nueva;
+    let mut selection = ColorChoice::Entry(1);
+    if let Some(new) = key_choice(&image, 9) {
+        selection = new;
     }
-    assert_eq!(seleccion, ColorChoice::Entry(1));
+    assert_eq!(selection, ColorChoice::Entry(1));
 }
 
 #[test]
-fn fila_6_un_clic_en_k_y_la_tecla_k_mas_1_dan_la_misma_eleccion_y_el_mismo_pixel() {
-    for (nombre, image) in todas() {
+fn row_6_a_click_on_k_and_the_k_key_plus_1_give_the_same_choice_and_the_same_pixel() {
+    for (name_2, image) in all_2() {
         for k in 0..9usize {
-            let por_clic = choice_for_cell(&image, k);
-            let por_tecla = key_choice(&image, (k + 1) as u8);
-            assert_eq!(por_clic, por_tecla, "{nombre}, celda {k}");
-            if let (Some(clic), Some(tecla)) = (por_clic, por_tecla) {
+            let per_click = choice_for_cell(&image, k);
+            let per_key = key_choice(&image, (k + 1) as u8);
+            assert_eq!(per_click, per_key, "{name_2}, celda {k}");
+            if let (Some(click), Some(key_2)) = (per_click, per_key) {
                 assert_eq!(
-                    pixel_for_choice(&image, clic),
-                    pixel_for_choice(&image, tecla),
-                    "{nombre}, celda {k}"
+                    pixel_for_choice(&image, click),
+                    pixel_for_choice(&image, key_2),
+                    "{name_2}, celda {k}"
                 );
             }
         }
@@ -283,17 +283,17 @@ fn fila_6_un_clic_en_k_y_la_tecla_k_mas_1_dan_la_misma_eleccion_y_el_mismo_pixel
 }
 
 #[test]
-fn la_forma_normal_es_entry_en_indexadas_y_slot_en_las_demas() {
-    for (nombre, image) in sin_paleta() {
+fn the_normal_form_is_entry_in_indexed_and_slot_in_the_others() {
+    for (name_2, image) in without_palette() {
         for i in 0..9usize {
             assert_eq!(
                 choice_for_cell(&image, i),
                 Some(ColorChoice::Slot(i as u8 + 1)),
-                "{nombre}, celda {i}"
+                "{name_2}, celda {i}"
             );
         }
     }
-    let image = indexada(20);
+    let image = indexed(20);
     for i in 0..20usize {
         assert_eq!(
             choice_for_cell(&image, i),
@@ -306,98 +306,105 @@ fn la_forma_normal_es_entry_en_indexadas_y_slot_en_las_demas() {
 // Fila 7 (parte de px-ui): celdas inexistentes.
 
 #[test]
-fn fila_7_las_celdas_inexistentes_no_eligen() {
-    for (nombre, image) in todas() {
-        let cuantas = cell_count(&image);
-        assert!(choice_for_cell(&image, cuantas - 1).is_some(), "{nombre}");
-        for cell in [cuantas, cuantas + 1, cuantas + 100, 256, 1000, usize::MAX] {
+fn row_7_the_nonexistent_cels_do_not_choose() {
+    for (name_2, image) in all_2() {
+        let how_many = cell_count(&image);
+        assert!(choice_for_cell(&image, how_many - 1).is_some(), "{name_2}");
+        for cell in [
+            how_many,
+            how_many + 1,
+            how_many + 100,
+            256,
+            1000,
+            usize::MAX,
+        ] {
             assert_eq!(
                 choice_for_cell(&image, cell),
                 None,
-                "{nombre}, celda {cell}"
+                "{name_2}, celda {cell}"
             );
-            assert_eq!(cell_color(&image, cell), None, "{nombre}, celda {cell}");
-            assert_eq!(cell_label(&image, cell), None, "{nombre}, celda {cell}");
+            assert_eq!(cell_color(&image, cell), None, "{name_2}, celda {cell}");
+            assert_eq!(cell_label(&image, cell), None, "{name_2}, celda {cell}");
         }
     }
 }
 
 #[test]
-fn fila_7_las_teclas_sin_muestra_se_ignoran() {
+fn row_7_the_keys_without_a_swatch_are_ignored() {
     // Una sola entrada: las teclas 2 a 9 se ignoran (fila 11).
-    let una = indexada(1);
-    assert_eq!(key_choice(&una, 1), Some(ColorChoice::Entry(0)));
+    let a = indexed(1);
+    assert_eq!(key_choice(&a, 1), Some(ColorChoice::Entry(0)));
     for n in 2..=9u8 {
-        assert_eq!(key_choice(&una, n), None, "tecla {n}");
+        assert_eq!(key_choice(&a, n), None, "tecla {n}");
     }
     // Paletas de 5 entradas: de la 6 a la 9 no existen.
-    let cinco = indexada(5);
+    let five = indexed(5);
     for n in 6..=9u8 {
-        assert_eq!(key_choice(&cinco, n), None, "tecla {n}");
+        assert_eq!(key_choice(&five, n), None, "tecla {n}");
     }
     // La tecla 0 no es de ninguna muestra.
-    for (nombre, image) in todas() {
-        assert_eq!(key_choice(&image, 0), None, "{nombre}, tecla 0");
+    for (name_2, image) in all_2() {
+        assert_eq!(key_choice(&image, 0), None, "{name_2}, tecla 0");
     }
 }
 
 #[test]
-fn fila_7_cell_of_choice_es_none_si_no_vale_para_la_imagen() {
+fn row_7_cell_of_choice_is_none_if_it_is_not_valid_for_the_image() {
     // Entrada en una imagen sin paleta.
-    for (nombre, image) in sin_paleta() {
+    for (name_2, image) in without_palette() {
         assert_eq!(
             cell_of_choice(&image, ColorChoice::Entry(0)),
             None,
-            "{nombre}"
+            "{name_2}"
         );
         assert_eq!(
             cell_of_choice(&image, ColorChoice::Entry(200)),
             None,
-            "{nombre}"
+            "{name_2}"
         );
         // Ranuras fuera de 1 a 9.
         assert_eq!(
             cell_of_choice(&image, ColorChoice::Slot(0)),
             None,
-            "{nombre}"
+            "{name_2}"
         );
         assert_eq!(
             cell_of_choice(&image, ColorChoice::Slot(10)),
             None,
-            "{nombre}"
+            "{name_2}"
         );
         // Las nueve ranuras dan su muestra.
         for n in 1..=9u8 {
             assert_eq!(
                 cell_of_choice(&image, ColorChoice::Slot(n)),
                 Some(usize::from(n) - 1),
-                "{nombre}, ranura {n}"
+                "{name_2}, ranura {n}"
             );
         }
     }
     // Entrada fuera de la paleta.
-    let tres = indexada(3);
-    assert_eq!(cell_of_choice(&tres, ColorChoice::Entry(2)), Some(2));
-    assert_eq!(cell_of_choice(&tres, ColorChoice::Entry(3)), None);
-    assert_eq!(cell_of_choice(&tres, ColorChoice::Entry(255)), None);
+    let three = indexed(3);
+    assert_eq!(cell_of_choice(&three, ColorChoice::Entry(2)), Some(2));
+    assert_eq!(cell_of_choice(&three, ColorChoice::Entry(3)), None);
+    assert_eq!(cell_of_choice(&three, ColorChoice::Entry(255)), None);
 }
 
 // Fila 9: textos.
 
-/// `[#000000, #ff0000, #00ff00 (índice transparente), #0000ff80, …, #ffffff (255)]`.
-fn paleta_de_la_fila_9() -> Image {
-    let mut colores = vec![Rgba::opaque(10, 20, 30); 256];
-    colores[0] = rgba(0, 0, 0);
-    colores[1] = rgba(0xff, 0, 0);
-    colores[2] = rgba(0, 0xff, 0);
-    colores[3] = Rgba::new(0, 0, 0xff, 0x80);
-    colores[255] = rgba(0xff, 0xff, 0xff);
-    indexada_con(colores, Some(2))
+/// `[#000000, #ff0000, #00ff00 (índice transparent), #0000ff80, …, #ffffff (255)]`.
+fn palette_of_row_9() -> Image {
+    let mut colors_2 = vec![Rgba::opaque(10, 20, 30); 256];
+    colors_2[0] = rgba(0, 0, 0);
+    colors_2[1] = rgba(0xff, 0, 0);
+    colors_2[2] = rgba(0, 0xff, 0);
+    colors_2[3] = Rgba::new(0, 0, 0xff, 0x80);
+    colors_2[255] = rgba(0xff, 0xff, 0xff);
+    indexed_with(colors_2, Some(2))
 }
 
 #[test]
-fn fila_9_cell_label_indexada() {
-    let image = paleta_de_la_fila_9();
+fn row_9_cell_label_indexed() {
+    let image = palette_of_row_9();
     assert_eq!(cell_label(&image, 1).as_deref(), Some("índice 1 #ff0000"));
     // Resuelto: la transparente da alfa 0, aunque se guardó opaca.
     assert_eq!(cell_label(&image, 2).as_deref(), Some("índice 2 #00ff0000"));
@@ -411,17 +418,17 @@ fn fila_9_cell_label_indexada() {
 }
 
 #[test]
-fn fila_9_cell_label_indexada_con_el_ejemplo_del_indice_12() {
-    let mut colores = vec![rgba(1, 2, 3); 20];
-    colores[12] = rgba(0xff, 0x88, 0x00);
-    let image = indexada_con(colores, None);
+fn row_9_cell_label_indexed_with_the_example_of_index_12() {
+    let mut colors_2 = vec![rgba(1, 2, 3); 20];
+    colors_2[12] = rgba(0xff, 0x88, 0x00);
+    let image = indexed_with(colors_2, None);
     assert_eq!(cell_label(&image, 12).as_deref(), Some("índice 12 #ff8800"));
 }
 
 #[test]
-fn fila_9_cell_label_rgba() {
+fn row_9_cell_label_rgba() {
     // Las muestras 3 y 9 de la spec son las ranuras `color 3` y `color 9` (celdas 2 y 8).
-    let image = imagen(Mode::Rgba);
+    let image = image_2(Mode::Rgba);
     assert_eq!(cell_label(&image, 2).as_deref(), Some("color 3 #ff0000"));
     assert_eq!(cell_label(&image, 8).as_deref(), Some("color 9 #00000000"));
     assert_eq!(cell_label(&image, 0).as_deref(), Some("color 1 #000000"));
@@ -430,8 +437,8 @@ fn fila_9_cell_label_rgba() {
 }
 
 #[test]
-fn fila_9_cell_label_gray_alpha() {
-    let image = imagen(Mode::GrayAlpha);
+fn row_9_cell_label_gray_alpha() {
+    let image = image_2(Mode::GrayAlpha);
     assert_eq!(cell_label(&image, 2).as_deref(), Some("color 3 gris 64"));
     assert_eq!(
         cell_label(&image, 8).as_deref(),
@@ -441,16 +448,16 @@ fn fila_9_cell_label_gray_alpha() {
 }
 
 #[test]
-fn fila_9_cell_label_gray() {
-    let image = imagen(Mode::Gray);
+fn row_9_cell_label_gray() {
+    let image = image_2(Mode::Gray);
     assert_eq!(cell_label(&image, 3).as_deref(), Some("color 4 gris 96"));
     assert_eq!(cell_label(&image, 9), None);
 }
 
 #[test]
-fn fila_9_info_flags_en_las_ocho_combinaciones() {
+fn row_9_info_flags_in_the_eight_combinations() {
     // (hover, activa, transparente) -> texto.
-    let casos = [
+    let cases = [
         (false, false, false, ""),
         (false, true, false, "activa"),
         (false, false, true, "transparente"),
@@ -460,11 +467,11 @@ fn fila_9_info_flags_en_las_ocho_combinaciones() {
         (true, false, true, "cursor · transparente"),
         (true, true, true, "cursor · activa · transparente"),
     ];
-    for (hover, activa, transparente, esperado) in casos {
+    for (hover, active_2, transparent, expected_2) in cases {
         assert_eq!(
-            info_flags_alpha0(hover, activa, false, transparente, false),
-            esperado,
-            "hover {hover}, activa {activa}, transparente {transparente}"
+            info_flags_alpha0(hover, active_2, false, transparent, false),
+            expected_2,
+            "hover {hover}, activa {active_2}, transparente {transparent}"
         );
     }
     // El más largo, de 30 caracteres (fila 12).
@@ -478,24 +485,24 @@ fn fila_9_info_flags_en_las_ocho_combinaciones() {
 }
 
 #[test]
-fn fila_9_choice_label() {
-    let indexada = paleta_de_la_fila_9();
+fn row_9_choice_label() {
+    let indexed = palette_of_row_9();
     assert_eq!(
-        choice_label(&indexada, ColorChoice::Entry(2)).as_deref(),
+        choice_label(&indexed, ColorChoice::Entry(2)).as_deref(),
         Some("índice 2 #00ff0000 transparente")
     );
     assert_eq!(
-        choice_label(&indexada, ColorChoice::Entry(1)).as_deref(),
+        choice_label(&indexed, ColorChoice::Entry(1)).as_deref(),
         Some("índice 1 #ff0000")
     );
     assert_eq!(
-        choice_label(&indexada, ColorChoice::Entry(3)).as_deref(),
+        choice_label(&indexed, ColorChoice::Entry(3)).as_deref(),
         Some("índice 3 #0000ff80")
     );
     // Entrada que no existe: no hay etiqueta.
-    assert_eq!(choice_label(&indexada, ColorChoice::Slot(0)), None);
+    assert_eq!(choice_label(&indexed, ColorChoice::Slot(0)), None);
 
-    let color = imagen(Mode::Rgba);
+    let color = image_2(Mode::Rgba);
     assert_eq!(
         choice_label(&color, ColorChoice::Slot(9)).as_deref(),
         Some("color 9 transparente")
@@ -509,26 +516,26 @@ fn fila_9_choice_label() {
 }
 
 #[test]
-fn choice_label_con_una_ranura_es_slot_label_como_hoy() {
-    for (nombre, image) in sin_paleta() {
+fn choice_label_with_a_slot_is_slot_label_as_today() {
+    for (name_2, image) in without_palette() {
         for n in 1..=9u8 {
             assert_eq!(
                 choice_label(&image, ColorChoice::Slot(n)),
                 px_ui::color::slot_label(&image, n),
-                "{nombre}, ranura {n}"
+                "{name_2}, ranura {n}"
             );
         }
     }
     // En una indexada, `Slot` mantiene el texto de hoy (`color 2 índice 1`).
     assert_eq!(
-        choice_label(&indexada(3), ColorChoice::Slot(2)).as_deref(),
+        choice_label(&indexed(3), ColorChoice::Slot(2)).as_deref(),
         Some("color 2 índice 1")
     );
 }
 
 #[test]
-fn choice_label_existe_exactamente_cuando_hay_color() {
-    for (nombre, image) in todas() {
+fn choice_label_exists_exactly_when_there_is_color() {
+    for (name_2, image) in all_2() {
         for choice in [
             ColorChoice::Slot(0),
             ColorChoice::Slot(1),
@@ -542,7 +549,7 @@ fn choice_label_existe_exactamente_cuando_hay_color() {
             assert_eq!(
                 choice_label(&image, choice).is_some(),
                 pixel_for_choice(&image, choice).is_some(),
-                "{nombre}, {choice:?}"
+                "{name_2}, {choice:?}"
             );
         }
     }
@@ -550,8 +557,8 @@ fn choice_label_existe_exactamente_cuando_hay_color() {
 
 // Fila 11 (parte de selección).
 
-fn indexada_de_256_con_transparente(t: Option<u8>) -> Image {
-    indexada_con(
+fn indexed_of_256_with_transparent(t: Option<u8>) -> Image {
+    indexed_with(
         (0..256usize)
             .map(|i| Rgba::opaque(i as u8, 100, 200))
             .collect(),
@@ -560,24 +567,24 @@ fn indexada_de_256_con_transparente(t: Option<u8>) -> Image {
 }
 
 #[test]
-fn fila_11_el_indice_transparente_en_0_17_y_255() {
+fn row_11_the_transparent_index_at_0_17_and_255() {
     for t in [0u8, 17, 255] {
-        let image = indexada_de_256_con_transparente(Some(t));
+        let image = indexed_of_256_with_transparent(Some(t));
         for cell in 0..256usize {
-            let es_la_transparente = cell == usize::from(t);
+            let is_the_transparent = cell == usize::from(t);
             assert_eq!(
                 is_transparent_cell(&image, cell),
-                es_la_transparente,
+                is_the_transparent,
                 "t={t}, celda {cell}"
             );
             let color = cell_color(&image, cell).unwrap();
-            assert_eq!(color.a == 0, es_la_transparente, "t={t}, celda {cell}");
+            assert_eq!(color.a == 0, is_the_transparent, "t={t}, celda {cell}");
         }
         // La transparente se ve con alfa 0 (su RGB guardado sigue ahí) y se elige como las otras.
-        let guardado = Rgba::opaque(t, 100, 200);
+        let saved = Rgba::opaque(t, 100, 200);
         assert_eq!(
             cell_color(&image, usize::from(t)),
-            Some(Rgba { a: 0, ..guardado })
+            Some(Rgba { a: 0, ..saved })
         );
         assert_eq!(
             pixel_for_choice(&image, ColorChoice::Entry(t)),
@@ -592,10 +599,10 @@ fn fila_11_el_indice_transparente_en_0_17_y_255() {
             Some(usize::from(t))
         );
         // El resto conserva su color opaco.
-        let otra = usize::from(t ^ 1);
+        let other = usize::from(t ^ 1);
         assert_eq!(
-            cell_color(&image, otra),
-            Some(Rgba::opaque(otra as u8, 100, 200))
+            cell_color(&image, other),
+            Some(Rgba::opaque(other as u8, 100, 200))
         );
         // El texto de la entrada transparente dice alfa 0.
         assert_eq!(
@@ -606,8 +613,8 @@ fn fila_11_el_indice_transparente_en_0_17_y_255() {
 }
 
 #[test]
-fn fila_11_sin_indice_transparente_ninguna_celda_es_transparente() {
-    let image = indexada_de_256_con_transparente(None);
+fn row_11_without_a_transparent_index_no_cell_is_transparent() {
+    let image = indexed_of_256_with_transparent(None);
     for cell in 0..256usize {
         assert!(!is_transparent_cell(&image, cell), "celda {cell}");
         assert_eq!(
@@ -619,10 +626,10 @@ fn fila_11_sin_indice_transparente_ninguna_celda_es_transparente() {
 }
 
 #[test]
-fn fila_11_colores_alfa_parcial_no_son_transparentes() {
+fn row_11_partial_alpha_colors_are_not_transparent() {
     // Un alfa de 128 guardado no es el índice transparente: solo cuenta `transparent_index`.
     let a = rgba(0x12, 0x34, 0x56);
-    let image = indexada_con(vec![a, Rgba { a: 128, ..a }], None);
+    let image = indexed_with(vec![a, Rgba { a: 128, ..a }], None);
     assert!(!is_transparent_cell(&image, 0));
     assert!(!is_transparent_cell(&image, 1));
     assert_eq!(cell_color(&image, 0), Some(a));
@@ -631,40 +638,40 @@ fn fila_11_colores_alfa_parcial_no_son_transparentes() {
 }
 
 #[test]
-fn fila_11_colores_duplicados_se_pueden_elegir_por_separado() {
+fn row_11_duplicate_colors_can_be_chosen_separately() {
     let a = rgba(0x12, 0x34, 0x56);
-    for colores in [vec![a, a, a], vec![a, Rgba { a: 128, ..a }]] {
-        let cuantos = colores.len();
-        let image = indexada_con(colores, None);
-        assert_eq!(cell_count(&image), cuantos);
-        let mut elecciones = Vec::new();
-        for i in 0..cuantos {
-            let eleccion = choice_for_cell(&image, i).unwrap();
-            assert_eq!(eleccion, ColorChoice::Entry(i as u8));
+    for colors_2 in [vec![a, a, a], vec![a, Rgba { a: 128, ..a }]] {
+        let how_many_2 = colors_2.len();
+        let image = indexed_with(colors_2, None);
+        assert_eq!(cell_count(&image), how_many_2);
+        let mut choices = Vec::new();
+        for i in 0..how_many_2 {
+            let choice_2 = choice_for_cell(&image, i).unwrap();
+            assert_eq!(choice_2, ColorChoice::Entry(i as u8));
             assert_eq!(
-                pixel_for_choice(&image, eleccion),
+                pixel_for_choice(&image, choice_2),
                 Some(Pixel::Indexed(i as u8))
             );
             // `cell_of_choice` devuelve la celda, no la primera con ese color.
-            assert_eq!(cell_of_choice(&image, eleccion), Some(i), "celda {i}");
-            elecciones.push(eleccion);
+            assert_eq!(cell_of_choice(&image, choice_2), Some(i), "celda {i}");
+            choices.push(choice_2);
         }
-        for (i, a) in elecciones.iter().enumerate() {
-            for b in &elecciones[i + 1..] {
+        for (i, a) in choices.iter().enumerate() {
+            for b in &choices[i + 1..] {
                 assert_ne!(a, b);
             }
         }
     }
     // En concreto, el clic en la 1 da `Entry(1)` y `cell_of_choice` da 1.
-    let image = indexada_con(vec![a, a, a], None);
+    let image = indexed_with(vec![a, a, a], None);
     assert_eq!(choice_for_cell(&image, 1), Some(ColorChoice::Entry(1)));
     assert_eq!(cell_of_choice(&image, ColorChoice::Entry(1)), Some(1));
 }
 
 #[test]
-fn fila_11_las_nueve_ranuras_de_rgba() {
-    let image = imagen(Mode::Rgba);
-    let esperado = [
+fn row_11_the_nine_slots_of_rgba() {
+    let image = image_2(Mode::Rgba);
+    let expected_2 = [
         Rgba::opaque(0x00, 0x00, 0x00),
         Rgba::opaque(0xff, 0xff, 0xff),
         Rgba::opaque(0xff, 0x00, 0x00),
@@ -676,8 +683,8 @@ fn fila_11_las_nueve_ranuras_de_rgba() {
         Rgba::new(0, 0, 0, 0),
     ];
     assert_eq!(cell_count(&image), 9);
-    for (i, esperado) in esperado.into_iter().enumerate() {
-        assert_eq!(cell_color(&image, i), Some(esperado), "celda {i}");
+    for (i, expected_2) in expected_2.into_iter().enumerate() {
+        assert_eq!(cell_color(&image, i), Some(expected_2), "celda {i}");
         assert_eq!(is_transparent_cell(&image, i), i == 8, "celda {i}");
     }
     assert_eq!(cell_color(&image, 9), None);
@@ -685,14 +692,14 @@ fn fila_11_las_nueve_ranuras_de_rgba() {
 }
 
 #[test]
-fn fila_11_las_nueve_ranuras_de_gray() {
-    let image = imagen(Mode::Gray);
+fn row_11_the_nine_slots_of_gray() {
+    let image = image_2(Mode::Gray);
     assert_eq!(cell_count(&image), 9);
     for i in 0..8usize {
-        let gris = (i as u8) * 32;
+        let gray_2 = (i as u8) * 32;
         assert_eq!(
             cell_color(&image, i),
-            Some(Rgba::opaque(gris, gris, gris)),
+            Some(Rgba::opaque(gray_2, gray_2, gray_2)),
             "celda {i}"
         );
         assert!(!is_transparent_cell(&image, i), "celda {i}");
@@ -705,14 +712,14 @@ fn fila_11_las_nueve_ranuras_de_gray() {
 }
 
 #[test]
-fn fila_11_las_nueve_ranuras_de_gray_alpha() {
-    let image = imagen(Mode::GrayAlpha);
+fn row_11_the_nine_slots_of_gray_alpha() {
+    let image = image_2(Mode::GrayAlpha);
     assert_eq!(cell_count(&image), 9);
     for i in 0..8usize {
-        let gris = (i as u8) * 32;
+        let gray_2 = (i as u8) * 32;
         assert_eq!(
             cell_color(&image, i),
-            Some(Rgba::new(gris, gris, gris, 255)),
+            Some(Rgba::new(gray_2, gray_2, gray_2, 255)),
             "celda {i}"
         );
         assert!(!is_transparent_cell(&image, i), "celda {i}");
@@ -724,8 +731,8 @@ fn fila_11_las_nueve_ranuras_de_gray_alpha() {
 }
 
 #[test]
-fn fila_11_paleta_de_una_entrada() {
-    let image = indexada(1);
+fn row_11_palette_of_one_entry() {
+    let image = indexed(1);
     assert_eq!(cell_count(&image), 1);
     assert_eq!(choice_for_cell(&image, 0), Some(ColorChoice::Entry(0)));
     assert_eq!(choice_for_cell(&image, 1), None);
@@ -735,8 +742,8 @@ fn fila_11_paleta_de_una_entrada() {
 }
 
 #[test]
-fn fila_11_paleta_de_256_entradas() {
-    let image = indexada(256);
+fn row_11_palette_of_256_entries() {
+    let image = indexed(256);
     assert_eq!(cell_count(&image), 256);
     assert_eq!(choice_for_cell(&image, 255), Some(ColorChoice::Entry(255)));
     assert_eq!(choice_for_cell(&image, 256), None);
@@ -748,16 +755,16 @@ fn fila_11_paleta_de_256_entradas() {
 }
 
 #[test]
-fn cell_color_es_lo_que_pinta_pixel_rgba_para_cada_eleccion() {
+fn cell_color_is_what_pixel_rgba_paints_for_each_choice() {
     // El color con el que se ve la celda es el de su `Pixel`.
-    for (nombre, image) in todas() {
+    for (name_2, image) in all_2() {
         for cell in 0..cell_count(&image) {
-            let eleccion = choice_for_cell(&image, cell).unwrap();
-            let pixel = pixel_for_choice(&image, eleccion).unwrap();
+            let choice_2 = choice_for_cell(&image, cell).unwrap();
+            let pixel = pixel_for_choice(&image, choice_2).unwrap();
             assert_eq!(
                 cell_color(&image, cell),
                 px_ui::texture::pixel_rgba(&image, pixel),
-                "{nombre}, celda {cell}"
+                "{name_2}, celda {cell}"
             );
         }
     }
@@ -766,82 +773,82 @@ fn cell_color_es_lo_que_pinta_pixel_rgba_para_cada_eleccion() {
 // Propiedad 4 (parte pura): la selección que se mantiene siempre vale.
 
 #[derive(Clone, Copy, Debug)]
-enum Accion {
-    /// Clic en una celda cualquiera. Con `cerca`, relativa al número de celdas (incluye las que
+enum TestAction {
+    /// Clic en una celda cualquiera. Con `near`, relativa al número de celdas (incluye las que
     /// no existen justo después de la última).
-    Clic { celda: usize, cerca: bool },
+    Click { cel: usize, near: bool },
     /// Tecla 0 a 9.
-    Tecla(u8),
+    TestKey(u8),
 }
 
-fn accion() -> impl Strategy<Value = Accion> {
+fn action_2() -> impl Strategy<Value = TestAction> {
     prop_oneof![
-        (0usize..300, any::<bool>()).prop_map(|(celda, cerca)| Accion::Clic { celda, cerca }),
-        (0u8..=9).prop_map(Accion::Tecla),
+        (0usize..300, any::<bool>()).prop_map(|(cel, near)| TestAction::Click { cel, near }),
+        (0u8..=9).prop_map(TestAction::TestKey),
     ]
 }
 
-fn imagen_para(modo: usize, colores: usize) -> Image {
-    match modo {
-        0 => imagen(Mode::Rgba),
-        1 => imagen(Mode::Gray),
-        2 => imagen(Mode::GrayAlpha),
-        _ => indexada(colores),
+fn image_for(mode_2: usize, colors_2: usize) -> Image {
+    match mode_2 {
+        0 => image_2(Mode::Rgba),
+        1 => image_2(Mode::Gray),
+        2 => image_2(Mode::GrayAlpha),
+        _ => indexed(colors_2),
     }
 }
 
 proptest! {
     #[test]
-    fn propiedad_4_la_seleccion_que_se_mantiene_siempre_tiene_pixel(
-        modo in 0usize..4,
-        colores in 1usize..=256,
-        acciones in vec(accion(), 0..60),
+    fn property_4_the_selection_that_is_kept_always_has_a_pixel(
+        mode_2 in 0usize..4,
+        colors_2 in 1usize..=256,
+        actions in vec(action_2(), 0..60),
     ) {
-        let image = imagen_para(modo, colores);
-        let cuantas = cell_count(&image);
-        let mut seleccion = initial_choice(&image);
-        prop_assert!(pixel_for_choice(&image, seleccion).is_some());
+        let image = image_for(mode_2, colors_2);
+        let how_many = cell_count(&image);
+        let mut selection = initial_choice(&image);
+        prop_assert!(pixel_for_choice(&image, selection).is_some());
 
-        for accion in acciones {
-            match accion {
-                Accion::Clic { celda, cerca } => {
-                    let celda = if cerca { celda % (cuantas + 4) } else { celda };
-                    let eleccion = choice_for_cell(&image, celda);
+        for action_2 in actions {
+            match action_2 {
+                TestAction::Click { cel, near } => {
+                    let cel = if near { cel % (how_many + 4) } else { cel };
+                    let choice_2 = choice_for_cell(&image, cel);
                     // Solo hay elección en las celdas que existen.
-                    prop_assert_eq!(eleccion.is_some(), celda < cuantas);
-                    if let Some(nueva) = eleccion {
-                        seleccion = nueva;
-                        // Un clic en una celda que existe deja `cell_of_choice == Some(celda)`.
-                        prop_assert_eq!(cell_of_choice(&image, seleccion), Some(celda));
+                    prop_assert_eq!(choice_2.is_some(), cel < how_many);
+                    if let Some(new) = choice_2 {
+                        selection = new;
+                        // Un clic en una celda que existe deja `cell_of_choice == Some(cel)`.
+                        prop_assert_eq!(cell_of_choice(&image, selection), Some(cel));
                     }
                 }
-                Accion::Tecla(n) => {
-                    let eleccion = key_choice(&image, n);
+                TestAction::TestKey(n) => {
+                    let choice_2 = key_choice(&image, n);
                     prop_assert_eq!(
-                        eleccion.is_some(),
-                        (1..=9).contains(&n) && usize::from(n) <= cuantas.min(9)
+                        choice_2.is_some(),
+                        (1..=9).contains(&n) && usize::from(n) <= how_many.min(9)
                     );
-                    if let Some(nueva) = eleccion {
-                        seleccion = nueva;
+                    if let Some(new) = choice_2 {
+                        selection = new;
                         prop_assert_eq!(
-                            cell_of_choice(&image, seleccion),
+                            cell_of_choice(&image, selection),
                             Some(usize::from(n) - 1)
                         );
                         // La tecla y el clic en la celda `n - 1` coinciden.
                         prop_assert_eq!(
                             choice_for_cell(&image, usize::from(n) - 1),
-                            Some(seleccion)
+                            Some(selection)
                         );
                     }
                 }
             }
             prop_assert!(
-                pixel_for_choice(&image, seleccion).is_some(),
+                pixel_for_choice(&image, selection).is_some(),
                 "la selección {:?} no tiene color en {:?} de {} celdas",
-                seleccion, image.mode(), cuantas
+                selection, image.mode(), how_many
             );
-            prop_assert!(cell_of_choice(&image, seleccion).is_some());
-            prop_assert!(choice_label(&image, seleccion).is_some());
+            prop_assert!(cell_of_choice(&image, selection).is_some());
+            prop_assert!(choice_label(&image, selection).is_some());
         }
     }
 }

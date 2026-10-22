@@ -14,9 +14,9 @@ use crate::view::Zoom;
 /// Lo que se puede pedir a la app, venga de donde venga.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppAction {
-    /// `Archivo → Nueva imagen…` (specs/hito-2-nueva-imagen.md).
+    /// `Archivo → Nueva image_2…` (specs/hito-2-nueva-imagen.md).
     NewImage,
-    /// `Imagen → Convertir modo…` (specs/hito-2-convertir-modo.md): sin atajo.
+    /// `TestImage → Convertir mode_2…` (specs/hito-2-convertir-modo.md): sin atajo.
     ConvertMode,
     Open,
     Save,
@@ -49,34 +49,34 @@ pub enum AppAction {
     ClearPage,
     /// Fondo bajo la transparencia del lienzo: preferencia de la sesión, no del documento.
     CanvasBackground(CanvasBackground),
-    /// `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
+    /// `Ver → Fondo del canvas_2 → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
     BackgroundColor,
-    /// `F1` o `Ayuda → Ayuda de la herramienta` (specs/interfaz-ayuda.md): abre la ayuda del
+    /// `F1` o `Ayuda → Ayuda de la tool_2` (specs/interfaz-ayuda.md): abre la ayuda del
     /// destino (la herramienta activa o el botón de la caja bajo el puntero).
     ShowHelp(HelpTarget),
     /// `Ayuda → Atajos de teclado…`: abre la lista de atajos.
     ShowShortcuts,
-    /// `Capa → Mostrar panel`: muestra u oculta el panel de capas (specs/hito-3-capas-interfaz.md).
+    /// `Layer → Mostrar panel`: muestra u oculta el panel de capas (specs/hito-3-capas-interfaz.md).
     ToggleLayerPanel,
-    /// `Capa → Nueva capa`: una capa vacía encima de la activa.
+    /// `Layer → Nueva layer_2`: una capa vacía encima de la activa.
     NewLayer,
-    /// `Capa → Duplicar`: la copia va justo encima de la activa.
+    /// `Layer → Duplicar`: la copia va justo encima de la activa.
     DuplicateLayer,
-    /// `Capa → Quitar`.
+    /// `Layer → Remove`.
     RemoveLayer,
-    /// `Capa → Subir`: un puesto.
+    /// `Layer → Subir`: un puesto.
     LayerUp,
-    /// `Capa → Bajar`: un puesto.
+    /// `Layer → Bajar`: un puesto.
     LayerDown,
-    /// `Capa → Renombrar`: lleva el foco al nombre en el panel.
+    /// `Layer → Renombrar`: lleva el foco al nombre en el panel.
     RenameLayer,
-    /// `Capa → Propiedades`: lleva el foco a las opciones de la capa en el panel.
+    /// `Layer → Propiedades`: lleva el foco a las opciones de la capa en el panel.
     LayerProperties,
-    /// `Capa → Combinar abajo`: une la activa con la de debajo (specs/hito-3-combinar.md).
+    /// `Layer → Combinar below`: une la activa con la de debajo (specs/hito-3-combinar.md).
     MergeLayerDown,
-    /// `Capa → Combinar visibles`: une todas las visibles en la visible más baja.
+    /// `Layer → Combinar visible_2`: une todas las visibles en la visible más baja.
     MergeVisibleLayers,
-    /// `Capa → Aplanar`: una sola capa con lo que se ve; las ocultas se quitan.
+    /// `Layer → Aplanar`: una sola capa con lo que se ve; las ocultas se quitan.
     FlattenLayers,
     /// `Archivo → Exportar PNG aplanado…`: guarda lo que se ve sin tocar el estado del documento.
     ExportFlat,

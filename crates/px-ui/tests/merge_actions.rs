@@ -6,11 +6,11 @@
 //!   `layer.flatten`), texto válido y editables; `Exportar PNG aplanado…` es de archivo: fija y
 //!   sin clave de ayuda.
 //! - Ninguna de las cuatro tiene tecla por defecto; la tabla sigue en 35 filas sin conflictos.
-//! - `layer_enabled`: `Combinar abajo` ⇔ hay capa debajo; `Combinar visibles` y `Aplanar` ⇔ hay
+//! - `layer_enabled`: `Combinar below` ⇔ hay capa debajo; `Combinar visible_2` y `Aplanar` ⇔ hay
 //!   más de una capa; `Exportar` siempre.
 //! - `is_blocked`: como el resto de acciones de documento (un trazo, un campo de texto o un
 //!   modal las paran).
-//! - El menú: `Capa` y `Archivo` con sus entradas nuevas y contraste de sus rótulos.
+//! - El menú: `Layer` y `Archivo` con sus entradas nuevas y contraste de sus rótulos.
 
 use px_ui::actions::{AppAction, LayerNav, Locks, Origin, Platform, is_blocked, layer_enabled};
 use px_ui::dialog_layout::ZONE_COLS;
@@ -20,22 +20,22 @@ use px_ui::licenses_view::wrap_text;
 use px_ui::menu::MENUS;
 use px_ui::text::INTERFACE_CHARSET;
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
-const ACCIONES_DE_CAPA: [(AppAction, &str); 3] = [
+const ACTIONS_OF_LAYER: [(AppAction, &str); 3] = [
     (AppAction::MergeLayerDown, "layer.merge-down"),
     (AppAction::MergeVisibleLayers, "layer.merge-visible"),
     (AppAction::FlattenLayers, "layer.flatten"),
 ];
 
-const LAS_CUATRO: [AppAction; 4] = [
+const THE_FOUR: [AppAction; 4] = [
     AppAction::MergeLayerDown,
     AppAction::MergeVisibleLayers,
     AppAction::FlattenLayers,
     AppAction::ExportFlat,
 ];
 
-fn pila(count: usize, active_pos: usize) -> LayerNav {
+fn stack(count: usize, active_pos: usize) -> LayerNav {
     LayerNav {
         count,
         active_pos,
@@ -44,30 +44,30 @@ fn pila(count: usize, active_pos: usize) -> LayerNav {
 }
 
 #[test]
-fn fila_10_las_tres_acciones_de_capa_tienen_clave_texto_valido_y_son_editables() {
+fn row_10_the_three_layer_actions_have_a_key_valid_text_and_are_editable() {
     assert_eq!(help_table().len(), 33);
-    for (accion, clave) in ACCIONES_DE_CAPA {
-        assert_eq!(help_key(accion), Some(clave));
-        assert_eq!(action_of_key(clave), Some(accion));
-        assert!(is_editable(accion), "{clave}");
-        let entrada = help_entry(clave).expect(clave);
-        assert!(entrada.name.chars().count() <= 20, "{clave}: nombre largo");
+    for (action_2, key) in ACTIONS_OF_LAYER {
+        assert_eq!(help_key(action_2), Some(key));
+        assert_eq!(action_of_key(key), Some(action_2));
+        assert!(is_editable(action_2), "{key}");
+        let input_2 = help_entry(key).expect(key);
+        assert!(input_2.name.chars().count() <= 20, "{key}: nombre largo");
         assert!(
-            wrap_text(entrada.description, ZONE_COLS).len() <= 8,
-            "{clave}: más de 8 líneas"
+            wrap_text(input_2.description, ZONE_COLS).len() <= 8,
+            "{key}: más de 8 líneas"
         );
-        for texto in [entrada.name, entrada.description] {
-            for c in texto.chars() {
+        for text_2 in [input_2.name, input_2.description] {
+            for c in text_2.chars() {
                 assert!(
                     INTERFACE_CHARSET.contains(c),
-                    "{clave}: {c:?} fuera del juego"
+                    "{key}: {c:?} fuera del juego"
                 );
             }
         }
         // Sin tecla por defecto, y la ayuda lo dice (D10).
         assert!(
-            entrada.description.contains("No tiene atajo por defecto"),
-            "{clave}"
+            input_2.description.contains("No tiene atajo por defecto"),
+            "{key}"
         );
     }
     // `Exportar PNG aplanado…` es una acción de archivo: ni clave de ayuda ni editor.
@@ -76,101 +76,104 @@ fn fila_10_las_tres_acciones_de_capa_tienen_clave_texto_valido_y_son_editables()
 }
 
 #[test]
-fn fila_10_ninguna_de_las_cuatro_tiene_tecla_por_defecto_y_la_tabla_no_cambia() {
+fn row_10_none_of_the_four_has_a_default_key_and_the_table_does_not_change() {
     let tabla = Keymap::default_scheme();
     assert_eq!(tabla.conflicts(), vec![]);
     assert_eq!(tabla.rows().len(), 35);
     assert_eq!(tabla.rows().iter().filter(|f| f.command).count(), 9);
-    for platform in PLATAFORMAS {
-        for accion in LAS_CUATRO {
-            assert!(tabla.shown(accion, platform).is_none(), "{accion:?}");
+    for platform in PLATFORMS {
+        for action_2 in THE_FOUR {
+            assert!(tabla.shown(action_2, platform).is_none(), "{action_2:?}");
         }
     }
 }
 
 #[test]
-fn fila_10_layer_enabled_sigue_la_pila_de_capas() {
+fn row_10_layer_enabled_follows_the_layer_stack() {
     // Una capa: nada que combinar ni aplanar; `Exportar` siempre.
-    let una = pila(1, 0);
-    assert!(!layer_enabled(AppAction::MergeLayerDown, &una));
-    assert!(!layer_enabled(AppAction::MergeVisibleLayers, &una));
-    assert!(!layer_enabled(AppAction::FlattenLayers, &una));
-    assert!(layer_enabled(AppAction::ExportFlat, &una));
+    let a = stack(1, 0);
+    assert!(!layer_enabled(AppAction::MergeLayerDown, &a));
+    assert!(!layer_enabled(AppAction::MergeVisibleLayers, &a));
+    assert!(!layer_enabled(AppAction::FlattenLayers, &a));
+    assert!(layer_enabled(AppAction::ExportFlat, &a));
     // Tres capas con la activa abajo: no hay capa debajo, pero sí más de una capa.
-    let abajo = pila(3, 0);
-    assert!(!layer_enabled(AppAction::MergeLayerDown, &abajo));
-    assert!(layer_enabled(AppAction::MergeVisibleLayers, &abajo));
-    assert!(layer_enabled(AppAction::FlattenLayers, &abajo));
+    let below = stack(3, 0);
+    assert!(!layer_enabled(AppAction::MergeLayerDown, &below));
+    assert!(layer_enabled(AppAction::MergeVisibleLayers, &below));
+    assert!(layer_enabled(AppAction::FlattenLayers, &below));
     // La activa en medio y arriba.
-    for posicion in [1, 2] {
-        let nav = pila(3, posicion);
-        assert!(layer_enabled(AppAction::MergeLayerDown, &nav), "{posicion}");
+    for position in [1, 2] {
+        let nav = stack(3, position);
+        assert!(layer_enabled(AppAction::MergeLayerDown, &nav), "{position}");
         assert!(layer_enabled(AppAction::MergeVisibleLayers, &nav));
         assert!(layer_enabled(AppAction::FlattenLayers, &nav));
     }
     // Con 256 capas combinar sigue valiendo (solo reduce).
-    let llena = pila(256, 255);
-    assert!(layer_enabled(AppAction::MergeLayerDown, &llena));
-    assert!(layer_enabled(AppAction::FlattenLayers, &llena));
+    let full = stack(256, 255);
+    assert!(layer_enabled(AppAction::MergeLayerDown, &full));
+    assert!(layer_enabled(AppAction::FlattenLayers, &full));
 }
 
 #[test]
-fn fila_10_los_bloqueos_son_los_de_las_acciones_de_documento() {
-    let libre = Locks::default();
-    let con = |f: fn(&mut Locks)| {
+fn row_10_the_locks_are_those_of_the_document_actions() {
+    let free = Locks::default();
+    let with = |f: fn(&mut Locks)| {
         let mut locks = Locks::default();
         f(&mut locks);
         locks
     };
-    for accion in LAS_CUATRO {
-        for origen in [Origin::Menu, Origin::Key, Origin::Button] {
-            assert!(!is_blocked(accion, libre, origen), "{accion:?}");
+    for action_2 in THE_FOUR {
+        for source_2 in [Origin::Menu, Origin::Key, Origin::Button] {
+            assert!(!is_blocked(action_2, free, source_2), "{action_2:?}");
             for locks in [
-                con(|l| l.gesture = true),
-                con(|l| l.text_focus = true),
-                con(|l| l.modal = true),
-                con(|l| l.dialog = true),
+                with(|l| l.gesture = true),
+                with(|l| l.text_focus = true),
+                with(|l| l.modal = true),
+                with(|l| l.dialog = true),
             ] {
-                assert!(is_blocked(accion, locks, origen), "{accion:?} {locks:?}");
+                assert!(
+                    is_blocked(action_2, locks, source_2),
+                    "{action_2:?} {locks:?}"
+                );
             }
         }
     }
 }
 
 #[test]
-fn fila_10_el_menu_tiene_las_entradas_nuevas_en_su_sitio() {
-    let menu = |titulo: &str| {
+fn row_10_the_menu_has_the_new_entries_in_their_place() {
+    let menu = |title: &str| {
         MENUS
             .iter()
-            .find(|m| m.title == titulo)
-            .unwrap_or_else(|| panic!("menú {titulo}"))
+            .find(|m| m.title == title)
+            .unwrap_or_else(|| panic!("menú {title}"))
     };
-    let archivo: Vec<AppAction> = menu("Archivo").items.iter().map(|i| i.action).collect();
-    let guardar_como = archivo
+    let file: Vec<AppAction> = menu("Archivo").items.iter().map(|i| i.action).collect();
+    let save_as = file
         .iter()
         .position(|a| *a == AppAction::SaveAs)
         .expect("Guardar como…");
-    assert_eq!(archivo[guardar_como + 1], AppAction::ExportFlat);
-    assert_eq!(archivo[guardar_como + 2], AppAction::Quit);
-    let exportar = menu("Archivo")
+    assert_eq!(file[save_as + 1], AppAction::ExportFlat);
+    assert_eq!(file[save_as + 2], AppAction::Quit);
+    let export = menu("Archivo")
         .items
         .iter()
         .find(|i| i.action == AppAction::ExportFlat)
         .expect("Exportar");
-    assert_eq!(exportar.label, "Exportar PNG aplanado…");
-    assert!(!exportar.separator_before);
+    assert_eq!(export.label, "Exportar PNG aplanado…");
+    assert!(!export.separator_before);
 
-    let capa: Vec<(&str, AppAction)> = menu("Capa")
+    let layer_2: Vec<(&str, AppAction)> = menu("Capa")
         .items
         .iter()
         .map(|i| (i.label, i.action))
         .collect();
-    let bajar = capa
+    let lower = layer_2
         .iter()
         .position(|(_, a)| *a == AppAction::LayerDown)
         .expect("Bajar");
     assert_eq!(
-        capa[bajar + 1..bajar + 4],
+        layer_2[lower + 1..lower + 4],
         [
             ("Combinar abajo", AppAction::MergeLayerDown),
             ("Combinar visibles", AppAction::MergeVisibleLayers),

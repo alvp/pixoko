@@ -36,29 +36,29 @@ use px_ui::key_events::presses;
 use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::tool::Tool;
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
 // ---------------------------------------------------------------------------------------------
 // Ayudantes
 // ---------------------------------------------------------------------------------------------
 
 /// La tecla pulsada, con la lógica igual a la física.
-fn tecla(key: Key, modifiers: Modifiers) -> Event {
-    tecla_fisica(key, key, modifiers)
+fn key_2(key: Key, modifiers: Modifiers) -> Event {
+    key_physical(key, key, modifiers)
 }
 
 /// Una tecla pulsada con su posición física (Dvorak, ruso…).
-fn tecla_fisica(key: Key, fisica: Key, modifiers: Modifiers) -> Event {
+fn key_physical(key: Key, physical: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
-        physical_key: Some(fisica),
+        physical_key: Some(physical),
         pressed: true,
         repeat: false,
         modifiers,
     }
 }
 
-fn repetida(key: Key, modifiers: Modifiers) -> Event {
+fn repeated(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -68,7 +68,7 @@ fn repetida(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn suelta(key: Key, modifiers: Modifiers) -> Event {
+fn releases(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -78,7 +78,7 @@ fn suelta(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn texto(t: &str) -> Event {
+fn text_2(t: &str) -> Event {
     Event::Text(t.to_string())
 }
 
@@ -119,7 +119,7 @@ fn press(key: Option<KeyId>, command: bool, shift: bool, alt: bool, other_ctrl: 
 }
 
 /// Las acciones que salen de `events`, una por cada `Press` (con `None` si no da ninguna).
-fn acciones(events: &[Event], platform: Platform) -> Vec<Option<AppAction>> {
+fn actions(events: &[Event], platform: Platform) -> Vec<Option<AppAction>> {
     let km = Keymap::default_scheme();
     presses(events)
         .iter()
@@ -128,17 +128,17 @@ fn acciones(events: &[Event], platform: Platform) -> Vec<Option<AppAction>> {
 }
 
 /// Comprueba la secuencia en las tres plataformas.
-fn assert_acciones(nombre: &str, events: &[Event], esperado: &[Option<AppAction>]) {
-    for platform in PLATAFORMAS {
+fn assert_actions(name_2: &str, events: &[Event], expected_2: &[Option<AppAction>]) {
+    for platform in PLATFORMS {
         assert_eq!(
-            acciones(events, platform),
-            esperado,
-            "{nombre} en {platform:?}: {events:?}"
+            actions(events, platform),
+            expected_2,
+            "{name_2} en {platform:?}: {events:?}"
         );
     }
 }
 
-fn lapiz() -> Option<AppAction> {
+fn pencil() -> Option<AppAction> {
     Some(AppAction::SelectTool(Tool::Pencil))
 }
 
@@ -147,31 +147,31 @@ fn lapiz() -> Option<AppAction> {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_espanol_altgr_corchetes_dan_color_anterior_y_siguiente() {
+fn row_4_spanish_altgr_brackets_give_color_previous_and_next() {
     // AltGr+`[` y AltGr+`]`: la tecla lógica es el corchete y el texto llega justo después. En
     // Linux AltGr no es `Alt`; en Windows `winit` lo quita; con `alt` también debe valer.
     for modifiers in [Modifiers::NONE, Modifiers::ALT] {
-        assert_acciones(
+        assert_actions(
             "AltGr+[",
-            &[tecla(Key::OpenBracket, modifiers), texto("[")],
+            &[key_2(Key::OpenBracket, modifiers), text_2("[")],
             &[Some(AppAction::ColorPrev)],
         );
-        assert_acciones(
+        assert_actions(
             "AltGr+]",
-            &[tecla(Key::CloseBracket, modifiers), texto("]")],
+            &[key_2(Key::CloseBracket, modifiers), text_2("]")],
             &[Some(AppAction::ColorNext)],
         );
     }
 }
 
 #[test]
-fn fila_4_la_press_del_corchete_lleva_el_caracter_del_texto() {
-    let p = presses(&[tecla(Key::OpenBracket, Modifiers::NONE), texto("[")]);
+fn row_4_the_bracket_press_carries_the_character_of_the_text() {
+    let p = presses(&[key_2(Key::OpenBracket, Modifiers::NONE), text_2("[")]);
     assert_eq!(
         p,
         vec![press(Some(KeyId::Char('[')), false, false, false, false)]
     );
-    let p = presses(&[tecla(Key::OpenBracket, Modifiers::ALT), texto("[")]);
+    let p = presses(&[key_2(Key::OpenBracket, Modifiers::ALT), text_2("[")]);
     assert_eq!(
         p,
         vec![press(Some(KeyId::Char('[')), false, false, true, false)]
@@ -179,69 +179,69 @@ fn fila_4_la_press_del_corchete_lleva_el_caracter_del_texto() {
 }
 
 #[test]
-fn fila_4_espanol_la_tecla_iso_da_menor_y_con_mayus_mayor() {
-    assert_acciones(
+fn row_4_spanish_the_iso_key_gives_less_than_and_with_shift_greater_than() {
+    assert_actions(
         "< (tecla ISO)",
-        &[tecla(Key::IntlBackslash, Modifiers::NONE), texto("<")],
+        &[key_2(Key::IntlBackslash, Modifiers::NONE), text_2("<")],
         &[Some(AppAction::ZoomOut)],
     );
-    assert_acciones(
+    assert_actions(
         "> (Mayús + tecla ISO)",
-        &[tecla(Key::IntlBackslash, Modifiers::SHIFT), texto(">")],
+        &[key_2(Key::IntlBackslash, Modifiers::SHIFT), text_2(">")],
         &[Some(AppAction::ZoomIn)],
     );
 }
 
 #[test]
-fn fila_4_ingles_mayus_coma_es_menor_y_mayus_punto_es_mayor() {
-    assert_acciones(
+fn row_4_english_shift_comma_is_less_than_and_shift_period_is_greater_than() {
+    assert_actions(
         "Mayús+, con Text(<)",
-        &[tecla(Key::Comma, Modifiers::SHIFT), texto("<")],
+        &[key_2(Key::Comma, Modifiers::SHIFT), text_2("<")],
         &[Some(AppAction::ZoomOut)],
     );
-    assert_acciones(
+    assert_actions(
         "Mayús+. con Text(>)",
-        &[tecla(Key::Period, Modifiers::SHIFT), texto(">")],
+        &[key_2(Key::Period, Modifiers::SHIFT), text_2(">")],
         &[Some(AppAction::ZoomIn)],
     );
     // Sin `Mayús`, la misma tecla es otra cosa: `,` es el cuentagotas y `.` no es nada.
-    assert_acciones(
+    assert_actions(
         ",",
-        &[tecla(Key::Comma, Modifiers::NONE), texto(",")],
+        &[key_2(Key::Comma, Modifiers::NONE), text_2(",")],
         &[Some(AppAction::SelectTool(Tool::Dropper))],
     );
-    assert_acciones(
+    assert_actions(
         ".",
-        &[tecla(Key::Period, Modifiers::NONE), texto(".")],
+        &[key_2(Key::Period, Modifiers::NONE), text_2(".")],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_el_menor_con_mayus_coma_no_es_la_coma() {
+fn row_4_the_less_than_with_shift_comma_is_not_the_comma() {
     // La misma tecla física (`,`) da cosas distintas según el texto: se compara el carácter.
-    let menor = presses(&[tecla(Key::Comma, Modifiers::SHIFT), texto("<")]);
-    let coma = presses(&[tecla(Key::Comma, Modifiers::NONE), texto(",")]);
-    assert_eq!(menor[0].key, Some(KeyId::Char('<')));
+    let smaller = presses(&[key_2(Key::Comma, Modifiers::SHIFT), text_2("<")]);
+    let coma = presses(&[key_2(Key::Comma, Modifiers::NONE), text_2(",")]);
+    assert_eq!(smaller[0].key, Some(KeyId::Char('<')));
     assert_eq!(coma[0].key, Some(KeyId::Char(',')));
 }
 
 #[test]
-fn fila_4_aleman_altgr_8_y_9_dan_los_corchetes() {
+fn row_4_german_altgr_8_and_9_give_the_brackets() {
     // AltGr+8 → `[` y AltGr+9 → `]`: la tecla lógica es la de la cifra o el propio corchete; vale
     // el texto, también con `alt`.
     for modifiers in [Modifiers::NONE, Modifiers::ALT] {
-        for (logica, fisica) in [(Key::OpenBracket, Key::Num8), (Key::Num8, Key::Num8)] {
-            assert_acciones(
+        for (logic, physical) in [(Key::OpenBracket, Key::Num8), (Key::Num8, Key::Num8)] {
+            assert_actions(
                 "AltGr+8",
-                &[tecla_fisica(logica, fisica, modifiers), texto("[")],
+                &[key_physical(logic, physical, modifiers), text_2("[")],
                 &[Some(AppAction::ColorPrev)],
             );
         }
-        for (logica, fisica) in [(Key::CloseBracket, Key::Num9), (Key::Num9, Key::Num9)] {
-            assert_acciones(
+        for (logic, physical) in [(Key::CloseBracket, Key::Num9), (Key::Num9, Key::Num9)] {
+            assert_actions(
                 "AltGr+9",
-                &[tecla_fisica(logica, fisica, modifiers), texto("]")],
+                &[key_physical(logic, physical, modifiers), text_2("]")],
                 &[Some(AppAction::ColorNext)],
             );
         }
@@ -249,145 +249,149 @@ fn fila_4_aleman_altgr_8_y_9_dan_los_corchetes() {
 }
 
 #[test]
-fn fila_4_macos_espanol_option_corchete_con_alt_da_color_anterior() {
-    assert_acciones(
+fn row_4_macos_spanish_option_bracket_with_alt_gives_color_previous() {
+    assert_actions(
         "Option+[",
-        &[tecla(Key::OpenBracket, Modifiers::ALT), texto("[")],
+        &[key_2(Key::OpenBracket, Modifiers::ALT), text_2("[")],
         &[Some(AppAction::ColorPrev)],
     );
-    assert_acciones(
+    assert_actions(
         "Option+]",
-        &[tecla(Key::CloseBracket, Modifiers::ALT), texto("]")],
+        &[key_2(Key::CloseBracket, Modifiers::ALT), text_2("]")],
         &[Some(AppAction::ColorNext)],
     );
 }
 
 #[test]
-fn fila_4_dvorak_la_d_en_otra_posicion_fisica_sigue_siendo_el_lapiz() {
+fn row_4_dvorak_the_d_at_another_physical_position_is_still_the_pencil() {
     // En Dvorak la `d` está donde la `e` de QWERTY.
-    assert_acciones(
+    assert_actions(
         "d en la posición de la E",
-        &[tecla_fisica(Key::D, Key::E, Modifiers::NONE), texto("d")],
-        &[lapiz()],
+        &[key_physical(Key::D, Key::E, Modifiers::NONE), text_2("d")],
+        &[pencil()],
     );
     // Y la tecla física `D` de QWERTY escribe `e`: no es el lápiz.
-    assert_acciones(
+    assert_actions(
         "la posición de la D escribe e",
-        &[tecla_fisica(Key::E, Key::D, Modifiers::NONE), texto("e")],
+        &[key_physical(Key::E, Key::D, Modifiers::NONE), text_2("e")],
         &[None],
     );
     // La coma de Dvorak está donde la `w`.
-    assert_acciones(
+    assert_actions(
         ", en la posición de la W",
         &[
-            tecla_fisica(Key::Comma, Key::W, Modifiers::NONE),
-            texto(","),
+            key_physical(Key::Comma, Key::W, Modifiers::NONE),
+            text_2(","),
         ],
         &[Some(AppAction::SelectTool(Tool::Dropper))],
     );
 }
 
 #[test]
-fn fila_4_ruso_key_d_con_texto_cirilico_es_el_lapiz_por_posicion() {
-    assert_acciones(
+fn row_4_russian_key_d_with_cyrillic_text_is_the_pencil_by_position() {
+    assert_actions(
         "в sobre la D",
-        &[tecla(Key::D, Modifiers::NONE), texto("в")],
-        &[lapiz()],
+        &[key_2(Key::D, Modifiers::NONE), text_2("в")],
+        &[pencil()],
     );
-    let p = presses(&[tecla(Key::D, Modifiers::NONE), texto("в")]);
+    let p = presses(&[key_2(Key::D, Modifiers::NONE), text_2("в")]);
     assert_eq!(
         p,
         vec![press(Some(KeyId::Char('d')), false, false, false, false)]
     );
     // El griego también (`δ` sobre la D).
-    assert_acciones(
+    assert_actions(
         "δ sobre la D",
-        &[tecla(Key::D, Modifiers::NONE), texto("δ")],
-        &[lapiz()],
+        &[key_2(Key::D, Modifiers::NONE), text_2("δ")],
+        &[pencil()],
     );
     // Una letra de otra escritura sobre una tecla sin fila es esa tecla: sin acción.
-    assert_acciones(
+    assert_actions(
         "я sobre la Z",
-        &[tecla(Key::Z, Modifiers::NONE), texto("я")],
+        &[key_2(Key::Z, Modifiers::NONE), text_2("я")],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_ruso_con_ctrl_vale_la_tecla_de_egui() {
+fn row_4_russian_with_ctrl_the_egui_key_counts() {
     // Con `Ctrl` no hay texto: vale la tecla de egui (que en ruso es la física).
-    assert_acciones(
+    assert_actions(
         "Ctrl+Z en ruso",
-        &[tecla(Key::Z, CTRL)],
+        &[key_2(Key::Z, CTRL)],
         &[Some(AppAction::Undo)],
     );
 }
 
 #[test]
-fn fila_4_bloq_mayus_text_d_mayuscula_sin_shift_es_el_lapiz() {
-    assert_acciones(
+fn row_4_caps_lock_text_capital_d_without_shift_is_the_pencil() {
+    assert_actions(
         "Text(D) sin shift",
-        &[tecla(Key::D, Modifiers::NONE), texto("D")],
-        &[lapiz()],
+        &[key_2(Key::D, Modifiers::NONE), text_2("D")],
+        &[pencil()],
     );
     // Es la misma `Press` que con `Text("d")` sin `shift`.
-    let con_mayuscula = presses(&[tecla(Key::D, Modifiers::NONE), texto("D")]);
-    let con_minuscula = presses(&[tecla(Key::D, Modifiers::NONE), texto("d")]);
-    assert_eq!(con_mayuscula, con_minuscula);
+    let with_capital = presses(&[key_2(Key::D, Modifiers::NONE), text_2("D")]);
+    let with_lowercase = presses(&[key_2(Key::D, Modifiers::NONE), text_2("d")]);
+    assert_eq!(with_capital, with_lowercase);
     assert_eq!(
-        con_mayuscula,
+        with_capital,
         vec![press(Some(KeyId::Char('d')), false, false, false, false)]
     );
 }
 
 #[test]
-fn fila_4_mayus_de_verdad_con_d_no_es_el_lapiz() {
+fn row_4_a_real_shift_with_d_is_not_the_pencil() {
     // `Mayús` pulsada con la `d` (en las letras `shift` es exacto): sin acción.
-    assert_acciones(
+    assert_actions(
         "Mayús+D",
-        &[tecla(Key::D, Modifiers::SHIFT), texto("D")],
+        &[key_2(Key::D, Modifiers::SHIFT), text_2("D")],
         &[None],
     );
     // Bloq Mayús y `Mayús` a la vez escribe `d`, pero con `shift`: tampoco.
-    assert_acciones(
+    assert_actions(
         "Bloq Mayús + Mayús + D",
-        &[tecla(Key::D, Modifiers::SHIFT), texto("d")],
+        &[key_2(Key::D, Modifiers::SHIFT), text_2("d")],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_azerty_ctrl_mas_la_tecla_de_la_cifra_1_es_zoom_actual() {
+fn row_4_azerty_ctrl_plus_the_key_of_the_digit_1_is_zoom_actual() {
     // En AZERTY el carácter de esa tecla sin `Mayús` es `&`, pero con `Ctrl` no hay texto y
     // vale la tecla de egui: la cifra.
-    assert_acciones(
+    assert_actions(
         "Ctrl+tecla de la cifra 1",
-        &[tecla(Key::Num1, CTRL)],
+        &[key_2(Key::Num1, CTRL)],
         &[Some(AppAction::ZoomActual)],
     );
-    assert_acciones(
+    assert_actions(
         "Cmd+tecla de la cifra 1",
-        &[tecla(Key::Num1, CMD)],
+        &[key_2(Key::Num1, CMD)],
         &[Some(AppAction::ZoomActual)],
     );
     // Sin `Ctrl`, esa tecla escribe `&`: no es ningún atajo.
-    assert_acciones(
+    assert_actions(
         "& sin Ctrl",
-        &[tecla(Key::Num1, Modifiers::NONE), texto("&")],
+        &[key_2(Key::Num1, Modifiers::NONE), text_2("&")],
         &[None],
     );
     // Con `Mayús` escribe `1`, pero con `shift` y sin `command`: nada.
-    assert_acciones(
+    assert_actions(
         "1 con Mayús",
-        &[tecla(Key::Num1, Modifiers::SHIFT), texto("1")],
+        &[key_2(Key::Num1, Modifiers::SHIFT), text_2("1")],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_las_cifras_con_su_texto_no_hacen_nada() {
-    for (key, cifra) in [(Key::Num1, "1"), (Key::Num3, "3"), (Key::Num9, "9")] {
-        assert_acciones(cifra, &[tecla(key, Modifiers::NONE), texto(cifra)], &[None]);
+fn row_4_digits_with_their_text_do_nothing() {
+    for (key, figure) in [(Key::Num1, "1"), (Key::Num3, "3"), (Key::Num9, "9")] {
+        assert_actions(
+            figure,
+            &[key_2(key, Modifiers::NONE), text_2(figure)],
+            &[None],
+        );
     }
 }
 
@@ -396,98 +400,98 @@ fn fila_4_las_cifras_con_su_texto_no_hacen_nada() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_la_tecla_muerta_del_acento_sin_texto_no_dispara_el_corchete() {
+fn row_4_the_accent_dead_key_without_text_does_not_fire_the_bracket() {
     // La tecla muerta del teclado español es la física de `[`: sin texto y sin modificadores.
-    let events = [tecla(Key::OpenBracket, Modifiers::NONE)];
+    let events = [key_2(Key::OpenBracket, Modifiers::NONE)];
     assert_eq!(
         presses(&events),
         vec![press(None, false, false, false, false)],
         "una Press sin carácter"
     );
-    assert_acciones("tecla muerta", &events, &[None]);
+    assert_actions("tecla muerta", &events, &[None]);
     // También la del apóstrofo (`'`), que es la otra tecla muerta posible.
-    assert_acciones(
+    assert_actions(
         "tecla muerta del `'`",
-        &[tecla(Key::Quote, Modifiers::NONE)],
+        &[key_2(Key::Quote, Modifiers::NONE)],
         &[None],
     );
     // Y con `Mayús` (la diéresis).
-    assert_acciones(
+    assert_actions(
         "tecla muerta con Mayús",
-        &[tecla(Key::OpenBracket, Modifiers::SHIFT)],
+        &[key_2(Key::OpenBracket, Modifiers::SHIFT)],
         &[None],
     );
-    assert_acciones(
+    assert_actions(
         "tecla muerta de `]`",
-        &[tecla(Key::CloseBracket, Modifiers::NONE)],
+        &[key_2(Key::CloseBracket, Modifiers::NONE)],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_la_vocal_compuesta_tras_la_tecla_muerta_no_es_la_letra() {
+fn row_4_the_composed_vowel_after_the_dead_key_is_not_the_letter() {
     // `´` y luego `u`: la `Key::U` llega con `Text("ú")`: no es el `u` de deshacer.
     let events = [
-        tecla(Key::OpenBracket, Modifiers::NONE),
-        tecla(Key::U, Modifiers::NONE),
-        texto("ú"),
+        key_2(Key::OpenBracket, Modifiers::NONE),
+        key_2(Key::U, Modifiers::NONE),
+        text_2("ú"),
     ];
     assert_eq!(presses(&events).len(), 2);
     assert_eq!(presses(&events)[1].key, None, "ú no da carácter");
-    assert_acciones("´ + u", &events, &[None, None]);
-    for (key, compuesta) in [(Key::E, "é"), (Key::D, "ď"), (Key::A, "á")] {
-        assert_acciones(
-            compuesta,
-            &[tecla(key, Modifiers::NONE), texto(compuesta)],
+    assert_actions("´ + u", &events, &[None, None]);
+    for (key, composite) in [(Key::E, "é"), (Key::D, "ď"), (Key::A, "á")] {
+        assert_actions(
+            composite,
+            &[key_2(key, Modifiers::NONE), text_2(composite)],
             &[None],
         );
     }
 }
 
 #[test]
-fn fila_4_una_composicion_de_varios_caracteres_no_da_atajo() {
-    let events = [tecla(Key::D, Modifiers::NONE), texto("´d")];
+fn row_4_a_composition_of_several_characters_gives_no_shortcut() {
+    let events = [key_2(Key::D, Modifiers::NONE), text_2("´d")];
     assert_eq!(
         presses(&events),
         vec![press(None, false, false, false, false)]
     );
-    assert_acciones("composición ´d", &events, &[None]);
-    assert_acciones(
+    assert_actions("composición ´d", &events, &[None]);
+    assert_actions(
         "dd",
-        &[tecla(Key::D, Modifiers::NONE), texto("dd")],
+        &[key_2(Key::D, Modifiers::NONE), text_2("dd")],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_option_mas_letra_en_macos_escribe_un_simbolo_y_no_hace_nada() {
+fn row_4_option_plus_a_letter_on_macos_writes_a_symbol_and_does_nothing() {
     // `Option`+`d` escribe `∂`: la `Key::D` llega con `alt` y `Text("∂")`.
-    let events = [tecla(Key::D, Modifiers::ALT), texto("∂")];
+    let events = [key_2(Key::D, Modifiers::ALT), text_2("∂")];
     assert_eq!(
         presses(&events),
         vec![press(None, false, false, true, false)],
         "un símbolo que no es ASCII no da carácter"
     );
-    assert_acciones("Option+d", &events, &[None]);
+    assert_actions("Option+d", &events, &[None]);
     // Otros símbolos no ASCII de `Option`.
-    for simbolo in ["ƒ", "ß", "€", "©"] {
-        assert_acciones(
-            simbolo,
-            &[tecla(Key::F, Modifiers::ALT), texto(simbolo)],
+    for symbol in ["ƒ", "ß", "€", "©"] {
+        assert_actions(
+            symbol,
+            &[key_2(Key::F, Modifiers::ALT), text_2(symbol)],
             &[None],
         );
     }
 }
 
 #[test]
-fn fila_4_alt_mas_letra_con_su_texto_no_es_la_letra() {
+fn row_4_alt_plus_a_letter_with_its_text_is_not_the_letter() {
     // En Linux y Windows `Alt`+`d` llega con `Text("d")`: la letra con `alt` no hace nada.
-    assert_acciones(
+    assert_actions(
         "Alt+d",
-        &[tecla(Key::D, Modifiers::ALT), texto("d")],
+        &[key_2(Key::D, Modifiers::ALT), text_2("d")],
         &[None],
     );
-    let p = presses(&[tecla(Key::D, Modifiers::ALT), texto("d")]);
+    let p = presses(&[key_2(Key::D, Modifiers::ALT), text_2("d")]);
     assert_eq!(
         p,
         vec![press(Some(KeyId::Char('d')), false, false, true, false)]
@@ -495,59 +499,59 @@ fn fila_4_alt_mas_letra_con_su_texto_no_es_la_letra() {
 }
 
 #[test]
-fn fila_4_el_ime_no_da_press_ni_atajo() {
+fn row_4_the_ime_gives_no_press_or_shortcut() {
     let preedicion = Event::Ime(ImeEvent::Preedit {
         text: "d".to_string(),
         active_range_chars: None,
     });
-    let confirmacion = Event::Ime(ImeEvent::Commit("d".to_string()));
-    let vacia = Event::Ime(ImeEvent::Preedit {
+    let confirmation = Event::Ime(ImeEvent::Commit("d".to_string()));
+    let empty = Event::Ime(ImeEvent::Preedit {
         text: String::new(),
         active_range_chars: None,
     });
-    let borrado = Event::Ime(ImeEvent::DeleteSurrounding {
+    let deleted = Event::Ime(ImeEvent::DeleteSurrounding {
         before_chars: 1,
         after_chars: 0,
     });
     for events in [
         vec![preedicion.clone()],
-        vec![confirmacion.clone()],
-        vec![vacia],
-        vec![borrado],
+        vec![confirmation.clone()],
+        vec![empty],
+        vec![deleted],
         // La secuencia completa de una composición: preedición, confirmación y el texto suelto.
-        vec![preedicion.clone(), confirmacion.clone(), texto("d")],
+        vec![preedicion.clone(), confirmation.clone(), text_2("d")],
     ] {
         assert!(presses(&events).is_empty(), "{events:?}");
-        assert_acciones("IME", &events, &[]);
+        assert_actions("IME", &events, &[]);
     }
 }
 
 #[test]
-fn fila_4_la_tecla_pulsada_durante_una_composicion_de_ime_no_da_caracter() {
+fn row_4_the_key_pressed_during_an_ime_composition_gives_no_character() {
     let preedicion = Event::Ime(ImeEvent::Preedit {
         text: "d".to_string(),
         active_range_chars: None,
     });
-    let confirmacion = Event::Ime(ImeEvent::Commit("d".to_string()));
-    let events = [preedicion, tecla(Key::D, Modifiers::NONE), confirmacion];
+    let confirmation = Event::Ime(ImeEvent::Commit("d".to_string()));
+    let events = [preedicion, key_2(Key::D, Modifiers::NONE), confirmation];
     assert_eq!(
         presses(&events),
         vec![press(None, false, false, false, false)],
         "una Press sin carácter por la `Key`, ninguna por el IME"
     );
-    assert_acciones("tecla durante el IME", &events, &[None]);
+    assert_actions("tecla durante el IME", &events, &[None]);
 }
 
 #[test]
-fn fila_4_un_text_suelto_no_da_press() {
-    assert!(presses(&[texto("d")]).is_empty());
-    assert!(presses(&[texto(",")]).is_empty());
-    assert_acciones("Text(,) suelto", &[texto(",")], &[]);
-    assert_acciones("Text(d) suelto", &[texto("d")], &[]);
+fn row_4_a_loose_text_gives_no_press() {
+    assert!(presses(&[text_2("d")]).is_empty());
+    assert!(presses(&[text_2(",")]).is_empty());
+    assert_actions("Text(,) suelto", &[text_2(",")], &[]);
+    assert_actions("Text(d) suelto", &[text_2("d")], &[]);
     // Tras la suelta de una tecla, el texto también es suelto.
-    assert!(presses(&[suelta(Key::Comma, Modifiers::NONE), texto(",")]).is_empty());
+    assert!(presses(&[releases(Key::Comma, Modifiers::NONE), text_2(",")]).is_empty());
     // Un segundo `Text` tras la tecla es suelto: solo el primero se empareja.
-    let events = [tecla(Key::D, Modifiers::NONE), texto("d"), texto("d")];
+    let events = [key_2(Key::D, Modifiers::NONE), text_2("d"), text_2("d")];
     assert_eq!(
         presses(&events),
         vec![press(Some(KeyId::Char('d')), false, false, false, false)]
@@ -555,22 +559,22 @@ fn fila_4_un_text_suelto_no_da_press() {
 }
 
 #[test]
-fn fila_4_un_text_que_no_sigue_inmediatamente_a_la_tecla_es_suelto() {
+fn row_4_a_text_that_does_not_immediately_follow_the_key_is_loose() {
     let events = [
-        tecla(Key::D, Modifiers::NONE),
+        key_2(Key::D, Modifiers::NONE),
         Event::PointerMoved(pos2(1.0, 1.0)),
-        texto("d"),
+        text_2("d"),
     ];
     assert_eq!(
         presses(&events),
         vec![press(None, false, false, false, false)],
         "la tecla queda sin carácter y el texto no da Press"
     );
-    assert_acciones("texto separado", &events, &[None]);
+    assert_actions("texto separado", &events, &[None]);
 }
 
 #[test]
-fn fila_4_otros_eventos_no_dan_press() {
+fn row_4_other_events_give_no_press() {
     let events = [
         Event::PointerMoved(pos2(1.0, 1.0)),
         Event::WindowFocused(true),
@@ -581,12 +585,12 @@ fn fila_4_otros_eventos_no_dan_press() {
 }
 
 #[test]
-fn fila_4_las_soltadas_se_ignoran() {
+fn row_4_the_released_ones_are_ignored() {
     let events = [
-        suelta(Key::D, Modifiers::NONE),
-        tecla(Key::D, Modifiers::NONE),
-        texto("d"),
-        suelta(Key::D, Modifiers::NONE),
+        releases(Key::D, Modifiers::NONE),
+        key_2(Key::D, Modifiers::NONE),
+        text_2("d"),
+        releases(Key::D, Modifiers::NONE),
     ];
     assert_eq!(
         presses(&events),
@@ -595,21 +599,21 @@ fn fila_4_las_soltadas_se_ignoran() {
 }
 
 #[test]
-fn fila_4_varias_teclas_en_un_fotograma_dan_una_press_por_tecla_y_en_orden() {
+fn row_4_several_keys_in_a_frame_give_one_press_per_key_and_in_order() {
     let events = [
-        tecla(Key::D, Modifiers::NONE),
-        texto("d"),
-        tecla(Key::V, Modifiers::NONE),
-        texto("v"),
-        tecla(Key::F, Modifiers::NONE),
-        texto("f"),
-        tecla(Key::Z, CTRL),
+        key_2(Key::D, Modifiers::NONE),
+        text_2("d"),
+        key_2(Key::V, Modifiers::NONE),
+        text_2("v"),
+        key_2(Key::F, Modifiers::NONE),
+        text_2("f"),
+        key_2(Key::Z, CTRL),
     ];
-    assert_acciones(
+    assert_actions(
         "d v f Ctrl+Z",
         &events,
         &[
-            lapiz(),
+            pencil(),
             Some(AppAction::SelectTool(Tool::Line)),
             Some(AppAction::SelectTool(Tool::Fill)),
             Some(AppAction::Undo),
@@ -622,8 +626,8 @@ fn fila_4_varias_teclas_en_un_fotograma_dan_una_press_por_tecla_y_en_orden() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_con_command_el_caracter_es_el_de_la_tecla_de_egui_sin_texto() {
-    for (key, esperada) in [
+fn row_4_with_command_the_character_is_that_of_the_egui_key_without_text() {
+    for (key, expected) in [
         (Key::Z, Some(KeyId::Char('z'))),
         (Key::Y, Some(KeyId::Char('y'))),
         (Key::O, Some(KeyId::Char('o'))),
@@ -635,9 +639,9 @@ fn fila_4_con_command_el_caracter_es_el_de_la_tecla_de_egui_sin_texto() {
         (Key::Home, Some(KeyId::Home)),
     ] {
         for modifiers in [CTRL, CMD] {
-            let p = presses(&[tecla(key, modifiers)]);
+            let p = presses(&[key_2(key, modifiers)]);
             assert_eq!(p.len(), 1);
-            assert_eq!(p[0].key, esperada, "{key:?} con {modifiers:?}");
+            assert_eq!(p[0].key, expected, "{key:?} con {modifiers:?}");
             assert!(
                 p[0].command && !p[0].other_ctrl,
                 "{key:?} con {modifiers:?}: {:?}",
@@ -648,7 +652,7 @@ fn fila_4_con_command_el_caracter_es_el_de_la_tecla_de_egui_sin_texto() {
 }
 
 #[test]
-fn fila_4_los_nueve_modernos_sobre_eventos_en_las_tres_plataformas() {
+fn row_4_the_nine_modern_ones_over_events_on_the_three_platforms() {
     let linux_y_windows = [
         (Key::Z, CTRL, AppAction::Undo),
         (Key::Y, CTRL, AppAction::Redo),
@@ -659,57 +663,57 @@ fn fila_4_los_nueve_modernos_sobre_eventos_en_las_tres_plataformas() {
         (Key::S, CTRL | Modifiers::SHIFT, AppAction::SaveAs),
         (Key::Num1, CTRL, AppAction::ZoomActual),
     ];
-    for (key, modifiers, esperada) in linux_y_windows {
-        assert_acciones(
+    for (key, modifiers, expected) in linux_y_windows {
+        assert_actions(
             "moderno con Ctrl",
-            &[tecla(key, modifiers)],
-            &[Some(esperada)],
+            &[key_2(key, modifiers)],
+            &[Some(expected)],
         );
     }
-    for (key, modifiers, esperada) in [
+    for (key, modifiers, expected) in [
         (Key::Z, CMD, AppAction::Undo),
         (Key::Z, CMD | Modifiers::SHIFT, AppAction::Redo),
         (Key::S, CMD | Modifiers::SHIFT, AppAction::SaveAs),
         (Key::Num1, CMD, AppAction::ZoomActual),
     ] {
-        assert_acciones(
+        assert_actions(
             "moderno con Cmd",
-            &[tecla(key, modifiers)],
-            &[Some(esperada)],
+            &[key_2(key, modifiers)],
+            &[Some(expected)],
         );
     }
     // `Ctrl+Q` solo sale en Linux.
-    let events = [tecla(Key::Q, CTRL)];
-    assert_eq!(acciones(&events, Platform::Linux), [Some(AppAction::Quit)]);
-    assert_eq!(acciones(&events, Platform::Windows), [None]);
-    assert_eq!(acciones(&events, Platform::Mac), [None]);
+    let events = [key_2(Key::Q, CTRL)];
+    assert_eq!(actions(&events, Platform::Linux), [Some(AppAction::Quit)]);
+    assert_eq!(actions(&events, Platform::Windows), [None]);
+    assert_eq!(actions(&events, Platform::Mac), [None]);
 }
 
 #[test]
-fn fila_4_ctrl_alt_y_letra_no_es_el_atajo() {
+fn row_4_ctrl_alt_and_a_letter_is_not_the_shortcut() {
     // `Ctrl+Alt+Z` (y el AltGr de Windows que llegara como `Ctrl`+`Alt`) no deshace.
-    assert_acciones(
+    assert_actions(
         "Ctrl+Alt+Z",
-        &[tecla(Key::Z, CTRL | Modifiers::ALT)],
+        &[key_2(Key::Z, CTRL | Modifiers::ALT)],
         &[None],
     );
 }
 
 #[test]
-fn fila_4_el_ctrl_de_macos_es_other_ctrl_y_anula_las_letras() {
-    let p = presses(&[tecla(Key::Z, CTRL_DE_MAC)]);
+fn row_4_the_macos_ctrl_is_other_ctrl_and_cancels_the_letters() {
+    let p = presses(&[key_2(Key::Z, CTRL_DE_MAC)]);
     assert_eq!(p.len(), 1);
     assert!(!p[0].command && p[0].other_ctrl, "{:?}", p[0]);
-    assert_acciones("Ctrl de macOS + Z", &[tecla(Key::Z, CTRL_DE_MAC)], &[None]);
+    assert_actions("Ctrl de macOS + Z", &[key_2(Key::Z, CTRL_DE_MAC)], &[None]);
     // Con texto de una letra, también: `Ctrl` suelto + `d` no es el lápiz.
-    let con_texto = [tecla(Key::D, CTRL_DE_MAC), texto("d")];
-    let p = presses(&con_texto);
+    let with_text = [key_2(Key::D, CTRL_DE_MAC), text_2("d")];
+    let p = presses(&with_text);
     assert!(p[0].other_ctrl);
-    assert_acciones("Ctrl de macOS + d", &con_texto, &[None]);
+    assert_actions("Ctrl de macOS + d", &with_text, &[None]);
 }
 
 #[test]
-fn fila_4_las_teclas_con_nombre_valen_siempre_por_la_tecla_y_con_cualquier_modificador() {
+fn row_4_named_keys_always_count_by_the_key_and_with_any_modifier() {
     for modifiers in [
         Modifiers::NONE,
         Modifiers::SHIFT,
@@ -717,58 +721,54 @@ fn fila_4_las_teclas_con_nombre_valen_siempre_por_la_tecla_y_con_cualquier_modif
         Modifiers::SHIFT | Modifiers::ALT,
         CTRL_DE_MAC,
     ] {
-        assert_acciones(
+        assert_actions(
             "Inicio",
-            &[tecla(Key::Home, modifiers)],
+            &[key_2(Key::Home, modifiers)],
             &[Some(AppAction::ZoomFit)],
         );
         // I.2a: con `Mayús` son el color de fondo; sin ella, el primer plano.
-        let (anterior, siguiente) = if modifiers.shift {
+        let (anterior, next) = if modifiers.shift {
             (AppAction::BackgroundPrev, AppAction::BackgroundNext)
         } else {
             (AppAction::ColorPrev, AppAction::ColorNext)
         };
-        assert_acciones(
+        assert_actions(
             "Re Pág",
-            &[tecla(Key::PageUp, modifiers)],
+            &[key_2(Key::PageUp, modifiers)],
             &[Some(anterior)],
         );
-        assert_acciones(
-            "Av Pág",
-            &[tecla(Key::PageDown, modifiers)],
-            &[Some(siguiente)],
-        );
+        assert_actions("Av Pág", &[key_2(Key::PageDown, modifiers)], &[Some(next)]);
     }
     // Con `command` no hay acción.
-    assert_acciones("Ctrl+Inicio", &[tecla(Key::Home, CTRL)], &[None]);
-    assert_acciones("Ctrl+Re Pág", &[tecla(Key::PageUp, CTRL)], &[None]);
-    assert_acciones("Cmd+Av Pág", &[tecla(Key::PageDown, CMD)], &[None]);
+    assert_actions("Ctrl+Inicio", &[key_2(Key::Home, CTRL)], &[None]);
+    assert_actions("Ctrl+Re Pág", &[key_2(Key::PageUp, CTRL)], &[None]);
+    assert_actions("Cmd+Av Pág", &[key_2(Key::PageDown, CMD)], &[None]);
     // Las pulsaciones de teclas con nombre llevan la tecla aunque no haya texto.
     assert_eq!(
-        presses(&[tecla(Key::PageDown, Modifiers::NONE)]),
+        presses(&[key_2(Key::PageDown, Modifiers::NONE)]),
         vec![press(Some(KeyId::PageDown), false, false, false, false)]
     );
 }
 
 #[test]
-fn fila_4_las_teclas_sin_caracter_dan_una_press_sin_tecla() {
+fn row_4_keys_without_a_character_give_a_press_without_a_key() {
     for key in [Key::End, Key::F1, Key::Escape, Key::Tab] {
         assert_eq!(
-            presses(&[tecla(key, Modifiers::NONE)]),
+            presses(&[key_2(key, Modifiers::NONE)]),
             vec![press(None, false, false, false, false)],
             "{key:?}"
         );
-        assert_acciones("sin carácter", &[tecla(key, Modifiers::NONE)], &[None]);
+        assert_actions("sin carácter", &[key_2(key, Modifiers::NONE)], &[None]);
     }
 }
 
 #[test]
-fn fila_4_los_modificadores_pasan_a_los_campos_de_la_press() {
-    let p = presses(&[tecla(Key::Home, Modifiers::SHIFT | Modifiers::ALT)]);
+fn row_4_the_modifiers_pass_to_the_fields_of_the_press() {
+    let p = presses(&[key_2(Key::Home, Modifiers::SHIFT | Modifiers::ALT)]);
     assert_eq!(p, vec![press(Some(KeyId::Home), false, true, true, false)]);
-    let p = presses(&[tecla(Key::Home, CTRL)]);
+    let p = presses(&[key_2(Key::Home, CTRL)]);
     assert_eq!(p, vec![press(Some(KeyId::Home), true, false, false, false)]);
-    let p = presses(&[tecla(Key::Home, CTRL_DE_MAC)]);
+    let p = presses(&[key_2(Key::Home, CTRL_DE_MAC)]);
     assert_eq!(p, vec![press(Some(KeyId::Home), false, false, false, true)]);
 }
 
@@ -777,14 +777,14 @@ fn fila_4_los_modificadores_pasan_a_los_campos_de_la_press() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_12_presses_marca_repeat_en_las_repeticiones_y_no_en_la_primera() {
+fn row_12_presses_marks_repeat_on_the_repetitions_and_not_on_the_first() {
     let events = [
-        tecla(Key::U, Modifiers::NONE),
-        texto("u"),
-        repetida(Key::U, Modifiers::NONE),
-        texto("u"),
-        repetida(Key::U, Modifiers::NONE),
-        texto("u"),
+        key_2(Key::U, Modifiers::NONE),
+        text_2("u"),
+        repeated(Key::U, Modifiers::NONE),
+        text_2("u"),
+        repeated(Key::U, Modifiers::NONE),
+        text_2("u"),
     ];
     let p = presses(&events);
     assert_eq!(p.len(), 3);
@@ -798,96 +798,96 @@ fn fila_12_presses_marca_repeat_en_las_repeticiones_y_no_en_la_primera() {
 }
 
 #[test]
-fn fila_12_u_corchete_av_pag_y_menor_repetidos_dan_una_accion_por_pulsacion() {
-    let casos: Vec<(&str, Vec<Event>, AppAction)> = vec![
+fn row_12_u_bracket_page_down_and_smaller_repeated_give_one_action_per_press() {
+    let cases: Vec<(&str, Vec<Event>, AppAction)> = vec![
         (
             "u",
             vec![
-                tecla(Key::U, Modifiers::NONE),
-                texto("u"),
-                repetida(Key::U, Modifiers::NONE),
-                texto("u"),
-                repetida(Key::U, Modifiers::NONE),
-                texto("u"),
-                repetida(Key::U, Modifiers::NONE),
-                texto("u"),
+                key_2(Key::U, Modifiers::NONE),
+                text_2("u"),
+                repeated(Key::U, Modifiers::NONE),
+                text_2("u"),
+                repeated(Key::U, Modifiers::NONE),
+                text_2("u"),
+                repeated(Key::U, Modifiers::NONE),
+                text_2("u"),
             ],
             AppAction::Undo,
         ),
         (
             "]",
             vec![
-                tecla(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
-                repetida(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
-                repetida(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
-                repetida(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
+                key_2(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
+                repeated(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
+                repeated(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
+                repeated(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
             ],
             AppAction::ColorNext,
         ),
         (
             "Av Pág",
             vec![
-                tecla(Key::PageDown, Modifiers::NONE),
-                repetida(Key::PageDown, Modifiers::NONE),
-                repetida(Key::PageDown, Modifiers::NONE),
-                repetida(Key::PageDown, Modifiers::NONE),
+                key_2(Key::PageDown, Modifiers::NONE),
+                repeated(Key::PageDown, Modifiers::NONE),
+                repeated(Key::PageDown, Modifiers::NONE),
+                repeated(Key::PageDown, Modifiers::NONE),
             ],
             AppAction::ColorNext,
         ),
         (
             "<",
             vec![
-                tecla(Key::IntlBackslash, Modifiers::NONE),
-                texto("<"),
-                repetida(Key::IntlBackslash, Modifiers::NONE),
-                texto("<"),
-                repetida(Key::IntlBackslash, Modifiers::NONE),
-                texto("<"),
-                repetida(Key::IntlBackslash, Modifiers::NONE),
-                texto("<"),
+                key_2(Key::IntlBackslash, Modifiers::NONE),
+                text_2("<"),
+                repeated(Key::IntlBackslash, Modifiers::NONE),
+                text_2("<"),
+                repeated(Key::IntlBackslash, Modifiers::NONE),
+                text_2("<"),
+                repeated(Key::IntlBackslash, Modifiers::NONE),
+                text_2("<"),
             ],
             AppAction::ZoomOut,
         ),
     ];
-    for (nombre, events, esperada) in casos {
-        for platform in PLATAFORMAS {
-            let acciones = acciones(&events, platform);
+    for (name_2, events, expected) in cases {
+        for platform in PLATFORMS {
+            let actions = actions(&events, platform);
             assert_eq!(
-                acciones,
-                vec![Some(esperada); 4],
-                "{nombre} repetida en {platform:?}"
+                actions,
+                vec![Some(expected); 4],
+                "{name_2} repetida en {platform:?}"
             );
-            assert!(!esperada.ignores_repeat(), "{nombre}: {esperada:?} repite");
+            assert!(!expected.ignores_repeat(), "{name_2}: {expected:?} repite");
         }
     }
 }
 
 #[test]
-fn fila_12_los_atajos_de_fichero_mantenidos_llegan_con_repeat_y_son_de_los_que_no_repiten() {
-    for (key, modifiers, esperada) in [
+fn row_12_the_held_file_shortcuts_arrive_with_repeat_and_are_of_those_that_do_not_repeat() {
+    for (key, modifiers, expected) in [
         (Key::O, CTRL, AppAction::Open),
         (Key::S, CTRL, AppAction::Save),
         (Key::S, CTRL | Modifiers::SHIFT, AppAction::SaveAs),
         (Key::N, CTRL, AppAction::NewImage),
         (Key::Q, CTRL, AppAction::Quit),
     ] {
-        let events = [tecla(key, modifiers), repetida(key, modifiers)];
+        let events = [key_2(key, modifiers), repeated(key, modifiers)];
         let p = presses(&events);
         assert_eq!(
             p.iter().map(|p| p.repeat).collect::<Vec<_>>(),
             [false, true],
-            "{esperada:?}"
+            "{expected:?}"
         );
         assert_eq!(
-            acciones(&events, Platform::Linux),
-            vec![Some(esperada); 2],
-            "{esperada:?}"
+            actions(&events, Platform::Linux),
+            vec![Some(expected); 2],
+            "{expected:?}"
         );
-        assert!(esperada.ignores_repeat(), "{esperada:?} no repite");
+        assert!(expected.ignores_repeat(), "{expected:?} no repite");
     }
 }
 
@@ -896,7 +896,7 @@ fn fila_12_los_atajos_de_fichero_mantenidos_llegan_con_repeat_y_son_de_los_que_n
 // ---------------------------------------------------------------------------------------------
 
 /// Las teclas de la propiedad y el carácter que da su tecla de egui (`None`: sin carácter).
-const TECLAS: [(Key, Option<KeyId>); 12] = [
+const KEYS: [(Key, Option<KeyId>); 12] = [
     (Key::D, Some(KeyId::Char('d'))),
     (Key::U, Some(KeyId::Char('u'))),
     (Key::Z, Some(KeyId::Char('z'))),
@@ -913,59 +913,59 @@ const TECLAS: [(Key, Option<KeyId>); 12] = [
 
 /// Los textos de la propiedad: ASCII, mayúsculas, varios caracteres, acentos, símbolos no ASCII y
 /// letras de otras escrituras.
-const TEXTOS: [&str; 16] = [
+const TEST_TEXTS: [&str; 16] = [
     "d", "D", ",", "<", ">", "[", "1", "ú", "´d", "dd", "∂", "в", "δ", "é", "€", "я",
 ];
 
 #[derive(Clone, Debug)]
-enum Evento {
-    Tecla {
-        indice: usize,
-        pulsada: bool,
+enum TestEvent {
+    TestKey {
+        index_2: usize,
+        pressed_2: bool,
         repeat: bool,
         command: bool,
-        ctrl_suelto: bool,
+        ctrl_loose: bool,
         shift: bool,
         alt: bool,
     },
-    Texto(usize),
+    Text(usize),
     Ime(usize),
 }
 
-fn modificadores_de(command: bool, ctrl_suelto: bool, shift: bool, alt: bool) -> Modifiers {
+fn modifiers_of(command: bool, ctrl_loose: bool, shift: bool, alt: bool) -> Modifiers {
     Modifiers {
         alt,
-        ctrl: command || ctrl_suelto,
+        ctrl: command || ctrl_loose,
         shift,
         mac_cmd: false,
         command,
     }
 }
 
-fn a_egui(evento: &Evento) -> Event {
-    match evento {
-        Evento::Tecla {
-            indice,
-            pulsada,
+fn a_egui(event: &TestEvent) -> Event {
+    match event {
+        TestEvent::TestKey {
+            index_2,
+            pressed_2,
             repeat,
             command,
-            ctrl_suelto,
+            ctrl_loose,
             shift,
             alt,
         } => Event::Key {
-            key: TECLAS[*indice].0,
-            physical_key: Some(TECLAS[*indice].0),
-            pressed: *pulsada,
-            repeat: *pulsada && *repeat,
-            modifiers: modificadores_de(*command, *ctrl_suelto && !*command, *shift, *alt),
+            key: KEYS[*index_2].0,
+            physical_key: Some(KEYS[*index_2].0),
+            pressed: *pressed_2,
+            repeat: *pressed_2 && *repeat,
+            modifiers: modifiers_of(*command, *ctrl_loose && !*command, *shift, *alt),
         },
-        Evento::Texto(i) => Event::Text(TEXTOS[*i].to_string()),
-        Evento::Ime(i) => match i % 3 {
+        TestEvent::Text(i) => Event::Text(TEST_TEXTS[*i].to_string()),
+        TestEvent::Ime(i) => match i % 3 {
             0 => Event::Ime(ImeEvent::Preedit {
-                text: TEXTOS[*i].to_string(),
+                text: TEST_TEXTS[*i].to_string(),
                 active_range_chars: None,
             }),
-            1 => Event::Ime(ImeEvent::Commit(TEXTOS[*i].to_string())),
+            1 => Event::Ime(ImeEvent::Commit(TEST_TEXTS[*i].to_string())),
             _ => Event::Ime(ImeEvent::DeleteSurrounding {
                 before_chars: 1,
                 after_chars: 0,
@@ -974,10 +974,10 @@ fn a_egui(evento: &Evento) -> Event {
     }
 }
 
-fn evento_cualquiera() -> impl Strategy<Value = Evento> {
+fn event_any() -> impl Strategy<Value = TestEvent> {
     prop_oneof![
         4 => (
-            0..TECLAS.len(),
+            0..KEYS.len(),
             any::<bool>(),
             any::<bool>(),
             any::<bool>(),
@@ -985,24 +985,24 @@ fn evento_cualquiera() -> impl Strategy<Value = Evento> {
             any::<bool>(),
             any::<bool>(),
         )
-            .prop_map(|(indice, pulsada, repeat, command, ctrl_suelto, shift, alt)| {
-                Evento::Tecla {
-                    indice,
-                    pulsada,
+            .prop_map(|(index_2, pressed_2, repeat, command, ctrl_loose, shift, alt)| {
+                TestEvent::TestKey {
+                    index_2,
+                    pressed_2,
                     repeat,
                     command,
-                    ctrl_suelto,
+                    ctrl_loose,
                     shift,
                     alt,
                 }
             }),
-        3 => (0..TEXTOS.len()).prop_map(Evento::Texto),
-        1 => (0..TEXTOS.len()).prop_map(Evento::Ime),
+        3 => (0..TEST_TEXTS.len()).prop_map(TestEvent::Text),
+        1 => (0..TEST_TEXTS.len()).prop_map(TestEvent::Ime),
     ]
 }
 
 /// Si `c` es una letra de otra escritura: alfabética y fuera de Latin-1 y Latín extendido.
-fn es_de_otra_escritura(ch: char) -> bool {
+fn is_of_another_script(ch: char) -> bool {
     ch.is_alphabetic() && ch > '\u{24F}'
 }
 
@@ -1010,27 +1010,27 @@ fn es_de_otra_escritura(ch: char) -> bool {
 /// con `command`, la tecla de egui; sin él, solo el texto que le sigue inmediatamente, si es un
 /// único carácter ASCII imprimible (en minúscula) o, como respaldo por posición, una letra de
 /// otra escritura (entonces, la tecla de egui).
-fn caracter_esperado(indice: usize, command: bool, texto_siguiente: Option<&str>) -> Option<KeyId> {
-    let de_la_tecla = TECLAS[indice].1;
+fn character_expected(index_2: usize, command: bool, text_next: Option<&str>) -> Option<KeyId> {
+    let of_the_key = KEYS[index_2].1;
     if matches!(
-        de_la_tecla,
+        of_the_key,
         Some(KeyId::Home | KeyId::PageUp | KeyId::PageDown)
     ) {
-        return de_la_tecla;
+        return of_the_key;
     }
     if command {
-        return de_la_tecla;
+        return of_the_key;
     }
-    let texto = texto_siguiente?;
-    let mut chars = texto.chars();
+    let text_2 = text_next?;
+    let mut chars = text_2.chars();
     let (Some(ch), None) = (chars.next(), chars.next()) else {
         return None;
     };
     if ch.is_ascii_graphic() {
         return Some(KeyId::Char(ch.to_ascii_lowercase()));
     }
-    if es_de_otra_escritura(ch) {
-        return de_la_tecla;
+    if is_of_another_script(ch) {
+        return of_the_key;
     }
     None
 }
@@ -1044,56 +1044,56 @@ proptest! {
     /// sin texto ni `command`) no dan carácter, y solo una letra de otra escritura cae al de la
     /// tecla.
     #[test]
-    fn propiedad_4_emparejado_de_eventos(
-        eventos in prop::collection::vec(evento_cualquiera(), 0..24),
+    fn property_4_event_pairing(
+        events_2 in prop::collection::vec(event_any(), 0..24),
     ) {
-        let egui: Vec<Event> = eventos.iter().map(a_egui).collect();
-        let obtenidas = presses(&egui);
+        let egui: Vec<Event> = events_2.iter().map(a_egui).collect();
+        let obtained = presses(&egui);
 
         // Lo esperado, recorriendo la secuencia con las reglas de la spec.
-        let mut esperadas: Vec<Press> = Vec::new();
-        for (i, evento) in eventos.iter().enumerate() {
-            let Evento::Tecla { indice, pulsada: true, repeat, command, ctrl_suelto, shift, alt } = evento else {
+        let mut expected_2_2: Vec<Press> = Vec::new();
+        for (i, event) in events_2.iter().enumerate() {
+            let TestEvent::TestKey { index_2, pressed_2: true, repeat, command, ctrl_loose, shift, alt } = event else {
                 continue;
             };
-            let siguiente = match eventos.get(i + 1) {
-                Some(Evento::Texto(t)) => Some(TEXTOS[*t]),
+            let next = match events_2.get(i + 1) {
+                Some(TestEvent::Text(t)) => Some(TEST_TEXTS[*t]),
                 _ => None,
             };
-            esperadas.push(Press {
-                key: caracter_esperado(*indice, *command, siguiente),
+            expected_2_2.push(Press {
+                key: character_expected(*index_2, *command, next),
                 command: *command,
                 shift: *shift,
                 alt: *alt,
-                other_ctrl: *ctrl_suelto && !*command,
+                other_ctrl: *ctrl_loose && !*command,
                 repeat: *repeat,
             });
         }
-        prop_assert_eq!(obtenidas.len(), esperadas.len(), "una Press por cada Key pulsada: {:?}", egui);
-        prop_assert_eq!(obtenidas, esperadas, "{:?}", egui);
+        prop_assert_eq!(obtained.len(), expected_2_2.len(), "una Press por cada Key pulsada: {:?}", egui);
+        prop_assert_eq!(obtained, expected_2_2, "{:?}", egui);
     }
 
     /// Propiedad 4, última cláusula: `Text("D")` sin `shift` da la misma `Press` que `Text("d")`
     /// sin `shift`, con cualquier otro modificador y estando entre otros eventos.
     #[test]
-    fn propiedad_4_text_d_mayuscula_sin_shift_es_text_d_minuscula(
+    fn property_4_text_capital_d_without_shift_is_text_lowercase_d(
         alt in any::<bool>(),
-        ctrl_suelto in any::<bool>(),
+        ctrl_loose in any::<bool>(),
         repeat in any::<bool>(),
-        antes in prop::collection::vec(evento_cualquiera(), 0..6),
+        antes in prop::collection::vec(event_any(), 0..6),
     ) {
-        let modifiers = modificadores_de(false, ctrl_suelto, false, alt);
-        let con = |t: &str| {
+        let modifiers = modifiers_of(false, ctrl_loose, false, alt);
+        let with = |t: &str| {
             let mut v: Vec<Event> = antes.iter().map(a_egui).collect();
-            let mut k = tecla(Key::D, modifiers);
+            let mut k = key_2(Key::D, modifiers);
             if let Event::Key { repeat: r, .. } = &mut k {
                 *r = repeat;
             }
             v.push(k);
-            v.push(texto(t));
+            v.push(text_2(t));
             presses(&v)
         };
-        prop_assert_eq!(con("D"), con("d"));
+        prop_assert_eq!(with("D"), with("d"));
     }
 }
 
@@ -1103,11 +1103,11 @@ proptest! {
     /// Propiedad 4: no entra en pánico con ninguna tecla de `Key::ALL`, pulsada o soltada, con
     /// ningún texto ni modificadores.
     #[test]
-    fn propiedad_4_sin_panico_con_cualquier_tecla_de_egui(
-        indice in 0..Key::ALL.len(),
-        pulsada in any::<bool>(),
+    fn property_4_without_panic_with_any_egui_key(
+        index_2 in 0..Key::ALL.len(),
+        pressed_2 in any::<bool>(),
         bits in 0u8..32,
-        con_texto in prop::option::of(0..TEXTOS.len()),
+        with_text in prop::option::of(0..TEST_TEXTS.len()),
     ) {
         let m = Modifiers {
             alt: bits & 1 != 0,
@@ -1117,16 +1117,16 @@ proptest! {
             command: bits & 16 != 0,
         };
         let mut events = vec![Event::Key {
-            key: Key::ALL[indice],
+            key: Key::ALL[index_2],
             physical_key: None,
-            pressed: pulsada,
+            pressed: pressed_2,
             repeat: false,
             modifiers: m,
         }];
-        if let Some(t) = con_texto {
-            events.push(texto(TEXTOS[t]));
+        if let Some(t) = with_text {
+            events.push(text_2(TEST_TEXTS[t]));
         }
         let p = presses(&events);
-        prop_assert_eq!(p.len(), usize::from(pulsada), "{:?}", events);
+        prop_assert_eq!(p.len(), usize::from(pressed_2), "{:?}", events);
     }
 }

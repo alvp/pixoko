@@ -1,6 +1,6 @@
 //! Tema mínimo: fondo neutro y color solo para acentos y avisos (specs/hito-2-texto.md).
 //!
-//! Los grises son neutros (`gris(p) = round(p·255/100)`). Los dos tonos salen de una regla en
+//! Los grises son neutros (`gray_2(p) = round(p·255/100)`). Los dos tonos salen de una regla en
 //! HSL elegida aquí: acento 168° (62 %, 52 %) y aviso 28° (85 %, 58 %).
 
 use egui::{Color32, CornerRadius, Shadow, Stroke, Visuals};

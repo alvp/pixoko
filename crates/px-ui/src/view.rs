@@ -306,7 +306,7 @@ impl View {
         self.clamp(viewport, image);
     }
 
-    /// Deja visibles al menos `min(MIN_VISIBLE, extensión · zoom, lienzo)` píxeles de la imagen
+    /// Deja visibles al menos `min(MIN_VISIBLE, extensión · zoom, canvas_2)` píxeles de la imagen
     /// en cada eje; si ese mínimo es 0 (lienzo o imagen vacíos) no mueve la vista.
     pub fn clamp(&mut self, viewport: Size, image: Size) {
         let axis = |origin: i64, view: u32, dim: u32| {

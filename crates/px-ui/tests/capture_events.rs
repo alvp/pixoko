@@ -13,7 +13,7 @@ use px_ui::actions::Platform;
 use px_ui::key_events::{Capture, captures, chord_of, help_pressed};
 use px_ui::keymap::{Binding, Chord, KeyId, Keymap, Platforms, Press};
 
-fn tecla(key: Key, modifiers: Modifiers) -> Event {
+fn key_2(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -23,7 +23,7 @@ fn tecla(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn repetida(key: Key, modifiers: Modifiers) -> Event {
+fn repeated(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -33,7 +33,7 @@ fn repetida(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn suelta(key: Key, modifiers: Modifiers) -> Event {
+fn releases(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -43,13 +43,13 @@ fn suelta(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn texto(t: &str) -> Event {
+fn text_2(t: &str) -> Event {
     Event::Text(t.to_string())
 }
 
-const NADA: Modifiers = Modifiers::NONE;
+const NOTHING: Modifiers = Modifiers::NONE;
 
-fn mayus() -> Modifiers {
+fn shift_2() -> Modifiers {
     Modifiers {
         shift: true,
         ..Modifiers::NONE
@@ -72,16 +72,16 @@ fn ctrl() -> Modifiers {
 }
 
 /// El resultado de capturar una secuencia: `Ok(chord)` o el motivo del rechazo.
-fn captura(eventos: &[Event]) -> Result<Chord, String> {
-    match captures(eventos).first() {
+fn capture(events_2: &[Event]) -> Result<Chord, String> {
+    match captures(events_2).first() {
         Some(Capture::Press(press)) => chord_of(press).map_err(str::to_string),
         Some(Capture::Cancel) => Err("cancel".into()),
-        Some(Capture::Reserved(motivo)) => Err((*motivo).to_string()),
+        Some(Capture::Reserved(reason_2)) => Err((*reason_2).to_string()),
         None => Err("nada".into()),
     }
 }
 
-fn simbolo(c: char) -> Chord {
+fn symbol(c: char) -> Chord {
     Chord {
         key: KeyId::Char(c),
         command: false,
@@ -94,17 +94,23 @@ fn simbolo(c: char) -> Chord {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_solo_f1_sin_modificadores_ni_repeticion_abre_la_ayuda() {
-    assert!(help_pressed(&[tecla(Key::F1, NADA)]));
-    assert!(help_pressed(&[tecla(Key::A, NADA), tecla(Key::F1, NADA)]));
+fn row_3_only_f1_without_modifiers_or_repeat_opens_the_help() {
+    assert!(help_pressed(&[key_2(Key::F1, NOTHING)]));
+    assert!(help_pressed(&[
+        key_2(Key::A, NOTHING),
+        key_2(Key::F1, NOTHING)
+    ]));
     assert!(!help_pressed(&[]));
-    assert!(!help_pressed(&[tecla(Key::F1, mayus())]));
-    assert!(!help_pressed(&[tecla(Key::F1, ctrl())]));
-    assert!(!help_pressed(&[tecla(Key::F1, alt())]));
-    assert!(!help_pressed(&[suelta(Key::F1, NADA)]));
-    assert!(!help_pressed(&[repetida(Key::F1, NADA)]));
-    assert!(!help_pressed(&[tecla(Key::F2, NADA), tecla(Key::A, NADA)]));
-    assert!(!help_pressed(&[texto("F1")]));
+    assert!(!help_pressed(&[key_2(Key::F1, shift_2())]));
+    assert!(!help_pressed(&[key_2(Key::F1, ctrl())]));
+    assert!(!help_pressed(&[key_2(Key::F1, alt())]));
+    assert!(!help_pressed(&[releases(Key::F1, NOTHING)]));
+    assert!(!help_pressed(&[repeated(Key::F1, NOTHING)]));
+    assert!(!help_pressed(&[
+        key_2(Key::F2, NOTHING),
+        key_2(Key::A, NOTHING)
+    ]));
+    assert!(!help_pressed(&[text_2("F1")]));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -112,53 +118,53 @@ fn fila_3_solo_f1_sin_modificadores_ni_repeticion_abre_la_ayuda() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6_las_distribuciones_dan_el_caracter_que_produce_la_tecla() {
+fn row_6_the_layouts_give_the_character_the_key_produces() {
     // Español: tecla ISO `<`, `Mayús`+ISO `>`; AltGr+`[` (con alt).
     assert_eq!(
-        captura(&[tecla(Key::IntlBackslash, NADA), texto("<")]),
-        Ok(simbolo('<'))
+        capture(&[key_2(Key::IntlBackslash, NOTHING), text_2("<")]),
+        Ok(symbol('<'))
     );
     assert_eq!(
-        captura(&[tecla(Key::IntlBackslash, mayus()), texto(">")]),
-        Ok(simbolo('>')),
+        capture(&[key_2(Key::IntlBackslash, shift_2()), text_2(">")]),
+        Ok(symbol('>')),
         "Mayús no cuenta en un símbolo"
     );
     assert_eq!(
-        captura(&[tecla(Key::OpenBracket, alt()), texto("[")]),
-        Ok(simbolo('['))
+        capture(&[key_2(Key::OpenBracket, alt()), text_2("[")]),
+        Ok(symbol('['))
     );
     // Inglés: Mayús+`,` con texto `<`.
     assert_eq!(
-        captura(&[tecla(Key::Comma, mayus()), texto("<")]),
-        Ok(simbolo('<'))
+        capture(&[key_2(Key::Comma, shift_2()), text_2("<")]),
+        Ok(symbol('<'))
     );
     // Alemán: AltGr+8 → `[`.
     assert_eq!(
-        captura(&[tecla(Key::Num8, alt()), texto("[")]),
-        Ok(simbolo('['))
+        capture(&[key_2(Key::Num8, alt()), text_2("[")]),
+        Ok(symbol('['))
     );
     // macOS español: `Option`+`[` con alt.
     assert_eq!(
-        captura(&[tecla(Key::Num5, alt()), texto("[")]),
-        Ok(simbolo('['))
+        capture(&[key_2(Key::Num5, alt()), text_2("[")]),
+        Ok(symbol('['))
     );
     // Dvorak: la `d` en otra posición física; ruso: `Key::D` con `в` (cae a la tecla).
     assert_eq!(
-        captura(&[tecla(Key::E, NADA), texto("d")]),
-        Ok(simbolo('d'))
+        capture(&[key_2(Key::E, NOTHING), text_2("d")]),
+        Ok(symbol('d'))
     );
     assert_eq!(
-        captura(&[tecla(Key::D, NADA), texto("в")]),
-        Ok(simbolo('d'))
+        capture(&[key_2(Key::D, NOTHING), text_2("в")]),
+        Ok(symbol('d'))
     );
     // Bloq Mayús: `Text("D")` sin `shift` es la `d`.
     assert_eq!(
-        captura(&[tecla(Key::D, NADA), texto("D")]),
-        Ok(simbolo('d'))
+        capture(&[key_2(Key::D, NOTHING), text_2("D")]),
+        Ok(symbol('d'))
     );
     // Con Mayús, una letra lleva `shift`.
     assert_eq!(
-        captura(&[tecla(Key::K, mayus()), texto("K")]),
+        capture(&[key_2(Key::K, shift_2()), text_2("K")]),
         Ok(Chord {
             key: KeyId::Char('k'),
             command: false,
@@ -167,7 +173,7 @@ fn fila_6_las_distribuciones_dan_el_caracter_que_produce_la_tecla() {
     );
     // Teclas con nombre.
     assert_eq!(
-        captura(&[tecla(Key::PageDown, mayus())]),
+        capture(&[key_2(Key::PageDown, shift_2())]),
         Ok(Chord {
             key: KeyId::PageDown,
             command: false,
@@ -175,7 +181,7 @@ fn fila_6_las_distribuciones_dan_el_caracter_que_produce_la_tecla() {
         })
     );
     assert_eq!(
-        captura(&[tecla(Key::Home, mayus())]),
+        capture(&[key_2(Key::Home, shift_2())]),
         Ok(Chord {
             key: KeyId::Home,
             command: false,
@@ -185,79 +191,82 @@ fn fila_6_las_distribuciones_dan_el_caracter_que_produce_la_tecla() {
     );
     // Una cifra.
     assert_eq!(
-        captura(&[tecla(Key::Num3, NADA), texto("3")]),
-        Ok(simbolo('3'))
+        capture(&[key_2(Key::Num3, NOTHING), text_2("3")]),
+        Ok(symbol('3'))
     );
 }
 
 #[test]
-fn fila_6_lo_que_no_vale_da_su_motivo_y_ninguno_pasa_de_37_caracteres() {
-    let motivos = [
+fn row_6_what_is_not_valid_gives_its_reason_and_none_passes_37_characters() {
+    let reasons = [
         // Tecla muerta, vocal compuesta, composición, `Option`+`d` (`∂`), IME, texto suelto.
-        captura(&[tecla(Key::OpenBracket, NADA)]),
-        captura(&[tecla(Key::U, NADA), texto("ú")]),
-        captura(&[tecla(Key::D, NADA), texto("´d")]),
-        captura(&[tecla(Key::D, alt()), texto("∂")]),
+        capture(&[key_2(Key::OpenBracket, NOTHING)]),
+        capture(&[key_2(Key::U, NOTHING), text_2("ú")]),
+        capture(&[key_2(Key::D, NOTHING), text_2("´d")]),
+        capture(&[key_2(Key::D, alt()), text_2("∂")]),
         // Teclas sin carácter.
-        captura(&[tecla(Key::Enter, NADA)]),
-        captura(&[tecla(Key::Tab, NADA)]),
-        captura(&[tecla(Key::ArrowLeft, NADA)]),
-        captura(&[tecla(Key::Backspace, NADA)]),
-        captura(&[tecla(Key::F5, NADA)]),
+        capture(&[key_2(Key::Enter, NOTHING)]),
+        capture(&[key_2(Key::Tab, NOTHING)]),
+        capture(&[key_2(Key::ArrowLeft, NOTHING)]),
+        capture(&[key_2(Key::Backspace, NOTHING)]),
+        capture(&[key_2(Key::F5, NOTHING)]),
         // `Ctrl`+letra y `Alt`+letra.
-        captura(&[tecla(Key::Z, ctrl())]),
-        captura(&[tecla(Key::C, ctrl())]),
-        captura(&[tecla(Key::D, alt()), texto("d")]),
+        capture(&[key_2(Key::Z, ctrl())]),
+        capture(&[key_2(Key::C, ctrl())]),
+        capture(&[key_2(Key::D, alt()), text_2("d")]),
         // Espacio.
-        captura(&[tecla(Key::Space, NADA), texto(" ")]),
+        capture(&[key_2(Key::Space, NOTHING), text_2(" ")]),
     ];
-    for motivo in &motivos {
-        let m = motivo.as_ref().expect_err("no vale");
+    for reason_2 in &reasons {
+        let m = reason_2.as_ref().expect_err("no vale");
         assert!(m.chars().count() <= 37, "{m}");
         assert!(!m.is_empty());
     }
-    assert_eq!(motivos[4], Err("esa tecla no vale".to_string()));
-    assert!(motivos[9].as_ref().unwrap_err().contains("Ctrl"));
-    assert!(motivos[11].as_ref().unwrap_err().contains("Alt"));
-    assert!(motivos[12].as_ref().unwrap_err().contains("Espacio"));
+    assert_eq!(reasons[4], Err("esa tecla no vale".to_string()));
+    assert!(reasons[9].as_ref().unwrap_err().contains("Ctrl"));
+    assert!(reasons[11].as_ref().unwrap_err().contains("Alt"));
+    assert!(reasons[12].as_ref().unwrap_err().contains("Espacio"));
     // IME y texto suelto no dan captura.
     assert!(captures(&[Event::Ime(ImeEvent::Commit("d".into()))]).is_empty());
-    assert!(captures(&[texto("d")]).is_empty());
-    assert!(captures(&[suelta(Key::D, NADA)]).is_empty());
+    assert!(captures(&[text_2("d")]).is_empty());
+    assert!(captures(&[releases(Key::D, NOTHING)]).is_empty());
 }
 
 #[test]
-fn fila_6_escape_f1_repeticiones_y_la_primera_del_fotograma() {
-    assert_eq!(captures(&[tecla(Key::Escape, NADA)]), vec![Capture::Cancel]);
+fn row_6_escape_f1_repeats_and_the_first_one_of_the_frame() {
     assert_eq!(
-        captures(&[tecla(Key::Escape, mayus())]),
+        captures(&[key_2(Key::Escape, NOTHING)]),
         vec![Capture::Cancel]
     );
-    assert!(captures(&[repetida(Key::Escape, NADA)]).is_empty());
     assert_eq!(
-        captura(&[tecla(Key::F1, NADA)]),
+        captures(&[key_2(Key::Escape, shift_2())]),
+        vec![Capture::Cancel]
+    );
+    assert!(captures(&[repeated(Key::Escape, NOTHING)]).is_empty());
+    assert_eq!(
+        capture(&[key_2(Key::F1, NOTHING)]),
         Err("F1 es de la ayuda".to_string())
     );
     // Las repeticiones se descartan: una tecla mantenida al armar no se captura sola.
-    assert!(captures(&[repetida(Key::D, NADA), texto("d")]).is_empty());
+    assert!(captures(&[repeated(Key::D, NOTHING), text_2("d")]).is_empty());
     // Vale la primera del fotograma.
-    let dos = captures(&[
-        tecla(Key::X, NADA),
-        texto("x"),
-        tecla(Key::Y, NADA),
-        texto("y"),
+    let two = captures(&[
+        key_2(Key::X, NOTHING),
+        text_2("x"),
+        key_2(Key::Y, NOTHING),
+        text_2("y"),
     ]);
     assert_eq!(
-        chord_of(match &dos[0] {
+        chord_of(match &two[0] {
             Capture::Press(p) => p,
-            otro => panic!("{otro:?}"),
+            other_2 => panic!("{other_2:?}"),
         }),
-        Ok(simbolo('x'))
+        Ok(symbol('x'))
     );
 }
 
 #[test]
-fn fila_6_lo_capturado_funciona_como_fila_de_la_tabla() {
+fn row_6_what_is_captured_works_as_a_row_of_the_table() {
     // Para cada carácter asignable de un teclado cualquiera, una fila con ese `Chord` casa con su
     // propia pulsación.
     for c in (b' '..=b'~').map(char::from) {
@@ -265,14 +274,14 @@ fn fila_6_lo_capturado_funciona_como_fila_de_la_tabla() {
             continue;
         }
         let mods = if c.is_ascii_uppercase() {
-            mayus()
+            shift_2()
         } else {
-            NADA
+            NOTHING
         };
-        let Ok(chord) = captura(&[tecla(Key::A, mods), texto(&c.to_string())]) else {
+        let Ok(chord) = capture(&[key_2(Key::A, mods), text_2(&c.to_string())]) else {
             continue;
         };
-        let fila = Binding {
+        let row_2 = Binding {
             key: chord.key,
             command: false,
             shift: chord.shift,
@@ -280,13 +289,13 @@ fn fila_6_lo_capturado_funciona_como_fila_de_la_tabla() {
             active: Platforms::All,
             shown: Platforms::All,
         };
-        let tabla = Keymap::new(vec![fila]);
-        let press = match captures(&[tecla(Key::A, mods), texto(&c.to_string())])
+        let tabla = Keymap::new(vec![row_2]);
+        let press = match captures(&[key_2(Key::A, mods), text_2(&c.to_string())])
             .first()
             .unwrap()
         {
             Capture::Press(p) => *p,
-            otro => panic!("{otro:?}"),
+            other_2 => panic!("{other_2:?}"),
         };
         assert_eq!(
             tabla.action_for(&press, Platform::Linux),
@@ -300,8 +309,8 @@ fn fila_6_lo_capturado_funciona_como_fila_de_la_tabla() {
 // Propiedad 3
 // ---------------------------------------------------------------------------------------------
 
-fn evento() -> impl Strategy<Value = Event> {
-    let teclas = prop_oneof![
+fn event() -> impl Strategy<Value = Event> {
+    let keys = prop_oneof![
         Just(Key::A),
         Just(Key::D),
         Just(Key::K),
@@ -329,17 +338,15 @@ fn evento() -> impl Strategy<Value = Event> {
         },
     );
     prop_oneof![
-        (teclas, mods, any::<bool>(), any::<bool>()).prop_map(
-            |(key, modifiers, pressed, repeat)| {
-                Event::Key {
-                    key,
-                    physical_key: Some(key),
-                    pressed,
-                    repeat,
-                    modifiers,
-                }
+        (keys, mods, any::<bool>(), any::<bool>()).prop_map(|(key, modifiers, pressed, repeat)| {
+            Event::Key {
+                key,
+                physical_key: Some(key),
+                pressed,
+                repeat,
+                modifiers,
             }
-        ),
+        }),
         "\\PC{0,3}".prop_map(Event::Text),
         "\\PC{0,3}".prop_map(|t| Event::Ime(ImeEvent::Commit(t))),
     ]
@@ -352,10 +359,10 @@ proptest! {
     /// `command`, no es `Alt`+letra, tiene carácter, no es `Espacio` y una fila con él casa con su
     /// propia `Press`; `Escape` nunca da un `Chord`; las repeticiones y `F1` nunca dan nada.
     #[test]
-    fn propiedad_3_la_captura_es_total_y_lo_que_da_es_asignable(
-        eventos in proptest::collection::vec(evento(), 0..8),
+    fn property_3_the_capture_is_total_and_what_it_gives_is_assignable(
+        events_2 in proptest::collection::vec(event(), 0..8),
     ) {
-        for capture in captures(&eventos) {
+        for capture in captures(&events_2) {
             match capture {
                 Capture::Cancel | Capture::Reserved(_) => {}
                 Capture::Press(press) => {
@@ -371,7 +378,7 @@ proptest! {
                             prop_assert!(!press.alt && !press.other_ctrl, "{press:?}");
                         }
                         prop_assert!(!chord.shift || c.is_ascii_lowercase());
-                        let fila = Binding {
+                        let row_2 = Binding {
                             key: chord.key,
                             command: false,
                             shift: chord.shift,
@@ -379,7 +386,7 @@ proptest! {
                             active: Platforms::All,
                             shown: Platforms::All,
                         };
-                        let tabla = Keymap::new(vec![fila]);
+                        let tabla = Keymap::new(vec![row_2]);
                         prop_assert_eq!(
                             tabla.action_for(&press, Platform::Linux),
                             Some(AppAction::ZoomFit)
@@ -389,7 +396,7 @@ proptest! {
             }
         }
         // `Escape` nunca da un `Chord` y `F1` tampoco.
-        for c in captures(&[tecla(Key::Escape, NADA), tecla(Key::F1, NADA)]) {
+        for c in captures(&[key_2(Key::Escape, NOTHING), key_2(Key::F1, NOTHING)]) {
             if let Capture::Press(p) = c {
                 prop_assert!(chord_of(&p).is_err());
             }
@@ -398,4 +405,4 @@ proptest! {
 }
 
 #[allow(dead_code)]
-fn _usa(_: Press) {}
+fn _uses(_: Press) {}

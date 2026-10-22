@@ -65,7 +65,7 @@ impl TileRect {
     }
 }
 
-/// Reparto de una imagen en baldosas de `side`, por filas (`índice = fila · cols + col`). Las
+/// Reparto de una imagen en baldosas de `side`, por filas (`índice = row_2 · cols + col`). Las
 /// del borde son menores.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Tiling {

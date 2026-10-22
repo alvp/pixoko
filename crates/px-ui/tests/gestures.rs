@@ -13,8 +13,8 @@ use px_ui::gestures::{
 use px_ui::keymap::Platforms;
 use px_ui::pointer_events::{button_of, pointer_presses, wheel_of};
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
-const BOTONES: [Button; 5] = [
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const BUTTONS: [Button; 5] = [
     Button::Left,
     Button::Middle,
     Button::Right,
@@ -30,7 +30,7 @@ fn mods(command: Option<bool>, shift: Option<bool>, space: Option<bool>) -> Mods
     }
 }
 
-fn fila(input: Input, mods: Mods, action: GestureAction, scope: Scope) -> GestureRow {
+fn row_2(input: Input, mods: Mods, action: GestureAction, scope: Scope) -> GestureRow {
     GestureRow {
         input,
         mods,
@@ -50,55 +50,55 @@ fn p(input: Input, command: bool, shift: bool, space: bool) -> Pointing {
 }
 
 /// Las diez filas de la spec, escritas a mano.
-fn esquema() -> Vec<GestureRow> {
+fn scheme() -> Vec<GestureRow> {
     use GestureAction::*;
     let n = mods(None, None, None);
     vec![
-        fila(
+        row_2(
             Input::Press(Button::Left),
             mods(None, None, Some(false)),
             Draw(Role::Foreground),
             Scope::Canvas,
         ),
-        fila(
+        row_2(
             Input::Press(Button::Left),
             mods(None, None, Some(true)),
             Pan,
             Scope::Canvas,
         ),
-        fila(Input::Press(Button::Middle), n, Pan, Scope::Canvas),
-        fila(
+        row_2(Input::Press(Button::Middle), n, Pan, Scope::Canvas),
+        row_2(
             Input::Press(Button::Right),
             n,
             Draw(Role::Background),
             Scope::Canvas,
         ),
-        fila(
+        row_2(
             Input::Wheel,
             mods(Some(false), Some(false), None),
             ZoomStep,
             Scope::Canvas,
         ),
-        fila(
+        row_2(
             Input::Wheel,
             mods(Some(false), Some(true), None),
             PanX,
             Scope::Canvas,
         ),
-        fila(
+        row_2(
             Input::Scroll,
             mods(Some(false), None, None),
             Pan,
             Scope::Canvas,
         ),
-        fila(Input::Pinch, n, ZoomStep, Scope::Canvas),
-        fila(
+        row_2(Input::Pinch, n, ZoomStep, Scope::Canvas),
+        row_2(
             Input::Press(Button::Back),
             n,
             App(AppAction::Undo),
             Scope::Window,
         ),
-        fila(
+        row_2(
             Input::Press(Button::Forward),
             n,
             App(AppAction::Redo),
@@ -110,27 +110,27 @@ fn esquema() -> Vec<GestureRow> {
 // --- Fila 1 ---
 
 #[test]
-fn fila_1_la_tabla_por_defecto_son_las_diez_filas_sin_choques() {
+fn row_1_the_default_table_is_the_ten_rows_without_clashes() {
     let tabla = GestureMap::default_scheme();
-    assert_eq!(tabla.rows(), esquema().as_slice());
+    assert_eq!(tabla.rows(), scheme().as_slice());
     assert!(tabla.conflicts().is_empty());
-    for plataforma in PLATAFORMAS {
-        let activas = tabla
+    for platform_2 in PLATFORMS {
+        let active = tabla
             .rows()
             .iter()
-            .filter(|f| f.active.includes(plataforma))
+            .filter(|f| f.active.includes(platform_2))
             .count();
-        assert_eq!(activas, 10, "{plataforma:?}");
+        assert_eq!(active, 10, "{platform_2:?}");
     }
 }
 
 // --- Fila 2 ---
 
 #[test]
-fn fila_2_resolver_los_cinco_botones_con_todos_los_modificadores() {
+fn row_2_resolving_the_five_buttons_with_all_the_modifiers() {
     use GestureAction::*;
     let tabla = GestureMap::default_scheme();
-    for plataforma in PLATAFORMAS {
+    for platform_2 in PLATFORMS {
         for command in [false, true] {
             for shift in [false, true] {
                 for space in [false, true] {
@@ -139,14 +139,14 @@ fn fila_2_resolver_los_cinco_botones_con_todos_los_modificadores() {
                             tabla.resolve(
                                 &p(Input::Press(b), command, shift, space),
                                 over,
-                                plataforma,
+                                platform_2,
                             )
                         };
-                        let esperado = |a: GestureAction| over.then_some(a);
-                        let izquierdo = if space { Pan } else { Draw(Role::Foreground) };
-                        assert_eq!(r(Button::Left), esperado(izquierdo));
-                        assert_eq!(r(Button::Middle), esperado(Pan));
-                        assert_eq!(r(Button::Right), esperado(Draw(Role::Background)));
+                        let expected_2 = |a: GestureAction| over.then_some(a);
+                        let left_2 = if space { Pan } else { Draw(Role::Foreground) };
+                        assert_eq!(r(Button::Left), expected_2(left_2));
+                        assert_eq!(r(Button::Middle), expected_2(Pan));
+                        assert_eq!(r(Button::Right), expected_2(Draw(Role::Background)));
                         // Los laterales valen en toda la ventana.
                         assert_eq!(r(Button::Back), Some(App(AppAction::Undo)));
                         assert_eq!(r(Button::Forward), Some(App(AppAction::Redo)));
@@ -158,36 +158,36 @@ fn fila_2_resolver_los_cinco_botones_con_todos_los_modificadores() {
 }
 
 #[test]
-fn fila_2_rueda_desplazamiento_y_pellizco() {
+fn row_2_wheel_scroll_and_pinch() {
     use GestureAction::*;
     let tabla = GestureMap::default_scheme();
     for shift in [false, true] {
         for space in [false, true] {
-            let rueda = |command| {
+            let wheel = |command| {
                 tabla.resolve(
                     &p(Input::Wheel, command, shift, space),
                     true,
                     Platform::Linux,
                 )
             };
-            assert_eq!(rueda(false), Some(if shift { PanX } else { ZoomStep }));
-            assert_eq!(rueda(true), None, "con command es del pellizco");
-            let dedos = |command| {
+            assert_eq!(wheel(false), Some(if shift { PanX } else { ZoomStep }));
+            assert_eq!(wheel(true), None, "con command es del pellizco");
+            let fingers = |command| {
                 tabla.resolve(
                     &p(Input::Scroll, command, shift, space),
                     true,
                     Platform::Mac,
                 )
             };
-            assert_eq!(dedos(false), Some(Pan));
-            assert_eq!(dedos(true), None);
+            assert_eq!(fingers(false), Some(Pan));
+            assert_eq!(fingers(true), None);
             for command in [false, true] {
-                let pellizco = tabla.resolve(
+                let pinch = tabla.resolve(
                     &p(Input::Pinch, command, shift, space),
                     true,
                     Platform::Windows,
                 );
-                assert_eq!(pellizco, Some(ZoomStep));
+                assert_eq!(pinch, Some(ZoomStep));
             }
         }
     }
@@ -212,7 +212,7 @@ fn fila_2_rueda_desplazamiento_y_pellizco() {
 
 // --- Fila 3 ---
 
-fn rueda(unit: MouseWheelUnit, delta: Vec2, modifiers: Modifiers) -> Event {
+fn wheel(unit: MouseWheelUnit, delta: Vec2, modifiers: Modifiers) -> Event {
     Event::MouseWheel {
         unit,
         delta,
@@ -222,7 +222,7 @@ fn rueda(unit: MouseWheelUnit, delta: Vec2, modifiers: Modifiers) -> Event {
     }
 }
 
-fn boton(button: PointerButton, pressed: bool, modifiers: Modifiers) -> Event {
+fn button_2(button: PointerButton, pressed: bool, modifiers: Modifiers) -> Event {
     Event::PointerButton {
         pos: Pos2::ZERO,
         button,
@@ -232,7 +232,7 @@ fn boton(button: PointerButton, pressed: bool, modifiers: Modifiers) -> Event {
 }
 
 #[test]
-fn fila_3_los_cinco_botones_de_egui_son_los_cinco_de_la_tabla() {
+fn row_3_the_five_egui_buttons_are_the_five_of_the_table() {
     assert_eq!(button_of(PointerButton::Primary), Button::Left);
     assert_eq!(button_of(PointerButton::Secondary), Button::Right);
     assert_eq!(button_of(PointerButton::Middle), Button::Middle);
@@ -241,19 +241,19 @@ fn fila_3_los_cinco_botones_de_egui_son_los_cinco_de_la_tabla() {
 }
 
 #[test]
-fn fila_3_la_unidad_separa_rueda_y_dedos_y_command_es_del_pellizco() {
+fn row_3_the_unit_separates_wheel_and_fingers_and_command_belongs_to_the_pinch() {
     let d = Vec2::new(0.25, -1.5);
-    let sin = Modifiers::NONE;
+    let without = Modifiers::NONE;
     assert_eq!(
-        wheel_of(MouseWheelUnit::Line, d, sin),
+        wheel_of(MouseWheelUnit::Line, d, without),
         Some((Input::Wheel, 0.25, -1.5))
     );
     assert_eq!(
-        wheel_of(MouseWheelUnit::Page, d, sin),
+        wheel_of(MouseWheelUnit::Page, d, without),
         Some((Input::Wheel, 0.25, -1.5))
     );
     assert_eq!(
-        wheel_of(MouseWheelUnit::Point, d, sin),
+        wheel_of(MouseWheelUnit::Point, d, without),
         Some((Input::Scroll, 0.25, -1.5))
     );
     for unit in [
@@ -274,17 +274,17 @@ fn fila_3_la_unidad_separa_rueda_y_dedos_y_command_es_del_pellizco() {
 }
 
 #[test]
-fn fila_3_pointer_presses_da_una_por_pulsado_y_nunca_por_soltado() {
-    let eventos = vec![
-        boton(PointerButton::Extra1, true, Modifiers::NONE),
-        boton(PointerButton::Extra1, false, Modifiers::NONE),
-        rueda(MouseWheelUnit::Line, Vec2::new(0.0, 1.0), Modifiers::NONE),
-        boton(PointerButton::Extra2, true, Modifiers::SHIFT),
-        boton(PointerButton::Primary, true, Modifiers::COMMAND),
+fn row_3_pointer_presses_gives_one_per_press_and_never_per_release() {
+    let events_2 = vec![
+        button_2(PointerButton::Extra1, true, Modifiers::NONE),
+        button_2(PointerButton::Extra1, false, Modifiers::NONE),
+        wheel(MouseWheelUnit::Line, Vec2::new(0.0, 1.0), Modifiers::NONE),
+        button_2(PointerButton::Extra2, true, Modifiers::SHIFT),
+        button_2(PointerButton::Primary, true, Modifiers::COMMAND),
         Event::Zoom(1.1),
     ];
     assert_eq!(
-        pointer_presses(&eventos),
+        pointer_presses(&events_2),
         vec![
             (Button::Back, false, false),
             (Button::Forward, false, true),
@@ -295,25 +295,25 @@ fn fila_3_pointer_presses_da_una_por_pulsado_y_nunca_por_soltado() {
 
 // --- Fila 4 ---
 
-fn suma(acumulador: &mut StepAccumulator, cantidades: &[f32]) -> Vec<i32> {
-    cantidades.iter().map(|&c| acumulador.push(c)).collect()
+fn sum(accumulator: &mut StepAccumulator, amounts: &[f32]) -> Vec<i32> {
+    amounts.iter().map(|&c| accumulator.push(c)).collect()
 }
 
 #[test]
-fn fila_4_acumulador_de_rueda() {
+fn row_4_wheel_accumulator() {
     let mut a = StepAccumulator::new(WHEEL_STEP);
     assert_eq!(a.push(1.0), 1);
     assert_eq!(a.push(3.0), 3, "tres muescas de golpe, tres pasos");
     assert_eq!(a.push(-1.0), -1);
     a.reset();
     assert_eq!(
-        suma(&mut a, &[0.4, 0.4, 0.4]),
+        sum(&mut a, &[0.4, 0.4, 0.4]),
         [0, 0, 1],
         "el resto se arrastra"
     );
     a.reset();
     assert_eq!(
-        suma(&mut a, &[0.6, -0.6]),
+        sum(&mut a, &[0.6, -0.6]),
         [0, 0],
         "el cambio de signo descarta el resto"
     );
@@ -325,10 +325,10 @@ fn fila_4_acumulador_de_rueda() {
 }
 
 #[test]
-fn fila_4_acumulador_de_pellizco() {
-    let total = |cantidades: &[f32]| {
+fn row_4_pinch_accumulator() {
+    let total = |amounts: &[f32]| {
         let mut a = StepAccumulator::new(PINCH_STEP_LN);
-        suma(&mut a, cantidades).iter().sum::<i32>()
+        sum(&mut a, amounts).iter().sum::<i32>()
     };
     assert_eq!(
         total(&[1.02f32.ln(); 30]),
@@ -346,11 +346,11 @@ fn fila_4_acumulador_de_pellizco() {
 }
 
 #[test]
-fn fila_4_los_no_finitos_se_ignoran() {
+fn row_4_the_non_finite_ones_are_ignored() {
     let mut a = StepAccumulator::new(WHEEL_STEP);
     assert_eq!(a.push(0.5), 0);
-    for malo in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-        assert_eq!(a.push(malo), 0);
+    for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        assert_eq!(a.push(bad), 0);
     }
     assert_eq!(a.remainder(), 0.5);
     assert_eq!(a.push(0.5), 1);
@@ -359,8 +359,8 @@ fn fila_4_los_no_finitos_se_ignoran() {
 // --- Fila 9 ---
 
 #[test]
-fn fila_9_reasignar_a_cualquier_accion_de_la_tabla_de_teclado() {
-    let tabla = GestureMap::new(vec![fila(
+fn row_9_reassigning_to_any_action_of_the_keyboard_table() {
+    let tabla = GestureMap::new(vec![row_2(
         Input::Press(Button::Back),
         mods(None, None, None),
         GestureAction::App(AppAction::ColorNext),
@@ -379,92 +379,92 @@ fn fila_9_reasignar_a_cualquier_accion_de_la_tabla_de_teclado() {
 }
 
 #[test]
-fn fila_9_duplicados_solo_si_los_modificadores_son_compatibles() {
-    let izq = |space| {
-        fila(
+fn row_9_duplicates_only_if_the_modifiers_are_compatible() {
+    let left = |space| {
+        row_2(
             Input::Press(Button::Left),
             mods(None, None, space),
             GestureAction::Pan,
             Scope::Canvas,
         )
     };
-    let choca = |a, b| GestureMap::new(vec![izq(a), izq(b)]).conflicts();
-    assert_eq!(choca(None, Some(false)), vec![Conflict::Duplicate(0, 1)]);
-    assert_eq!(choca(Some(true), None), vec![Conflict::Duplicate(0, 1)]);
+    let clashes = |a, b| GestureMap::new(vec![left(a), left(b)]).conflicts();
+    assert_eq!(clashes(None, Some(false)), vec![Conflict::Duplicate(0, 1)]);
+    assert_eq!(clashes(Some(true), None), vec![Conflict::Duplicate(0, 1)]);
     assert_eq!(
-        choca(Some(true), Some(true)),
+        clashes(Some(true), Some(true)),
         vec![Conflict::Duplicate(0, 1)]
     );
-    assert!(choca(Some(true), Some(false)).is_empty(), "se excluyen");
+    assert!(clashes(Some(true), Some(false)).is_empty(), "se excluyen");
     // Plataformas que no se solapan tampoco chocan.
-    let mut linux = izq(None);
+    let mut linux = left(None);
     linux.active = Platforms::Only(Platform::Linux);
-    let mut mac = izq(None);
+    let mut mac = left(None);
     mac.active = Platforms::Only(Platform::Mac);
     assert!(GestureMap::new(vec![linux, mac]).conflicts().is_empty());
 }
 
 #[test]
-fn fila_9_combinaciones_invalidas() {
+fn row_9_invalid_combinations() {
     let n = mods(None, None, None);
-    let invalidas = [
-        fila(
+    let invalid = [
+        row_2(
             Input::Wheel,
             n,
             GestureAction::Draw(Role::Foreground),
             Scope::Canvas,
         ),
-        fila(
+        row_2(
             Input::Press(Button::Left),
             n,
             GestureAction::ZoomStep,
             Scope::Canvas,
         ),
-        fila(
+        row_2(
             Input::Press(Button::Left),
             n,
             GestureAction::PanX,
             Scope::Canvas,
         ),
-        fila(Input::Pinch, n, GestureAction::PanX, Scope::Canvas),
-        fila(Input::Pinch, n, GestureAction::Pan, Scope::Canvas),
-        fila(
+        row_2(Input::Pinch, n, GestureAction::PanX, Scope::Canvas),
+        row_2(Input::Pinch, n, GestureAction::Pan, Scope::Canvas),
+        row_2(
             Input::Scroll,
             n,
             GestureAction::App(AppAction::Undo),
             Scope::Window,
         ),
-        fila(
+        row_2(
             Input::Wheel,
             n,
             GestureAction::App(AppAction::Undo),
             Scope::Window,
         ),
     ];
-    for f in invalidas {
+    for f in invalid {
         assert_eq!(
             GestureMap::new(vec![f.clone()]).conflicts(),
             vec![Conflict::Invalid(0)],
             "{f:?}"
         );
     }
-    let validas = [
-        fila(Input::Wheel, n, GestureAction::Pan, Scope::Canvas),
-        fila(Input::Scroll, n, GestureAction::ZoomStep, Scope::Canvas),
-        fila(
+    let valid = [
+        row_2(Input::Wheel, n, GestureAction::Pan, Scope::Canvas),
+        row_2(Input::Scroll, n, GestureAction::ZoomStep, Scope::Canvas),
+        row_2(
             Input::Press(Button::Back),
             n,
             GestureAction::App(AppAction::ZoomIn),
             Scope::Window,
         ),
-        fila(
+        row_2(
             Input::Press(Button::Right),
             n,
             GestureAction::Pan,
             Scope::Canvas,
         ),
     ];
-    for f in validas {
+    for f in valid {
         assert!(
             GestureMap::new(vec![f.clone()]).conflicts().is_empty(),
             "{f:?}"
@@ -474,9 +474,9 @@ fn fila_9_combinaciones_invalidas() {
 
 // --- Propiedades ---
 
-fn cualquier_entrada() -> impl Strategy<Value = Input> {
+fn any_input() -> impl Strategy<Value = Input> {
     prop_oneof![
-        prop::sample::select(BOTONES.to_vec()).prop_map(Input::Press),
+        prop::sample::select(BUTTONS.to_vec()).prop_map(Input::Press),
         Just(Input::Wheel),
         Just(Input::Scroll),
         Just(Input::Pinch),
@@ -484,7 +484,7 @@ fn cualquier_entrada() -> impl Strategy<Value = Input> {
 }
 
 /// Lo que dice la spec, escrito a mano sin mirar las filas.
-fn oraculo(p: &Pointing, over: bool) -> Option<GestureAction> {
+fn oracle(p: &Pointing, over: bool) -> Option<GestureAction> {
     use GestureAction::*;
     match p.input {
         Input::Press(Button::Left) if over => {
@@ -506,61 +506,61 @@ proptest! {
 
     /// Propiedad 1: sin choques, independiente del orden, igual al oráculo y sin filas inalcanzables.
     #[test]
-    fn propiedad_1_sin_choques_determinista_y_alcanzable(
-        input in cualquier_entrada(),
+    fn property_1_without_clashes_deterministic_and_reachable(
+        input in any_input(),
         command: bool, shift: bool, space: bool, over: bool,
-        plataforma in prop::sample::select(PLATAFORMAS.to_vec()),
+        platform_2 in prop::sample::select(PLATFORMS.to_vec()),
     ) {
         let tabla = GestureMap::default_scheme();
-        let inversa = GestureMap::new(tabla.rows().iter().rev().cloned().collect());
+        let inverse = GestureMap::new(tabla.rows().iter().rev().cloned().collect());
         prop_assert!(tabla.conflicts().is_empty());
-        let punto = p(input, command, shift, space);
-        let resultado = tabla.resolve(&punto, over, plataforma);
-        prop_assert_eq!(resultado, inversa.resolve(&punto, over, plataforma));
-        prop_assert_eq!(resultado, oraculo(&punto, over));
+        let point = p(input, command, shift, space);
+        let result = tabla.resolve(&point, over, platform_2);
+        prop_assert_eq!(result, inverse.resolve(&point, over, platform_2));
+        prop_assert_eq!(result, oracle(&point, over));
     }
 
     #[test]
-    fn propiedad_1_cada_fila_es_alcanzable(indice in 0usize..10) {
+    fn property_1_each_row_is_reachable(index_2 in 0usize..10) {
         let tabla = GestureMap::default_scheme();
-        let f = &tabla.rows()[indice];
-        let punto = Pointing {
+        let f = &tabla.rows()[index_2];
+        let point = Pointing {
             input: f.input,
             command: f.mods.command.unwrap_or(false),
             shift: f.mods.shift.unwrap_or(false),
             space: f.mods.space.unwrap_or(false),
         };
-        for plataforma in PLATAFORMAS {
-            prop_assert_eq!(tabla.resolve(&punto, true, plataforma), Some(f.action));
+        for platform_2 in PLATFORMS {
+            prop_assert_eq!(tabla.resolve(&point, true, platform_2), Some(f.action));
         }
     }
 
     /// Propiedad 2: el acumulador conserva lo que no ha dado en pasos y nunca da un paso sin cruzar
     /// el umbral.
     #[test]
-    fn propiedad_2_acumulador(
-        umbral in prop::sample::select(vec![WHEEL_STEP, PINCH_STEP_LN]),
-        cantidades in prop::collection::vec(-3.0f32..3.0, 0..40),
+    fn property_2_accumulator(
+        threshold in prop::sample::select(vec![WHEEL_STEP, PINCH_STEP_LN]),
+        amounts in prop::collection::vec(-3.0f32..3.0, 0..40),
         reset_en in prop::option::of(0usize..40),
     ) {
-        let mut a = StepAccumulator::new(umbral);
-        let mut resto = 0.0f32;
-        for (i, &c) in cantidades.iter().enumerate() {
+        let mut a = StepAccumulator::new(threshold);
+        let mut rest_2 = 0.0f32;
+        for (i, &c) in amounts.iter().enumerate() {
             if reset_en == Some(i) {
                 a.reset();
-                resto = 0.0;
+                rest_2 = 0.0;
                 prop_assert_eq!(a.remainder(), 0.0);
             }
-            let previo = if resto != 0.0 && c != 0.0 && (resto > 0.0) != (c > 0.0) { 0.0 } else { resto };
-            let pasos = a.push(c);
-            let total = previo + c;
-            prop_assert!(a.remainder().abs() < umbral + 1e-4, "resto {}", a.remainder());
-            prop_assert!(pasos == 0 || (pasos > 0) == (total > 0.0));
-            prop_assert!((total - pasos as f32 * umbral - a.remainder()).abs() < 1e-3);
-            if pasos == 0 {
-                prop_assert!(total.abs() < umbral + 1e-4, "sin paso con {total} y umbral {umbral}");
+            let previous = if rest_2 != 0.0 && c != 0.0 && (rest_2 > 0.0) != (c > 0.0) { 0.0 } else { rest_2 };
+            let steps_2 = a.push(c);
+            let total = previous + c;
+            prop_assert!(a.remainder().abs() < threshold + 1e-4, "resto {}", a.remainder());
+            prop_assert!(steps_2 == 0 || (steps_2 > 0) == (total > 0.0));
+            prop_assert!((total - steps_2 as f32 * threshold - a.remainder()).abs() < 1e-3);
+            if steps_2 == 0 {
+                prop_assert!(total.abs() < threshold + 1e-4, "sin paso con {total} y umbral {threshold}");
             }
-            resto = a.remainder();
+            rest_2 = a.remainder();
         }
     }
 }

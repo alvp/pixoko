@@ -26,10 +26,10 @@ use px_ui::text::{apply_scale, install_fonts, text_scale};
 pub const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 
 /// Tolerancia del error de `f32` al pasar de puntos a píxeles físicos.
-pub const TOLERANCIA: f32 = 0.001;
+pub const TOLERANCE: f32 = 0.001;
 
-pub fn cerca(a: f32, b: f32) -> bool {
-    (a - b).abs() <= TOLERANCIA
+pub fn near(a: f32, b: f32) -> bool {
+    (a - b).abs() <= TOLERANCE
 }
 
 /// `n = text_scale(ppp)` como `i64`.
@@ -38,23 +38,23 @@ pub fn n_de(ppp: f32) -> i64 {
 }
 
 /// Un valor en puntos es un número entero de píxeles físicos (error de `f32` ≤ 0,001).
-pub fn es_entero_fisico(puntos: f32, ppp: f32) -> bool {
-    let fisico = puntos * ppp;
-    (fisico - fisico.round()).abs() <= TOLERANCIA
+pub fn is_integer_physical(points: f32, ppp: f32) -> bool {
+    let physical = points * ppp;
+    (physical - physical.round()).abs() <= TOLERANCE
 }
 
 /// Tolerancia, en píxeles físicos, de lo que egui coloca por su cuenta: `Panel`, `allocate_rect` y
 /// `allocate_exact_size` redondean a un múltiplo par de `emath::GUI_ROUNDING` (1/16 pt), así que a
 /// `ppp` 1,25 y 1,5 un borde puede caer hasta 1/32 pt (`ppp/32` px) del entero. Lo que se calcula
-/// sin egui usa [`TOLERANCIA`].
-pub fn tolerancia_de_egui(ppp: f32) -> f32 {
-    ppp / 32.0 + TOLERANCIA
+/// sin egui usa [`TOLERANCE`].
+pub fn tolerance_of_egui(ppp: f32) -> f32 {
+    ppp / 32.0 + TOLERANCE
 }
 
-/// Como [`es_entero_fisico`] con la tolerancia del redondeo de egui.
-pub fn es_entero_fisico_en_egui(puntos: f32, ppp: f32) -> bool {
-    let fisico = puntos * ppp;
-    (fisico - fisico.round()).abs() <= tolerancia_de_egui(ppp)
+/// Como [`is_integer_physical`] con la tolerancia del redondeo de egui.
+pub fn is_physical_integer_in_egui(points: f32, ppp: f32) -> bool {
+    let physical = points * ppp;
+    (physical - physical.round()).abs() <= tolerance_of_egui(ppp)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -65,11 +65,11 @@ pub fn mover(pos: Pos2) -> Event {
     Event::PointerMoved(pos)
 }
 
-pub fn boton(pos: Pos2, pressed: bool) -> Event {
-    boton_de(pos, PointerButton::Primary, pressed)
+pub fn button_2(pos: Pos2, pressed: bool) -> Event {
+    button_of_2(pos, PointerButton::Primary, pressed)
 }
 
-pub fn boton_de(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
+pub fn button_of_2(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
     Event::PointerButton {
         pos,
         button,
@@ -78,7 +78,7 @@ pub fn boton_de(pos: Pos2, button: PointerButton, pressed: bool) -> Event {
     }
 }
 
-pub fn tecla(key: Key, modifiers: Modifiers) -> Event {
+pub fn key_2(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -88,11 +88,11 @@ pub fn tecla(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-/// Una muesca de la rueda, en líneas (`arriba`: acerca).
-pub fn rueda_linea(arriba: bool) -> Event {
+/// Una muesca de la rueda, en líneas (`top`: acerca).
+pub fn wheel_line(top: bool) -> Event {
     Event::MouseWheel {
         unit: MouseWheelUnit::Line,
-        delta: vec2(0.0, if arriba { 1.0 } else { -1.0 }),
+        delta: vec2(0.0, if top { 1.0 } else { -1.0 }),
         phase: TouchPhase::Move,
         source: MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
@@ -100,10 +100,10 @@ pub fn rueda_linea(arriba: bool) -> Event {
 }
 
 /// La rueda en puntos: `delta.y = −px / ppp` desplaza `px` píxeles físicos hacia abajo.
-pub fn rueda_puntos(px_abajo: i64, ppp: f32) -> Event {
+pub fn wheel_points(px_below: i64, ppp: f32) -> Event {
     Event::MouseWheel {
         unit: MouseWheelUnit::Point,
-        delta: vec2(0.0, -(px_abajo as f32) / ppp),
+        delta: vec2(0.0, -(px_below as f32) / ppp),
         phase: TouchPhase::Move,
         source: MouseWheelSource::Unknown,
         modifiers: Modifiers::NONE,
@@ -111,13 +111,13 @@ pub fn rueda_puntos(px_abajo: i64, ppp: f32) -> Event {
 }
 
 /// Posición en puntos de una coordenada en píxeles físicos.
-pub fn en_puntos(ppp: f32, x_px: i64, y_px: i64) -> Pos2 {
+pub fn in_points(ppp: f32, x_px: i64, y_px: i64) -> Pos2 {
     pos2(x_px as f32 / ppp, y_px as f32 / ppp)
 }
 
 /// Modificadores de `command` como los entrega egui en cada plataforma: `ctrl` y `command` en
 /// Linux y Windows, `mac_cmd` y `command` en macOS.
-pub fn modificadores_command(mac: bool) -> Modifiers {
+pub fn modifiers_command(mac: bool) -> Modifiers {
     if mac {
         Modifiers {
             mac_cmd: true,
@@ -134,7 +134,7 @@ pub fn modificadores_command(mac: bool) -> Modifiers {
 }
 
 /// Las 32 combinaciones de los cinco modificadores de egui.
-pub fn modificadores(bits: u8) -> Modifiers {
+pub fn modifiers_2(bits: u8) -> Modifiers {
     Modifiers {
         alt: bits & 1 != 0,
         ctrl: bits & 2 != 0,
@@ -150,38 +150,38 @@ pub fn modificadores(bits: u8) -> Modifiers {
 
 /// Contexto a `ppp` con la fuente instalada, la escala aplicada y `MissingGlyphPolicy::Panic`
 /// (un glifo ausente en texto fijo es un fallo), ya calentado.
-pub fn contexto(ppp: f32) -> Context {
+pub fn context(ppp: f32) -> Context {
     let ctx = Context::default();
     ctx.set_pixels_per_point(ppp);
     ctx.set_missing_glyph_policy(MissingGlyphPolicy::Panic);
     install_fonts(&ctx);
     for _ in 0..2 {
-        let entrada = RawInput {
+        let input_2 = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(100.0, 100.0))),
             ..RawInput::default()
         };
-        let salida = ctx.run_ui(entrada, |ui| apply_scale(ui.ctx()));
-        salida.drop_without_applying_deltas();
+        let output_2 = ctx.run_ui(input_2, |ui| apply_scale(ui.ctx()));
+        output_2.drop_without_applying_deltas();
     }
     ctx
 }
 
-/// Ejecuta un fotograma de `pantalla` puntos con `events`, aplica `dibuja` y devuelve lo pintado
+/// Ejecuta un fotograma de `screen` puntos con `events`, aplica `draws` y devuelve lo pintado
 /// (sin los cambios de textura, que egui exige descartar).
-pub fn fotograma(
+pub fn frame(
     ctx: &Context,
-    pantalla: Vec2,
+    screen: Vec2,
     events: Vec<Event>,
-    dibuja: impl FnMut(&mut Ui),
+    draws: impl FnMut(&mut Ui),
 ) -> Vec<ClippedShape> {
-    let entrada = RawInput {
-        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, pantalla)),
+    let input_2 = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, screen)),
         events,
         ..RawInput::default()
     };
-    let mut salida = ctx.run_ui(entrada, dibuja);
-    salida.textures_delta.clear();
-    std::mem::take(&mut salida.shapes)
+    let mut output_2 = ctx.run_ui(input_2, draws);
+    output_2.textures_delta.clear();
+    std::mem::take(&mut output_2.shapes)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -190,45 +190,45 @@ pub fn fotograma(
 
 /// Un tramo de texto de un solo color dentro de una forma de texto.
 #[derive(Clone, Debug)]
-pub struct Tramo {
-    pub texto: String,
+pub struct TestSpan {
+    pub text_2: String,
     pub color: Color32,
 }
 
 /// Una forma de texto: su esquina superior izquierda, su tamaño, su recorte y sus tramos.
 #[derive(Clone, Debug)]
-pub struct Texto {
-    pub texto: String,
+pub struct Text {
+    pub text_2: String,
     pub pos: Pos2,
-    pub tamano: Vec2,
+    pub size_2: Vec2,
     pub clip: Rect,
-    pub tramos: Vec<Tramo>,
+    pub spans_2: Vec<TestSpan>,
     /// `opacity_factor` de la forma (egui atenúa lo deshabilitado con él o con el color).
-    pub opacidad: f32,
+    pub opacity_2: f32,
 }
 
-impl Texto {
+impl Text {
     /// Color del primer tramo y opacidad: lo que cambia al atenuar un texto.
-    pub fn aspecto(&self) -> (Color32, u32) {
-        (self.color(), self.opacidad.to_bits())
+    pub fn look(&self) -> (Color32, u32) {
+        (self.color(), self.opacity_2.to_bits())
     }
 
     /// Color del primer tramo (el de todo el texto si solo hay uno).
     pub fn color(&self) -> Color32 {
-        self.tramos
+        self.spans_2
             .first()
             .map_or(Color32::PLACEHOLDER, |t| t.color)
     }
 
     /// Rectángulo que ocupa, en puntos.
     pub fn rect(&self) -> Rect {
-        Rect::from_min_size(self.pos, self.tamano)
+        Rect::from_min_size(self.pos, self.size_2)
     }
 }
 
 /// Un rectángulo relleno y su recorte.
 #[derive(Clone, Copy, Debug)]
-pub struct Relleno {
+pub struct TestFill {
     pub rect: Rect,
     pub fill: Color32,
     pub clip: Rect,
@@ -237,8 +237,8 @@ pub struct Relleno {
 /// Una malla con textura (un icono): la textura, el rectángulo que cubren sus vértices, la tinta
 /// (el color de sus vértices) y su recorte.
 #[derive(Clone, Copy, Debug)]
-pub struct Malla {
-    pub textura: TextureId,
+pub struct TestMesh {
+    pub texture_2: TextureId,
     pub rect: Rect,
     /// Rectángulo que cubren las coordenadas de textura de sus vértices.
     pub uv: Rect,
@@ -247,52 +247,52 @@ pub struct Malla {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Pintado {
-    pub textos: Vec<Texto>,
-    pub rellenos: Vec<Relleno>,
-    pub mallas: Vec<Malla>,
+pub struct Painted {
+    pub texts: Vec<Text>,
+    pub fills: Vec<TestFill>,
+    pub meshes: Vec<TestMesh>,
 }
 
-impl Pintado {
-    /// Alguna forma de texto es exactamente `buscado`.
-    pub fn pinta(&self, buscado: &str) -> bool {
-        self.textos.iter().any(|t| t.texto == buscado)
+impl Painted {
+    /// Alguna forma de texto es exactamente `searched`.
+    pub fn paints(&self, searched: &str) -> bool {
+        self.texts.iter().any(|t| t.text_2 == searched)
     }
 
-    /// La primera forma de texto que contiene `buscado`.
-    pub fn texto_con(&self, buscado: &str) -> Option<&Texto> {
-        self.textos.iter().find(|t| t.texto.contains(buscado))
+    /// La primera forma de texto que contiene `searched`.
+    pub fn text_with(&self, searched: &str) -> Option<&Text> {
+        self.texts.iter().find(|t| t.text_2.contains(searched))
     }
 
-    /// Un tramo de color de **cualquier** forma de texto cuyo texto recortado es `buscado`
+    /// Un tramo de color de **cualquier** forma de texto cuyo texto recortado es `searched`
     /// (sirve tanto si la letra va en su propia forma como si va en otro tramo de la misma).
-    pub fn tramo(&self, buscado: &str) -> Option<&Tramo> {
-        self.textos
+    pub fn span(&self, searched: &str) -> Option<&TestSpan> {
+        self.texts
             .iter()
-            .flat_map(|t| t.tramos.iter())
-            .find(|tramo| tramo.texto.trim() == buscado)
+            .flat_map(|t| t.spans_2.iter())
+            .find(|span| span.text_2.trim() == searched)
     }
 
     /// La malla con esa textura (el icono), si se pintó.
-    pub fn malla_de(&self, textura: TextureId) -> Option<&Malla> {
-        self.mallas.iter().find(|m| m.textura == textura)
+    pub fn mesh_of(&self, texture_2: TextureId) -> Option<&TestMesh> {
+        self.meshes.iter().find(|m| m.texture_2 == texture_2)
     }
 
     /// Todo el texto pintado, forma a forma.
-    pub fn todos_los_textos(&self) -> Vec<&str> {
-        self.textos.iter().map(|t| t.texto.as_str()).collect()
+    pub fn all_the_texts(&self) -> Vec<&str> {
+        self.texts.iter().map(|t| t.text_2.as_str()).collect()
     }
 }
 
-fn recoge(shape: &Shape, clip: Rect, fuera: &mut Pintado) {
+fn collects(shape: &Shape, clip: Rect, outside: &mut Painted) {
     match shape {
         Shape::Text(t) => {
             let job = &t.galley.job;
-            let tramos = job
+            let spans_2 = job
                 .sections
                 .iter()
-                .map(|s| Tramo {
-                    texto: job.text[s.byte_range.start.0..s.byte_range.end.0].to_owned(),
+                .map(|s| TestSpan {
+                    text_2: job.text[s.byte_range.start.0..s.byte_range.end.0].to_owned(),
                     color: t.override_text_color.unwrap_or(
                         if s.format.color == Color32::PLACEHOLDER {
                             t.fallback_color
@@ -302,37 +302,37 @@ fn recoge(shape: &Shape, clip: Rect, fuera: &mut Pintado) {
                     ),
                 })
                 .collect();
-            fuera.textos.push(Texto {
-                texto: t.galley.text().to_owned(),
+            outside.texts.push(Text {
+                text_2: t.galley.text().to_owned(),
                 pos: t.pos,
-                tamano: t.galley.size(),
+                size_2: t.galley.size(),
                 clip,
-                tramos,
-                opacidad: t.opacity_factor,
+                spans_2,
+                opacity_2: t.opacity_factor,
             });
         }
-        Shape::Rect(r) => fuera.rellenos.push(Relleno {
+        Shape::Rect(r) => outside.fills.push(TestFill {
             rect: r.rect,
             fill: r.fill,
             clip,
         }),
-        Shape::Mesh(malla) => {
-            let puntos: Vec<Pos2> = malla.vertices.iter().map(|v| v.pos).collect();
-            let uvs: Vec<Pos2> = malla.vertices.iter().map(|v| v.uv).collect();
-            fuera.mallas.push(Malla {
-                textura: malla.texture_id,
-                rect: Rect::from_points(&puntos),
+        Shape::Mesh(mesh) => {
+            let points: Vec<Pos2> = mesh.vertices.iter().map(|v| v.pos).collect();
+            let uvs: Vec<Pos2> = mesh.vertices.iter().map(|v| v.uv).collect();
+            outside.meshes.push(TestMesh {
+                texture_2: mesh.texture_id,
+                rect: Rect::from_points(&points),
                 uv: Rect::from_points(&uvs),
-                color: malla
+                color: mesh
                     .vertices
                     .first()
                     .map_or(Color32::PLACEHOLDER, |v| v.color),
                 clip,
             });
         }
-        Shape::Vec(formas) => {
-            for forma in formas {
-                recoge(forma, clip, fuera);
+        Shape::Vec(shapes_2) => {
+            for shape_2 in shapes_2 {
+                collects(shape_2, clip, outside);
             }
         }
         _ => {}
@@ -340,10 +340,10 @@ fn recoge(shape: &Shape, clip: Rect, fuera: &mut Pintado) {
 }
 
 /// Reúne los textos y los rectángulos rellenos de las formas del fotograma.
-pub fn pintado(formas: &[ClippedShape]) -> Pintado {
-    let mut fuera = Pintado::default();
-    for clipped in formas {
-        recoge(&clipped.shape, clipped.clip_rect, &mut fuera);
+pub fn painted(shapes_2: &[ClippedShape]) -> Painted {
+    let mut outside = Painted::default();
+    for clipped in shapes_2 {
+        collects(&clipped.shape, clipped.clip_rect, &mut outside);
     }
-    fuera
+    outside
 }

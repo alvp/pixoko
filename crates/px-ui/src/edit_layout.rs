@@ -52,7 +52,7 @@ pub const MIN_CANVAS_WIDTH_U: i64 = 128;
 pub const NOTICE_LINES: i64 = 2;
 /// Botones de la paleta (solo indexadas; specs/interfaz-iconos.md): una fila de cinco iconos de
 /// 24 u (hueco de 1 u dentro de un grupo y de 8 u entre grupos: añadir y quitar | rotar a un lado
-/// y a otro | transparente) o, con una quita pendiente, `Confirmar` y `Cancelar` en texto en su
+/// y a otro | transparente) o, con una quita pendiente, `Confirmar` y `Cancel` en texto en su
 /// lugar (dos botones de 110 u y 5 u de hueco). Filas, alto, origen, ancho de los dos botones de
 /// texto y hueco entre ellos, margen del texto dentro del botón y hueco entre grupos de iconos.
 pub const BUTTON_ROWS: i64 = 1;
@@ -125,7 +125,7 @@ pub fn palette_icon(button: PaletteButton) -> Option<Icon> {
     }
 }
 
-/// Rectángulo `(x, y, ancho, alto)` del botón, en `u` desde la esquina del editor. `None` en los
+/// Rectángulo `(x, y, width_2, height_2)` del botón, en `u` desde la esquina del editor. `None` en los
 /// modos sin botones.
 pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64, i64)> {
     if buttons_height_u(mode) == 0 {
@@ -194,7 +194,7 @@ fn scale(n: u32) -> i64 {
     i64::from(n.max(1))
 }
 
-/// Alto del bloque `[texto · una fila de rejilla · editor]` del modo, en píxeles físicos: el
+/// Alto del bloque `[text_2 · a row_2 de grid · editor]` del modo, en píxeles físicos: el
 /// alto del panel a partir del cual no hay desplazamiento.
 pub fn block_height_px(mode: Mode, n: u32) -> i64 {
     (GRID_Y_U + PITCH_U + editor_height_u(mode)) * scale(n)
@@ -250,7 +250,7 @@ pub struct PanelLayout {
 
 /// Reparto del panel de `panel_h_px` con el editor del modo. Con alto suficiente, el editor se
 /// ancla al fondo y la rejilla usa el resto; con menos, el bloque se desplaza `offset_px` (se
-/// recorta a lo que cabe) y la rejilla enseña una fila. Con `offset_px = 0` y `alto = bloque`
+/// recorta a lo que cabe) y la rejilla enseña una fila. Con `offset_px = 0` y `height_2 = block`
 /// los dos repartos coinciden.
 pub fn panel_layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64) -> PanelLayout {
     let n = scale(n);

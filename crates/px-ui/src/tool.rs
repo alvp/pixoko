@@ -173,7 +173,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    /// Nombre para el título: `lápiz`, `línea`, `relleno`, `cuentagotas` o `borrador`.
+    /// Nombre para el título: `lápiz`, `línea`, `fill`, `dropper` o `eraser`.
     pub fn label(self) -> &'static str {
         match self {
             Tool::Pencil => "lápiz",
@@ -219,7 +219,7 @@ pub fn status_text(tool: Tool, color: Option<&str>) -> String {
 
 /// Texto que acompaña a la herramienta en el título y la barra de estado: el color activo (con el
 /// cuentagotas, el valor que acaba de elegir) o, con el borrador, lo que escribe
-/// (`transparente`) o por qué no puede.
+/// (`transparent`) o por qué no puede.
 pub fn tool_color_label(
     tool: Tool,
     image: &Image,

@@ -79,7 +79,7 @@ pub struct Chord {
 }
 
 impl Chord {
-    /// Texto del atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Inicio`, `d`, `>`. Con `command` la letra va en
+    /// Texto del atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Start`, `d`, `>`. Con `command` la letra va en
     /// mayúscula (como los menús de siempre); sin él, como se teclea.
     pub fn text(self, platform: Platform) -> String {
         let key = match self.key {
@@ -356,7 +356,7 @@ fn matches(row: &Binding, press: &Press, platform: Platform) -> bool {
         KeyId::Char(_) => true,
         // `Re Pág` y `Av Pág`: `Mayús` es exacto; `Alt` y `Ctrl` suelto no cuentan.
         KeyId::PageUp | KeyId::PageDown => press.shift == row.shift,
-        // `Inicio`: `Mayús`, `Alt` y `Ctrl` suelto no cuentan.
+        // `Start`: `Mayús`, `Alt` y `Ctrl` suelto no cuentan.
         KeyId::Home => true,
     }
 }

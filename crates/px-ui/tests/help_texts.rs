@@ -22,9 +22,9 @@ use px_ui::shortcut_editor::{CaptureResult, ShortcutEditor, Slot, slots_of};
 use px_ui::text::INTERFACE_CHARSET;
 use px_ui::tool::Tool;
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
-const HERRAMIENTAS: [Tool; 5] = [
+const TEST_TOOLS: [Tool; 5] = [
     Tool::Pencil,
     Tool::Line,
     Tool::Fill,
@@ -32,7 +32,7 @@ const HERRAMIENTAS: [Tool; 5] = [
     Tool::Eraser,
 ];
 
-const DESTINOS_DE_BOTON: [HelpTarget; 9] = [
+const TARGETS_OF_BUTTON: [HelpTarget; 9] = [
     HelpTarget::Tool(Tool::Pencil),
     HelpTarget::Tool(Tool::Line),
     HelpTarget::Tool(Tool::Fill),
@@ -45,7 +45,7 @@ const DESTINOS_DE_BOTON: [HelpTarget; 9] = [
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.
-const CLAVES: [&str; 33] = [
+const KEYS: [&str; 33] = [
     "tool.pencil",
     "tool.line",
     "tool.fill",
@@ -82,7 +82,7 @@ const CLAVES: [&str; 33] = [
 ];
 
 /// Las acciones de la tabla por defecto (22 distintas).
-fn acciones_de_la_tabla() -> Vec<AppAction> {
+fn table_actions() -> Vec<AppAction> {
     let mut v: Vec<AppAction> = Vec::new();
     for row in Keymap::default_scheme().rows() {
         if !v.contains(&row.action) {
@@ -92,25 +92,25 @@ fn acciones_de_la_tabla() -> Vec<AppAction> {
     v
 }
 
-fn texto_de_la_zona(spec: &FormSpec) -> String {
-    let campo = spec
+fn text_of_the_area(spec: &FormSpec) -> String {
+    let field_2 = spec
         .fields
         .iter()
         .find(|f| f.id == HELP_ZONE)
         .expect("la ayuda tiene una zona de texto");
-    match &campo.kind {
+    match &field_2.kind {
         FieldKind::ReadOnly { text, .. } => text.clone(),
-        otro => panic!("la zona es de solo lectura, no {otro:?}"),
+        other_2 => panic!("la zona es de solo lectura, no {other_2:?}"),
     }
 }
 
-fn boton(spec: &FormSpec, id: &str) -> Option<String> {
+fn button_2(spec: &FormSpec, id: &str) -> Option<String> {
     spec.fields
         .iter()
         .find(|f| f.id == id)
         .map(|f| match &f.kind {
             FieldKind::Button { text, .. } => text.clone(),
-            otro => panic!("{id} es un botón, no {otro:?}"),
+            other_2 => panic!("{id} es un botón, no {other_2:?}"),
         })
 }
 
@@ -138,11 +138,11 @@ fn press(c: char) -> Press {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_la_tabla_tiene_22_entradas_con_claves_unicas_y_limites() {
+fn row_1_the_table_has_22_entries_with_unique_keys_and_limits() {
     let tabla = help_table();
     assert_eq!(tabla.len(), 33);
-    let claves: Vec<&str> = tabla.iter().map(|e| e.key).collect();
-    assert_eq!(claves, CLAVES, "claves estables y en el orden del anexo");
+    let keys: Vec<&str> = tabla.iter().map(|e| e.key).collect();
+    assert_eq!(keys, KEYS, "claves estables y en el orden del anexo");
     for (i, e) in tabla.iter().enumerate() {
         assert!(
             !tabla[..i].iter().any(|o| o.key == e.key),
@@ -150,17 +150,17 @@ fn fila_1_la_tabla_tiene_22_entradas_con_claves_unicas_y_limites() {
             e.key
         );
         assert!(e.name.chars().count() <= 20, "nombre largo: {}", e.name);
-        let lineas = wrap_text(e.description, ZONE_COLS);
-        assert!(lineas.len() <= 8, "{}: {} líneas", e.key, lineas.len());
+        let lines = wrap_text(e.description, ZONE_COLS);
+        assert!(lines.len() <= 8, "{}: {} líneas", e.key, lines.len());
         assert!(!e.description.trim().is_empty(), "{}", e.key);
-        let todo = [
+        let all = [
             Some(e.name),
             Some(e.description),
             e.mouse_left,
             e.mouse_right,
         ];
-        for texto in todo.into_iter().flatten() {
-            for c in texto.chars() {
+        for text_2 in all.into_iter().flatten() {
+            for c in text_2.chars() {
                 assert!(
                     INTERFACE_CHARSET.contains(c),
                     "{}: {c:?} fuera del juego",
@@ -173,14 +173,14 @@ fn fila_1_la_tabla_tiene_22_entradas_con_claves_unicas_y_limites() {
 }
 
 #[test]
-fn fila_1_toda_accion_de_la_tabla_de_teclado_tiene_texto_y_las_claves_son_inversas() {
-    for action in acciones_de_la_tabla() {
+fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() {
+    for action in table_actions() {
         let key = help_key(action).unwrap_or_else(|| panic!("{action:?} sin clave de ayuda"));
         assert!(help_entry(key).is_some(), "{key}");
         assert_eq!(action_of_key(key), Some(action), "{key}");
     }
     // Las cinco herramientas y los cuatro botones de zoom están en la tabla.
-    for target in DESTINOS_DE_BOTON {
+    for target in TARGETS_OF_BUTTON {
         let action = target.action(Tool::Pencil);
         assert!(help_key(action).is_some(), "{target:?}");
     }
@@ -191,11 +191,11 @@ fn fila_1_toda_accion_de_la_tabla_de_teclado_tiene_texto_y_las_claves_son_invers
     }
     assert_eq!(action_of_key("no.existe"), None);
     // Editables: 17 de 22; las cinco de archivo son fijas.
-    let editables = help_table()
+    let editable = help_table()
         .iter()
         .filter(|e| is_editable(action_of_key(e.key).unwrap()))
         .count();
-    assert_eq!(editables, 28);
+    assert_eq!(editable, 28);
     for key in [
         "file.new",
         "file.open",
@@ -212,13 +212,13 @@ fn fila_1_toda_accion_de_la_tabla_de_teclado_tiene_texto_y_las_claves_son_invers
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_2_help_form_de_cada_destino_valida_y_cabe_sin_desplazar() {
+fn row_2_help_form_of_each_target_valid_and_fits_without_scrolling() {
     let tabla = Keymap::default_scheme();
-    for platform in PLATAFORMAS {
-        let mut destinos = DESTINOS_DE_BOTON.to_vec();
-        destinos.push(HelpTarget::Active);
-        for target in destinos {
-            for active in HERRAMIENTAS {
+    for platform in PLATFORMS {
+        let mut targets = TARGETS_OF_BUTTON.to_vec();
+        targets.push(HelpTarget::Active);
+        for target in targets {
+            for active in TEST_TOOLS {
                 let spec = help_form(target, active, &tabla, platform);
                 spec.validate()
                     .unwrap_or_else(|e| panic!("{target:?}: {e:?}"));
@@ -250,9 +250,9 @@ fn fila_2_help_form_de_cada_destino_valida_y_cabe_sin_desplazar() {
 }
 
 #[test]
-fn fila_2_el_titulo_es_el_nombre_y_el_destino_activo_es_el_de_la_herramienta() {
+fn row_2_the_title_is_the_name_and_the_active_target_is_that_of_the_tool() {
     let tabla = Keymap::default_scheme();
-    for active in HERRAMIENTAS {
+    for active in TEST_TOOLS {
         let a = help_form(HelpTarget::Active, active, &tabla, Platform::Linux);
         let b = help_form(
             HelpTarget::Tool(active),
@@ -262,60 +262,63 @@ fn fila_2_el_titulo_es_el_nombre_y_el_destino_activo_es_el_de_la_herramienta() {
         );
         assert_eq!(a, b, "{active:?}");
     }
-    let lapiz = help_form(
+    let pencil = help_form(
         HelpTarget::Tool(Tool::Pencil),
         Tool::Line,
         &tabla,
         Platform::Linux,
     );
-    assert_eq!(lapiz.title, "Lápiz");
-    let texto = texto_de_la_zona(&lapiz);
-    assert!(texto.contains("Clic izquierdo: "), "{texto}");
-    assert!(texto.contains("Clic derecho: "), "{texto}");
-    let ajustar = help_form(HelpTarget::ZoomFit, Tool::Pencil, &tabla, Platform::Linux);
-    let texto = texto_de_la_zona(&ajustar);
+    assert_eq!(pencil.title, "Lápiz");
+    let text_2 = text_of_the_area(&pencil);
+    assert!(text_2.contains("Clic izquierdo: "), "{text_2}");
+    assert!(text_2.contains("Clic derecho: "), "{text_2}");
+    let fit_2 = help_form(HelpTarget::ZoomFit, Tool::Pencil, &tabla, Platform::Linux);
+    let text_2 = text_of_the_area(&fit_2);
     assert!(
-        !texto.contains("Clic izquierdo"),
-        "Ajustar no tiene líneas de clic: {texto}"
+        !text_2.contains("Clic izquierdo"),
+        "Ajustar no tiene líneas de clic: {text_2}"
     );
-    assert!(!texto.contains("Clic derecho"), "{texto}");
+    assert!(!text_2.contains("Clic derecho"), "{text_2}");
 }
 
 #[test]
-fn fila_2_botones_de_atajo_fijos_y_extras() {
+fn row_2_fixed_and_extra_shortcut_buttons() {
     let tabla = Keymap::default_scheme();
     // Lápiz: principal d, sin secundario.
-    let lapiz = help_form(
+    let pencil = help_form(
         HelpTarget::Tool(Tool::Pencil),
         Tool::Pencil,
         &tabla,
         Platform::Linux,
     );
-    assert_eq!(boton(&lapiz, HELP_PRIMARY).as_deref(), Some("d"));
-    assert_eq!(boton(&lapiz, HELP_SECONDARY).as_deref(), Some("sin atajo"));
-    // Deshacer: principal u, fijo Ctrl+Z.
-    let deshacer = help_form_for("edit.undo", &tabla, Platform::Linux).unwrap();
-    assert_eq!(boton(&deshacer, HELP_PRIMARY).as_deref(), Some("u"));
+    assert_eq!(button_2(&pencil, HELP_PRIMARY).as_deref(), Some("d"));
     assert_eq!(
-        boton(&deshacer, HELP_SECONDARY).as_deref(),
+        button_2(&pencil, HELP_SECONDARY).as_deref(),
         Some("sin atajo")
     );
-    assert!(texto_de_la_zona(&deshacer).contains("Fijos: Ctrl+Z"));
+    // Deshacer: principal u, fijo Ctrl+Z.
+    let undo = help_form_for("edit.undo", &tabla, Platform::Linux).unwrap();
+    assert_eq!(button_2(&undo, HELP_PRIMARY).as_deref(), Some("u"));
+    assert_eq!(
+        button_2(&undo, HELP_SECONDARY).as_deref(),
+        Some("sin atajo")
+    );
+    assert!(text_of_the_area(&undo).contains("Fijos: Ctrl+Z"));
     // Acercar: `>` y `+`, también `=`.
-    let acercar = help_form(HelpTarget::ZoomIn, Tool::Pencil, &tabla, Platform::Linux);
-    assert_eq!(boton(&acercar, HELP_PRIMARY).as_deref(), Some(">"));
-    assert_eq!(boton(&acercar, HELP_SECONDARY).as_deref(), Some("+"));
-    assert!(texto_de_la_zona(&acercar).contains("También: ="));
+    let zoom_in = help_form(HelpTarget::ZoomIn, Tool::Pencil, &tabla, Platform::Linux);
+    assert_eq!(button_2(&zoom_in, HELP_PRIMARY).as_deref(), Some(">"));
+    assert_eq!(button_2(&zoom_in, HELP_SECONDARY).as_deref(), Some("+"));
+    assert!(text_of_the_area(&zoom_in).contains("También: ="));
     // Archivo: sin botones y con el atajo fijo; Salir sin atajo fuera de Linux.
-    let guardar = help_form_for("file.save", &tabla, Platform::Linux).unwrap();
-    assert!(boton(&guardar, HELP_PRIMARY).is_none() && boton(&guardar, HELP_SECONDARY).is_none());
-    assert!(texto_de_la_zona(&guardar).contains("Atajo (fijo): Ctrl+S"));
-    let salir_linux = help_form_for("file.quit", &tabla, Platform::Linux).unwrap();
-    assert!(texto_de_la_zona(&salir_linux).contains("Atajo (fijo): Ctrl+Q"));
+    let save = help_form_for("file.save", &tabla, Platform::Linux).unwrap();
+    assert!(button_2(&save, HELP_PRIMARY).is_none() && button_2(&save, HELP_SECONDARY).is_none());
+    assert!(text_of_the_area(&save).contains("Atajo (fijo): Ctrl+S"));
+    let exit_linux = help_form_for("file.quit", &tabla, Platform::Linux).unwrap();
+    assert!(text_of_the_area(&exit_linux).contains("Atajo (fijo): Ctrl+Q"));
     for platform in [Platform::Windows, Platform::Mac] {
-        let salir = help_form_for("file.quit", &tabla, platform).unwrap();
+        let exit = help_form_for("file.quit", &tabla, platform).unwrap();
         assert!(
-            texto_de_la_zona(&salir).contains("sin atajo"),
+            text_of_the_area(&exit).contains("sin atajo"),
             "{platform:?}"
         );
     }
@@ -327,22 +330,22 @@ fn fila_2_botones_de_atajo_fijos_y_extras() {
         editor.capture(Capture::Press(press('x'))),
         CaptureResult::Set
     );
-    let nueva = editor.accept();
-    let lapiz = help_form(
+    let new = editor.accept();
+    let pencil = help_form(
         HelpTarget::Tool(Tool::Pencil),
         Tool::Pencil,
-        &nueva,
+        &new,
         Platform::Linux,
     );
-    assert_eq!(boton(&lapiz, HELP_PRIMARY).as_deref(), Some("x"));
+    assert_eq!(button_2(&pencil, HELP_PRIMARY).as_deref(), Some("x"));
     assert_eq!(
         chord('x'),
-        slots_of(&nueva, AppAction::SelectTool(Tool::Pencil)).slots[0]
+        slots_of(&new, AppAction::SelectTool(Tool::Pencil)).slots[0]
     );
 }
 
 #[test]
-fn fila_2_foco_inicial_en_la_zona_pressed_no_cierra_y_cerrar_cierra() {
+fn row_2_initial_focus_in_the_area_pressed_does_not_close_and_close_closes() {
     let tabla = Keymap::default_scheme();
     let spec = help_form(
         HelpTarget::Tool(Tool::Pencil),
@@ -355,12 +358,12 @@ fn fila_2_foco_inicial_en_la_zona_pressed_no_cierra_y_cerrar_cierra() {
         dialog.take_focus_request(),
         Some(px_ui::dialog_keys::FocusTarget::Zone(HELP_ZONE))
     ));
-    let reaccion = dialog.event(Event::Press {
+    let reaction = dialog.event(Event::Press {
         field: HELP_PRIMARY,
         aside: false,
     });
     assert_eq!(
-        reaccion,
+        reaction,
         Reaction::Pressed {
             field: HELP_PRIMARY,
             aside: false
@@ -375,12 +378,12 @@ fn fila_2_foco_inicial_en_la_zona_pressed_no_cierra_y_cerrar_cierra() {
         Reaction::None
     );
     assert!(matches!(dialog.event(Event::Accept), Reaction::Accepted(_)));
-    let mut otro = Dialog::new(
+    let mut other_2 = Dialog::new(
         DialogKind::Help,
         help_form(HelpTarget::ZoomFit, Tool::Pencil, &tabla, Platform::Linux),
     )
     .unwrap();
-    assert!(matches!(otro.event(Event::Cancel), Reaction::Cancelled));
+    assert!(matches!(other_2.event(Event::Cancel), Reaction::Cancelled));
     // La zona es `Fixed(9)`.
     let spec = help_form(
         HelpTarget::Tool(Tool::Line),
@@ -388,9 +391,9 @@ fn fila_2_foco_inicial_en_la_zona_pressed_no_cierra_y_cerrar_cierra() {
         &tabla,
         Platform::Linux,
     );
-    let zona = spec.fields.iter().find(|f| f.id == HELP_ZONE).unwrap();
+    let zone = spec.fields.iter().find(|f| f.id == HELP_ZONE).unwrap();
     assert!(matches!(
-        zona.kind,
+        zone.kind,
         FieldKind::ReadOnly {
             rows: Rows::Fixed(9),
             ..
@@ -403,26 +406,26 @@ fn fila_2_foco_inicial_en_la_zona_pressed_no_cierra_y_cerrar_cierra() {
 // ---------------------------------------------------------------------------------------------
 
 /// Una tabla alcanzable por el editor: una secuencia de asignaciones sobre la tabla por defecto.
-fn tabla_alcanzable(pasos: &[(usize, bool, u8, bool)], platform: Platform) -> Keymap {
+fn table_reachable(steps_2: &[(usize, bool, u8, bool)], platform: Platform) -> Keymap {
     let mut tabla = Keymap::default_scheme();
-    let editables: Vec<AppAction> = help_table()
+    let editable: Vec<AppAction> = help_table()
         .iter()
         .filter_map(|e| action_of_key(e.key))
         .filter(|a| is_editable(*a))
         .collect();
-    for &(accion, secundaria, caracter, reasignar) in pasos {
-        let action = editables[accion % editables.len()];
+    for &(action_2, secondary, character, reassign) in steps_2 {
+        let action = editable[action_2 % editable.len()];
         let Some(mut editor) = ShortcutEditor::new(action, &tabla, platform) else {
             continue;
         };
-        editor.begin_capture(if secundaria {
+        editor.begin_capture(if secondary {
             Slot::Secondary
         } else {
             Slot::Primary
         });
-        let c = (b'a' + caracter % 26) as char;
+        let c = (b'a' + character % 26) as char;
         if let CaptureResult::Pending(_) = editor.capture(Capture::Press(press(c))) {
-            editor.resolve(reasignar);
+            editor.resolve(reassign);
         }
         tabla = editor.accept();
     }
@@ -435,30 +438,30 @@ proptest! {
     /// Propiedad 4: `help_form` es válida para cualquier tabla alcanzable, ninguna línea de la zona
     /// pasa de 42 columnas, los botones dicen exactamente las casillas y las de archivo no llevan.
     #[test]
-    fn propiedad_4_la_ayuda_es_valida_para_cualquier_tabla(
-        pasos in proptest::collection::vec((0usize..17, any::<bool>(), 0u8..26, any::<bool>()), 0..8),
-        plataforma in 0usize..3,
+    fn property_4_the_help_is_valid_for_any_table(
+        steps_2 in proptest::collection::vec((0usize..17, any::<bool>(), 0u8..26, any::<bool>()), 0..8),
+        platform_2 in 0usize..3,
     ) {
-        let platform = PLATAFORMAS[plataforma];
-        let tabla = tabla_alcanzable(&pasos, platform);
+        let platform = PLATFORMS[platform_2];
+        let tabla = table_reachable(&steps_2, platform);
         for e in help_table() {
             let action = action_of_key(e.key).unwrap();
             let spec = help_form_for(e.key, &tabla, platform).unwrap();
             prop_assert!(spec.validate().is_ok());
-            for linea in wrap_text(&texto_de_la_zona(&spec), ZONE_COLS) {
-                prop_assert!(linea.chars().count() <= ZONE_COLS);
+            for line in wrap_text(&text_of_the_area(&spec), ZONE_COLS) {
+                prop_assert!(line.chars().count() <= ZONE_COLS);
             }
             if is_editable(action) {
-                let casillas = slots_of(&tabla, action).slots;
-                for (campo, i) in [(HELP_PRIMARY, 0usize), (HELP_SECONDARY, 1usize)] {
-                    let esperado = casillas
+                let boxes_2 = slots_of(&tabla, action).slots;
+                for (field_2, i) in [(HELP_PRIMARY, 0usize), (HELP_SECONDARY, 1usize)] {
+                    let expected_2 = boxes_2
                         .get(i)
                         .map_or("sin atajo".to_string(), |c| c.text(platform));
-                    prop_assert_eq!(boton(&spec, campo), Some(esperado));
+                    prop_assert_eq!(button_2(&spec, field_2), Some(expected_2));
                 }
             } else {
-                prop_assert!(boton(&spec, HELP_PRIMARY).is_none());
-                prop_assert!(boton(&spec, HELP_SECONDARY).is_none());
+                prop_assert!(button_2(&spec, HELP_PRIMARY).is_none());
+                prop_assert!(button_2(&spec, HELP_SECONDARY).is_none());
             }
         }
     }
@@ -466,10 +469,10 @@ proptest! {
     /// Visto bueno 4c: ninguna acción de la tabla (de cualquier tabla alcanzable) se queda sin
     /// texto de ayuda.
     #[test]
-    fn propiedad_c_ninguna_accion_de_la_tabla_se_queda_sin_texto_de_ayuda(
-        pasos in proptest::collection::vec((0usize..17, any::<bool>(), 0u8..26, any::<bool>()), 0..8),
+    fn property_c_no_action_of_the_table_is_left_without_help_text(
+        steps_2 in proptest::collection::vec((0usize..17, any::<bool>(), 0u8..26, any::<bool>()), 0..8),
     ) {
-        let tabla = tabla_alcanzable(&pasos, Platform::Linux);
+        let tabla = table_reachable(&steps_2, Platform::Linux);
         for row in tabla.rows() {
             let key = help_key(row.action);
             prop_assert!(key.is_some(), "{:?}", row.action);

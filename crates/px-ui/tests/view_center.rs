@@ -1,6 +1,6 @@
 //! Tests de «Zoom y centrar» (specs/interfaz-teclado.md, unidad I.1, fila 6): el zoom por las teclas
 //! nuevas frente al de antes, `View::center_on` (parte pura) y `Canvas::request_view(
-//! ViewOp::CenterOnCursor)` (banco de egui sin ventana, con y sin puntero sobre el lienzo, con otra
+//! ViewOp::CenterOnCursor)` (bench de egui without window, with y without pointer over el canvas_2, with other
 //! capa encima y con un trazo a medias). En ROJO hasta la lógica: `ViewOp::CenterOnCursor`,
 //! `View::center_on` y la tabla de teclas no existen todavía.
 //!
@@ -9,7 +9,7 @@
 //!   el zoom no cambia, la vista queda con `clamp` y el píxel que había bajo el punto pasa a estar
 //!   bajo el centro del lienzo. Fuera de la imagen no rompe nada y manda `clamp`.
 //!   `View::apply_op(ViewOp::CenterOnCursor)` no la conoce y deja la vista como está.
-//! - Zoom por teclas: `>`, `+` y `=` dan `ViewOp::ZoomIn`, `<` y `-` dan `ViewOp::ZoomOut`, `Inicio`
+//! - Zoom por teclas: `>`, `+` y `=` dan `ViewOp::ZoomIn`, `<` y `-` dan `ViewOp::ZoomOut`, `Start`
 //!   da `Fit` y `Ctrl+1` da `Actual`, y aplicadas a las vistas dan lo mismo que el modelo de
 //!   `view_ops.rs` (`set_zoom` en el centro y `clamp`).
 //! - Banco (copiando el estilo de `view_ops.rs` y `canvas_layers.rs`): con el puntero sobre el
@@ -34,40 +34,40 @@ use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::view::{Size, View, ViewOp, Zoom};
 
 mod common;
-use common::{PPPS, boton, contexto, fotograma, mover};
+use common::{PPPS, button_2, context, frame, mover};
 
-const LIENZO: Size = Size {
+const CANVAS: Size = Size {
     width: 700,
     height: 500,
 };
-const IMAGEN: Size = Size {
+const IMAGE: Size = Size {
     width: 64,
     height: 48,
 };
-const CENTRO: (i64, i64) = (350, 250);
+const CENTER: (i64, i64) = (350, 250);
 const ZOOMS: [u32; 3] = [1, 5, 64];
-const DESPLAZAMIENTOS: [(i64, i64); 5] = [(0, 0), (7, -5), (-20, 15), (40, 30), (-45, -40)];
+const PANS: [(i64, i64); 5] = [(0, 0), (7, -5), (-20, 15), (40, 30), (-45, -40)];
 
 fn zoom(n: u32) -> Zoom {
     Zoom::from_int(n).unwrap_or_else(|| panic!("el zoom {n} debería existir"))
 }
 
 /// Vista a ×`n` anclada en el centro, con `clamp`, y desplazada `(dx, dy)` (con `pan`).
-fn vista(n: u32, desplazamiento: (i64, i64)) -> View {
-    let mut v = View::fit(LIENZO, IMAGEN);
-    v.set_zoom(zoom(n), CENTRO);
-    v.clamp(LIENZO, IMAGEN);
-    v.pan(desplazamiento.0, desplazamiento.1, LIENZO, IMAGEN);
+fn vista(n: u32, pan: (i64, i64)) -> View {
+    let mut v = View::fit(CANVAS, IMAGE);
+    v.set_zoom(zoom(n), CENTER);
+    v.clamp(CANVAS, IMAGE);
+    v.pan(pan.0, pan.1, CANVAS, IMAGE);
     v
 }
 
-fn con_clamp(mut v: View) -> View {
-    v.clamp(LIENZO, IMAGEN);
+fn with_clamp(mut v: View) -> View {
+    v.clamp(CANVAS, IMAGE);
     v
 }
 
-fn centrada(mut v: View, punto: (i64, i64)) -> View {
-    v.center_on(punto, LIENZO, IMAGEN);
+fn centered(mut v: View, point: (i64, i64)) -> View {
+    v.center_on(point, CANVAS, IMAGE);
     v
 }
 
@@ -75,7 +75,7 @@ fn centrada(mut v: View, punto: (i64, i64)) -> View {
 fn vistas() -> Vec<(String, View)> {
     let mut v = Vec::new();
     for n in ZOOMS {
-        for d in DESPLAZAMIENTOS {
+        for d in PANS {
             v.push((format!("×{n} desplazada {d:?}"), vista(n, d)));
         }
     }
@@ -83,7 +83,7 @@ fn vistas() -> Vec<(String, View)> {
 }
 
 /// El centro del bloque del píxel `(x, y)` en pantalla.
-fn centro_del_pixel(v: &View, x: u32, y: u32) -> (i64, i64) {
+fn center_of_the_pixel(v: &View, x: u32, y: u32) -> (i64, i64) {
     let (min, max) = v.pixel_block(x, y).expect("zoom entero: hay bloque");
     ((min.0 + max.0) / 2, (min.1 + max.1) / 2)
 }
@@ -109,28 +109,28 @@ fn op_de(action: AppAction) -> ViewOp {
         AppAction::ZoomOut => ViewOp::ZoomOut,
         AppAction::ZoomFit => ViewOp::Fit,
         AppAction::ZoomActual => ViewOp::Actual,
-        otra => panic!("{otra:?} no es una acción de zoom"),
+        other => panic!("{other:?} no es una acción de zoom"),
     }
 }
 
 /// Modelo de `apply_op` de antes de la unidad, escrito con `set_zoom` y `clamp`.
-fn modelo(v: View, op: ViewOp) -> View {
+fn model(v: View, op: ViewOp) -> View {
     let mut m = v;
     match op {
-        ViewOp::ZoomIn => m.set_zoom(v.zoom().zoom_in(), CENTRO),
-        ViewOp::ZoomOut => m.set_zoom(v.zoom().zoom_out(), CENTRO),
-        ViewOp::Actual => m.set_zoom(Zoom::ONE, CENTRO),
-        ViewOp::Fit => return View::fit(LIENZO, IMAGEN),
-        otra => panic!("{otra:?} no es una operación de zoom"),
+        ViewOp::ZoomIn => m.set_zoom(v.zoom().zoom_in(), CENTER),
+        ViewOp::ZoomOut => m.set_zoom(v.zoom().zoom_out(), CENTER),
+        ViewOp::Actual => m.set_zoom(Zoom::ONE, CENTER),
+        ViewOp::Fit => return View::fit(CANVAS, IMAGE),
+        other => panic!("{other:?} no es una operación de zoom"),
     }
-    con_clamp(m)
+    with_clamp(m)
 }
 
 #[test]
-fn fila_6_mayor_menos_y_mas_igual_menos_dan_zoom_in_y_zoom_out_como_antes() {
+fn row_6_greater_minus_and_plus_equals_minus_give_zoom_in_and_zoom_out_as_before() {
     let km = Keymap::default_scheme();
     for platform in [Platform::Linux, Platform::Windows, Platform::Mac] {
-        for (tecla, esperada) in [
+        for (key_2, expected) in [
             ('>', ViewOp::ZoomIn),
             ('+', ViewOp::ZoomIn),
             ('=', ViewOp::ZoomIn),
@@ -138,9 +138,9 @@ fn fila_6_mayor_menos_y_mas_igual_menos_dan_zoom_in_y_zoom_out_como_antes() {
             ('-', ViewOp::ZoomOut),
         ] {
             let action = km
-                .action_for(&press_de(KeyId::Char(tecla), false), platform)
-                .unwrap_or_else(|| panic!("`{tecla}` no da acción en {platform:?}"));
-            assert_eq!(op_de(action), esperada, "`{tecla}` en {platform:?}");
+                .action_for(&press_de(KeyId::Char(key_2), false), platform)
+                .unwrap_or_else(|| panic!("`{key_2}` no da acción en {platform:?}"));
+            assert_eq!(op_de(action), expected, "`{key_2}` en {platform:?}");
         }
         let fit = km.action_for(&press_de(KeyId::Home, false), platform);
         assert_eq!(fit.map(op_de), Some(ViewOp::Fit), "{platform:?}");
@@ -150,9 +150,9 @@ fn fila_6_mayor_menos_y_mas_igual_menos_dan_zoom_in_y_zoom_out_como_antes() {
 }
 
 #[test]
-fn fila_6_las_teclas_de_zoom_aplicadas_a_la_vista_dan_lo_mismo_que_el_modelo_de_antes() {
+fn row_6_the_zoom_keys_applied_to_the_view_give_the_same_as_the_previous_model() {
     let km = Keymap::default_scheme();
-    let teclas = [
+    let keys = [
         (KeyId::Char('>'), false),
         (KeyId::Char('+'), false),
         (KeyId::Char('='), false),
@@ -161,52 +161,52 @@ fn fila_6_las_teclas_de_zoom_aplicadas_a_la_vista_dan_lo_mismo_que_el_modelo_de_
         (KeyId::Home, false),
         (KeyId::Char('1'), true),
     ];
-    for (nombre, antes) in vistas() {
-        for (key, command) in teclas {
+    for (name_2, antes) in vistas() {
+        for (key, command) in keys {
             let action = km
                 .action_for(&press_de(key, command), Platform::Linux)
                 .expect("la tecla da una acción");
             let op = op_de(action);
-            let mut despues = antes;
-            despues.apply_op(op, LIENZO, IMAGEN);
-            assert_eq!(despues, modelo(antes, op), "{nombre}: {key:?}");
+            let mut after_2 = antes;
+            after_2.apply_op(op, CANVAS, IMAGE);
+            assert_eq!(after_2, model(antes, op), "{name_2}: {key:?}");
         }
         // `>`, `+` y `=` son la misma operación: el mismo resultado.
-        let por = |tecla: char| {
+        let per = |key_2: char| {
             let action = km
-                .action_for(&press_de(KeyId::Char(tecla), false), Platform::Linux)
+                .action_for(&press_de(KeyId::Char(key_2), false), Platform::Linux)
                 .expect("acción");
             let mut v = antes;
-            v.apply_op(op_de(action), LIENZO, IMAGEN);
+            v.apply_op(op_de(action), CANVAS, IMAGE);
             v
         };
-        assert_eq!(por('>'), por('+'), "{nombre}");
-        assert_eq!(por('>'), por('='), "{nombre}");
-        assert_eq!(por('<'), por('-'), "{nombre}");
+        assert_eq!(per('>'), per('+'), "{name_2}");
+        assert_eq!(per('>'), per('='), "{name_2}");
+        assert_eq!(per('<'), per('-'), "{name_2}");
     }
 }
 
 #[test]
-fn fila_6_mayor_acerca_un_nivel_y_menor_aleja_un_nivel() {
+fn row_6_greater_zooms_in_one_level_and_smaller_zooms_out_one_level() {
     let km = Keymap::default_scheme();
-    for (nombre, antes) in vistas() {
-        let aplica = |tecla: char| {
+    for (name_2, antes) in vistas() {
+        let applies = |key_2: char| {
             let action = km
-                .action_for(&press_de(KeyId::Char(tecla), false), Platform::Linux)
+                .action_for(&press_de(KeyId::Char(key_2), false), Platform::Linux)
                 .expect("acción");
             let mut v = antes;
-            v.apply_op(op_de(action), LIENZO, IMAGEN);
+            v.apply_op(op_de(action), CANVAS, IMAGE);
             v
         };
         assert_eq!(
-            aplica('>').zoom(),
+            applies('>').zoom(),
             antes.zoom().zoom_in(),
-            "{nombre}: `>` acerca"
+            "{name_2}: `>` acerca"
         );
         assert_eq!(
-            aplica('<').zoom(),
+            applies('<').zoom(),
             antes.zoom().zoom_out(),
-            "{nombre}: `<` aleja"
+            "{name_2}: `<` aleja"
         );
     }
 }
@@ -216,30 +216,30 @@ fn fila_6_mayor_acerca_un_nivel_y_menor_aleja_un_nivel() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn view_op_center_on_cursor_es_un_tipo_plano() {
-    fn plano<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
-    plano::<ViewOp>();
+fn view_op_center_on_cursor_is_a_plain_type() {
+    fn plane<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
+    plane::<ViewOp>();
     assert_ne!(ViewOp::CenterOnCursor, ViewOp::Fit);
 }
 
 #[test]
-fn fila_6_center_on_no_cambia_el_zoom() {
-    let puntos = [CENTRO, (0, 0), (699, 499), (-500, -500), (5000, 5000)];
-    for (nombre, antes) in vistas() {
-        for punto in puntos {
+fn row_6_center_on_does_not_change_the_zoom() {
+    let points = [CENTER, (0, 0), (699, 499), (-500, -500), (5000, 5000)];
+    for (name_2, antes) in vistas() {
+        for point in points {
             assert_eq!(
-                centrada(antes, punto).zoom(),
+                centered(antes, point).zoom(),
                 antes.zoom(),
-                "{nombre}: punto {punto:?}"
+                "{name_2}: punto {point:?}"
             );
         }
     }
 }
 
 #[test]
-fn fila_6_center_on_deja_la_vista_con_clamp_en_todos_los_puntos() {
-    let puntos = [
-        CENTRO,
+fn row_6_center_on_leaves_the_view_with_clamp_at_all_the_points() {
+    let points = [
+        CENTER,
         (0, 0),
         (699, 499),
         (0, 499),
@@ -249,81 +249,81 @@ fn fila_6_center_on_deja_la_vista_con_clamp_en_todos_los_puntos() {
         (-100_000, 100_000),
         (1_000_000_000, -1_000_000_000),
     ];
-    for (nombre, antes) in vistas() {
-        for punto in puntos {
-            let despues = centrada(antes, punto);
+    for (name_2, antes) in vistas() {
+        for point in points {
+            let after_2 = centered(antes, point);
             assert_eq!(
-                despues,
-                con_clamp(despues),
-                "{nombre}: punto {punto:?} no deja la vista con clamp"
+                after_2,
+                with_clamp(after_2),
+                "{name_2}: punto {point:?} no deja la vista con clamp"
             );
         }
     }
 }
 
 #[test]
-fn fila_6_el_pixel_bajo_el_punto_pasa_a_estar_bajo_el_centro_del_lienzo() {
-    for (nombre, antes) in vistas() {
+fn row_6_the_pixel_under_the_point_ends_up_under_the_center_of_the_canvas() {
+    for (name_2, antes) in vistas() {
         // El punto en el centro del lienzo, si cae sobre la imagen.
-        let mut puntos: Vec<(String, (i64, i64))> = vec![("el centro".to_string(), CENTRO)];
+        let mut points: Vec<(String, (i64, i64))> = vec![("el centro".to_string(), CENTER)];
         // El centro de cada una de las cuatro esquinas de la imagen y del píxel del medio.
         for (x, y) in [(0, 0), (63, 0), (0, 47), (63, 47), (32, 24)] {
-            puntos.push((
+            points.push((
                 format!("el píxel ({x}, {y})"),
-                centro_del_pixel(&antes, x, y),
+                center_of_the_pixel(&antes, x, y),
             ));
         }
-        for (descripcion, punto) in puntos {
-            let Some(pixel) = antes.screen_to_image(punto, IMAGEN) else {
+        for (description, point) in points {
+            let Some(pixel) = antes.screen_to_image(point, IMAGE) else {
                 // Sobre un punto fuera de la imagen no hay píxel que mantener (véase abajo).
                 continue;
             };
-            let despues = centrada(antes, punto);
+            let after_2 = centered(antes, point);
             assert_eq!(
-                despues.screen_to_image(CENTRO, IMAGEN),
+                after_2.screen_to_image(CENTER, IMAGE),
                 Some(pixel),
-                "{nombre}: {descripcion} ({punto:?}) no quedó bajo el centro"
+                "{name_2}: {description} ({point:?}) no quedó bajo el centro"
             );
         }
     }
 }
 
 #[test]
-fn fila_6_con_el_punto_ya_en_el_centro_el_pixel_bajo_el_centro_no_cambia() {
-    for (nombre, antes) in vistas() {
-        if let Some(pixel) = antes.screen_to_image(CENTRO, IMAGEN) {
+fn row_6_with_the_point_already_at_the_center_the_pixel_under_the_center_does_not_change() {
+    for (name_2, antes) in vistas() {
+        if let Some(pixel) = antes.screen_to_image(CENTER, IMAGE) {
             assert_eq!(
-                centrada(antes, CENTRO).screen_to_image(CENTRO, IMAGEN),
+                centered(antes, CENTER).screen_to_image(CENTER, IMAGE),
                 Some(pixel),
-                "{nombre}"
+                "{name_2}"
             );
         }
     }
 }
 
 #[test]
-fn fila_6_con_un_punto_sobre_la_imagen_no_hace_falta_clamp_y_el_centrado_es_completo() {
+fn row_6_with_a_point_over_the_image_no_clamp_is_needed_and_the_centering_is_complete() {
     // Si el punto está sobre la imagen, centrarlo nunca saca la imagen del lienzo: el resultado
     // es el de desplazar la vista lo que falta para llevar el punto al centro, sin recorte
     // (±1 px de redondeo).
-    for (nombre, antes) in vistas() {
-        let punto = centro_del_pixel(&antes, 10, 10);
-        if antes.screen_to_image(punto, IMAGEN).is_none() {
+    for (name_2, antes) in vistas() {
+        let point = center_of_the_pixel(&antes, 10, 10);
+        if antes.screen_to_image(point, IMAGE).is_none() {
             continue;
         }
-        let despues = centrada(antes, punto);
-        let (bx, by) = centro_del_pixel(&despues, 10, 10);
+        let after_2 = centered(antes, point);
+        let (bx, by) = center_of_the_pixel(&after_2, 10, 10);
         let z = antes.zoom().scale(1);
         assert!(
-            (bx - CENTRO.0).abs() <= z.max(1) && (by - CENTRO.1).abs() <= z.max(1),
-            "{nombre}: el píxel (10, 10) quedó en ({bx}, {by}) y el centro es {CENTRO:?}"
+            (bx - CENTER.0).abs() <= z.max(1) && (by - CENTER.1).abs() <= z.max(1),
+            "{name_2}: el píxel (10, 10) quedó en ({bx}, {by}) y el centro es {CENTER:?}"
         );
     }
 }
 
 #[test]
-fn fila_6_fuera_de_la_imagen_no_rompe_nada_y_el_zoom_no_cambia() {
-    let fuera = [
+fn row_6_outside_the_image_nothing_breaks_and_the_zoom_does_not_change() {
+    let outside = [
         (-500, -500),
         (-1, -1),
         (699, 499),
@@ -331,43 +331,43 @@ fn fila_6_fuera_de_la_imagen_no_rompe_nada_y_el_zoom_no_cambia() {
         (-100_000, 7),
         (1_000_000_000, -1_000_000_000),
     ];
-    for (nombre, antes) in vistas() {
-        for punto in fuera {
-            let despues = centrada(antes, punto);
-            assert_eq!(despues.zoom(), antes.zoom(), "{nombre}: {punto:?}");
+    for (name_2, antes) in vistas() {
+        for point in outside {
+            let after_2 = centered(antes, point);
+            assert_eq!(after_2.zoom(), antes.zoom(), "{name_2}: {point:?}");
             // `clamp` manda: la imagen sigue visible en el lienzo.
-            assert_eq!(despues, con_clamp(despues), "{nombre}: {punto:?}");
+            assert_eq!(after_2, with_clamp(after_2), "{name_2}: {point:?}");
             assert!(
-                despues.image_rect(IMAGEN).width > 0,
-                "{nombre}: {punto:?}: la imagen existe"
+                after_2.image_rect(IMAGE).width > 0,
+                "{name_2}: {point:?}: la imagen existe"
             );
         }
     }
 }
 
 #[test]
-fn fila_6_center_on_con_un_lienzo_o_una_imagen_vacios_no_entra_en_panico() {
-    for (viewport, imagen) in [
-        (Size::new(0, 0), IMAGEN),
-        (LIENZO, Size::new(0, 0)),
+fn row_6_center_on_with_an_empty_canvas_or_image_does_not_panic() {
+    for (viewport, image_2) in [
+        (Size::new(0, 0), IMAGE),
+        (CANVAS, Size::new(0, 0)),
         (Size::new(0, 0), Size::new(0, 0)),
         (Size::new(1, 1), Size::new(1, 1)),
     ] {
-        let mut v = View::fit(viewport, imagen);
-        v.center_on((10, 10), viewport, imagen);
+        let mut v = View::fit(viewport, image_2);
+        v.center_on((10, 10), viewport, image_2);
         let mut clamped = v;
-        clamped.clamp(viewport, imagen);
-        assert_eq!(v, clamped, "{viewport:?} con {imagen:?}");
+        clamped.clamp(viewport, image_2);
+        assert_eq!(v, clamped, "{viewport:?} con {image_2:?}");
     }
 }
 
 #[test]
-fn fila_6_apply_op_no_conoce_center_on_cursor_y_deja_la_vista_como_esta() {
+fn row_6_apply_op_does_not_know_center_on_cursor_and_leaves_the_view_as_it_is() {
     // La operación necesita el cursor: la resuelve el lienzo con `center_on`. `apply_op` la deja.
-    for (nombre, antes) in vistas() {
-        let mut despues = antes;
-        despues.apply_op(ViewOp::CenterOnCursor, LIENZO, IMAGEN);
-        assert_eq!(despues, con_clamp(antes), "{nombre}");
+    for (name_2, antes) in vistas() {
+        let mut after_2 = antes;
+        after_2.apply_op(ViewOp::CenterOnCursor, CANVAS, IMAGE);
+        assert_eq!(after_2, with_clamp(antes), "{name_2}");
     }
 }
 
@@ -377,115 +377,115 @@ fn fila_6_apply_op_no_conoce_center_on_cursor_y_deja_la_vista_como_esta() {
 
 /// Pantalla de 800×600 puntos y imagen RGBA de 64×48: a `ppp` 1,0 el ajuste es ×12 y el lienzo es
 /// la pantalla entera.
-const PANTALLA: Vec2 = vec2(800.0, 600.0);
-const CENTRO_DE_PANTALLA: Pos2 = pos2(400.0, 300.0);
-const POS_DEL_AREA: Pos2 = pos2(300.0, 200.0);
+const TEST_SCREEN: Vec2 = vec2(800.0, 600.0);
+const CENTER_OF_SCREEN: Pos2 = pos2(400.0, 300.0);
+const POS_OF_THE_AREA: Pos2 = pos2(300.0, 200.0);
 
-fn imagen() -> Image {
+fn image_2() -> Image {
     Image::new(64, 48, Mode::Rgba).expect("imagen válida")
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     canvas: Canvas,
     /// Con un `Area` encima del lienzo (como un desplegable del menú).
     area: Option<Id>,
-    boton: Rect,
+    button_2: Rect,
 }
 
-impl Banco {
-    fn nuevo(ppp: f32) -> Banco {
+impl Bench {
+    fn new_2(ppp: f32) -> Bench {
         let mut canvas = Canvas::new();
-        canvas.set_image(&imagen());
-        let mut banco = Banco {
-            ctx: contexto(ppp),
+        canvas.set_image(&image_2());
+        let mut bench = Bench {
+            ctx: context(ppp),
             canvas,
             area: None,
-            boton: Rect::NOTHING,
+            button_2: Rect::NOTHING,
         };
-        banco.reposo();
-        banco
+        bench.rest_2_2();
+        bench
     }
 
-    fn con_area(ppp: f32) -> Banco {
-        let mut banco = Banco::nuevo(ppp);
-        banco.area = Some(Id::unique("desplegable"));
+    fn with_area(ppp: f32) -> Bench {
+        let mut bench = Bench::new_2(ppp);
+        bench.area = Some(Id::unique("desplegable"));
         for _ in 0..3 {
-            banco.fotograma(vec![]);
+            bench.frame(vec![]);
         }
-        banco
+        bench
     }
 
-    fn fotograma(&mut self, events: Vec<Event>) -> (CanvasInfo, Vec<CanvasInput>) {
-        let mut resultado = None;
+    fn frame(&mut self, events: Vec<Event>) -> (CanvasInfo, Vec<CanvasInput>) {
+        let mut result = None;
         let canvas = &mut self.canvas;
         let area = self.area;
-        let mut boton_rect = self.boton;
-        fotograma(&self.ctx, PANTALLA, events, |ui| {
+        let mut button_rect = self.button_2;
+        frame(&self.ctx, TEST_SCREEN, events, |ui| {
             if let Some(id) = area {
-                let respuesta = Area::new(id)
+                let response = Area::new(id)
                     .order(Order::Foreground)
-                    .fixed_pos(POS_DEL_AREA)
+                    .fixed_pos(POS_OF_THE_AREA)
                     .show(ui.ctx(), |ui| ui.button("Guardar"));
-                boton_rect = respuesta.inner.rect;
+                button_rect = response.inner.rect;
             }
-            let entradas = canvas
+            let entries = canvas
                 .interact_roles(ui)
                 .into_iter()
                 .map(|(input, _)| input)
                 .collect::<Vec<_>>();
             let info = canvas.paint(ui);
-            resultado = Some((info, entradas));
+            result = Some((info, entries));
         });
-        self.boton = boton_rect;
-        resultado.expect("el lienzo se dibuja")
+        self.button_2 = button_rect;
+        result.expect("el lienzo se dibuja")
     }
 
     fn info(&mut self, events: Vec<Event>) -> CanvasInfo {
-        self.fotograma(events).0
+        self.frame(events).0
     }
 
-    fn reposo(&mut self) -> CanvasInfo {
+    fn rest_2_2(&mut self) -> CanvasInfo {
         self.info(vec![]);
         self.info(vec![])
     }
 
     /// Mueve el puntero a `pos` y deja un fotograma de reposo.
-    fn puntero_en(&mut self, pos: Pos2) -> CanvasInfo {
+    fn pointer_in(&mut self, pos: Pos2) -> CanvasInfo {
         self.info(vec![mover(pos)]);
         self.info(vec![])
     }
 
     /// Pide centrar y deja pasar un fotograma.
-    fn centra(&mut self) -> CanvasInfo {
+    fn centers(&mut self) -> CanvasInfo {
         self.canvas.request_view(ViewOp::CenterOnCursor);
         self.info(vec![])
     }
 }
 
 #[test]
-fn fila_6_request_view_se_aplica_en_el_siguiente_interact_y_no_antes() {
-    let mut banco = Banco::nuevo(1.0);
-    banco.puntero_en(pos2(100.0, 100.0));
-    let antes = banco.info(vec![]);
-    banco.canvas.request_view(ViewOp::CenterOnCursor);
+fn row_6_request_view_is_applied_in_the_next_interact_and_not_before() {
+    let mut bench = Bench::new_2(1.0);
+    bench.pointer_in(pos2(100.0, 100.0));
+    let antes = bench.info(vec![]);
+    bench.canvas.request_view(ViewOp::CenterOnCursor);
     assert_eq!(
-        banco.canvas.zoom(),
+        bench.canvas.zoom(),
         Some(antes.zoom),
         "pedirlo no cambia la vista: lo hace el siguiente interact"
     );
-    let despues = banco.info(vec![]);
+    let after_2 = bench.info(vec![]);
     assert_ne!(
-        despues.image_rect, antes.image_rect,
+        after_2.image_rect, antes.image_rect,
         "se aplica en ese fotograma"
     );
     // Y una sola vez: otro fotograma no la mueve más.
-    let otra = banco.info(vec![]);
-    assert_eq!(otra.image_rect, despues.image_rect);
+    let other = bench.info(vec![]);
+    assert_eq!(other.image_rect, after_2.image_rect);
 }
 
 #[test]
-fn fila_6_con_el_puntero_sobre_el_lienzo_el_pixel_bajo_el_cursor_pasa_al_centro_y_el_zoom_no_cambia()
+fn row_6_with_the_pointer_over_the_canvas_the_pixel_under_the_cursor_goes_to_the_center_and_the_zoom_does_not_change()
  {
     for ppp in PPPS {
         for cursor in [
@@ -494,121 +494,121 @@ fn fila_6_con_el_puntero_sobre_el_lienzo_el_pixel_bajo_el_cursor_pasa_al_centro_
             pos2(600.0, 150.0),
             pos2(400.0, 300.0),
         ] {
-            let mut banco = Banco::nuevo(ppp);
-            let antes = banco.puntero_en(cursor);
+            let mut bench = Bench::new_2(ppp);
+            let antes = bench.pointer_in(cursor);
             let Some(pixel) = antes.hover else {
                 // El cursor cae fuera de la imagen a esta escala: nada que comprobar.
                 continue;
             };
-            let despues = banco.centra();
+            let after_2 = bench.centers();
             assert_eq!(
-                despues.zoom, antes.zoom,
+                after_2.zoom, antes.zoom,
                 "ppp {ppp}, cursor {cursor:?}: mismo zoom"
             );
             // Lo que había bajo el cursor está ahora bajo el centro del lienzo: se comprueba
             // llevando el puntero allí.
-            let en_el_centro = banco.puntero_en(CENTRO_DE_PANTALLA);
+            let in_the_center = bench.pointer_in(CENTER_OF_SCREEN);
             assert_eq!(
-                en_el_centro.hover,
+                in_the_center.hover,
                 Some(pixel),
                 "ppp {ppp}, cursor {cursor:?}: el píxel {pixel:?} no quedó en el centro"
             );
-            assert_eq!(en_el_centro.zoom, antes.zoom, "ppp {ppp}");
+            assert_eq!(in_the_center.zoom, antes.zoom, "ppp {ppp}");
         }
     }
 }
 
 #[test]
-fn fila_6_con_el_puntero_ya_en_el_centro_el_pixel_bajo_el_centro_no_cambia() {
-    let mut banco = Banco::nuevo(1.0);
-    let antes = banco.puntero_en(CENTRO_DE_PANTALLA);
+fn row_6_with_the_pointer_already_at_the_center_the_pixel_under_the_center_does_not_change() {
+    let mut bench = Bench::new_2(1.0);
+    let antes = bench.pointer_in(CENTER_OF_SCREEN);
     let pixel = antes.hover.expect("el centro está sobre la imagen");
-    let despues = banco.centra();
-    assert_eq!(despues.zoom, antes.zoom);
-    assert_eq!(despues.hover, Some(pixel));
+    let after_2 = bench.centers();
+    assert_eq!(after_2.zoom, antes.zoom);
+    assert_eq!(after_2.hover, Some(pixel));
 }
 
 #[test]
-fn fila_6_sin_puntero_sobre_el_lienzo_la_vista_no_cambia() {
+fn row_6_without_a_pointer_over_the_canvas_the_view_does_not_change() {
     for ppp in PPPS {
         // Nunca hubo puntero.
-        let mut banco = Banco::nuevo(ppp);
-        let antes = banco.reposo();
-        let despues = banco.centra();
+        let mut bench = Bench::new_2(ppp);
+        let antes = bench.rest_2_2();
+        let after_2 = bench.centers();
         assert_eq!(
-            despues.image_rect, antes.image_rect,
+            after_2.image_rect, antes.image_rect,
             "ppp {ppp}: sin puntero"
         );
-        assert_eq!(despues.zoom, antes.zoom, "ppp {ppp}");
+        assert_eq!(after_2.zoom, antes.zoom, "ppp {ppp}");
 
         // El puntero fuera del lienzo (a la derecha de la pantalla).
-        let mut banco = Banco::nuevo(ppp);
-        banco.puntero_en(pos2(900.0, 300.0));
-        let antes = banco.reposo();
-        let despues = banco.centra();
+        let mut bench = Bench::new_2(ppp);
+        bench.pointer_in(pos2(900.0, 300.0));
+        let antes = bench.rest_2_2();
+        let after_2 = bench.centers();
         assert_eq!(
-            despues.image_rect, antes.image_rect,
+            after_2.image_rect, antes.image_rect,
             "ppp {ppp}: puntero fuera del lienzo"
         );
-        assert_eq!(despues.zoom, antes.zoom, "ppp {ppp}");
+        assert_eq!(after_2.zoom, antes.zoom, "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_6_sin_imagen_pedir_centrar_no_rompe_nada() {
-    let mut banco = Banco {
-        ctx: contexto(1.0),
+fn row_6_without_an_image_asking_to_center_breaks_nothing() {
+    let mut bench = Bench {
+        ctx: context(1.0),
         canvas: Canvas::new(),
         area: None,
-        boton: Rect::NOTHING,
+        button_2: Rect::NOTHING,
     };
-    banco.puntero_en(pos2(100.0, 100.0));
-    banco.canvas.request_view(ViewOp::CenterOnCursor);
-    banco.info(vec![]);
-    assert_eq!(banco.canvas.zoom(), None);
+    bench.pointer_in(pos2(100.0, 100.0));
+    bench.canvas.request_view(ViewOp::CenterOnCursor);
+    bench.info(vec![]);
+    assert_eq!(bench.canvas.zoom(), None);
 }
 
 #[test]
-fn fila_6_con_otra_capa_encima_del_cursor_la_vista_no_cambia() {
-    let mut banco = Banco::con_area(1.0);
-    assert!(banco.boton.is_positive(), "el área se pintó");
-    let sobre_el_area = banco.boton.center();
-    banco.puntero_en(sobre_el_area);
-    let antes = banco.reposo();
-    let despues = banco.centra();
+fn row_6_with_another_layer_above_the_cursor_the_view_does_not_change() {
+    let mut bench = Bench::with_area(1.0);
+    assert!(bench.button_2.is_positive(), "el área se pintó");
+    let over_the_area = bench.button_2.center();
+    bench.pointer_in(over_the_area);
+    let antes = bench.rest_2_2();
+    let after_2 = bench.centers();
     assert_eq!(
-        despues.image_rect, antes.image_rect,
+        after_2.image_rect, antes.image_rect,
         "con el cursor sobre un desplegable no se centra"
     );
     // Con el cursor fuera del área sí se centra (el control de la prueba).
-    banco.puntero_en(pos2(100.0, 100.0));
-    let antes = banco.reposo();
-    let despues = banco.centra();
-    assert_ne!(despues.image_rect, antes.image_rect);
+    bench.pointer_in(pos2(100.0, 100.0));
+    let antes = bench.rest_2_2();
+    let after_2 = bench.centers();
+    assert_ne!(after_2.image_rect, antes.image_rect);
 }
 
 #[test]
-fn fila_6_con_un_trazo_a_medias_n_mueve_la_vista_y_el_trazo_sigue() {
+fn row_6_with_a_half_made_stroke_n_moves_the_view_and_the_stroke_continues() {
     let cursor = pos2(100.0, 100.0);
-    let mut banco = Banco::nuevo(1.0);
-    banco.puntero_en(cursor);
-    let antes = banco.reposo();
+    let mut bench = Bench::new_2(1.0);
+    bench.pointer_in(cursor);
+    let antes = bench.rest_2_2();
 
     // Empieza el trazo: pulsa sin soltar.
-    let (_, empezar) = banco.fotograma(vec![boton(cursor, true)]);
-    let origen = match empezar.as_slice() {
+    let (_, start_2_2) = bench.frame(vec![button_2(cursor, true)]);
+    let source_2 = match start_2_2.as_slice() {
         [CanvasInput::Stroke(CanvasEvent::StrokeBegin(p))] => *p,
-        otra => panic!("se esperaba un StrokeBegin y salió {otra:?}"),
+        other => panic!("se esperaba un StrokeBegin y salió {other:?}"),
     };
 
     // Centra a mitad del trazo.
-    banco.canvas.request_view(ViewOp::CenterOnCursor);
-    let (info, entradas) = banco.fotograma(vec![]);
+    bench.canvas.request_view(ViewOp::CenterOnCursor);
+    let (info, entries) = bench.frame(vec![]);
     assert!(
-        !entradas
+        !entries
             .iter()
             .any(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeEnd))),
-        "centrar no corta el trazo: {entradas:?}"
+        "centrar no corta el trazo: {entries:?}"
     );
     assert_ne!(
         info.image_rect, antes.image_rect,
@@ -617,8 +617,8 @@ fn fila_6_con_un_trazo_a_medias_n_mueve_la_vista_y_el_trazo_sigue() {
     assert_eq!(info.zoom, antes.zoom);
 
     // El trazo sigue: el siguiente movimiento usa la vista nueva (otro píxel bajo el mismo punto).
-    let (_, movimiento) = banco.fotograma(vec![mover(pos2(101.0, 100.0))]);
-    let destino = movimiento
+    let (_, movement) = bench.frame(vec![mover(pos2(101.0, 100.0))]);
+    let target_2 = movement
         .iter()
         .find_map(|e| match e {
             CanvasInput::Stroke(CanvasEvent::StrokeMove(p)) => Some(*p),
@@ -626,41 +626,41 @@ fn fila_6_con_un_trazo_a_medias_n_mueve_la_vista_y_el_trazo_sigue() {
         })
         .expect("el trazo sigue y da un StrokeMove");
     assert_ne!(
-        destino, origen,
-        "el movimiento usa la vista nueva: {origen:?} → {destino:?}"
+        target_2, source_2,
+        "el movimiento usa la vista nueva: {source_2:?} → {target_2:?}"
     );
 
     // Y termina como siempre, al soltar.
-    let (_, soltar) = banco.fotograma(vec![boton(pos2(101.0, 100.0), false)]);
+    let (_, release_2) = bench.frame(vec![button_2(pos2(101.0, 100.0), false)]);
     assert_eq!(
-        soltar.last(),
+        release_2.last(),
         Some(&CanvasInput::Stroke(CanvasEvent::StrokeEnd))
     );
 }
 
 #[test]
-fn fila_6_centrar_con_un_trazo_a_medias_no_cambia_el_pixel_que_se_dibuja_bajo_el_cursor_del_centro()
+fn row_6_centering_with_a_half_made_stroke_does_not_change_the_pixel_drawn_under_the_center_cursor()
 {
     // Tras centrar, llevar el cursor al centro da el mismo píxel que había bajo el cursor antes.
     let cursor = pos2(100.0, 100.0);
-    let mut banco = Banco::nuevo(1.0);
-    let antes = banco.puntero_en(cursor);
+    let mut bench = Bench::new_2(1.0);
+    let antes = bench.pointer_in(cursor);
     let pixel = antes.hover.expect("sobre la imagen");
-    banco.fotograma(vec![boton(cursor, true)]);
-    banco.canvas.request_view(ViewOp::CenterOnCursor);
-    banco.fotograma(vec![]);
-    let (info, _) = banco.fotograma(vec![mover(CENTRO_DE_PANTALLA)]);
+    bench.frame(vec![button_2(cursor, true)]);
+    bench.canvas.request_view(ViewOp::CenterOnCursor);
+    bench.frame(vec![]);
+    let (info, _) = bench.frame(vec![mover(CENTER_OF_SCREEN)]);
     assert_eq!(info.hover, Some(pixel));
-    banco.fotograma(vec![boton(CENTRO_DE_PANTALLA, false)]);
+    bench.frame(vec![button_2(CENTER_OF_SCREEN, false)]);
 }
 
 #[test]
-fn fila_6_las_demas_operaciones_de_zoom_siguen_igual_con_la_nueva_en_la_cola() {
+fn row_6_the_other_zoom_operations_stay_the_same_with_the_new_one_in_the_queue() {
     // `CenterOnCursor` sin puntero no estropea las operaciones pedidas en el mismo fotograma.
-    let mut banco = Banco::nuevo(1.0);
-    let ajuste = banco.reposo().zoom;
-    banco.canvas.request_view(ViewOp::CenterOnCursor);
-    banco.canvas.request_view(ViewOp::ZoomIn);
-    let despues = banco.info(vec![]);
-    assert_eq!(despues.zoom, ajuste.zoom_in());
+    let mut bench = Bench::new_2(1.0);
+    let fit = bench.rest_2_2().zoom;
+    bench.canvas.request_view(ViewOp::CenterOnCursor);
+    bench.canvas.request_view(ViewOp::ZoomIn);
+    let after_2 = bench.info(vec![]);
+    assert_eq!(after_2.zoom, fit.zoom_in());
 }

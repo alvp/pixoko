@@ -1,7 +1,7 @@
 //! Botón cuadrado con relieve para los iconos (specs/interfaz-iconos.md, decisión 3).
 //!
 //! 24 u = 1 u de relieve + 3 u de margen + 16 u de icono + 3 + 1. El aspecto sale de tres banderas
-//! (`hundido`, `habilitado`, `ratón encima`) en [`look`], sin egui, y [`paint_icon`] y
+//! (`pressed`, `enabled_2`, `ratón above`) en [`look`], sin egui, y [`paint_icon`] y
 //! [`paint_text`] lo pintan. Todo cae en píxeles físicos enteros: las medidas son `u` y el
 //! icono se pinta a `16 · n` píxeles, con el UV completo (la textura se muestrea con vecino más
 //! cercano).
@@ -121,7 +121,7 @@ pub fn paint_icon(painter: &Painter, rect: Rect, u: f32, texture: Option<Texture
     }
 }
 
-/// Pinta un botón de texto (`Confirmar` y `Cancelar`): cara, relieve y el rótulo a `text_pos`,
+/// Pinta un botón de texto (`Confirmar` y `Cancel`): cara, relieve y el rótulo a `text_pos`,
 /// con la tinta del aspecto.
 pub fn paint_text(
     painter: &Painter,

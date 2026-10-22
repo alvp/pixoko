@@ -156,14 +156,14 @@ pub(crate) fn interact(
 /// Qué botones de la paleta hay que pintar y cómo (specs/hito-2-paleta-operaciones.md).
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ButtonsView {
-    /// Hay una quita pendiente: `Confirmar` y `Cancelar` (texto) sustituyen a la fila de iconos.
+    /// Hay una quita pendiente: `Confirmar` y `Cancel` (texto) sustituyen a la fila de iconos.
     pub removing: bool,
     /// Entradas de la paleta.
     pub len: usize,
     /// La quita pendiente tiene destino.
     pub has_destination: bool,
     /// La entrada elegida es la transparente: el icono de fijar o quitar se ve hundido y su
-    /// tooltip dice `Quitar transparente`.
+    /// tooltip dice `Remove transparent`.
     pub transparent_active: bool,
     /// Las texturas de los iconos.
     pub icons: IconSet,
@@ -321,7 +321,7 @@ pub(crate) fn show(
     }
 
     // Botones de la paleta: la fila de iconos o, con una quita pendiente, `Confirmar` y
-    // `Cancelar` en texto.
+    // `Cancel` en texto.
     if let Some(view) = extras.buttons {
         let pointer = ui.input(|input| input.pointer.hover_pos());
         let buttons: &[PaletteButton] = if view.removing {

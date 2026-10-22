@@ -140,8 +140,8 @@ pub fn transparent_button_label(palette: &Palette, active: u8) -> &'static str {
 }
 
 /// Rótulo de un botón de la fila de la paleta: tooltip y texto accesible de los iconos y rótulo de
-/// `Confirmar` y `Cancelar` (specs/interfaz-iconos.md, decisión 10). `transparent_active`: la entrada
-/// elegida es la transparente (el icono de la fila dice entonces `Quitar transparente`).
+/// `Confirmar` y `Cancel` (specs/interfaz-iconos.md, decisión 10). `transparent_active`: la entrada
+/// elegida es la transparente (el icono de la fila dice entonces `Remove transparent`).
 pub fn palette_button_tooltip(button: PaletteButton, transparent_active: bool) -> &'static str {
     match button {
         PaletteButton::Add => "Añadir entrada",

@@ -1,5 +1,5 @@
 //! Los iconos propios de la interfaz (specs/interfaz-iconos.md): sus nombres y el conjunto de
-//! texturas con que se pintan. Los PNG (`assets/icons/<nombre>.png`, 16 × 16, alfa 0 o 255,
+//! texturas con que se pintan. Los PNG (`assets/icons/<name_2>.png`, 16 × 16, alfa 0 o 255,
 //! píxeles blancos) los incrusta y los sube `px-app`; aquí no hay dibujos ni dependencia de
 //! `px-formats`.
 //!
@@ -72,7 +72,7 @@ impl Icon {
         self as usize
     }
 
-    /// Nombre del fichero sin extensión (`assets/icons/<nombre>.png`).
+    /// Nombre del fichero sin extensión (`assets/icons/<name_2>.png`).
     pub fn file_stem(self) -> &'static str {
         match self {
             Icon::Pencil => "lapiz",

@@ -55,8 +55,8 @@ pub fn dialog_key(key: Key, modifiers: Modifiers) -> Option<DialogKey> {
 }
 
 /// El orden de tabulación: los campos visibles de arriba abajo (`Minus` y `Plus` tras cada
-/// numérico, una parada por opción, la zona de texto), `Aceptar` solo si todo es válido y
-/// `Cancelar` si lo hay.
+/// numérico, una parada por opción, la zona de texto), `Accept` solo si todo es válido y
+/// `Cancel` si lo hay.
 pub fn focus_order(dialog: &Dialog) -> Vec<FocusTarget> {
     let mut order = Vec::new();
     for index in dialog.shown_indices() {
@@ -95,7 +95,7 @@ pub fn focus_order(dialog: &Dialog) -> Vec<FocusTarget> {
 
 /// El foco al abrir: el primer campo editable visible (en un grupo, la opción elegida); si no hay,
 /// el primero que sea una zona de texto o un botón de campo habilitado, en el orden de los campos;
-/// si no, `Aceptar`.
+/// si no, `Accept`.
 pub fn initial_focus(dialog: &Dialog) -> FocusTarget {
     for index in dialog.shown_indices() {
         let field = &dialog.spec().fields[index];

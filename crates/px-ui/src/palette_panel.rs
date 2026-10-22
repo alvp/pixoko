@@ -138,7 +138,7 @@ pub struct Roles {
 }
 
 /// Lo que `show_panel` necesita de los colores: el fondo es `None` en las vías antiguas (que no
-/// pintan el anillo del fondo ni dicen `frente`/`fondo`).
+/// pintan el anillo del fondo ni dicen `foreground`/`background_2`).
 #[derive(Clone, Copy)]
 struct PanelRoles {
     foreground: ColorChoice,
@@ -217,7 +217,7 @@ pub fn show_editing(
 }
 
 /// Como [`show_editing`], con el estado del panel entre fotogramas (`view`). Si el panel no
-/// cabe (`edit_layout::panel_layout`), el bloque `[texto · una fila · editor]` se desplaza
+/// cabe (`edit_layout::panel_layout`), el bloque `[text_2 · a row_2 · editor]` se desplaza
 /// entero con la rueda y una barra visible; la elegida se muestra al cambiar el número de filas
 /// visibles o si `view.reveal`, nunca por la rueda (specs/hito-2-panel-ventana-baja.md).
 #[allow(clippy::too_many_arguments)]

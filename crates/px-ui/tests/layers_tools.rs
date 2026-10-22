@@ -10,7 +10,7 @@
 //!
 //! Contrato de API que estas pruebas fijan (la lógica debe ofrecerlo):
 //! - `px_ui::source::{PixelSource, DocSource, identity_cell, flatten, visible_picked,
-//!   overlay_pixels}`; `overlay_pixels(doc, celda_activa, edits) -> Vec<(u32, u32, Rgba)>` da, por
+//!   overlay_pixels}`; `overlay_pixels(doc, celda_activa, edits) -> Vec<(u32, u32, Rgba)>` gives, per
 //!   cada edición, el color que se ve con el valor de la celda activa sustituido por el del trazo.
 //! - `px_ui::tool::DropperSource { Visible, Layer }` y `ToolState::set_dropper_source`.
 //! - `Document::canvas_image()` (px-core, C-01).
@@ -35,102 +35,99 @@ use px_ui::tool::{DropperSource, Tool, ToolAction, ToolEvent, ToolState};
 use px_ui::view::Size;
 
 mod tiles_support;
-use tiles_support::{esperado, paleta};
+use tiles_support::{expected_2, palette};
 
-const ROJO: Rgba = Rgba::opaque(255, 0, 0);
-const VERDE: Rgba = Rgba::opaque(0, 255, 0);
-const AZUL: Rgba = Rgba::opaque(0, 0, 255);
-const FONDO: Rgba = Rgba::opaque(10, 20, 30);
+const RED: Rgba = Rgba::opaque(255, 0, 0);
+const GREEN: Rgba = Rgba::opaque(0, 255, 0);
+const BLUE: Rgba = Rgba::opaque(0, 0, 255);
+const TEST_BACKGROUND: Rgba = Rgba::opaque(10, 20, 30);
 
 // ---------------------------------------------------------------------------------------------
 // Ayudantes
 // ---------------------------------------------------------------------------------------------
 
-fn rgba_lleno(ancho: u32, alto: u32, color: Rgba) -> Image {
-    let mut imagen = Image::new(ancho, alto, Mode::Rgba).expect("imagen");
-    for y in 0..alto {
-        for x in 0..ancho {
-            imagen.set_pixel(x, y, Pixel::Rgba(color)).expect("dentro");
+fn rgba_full(width_2: u32, height_2: u32, color: Rgba) -> Image {
+    let mut image_2 = Image::new(width_2, height_2, Mode::Rgba).expect("imagen");
+    for y in 0..height_2 {
+        for x in 0..width_2 {
+            image_2.set_pixel(x, y, Pixel::Rgba(color)).expect("dentro");
         }
     }
-    imagen
+    image_2
 }
 
-/// Un documento RGBA de `ancho × alto` con la capa A opaca de color `FONDO`.
-fn doc_rgba(ancho: u32, alto: u32) -> Document {
-    Document::new(rgba_lleno(ancho, alto, FONDO))
+/// Un documento RGBA de `width_2 × height_2` con la capa A opaca de color `TEST_BACKGROUND`.
+fn doc_rgba(width_2: u32, height_2: u32) -> Document {
+    Document::new(rgba_full(width_2, height_2, TEST_BACKGROUND))
 }
 
 /// Un documento indexado (paleta de `tiles_support`, transparente en la 7) con la capa A en el
 /// índice 1.
-fn doc_indexado(ancho: u32, alto: u32) -> Document {
-    let mut imagen = Image::new_indexed(ancho, alto, paleta()).expect("imagen");
-    for y in 0..alto {
-        for x in 0..ancho {
-            imagen.set_pixel(x, y, Pixel::Indexed(1)).expect("dentro");
+fn doc_indexed(width_2: u32, height_2: u32) -> Document {
+    let mut image_2 = Image::new_indexed(width_2, height_2, palette()).expect("imagen");
+    for y in 0..height_2 {
+        for x in 0..width_2 {
+            image_2.set_pixel(x, y, Pixel::Indexed(1)).expect("dentro");
         }
     }
-    Document::new(imagen)
+    Document::new(image_2)
 }
 
 /// Añade una capa encima (vacía) y devuelve su `LayerId` y la celda.
-fn capa_nueva(doc: &mut Document, nombre: &str) -> (LayerId, ImageId) {
+fn layer_new(doc: &mut Document, name_2: &str) -> (LayerId, ImageId) {
     let at = doc.layers().len();
     doc.apply(Command::AddLayer {
-        name: nombre.to_string(),
+        name: name_2.to_string(),
         at,
     })
     .expect("añadir capa");
-    let capa = &doc.layers()[at];
-    (capa.id(), capa.cel())
+    let layer_2 = &doc.layers()[at];
+    (layer_2.id(), layer_2.cel())
 }
 
-fn pinta(doc: &mut Document, celda: ImageId, puntos: &[(u32, u32)], pixel: Pixel) {
-    let pixels = puntos
+fn paints(doc: &mut Document, cel: ImageId, points: &[(u32, u32)], pixel: Pixel) {
+    let pixels = points
         .iter()
         .map(|&(x, y)| PixelEdit { x, y, pixel })
         .collect();
-    doc.apply(Command::SetPixels {
-        image: celda,
-        pixels,
-    })
-    .expect("pintar");
+    doc.apply(Command::SetPixels { image: cel, pixels })
+        .expect("pintar");
 }
 
 fn rgba(color: Rgba) -> Pixel {
     Pixel::Rgba(color)
 }
 
-/// Un gesto completo (pulsar, mover y soltar) con `herramienta`: devuelve el resultado de soltar.
-fn gesto(
+/// Un gesto completo (pulsar, mover y soltar) con `tool_2`: devuelve el resultado de soltar.
+fn gesture_2(
     tools: &mut ToolState,
     doc: &mut Document,
-    celda: ImageId,
+    cel: ImageId,
     pixel: Option<Pixel>,
-    herramienta: Tool,
-    puntos: &[(i32, i32)],
+    tool_2: Tool,
+    points: &[(i32, i32)],
 ) -> Result<bool, DocumentError> {
-    tools.apply_action(ToolAction::Select(herramienta));
-    let mut resultado =
-        tools.canvas_event_with(doc, celda, pixel, CanvasEvent::StrokeBegin(puntos[0]))?;
-    for &punto in &puntos[1..] {
-        resultado |= tools.canvas_event_with(doc, celda, pixel, CanvasEvent::StrokeMove(punto))?;
+    tools.apply_action(ToolAction::Select(tool_2));
+    let mut result =
+        tools.canvas_event_with(doc, cel, pixel, CanvasEvent::StrokeBegin(points[0]))?;
+    for &point in &points[1..] {
+        result |= tools.canvas_event_with(doc, cel, pixel, CanvasEvent::StrokeMove(point))?;
     }
-    Ok(resultado | tools.canvas_event_with(doc, celda, pixel, CanvasEvent::StrokeEnd)?)
+    Ok(result | tools.canvas_event_with(doc, cel, pixel, CanvasEvent::StrokeEnd)?)
 }
 
-fn pixel_de(doc: &Document, celda: ImageId, x: u32, y: u32) -> Pixel {
-    doc.image(celda)
+fn pixel_de(doc: &Document, cel: ImageId, x: u32, y: u32) -> Pixel {
+    doc.image(cel)
         .expect("la celda tiene imagen")
         .get_pixel(x, y)
         .expect("dentro")
 }
 
 /// El color que se ve en `(x, y)`: el píxel de `compose` pasado por `pixel_rgba`.
-fn visto(doc: &Document, x: u32, y: u32) -> Rgba {
-    let compuesta = compose(doc).expect("compose");
-    let pixel = compuesta.get_pixel(x, y).expect("dentro");
-    pixel_rgba(&compuesta, pixel).expect("color")
+fn seen(doc: &Document, x: u32, y: u32) -> Rgba {
+    let composite = compose(doc).expect("compose");
+    let pixel = composite.get_pixel(x, y).expect("dentro");
+    pixel_rgba(&composite, pixel).expect("color")
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -138,42 +135,42 @@ fn visto(doc: &Document, x: u32, y: u32) -> Rgba {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_la_linea_sobre_celda_vacia_es_un_setpixels_recortado_sin_materializar_antes() {
+fn row_3_the_line_over_an_empty_cel_is_a_clipped_setpixels_without_materializing_first() {
     let mut doc = doc_rgba(8, 6);
-    let (_, celda) = capa_nueva(&mut doc, "B");
+    let (_, cel) = layer_new(&mut doc, "B");
     let antes = doc.clone();
     let bytes = doc.materialized_bytes();
     let mut tools = ToolState::new();
     tools.apply_action(ToolAction::Select(Tool::Line));
-    let pixel = Some(rgba(ROJO));
+    let pixel = Some(rgba(RED));
     tools
-        .canvas_event_with(&mut doc, celda, pixel, CanvasEvent::StrokeBegin((1, 1)))
+        .canvas_event_with(&mut doc, cel, pixel, CanvasEvent::StrokeBegin((1, 1)))
         .expect("pulsar");
     tools
-        .canvas_event_with(&mut doc, celda, pixel, CanvasEvent::StrokeMove((20, 1)))
+        .canvas_event_with(&mut doc, cel, pixel, CanvasEvent::StrokeMove((20, 1)))
         .expect("mover");
     assert!(
-        doc.image(celda).is_none(),
+        doc.image(cel).is_none(),
         "no se materializa antes de soltar"
     );
     assert_eq!(doc.materialized_bytes(), bytes);
-    let cambio = tools
-        .canvas_event_with(&mut doc, celda, pixel, CanvasEvent::StrokeEnd)
+    let change = tools
+        .canvas_event_with(&mut doc, cel, pixel, CanvasEvent::StrokeEnd)
         .expect("soltar");
-    assert!(cambio);
+    assert!(change);
     for x in 0..8 {
-        let esperado = if x >= 1 {
-            rgba(ROJO)
+        let expected_2 = if x >= 1 {
+            rgba(RED)
         } else {
             rgba(Rgba::TRANSPARENT)
         };
-        assert_eq!(pixel_de(&doc, celda, x, 1), esperado, "x = {x}");
+        assert_eq!(pixel_de(&doc, cel, x, 1), expected_2, "x = {x}");
     }
-    assert_eq!(pixel_de(&doc, celda, 0, 0), rgba(Rgba::TRANSPARENT));
-    let cambios = tools.take_changes();
-    assert_eq!(cambios.len(), 1, "un solo paso anotado");
+    assert_eq!(pixel_de(&doc, cel, 0, 0), rgba(Rgba::TRANSPARENT));
+    let changes_2 = tools.take_changes();
+    assert_eq!(changes_2.len(), 1, "un solo paso anotado");
     assert!(
-        !cambios[0].blocks.is_empty(),
+        !changes_2[0].blocks.is_empty(),
         "la región sucia no está vacía"
     );
     doc.undo().expect("deshacer");
@@ -181,138 +178,134 @@ fn fila_3_la_linea_sobre_celda_vacia_es_un_setpixels_recortado_sin_materializar_
 }
 
 #[test]
-fn fila_3_el_relleno_sobre_celda_vacia_cubre_el_lienzo_con_un_tramo_por_fila() {
+fn row_3_the_fill_over_an_empty_cel_covers_the_canvas_with_one_span_per_row() {
     let mut doc = doc_rgba(9, 5);
-    let (_, celda) = capa_nueva(&mut doc, "B");
+    let (_, cel) = layer_new(&mut doc, "B");
     let antes = doc.clone();
     let mut tools = ToolState::new();
-    let cambio = gesto(
+    let change = gesture_2(
         &mut tools,
         &mut doc,
-        celda,
-        Some(rgba(ROJO)),
+        cel,
+        Some(rgba(RED)),
         Tool::Fill,
         &[(3, 3)],
     )
     .expect("relleno");
-    assert!(cambio);
+    assert!(change);
     for y in 0..5 {
         for x in 0..9 {
-            assert_eq!(pixel_de(&doc, celda, x, y), rgba(ROJO), "({x}, {y})");
+            assert_eq!(pixel_de(&doc, cel, x, y), rgba(RED), "({x}, {y})");
         }
     }
-    let cambios = tools.take_changes();
-    assert_eq!(cambios.len(), 1);
+    let changes_2 = tools.take_changes();
+    assert_eq!(changes_2.len(), 1);
     assert_eq!(
-        cambios[0].blocks,
+        changes_2[0].blocks,
         BlockSet::full(9, 5),
         "todo el lienzo queda sucio"
     );
     doc.undo().expect("deshacer");
     assert_eq!(doc, antes);
-    assert!(
-        doc.image(celda).is_none(),
-        "deshacer la deja vacía otra vez"
-    );
+    assert!(doc.image(cel).is_none(), "deshacer la deja vacía otra vez");
 }
 
 #[test]
-fn fila_3_rellenar_una_celda_vacia_con_el_transparente_no_cambia_nada() {
+fn row_3_filling_an_empty_cel_with_the_transparent_changes_nothing() {
     let mut doc = doc_rgba(6, 4);
-    let (_, celda) = capa_nueva(&mut doc, "B");
+    let (_, cel) = layer_new(&mut doc, "B");
     let antes = doc.clone();
     let mut tools = ToolState::new();
-    let cambio = gesto(
+    let change = gesture_2(
         &mut tools,
         &mut doc,
-        celda,
+        cel,
         Some(rgba(Rgba::TRANSPARENT)),
         Tool::Fill,
         &[(2, 2)],
     )
     .expect("relleno");
-    assert!(!cambio);
+    assert!(!change);
     assert_eq!(doc, antes);
-    assert!(doc.image(celda).is_none());
+    assert!(doc.image(cel).is_none());
     assert_eq!(doc.state_id(), antes.state_id());
     assert!(tools.take_changes().is_empty());
 }
 
 #[test]
-fn fila_3_en_indexado_el_relleno_de_una_celda_vacia_usa_el_indice_transparente_como_semilla() {
-    let mut doc = doc_indexado(6, 4);
-    let (_, celda) = capa_nueva(&mut doc, "B");
+fn row_3_in_indexed_the_fill_of_an_empty_cel_uses_the_transparent_index_as_the_seed() {
+    let mut doc = doc_indexed(6, 4);
+    let (_, cel) = layer_new(&mut doc, "B");
     let mut tools = ToolState::new();
     // El índice transparente de la paleta de prueba es el 7: rellenar con él no cambia nada.
-    let nada = gesto(
+    let nothing = gesture_2(
         &mut tools,
         &mut doc,
-        celda,
+        cel,
         Some(Pixel::Indexed(7)),
         Tool::Fill,
         &[(1, 1)],
     )
     .expect("relleno");
-    assert!(!nada);
-    assert!(doc.image(celda).is_none());
-    let cambio = gesto(
+    assert!(!nothing);
+    assert!(doc.image(cel).is_none());
+    let change = gesture_2(
         &mut tools,
         &mut doc,
-        celda,
+        cel,
         Some(Pixel::Indexed(2)),
         Tool::Fill,
         &[(1, 1)],
     )
     .expect("relleno");
-    assert!(cambio);
-    assert_eq!(pixel_de(&doc, celda, 5, 3), Pixel::Indexed(2));
+    assert!(change);
+    assert_eq!(pixel_de(&doc, cel, 5, 3), Pixel::Indexed(2));
 }
 
 #[test]
-fn fila_3_el_relleno_sobre_una_celda_con_pixeles_es_el_de_siempre() {
+fn row_3_the_fill_over_a_cel_with_pixels_is_the_usual_one() {
     let mut doc = doc_rgba(8, 6);
-    let celda_a = doc.layers()[0].cel();
-    pinta(&mut doc, celda_a, &[(2, 2), (3, 2)], rgba(ROJO));
-    let mut esperado = doc.clone();
-    flood_fill(&mut esperado, celda_a, 5, 5, rgba(VERDE)).expect("oráculo");
+    let cel_a = doc.layers()[0].cel();
+    paints(&mut doc, cel_a, &[(2, 2), (3, 2)], rgba(RED));
+    let mut expected_2 = doc.clone();
+    flood_fill(&mut expected_2, cel_a, 5, 5, rgba(GREEN)).expect("oráculo");
     let mut tools = ToolState::new();
-    gesto(
+    gesture_2(
         &mut tools,
         &mut doc,
-        celda_a,
-        Some(rgba(VERDE)),
+        cel_a,
+        Some(rgba(GREEN)),
         Tool::Fill,
         &[(5, 5)],
     )
     .expect("relleno");
     assert_eq!(
-        pixel_de(&doc, celda_a, 5, 5),
-        pixel_de(&esperado, celda_a, 5, 5)
+        pixel_de(&doc, cel_a, 5, 5),
+        pixel_de(&expected_2, cel_a, 5, 5)
     );
-    assert_eq!(doc.image(celda_a), esperado.image(celda_a));
+    assert_eq!(doc.image(cel_a), expected_2.image(cel_a));
 }
 
 #[test]
-fn fila_3_un_id_que_no_es_celda_sigue_siendo_unknown_image_en_raster_y_no_hace_nada_en_la_herramienta()
- {
+fn row_3_an_id_that_is_not_a_cel_is_still_unknown_image_in_raster_and_does_nothing_in_the_tool() {
     let mut doc = doc_rgba(4, 4);
-    let ninguna = ImageId::from_raw(999);
+    let no = ImageId::from_raw(999);
     assert!(matches!(
-        fill_command(&doc, ninguna, 1, 1, rgba(ROJO)),
+        fill_command(&doc, no, 1, 1, rgba(RED)),
         Err(DocumentError::UnknownImage(_))
     ));
     let antes = doc.clone();
     let mut tools = ToolState::new();
-    let cambio = gesto(
+    let change = gesture_2(
         &mut tools,
         &mut doc,
-        ninguna,
-        Some(rgba(ROJO)),
+        no,
+        Some(rgba(RED)),
         Tool::Fill,
         &[(1, 1)],
     )
     .expect("sin error");
-    assert!(!cambio);
+    assert!(!change);
     assert_eq!(doc, antes);
 }
 
@@ -321,23 +314,23 @@ fn fila_3_un_id_que_no_es_celda_sigue_siendo_unknown_image_en_raster_y_no_hace_n
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_el_borrador_sobre_una_celda_vacia_no_hace_nada_ni_la_materializa() {
+fn row_4_the_eraser_on_an_empty_cel_does_nothing_or_materializes_it() {
     let mut doc = doc_rgba(6, 4);
-    let (_, celda) = capa_nueva(&mut doc, "B");
+    let (_, cel) = layer_new(&mut doc, "B");
     let antes = doc.clone();
     let mut tools = ToolState::new();
-    let cambio = gesto(
+    let change = gesture_2(
         &mut tools,
         &mut doc,
-        celda,
+        cel,
         None,
         Tool::Eraser,
         &[(1, 1), (4, 1)],
     )
     .expect("borrador");
-    assert!(!cambio);
+    assert!(!change);
     assert_eq!(doc, antes);
-    assert!(doc.image(celda).is_none());
+    assert!(doc.image(cel).is_none());
     assert!(tools.take_changes().is_empty());
     assert!(
         tools.take_events().is_empty(),
@@ -346,58 +339,58 @@ fn fila_4_el_borrador_sobre_una_celda_vacia_no_hace_nada_ni_la_materializa() {
 }
 
 #[test]
-fn fila_4_el_borrador_solo_toca_la_capa_activa_y_deja_ver_lo_de_debajo() {
+fn row_4_the_eraser_only_touches_the_active_layer_and_lets_what_is_below_show() {
     let mut doc = doc_rgba(6, 4);
-    let celda_a = doc.layers()[0].cel();
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    pinta(&mut doc, celda_b, &[(1, 1), (2, 1), (3, 1)], rgba(ROJO));
-    let a_antes = doc.image(celda_a).cloned();
-    assert_eq!(visto(&doc, 2, 1), ROJO);
+    let cel_a = doc.layers()[0].cel();
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    paints(&mut doc, cel_b, &[(1, 1), (2, 1), (3, 1)], rgba(RED));
+    let a_antes = doc.image(cel_a).cloned();
+    assert_eq!(seen(&doc, 2, 1), RED);
     let mut tools = ToolState::new();
-    let cambio = gesto(
+    let change = gesture_2(
         &mut tools,
         &mut doc,
-        celda_b,
+        cel_b,
         None,
         Tool::Eraser,
         &[(1, 1), (2, 1)],
     )
     .expect("borrador");
-    assert!(cambio);
-    assert_eq!(pixel_de(&doc, celda_b, 1, 1), rgba(Rgba::TRANSPARENT));
-    assert_eq!(pixel_de(&doc, celda_b, 2, 1), rgba(Rgba::TRANSPARENT));
+    assert!(change);
+    assert_eq!(pixel_de(&doc, cel_b, 1, 1), rgba(Rgba::TRANSPARENT));
+    assert_eq!(pixel_de(&doc, cel_b, 2, 1), rgba(Rgba::TRANSPARENT));
     assert_eq!(
-        pixel_de(&doc, celda_b, 3, 1),
-        rgba(ROJO),
+        pixel_de(&doc, cel_b, 3, 1),
+        rgba(RED),
         "fuera del trazo no se toca"
     );
     assert_eq!(
-        doc.image(celda_a).cloned(),
+        doc.image(cel_a).cloned(),
         a_antes,
         "la capa de debajo no cambia"
     );
-    assert_eq!(visto(&doc, 2, 1), FONDO, "se ve lo de debajo");
+    assert_eq!(seen(&doc, 2, 1), TEST_BACKGROUND, "se ve lo de debajo");
 }
 
 #[test]
-fn fila_4_en_indexado_el_borrador_escribe_el_indice_transparente_del_lienzo() {
-    let mut doc = doc_indexado(6, 4);
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    pinta(&mut doc, celda_b, &[(1, 1)], Pixel::Indexed(3));
+fn row_4_in_indexed_the_eraser_writes_the_transparent_index_of_the_canvas() {
+    let mut doc = doc_indexed(6, 4);
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    paints(&mut doc, cel_b, &[(1, 1)], Pixel::Indexed(3));
     let mut tools = ToolState::new();
-    gesto(&mut tools, &mut doc, celda_b, None, Tool::Eraser, &[(1, 1)]).expect("borrador");
-    assert_eq!(pixel_de(&doc, celda_b, 1, 1), Pixel::Indexed(7));
+    gesture_2(&mut tools, &mut doc, cel_b, None, Tool::Eraser, &[(1, 1)]).expect("borrador");
+    assert_eq!(pixel_de(&doc, cel_b, 1, 1), Pixel::Indexed(7));
 }
 
 #[test]
-fn fila_4_el_borrador_de_un_gris_avisa_y_no_cambia_nada() {
-    let mut imagen = Image::new(4, 4, Mode::Gray).expect("imagen");
-    imagen.set_pixel(1, 1, Pixel::Gray(200)).expect("dentro");
-    let mut doc = Document::new(imagen);
-    let celda = doc.layers()[0].cel();
+fn row_4_the_eraser_on_a_gray_warns_and_changes_nothing() {
+    let mut image_2 = Image::new(4, 4, Mode::Gray).expect("imagen");
+    image_2.set_pixel(1, 1, Pixel::Gray(200)).expect("dentro");
+    let mut doc = Document::new(image_2);
+    let cel = doc.layers()[0].cel();
     let antes = doc.clone();
     let mut tools = ToolState::new();
-    gesto(&mut tools, &mut doc, celda, None, Tool::Eraser, &[(1, 1)]).expect("borrador");
+    gesture_2(&mut tools, &mut doc, cel, None, Tool::Eraser, &[(1, 1)]).expect("borrador");
     assert_eq!(doc, antes);
     assert_eq!(
         tools.take_events(),
@@ -411,40 +404,40 @@ fn fila_4_el_borrador_de_un_gris_avisa_y_no_cambia_nada() {
 
 /// Una A opaca, una B (activa) a opacidad 128 con un píxel rojo en (5, 5) y una C oculta con un
 /// píxel azul en (6, 6). Devuelve el documento y las celdas de B y de C.
-fn doc_de_cuentagotas() -> (Document, ImageId, ImageId) {
+fn doc_of_dropper() -> (Document, ImageId, ImageId) {
     let mut doc = doc_rgba(10, 10);
-    let (capa_b, celda_b) = capa_nueva(&mut doc, "B");
-    let (capa_c, celda_c) = capa_nueva(&mut doc, "C");
-    pinta(&mut doc, celda_b, &[(5, 5)], rgba(ROJO));
-    pinta(&mut doc, celda_c, &[(6, 6)], rgba(AZUL));
+    let (layer_b, cel_b) = layer_new(&mut doc, "B");
+    let (layer_c, cel_c) = layer_new(&mut doc, "C");
+    paints(&mut doc, cel_b, &[(5, 5)], rgba(RED));
+    paints(&mut doc, cel_c, &[(6, 6)], rgba(BLUE));
     doc.apply(Command::SetLayerOpacity {
-        layer: capa_b,
+        layer: layer_b,
         opacity: 128,
     })
     .expect("opacidad");
     doc.apply(Command::SetLayerVisible {
-        layer: capa_c,
+        layer: layer_c,
         visible: false,
     })
     .expect("ocultar");
-    (doc, celda_b, celda_c)
+    (doc, cel_b, cel_c)
 }
 
-fn elige(
+fn chooses(
     doc: &mut Document,
-    celda: ImageId,
-    fuente: Option<DropperSource>,
-    punto: (i32, i32),
+    cel: ImageId,
+    source: Option<DropperSource>,
+    point: (i32, i32),
 ) -> Vec<Picked> {
     let mut tools = ToolState::new();
-    if let Some(fuente) = fuente {
-        tools.set_dropper_source(fuente);
+    if let Some(source) = source {
+        tools.set_dropper_source(source);
     }
-    gesto(&mut tools, doc, celda, None, Tool::Dropper, &[punto]).expect("cuentagotas");
+    gesture_2(&mut tools, doc, cel, None, Tool::Dropper, &[point]).expect("cuentagotas");
     tools
         .take_events()
         .into_iter()
-        .filter_map(|evento| match evento {
+        .filter_map(|event| match event {
             ToolEvent::Picked(picked) => Some(picked),
             ToolEvent::Refused(_) => None,
         })
@@ -452,88 +445,90 @@ fn elige(
 }
 
 #[test]
-fn fila_5_el_cuentagotas_elige_lo_visible_por_defecto() {
-    let (mut doc, celda_b, _) = doc_de_cuentagotas();
-    let esperado = composite_pixel(FONDO, ROJO, 128, BlendMode::Normal);
-    assert_ne!(esperado, ROJO, "la mezcla cambia el color");
+fn row_5_the_dropper_chooses_what_is_visible_by_default() {
+    let (mut doc, cel_b, _) = doc_of_dropper();
+    let expected_2 = composite_pixel(TEST_BACKGROUND, RED, 128, BlendMode::Normal);
+    assert_ne!(expected_2, RED, "la mezcla cambia el color");
     assert_eq!(
-        elige(&mut doc, celda_b, None, (5, 5)),
-        vec![Picked::Color(esperado)]
+        chooses(&mut doc, cel_b, None, (5, 5)),
+        vec![Picked::Color(expected_2)]
     );
     // La capa oculta no se ve.
     assert_eq!(
-        elige(&mut doc, celda_b, None, (6, 6)),
-        vec![Picked::Color(FONDO)]
+        chooses(&mut doc, cel_b, None, (6, 6)),
+        vec![Picked::Color(TEST_BACKGROUND)]
     );
     // Sobre la celda vacía de la activa se ve lo de debajo, no «transparente».
     assert_eq!(
-        elige(&mut doc, celda_b, None, (0, 0)),
-        vec![Picked::Color(FONDO)]
+        chooses(&mut doc, cel_b, None, (0, 0)),
+        vec![Picked::Color(TEST_BACKGROUND)]
     );
 }
 
 #[test]
-fn fila_5_la_fuente_capa_lee_la_celda_activa_y_la_vacia_es_transparente() {
-    let (mut doc, celda_b, _) = doc_de_cuentagotas();
-    let capa = Some(DropperSource::Layer);
+fn row_5_the_layer_source_reads_the_active_cel_and_the_empty_one_is_transparent() {
+    let (mut doc, cel_b, _) = doc_of_dropper();
+    let layer_2 = Some(DropperSource::Layer);
     assert_eq!(
-        elige(&mut doc, celda_b, capa, (5, 5)),
-        vec![Picked::Color(ROJO)]
+        chooses(&mut doc, cel_b, layer_2, (5, 5)),
+        vec![Picked::Color(RED)]
     );
     assert_eq!(
-        elige(&mut doc, celda_b, capa, (0, 0)),
+        chooses(&mut doc, cel_b, layer_2, (0, 0)),
         vec![Picked::Color(Rgba::TRANSPARENT)]
     );
-    let (mut vacio, _, _) = doc_de_cuentagotas();
-    let (_, celda_d) = capa_nueva(&mut vacio, "D");
-    assert!(vacio.image(celda_d).is_none());
+    let (mut empty, _, _) = doc_of_dropper();
+    let (_, cel_d) = layer_new(&mut empty, "D");
+    assert!(empty.image(cel_d).is_none());
     assert_eq!(
-        elige(&mut vacio, celda_d, capa, (3, 3)),
+        chooses(&mut empty, cel_d, layer_2, (3, 3)),
         vec![Picked::Color(Rgba::TRANSPARENT)]
     );
-    let antes = vacio.clone();
-    assert_eq!(vacio, antes, "el cuentagotas no modifica el documento");
+    let antes = empty.clone();
+    assert_eq!(empty, antes, "el cuentagotas no modifica el documento");
 }
 
 #[test]
-fn fila_5_con_una_capa_visible_las_dos_fuentes_dan_lo_de_hoy_incluido_el_alfa_cero() {
-    let mut imagen = rgba_lleno(4, 4, FONDO);
-    let oculto = Rgba::new(12, 34, 56, 0);
-    imagen.set_pixel(2, 2, Pixel::Rgba(oculto)).expect("dentro");
-    let mut doc = Document::new(imagen.clone());
-    let celda = doc.layers()[0].cel();
-    let de_hoy = picked_at(&imagen, 2, 2).expect("dentro");
-    assert_eq!(de_hoy, Picked::Color(oculto));
-    for fuente in [None, Some(DropperSource::Layer)] {
-        assert_eq!(elige(&mut doc, celda, fuente, (2, 2)), vec![de_hoy]);
+fn row_5_with_one_visible_layer_the_two_sources_give_todays_including_alpha_zero() {
+    let mut image_2 = rgba_full(4, 4, TEST_BACKGROUND);
+    let hidden = Rgba::new(12, 34, 56, 0);
+    image_2
+        .set_pixel(2, 2, Pixel::Rgba(hidden))
+        .expect("dentro");
+    let mut doc = Document::new(image_2.clone());
+    let cel = doc.layers()[0].cel();
+    let of_today = picked_at(&image_2, 2, 2).expect("dentro");
+    assert_eq!(of_today, Picked::Color(hidden));
+    for source in [None, Some(DropperSource::Layer)] {
+        assert_eq!(chooses(&mut doc, cel, source, (2, 2)), vec![of_today]);
     }
     assert!(
-        px_ui::pick::pick_notice(&de_hoy).is_some(),
+        px_ui::pick::pick_notice(&of_today).is_some(),
         "el aviso de «copiado tal cual»"
     );
 }
 
 #[test]
-fn fila_5_en_indexado_lo_visible_es_la_entrada_de_la_capa_visible_mas_alta_no_transparente() {
-    let mut doc = doc_indexado(6, 4);
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    let (_, celda_c) = capa_nueva(&mut doc, "C");
-    pinta(&mut doc, celda_b, &[(1, 1)], Pixel::Indexed(3));
-    pinta(&mut doc, celda_c, &[(1, 1)], Pixel::Indexed(7));
-    pinta(&mut doc, celda_c, &[(2, 2)], Pixel::Indexed(5));
+fn row_5_in_indexed_what_is_visible_is_the_entry_of_the_highest_non_transparent_visible_layer() {
+    let mut doc = doc_indexed(6, 4);
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    let (_, cel_c) = layer_new(&mut doc, "C");
+    paints(&mut doc, cel_b, &[(1, 1)], Pixel::Indexed(3));
+    paints(&mut doc, cel_c, &[(1, 1)], Pixel::Indexed(7));
+    paints(&mut doc, cel_c, &[(2, 2)], Pixel::Indexed(5));
     assert_eq!(
-        elige(&mut doc, celda_c, None, (1, 1)),
+        chooses(&mut doc, cel_c, None, (1, 1)),
         vec![Picked::Entry(3)]
     );
     assert_eq!(
-        elige(&mut doc, celda_c, None, (2, 2)),
+        chooses(&mut doc, cel_c, None, (2, 2)),
         vec![Picked::Entry(5)]
     );
     assert_eq!(
-        elige(&mut doc, celda_c, None, (0, 0)),
+        chooses(&mut doc, cel_c, None, (0, 0)),
         vec![Picked::Entry(1)]
     );
-    let oraculo = compose_rect(
+    let oracle = compose_rect(
         &doc,
         Rect {
             x: 2,
@@ -543,7 +538,7 @@ fn fila_5_en_indexado_lo_visible_es_la_entrada_de_la_capa_visible_mas_alta_no_tr
         },
     )
     .expect("compose");
-    assert_eq!(visible_picked(&doc, 2, 2), picked_at(&oraculo, 0, 0));
+    assert_eq!(visible_picked(&doc, 2, 2), picked_at(&oracle, 0, 0));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -551,44 +546,39 @@ fn fila_5_en_indexado_lo_visible_es_la_entrada_de_la_capa_visible_mas_alta_no_tr
 // ---------------------------------------------------------------------------------------------
 
 /// Un documento de 3 capas con mezcla, opacidad y una oculta, en RGBA.
-fn doc_de_tres_capas() -> Document {
+fn three_layer_doc() -> Document {
     let mut doc = doc_rgba(130, 70);
-    let (capa_b, celda_b) = capa_nueva(&mut doc, "B");
-    let (capa_c, celda_c) = capa_nueva(&mut doc, "C");
-    let puntos: Vec<(u32, u32)> = (0..130).step_by(3).map(|x| (x, (x * 7) % 70)).collect();
-    pinta(
-        &mut doc,
-        celda_b,
-        &puntos,
-        rgba(Rgba::new(200, 100, 50, 200)),
-    );
-    pinta(&mut doc, celda_c, &puntos, rgba(AZUL));
+    let (layer_b, cel_b) = layer_new(&mut doc, "B");
+    let (layer_c, cel_c) = layer_new(&mut doc, "C");
+    let points: Vec<(u32, u32)> = (0..130).step_by(3).map(|x| (x, (x * 7) % 70)).collect();
+    paints(&mut doc, cel_b, &points, rgba(Rgba::new(200, 100, 50, 200)));
+    paints(&mut doc, cel_c, &points, rgba(BLUE));
     doc.apply(Command::SetLayerOpacity {
-        layer: capa_b,
+        layer: layer_b,
         opacity: 128,
     })
     .expect("opacidad");
     doc.apply(Command::SetLayerBlend {
-        layer: capa_b,
+        layer: layer_b,
         blend: BlendMode::Multiply,
     })
     .expect("mezcla");
     doc.apply(Command::SetLayerVisible {
-        layer: capa_c,
+        layer: layer_c,
         visible: false,
     })
     .expect("ocultar");
     doc
 }
 
-fn region_completa(fuente: &dyn PixelSource, ancho: u32, alto: u32) -> Vec<egui::Color32> {
-    fuente
+fn region_complete(source: &dyn PixelSource, width_2: u32, height_2: u32) -> Vec<egui::Color32> {
+    source
         .region(
             TileRect {
                 x: 0,
                 y: 0,
-                width: ancho,
-                height: alto,
+                width: width_2,
+                height: height_2,
             },
             None,
             &mut SystemTileAlloc,
@@ -597,13 +587,13 @@ fn region_completa(fuente: &dyn PixelSource, ancho: u32, alto: u32) -> Vec<egui:
 }
 
 #[test]
-fn fila_7_el_origen_compuesto_de_varias_capas_es_compose() {
-    let doc = doc_de_tres_capas();
+fn row_7_the_composite_source_of_several_layers_is_compose() {
+    let doc = three_layer_doc();
     assert!(identity_cell(&doc).is_none());
-    let oraculo = esperado(&compose(&doc).expect("compose"));
-    assert_eq!(region_completa(&DocSource(&doc), 130, 70), oraculo);
+    let oracle = expected_2(&compose(&doc).expect("compose"));
+    assert_eq!(region_complete(&DocSource(&doc), 130, 70), oracle);
     // Un recorte también es el recorte de la composición.
-    let parte = DocSource(&doc)
+    let part = DocSource(&doc)
         .region(
             TileRect {
                 x: 60,
@@ -615,25 +605,25 @@ fn fila_7_el_origen_compuesto_de_varias_capas_es_compose() {
             &mut SystemTileAlloc,
         )
         .expect("región");
-    let mut esperada = Vec::new();
+    let mut expected = Vec::new();
     for y in 10..40usize {
-        esperada.extend_from_slice(&oraculo[y * 130 + 60..y * 130 + 100]);
+        expected.extend_from_slice(&oracle[y * 130 + 60..y * 130 + 100]);
     }
-    assert_eq!(parte, esperada);
+    assert_eq!(part, expected);
 }
 
 #[test]
-fn fila_7_el_origen_compuesto_de_un_indexado_es_compose_y_sustituye_una_entrada() {
-    let mut doc = doc_indexado(20, 10);
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    pinta(&mut doc, celda_b, &[(3, 3), (4, 3)], Pixel::Indexed(5));
-    let compuesta = compose(&doc).expect("compose");
+fn row_7_the_composite_source_of_an_indexed_one_is_compose_and_replaces_an_entry() {
+    let mut doc = doc_indexed(20, 10);
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    paints(&mut doc, cel_b, &[(3, 3), (4, 3)], Pixel::Indexed(5));
+    let composite = compose(&doc).expect("compose");
     assert_eq!(
-        region_completa(&DocSource(&doc), 20, 10),
-        esperado(&compuesta)
+        region_complete(&DocSource(&doc), 20, 10),
+        expected_2(&composite)
     );
     let color = Rgba::opaque(1, 2, 3);
-    let con_entrada = DocSource(&doc)
+    let with_input = DocSource(&doc)
         .region(
             TileRect {
                 x: 0,
@@ -646,27 +636,30 @@ fn fila_7_el_origen_compuesto_de_un_indexado_es_compose_y_sustituye_una_entrada(
         )
         .expect("región");
     assert_eq!(
-        con_entrada[3 * 20 + 3],
+        with_input[3 * 20 + 3],
         egui::Color32::from_rgba_unmultiplied(1, 2, 3, 255)
     );
     assert_eq!(DocSource(&doc).transparent_index(), Some(7));
 }
 
 #[test]
-fn fila_7_con_una_capa_visible_opaca_y_normal_se_lee_la_celda_tal_cual() {
-    let mut imagen = rgba_lleno(8, 8, FONDO);
-    imagen
+fn row_7_with_one_visible_opaque_normal_layer_the_cel_is_read_as_is() {
+    let mut image_2 = rgba_full(8, 8, TEST_BACKGROUND);
+    image_2
         .set_pixel(3, 3, Pixel::Rgba(Rgba::new(9, 8, 7, 0)))
         .expect("dentro");
-    let doc = Document::new(imagen.clone());
-    assert_eq!(identity_cell(&doc), Some(&imagen));
-    assert_eq!(region_completa(&DocSource(&doc), 8, 8), esperado(&imagen));
+    let doc = Document::new(image_2.clone());
+    assert_eq!(identity_cell(&doc), Some(&image_2));
+    assert_eq!(
+        region_complete(&DocSource(&doc), 8, 8),
+        expected_2(&image_2)
+    );
     assert!(matches!(flatten(&doc).expect("aplanar"), Cow::Borrowed(_)));
     // Con la opacidad 254 ya no es la identidad.
     let mut doc = doc;
-    let capa = doc.layers()[0].id();
+    let layer_2 = doc.layers()[0].id();
     doc.apply(Command::SetLayerOpacity {
-        layer: capa,
+        layer: layer_2,
         opacity: 254,
     })
     .expect("opacidad");
@@ -675,179 +668,187 @@ fn fila_7_con_una_capa_visible_opaca_y_normal_se_lee_la_celda_tal_cual() {
 }
 
 #[test]
-fn fila_11_aplanar_con_varias_capas_es_compose_y_un_gris_sin_nada_visible_da_error() {
-    let doc = doc_de_tres_capas();
+fn row_11_flatten_with_several_layers_is_compose_and_a_gray_without_anything_visible_gives_an_error()
+ {
+    let doc = three_layer_doc();
     assert_eq!(
         *flatten(&doc).expect("aplanar"),
         compose(&doc).expect("compose")
     );
-    let mut gris = Document::new(Image::new(3, 3, Mode::Gray).expect("imagen"));
-    let capa = gris.layers()[0].id();
-    gris.apply(Command::SetLayerVisible {
-        layer: capa,
-        visible: false,
-    })
-    .expect("ocultar");
-    assert!(flatten(&gris).is_err());
+    let mut gray_2 = Document::new(Image::new(3, 3, Mode::Gray).expect("imagen"));
+    let layer_2 = gray_2.layers()[0].id();
+    gray_2
+        .apply(Command::SetLayerVisible {
+            layer: layer_2,
+            visible: false,
+        })
+        .expect("ocultar");
+    assert!(flatten(&gray_2).is_err());
 }
 
 #[test]
-fn fila_8_la_region_sucia_de_los_comandos_de_capa() {
+fn row_8_the_dirty_region_of_the_layer_commands() {
     let size = Size::new(130, 70);
-    let todo = BlockSet::full(130, 70);
-    let doc = doc_de_tres_capas();
-    let capa = doc.layers()[1].id();
-    let nada = |orden: Command| assert!(dirty_of(&orden, size).is_empty(), "{orden:?}");
-    let entera = |orden: Command| assert_eq!(dirty_of(&orden, size), todo, "{orden:?}");
-    nada(Command::AddLayer {
+    let all = BlockSet::full(130, 70);
+    let doc = three_layer_doc();
+    let layer_2 = doc.layers()[1].id();
+    let nothing = |order: Command| assert!(dirty_of(&order, size).is_empty(), "{order:?}");
+    let whole = |order: Command| assert_eq!(dirty_of(&order, size), all, "{order:?}");
+    nothing(Command::AddLayer {
         name: "X".to_string(),
         at: 1,
     });
-    nada(Command::RenameLayer {
-        layer: capa,
+    nothing(Command::RenameLayer {
+        layer: layer_2,
         name: "Y".to_string(),
     });
-    entera(Command::SetLayerOpacity {
-        layer: capa,
+    whole(Command::SetLayerOpacity {
+        layer: layer_2,
         opacity: 3,
     });
-    entera(Command::SetLayerVisible {
-        layer: capa,
+    whole(Command::SetLayerVisible {
+        layer: layer_2,
         visible: false,
     });
-    entera(Command::SetLayerBlend {
-        layer: capa,
+    whole(Command::SetLayerBlend {
+        layer: layer_2,
         blend: BlendMode::Screen,
     });
-    entera(Command::MoveLayer { layer: capa, to: 0 });
-    entera(Command::RemoveLayer { layer: capa });
+    whole(Command::MoveLayer {
+        layer: layer_2,
+        to: 0,
+    });
+    whole(Command::RemoveLayer { layer: layer_2 });
 }
 
 #[test]
-fn fila_9_la_superposicion_oculta_el_trazo_bajo_una_capa_opaca_y_lo_mezcla_con_128() {
+fn row_9_the_overlay_hides_the_stroke_under_an_opaque_layer_and_mixes_it_at_128() {
     let mut doc = doc_rgba(8, 8);
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    let (capa_c, celda_c) = capa_nueva(&mut doc, "C");
-    pinta(&mut doc, celda_c, &[(2, 2)], rgba(ROJO));
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    let (layer_c, cel_c) = layer_new(&mut doc, "C");
+    paints(&mut doc, cel_c, &[(2, 2)], rgba(RED));
     let edits = [
         PixelEdit {
             x: 2,
             y: 2,
-            pixel: rgba(VERDE),
+            pixel: rgba(GREEN),
         },
         PixelEdit {
             x: 3,
             y: 3,
-            pixel: rgba(VERDE),
+            pixel: rgba(GREEN),
         },
     ];
     // C opaca encima en (2, 2): el trazo no se ve ahí; en (3, 3) no hay nada encima.
-    let colores = overlay_pixels(&doc, celda_b, edits);
-    assert_eq!(colores, vec![(2, 2, ROJO), (3, 3, VERDE)]);
+    let colors_2 = overlay_pixels(&doc, cel_b, edits);
+    assert_eq!(colors_2, vec![(2, 2, RED), (3, 3, GREEN)]);
     // Con C a 128 se mezcla: es lo que dará compose tras aplicar el comando de verdad.
     doc.apply(Command::SetLayerOpacity {
-        layer: capa_c,
+        layer: layer_c,
         opacity: 128,
     })
     .expect("opacidad");
-    let colores = overlay_pixels(&doc, celda_b, edits);
-    let mut aplicado = doc.clone();
-    aplicado
+    let colors_2 = overlay_pixels(&doc, cel_b, edits);
+    let mut applied = doc.clone();
+    applied
         .apply(Command::SetPixels {
-            image: celda_b,
+            image: cel_b,
             pixels: edits.to_vec(),
         })
         .expect("aplicar");
-    assert_eq!(colores[0].2, visto(&aplicado, 2, 2));
-    assert_eq!(colores[1].2, visto(&aplicado, 3, 3));
-    assert_ne!(colores[0].2, ROJO);
+    assert_eq!(colors_2[0].2, seen(&applied, 2, 2));
+    assert_eq!(colors_2[1].2, seen(&applied, 3, 3));
+    assert_ne!(colors_2[0].2, RED);
 }
 
 #[test]
-fn fila_9_el_borrador_en_la_superposicion_muestra_lo_de_debajo() {
+fn row_9_the_eraser_in_the_overlay_shows_what_is_below() {
     let mut doc = doc_rgba(8, 8);
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    pinta(&mut doc, celda_b, &[(1, 1)], rgba(ROJO));
-    let borrar = [PixelEdit {
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    paints(&mut doc, cel_b, &[(1, 1)], rgba(RED));
+    let delete = [PixelEdit {
         x: 1,
         y: 1,
         pixel: rgba(Rgba::TRANSPARENT),
     }];
-    assert_eq!(overlay_pixels(&doc, celda_b, borrar), vec![(1, 1, FONDO)]);
+    assert_eq!(
+        overlay_pixels(&doc, cel_b, delete),
+        vec![(1, 1, TEST_BACKGROUND)]
+    );
 }
 
 #[test]
-fn fila_9_con_una_capa_la_superposicion_es_el_color_crudo_de_hoy() {
+fn row_9_with_one_layer_the_overlay_is_todays_raw_color() {
     let doc = doc_rgba(8, 8);
-    let celda = doc.layers()[0].cel();
-    let semitransparente = Rgba::new(1, 2, 3, 0);
+    let cel = doc.layers()[0].cel();
+    let semitransparent = Rgba::new(1, 2, 3, 0);
     let edits = [
         PixelEdit {
             x: 1,
             y: 1,
-            pixel: rgba(ROJO),
+            pixel: rgba(RED),
         },
         PixelEdit {
             x: 2,
             y: 2,
-            pixel: rgba(semitransparente),
+            pixel: rgba(semitransparent),
         },
     ];
     assert_eq!(
-        overlay_pixels(&doc, celda, edits),
-        vec![(1, 1, ROJO), (2, 2, semitransparente)]
+        overlay_pixels(&doc, cel, edits),
+        vec![(1, 1, RED), (2, 2, semitransparent)]
     );
 }
 
 #[test]
-fn fila_9_el_cache_de_la_superposicion_solo_calcula_los_pixeles_nuevos() {
+fn row_9_the_overlay_cache_only_computes_the_new_pixels() {
     let mut doc = doc_rgba(40, 10);
-    let (_, celda_b) = capa_nueva(&mut doc, "B");
-    let (_, celda_c) = capa_nueva(&mut doc, "C");
-    pinta(&mut doc, celda_c, &[(3, 1), (7, 1)], rgba(ROJO));
-    let trazo: Vec<PixelEdit> = (0..30)
+    let (_, cel_b) = layer_new(&mut doc, "B");
+    let (_, cel_c) = layer_new(&mut doc, "C");
+    paints(&mut doc, cel_c, &[(3, 1), (7, 1)], rgba(RED));
+    let stroke_2: Vec<PixelEdit> = (0..30)
         .map(|x| PixelEdit {
             x,
             y: 1,
-            pixel: rgba(VERDE),
+            pixel: rgba(GREEN),
         })
         .collect();
     let mut cache = OverlayCache::default();
     // El trazo crece: cada llamada calcula solo lo añadido y da lo que daría `overlay_pixels`.
-    let mut vistos = 0;
-    for hasta in [10, 20, 30] {
-        let colores = cache
-            .colors(&doc, celda_b, trazo[..hasta].iter().copied())
+    let mut seen_2 = 0;
+    for until in [10, 20, 30] {
+        let colors_2 = cache
+            .colors(&doc, cel_b, stroke_2[..until].iter().copied())
             .to_vec();
         assert_eq!(
-            colores,
-            overlay_pixels(&doc, celda_b, trazo[..hasta].iter().copied())
+            colors_2,
+            overlay_pixels(&doc, cel_b, stroke_2[..until].iter().copied())
         );
-        assert_eq!(cache.last_computed(), hasta - vistos);
-        vistos = hasta;
+        assert_eq!(cache.last_computed(), until - seen_2);
+        seen_2 = until;
     }
     // La misma lista otra vez: nada que calcular.
-    cache.colors(&doc, celda_b, trazo.iter().copied());
+    cache.colors(&doc, cel_b, stroke_2.iter().copied());
     assert_eq!(cache.last_computed(), 0);
     // Una lista que no continúa la anterior (la goma elástica de la línea): se calcula entera.
-    let otra: Vec<PixelEdit> = trazo.iter().rev().take(12).copied().collect();
-    let colores = cache.colors(&doc, celda_b, otra.iter().copied()).to_vec();
+    let other: Vec<PixelEdit> = stroke_2.iter().rev().take(12).copied().collect();
+    let colors_2 = cache.colors(&doc, cel_b, other.iter().copied()).to_vec();
     assert_eq!(cache.last_computed(), 12);
-    assert_eq!(colores, overlay_pixels(&doc, celda_b, otra.iter().copied()));
+    assert_eq!(colors_2, overlay_pixels(&doc, cel_b, other.iter().copied()));
     // Otro estado del documento o otra capa activa: todo de nuevo.
-    cache.colors(&doc, celda_b, trazo.iter().copied());
-    pinta(&mut doc, celda_c, &[(9, 1)], rgba(AZUL));
-    let colores = cache.colors(&doc, celda_b, trazo.iter().copied()).to_vec();
+    cache.colors(&doc, cel_b, stroke_2.iter().copied());
+    paints(&mut doc, cel_c, &[(9, 1)], rgba(BLUE));
+    let colors_2 = cache.colors(&doc, cel_b, stroke_2.iter().copied()).to_vec();
     assert_eq!(cache.last_computed(), 30, "el documento cambió");
     assert_eq!(
-        colores,
-        overlay_pixels(&doc, celda_b, trazo.iter().copied())
+        colors_2,
+        overlay_pixels(&doc, cel_b, stroke_2.iter().copied())
     );
-    cache.colors(&doc, celda_c, trazo.iter().copied());
+    cache.colors(&doc, cel_c, stroke_2.iter().copied());
     assert_eq!(cache.last_computed(), 30, "otra capa activa");
     // Vacío: nada, y el siguiente trazo empieza de cero.
-    assert!(cache.colors(&doc, celda_c, std::iter::empty()).is_empty());
-    cache.colors(&doc, celda_c, trazo[..5].iter().copied());
+    assert!(cache.colors(&doc, cel_c, std::iter::empty()).is_empty());
+    cache.colors(&doc, cel_c, stroke_2[..5].iter().copied());
     assert_eq!(cache.last_computed(), 5);
 }
 
@@ -855,10 +856,10 @@ fn fila_9_el_cache_de_la_superposicion_solo_calcula_los_pixeles_nuevos() {
 // Propiedad 2: la superposición no miente
 // ---------------------------------------------------------------------------------------------
 
-type Capas = Vec<(u8, u8, u8, u8, u32, u32)>;
-type Trazo = Vec<(u32, u32, u32)>;
+type Layers = Vec<(u8, u8, u8, u8, u32, u32)>;
+type TestStroke = Vec<(u32, u32, u32)>;
 
-fn semilla_de_capas() -> impl Strategy<Value = (u8, Capas, u8, Trazo)> {
+fn seed_of_layers() -> impl Strategy<Value = (u8, Layers, u8, TestStroke)> {
     (
         0u8..3,
         prop::collection::vec(
@@ -870,9 +871,9 @@ fn semilla_de_capas() -> impl Strategy<Value = (u8, Capas, u8, Trazo)> {
     )
 }
 
-/// Un píxel del modo `modo` según `k` (con alfas 0, 1, 128 y 255; índices dentro de la paleta).
-fn pixel_para(modo: Mode, k: u32) -> Pixel {
-    tiles_support::pixel_de(modo, k, paleta().len())
+/// Un píxel del modo `mode_2` según `k` (con alfas 0, 1, 128 y 255; índices dentro de la paleta).
+fn pixel_para(mode_2: Mode, k: u32) -> Pixel {
+    tiles_support::pixel_de(mode_2, k, palette().len())
 }
 
 proptest! {
@@ -883,60 +884,60 @@ proptest! {
     /// borrado incluido): el color de cada píxel de la superposición es el píxel de `compose` del
     /// documento tras aplicar de verdad el comando del trazo.
     #[test]
-    fn propiedad_2_la_superposicion_es_la_composicion_con_el_trazo_aplicado(
-        (modo, capas, activa, trazo) in semilla_de_capas(),
+    fn property_2_the_overlay_is_the_composition_with_the_stroke_applied(
+        (mode_2, layers, active_2, stroke_2) in seed_of_layers(),
     ) {
-        let modo = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(modo)];
-        let base = match modo {
-            Mode::Indexed => tiles_support::imagen_de(modo, 12, 9, 3),
-            _ => tiles_support::imagen_de(modo, 12, 9, 2),
+        let mode_2 = [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed][usize::from(mode_2)];
+        let base = match mode_2 {
+            Mode::Indexed => tiles_support::image_of(mode_2, 12, 9, 3),
+            _ => tiles_support::image_of(mode_2, 12, 9, 2),
         };
         let mut doc = Document::new(base);
-        for (i, &(capa, opacidad, mezcla, visible, a, b)) in capas.iter().enumerate() {
+        for (i, &(layer_2, opacity_2, blend_2, visible, a, b)) in layers.iter().enumerate() {
             let at = doc.layers().len();
             if doc.apply(Command::AddLayer { name: format!("C{i}"), at }).is_err() {
                 continue;
             }
             let id = doc.layers()[at].id();
-            let celda = doc.layers()[at].cel();
-            if capa != 0 {
+            let cel = doc.layers()[at].cel();
+            if layer_2 != 0 {
                 let pixels: Vec<PixelEdit> = (0..1 + b % 20)
                     .map(|j| PixelEdit {
                         x: a.wrapping_add(j.wrapping_mul(5)) % 12,
                         y: b.wrapping_add(j.wrapping_mul(3)) % 9,
-                        pixel: pixel_para(modo, a.wrapping_add(j)),
+                        pixel: pixel_para(mode_2, a.wrapping_add(j)),
                     })
                     .collect();
-                let _ = doc.apply(Command::SetPixels { image: celda, pixels });
+                let _ = doc.apply(Command::SetPixels { image: cel, pixels });
             }
-            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 1, 128, 200, 254, 255, 77][usize::from(opacidad)] });
-            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(mezcla) * 3 % 8] });
+            let _ = doc.apply(Command::SetLayerOpacity { layer: id, opacity: [255, 0, 1, 128, 200, 254, 255, 77][usize::from(opacity_2)] });
+            let _ = doc.apply(Command::SetLayerBlend { layer: id, blend: BlendMode::ALL[usize::from(blend_2) * 3 % 8] });
             let _ = doc.apply(Command::SetLayerVisible { layer: id, visible: visible != 0 });
         }
-        let capa_activa = &doc.layers()[usize::from(activa) % doc.layers().len()];
-        let celda = capa_activa.cel();
-        let edits: Vec<PixelEdit> = trazo
+        let layer_active = &doc.layers()[usize::from(active_2) % doc.layers().len()];
+        let cel = layer_active.cel();
+        let edits: Vec<PixelEdit> = stroke_2
             .iter()
-            .map(|&(x, y, k)| PixelEdit { x, y, pixel: pixel_para(modo, k) })
+            .map(|&(x, y, k)| PixelEdit { x, y, pixel: pixel_para(mode_2, k) })
             .collect();
         // Sin repetidos: el último valor de cada coordenada es el que se aplica.
-        let mut unicos: Vec<PixelEdit> = Vec::new();
+        let mut unique: Vec<PixelEdit> = Vec::new();
         for edit in edits {
-            match unicos.iter_mut().find(|e| (e.x, e.y) == (edit.x, edit.y)) {
+            match unique.iter_mut().find(|e| (e.x, e.y) == (edit.x, edit.y)) {
                 Some(e) => e.pixel = edit.pixel,
-                None => unicos.push(edit),
+                None => unique.push(edit),
             }
         }
-        let colores = overlay_pixels(&doc, celda, unicos.clone());
-        prop_assert_eq!(colores.len(), unicos.len());
-        let mut aplicado = doc.clone();
-        let aplicable = aplicado
-            .apply(Command::SetPixels { image: celda, pixels: unicos.clone() })
+        let colors_2 = overlay_pixels(&doc, cel, unique.clone());
+        prop_assert_eq!(colors_2.len(), unique.len());
+        let mut applied = doc.clone();
+        let applicable = applied
+            .apply(Command::SetPixels { image: cel, pixels: unique.clone() })
             .is_ok();
-        if aplicable && let Ok(compuesta) = compose(&aplicado) {
-            for (x, y, color) in colores {
-                let pixel = compuesta.get_pixel(x, y).unwrap();
-                prop_assert_eq!(Some(color), pixel_rgba(&compuesta, pixel), "({}, {})", x, y);
+        if applicable && let Ok(composite) = compose(&applied) {
+            for (x, y, color) in colors_2 {
+                let pixel = composite.get_pixel(x, y).unwrap();
+                prop_assert_eq!(Some(color), pixel_rgba(&composite, pixel), "({}, {})", x, y);
             }
         }
     }

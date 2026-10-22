@@ -6,7 +6,7 @@ use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use px_ui::texture::{pixel_rgba, to_rgba8};
 
 #[test]
-fn cada_modo_da_el_color_que_se_ve() {
+fn each_mode_gives_the_color_that_is_seen() {
     let rgba = Image::new(1, 1, Mode::Rgba).expect("imagen válida");
     let color = Rgba::new(1, 2, 3, 4);
     assert_eq!(pixel_rgba(&rgba, Pixel::Rgba(color)), Some(color));
@@ -25,7 +25,7 @@ fn cada_modo_da_el_color_que_se_ve() {
 }
 
 #[test]
-fn indexado_usa_la_paleta_y_none_si_el_indice_no_esta() {
+fn indexed_uses_the_palette_and_none_if_the_index_is_not_there() {
     let mut palette = Palette::from_colors([Rgba::opaque(9, 8, 7), Rgba::new(1, 2, 3, 77)])
         .expect("paleta válida");
     palette
@@ -48,7 +48,7 @@ fn indexado_usa_la_paleta_y_none_si_el_indice_no_esta() {
 }
 
 #[test]
-fn coincide_con_to_rgba8() {
+fn matches_to_rgba8() {
     let mut image = Image::new(2, 1, Mode::GrayAlpha).expect("imagen válida");
     let pixels = [
         Pixel::GrayAlpha { gray: 5, alpha: 6 },

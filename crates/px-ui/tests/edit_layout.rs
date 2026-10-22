@@ -13,7 +13,7 @@
 //! sustituye la spec de la ventana baja.
 //!
 //! Los números de la tabla «Geometría» están escritos como literales en un solo test
-//! (`las_constantes_valen_lo_que_dice_la_spec`); el resto usa las constantes de `edit_layout`,
+//! (`the_constants_are_worth_what_the_spec_says`); el resto usa las constantes de `edit_layout`,
 //! que son el único sitio donde viven.
 
 use proptest::prelude::*;
@@ -34,14 +34,14 @@ use px_ui::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, visible_rows, visibl
 use px_ui::status::bar_height_px;
 use px_ui::text::text_scale;
 
-const MODOS: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
-const ESCALAS: [u32; 3] = [1, 2, 3];
+const TEST_MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
+const SCALES: [u32; 3] = [1, 2, 3];
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 
 // Constantes.
 
 #[test]
-fn las_constantes_valen_lo_que_dice_la_spec() {
+fn the_constants_are_worth_what_the_spec_says() {
     assert_eq!(SEPARATOR_Y_U, 0);
     assert_eq!(HEADER_X_U, 4);
     assert_eq!(HEADER_Y_U, 4);
@@ -68,7 +68,7 @@ fn las_constantes_valen_lo_que_dice_la_spec() {
 }
 
 #[test]
-fn las_constantes_son_coherentes_entre_si() {
+fn the_constants_are_consistent_with_each_other() {
     // `#` + 8 dígitos = 9 columnas de 7 u, más 3 de relleno a cada lado.
     assert_eq!(FIELD_W_U, 9 * 7 + 2 * FIELD_PAD_U);
     const {
@@ -87,7 +87,7 @@ fn las_constantes_son_coherentes_entre_si() {
 // Alturas y filas.
 
 #[test]
-fn la_altura_del_editor_depende_del_modo() {
+fn the_editor_height_depends_on_the_mode() {
     // Indexadas: 186 más la fila de iconos de la unidad I.4 (24 u y un margen de 4).
     assert_eq!(editor_height_u(Mode::Indexed), 214);
     assert_eq!(editor_height_u(Mode::Rgba), 186);
@@ -96,9 +96,9 @@ fn la_altura_del_editor_depende_del_modo() {
 }
 
 #[test]
-fn las_filas_de_deslizadores_de_indexadas_y_rgba() {
-    for modo in [Mode::Indexed, Mode::Rgba] {
-        let esperado = [
+fn the_slider_rows_of_indexed_and_rgba() {
+    for mode_2 in [Mode::Indexed, Mode::Rgba] {
+        let expected_2 = [
             (Control::Red, 22),
             (Control::Green, 36),
             (Control::Blue, 50),
@@ -107,25 +107,25 @@ fn las_filas_de_deslizadores_de_indexadas_y_rgba() {
             (Control::Lightness, 96),
             (Control::Alpha, 114),
         ];
-        for (control, fila) in esperado {
+        for (control, row_2) in expected_2 {
             assert_eq!(
-                control_row_u(modo, control),
-                Some(fila),
-                "{modo:?} {control:?}"
+                control_row_u(mode_2, control),
+                Some(row_2),
+                "{mode_2:?} {control:?}"
             );
         }
-        assert_eq!(control_row_u(modo, Control::Gray), None);
+        assert_eq!(control_row_u(mode_2, Control::Gray), None);
     }
 }
 
 #[test]
-fn las_filas_se_compactan_sin_huecos_en_gray_y_gray_alpha() {
+fn the_rows_are_compacted_without_gaps_in_gray_and_gray_alpha() {
     // Gray: solo «G», en la primera fila.
     assert_eq!(
         control_row_u(Mode::Gray, Control::Gray),
         Some(FIRST_ROW_Y_U)
     );
-    for ausente in [
+    for absent in [
         Control::Red,
         Control::Green,
         Control::Blue,
@@ -134,7 +134,7 @@ fn las_filas_se_compactan_sin_huecos_en_gray_y_gray_alpha() {
         Control::Lightness,
         Control::Alpha,
     ] {
-        assert_eq!(control_row_u(Mode::Gray, ausente), None, "{ausente:?}");
+        assert_eq!(control_row_u(Mode::Gray, absent), None, "{absent:?}");
     }
     // GrayAlpha: «G» y «A» con el hueco de 4 u entre grupos; la altura 112 lo exige (94 más una
     // fila de 14 más el hueco de 4).
@@ -146,7 +146,7 @@ fn las_filas_se_compactan_sin_huecos_en_gray_y_gray_alpha() {
         control_row_u(Mode::GrayAlpha, Control::Alpha),
         Some(FIRST_ROW_Y_U + ROW_H_U + GROUP_GAP_U)
     );
-    for ausente in [
+    for absent in [
         Control::Red,
         Control::Green,
         Control::Blue,
@@ -154,81 +154,85 @@ fn las_filas_se_compactan_sin_huecos_en_gray_y_gray_alpha() {
         Control::Saturation,
         Control::Lightness,
     ] {
-        assert_eq!(control_row_u(Mode::GrayAlpha, ausente), None, "{ausente:?}");
+        assert_eq!(control_row_u(Mode::GrayAlpha, absent), None, "{absent:?}");
     }
 }
 
 #[test]
-fn los_controles_de_cada_modo_tienen_fila_y_van_de_arriba_abajo() {
-    for modo in MODOS {
+fn the_controls_of_each_mode_have_a_row_and_go_from_top_to_bottom() {
+    for mode_2 in TEST_MODES {
         let mut anterior = None;
-        for control in controls(modo) {
-            let fila = control_row_u(modo, *control).expect("cada control tiene fila");
+        for control in controls(mode_2) {
+            let row_2 = control_row_u(mode_2, *control).expect("cada control tiene fila");
             if let Some(anterior) = anterior {
-                assert!(fila >= anterior + ROW_H_U, "{modo:?} {control:?}");
+                assert!(row_2 >= anterior + ROW_H_U, "{mode_2:?} {control:?}");
             }
-            anterior = Some(fila);
+            anterior = Some(row_2);
         }
     }
 }
 
 #[test]
-fn el_campo_y_el_aviso_van_tras_los_controles() {
+fn the_field_and_the_notice_go_after_the_controls() {
     // Tras el último control, 4 u; tras el campo, 4 u; el aviso son dos líneas y 4 u de margen.
-    let esperado = [
+    let expected_2 = [
         (Mode::Indexed, 132, 154),
         (Mode::Rgba, 132, 154),
         (Mode::GrayAlpha, 58, 80),
         (Mode::Gray, 40, 62),
     ];
-    for (modo, campo, aviso) in esperado {
-        assert_eq!(field_y_u(modo), campo, "{modo:?}");
-        assert_eq!(notice_y_u(modo), aviso, "{modo:?}");
+    for (mode_2, field_2, notice) in expected_2 {
+        assert_eq!(field_y_u(mode_2), field_2, "{mode_2:?}");
+        assert_eq!(notice_y_u(mode_2), notice, "{mode_2:?}");
     }
 }
 
 #[test]
-fn la_maqueta_se_deduce_de_las_constantes() {
-    for modo in MODOS {
-        let ultimo = controls(modo)
+fn the_mockup_is_deduced_from_the_constants() {
+    for mode_2 in TEST_MODES {
+        let ultimo = controls(mode_2)
             .iter()
-            .filter_map(|c| control_row_u(modo, *c))
+            .filter_map(|c| control_row_u(mode_2, *c))
             .max()
             .expect("hay controles");
-        assert_eq!(field_y_u(modo), ultimo + ROW_H_U + BLOCK_GAP_U, "{modo:?}");
         assert_eq!(
-            notice_y_u(modo),
-            field_y_u(modo) + FIELD_H_U + BLOCK_GAP_U,
-            "{modo:?}"
-        );
-        let botones = buttons_height_u(modo);
-        assert_eq!(
-            buttons_y_u(modo),
-            notice_y_u(modo) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
+            field_y_u(mode_2),
+            ultimo + ROW_H_U + BLOCK_GAP_U,
+            "{mode_2:?}"
         );
         assert_eq!(
-            editor_height_u(modo),
-            buttons_y_u(modo)
-                + if botones > 0 {
-                    botones + BLOCK_GAP_U
+            notice_y_u(mode_2),
+            field_y_u(mode_2) + FIELD_H_U + BLOCK_GAP_U,
+            "{mode_2:?}"
+        );
+        let buttons = buttons_height_u(mode_2);
+        assert_eq!(
+            buttons_y_u(mode_2),
+            notice_y_u(mode_2) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
+        );
+        assert_eq!(
+            editor_height_u(mode_2),
+            buttons_y_u(mode_2)
+                + if buttons > 0 {
+                    buttons + BLOCK_GAP_U
                 } else {
                     0
                 },
-            "{modo:?}"
+            "{mode_2:?}"
         );
     }
 }
 
 // `editor_height_u_max`, `block_height_px`, `min_panel_height_px` y `min_window_height_pt`.
 
-/// El bloque `[texto · rejilla de 1 fila · editor]` calculado a mano desde las constantes.
-fn bloque_px(modo: Mode, n: i64) -> i64 {
-    (GRID_Y_U + PITCH_U + editor_height_u(modo)) * n
+/// El bloque `[text_2 · grid de 1 row_2 · editor]` calculado a mano desde las constantes.
+fn block_px(mode_2: Mode, n: i64) -> i64 {
+    (GRID_Y_U + PITCH_U + editor_height_u(mode_2)) * n
 }
 
 #[test]
-fn editor_height_u_max_es_el_mayor_de_los_modos() {
-    let mayor = MODOS
+fn editor_height_u_max_is_the_largest_of_the_modes() {
+    let mayor = TEST_MODES
         .iter()
         .map(|m| editor_height_u(*m))
         .max()
@@ -238,14 +242,14 @@ fn editor_height_u_max_es_el_mayor_de_los_modos() {
 }
 
 #[test]
-fn block_height_px_es_texto_una_fila_y_editor() {
-    for n in ESCALAS {
+fn block_height_px_is_text_one_row_and_editor() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
+        for mode_2 in TEST_MODES {
             assert_eq!(
-                block_height_px(modo, n),
-                bloque_px(modo, n_i),
-                "{modo:?}, n = {n}"
+                block_height_px(mode_2, n),
+                block_px(mode_2, n_i),
+                "{mode_2:?}, n = {n}"
             );
         }
         // Con la banda del indicador (36 u, I.2a) y la fila de iconos de I.4 en indexadas: 305,
@@ -260,7 +264,7 @@ fn block_height_px_es_texto_una_fila_y_editor() {
 // Fila 1 (parte pura de `edit_layout`).
 
 #[test]
-fn fila_1_min_panel_height_px_es_305n() {
+fn row_1_min_panel_height_px_is_305n() {
     for n in [1u32, 2, 3] {
         let n_i = i64::from(n);
         assert_eq!(min_panel_height_px(n), 305 * n_i, "n = {n}");
@@ -273,13 +277,13 @@ fn fila_1_min_panel_height_px_es_305n() {
 }
 
 #[test]
-fn fila_1_el_minimo_cubre_el_bloque_de_todos_los_modos() {
+fn row_1_the_minimum_covers_the_block_of_all_the_modes() {
     // Abrir una imagen Gray no cambia el mínimo: es el del mayor editor, no el del modo actual.
-    for n in ESCALAS {
-        for modo in MODOS {
+    for n in SCALES {
+        for mode_2 in TEST_MODES {
             assert!(
-                block_height_px(modo, n) <= min_panel_height_px(n),
-                "{modo:?}, n = {n}"
+                block_height_px(mode_2, n) <= min_panel_height_px(n),
+                "{mode_2:?}, n = {n}"
             );
         }
         assert_eq!(
@@ -292,19 +296,19 @@ fn fila_1_el_minimo_cubre_el_bloque_de_todos_los_modos() {
 }
 
 #[test]
-fn fila_1_min_window_height_pt_a_los_cinco_ppp() {
-    let esperado = [
+fn row_1_min_window_height_pt_at_the_five_ppp() {
+    let expected_2 = [
         (1.0f32, 341.0f32),
         (1.25, 272.8),
         (1.5, 454.67),
         (2.0, 341.0),
         (3.0, 341.0),
     ];
-    for (ppp, puntos) in esperado {
-        let medido = min_window_height_pt(ppp);
+    for (ppp, points) in expected_2 {
+        let measured = min_window_height_pt(ppp);
         assert!(
-            (medido - puntos).abs() <= 0.01,
-            "ppp {ppp}: {medido} pt y se esperaban {puntos}"
+            (measured - points).abs() <= 0.01,
+            "ppp {ppp}: {measured} pt y se esperaban {points}"
         );
         // Barra de estado, menú y panel mínimo, en píxeles físicos, entre `ppp`.
         let n = text_scale(ppp);
@@ -312,25 +316,25 @@ fn fila_1_min_window_height_pt_a_los_cinco_ppp() {
             (i64::from(bar_height_px(n)) + MENU_H_U * i64::from(n) + min_panel_height_px(n)) as f32
                 / ppp;
         assert!(
-            (medido - formula).abs() <= 0.001,
-            "ppp {ppp}: {medido} pt y la fórmula da {formula}"
+            (measured - formula).abs() <= 0.001,
+            "ppp {ppp}: {measured} pt y la fórmula da {formula}"
         );
     }
 }
 
 #[test]
-fn fila_1_el_minimo_no_pasa_del_65_por_ciento_de_720_y_deja_una_fila_con_el_editor() {
+fn row_1_the_minimum_does_not_pass_65_percent_of_720_and_leaves_one_row_with_the_editor() {
     let mut mayor = 0.0f32;
     for ppp in PPPS {
         let n = text_scale(ppp);
-        let minimo = min_window_height_pt(ppp);
-        mayor = mayor.max(minimo);
+        let minimum_2 = min_window_height_pt(ppp);
+        mayor = mayor.max(minimum_2);
         assert!(
-            minimo >= min_panel_height_px(n) as f32 / ppp,
-            "ppp {ppp}: {minimo} pt no deja sitio a una fila y al editor"
+            minimum_2 >= min_panel_height_px(n) as f32 / ppp,
+            "ppp {ppp}: {minimum_2} pt no deja sitio a una fila y al editor"
         );
         // Y la barra de estado.
-        assert!(minimo > min_panel_height_px(n) as f32 / ppp, "ppp {ppp}");
+        assert!(minimum_2 > min_panel_height_px(n) as f32 / ppp, "ppp {ppp}");
     }
     // El 65 % de 720 puntos: con los iconos (I.4) se retira la excepción del 72 % de I.2a
     // (specs/interfaz-iconos.md, decisión 9).
@@ -340,7 +344,7 @@ fn fila_1_el_minimo_no_pasa_del_65_por_ciento_de_720_y_deja_una_fila_con_el_edit
 // Fila 1b: ancho mínimo (columna de herramientas, ancho del panel y 128 u de lienzo).
 
 #[test]
-fn fila_1b_min_window_width_u_es_la_columna_mas_el_panel_mas_128() {
+fn row_1b_min_window_width_u_is_the_column_plus_the_panel_plus_128() {
     assert_eq!(MIN_CANVAS_WIDTH_U, 128);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(toolbar_width_u(), 107);
@@ -352,55 +356,55 @@ fn fila_1b_min_window_width_u_es_la_columna_mas_el_panel_mas_128() {
 }
 
 #[test]
-fn fila_1b_min_window_width_pt_a_los_cinco_ppp() {
-    let esperado = [
+fn row_1b_min_window_width_pt_at_the_five_ppp() {
+    let expected_2 = [
         (1.0f32, 468.0f32),
         (1.25, 374.4),
         (1.5, 624.0),
         (2.0, 468.0),
         (3.0, 468.0),
     ];
-    for (ppp, puntos) in esperado {
-        let medido = min_window_width_pt(ppp);
+    for (ppp, points) in expected_2 {
+        let measured = min_window_width_pt(ppp);
         assert!(
-            (medido - puntos).abs() <= 0.01,
-            "ppp {ppp}: {medido} pt y se esperaban {puntos}"
+            (measured - points).abs() <= 0.01,
+            "ppp {ppp}: {measured} pt y se esperaban {points}"
         );
         let n = text_scale(ppp) as f32;
         let formula = min_window_width_u() as f32 * n / ppp;
         assert!(
-            (medido - formula).abs() <= 0.001,
-            "ppp {ppp}: {medido} pt y la fórmula da {formula}"
+            (measured - formula).abs() <= 0.001,
+            "ppp {ppp}: {measured} pt y la fórmula da {formula}"
         );
     }
 }
 
 #[test]
-fn fila_1b_el_ancho_minimo_deja_128_u_de_lienzo_y_cabe_en_la_mitad_de_1366() {
+fn row_1b_the_minimum_width_leaves_128_u_of_canvas_and_fits_in_half_of_1366() {
     for ppp in PPPS {
         let n = text_scale(ppp) as f32;
-        let minimo = min_window_width_pt(ppp);
+        let minimum_2 = min_window_width_pt(ppp);
         let panel = PANEL_WIDTH_U as f32 * n / ppp;
-        let columna = toolbar_width_u() as f32 * n / ppp;
+        let column = toolbar_width_u() as f32 * n / ppp;
         assert!(
-            minimo > panel + columna,
-            "ppp {ppp}: {minimo} pt no deja lienzo"
+            minimum_2 > panel + column,
+            "ppp {ppp}: {minimum_2} pt no deja lienzo"
         );
         assert!(
-            (minimo - columna - panel - MIN_CANVAS_WIDTH_U as f32 * n / ppp).abs() <= 0.001,
+            (minimum_2 - column - panel - MIN_CANVAS_WIDTH_U as f32 * n / ppp).abs() <= 0.001,
             "ppp {ppp}: el lienzo mínimo no mide 128 u"
         );
-        assert!(minimo <= 683.0, "ppp {ppp}: {minimo} pt");
+        assert!(minimum_2 <= 683.0, "ppp {ppp}: {minimum_2} pt");
     }
 }
 
 #[test]
-fn fila_1b_min_window_width_pt_con_ppp_invalido_es_el_de_1() {
+fn row_1b_min_window_width_pt_with_an_invalid_ppp_is_that_of_1() {
     for ppp in [0.0f32, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-        let medido = min_window_width_pt(ppp);
+        let measured = min_window_width_pt(ppp);
         assert!(
-            (medido - 468.0).abs() <= 0.001,
-            "ppp {ppp}: {medido} pt y se esperaban 468"
+            (measured - 468.0).abs() <= 0.001,
+            "ppp {ppp}: {measured} pt y se esperaban 468"
         );
     }
 }
@@ -408,25 +412,25 @@ fn fila_1b_min_window_width_pt_con_ppp_invalido_es_el_de_1() {
 // Fila 2: una sola función para la altura del editor.
 
 #[test]
-fn fila_2_editor_height_u_coincide_con_la_derivacion_de_la_maqueta() {
-    let esperado = [
+fn row_2_editor_height_u_matches_the_derivation_of_the_mockup() {
+    let expected_2 = [
         (Mode::Indexed, 214),
         (Mode::Rgba, 186),
         (Mode::GrayAlpha, 112),
         (Mode::Gray, 94),
     ];
-    for (modo, altura) in esperado {
-        let botones = buttons_height_u(modo);
-        let derivada = notice_y_u(modo)
+    for (mode_2, height_2_2) in expected_2 {
+        let buttons = buttons_height_u(mode_2);
+        let derived = notice_y_u(mode_2)
             + NOTICE_LINES * ROW_H_U
             + BLOCK_GAP_U
-            + if botones > 0 {
-                botones + BLOCK_GAP_U
+            + if buttons > 0 {
+                buttons + BLOCK_GAP_U
             } else {
                 0
             };
-        assert_eq!(editor_height_u(modo), derivada, "{modo:?}");
-        assert_eq!(editor_height_u(modo), altura, "{modo:?}");
+        assert_eq!(editor_height_u(mode_2), derived, "{mode_2:?}");
+        assert_eq!(editor_height_u(mode_2), height_2_2, "{mode_2:?}");
     }
 }
 
@@ -437,34 +441,34 @@ fn fila_2_editor_height_u_coincide_con_la_derivacion_de_la_maqueta() {
 /// `n`. Así, 20 u más en `editor_height_u` mueven `block_height_px`, el mínimo y `panel_layout` en
 /// la misma cuantía y sin tocar nada más.
 #[test]
-fn fila_2_lo_derivado_solo_depende_de_editor_height_u() {
-    for n in ESCALAS {
+fn row_2_what_is_derived_depends_only_on_editor_height_u() {
+    for n in SCALES {
         let n_i = i64::from(n);
         // Todo deriva de `editor_height_u`: RGBA no cambia e indexadas suma exactamente la altura
-        // de los botones, así que el bloque y el mínimo difieren en `botones · n` y `panel_layout`
-        // de indexadas con `botones · n` píxeles más de alto es el de RGBA.
-        let botones = buttons_height_u(Mode::Indexed) + BLOCK_GAP_U;
+        // de los botones, así que el bloque y el mínimo difieren en `buttons · n` y `panel_layout`
+        // de indexadas con `buttons · n` píxeles más de alto es el de RGBA.
+        let buttons = buttons_height_u(Mode::Indexed) + BLOCK_GAP_U;
         assert_eq!(buttons_height_u(Mode::Rgba), 0);
         assert_eq!(
             editor_height_u(Mode::Indexed) - editor_height_u(Mode::Rgba),
-            botones
+            buttons
         );
         assert_eq!(
             block_height_px(Mode::Indexed, n) - block_height_px(Mode::Rgba, n),
-            botones * n_i
+            buttons * n_i
         );
-        for alto in [0, 100 * n_i, 200 * n_i, 241 * n_i, 700 * n_i] {
-            for pedido in [0, n_i, 50 * n_i, 10_000] {
+        for height_2 in [0, 100 * n_i, 200 * n_i, 241 * n_i, 700 * n_i] {
+            for requested in [0, n_i, 50 * n_i, 10_000] {
                 assert_eq!(
-                    panel_layout(Mode::Indexed, alto + botones * n_i, n, pedido),
-                    panel_layout(Mode::Rgba, alto, n, pedido),
-                    "alto {alto}, pedido {pedido}"
+                    panel_layout(Mode::Indexed, height_2 + buttons * n_i, n, requested),
+                    panel_layout(Mode::Rgba, height_2, n, requested),
+                    "alto {height_2}, pedido {requested}"
                 );
             }
         }
         // Alturas distintas: la diferencia es `Δh · n`.
-        for a in MODOS {
-            for b in MODOS {
+        for a in TEST_MODES {
+            for b in TEST_MODES {
                 let delta = (editor_height_u(a) - editor_height_u(b)) * n_i;
                 assert_eq!(
                     block_height_px(a, n) - block_height_px(b, n),
@@ -480,50 +484,50 @@ fn fila_2_lo_derivado_solo_depende_de_editor_height_u() {
                 "{a:?}"
             );
             // `panel_layout` cambia de régimen exactamente en el bloque de cada modo.
-            let bloque = block_height_px(a, n);
-            assert!(!panel_layout(a, bloque, n, 0).scrolling, "{a:?}");
-            assert!(panel_layout(a, bloque - 1, n, 0).scrolling, "{a:?}");
+            let block = block_height_px(a, n);
+            assert!(!panel_layout(a, block, n, 0).scrolling, "{a:?}");
+            assert!(panel_layout(a, block - 1, n, 0).scrolling, "{a:?}");
             // Y el editor, anclado al fondo, empieza siempre `editor_height_u · n` por encima.
-            let pie = panel_layout(a, bloque, n, 0);
-            assert_eq!(pie.top_px, bloque - editor_height_u(a) * n_i, "{a:?}");
+            let footer = panel_layout(a, block, n, 0);
+            assert_eq!(footer.top_px, block - editor_height_u(a) * n_i, "{a:?}");
         }
     }
 }
 
 // `panel_layout`.
 
-/// `PanelLayout` del diseño normal (sin desplazamiento) con `alto` ≥ bloque.
-fn normal(modo: Mode, alto: i64, n: u32) -> PanelLayout {
+/// `PanelLayout` del diseño normal (sin desplazamiento) con `height_2` ≥ bloque.
+fn normal(mode_2: Mode, height_2: i64, n: u32) -> PanelLayout {
     let n_i = i64::from(n);
-    let top = (alto - editor_height_u(modo) * n_i).div_euclid(n_i) * n_i;
+    let top = (height_2 - editor_height_u(mode_2) * n_i).div_euclid(n_i) * n_i;
     PanelLayout {
         scrolling: false,
         offset_px: 0,
         max_offset_px: 0,
         top_px: top,
-        visible_rows: visible_rows_reserved(alto, alto - top, n),
+        visible_rows: visible_rows_reserved(height_2, height_2 - top, n),
     }
 }
 
 #[test]
-fn con_alto_700n_el_editor_se_ancla_al_fondo() {
-    for n in ESCALAS {
+fn with_height_700n_the_editor_anchors_to_the_bottom() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        let esperado = [
+        let expected_2 = [
             (Mode::Indexed, 486),
             (Mode::Rgba, 514),
             (Mode::GrayAlpha, 588),
             (Mode::Gray, 606),
         ];
-        for (modo, arriba) in esperado {
-            let layout = panel_layout(modo, 700 * n_i, n, 0);
-            assert!(!layout.scrolling, "{modo:?}, n = {n}");
-            assert_eq!(layout.offset_px, 0, "{modo:?}, n = {n}");
-            assert_eq!(layout.top_px, arriba * n_i, "{modo:?}, n = {n}");
+        for (mode_2, top) in expected_2 {
+            let layout = panel_layout(mode_2, 700 * n_i, n, 0);
+            assert!(!layout.scrolling, "{mode_2:?}, n = {n}");
+            assert_eq!(layout.offset_px, 0, "{mode_2:?}, n = {n}");
+            assert_eq!(layout.top_px, top * n_i, "{mode_2:?}, n = {n}");
             assert_eq!(
                 layout.visible_rows,
                 visible_rows_reserved(700 * n_i, 700 * n_i - layout.top_px, n),
-                "{modo:?}, n = {n}"
+                "{mode_2:?}, n = {n}"
             );
         }
         // 700n con 214n reservados: (700 − 214 − 77) / 14 = 29 filas.
@@ -536,107 +540,110 @@ fn con_alto_700n_el_editor_se_ancla_al_fondo() {
 }
 
 #[test]
-fn en_el_diseno_normal_el_desplazamiento_pedido_se_ignora() {
-    for n in ESCALAS {
+fn in_the_normal_layout_the_requested_scroll_is_ignored() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
-            let alto = 700 * n_i;
-            for pedido in [0, 1, n_i, 1000, -5] {
-                let layout = panel_layout(modo, alto, n, pedido);
-                assert!(!layout.scrolling, "{modo:?}, pedido {pedido}");
-                assert_eq!(layout.offset_px, 0, "{modo:?}, pedido {pedido}");
-                assert_eq!(layout.top_px, normal(modo, alto, n).top_px);
+        for mode_2 in TEST_MODES {
+            let height_2 = 700 * n_i;
+            for requested in [0, 1, n_i, 1000, -5] {
+                let layout = panel_layout(mode_2, height_2, n, requested);
+                assert!(!layout.scrolling, "{mode_2:?}, pedido {requested}");
+                assert_eq!(layout.offset_px, 0, "{mode_2:?}, pedido {requested}");
+                assert_eq!(layout.top_px, normal(mode_2, height_2, n).top_px);
             }
         }
     }
 }
 
 #[test]
-fn top_px_siempre_es_multiplo_de_n_aunque_el_alto_no_lo_sea() {
+fn top_px_is_always_a_multiple_of_n_even_if_the_height_is_not() {
     // La spec propone `700n + 3` con n = 3, que sí es múltiplo de 3 (2103): se prueban los
     // restos 1 y 2 y también el 3 de la spec.
     let n = 3u32;
     let n_i = i64::from(n);
-    for modo in MODOS {
-        for resto in 0..=5 {
-            let alto = 700 * n_i + resto;
-            let layout = panel_layout(modo, alto, n, 0);
-            assert!(!layout.scrolling, "{modo:?}, resto {resto}");
-            assert_eq!(layout.top_px % n_i, 0, "{modo:?}, resto {resto}");
-            // `((alto − H·n) div n)·n`, con el alto redondeado a píxeles físicos.
-            let h = editor_height_u(modo) * n_i;
-            assert_eq!(layout.top_px, (alto - h).div_euclid(n_i) * n_i);
-            assert!(alto - layout.top_px >= h);
+    for mode_2 in TEST_MODES {
+        for rest_2 in 0..=5 {
+            let height_2 = 700 * n_i + rest_2;
+            let layout = panel_layout(mode_2, height_2, n, 0);
+            assert!(!layout.scrolling, "{mode_2:?}, resto {rest_2}");
+            assert_eq!(layout.top_px % n_i, 0, "{mode_2:?}, resto {rest_2}");
+            // `((height_2 − H·n) div n)·n`, con el alto redondeado a píxeles físicos.
+            let h = editor_height_u(mode_2) * n_i;
+            assert_eq!(layout.top_px, (height_2 - h).div_euclid(n_i) * n_i);
+            assert!(height_2 - layout.top_px >= h);
             assert_eq!(
                 layout.visible_rows,
-                visible_rows_reserved(alto, alto - layout.top_px, n)
+                visible_rows_reserved(height_2, height_2 - layout.top_px, n)
             );
         }
     }
 }
 
 #[test]
-fn un_pixel_mas_de_alto_no_mueve_el_editor_hasta_completar_n() {
+fn one_more_pixel_of_height_does_not_move_the_editor_until_completing_n() {
     // `top_px` es múltiplo de `n`: un píxel físico más de alto no lo mueve; al completar `n`
     // píxeles baja exactamente `n`.
     let n = 2u32;
     let n_i = i64::from(n);
-    let modo = Mode::Rgba;
-    let a = panel_layout(modo, 700 * n_i, n, 0);
-    let b = panel_layout(modo, 700 * n_i + 1, n, 0);
-    let c = panel_layout(modo, 701 * n_i, n, 0);
+    let mode_2 = Mode::Rgba;
+    let a = panel_layout(mode_2, 700 * n_i, n, 0);
+    let b = panel_layout(mode_2, 700 * n_i + 1, n, 0);
+    let c = panel_layout(mode_2, 701 * n_i, n, 0);
     assert_eq!(a.top_px, b.top_px);
     assert_eq!(c.top_px, a.top_px + n_i);
 }
 
 #[test]
-fn el_cambio_de_regimen_es_el_bloque_de_cada_modo() {
-    for n in ESCALAS {
+fn the_regime_change_is_the_block_of_each_mode() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
-            let limite = bloque_px(modo, n_i);
-            assert_eq!(limite, block_height_px(modo, n));
-            let justo = panel_layout(modo, limite, n, 0);
-            assert!(!justo.scrolling, "{modo:?}, n = {n}");
-            assert_eq!(justo.visible_rows, 1, "{modo:?}, n = {n}");
-            let debajo = panel_layout(modo, limite - 1, n, 0);
-            assert!(debajo.scrolling, "{modo:?}, n = {n}");
-            assert_eq!(debajo.visible_rows, 1, "{modo:?}, n = {n}");
+        for mode_2 in TEST_MODES {
+            let limit = block_px(mode_2, n_i);
+            assert_eq!(limit, block_height_px(mode_2, n));
+            let just = panel_layout(mode_2, limit, n, 0);
+            assert!(!just.scrolling, "{mode_2:?}, n = {n}");
+            assert_eq!(just.visible_rows, 1, "{mode_2:?}, n = {n}");
+            let below_2 = panel_layout(mode_2, limit - 1, n, 0);
+            assert!(below_2.scrolling, "{mode_2:?}, n = {n}");
+            assert_eq!(below_2.visible_rows, 1, "{mode_2:?}, n = {n}");
             // Sin salto: con `offset = 0` el `top_px` es el mismo a un lado y otro.
-            assert_eq!(debajo.top_px, justo.top_px, "{modo:?}, n = {n}");
-            assert_eq!(debajo.top_px, (GRID_Y_U + PITCH_U) * n_i);
+            assert_eq!(below_2.top_px, just.top_px, "{mode_2:?}, n = {n}");
+            assert_eq!(below_2.top_px, (GRID_Y_U + PITCH_U) * n_i);
         }
     }
 }
 
 #[test]
-fn alto_cero_o_negativo_no_da_panico_y_desplaza() {
-    for n in ESCALAS {
-        for modo in MODOS {
-            for alto in [0, -5] {
-                let layout = panel_layout(modo, alto, n, 0);
-                assert!(layout.scrolling, "{modo:?}, alto {alto}");
+fn height_zero_or_negative_does_not_panic_and_scrolls() {
+    for n in SCALES {
+        for mode_2 in TEST_MODES {
+            for height_2 in [0, -5] {
+                let layout = panel_layout(mode_2, height_2, n, 0);
+                assert!(layout.scrolling, "{mode_2:?}, alto {height_2}");
                 assert_eq!(layout.visible_rows, 1);
                 assert_eq!(layout.offset_px, 0);
                 // Con cualquier desplazamiento pedido, sigue en su rango.
-                let enorme = panel_layout(modo, alto, n, i64::MAX / 4);
-                assert_eq!(enorme.offset_px, enorme.max_offset_px);
+                let huge = panel_layout(mode_2, height_2, n, i64::MAX / 4);
+                assert_eq!(huge.offset_px, huge.max_offset_px);
             }
         }
     }
 }
 
 #[test]
-fn con_el_editor_visible_siempre_queda_una_fila_de_rejilla() {
-    for n in ESCALAS {
+fn with_the_editor_visible_one_grid_row_always_remains() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
-            for alto in 0..(900 * n_i) {
-                let layout = panel_layout(modo, alto, n, 0);
-                assert!(layout.visible_rows >= 1, "{modo:?}, n = {n}, alto {alto}");
+        for mode_2 in TEST_MODES {
+            for height_2 in 0..(900 * n_i) {
+                let layout = panel_layout(mode_2, height_2, n, 0);
+                assert!(
+                    layout.visible_rows >= 1,
+                    "{mode_2:?}, n = {n}, alto {height_2}"
+                );
                 assert_eq!(layout.top_px % n_i, 0);
                 assert!(layout.top_px >= (GRID_Y_U + PITCH_U) * n_i);
-                assert_eq!(layout.scrolling, alto < block_height_px(modo, n));
+                assert_eq!(layout.scrolling, height_2 < block_height_px(mode_2, n));
             }
         }
     }
@@ -645,80 +652,83 @@ fn con_el_editor_visible_siempre_queda_una_fila_de_rejilla() {
 // Fila 3: alto del panel 241n, 240n, 200n y 100n.
 
 #[test]
-fn fila_3_con_el_bloque_justo_el_editor_cabe_y_la_rejilla_tiene_una_fila() {
-    for n in ESCALAS {
+fn row_3_with_the_exact_block_the_editor_fits_and_the_grid_has_one_row() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for (modo, bloque) in [(Mode::Indexed, 305), (Mode::Rgba, 277)] {
-            let layout = panel_layout(modo, bloque * n_i, n, 0);
-            assert!(!layout.scrolling, "{modo:?}, n = {n}");
+        for (mode_2, block) in [(Mode::Indexed, 305), (Mode::Rgba, 277)] {
+            let layout = panel_layout(mode_2, block * n_i, n, 0);
+            assert!(!layout.scrolling, "{mode_2:?}, n = {n}");
             assert_eq!(layout.offset_px, 0);
-            assert_eq!(layout.top_px, 91 * n_i, "{modo:?}, n = {n}");
-            assert_eq!(layout.visible_rows, 1, "{modo:?}, n = {n}");
+            assert_eq!(layout.top_px, 91 * n_i, "{mode_2:?}, n = {n}");
+            assert_eq!(layout.visible_rows, 1, "{mode_2:?}, n = {n}");
         }
     }
 }
 
 #[test]
-fn fila_3_con_un_pixel_menos_y_offset_0_no_hay_salto_respecto_del_bloque_justo() {
-    for n in ESCALAS {
+fn row_3_with_one_pixel_less_and_offset_0_there_is_no_jump_with_respect_to_the_exact_block() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for (modo, bloque) in [(Mode::Indexed, 305), (Mode::Rgba, 277)] {
-            let justo = panel_layout(modo, bloque * n_i, n, 0);
-            let debajo = panel_layout(modo, (bloque - 1) * n_i, n, 0);
-            assert!(debajo.scrolling, "{modo:?}, n = {n}");
-            assert_eq!(debajo.offset_px, 0);
-            assert_eq!(debajo.top_px, 91 * n_i, "{modo:?}, n = {n}");
-            assert_eq!(debajo.top_px, justo.top_px);
-            assert_eq!(debajo.visible_rows, 1);
+        for (mode_2, block) in [(Mode::Indexed, 305), (Mode::Rgba, 277)] {
+            let just = panel_layout(mode_2, block * n_i, n, 0);
+            let below_2 = panel_layout(mode_2, (block - 1) * n_i, n, 0);
+            assert!(below_2.scrolling, "{mode_2:?}, n = {n}");
+            assert_eq!(below_2.offset_px, 0);
+            assert_eq!(below_2.top_px, 91 * n_i, "{mode_2:?}, n = {n}");
+            assert_eq!(below_2.top_px, just.top_px);
+            assert_eq!(below_2.visible_rows, 1);
             // Un solo `n` de desplazamiento posible: el bloque excede el panel en `n`.
-            assert_eq!(debajo.max_offset_px, n_i, "{modo:?}, n = {n}");
+            assert_eq!(below_2.max_offset_px, n_i, "{mode_2:?}, n = {n}");
         }
     }
 }
 
 #[test]
-fn fila_3_max_offset_px_y_top_con_offset_maximo() {
-    for n in ESCALAS {
+fn row_3_max_offset_px_and_top_with_maximum_offset() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
-            let bloque = block_height_px(modo, n);
-            for alto in [241 * n_i, 240 * n_i, 200 * n_i, 100 * n_i] {
-                let sin = panel_layout(modo, alto, n, 0);
-                if alto >= bloque {
-                    assert!(!sin.scrolling, "{modo:?}, n = {n}, alto {alto}");
+        for mode_2 in TEST_MODES {
+            let block = block_height_px(mode_2, n);
+            for height_2 in [241 * n_i, 240 * n_i, 200 * n_i, 100 * n_i] {
+                let without = panel_layout(mode_2, height_2, n, 0);
+                if height_2 >= block {
+                    assert!(!without.scrolling, "{mode_2:?}, n = {n}, alto {height_2}");
                     continue;
                 }
-                let max = (bloque - alto).div_euclid(n_i) * n_i;
-                assert!(sin.scrolling, "{modo:?}, n = {n}, alto {alto}");
-                assert_eq!(sin.max_offset_px, max, "{modo:?}, n = {n}, alto {alto}");
-                assert_eq!(sin.visible_rows, 1);
-                assert_eq!(sin.top_px, (GRID_Y_U + PITCH_U) * n_i);
+                let max = (block - height_2).div_euclid(n_i) * n_i;
+                assert!(without.scrolling, "{mode_2:?}, n = {n}, alto {height_2}");
+                assert_eq!(
+                    without.max_offset_px, max,
+                    "{mode_2:?}, n = {n}, alto {height_2}"
+                );
+                assert_eq!(without.visible_rows, 1);
+                assert_eq!(without.top_px, (GRID_Y_U + PITCH_U) * n_i);
 
-                let abajo = panel_layout(modo, alto, n, max);
-                assert_eq!(abajo.offset_px, max);
-                assert_eq!(abajo.max_offset_px, max);
-                assert_eq!(abajo.top_px, (GRID_Y_U + PITCH_U) * n_i - max);
+                let below = panel_layout(mode_2, height_2, n, max);
+                assert_eq!(below.offset_px, max);
+                assert_eq!(below.max_offset_px, max);
+                assert_eq!(below.top_px, (GRID_Y_U + PITCH_U) * n_i - max);
                 // Con el alto múltiplo de `n`, coincide con el editor anclado al fondo.
                 assert_eq!(
-                    abajo.top_px,
-                    alto - editor_height_u(modo) * n_i,
-                    "{modo:?}, n = {n}, alto {alto}"
+                    below.top_px,
+                    height_2 - editor_height_u(mode_2) * n_i,
+                    "{mode_2:?}, n = {n}, alto {height_2}"
                 );
-                assert_eq!(abajo.visible_rows, 1);
+                assert_eq!(below.visible_rows, 1);
             }
         }
     }
 }
 
 #[test]
-fn fila_3_el_desplazamiento_se_recorta_y_baja_a_multiplo_de_n() {
+fn row_3_the_scroll_is_clipped_and_lowered_to_a_multiple_of_n() {
     let n = 3u32;
     let n_i = i64::from(n);
-    let modo = Mode::Indexed;
-    let alto = 200 * n_i;
-    let max = panel_layout(modo, alto, n, 0).max_offset_px;
+    let mode_2 = Mode::Indexed;
+    let height_2 = 200 * n_i;
+    let max = panel_layout(mode_2, height_2, n, 0).max_offset_px;
     assert_eq!(max, 105 * n_i);
-    for (pedido, esperado) in [
+    for (requested, expected_2) in [
         (-100, 0),
         (0, 0),
         (1, 0),
@@ -731,29 +741,29 @@ fn fila_3_el_desplazamiento_se_recorta_y_baja_a_multiplo_de_n() {
         (max + 1, max),
         (10_000, max),
     ] {
-        let layout = panel_layout(modo, alto, n, pedido);
-        assert_eq!(layout.offset_px, esperado, "pedido {pedido}");
+        let layout = panel_layout(mode_2, height_2, n, requested);
+        assert_eq!(layout.offset_px, expected_2, "pedido {requested}");
         assert_eq!(
             layout.top_px,
-            (GRID_Y_U + PITCH_U) * n_i - esperado,
-            "pedido {pedido}"
+            (GRID_Y_U + PITCH_U) * n_i - expected_2,
+            "pedido {requested}"
         );
     }
 }
 
 #[test]
-fn fila_3_el_editor_siempre_tiene_sitio_con_offset_maximo() {
+fn row_3_the_editor_always_has_room_with_maximum_offset() {
     // Con `offset = max` el editor entero cae dentro del panel (alto múltiplo de `n`).
-    for n in ESCALAS {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
-            for alto_n in [60, 100, 120, 200, 240] {
-                let alto = alto_n * n_i;
-                let sin = panel_layout(modo, alto, n, 0);
-                let layout = panel_layout(modo, alto, n, sin.max_offset_px.max(0));
+        for mode_2 in TEST_MODES {
+            for height_n in [60, 100, 120, 200, 240] {
+                let height_2 = height_n * n_i;
+                let without = panel_layout(mode_2, height_2, n, 0);
+                let layout = panel_layout(mode_2, height_2, n, without.max_offset_px.max(0));
                 if layout.scrolling {
-                    let fin = layout.top_px + editor_height_u(modo) * n_i;
-                    assert_eq!(fin, alto, "{modo:?}, n = {n}, alto {alto}");
+                    let fin = layout.top_px + editor_height_u(mode_2) * n_i;
+                    assert_eq!(fin, height_2, "{mode_2:?}, n = {n}, alto {height_2}");
                 }
             }
         }
@@ -762,27 +772,27 @@ fn fila_3_el_editor_siempre_tiene_sitio_con_offset_maximo() {
 
 proptest! {
     #[test]
-    fn panel_layout_cumple_sus_invariantes(
-        modo in prop::sample::select(MODOS.to_vec()),
-        alto in -50i64..6000,
+    fn panel_layout_meets_its_invariants(
+        mode_2 in prop::sample::select(TEST_MODES.to_vec()),
+        height_2 in -50i64..6000,
         n in 1u32..=8,
-        pedido in -200i64..9000,
+        requested in -200i64..9000,
     ) {
         let n_i = i64::from(n);
-        let bloque = block_height_px(modo, n);
-        let layout = panel_layout(modo, alto, n, pedido);
-        if alto >= bloque {
+        let block = block_height_px(mode_2, n);
+        let layout = panel_layout(mode_2, height_2, n, requested);
+        if height_2 >= block {
             prop_assert!(!layout.scrolling);
             prop_assert_eq!(layout.offset_px, 0);
-            prop_assert_eq!(layout.top_px, normal(modo, alto, n).top_px);
-            prop_assert_eq!(layout.visible_rows, normal(modo, alto, n).visible_rows);
+            prop_assert_eq!(layout.top_px, normal(mode_2, height_2, n).top_px);
+            prop_assert_eq!(layout.visible_rows, normal(mode_2, height_2, n).visible_rows);
         } else {
-            let max = (bloque - alto).div_euclid(n_i) * n_i;
+            let max = (block - height_2).div_euclid(n_i) * n_i;
             prop_assert!(layout.scrolling);
             prop_assert_eq!(layout.max_offset_px, max);
             prop_assert!(layout.offset_px >= 0 && layout.offset_px <= max);
             prop_assert_eq!(layout.offset_px % n_i, 0);
-            prop_assert_eq!(layout.offset_px, pedido.clamp(0, max).div_euclid(n_i) * n_i);
+            prop_assert_eq!(layout.offset_px, requested.clamp(0, max).div_euclid(n_i) * n_i);
             prop_assert_eq!(layout.top_px, (GRID_Y_U + PITCH_U) * n_i - layout.offset_px);
             prop_assert_eq!(layout.visible_rows, 1);
         }
@@ -790,15 +800,15 @@ proptest! {
     }
 
     #[test]
-    fn el_editor_no_salta_al_cruzar_el_bloque(
-        modo in prop::sample::select(MODOS.to_vec()),
+    fn the_editor_does_not_jump_when_crossing_the_block(
+        mode_2 in prop::sample::select(TEST_MODES.to_vec()),
         n in 1u32..=8,
         extra in 0i64..40,
     ) {
         // Un píxel por encima o por debajo del bloque, con offset 0, el top es el mismo.
-        let bloque = block_height_px(modo, n);
-        let a = panel_layout(modo, bloque - 1 - extra.min(i64::from(n) - 1), n, 0);
-        let b = panel_layout(modo, bloque, n, 0);
+        let block = block_height_px(mode_2, n);
+        let a = panel_layout(mode_2, block - 1 - extra.min(i64::from(n) - 1), n, 0);
+        let b = panel_layout(mode_2, block, n, 0);
         prop_assert_eq!(a.top_px, b.top_px);
         prop_assert_eq!(a.visible_rows, b.visible_rows);
     }
@@ -807,21 +817,21 @@ proptest! {
 // `visible_rows_reserved`.
 
 #[test]
-fn visible_rows_reserved_con_reserva_cero_es_visible_rows() {
+fn visible_rows_reserved_with_zero_reserve_is_visible_rows() {
     for n in [1u32, 2, 3, 4] {
-        for alto in -50i64..3000 {
+        for height_2 in -50i64..3000 {
             assert_eq!(
-                visible_rows_reserved(alto, 0, n),
-                visible_rows(alto, n),
-                "alto {alto}, n = {n}"
+                visible_rows_reserved(height_2, 0, n),
+                visible_rows(height_2, n),
+                "alto {height_2}, n = {n}"
             );
         }
     }
 }
 
 #[test]
-fn visible_rows_reserved_usa_la_altura_restante() {
-    for n in ESCALAS {
+fn visible_rows_reserved_uses_the_remaining_height() {
+    for n in SCALES {
         let n_i = i64::from(n);
         // 700n con 186n reservados: (700 − 186 − 77) / 14 = 31.
         assert_eq!(visible_rows_reserved(700 * n_i, 186 * n_i, n), 31);
@@ -833,27 +843,27 @@ fn visible_rows_reserved_usa_la_altura_restante() {
 
 proptest! {
     #[test]
-    fn visible_rows_reserved_es_visible_rows_de_lo_que_queda(
-        alto in 0i64..6000,
-        reservado in 0i64..6000,
+    fn visible_rows_reserved_is_visible_rows_of_what_is_left(
+        height_2 in 0i64..6000,
+        reserved in 0i64..6000,
         n in 1u32..=8,
     ) {
         prop_assert_eq!(
-            visible_rows_reserved(alto, reservado, n),
-            visible_rows(alto - reservado.min(alto), n)
+            visible_rows_reserved(height_2, reserved, n),
+            visible_rows(height_2 - reserved.min(height_2), n)
         );
     }
 
     #[test]
-    fn reservar_mas_nunca_da_mas_filas(
-        alto in 0i64..6000,
-        reservado in 0i64..6000,
+    fn reserving_more_never_gives_more_rows(
+        height_2 in 0i64..6000,
+        reserved in 0i64..6000,
         extra in 0i64..500,
         n in 1u32..=8,
     ) {
         prop_assert!(
-            visible_rows_reserved(alto, reservado + extra, n)
-                <= visible_rows_reserved(alto, reservado, n)
+            visible_rows_reserved(height_2, reserved + extra, n)
+                <= visible_rows_reserved(height_2, reserved, n)
         );
     }
 }
@@ -861,21 +871,21 @@ proptest! {
 // `slider_hit`.
 
 /// Control cuya zona activa contiene el punto, calculado con `control_row_u` (probado arriba).
-fn control_esperado(modo: Mode, x: i64, y: i64, n: i64) -> Option<Control> {
+fn control_expected(mode_2: Mode, x: i64, y: i64, n: i64) -> Option<Control> {
     if x < HIT_X0_U * n || x >= HIT_X1_U * n {
         return None;
     }
-    controls(modo).iter().copied().find(|control| {
-        let fila = control_row_u(modo, *control).expect("tiene fila");
-        y >= fila * n && y < (fila + ROW_H_U) * n
+    controls(mode_2).iter().copied().find(|control| {
+        let row_2 = control_row_u(mode_2, *control).expect("tiene fila");
+        y >= row_2 * n && y < (row_2 + ROW_H_U) * n
     })
 }
 
 #[test]
-fn slider_hit_recorre_toda_la_zona_de_cada_modo() {
-    for n in ESCALAS {
+fn slider_hit_walks_the_whole_area_of_each_mode() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
+        for mode_2 in TEST_MODES {
             let xs = [
                 -1,
                 0,
@@ -887,12 +897,12 @@ fn slider_hit_recorre_toda_la_zona_de_cada_modo() {
                 HIT_X1_U * n_i,
                 233 * n_i,
             ];
-            for y in -2..(editor_height_u(modo) * n_i + 2) {
+            for y in -2..(editor_height_u(mode_2) * n_i + 2) {
                 for x in xs {
                     assert_eq!(
-                        slider_hit(modo, x, y, n),
-                        control_esperado(modo, x, y, n_i),
-                        "{modo:?}, n = {n}, ({x}, {y})"
+                        slider_hit(mode_2, x, y, n),
+                        control_expected(mode_2, x, y, n_i),
+                        "{mode_2:?}, n = {n}, ({x}, {y})"
                     );
                 }
             }
@@ -901,43 +911,47 @@ fn slider_hit_recorre_toda_la_zona_de_cada_modo() {
 }
 
 #[test]
-fn slider_hit_en_las_esquinas_de_cada_fila() {
-    for n in ESCALAS {
+fn slider_hit_at_the_corners_of_each_row() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
-            for control in controls(modo) {
-                let fila = control_row_u(modo, *control).expect("tiene fila");
+        for mode_2 in TEST_MODES {
+            for control in controls(mode_2) {
+                let row_2 = control_row_u(mode_2, *control).expect("tiene fila");
                 let (x0, x1) = (HIT_X0_U * n_i, HIT_X1_U * n_i);
-                let (y0, y1) = (fila * n_i, (fila + ROW_H_U) * n_i);
+                let (y0, y1) = (row_2 * n_i, (row_2 + ROW_H_U) * n_i);
                 // Dentro: las cuatro esquinas incluidas y las excluidas.
-                assert_eq!(slider_hit(modo, x0, y0, n), Some(*control));
-                assert_eq!(slider_hit(modo, x1 - 1, y0, n), Some(*control));
-                assert_eq!(slider_hit(modo, x0, y1 - 1, n), Some(*control));
-                assert_eq!(slider_hit(modo, x1 - 1, y1 - 1, n), Some(*control));
+                assert_eq!(slider_hit(mode_2, x0, y0, n), Some(*control));
+                assert_eq!(slider_hit(mode_2, x1 - 1, y0, n), Some(*control));
+                assert_eq!(slider_hit(mode_2, x0, y1 - 1, n), Some(*control));
+                assert_eq!(slider_hit(mode_2, x1 - 1, y1 - 1, n), Some(*control));
                 // Fuera por la x.
-                assert_eq!(slider_hit(modo, x0 - 1, y0, n), None);
-                assert_eq!(slider_hit(modo, x1, y0, n), None);
+                assert_eq!(slider_hit(mode_2, x0 - 1, y0, n), None);
+                assert_eq!(slider_hit(mode_2, x1, y0, n), None);
             }
         }
     }
 }
 
 #[test]
-fn slider_hit_no_acierta_en_la_cabecera_el_campo_ni_el_aviso() {
-    for n in ESCALAS {
+fn slider_hit_does_not_hit_in_the_header_the_field_or_the_notice() {
+    for n in SCALES {
         let n_i = i64::from(n);
-        for modo in MODOS {
+        for mode_2 in TEST_MODES {
             let x = 100 * n_i;
-            assert_eq!(slider_hit(modo, x, 0, n), None, "separador");
-            assert_eq!(slider_hit(modo, x, HEADER_Y_U * n_i, n), None, "cabecera");
-            assert_eq!(slider_hit(modo, x, field_y_u(modo) * n_i, n), None, "campo");
+            assert_eq!(slider_hit(mode_2, x, 0, n), None, "separador");
+            assert_eq!(slider_hit(mode_2, x, HEADER_Y_U * n_i, n), None, "cabecera");
             assert_eq!(
-                slider_hit(modo, x, notice_y_u(modo) * n_i, n),
+                slider_hit(mode_2, x, field_y_u(mode_2) * n_i, n),
+                None,
+                "campo"
+            );
+            assert_eq!(
+                slider_hit(mode_2, x, notice_y_u(mode_2) * n_i, n),
                 None,
                 "aviso"
             );
             assert_eq!(
-                slider_hit(modo, x, editor_height_u(modo) * n_i, n),
+                slider_hit(mode_2, x, editor_height_u(mode_2) * n_i, n),
                 None,
                 "bajo el editor"
             );
@@ -946,35 +960,35 @@ fn slider_hit_no_acierta_en_la_cabecera_el_campo_ni_el_aviso() {
 }
 
 #[test]
-fn slider_hit_en_el_hueco_entre_grupos_no_acierta() {
-    for n in ESCALAS {
+fn slider_hit_in_the_gap_between_groups_does_not_hit() {
+    for n in SCALES {
         let n_i = i64::from(n);
         let x = 100 * n_i;
-        for modo in [Mode::Indexed, Mode::Rgba] {
+        for mode_2 in [Mode::Indexed, Mode::Rgba] {
             // Entre B (50..64) y H (68..82), y entre L (96..110) y A (114..128).
-            let tras_b = control_row_u(modo, Control::Blue).expect("fila") + ROW_H_U;
-            let tras_l = control_row_u(modo, Control::Lightness).expect("fila") + ROW_H_U;
-            for y in [tras_b * n_i, (tras_b + GROUP_GAP_U) * n_i - 1] {
-                assert_eq!(slider_hit(modo, x, y, n), None, "{modo:?}, y = {y}");
+            let after_b = control_row_u(mode_2, Control::Blue).expect("fila") + ROW_H_U;
+            let after_l = control_row_u(mode_2, Control::Lightness).expect("fila") + ROW_H_U;
+            for y in [after_b * n_i, (after_b + GROUP_GAP_U) * n_i - 1] {
+                assert_eq!(slider_hit(mode_2, x, y, n), None, "{mode_2:?}, y = {y}");
             }
-            for y in [tras_l * n_i, (tras_l + GROUP_GAP_U) * n_i - 1] {
-                assert_eq!(slider_hit(modo, x, y, n), None, "{modo:?}, y = {y}");
+            for y in [after_l * n_i, (after_l + GROUP_GAP_U) * n_i - 1] {
+                assert_eq!(slider_hit(mode_2, x, y, n), None, "{mode_2:?}, y = {y}");
             }
             // Las tres filas de un grupo son contiguas.
-            let verde = control_row_u(modo, Control::Green).expect("fila") * n_i;
-            assert_eq!(slider_hit(modo, x, verde - 1, n), Some(Control::Red));
-            assert_eq!(slider_hit(modo, x, verde, n), Some(Control::Green));
+            let green = control_row_u(mode_2, Control::Green).expect("fila") * n_i;
+            assert_eq!(slider_hit(mode_2, x, green - 1, n), Some(Control::Red));
+            assert_eq!(slider_hit(mode_2, x, green, n), Some(Control::Green));
         }
     }
 }
 
 #[test]
-fn slider_hit_no_ve_controles_que_el_modo_no_tiene() {
+fn slider_hit_does_not_see_controls_that_the_mode_does_not_have() {
     let n = 2i64;
     let x = 100 * n;
     // Gray no tiene segunda fila de deslizadores.
-    let segunda = (FIRST_ROW_Y_U + ROW_H_U) * n;
-    assert_eq!(slider_hit(Mode::Gray, x, segunda, 2), None);
+    let second = (FIRST_ROW_Y_U + ROW_H_U) * n;
+    assert_eq!(slider_hit(Mode::Gray, x, second, 2), None);
     assert_eq!(
         slider_hit(Mode::Gray, x, FIRST_ROW_Y_U * n, 2),
         Some(Control::Gray)
@@ -984,24 +998,24 @@ fn slider_hit_no_ve_controles_que_el_modo_no_tiene() {
 // Bordes en píxeles físicos enteros.
 
 #[test]
-fn todo_borde_en_puntos_por_ppp_es_entero() {
+fn every_edge_in_points_per_ppp_is_an_integer() {
     for ppp in PPPS {
         let n = text_scale(ppp);
         let n_i = i64::from(n);
-        for modo in MODOS {
-            let bordes = edges_u(modo);
-            assert!(!bordes.is_empty());
-            for borde in bordes {
-                let fisico = (borde * n_i) as f32;
-                let puntos = fisico / ppp;
-                let de_vuelta = puntos * ppp;
+        for mode_2 in TEST_MODES {
+            let borders = edges_u(mode_2);
+            assert!(!borders.is_empty());
+            for border in borders {
+                let physical = (border * n_i) as f32;
+                let points = physical / ppp;
+                let of_return = points * ppp;
                 assert!(
-                    (de_vuelta - de_vuelta.round()).abs() <= 0.001,
-                    "{modo:?}, ppp {ppp}: borde {borde} u = {puntos} pt = {de_vuelta} px"
+                    (of_return - of_return.round()).abs() <= 0.001,
+                    "{mode_2:?}, ppp {ppp}: borde {border} u = {points} pt = {of_return} px"
                 );
                 assert!(
-                    (de_vuelta - fisico).abs() <= 0.001,
-                    "{modo:?}, ppp {ppp}: borde {borde} u cae en {de_vuelta} px, no en {fisico}"
+                    (of_return - physical).abs() <= 0.001,
+                    "{mode_2:?}, ppp {ppp}: borde {border} u cae en {of_return} px, no en {physical}"
                 );
             }
         }
@@ -1009,19 +1023,19 @@ fn todo_borde_en_puntos_por_ppp_es_entero() {
 }
 
 #[test]
-fn el_anclaje_del_editor_cae_en_pixeles_fisicos_enteros() {
+fn the_editor_anchoring_falls_on_whole_physical_pixels() {
     for ppp in PPPS {
         let n = text_scale(ppp);
-        for modo in MODOS {
-            for alto in [700, 701, 777, 1080, 1441] {
-                let alto = alto * i64::from(n) + i64::from(n) / 2;
-                let layout = panel_layout(modo, alto, n, 0);
-                assert!(!layout.scrolling, "{modo:?}, ppp {ppp}, alto {alto}");
-                let puntos = layout.top_px as f32 / ppp;
-                let fisico = puntos * ppp;
+        for mode_2 in TEST_MODES {
+            for height_2 in [700, 701, 777, 1080, 1441] {
+                let height_2 = height_2 * i64::from(n) + i64::from(n) / 2;
+                let layout = panel_layout(mode_2, height_2, n, 0);
+                assert!(!layout.scrolling, "{mode_2:?}, ppp {ppp}, alto {height_2}");
+                let points = layout.top_px as f32 / ppp;
+                let physical = points * ppp;
                 assert!(
-                    (fisico - layout.top_px as f32).abs() <= 0.001,
-                    "{modo:?}, ppp {ppp}, alto {alto}"
+                    (physical - layout.top_px as f32).abs() <= 0.001,
+                    "{mode_2:?}, ppp {ppp}, alto {height_2}"
                 );
             }
         }
@@ -1029,11 +1043,11 @@ fn el_anclaje_del_editor_cae_en_pixeles_fisicos_enteros() {
 }
 
 #[test]
-fn edges_u_contiene_los_bordes_de_la_maqueta() {
-    for modo in MODOS {
-        let bordes = edges_u(modo);
-        assert!(bordes.iter().all(|b| *b >= 0), "{modo:?}: {bordes:?}");
-        let mut esperados = vec![
+fn edges_u_contains_the_edges_of_the_mockup() {
+    for mode_2 in TEST_MODES {
+        let borders = edges_u(mode_2);
+        assert!(borders.iter().all(|b| *b >= 0), "{mode_2:?}: {borders:?}");
+        let mut expected_2_2 = vec![
             SEPARATOR_Y_U,
             SEPARATOR_Y_U + 1,
             HEADER_Y_U,
@@ -1044,51 +1058,51 @@ fn edges_u_contiene_los_bordes_de_la_maqueta() {
             VALUE_X_U + VALUE_W_U,
             FIELD_X_U,
             FIELD_X_U + FIELD_W_U,
-            field_y_u(modo),
-            field_y_u(modo) + FIELD_H_U,
-            notice_y_u(modo),
-            notice_y_u(modo) + ROW_H_U,
-            notice_y_u(modo) + NOTICE_LINES * ROW_H_U,
-            editor_height_u(modo),
+            field_y_u(mode_2),
+            field_y_u(mode_2) + FIELD_H_U,
+            notice_y_u(mode_2),
+            notice_y_u(mode_2) + ROW_H_U,
+            notice_y_u(mode_2) + NOTICE_LINES * ROW_H_U,
+            editor_height_u(mode_2),
         ];
-        for control in controls(modo) {
-            let fila = control_row_u(modo, *control).expect("tiene fila");
-            esperados.extend([
-                fila,
-                fila + ROW_H_U,
+        for control in controls(mode_2) {
+            let row_2 = control_row_u(mode_2, *control).expect("tiene fila");
+            expected_2_2.extend([
+                row_2,
+                row_2 + ROW_H_U,
                 // La pista, centrada en la fila.
-                fila + (ROW_H_U - TRACK_H_U) / 2,
-                fila + (ROW_H_U - TRACK_H_U) / 2 + TRACK_H_U,
+                row_2 + (ROW_H_U - TRACK_H_U) / 2,
+                row_2 + (ROW_H_U - TRACK_H_U) / 2 + TRACK_H_U,
                 // La marca, centrada en la fila.
-                fila + (ROW_H_U - THUMB_H_U) / 2,
-                fila + (ROW_H_U - THUMB_H_U) / 2 + THUMB_H_U,
+                row_2 + (ROW_H_U - THUMB_H_U) / 2,
+                row_2 + (ROW_H_U - THUMB_H_U) / 2 + THUMB_H_U,
             ]);
         }
-        for esperado in esperados {
+        for expected_2 in expected_2_2 {
             assert!(
-                bordes.contains(&esperado),
-                "{modo:?}: falta el borde {esperado} u en {bordes:?}"
+                borders.contains(&expected_2),
+                "{mode_2:?}: falta el borde {expected_2} u en {borders:?}"
             );
         }
     }
 }
 
 #[test]
-fn edges_u_no_incluye_las_filas_que_el_modo_no_tiene() {
+fn edges_u_does_not_include_the_rows_the_mode_does_not_have() {
     let gray = edges_u(Mode::Gray);
-    let completo = edges_u(Mode::Rgba);
+    let complete = edges_u(Mode::Rgba);
     // La fila de B de RGBA (y = 50) no existe en Gray.
-    let tercera_fila = FIRST_ROW_Y_U + 2 * ROW_H_U;
-    assert!(completo.contains(&tercera_fila));
-    assert!(!gray.contains(&tercera_fila));
+    let third_row = FIRST_ROW_Y_U + 2 * ROW_H_U;
+    assert!(complete.contains(&third_row));
+    assert!(!gray.contains(&third_row));
 }
 
 // Botones de la paleta: una fila de cinco iconos de 24 u y, con una quita pendiente, `Confirmar` y
-// `Cancelar` en texto en su lugar (specs/interfaz-iconos.md, decisiones 7 y 8). Antes: cuatro filas
+// `Cancel` en texto en su lugar (specs/interfaz-iconos.md, decisiones 7 y 8). Antes: cuatro filas
 // de botones de texto (specs/hito-2-paleta-operaciones.md y hito-2-fijar-transparente.md, filas 1
 // y 2); las comprobaciones son las mismas con los rectángulos nuevos.
 
-const TODOS_LOS_BOTONES: [PaletteButton; 7] = [
+const ALL_THE_BUTTONS: [PaletteButton; 7] = [
     PaletteButton::Add,
     PaletteButton::Remove,
     PaletteButton::Confirm,
@@ -1099,40 +1113,48 @@ const TODOS_LOS_BOTONES: [PaletteButton; 7] = [
 ];
 
 #[test]
-fn los_botones_miden_24_u_y_empiezan_en_186_solo_en_indexadas() {
+fn the_buttons_measure_24_u_and_start_at_186_only_in_indexed() {
     assert_eq!(BUTTON_ROWS, 1);
     assert_eq!(BUTTON_H_U, 24);
     assert_eq!(BUTTON_ROWS * BUTTON_H_U, 24);
     assert_eq!(buttons_height_u(Mode::Indexed), 24);
     assert_eq!(buttons_y_u(Mode::Indexed), 186);
-    for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
-        assert_eq!(buttons_height_u(modo), 0, "{modo:?}");
+    for mode_2 in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+        assert_eq!(buttons_height_u(mode_2), 0, "{mode_2:?}");
         // Sin botones, el editor termina donde habrían empezado.
-        assert_eq!(editor_height_u(modo), buttons_y_u(modo), "{modo:?}");
-        for boton in TODOS_LOS_BOTONES {
-            assert_eq!(button_rect_u(modo, boton), None, "{modo:?}, {boton:?}");
+        assert_eq!(editor_height_u(mode_2), buttons_y_u(mode_2), "{mode_2:?}");
+        for button_2 in ALL_THE_BUTTONS {
+            assert_eq!(
+                button_rect_u(mode_2, button_2),
+                None,
+                "{mode_2:?}, {button_2:?}"
+            );
         }
     }
-    // `Confirmar` y `Cancelar` y su hueco ocupan el ancho útil del texto.
+    // `Confirmar` y `Cancel` y su hueco ocupan el ancho útil del texto.
     assert_eq!(2 * BUTTON_HALF_W_U + BUTTON_COL_GAP_U, BUTTON_FULL_W_U);
     assert_eq!(BUTTON_FULL_W_U, 225);
 }
 
 #[test]
-fn button_rect_u_sigue_la_tabla_de_la_maqueta() {
+fn button_rect_u_follows_the_table_of_the_mockup() {
     let m = Mode::Indexed;
     assert_eq!(BUTTON_X_U, 4);
     // Los cinco iconos, en una fila: hueco de 1 u en un grupo y de 8 u entre grupos.
-    for (boton, x) in [
+    for (button_2, x) in [
         (PaletteButton::Add, 4),
         (PaletteButton::Remove, 29),
         (PaletteButton::RotateLeft, 61),
         (PaletteButton::RotateRight, 86),
         (PaletteButton::Transparent, 118),
     ] {
-        assert_eq!(button_rect_u(m, boton), Some((x, 186, 24, 24)), "{boton:?}");
+        assert_eq!(
+            button_rect_u(m, button_2),
+            Some((x, 186, 24, 24)),
+            "{button_2:?}"
+        );
     }
-    // `Confirmar` y `Cancelar`: texto, de 110 × 24 u.
+    // `Confirmar` y `Cancel`: texto, de 110 × 24 u.
     assert_eq!(
         button_rect_u(m, PaletteButton::Confirm),
         Some((4, 186, 110, 24))
@@ -1144,22 +1166,22 @@ fn button_rect_u_sigue_la_tabla_de_la_maqueta() {
     // El último botón acaba 4 u (el margen) antes del final del editor.
     assert_eq!(186 + 24 + BLOCK_GAP_U, editor_height_u(m));
     // Ninguno pisa el aviso ni sale del panel.
-    let fin_aviso = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
-    for boton in TODOS_LOS_BOTONES {
-        let (x, y, w, _) = button_rect_u(m, boton).expect("indexadas tienen botones");
-        assert!(y >= fin_aviso, "{boton:?}");
-        assert!(x >= 0 && x + w < PANEL_WIDTH_U, "{boton:?}");
+    let fin_notice = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
+    for button_2 in ALL_THE_BUTTONS {
+        let (x, y, w, _) = button_rect_u(m, button_2).expect("indexadas tienen botones");
+        assert!(y >= fin_notice, "{button_2:?}");
+        assert!(x >= 0 && x + w < PANEL_WIDTH_U, "{button_2:?}");
     }
 }
 
 #[test]
-fn button_hit_en_los_puntos_de_la_spec() {
+fn button_hit_at_the_points_of_the_spec() {
     use PaletteButton::*;
-    for n in ESCALAS {
+    for n in SCALES {
         let k = i64::from(n);
         let m = Mode::Indexed;
         // (x, y, con los iconos, con una quita pendiente)
-        let casos = [
+        let cases = [
             (4 * k, 186 * k, Some(Add), Some(Confirm)),
             (28 * k - 1, 186 * k, Some(Add), Some(Confirm)),
             (28 * k, 186 * k, None, Some(Confirm)),
@@ -1181,29 +1203,33 @@ fn button_hit_en_los_puntos_de_la_spec() {
             (10 * k, 210 * k, None, None),
             (-1, -1, None, None),
         ];
-        for (x, y, iconos, quita) in casos {
-            assert_eq!(button_hit(m, false, x, y, n), iconos, "n = {n}, ({x}, {y})");
+        for (x, y, icons_2, removes) in cases {
+            assert_eq!(
+                button_hit(m, false, x, y, n),
+                icons_2,
+                "n = {n}, ({x}, {y})"
+            );
             assert_eq!(
                 button_hit(m, true, x, y, n),
-                quita,
+                removes,
                 "n = {n}, ({x}, {y}) con quita"
             );
         }
-        for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+        for mode_2 in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
             for removing in [false, true] {
-                assert_eq!(button_hit(modo, removing, 10 * k, 190 * k, n), None);
+                assert_eq!(button_hit(mode_2, removing, 10 * k, 190 * k, n), None);
             }
         }
     }
 }
 
 #[test]
-fn los_bordes_de_los_botones_caen_en_pixeles_fisicos_enteros() {
+fn the_button_edges_fall_on_whole_physical_pixels() {
     for ppp in PPPS {
         let n = text_scale(ppp);
         let k = i64::from(n);
-        for boton in TODOS_LOS_BOTONES {
-            let (x, y, w, h) = button_rect_u(Mode::Indexed, boton).expect("botones");
+        for button_2 in ALL_THE_BUTTONS {
+            let (x, y, w, h) = button_rect_u(Mode::Indexed, button_2).expect("botones");
             for u in [
                 x,
                 x + 1,
@@ -1220,19 +1246,19 @@ fn los_bordes_de_los_botones_caen_en_pixeles_fisicos_enteros() {
                 y + h,
                 y + BUTTON_TEXT_Y_U,
             ] {
-                let fisico = (u * k) as f32 / ppp * ppp;
+                let physical = (u * k) as f32 / ppp * ppp;
                 assert!(
-                    (fisico - fisico.round()).abs() <= 0.001 && (u * k) % k == 0,
-                    "ppp {ppp}, {boton:?}, {u} u"
+                    (physical - physical.round()).abs() <= 0.001 && (u * k) % k == 0,
+                    "ppp {ppp}, {button_2:?}, {u} u"
                 );
             }
         }
         // Y están en `edges_u`.
-        let bordes = edges_u(Mode::Indexed);
-        for boton in [PaletteButton::Add, PaletteButton::RotateRight] {
-            let (x, y, w, h) = button_rect_u(Mode::Indexed, boton).expect("botones");
+        let borders = edges_u(Mode::Indexed);
+        for button_2 in [PaletteButton::Add, PaletteButton::RotateRight] {
+            let (x, y, w, h) = button_rect_u(Mode::Indexed, button_2).expect("botones");
             for u in [x, x + w, y, y + h] {
-                assert!(bordes.contains(&u), "{boton:?}: {u}");
+                assert!(borders.contains(&u), "{button_2:?}: {u}");
             }
         }
     }
@@ -1242,10 +1268,10 @@ fn los_bordes_de_los_botones_caen_en_pixeles_fisicos_enteros() {
 // botón `Transparent` es el quinto icono; las cifras de alturas, ventana y `panel_layout` están en
 // las pruebas adaptadas de arriba.
 
-const BOTONES_U21: [PaletteButton; 7] = TODOS_LOS_BOTONES;
+const BUTTONS_U_21: [PaletteButton; 7] = ALL_THE_BUTTONS;
 
 #[test]
-fn fila_1_u21_la_fila_de_iconos_suma_24_u_y_deja_el_editor_en_214() {
+fn row_1_u21_the_icon_row_adds_24_u_and_leaves_the_editor_at_214() {
     assert_eq!(buttons_height_u(Mode::Indexed), 24);
     // La derivación de la maqueta, con literales: 186 + 24 + 4.
     assert_eq!(buttons_y_u(Mode::Indexed), 186);
@@ -1254,20 +1280,20 @@ fn fila_1_u21_la_fila_de_iconos_suma_24_u_y_deja_el_editor_en_214() {
     // Una sola función: el bloque, el mínimo y el último botón cuelgan de ella.
     let (_, y, _, h) = button_rect_u(Mode::Indexed, PaletteButton::Transparent).expect("botón");
     assert_eq!(y + h + BLOCK_GAP_U, editor_height_u(Mode::Indexed));
-    for n in ESCALAS {
+    for n in SCALES {
         let k = i64::from(n);
         assert_eq!(block_height_px(Mode::Indexed, n), 305 * k);
         assert_eq!(min_panel_height_px(n), 305 * k);
     }
     // Solo indexadas llevan botones: los demás modos no cambian (186, 94 y 112 u).
-    for (modo, altura) in [(Mode::Rgba, 186), (Mode::Gray, 94), (Mode::GrayAlpha, 112)] {
-        assert_eq!(buttons_height_u(modo), 0, "{modo:?}");
-        assert_eq!(editor_height_u(modo), altura, "{modo:?}");
+    for (mode_2, height_2_2) in [(Mode::Rgba, 186), (Mode::Gray, 94), (Mode::GrayAlpha, 112)] {
+        assert_eq!(buttons_height_u(mode_2), 0, "{mode_2:?}");
+        assert_eq!(editor_height_u(mode_2), height_2_2, "{mode_2:?}");
     }
 }
 
 #[test]
-fn fila_2_u21_button_rect_u_del_boton_transparente() {
+fn row_2_u21_button_rect_u_of_the_transparent_button() {
     let m = Mode::Indexed;
     assert_eq!(
         button_rect_u(m, PaletteButton::Transparent),
@@ -1280,39 +1306,45 @@ fn fila_2_u21_button_rect_u_del_boton_transparente() {
     assert_eq!((y, w, h), (yd, BUTTON_H_U, BUTTON_H_U));
     assert_eq!(x, xd + wd + 8);
     // Ni pisa el aviso ni sale del panel ni se solapa con otro botón de la misma fila.
-    let fin_aviso = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
-    assert!(y >= fin_aviso);
+    let fin_notice = notice_y_u(m) + NOTICE_LINES * ROW_H_U;
+    assert!(y >= fin_notice);
     assert!(x >= 0 && x + w < PANEL_WIDTH_U);
-    for otro in BOTONES_U21 {
+    for other_2 in BUTTONS_U_21 {
         if matches!(
-            otro,
+            other_2,
             PaletteButton::Transparent | PaletteButton::Confirm | PaletteButton::Cancel
         ) {
             continue;
         }
-        let (ox, oy, ow, oh) = button_rect_u(m, otro).expect("botón");
-        let solapa = x < ox + ow && ox < x + w && y < oy + oh && oy < y + h;
-        assert!(!solapa, "solapa con {otro:?}");
+        let (ox, oy, ow, oh) = button_rect_u(m, other_2).expect("botón");
+        let overlaps = x < ox + ow && ox < x + w && y < oy + oh && oy < y + h;
+        assert!(!overlaps, "solapa con {other_2:?}");
     }
 }
 
 #[test]
-fn fila_2_u21_los_modos_sin_botones_no_tienen_el_transparente() {
-    for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+fn row_2_u21_the_modes_without_buttons_do_not_have_the_transparent_one() {
+    for mode_2 in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
         assert_eq!(
-            button_rect_u(modo, PaletteButton::Transparent),
+            button_rect_u(mode_2, PaletteButton::Transparent),
             None,
-            "{modo:?}"
+            "{mode_2:?}"
         );
-        for n in ESCALAS {
+        for n in SCALES {
             let k = i64::from(n);
             for removing in [false, true] {
                 // El punto donde está el botón en indexadas y todo el alto del editor.
-                for y in [0, 190 * k, 200 * k, 210 * k, editor_height_u(modo) * k - 1] {
+                for y in [
+                    0,
+                    190 * k,
+                    200 * k,
+                    210 * k,
+                    editor_height_u(mode_2) * k - 1,
+                ] {
                     assert_eq!(
-                        button_hit(modo, removing, 120 * k, y, n),
+                        button_hit(mode_2, removing, 120 * k, y, n),
                         None,
-                        "{modo:?}, n = {n}, y = {y}"
+                        "{mode_2:?}, n = {n}, y = {y}"
                     );
                 }
             }
@@ -1321,12 +1353,12 @@ fn fila_2_u21_los_modos_sin_botones_no_tienen_el_transparente() {
 }
 
 #[test]
-fn fila_2_u21_button_hit_en_los_puntos_del_boton_transparente() {
+fn row_2_u21_button_hit_at_the_points_of_the_transparent_button() {
     use PaletteButton::*;
-    for n in ESCALAS {
+    for n in SCALES {
         let k = i64::from(n);
         let m = Mode::Indexed;
-        let casos = [
+        let cases = [
             // Esquina superior izquierda y última esquina dentro del botón.
             (118 * k, 186 * k, Some(Transparent)),
             (141 * k, 209 * k, Some(Transparent)),
@@ -1342,14 +1374,14 @@ fn fila_2_u21_button_hit_en_los_puntos_del_boton_transparente() {
             (142 * k, 209 * k, None),
             (130 * k, 186 * k - 1, None),
         ];
-        for (x, y, esperado) in casos {
+        for (x, y, expected_2) in cases {
             assert_eq!(
                 button_hit(m, false, x, y, n),
-                esperado,
+                expected_2,
                 "n = {n}, ({x}, {y})"
             );
         }
-        // Con una quita pendiente no hay iconos: solo `Confirmar` y `Cancelar` (decisión 8).
+        // Con una quita pendiente no hay iconos: solo `Confirmar` y `Cancel` (decisión 8).
         assert_eq!(button_hit(m, true, 130 * k, 198 * k, n), Some(Cancel));
         assert_eq!(button_hit(m, true, 118 * k, 198 * k, n), None);
         // Los demás iconos siguen en sus puntos.
@@ -1362,16 +1394,16 @@ fn fila_2_u21_button_hit_en_los_puntos_del_boton_transparente() {
 }
 
 #[test]
-fn fila_2_u21_button_hit_recorre_todo_el_rectangulo_del_boton() {
+fn row_2_u21_button_hit_walks_the_whole_rectangle_of_the_button() {
     let n = 2u32;
     let k = i64::from(n);
     let m = Mode::Indexed;
     let (x, y, w, h) = button_rect_u(m, PaletteButton::Transparent).expect("botón");
     for py in (y - 2) * k..(y + h + 2) * k {
         for px in ((x - 2) * k..(x + w + 2) * k).step_by(3) {
-            let dentro = px >= x * k && px < (x + w) * k && py >= y * k && py < (y + h) * k;
-            let esperado = dentro.then_some(PaletteButton::Transparent);
-            assert_eq!(button_hit(m, false, px, py, n), esperado, "({px}, {py})");
+            let inside = px >= x * k && px < (x + w) * k && py >= y * k && py < (y + h) * k;
+            let expected_2 = inside.then_some(PaletteButton::Transparent);
+            assert_eq!(button_hit(m, false, px, py, n), expected_2, "({px}, {py})");
             // Con una quita pendiente el icono no golpea nunca.
             assert_ne!(
                 button_hit(m, true, px, py, n),
@@ -1383,9 +1415,9 @@ fn fila_2_u21_button_hit_recorre_todo_el_rectangulo_del_boton() {
 }
 
 #[test]
-fn fila_2_u21_los_bordes_del_boton_estan_en_edges_u_y_son_enteros_a_los_cinco_ppp() {
+fn row_2_u21_the_button_edges_are_in_edges_u_and_are_integers_at_the_five_ppp() {
     let (x, y, w, h) = button_rect_u(Mode::Indexed, PaletteButton::Transparent).expect("botón");
-    let bordes = edges_u(Mode::Indexed);
+    let borders = edges_u(Mode::Indexed);
     for u in [
         x,
         x + 1,
@@ -1400,17 +1432,17 @@ fn fila_2_u21_los_bordes_del_boton_estan_en_edges_u_y_son_enteros_a_los_cinco_pp
         y + h - 1,
         y + h,
     ] {
-        assert!(bordes.contains(&u), "falta el borde {u} en edges_u");
+        assert!(borders.contains(&u), "falta el borde {u} en edges_u");
     }
-    assert!(bordes.contains(&186) && bordes.contains(&210));
-    assert!(bordes.contains(&editor_height_u(Mode::Indexed)));
+    assert!(borders.contains(&186) && borders.contains(&210));
+    assert!(borders.contains(&editor_height_u(Mode::Indexed)));
     for ppp in PPPS {
         let n = text_scale(ppp);
         let k = i64::from(n);
         for u in edges_u(Mode::Indexed) {
-            let fisico = (u * k) as f32 / ppp * ppp;
+            let physical = (u * k) as f32 / ppp * ppp;
             assert!(
-                (fisico - fisico.round()).abs() <= 0.001 && (u * k) % k == 0,
+                (physical - physical.round()).abs() <= 0.001 && (u * k) % k == 0,
                 "ppp {ppp}: el borde {u} u no cae en píxel físico entero"
             );
         }
@@ -1428,45 +1460,49 @@ mod icons {
 
     /// Los cinco iconos con los literales de la spec y los dos botones de texto de la quita
     /// pendiente.
-    const ICONOS: [(PaletteButton, RectU); 5] = [
+    const ICONS: [(PaletteButton, RectU); 5] = [
         (PaletteButton::Add, (4, 186, 24, 24)),
         (PaletteButton::Remove, (29, 186, 24, 24)),
         (PaletteButton::RotateLeft, (61, 186, 24, 24)),
         (PaletteButton::RotateRight, (86, 186, 24, 24)),
         (PaletteButton::Transparent, (118, 186, 24, 24)),
     ];
-    const TEXTOS: [(PaletteButton, RectU); 2] = [
+    const TEST_TEXTS: [(PaletteButton, RectU); 2] = [
         (PaletteButton::Confirm, (4, 186, 110, 24)),
         (PaletteButton::Cancel, (119, 186, 110, 24)),
     ];
 
     #[test]
-    fn fila_4_la_fila_de_iconos_del_editor_tiene_la_geometria_de_la_spec_a_las_cinco_escalas() {
-        for (boton, rect) in ICONOS.into_iter().chain(TEXTOS) {
-            assert_eq!(button_rect_u(Mode::Indexed, boton), Some(rect), "{boton:?}");
+    fn row_4_the_editor_icon_row_has_the_geometry_of_the_spec_at_the_five_scales() {
+        for (button_2, rect) in ICONS.into_iter().chain(TEST_TEXTS) {
+            assert_eq!(
+                button_rect_u(Mode::Indexed, button_2),
+                Some(rect),
+                "{button_2:?}"
+            );
         }
-        for (modo, alto) in [
+        for (mode_2, height_2) in [
             (Mode::Indexed, 214),
             (Mode::Rgba, 186),
             (Mode::GrayAlpha, 112),
             (Mode::Gray, 94),
         ] {
-            assert_eq!(editor_height_u(modo), alto, "{modo:?}");
+            assert_eq!(editor_height_u(mode_2), height_2, "{mode_2:?}");
         }
         // Rgba, Gray y GrayAlpha: sin botones.
-        for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
-            assert_eq!(buttons_height_u(modo), 0, "{modo:?}");
-            for (boton, _) in ICONOS.into_iter().chain(TEXTOS) {
-                assert_eq!(button_rect_u(modo, boton), None);
+        for mode_2 in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+            assert_eq!(buttons_height_u(mode_2), 0, "{mode_2:?}");
+            for (button_2, _) in ICONS.into_iter().chain(TEST_TEXTS) {
+                assert_eq!(button_rect_u(mode_2, button_2), None);
             }
         }
         // Nada pisa el aviso ni el borde del editor; el hueco de 1 u y el de 8 u no golpean.
-        let fin_aviso = notice_y_u(Mode::Indexed) + NOTICE_LINES * ROW_H_U;
-        for (_, (x, y, w, h)) in ICONOS.into_iter().chain(TEXTOS) {
-            assert!(y >= fin_aviso && y + h + BLOCK_GAP_U == editor_height_u(Mode::Indexed));
+        let fin_notice = notice_y_u(Mode::Indexed) + NOTICE_LINES * ROW_H_U;
+        for (_, (x, y, w, h)) in ICONS.into_iter().chain(TEST_TEXTS) {
+            assert!(y >= fin_notice && y + h + BLOCK_GAP_U == editor_height_u(Mode::Indexed));
             assert!(x >= 0 && x + w < PANEL_WIDTH_U);
         }
-        for n in ESCALAS {
+        for n in SCALES {
             let k = i64::from(n);
             for x_u in [28, 53, 57, 60, 85, 110, 117, 142] {
                 assert_eq!(
@@ -1479,10 +1515,13 @@ mod icons {
         // Todo borde en puntos × `ppp` es entero (±0,001) y múltiplo de `n`.
         for ppp in PPPS {
             let k = i64::from(text_scale(ppp));
-            for (_, (x, y, w, h)) in ICONOS.into_iter().chain(TEXTOS) {
+            for (_, (x, y, w, h)) in ICONS.into_iter().chain(TEST_TEXTS) {
                 for u in [x, x + 1, x + 4, x + w - 4, x + w, y, y + 4, y + h] {
-                    let fisico = (u * k) as f32 / ppp * ppp;
-                    assert!((fisico - fisico.round()).abs() <= 0.001, "ppp {ppp}: {u} u");
+                    let physical = (u * k) as f32 / ppp * ppp;
+                    assert!(
+                        (physical - physical.round()).abs() <= 0.001,
+                        "ppp {ppp}: {u} u"
+                    );
                 }
             }
         }
@@ -1492,23 +1531,23 @@ mod icons {
         #![proptest_config(ProptestConfig::with_cases(256))]
 
         /// Propiedad 3 (el editor): un punto golpea como mucho un botón y exactamente el de su
-        /// rectángulo; con una quita pendiente solo `Confirmar` y `Cancelar`; es total.
+        /// rectángulo; con una quita pendiente solo `Confirmar` y `Cancel`; es total.
         #[test]
-        fn propiedad_3_button_hit_da_el_boton_de_su_rectangulo_y_nada_en_los_huecos(
+        fn property_3_button_hit_gives_the_button_of_its_rectangle_and_nothing_in_the_gaps(
             n in 1u32..=8,
             x in -60i64..=2000,
             y in -60i64..=2200,
             removing in any::<bool>(),
         ) {
             let k = i64::from(n);
-            let tabla: &[(PaletteButton, RectU)] = if removing { &TEXTOS } else { &ICONOS };
-            let esperado = tabla
+            let tabla: &[(PaletteButton, RectU)] = if removing { &TEST_TEXTS } else { &ICONS };
+            let expected_2 = tabla
                 .iter()
                 .find(|(_, r)| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k)
                 .map(|(b, _)| *b);
-            prop_assert_eq!(button_hit(Mode::Indexed, removing, x, y, n), esperado);
-            for modo in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
-                prop_assert_eq!(button_hit(modo, removing, x, y, n), None);
+            prop_assert_eq!(button_hit(Mode::Indexed, removing, x, y, n), expected_2);
+            for mode_2 in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
+                prop_assert_eq!(button_hit(mode_2, removing, x, y, n), None);
             }
         }
     }

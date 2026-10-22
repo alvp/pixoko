@@ -44,7 +44,7 @@ pub fn wrap_text(text: &str, columns: usize) -> Vec<String> {
     out
 }
 
-/// Recorta la primera línea visible a `0..=total − visibles`.
+/// Recorta la primera línea visible a `0..=total − visible_2`.
 pub fn clamp_first_line(first: usize, total: usize, visible: usize) -> usize {
     first.min(total.saturating_sub(visible))
 }

@@ -16,9 +16,9 @@ use crate::tool::Tool;
 pub const HELP_ZONE: FieldId = "texto";
 pub const HELP_PRIMARY: FieldId = "principal";
 pub const HELP_SECONDARY: FieldId = "secundario";
-/// El botón `Restablecer todo` de la lista de atajos.
+/// El botón `Reset all` de la lista de atajos.
 pub const SHORTCUTS_RESET: FieldId = "restablecer-todo";
-/// La zona de la confirmación de `Restablecer todo`.
+/// La zona de la confirmación de `Reset all`.
 pub const RESET_TEXT: FieldId = "texto";
 
 /// De qué pide ayuda `F1`.
@@ -261,7 +261,7 @@ pub fn help_form(
     help_form_for(key, keymap, platform).expect("la clave existe")
 }
 
-/// La línea de la lista de una acción: `{nombre:<20}{atajos}` (44 columnas como mucho), con la
+/// La línea de la lista de una acción: `{name_2:<20}{shortcuts}` (44 columnas como mucho), con la
 /// marca `conflicto` si la acción perdió un atajo en un choque.
 fn list_line(
     entry: &HelpEntry,
@@ -295,7 +295,7 @@ fn list_line(
     }
 }
 
-/// La lista de atajos: un botón por acción (`{nombre:<20}{atajos}`), `Restablecer todo` al final y
+/// La lista de atajos: un botón por acción (`{name_2:<20}{shortcuts}`), `Reset all` al final y
 /// `Cerrar`. `conflicted` son las acciones con la marca `conflicto`. Hay que pasar el diálogo por
 /// [`prepare_shortcut_list`] para atenuar las acciones fijas.
 pub fn shortcuts_form(keymap: &Keymap, platform: Platform, conflicted: &[AppAction]) -> FormSpec {
@@ -348,7 +348,7 @@ pub fn prepare_shortcut_list(dialog: &mut Dialog) {
     }
 }
 
-/// La confirmación de `Restablecer todo`.
+/// La confirmación de `Reset all`.
 pub fn confirm_reset_form() -> FormSpec {
     let strings = ui();
     FormSpec {

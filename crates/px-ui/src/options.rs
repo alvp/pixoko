@@ -2,7 +2,7 @@
 //! 6), sin tipos de egui: el texto de hoy, el desplazamiento por filas y el foco.
 //!
 //! Hoy ninguna herramienta tiene opciones: el recuadro enseña el nombre, el atajo de la tabla y
-//! `sin opciones`. El hito 4 amplía [`options_row_count`] (y el cuerpo) sin tocar el resto.
+//! `without options_2`. El hito 4 amplía [`options_row_count`] (y el cuerpo) sin tocar el resto.
 
 use crate::actions::{AppAction, Platform};
 use crate::chrome::OPTIONS_BODY_ROWS;
@@ -37,7 +37,7 @@ pub fn title(tool: Tool) -> &'static str {
     }
 }
 
-/// Línea del atajo, leída de la tabla: `tecla d`, o `sin tecla` si la tabla no le da ninguno.
+/// Línea del atajo, leída de la tabla: `key_2 d`, o `without key_2` si la tabla no le da ninguno.
 pub fn key_line(tool: Tool, keymap: &Keymap, platform: Platform) -> String {
     match keymap.shown_text(AppAction::SelectTool(tool), platform) {
         Some(text) => format!("tecla {text}"),

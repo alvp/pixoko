@@ -8,7 +8,7 @@ use egui::{Key, Modifiers};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
 
 /// Los cinco booleanos de `Modifiers`, en el orden de una máscara de 5 bits.
-fn modificadores(mascara: u8) -> Modifiers {
+fn modifiers_2(mascara: u8) -> Modifiers {
     Modifiers {
         alt: mascara & 1 != 0,
         ctrl: mascara & 2 != 0,
@@ -40,14 +40,14 @@ fn mac_command() -> Modifiers {
 fn assert_traits<T: Clone + Copy + std::fmt::Debug + PartialEq + Eq>() {}
 
 #[test]
-fn file_action_deriva_los_traits_pedidos() {
+fn file_action_derives_the_requested_traits() {
     assert_traits::<FileAction>();
     assert_ne!(FileAction::Save, FileAction::SaveAs);
     let _ = format!("{:?}", FileAction::Save);
 }
 
 #[test]
-fn fila_22_command_s_guarda() {
+fn row_22_command_s_saves() {
     // Fila 22: `S` con `COMMAND` guarda.
     assert_eq!(
         file_action_for_key(Key::S, Modifiers::COMMAND),
@@ -56,7 +56,7 @@ fn fila_22_command_s_guarda() {
 }
 
 #[test]
-fn fila_22_command_mayus_s_guarda_como() {
+fn row_22_command_shift_s_saves_as() {
     // Fila 22: `S` con `COMMAND` y `SHIFT` guarda como.
     assert_eq!(
         file_action_for_key(Key::S, Modifiers::COMMAND | Modifiers::SHIFT),
@@ -65,7 +65,7 @@ fn fila_22_command_mayus_s_guarda_como() {
 }
 
 #[test]
-fn fila_22_en_la_practica_command_llega_junto_a_ctrl_o_mac_cmd() {
+fn row_22_in_practice_command_arrives_together_with_ctrl_or_mac_cmd() {
     // Fila 22: `command` + `ctrl` a la vez (Linux) y `mac_cmd` + `command` (macOS).
     for m in [ctrl_command(), mac_command()] {
         assert_eq!(
@@ -93,7 +93,7 @@ fn fila_22_en_la_practica_command_llega_junto_a_ctrl_o_mac_cmd() {
 }
 
 #[test]
-fn fila_22_sin_command_no_hay_atajo() {
+fn row_22_without_command_there_is_no_shortcut() {
     // Fila 22: `S` sola, con `SHIFT` solo, con `ALT`.
     assert_eq!(file_action_for_key(Key::S, Modifiers::NONE), None);
     assert_eq!(file_action_for_key(Key::S, Modifiers::SHIFT), None);
@@ -105,7 +105,7 @@ fn fila_22_sin_command_no_hay_atajo() {
 }
 
 #[test]
-fn fila_22_command_con_alt_no_es_atajo() {
+fn row_22_command_with_alt_is_not_a_shortcut() {
     // Fila 22: `COMMAND` + `ALT`; tampoco con Mayús.
     assert_eq!(
         file_action_for_key(Key::S, Modifiers::COMMAND | Modifiers::ALT),
@@ -121,7 +121,7 @@ fn fila_22_command_con_alt_no_es_atajo() {
 }
 
 #[test]
-fn fila_22_en_macos_ctrl_solo_no_hace_nada() {
+fn row_22_on_macos_ctrl_alone_does_nothing() {
     // Fila 22: `ctrl` solo (macOS: `command` falso) no guarda, ni con Mayús.
     let ctrl = Modifiers {
         ctrl: true,
@@ -131,15 +131,15 @@ fn fila_22_en_macos_ctrl_solo_no_hace_nada() {
     assert_eq!(file_action_for_key(Key::S, ctrl), None);
     assert_eq!(file_action_for_key(Key::S, ctrl | Modifiers::SHIFT), None);
     // Tampoco `mac_cmd` sin `command`: lo que decide es `command`, que egui resuelve.
-    let cmd_sin_command = Modifiers {
+    let cmd_without_command = Modifiers {
         mac_cmd: true,
         ..Modifiers::NONE
     };
-    assert_eq!(file_action_for_key(Key::S, cmd_sin_command), None);
+    assert_eq!(file_action_for_key(Key::S, cmd_without_command), None);
 }
 
 #[test]
-fn fila_22_otras_teclas_con_command_no_son_atajo_de_fichero() {
+fn row_22_other_keys_with_command_are_not_a_file_shortcut() {
     // Fila 22: `P` y `Z` con `COMMAND` dan `None`. `O` con `COMMAND` es `Open` desde la unidad 16
     // (`Ctrl+O` era «de la unidad 11»); con `Mayús` sigue sin ser atajo.
     for key in [Key::P, Key::Z] {
@@ -165,7 +165,7 @@ fn fila_22_otras_teclas_con_command_no_son_atajo_de_fichero() {
 }
 
 #[test]
-fn fila_10_unidad_16_command_o_abre_y_solo_con_command_sin_mayus_ni_alt() {
+fn row_10_unit_16_command_o_opens_and_only_with_command_without_shift_or_alt() {
     // specs/hito-2-dialogos-archivo.md, fila 10: `Ctrl+O` (Linux y Windows) y `Cmd+O` (macOS)
     // abren; `Ctrl+Mayús+O`, `Ctrl+Alt+O` y `O` sin modificador siguen dando `None`.
     for command in [ctrl_command(), mac_command()] {
@@ -174,20 +174,20 @@ fn fila_10_unidad_16_command_o_abre_y_solo_con_command_sin_mayus_ni_alt() {
             Some(FileAction::Open),
             "{command:?}"
         );
-        let con_mayus = Modifiers {
+        let with_shift = Modifiers {
             shift: true,
             ..command
         };
-        let con_alt = Modifiers {
+        let with_alt = Modifiers {
             alt: true,
             ..command
         };
         assert_eq!(
-            file_action_for_key(Key::O, con_mayus),
+            file_action_for_key(Key::O, with_shift),
             None,
-            "{con_mayus:?}"
+            "{with_shift:?}"
         );
-        assert_eq!(file_action_for_key(Key::O, con_alt), None, "{con_alt:?}");
+        assert_eq!(file_action_for_key(Key::O, with_alt), None, "{with_alt:?}");
     }
     assert_eq!(file_action_for_key(Key::O, Modifiers::NONE), None);
     // En macOS, `Ctrl` solo (sin `command`) no es atajo.
@@ -197,7 +197,7 @@ fn fila_10_unidad_16_command_o_abre_y_solo_con_command_sin_mayus_ni_alt() {
 }
 
 #[test]
-fn fila_22_action_for_key_no_conoce_la_tecla_s() {
+fn row_22_action_for_key_does_not_know_the_s_key() {
     // Fila 22: `action_for_key` con `S` sigue dando `None` (su contrato no cambia).
     assert_eq!(action_for_key(Key::S, Modifiers::COMMAND), None);
     assert_eq!(
@@ -217,16 +217,16 @@ fn fila_22_action_for_key_no_conoce_la_tecla_s() {
 /// Solo `S` con `command` y sin `alt` da `Save` o `SaveAs` (esta si y solo si hay `shift`), y solo
 /// `O` con `command`, sin `shift` ni `alt`, da `Open` (unidad 16). Todo lo demás da `None`.
 #[test]
-fn fila_22_recorrido_de_todas_las_teclas_y_combinaciones() {
+fn row_22_walk_through_all_the_keys_and_combinations() {
     assert!(Key::ALL.len() > 100, "Key::ALL incluye todas las teclas");
-    let (mut guardados, mut abiertos) = (0, 0);
+    let (mut saved, mut open) = (0, 0);
     for key in Key::ALL.iter().copied() {
         for mascara in 0..32u8 {
-            let m = modificadores(mascara);
+            let m = modifiers_2(mascara);
             // No entra en pánico (la llamada ya lo comprueba).
-            let accion = file_action_for_key(key, m);
+            let action_2 = file_action_for_key(key, m);
 
-            let esperado = if key == Key::S && m.command && !m.alt {
+            let expected_2 = if key == Key::S && m.command && !m.alt {
                 Some(if m.shift {
                     FileAction::SaveAs
                 } else {
@@ -237,19 +237,19 @@ fn fila_22_recorrido_de_todas_las_teclas_y_combinaciones() {
             } else {
                 None
             };
-            assert_eq!(accion, esperado, "{key:?} con {m:?}");
+            assert_eq!(action_2, expected_2, "{key:?} con {m:?}");
 
             // Lo dicho de otra manera: `Some` implica command sin alt y la tecla de su acción.
-            if let Some(a) = accion {
+            if let Some(a) = action_2 {
                 assert!(m.command && !m.alt, "{key:?} con {m:?} dio {a:?}");
                 match a {
                     FileAction::Open => {
-                        abiertos += 1;
+                        open += 1;
                         assert_eq!(key, Key::O, "{key:?} con {m:?} dio {a:?}");
                         assert!(!m.shift, "{key:?} con {m:?} dio {a:?}");
                     }
                     FileAction::Save | FileAction::SaveAs => {
-                        guardados += 1;
+                        saved += 1;
                         assert_eq!(key, Key::S, "{key:?} con {m:?} dio {a:?}");
                         assert_eq!(a == FileAction::SaveAs, m.shift, "{key:?} con {m:?}");
                     }
@@ -259,7 +259,7 @@ fn fila_22_recorrido_de_todas_las_teclas_y_combinaciones() {
     }
     // Con S hay 8 combinaciones de (ctrl, mac_cmd, shift) con command y sin alt: 4 de Save y 4 de
     // SaveAs. Con O, 4 de (ctrl, mac_cmd) con command y sin alt ni shift: todas de Open.
-    assert_eq!(guardados, 8);
-    assert_eq!(abiertos, 4);
-    assert_eq!(guardados + abiertos, 12);
+    assert_eq!(saved, 8);
+    assert_eq!(open, 4);
+    assert_eq!(saved + open, 12);
 }

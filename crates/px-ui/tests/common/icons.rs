@@ -9,31 +9,31 @@ use egui::{ColorImage, Context, TextureHandle, TextureId, TextureOptions};
 use px_ui::icons::{Icon, IconSet};
 
 /// Las texturas de prueba (se mantienen vivas mientras viva el banco) y el `IconSet` que las usa.
-pub struct IconosDePrueba {
+pub struct IconsOfTest {
     pub set: IconSet,
     handles: Vec<TextureHandle>,
 }
 
-impl IconosDePrueba {
-    pub fn nuevos(ctx: &Context) -> IconosDePrueba {
+impl IconsOfTest {
+    pub fn new_2_2(ctx: &Context) -> IconsOfTest {
         let handles: Vec<TextureHandle> = Icon::ALL
             .iter()
-            .map(|icono| {
+            .map(|icon| {
                 ctx.load_texture(
-                    format!("icono-de-prueba-{}", icono.file_stem()),
+                    format!("icono-de-prueba-{}", icon.file_stem()),
                     ColorImage::filled([16, 16], egui::Color32::WHITE),
                     TextureOptions::NEAREST,
                 )
             })
             .collect();
-        let set = IconSet::new(|icono| handles[icono.index()].id());
-        IconosDePrueba { set, handles }
+        let set = IconSet::new(|icon| handles[icon.index()].id());
+        IconsOfTest { set, handles }
     }
 
     /// El icono cuya textura es `id`.
-    pub fn icono_de(&self, id: TextureId) -> Option<Icon> {
+    pub fn icon_of(&self, id: TextureId) -> Option<Icon> {
         Icon::ALL
             .into_iter()
-            .find(|icono| self.handles[icono.index()].id() == id)
+            .find(|icon| self.handles[icon.index()].id() == id)
     }
 }

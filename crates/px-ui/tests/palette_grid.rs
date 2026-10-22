@@ -7,7 +7,7 @@
 //! `n` = 1, 2 y 3 donde la spec lo dice.
 //!
 //! Los números esperados salen de la spec. Se usan las constantes de `palette_grid` cuando es
-//! natural, pero `las_constantes_valen_lo_que_dice_la_spec` fija los valores literales para que
+//! natural, pero `the_constants_are_worth_what_the_spec_says` fija los valores literales para que
 //! cambiar una constante rompa un test. El modelo del desplazamiento (propiedad 2) usa `i128`
 //! y `div_euclid`, sin las fórmulas de la implementación.
 
@@ -24,7 +24,7 @@ use px_ui::texture::pixel_rgba;
 use px_ui::theme::{self, contrast_ratio};
 use px_ui::view::ScreenRect;
 
-const ESCALAS: [u32; 3] = [1, 2, 3];
+const SCALES: [u32; 3] = [1, 2, 3];
 
 fn rect(x: i64, y: i64, width: i64, height: i64) -> ScreenRect {
     ScreenRect {
@@ -35,14 +35,14 @@ fn rect(x: i64, y: i64, width: i64, height: i64) -> ScreenRect {
     }
 }
 
-fn contiene(r: ScreenRect, x: i64, y: i64) -> bool {
+fn contains(r: ScreenRect, x: i64, y: i64) -> bool {
     x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
 }
 
 // Constantes.
 
 #[test]
-fn las_constantes_valen_lo_que_dice_la_spec() {
+fn the_constants_are_worth_what_the_spec_says() {
     assert_eq!(COLUMNS, 16usize);
     assert_eq!(CELL_U, 10);
     assert_eq!(GAP_U, 4);
@@ -67,7 +67,7 @@ fn las_constantes_valen_lo_que_dice_la_spec() {
 }
 
 #[test]
-fn las_constantes_son_coherentes_entre_si() {
+fn the_constants_are_consistent_with_each_other() {
     assert_eq!(PITCH_U, CELL_U + GAP_U);
     assert_eq!(CHECK_U * 2, CELL_U);
     assert_eq!(
@@ -84,38 +84,38 @@ fn las_constantes_son_coherentes_entre_si() {
 }
 
 #[test]
-fn edges_u_contiene_los_bordes_de_la_maqueta() {
-    let bordes = edges_u();
-    assert!(!bordes.is_empty());
+fn edges_u_contains_the_edges_of_the_mockup() {
+    let borders = edges_u();
+    assert!(!borders.is_empty());
     // Los únicos negativos posibles son los de los anillos (-2).
-    for &borde in &bordes {
+    for &border in &borders {
         assert!(
-            borde >= 0 || borde == -2,
-            "borde {borde}: solo se admite -2 como negativo"
+            border >= 0 || border == -2,
+            "borde {border}: solo se admite -2 como negativo"
         );
     }
-    for (nombre, esperado) in [
+    for (name_2, expected_2) in [
         ("PANEL_WIDTH_U", PANEL_WIDTH_U),
         ("GRID_X_U", GRID_X_U),
         ("GRID_Y_U", GRID_Y_U),
         ("SEPARATOR_Y_U", SEPARATOR_Y_U),
     ] {
         assert!(
-            bordes.contains(&esperado),
-            "falta {nombre} = {esperado} en {bordes:?}"
+            borders.contains(&expected_2),
+            "falta {name_2} = {expected_2} en {borders:?}"
         );
     }
     // Y con los valores literales de la spec.
-    for esperado in [233, 4, 77, 72] {
-        assert!(bordes.contains(&esperado), "falta {esperado}");
+    for expected_2 in [233, 4, 77, 72] {
+        assert!(borders.contains(&expected_2), "falta {expected_2}");
     }
 }
 
 // Fila 1: `cell_rect`.
 
 #[test]
-fn fila_1_cell_rect_con_256_entradas_y_16_filas() {
-    for n in ESCALAS {
+fn row_1_cell_rect_with_256_entries_and_16_rows() {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 16, 0);
         assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 10 * k, 10 * k)), "n={n}");
@@ -144,8 +144,8 @@ fn fila_1_cell_rect_con_256_entradas_y_16_filas() {
 }
 
 #[test]
-fn fila_1_cell_rect_con_desplazamiento_de_3_filas_y_5_visibles() {
-    for n in ESCALAS {
+fn row_1_cell_rect_with_a_scroll_of_3_rows_and_5_visible() {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 5, 3);
         assert_eq!(grid.cell_rect(47), None, "n={n}: fila 2, por arriba");
@@ -169,7 +169,7 @@ fn fila_1_cell_rect_con_desplazamiento_de_3_filas_y_5_visibles() {
 }
 
 #[test]
-fn fila_1_con_n_1_los_numeros_literales_de_la_spec() {
+fn row_1_with_n_1_the_literal_numbers_of_the_spec() {
     let grid = Grid::new(1, 256, 16, 0);
     assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 10, 10)));
     assert_eq!(grid.cell_rect(1), Some(rect(14, 0, 10, 10)));
@@ -184,17 +184,17 @@ fn fila_1_con_n_1_los_numeros_literales_de_la_spec() {
 }
 
 #[test]
-fn cell_rect_usa_las_constantes() {
-    for n in ESCALAS {
+fn cell_rect_uses_the_constants() {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 16, 0);
         for i in [0usize, 1, 15, 16, 17, 100, 255] {
-            let (col, fila) = ((i % COLUMNS) as i64, (i / COLUMNS) as i64);
+            let (col, row_2) = ((i % COLUMNS) as i64, (i / COLUMNS) as i64);
             assert_eq!(
                 grid.cell_rect(i),
                 Some(rect(
                     col * PITCH_U * k,
-                    fila * PITCH_U * k,
+                    row_2 * PITCH_U * k,
                     CELL_U * k,
                     CELL_U * k
                 )),
@@ -207,11 +207,11 @@ fn cell_rect_usa_las_constantes() {
 // Fila 2: `index_at`.
 
 #[test]
-fn fila_2_index_at_con_256_entradas_y_16_filas() {
-    for n in ESCALAS {
+fn row_2_index_at_with_256_entries_and_16_rows() {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 16, 0);
-        let casos: [(i64, i64, Option<usize>, &str); 11] = [
+        let cases: [(i64, i64, Option<usize>, &str); 11] = [
             (0, 0, Some(0), "esquina de la muestra 0"),
             (
                 10 * k - 1,
@@ -229,30 +229,30 @@ fn fila_2_index_at_con_256_entradas_y_16_filas() {
             (224 * k, 0, None, "no hay columna 16"),
             (0, 224 * k, None, "no hay fila 16"),
         ];
-        for (x, y, esperado, que) in casos {
-            assert_eq!(grid.index_at(x, y), esperado, "n={n}, ({x}, {y}): {que}");
+        for (x, y, expected_2, that) in cases {
+            assert_eq!(grid.index_at(x, y), expected_2, "n={n}, ({x}, {y}): {that}");
         }
     }
 }
 
 #[test]
-fn fila_2_index_at_con_9_y_con_1_entradas() {
-    for n in ESCALAS {
+fn row_2_index_at_with_9_and_with_1_entries() {
+    for n in SCALES {
         let k = i64::from(n);
-        let nueve = Grid::new(n, 9, 16, 0);
-        assert_eq!(nueve.index_at(126 * k, 0), None, "n={n}: índice 9 >= 9");
-        assert_eq!(nueve.index_at(0, 14 * k), None, "n={n}: fila 1");
+        let nine = Grid::new(n, 9, 16, 0);
+        assert_eq!(nine.index_at(126 * k, 0), None, "n={n}: índice 9 >= 9");
+        assert_eq!(nine.index_at(0, 14 * k), None, "n={n}: fila 1");
         // La última existente sí.
-        assert_eq!(nueve.index_at(112 * k, 0), Some(8), "n={n}");
+        assert_eq!(nine.index_at(112 * k, 0), Some(8), "n={n}");
 
-        let una = Grid::new(n, 1, 16, 0);
-        assert_eq!(una.index_at(0, 0), Some(0), "n={n}");
-        assert_eq!(una.index_at(14 * k, 0), None, "n={n}");
+        let a = Grid::new(n, 1, 16, 0);
+        assert_eq!(a.index_at(0, 0), Some(0), "n={n}");
+        assert_eq!(a.index_at(14 * k, 0), None, "n={n}");
     }
 }
 
 #[test]
-fn fila_2_con_n_1_los_numeros_literales_de_la_spec() {
+fn row_2_with_n_1_the_literal_numbers_of_the_spec() {
     let grid = Grid::new(1, 256, 16, 0);
     assert_eq!(grid.index_at(0, 0), Some(0));
     assert_eq!(grid.index_at(9, 9), Some(0));
@@ -269,8 +269,8 @@ fn fila_2_con_n_1_los_numeros_literales_de_la_spec() {
 }
 
 #[test]
-fn index_at_y_cell_rect_respetan_las_filas_visibles() {
-    for n in ESCALAS {
+fn index_at_and_cell_rect_respect_the_visible_rows() {
+    for n in SCALES {
         let k = i64::from(n);
         // Con 3 filas visibles, la fila 5 no se ve (fila 7 de la spec, «la fila 5 con solo 3»).
         let grid = Grid::new(n, 256, 3, 0);
@@ -287,16 +287,16 @@ fn index_at_y_cell_rect_respetan_las_filas_visibles() {
             "n={n}: primera fila oculta"
         );
         // Sin filas visibles no hay muestras.
-        let nada = Grid::new(n, 256, 0, 0);
-        assert_eq!(nada.cell_rect(0), None, "n={n}");
-        assert_eq!(nada.index_at(0, 0), None, "n={n}");
+        let nothing = Grid::new(n, 256, 0, 0);
+        assert_eq!(nothing.cell_rect(0), None, "n={n}");
+        assert_eq!(nothing.index_at(0, 0), None, "n={n}");
     }
 }
 
 // Fila 3: filas visibles y totales.
 
 #[test]
-fn fila_3_visible_rows() {
+fn row_3_visible_rows() {
     let n1 = [
         (0, 0usize),
         (-5, 0),
@@ -307,36 +307,48 @@ fn fila_3_visible_rows() {
         (300, 15),
         (301, 16),
     ];
-    for (alto, esperado) in n1 {
-        assert_eq!(visible_rows(alto, 1), esperado, "n=1, alto {alto}");
+    for (height_2, expected_2) in n1 {
+        assert_eq!(
+            visible_rows(height_2, 1),
+            expected_2,
+            "n=1, alto {height_2}"
+        );
     }
-    for (alto, esperado) in [(181, 0usize), (182, 1)] {
-        assert_eq!(visible_rows(alto, 2), esperado, "n=2, alto {alto}");
+    for (height_2, expected_2) in [(181, 0usize), (182, 1)] {
+        assert_eq!(
+            visible_rows(height_2, 2),
+            expected_2,
+            "n=2, alto {height_2}"
+        );
     }
-    for (alto, esperado) in [(272, 0usize), (273, 1)] {
-        assert_eq!(visible_rows(alto, 3), esperado, "n=3, alto {alto}");
+    for (height_2, expected_2) in [(272, 0usize), (273, 1)] {
+        assert_eq!(
+            visible_rows(height_2, 3),
+            expected_2,
+            "n=3, alto {height_2}"
+        );
     }
 }
 
 #[test]
-fn fila_3_visible_rows_sale_de_las_constantes() {
-    for n in ESCALAS {
+fn row_3_visible_rows_comes_from_the_constants() {
+    for n in SCALES {
         let k = i64::from(n);
-        let origen = GRID_Y_U * k;
-        let paso = PITCH_U * k;
-        for filas in [0i64, 1, 2, 5, 16] {
-            let justo = origen + filas * paso;
-            assert_eq!(visible_rows(justo, n), filas as usize, "n={n}");
-            if filas > 0 {
-                assert_eq!(visible_rows(justo - 1, n), filas as usize - 1, "n={n}");
+        let source_2 = GRID_Y_U * k;
+        let step = PITCH_U * k;
+        for rows_2 in [0i64, 1, 2, 5, 16] {
+            let just = source_2 + rows_2 * step;
+            assert_eq!(visible_rows(just, n), rows_2 as usize, "n={n}");
+            if rows_2 > 0 {
+                assert_eq!(visible_rows(just - 1, n), rows_2 as usize - 1, "n={n}");
             }
         }
     }
 }
 
 #[test]
-fn fila_3_total_rows() {
-    for (count, esperado) in [
+fn row_3_total_rows() {
+    for (count, expected_2) in [
         (0usize, 0usize),
         (1, 1),
         (9, 1),
@@ -344,13 +356,13 @@ fn fila_3_total_rows() {
         (17, 2),
         (256, 16),
     ] {
-        assert_eq!(total_rows(count), esperado, "count {count}");
+        assert_eq!(total_rows(count), expected_2, "count {count}");
     }
 }
 
 #[test]
-fn fila_3_max_first_row() {
-    for ((total, visible), esperado) in [
+fn row_3_max_first_row() {
+    for ((total, visible), expected_2) in [
         ((16usize, 5usize), 11usize),
         ((16, 16), 0),
         ((16, 20), 0),
@@ -359,7 +371,7 @@ fn fila_3_max_first_row() {
     ] {
         assert_eq!(
             max_first_row(total, visible),
-            esperado,
+            expected_2,
             "total {total}, visibles {visible}"
         );
     }
@@ -373,7 +385,7 @@ fn by(scroll: &mut Scroll, delta: i64, n: u32, total: usize, visible: usize) -> 
 }
 
 #[test]
-fn fila_4_secuencia_de_desplazamientos_con_n_1() {
+fn row_4_sequence_of_scrolls_with_n_1() {
     let mut s = Scroll::default();
     assert_eq!((s.first_row, s.rest), (0, 0));
     assert_eq!(by(&mut s, 7, 1, 16, 5), (0, 7));
@@ -393,7 +405,7 @@ fn fila_4_secuencia_de_desplazamientos_con_n_1() {
 }
 
 #[test]
-fn fila_4_con_n_2_28_pixeles_son_una_fila() {
+fn row_4_with_n_2_28_pixels_are_one_row() {
     let mut s = Scroll::default();
     assert_eq!(by(&mut s, 28, 2, 16, 5), (1, 0));
     let mut s = Scroll::default();
@@ -401,7 +413,7 @@ fn fila_4_con_n_2_28_pixeles_son_una_fila() {
 }
 
 #[test]
-fn fila_4_clamp() {
+fn row_4_clamp() {
     let mut s = Scroll {
         first_row: 11,
         rest: 0,
@@ -425,7 +437,7 @@ fn fila_4_clamp() {
 }
 
 #[test]
-fn fila_4_thumb() {
+fn row_4_thumb() {
     assert_eq!(thumb(0, 5, 16, 1), Some((0, 21)));
     assert_eq!(thumb(11, 5, 16, 1), Some((48, 21)));
     assert_eq!(thumb(0, 5, 16, 2), Some((0, 43)));
@@ -440,101 +452,101 @@ fn fila_4_thumb() {
 
 // Fila 10: muestras y anillos.
 
-fn colores_del_damero() -> [Rgba; 4] {
+fn colors_of_the_checker() -> [Rgba; 4] {
     [CHECK_A, CHECK_B, CHECK_B, CHECK_A]
 }
 
 /// Los cuatro cuadrados del damero de una muestra, en orden de lectura (por filas), sin
 /// depender del orden de pintado que escoja la implementación.
-fn cuadrados_del_damero(partes: &[(ScreenRect, Rgba)], n: u32) -> Vec<(ScreenRect, Rgba)> {
+fn squares_of_the_checker(parts: &[(ScreenRect, Rgba)], n: u32) -> Vec<(ScreenRect, Rgba)> {
     let k = i64::from(n);
-    let mut cuadrados: Vec<(ScreenRect, Rgba)> = partes[..4].to_vec();
-    cuadrados.sort_by_key(|(r, _)| (r.y, r.x));
-    assert_eq!(cuadrados.len(), 4);
-    for (r, _) in &cuadrados {
+    let mut squares: Vec<(ScreenRect, Rgba)> = parts[..4].to_vec();
+    squares.sort_by_key(|(r, _)| (r.y, r.x));
+    assert_eq!(squares.len(), 4);
+    for (r, _) in &squares {
         assert_eq!((r.width, r.height), (5 * k, 5 * k), "n={n}");
     }
-    cuadrados
+    squares
 }
 
 #[test]
-fn fila_10_swatch_opaco_es_un_solo_rectangulo() {
-    for n in ESCALAS {
+fn row_10_opaque_swatch_is_a_single_rectangle() {
+    for n in SCALES {
         let k = i64::from(n);
-        let rojo = Rgba::opaque(0xff, 0, 0);
+        let red = Rgba::opaque(0xff, 0, 0);
         assert_eq!(
-            swatch_parts(n, rojo),
-            vec![(rect(0, 0, 10 * k, 10 * k), rojo)],
+            swatch_parts(n, red),
+            vec![(rect(0, 0, 10 * k, 10 * k), red)],
             "n={n}"
         );
     }
 }
 
 #[test]
-fn fila_10_swatch_transparente_son_cuatro_cuadrados_sin_color() {
-    for n in ESCALAS {
+fn row_10_transparent_swatch_is_four_squares_without_color() {
+    for n in SCALES {
         let k = i64::from(n);
-        let partes = swatch_parts(n, Rgba::TRANSPARENT);
-        assert_eq!(partes.len(), 4, "n={n}");
-        let cuadrados = cuadrados_del_damero(&partes, n);
-        let posiciones: Vec<(i64, i64)> = cuadrados.iter().map(|(r, _)| (r.x, r.y)).collect();
+        let parts = swatch_parts(n, Rgba::TRANSPARENT);
+        assert_eq!(parts.len(), 4, "n={n}");
+        let squares = squares_of_the_checker(&parts, n);
+        let positions: Vec<(i64, i64)> = squares.iter().map(|(r, _)| (r.x, r.y)).collect();
         assert_eq!(
-            posiciones,
+            positions,
             [(0, 0), (5 * k, 0), (0, 5 * k), (5 * k, 5 * k)],
             "n={n}"
         );
-        let colores: Vec<Rgba> = cuadrados.iter().map(|&(_, c)| c).collect();
-        assert_eq!(colores, colores_del_damero(), "n={n}");
+        let colors_2: Vec<Rgba> = squares.iter().map(|&(_, c)| c).collect();
+        assert_eq!(colors_2, colors_of_the_checker(), "n={n}");
         // El orden de las partes, tal como lo devuelve: A, B, B, A.
-        let en_orden: Vec<Rgba> = partes.iter().map(|&(_, c)| c).collect();
-        assert_eq!(en_orden, colores_del_damero(), "n={n}");
+        let in_order: Vec<Rgba> = parts.iter().map(|&(_, c)| c).collect();
+        assert_eq!(in_order, colors_of_the_checker(), "n={n}");
     }
 }
 
 #[test]
-fn fila_10_swatch_con_alfa_parcial_es_damero_y_encima_el_color() {
-    for n in ESCALAS {
+fn row_10_swatch_with_partial_alpha_is_checker_and_the_color_on_top() {
+    for n in SCALES {
         let k = i64::from(n);
         let base = swatch_parts(n, Rgba::TRANSPARENT);
-        for alfa in [1u8, 128, 254] {
-            let color = Rgba::new(0xff, 0, 0, alfa);
-            let partes = swatch_parts(n, color);
-            assert_eq!(partes.len(), 5, "n={n}, alfa {alfa}");
+        for alpha in [1u8, 128, 254] {
+            let color = Rgba::new(0xff, 0, 0, alpha);
+            let parts = swatch_parts(n, color);
+            assert_eq!(parts.len(), 5, "n={n}, alfa {alpha}");
             assert_eq!(
-                cuadrados_del_damero(&partes, n),
-                cuadrados_del_damero(&base, n),
-                "n={n}, alfa {alfa}: el mismo damero"
+                squares_of_the_checker(&parts, n),
+                squares_of_the_checker(&base, n),
+                "n={n}, alfa {alpha}: el mismo damero"
             );
             assert_eq!(
-                partes[4],
+                parts[4],
                 (rect(0, 0, 10 * k, 10 * k), color),
-                "n={n}, alfa {alfa}: el color con su alfa encima"
+                "n={n}, alfa {alpha}: el color con su alfa encima"
             );
         }
     }
 }
 
 #[test]
-fn fila_10_swatch_con_el_alfa_de_la_spec_en_hexadecimal() {
+fn row_10_swatch_with_the_alpha_of_the_spec_in_hexadecimal() {
     // `#ff000001`, `#ff000080` y `#ff0000fe`.
-    for (hex, alfa) in [("#ff000001", 1u8), ("#ff000080", 128), ("#ff0000fe", 254)] {
+    for (hex, alpha) in [("#ff000001", 1u8), ("#ff000080", 128), ("#ff0000fe", 254)] {
         let color: Rgba = hex.parse().unwrap();
-        assert_eq!(color.a, alfa);
-        let partes = swatch_parts(1, color);
-        assert_eq!(partes.len(), 5, "{hex}");
-        assert_eq!(partes[4], (rect(0, 0, 10, 10), color), "{hex}");
+        assert_eq!(color.a, alpha);
+        let parts = swatch_parts(1, color);
+        assert_eq!(parts.len(), 5, "{hex}");
+        assert_eq!(parts[4], (rect(0, 0, 10, 10), color), "{hex}");
     }
 }
 
 #[test]
-fn fila_10_la_entrada_transparente_guardada_opaca_se_pinta_como_transparente() {
-    let mut paleta =
+fn row_10_the_transparent_entry_saved_opaque_is_painted_as_transparent() {
+    let mut palette =
         Palette::from_colors([Rgba::opaque(0xff, 0, 0), Rgba::opaque(0, 0, 0xff)]).unwrap();
-    paleta.set_transparent_index(Some(0)).unwrap();
-    let image = Image::new_indexed(2, 2, paleta).unwrap();
+    palette.set_transparent_index(Some(0)).unwrap();
+    let image = Image::new_indexed(2, 2, palette).unwrap();
     let color = pixel_rgba(&image, Pixel::Indexed(0)).unwrap();
     assert_eq!(color.a, 0, "el color resuelto de la transparente");
-    for n in ESCALAS {
+    for n in SCALES {
         assert_eq!(
             swatch_parts(n, color),
             swatch_parts(n, Rgba::TRANSPARENT),
@@ -544,12 +556,12 @@ fn fila_10_la_entrada_transparente_guardada_opaca_se_pinta_como_transparente() {
 }
 
 #[test]
-fn fila_10_ring_rects() {
-    for n in ESCALAS {
+fn row_10_ring_rects() {
+    for n in SCALES {
         let k = i64::from(n);
-        let celda = rect(0, 0, 10 * k, 10 * k);
+        let cel = rect(0, 0, 10 * k, 10 * k);
         assert_eq!(
-            ring_rects(celda, 2 * k),
+            ring_rects(cel, 2 * k),
             [
                 rect(-2 * k, -2 * k, 14 * k, 2 * k),
                 rect(-2 * k, 10 * k, 14 * k, 2 * k),
@@ -559,7 +571,7 @@ fn fila_10_ring_rects() {
             "n={n}, grosor 2n"
         );
         assert_eq!(
-            ring_rects(celda, k),
+            ring_rects(cel, k),
             [
                 rect(-k, -k, 12 * k, k),
                 rect(-k, 10 * k, 12 * k, k),
@@ -572,11 +584,11 @@ fn fila_10_ring_rects() {
 }
 
 #[test]
-fn fila_10_ring_rects_acompana_a_la_celda_donde_este() {
+fn row_10_ring_rects_accompanies_the_cell_wherever_it_is() {
     // Relativo a la esquina de la celda, esté donde esté.
-    let celda = rect(28, 42, 10, 10);
+    let cel = rect(28, 42, 10, 10);
     assert_eq!(
-        ring_rects(celda, 2),
+        ring_rects(cel, 2),
         [
             rect(26, 40, 14, 2),
             rect(26, 52, 14, 2),
@@ -587,7 +599,7 @@ fn fila_10_ring_rects_acompana_a_la_celda_donde_este() {
 }
 
 #[test]
-fn fila_10_los_anillos_contrastan_al_menos_3_a_1_con_el_fondo_del_panel() {
+fn row_10_the_rings_contrast_at_least_3_to_1_with_the_panel_background() {
     assert!(
         contrast_ratio(theme::RING_ACTIVE, theme::SURFACE_1) >= 3.0,
         "RING_ACTIVE: {}",
@@ -603,25 +615,29 @@ fn fila_10_los_anillos_contrastan_al_menos_3_a_1_con_el_fondo_del_panel() {
 // Fila 11 (parte geométrica): paletas límite.
 
 #[test]
-fn fila_11_paleta_de_una_entrada() {
+fn row_11_palette_of_one_entry() {
     assert_eq!(total_rows(1), 1);
-    for n in ESCALAS {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 1, 1, 0);
         assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 10 * k, 10 * k)), "n={n}");
         assert_eq!(grid.cell_rect(1), None, "n={n}");
         // Una fila, sin pista (con cualquier número de filas visibles).
-        for visibles in [1usize, 2, 16] {
-            assert_eq!(thumb(0, visibles, 1, n), None, "n={n}, visibles {visibles}");
+        for visible_2 in [1usize, 2, 16] {
+            assert_eq!(
+                thumb(0, visible_2, 1, n),
+                None,
+                "n={n}, visibles {visible_2}"
+            );
         }
         assert_eq!(max_first_row(1, 1), 0);
     }
 }
 
 #[test]
-fn fila_11_paleta_de_256_entradas() {
+fn row_11_palette_of_256_entries() {
     assert_eq!(total_rows(256), 16);
-    for n in ESCALAS {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 16, 0);
         // La 255 está en la columna 15 y la fila 15.
@@ -639,10 +655,10 @@ fn fila_11_paleta_de_256_entradas() {
 }
 
 #[test]
-fn fila_11_las_nueve_ranuras_de_los_modos_sin_paleta() {
+fn row_11_the_nine_slots_of_the_modes_without_a_palette() {
     // RGBA, Gray y GrayAlpha: 9 muestras en una fila; las 9+ no existen.
     assert_eq!(total_rows(9), 1);
-    for n in ESCALAS {
+    for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 9, 16, 0);
         for i in 0..9usize {
@@ -664,61 +680,61 @@ fn fila_11_las_nueve_ranuras_de_los_modos_sin_paleta() {
 
 // Propiedad 1: geometría.
 
-fn coordenada(crudo: i64, k: i64, ancho: i64, delta: i64, de_borde: bool, n: i64) -> i64 {
-    if de_borde {
+fn coordinate(raw_2: i64, k: i64, width_2: i64, delta: i64, of_border: bool, n: i64) -> i64 {
+    if of_border {
         // Alrededor de los bordes de las muestras y de los huecos.
-        k * 14 * n + ancho * 10 * n + delta
+        k * 14 * n + width_2 * 10 * n + delta
     } else {
-        crudo
+        raw_2
     }
 }
 
 proptest! {
     #[test]
-    fn propiedad_1_index_at_y_cell_rect_son_inversas(
+    fn property_1_index_at_and_cell_rect_are_inverses(
         n in 1u32..=8,
         count in 0usize..=256,
-        visibles in 0usize..=20,
-        fila_cruda in any::<usize>(),
-        x_crudo in -30i64..2000,
-        y_crudo in -30i64..2000,
-        (kx, wx, dx, borde_x) in (-1i64..=17, 0i64..=1, -2i64..=1, any::<bool>()),
-        (ky, wy, dy, borde_y) in (-1i64..=17, 0i64..=1, -2i64..=1, any::<bool>()),
+        visible_2 in 0usize..=20,
+        row_raw in any::<usize>(),
+        x_raw in -30i64..2000,
+        y_raw in -30i64..2000,
+        (kx, wx, dx, border_x) in (-1i64..=17, 0i64..=1, -2i64..=1, any::<bool>()),
+        (ky, wy, dy, border_y) in (-1i64..=17, 0i64..=1, -2i64..=1, any::<bool>()),
     ) {
         let total = total_rows(count);
-        let first_row = fila_cruda % (max_first_row(total, visibles) + 1);
-        let grid = Grid::new(n, count, visibles, first_row);
+        let first_row = row_raw % (max_first_row(total, visible_2) + 1);
+        let grid = Grid::new(n, count, visible_2, first_row);
         let k = i64::from(n);
-        let x = coordenada(x_crudo, kx, wx, dx, borde_x, k);
-        let y = coordenada(y_crudo, ky, wy, dy, borde_y, k);
+        let x = coordinate(x_raw, kx, wx, dx, border_x, k);
+        let y = coordinate(y_raw, ky, wy, dy, border_y, k);
 
         // Qué muestras contienen el punto (según `cell_rect`).
-        let mut contienen = Vec::new();
+        let mut contain = Vec::new();
         for i in 0..count {
             if let Some(r) = grid.cell_rect(i) {
                 // Rectángulo de 10n x 10n dentro de las filas visibles.
                 prop_assert_eq!((r.width, r.height), (10 * k, 10 * k));
-                let fila = i / COLUMNS;
-                prop_assert!(fila >= first_row && fila < first_row + visibles);
-                if contiene(r, x, y) {
-                    contienen.push(i);
+                let row_2 = i / COLUMNS;
+                prop_assert!(row_2 >= first_row && row_2 < first_row + visible_2);
+                if contains(r, x, y) {
+                    contain.push(i);
                 }
             } else {
-                let fila = i / COLUMNS;
+                let row_2 = i / COLUMNS;
                 prop_assert!(
-                    fila < first_row || fila >= first_row + visibles,
+                    row_2 < first_row || row_2 >= first_row + visible_2,
                     "la muestra {} está en una fila visible y no tiene rectángulo", i
                 );
             }
         }
         // Ningún punto está en dos muestras.
-        prop_assert!(contienen.len() <= 1, "el punto ({}, {}) está en {:?}", x, y, contienen);
+        prop_assert!(contain.len() <= 1, "el punto ({}, {}) está en {:?}", x, y, contain);
         // `index_at` da `Some(i)` si y solo si el punto está en `cell_rect(i)`.
-        prop_assert_eq!(grid.index_at(x, y), contienen.first().copied());
+        prop_assert_eq!(grid.index_at(x, y), contain.first().copied());
 
         // Los huecos nunca dan muestra.
-        let hueco = x.rem_euclid(14 * k) >= 10 * k || y.rem_euclid(14 * k) >= 10 * k;
-        if hueco {
+        let gap = x.rem_euclid(14 * k) >= 10 * k || y.rem_euclid(14 * k) >= 10 * k;
+        if gap {
             prop_assert_eq!(grid.index_at(x, y), None);
         }
 
@@ -727,15 +743,15 @@ proptest! {
     }
 
     #[test]
-    fn propiedad_1_cada_muestra_visible_se_encuentra_por_sus_cuatro_esquinas(
+    fn property_1_each_visible_swatch_is_found_by_its_four_corners(
         n in 1u32..=8,
         count in 1usize..=256,
-        visibles in 1usize..=20,
-        fila_cruda in any::<usize>(),
+        visible_2 in 1usize..=20,
+        row_raw in any::<usize>(),
     ) {
         let total = total_rows(count);
-        let first_row = fila_cruda % (max_first_row(total, visibles) + 1);
-        let grid = Grid::new(n, count, visibles, first_row);
+        let first_row = row_raw % (max_first_row(total, visible_2) + 1);
+        let grid = Grid::new(n, count, visible_2, first_row);
         for i in 0..count {
             if let Some(r) = grid.cell_rect(i) {
                 for (x, y) in [
@@ -775,23 +791,23 @@ fn delta() -> impl Strategy<Value = i64> {
 
 proptest! {
     #[test]
-    fn propiedad_2_desplazamiento_sin_panico_y_dentro_de_los_limites(
+    fn property_2_scroll_without_panic_and_within_the_limits(
         n in 1u32..=8,
         total in 0usize..=300,
-        visibles in 0usize..=20,
+        visible_2 in 0usize..=20,
         deltas in vec(delta(), 0..30),
     ) {
-        let paso = 14 * i128::from(n);
-        let maximo = max_first_row(total, visibles);
+        let step = 14 * i128::from(n);
+        let maximum_2 = max_first_row(total, visible_2);
         let mut scroll = Scroll::default();
         for d in deltas {
             let antes = scroll;
-            scroll.by(d, n, total, visibles);
+            scroll.by(d, n, total, visible_2);
 
-            prop_assert!(scroll.first_row <= maximo, "{:?} con máximo {}", scroll, maximo);
+            prop_assert!(scroll.first_row <= maximum_2, "{:?} con máximo {}", scroll, maximum_2);
             prop_assert!(
-                scroll.rest >= 0 && i128::from(scroll.rest) < paso,
-                "rest {} fuera de 0..{}", scroll.rest, paso
+                scroll.rest >= 0 && i128::from(scroll.rest) < step,
+                "rest {} fuera de 0..{}", scroll.rest, step
             );
             if d >= 0 {
                 prop_assert!(scroll.first_row >= antes.first_row);
@@ -800,70 +816,70 @@ proptest! {
                 prop_assert!(scroll.first_row <= antes.first_row);
             }
             // Sin nada más que acumular en la última fila.
-            if scroll.first_row == maximo {
+            if scroll.first_row == maximum_2 {
                 prop_assert_eq!(scroll.rest, 0);
             }
 
             // Modelo con `i128`.
-            let suma = i128::from(antes.rest) + i128::from(d);
-            let filas = antes.first_row as i128 + suma.div_euclid(paso);
-            let (fila, resto) = if filas < 0 || filas > maximo as i128 {
-                (filas.clamp(0, maximo as i128), 0)
-            } else if filas == maximo as i128 {
-                (filas, 0)
+            let sum = i128::from(antes.rest) + i128::from(d);
+            let rows_2 = antes.first_row as i128 + sum.div_euclid(step);
+            let (row_2, rest_2) = if rows_2 < 0 || rows_2 > maximum_2 as i128 {
+                (rows_2.clamp(0, maximum_2 as i128), 0)
+            } else if rows_2 == maximum_2 as i128 {
+                (rows_2, 0)
             } else {
-                (filas, suma.rem_euclid(paso))
+                (rows_2, sum.rem_euclid(step))
             };
-            prop_assert_eq!(scroll.first_row as i128, fila);
-            prop_assert_eq!(i128::from(scroll.rest), resto);
+            prop_assert_eq!(scroll.first_row as i128, row_2);
+            prop_assert_eq!(i128::from(scroll.rest), rest_2);
 
             // El indicador queda dentro de la pista.
-            if let Some((y, alto)) = thumb(scroll.first_row, visibles, total, n) {
+            if let Some((y, height_2)) = thumb(scroll.first_row, visible_2, total, n) {
                 prop_assert!(y >= 0);
-                prop_assert!(alto >= 2 * i64::from(n));
+                prop_assert!(height_2 >= 2 * i64::from(n));
                 prop_assert!(
-                    i128::from(y) + i128::from(alto) <= visibles as i128 * paso,
-                    "y {} + alto {} sobrepasa la pista de {}", y, alto, visibles as i128 * paso
+                    i128::from(y) + i128::from(height_2) <= visible_2 as i128 * step,
+                    "y {} + alto {} sobrepasa la pista de {}", y, height_2, visible_2 as i128 * step
                 );
             } else {
-                prop_assert!(total <= visibles || visibles == 0);
+                prop_assert!(total <= visible_2 || visible_2 == 0);
             }
         }
     }
 
     #[test]
-    fn propiedad_2_clamp_deja_la_primera_fila_dentro_y_es_idempotente(
+    fn property_2_clamp_leaves_the_first_row_inside_and_is_idempotent(
         total in 0usize..=300,
-        visibles in 0usize..=20,
-        primera in 0usize..=400,
-        resto in 0i64..14,
+        visible_2 in 0usize..=20,
+        first in 0usize..=400,
+        rest_2 in 0i64..14,
     ) {
-        let mut scroll = Scroll { first_row: primera, rest: resto };
-        scroll.clamp(total, visibles);
-        prop_assert!(scroll.first_row <= max_first_row(total, visibles));
-        if primera <= max_first_row(total, visibles) {
-            prop_assert_eq!(scroll.first_row, primera);
+        let mut scroll = Scroll { first_row: first, rest: rest_2 };
+        scroll.clamp(total, visible_2);
+        prop_assert!(scroll.first_row <= max_first_row(total, visible_2));
+        if first <= max_first_row(total, visible_2) {
+            prop_assert_eq!(scroll.first_row, first);
         }
-        let una_vez = scroll;
-        scroll.clamp(total, visibles);
-        prop_assert_eq!(scroll, una_vez);
+        let a_time = scroll;
+        scroll.clamp(total, visible_2);
+        prop_assert_eq!(scroll, a_time);
     }
 
     #[test]
-    fn propiedad_2_thumb_dentro_de_la_pista_para_cualquier_fila_valida(
+    fn property_2_thumb_inside_the_track_for_any_valid_row(
         n in 1u32..=8,
         total in 0usize..=300,
-        visibles in 0usize..=20,
-        primera_cruda in any::<usize>(),
+        visible_2 in 0usize..=20,
+        first_raw in any::<usize>(),
     ) {
-        let primera = primera_cruda % (max_first_row(total, visibles) + 1);
-        let paso = 14 * i64::from(n);
-        match thumb(primera, visibles, total, n) {
-            None => prop_assert!(total <= visibles || visibles == 0),
-            Some((y, alto)) => {
-                prop_assert!(total > visibles && visibles > 0);
-                prop_assert!(y >= 0 && alto >= 2 * i64::from(n));
-                prop_assert!(y + alto <= visibles as i64 * paso);
+        let first = first_raw % (max_first_row(total, visible_2) + 1);
+        let step = 14 * i64::from(n);
+        match thumb(first, visible_2, total, n) {
+            None => prop_assert!(total <= visible_2 || visible_2 == 0),
+            Some((y, height_2)) => {
+                prop_assert!(total > visible_2 && visible_2 > 0);
+                prop_assert!(y >= 0 && height_2 >= 2 * i64::from(n));
+                prop_assert!(y + height_2 <= visible_2 as i64 * step);
             }
         }
     }

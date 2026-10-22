@@ -3,9 +3,9 @@
 //! pura; solo la comprobación de que ningún rótulo pierde un carácter con la fuente real usa un
 //! `egui::Context` (sin GPU).
 //!
-//! - Fila 1: los cinco menús (con `Imagen` de la unidad 20) con sus rótulos y acciones, el separador solo antes de `Salir`, los
+//! - Fila 1: los cinco menús (con `TestImage` de la unidad 20) con sus rótulos y acciones, el separador solo antes de `Salir`, los
 //!   atajos por `Platform::{Linux, Windows, Mac}` (`Salir` solo con `Ctrl+Q` en Linux; `Cmd` en
-//!   macOS y `Rehacer` = `Cmd+Mayús+Z`), los rótulos contra `INTERFACE_CHARSET`, ningún `?` por
+//!   macOS y `Redo` = `Cmd+Mayús+Z`), los rótulos contra `INTERFACE_CHARSET`, ningún `?` por
 //!   `replace_missing` y ninguna acción repetida.
 //! - Fila 2: `enabled` de las 11 acciones de la tabla con historia vacía, solo deshacer, solo
 //!   rehacer y zoom `None`, `Zoom::MIN`, ×5 y `Zoom::MAX`.
@@ -25,8 +25,8 @@ use px_ui::tool::Tool;
 use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::Zoom;
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
-const HERRAMIENTAS: [Tool; 5] = [
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const TEST_TOOLS: [Tool; 5] = [
     Tool::Pencil,
     Tool::Line,
     Tool::Fill,
@@ -35,7 +35,7 @@ const HERRAMIENTAS: [Tool; 5] = [
 ];
 
 /// Las 11 acciones de la tabla, en el orden del menú.
-const ACCIONES_DE_LA_TABLA: [AppAction; 11] = [
+const TABLE_ACTIONS: [AppAction; 11] = [
     AppAction::Open,
     AppAction::Save,
     AppAction::SaveAs,
@@ -50,15 +50,15 @@ const ACCIONES_DE_LA_TABLA: [AppAction; 11] = [
 ];
 
 /// Las entradas de todos los menús, aplanadas.
-fn entradas() -> Vec<MenuItem> {
+fn entries() -> Vec<MenuItem> {
     MENUS.iter().flat_map(|m| m.items.iter().copied()).collect()
 }
 
-fn titulo(menu: &Menu) -> &'static str {
+fn title(menu: &Menu) -> &'static str {
     menu.title
 }
 
-fn atajo(key: KeyId, command: bool, shift: bool) -> Option<Shortcut> {
+fn shortcut_2(key: KeyId, command: bool, shift: bool) -> Option<Shortcut> {
     Some(Shortcut {
         key,
         command,
@@ -71,17 +71,17 @@ fn atajo(key: KeyId, command: bool, shift: bool) -> Option<Shortcut> {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_cinco_menus_en_orden_con_sus_titulos() {
-    let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
+fn row_1_five_menus_in_order_with_their_titles() {
+    let titles: Vec<&str> = MENUS.iter().map(title).collect();
     assert_eq!(
-        titulos,
+        titles,
         ["Archivo", "Editar", "Imagen", "Capa", "Ver", "Ayuda"]
     );
 }
 
 #[test]
-fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
-    let esperado: [(&str, Vec<(&str, AppAction)>); 6] = [
+fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
+    let expected_2: [(&str, Vec<(&str, AppAction)>); 6] = [
         (
             "Archivo",
             vec![
@@ -139,16 +139,15 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
             ],
         ),
     ];
-    for (menu, (titulo, items)) in MENUS.iter().zip(esperado) {
-        assert_eq!(menu.title, titulo);
-        let reales: Vec<(&str, AppAction)> =
-            menu.items.iter().map(|i| (i.label, i.action)).collect();
-        assert_eq!(reales, items, "menú {titulo}");
+    for (menu, (title, items)) in MENUS.iter().zip(expected_2) {
+        assert_eq!(menu.title, title);
+        let real: Vec<(&str, AppAction)> = menu.items.iter().map(|i| (i.label, i.action)).collect();
+        assert_eq!(real, items, "menú {title}");
     }
 }
 
 #[test]
-fn fila_1_el_separador_va_solo_antes_de_salir() {
+fn row_1_the_separator_goes_only_before_quit() {
     for menu in MENUS.iter() {
         for item in menu.items {
             assert_eq!(
@@ -163,26 +162,26 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 }
 
 #[test]
-fn fila_1_hay_veintiocho_entradas_y_ninguna_accion_se_repite() {
-    let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 28);
-    for (i, a) in acciones.iter().enumerate() {
+fn row_1_there_are_twenty_eight_entries_and_no_action_repeats() {
+    let actions: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
+    assert_eq!(actions.len(), 28);
+    for (i, a) in actions.iter().enumerate() {
         assert!(
-            !acciones[i + 1..].contains(a),
+            !actions[i + 1..].contains(a),
             "la acción {a:?} aparece dos veces"
         );
     }
-    // `Nueva imagen…` (unidad 19) es la primera y `Convertir modo…` (unidad 20) va tras
-    // `Rehacer`; las otras 11 siguen siendo las de la 17.
-    let mut esperado = vec![AppAction::NewImage];
-    // `Exportar PNG aplanado…` (3.5) va tras `Guardar como…`, antes de `Salir`.
-    esperado.extend(&ACCIONES_DE_LA_TABLA[..3]);
-    esperado.push(AppAction::ExportFlat);
-    esperado.extend(&ACCIONES_DE_LA_TABLA[3..6]);
-    // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
-    esperado.push(AppAction::ClearPage);
-    esperado.push(AppAction::ConvertMode);
-    esperado.extend([
+    // `Nueva image_2…` (unidad 19) es la primera y `Convertir mode_2…` (unidad 20) va tras
+    // `Redo`; las otras 11 siguen siendo las de la 17.
+    let mut expected_2 = vec![AppAction::NewImage];
+    // `Exportar PNG aplanado…` (3.5) va tras `Guardar as_word…`, antes de `Salir`.
+    expected_2.extend(&TABLE_ACTIONS[..3]);
+    expected_2.push(AppAction::ExportFlat);
+    expected_2.extend(&TABLE_ACTIONS[3..6]);
+    // `Borrar página` (I.2a) cierra `Editar`, antes de `TestImage`.
+    expected_2.push(AppAction::ClearPage);
+    expected_2.push(AppAction::ConvertMode);
+    expected_2.extend([
         AppAction::NewLayer,
         AppAction::DuplicateLayer,
         AppAction::RemoveLayer,
@@ -195,21 +194,21 @@ fn fila_1_hay_veintiocho_entradas_y_ninguna_accion_se_repite() {
         AppAction::LayerProperties,
         AppAction::ToggleLayerPanel,
     ]);
-    esperado.extend(&ACCIONES_DE_LA_TABLA[6..10]);
+    expected_2.extend(&TABLE_ACTIONS[6..10]);
     // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
-    esperado.push(AppAction::ShowHelp(HelpTarget::Active));
-    esperado.push(AppAction::ShowShortcuts);
-    esperado.push(AppAction::ShowLicenses);
-    assert_eq!(acciones, esperado);
+    expected_2.push(AppAction::ShowHelp(HelpTarget::Active));
+    expected_2.push(AppAction::ShowShortcuts);
+    expected_2.push(AppAction::ShowLicenses);
+    assert_eq!(actions, expected_2);
 }
 
 #[test]
-fn fila_1_ninguna_entrada_ni_titulo_esta_vacio_ni_repetido() {
-    let mut rotulos: Vec<&str> = MENUS.iter().map(titulo).collect();
-    rotulos.extend(entradas().iter().map(|i| i.label));
-    for (i, r) in rotulos.iter().enumerate() {
+fn row_1_no_entry_or_title_is_empty_or_repeated() {
+    let mut labels: Vec<&str> = MENUS.iter().map(title).collect();
+    labels.extend(entries().iter().map(|i| i.label));
+    for (i, r) in labels.iter().enumerate() {
         assert!(!r.is_empty());
-        assert!(!rotulos[i + 1..].contains(r), "rótulo repetido: {r}");
+        assert!(!labels[i + 1..].contains(r), "rótulo repetido: {r}");
     }
 }
 
@@ -217,23 +216,23 @@ fn fila_1_ninguna_entrada_ni_titulo_esta_vacio_ni_repetido() {
 // Fila 1: atajos por plataforma
 // ---------------------------------------------------------------------------------------------
 
-/// Texto del atajo de cada entrada, en el orden de `ACCIONES_DE_LA_TABLA`.
-fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
-    entradas()
+/// Texto del atajo de cada entrada, en el orden de `TABLE_ACTIONS`.
+fn texts_of_shortcut(platform: Platform) -> Vec<Option<String>> {
+    entries()
         .iter()
         .map(|i| shortcut_for(i.action, platform).map(|s| shortcut_text(s, platform)))
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 28]) -> Vec<Option<String>> {
-    textos.iter().map(|t| t.map(str::to_string)).collect()
+fn some(texts: [Option<&str>; 28]) -> Vec<Option<String>> {
+    texts.iter().map(|t| t.map(str::to_string)).collect()
 }
 
 #[test]
-fn fila_1_atajos_en_linux() {
+fn row_1_shortcuts_on_linux() {
     assert_eq!(
-        textos_de_atajo(Platform::Linux),
-        algunos([
+        texts_of_shortcut(Platform::Linux),
+        some([
             Some("Ctrl+N"),
             Some("Ctrl+O"),
             Some("Ctrl+S"),
@@ -267,10 +266,10 @@ fn fila_1_atajos_en_linux() {
 }
 
 #[test]
-fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
+fn row_1_shortcuts_on_windows_are_those_of_linux_except_quit_which_has_none() {
     assert_eq!(
-        textos_de_atajo(Platform::Windows),
-        algunos([
+        texts_of_shortcut(Platform::Windows),
+        some([
             Some("Ctrl+N"),
             Some("Ctrl+O"),
             Some("Ctrl+S"),
@@ -305,10 +304,10 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
 }
 
 #[test]
-fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
+fn row_1_shortcuts_on_mac_use_cmd_redo_is_cmd_shift_z_and_quit_has_none() {
     assert_eq!(
-        textos_de_atajo(Platform::Mac),
-        algunos([
+        texts_of_shortcut(Platform::Mac),
+        some([
             Some("Cmd+N"),
             Some("Cmd+O"),
             Some("Cmd+S"),
@@ -343,37 +342,46 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
 }
 
 #[test]
-fn fila_1_licencias_no_tiene_atajo_en_ninguna_plataforma() {
-    for platform in PLATAFORMAS {
+fn row_1_licenses_has_no_shortcut_on_any_platform() {
+    for platform in PLATFORMS {
         assert_eq!(shortcut_for(AppAction::ShowLicenses, platform), None);
     }
 }
 
 #[test]
-fn fila_1_shortcut_for_da_la_tecla_y_los_modificadores_de_cada_entrada() {
-    for platform in PLATAFORMAS {
+fn row_1_shortcut_for_gives_the_key_and_the_modifiers_of_each_entry() {
+    for platform in PLATFORMS {
         let redo = if platform == Platform::Mac {
-            atajo(KeyId::Char('z'), true, true)
+            shortcut_2(KeyId::Char('z'), true, true)
         } else {
-            atajo(KeyId::Char('y'), true, false)
+            shortcut_2(KeyId::Char('y'), true, false)
         };
         let quit = (platform == Platform::Linux)
-            .then(|| atajo(KeyId::Char('q'), true, false))
+            .then(|| shortcut_2(KeyId::Char('q'), true, false))
             .flatten();
-        let esperado = [
-            (AppAction::Open, atajo(KeyId::Char('o'), true, false)),
-            (AppAction::Save, atajo(KeyId::Char('s'), true, false)),
-            (AppAction::SaveAs, atajo(KeyId::Char('s'), true, true)),
+        let expected_2 = [
+            (AppAction::Open, shortcut_2(KeyId::Char('o'), true, false)),
+            (AppAction::Save, shortcut_2(KeyId::Char('s'), true, false)),
+            (AppAction::SaveAs, shortcut_2(KeyId::Char('s'), true, true)),
             (AppAction::Quit, quit),
-            (AppAction::Undo, atajo(KeyId::Char('z'), true, false)),
+            (AppAction::Undo, shortcut_2(KeyId::Char('z'), true, false)),
             (AppAction::Redo, redo),
-            (AppAction::ZoomIn, atajo(KeyId::Char('>'), false, false)),
-            (AppAction::ZoomOut, atajo(KeyId::Char('<'), false, false)),
-            (AppAction::ZoomFit, atajo(KeyId::Home, false, false)),
-            (AppAction::ZoomActual, atajo(KeyId::Char('1'), true, false)),
+            (
+                AppAction::ZoomIn,
+                shortcut_2(KeyId::Char('>'), false, false),
+            ),
+            (
+                AppAction::ZoomOut,
+                shortcut_2(KeyId::Char('<'), false, false),
+            ),
+            (AppAction::ZoomFit, shortcut_2(KeyId::Home, false, false)),
+            (
+                AppAction::ZoomActual,
+                shortcut_2(KeyId::Char('1'), true, false),
+            ),
             (AppAction::ShowLicenses, None),
         ];
-        for (action, shortcut) in esperado {
+        for (action, shortcut) in expected_2 {
             assert_eq!(
                 shortcut_for(action, platform),
                 shortcut,
@@ -384,7 +392,7 @@ fn fila_1_shortcut_for_da_la_tecla_y_los_modificadores_de_cada_entrada() {
 }
 
 #[test]
-fn fila_1_shortcut_text_de_cada_forma() {
+fn row_1_shortcut_text_of_each_form() {
     // Con `command`: `Ctrl+` en Linux y Windows, `Cmd+` en macOS; con `shift`, `Mayús+`.
     for (platform, command) in [
         (Platform::Linux, "Ctrl"),
@@ -392,32 +400,38 @@ fn fila_1_shortcut_text_de_cada_forma() {
         (Platform::Mac, "Cmd"),
     ] {
         assert_eq!(
-            shortcut_text(atajo(KeyId::Char('o'), true, false).unwrap(), platform),
+            shortcut_text(shortcut_2(KeyId::Char('o'), true, false).unwrap(), platform),
             format!("{command}+O")
         );
         assert_eq!(
-            shortcut_text(atajo(KeyId::Char('s'), true, true).unwrap(), platform),
+            shortcut_text(shortcut_2(KeyId::Char('s'), true, true).unwrap(), platform),
             format!("{command}+Mayús+S")
         );
         assert_eq!(
-            shortcut_text(atajo(KeyId::Char('1'), true, false).unwrap(), platform),
+            shortcut_text(shortcut_2(KeyId::Char('1'), true, false).unwrap(), platform),
             format!("{command}+1")
         );
         assert_eq!(
-            shortcut_text(atajo(KeyId::Char('z'), true, true).unwrap(), platform),
+            shortcut_text(shortcut_2(KeyId::Char('z'), true, true).unwrap(), platform),
             format!("{command}+Mayús+Z")
         );
         // Sin `command` la tecla va sola, con su nombre en español o su signo.
         assert_eq!(
-            shortcut_text(atajo(KeyId::Home, false, false).unwrap(), platform),
+            shortcut_text(shortcut_2(KeyId::Home, false, false).unwrap(), platform),
             "Inicio"
         );
         assert_eq!(
-            shortcut_text(atajo(KeyId::Char('+'), false, false).unwrap(), platform),
+            shortcut_text(
+                shortcut_2(KeyId::Char('+'), false, false).unwrap(),
+                platform
+            ),
             "+"
         );
         assert_eq!(
-            shortcut_text(atajo(KeyId::Char('-'), false, false).unwrap(), platform),
+            shortcut_text(
+                shortcut_2(KeyId::Char('-'), false, false).unwrap(),
+                platform
+            ),
             "-"
         );
     }
@@ -428,11 +442,11 @@ fn fila_1_shortcut_text_de_cada_forma() {
 // ---------------------------------------------------------------------------------------------
 
 /// Todo el texto fijo del menú: títulos, rótulos y los atajos de cada plataforma.
-fn textos_fijos() -> Vec<String> {
+fn texts_fixed() -> Vec<String> {
     let mut v: Vec<String> = MENUS.iter().map(|m| m.title.to_string()).collect();
-    for item in entradas() {
+    for item in entries() {
         v.push(item.label.to_string());
-        for platform in PLATAFORMAS {
+        for platform in PLATFORMS {
             if let Some(s) = shortcut_for(item.action, platform) {
                 v.push(shortcut_text(s, platform));
             }
@@ -442,28 +456,28 @@ fn textos_fijos() -> Vec<String> {
 }
 
 #[test]
-fn fila_1_todo_el_texto_del_menu_esta_dentro_de_interface_charset() {
-    for texto in textos_fijos() {
-        for c in texto.chars() {
+fn row_1_all_the_menu_text_is_inside_interface_charset() {
+    for text_2 in texts_fixed() {
+        for c in text_2.chars() {
             assert!(
                 INTERFACE_CHARSET.contains(c),
-                "{c:?} de {texto:?} no está en INTERFACE_CHARSET"
+                "{c:?} de {text_2:?} no está en INTERFACE_CHARSET"
             );
         }
     }
 }
 
 #[test]
-fn fila_1_ningun_rotulo_pierde_un_caracter_por_replace_missing() {
-    let tiene = |c: char| INTERFACE_CHARSET.contains(c);
-    for texto in textos_fijos() {
-        assert_eq!(replace_missing(&texto, tiene), texto);
-        assert!(!texto.contains('?'), "{texto:?} lleva un `?`");
+fn row_1_no_label_loses_a_character_through_replace_missing() {
+    let has = |c: char| INTERFACE_CHARSET.contains(c);
+    for text_2 in texts_fixed() {
+        assert_eq!(replace_missing(&text_2, has), text_2);
+        assert!(!text_2.contains('?'), "{text_2:?} lleva un `?`");
     }
 }
 
 #[test]
-fn fila_1_con_la_fuente_real_printable_no_cambia_ningun_rotulo() {
+fn row_1_with_the_real_font_printable_changes_no_label() {
     let ctx = Context::default();
     install_fonts(&ctx);
     // Los cambios de fuente se aplican al empezar el pase siguiente.
@@ -471,8 +485,8 @@ fn fila_1_con_la_fuente_real_printable_no_cambia_ningun_rotulo() {
         ctx.run_ui(egui::RawInput::default(), |_| {})
             .drop_without_applying_deltas();
     }
-    for texto in textos_fijos() {
-        assert_eq!(printable(&ctx, &texto), texto);
+    for text_2 in texts_fixed() {
+        assert_eq!(printable(&ctx, &text_2), text_2);
     }
 }
 
@@ -480,7 +494,7 @@ fn fila_1_con_la_fuente_real_printable_no_cambia_ningun_rotulo() {
 // Fila 2: habilitación
 // ---------------------------------------------------------------------------------------------
 
-fn estado(can_undo: bool, can_redo: bool, zoom: Option<Zoom>) -> UiState {
+fn state_2(can_undo: bool, can_redo: bool, zoom: Option<Zoom>) -> UiState {
     UiState {
         can_undo,
         can_redo,
@@ -494,19 +508,16 @@ fn x5() -> Option<Zoom> {
     Zoom::from_int(5)
 }
 
-/// `enabled` de las 11 acciones de la tabla, en el orden de `ACCIONES_DE_LA_TABLA`.
-fn habilitadas(state: &UiState) -> Vec<bool> {
-    ACCIONES_DE_LA_TABLA
-        .iter()
-        .map(|a| enabled(*a, state))
-        .collect()
+/// `enabled` de las 11 acciones de la tabla, en el orden de `TABLE_ACTIONS`.
+fn enabled_2(state: &UiState) -> Vec<bool> {
+    TABLE_ACTIONS.iter().map(|a| enabled(*a, state)).collect()
 }
 
 #[test]
-fn fila_2_con_la_historia_vacia_deshacer_y_rehacer_estan_deshabilitados() {
+fn row_2_with_the_history_empty_undo_and_redo_are_disabled() {
     // Orden: Open, Save, SaveAs, Quit, Undo, Redo, ZoomIn, ZoomOut, ZoomFit, ZoomActual, Licencias.
     assert_eq!(
-        habilitadas(&estado(false, false, x5())),
+        enabled_2(&state_2(false, false, x5())),
         [
             true, true, true, true, false, false, true, true, true, true, true
         ]
@@ -514,9 +525,9 @@ fn fila_2_con_la_historia_vacia_deshacer_y_rehacer_estan_deshabilitados() {
 }
 
 #[test]
-fn fila_2_solo_can_undo_habilita_deshacer() {
+fn row_2_only_can_undo_enables_undo() {
     assert_eq!(
-        habilitadas(&estado(true, false, x5())),
+        enabled_2(&state_2(true, false, x5())),
         [
             true, true, true, true, true, false, true, true, true, true, true
         ]
@@ -524,9 +535,9 @@ fn fila_2_solo_can_undo_habilita_deshacer() {
 }
 
 #[test]
-fn fila_2_solo_can_redo_habilita_rehacer() {
+fn row_2_only_can_redo_enables_redo() {
     assert_eq!(
-        habilitadas(&estado(false, true, x5())),
+        enabled_2(&state_2(false, true, x5())),
         [
             true, true, true, true, false, true, true, true, true, true, true
         ]
@@ -534,9 +545,9 @@ fn fila_2_solo_can_redo_habilita_rehacer() {
 }
 
 #[test]
-fn fila_2_sin_imagen_mostrable_los_tres_de_zoom_y_1_a_1_estan_deshabilitados() {
+fn row_2_without_a_displayable_image_the_three_zoom_ones_and_1_to_1_are_disabled() {
     assert_eq!(
-        habilitadas(&estado(true, true, None)),
+        enabled_2(&state_2(true, true, None)),
         [
             true, true, true, true, true, true, false, false, false, false, true
         ]
@@ -544,11 +555,11 @@ fn fila_2_sin_imagen_mostrable_los_tres_de_zoom_y_1_a_1_estan_deshabilitados() {
 }
 
 #[test]
-fn fila_2_en_zoom_min_solo_alejar_esta_deshabilitado() {
+fn row_2_at_zoom_min_only_zoom_out_is_disabled() {
     // `Zoom::MIN` es 1/64 (antes ×1): ahí `Alejar` sigue deshabilitado, pero `1:1` ya vale
     // (el zoom no es ×1). La comparación usa la constante, no el número.
     assert_eq!(
-        habilitadas(&estado(true, true, Some(Zoom::MIN))),
+        enabled_2(&state_2(true, true, Some(Zoom::MIN))),
         [
             true, true, true, true, true, true, true, false, true, true, true
         ]
@@ -556,10 +567,10 @@ fn fila_2_en_zoom_min_solo_alejar_esta_deshabilitado() {
 }
 
 #[test]
-fn fila_2_en_x1_alejar_esta_habilitado_y_1_a_1_no() {
+fn row_2_at_x1_zoom_out_is_enabled_and_1_to_1_is_not() {
     // El estado que antes era el mínimo: ahora hay un nivel por debajo (1/2).
     assert_eq!(
-        habilitadas(&estado(true, true, Zoom::from_int(1))),
+        enabled_2(&state_2(true, true, Zoom::from_int(1))),
         [
             true, true, true, true, true, true, true, true, true, false, true
         ]
@@ -567,14 +578,14 @@ fn fila_2_en_x1_alejar_esta_habilitado_y_1_a_1_no() {
 }
 
 #[test]
-fn fila_2_en_x5_todo_el_zoom_esta_habilitado() {
-    assert_eq!(habilitadas(&estado(true, true, x5())), [true; 11]);
+fn row_2_at_x5_all_the_zoom_is_enabled() {
+    assert_eq!(enabled_2(&state_2(true, true, x5())), [true; 11]);
 }
 
 #[test]
-fn fila_2_en_zoom_max_solo_acercar_esta_deshabilitado() {
+fn row_2_at_zoom_max_only_zoom_in_is_disabled() {
     assert_eq!(
-        habilitadas(&estado(true, true, Some(Zoom::MAX))),
+        enabled_2(&state_2(true, true, Some(Zoom::MAX))),
         [
             true, true, true, true, true, true, false, true, true, true, true
         ]
@@ -583,11 +594,11 @@ fn fila_2_en_zoom_max_solo_acercar_esta_deshabilitado() {
 }
 
 #[test]
-fn fila_2_guardar_esta_habilitado_siempre_tambien_sin_cambios_ni_historia() {
+fn row_2_save_is_always_enabled_also_without_changes_or_history() {
     for can_undo in [false, true] {
         for can_redo in [false, true] {
             for zoom in [None, Some(Zoom::MIN), x5(), Some(Zoom::MAX)] {
-                let state = estado(can_undo, can_redo, zoom);
+                let state = state_2(can_undo, can_redo, zoom);
                 assert!(enabled(AppAction::Save, &state), "{zoom:?}");
                 for action in [
                     AppAction::Open,
@@ -603,23 +614,23 @@ fn fila_2_guardar_esta_habilitado_siempre_tambien_sin_cambios_ni_historia() {
 }
 
 #[test]
-fn fila_2_select_tool_solo_depende_del_bloqueo_tambien_la_herramienta_activa() {
-    for activa in HERRAMIENTAS {
+fn row_2_select_tool_depends_only_on_the_lock_also_the_active_tool() {
+    for active_2 in TEST_TOOLS {
         let state = UiState {
-            tool: activa,
-            ..estado(false, false, None)
+            tool: active_2,
+            ..state_2(false, false, None)
         };
-        for tool in HERRAMIENTAS {
+        for tool in TEST_TOOLS {
             assert!(enabled(AppAction::SelectTool(tool), &state));
         }
     }
 }
 
 #[test]
-fn fila_2_zoom_in_es_falso_solo_en_x64_en_todos_los_niveles_enteros() {
+fn row_2_zoom_in_is_false_only_at_x64_at_all_the_integer_levels() {
     for n in 1..=64u32 {
         let zoom = Zoom::from_int(n).expect("nivel válido");
-        let state = estado(true, true, Some(zoom));
+        let state = state_2(true, true, Some(zoom));
         assert_eq!(enabled(AppAction::ZoomIn, &state), n != 64, "×{n}");
         assert_eq!(
             enabled(AppAction::ZoomOut, &state),
@@ -636,7 +647,7 @@ fn fila_2_zoom_in_es_falso_solo_en_x64_en_todos_los_niveles_enteros() {
 // ---------------------------------------------------------------------------------------------
 
 /// La pulsación que hace un `Shortcut` (la tecla que muestra, con `command` y `Mayús` si los lleva).
-fn pulsado(shortcut: Shortcut) -> Press {
+fn pressed_2(shortcut: Shortcut) -> Press {
     Press {
         key: Some(shortcut.key),
         command: shortcut.command,
@@ -648,18 +659,18 @@ fn pulsado(shortcut: Shortcut) -> Press {
 }
 
 /// Las acciones de cada entrada de menú y de las dos tablas de la columna.
-fn acciones_de_menu_y_columna() -> Vec<AppAction> {
-    let mut v: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
+fn menu_and_column_actions() -> Vec<AppAction> {
+    let mut v: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
     v.extend(TOOL_BUTTONS.iter().map(|b| b.action));
     v.extend(ZOOM_BUTTONS.iter().map(|b| b.action));
     v
 }
 
-fn plataforma(i: u8) -> Platform {
-    PLATAFORMAS[usize::from(i) % 3]
+fn platform_2(i: u8) -> Platform {
+    PLATFORMS[usize::from(i) % 3]
 }
 
-fn estado_de(
+fn state_of(
     can_undo: bool,
     can_redo: bool,
     zoom: Option<u32>,
@@ -670,7 +681,7 @@ fn estado_de(
         can_undo,
         can_redo,
         zoom: zoom.and_then(Zoom::from_int),
-        tool: HERRAMIENTAS[usize::from(tool) % 5],
+        tool: TEST_TOOLS[usize::from(tool) % 5],
         locks: Locks {
             gesture: locks[0],
             stroke: false,
@@ -686,15 +697,15 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(512))]
 
     #[test]
-    fn propiedad_1_enabled_implica_no_bloqueada_y_los_bloqueos_apagan_lo_que_toca(
+    fn property_1_enabled_implies_not_blocked_and_the_locks_turn_off_what_they_should(
         can_undo: bool,
         can_redo: bool,
         zoom in prop::option::of(1u32..=64),
         tool in 0u8..5,
         locks in prop::array::uniform5(any::<bool>()),
     ) {
-        let state = estado_de(can_undo, can_redo, zoom, tool, locks);
-        for action in acciones_de_menu_y_columna() {
+        let state = state_of(can_undo, can_redo, zoom, tool, locks);
+        for action in menu_and_column_actions() {
             let on = enabled(action, &state);
             // `enabled` implica `!is_blocked(.., Origin::Menu)`.
             if on {
@@ -714,15 +725,15 @@ proptest! {
             }
             // Las acciones de zoom no se apagan por gesto, quita ni campo de texto (con el menú).
             if action.is_zoom() {
-                let sin_nada_mas = !state.locks.dialog && !state.locks.modal;
-                if sin_nada_mas && state.zoom.is_some() {
-                    let por_nivel = match action {
+                let without_nothing_more = !state.locks.dialog && !state.locks.modal;
+                if without_nothing_more && state.zoom.is_some() {
+                    let per_level = match action {
                         AppAction::ZoomIn => state.zoom < Some(Zoom::MAX),
                         AppAction::ZoomOut => state.zoom > Some(Zoom::MIN),
                         AppAction::ZoomActual => state.zoom != Zoom::from_int(1),
                         _ => true,
                     };
-                    prop_assert_eq!(on, por_nivel, "{:?}", action);
+                    prop_assert_eq!(on, per_level, "{:?}", action);
                 }
             }
             // Ninguna entrada depende del origen: menú y botón bloquean igual.
@@ -745,12 +756,12 @@ proptest! {
     }
 
     #[test]
-    fn propiedad_1_el_atajo_de_cada_entrada_traducido_da_su_accion(platform_i in 0u8..3) {
-        let platform = plataforma(platform_i);
-        for item in entradas() {
+    fn property_1_the_shortcut_of_each_entry_translated_gives_its_action(platform_i in 0u8..3) {
+        let platform = platform_2(platform_i);
+        for item in entries() {
             if let Some(shortcut) = shortcut_for(item.action, platform) {
                 prop_assert_eq!(
-                    Keymap::default_scheme().action_for(&pulsado(shortcut), platform),
+                    Keymap::default_scheme().action_for(&pressed_2(shortcut), platform),
                     Some(item.action),
                     "{}", item.label
                 );
@@ -758,10 +769,10 @@ proptest! {
         }
         // La letra de la columna sale de la tabla y es la tecla de herramienta (el Borrador, `k`).
         for button in TOOL_BUTTONS.iter() {
-            let letra = Keymap::default_scheme().shown(button.action, platform);
-            let letra = letra.expect("los botones de herramienta la muestran");
+            let letter = Keymap::default_scheme().shown(button.action, platform);
+            let letter = letter.expect("los botones de herramienta la muestran");
             prop_assert_eq!(
-                Keymap::default_scheme().action_for(&pulsado(letra), platform),
+                Keymap::default_scheme().action_for(&pressed_2(letter), platform),
                 Some(button.action),
                 "{}", button.label
             );
@@ -777,8 +788,8 @@ proptest! {
 // solo `shortcut_for` y `shortcut_text` de la acción nueva por plataforma y su `enabled`.
 
 #[test]
-fn fila_9_shortcut_for_nueva_imagen_es_command_n_en_las_tres_plataformas() {
-    for (platform, texto) in [
+fn row_9_shortcut_for_new_image_is_command_n_on_the_three_platforms() {
+    for (platform, text_2) in [
         (Platform::Linux, "Ctrl+N"),
         (Platform::Windows, "Ctrl+N"),
         (Platform::Mac, "Cmd+N"),
@@ -787,34 +798,34 @@ fn fila_9_shortcut_for_nueva_imagen_es_command_n_en_las_tres_plataformas() {
             .unwrap_or_else(|| panic!("{platform:?}: Nueva imagen… tiene atajo"));
         assert_eq!(
             shortcut,
-            atajo(KeyId::Char('n'), true, false).unwrap(),
+            shortcut_2(KeyId::Char('n'), true, false).unwrap(),
             "{platform:?}"
         );
-        assert_eq!(shortcut_text(shortcut, platform), texto, "{platform:?}");
+        assert_eq!(shortcut_text(shortcut, platform), text_2, "{platform:?}");
     }
 }
 
 #[test]
-fn fila_9_nueva_imagen_esta_en_archivo_la_primera_con_su_accion() {
-    let archivo = MENUS
+fn row_9_new_image_is_in_file_the_first_one_with_its_action() {
+    let file = MENUS
         .iter()
         .find(|m| m.title == "Archivo")
         .expect("Archivo");
-    let primera = archivo.items.first().expect("Archivo tiene entradas");
-    assert_eq!(primera.label, "Nueva imagen…");
-    assert_eq!(primera.action, AppAction::NewImage);
-    assert!(!primera.separator_before);
+    let first = file.items.first().expect("Archivo tiene entradas");
+    assert_eq!(first.label, "Nueva imagen…");
+    assert_eq!(first.action, AppAction::NewImage);
+    assert!(!first.separator_before);
     // En ningún otro menú.
-    let veces = MENUS
+    let times = MENUS
         .iter()
         .flat_map(|m| m.items.iter())
         .filter(|item| item.action == AppAction::NewImage)
         .count();
-    assert_eq!(veces, 1);
+    assert_eq!(times, 1);
 }
 
 #[test]
-fn fila_9_enabled_de_nueva_imagen_no_depende_de_la_historia_ni_del_zoom() {
+fn row_9_enabled_of_new_image_does_not_depend_on_the_history_or_the_zoom() {
     for can_undo in [false, true] {
         for can_redo in [false, true] {
             for zoom in [
@@ -824,7 +835,7 @@ fn fila_9_enabled_de_nueva_imagen_no_depende_de_la_historia_ni_del_zoom() {
                 Some(Zoom::MIN),
                 Some(Zoom::MAX),
             ] {
-                let state = estado(can_undo, can_redo, zoom);
+                let state = state_2(can_undo, can_redo, zoom);
                 assert!(
                     enabled(AppAction::NewImage, &state),
                     "undo {can_undo}, redo {can_redo}, zoom {zoom:?}"
@@ -835,8 +846,8 @@ fn fila_9_enabled_de_nueva_imagen_no_depende_de_la_historia_ni_del_zoom() {
 }
 
 #[test]
-fn fila_9_enabled_de_nueva_imagen_esta_deshabilitado_con_cada_bloqueo() {
-    for (nombre, locks) in [
+fn row_9_enabled_of_new_image_is_disabled_with_each_lock() {
+    for (name_2, locks) in [
         (
             "gesture",
             Locks {
@@ -875,12 +886,12 @@ fn fila_9_enabled_de_nueva_imagen_esta_deshabilitado_con_cada_bloqueo() {
     ] {
         let state = UiState {
             locks,
-            ..estado(true, true, x5())
+            ..state_2(true, true, x5())
         };
-        assert!(!enabled(AppAction::NewImage, &state), "{nombre}");
+        assert!(!enabled(AppAction::NewImage, &state), "{name_2}");
         assert!(
             is_blocked(AppAction::NewImage, locks, Origin::Menu),
-            "{nombre}"
+            "{name_2}"
         );
     }
 }
@@ -890,13 +901,13 @@ fn fila_9_enabled_de_nueva_imagen_esta_deshabilitado_con_cada_bloqueo() {
 // ---------------------------------------------------------------------------------------------
 //
 // La tabla ya está adaptada en las pruebas de la fila 1 (cinco menús, rótulos, orden y texto de los
-// atajos): aquí el menú `Imagen` por sí solo, la falta de atajo de `ConvertMode`, su `enabled` con
-// los cinco bloqueos y el ancho de los desplegables (`Imagen` mide 131 u; `Ver`, 208, sigue siendo
+// atajos): aquí el menú `TestImage` por sí solo, la falta de atajo de `ConvertMode`, su `enabled` con
+// los cinco bloqueos y el ancho de los desplegables (`TestImage` mide 131 u; `Ver`, 208, sigue siendo
 // el más ancho).
 
 use px_ui::menu::popup_width_u;
 
-fn menu_imagen() -> Menu {
+fn menu_image() -> Menu {
     *MENUS
         .iter()
         .find(|m| m.title == "Imagen")
@@ -904,31 +915,31 @@ fn menu_imagen() -> Menu {
 }
 
 #[test]
-fn fila_10_imagen_es_el_tercer_menu_entre_editar_y_ver_con_una_sola_entrada() {
-    let titulos: Vec<&str> = MENUS.iter().map(titulo).collect();
-    assert_eq!(titulos.iter().position(|t| *t == "Imagen"), Some(2));
-    assert_eq!(titulos[1], "Editar");
-    assert_eq!(titulos[3], "Capa");
-    assert_eq!(titulos[4], "Ver");
+fn row_10_image_is_the_third_menu_between_edit_and_view_with_a_single_entry() {
+    let titles: Vec<&str> = MENUS.iter().map(title).collect();
+    assert_eq!(titles.iter().position(|t| *t == "Imagen"), Some(2));
+    assert_eq!(titles[1], "Editar");
+    assert_eq!(titles[3], "Capa");
+    assert_eq!(titles[4], "Ver");
 
-    let imagen = menu_imagen();
-    assert_eq!(imagen.items.len(), 1, "una sola entrada");
-    let entrada = imagen.items[0];
-    assert_eq!(entrada.label, "Convertir modo…");
-    assert_eq!(entrada.action, AppAction::ConvertMode);
-    assert!(!entrada.separator_before, "sin separador");
-    assert!(imagen.submenus.is_empty(), "sin submenús");
+    let image_2 = menu_image();
+    assert_eq!(image_2.items.len(), 1, "una sola entrada");
+    let input_2 = image_2.items[0];
+    assert_eq!(input_2.label, "Convertir modo…");
+    assert_eq!(input_2.action, AppAction::ConvertMode);
+    assert!(!input_2.separator_before, "sin separador");
+    assert!(image_2.submenus.is_empty(), "sin submenús");
 }
 
 #[test]
-fn fila_10_convertir_modo_esta_una_sola_vez_en_la_barra_y_solo_en_imagen() {
-    let veces: Vec<&str> = MENUS
+fn row_10_convert_mode_is_in_the_bar_only_once_and_only_in_image() {
+    let times: Vec<&str> = MENUS
         .iter()
         .filter(|m| m.items.iter().any(|i| i.action == AppAction::ConvertMode))
-        .map(titulo)
+        .map(title)
         .collect();
-    assert_eq!(veces, ["Imagen"]);
-    let total = entradas()
+    assert_eq!(times, ["Imagen"]);
+    let total = entries()
         .iter()
         .filter(|i| i.action == AppAction::ConvertMode)
         .count();
@@ -946,8 +957,8 @@ fn fila_10_convertir_modo_esta_una_sola_vez_en_la_barra_y_solo_en_imagen() {
 }
 
 #[test]
-fn fila_10_convertir_modo_no_tiene_atajo_ni_texto_de_atajo_en_las_tres_plataformas() {
-    for platform in PLATAFORMAS {
+fn row_10_convert_mode_has_neither_shortcut_nor_shortcut_text_on_the_three_platforms() {
+    for platform in PLATFORMS {
         assert_eq!(
             shortcut_for(AppAction::ConvertMode, platform),
             None,
@@ -955,17 +966,17 @@ fn fila_10_convertir_modo_no_tiene_atajo_ni_texto_de_atajo_en_las_tres_plataform
         );
     }
     // Y en la tabla del menú, la posición de la entrada nueva no lleva texto de atajo.
-    for platform in PLATAFORMAS {
-        let posicion = entradas()
+    for platform in PLATFORMS {
+        let position = entries()
             .iter()
             .position(|i| i.action == AppAction::ConvertMode)
             .expect("la entrada existe");
-        assert_eq!(textos_de_atajo(platform)[posicion], None, "{platform:?}");
+        assert_eq!(texts_of_shortcut(platform)[position], None, "{platform:?}");
     }
 }
 
 #[test]
-fn fila_10_enabled_de_convertir_modo_no_depende_de_la_historia_ni_del_zoom() {
+fn row_10_enabled_of_convert_mode_does_not_depend_on_the_history_or_the_zoom() {
     for can_undo in [false, true] {
         for can_redo in [false, true] {
             for zoom in [
@@ -975,7 +986,7 @@ fn fila_10_enabled_de_convertir_modo_no_depende_de_la_historia_ni_del_zoom() {
                 Some(Zoom::MIN),
                 Some(Zoom::MAX),
             ] {
-                let state = estado(can_undo, can_redo, zoom);
+                let state = state_2(can_undo, can_redo, zoom);
                 assert!(
                     enabled(AppAction::ConvertMode, &state),
                     "undo {can_undo}, redo {can_redo}, zoom {zoom:?}"
@@ -986,8 +997,8 @@ fn fila_10_enabled_de_convertir_modo_no_depende_de_la_historia_ni_del_zoom() {
 }
 
 #[test]
-fn fila_10_enabled_de_convertir_modo_esta_deshabilitado_con_cada_uno_de_los_cinco_bloqueos() {
-    for (nombre, locks) in [
+fn row_10_enabled_of_convert_mode_is_disabled_with_each_of_the_five_locks() {
+    for (name_2, locks) in [
         (
             "gesture",
             Locks {
@@ -1027,26 +1038,26 @@ fn fila_10_enabled_de_convertir_modo_esta_deshabilitado_con_cada_uno_de_los_cinc
     ] {
         let state = UiState {
             locks,
-            ..estado(true, true, x5())
+            ..state_2(true, true, x5())
         };
-        assert!(!enabled(AppAction::ConvertMode, &state), "{nombre}");
+        assert!(!enabled(AppAction::ConvertMode, &state), "{name_2}");
         assert!(
             is_blocked(AppAction::ConvertMode, locks, Origin::Menu),
-            "{nombre}"
+            "{name_2}"
         );
     }
     // Sin bloqueos, habilitada.
-    assert!(enabled(AppAction::ConvertMode, &estado(true, true, x5())));
+    assert!(enabled(AppAction::ConvertMode, &state_2(true, true, x5())));
 }
 
 #[test]
-fn fila_10_el_desplegable_de_imagen_mide_131_u_y_el_de_ver_208_el_mas_ancho() {
-    for platform in PLATAFORMAS {
-        assert_eq!(popup_width_u(&menu_imagen(), platform), 131, "{platform:?}");
-        let ver = MENUS.iter().find(|m| m.title == "Ver").expect("Ver");
-        assert_eq!(popup_width_u(ver, platform), 208, "{platform:?}");
+fn row_10_the_image_dropdown_measures_131_u_and_the_view_one_208_the_widest() {
+    for platform in PLATFORMS {
+        assert_eq!(popup_width_u(&menu_image(), platform), 131, "{platform:?}");
+        let see = MENUS.iter().find(|m| m.title == "Ver").expect("Ver");
+        assert_eq!(popup_width_u(see, platform), 208, "{platform:?}");
         assert!(
-            popup_width_u(&menu_imagen(), platform) < popup_width_u(ver, platform),
+            popup_width_u(&menu_image(), platform) < popup_width_u(see, platform),
             "{platform:?}: Imagen es más estrecho que Ver"
         );
         // `Ver` sigue siendo el más ancho de los cinco.

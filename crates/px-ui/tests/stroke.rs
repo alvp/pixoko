@@ -23,7 +23,7 @@ use px_ui::stroke::Stroke;
 const MIN: i32 = i32::MIN;
 const MAX: i32 = i32::MAX;
 
-type Punto = (i32, i32);
+type Point = (i32, i32);
 
 // Apoyo común.
 
@@ -40,7 +40,7 @@ fn pixel_k(k: usize) -> Pixel {
     Pixel::Rgba(Rgba::new(k as u8, (k * 7) as u8, 3, 255))
 }
 
-fn edicion(x: i32, y: i32, pixel: Pixel) -> PixelEdit {
+fn editing(x: i32, y: i32, pixel: Pixel) -> PixelEdit {
     PixelEdit {
         x: u32::try_from(x).expect("dentro del lienzo"),
         y: u32::try_from(y).expect("dentro del lienzo"),
@@ -49,29 +49,29 @@ fn edicion(x: i32, y: i32, pixel: Pixel) -> PixelEdit {
 }
 
 /// Las ediciones esperadas de una lista de coordenadas con un mismo píxel.
-fn ediciones(coords: &[Punto], pixel: Pixel) -> Vec<PixelEdit> {
-    coords.iter().map(|&(x, y)| edicion(x, y, pixel)).collect()
+fn edits(coords: &[Point], pixel: Pixel) -> Vec<PixelEdit> {
+    coords.iter().map(|&(x, y)| editing(x, y, pixel)).collect()
 }
 
 /// Crea un trazo en un lienzo de `width` x `height` y le da las posiciones, cada una con su píxel.
-fn trazo(width: u32, height: u32, posiciones: &[(Punto, Pixel)]) -> Stroke {
+fn stroke_2(width: u32, height: u32, positions: &[(Point, Pixel)]) -> Stroke {
     let mut stroke = Stroke::new(width, height);
-    for &(pos, pixel) in posiciones {
+    for &(pos, pixel) in positions {
         stroke.move_to(pos, pixel);
     }
     stroke
 }
 
-/// Como `trazo`, con el mismo píxel en todas las posiciones.
-fn trazo_con(width: u32, height: u32, posiciones: &[Punto], pixel: Pixel) -> Stroke {
+/// Como `stroke_2`, con el mismo píxel en todas las posiciones.
+fn stroke_with(width: u32, height: u32, positions: &[Point], pixel: Pixel) -> Stroke {
     let mut stroke = Stroke::new(width, height);
-    for &pos in posiciones {
+    for &pos in positions {
         stroke.move_to(pos, pixel);
     }
     stroke
 }
 
-fn coordenadas(stroke: &Stroke) -> Vec<Punto> {
+fn coordinates(stroke: &Stroke) -> Vec<Point> {
     stroke
         .pixels()
         .iter()
@@ -83,12 +83,12 @@ fn doc_rgba(width: u32, height: u32) -> Document {
     Document::new(Image::new(width, height, Mode::Rgba).unwrap())
 }
 
-fn imagen_de(doc: &Document) -> Image {
+fn image_of(doc: &Document) -> Image {
     doc.image(ImageId::from_raw(0)).unwrap().clone()
 }
 
 /// Todo lo observable de un documento, para comprobar que una operación no tocó nada.
-fn instantanea(doc: &Document) -> (Document, bool, bool, usize) {
+fn snapshot(doc: &Document) -> (Document, bool, bool, usize) {
     (
         doc.clone(),
         doc.can_undo(),
@@ -97,7 +97,7 @@ fn instantanea(doc: &Document) -> (Document, bool, bool, usize) {
     )
 }
 
-fn dentro(p: Punto, width: u32, height: u32) -> bool {
+fn inside(p: Point, width: u32, height: u32) -> bool {
     (0..i64::from(width)).contains(&i64::from(p.0))
         && (0..i64::from(height)).contains(&i64::from(p.1))
 }
@@ -105,30 +105,30 @@ fn dentro(p: Punto, width: u32, height: u32) -> bool {
 // Filas 1 a 7: la lista de píxeles.
 
 #[test]
-fn fila_1_una_posicion_pinta_un_pixel() {
+fn row_1_a_position_paints_a_pixel() {
     let mut stroke = Stroke::new(8, 8);
     assert!(stroke.is_empty());
     assert_eq!(stroke.last(), None);
     stroke.move_to((2, 3), pixel_a());
-    assert_eq!(stroke.pixels(), [edicion(2, 3, pixel_a())]);
+    assert_eq!(stroke.pixels(), [editing(2, 3, pixel_a())]);
     assert!(!stroke.is_empty());
     assert_eq!(stroke.last(), Some((2, 3)));
 }
 
 #[test]
-fn fila_2_la_repetida_se_ignora_y_el_salto_no_deja_huecos() {
-    let stroke = trazo_con(8, 8, &[(1, 1), (1, 1), (4, 1)], pixel_a());
+fn row_2_the_repeated_one_is_ignored_and_the_jump_leaves_no_gaps() {
+    let stroke = stroke_with(8, 8, &[(1, 1), (1, 1), (4, 1)], pixel_a());
     assert_eq!(
         stroke.pixels(),
-        ediciones(&[(1, 1), (2, 1), (3, 1), (4, 1)], pixel_a())
+        edits(&[(1, 1), (2, 1), (3, 1), (4, 1)], pixel_a())
     );
     assert_eq!(stroke.last(), Some((4, 1)));
 }
 
 #[test]
-fn fila_3_un_cruce_visita_dos_veces_y_sale_una() {
-    let stroke = trazo_con(8, 8, &[(0, 2), (4, 2), (2, 0), (2, 4)], pixel_a());
-    let esperado = [
+fn row_3_a_crossing_visits_twice_and_leaves_once() {
+    let stroke = stroke_with(8, 8, &[(0, 2), (4, 2), (2, 0), (2, 4)], pixel_a());
+    let expected_2 = [
         (0, 2),
         (1, 2),
         (2, 2),
@@ -141,14 +141,14 @@ fn fila_3_un_cruce_visita_dos_veces_y_sale_una() {
         (2, 4),
     ];
     assert_eq!(stroke.pixels().len(), 10);
-    assert_eq!(coordenadas(&stroke), esperado);
+    assert_eq!(coordinates(&stroke), expected_2);
 }
 
 #[test]
-fn fila_4_la_ultima_escritura_gana_y_el_segmento_usa_el_pixel_nuevo() {
+fn row_4_the_last_write_wins_and_the_segment_uses_the_new_pixel() {
     // `(1,1)` con A, `(3,1)` con A y otra vez `(1,1)` con B: el segmento de vuelta pinta los tres
     // con B, extremo ya pintado incluido.
-    let vuelta = trazo(
+    let ret = stroke_2(
         8,
         8,
         &[
@@ -157,85 +157,82 @@ fn fila_4_la_ultima_escritura_gana_y_el_segmento_usa_el_pixel_nuevo() {
             ((1, 1), pixel_b()),
         ],
     );
-    assert_eq!(
-        vuelta.pixels(),
-        ediciones(&[(1, 1), (2, 1), (3, 1)], pixel_b())
-    );
+    assert_eq!(ret.pixels(), edits(&[(1, 1), (2, 1), (3, 1)], pixel_b()));
     // `(1,1)` con A y `(3,1)` con B: el extremo `(1,1)`, que estaba con A, pasa a B.
-    let ida = trazo(8, 8, &[((1, 1), pixel_a()), ((3, 1), pixel_b())]);
+    let outward = stroke_2(8, 8, &[((1, 1), pixel_a()), ((3, 1), pixel_b())]);
     assert_eq!(
-        ida.pixels(),
-        ediciones(&[(1, 1), (2, 1), (3, 1)], pixel_b())
+        outward.pixels(),
+        edits(&[(1, 1), (2, 1), (3, 1)], pixel_b())
     );
 }
 
 #[test]
-fn una_posicion_igual_a_la_anterior_no_hace_nada_aunque_el_pixel_cambie() {
+fn a_position_equal_to_the_previous_one_does_nothing_even_if_the_pixel_changes() {
     let mut stroke = Stroke::new(8, 8);
     stroke.move_to((2, 2), pixel_a());
     stroke.move_to((2, 2), pixel_b());
-    assert_eq!(stroke.pixels(), [edicion(2, 2, pixel_a())]);
+    assert_eq!(stroke.pixels(), [editing(2, 2, pixel_a())]);
 }
 
 #[test]
-fn fila_5_todo_fuera_deja_el_trazo_vacio_pero_recuerda_la_ultima_posicion() {
-    let stroke = trazo_con(8, 8, &[(-5, 2), (-1, 6), (-3, 0)], pixel_a());
+fn row_5_everything_outside_leaves_the_stroke_empty_but_remembers_the_last_position() {
+    let stroke = stroke_with(8, 8, &[(-5, 2), (-1, 6), (-3, 0)], pixel_a());
     assert!(stroke.is_empty());
     assert!(stroke.pixels().is_empty());
     assert_eq!(stroke.last(), Some((-3, 0)));
 
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let antes = instantanea(&doc);
+    let antes = snapshot(&doc);
     assert_eq!(stroke.commit(&mut doc, id), Ok(false));
-    assert_eq!(instantanea(&doc), antes);
+    assert_eq!(snapshot(&doc), antes);
 }
 
 #[test]
-fn fila_6_el_tramo_de_ida_y_vuelta_por_fuera_no_se_cierra_por_dentro() {
+fn row_6_the_round_trip_span_on_the_outside_is_not_closed_on_the_inside() {
     // (6,2)-(20,2) dentro da (6,2),(7,2); (20,2)-(6,4) tiene 15 píxeles (`i` de 0 a 14) y solo
     // los dos últimos caen dentro: (7,4) y (6,4). No hay línea entre (7,2) y (7,4).
-    let stroke = trazo_con(8, 8, &[(6, 2), (20, 2), (6, 4)], pixel_a());
+    let stroke = stroke_with(8, 8, &[(6, 2), (20, 2), (6, 4)], pixel_a());
     assert_eq!(
-        coordenadas(&stroke),
+        coordinates(&stroke),
         [(6, 2), (7, 2), (7, 4), (6, 4)],
         "calculado a mano"
     );
     // El mismo resultado con el oráculo de `Line`, que no depende de lo anterior.
-    let mut oraculo: Vec<Punto> = vec![(6, 2)];
+    let mut oracle: Vec<Point> = vec![(6, 2)];
     for (a, b) in [((6, 2), (20, 2)), ((20, 2), (6, 4))] {
         for p in Line::new(a, b).clip_to(8, 8) {
-            if !oraculo.contains(&p) {
-                oraculo.push(p);
+            if !oracle.contains(&p) {
+                oracle.push(p);
             }
         }
     }
-    assert_eq!(coordenadas(&stroke), oraculo);
+    assert_eq!(coordinates(&stroke), oracle);
     assert_eq!(stroke.last(), Some((6, 4)));
 }
 
 #[test]
-fn fila_7_los_extremos_de_i32_no_entran_en_panico() {
-    let diagonal = trazo_con(8, 8, &[(MIN, MIN), (MAX, MAX)], pixel_a());
-    let esperado: Vec<Punto> = (0..8).map(|k| (k, k)).collect();
-    assert_eq!(coordenadas(&diagonal), esperado);
+fn row_7_the_i32_extremes_do_not_panic() {
+    let diagonal = stroke_with(8, 8, &[(MIN, MIN), (MAX, MAX)], pixel_a());
+    let expected_2: Vec<Point> = (0..8).map(|k| (k, k)).collect();
+    assert_eq!(coordinates(&diagonal), expected_2);
     assert_eq!(diagonal.last(), Some((MAX, MAX)));
 
-    let uno = trazo_con(1, 1, &[(0, 0), (5, 5)], pixel_a());
-    assert_eq!(uno.pixels(), [edicion(0, 0, pixel_a())]);
-    assert_eq!(uno.last(), Some((5, 5)));
+    let one = stroke_with(1, 1, &[(0, 0), (5, 5)], pixel_a());
+    assert_eq!(one.pixels(), [editing(0, 0, pixel_a())]);
+    assert_eq!(one.last(), Some((5, 5)));
 }
 
 #[test]
-fn todas_las_esquinas_de_i32_entre_si_no_entran_en_panico() {
-    let valores = [MIN, MIN + 1, -1, 0, 1, 7, 8, MAX - 1, MAX];
-    for ax in valores {
-        for ay in valores {
-            for bx in valores {
-                for by in valores {
-                    let stroke = trazo_con(8, 8, &[(ax, ay), (bx, by)], pixel_a());
-                    for (x, y) in coordenadas(&stroke) {
-                        assert!(dentro((x, y), 8, 8), "({x}, {y}) fuera de 8x8");
+fn all_the_i32_corners_among_themselves_do_not_panic() {
+    let values = [MIN, MIN + 1, -1, 0, 1, 7, 8, MAX - 1, MAX];
+    for ax in values {
+        for ay in values {
+            for bx in values {
+                for by in values {
+                    let stroke = stroke_with(8, 8, &[(ax, ay), (bx, by)], pixel_a());
+                    for (x, y) in coordinates(&stroke) {
+                        assert!(inside((x, y), 8, 8), "({x}, {y}) fuera de 8x8");
                     }
                     assert_eq!(stroke.last(), Some((bx, by)));
                 }
@@ -247,85 +244,85 @@ fn todas_las_esquinas_de_i32_entre_si_no_entran_en_panico() {
 // Filas 8 a 10: `commit` contra el documento.
 
 #[test]
-fn fila_8_un_trazo_que_cambia_es_un_paso_de_historia() {
+fn row_8_a_stroke_that_changes_is_a_history_step() {
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let original = imagen_de(&doc);
-    let mut editada = original.clone();
+    let original = image_of(&doc);
+    let mut edited = original.clone();
     for x in 1..=3 {
-        editada.set_pixel(x, 1, pixel_a()).unwrap();
+        edited.set_pixel(x, 1, pixel_a()).unwrap();
     }
 
-    let stroke = trazo_con(8, 8, &[(1, 1), (3, 1)], pixel_a());
+    let stroke = stroke_with(8, 8, &[(1, 1), (3, 1)], pixel_a());
     assert_eq!(stroke.pixels().len(), 3);
     assert_eq!(stroke.commit(&mut doc, id), Ok(true));
     assert!(doc.can_undo());
     assert!(!doc.can_redo());
-    assert_eq!(imagen_de(&doc), editada);
+    assert_eq!(image_of(&doc), edited);
 
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc), original, "un undo vuelve al original");
+    assert_eq!(image_of(&doc), original, "un undo vuelve al original");
     assert!(!doc.can_undo());
     assert_eq!(doc.redo(), Ok(()));
-    assert_eq!(imagen_de(&doc), editada);
+    assert_eq!(image_of(&doc), edited);
 }
 
 #[test]
-fn fila_8_con_dos_trazos_un_undo_deshace_solo_el_ultimo() {
+fn row_8_with_two_strokes_one_undo_undoes_only_the_last() {
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let original = imagen_de(&doc);
+    let original = image_of(&doc);
 
-    let primero = trazo_con(8, 8, &[(1, 1), (3, 1)], pixel_a());
-    assert_eq!(primero.commit(&mut doc, id), Ok(true));
-    let tras_primero = imagen_de(&doc);
-    let segundo = trazo_con(8, 8, &[(1, 3), (3, 3)], pixel_b());
-    assert_eq!(segundo.commit(&mut doc, id), Ok(true));
-    assert_ne!(imagen_de(&doc), tras_primero);
+    let first = stroke_with(8, 8, &[(1, 1), (3, 1)], pixel_a());
+    assert_eq!(first.commit(&mut doc, id), Ok(true));
+    let after_first = image_of(&doc);
+    let second = stroke_with(8, 8, &[(1, 3), (3, 3)], pixel_b());
+    assert_eq!(second.commit(&mut doc, id), Ok(true));
+    assert_ne!(image_of(&doc), after_first);
 
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc), tras_primero);
+    assert_eq!(image_of(&doc), after_first);
     assert!(doc.can_undo());
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc), original);
+    assert_eq!(image_of(&doc), original);
     assert!(!doc.can_undo());
 }
 
 #[test]
-fn fila_9_los_trazos_que_no_cambian_nada_no_tocan_la_historia() {
+fn row_9_strokes_that_change_nothing_do_not_touch_the_history() {
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let a = trazo_con(8, 8, &[(1, 1), (3, 1)], pixel_a());
+    let a = stroke_with(8, 8, &[(1, 1), (3, 1)], pixel_a());
     assert_eq!(a.commit(&mut doc, id), Ok(true));
-    let b = trazo_con(8, 8, &[(1, 3), (3, 3)], pixel_b());
+    let b = stroke_with(8, 8, &[(1, 3), (3, 3)], pixel_b());
     assert_eq!(b.commit(&mut doc, id), Ok(true));
     // Un `undo` previo: queda algo que rehacer, y no debe perderse.
     assert_eq!(doc.undo(), Ok(()));
-    let antes = instantanea(&doc);
+    let antes = snapshot(&doc);
     assert!(antes.1 && antes.2, "hay algo que deshacer y que rehacer");
 
     // Vacío: no llama a `apply`, que daría `EmptyCommand`.
     assert_eq!(Stroke::new(8, 8).commit(&mut doc, id), Ok(false));
-    assert_eq!(instantanea(&doc), antes);
+    assert_eq!(snapshot(&doc), antes);
     // Todo fuera del lienzo.
-    let todo_fuera = trazo_con(8, 8, &[(-4, 2), (-1, 6)], pixel_a());
-    assert!(todo_fuera.is_empty());
-    assert_eq!(todo_fuera.commit(&mut doc, id), Ok(false));
-    assert_eq!(instantanea(&doc), antes);
+    let all_outside = stroke_with(8, 8, &[(-4, 2), (-1, 6)], pixel_a());
+    assert!(all_outside.is_empty());
+    assert_eq!(all_outside.commit(&mut doc, id), Ok(false));
+    assert_eq!(snapshot(&doc), antes);
     // Con el color que ya hay (el primer trazo dejó A en la fila 1).
-    let igual = trazo_con(8, 8, &[(1, 1), (3, 1)], pixel_a());
-    assert_eq!(igual.pixels().len(), 3);
-    assert_eq!(igual.commit(&mut doc, id), Ok(false));
-    assert_eq!(instantanea(&doc), antes);
+    let equal = stroke_with(8, 8, &[(1, 1), (3, 1)], pixel_a());
+    assert_eq!(equal.pixels().len(), 3);
+    assert_eq!(equal.commit(&mut doc, id), Ok(false));
+    assert_eq!(snapshot(&doc), antes);
     assert!(doc.can_redo(), "el redo pendiente sigue ahí");
 }
 
 #[test]
-fn fila_10_un_pixel_de_otro_modo_da_error_y_no_toca_el_documento() {
+fn row_10_a_pixel_of_another_mode_gives_an_error_and_does_not_touch_the_document() {
     let mut doc = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let antes = instantanea(&doc);
-    let stroke = trazo_con(8, 8, &[(1, 1), (3, 1)], Pixel::Indexed(0));
+    let antes = snapshot(&doc);
+    let stroke = stroke_with(8, 8, &[(1, 1), (3, 1)], Pixel::Indexed(0));
     assert_eq!(
         stroke.commit(&mut doc, id),
         Err(DocumentError::Pixel {
@@ -336,29 +333,29 @@ fn fila_10_un_pixel_de_otro_modo_da_error_y_no_toca_el_documento() {
             }
         })
     );
-    assert_eq!(instantanea(&doc), antes);
+    assert_eq!(snapshot(&doc), antes);
 }
 
 #[test]
-fn commit_aplica_un_solo_set_pixels_con_los_pixeles_del_trazo() {
+fn commit_applies_a_single_set_pixels_with_the_pixels_of_the_stroke() {
     // Lo mismo que `Document::apply(SetPixels { .. })` con la lista del trazo.
-    let stroke = trazo_con(8, 8, &[(0, 2), (4, 2), (2, 0)], pixel_a());
+    let stroke = stroke_with(8, 8, &[(0, 2), (4, 2), (2, 0)], pixel_a());
     let pixels = stroke.pixels().to_vec();
-    let mut con_trazo = doc_rgba(8, 8);
+    let mut with_stroke = doc_rgba(8, 8);
     let id = ImageId::from_raw(0);
-    let mut a_mano = doc_rgba(8, 8);
+    let mut by_hand = doc_rgba(8, 8);
     assert_eq!(
-        a_mano.apply(Command::SetPixels { image: id, pixels }),
+        by_hand.apply(Command::SetPixels { image: id, pixels }),
         Ok(true)
     );
-    assert_eq!(stroke.commit(&mut con_trazo, id), Ok(true));
-    assert_eq!(instantanea(&con_trazo), instantanea(&a_mano));
+    assert_eq!(stroke.commit(&mut with_stroke, id), Ok(true));
+    assert_eq!(snapshot(&with_stroke), snapshot(&by_hand));
 }
 
 // Estrategias.
 
 /// Coordenada `i32`: sesgo hacia dentro de un lienzo de hasta 16 y sus bordes, con los extremos.
-fn coordenada() -> impl Strategy<Value = i32> {
+fn coordinate() -> impl Strategy<Value = i32> {
     prop_oneof![
         4 => -3i32..=18,
         3 => 0i32..=15,
@@ -370,15 +367,15 @@ fn coordenada() -> impl Strategy<Value = i32> {
     ]
 }
 
-fn posiciones(max: usize) -> impl Strategy<Value = Vec<Punto>> {
-    vec((coordenada(), coordenada()), 1..=max)
+fn positions(max: usize) -> impl Strategy<Value = Vec<Point>> {
+    vec((coordinate(), coordinate()), 1..=max)
 }
 
-/// Si `dentro`, lleva todas las posiciones al interior del lienzo; si no, las deja como están.
-fn ajustar(pos: &[Punto], width: u32, height: u32, dentro: bool) -> Vec<Punto> {
+/// Si `inside`, lleva todas las posiciones al interior del lienzo; si no, las deja como están.
+fn fit_2(pos: &[Point], width: u32, height: u32, inside: bool) -> Vec<Point> {
     pos.iter()
         .map(|&(x, y)| {
-            if dentro {
+            if inside {
                 (x.rem_euclid(width as i32), y.rem_euclid(height as i32))
             } else {
                 (x, y)
@@ -391,101 +388,101 @@ fn ajustar(pos: &[Punto], width: u32, height: u32, dentro: bool) -> Vec<Punto> {
 
 /// Conjunto esperado: el primer punto y, para cada par consecutivo distinto, los puntos de
 /// `Line` recortados al lienzo.
-fn oraculo_conjunto(pos: &[Punto], width: u32, height: u32) -> BTreeSet<Punto> {
-    let mut conjunto = BTreeSet::new();
-    let mut ultimo: Option<Punto> = None;
+fn oracle_set(pos: &[Point], width: u32, height: u32) -> BTreeSet<Point> {
+    let mut set = BTreeSet::new();
+    let mut ultimo: Option<Point> = None;
     for &p in pos {
         match ultimo {
             None => {
-                if dentro(p, width, height) {
-                    conjunto.insert(p);
+                if inside(p, width, height) {
+                    set.insert(p);
                 }
             }
             Some(anterior) if anterior == p => {}
-            Some(anterior) => conjunto.extend(Line::new(anterior, p).clip_to(width, height)),
+            Some(anterior) => set.extend(Line::new(anterior, p).clip_to(width, height)),
         }
         ultimo = Some(p);
     }
-    conjunto
+    set
 }
 
 /// Lista esperada con la regla «la última escritura gana» y el orden de primera visita.
-/// `pixeles[i]` es el píxel de la llamada `i`.
-fn oraculo_valores(pos: &[Punto], pixeles: &[Pixel], width: u32, height: u32) -> Vec<PixelEdit> {
-    let mut orden: Vec<Punto> = Vec::new();
-    let mut valores: HashMap<Punto, Pixel> = HashMap::new();
-    let mut ultimo: Option<Punto> = None;
-    for (&p, &pixel) in pos.iter().zip(pixeles) {
+/// `pixels_2[i]` es el píxel de la llamada `i`.
+fn oracle_values(pos: &[Point], pixels_2: &[Pixel], width: u32, height: u32) -> Vec<PixelEdit> {
+    let mut order: Vec<Point> = Vec::new();
+    let mut values: HashMap<Point, Pixel> = HashMap::new();
+    let mut ultimo: Option<Point> = None;
+    for (&p, &pixel) in pos.iter().zip(pixels_2) {
         if ultimo == Some(p) {
             continue;
         }
-        let puntos: Vec<Punto> = match ultimo {
-            None if dentro(p, width, height) => vec![p],
+        let points: Vec<Point> = match ultimo {
+            None if inside(p, width, height) => vec![p],
             None => vec![],
             Some(anterior) => Line::new(anterior, p).clip_to(width, height).collect(),
         };
-        for q in puntos {
-            if valores.insert(q, pixel).is_none() {
-                orden.push(q);
+        for q in points {
+            if values.insert(q, pixel).is_none() {
+                order.push(q);
             }
         }
         ultimo = Some(p);
     }
-    orden
+    order
         .into_iter()
-        .map(|q| edicion(q.0, q.1, valores[&q]))
+        .map(|q| editing(q.0, q.1, values[&q]))
         .collect()
 }
 
 /// ¿Es el conjunto 8-conexo? (vacío cuenta como conexo).
-fn es_8_conexo(conjunto: &BTreeSet<Punto>) -> bool {
-    let Some(&inicio) = conjunto.iter().next() else {
+fn is_8_connected(set: &BTreeSet<Point>) -> bool {
+    let Some(&start_2) = set.iter().next() else {
         return true;
     };
-    let mut visto: BTreeSet<Punto> = BTreeSet::from([inicio]);
-    let mut cola: VecDeque<Punto> = VecDeque::from([inicio]);
-    while let Some((x, y)) = cola.pop_front() {
+    let mut seen: BTreeSet<Point> = BTreeSet::from([start_2]);
+    let mut queue: VecDeque<Point> = VecDeque::from([start_2]);
+    while let Some((x, y)) = queue.pop_front() {
         for dx in -1..=1 {
             for dy in -1..=1 {
-                let vecino = (x + dx, y + dy);
-                if conjunto.contains(&vecino) && visto.insert(vecino) {
-                    cola.push_back(vecino);
+                let neighbor = (x + dx, y + dy);
+                if set.contains(&neighbor) && seen.insert(neighbor) {
+                    queue.push_back(neighbor);
                 }
             }
         }
     }
-    visto.len() == conjunto.len()
+    seen.len() == set.len()
 }
 
 // Propiedad 1: oráculo geométrico y conexión.
 
 proptest! {
     #[test]
-    fn los_pixeles_son_la_union_de_las_lineas_recortadas(
+    fn the_pixels_are_the_union_of_the_clipped_lines(
         width in 1u32..=16,
         height in 1u32..=16,
-        pos in posiciones(8),
-        todas_dentro in any::<bool>(),
+        pos in positions(8),
+        all_inside in any::<bool>(),
     ) {
-        let pos = ajustar(&pos, width, height, todas_dentro);
-        let stroke = trazo_con(width, height, &pos, pixel_a());
-        let obtenidos = coordenadas(&stroke);
+        let pos = fit_2(&pos, width, height, all_inside);
+        let stroke = stroke_with(width, height, &pos, pixel_a());
+        let obtained = coordinates(&stroke);
 
         // Todos dentro y sin repetidos.
-        for &p in &obtenidos {
-            prop_assert!(dentro(p, width, height), "{:?} fuera de {}x{}", p, width, height);
+        for &p in &obtained {
+            prop_assert!(inside(p, width, height), "{:?} fuera de {}x{}", p, width, height);
         }
-        let conjunto: BTreeSet<Punto> = obtenidos.iter().copied().collect();
-        prop_assert_eq!(conjunto.len(), obtenidos.len(), "coordenadas repetidas");
+        let set: BTreeSet<Point> = obtained.iter().copied().collect();
+        prop_assert_eq!(set.len(), obtained.len(), "coordenadas repetidas");
 
         // Exactamente la unión de los segmentos recortados, y nada más.
-        prop_assert_eq!(&conjunto, &oraculo_conjunto(&pos, width, height));
-        prop_assert_eq!(stroke.is_empty(), conjunto.is_empty());
+        prop_assert_eq!(&set, &oracle_set(&pos, width, height));
+        prop_assert_eq!(stroke.is_empty(), set.is_empty());
         prop_assert_eq!(stroke.last(), pos.last().copied());
 
         // Todas las posiciones dentro: sin huecos.
-        if todas_dentro {
-            prop_assert!(es_8_conexo(&conjunto), "hueco en {:?}", conjunto);
+        if all_inside {
+            prop_assert!(is_8_connected(&set), "hueco en {:?}", set);
         }
     }
 }
@@ -494,59 +491,59 @@ proptest! {
 
 proptest! {
     #[test]
-    fn gana_la_ultima_escritura_y_el_orden_es_el_de_primera_visita(
+    fn the_last_write_wins_and_the_order_is_that_of_the_first_visit(
         width in 1u32..=16,
         height in 1u32..=16,
-        pos in posiciones(8),
-        todas_dentro in any::<bool>(),
+        pos in positions(8),
+        all_inside in any::<bool>(),
     ) {
-        let pos = ajustar(&pos, width, height, todas_dentro);
-        let pixeles: Vec<Pixel> = (0..pos.len()).map(pixel_k).collect();
-        let llamadas: Vec<(Punto, Pixel)> = pos.iter().copied().zip(pixeles.iter().copied()).collect();
-        let stroke = trazo(width, height, &llamadas);
+        let pos = fit_2(&pos, width, height, all_inside);
+        let pixels_2: Vec<Pixel> = (0..pos.len()).map(pixel_k).collect();
+        let calls: Vec<(Point, Pixel)> = pos.iter().copied().zip(pixels_2.iter().copied()).collect();
+        let stroke = stroke_2(width, height, &calls);
         prop_assert_eq!(
             stroke.pixels().to_vec(),
-            oraculo_valores(&pos, &pixeles, width, height)
+            oracle_values(&pos, &pixels_2, width, height)
         );
     }
 
     #[test]
-    fn repetir_una_posicion_seguida_no_cambia_el_resultado(
+    fn repeating_a_position_in_a_row_does_not_change_the_result(
         width in 1u32..=16,
         height in 1u32..=16,
-        pos in posiciones(8),
-        repeticiones in vec(0usize..=3, 8),
-        todas_dentro in any::<bool>(),
+        pos in positions(8),
+        repetitions in vec(0usize..=3, 8),
+        all_inside in any::<bool>(),
     ) {
-        let pos = ajustar(&pos, width, height, todas_dentro);
-        let base: Vec<(Punto, Pixel)> = pos
+        let pos = fit_2(&pos, width, height, all_inside);
+        let base: Vec<(Point, Pixel)> = pos
             .iter()
             .enumerate()
             .map(|(i, &p)| (p, pixel_k(i)))
             .collect();
-        let sin_repetir = trazo(width, height, &base);
+        let without_repeat = stroke_2(width, height, &base);
 
         // Cada posición se repite 0 a 3 veces seguidas, con otro píxel cada vez: se ignoran.
-        let mut repetida: Vec<(Punto, Pixel)> = Vec::new();
+        let mut repeated: Vec<(Point, Pixel)> = Vec::new();
         for (i, &(p, pixel)) in base.iter().enumerate() {
-            repetida.push((p, pixel));
-            for j in 0..repeticiones[i] {
-                repetida.push((p, pixel_k(100 + 3 * i + j)));
+            repeated.push((p, pixel));
+            for j in 0..repetitions[i] {
+                repeated.push((p, pixel_k(100 + 3 * i + j)));
             }
         }
-        let con_repeticiones = trazo(width, height, &repetida);
-        prop_assert_eq!(sin_repetir.pixels(), con_repeticiones.pixels());
-        prop_assert_eq!(sin_repetir.last(), con_repeticiones.last());
+        let with_repetitions = stroke_2(width, height, &repeated);
+        prop_assert_eq!(without_repeat.pixels(), with_repetitions.pixels());
+        prop_assert_eq!(without_repeat.last(), with_repetitions.last());
     }
 }
 
 // Imágenes de los cuatro modos para las propiedades 3 y 4.
 
-const MODOS: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
+const TEST_MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
 /// Hasta cuatro valores distintos por modo (`v` de 0 a 3), que caben en la paleta de 4 colores.
-fn valor(modo: Mode, v: u8) -> Pixel {
-    match modo {
+fn valor(mode_2: Mode, v: u8) -> Pixel {
+    match mode_2 {
         Mode::Rgba => Pixel::Rgba(Rgba::new(v * 60, 10, v * 3, 255)),
         Mode::Indexed => Pixel::Indexed(v),
         Mode::Gray => Pixel::Gray(v * 70),
@@ -557,35 +554,35 @@ fn valor(modo: Mode, v: u8) -> Pixel {
     }
 }
 
-fn imagen_vacia(modo: Mode, width: u32, height: u32) -> Image {
-    match modo {
+fn image_empty(mode_2: Mode, width: u32, height: u32) -> Image {
+    match mode_2 {
         Mode::Indexed => {
-            let paleta = Palette::from_colors((0..4).map(|i| Rgba::opaque(i * 50, 0, 0))).unwrap();
-            Image::new_indexed(width, height, paleta).unwrap()
+            let palette = Palette::from_colors((0..4).map(|i| Rgba::opaque(i * 50, 0, 0))).unwrap();
+            Image::new_indexed(width, height, palette).unwrap()
         }
-        otro => Image::new(width, height, otro).unwrap(),
+        other_2 => Image::new(width, height, other_2).unwrap(),
     }
 }
 
-/// Imagen con valores 0 a 2 repartidos según `ruido`.
-fn imagen_con_ruido(modo: Mode, width: u32, height: u32, ruido: &[u8]) -> Image {
-    let mut image = imagen_vacia(modo, width, height);
+/// Imagen con valores 0 a 2 repartidos según `noise`.
+fn image_with_noise(mode_2: Mode, width: u32, height: u32, noise: &[u8]) -> Image {
+    let mut image = image_empty(mode_2, width, height);
     for y in 0..height {
         for x in 0..width {
-            let v = ruido[(y * width + x) as usize % ruido.len()] % 3;
-            image.set_pixel(x, y, valor(modo, v)).unwrap();
+            let v = noise[(y * width + x) as usize % noise.len()] % 3;
+            image.set_pixel(x, y, valor(mode_2, v)).unwrap();
         }
     }
     image
 }
 
 /// Imagen toda del valor `v`.
-fn imagen_uniforme(modo: Mode, width: u32, height: u32, v: u8) -> Image {
-    imagen_con_ruido(modo, width, height, &[v])
+fn image_uniform(mode_2: Mode, width: u32, height: u32, v: u8) -> Image {
+    image_with_noise(mode_2, width, height, &[v])
 }
 
 /// `SetPixels` que pone toda la imagen al valor `v`.
-fn rellenar(doc: &mut Document, modo: Mode, v: u8) {
+fn fill(doc: &mut Document, mode_2: Mode, v: u8) {
     let id = ImageId::from_raw(0);
     let (width, height) = {
         let image = doc.image(id).unwrap();
@@ -596,7 +593,7 @@ fn rellenar(doc: &mut Document, modo: Mode, v: u8) {
             (0..width).map(move |x| PixelEdit {
                 x,
                 y,
-                pixel: valor(modo, v),
+                pixel: valor(mode_2, v),
             })
         })
         .collect();
@@ -608,103 +605,103 @@ fn rellenar(doc: &mut Document, modo: Mode, v: u8) {
 
 /// Un trazo con una lista de posiciones y un valor, aplicado con `commit` y comprobado contra
 /// la imagen antes y después. Devuelve el resultado de `commit`.
-fn comprobar_un_paso(
+fn check_a_step(
     doc: &mut Document,
-    modo: Mode,
-    pos: &[Punto],
+    mode_2: Mode,
+    pos: &[Point],
     v: u8,
 ) -> Result<bool, TestCaseError> {
     let id = ImageId::from_raw(0);
-    let image = imagen_de(doc);
-    let pixel = valor(modo, v);
-    let stroke = trazo_con(image.width(), image.height(), pos, pixel);
-    let cambia = stroke
+    let image = image_of(doc);
+    let pixel = valor(mode_2, v);
+    let stroke = stroke_with(image.width(), image.height(), pos, pixel);
+    let changes = stroke
         .pixels()
         .iter()
         .any(|e| image.get_pixel(e.x, e.y).unwrap() != pixel);
-    let mut editada = image.clone();
+    let mut edited = image.clone();
     for e in stroke.pixels() {
-        editada.set_pixel(e.x, e.y, e.pixel).unwrap();
+        edited.set_pixel(e.x, e.y, e.pixel).unwrap();
     }
 
-    let antes = instantanea(doc);
-    let resultado = stroke.commit(doc, id);
-    prop_assert_eq!(resultado, Ok(cambia));
-    if cambia {
+    let antes = snapshot(doc);
+    let result = stroke.commit(doc, id);
+    prop_assert_eq!(result, Ok(changes));
+    if changes {
         prop_assert!(doc.can_undo());
         prop_assert!(!doc.can_redo());
-        prop_assert_eq!(imagen_de(doc), editada.clone());
+        prop_assert_eq!(image_of(doc), edited.clone());
         // Un solo paso: un undo vuelve exactamente a la imagen previa y un redo a la editada.
         prop_assert_eq!(doc.undo(), Ok(()));
-        prop_assert_eq!(imagen_de(doc), image);
+        prop_assert_eq!(image_of(doc), image);
         prop_assert!(doc.can_redo());
         prop_assert_eq!(doc.redo(), Ok(()));
-        prop_assert_eq!(imagen_de(doc), editada);
+        prop_assert_eq!(image_of(doc), edited);
     } else {
-        prop_assert_eq!(instantanea(doc), antes);
+        prop_assert_eq!(snapshot(doc), antes);
     }
-    Ok(cambia)
+    Ok(changes)
 }
 
 // Propiedad 3: un trazo, un paso.
 
 proptest! {
     #[test]
-    fn un_trazo_que_cambia_es_exactamente_un_paso(
-        modo in 0usize..4,
+    fn a_stroke_that_changes_is_exactly_one_step(
+        mode_2 in 0usize..4,
         width in 1u32..=16,
         height in 1u32..=16,
-        ruido in vec(0u8..3, 256),
-        pos in posiciones(8),
+        noise in vec(0u8..3, 256),
+        pos in positions(8),
         v in 0u8..3,
-        todas_dentro in any::<bool>(),
+        all_inside in any::<bool>(),
     ) {
-        let modo = MODOS[modo];
-        let mut doc = Document::new(imagen_con_ruido(modo, width, height, &ruido));
-        let pos = ajustar(&pos, width, height, todas_dentro);
-        comprobar_un_paso(&mut doc, modo, &pos, v)?;
+        let mode_2 = TEST_MODES[mode_2];
+        let mut doc = Document::new(image_with_noise(mode_2, width, height, &noise));
+        let pos = fit_2(&pos, width, height, all_inside);
+        check_a_step(&mut doc, mode_2, &pos, v)?;
     }
 
     #[test]
-    fn k_trazos_se_deshacen_y_rehacen_de_uno_en_uno(
-        modo in 0usize..4,
+    fn k_strokes_are_undone_and_redone_one_by_one(
+        mode_2 in 0usize..4,
         width in 1u32..=16,
         height in 1u32..=16,
-        ruido in vec(0u8..3, 256),
-        trazos in vec((posiciones(6), 0u8..3, any::<bool>()), 1..=4),
+        noise in vec(0u8..3, 256),
+        strokes in vec((positions(6), 0u8..3, any::<bool>()), 1..=4),
     ) {
-        let modo = MODOS[modo];
-        let mut doc = Document::new(imagen_con_ruido(modo, width, height, &ruido));
-        let original = imagen_de(&doc);
+        let mode_2 = TEST_MODES[mode_2];
+        let mut doc = Document::new(image_with_noise(mode_2, width, height, &noise));
+        let original = image_of(&doc);
 
-        let mut pasos = 0usize;
-        for (pos, v, todas_dentro) in &trazos {
-            let pos = ajustar(pos, width, height, *todas_dentro);
-            if comprobar_un_paso(&mut doc, modo, &pos, *v)? {
-                pasos += 1;
+        let mut steps_2 = 0usize;
+        for (pos, v, all_inside) in &strokes {
+            let pos = fit_2(pos, width, height, *all_inside);
+            if check_a_step(&mut doc, mode_2, &pos, *v)? {
+                steps_2 += 1;
             }
         }
-        let final_ = imagen_de(&doc);
+        let final_ = image_of(&doc);
 
-        for _ in 0..pasos {
+        for _ in 0..steps_2 {
             prop_assert_eq!(doc.undo(), Ok(()));
         }
-        prop_assert_eq!(imagen_de(&doc), original);
+        prop_assert_eq!(image_of(&doc), original);
         prop_assert!(!doc.can_undo());
-        for _ in 0..pasos {
+        for _ in 0..steps_2 {
             prop_assert_eq!(doc.redo(), Ok(()));
         }
-        prop_assert_eq!(imagen_de(&doc), final_);
+        prop_assert_eq!(image_of(&doc), final_);
         prop_assert!(!doc.can_redo());
 
         // Un trazo nuevo tras un undo vacía lo rehacible. El valor 3 no está en la imagen, así
         // que el trazo siempre cambia algo.
-        if pasos >= 1 {
+        if steps_2 >= 1 {
             prop_assert_eq!(doc.undo(), Ok(()));
             prop_assert!(doc.can_redo());
-            let nuevo = trazo_con(width, height, &[(0, 0)], valor(modo, 3));
+            let new_2 = stroke_with(width, height, &[(0, 0)], valor(mode_2, 3));
             let id = ImageId::from_raw(0);
-            prop_assert_eq!(nuevo.commit(&mut doc, id), Ok(true));
+            prop_assert_eq!(new_2.commit(&mut doc, id), Ok(true));
             prop_assert!(!doc.can_redo());
         }
     }
@@ -714,41 +711,41 @@ proptest! {
 
 proptest! {
     #[test]
-    fn los_trazos_que_no_cambian_nada_no_tocan_el_documento(
-        modo in 0usize..4,
+    fn strokes_that_change_nothing_do_not_touch_the_document(
+        mode_2 in 0usize..4,
         width in 1u32..=16,
         height in 1u32..=16,
-        previa in 0u8..3,
-        tipo in 0u8..3,
-        pos in posiciones(8),
-        fuera_por_la_derecha in any::<bool>(),
+        preview in 0u8..3,
+        kind in 0u8..3,
+        pos in positions(8),
+        outside_on_the_right in any::<bool>(),
     ) {
-        let modo = MODOS[modo];
-        let mut doc = Document::new(imagen_uniforme(modo, width, height, 0));
+        let mode_2 = TEST_MODES[mode_2];
+        let mut doc = Document::new(image_uniform(mode_2, width, height, 0));
         let id = ImageId::from_raw(0);
         // Historia previa: ninguna, un paso (la imagen entera pasa a valer 1), o ese paso
         // deshecho (con algo que rehacer).
         let mut actual = 0;
-        if previa >= 1 {
-            rellenar(&mut doc, modo, 1);
+        if preview >= 1 {
+            fill(&mut doc, mode_2, 1);
             actual = 1;
         }
-        if previa == 2 {
+        if preview == 2 {
             prop_assert_eq!(doc.undo(), Ok(()));
             actual = 0;
         }
-        let antes = instantanea(&doc);
+        let antes = snapshot(&doc);
 
-        let stroke = match tipo {
+        let stroke = match kind {
             // Vacío.
             0 => Stroke::new(width, height),
             // Todo fuera: x < 0 o x >= width, con cualquier y.
             1 => {
-                let fuera: Vec<Punto> = pos
+                let outside: Vec<Point> = pos
                     .iter()
                     .map(|&(x, y)| {
                         let x = if x < 0 { x } else { -1 - x.min(MAX - 1) };
-                        let x = if fuera_por_la_derecha {
+                        let x = if outside_on_the_right {
                             (width as i32 - 1).saturating_sub(x)
                         } else {
                             x
@@ -756,15 +753,15 @@ proptest! {
                         (x, y)
                     })
                     .collect();
-                trazo_con(width, height, &fuera, valor(modo, 2))
+                stroke_with(width, height, &outside, valor(mode_2, 2))
             }
             // Con el valor que ya tiene toda la imagen.
-            _ => trazo_con(width, height, &pos, valor(modo, actual)),
+            _ => stroke_with(width, height, &pos, valor(mode_2, actual)),
         };
-        if tipo == 1 {
+        if kind == 1 {
             prop_assert!(stroke.is_empty());
         }
         prop_assert_eq!(stroke.commit(&mut doc, id), Ok(false));
-        prop_assert_eq!(instantanea(&doc), antes);
+        prop_assert_eq!(snapshot(&doc), antes);
     }
 }

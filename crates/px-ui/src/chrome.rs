@@ -29,7 +29,7 @@ pub const TOOL_ROWS: i64 = 2;
 pub const TOOL_SLOTS: usize = (TOOLBOX_COLUMNS * TOOL_ROWS) as usize;
 /// Botones de la caja: cinco herramientas y cuatro de zoom.
 pub const TOOLBOX_BUTTONS: usize = 9;
-/// `y` de la primera fila de herramientas (`4 + 25·fila`; la última termina en 53).
+/// `y` de la primera fila de herramientas (`4 + 25·row_2`; la última termina en 53).
 pub const TOOLS_Y_U: i64 = TOOLBAR_MARGIN_U;
 /// `y` del separador de 1 u entre las herramientas y el zoom: 4 u bajo la última fila.
 pub const TOOLBAR_SEPARATOR_Y_U: i64 = TOOLS_Y_U + TOOL_ROWS * PITCH_U - GAP_U + 4;
@@ -83,7 +83,7 @@ pub fn tool_slot_u(slot: usize) -> (i64, i64) {
     )
 }
 
-/// Rectángulo `(x, y, ancho, alto)` del botón `index` de la caja, en `u` desde su esquina: del 0 al
+/// Rectángulo `(x, y, width_2, height_2)` del botón `index` de la caja, en `u` desde su esquina: del 0 al
 /// 4 las herramientas (casillas 0 a 4) y del 5 al 8 el zoom (una fila).
 ///
 /// # Panics

@@ -36,7 +36,7 @@ use px_ui::tool::Tool;
 use px_ui::view::Zoom;
 
 mod common;
-use common::{modificadores, modificadores_command};
+use common::{modifiers_2, modifiers_command};
 
 #[path = "common/dialog_forms.rs"]
 mod dialog_forms;
@@ -45,16 +45,16 @@ mod dialog_forms;
 // Ayudantes
 // ---------------------------------------------------------------------------------------------
 
-const ORIGENES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
-const HERRAMIENTAS: [Tool; 5] = [
+const SOURCES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const TEST_TOOLS: [Tool; 5] = [
     Tool::Pencil,
     Tool::Line,
     Tool::Fill,
     Tool::Dropper,
     Tool::Eraser,
 ];
-const FONDOS: [CanvasBackground; 4] = [
+const BACKGROUNDS: [CanvasBackground; 4] = [
     CanvasBackground::Checker,
     CanvasBackground::Black,
     CanvasBackground::Gray,
@@ -63,7 +63,7 @@ const FONDOS: [CanvasBackground; 4] = [
 
 /// Todas las acciones: fichero, salir, deshacer, rehacer, zoom, licencias (abrir y cerrar), las
 /// cinco herramientas, las nueve ranuras y los cuatro fondos del lienzo.
-fn todas_las_acciones() -> Vec<AppAction> {
+fn all_the_actions() -> Vec<AppAction> {
     let mut v = vec![
         AppAction::Open,
         AppAction::Save,
@@ -78,14 +78,14 @@ fn todas_las_acciones() -> Vec<AppAction> {
         AppAction::ShowLicenses,
         AppAction::CloseLicenses,
     ];
-    v.extend(HERRAMIENTAS.map(AppAction::SelectTool));
+    v.extend(TEST_TOOLS.map(AppAction::SelectTool));
     v.extend((1..=9).map(AppAction::SelectColor));
-    v.extend(FONDOS.map(AppAction::CanvasBackground));
+    v.extend(BACKGROUNDS.map(AppAction::CanvasBackground));
     v
 }
 
 /// Las 32 combinaciones de los cinco bloqueos.
-fn bloqueos(bits: u8) -> Locks {
+fn locks_2(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
         stroke: false,
@@ -96,24 +96,24 @@ fn bloqueos(bits: u8) -> Locks {
     }
 }
 
-fn solo(f: impl FnOnce(&mut Locks)) -> Locks {
+fn only(f: impl FnOnce(&mut Locks)) -> Locks {
     let mut locks = Locks::default();
     f(&mut locks);
     locks
 }
 
 /// Los cinco bloqueos, uno por uno, con su nombre.
-fn bloqueos_uno_a_uno() -> [(&'static str, Locks); 5] {
+fn locks_one_by_one() -> [(&'static str, Locks); 5] {
     [
-        ("gesture", solo(|l| l.gesture = true)),
-        ("dialog", solo(|l| l.dialog = true)),
-        ("text_focus", solo(|l| l.text_focus = true)),
-        ("removal", solo(|l| l.removal = true)),
-        ("modal", solo(|l| l.modal = true)),
+        ("gesture", only(|l| l.gesture = true)),
+        ("dialog", only(|l| l.dialog = true)),
+        ("text_focus", only(|l| l.text_focus = true)),
+        ("removal", only(|l| l.removal = true)),
+        ("modal", only(|l| l.modal = true)),
     ]
 }
 
-fn estado(locks: Locks) -> UiState {
+fn state_2(locks: Locks) -> UiState {
     UiState {
         can_undo: true,
         can_redo: true,
@@ -123,13 +123,13 @@ fn estado(locks: Locks) -> UiState {
     }
 }
 
-fn pasa_con_modal(action: AppAction) -> bool {
+fn passes_with_modal(action: AppAction) -> bool {
     matches!(action, AppAction::CloseLicenses | AppAction::Quit)
 }
 
 /// Una spec inválida: dos campos con el mismo id.
-fn spec_invalida() -> FormSpec {
-    let casilla = |label| FieldSpec {
+fn spec_invalid() -> FormSpec {
+    let box_value = |label| FieldSpec {
         id: "repetido",
         label,
         kind: FieldKind::Check { default: false },
@@ -139,12 +139,12 @@ fn spec_invalida() -> FormSpec {
         title: "Inválida",
         accept: "Aceptar",
         cancel: Some("Cancelar"),
-        fields: vec![casilla("Uno"), casilla("Dos")],
+        fields: vec![box_value("Uno"), box_value("Dos")],
         check: None,
     }
 }
 
-fn abierto(modal: &Modal) -> Option<&Dialog> {
+fn open_2_2(modal: &Modal) -> Option<&Dialog> {
     match modal {
         Modal::Open(dialog) => Some(dialog),
         Modal::Closed => None,
@@ -156,30 +156,30 @@ fn abierto(modal: &Modal) -> Option<&Dialog> {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6a_can_open_dialog_es_cierto_solo_con_los_cinco_bloqueos_en_falso() {
-    let mut ciertos = 0;
+fn row_6a_can_open_dialog_is_true_only_with_the_five_locks_false() {
+    let mut certain = 0;
     for bits in 0..32u8 {
-        let locks = bloqueos(bits);
-        let esperado =
+        let locks = locks_2(bits);
+        let expected_2 =
             !(locks.gesture || locks.dialog || locks.text_focus || locks.removal || locks.modal);
-        assert_eq!(can_open_dialog(locks), esperado, "{locks:?}");
+        assert_eq!(can_open_dialog(locks), expected_2, "{locks:?}");
         assert_eq!(can_open_dialog(locks), bits == 0, "{locks:?}");
-        ciertos += usize::from(can_open_dialog(locks));
+        certain += usize::from(can_open_dialog(locks));
     }
-    assert_eq!(ciertos, 1, "solo una de las 32 combinaciones permite abrir");
+    assert_eq!(certain, 1, "solo una de las 32 combinaciones permite abrir");
 }
 
 #[test]
-fn fila_6a_con_todo_en_falso_se_puede_abrir() {
+fn row_6a_with_everything_false_it_can_be_opened() {
     assert!(can_open_dialog(Locks::default()));
 }
 
 #[test]
-fn fila_6a_cada_bloqueo_solo_impide_abrir_y_todos_juntos_tambien() {
-    for (nombre, locks) in bloqueos_uno_a_uno() {
-        assert!(!can_open_dialog(locks), "{nombre}");
+fn row_6a_each_lock_alone_prevents_opening_and_all_together_too() {
+    for (name_2, locks) in locks_one_by_one() {
+        assert!(!can_open_dialog(locks), "{name_2}");
     }
-    let todos = Locks {
+    let all_2 = Locks {
         gesture: true,
         stroke: false,
         dialog: true,
@@ -187,7 +187,7 @@ fn fila_6a_cada_bloqueo_solo_impide_abrir_y_todos_juntos_tambien() {
         removal: true,
         modal: true,
     };
-    assert!(!can_open_dialog(todos));
+    assert!(!can_open_dialog(all_2));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -195,7 +195,7 @@ fn fila_6a_cada_bloqueo_solo_impide_abrir_y_todos_juntos_tambien() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6b_open_con_todo_a_falso_abre_el_dialogo() {
+fn row_6b_open_with_everything_false_opens_the_dialog() {
     let mut modal = Modal::default();
     assert!(!modal.is_open());
     assert_eq!(modal.kind(), None);
@@ -206,46 +206,46 @@ fn fila_6b_open_con_todo_a_falso_abre_el_dialogo() {
     ));
     assert!(modal.is_open());
     assert_eq!(modal.kind(), Some(DialogKind::Licenses));
-    assert!(abierto(&modal).is_some());
+    assert!(open_2_2(&modal).is_some());
 }
 
 #[test]
-fn fila_6b_open_con_cada_bloqueo_solo_da_false_y_sigue_closed() {
-    for (nombre, locks) in bloqueos_uno_a_uno() {
+fn row_6b_open_with_each_lock_alone_gives_false_and_stays_closed() {
+    for (name_2, locks) in locks_one_by_one() {
         let mut modal = Modal::default();
         assert!(
             !modal.open(DialogKind::Licenses, licenses_form("texto"), locks),
-            "{nombre}"
+            "{name_2}"
         );
-        assert!(!modal.is_open(), "{nombre}");
-        assert_eq!(modal.kind(), None, "{nombre}");
-        assert!(matches!(modal, Modal::Closed), "{nombre}");
+        assert!(!modal.is_open(), "{name_2}");
+        assert_eq!(modal.kind(), None, "{name_2}");
+        assert!(matches!(modal, Modal::Closed), "{name_2}");
     }
 }
 
 #[test]
-fn fila_6b_open_con_las_32_combinaciones_abre_solo_con_todo_en_falso() {
+fn row_6b_open_with_the_32_combinations_opens_only_with_everything_false() {
     for bits in 0..32u8 {
-        let locks = bloqueos(bits);
+        let locks = locks_2(bits);
         let mut modal = Modal::default();
-        let abre = modal.open(DialogKind::Licenses, licenses_form("texto"), locks);
-        assert_eq!(abre, bits == 0, "{locks:?}");
+        let opens = modal.open(DialogKind::Licenses, licenses_form("texto"), locks);
+        assert_eq!(opens, bits == 0, "{locks:?}");
         assert_eq!(modal.is_open(), bits == 0, "{locks:?}");
         assert_eq!(modal.kind().is_some(), bits == 0, "{locks:?}");
     }
 }
 
 #[test]
-fn fila_6b_con_uno_abierto_otro_open_da_false_con_cualquier_bloqueo_y_no_toca_sus_valores() {
+fn row_6b_with_one_open_another_open_gives_false_with_any_lock_and_does_not_touch_its_values() {
     for bits in 0..32u8 {
-        let locks = bloqueos(bits);
+        let locks = locks_2(bits);
         let mut modal = Modal::default();
         assert!(modal.open(
             DialogKind::Licenses,
             dialog_forms::all_kinds(),
             Locks::default()
         ));
-        let antes = abierto(&modal).expect("abierto").clone();
+        let antes = open_2_2(&modal).expect("abierto").clone();
         // La app pone `modal: true` mientras hay uno abierto, pero la regla también se sostiene
         // sin ese bloqueo: un segundo `open` nunca sustituye al primero.
         assert!(
@@ -254,7 +254,7 @@ fn fila_6b_con_uno_abierto_otro_open_da_false_con_cualquier_bloqueo_y_no_toca_su
         );
         assert!(modal.is_open(), "{locks:?}");
         assert_eq!(
-            abierto(&modal).expect("sigue abierto"),
+            open_2_2(&modal).expect("sigue abierto"),
             &antes,
             "{locks:?}: el diálogo abierto no cambia"
         );
@@ -262,26 +262,26 @@ fn fila_6b_con_uno_abierto_otro_open_da_false_con_cualquier_bloqueo_y_no_toca_su
 }
 
 #[test]
-fn fila_6b_open_con_el_bloqueo_modal_del_propio_dialogo_abierto_da_false() {
+fn row_6b_open_with_the_modal_lock_of_the_open_dialog_itself_gives_false() {
     let mut modal = Modal::default();
     assert!(modal.open(DialogKind::Licenses, licenses_form("uno"), Locks::default()));
-    let con_modal = solo(|l| l.modal = modal.is_open());
-    assert!(con_modal.modal);
-    assert!(!modal.open(DialogKind::Licenses, licenses_form("dos"), con_modal));
+    let with_modal = only(|l| l.modal = modal.is_open());
+    assert!(with_modal.modal);
+    assert!(!modal.open(DialogKind::Licenses, licenses_form("dos"), with_modal));
     assert!(modal.is_open());
 }
 
 #[test]
-fn fila_6b_open_con_una_spec_invalida_da_false_y_sigue_closed() {
+fn row_6b_open_with_an_invalid_spec_gives_false_and_stays_closed() {
     let mut modal = Modal::default();
-    assert!(spec_invalida().validate().is_err());
-    assert!(!modal.open(DialogKind::Licenses, spec_invalida(), Locks::default()));
+    assert!(spec_invalid().validate().is_err());
+    assert!(!modal.open(DialogKind::Licenses, spec_invalid(), Locks::default()));
     assert!(!modal.is_open());
     assert!(matches!(modal, Modal::Closed));
 }
 
 #[test]
-fn fila_6b_se_puede_volver_a_abrir_despues_de_cerrar() {
+fn row_6b_it_can_be_reopened_after_closing() {
     let mut modal = Modal::default();
     assert!(modal.open(DialogKind::Licenses, licenses_form("uno"), Locks::default()));
     assert!(modal.abandon());
@@ -290,7 +290,7 @@ fn fila_6b_se_puede_volver_a_abrir_despues_de_cerrar() {
     assert!(!modal.open(
         DialogKind::Licenses,
         licenses_form("dos"),
-        solo(|l| l.gesture = true)
+        only(|l| l.gesture = true)
     ));
     assert!(modal.open(DialogKind::Licenses, licenses_form("dos"), Locks::default()));
 }
@@ -300,16 +300,16 @@ fn fila_6b_se_puede_volver_a_abrir_despues_de_cerrar() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6c_con_modal_is_blocked_es_cierto_salvo_para_close_licenses_y_quit() {
-    let locks = solo(|l| l.modal = true);
-    let acciones = todas_las_acciones();
+fn row_6c_with_a_modal_is_blocked_is_true_except_for_close_licenses_and_quit() {
+    let locks = only(|l| l.modal = true);
+    let actions = all_the_actions();
     // 12 + 5 herramientas + 9 ranuras + 4 fondos.
-    assert_eq!(acciones.len(), 30);
-    for action in acciones {
-        for origin in ORIGENES {
+    assert_eq!(actions.len(), 30);
+    for action in actions {
+        for origin in SOURCES {
             assert_eq!(
                 is_blocked(action, locks, origin),
-                !pasa_con_modal(action),
+                !passes_with_modal(action),
                 "{action:?} con modal y {origin:?}"
             );
         }
@@ -317,24 +317,24 @@ fn fila_6c_con_modal_is_blocked_es_cierto_salvo_para_close_licenses_y_quit() {
 }
 
 #[test]
-fn fila_6c_con_modal_enabled_es_falso_salvo_para_close_licenses_y_quit() {
-    let locks = solo(|l| l.modal = true);
-    for action in todas_las_acciones() {
+fn row_6c_with_a_modal_enabled_is_false_except_for_close_licenses_and_quit() {
+    let locks = only(|l| l.modal = true);
+    for action in all_the_actions() {
         assert_eq!(
-            enabled(action, &estado(locks)),
-            pasa_con_modal(action),
+            enabled(action, &state_2(locks)),
+            passes_with_modal(action),
             "{action:?} con modal"
         );
     }
 }
 
 #[test]
-fn fila_6c_enabled_con_modal_no_depende_de_la_historia_ni_del_zoom_ni_de_la_herramienta() {
-    let locks = solo(|l| l.modal = true);
+fn row_6c_enabled_with_a_modal_does_not_depend_on_the_history_or_the_zoom_or_the_tool() {
+    let locks = only(|l| l.modal = true);
     for can_undo in [false, true] {
         for can_redo in [false, true] {
             for zoom in [None, Zoom::from_int(1), Zoom::from_int(5), Some(Zoom::MAX)] {
-                for tool in HERRAMIENTAS {
+                for tool in TEST_TOOLS {
                     let state = UiState {
                         can_undo,
                         can_redo,
@@ -342,11 +342,11 @@ fn fila_6c_enabled_con_modal_no_depende_de_la_historia_ni_del_zoom_ni_de_la_herr
                         tool,
                         locks,
                     };
-                    for action in todas_las_acciones() {
+                    for action in all_the_actions() {
                         // `CloseLicenses` y `Quit` no dependen de la historia ni del zoom.
                         assert_eq!(
                             enabled(action, &state),
-                            pasa_con_modal(action),
+                            passes_with_modal(action),
                             "{action:?} con {state:?}"
                         );
                     }
@@ -357,28 +357,31 @@ fn fila_6c_enabled_con_modal_no_depende_de_la_historia_ni_del_zoom_ni_de_la_herr
 }
 
 #[test]
-fn fila_6c_quit_y_close_licenses_pasan_con_modal_y_con_los_tres_origenes() {
-    let locks = solo(|l| l.modal = true);
+fn row_6c_quit_and_close_licenses_pass_with_a_modal_and_with_the_three_sources() {
+    let locks = only(|l| l.modal = true);
     for action in [AppAction::Quit, AppAction::CloseLicenses] {
-        for origin in ORIGENES {
+        for origin in SOURCES {
             assert!(!is_blocked(action, locks, origin), "{action:?} {origin:?}");
         }
-        assert!(enabled(action, &estado(locks)), "{action:?}");
+        assert!(enabled(action, &state_2(locks)), "{action:?}");
     }
 }
 
 #[test]
-fn fila_6c_cada_accion_bloqueada_con_modal_tambien_lo_esta_con_el_menu_el_boton_y_la_tecla() {
+fn row_6c_each_action_blocked_with_a_modal_is_also_blocked_with_the_menu_the_button_and_the_key() {
     // Las ranuras 1 a 9, las cinco herramientas, los cuatro fondos y las cuatro de zoom, una a
     // una (el zoom con el campo de texto sin foco: solo el modal lo bloquea).
-    let locks = solo(|l| l.modal = true);
-    let sin_modal = Locks::default();
-    for action in todas_las_acciones() {
-        if pasa_con_modal(action) {
+    let locks = only(|l| l.modal = true);
+    let without_modal = Locks::default();
+    for action in all_the_actions() {
+        if passes_with_modal(action) {
             continue;
         }
-        for origin in ORIGENES {
-            assert!(!is_blocked(action, sin_modal, origin), "{action:?} libre");
+        for origin in SOURCES {
+            assert!(
+                !is_blocked(action, without_modal, origin),
+                "{action:?} libre"
+            );
             assert!(is_blocked(action, locks, origin), "{action:?} {origin:?}");
         }
     }
@@ -389,55 +392,55 @@ fn fila_6c_cada_accion_bloqueada_con_modal_tambien_lo_esta_con_el_menu_el_boton_
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6d_lo_que_traduce_action_for_shortcut_sigue_bloqueado_con_modal_salvo_quit() {
-    let locks = solo(|l| l.modal = true);
-    let mut traducidas = 0usize;
+fn row_6d_what_action_for_shortcut_translates_stays_blocked_with_a_modal_except_quit() {
+    let locks = only(|l| l.modal = true);
+    let mut translated = 0usize;
     let mut quits = 0usize;
     for key in Key::ALL {
         for bits in 0..32u8 {
-            let modifiers = modificadores(bits);
-            for platform in PLATAFORMAS {
+            let modifiers = modifiers_2(bits);
+            for platform in PLATFORMS {
                 let Some(action) = action_for_shortcut(*key, modifiers, platform) else {
                     continue;
                 };
-                traducidas += 1;
-                let contexto = format!("{key:?} con {modifiers:?} en {platform:?}: {action:?}");
-                for origin in ORIGENES {
+                translated += 1;
+                let context = format!("{key:?} con {modifiers:?} en {platform:?}: {action:?}");
+                for origin in SOURCES {
                     assert_eq!(
                         is_blocked(action, locks, origin),
                         action != AppAction::Quit,
-                        "{contexto} ({origin:?})"
+                        "{context} ({origin:?})"
                     );
                 }
                 // Las teclas llegan con `Origin::Key`; el menú las ve con `enabled`.
                 assert_eq!(
-                    enabled(action, &estado(locks)),
+                    enabled(action, &state_2(locks)),
                     action == AppAction::Quit,
-                    "{contexto}"
+                    "{context}"
                 );
                 assert_ne!(
                     action,
                     AppAction::CloseLicenses,
-                    "{contexto}: ningún atajo cierra las licencias"
+                    "{context}: ningún atajo cierra las licencias"
                 );
                 quits += usize::from(action == AppAction::Quit);
             }
         }
     }
-    assert!(traducidas > 100, "se tradujeron {traducidas} combinaciones");
+    assert!(translated > 100, "se tradujeron {translated} combinaciones");
     assert!(quits > 0, "hay combinaciones que dan Quit");
 }
 
 #[test]
-fn fila_6d_solo_ctrl_q_en_linux_da_quit_y_es_lo_unico_que_pasa_con_modal() {
-    let locks = solo(|l| l.modal = true);
+fn row_6d_only_ctrl_q_on_linux_gives_quit_and_it_is_the_only_one_that_passes_with_a_modal() {
+    let locks = only(|l| l.modal = true);
     for key in Key::ALL {
         for bits in 0..32u8 {
-            let modifiers = modificadores(bits);
-            for platform in PLATAFORMAS {
-                let pasa = action_for_shortcut(*key, modifiers, platform)
+            let modifiers = modifiers_2(bits);
+            for platform in PLATFORMS {
+                let passes = action_for_shortcut(*key, modifiers, platform)
                     .is_some_and(|a| !is_blocked(a, locks, Origin::Key));
-                if pasa {
+                if passes {
                     assert_eq!(*key, Key::Q, "{key:?} {modifiers:?} {platform:?}");
                     assert_eq!(platform, Platform::Linux, "{key:?} {modifiers:?}");
                     assert!(modifiers.command, "{key:?} {modifiers:?}");
@@ -447,37 +450,37 @@ fn fila_6d_solo_ctrl_q_en_linux_da_quit_y_es_lo_unico_que_pasa_con_modal() {
         }
     }
     assert_eq!(
-        action_for_shortcut(Key::Q, modificadores_command(false), Platform::Linux),
+        action_for_shortcut(Key::Q, modifiers_command(false), Platform::Linux),
         Some(AppAction::Quit)
     );
     assert!(!is_blocked(AppAction::Quit, locks, Origin::Key));
     // En Windows y macOS `Ctrl`/`Cmd`+`Q` no es un atajo de la app.
     assert_eq!(
-        action_for_shortcut(Key::Q, modificadores_command(false), Platform::Windows),
+        action_for_shortcut(Key::Q, modifiers_command(false), Platform::Windows),
         None
     );
     assert_eq!(
-        action_for_shortcut(Key::Q, modificadores_command(true), Platform::Mac),
+        action_for_shortcut(Key::Q, modifiers_command(true), Platform::Mac),
         None
     );
 }
 
 #[test]
-fn fila_6d_las_teclas_de_herramienta_color_zoom_y_fichero_estan_bloqueadas_con_modal() {
-    let locks = solo(|l| l.modal = true);
-    let casos = [
-        (Key::D, modificadores(0)),
-        (Key::CloseBracket, modificadores(0)),
-        (Key::OpenBracket, modificadores(0)),
-        (Key::Plus, modificadores(0)),
-        (Key::Minus, modificadores(0)),
-        (Key::Home, modificadores(0)),
-        (Key::Z, modificadores_command(false)),
-        (Key::O, modificadores_command(false)),
-        (Key::S, modificadores_command(false)),
-        (Key::Num1, modificadores_command(false)),
+fn row_6d_the_tool_color_zoom_and_file_keys_are_blocked_with_a_modal() {
+    let locks = only(|l| l.modal = true);
+    let cases = [
+        (Key::D, modifiers_2(0)),
+        (Key::CloseBracket, modifiers_2(0)),
+        (Key::OpenBracket, modifiers_2(0)),
+        (Key::Plus, modifiers_2(0)),
+        (Key::Minus, modifiers_2(0)),
+        (Key::Home, modifiers_2(0)),
+        (Key::Z, modifiers_command(false)),
+        (Key::O, modifiers_command(false)),
+        (Key::S, modifiers_command(false)),
+        (Key::Num1, modifiers_command(false)),
     ];
-    for (key, modifiers) in casos {
+    for (key, modifiers) in cases {
         let action = action_for_shortcut(key, modifiers, Platform::Linux)
             .unwrap_or_else(|| panic!("{key:?} con {modifiers:?} debería traducirse"));
         assert!(
@@ -492,8 +495,8 @@ fn fila_6d_las_teclas_de_herramienta_color_zoom_y_fichero_estan_bloqueadas_con_m
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6d_opens_dialog_es_cierto_solo_para_show_licenses() {
-    for action in todas_las_acciones() {
+fn row_6d_opens_dialog_is_true_only_for_show_licenses() {
+    for action in all_the_actions() {
         assert_eq!(
             action.opens_dialog(),
             action == AppAction::ShowLicenses,
@@ -503,31 +506,31 @@ fn fila_6d_opens_dialog_es_cierto_solo_para_show_licenses() {
 }
 
 #[test]
-fn fila_6d_con_removal_is_blocked_bloquea_exactamente_select_color_y_show_licenses() {
-    let locks = solo(|l| l.removal = true);
-    let mut bloqueadas = Vec::new();
-    for action in todas_las_acciones() {
-        for origin in ORIGENES {
-            let esperado = matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses);
+fn row_6d_with_removal_is_blocked_blocks_exactly_select_color_and_show_licenses() {
+    let locks = only(|l| l.removal = true);
+    let mut locked = Vec::new();
+    for action in all_the_actions() {
+        for origin in SOURCES {
+            let expected_2 = matches!(action, AppAction::SelectColor(_) | AppAction::ShowLicenses);
             assert_eq!(
                 is_blocked(action, locks, origin),
-                esperado,
+                expected_2,
                 "{action:?} con removal y {origin:?}"
             );
         }
         if is_blocked(action, locks, Origin::Menu) {
-            bloqueadas.push(action);
+            locked.push(action);
         }
     }
     // Las nueve ranuras y `ShowLicenses`, nada más.
-    assert_eq!(bloqueadas.len(), 10, "{bloqueadas:?}");
+    assert_eq!(locked.len(), 10, "{locked:?}");
 }
 
 #[test]
-fn fila_6d_la_regla_5_es_select_color_o_una_accion_que_abre_un_dialogo() {
-    let locks = solo(|l| l.removal = true);
-    for action in todas_las_acciones() {
-        for origin in ORIGENES {
+fn row_6d_rule_5_is_select_color_or_an_action_that_opens_a_dialog() {
+    let locks = only(|l| l.removal = true);
+    for action in all_the_actions() {
+        for origin in SOURCES {
             assert_eq!(
                 is_blocked(action, locks, origin),
                 matches!(action, AppAction::SelectColor(_)) || action.opens_dialog(),
@@ -538,9 +541,9 @@ fn fila_6d_la_regla_5_es_select_color_o_una_accion_que_abre_un_dialogo() {
 }
 
 #[test]
-fn fila_6d_con_removal_siguen_libres_quit_zoom_fondo_deshacer_y_rehacer_y_herramientas() {
-    let locks = solo(|l| l.removal = true);
-    let libres = [
+fn row_6d_with_removal_quit_zoom_background_undo_and_redo_and_tools_stay_free() {
+    let locks = only(|l| l.removal = true);
+    let free = [
         AppAction::Quit,
         AppAction::CloseLicenses,
         AppAction::Undo,
@@ -555,21 +558,21 @@ fn fila_6d_con_removal_siguen_libres_quit_zoom_fondo_deshacer_y_rehacer_y_herram
         AppAction::SelectTool(Tool::Fill),
         AppAction::CanvasBackground(CanvasBackground::Black),
     ];
-    for action in libres {
-        for origin in ORIGENES {
+    for action in free {
+        for origin in SOURCES {
             assert!(!is_blocked(action, locks, origin), "{action:?} {origin:?}");
         }
-        assert!(enabled(action, &estado(locks)), "{action:?}");
+        assert!(enabled(action, &state_2(locks)), "{action:?}");
     }
-    assert!(!enabled(AppAction::ShowLicenses, &estado(locks)));
-    assert!(!enabled(AppAction::SelectColor(1), &estado(locks)));
+    assert!(!enabled(AppAction::ShowLicenses, &state_2(locks)));
+    assert!(!enabled(AppAction::SelectColor(1), &state_2(locks)));
 }
 
 #[test]
-fn fila_6d_show_licenses_esta_bloqueada_exactamente_cuando_no_se_puede_abrir_un_dialogo() {
+fn row_6d_show_licenses_is_blocked_exactly_when_a_dialog_cannot_be_opened() {
     for bits in 0..32u8 {
-        let locks = bloqueos(bits);
-        for origin in ORIGENES {
+        let locks = locks_2(bits);
+        for origin in SOURCES {
             assert_eq!(
                 is_blocked(AppAction::ShowLicenses, locks, origin),
                 !can_open_dialog(locks),
@@ -577,7 +580,7 @@ fn fila_6d_show_licenses_esta_bloqueada_exactamente_cuando_no_se_puede_abrir_un_
             );
         }
         assert_eq!(
-            enabled(AppAction::ShowLicenses, &estado(locks)),
+            enabled(AppAction::ShowLicenses, &state_2(locks)),
             can_open_dialog(locks),
             "{locks:?}"
         );
@@ -585,14 +588,11 @@ fn fila_6d_show_licenses_esta_bloqueada_exactamente_cuando_no_se_puede_abrir_un_
 }
 
 #[test]
-fn fila_6d_ninguna_accion_que_abre_un_dialogo_se_deja_pasar_si_no_se_puede_abrir() {
-    for action in todas_las_acciones()
-        .into_iter()
-        .filter(|a| a.opens_dialog())
-    {
+fn row_6d_no_action_that_opens_a_dialog_is_let_through_if_it_cannot_be_opened() {
+    for action in all_the_actions().into_iter().filter(|a| a.opens_dialog()) {
         for bits in 0..32u8 {
-            let locks = bloqueos(bits);
-            for origin in ORIGENES {
+            let locks = locks_2(bits);
+            for origin in SOURCES {
                 if !can_open_dialog(locks) {
                     assert!(
                         is_blocked(action, locks, origin),
@@ -605,16 +605,16 @@ fn fila_6d_ninguna_accion_que_abre_un_dialogo_se_deja_pasar_si_no_se_puede_abrir
 }
 
 #[test]
-fn fila_6d_cada_bloqueo_solo_frena_show_licenses_con_los_tres_origenes() {
-    for (nombre, locks) in bloqueos_uno_a_uno() {
-        for origin in ORIGENES {
+fn row_6d_each_lock_alone_only_stops_show_licenses_with_the_three_sources() {
+    for (name_2, locks) in locks_one_by_one() {
+        for origin in SOURCES {
             assert!(
                 is_blocked(AppAction::ShowLicenses, locks, origin),
-                "{nombre} {origin:?}"
+                "{name_2} {origin:?}"
             );
         }
     }
-    for origin in ORIGENES {
+    for origin in SOURCES {
         assert!(!is_blocked(
             AppAction::ShowLicenses,
             Locks::default(),

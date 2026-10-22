@@ -128,7 +128,7 @@ struct Tile {
 struct Overlay {
     /// El trazo pendiente ya escrito (para escribir solo lo nuevo).
     pending: Vec<(u32, u32, Rgba)>,
-    /// Bloque `(bx, by)` → sus píxeles (`ancho · alto` del bloque recortado a la imagen).
+    /// Bloque `(bx, by)` → sus píxeles (`width_2 · height_2` del bloque recortado a la imagen).
     blocks: HashMap<(u32, u32), Vec<Color32>>,
 }
 

@@ -22,12 +22,12 @@ use px_ui::layers_panel::{
 use px_ui::text::text_scale;
 
 /// Alto de la ventana mínima en `u` (barra de estado 20 + menú 16 + panel mínimo 305).
-const ALTO_MINIMO_U: i64 = 341;
+const HEIGHT_MINIMUM_U: i64 = 341;
 const GIB: usize = 1 << 30;
 const MIB: usize = 1 << 20;
 
 /// Todos los elementos con su rectángulo, para los barridos de recubrimiento.
-fn elementos() -> Vec<(String, RectU)> {
+fn elements() -> Vec<(String, RectU)> {
     let mut v = vec![
         ("título".to_string(), title_u()),
         ("cerrar".to_string(), close_u()),
@@ -39,23 +39,23 @@ fn elementos() -> Vec<(String, RectU)> {
         ("mezcla".to_string(), blend_u()),
         ("memoria".to_string(), memory_u()),
     ];
-    for fila in 0..VISIBLE_ROWS {
-        v.push((format!("ojo {fila}"), eye_u(fila)));
-        v.push((format!("candado {fila}"), lock_u(fila)));
-        v.push((format!("nombre {fila}"), name_u(fila)));
+    for row_2 in 0..VISIBLE_ROWS {
+        v.push((format!("ojo {row_2}"), eye_u(row_2)));
+        v.push((format!("candado {row_2}"), lock_u(row_2)));
+        v.push((format!("nombre {row_2}"), name_u(row_2)));
     }
-    for boton in PanelButton::ALL {
-        v.push((format!("botón {boton:?}"), button_u(boton)));
+    for button_2 in PanelButton::ALL {
+        v.push((format!("botón {button_2:?}"), button_u(button_2)));
     }
     v
 }
 
-fn solapan(a: RectU, b: RectU) -> bool {
+fn overlap(a: RectU, b: RectU) -> bool {
     a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 }
 
-fn ventana_minima(n: i64) -> (i64, i64) {
-    (min_window_width_u() * n, ALTO_MINIMO_U * n)
+fn window_minimum(n: i64) -> (i64, i64) {
+    (min_window_width_u() * n, HEIGHT_MINIMUM_U * n)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ fn ventana_minima(n: i64) -> (i64, i64) {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_5_las_medidas_son_188_por_277_con_seis_filas_de_24_u() {
+fn row_5_the_measures_are_188_by_277_with_six_rows_of_24_u() {
     assert_eq!((PANEL_W_U, PANEL_H_U, VISIBLE_ROWS), (188, 277, 6));
     assert_eq!(
         title_u(),
@@ -83,47 +83,47 @@ fn fila_5_las_medidas_son_188_por_277_con_seis_filas_de_24_u() {
             h: 16
         }
     );
-    for fila in 0..VISIBLE_ROWS {
-        let y = 21 + 25 * fila as i64;
+    for row_2 in 0..VISIBLE_ROWS {
+        let y = 21 + 25 * row_2 as i64;
         assert_eq!(
-            eye_u(fila),
+            eye_u(row_2),
             RectU {
                 x: 5,
                 y,
                 w: 24,
                 h: 24
             },
-            "ojo {fila}"
+            "ojo {row_2}"
         );
         assert_eq!(
-            lock_u(fila),
+            lock_u(row_2),
             RectU {
                 x: 30,
                 y,
                 w: 24,
                 h: 24
             },
-            "candado {fila}"
+            "candado {row_2}"
         );
         assert_eq!(
-            name_u(fila),
+            name_u(row_2),
             RectU {
                 x: 58,
                 y,
                 w: 114,
                 h: 24
             },
-            "nombre {fila}"
+            "nombre {row_2}"
         );
         assert_eq!(
-            row_u(fila),
+            row_u(row_2),
             RectU {
                 x: 5,
                 y,
                 w: 167,
                 h: 24
             },
-            "fila {fila}"
+            "fila {row_2}"
         );
     }
     assert_eq!(
@@ -135,16 +135,16 @@ fn fila_5_las_medidas_son_188_por_277_con_seis_filas_de_24_u() {
             h: 149
         }
     );
-    for (i, boton) in PanelButton::ALL.into_iter().enumerate() {
+    for (i, button_2) in PanelButton::ALL.into_iter().enumerate() {
         assert_eq!(
-            button_u(boton),
+            button_u(button_2),
             RectU {
                 x: 5 + 25 * i as i64,
                 y: 174,
                 w: 24,
                 h: 24
             },
-            "{boton:?}"
+            "{button_2:?}"
         );
     }
     assert_eq!(name_field_u().y, 202);
@@ -167,28 +167,28 @@ fn fila_5_las_medidas_son_188_por_277_con_seis_filas_de_24_u() {
 }
 
 #[test]
-fn fila_5_ningun_elemento_solapa_con_otro_y_todos_caben_en_el_panel() {
-    let todos = elementos();
-    for (nombre, r) in &todos {
+fn row_5_no_element_overlaps_another_and_all_fit_in_the_panel() {
+    let all_2 = elements();
+    for (name_2, r) in &all_2 {
         assert!(
             r.x >= 0 && r.y >= 0 && r.x + r.w <= PANEL_W_U && r.y + r.h <= PANEL_H_U,
-            "{nombre}: {r:?}"
+            "{name_2}: {r:?}"
         );
-        assert!(r.w > 0 && r.h > 0, "{nombre}");
+        assert!(r.w > 0 && r.h > 0, "{name_2}");
     }
-    for (i, (a, ra)) in todos.iter().enumerate() {
-        for (b, rb) in &todos[i + 1..] {
-            assert!(!solapan(*ra, *rb), "{a} solapa con {b}");
+    for (i, (a, ra)) in all_2.iter().enumerate() {
+        for (b, rb) in &all_2[i + 1..] {
+            assert!(!overlap(*ra, *rb), "{a} solapa con {b}");
         }
     }
 }
 
 #[test]
-fn fila_5_hit_golpea_el_elemento_en_su_primera_y_ultima_coordenada_a_todas_las_escalas() {
+fn row_5_hit_hits_the_element_at_its_first_and_last_coordinate_at_all_scales() {
     for n in 1..=8u32 {
         let k = i64::from(n);
-        let esperado = |nombre: &str| -> PanelHit {
-            match nombre {
+        let expected_2 = |name_2: &str| -> PanelHit {
+            match name_2 {
                 "título" => PanelHit::Title,
                 "cerrar" => PanelHit::Close,
                 "barra" => PanelHit::Scrollbar,
@@ -198,36 +198,32 @@ fn fila_5_hit_golpea_el_elemento_en_su_primera_y_ultima_coordenada_a_todas_las_e
                 "opacidad" => PanelHit::OpacityField,
                 "mezcla" => PanelHit::BlendButton,
                 "memoria" => PanelHit::Memory,
-                otro if otro.starts_with("botón ") => {
-                    let boton = PanelButton::ALL
+                other_2 if other_2.starts_with("botón ") => {
+                    let button_2 = PanelButton::ALL
                         .into_iter()
-                        .find(|b| format!("botón {b:?}") == otro)
+                        .find(|b| format!("botón {b:?}") == other_2)
                         .expect("botón");
-                    PanelHit::Button(boton)
+                    PanelHit::Button(button_2)
                 }
-                otro => {
-                    let fila: usize = otro.rsplit(' ').next().unwrap().parse().unwrap();
-                    if otro.starts_with("ojo") {
-                        PanelHit::Eye(fila)
-                    } else if otro.starts_with("candado") {
-                        PanelHit::Lock(fila)
+                other_2 => {
+                    let row_2: usize = other_2.rsplit(' ').next().unwrap().parse().unwrap();
+                    if other_2.starts_with("ojo") {
+                        PanelHit::Eye(row_2)
+                    } else if other_2.starts_with("candado") {
+                        PanelHit::Lock(row_2)
                     } else {
-                        PanelHit::Name(fila)
+                        PanelHit::Name(row_2)
                     }
                 }
             }
         };
-        for (nombre, r) in elementos() {
-            let quiero = esperado(&nombre);
+        for (name_2, r) in elements() {
+            let want = expected_2(&name_2);
             for (x, y) in [
                 (r.x * k, r.y * k),
                 ((r.x + r.w) * k - 1, (r.y + r.h) * k - 1),
             ] {
-                assert_eq!(
-                    hit(x, y, n),
-                    Some(quiero),
-                    "{nombre} en ({x}, {y}) a n = {n}"
-                );
+                assert_eq!(hit(x, y, n), Some(want), "{name_2} en ({x}, {y}) a n = {n}");
             }
             // Un píxel fuera por cada lado no es el mismo elemento.
             for (x, y) in [
@@ -236,11 +232,7 @@ fn fila_5_hit_golpea_el_elemento_en_su_primera_y_ultima_coordenada_a_todas_las_e
                 (r.x * k, r.y * k - 1),
                 (r.x * k, (r.y + r.h) * k),
             ] {
-                assert_ne!(
-                    hit(x, y, n),
-                    Some(quiero),
-                    "{nombre} en ({x}, {y}) a n = {n}"
-                );
+                assert_ne!(hit(x, y, n), Some(want), "{name_2} en ({x}, {y}) a n = {n}");
             }
         }
         // Dentro del panel pero en un hueco: el fondo. Fuera del panel: nada.
@@ -257,32 +249,32 @@ fn fila_5_hit_golpea_el_elemento_en_su_primera_y_ultima_coordenada_a_todas_las_e
 }
 
 #[test]
-fn fila_5_place_recorta_a_la_franja_central_con_posiciones_dentro_fuera_y_negativas() {
+fn row_5_place_clips_to_the_central_strip_with_positions_inside_outside_and_negative() {
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
-        let ventana = ventana_minima(k);
-        let diseno = window_layout(ventana, n);
-        let franja_y = diseno.menu.height;
-        let franja_alto = diseno.status.y - diseno.menu.height;
+        let window = window_minimum(k);
+        let design = window_layout(window, n);
+        let band_y = design.menu.height;
+        let band_height = design.status.y - design.menu.height;
         assert_eq!(
-            franja_alto,
+            band_height,
             305 * k,
             "la franja central mide 305 u a la ventana mínima"
         );
-        for (pos, x_esperado, y_esperado) in [
-            ((0, 0), 0, franja_y),
-            ((10, 20), 10 * k, franja_y + 20 * k),
-            ((-50, -50), 0, franja_y),
+        for (pos, x_expected, y_expected) in [
+            ((0, 0), 0, band_y),
+            ((10, 20), 10 * k, band_y + 20 * k),
+            ((-50, -50), 0, band_y),
             (
                 (10_000, 10_000),
-                ventana.0 - PANEL_W_U * k,
-                franja_y + franja_alto - PANEL_H_U * k,
+                window.0 - PANEL_W_U * k,
+                band_y + band_height - PANEL_H_U * k,
             ),
         ] {
-            let r = place(pos, ventana, n);
+            let r = place(pos, window, n);
             assert_eq!(
                 (r.x, r.y),
-                (x_esperado, y_esperado),
+                (x_expected, y_expected),
                 "pos {pos:?} a n = {n}"
             );
             assert_eq!((r.width, r.height), (PANEL_W_U * k, PANEL_H_U * k));
@@ -291,75 +283,75 @@ fn fila_5_place_recorta_a_la_franja_central_con_posiciones_dentro_fuera_y_negati
 }
 
 #[test]
-fn fila_5_con_una_ventana_menor_que_el_panel_se_ancla_arriba_a_la_izquierda_sin_panico() {
-    for ventana in [(100, 100), (0, 0), (187, 300)] {
-        let r = place((30, 30), ventana, 1);
-        let franja_y = window_layout(ventana, 1).menu.height;
-        assert_eq!(r.x, 0, "{ventana:?}");
-        assert_eq!(r.y, franja_y, "{ventana:?}");
+fn row_5_with_a_window_smaller_than_the_panel_it_anchors_top_left_without_panic() {
+    for window in [(100, 100), (0, 0), (187, 300)] {
+        let r = place((30, 30), window, 1);
+        let band_y = window_layout(window, 1).menu.height;
+        assert_eq!(r.x, 0, "{window:?}");
+        assert_eq!(r.y, band_y, "{window:?}");
         assert_eq!((r.width, r.height), (PANEL_W_U, PANEL_H_U));
     }
 }
 
 #[test]
-fn fila_5_al_redimensionar_y_al_cambiar_de_escala_el_panel_se_recoloca_dentro() {
+fn row_5_when_resizing_and_when_changing_scale_the_panel_repositions_inside() {
     // Condición 2. Un panel colocado a la derecha de una ventana grande, al achicarla hasta el
     // mínimo se recoloca dentro; al volver a agrandarla no se «acuerda» de la posición recortada
     // más allá de lo que se arrastró (la posición en `u` guardada es la recortada).
-    let mut estado = PanelState {
+    let mut state_2 = PanelState {
         open: true,
         ..PanelState::default()
     };
-    let grande = (1600, 900);
-    estado.pos_u = Some((900, 80));
-    let r_grande = estado.rect(grande, 1);
-    assert!(r_grande.x + r_grande.width <= grande.0);
-    let minima = ventana_minima(1);
-    let r_min = estado.rect(minima, 1);
+    let large = (1600, 900);
+    state_2.pos_u = Some((900, 80));
+    let r_large = state_2.rect(large, 1);
+    assert!(r_large.x + r_large.width <= large.0);
+    let minimum = window_minimum(1);
+    let r_min = state_2.rect(minimum, 1);
     assert!(
-        r_min.x >= 0 && r_min.x + r_min.width <= minima.0,
+        r_min.x >= 0 && r_min.x + r_min.width <= minimum.0,
         "{r_min:?}"
     );
-    let franja = window_layout(minima, 1);
-    assert!(r_min.y >= franja.menu.height && r_min.y + r_min.height <= franja.status.y);
+    let band = window_layout(minimum, 1);
+    assert!(r_min.y >= band.menu.height && r_min.y + r_min.height <= band.status.y);
     // Cambio de escala: la misma posición en `u` a otra escala.
-    let mut otro = PanelState {
+    let mut other_2 = PanelState {
         open: true,
         pos_u: Some((40, 30)),
         ..PanelState::default()
     };
-    let a1 = otro.rect((2000, 1200), 1);
-    let a2 = otro.rect((4000, 2400), 2);
+    let a1 = other_2.rect((2000, 1200), 1);
+    let a2 = other_2.rect((4000, 2400), 2);
     assert_eq!((a2.x, a2.width), (a1.x * 2, a1.width * 2));
     assert_eq!(
         a2.y - window_layout((4000, 2400), 2).menu.height,
         (a1.y - window_layout((2000, 1200), 1).menu.height) * 2
     );
     // Y a una escala mayor con la ventana mínima también cabe.
-    let r3 = otro.rect(ventana_minima(3), 3);
-    assert!(r3.x + r3.width <= ventana_minima(3).0);
+    let r3 = other_2.rect(window_minimum(3), 3);
+    assert!(r3.x + r3.width <= window_minimum(3).0);
 }
 
 #[test]
-fn fila_5_arrastrar_por_la_barra_mueve_a_pasos_de_u_y_la_posicion_inicial_pega_a_la_derecha_del_lienzo()
+fn row_5_dragging_by_the_bar_moves_in_steps_of_u_and_the_initial_position_sticks_to_the_right_of_the_canvas()
  {
-    let ventana = (1280, 720);
+    let window = (1280, 720);
     let k = 2i64;
-    let ventana2 = (ventana.0 * k, ventana.1 * k);
-    let (x, y) = default_pos_u(ventana2, 2);
-    let canvas = window_layout(ventana2, 2).canvas;
+    let window_2 = (window.0 * k, window.1 * k);
+    let (x, y) = default_pos_u(window_2, 2);
+    let canvas = window_layout(window_2, 2).canvas;
     assert_eq!(x, (canvas.width / k) - PANEL_W_U - 8);
     assert_eq!(y, 8);
-    let mut estado = PanelState {
+    let mut state_2 = PanelState {
         open: true,
         ..PanelState::default()
     };
-    let antes = estado.rect(ventana2, 2);
-    estado.drag(11, -7, 2); // 11 px = 5,5 u → 6 u y −7 px = −3,5 u → −4 u (redondeo)
-    let despues = estado.rect(ventana2, 2);
-    assert_eq!((despues.x - antes.x) % k, 0, "a pasos de u enteras");
-    assert_eq!((despues.y - antes.y) % k, 0);
-    assert!((despues.x - antes.x - 11).abs() <= 1 && (despues.y - antes.y + 7).abs() <= 1);
+    let antes = state_2.rect(window_2, 2);
+    state_2.drag(11, -7, 2); // 11 px = 5,5 u → 6 u y −7 px = −3,5 u → −4 u (redondeo)
+    let after_2 = state_2.rect(window_2, 2);
+    assert_eq!((after_2.x - antes.x) % k, 0, "a pasos de u enteras");
+    assert_eq!((after_2.y - antes.y) % k, 0);
+    assert!((after_2.x - antes.x - 11).abs() <= 1 && (after_2.y - antes.y + 7).abs() <= 1);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -367,42 +359,42 @@ fn fila_5_arrastrar_por_la_barra_mueve_a_pasos_de_u_y_la_posicion_inicial_pega_a
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn propiedad_2_el_panel_cabe_siempre_y_se_recoloca() {
-    let posiciones = [(-500, -500), (0, 0), (37, 11), (120, 90), (5000, 5000)];
-    for paso in 0..=60 {
-        let ppp = 1.0 + 0.05 * paso as f32;
+fn property_2_the_panel_always_fits_and_repositions() {
+    let positions = [(-500, -500), (0, 0), (37, 11), (120, 90), (5000, 5000)];
+    for step in 0..=60 {
+        let ppp = 1.0 + 0.05 * step as f32;
         let n = text_scale(ppp);
         let k = i64::from(n);
-        for (ancho_extra, alto_extra) in [(0, 0), (1, 0), (0, 7), (333, 211)] {
-            let ventana = (
-                min_window_width_u() * k + ancho_extra,
-                ALTO_MINIMO_U * k + alto_extra,
+        for (width_extra, height_extra) in [(0, 0), (1, 0), (0, 7), (333, 211)] {
+            let window = (
+                min_window_width_u() * k + width_extra,
+                HEIGHT_MINIMUM_U * k + height_extra,
             );
-            let diseno = window_layout(ventana, n);
-            let (arriba, abajo) = (diseno.menu.height, diseno.status.y);
-            for pos in posiciones {
-                let r = place(pos, ventana, n);
+            let design = window_layout(window, n);
+            let (top, below) = (design.menu.height, design.status.y);
+            for pos in positions {
+                let r = place(pos, window, n);
                 assert_eq!(
                     (r.width, r.height),
                     (PANEL_W_U * k, PANEL_H_U * k),
                     "ppp {ppp}"
                 );
                 assert!(
-                    r.x >= 0 && r.x + r.width <= ventana.0,
+                    r.x >= 0 && r.x + r.width <= window.0,
                     "ppp {ppp} {pos:?}: {r:?}"
                 );
                 assert!(
-                    r.y >= arriba && r.y + r.height <= abajo,
+                    r.y >= top && r.y + r.height <= below,
                     "ppp {ppp} {pos:?}: {r:?}"
                 );
                 // Idempotente: colocar el resultado (en `u` relativas a la franja) da lo mismo.
-                let otra = place(((r.x) / k, (r.y - arriba) / k), ventana, n);
-                assert_eq!(otra, r, "ppp {ppp} {pos:?}");
+                let other = place(((r.x) / k, (r.y - top) / k), window, n);
+                assert_eq!(other, r, "ppp {ppp} {pos:?}");
                 // Un punto físico golpea como mucho un elemento y nunca fuera del panel.
                 for (dx, dy) in [(0, 0), (r.width - 1, r.height - 1), (r.width, 0), (-1, -1)] {
-                    let golpe = hit(dx, dy, n);
-                    let dentro = (0..r.width).contains(&dx) && (0..r.height).contains(&dy);
-                    assert_eq!(golpe.is_some(), dentro, "ppp {ppp}");
+                    let hit_2 = hit(dx, dy, n);
+                    let inside = (0..r.width).contains(&dx) && (0..r.height).contains(&dy);
+                    assert_eq!(hit_2.is_some(), inside, "ppp {ppp}");
                 }
             }
         }
@@ -413,10 +405,10 @@ fn propiedad_2_el_panel_cabe_siempre_y_se_recoloca() {
 // Fila 6: la lista
 // ---------------------------------------------------------------------------------------------
 
-fn documento(capas: usize) -> Document {
-    let imagen = Image::new(8, 8, Mode::Rgba).expect("imagen");
-    let mut doc = Document::new(imagen);
-    for i in 1..capas {
+fn document(layers: usize) -> Document {
+    let image_2 = Image::new(8, 8, Mode::Rgba).expect("imagen");
+    let mut doc = Document::new(image_2);
+    for i in 1..layers {
         doc.apply(Command::AddLayer {
             name: format!("Capa {}", i + 1),
             at: i,
@@ -426,13 +418,13 @@ fn documento(capas: usize) -> Document {
     doc
 }
 
-fn id(doc: &Document, posicion: usize) -> LayerId {
-    doc.layers()[posicion].id()
+fn id(doc: &Document, position: usize) -> LayerId {
+    doc.layers()[position].id()
 }
 
 #[test]
-fn fila_6_la_lista_empieza_por_la_capa_de_arriba_y_marca_la_activa_el_ojo_y_el_candado() {
-    let mut doc = documento(3);
+fn row_6_the_list_starts_with_the_top_layer_and_marks_the_active_one_the_eye_and_the_lock() {
+    let mut doc = document(3);
     let (b, c) = (id(&doc, 1), id(&doc, 2));
     doc.apply(Command::SetLayerVisible {
         layer: b,
@@ -444,11 +436,11 @@ fn fila_6_la_lista_empieza_por_la_capa_de_arriba_y_marca_la_activa_el_ojo_y_el_c
         locked: true,
     })
     .expect("bloquear");
-    let filas = visible_rows(&doc, b, 0);
-    let nombres: Vec<&str> = filas.iter().map(|f| f.name.as_str()).collect();
-    assert_eq!(nombres, ["Capa 3", "Capa 2", "Capa 1"]);
+    let rows_2 = visible_rows(&doc, b, 0);
+    let names: Vec<&str> = rows_2.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Capa 3", "Capa 2", "Capa 1"]);
     assert_eq!(
-        filas
+        rows_2
             .iter()
             .map(|f| (f.visible, f.locked, f.active))
             .collect::<Vec<_>>(),
@@ -458,48 +450,45 @@ fn fila_6_la_lista_empieza_por_la_capa_de_arriba_y_marca_la_activa_el_ojo_y_el_c
             (true, false, false)
         ]
     );
-    assert_eq!(filas[0].id, c);
+    assert_eq!(rows_2[0].id, c);
     // Con una sola capa, una sola fila.
-    assert_eq!(
-        visible_rows(&documento(1), id(&documento(1), 0), 0).len(),
-        1
-    );
+    assert_eq!(visible_rows(&document(1), id(&document(1), 0), 0).len(), 1);
 }
 
 #[test]
-fn fila_6_seis_filas_visibles_con_desplazamiento_hasta_256_capas() {
+fn row_6_six_visible_rows_with_scroll_up_to_256_layers() {
     assert_eq!(max_scroll(1), 0);
     assert_eq!(max_scroll(6), 0);
     assert_eq!(max_scroll(7), 1);
     assert_eq!(max_scroll(256), 250);
-    let doc = documento(7);
-    let activa = id(&doc, 0);
-    assert_eq!(visible_rows(&doc, activa, 0).len(), 6);
-    let abajo = visible_rows(&doc, activa, 1);
-    assert_eq!(abajo.len(), 6);
-    assert_eq!(abajo[0].name, "Capa 6");
-    assert_eq!(abajo[5].name, "Capa 1");
-    assert!(abajo[5].active);
+    let doc = document(7);
+    let active_2 = id(&doc, 0);
+    assert_eq!(visible_rows(&doc, active_2, 0).len(), 6);
+    let below = visible_rows(&doc, active_2, 1);
+    assert_eq!(below.len(), 6);
+    assert_eq!(below[0].name, "Capa 6");
+    assert_eq!(below[5].name, "Capa 1");
+    assert!(below[5].active);
     // Un desplazamiento de más se recorta.
-    assert_eq!(visible_rows(&doc, activa, 99).len(), 6);
-    let grande = documento(256);
-    assert_eq!(visible_rows(&grande, id(&grande, 0), 250).len(), 6);
-    assert_eq!(visible_rows(&grande, id(&grande, 0), 250)[5].name, "Capa 1");
+    assert_eq!(visible_rows(&doc, active_2, 99).len(), 6);
+    let large = document(256);
+    assert_eq!(visible_rows(&large, id(&large, 0), 250).len(), 6);
+    assert_eq!(visible_rows(&large, id(&large, 0), 250)[5].name, "Capa 1");
     // La rueda baja 3 filas por muesca y se recorta.
-    let mut estado = PanelState::default();
-    estado.scroll_by(1, 256);
-    assert_eq!(estado.scroll, 3);
-    estado.scroll_by(100, 256);
-    assert_eq!(estado.scroll, 250);
-    estado.scroll_by(-100, 256);
-    assert_eq!(estado.scroll, 0);
-    estado.scroll_by(1, 5);
-    assert_eq!(estado.scroll, 0, "con 5 capas no hay nada que desplazar");
+    let mut state_2 = PanelState::default();
+    state_2.scroll_by(1, 256);
+    assert_eq!(state_2.scroll, 3);
+    state_2.scroll_by(100, 256);
+    assert_eq!(state_2.scroll, 250);
+    state_2.scroll_by(-100, 256);
+    assert_eq!(state_2.scroll, 0);
+    state_2.scroll_by(1, 5);
+    assert_eq!(state_2.scroll, 0, "con 5 capas no hay nada que desplazar");
 }
 
 #[test]
-fn fila_6_elegir_o_crear_una_capa_la_lleva_a_la_vista() {
-    // `scroll_for(total, posición de la activa desde abajo, scroll actual)`.
+fn row_6_choosing_or_creating_a_layer_brings_it_into_view() {
+    // `scroll_for(total, posición de la active_2 from_2 below, scroll actual)`.
     assert_eq!(scroll_for(20, 19, 5), 0, "la de arriba es la fila 0");
     assert_eq!(
         scroll_for(20, 0, 0),
@@ -513,9 +502,9 @@ fn fila_6_elegir_o_crear_una_capa_la_lleva_a_la_vista() {
 }
 
 #[test]
-fn fila_6_los_nombres_largos_se_recortan_con_puntos_suspensivos() {
-    let justo = "a".repeat(NAME_CHARS);
-    assert_eq!(truncate_name(&justo), justo);
+fn row_6_long_names_are_clipped_with_an_ellipsis() {
+    let just = "a".repeat(NAME_CHARS);
+    assert_eq!(truncate_name(&just), just);
     assert_eq!(
         truncate_name(&"a".repeat(NAME_CHARS + 1)),
         format!("{}…", "a".repeat(15))
@@ -530,7 +519,7 @@ fn fila_6_los_nombres_largos_se_recortan_con_puntos_suspensivos() {
 }
 
 #[test]
-fn fila_6_el_pie_de_memoria_formatea_kib_mib_y_gib_y_avisa_desde_1_gib() {
+fn row_6_the_memory_footer_formats_kib_mib_and_gib_and_warns_from_1_gib() {
     assert_eq!(format_bytes(0), "0 KiB");
     assert_eq!(format_bytes(16 * 1024), "16 KiB");
     assert_eq!(format_bytes(768 * MIB), "768 MiB");
@@ -568,10 +557,10 @@ fn fila_6_el_pie_de_memoria_formatea_kib_mib_y_gib_y_avisa_desde_1_gib() {
         2 * GIB,
         usize::MAX,
     ] {
-        for limite in [2 * GIB, GIB / 2, 3 * GIB / 2] {
+        for limit in [2 * GIB, GIB / 2, 3 * GIB / 2] {
             assert!(
-                memory_line(bytes, limite).0.chars().count() <= 25,
-                "{bytes} / {limite}"
+                memory_line(bytes, limit).0.chars().count() <= 25,
+                "{bytes} / {limit}"
             );
         }
     }

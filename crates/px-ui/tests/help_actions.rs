@@ -14,9 +14,9 @@ use px_ui::help::{HelpTarget, help_target_at, help_target_for_button};
 use px_ui::menu::{MENUS, popup_width_u, shortcut_for};
 use px_ui::tool::Tool;
 
-const ORIGENES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
+const SOURCES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
 
-fn bloqueos(bits: u8) -> Locks {
+fn locks_2(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
         stroke: bits & 2 != 0,
@@ -27,7 +27,7 @@ fn bloqueos(bits: u8) -> Locks {
     }
 }
 
-fn estado(locks: Locks) -> UiState {
+fn state_2(locks: Locks) -> UiState {
     UiState {
         can_undo: false,
         can_redo: false,
@@ -37,7 +37,7 @@ fn estado(locks: Locks) -> UiState {
     }
 }
 
-const ACCIONES: [AppAction; 2] = [
+const ACTIONS: [AppAction; 2] = [
     AppAction::ShowHelp(HelpTarget::Active),
     AppAction::ShowShortcuts,
 ];
@@ -47,8 +47,8 @@ const ACCIONES: [AppAction; 2] = [
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_cada_boton_de_la_caja_tiene_su_destino() {
-    let esperado = [
+fn row_3_each_toolbox_button_has_its_target() {
+    let expected_2 = [
         HelpTarget::Tool(Tool::Pencil),
         HelpTarget::Tool(Tool::Line),
         HelpTarget::Tool(Tool::Fill),
@@ -60,34 +60,34 @@ fn fila_3_cada_boton_de_la_caja_tiene_su_destino() {
         HelpTarget::ZoomActual,
     ];
     assert_eq!(TOOLBOX_BUTTONS, 9);
-    for (i, destino) in esperado.into_iter().enumerate() {
-        assert_eq!(help_target_for_button(i), Some(destino), "botón {i}");
+    for (i, target_2) in expected_2.into_iter().enumerate() {
+        assert_eq!(help_target_for_button(i), Some(target_2), "botón {i}");
     }
     assert_eq!(help_target_for_button(9), None);
 }
 
 #[test]
-fn fila_3_el_puntero_sobre_un_boton_da_el_destino_y_fuera_de_ellos_la_herramienta_activa() {
+fn row_3_the_pointer_over_a_button_gives_the_target_and_outside_them_the_active_tool() {
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
-        let ventana = (960 * k, 720 * k);
-        let layout = window_layout(ventana, n);
+        let window = (960 * k, 720 * k);
+        let layout = window_layout(window, n);
         // Sobre cada botón (el centro y las dos esquinas), también si estuviera atenuado.
         for i in 0..TOOLBOX_BUTTONS {
             let (x, y, w, h) = toolbox_button_rect_u(i);
             for (dx, dy) in [(w * k / 2, h * k / 2), (0, 0), (w * k - 1, h * k - 1)] {
-                let punto = (layout.toolbar.x + x * k + dx, layout.toolbar.y + y * k + dy);
+                let point = (layout.toolbar.x + x * k + dx, layout.toolbar.y + y * k + dy);
                 assert_eq!(
-                    help_target_at(punto, ventana, n),
+                    help_target_at(point, window, n),
                     help_target_for_button(i).unwrap(),
-                    "botón {i} a n={n} en {punto:?}"
+                    "botón {i} a n={n} en {point:?}"
                 );
             }
         }
         // En un hueco entre botones, un píxel fuera, el recuadro de opciones, el lienzo, el panel,
         // el menú, la barra de estado y fuera de la ventana: la activa.
         let (x0, y0, w0, h0) = toolbox_button_rect_u(0);
-        let fuera = [
+        let outside = [
             (
                 layout.toolbar.x + (x0 + w0) * k,
                 layout.toolbar.y + y0 * k + h0 * k / 2,
@@ -97,30 +97,29 @@ fn fila_3_el_puntero_sobre_un_boton_da_el_destino_y_fuera_de_ellos_la_herramient
             (layout.canvas.x + 10, layout.canvas.y + 10),
             (layout.panel.x + 10, layout.panel.y + 10),
             (10, 1),
-            (10, ventana.1 - 1),
+            (10, window.1 - 1),
             (-5, -5),
-            (ventana.0 + 50, ventana.1 + 50),
+            (window.0 + 50, window.1 + 50),
         ];
-        for punto in fuera {
+        for point in outside {
             assert_eq!(
-                help_target_at(punto, ventana, n),
+                help_target_at(point, window, n),
                 HelpTarget::Active,
-                "{punto:?} a n={n}"
+                "{point:?} a n={n}"
             );
         }
     }
 }
 
 #[test]
-fn fila_3_el_menu_ayuda_tiene_tres_entradas_y_f1_solo_en_la_primera() {
-    let ayuda = MENUS
+fn row_3_the_help_menu_has_three_entries_and_f1_only_on_the_first() {
+    let help = MENUS
         .iter()
         .find(|m| m.title == "Ayuda")
         .expect("menú Ayuda");
-    let entradas: Vec<(&str, AppAction)> =
-        ayuda.items.iter().map(|i| (i.label, i.action)).collect();
+    let entries: Vec<(&str, AppAction)> = help.items.iter().map(|i| (i.label, i.action)).collect();
     assert_eq!(
-        entradas,
+        entries,
         [
             (
                 "Ayuda de la herramienta",
@@ -132,10 +131,10 @@ fn fila_3_el_menu_ayuda_tiene_tres_entradas_y_f1_solo_en_la_primera() {
     );
     // `F1` es fijo y no sale de la tabla de teclado.
     for platform in [Platform::Linux, Platform::Windows, Platform::Mac] {
-        for action in ACCIONES {
+        for action in ACTIONS {
             assert_eq!(shortcut_for(action, platform), None, "{action:?}");
         }
-        assert_eq!(popup_width_u(ayuda, platform), 201, "{platform:?}");
+        assert_eq!(popup_width_u(help, platform), 201, "{platform:?}");
     }
     assert_eq!(
         px_ui::menu::fixed_shortcut(AppAction::ShowHelp(HelpTarget::Active)),
@@ -149,37 +148,37 @@ fn fila_3_el_menu_ayuda_tiene_tres_entradas_y_f1_solo_en_la_primera() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_se_bloquean_exactamente_como_una_accion_que_abre_un_dialogo() {
-    for action in ACCIONES {
+fn row_4_they_are_blocked_exactly_like_an_action_that_opens_a_dialog() {
+    for action in ACTIONS {
         assert!(action.opens_dialog(), "{action:?}");
         assert!(AppAction::ShowHelp(HelpTarget::Tool(Tool::Fill)).opens_dialog());
         for bits in 0..64u8 {
-            let locks = bloqueos(bits);
-            for origen in ORIGENES {
-                let esperado = locks.modal
+            let locks = locks_2(bits);
+            for source_2 in SOURCES {
+                let expected_2 = locks.modal
                     || locks.dialog
                     || locks.gesture
                     || locks.text_focus
                     || locks.removal;
                 assert_eq!(
-                    is_blocked(action, locks, origen),
-                    esperado,
-                    "{action:?} {locks:?} {origen:?}"
+                    is_blocked(action, locks, source_2),
+                    expected_2,
+                    "{action:?} {locks:?} {source_2:?}"
                 );
             }
             assert_eq!(
-                enabled(action, &estado(locks)),
+                enabled(action, &state_2(locks)),
                 !is_blocked(action, locks, Origin::Menu)
             );
         }
         // Sin imagen (zoom `None`) tampoco se bloquea.
-        assert!(enabled(action, &estado(Locks::default())));
+        assert!(enabled(action, &state_2(Locks::default())));
         assert!(can_open_dialog(Locks::default()));
     }
 }
 
 #[test]
-fn fila_4_la_ayuda_no_repite_con_la_tecla_mantenida() {
+fn row_4_the_help_does_not_repeat_with_the_held_key() {
     assert!(AppAction::ShowHelp(HelpTarget::Active).ignores_repeat());
     assert!(AppAction::ShowHelp(HelpTarget::ZoomIn).ignores_repeat());
 }

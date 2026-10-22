@@ -26,18 +26,18 @@ const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 // Fila 1: fondo por defecto
 // ---------------------------------------------------------------------------------------------
 
-fn indexada(colores: Vec<Rgba>, transparente: Option<u8>) -> Image {
-    let mut paleta = Palette::from_colors(colores).expect("paleta");
-    paleta.set_transparent_index(transparente).expect("existe");
-    Image::new_indexed(4, 4, paleta).expect("imagen")
+fn indexed(colors_2: Vec<Rgba>, transparent: Option<u8>) -> Image {
+    let mut palette = Palette::from_colors(colors_2).expect("paleta");
+    palette.set_transparent_index(transparent).expect("existe");
+    Image::new_indexed(4, 4, palette).expect("imagen")
 }
 
-fn opacos(n: usize) -> Vec<Rgba> {
+fn opaque(n: usize) -> Vec<Rgba> {
     (0..n).map(|i| Rgba::opaque(i as u8 * 10, 1, 2)).collect()
 }
 
 #[test]
-fn fila_1_rgba_gris_con_alfa_y_gris_usan_la_ranura_9() {
+fn row_1_rgba_gray_alpha_and_gray_use_slot_9() {
     for mode in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
         let image = Image::new(4, 4, mode).expect("imagen");
         assert_eq!(default_background(&image), ColorChoice::Slot(9), "{mode:?}");
@@ -45,7 +45,7 @@ fn fila_1_rgba_gris_con_alfa_y_gris_usan_la_ranura_9() {
 }
 
 #[test]
-fn fila_1_la_ranura_9_es_transparente_en_rgba_y_gris_con_alfa_y_blanca_en_gris() {
+fn row_1_slot_9_is_transparent_in_rgba_and_gray_alpha_and_white_in_gray() {
     let rgba = Image::new(4, 4, Mode::Rgba).expect("imagen");
     assert_eq!(
         pixel_for_choice(&rgba, default_background(&rgba)),
@@ -64,37 +64,37 @@ fn fila_1_la_ranura_9_es_transparente_en_rgba_y_gris_con_alfa_y_blanca_en_gris()
 }
 
 #[test]
-fn fila_1_indexada_con_indice_transparente_usa_esa_entrada() {
-    let mut colores = opacos(5);
-    colores[2] = Rgba::new(0, 255, 0, 0);
-    let image = indexada(colores, Some(3));
+fn row_1_indexed_with_transparent_index_uses_that_entry() {
+    let mut colors_2 = opaque(5);
+    colors_2[2] = Rgba::new(0, 255, 0, 0);
+    let image = indexed(colors_2, Some(3));
     assert_eq!(default_background(&image), ColorChoice::Entry(3));
 }
 
 #[test]
-fn fila_1_indexada_sin_indice_usa_la_primera_entrada_de_alfa_0() {
-    let mut colores = opacos(5);
-    colores[2] = Rgba::new(0, 255, 0, 0);
-    colores[4] = Rgba::new(9, 9, 9, 0);
+fn row_1_indexed_without_an_index_uses_the_first_alpha_0_entry() {
+    let mut colors_2 = opaque(5);
+    colors_2[2] = Rgba::new(0, 255, 0, 0);
+    colors_2[4] = Rgba::new(9, 9, 9, 0);
     assert_eq!(
-        default_background(&indexada(colores.clone(), None)),
+        default_background(&indexed(colors_2.clone(), None)),
         ColorChoice::Entry(2)
     );
-    colores[2] = Rgba::opaque(0, 255, 0);
+    colors_2[2] = Rgba::opaque(0, 255, 0);
     assert_eq!(
-        default_background(&indexada(colores, None)),
+        default_background(&indexed(colors_2, None)),
         ColorChoice::Entry(4)
     );
 }
 
 #[test]
-fn fila_1_indexada_sin_ninguna_y_paleta_de_una_entrada_usan_la_entrada_0() {
+fn row_1_indexed_without_any_and_palette_of_one_entry_use_entry_0() {
     assert_eq!(
-        default_background(&indexada(opacos(5), None)),
+        default_background(&indexed(opaque(5), None)),
         ColorChoice::Entry(0)
     );
     assert_eq!(
-        default_background(&indexada(opacos(1), None)),
+        default_background(&indexed(opaque(1), None)),
         ColorChoice::Entry(0)
     );
 }
@@ -103,9 +103,9 @@ fn fila_1_indexada_sin_ninguna_y_paleta_de_una_entrada_usan_la_entrada_0() {
 // Fila 3 (parte pura): bloqueos del color con un trazo
 // ---------------------------------------------------------------------------------------------
 
-const ORIGENES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
+const SOURCES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
 
-const ACCIONES_DE_COLOR: [AppAction; 5] = [
+const ACTIONS_OF_COLOR: [AppAction; 5] = [
     AppAction::ColorNext,
     AppAction::ColorPrev,
     AppAction::BackgroundNext,
@@ -113,13 +113,13 @@ const ACCIONES_DE_COLOR: [AppAction; 5] = [
     AppAction::SelectColor(3),
 ];
 
-fn solo(f: impl FnOnce(&mut Locks)) -> Locks {
+fn only(f: impl FnOnce(&mut Locks)) -> Locks {
     let mut locks = Locks::default();
     f(&mut locks);
     locks
 }
 
-fn con_trazo() -> Locks {
+fn with_stroke() -> Locks {
     Locks {
         gesture: true,
         stroke: true,
@@ -128,11 +128,11 @@ fn con_trazo() -> Locks {
 }
 
 #[test]
-fn fila_3_las_acciones_de_color_con_un_trazo_en_curso_siguen_permitidas() {
-    for action in ACCIONES_DE_COLOR {
-        for origin in ORIGENES {
+fn row_3_the_color_actions_with_a_stroke_in_progress_are_still_allowed() {
+    for action in ACTIONS_OF_COLOR {
+        for origin in SOURCES {
             assert!(
-                !is_blocked(action, con_trazo(), origin),
+                !is_blocked(action, with_stroke(), origin),
                 "{action:?} con {origin:?}"
             );
         }
@@ -140,27 +140,27 @@ fn fila_3_las_acciones_de_color_con_un_trazo_en_curso_siguen_permitidas() {
 }
 
 #[test]
-fn fila_3_el_color_con_el_deslizador_o_una_muestra_arrastrandose_sigue_bloqueado() {
+fn row_3_color_with_the_slider_or_a_swatch_being_dragged_stays_blocked() {
     // `gesture` sin `stroke`: el deslizador del editor o el arrastre de una muestra.
-    for action in ACCIONES_DE_COLOR {
-        for origin in ORIGENES {
-            assert!(is_blocked(action, solo(|l| l.gesture = true), origin));
+    for action in ACTIONS_OF_COLOR {
+        for origin in SOURCES {
+            assert!(is_blocked(action, only(|l| l.gesture = true), origin));
         }
     }
 }
 
 #[test]
-fn fila_3_el_color_se_bloquea_con_dialogo_modal_campo_y_quita_pendiente() {
-    for action in ACCIONES_DE_COLOR {
-        for origin in ORIGENES {
+fn row_3_color_is_blocked_with_a_modal_dialog_field_and_pending_removal() {
+    for action in ACTIONS_OF_COLOR {
+        for origin in SOURCES {
             for locks in [
-                solo(|l| l.dialog = true),
-                solo(|l| l.modal = true),
-                solo(|l| l.text_focus = true),
-                solo(|l| l.removal = true),
+                only(|l| l.dialog = true),
+                only(|l| l.modal = true),
+                only(|l| l.text_focus = true),
+                only(|l| l.removal = true),
                 Locks {
                     removal: true,
-                    ..con_trazo()
+                    ..with_stroke()
                 },
             ] {
                 assert!(is_blocked(action, locks, origin), "{action:?} {locks:?}");
@@ -170,7 +170,7 @@ fn fila_3_el_color_se_bloquea_con_dialogo_modal_campo_y_quita_pendiente() {
 }
 
 #[test]
-fn fila_3_el_resto_de_acciones_sigue_bloqueado_con_un_trazo() {
+fn row_3_the_rest_of_the_actions_stays_blocked_with_a_stroke() {
     for action in [
         AppAction::Undo,
         AppAction::Redo,
@@ -179,27 +179,27 @@ fn fila_3_el_resto_de_acciones_sigue_bloqueado_con_un_trazo() {
         AppAction::ClearPage,
         AppAction::SelectTool(px_ui::tool::Tool::Line),
     ] {
-        for origin in ORIGENES {
-            assert!(is_blocked(action, con_trazo(), origin), "{action:?}");
+        for origin in SOURCES {
+            assert!(is_blocked(action, with_stroke(), origin), "{action:?}");
         }
     }
 }
 
 #[test]
-fn fila_8_borrar_la_pagina_se_bloquea_con_gesto_dialogo_modal_y_campo_pero_no_con_quita() {
-    for origin in ORIGENES {
+fn row_8_clear_page_is_blocked_with_gesture_dialog_modal_and_field_but_not_with_removal() {
+    for origin in SOURCES {
         for locks in [
-            solo(|l| l.gesture = true),
-            con_trazo(),
-            solo(|l| l.dialog = true),
-            solo(|l| l.modal = true),
-            solo(|l| l.text_focus = true),
+            only(|l| l.gesture = true),
+            with_stroke(),
+            only(|l| l.dialog = true),
+            only(|l| l.modal = true),
+            only(|l| l.text_focus = true),
         ] {
             assert!(is_blocked(AppAction::ClearPage, locks, origin), "{locks:?}");
         }
         assert!(!is_blocked(
             AppAction::ClearPage,
-            solo(|l| l.removal = true),
+            only(|l| l.removal = true),
             origin
         ));
         assert!(!is_blocked(AppAction::ClearPage, Locks::default(), origin));
@@ -210,27 +210,27 @@ fn fila_8_borrar_la_pagina_se_bloquea_con_gesto_dialogo_modal_y_campo_pero_no_co
 // Fila 5: banderas y anillos
 // ---------------------------------------------------------------------------------------------
 
-fn banderas(f: impl FnOnce(&mut RoleFlags)) -> RoleFlags {
+fn flags_2(f: impl FnOnce(&mut RoleFlags)) -> RoleFlags {
     let mut flags = RoleFlags::default();
     f(&mut flags);
     flags
 }
 
 #[test]
-fn fila_5_banderas_de_cada_rol_y_sus_combinaciones() {
-    let casos = [
+fn row_5_flags_of_each_role_and_their_combinations() {
+    let cases = [
         (RoleFlags::default(), ""),
-        (banderas(|f| f.foreground = true), "frente"),
-        (banderas(|f| f.background = true), "fondo"),
+        (flags_2(|f| f.foreground = true), "frente"),
+        (flags_2(|f| f.background = true), "fondo"),
         (
-            banderas(|f| {
+            flags_2(|f| {
                 f.foreground = true;
                 f.background = true;
             }),
             "frente · fondo",
         ),
         (
-            banderas(|f| {
+            flags_2(|f| {
                 f.hover = true;
                 f.foreground = true;
                 f.background = true;
@@ -238,65 +238,65 @@ fn fila_5_banderas_de_cada_rol_y_sus_combinaciones() {
             "cursor · frente · fondo",
         ),
         (
-            banderas(|f| {
+            flags_2(|f| {
                 f.background = true;
                 f.transparent = true;
             }),
             "fondo · transparente",
         ),
-        (banderas(|f| f.alpha0 = true), "alfa 0"),
+        (flags_2(|f| f.alpha0 = true), "alfa 0"),
         (
-            banderas(|f| {
+            flags_2(|f| {
                 f.alpha0 = true;
                 f.transparent = true;
             }),
             "transparente",
         ),
-        (banderas(|f| f.in_range = true), "rango"),
+        (flags_2(|f| f.in_range = true), "rango"),
         (
-            banderas(|f| {
+            flags_2(|f| {
                 f.in_range = true;
                 f.foreground = true;
             }),
             "frente",
         ),
     ];
-    for (flags, esperado) in casos {
-        assert_eq!(info_flags_roles(flags, 32), esperado, "{flags:?}");
+    for (flags, expected_2) in cases {
+        assert_eq!(info_flags_roles(flags, 32), expected_2, "{flags:?}");
     }
 }
 
 #[test]
-fn fila_5_si_no_cabe_en_32_columnas_se_omite_cursor() {
-    let peor = banderas(|f| {
+fn row_5_if_it_does_not_fit_in_32_columns_cursor_is_omitted() {
+    let worst = flags_2(|f| {
         f.hover = true;
         f.foreground = true;
         f.background = true;
         f.transparent = true;
     });
     assert_eq!(
-        info_flags_roles(peor, 32),
+        info_flags_roles(worst, 32),
         "frente · fondo · transparente",
         "sin cursor"
     );
     assert_eq!(
-        info_flags_roles(peor, 40),
+        info_flags_roles(worst, 40),
         "cursor · frente · fondo · transparente",
         "con sitio, cursor se queda"
     );
     for columns in 29..=64 {
-        assert!(info_flags_roles(peor, columns).chars().count() <= columns.max(29));
+        assert!(info_flags_roles(worst, columns).chars().count() <= columns.max(29));
     }
 }
 
 #[test]
-fn fila_5_el_anillo_del_fondo_contrasta_3_a_1_y_no_es_el_del_primer_plano() {
+fn row_5_the_background_ring_contrasts_3_to_1_and_is_not_the_foreground_one() {
     assert!(contrast_ratio(RING_BACKGROUND, SURFACE_1) >= 3.0);
     assert_ne!(RING_BACKGROUND, RING_ACTIVE);
     let _: Color32 = RING_BACKGROUND;
 }
 
-fn celda(n: i64) -> ScreenRect {
+fn cel(n: i64) -> ScreenRect {
     ScreenRect {
         x: 0,
         y: 0,
@@ -305,20 +305,20 @@ fn celda(n: i64) -> ScreenRect {
     }
 }
 
-fn se_solapan(a: &ScreenRect, b: &ScreenRect) -> bool {
+fn overlap_2(a: &ScreenRect, b: &ScreenRect) -> bool {
     a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
 #[test]
-fn fila_5_el_anillo_del_fondo_son_8_rectangulos_disjuntos_en_4_esquinas_fuera_de_la_muestra() {
+fn row_5_the_background_ring_is_8_disjoint_rectangles_in_4_corners_outside_the_swatch() {
     for n in 1..=3 {
-        let cell = celda(n);
+        let cell = cel(n);
         let rects = corner_rects(cell, 0, 2 * n, 5 * n);
         assert_eq!(rects.len(), 8);
         for (i, a) in rects.iter().enumerate() {
-            assert!(!se_solapan(a, &cell), "{a:?} tapa la muestra");
+            assert!(!overlap_2(a, &cell), "{a:?} tapa la muestra");
             for b in rects.iter().skip(i + 1) {
-                assert!(!se_solapan(a, b), "{a:?} y {b:?}");
+                assert!(!overlap_2(a, b), "{a:?} y {b:?}");
             }
             // Dentro del hueco de 4 u.
             assert!(a.x >= -GAP_U * n && a.x + a.width <= (CELL_U + GAP_U) * n);
@@ -326,30 +326,31 @@ fn fila_5_el_anillo_del_fondo_son_8_rectangulos_disjuntos_en_4_esquinas_fuera_de
         }
         // Cada esquina de la muestra tiene su L (dos rectángulos); no hay anillo en el medio de
         // los lados (forma distinta a la del primer plano).
-        let medio = ScreenRect {
+        let middle = ScreenRect {
             x: 4 * n,
             y: -2 * n,
             width: 2 * n,
             height: 2 * n,
         };
-        assert!(rects.iter().all(|r| !se_solapan(r, &medio)));
+        assert!(rects.iter().all(|r| !overlap_2(r, &middle)));
     }
 }
 
 #[test]
-fn fila_5_con_la_misma_muestra_el_del_primer_plano_va_dentro_y_el_del_fondo_fuera_sin_solaparse() {
+fn row_5_with_the_same_swatch_the_foreground_one_goes_inside_and_the_background_one_outside_without_overlapping()
+ {
     for n in 1..=3 {
-        let cell = celda(n);
-        let dentro = ring_rects(cell, 2 * n);
-        let fuera = corner_rects(cell, 2 * n, 2 * n, 5 * n);
-        for a in &dentro {
-            for b in &fuera {
-                assert!(!se_solapan(a, b), "{a:?} y {b:?}");
+        let cell = cel(n);
+        let inside = ring_rects(cell, 2 * n);
+        let outside = corner_rects(cell, 2 * n, 2 * n, 5 * n);
+        for a in &inside {
+            for b in &outside {
+                assert!(!overlap_2(a, b), "{a:?} y {b:?}");
             }
         }
-        for b in &fuera {
+        for b in &outside {
             assert!(b.x >= -4 * n && b.x + b.width <= (CELL_U + 4) * n);
-            assert!(!se_solapan(b, &cell));
+            assert!(!overlap_2(b, &cell));
         }
     }
 }
@@ -359,7 +360,7 @@ fn fila_5_con_la_misma_muestra_el_del_primer_plano_va_dentro_y_el_del_fondo_fuer
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6_la_banda_mide_36_u_y_de_ella_cuelga_el_resto_del_panel() {
+fn row_6_the_band_measures_36_u_and_the_rest_of_the_panel_hangs_from_it() {
     assert_eq!(INDICATOR_H_U, 36);
     assert_eq!(LINE1_Y_U, INDICATOR_H_U + 4);
     assert_eq!(LINE2_Y_U, INDICATOR_H_U + 18);
@@ -369,12 +370,12 @@ fn fila_6_la_banda_mide_36_u_y_de_ella_cuelga_el_resto_del_panel() {
 }
 
 #[test]
-fn fila_6_el_pequeno_primer_plano_14_por_14_va_encima_del_grande_fondo_20_por_20() {
+fn row_6_the_small_foreground_14_by_14_goes_on_top_of_the_large_background_20_by_20() {
     for n in 1..=3i64 {
         let (fg, bg) = indicator_rects(n as u32);
         assert_eq!((fg.width, fg.height), (14 * n, 14 * n));
         assert_eq!((bg.width, bg.height), (20 * n, 20 * n));
-        assert!(se_solapan(&fg, &bg), "se superponen");
+        assert!(overlap_2(&fg, &bg), "se superponen");
         // El conjunto cabe en la banda con su margen de 4 u y su borde de 1 u.
         for r in [fg, bg] {
             assert!(r.x >= 4 * n && r.y >= 4 * n);
@@ -389,11 +390,11 @@ fn px_ui_panel_width() -> i64 {
 }
 
 #[test]
-fn fila_6_indicator_hit_distingue_primer_plano_fondo_y_huecos() {
+fn row_6_indicator_hit_distinguishes_foreground_background_and_gaps() {
     for n in 1..=3i64 {
         let (fg, bg) = indicator_rects(n as u32);
-        let centro = |r: &ScreenRect| (r.x + r.width / 2, r.y + r.height / 2);
-        let (x, y) = centro(&fg);
+        let center = |r: &ScreenRect| (r.x + r.width / 2, r.y + r.height / 2);
+        let (x, y) = center(&fg);
         assert_eq!(indicator_hit(x, y, n as u32), Some(Role::Foreground));
         // Donde se superponen manda el pequeño.
         let (x, y) = (bg.x + 1, bg.y + 1);
@@ -412,16 +413,16 @@ fn fila_6_indicator_hit_distingue_primer_plano_fondo_y_huecos() {
 }
 
 #[test]
-fn fila_6_los_dos_selectores_son_filas_excluyentes_dentro_de_la_banda() {
+fn row_6_the_two_selectors_are_exclusive_rows_inside_the_band() {
     for n in 1..=3i64 {
         let a = selector_rect(Role::Foreground, n as u32);
         let b = selector_rect(Role::Background, n as u32);
-        assert!(!se_solapan(&a, &b));
+        assert!(!overlap_2(&a, &b));
         assert!(a.y + a.height <= b.y);
         assert!(b.y + b.height <= INDICATOR_H_U * n);
         let (fg, bg) = indicator_rects(n as u32);
-        for fila in [&a, &b] {
-            assert!(!se_solapan(fila, &fg) && !se_solapan(fila, &bg));
+        for row_2 in [&a, &b] {
+            assert!(!overlap_2(row_2, &fg) && !overlap_2(row_2, &bg));
         }
         assert_eq!(
             selector_hit(a.x + 1, a.y + 1, n as u32),
@@ -440,7 +441,7 @@ fn fila_6_los_dos_selectores_son_filas_excluyentes_dentro_de_la_banda() {
 // Fila 7: teclas y menú
 // ---------------------------------------------------------------------------------------------
 
-fn pulsa(key: KeyId) -> Press {
+fn presses_2(key: KeyId) -> Press {
     Press {
         key: Some(key),
         command: false,
@@ -451,16 +452,16 @@ fn pulsa(key: KeyId) -> Press {
     }
 }
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
-fn accion(press: &Press, platform: Platform) -> Option<AppAction> {
+fn action_2(press: &Press, platform: Platform) -> Option<AppAction> {
     Keymap::default_scheme().action_for(press, platform)
 }
 
 #[test]
-fn fila_7_llaves_y_corchetes_del_fondo_con_cualquier_mayus_o_alt() {
-    for platform in PLATAFORMAS {
-        for (c, esperada) in [
+fn row_7_background_braces_and_brackets_with_any_shift_or_alt() {
+    for platform in PLATFORMS {
+        for (c, expected) in [
             ('}', AppAction::BackgroundNext),
             ('{', AppAction::BackgroundPrev),
         ] {
@@ -469,92 +470,93 @@ fn fila_7_llaves_y_corchetes_del_fondo_con_cualquier_mayus_o_alt() {
                     let press = Press {
                         shift,
                         alt,
-                        ..pulsa(KeyId::Char(c))
+                        ..presses_2(KeyId::Char(c))
                     };
                     assert_eq!(
-                        accion(&press, platform),
-                        Some(esperada),
+                        action_2(&press, platform),
+                        Some(expected),
                         "{c} {shift} {alt}"
                     );
                 }
             }
-            let con_ctrl = Press {
+            let with_ctrl = Press {
                 command: true,
-                ..pulsa(KeyId::Char(c))
+                ..presses_2(KeyId::Char(c))
             };
-            assert_eq!(accion(&con_ctrl, platform), None);
+            assert_eq!(action_2(&with_ctrl, platform), None);
         }
     }
 }
 
 #[test]
-fn fila_7_k_mayuscula_borra_la_pagina_k_sin_mayus_elige_el_borrador_y_con_ctrl_o_alt_no_hace_nada()
-{
-    for platform in PLATAFORMAS {
+fn row_7_capital_k_clears_the_page_k_without_shift_chooses_the_eraser_and_with_ctrl_or_alt_does_nothing()
+ {
+    for platform in PLATFORMS {
         let k = KeyId::Char('k');
-        let con_mayus = Press {
+        let with_shift = Press {
             shift: true,
-            ..pulsa(k)
+            ..presses_2(k)
         };
-        assert_eq!(accion(&con_mayus, platform), Some(AppAction::ClearPage));
+        assert_eq!(action_2(&with_shift, platform), Some(AppAction::ClearPage));
         assert_eq!(
-            accion(&pulsa(k), platform),
+            action_2(&presses_2(k), platform),
             Some(AppAction::SelectTool(px_ui::tool::Tool::Eraser))
         );
         for press in [
             Press {
                 command: true,
                 shift: true,
-                ..pulsa(k)
+                ..presses_2(k)
             },
             Press {
                 command: true,
-                ..pulsa(k)
+                ..presses_2(k)
             },
             Press {
                 alt: true,
                 shift: true,
-                ..pulsa(k)
+                ..presses_2(k)
             },
             Press {
                 other_ctrl: true,
                 shift: true,
-                ..pulsa(k)
+                ..presses_2(k)
             },
         ] {
-            assert_eq!(accion(&press, platform), None, "{press:?}");
+            assert_eq!(action_2(&press, platform), None, "{press:?}");
         }
     }
 }
 
 #[test]
-fn fila_7_mayus_re_pag_y_av_pag_son_el_fondo_y_sin_mayus_siguen_siendo_el_primer_plano() {
-    for platform in PLATAFORMAS {
-        let con = |key, shift, alt| Press {
+fn row_7_shift_page_up_and_page_down_are_the_background_and_without_shift_they_are_still_the_foreground()
+ {
+    for platform in PLATFORMS {
+        let with = |key, shift, alt| Press {
             shift,
             alt,
-            ..pulsa(key)
+            ..presses_2(key)
         };
         assert_eq!(
-            accion(&con(KeyId::PageDown, true, false), platform),
+            action_2(&with(KeyId::PageDown, true, false), platform),
             Some(AppAction::BackgroundNext)
         );
         assert_eq!(
-            accion(&con(KeyId::PageUp, true, true), platform),
+            action_2(&with(KeyId::PageUp, true, true), platform),
             Some(AppAction::BackgroundPrev)
         );
         assert_eq!(
-            accion(&con(KeyId::PageDown, false, false), platform),
+            action_2(&with(KeyId::PageDown, false, false), platform),
             Some(AppAction::ColorNext)
         );
         assert_eq!(
-            accion(&con(KeyId::PageUp, false, true), platform),
+            action_2(&with(KeyId::PageUp, false, true), platform),
             Some(AppAction::ColorPrev)
         );
-        // `Inicio` no cambia con `Mayús`.
+        // `Start` no cambia con `Mayús`.
         for shift in [false, true] {
             assert_eq!(
-                accion(&con(KeyId::Home, shift, false), platform),
+                action_2(&with(KeyId::Home, shift, false), platform),
                 Some(AppAction::ZoomFit)
             );
         }
@@ -562,17 +564,17 @@ fn fila_7_mayus_re_pag_y_av_pag_son_el_fondo_y_sin_mayus_siguen_siendo_el_primer
 }
 
 #[test]
-fn fila_7_la_tabla_tiene_31_filas_sin_choques_y_solo_las_nueve_modernas_llevan_command() {
+fn row_7_the_table_has_31_rows_without_clashes_and_only_the_nine_modern_ones_carry_command() {
     let keymap = Keymap::default_scheme();
     assert_eq!(keymap.rows().len(), 35);
     assert_eq!(keymap.conflicts(), Vec::<Conflict>::new());
-    let con_command = keymap.rows().iter().filter(|row| row.command).count();
-    assert_eq!(con_command, 9);
+    let with_command = keymap.rows().iter().filter(|row| row.command).count();
+    assert_eq!(with_command, 9);
 }
 
 #[test]
-fn fila_7_dos_filas_de_re_pag_con_distinto_mayus_no_chocan_pero_iguales_si() {
-    let fila = |shift, action| Binding {
+fn row_7_two_page_up_rows_with_different_shift_do_not_clash_but_equal_ones_do() {
+    let row_2 = |shift, action| Binding {
         key: KeyId::PageUp,
         command: false,
         shift,
@@ -580,88 +582,91 @@ fn fila_7_dos_filas_de_re_pag_con_distinto_mayus_no_chocan_pero_iguales_si() {
         active: Platforms::All,
         shown: Platforms::Never,
     };
-    let bien = Keymap::new(vec![
-        fila(false, AppAction::ColorPrev),
-        fila(true, AppAction::BackgroundPrev),
+    let well = Keymap::new(vec![
+        row_2(false, AppAction::ColorPrev),
+        row_2(true, AppAction::BackgroundPrev),
     ]);
-    assert_eq!(bien.conflicts(), Vec::<Conflict>::new());
-    let mal = Keymap::new(vec![
-        fila(true, AppAction::ColorPrev),
-        fila(true, AppAction::BackgroundPrev),
+    assert_eq!(well.conflicts(), Vec::<Conflict>::new());
+    let badly = Keymap::new(vec![
+        row_2(true, AppAction::ColorPrev),
+        row_2(true, AppAction::BackgroundPrev),
     ]);
-    assert_eq!(mal.conflicts(), vec![Conflict::Duplicate(0, 1)]);
+    assert_eq!(badly.conflicts(), vec![Conflict::Duplicate(0, 1)]);
 }
 
 #[test]
-fn fila_7_editar_gana_borrar_pagina_y_muestra_k_leida_de_la_tabla() {
-    let editar = MENUS
+fn row_7_edit_wins_clear_page_and_shows_k_read_from_the_table() {
+    let edit = MENUS
         .iter()
         .find(|menu| menu.title == "Editar")
         .expect("menú Editar");
-    let entrada = editar
+    let input_2 = edit
         .items
         .iter()
         .find(|item| item.action == AppAction::ClearPage)
         .expect("Borrar página");
-    assert_eq!(entrada.label, "Borrar página");
-    for platform in PLATAFORMAS {
-        let atajo = shortcut_for(AppAction::ClearPage, platform).expect("tiene atajo");
-        assert_eq!(shortcut_text(atajo, platform), "K");
+    assert_eq!(input_2.label, "Borrar página");
+    for platform in PLATFORMS {
+        let shortcut_2 = shortcut_for(AppAction::ClearPage, platform).expect("tiene atajo");
+        assert_eq!(shortcut_text(shortcut_2, platform), "K");
         // El desplegable cabe: el rótulo más largo más su atajo.
-        let ancho = popup_width_u(editar, platform);
-        let mas_largo = editar
+        let width_2 = popup_width_u(edit, platform);
+        let more_long_2 = edit
             .items
             .iter()
             .map(|item| item.label.chars().count())
             .max()
             .unwrap_or(0) as i64;
-        assert!(ancho >= (mas_largo + 2 + 1) * i64::from(px_ui::status::ADVANCE_PX));
+        assert!(width_2 >= (more_long_2 + 2 + 1) * i64::from(px_ui::status::ADVANCE_PX));
     }
     // Deshacer y Rehacer siguen donde estaban.
-    assert_eq!(editar.items[0].action, AppAction::Undo);
-    assert_eq!(editar.items[1].action, AppAction::Redo);
+    assert_eq!(edit.items[0].action, AppAction::Undo);
+    assert_eq!(edit.items[1].action, AppAction::Redo);
 }
 
 // ---------------------------------------------------------------------------------------------
 // Propiedad 3: geometría de una sola fuente
 // ---------------------------------------------------------------------------------------------
 
-fn ppp_multiplos_de_0_05() -> impl Iterator<Item = f32> {
+fn ppp_multiples_of_0_05() -> impl Iterator<Item = f32> {
     (0..=60).map(|i| (100 + 5 * i) as f32 / 100.0)
 }
 
 #[test]
-fn propiedad_3_minimos_de_ventana_a_los_cinco_ppp_y_criterio_del_65_por_ciento() {
-    for (ppp, alto) in PPPS.into_iter().zip([341.0, 272.8, 454.67, 341.0, 341.0]) {
+fn property_3_window_minimums_at_the_five_ppp_and_the_65_percent_criterion() {
+    for (ppp, height_2) in PPPS.into_iter().zip([341.0, 272.8, 454.67, 341.0, 341.0]) {
         assert!(
-            (min_window_height_pt(ppp) - alto).abs() < 0.01,
+            (min_window_height_pt(ppp) - height_2).abs() < 0.01,
             "alto con {ppp}: {}",
             min_window_height_pt(ppp)
         );
     }
-    for (ppp, ancho) in PPPS.into_iter().zip([468.0, 374.4, 624.0, 468.0, 468.0]) {
+    for (ppp, width_2) in PPPS.into_iter().zip([468.0, 374.4, 624.0, 468.0, 468.0]) {
         assert!(
-            (min_window_width_pt(ppp) - ancho).abs() < 0.01,
+            (min_window_width_pt(ppp) - width_2).abs() < 0.01,
             "ancho con {ppp}"
         );
     }
 }
 
 #[test]
-fn propiedad_3_el_bloque_de_indexadas_mide_305_n_y_el_alto_minimo_sigue_la_formula() {
-    for ppp in ppp_multiplos_de_0_05() {
+fn property_3_the_indexed_block_measures_305_n_and_the_minimum_height_follows_the_formula() {
+    for ppp in ppp_multiples_of_0_05() {
         let n = i64::from(text_scale(ppp));
         assert_eq!(block_height_px(Mode::Indexed, n as u32), 305 * n);
-        let alto = ((20 + 16 + 305) * n) as f32 / ppp;
-        assert!((min_window_height_pt(ppp) - alto).abs() < 0.01, "ppp {ppp}");
+        let height_2 = ((20 + 16 + 305) * n) as f32 / ppp;
+        assert!(
+            (min_window_height_pt(ppp) - height_2).abs() < 0.01,
+            "ppp {ppp}"
+        );
         assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
 }
 
 #[test]
-fn propiedad_3_cada_medida_del_indicador_es_un_entero_de_pixeles_multiplo_de_n() {
-    for ppp in ppp_multiplos_de_0_05() {
+fn property_3_each_indicator_measure_is_an_integer_of_pixels_multiple_of_n() {
+    for ppp in ppp_multiples_of_0_05() {
         let n = text_scale(ppp);
         let k = i64::from(n);
         let (fg, bg) = indicator_rects(n);
@@ -676,8 +681,8 @@ fn propiedad_3_cada_medida_del_indicador_es_un_entero_de_pixeles_multiplo_de_n()
 }
 
 #[test]
-fn propiedad_3_las_aristas_de_la_maqueta_incluyen_las_de_la_banda() {
-    let aristas = palette_grid::edges_u();
+fn property_3_the_edges_of_the_mockup_include_those_of_the_band() {
+    let edges = palette_grid::edges_u();
     for v in [
         0,
         INDICATOR_H_U,
@@ -687,6 +692,6 @@ fn propiedad_3_las_aristas_de_la_maqueta_incluyen_las_de_la_banda() {
         GRID_Y_U,
         GRID_X_U,
     ] {
-        assert!(aristas.contains(&v), "falta {v}");
+        assert!(edges.contains(&v), "falta {v}");
     }
 }

@@ -18,35 +18,35 @@ use px_ui::view::Zoom;
 const SCREEN: Vec2 = vec2(800.0, 600.0);
 const CURSOR: Pos2 = pos2(300.0, 200.0);
 
-struct Banco {
+struct Bench {
     ctx: Context,
     canvas: Canvas,
     t: f64,
     info: CanvasInfo,
-    entradas: Vec<(CanvasInput, Role)>,
+    entries: Vec<(CanvasInput, Role)>,
 }
 
-impl Banco {
-    fn nuevo() -> Banco {
-        Banco::con_ppp(1.0)
+impl Bench {
+    fn new_2() -> Bench {
+        Bench::with_ppp(1.0)
     }
 
-    fn con_ppp(ppp: f32) -> Banco {
+    fn with_ppp(ppp: f32) -> Bench {
         let ctx = Context::default();
         ctx.set_pixels_per_point(ppp);
         // `set_pixels_per_point` se activa al empezar el pase siguiente: un pase vacío antes de que
         // el lienzo calcule su ajuste.
-        let mut vacio = ctx.run_ui(
+        let mut empty = ctx.run_ui(
             RawInput {
                 screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
                 ..RawInput::default()
             },
             |_| {},
         );
-        vacio.textures_delta.clear();
+        empty.textures_delta.clear();
         let mut canvas = Canvas::new();
         canvas.set_image(&Image::new(64, 48, Mode::Rgba).expect("imagen"));
-        let mut banco = Banco {
+        let mut bench = Bench {
             ctx,
             canvas,
             t: 0.0,
@@ -56,20 +56,20 @@ impl Banco {
                 image_rect: None,
                 error: None,
             },
-            entradas: Vec::new(),
+            entries: Vec::new(),
         };
-        banco.paso(vec![]);
-        banco
+        bench.step(vec![]);
+        bench
     }
 
     /// Un banco con el cursor ya sobre el lienzo.
-    fn con_cursor() -> Banco {
-        let mut banco = Banco::nuevo();
-        banco.paso(vec![Event::PointerMoved(CURSOR)]);
-        banco
+    fn with_cursor() -> Bench {
+        let mut bench = Bench::new_2();
+        bench.step(vec![Event::PointerMoved(CURSOR)]);
+        bench
     }
 
-    fn paso(&mut self, events: Vec<Event>) -> Vec<(CanvasInput, Role)> {
+    fn step(&mut self, events: Vec<Event>) -> Vec<(CanvasInput, Role)> {
         self.t += 1.0 / 60.0;
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
@@ -79,28 +79,28 @@ impl Banco {
             ..RawInput::default()
         };
         let canvas = &mut self.canvas;
-        let mut resultado = None;
-        let mut salida = self.ctx.run_ui(input, |ui| {
-            let entradas = canvas.interact_roles(ui);
-            resultado = Some((entradas, canvas.paint(ui)));
+        let mut result = None;
+        let mut output_2 = self.ctx.run_ui(input, |ui| {
+            let entries = canvas.interact_roles(ui);
+            result = Some((entries, canvas.paint(ui)));
         });
-        salida.textures_delta.clear();
-        let (entradas, info) = resultado.expect("el lienzo se dibuja");
+        output_2.textures_delta.clear();
+        let (entries, info) = result.expect("el lienzo se dibuja");
         self.info = info;
-        self.entradas.extend(entradas.iter().copied());
-        entradas
+        self.entries.extend(entries.iter().copied());
+        entries
     }
 
     fn zoom(&self) -> Zoom {
         self.info.zoom
     }
 
-    fn origen(&self) -> Pos2 {
+    fn source_2(&self) -> Pos2 {
         self.info.image_rect.expect("hay imagen").min
     }
 }
 
-fn evento_rueda(
+fn event_wheel(
     unit: MouseWheelUnit,
     delta: Vec2,
     modifiers: Modifiers,
@@ -115,8 +115,8 @@ fn evento_rueda(
     }
 }
 
-fn linea(dy: f32) -> Event {
-    evento_rueda(
+fn line(dy: f32) -> Event {
+    event_wheel(
         MouseWheelUnit::Line,
         vec2(0.0, dy),
         Modifiers::NONE,
@@ -124,8 +124,8 @@ fn linea(dy: f32) -> Event {
     )
 }
 
-fn dedos(dx: f32, dy: f32) -> Event {
-    evento_rueda(
+fn fingers(dx: f32, dy: f32) -> Event {
+    event_wheel(
         MouseWheelUnit::Point,
         vec2(dx, dy),
         Modifiers::NONE,
@@ -133,7 +133,7 @@ fn dedos(dx: f32, dy: f32) -> Event {
     )
 }
 
-fn boton(pos: Pos2, button: PointerButton, pressed: bool, modifiers: Modifiers) -> Event {
+fn button_2(pos: Pos2, button: PointerButton, pressed: bool, modifiers: Modifiers) -> Event {
     Event::PointerButton {
         pos,
         button,
@@ -142,7 +142,7 @@ fn boton(pos: Pos2, button: PointerButton, pressed: bool, modifiers: Modifiers) 
     }
 }
 
-fn espacio(pressed: bool) -> Event {
+fn space(pressed: bool) -> Event {
     Event::Key {
         key: egui::Key::Space,
         physical_key: Some(egui::Key::Space),
@@ -152,11 +152,11 @@ fn espacio(pressed: bool) -> Event {
     }
 }
 
-fn pasos_de_zoom(desde: Zoom, hasta: Zoom) -> i32 {
-    let (mut z, mut n) = (desde, 0);
-    while z != hasta && n < 200 {
-        z = if hasta > z { z.zoom_in() } else { z.zoom_out() };
-        n += if hasta > desde { 1 } else { -1 };
+fn steps_of_zoom(from_2: Zoom, until: Zoom) -> i32 {
+    let (mut z, mut n) = (from_2, 0);
+    while z != until && n < 200 {
+        z = if until > z { z.zoom_in() } else { z.zoom_out() };
+        n += if until > from_2 { 1 } else { -1 };
     }
     n
 }
@@ -164,43 +164,43 @@ fn pasos_de_zoom(desde: Zoom, hasta: Zoom) -> i32 {
 // --- Fila 5 ---
 
 #[test]
-fn fila_5_una_muesca_es_un_paso_anclado_y_tres_muescas_de_golpe_son_tres() {
-    let mut b = Banco::con_cursor();
-    let ajuste = b.zoom();
+fn row_5_a_notch_is_an_anchored_step_and_three_notches_at_once_are_three() {
+    let mut b = Bench::with_cursor();
+    let fit = b.zoom();
     let pixel = b.info.hover.expect("el cursor está sobre la imagen");
-    b.paso(vec![linea(1.0)]);
-    assert_eq!(b.zoom(), ajuste.zoom_in());
+    b.step(vec![line(1.0)]);
+    assert_eq!(b.zoom(), fit.zoom_in());
     assert_eq!(
         b.info.hover,
         Some(pixel),
         "el píxel bajo el cursor se conserva"
     );
     let antes = b.zoom();
-    b.paso(vec![linea(3.0)]);
-    assert_eq!(pasos_de_zoom(antes, b.zoom()), 3, "antes de I.2b eran 1");
+    b.step(vec![line(3.0)]);
+    assert_eq!(steps_of_zoom(antes, b.zoom()), 3, "antes de I.2b eran 1");
     assert_eq!(b.info.hover, Some(pixel));
     let antes = b.zoom();
-    b.paso(vec![linea(-1.0), linea(-1.0)]);
-    assert_eq!(pasos_de_zoom(antes, b.zoom()), -2, "un paso por muesca");
+    b.step(vec![line(-1.0), line(-1.0)]);
+    assert_eq!(steps_of_zoom(antes, b.zoom()), -2, "un paso por muesca");
 }
 
 #[test]
-fn fila_5_los_dedos_en_puntos_desplazan_y_no_hacen_zoom() {
-    let mut b = Banco::con_cursor();
-    let (zoom, origen) = (b.zoom(), b.origen());
+fn row_5_fingers_in_points_scroll_and_do_not_zoom() {
+    let mut b = Bench::with_cursor();
+    let (zoom, source_2) = (b.zoom(), b.source_2());
     for _ in 0..30 {
-        b.paso(vec![dedos(0.0, 6.0)]);
+        b.step(vec![fingers(0.0, 6.0)]);
     }
     assert_eq!(b.zoom(), zoom, "antes de I.2b eran 30 pasos de zoom");
-    assert_ne!(b.origen(), origen, "la imagen se desplaza");
-    assert!(b.entradas.is_empty(), "sin eventos de trazo");
+    assert_ne!(b.source_2(), source_2, "la imagen se desplaza");
+    assert!(b.entries.is_empty(), "sin eventos de trazo");
 }
 
 #[test]
-fn fila_5_mayus_mas_rueda_desplaza_en_horizontal_sin_zoom() {
-    let mut b = Banco::con_cursor();
-    let (zoom, origen) = (b.zoom(), b.origen());
-    b.paso(vec![evento_rueda(
+fn row_5_shift_plus_wheel_scrolls_horizontally_without_zoom() {
+    let mut b = Bench::with_cursor();
+    let (zoom, source_2) = (b.zoom(), b.source_2());
+    b.step(vec![event_wheel(
         MouseWheelUnit::Line,
         vec2(0.0, 1.0),
         Modifiers::SHIFT,
@@ -208,122 +208,122 @@ fn fila_5_mayus_mas_rueda_desplaza_en_horizontal_sin_zoom() {
     )]);
     assert_eq!(b.zoom(), zoom);
     assert_eq!(
-        b.origen(),
-        origen + vec2(40.0, 0.0),
+        b.source_2(),
+        source_2 + vec2(40.0, 0.0),
         "40 puntos por muesca, a la derecha"
     );
 }
 
 #[test]
-fn fila_5_ctrl_mas_una_muesca_da_un_solo_paso() {
-    let mut b = Banco::con_cursor();
-    let ajuste = b.zoom();
-    b.paso(vec![evento_rueda(
+fn row_5_ctrl_plus_one_notch_gives_a_single_step() {
+    let mut b = Bench::with_cursor();
+    let fit = b.zoom();
+    b.step(vec![event_wheel(
         MouseWheelUnit::Line,
         vec2(0.0, 1.0),
         Modifiers::COMMAND,
         MouseWheelSource::Unknown,
     )]);
     for _ in 0..40 {
-        b.paso(vec![]);
+        b.step(vec![]);
     }
-    assert_eq!(pasos_de_zoom(ajuste, b.zoom()), 1, "antes de I.2b eran 11");
+    assert_eq!(steps_of_zoom(fit, b.zoom()), 1, "antes de I.2b eran 11");
 }
 
 #[test]
-fn fila_5_un_pellizco_lento_da_tres_pasos() {
-    let mut b = Banco::con_cursor();
-    let ajuste = b.zoom();
+fn row_5_a_slow_pinch_gives_three_steps() {
+    let mut b = Bench::with_cursor();
+    let fit = b.zoom();
     for _ in 0..30 {
-        b.paso(vec![Event::Zoom(1.02)]);
+        b.step(vec![Event::Zoom(1.02)]);
     }
     for _ in 0..5 {
-        b.paso(vec![]);
+        b.step(vec![]);
     }
-    assert_eq!(pasos_de_zoom(ajuste, b.zoom()), 3, "antes de I.2b eran 30");
+    assert_eq!(steps_of_zoom(fit, b.zoom()), 3, "antes de I.2b eran 30");
 }
 
 #[test]
-fn fila_5_sin_cursor_sobre_el_lienzo_la_rueda_no_hace_nada() {
-    let mut b = Banco::nuevo();
-    let (zoom, origen) = (b.zoom(), b.origen());
-    b.paso(vec![linea(1.0), dedos(0.0, 20.0), Event::Zoom(1.5)]);
+fn row_5_without_a_cursor_over_the_canvas_the_wheel_does_nothing() {
+    let mut b = Bench::new_2();
+    let (zoom, source_2) = (b.zoom(), b.source_2());
+    b.step(vec![line(1.0), fingers(0.0, 20.0), Event::Zoom(1.5)]);
     assert_eq!(b.zoom(), zoom);
-    assert_eq!(b.origen(), origen);
+    assert_eq!(b.source_2(), source_2);
 }
 
 // --- Fila 6 ---
 
 #[test]
-fn fila_6_central_y_espacio_mas_izquierdo_desplazan_sin_trazo() {
-    for (boton_pan, con_espacio) in [
+fn row_6_middle_and_space_plus_left_scroll_without_a_stroke() {
+    for (button_pan, with_space) in [
         (PointerButton::Middle, false),
         (PointerButton::Primary, true),
     ] {
-        let mut b = Banco::con_cursor();
-        let origen = b.origen();
-        if con_espacio {
-            b.paso(vec![espacio(true)]);
+        let mut b = Bench::with_cursor();
+        let source_2 = b.source_2();
+        if with_space {
+            b.step(vec![space(true)]);
         }
-        b.paso(vec![boton(CURSOR, boton_pan, true, Modifiers::NONE)]);
-        b.paso(vec![Event::PointerMoved(CURSOR + vec2(10.0, 5.0))]);
-        b.paso(vec![Event::PointerMoved(CURSOR + vec2(20.0, 10.0))]);
-        b.paso(vec![boton(
+        b.step(vec![button_2(CURSOR, button_pan, true, Modifiers::NONE)]);
+        b.step(vec![Event::PointerMoved(CURSOR + vec2(10.0, 5.0))]);
+        b.step(vec![Event::PointerMoved(CURSOR + vec2(20.0, 10.0))]);
+        b.step(vec![button_2(
             CURSOR + vec2(20.0, 10.0),
-            boton_pan,
+            button_pan,
             false,
             Modifiers::NONE,
         )]);
-        assert!(b.entradas.is_empty(), "{boton_pan:?}: sin eventos de trazo");
+        assert!(b.entries.is_empty(), "{button_pan:?}: sin eventos de trazo");
         assert!(
-            b.origen().x > origen.x && b.origen().y > origen.y,
-            "{boton_pan:?}"
+            b.source_2().x > source_2.x && b.source_2().y > source_2.y,
+            "{button_pan:?}"
         );
     }
 }
 
 #[test]
-fn fila_6_los_dedos_desplazan_con_un_trazo_en_curso_y_el_trazo_sigue() {
-    let mut b = Banco::con_cursor();
-    let origen = b.origen();
-    b.paso(vec![boton(
+fn row_6_fingers_scroll_with_a_stroke_in_progress_and_the_stroke_continues() {
+    let mut b = Bench::with_cursor();
+    let source_2 = b.source_2();
+    b.step(vec![button_2(
         CURSOR,
         PointerButton::Primary,
         true,
         Modifiers::NONE,
     )]);
-    b.paso(vec![dedos(0.0, 8.0)]);
-    assert_eq!(b.origen(), origen + vec2(0.0, 8.0), "la vista se mueve");
-    b.paso(vec![Event::PointerMoved(CURSOR + vec2(12.0, 0.0))]);
-    b.paso(vec![boton(
+    b.step(vec![fingers(0.0, 8.0)]);
+    assert_eq!(b.source_2(), source_2 + vec2(0.0, 8.0), "la vista se mueve");
+    b.step(vec![Event::PointerMoved(CURSOR + vec2(12.0, 0.0))]);
+    b.step(vec![button_2(
         CURSOR + vec2(12.0, 0.0),
         PointerButton::Primary,
         false,
         Modifiers::NONE,
     )]);
-    let tiene = |f: fn(&CanvasInput) -> bool| b.entradas.iter().any(|(e, _)| f(e));
-    assert!(tiene(|e| matches!(
+    let has = |f: fn(&CanvasInput) -> bool| b.entries.iter().any(|(e, _)| f(e));
+    assert!(has(|e| matches!(
         e,
         CanvasInput::Stroke(px_ui::canvas::CanvasEvent::StrokeBegin(_))
     )));
-    assert!(tiene(|e| matches!(
+    assert!(has(|e| matches!(
         e,
         CanvasInput::Stroke(px_ui::canvas::CanvasEvent::StrokeEnd)
     )));
-    assert!(!tiene(|e| matches!(e, CanvasInput::Escape)));
+    assert!(!has(|e| matches!(e, CanvasInput::Escape)));
 }
 
 #[test]
-fn fila_6_el_desplazamiento_es_entero_en_pixeles_fisicos_y_clamp_manda() {
+fn row_6_the_scroll_is_an_integer_in_physical_pixels_and_clamp_rules() {
     for ppp in [1.0f32, 1.25, 1.5, 2.0] {
-        let mut b = Banco::con_ppp(ppp);
-        b.paso(vec![Event::PointerMoved(CURSOR)]);
-        let a = b.origen();
-        b.paso(vec![dedos(0.0, 7.3)]);
-        let d = (b.origen().y - a.y) * ppp;
+        let mut b = Bench::with_ppp(ppp);
+        b.step(vec![Event::PointerMoved(CURSOR)]);
+        let a = b.source_2();
+        b.step(vec![fingers(0.0, 7.3)]);
+        let d = (b.source_2().y - a.y) * ppp;
         assert!((d - d.round()).abs() < 1e-3, "ppp {ppp}: {d} px físicos");
         // Un desplazamiento enorme no saca la imagen del lienzo.
-        b.paso(vec![dedos(5000.0, 5000.0), dedos(-90000.0, 0.0)]);
+        b.step(vec![fingers(5000.0, 5000.0), fingers(-90000.0, 0.0)]);
         let rect = b.info.image_rect.expect("hay imagen");
         assert!(
             rect.intersects(Rect::from_min_size(Pos2::ZERO, SCREEN)),
@@ -334,7 +334,7 @@ fn fila_6_el_desplazamiento_es_entero_en_pixeles_fisicos_y_clamp_manda() {
 
 // --- Fila 8 (en el lienzo): tabla sustituida ---
 
-fn fila_de(input: Input, action: GestureAction) -> GestureRow {
+fn row_of(input: Input, action: GestureAction) -> GestureRow {
     GestureRow {
         input,
         mods: Mods {
@@ -349,58 +349,58 @@ fn fila_de(input: Input, action: GestureAction) -> GestureRow {
 }
 
 #[test]
-fn fila_8_con_una_tabla_vacia_el_lienzo_no_responde_a_nada() {
-    let mut b = Banco::con_cursor();
+fn row_8_with_an_empty_table_the_canvas_does_not_respond_to_anything() {
+    let mut b = Bench::with_cursor();
     b.canvas.set_gestures(GestureMap::new(vec![]));
-    let (zoom, origen) = (b.zoom(), b.origen());
-    b.paso(vec![linea(1.0), dedos(0.0, 9.0), Event::Zoom(1.5)]);
-    b.paso(vec![boton(
+    let (zoom, source_2) = (b.zoom(), b.source_2());
+    b.step(vec![line(1.0), fingers(0.0, 9.0), Event::Zoom(1.5)]);
+    b.step(vec![button_2(
         CURSOR,
         PointerButton::Primary,
         true,
         Modifiers::NONE,
     )]);
-    b.paso(vec![boton(
+    b.step(vec![button_2(
         CURSOR,
         PointerButton::Primary,
         false,
         Modifiers::NONE,
     )]);
-    b.paso(vec![boton(
+    b.step(vec![button_2(
         CURSOR,
         PointerButton::Middle,
         true,
         Modifiers::NONE,
     )]);
-    b.paso(vec![Event::PointerMoved(CURSOR + vec2(30.0, 30.0))]);
+    b.step(vec![Event::PointerMoved(CURSOR + vec2(30.0, 30.0))]);
     assert_eq!(b.zoom(), zoom);
-    assert_eq!(b.origen(), origen);
-    assert!(b.entradas.is_empty());
+    assert_eq!(b.source_2(), source_2);
+    assert!(b.entries.is_empty());
 }
 
 #[test]
-fn fila_8_rueda_asignada_a_desplazar_y_dedos_a_zoom() {
-    let mut b = Banco::con_cursor();
+fn row_8_wheel_assigned_to_scroll_and_fingers_to_zoom() {
+    let mut b = Bench::with_cursor();
     b.canvas.set_gestures(GestureMap::new(vec![
-        fila_de(Input::Wheel, GestureAction::Pan),
-        fila_de(Input::Scroll, GestureAction::ZoomStep),
+        row_of(Input::Wheel, GestureAction::Pan),
+        row_of(Input::Scroll, GestureAction::ZoomStep),
     ]));
-    let (zoom, origen) = (b.zoom(), b.origen());
-    b.paso(vec![linea(1.0)]);
+    let (zoom, source_2) = (b.zoom(), b.source_2());
+    b.step(vec![line(1.0)]);
     assert_eq!(b.zoom(), zoom, "la rueda ya no hace zoom");
     assert_eq!(
-        b.origen(),
-        origen + vec2(0.0, 40.0),
+        b.source_2(),
+        source_2 + vec2(0.0, 40.0),
         "desplaza 40 puntos por muesca"
     );
     let antes = b.zoom();
-    b.paso(vec![dedos(0.0, 20.0)]);
+    b.step(vec![fingers(0.0, 20.0)]);
     assert_eq!(
         b.zoom(),
         antes,
         "media muesca (20 de 40 puntos) no cruza el umbral"
     );
-    b.paso(vec![dedos(0.0, 20.0)]);
+    b.step(vec![fingers(0.0, 20.0)]);
     assert_eq!(
         b.zoom(),
         antes.zoom_in(),
@@ -411,14 +411,14 @@ fn fila_8_rueda_asignada_a_desplazar_y_dedos_a_zoom() {
 // --- Fila 10 ---
 
 #[test]
-fn fila_10_el_derecho_pinta_con_el_fondo_con_y_sin_espacio_y_alt_no_cuenta() {
-    for (espacio_abajo, alt) in [(false, false), (true, false), (false, true), (true, true)] {
-        let mut b = Banco::con_cursor();
-        if espacio_abajo {
-            b.paso(vec![espacio(true)]);
+fn row_10_the_right_one_paints_with_the_background_with_and_without_space_and_alt_does_not_count() {
+    for (space_below, alt) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut b = Bench::with_cursor();
+        if space_below {
+            b.step(vec![space(true)]);
         }
         let m = if alt { Modifiers::ALT } else { Modifiers::NONE };
-        let e = b.paso(vec![boton(CURSOR, PointerButton::Secondary, true, m)]);
+        let e = b.step(vec![button_2(CURSOR, PointerButton::Secondary, true, m)]);
         assert!(
             matches!(
                 e.as_slice(),
@@ -427,17 +427,17 @@ fn fila_10_el_derecho_pinta_con_el_fondo_con_y_sin_espacio_y_alt_no_cuenta() {
                     Role::Background
                 )]
             ),
-            "espacio {espacio_abajo}, alt {alt}: {e:?}"
+            "espacio {space_below}, alt {alt}: {e:?}"
         );
     }
 }
 
 #[test]
-fn fila_10_alt_no_cambia_la_rueda_ni_el_izquierdo_y_mayus_izquierdo_dibuja() {
-    let mut a = Banco::con_cursor();
-    let mut b = Banco::con_cursor();
-    a.paso(vec![linea(1.0)]);
-    b.paso(vec![evento_rueda(
+fn row_10_alt_does_not_change_the_wheel_or_the_left_and_shift_left_draws() {
+    let mut a = Bench::with_cursor();
+    let mut b = Bench::with_cursor();
+    a.step(vec![line(1.0)]);
+    b.step(vec![event_wheel(
         MouseWheelUnit::Line,
         vec2(0.0, 1.0),
         Modifiers::ALT,
@@ -445,8 +445,8 @@ fn fila_10_alt_no_cambia_la_rueda_ni_el_izquierdo_y_mayus_izquierdo_dibuja() {
     )]);
     assert_eq!(a.zoom(), b.zoom(), "Alt no cuenta en la rueda");
     for m in [Modifiers::NONE, Modifiers::ALT, Modifiers::SHIFT] {
-        let mut b = Banco::con_cursor();
-        let e = b.paso(vec![boton(CURSOR, PointerButton::Primary, true, m)]);
+        let mut b = Bench::with_cursor();
+        let e = b.step(vec![button_2(CURSOR, PointerButton::Primary, true, m)]);
         assert!(
             matches!(
                 e.as_slice(),
@@ -463,13 +463,13 @@ fn fila_10_alt_no_cambia_la_rueda_ni_el_izquierdo_y_mayus_izquierdo_dibuja() {
 // --- Fila 11 ---
 
 #[test]
-fn fila_11_el_signo_lo_da_el_sistema_y_la_app_no_lo_invierte() {
+fn row_11_the_sign_is_given_by_the_system_and_the_app_does_not_invert_it() {
     // (dx, dy) del delta → cuánto se mueve la imagen: el mismo signo.
     for (dx, dy) in [(0.0, 6.0), (0.0, -6.0), (6.0, 0.0), (-6.0, 0.0)] {
-        let mut b = Banco::con_cursor();
-        let origen = b.origen();
-        b.paso(vec![dedos(dx, dy)]);
-        assert_eq!(b.origen() - origen, vec2(dx, dy), "delta ({dx}, {dy})");
+        let mut b = Bench::with_cursor();
+        let source_2 = b.source_2();
+        b.step(vec![fingers(dx, dy)]);
+        assert_eq!(b.source_2() - source_2, vec2(dx, dy), "delta ({dx}, {dy})");
     }
     // Con el desplazamiento natural de macOS el sistema ya entrega el signo contrario para el mismo
     // movimiento de dedos: movimientos opuestos, sin ramas por `source`.
@@ -480,15 +480,15 @@ fn fila_11_el_signo_lo_da_el_sistema_y_la_app_no_lo_invierte() {
         MouseWheelSource::Momentum,
     ] {
         let mover = |dy: f32| {
-            let mut b = Banco::con_cursor();
-            let origen = b.origen();
-            b.paso(vec![evento_rueda(
+            let mut b = Bench::with_cursor();
+            let source_2 = b.source_2();
+            b.step(vec![event_wheel(
                 MouseWheelUnit::Point,
                 vec2(0.0, dy),
                 Modifiers::NONE,
                 source,
             )]);
-            b.origen().y - origen.y
+            b.source_2().y - source_2.y
         };
         assert_eq!(mover(9.0), 9.0, "{source:?}");
         assert_eq!(mover(-9.0), -9.0, "{source:?}");
@@ -496,24 +496,24 @@ fn fila_11_el_signo_lo_da_el_sistema_y_la_app_no_lo_invierte() {
 }
 
 #[test]
-fn fila_11_mayus_mas_linea_suma_los_dos_ejes() {
-    for (dx, dy, esperado) in [
+fn row_11_shift_plus_line_adds_the_two_axes() {
+    for (dx, dy, expected_2) in [
         (0.0, 1.0, 40.0),
         (1.0, 0.0, 40.0),
         (0.0, -1.0, -40.0),
         (-1.0, 0.0, -40.0),
     ] {
-        let mut b = Banco::con_cursor();
-        let origen = b.origen();
-        b.paso(vec![evento_rueda(
+        let mut b = Bench::with_cursor();
+        let source_2 = b.source_2();
+        b.step(vec![event_wheel(
             MouseWheelUnit::Line,
             vec2(dx, dy),
             Modifiers::SHIFT,
             MouseWheelSource::Unknown,
         )]);
         assert_eq!(
-            b.origen() - origen,
-            vec2(esperado, 0.0),
+            b.source_2() - source_2,
+            vec2(expected_2, 0.0),
             "delta ({dx}, {dy})"
         );
     }
@@ -522,38 +522,38 @@ fn fila_11_mayus_mas_linea_suma_los_dos_ejes() {
 // --- Fila 12 ---
 
 #[test]
-fn fila_12_los_restos_de_medio_pixel_se_arrastran() {
+fn row_12_the_half_pixel_remainders_are_carried() {
     // 7 eventos de 0,4 pt: a ppp 1,0 son 2,8 px (se mueven 2); a 1,5, 4,2 (4); a 2,0, 5,6 (5).
-    for (ppp, fisicos) in [(1.0f32, 2.0f32), (1.5, 4.0), (2.0, 5.0)] {
-        for signo in [1.0f32, -1.0] {
-            let mut b = Banco::con_ppp(ppp);
-            b.paso(vec![Event::PointerMoved(CURSOR)]);
-            let origen = b.origen();
+    for (ppp, physical) in [(1.0f32, 2.0f32), (1.5, 4.0), (2.0, 5.0)] {
+        for sign in [1.0f32, -1.0] {
+            let mut b = Bench::with_ppp(ppp);
+            b.step(vec![Event::PointerMoved(CURSOR)]);
+            let source_2 = b.source_2();
             for _ in 0..7 {
-                b.paso(vec![dedos(0.0, 0.4 * signo)]);
+                b.step(vec![fingers(0.0, 0.4 * sign)]);
             }
-            let movido = (b.origen().y - origen.y) * ppp;
+            let moved = (b.source_2().y - source_2.y) * ppp;
             assert!(
-                (movido - fisicos * signo).abs() < 1e-3,
-                "ppp {ppp}, signo {signo}: {movido} px físicos"
+                (moved - physical * sign).abs() < 1e-3,
+                "ppp {ppp}, signo {sign}: {moved} px físicos"
             );
-            assert_eq!(b.origen().x, origen.x);
+            assert_eq!(b.source_2().x, source_2.x);
         }
     }
 }
 
 #[test]
-fn fila_12_el_resto_se_arrastra_por_eje() {
-    let mut b = Banco::con_cursor();
-    let origen = b.origen();
+fn row_12_the_remainder_is_carried_per_axis() {
+    let mut b = Bench::with_cursor();
+    let source_2 = b.source_2();
     for _ in 0..3 {
-        b.paso(vec![dedos(0.4, 0.0)]);
+        b.step(vec![fingers(0.4, 0.0)]);
     }
     for _ in 0..3 {
-        b.paso(vec![dedos(0.0, 0.4)]);
+        b.step(vec![fingers(0.0, 0.4)]);
     }
     assert_eq!(
-        b.origen() - origen,
+        b.source_2() - source_2,
         vec2(1.0, 1.0),
         "1,2 px en cada eje: uno entero"
     );
@@ -561,31 +561,31 @@ fn fila_12_el_resto_se_arrastra_por_eje() {
 
 // --- Propiedad 3 ---
 
-fn evento_de_navegacion() -> impl Strategy<Value = Event> {
-    let modificadores = (any::<bool>(), any::<bool>()).prop_map(|(c, s)| Modifiers {
+fn event_of_navigation() -> impl Strategy<Value = Event> {
+    let modifiers_2 = (any::<bool>(), any::<bool>()).prop_map(|(c, s)| Modifiers {
         command: c,
         ctrl: c,
         shift: s,
         ..Modifiers::NONE
     });
-    let unidad = prop::sample::select(vec![
+    let unit = prop::sample::select(vec![
         MouseWheelUnit::Line,
         MouseWheelUnit::Point,
         MouseWheelUnit::Page,
     ]);
     prop_oneof![
-        (unidad, -6.0f32..6.0, -6.0f32..6.0, modificadores)
-            .prop_map(|(u, x, y, m)| { evento_rueda(u, vec2(x, y), m, MouseWheelSource::Unknown) }),
+        (unit, -6.0f32..6.0, -6.0f32..6.0, modifiers_2)
+            .prop_map(|(u, x, y, m)| { event_wheel(u, vec2(x, y), m, MouseWheelSource::Unknown) }),
         (0.5f32..2.0).prop_map(Event::Zoom),
-        any::<bool>().prop_map(espacio),
-        any::<bool>().prop_map(|p| boton(CURSOR, PointerButton::Middle, p, Modifiers::NONE)),
+        any::<bool>().prop_map(space),
+        any::<bool>().prop_map(|p| button_2(CURSOR, PointerButton::Middle, p, Modifiers::NONE)),
         (any::<bool>(), any::<bool>()).prop_map(|(a, p)| {
             let b = if a {
                 PointerButton::Extra1
             } else {
                 PointerButton::Extra2
             };
-            boton(CURSOR, b, p, Modifiers::NONE)
+            button_2(CURSOR, b, p, Modifiers::NONE)
         }),
         (0.0f32..800.0, 0.0f32..600.0).prop_map(|(x, y)| Event::PointerMoved(pos2(x, y))),
     ]
@@ -596,17 +596,17 @@ proptest! {
 
     /// Propiedad 3: navegar no dibuja y la vista siempre vale.
     #[test]
-    fn propiedad_3_navegar_no_dibuja_y_la_vista_siempre_vale(
-        eventos in prop::collection::vec(evento_de_navegacion(), 0..14),
+    fn property_3_navigating_does_not_draw_and_the_view_is_always_valid(
+        events_2 in prop::collection::vec(event_of_navigation(), 0..14),
     ) {
-        let mut b = Banco::con_cursor();
-        for e in eventos {
-            b.paso(vec![e]);
+        let mut b = Bench::with_cursor();
+        for e in events_2 {
+            b.step(vec![e]);
             prop_assert!(b.zoom() >= Zoom::MIN && b.zoom() <= Zoom::MAX);
             let rect = b.info.image_rect.expect("hay imagen");
             prop_assert!(rect.intersects(Rect::from_min_size(Pos2::ZERO, SCREEN)), "{rect:?}");
         }
-        b.paso(vec![]);
-        prop_assert!(b.entradas.is_empty(), "eventos de trazo: {:?}", b.entradas);
+        b.step(vec![]);
+        prop_assert!(b.entries.is_empty(), "eventos de trazo: {:?}", b.entries);
     }
 }

@@ -2,7 +2,7 @@
 //! decisión 7 y «Prueba manual» 1): con un clic de ratón sobre una entrada del menú desplegable.
 //!
 //! Fallo observado a mano en la unidad 18: abriendo `Ayuda → Licencias` con el ratón, tras abrirse
-//! no hay ningún widget con foco (`AvPág`, `RePág`, `Inicio` y `Fin` no mueven el texto e `Intro`
+//! no hay ningún widget con foco (`AvPág`, `RePág`, `Start` y `Fin` no mueven el texto e `Intro`
 //! cierra el diálogo); el primer `Tab` lleva el foco a la zona de texto. Las pruebas sin ventana de
 //! la fila 11 pasaban porque abren el diálogo de forma sintética, en el primer fotograma y sin clic.
 //!
@@ -12,9 +12,9 @@
 //! `RawInput` sintético. Tras **cada** fotograma se anota qué `Id` tiene el foco en la memoria de
 //! egui (`ctx.memory(|m| m.focused())`).
 //!
-//! - Con el clic en el menú: el foco inicial tiene que estar en la zona de texto (`Zone("texto")`)
+//! - Con el clic en el menú: el foco inicial tiene que estar en la zona de texto (`Zone("text_2")`)
 //!   desde el fotograma siguiente al de apertura y mantenerse en los demás.
-//! - Con el foco ahí: `AvPág`, `Fin`, `RePág` e `Inicio` desplazan la zona e `Intro` no cierra.
+//! - Con el foco ahí: `AvPág`, `Fin`, `RePág` e `Start` desplazan la zona e `Intro` no cierra.
 //! - La variante sin menú (el diálogo abierto antes del primer fotograma, como con
 //!   `PIXOKO_TEST_DIALOG=1`) se comprueba igual, con Licencias y con un formulario con campos.
 
@@ -33,120 +33,120 @@ mod common;
 #[path = "common/dialog_forms.rs"]
 mod dialog_forms;
 
-use common::{PPPS, boton, contexto, fotograma, mover, n_de, pintado, tecla};
+use common::{PPPS, button_2, context, frame, key_2, mover, n_de, painted};
 use dialog_forms::all_kinds;
 
 /// La ventana mínima real de la escala (`468n × 333n` px) o 960 × 720 pt.
 #[derive(Clone, Copy, Debug)]
-enum Ventana {
-    Minima,
-    Grande,
+enum Window {
+    Minimum,
+    Large,
 }
 
-const VENTANAS: [Ventana; 2] = [Ventana::Minima, Ventana::Grande];
+const WINDOWS: [Window; 2] = [Window::Minimum, Window::Large];
 
-fn pantalla(ppp: f32, ventana: Ventana) -> Vec2 {
-    match ventana {
-        Ventana::Minima => {
+fn screen(ppp: f32, window: Window) -> Vec2 {
+    match window {
+        Window::Minimum => {
             let n = n_de(ppp) as f32;
             vec2(468.0 * n / ppp, 333.0 * n / ppp)
         }
-        Ventana::Grande => vec2(960.0, 720.0),
+        Window::Large => vec2(960.0, 720.0),
     }
 }
 
 /// Un texto largo (200 líneas) para que la zona de Licencias tenga a dónde desplazarse.
-fn texto_largo() -> String {
+fn text_long() -> String {
     (1..=200)
         .map(|n| format!("linea {n}"))
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-fn id_de_la_zona() -> Id {
+fn id_of_the_area() -> Id {
     Id::unique(("pixoko-dialog-zone", LICENSES_FIELD))
 }
 
 /// Un fotograma de la aplicación: menú, apertura por acción y diálogo.
-struct Aplicacion {
+struct Application {
     ctx: Context,
     ppp: f32,
-    ventana: Ventana,
+    window: Window,
     modal: Modal,
     focus: Option<FocusTarget>,
     /// Diálogos aceptados o cancelados (cerrados) desde el principio.
-    cierres: usize,
+    closes_2: usize,
     /// Qué `Id` tenía el foco al final de cada fotograma, y si el diálogo estaba abierto.
-    traza: Vec<(bool, Option<Id>)>,
-    /// El fotograma (índice en `traza`) en que `show_dialog` pintó el diálogo por primera vez.
-    abierto_en: Option<usize>,
+    trace: Vec<(bool, Option<Id>)>,
+    /// El fotograma (índice en `trace`) en que `show_dialog` pintó el diálogo por primera vez.
+    open_in: Option<usize>,
     /// Lo pintado en el último fotograma, para buscar entradas del menú.
-    ultimo: common::Pintado,
+    ultimo: common::Painted,
     /// Si está, un botón «Abrir formulario» (en una capa bajo el velo) abre este formulario con un
     /// clic: la misma apertura que el menú, para un diálogo con campos.
-    formulario: Option<fn() -> FormSpec>,
+    form: Option<fn() -> FormSpec>,
 }
 
-impl Aplicacion {
-    fn nueva(ppp: f32, ventana: Ventana) -> Aplicacion {
-        let ctx = contexto(ppp);
+impl Application {
+    fn new(ppp: f32, window: Window) -> Application {
+        let ctx = context(ppp);
         ctx.set_visuals_of(egui::Theme::Dark, visuals(ppp));
-        Aplicacion {
+        Application {
             ctx,
             ppp,
-            ventana,
+            window,
             modal: Modal::Closed,
             focus: None,
-            cierres: 0,
-            traza: Vec::new(),
-            abierto_en: None,
-            ultimo: common::Pintado::default(),
-            formulario: None,
+            closes_2: 0,
+            trace: Vec::new(),
+            open_in: None,
+            ultimo: common::Painted::default(),
+            form: None,
         }
     }
 
-    /// Con un botón que abre `formulario` con un clic.
-    fn con_boton_de_formulario(ppp: f32, ventana: Ventana, formulario: fn() -> FormSpec) -> Self {
-        let mut app = Aplicacion::nueva(ppp, ventana);
-        app.formulario = Some(formulario);
+    /// Con un botón que abre `form` con un clic.
+    fn with_form_button(ppp: f32, window: Window, form: fn() -> FormSpec) -> Self {
+        let mut app = Application::new(ppp, window);
+        app.form = Some(form);
         app
     }
 
     /// Cambio de escala y de tamaño de la ventana con el diálogo abierto.
-    fn cambia(&mut self, ppp: f32, ventana: Ventana) {
+    fn changes(&mut self, ppp: f32, window: Window) {
         self.ppp = ppp;
-        self.ventana = ventana;
+        self.window = window;
         self.ctx.set_pixels_per_point(ppp);
         self.ctx.set_visuals_of(egui::Theme::Dark, visuals(ppp));
     }
 
     /// El diálogo ya abierto antes del primer fotograma (como `PIXOKO_TEST_DIALOG=1`).
-    fn con_dialogo(ppp: f32, ventana: Ventana, kind: DialogKind, spec: FormSpec) -> Aplicacion {
-        let mut app = Aplicacion::nueva(ppp, ventana);
+    fn with_dialog(ppp: f32, window: Window, kind: DialogKind, spec: FormSpec) -> Application {
+        let mut app = Application::new(ppp, window);
         assert!(app.modal.open(kind, spec, Locks::default()));
         app
     }
 
-    fn dialogo(&self) -> Option<&Dialog> {
+    fn dialog_2(&self) -> Option<&Dialog> {
         match &self.modal {
             Modal::Open(d) => Some(d),
             Modal::Closed => None,
         }
     }
 
-    fn fotograma(&mut self, events: Vec<egui::Event>) {
-        let size = pantalla(self.ppp, self.ventana);
-        let mut cierra = false;
-        let mut pinto_el_dialogo = false;
-        let formas = {
-            let Aplicacion {
+    fn frame(&mut self, events: Vec<egui::Event>) {
+        let size = screen(self.ppp, self.window);
+        let mut closes = false;
+        let mut paint_the_dialog = false;
+        let shapes_2 = {
+            let Application {
                 ctx,
                 modal,
                 focus,
-                formulario,
+                form,
                 ..
             } = &mut *self;
-            fotograma(ctx, size, events, |ui| {
+            frame(ctx, size, events, |ui| {
                 let c = ui.ctx().clone();
                 apply_scale(&c);
                 let state = UiState {
@@ -172,77 +172,77 @@ impl Aplicacion {
                             modal: modal.is_open(),
                             ..Locks::default()
                         };
-                        if modal.open(DialogKind::Licenses, licenses_form(&texto_largo()), locks) {
+                        if modal.open(DialogKind::Licenses, licenses_form(&text_long()), locks) {
                             *focus = None;
                         }
                     }
                 }
-                if let Some(formulario) = formulario {
-                    let boton = Area::new(Id::unique("abrir_formulario"))
+                if let Some(form) = form {
+                    let button_2 = Area::new(Id::unique("abrir_formulario"))
                         .order(Order::Middle)
                         .fixed_pos(pos2(2.0, 150.0))
                         .show(&c, |ui| ui.button("Abrir formulario"))
                         .inner;
-                    if boton.clicked() {
+                    if button_2.clicked() {
                         let locks = Locks {
                             text_focus: c.text_edit_focused(),
                             modal: modal.is_open(),
                             ..Locks::default()
                         };
-                        if modal.open(DialogKind::Licenses, formulario(), locks) {
+                        if modal.open(DialogKind::Licenses, form(), locks) {
                             *focus = None;
                         }
                     }
                 }
                 // El diálogo, el último, como `App::show_modal`.
                 if let Modal::Open(dialog) = modal {
-                    pinto_el_dialogo = true;
+                    paint_the_dialog = true;
                     let reaction = show_dialog(&c, dialog, focus);
                     if matches!(reaction, Reaction::Accepted(_) | Reaction::Cancelled) {
-                        cierra = true;
+                        closes = true;
                     }
                 }
             })
         };
-        if cierra {
+        if closes {
             self.modal.abandon();
             self.focus = None;
-            self.cierres += 1;
+            self.closes_2 += 1;
         }
-        if pinto_el_dialogo && self.abierto_en.is_none() {
-            self.abierto_en = Some(self.traza.len());
+        if paint_the_dialog && self.open_in.is_none() {
+            self.open_in = Some(self.trace.len());
         }
-        self.traza
+        self.trace
             .push((self.modal.is_open(), self.ctx.memory(|m| m.focused())));
-        self.ultimo = pintado(&formas);
+        self.ultimo = painted(&shapes_2);
     }
 
-    fn reposo(&mut self) {
+    fn rest_2_2(&mut self) {
         for _ in 0..3 {
-            self.fotograma(vec![]);
+            self.frame(vec![]);
         }
     }
 
     /// Mueve, pulsa y suelta en `pos`: tres fotogramas, como los entrega winit.
-    fn clic(&mut self, pos: Pos2) {
-        self.fotograma(vec![mover(pos)]);
-        self.fotograma(vec![boton(pos, true)]);
-        self.fotograma(vec![boton(pos, false)]);
+    fn click(&mut self, pos: Pos2) {
+        self.frame(vec![mover(pos)]);
+        self.frame(vec![button_2(pos, true)]);
+        self.frame(vec![button_2(pos, false)]);
     }
 
-    fn pulsa(&mut self, key: Key) {
-        self.fotograma(vec![tecla(key, Modifiers::NONE)]);
-        self.reposo();
+    fn presses_2(&mut self, key: Key) {
+        self.frame(vec![key_2(key, Modifiers::NONE)]);
+        self.rest_2_2();
     }
 
-    /// El centro del texto pintado `buscado` en el último fotograma.
-    fn centro_de(&self, buscado: &str) -> Pos2 {
+    /// El centro del texto pintado `searched` en el último fotograma.
+    fn center_of(&self, searched: &str) -> Pos2 {
         self.ultimo
-            .texto_con(buscado)
+            .text_with(searched)
             .unwrap_or_else(|| {
                 panic!(
-                    "no se pinta {buscado:?}; hay {:?}",
-                    self.ultimo.todos_los_textos()
+                    "no se pinta {searched:?}; hay {:?}",
+                    self.ultimo.all_the_texts()
                 )
             })
             .rect()
@@ -250,40 +250,40 @@ impl Aplicacion {
     }
 
     /// `Ayuda → Licencias` con el ratón, como lo hace el usuario, y unos fotogramas de reposo.
-    fn abre_licencias_con_el_raton(&mut self) {
-        self.reposo();
-        let ayuda = self.centro_de("Ayuda");
-        self.clic(ayuda);
-        self.reposo();
-        let licencias = self.centro_de("Licencias");
-        self.clic(licencias);
-        self.reposo();
+    fn opens_licenses_with_the_mouse(&mut self) {
+        self.rest_2_2();
+        let help = self.center_of("Ayuda");
+        self.click(help);
+        self.rest_2_2();
+        let licenses = self.center_of("Licencias");
+        self.click(licenses);
+        self.rest_2_2();
     }
 
     /// El `Id` que tenía el foco tras cada fotograma posterior al de apertura.
-    fn foco_tras_la_apertura(&self) -> Vec<(usize, Option<Id>)> {
-        let desde = self.abierto_en.map_or(self.traza.len(), |i| i + 1);
-        self.traza
+    fn focus_after_opening(&self) -> Vec<(usize, Option<Id>)> {
+        let from_2 = self.open_in.map_or(self.trace.len(), |i| i + 1);
+        self.trace
             .iter()
             .enumerate()
-            .skip(desde)
+            .skip(from_2)
             .map(|(i, (_, id))| (i, *id))
             .collect()
     }
 
-    fn primera_linea(&self) -> usize {
-        self.dialogo()
+    fn first_line(&self) -> usize {
+        self.dialog_2()
             .expect("el diálogo está abierto")
             .first_line(LICENSES_FIELD)
     }
 }
 
-fn describe(app: &Aplicacion) -> String {
+fn describe(app: &Application) -> String {
     format!(
         "abierto_en {:?}; foco tras cada fotograma (abierto, id) {:?}; zona {:?}; focus {:?}",
-        app.abierto_en,
-        app.traza,
-        id_de_la_zona(),
+        app.open_in,
+        app.trace,
+        id_of_the_area(),
         app.focus
     )
 }
@@ -293,91 +293,91 @@ fn describe(app: &Aplicacion) -> String {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn licencias_abiertas_con_un_clic_en_el_menu_dejan_el_foco_en_la_zona_de_texto() {
+fn licenses_opened_with_a_click_on_the_menu_leave_the_focus_in_the_text_area() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
-            let mut app = Aplicacion::nueva(ppp, ventana);
-            app.abre_licencias_con_el_raton();
-            assert!(app.modal.is_open(), "ppp {ppp} {ventana:?}: no se abrió");
+        for window in WINDOWS {
+            let mut app = Application::new(ppp, window);
+            app.opens_licenses_with_the_mouse();
+            assert!(app.modal.is_open(), "ppp {ppp} {window:?}: no se abrió");
             assert!(
-                app.abierto_en.is_some(),
-                "ppp {ppp} {ventana:?}: nunca se pintó"
+                app.open_in.is_some(),
+                "ppp {ppp} {window:?}: nunca se pintó"
             );
-            let foco = app.foco_tras_la_apertura();
+            let focus = app.focus_after_opening();
             assert!(
-                foco.len() >= 3,
-                "ppp {ppp} {ventana:?}: faltan fotogramas tras abrir"
+                focus.len() >= 3,
+                "ppp {ppp} {window:?}: faltan fotogramas tras abrir"
             );
-            for (fotograma, id) in foco {
+            for (frame, id) in focus {
                 assert_eq!(
                     id,
-                    Some(id_de_la_zona()),
-                    "ppp {ppp} {ventana:?}: el foco de egui en el fotograma {fotograma} \
+                    Some(id_of_the_area()),
+                    "ppp {ppp} {window:?}: el foco de egui en el fotograma {frame} \
                      (el diálogo se abrió en {:?}) no es la zona de texto; {}",
-                    app.abierto_en,
+                    app.open_in,
                     describe(&app)
                 );
             }
             assert_eq!(
                 app.focus,
                 Some(FocusTarget::Zone(LICENSES_FIELD)),
-                "ppp {ppp} {ventana:?}: el foco que lleva show_dialog"
+                "ppp {ppp} {window:?}: el foco que lleva show_dialog"
             );
         }
     }
 }
 
 #[test]
-fn con_el_dialogo_abierto_por_el_menu_avpag_fin_repag_e_inicio_desplazan_la_zona() {
+fn with_the_dialog_opened_from_the_menu_page_down_end_page_up_and_home_scroll_the_area() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
-            let mut app = Aplicacion::nueva(ppp, ventana);
-            app.abre_licencias_con_el_raton();
-            assert_eq!(app.primera_linea(), 0, "ppp {ppp} {ventana:?}: al abrir");
+        for window in WINDOWS {
+            let mut app = Application::new(ppp, window);
+            app.opens_licenses_with_the_mouse();
+            assert_eq!(app.first_line(), 0, "ppp {ppp} {window:?}: al abrir");
 
-            app.pulsa(Key::PageDown);
-            let tras_avpag = app.primera_linea();
+            app.presses_2(Key::PageDown);
+            let after_page_down = app.first_line();
             assert!(
-                tras_avpag > 0,
-                "ppp {ppp} {ventana:?}: AvPág no desplaza; {}",
+                after_page_down > 0,
+                "ppp {ppp} {window:?}: AvPág no desplaza; {}",
                 describe(&app)
             );
 
-            app.pulsa(Key::End);
-            let tras_fin = app.primera_linea();
+            app.presses_2(Key::End);
+            let after_fin = app.first_line();
             assert!(
-                tras_fin > tras_avpag,
-                "ppp {ppp} {ventana:?}: Fin ({tras_fin}) no llega más lejos que AvPág ({tras_avpag})"
+                after_fin > after_page_down,
+                "ppp {ppp} {window:?}: Fin ({after_fin}) no llega más lejos que AvPág ({after_page_down})"
             );
 
-            app.pulsa(Key::PageUp);
-            let tras_repag = app.primera_linea();
+            app.presses_2(Key::PageUp);
+            let after_page_up = app.first_line();
             assert!(
-                tras_repag < tras_fin,
-                "ppp {ppp} {ventana:?}: RePág no sube"
+                after_page_up < after_fin,
+                "ppp {ppp} {window:?}: RePág no sube"
             );
 
-            app.pulsa(Key::Home);
+            app.presses_2(Key::Home);
             assert_eq!(
-                app.primera_linea(),
+                app.first_line(),
                 0,
-                "ppp {ppp} {ventana:?}: Inicio no vuelve al principio"
+                "ppp {ppp} {window:?}: Inicio no vuelve al principio"
             );
-            assert_eq!(app.cierres, 0);
+            assert_eq!(app.closes_2, 0);
         }
     }
 }
 
 #[test]
-fn con_el_dialogo_abierto_por_el_menu_intro_en_la_zona_no_lo_cierra() {
+fn with_the_dialog_opened_from_the_menu_enter_in_the_area_does_not_close_it() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
-            let mut app = Aplicacion::nueva(ppp, ventana);
-            app.abre_licencias_con_el_raton();
-            app.pulsa(Key::Enter);
+        for window in WINDOWS {
+            let mut app = Application::new(ppp, window);
+            app.opens_licenses_with_the_mouse();
+            app.presses_2(Key::Enter);
             assert!(
-                app.modal.is_open() && app.cierres == 0,
-                "ppp {ppp} {ventana:?}: Intro en la zona de texto cerró el diálogo; {}",
+                app.modal.is_open() && app.closes_2 == 0,
+                "ppp {ppp} {window:?}: Intro en la zona de texto cerró el diálogo; {}",
                 describe(&app)
             );
         }
@@ -385,19 +385,19 @@ fn con_el_dialogo_abierto_por_el_menu_intro_en_la_zona_no_lo_cierra() {
 }
 
 #[test]
-fn con_el_dialogo_abierto_por_el_menu_tab_va_a_cerrar_y_escape_cierra() {
+fn with_the_dialog_opened_from_the_menu_tab_goes_to_close_and_escape_closes() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
-            let mut app = Aplicacion::nueva(ppp, ventana);
-            app.abre_licencias_con_el_raton();
-            app.pulsa(Key::Tab);
+        for window in WINDOWS {
+            let mut app = Application::new(ppp, window);
+            app.opens_licenses_with_the_mouse();
+            app.presses_2(Key::Tab);
             assert_eq!(
                 app.focus,
                 Some(FocusTarget::Accept),
-                "ppp {ppp} {ventana:?}: tras el primer Tab el foco va a Cerrar (la zona era el inicial)"
+                "ppp {ppp} {window:?}: tras el primer Tab el foco va a Cerrar (la zona era el inicial)"
             );
-            app.pulsa(Key::Escape);
-            assert_eq!(app.cierres, 1, "ppp {ppp} {ventana:?}: Escape no cierra");
+            app.presses_2(Key::Escape);
+            assert_eq!(app.closes_2, 1, "ppp {ppp} {window:?}: Escape no cierra");
         }
     }
 }
@@ -407,50 +407,50 @@ fn con_el_dialogo_abierto_por_el_menu_tab_va_a_cerrar_y_escape_cierra() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn variante_sin_menu_licencias_en_el_primer_fotograma_tiene_el_foco_en_la_zona() {
+fn variant_without_menu_licenses_in_the_first_frame_has_the_focus_on_the_area() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
-            let mut app = Aplicacion::con_dialogo(
+        for window in WINDOWS {
+            let mut app = Application::with_dialog(
                 ppp,
-                ventana,
+                window,
                 DialogKind::Licenses,
-                licenses_form(&texto_largo()),
+                licenses_form(&text_long()),
             );
-            app.reposo();
-            assert_eq!(app.abierto_en, Some(0));
-            for (fotograma, id) in app.foco_tras_la_apertura() {
+            app.rest_2_2();
+            assert_eq!(app.open_in, Some(0));
+            for (frame, id) in app.focus_after_opening() {
                 assert_eq!(
                     id,
-                    Some(id_de_la_zona()),
-                    "ppp {ppp} {ventana:?}: fotograma {fotograma}; {}",
+                    Some(id_of_the_area()),
+                    "ppp {ppp} {window:?}: fotograma {frame}; {}",
                     describe(&app)
                 );
             }
-            app.pulsa(Key::PageDown);
-            assert!(app.primera_linea() > 0, "ppp {ppp} {ventana:?}: AvPág");
-            app.pulsa(Key::Enter);
-            assert_eq!(app.cierres, 0, "ppp {ppp} {ventana:?}: Intro cierra");
+            app.presses_2(Key::PageDown);
+            assert!(app.first_line() > 0, "ppp {ppp} {window:?}: AvPág");
+            app.presses_2(Key::Enter);
+            assert_eq!(app.closes_2, 0, "ppp {ppp} {window:?}: Intro cierra");
         }
     }
 }
 
 #[test]
-fn variante_sin_menu_un_formulario_con_campos_tiene_el_foco_en_el_primer_campo() {
+fn variant_without_menu_a_form_with_fields_has_the_focus_on_the_first_field() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
+        for window in WINDOWS {
             let dialog = Dialog::new(DialogKind::Licenses, all_kinds()).expect("spec válida");
-            let esperado = initial_focus(&dialog);
-            let FocusTarget::Field(campo) = esperado else {
-                panic!("el foco inicial del formulario no es un campo: {esperado:?}");
+            let expected_2 = initial_focus(&dialog);
+            let FocusTarget::Field(field_2) = expected_2 else {
+                panic!("el foco inicial del formulario no es un campo: {expected_2:?}");
             };
-            let mut app = Aplicacion::con_dialogo(ppp, ventana, DialogKind::Licenses, all_kinds());
-            app.reposo();
-            assert_eq!(app.focus, Some(esperado), "ppp {ppp} {ventana:?}");
-            for (fotograma, id) in app.foco_tras_la_apertura() {
+            let mut app = Application::with_dialog(ppp, window, DialogKind::Licenses, all_kinds());
+            app.rest_2_2();
+            assert_eq!(app.focus, Some(expected_2), "ppp {ppp} {window:?}");
+            for (frame, id) in app.focus_after_opening() {
                 assert_eq!(
                     id,
-                    Some(Id::unique(("pixoko-dialog", campo))),
-                    "ppp {ppp} {ventana:?}: fotograma {fotograma}"
+                    Some(Id::unique(("pixoko-dialog", field_2))),
+                    "ppp {ppp} {window:?}: fotograma {frame}"
                 );
             }
         }
@@ -461,110 +461,109 @@ fn variante_sin_menu_un_formulario_con_campos_tiene_el_foco_en_el_primer_campo()
 // Con el diálogo abierto por un clic: redimensionar, cambiar de escala y recorrer con Tab
 // ---------------------------------------------------------------------------------------------
 
-fn abre_formulario_con_un_clic(app: &mut Aplicacion) {
-    app.reposo();
-    let boton = app.centro_de("Abrir formulario");
-    app.clic(boton);
-    app.reposo();
+fn opens_the_form_with_a_click(app: &mut Application) {
+    app.rest_2_2();
+    let button_2 = app.center_of("Abrir formulario");
+    app.click(button_2);
+    app.rest_2_2();
 }
 
-fn formulario_de_prueba() -> FormSpec {
+fn form_of_test() -> FormSpec {
     all_kinds()
 }
 
 /// Un ciclo entero de `Tab` más una vuelta extra desde el foco actual: cada paso es el siguiente de
 /// `focus_order`.
-fn tab_recorre_el_orden(app: &mut Aplicacion, contexto: &str) {
-    let orden = focus_order(app.dialogo().expect("abierto"));
+fn tab_walks_the_order(app: &mut Application, context: &str) {
+    let order = focus_order(app.dialog_2().expect("abierto"));
     let mut actual = app.focus.expect("hay un foco para empezar");
-    for paso in 0..=orden.len() {
-        let posicion = orden
+    for step in 0..=order.len() {
+        let position = order
             .iter()
             .position(|t| *t == actual)
-            .unwrap_or_else(|| panic!("{contexto}: {actual:?} no está en {orden:?}"));
-        let esperado = orden[(posicion + 1) % orden.len()];
-        app.pulsa(Key::Tab);
+            .unwrap_or_else(|| panic!("{context}: {actual:?} no está en {order:?}"));
+        let expected_2 = order[(position + 1) % order.len()];
+        app.presses_2(Key::Tab);
         assert_eq!(
             app.focus,
-            Some(esperado),
-            "{contexto}: paso {paso} de Tab desde {actual:?}; orden {orden:?}"
+            Some(expected_2),
+            "{context}: paso {step} de Tab desde {actual:?}; orden {order:?}"
         );
-        actual = esperado;
+        actual = expected_2;
     }
 }
 
 #[test]
-fn un_formulario_abierto_con_un_clic_tiene_el_foco_inicial_y_tab_recorre_el_orden_de_la_spec() {
+fn a_form_opened_with_a_click_has_the_initial_focus_and_tab_walks_the_order_of_the_spec() {
     for ppp in PPPS {
-        for ventana in VENTANAS {
-            let mut app = Aplicacion::con_boton_de_formulario(ppp, ventana, formulario_de_prueba);
-            abre_formulario_con_un_clic(&mut app);
-            let dialog = app.dialogo().expect("se abrió");
-            let esperado = initial_focus(dialog);
-            let contexto = format!("ppp {ppp} {ventana:?}");
-            assert_eq!(app.focus, Some(esperado), "{contexto}: foco inicial");
+        for window in WINDOWS {
+            let mut app = Application::with_form_button(ppp, window, form_of_test);
+            opens_the_form_with_a_click(&mut app);
+            let dialog = app.dialog_2().expect("se abrió");
+            let expected_2 = initial_focus(dialog);
+            let context = format!("ppp {ppp} {window:?}");
+            assert_eq!(app.focus, Some(expected_2), "{context}: foco inicial");
             assert!(
                 app.ctx.memory(|m| m.focused()).is_some(),
-                "{contexto}: egui no tiene ningún widget con foco"
+                "{context}: egui no tiene ningún widget con foco"
             );
-            tab_recorre_el_orden(&mut app, &contexto);
+            tab_walks_the_order(&mut app, &context);
         }
     }
 }
 
 #[test]
-fn el_foco_inicial_se_mantiene_tras_redimensionar_y_cambiar_de_escala_con_el_menu() {
+fn the_initial_focus_is_kept_after_resizing_and_changing_scale_with_the_menu() {
     for ppp in PPPS {
-        let mut app = Aplicacion::nueva(ppp, Ventana::Minima);
-        app.abre_licencias_con_el_raton();
-        let zona = Some(FocusTarget::Zone(LICENSES_FIELD));
-        assert_eq!(app.focus, zona, "ppp {ppp}: tras abrir");
+        let mut app = Application::new(ppp, Window::Minimum);
+        app.opens_licenses_with_the_mouse();
+        let zone = Some(FocusTarget::Zone(LICENSES_FIELD));
+        assert_eq!(app.focus, zone, "ppp {ppp}: tras abrir");
         let id = app.ctx.memory(|m| m.focused());
-        assert_eq!(id, Some(id_de_la_zona()), "ppp {ppp}: tras abrir");
-        for otra in PPPS {
-            for ventana in [Ventana::Grande, Ventana::Minima] {
-                app.cambia(otra, ventana);
-                app.reposo();
+        assert_eq!(id, Some(id_of_the_area()), "ppp {ppp}: tras abrir");
+        for other in PPPS {
+            for window in [Window::Large, Window::Minimum] {
+                app.changes(other, window);
+                app.rest_2_2();
                 assert_eq!(
-                    app.focus, zona,
-                    "ppp {ppp} -> {otra} {ventana:?}: el foco que lleva show_dialog"
+                    app.focus, zone,
+                    "ppp {ppp} -> {other} {window:?}: el foco que lleva show_dialog"
                 );
                 assert_eq!(
                     app.ctx.memory(|m| m.focused()),
                     id,
-                    "ppp {ppp} -> {otra} {ventana:?}: el foco de egui"
+                    "ppp {ppp} -> {other} {window:?}: el foco de egui"
                 );
             }
         }
         // El orden de Tab sigue siendo el de la spec tras tanto cambio.
-        tab_recorre_el_orden(&mut app, &format!("ppp {ppp}, tras los cambios"));
+        tab_walks_the_order(&mut app, &format!("ppp {ppp}, tras los cambios"));
         // Y el diálogo sigue abierto y sin cerrar.
-        assert!(app.modal.is_open() && app.cierres == 0);
+        assert!(app.modal.is_open() && app.closes_2 == 0);
     }
 }
 
 #[test]
-fn el_foco_inicial_de_un_formulario_se_mantiene_tras_redimensionar_y_cambiar_de_escala() {
+fn the_initial_focus_of_a_form_is_kept_after_resizing_and_changing_scale() {
     for ppp in PPPS {
-        let mut app =
-            Aplicacion::con_boton_de_formulario(ppp, Ventana::Minima, formulario_de_prueba);
-        abre_formulario_con_un_clic(&mut app);
-        let inicial = Some(initial_focus(app.dialogo().expect("abierto")));
-        assert_eq!(app.focus, inicial, "ppp {ppp}: tras abrir");
+        let mut app = Application::with_form_button(ppp, Window::Minimum, form_of_test);
+        opens_the_form_with_a_click(&mut app);
+        let initial = Some(initial_focus(app.dialog_2().expect("abierto")));
+        assert_eq!(app.focus, initial, "ppp {ppp}: tras abrir");
         let id = app.ctx.memory(|m| m.focused());
         assert!(id.is_some(), "ppp {ppp}: egui sin foco tras abrir");
-        for otra in PPPS {
-            for ventana in [Ventana::Grande, Ventana::Minima] {
-                app.cambia(otra, ventana);
-                app.reposo();
-                assert_eq!(app.focus, inicial, "ppp {ppp} -> {otra} {ventana:?}");
+        for other in PPPS {
+            for window in [Window::Large, Window::Minimum] {
+                app.changes(other, window);
+                app.rest_2_2();
+                assert_eq!(app.focus, initial, "ppp {ppp} -> {other} {window:?}");
                 assert_eq!(
                     app.ctx.memory(|m| m.focused()),
                     id,
-                    "ppp {ppp} -> {otra} {ventana:?}: el foco de egui"
+                    "ppp {ppp} -> {other} {window:?}: el foco de egui"
                 );
             }
         }
-        tab_recorre_el_orden(&mut app, &format!("ppp {ppp}, tras los cambios"));
+        tab_walks_the_order(&mut app, &format!("ppp {ppp}, tras los cambios"));
     }
 }

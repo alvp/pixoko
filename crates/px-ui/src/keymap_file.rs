@@ -11,8 +11,8 @@
 //! color.next 1 shift+pagedown
 //! ```
 //!
-//! Cada línea es `<clave> <casilla> <shortcut>` (la clave de la tabla de ayuda; la casilla, de 1 a
-//! 8; el atajo, `none` o `[shift+]<tecla>` con una tecla ASCII imprimible que no sea mayúscula ni
+//! Cada línea es `<key> <box_value> <shortcut>` (la clave de la tabla de ayuda; la casilla, de 1 a
+//! 8; el atajo, `none` o `[shift+]<key_2>` con una tecla ASCII imprimible que no sea mayúscula ni
 //! espacio, o `home`, `pageup`, `pagedown`).
 
 use crate::actions::AppAction;

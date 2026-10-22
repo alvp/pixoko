@@ -38,7 +38,7 @@ pub(crate) fn eraser_entry(image: &Image) -> Option<(u8, bool)> {
 
 /// Valor que escribe el borrador: en indexada, `Indexed(t)` con el índice transparente `t` o,
 /// si no está fijado, la primera entrada de alfa 0; en RGBA el transparente canónico
-/// (`(0, 0, 0, 0)`) y en GrayAlpha `gris 0, alfa 0`. Se calcula en cada llamada.
+/// (`(0, 0, 0, 0)`) y en GrayAlpha `gray_2 0, alpha 0`. Se calcula en cada llamada.
 pub fn eraser_pixel(image: &Image) -> Result<Pixel, EraseError> {
     match image.mode() {
         Mode::Rgba => Ok(Pixel::Rgba(Rgba::TRANSPARENT)),
@@ -50,8 +50,8 @@ pub fn eraser_pixel(image: &Image) -> Result<Pixel, EraseError> {
     }
 }
 
-/// Lo que acompaña a `borrador` en el título y la barra de estado: `transparente`,
-/// `transparente (entrada N)` si usa una entrada de alfa 0 sin índice transparente, o el
+/// Lo que acompaña a `eraser` en el título y la barra de estado: `transparent`,
+/// `transparent (input_2 N)` si usa una entrada de alfa 0 sin índice transparente, o el
 /// motivo por el que no puede.
 pub fn eraser_label(image: &Image) -> String {
     match eraser_pixel(image) {

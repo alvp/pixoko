@@ -34,7 +34,7 @@ use px_ui::tool::{Tool, status_text};
 use px_ui::view::Zoom;
 
 /// Pantalla sintética: ancha, para que el texto de 115 caracteres a escala 3 no se corte.
-const PANTALLA: egui::Vec2 = vec2(3000.0, 400.0);
+const TEST_SCREEN: egui::Vec2 = vec2(3000.0, 400.0);
 
 // ---------------------------------------------------------------------------------------------
 // Banco
@@ -42,178 +42,179 @@ const PANTALLA: egui::Vec2 = vec2(3000.0, 400.0);
 
 /// Canal alfa del atlas de fuentes, reconstruido a partir de los cambios de textura.
 struct Atlas {
-    ancho: usize,
-    alto: usize,
-    alfa: Vec<u8>,
+    width_2: usize,
+    height_2: usize,
+    alpha: Vec<u8>,
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     atlas: HashMap<TextureId, Atlas>,
 }
 
-impl Banco {
+impl Bench {
     /// Contexto con `ppp`, la fuente instalada, la escala aplicada y `MissingGlyphPolicy::Panic`
     /// (como en los tests de la spec), ya calentado.
-    fn nuevo(ppp: f32) -> Banco {
+    fn new_2(ppp: f32) -> Bench {
         let ctx = Context::default();
         ctx.set_pixels_per_point(ppp);
         ctx.set_missing_glyph_policy(MissingGlyphPolicy::Panic);
         install_fonts(&ctx);
-        let mut banco = Banco {
+        let mut bench = Bench {
             ctx,
             atlas: HashMap::new(),
         };
         // El primer pase (vacío) activa el ppp, la política y las fuentes; `apply_scale` lee el
         // ppp ya activo; los dos siguientes dejan todo aplicado.
-        banco.pase(|_| {});
-        apply_scale(&banco.ctx);
-        banco.pase(|_| {});
-        banco.pase(|_| {});
-        banco
+        bench.pass(|_| {});
+        apply_scale(&bench.ctx);
+        bench.pass(|_| {});
+        bench.pass(|_| {});
+        bench
     }
 
     /// Ejecuta un pase, absorbe sus cambios de textura en el atlas (egui entra en pánico si se
     /// sueltan sin aplicar) y devuelve las formas que se pintaron.
-    fn pase(&mut self, mut dibujar: impl FnMut(&mut Ui)) -> Vec<egui::epaint::ClippedShape> {
+    fn pass(&mut self, mut draw: impl FnMut(&mut Ui)) -> Vec<egui::epaint::ClippedShape> {
         let input = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, PANTALLA)),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, TEST_SCREEN)),
             ..RawInput::default()
         };
-        let mut salida = self.ctx.run_ui(input, &mut dibujar);
-        for (id, deltas) in &salida.textures_delta.set {
+        let mut output_2 = self.ctx.run_ui(input, &mut draw);
+        for (id, deltas) in &output_2.textures_delta.set {
             for delta in deltas.iter() {
-                let ImageData::Color(imagen) = &delta.image;
-                let [w, h] = imagen.size;
+                let ImageData::Color(image_2) = &delta.image;
+                let [w, h] = image_2.size;
                 let atlas = self.atlas.entry(*id).or_insert_with(|| Atlas {
-                    ancho: w,
-                    alto: h,
-                    alfa: vec![0; w * h],
+                    width_2: w,
+                    height_2: h,
+                    alpha: vec![0; w * h],
                 });
                 if delta.pos.is_none() {
                     *atlas = Atlas {
-                        ancho: w,
-                        alto: h,
-                        alfa: vec![0; w * h],
+                        width_2: w,
+                        height_2: h,
+                        alpha: vec![0; w * h],
                     };
                 }
                 let [ox, oy] = delta.pos.unwrap_or([0, 0]);
                 for y in 0..h {
                     for x in 0..w {
-                        atlas.alfa[(oy + y) * atlas.ancho + ox + x] = imagen.pixels[y * w + x].a();
+                        atlas.alpha[(oy + y) * atlas.width_2 + ox + x] =
+                            image_2.pixels[y * w + x].a();
                     }
                 }
             }
         }
-        salida.textures_delta.clear();
-        std::mem::take(&mut salida.shapes)
+        output_2.textures_delta.clear();
+        std::mem::take(&mut output_2.shapes)
     }
 
     fn ppp(&self) -> f32 {
         self.ctx.pixels_per_point()
     }
 
-    /// Tamaño en píxeles físicos de `texto` maquetado en una línea con el tamaño de la interfaz.
-    fn medida_px(&self, texto: &str) -> (f32, f32) {
+    /// Tamaño en píxeles físicos de `text_2` maquetado en una línea con el tamaño de la interfaz.
+    fn measure_px(&self, text_2: &str) -> (f32, f32) {
         let ppp = self.ppp();
-        let fuente = FontId::proportional(font_size_points(ppp));
-        let tamano = self.ctx.fonts_mut(|f| {
-            f.layout_no_wrap(texto.to_string(), fuente, Color32::WHITE)
+        let source = FontId::proportional(font_size_points(ppp));
+        let size_2 = self.ctx.fonts_mut(|f| {
+            f.layout_no_wrap(text_2.to_string(), source, Color32::WHITE)
                 .size()
         });
-        (tamano.x * ppp, tamano.y * ppp)
+        (size_2.x * ppp, size_2.y * ppp)
     }
 }
 
 /// Contexto compartido solo para **consultar** glifos (`has_glyph`), a ppp 1. Nunca se le piden
 /// pases: varios tests lo usan a la vez desde hilos distintos.
-fn ctx_compartido() -> &'static Context {
+fn ctx_shared() -> &'static Context {
     static CTX: OnceLock<Context> = OnceLock::new();
-    CTX.get_or_init(|| Banco::nuevo(1.0).ctx)
+    CTX.get_or_init(|| Bench::new_2(1.0).ctx)
 }
 
 /// `has_glyph` de la fuente instalada en `ctx` (la de `font_size_points` del ppp activo).
-fn tiene_glifo(ctx: &Context) -> impl Fn(char) -> bool + '_ {
-    let fuente = FontId::proportional(font_size_points(ctx.pixels_per_point()));
-    move |c| ctx.fonts_mut(|f| f.has_glyph(&fuente, c))
+fn has_glyph(ctx: &Context) -> impl Fn(char) -> bool + '_ {
+    let source = FontId::proportional(font_size_points(ctx.pixels_per_point()));
+    move |c| ctx.fonts_mut(|f| f.has_glyph(&source, c))
 }
 
-/// Maqueta `texto` dentro de un pase de `ctx`; `true` si no entra en pánico. Tras un pánico el
+/// Maqueta `text_2` dentro de un pase de `ctx`; `true` si no entra en pánico. Tras un pánico el
 /// contexto no se debe reutilizar.
-fn maqueta_sin_panico(ctx: &Context, texto: &str) -> bool {
-    let fuente = FontId::proportional(font_size_points(ctx.pixels_per_point()));
+fn mockup_without_panic(ctx: &Context, text_2: &str) -> bool {
+    let source = FontId::proportional(font_size_points(ctx.pixels_per_point()));
     catch_unwind(AssertUnwindSafe(|| {
         let input = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, PANTALLA)),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, TEST_SCREEN)),
             ..RawInput::default()
         };
-        let salida = ctx.run_ui(input, |ui| {
+        let output_2 = ctx.run_ui(input, |ui| {
             ui.ctx().fonts_mut(|f| {
-                let _ = f.layout_no_wrap(texto.to_string(), fuente.clone(), Color32::WHITE);
+                let _ = f.layout_no_wrap(text_2.to_string(), source.clone(), Color32::WHITE);
             });
         });
-        salida.drop_without_applying_deltas();
+        output_2.drop_without_applying_deltas();
     }))
     .is_ok()
 }
 
 /// Resultado del banco de nitidez para un texto.
 #[derive(Debug, Default)]
-struct Nitidez {
-    glifos: usize,
+struct Sharpness {
+    glyphs: usize,
     /// Glifos con algún vértice fuera de píxel físico (±0,001).
-    fuera_de_pixel: usize,
+    outside_of_pixel: usize,
     /// Glifos con alguna uv fuera de texel (±0,01).
-    uv_fuera_de_texel: usize,
+    uv_outside_texel: usize,
     /// Texels de atlas bajo los glifos, y de ellos los de alfa distinto de 0 y 255.
     texels: usize,
-    intermedios: usize,
+    intermediate: usize,
 }
 
-/// Pinta `texto` en `origen` (puntos) a `ppp`, lo tesela y mide la nitidez glifo a glifo.
-fn nitidez(ppp: f32, origen: Pos2, texto: &str) -> Nitidez {
-    let mut banco = Banco::nuevo(ppp);
-    let tamano = font_size_points(ppp);
-    let formas = banco.pase(|ui| {
+/// Pinta `text_2` en `source_2` (puntos) a `ppp`, lo tesela y mide la nitidez glifo a glifo.
+fn sharpness(ppp: f32, source_2: Pos2, text_2: &str) -> Sharpness {
+    let mut bench = Bench::new_2(ppp);
+    let size_2 = font_size_points(ppp);
+    let shapes_2 = bench.pass(|ui| {
         let _ = ui.ctx().layer_painter(LayerId::background()).text(
-            origen,
+            source_2,
             Align2::LEFT_TOP,
-            texto,
-            FontId::proportional(tamano),
+            text_2,
+            FontId::proportional(size_2),
             Color32::WHITE,
         );
     });
-    let mut r = Nitidez::default();
-    for primitiva in banco.ctx.tessellate(formas, ppp) {
-        let Primitive::Mesh(malla) = primitiva.primitive else {
+    let mut r = Sharpness::default();
+    for primitive in bench.ctx.tessellate(shapes_2, ppp) {
+        let Primitive::Mesh(mesh) = primitive.primitive else {
             continue;
         };
-        let atlas = banco
+        let atlas = bench
             .atlas
-            .get(&malla.texture_id)
+            .get(&mesh.texture_id)
             .expect("el atlas de la malla está reconstruido");
-        let (aw, ah) = (atlas.ancho as f32, atlas.alto as f32);
-        for glifo in malla.vertices.chunks(4) {
-            if glifo.len() < 4 {
+        let (aw, ah) = (atlas.width_2 as f32, atlas.height_2 as f32);
+        for glyph in mesh.vertices.chunks(4) {
+            if glyph.len() < 4 {
                 continue;
             }
-            r.glifos += 1;
-            let fuera =
-                |c: f32, escala: f32, tol: f32| (c * escala - (c * escala).round()).abs() > tol;
-            if glifo
+            r.glyphs += 1;
+            let outside =
+                |c: f32, scale: f32, tol: f32| (c * scale - (c * scale).round()).abs() > tol;
+            if glyph
                 .iter()
-                .any(|v| fuera(v.pos.x, ppp, 1e-3) || fuera(v.pos.y, ppp, 1e-3))
+                .any(|v| outside(v.pos.x, ppp, 1e-3) || outside(v.pos.y, ppp, 1e-3))
             {
-                r.fuera_de_pixel += 1;
+                r.outside_of_pixel += 1;
             }
-            if glifo
+            if glyph
                 .iter()
-                .any(|v| fuera(v.uv.x, aw, 1e-2) || fuera(v.uv.y, ah, 1e-2))
+                .any(|v| outside(v.uv.x, aw, 1e-2) || outside(v.uv.y, ah, 1e-2))
             {
-                r.uv_fuera_de_texel += 1;
+                r.uv_outside_texel += 1;
             }
             let (mut x0, mut x1, mut y0, mut y1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
-            for v in glifo {
+            for v in glyph {
                 x0 = x0.min(v.uv.x * aw);
                 x1 = x1.max(v.uv.x * aw);
                 y0 = y0.min(v.uv.y * ah);
@@ -221,10 +222,10 @@ fn nitidez(ppp: f32, origen: Pos2, texto: &str) -> Nitidez {
             }
             for y in y0.round() as usize..y1.round() as usize {
                 for x in x0.round() as usize..x1.round() as usize {
-                    if let Some(&alfa) = atlas.alfa.get(y * atlas.ancho + x) {
+                    if let Some(&alpha) = atlas.alpha.get(y * atlas.width_2 + x) {
                         r.texels += 1;
-                        if alfa != 0 && alfa != 255 {
-                            r.intermedios += 1;
+                        if alpha != 0 && alpha != 255 {
+                            r.intermediate += 1;
                         }
                     }
                 }
@@ -234,14 +235,14 @@ fn nitidez(ppp: f32, origen: Pos2, texto: &str) -> Nitidez {
     r
 }
 
-fn cerca(a: f32, b: f32, tolerancia: f32) -> bool {
-    (a - b).abs() <= tolerancia
+fn near(a: f32, b: f32, tolerance: f32) -> bool {
+    (a - b).abs() <= tolerance
 }
 
 /// Tolerancia (px físicos) de las medidas de texto maquetado. La spec dice ±0,05, pero egui
 /// cuantiza el tamaño del texto maquetado (`Galley`) a 1/32 de punto, y esa cuantización vale
 /// hasta `ppp/64` píxeles (0,061 a 3,9×): se acepta `max(0,05; ppp/64 + 0,005)`.
-fn tolerancia_de_medida(ppp: f32) -> f32 {
+fn tolerance_of_measure(ppp: f32) -> f32 {
     0.05_f32.max(ppp / 64.0 + 0.005)
 }
 
@@ -249,8 +250,8 @@ fn tolerancia_de_medida(ppp: f32) -> f32 {
 // SHA-256 (sin dependencias)
 // ---------------------------------------------------------------------------------------------
 
-/// SHA-256 de `datos` en hexadecimal minúscula (FIPS 180-4).
-fn sha256(datos: &[u8]) -> String {
+/// SHA-256 de `data` en hexadecimal minúscula (FIPS 180-4).
+fn sha256(data: &[u8]) -> String {
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
@@ -267,16 +268,16 @@ fn sha256(datos: &[u8]) -> String {
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
         0x5be0cd19,
     ];
-    let mut mensaje = datos.to_vec();
-    mensaje.push(0x80);
-    while mensaje.len() % 64 != 56 {
-        mensaje.push(0);
+    let mut message = data.to_vec();
+    message.push(0x80);
+    while message.len() % 64 != 56 {
+        message.push(0);
     }
-    mensaje.extend_from_slice(&((datos.len() as u64) * 8).to_be_bytes());
-    for bloque in mensaje.as_chunks::<64>().0 {
+    message.extend_from_slice(&((data.len() as u64) * 8).to_be_bytes());
+    for block in message.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
-        for (i, palabra) in bloque.as_chunks::<4>().0.iter().enumerate() {
-            w[i] = u32::from_be_bytes(*palabra);
+        for (i, word) in block.as_chunks::<4>().0.iter().enumerate() {
+            w[i] = u32::from_be_bytes(*word);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -307,23 +308,23 @@ fn sha256(datos: &[u8]) -> String {
             b = a;
             a = t1.wrapping_add(t2);
         }
-        for (estado, nuevo) in h.iter_mut().zip([a, b, c, d, e, f, g, hh]) {
-            *estado = estado.wrapping_add(nuevo);
+        for (state_2, new_2) in h.iter_mut().zip([a, b, c, d, e, f, g, hh]) {
+            *state_2 = state_2.wrapping_add(new_2);
         }
     }
-    h.iter().map(|palabra| format!("{palabra:08x}")).collect()
+    h.iter().map(|word| format!("{word:08x}")).collect()
 }
 
 /// Lee un fichero de la raíz del repositorio (desde `crates/px-ui`).
-fn lee_de_la_raiz(ruta: &str) -> Vec<u8> {
-    let completa = format!("{}/../../{ruta}", env!("CARGO_MANIFEST_DIR"));
-    std::fs::read(&completa).unwrap_or_else(|e| panic!("no se pudo leer {completa}: {e}"))
+fn reads_from_the_root(path: &str) -> Vec<u8> {
+    let complete = format!("{}/../../{path}", env!("CARGO_MANIFEST_DIR"));
+    std::fs::read(&complete).unwrap_or_else(|e| panic!("no se pudo leer {complete}: {e}"))
 }
 
 /// Texto de la raíz con los finales de línea normalizados a `\n` (un checkout de Windows con
 /// `autocrlf` puede haberlos cambiado en los ficheros de texto).
-fn lee_texto_de_la_raiz(ruta: &str) -> String {
-    String::from_utf8(lee_de_la_raiz(ruta))
+fn reads_text_from_the_root(path: &str) -> String {
+    String::from_utf8(reads_from_the_root(path))
         .expect("UTF-8")
         .replace("\r\n", "\n")
 }
@@ -333,8 +334,8 @@ fn lee_texto_de_la_raiz(ruta: &str) -> String {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_01_text_scale_redondea_con_el_medio_hacia_arriba() {
-    let casos: [(f32, u32); 11] = [
+fn row_01_text_scale_rounds_with_the_half_upward() {
+    let cases: [(f32, u32); 11] = [
         (0.5, 1),
         (1.0, 1),
         (1.25, 1),
@@ -347,20 +348,20 @@ fn fila_01_text_scale_redondea_con_el_medio_hacia_arriba() {
         (8.0, 8),
         (20.0, 8),
     ];
-    for (ppp, esperado) in casos {
-        assert_eq!(text_scale(ppp), esperado, "ppp {ppp}");
+    for (ppp, expected_2) in cases {
+        assert_eq!(text_scale(ppp), expected_2, "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_01_text_scale_de_un_ppp_no_valido_es_1() {
+fn row_01_text_scale_of_an_invalid_ppp_is_1() {
     for ppp in [f32::NAN, 0.0, -1.0, f32::INFINITY] {
         assert_eq!(text_scale(ppp), 1, "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_01_las_constantes_de_la_spec() {
+fn row_01_the_constants_of_the_spec() {
     assert_eq!(FONT_EM_PX, 11.0);
     assert_eq!(MAX_TEXT_SCALE, 8);
 }
@@ -370,8 +371,8 @@ fn fila_01_las_constantes_de_la_spec() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_02_el_tamano_de_fuente_en_pixeles_fisicos_es_multiplo_de_11() {
-    let casos: [(f32, f32); 6] = [
+fn row_02_the_font_size_in_physical_pixels_is_a_multiple_of_11() {
+    let cases: [(f32, f32); 6] = [
         (1.0, 11.0),
         (1.25, 11.0),
         (1.5, 22.0),
@@ -379,19 +380,19 @@ fn fila_02_el_tamano_de_fuente_en_pixeles_fisicos_es_multiplo_de_11() {
         (2.5, 33.0),
         (3.0, 33.0),
     ];
-    for (ppp, fisico) in casos {
-        let cuerpo = font_size_points(ppp) * ppp;
-        let titulo = heading_size_points(ppp) * ppp;
-        assert!(cerca(cuerpo, fisico, 1e-3), "ppp {ppp}: cuerpo {cuerpo}");
+    for (ppp, physical) in cases {
+        let body = font_size_points(ppp) * ppp;
+        let title = heading_size_points(ppp) * ppp;
+        assert!(near(body, physical, 1e-3), "ppp {ppp}: cuerpo {body}");
         assert!(
-            cerca(titulo, 2.0 * fisico, 1e-3),
-            "ppp {ppp}: título {titulo}"
+            near(title, 2.0 * physical, 1e-3),
+            "ppp {ppp}: título {title}"
         );
     }
 }
 
 #[test]
-fn fila_02_la_unidad_de_interfaz_son_n_pixeles_fisicos() {
+fn row_02_the_interface_unit_is_n_physical_pixels() {
     // `u = n/ppp` puntos: con 1,5 (n = 2) son 2 píxeles físicos; con 2,5 (n = 3), 3.
     for (ppp, n) in [
         (1.0_f32, 1.0_f32),
@@ -400,7 +401,7 @@ fn fila_02_la_unidad_de_interfaz_son_n_pixeles_fisicos() {
         (2.5, 3.0),
         (3.0, 3.0),
     ] {
-        assert!(cerca(ui_unit(ppp) * ppp, n, 1e-3), "ppp {ppp}");
+        assert!(near(ui_unit(ppp) * ppp, n, 1e-3), "ppp {ppp}");
     }
 }
 
@@ -409,24 +410,24 @@ fn fila_02_la_unidad_de_interfaz_son_n_pixeles_fisicos() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_03_la_fuente_tiene_glifo_para_los_115_caracteres_de_la_interfaz() {
-    let caracteres: Vec<char> = INTERFACE_CHARSET.chars().collect();
-    assert_eq!(caracteres.len(), 115, "ASCII 95 + 14 + 2 + 4");
-    let mut unicos = caracteres.clone();
-    unicos.sort_unstable();
-    unicos.dedup();
-    assert_eq!(unicos.len(), 115, "sin repetidos");
+fn row_03_the_font_has_a_glyph_for_the_115_characters_of_the_interface() {
+    let characters: Vec<char> = INTERFACE_CHARSET.chars().collect();
+    assert_eq!(characters.len(), 115, "ASCII 95 + 14 + 2 + 4");
+    let mut unique = characters.clone();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), 115, "sin repetidos");
     for c in ' '..='~' {
-        assert!(caracteres.contains(&c), "falta el ASCII {c:?}");
+        assert!(characters.contains(&c), "falta el ASCII {c:?}");
     }
     for c in "ñÑáéíóúÁÉÍÓÚüÜ¿¡×·—…".chars() {
-        assert!(caracteres.contains(&c), "falta {c:?}");
+        assert!(characters.contains(&c), "falta {c:?}");
     }
 
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    for c in caracteres {
-        assert!(tiene(c), "sin glifo para {c:?} (U+{:04X})", c as u32);
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    for c in characters {
+        assert!(has(c), "sin glifo para {c:?} (U+{:04X})", c as u32);
     }
 }
 
@@ -435,46 +436,46 @@ fn fila_03_la_fuente_tiene_glifo_para_los_115_caracteres_de_la_interfaz() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_04_japones_check_y_emoji_no_tienen_glifo_y_los_puntos_suspensivos_si() {
+fn row_04_japanese_check_and_emoji_have_no_glyph_and_the_ellipsis_does() {
     // La spec ponía también `→`, pero la cmap de Departure Mono 1.500 sí tiene U+2192 (se
     // comprobó leyendo la tabla del fichero fijado por SHA-256): se usa `✓` (U+2713), que no.
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    assert!(!tiene('日'));
-    assert!(!tiene('✓'));
-    assert!(!tiene('😀'));
-    assert!(tiene('…'));
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    assert!(!has('日'));
+    assert!(!has('✓'));
+    assert!(!has('😀'));
+    assert!(has('…'));
 }
 
 #[test]
-fn fila_04_replace_missing_cambia_solo_lo_que_no_se_puede_dibujar() {
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    assert_eq!(replace_missing("a日b✓c", &tiene), "a?b?c");
-    assert_eq!(replace_missing("a\0b\x1bc\r\n\u{2028}", &tiene), "a b c   ");
-    assert_eq!(replace_missing("", &tiene), "");
-    assert_eq!(replace_missing("straße €", &tiene), "straße €");
+fn row_04_replace_missing_changes_only_what_cannot_be_drawn() {
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    assert_eq!(replace_missing("a日b✓c", &has), "a?b?c");
+    assert_eq!(replace_missing("a\0b\x1bc\r\n\u{2028}", &has), "a b c   ");
+    assert_eq!(replace_missing("", &has), "");
+    assert_eq!(replace_missing("straße €", &has), "straße €");
 }
 
 #[test]
-fn fila_04_u2029_tambien_es_un_espacio() {
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    assert_eq!(replace_missing("a\u{2029}b", &tiene), "a b");
+fn row_04_u2029_is_also_a_space() {
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    assert_eq!(replace_missing("a\u{2029}b", &has), "a b");
 }
 
 #[test]
-fn fila_04_printable_es_replace_missing_con_las_fuentes_del_contexto() {
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    for texto in [
+fn row_04_printable_is_replace_missing_with_the_fonts_of_the_context() {
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    for text_2 in [
         "a日b✓c",
         "a\0b\x1bc\r\n\u{2028}",
         "",
         "straße €",
         "e\u{301}",
     ] {
-        assert_eq!(printable(ctx, texto), replace_missing(texto, &tiene));
+        assert_eq!(printable(ctx, text_2), replace_missing(text_2, &has));
     }
 }
 
@@ -485,58 +486,56 @@ fn fila_04_printable_es_replace_missing_con_las_fuentes_del_contexto() {
 /// Cadenas de texto fijo de la interfaz: lo que `px-app` pone en la barra, reconstruido con los
 /// mismos trozos que `status_line` (la función en sí se prueba en `px-app`, con la propiedad 5,
 /// que exige que solo use `INTERFACE_CHARSET`).
-fn textos_fijos() -> Vec<String> {
-    let mut textos = vec![
+fn texts_fixed() -> Vec<String> {
+    let mut texts = vec![
         "Pixoko".to_string(),
         "Pixoko: ".to_string(),
         NOTICE_PREFIX.to_string(),
         INTERFACE_CHARSET.to_string(),
     ];
-    for herramienta in [Tool::Pencil, Tool::Line, Tool::Fill] {
-        textos.push(herramienta.label().to_string());
+    for tool_2 in [Tool::Pencil, Tool::Line, Tool::Fill] {
+        texts.push(tool_2.label().to_string());
         let zoom = Zoom::from_int(8).expect("el zoom existe");
         for cursor in [None, Some((3, 4))] {
             for color in [None, Some("color 3 #ff0000"), Some("color 9 transparente")] {
-                for (deshacer, rehacer) in
-                    [(false, false), (true, false), (false, true), (true, true)]
-                {
-                    let mut linea = format!("64×48 · {zoom}");
+                for (undo, redo) in [(false, false), (true, false), (false, true), (true, true)] {
+                    let mut line = format!("64×48 · {zoom}");
                     if let Some((x, y)) = cursor {
-                        linea.push_str(&format!(" · ({x}, {y})"));
+                        line.push_str(&format!(" · ({x}, {y})"));
                     }
-                    linea.push_str(&format!(" · {}", status_text(herramienta, color)));
-                    if deshacer {
-                        linea.push_str(" · deshacer");
+                    line.push_str(&format!(" · {}", status_text(tool_2, color)));
+                    if undo {
+                        line.push_str(" · deshacer");
                     }
-                    if rehacer {
-                        linea.push_str(" · rehacer");
+                    if redo {
+                        line.push_str(" · rehacer");
                     }
-                    textos.push(linea);
+                    texts.push(line);
                 }
             }
         }
     }
-    textos
+    texts
 }
 
 #[test]
-fn fila_05_el_texto_fijo_se_maqueta_sin_panico_con_la_politica_panic() {
+fn row_05_the_fixed_text_is_laid_out_without_panic_with_the_panic_policy() {
     for ppp in [1.0_f32, 1.5, 2.0] {
-        let banco = Banco::nuevo(ppp);
-        for texto in textos_fijos() {
+        let bench = Bench::new_2(ppp);
+        for text_2 in texts_fixed() {
             assert!(
-                maqueta_sin_panico(&banco.ctx, &texto),
-                "ppp {ppp}: el texto fijo {texto:?} entra en pánico"
+                mockup_without_panic(&bench.ctx, &text_2),
+                "ppp {ppp}: el texto fijo {text_2:?} entra en pánico"
             );
         }
     }
 }
 
 #[test]
-fn fila_05_un_caracter_sin_glifo_entra_en_panico_con_la_politica_panic() {
-    let banco = Banco::nuevo(1.0);
+fn row_05_a_character_without_a_glyph_panics_with_the_panic_policy() {
+    let bench = Bench::new_2(1.0);
     assert!(
-        !maqueta_sin_panico(&banco.ctx, "a日b"),
+        !mockup_without_panic(&bench.ctx, "a日b"),
         "la guardia no funciona: «日» se maquetó sin pánico"
     );
 }
@@ -546,29 +545,29 @@ fn fila_05_un_caracter_sin_glifo_entra_en_panico_con_la_politica_panic() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_06_pixoko_mide_7n_por_caracter_y_14n_de_alto() {
-    let casos: [(f32, (f32, f32)); 4] = [
+fn row_06_pixoko_measures_7n_per_character_and_14n_in_height() {
+    let cases: [(f32, (f32, f32)); 4] = [
         (1.0, (42.0, 14.0)),
         (1.5, (84.0, 28.0)),
         (2.0, (84.0, 28.0)),
         (3.0, (126.0, 42.0)),
     ];
-    for (ppp, (ancho, alto)) in casos {
-        let banco = Banco::nuevo(ppp);
-        let (w, h) = banco.medida_px("Pixoko");
+    for (ppp, (width_2, height_2)) in cases {
+        let bench = Bench::new_2(ppp);
+        let (w, h) = bench.measure_px("Pixoko");
         assert!(
-            cerca(w, ancho, 0.05) && cerca(h, alto, 0.05),
-            "ppp {ppp}: {w} × {h}, se esperaba {ancho} × {alto}"
+            near(w, width_2, 0.05) && near(h, height_2, 0.05),
+            "ppp {ppp}: {w} × {h}, se esperaba {width_2} × {height_2}"
         );
     }
 }
 
 #[test]
-fn fila_06_los_115_caracteres_seguidos_a_1_5_miden_1610_px_de_ancho() {
-    let banco = Banco::nuevo(1.5);
-    let (w, h) = banco.medida_px(INTERFACE_CHARSET);
-    assert!(cerca(w, 805.0 * 2.0, 0.05), "ancho {w}");
-    assert!(cerca(h, 28.0, 0.05), "alto {h}");
+fn row_06_the_115_characters_in_a_row_at_1_5_measure_1610_px_wide() {
+    let bench = Bench::new_2(1.5);
+    let (w, h) = bench.measure_px(INTERFACE_CHARSET);
+    assert!(near(w, 805.0 * 2.0, 0.05), "ancho {w}");
+    assert!(near(h, 28.0, 0.05), "alto {h}");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -576,23 +575,23 @@ fn fila_06_los_115_caracteres_seguidos_a_1_5_miden_1610_px_de_ancho() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_07_ningun_glifo_cae_fuera_de_pixel_ni_hay_texels_intermedios() {
-    let texto = "Pixoko: 64×48 · ×8 · (12, 7) · lápiz ñÑ ¿Qué?";
-    let con_tinta = texto.chars().filter(|c| !c.is_whitespace()).count();
+fn row_07_no_glyph_falls_outside_the_pixel_or_has_intermediate_texels() {
+    let text_2 = "Pixoko: 64×48 · ×8 · (12, 7) · lápiz ñÑ ¿Qué?";
+    let with_ink = text_2.chars().filter(|c| !c.is_whitespace()).count();
     for ppp in [1.0_f32, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0] {
-        let r = nitidez(ppp, pos2(3.37, 5.11), texto);
+        let r = sharpness(ppp, pos2(3.37, 5.11), text_2);
         assert!(
-            r.glifos >= con_tinta,
-            "ppp {ppp}: {} glifos para {con_tinta} caracteres con tinta",
-            r.glifos
+            r.glyphs >= with_ink,
+            "ppp {ppp}: {} glifos para {with_ink} caracteres con tinta",
+            r.glyphs
         );
         assert!(r.texels > 0, "ppp {ppp}: no se midió ningún texel");
         assert_eq!(
-            r.fuera_de_pixel, 0,
+            r.outside_of_pixel, 0,
             "ppp {ppp}: glifos fuera de píxel físico"
         );
-        assert_eq!(r.uv_fuera_de_texel, 0, "ppp {ppp}: uv fuera de texel");
-        assert_eq!(r.intermedios, 0, "ppp {ppp}: texels de alfa intermedio");
+        assert_eq!(r.uv_outside_texel, 0, "ppp {ppp}: uv fuera de texel");
+        assert_eq!(r.intermediate, 0, "ppp {ppp}: texels de alfa intermedio");
     }
 }
 
@@ -600,12 +599,12 @@ fn fila_07_ningun_glifo_cae_fuera_de_pixel_ni_hay_texels_intermedios() {
 // Fila 8: fuente, licencia, THIRD-PARTY.md y .gitattributes
 // ---------------------------------------------------------------------------------------------
 
-const SHA_FUENTE: &str = "4d53f663155cf8bf7ffc8e688776e719625f7bbb80a8d90073438b249261a2e0";
-const SHA_LICENCIA: &str = "b65e42750f3cb65437a97f4dfd781c58f199259949db2341012be60e32500e83";
+const SHA_SOURCE: &str = "4d53f663155cf8bf7ffc8e688776e719625f7bbb80a8d90073438b249261a2e0";
+const SHA_LICENSE: &str = "b65e42750f3cb65437a97f4dfd781c58f199259949db2341012be60e32500e83";
 const COPYRIGHT: &str = "Copyright 2022–2024 Helena Zhang (helenazhang.com).";
 
 #[test]
-fn fila_08_el_sha256_del_test_pasa_sus_vectores() {
+fn row_08_the_test_sha256_passes_its_vectors() {
     assert_eq!(
         sha256(b""),
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -627,64 +626,64 @@ fn fila_08_el_sha256_del_test_pasa_sus_vectores() {
 }
 
 #[test]
-fn fila_08_install_fonts_instala_una_sola_fuente_departure_mono() {
-    let banco = Banco::nuevo(1.0);
-    let definiciones = banco.ctx.fonts(|f| f.definitions().clone());
-    assert_eq!(definiciones.font_data.len(), 1, "una sola fuente");
-    let datos = definiciones
+fn row_08_install_fonts_installs_a_single_font_departure_mono() {
+    let bench = Bench::new_2(1.0);
+    let definitions = bench.ctx.fonts(|f| f.definitions().clone());
+    assert_eq!(definitions.font_data.len(), 1, "una sola fuente");
+    let data = definitions
         .font_data
         .get("DepartureMono")
         .expect("la fuente se llama DepartureMono");
-    assert_eq!(datos.tweak.hinting, Some(false));
-    assert_eq!(datos.tweak.subpixel_binning, Some(false));
-    let bytes: &[u8] = (*datos.font).as_ref();
+    assert_eq!(data.tweak.hinting, Some(false));
+    assert_eq!(data.tweak.subpixel_binning, Some(false));
+    let bytes: &[u8] = (*data.font).as_ref();
     assert_eq!(bytes, FONT_BYTES, "es la fuente sin modificar");
-    for familia in [FontFamily::Proportional, FontFamily::Monospace] {
+    for family in [FontFamily::Proportional, FontFamily::Monospace] {
         assert_eq!(
-            definiciones.families.get(&familia),
+            definitions.families.get(&family),
             Some(&vec!["DepartureMono".to_string()]),
-            "{familia:?}: solo DepartureMono, sin fuentes de reserva"
+            "{family:?}: solo DepartureMono, sin fuentes de reserva"
         );
     }
 }
 
 #[test]
-fn fila_08_la_fuente_embebida_es_el_fichero_oficial() {
-    let fichero = lee_de_la_raiz("assets/fonts/DepartureMono-Regular.otf");
-    assert_eq!(fichero.as_slice(), FONT_BYTES, "FONT_BYTES es el fichero");
+fn row_08_the_embedded_font_is_the_official_file() {
+    let file = reads_from_the_root("assets/fonts/DepartureMono-Regular.otf");
+    assert_eq!(file.as_slice(), FONT_BYTES, "FONT_BYTES es el fichero");
     assert_eq!(FONT_BYTES.len(), 84_480);
     assert_eq!(&FONT_BYTES[..4], b"OTTO");
-    assert_eq!(sha256(&fichero), SHA_FUENTE);
-    assert_eq!(sha256(FONT_BYTES), SHA_FUENTE);
+    assert_eq!(sha256(&file), SHA_SOURCE);
+    assert_eq!(sha256(FONT_BYTES), SHA_SOURCE);
 }
 
 #[test]
-fn fila_08_la_licencia_embebida_es_la_ofl_de_la_fuente() {
-    let fichero = lee_de_la_raiz("assets/fonts/LICENSE");
+fn row_08_the_embedded_license_is_the_ofl_of_the_font() {
+    let file = reads_from_the_root("assets/fonts/LICENSE");
     assert_eq!(
-        fichero.as_slice(),
+        file.as_slice(),
         FONT_LICENSE.as_bytes(),
         "FONT_LICENSE es el fichero"
     );
-    assert_eq!(sha256(&fichero), SHA_LICENCIA);
-    assert_eq!(sha256(FONT_LICENSE.as_bytes()), SHA_LICENCIA);
+    assert_eq!(sha256(&file), SHA_LICENSE);
+    assert_eq!(sha256(FONT_LICENSE.as_bytes()), SHA_LICENSE);
     assert!(FONT_LICENSE.starts_with(COPYRIGHT));
 }
 
 #[test]
-fn fila_08_third_party_documenta_la_fuente_y_su_licencia() {
-    let doc = lee_texto_de_la_raiz("docs/THIRD-PARTY.md");
-    for parte in [
+fn row_08_third_party_documents_the_font_and_its_license() {
+    let doc = reads_text_from_the_root("docs/THIRD-PARTY.md");
+    for part in [
         "Departure Mono",
         "1.500",
         "https://github.com/rektdeckard/departure-mono",
         "public/assets/LICENSE",
         "OFL-1.1",
         COPYRIGHT,
-        SHA_FUENTE,
-        SHA_LICENCIA,
+        SHA_SOURCE,
+        SHA_LICENSE,
     ] {
-        assert!(doc.contains(parte), "THIRD-PARTY.md no contiene {parte:?}");
+        assert!(doc.contains(part), "THIRD-PARTY.md no contiene {part:?}");
     }
     assert!(
         doc.lines()
@@ -692,9 +691,9 @@ fn fila_08_third_party_documenta_la_fuente_y_su_licencia() {
         "THIRD-PARTY.md debe declarar que no hay Reserved Font Name (una línea con \
          «Reserved Font Name» y «Ninguno»)"
     );
-    let licencia = FONT_LICENSE.replace("\r\n", "\n");
+    let license = FONT_LICENSE.replace("\r\n", "\n");
     assert!(
-        doc.contains(licencia.trim_end()),
+        doc.contains(license.trim_end()),
         "THIRD-PARTY.md debe contener el texto completo de FONT_LICENSE"
     );
     // El MIT de la raíz del repositorio de la fuente es el del sitio web: no se atribuye.
@@ -703,10 +702,10 @@ fn fila_08_third_party_documenta_la_fuente_y_su_licencia() {
 }
 
 #[test]
-fn fila_08_gitattributes_marca_la_fuente_como_binaria() {
-    let atributos = lee_texto_de_la_raiz(".gitattributes");
+fn row_08_gitattributes_marks_the_font_as_binary() {
+    let attributes = reads_text_from_the_root(".gitattributes");
     assert!(
-        atributos
+        attributes
             .lines()
             .any(|l| l.trim() == "assets/fonts/** binary"),
         ".gitattributes debe contener la línea `assets/fonts/** binary`"
@@ -717,11 +716,11 @@ fn fila_08_gitattributes_marca_la_fuente_como_binaria() {
 // Fila 9: apply_scale
 // ---------------------------------------------------------------------------------------------
 
-fn tamano_de_estilo(ctx: &Context, estilo: TextStyle) -> f32 {
-    ctx.global_style().text_styles[&estilo].size
+fn size_of_style(ctx: &Context, style: TextStyle) -> f32 {
+    ctx.global_style().text_styles[&style].size
 }
 
-fn pase_vacio(ctx: &Context) {
+fn pass_empty(ctx: &Context) {
     let input = RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(400.0, 300.0))),
         ..RawInput::default()
@@ -730,60 +729,52 @@ fn pase_vacio(ctx: &Context) {
 }
 
 #[test]
-fn fila_09_apply_scale_sigue_al_ppp_y_no_toca_el_estilo_si_no_cambia() {
+fn row_09_apply_scale_follows_the_ppp_and_does_not_touch_the_style_if_it_does_not_change() {
     let ctx = Context::default();
     install_fonts(&ctx);
 
     // `set_pixels_per_point` se activa al empezar el pase siguiente.
     ctx.set_pixels_per_point(1.5);
-    pase_vacio(&ctx);
+    pass_empty(&ctx);
     apply_scale(&ctx);
-    for estilo in [
+    for style in [
         TextStyle::Small,
         TextStyle::Body,
         TextStyle::Button,
         TextStyle::Monospace,
     ] {
         assert!(
-            cerca(tamano_de_estilo(&ctx, estilo.clone()), 22.0 / 1.5, 1e-3),
-            "ppp 1,5: {estilo:?}"
+            near(size_of_style(&ctx, style.clone()), 22.0 / 1.5, 1e-3),
+            "ppp 1,5: {style:?}"
         );
     }
-    assert!(cerca(tamano_de_estilo(&ctx, TextStyle::Body), 14.667, 1e-3));
-    assert!(cerca(
-        tamano_de_estilo(&ctx, TextStyle::Heading),
-        29.333,
-        1e-3
-    ));
+    assert!(near(size_of_style(&ctx, TextStyle::Body), 14.667, 1e-3));
+    assert!(near(size_of_style(&ctx, TextStyle::Heading), 29.333, 1e-3));
 
     ctx.set_pixels_per_point(2.0);
-    pase_vacio(&ctx);
+    pass_empty(&ctx);
     apply_scale(&ctx);
-    for estilo in [
+    for style in [
         TextStyle::Small,
         TextStyle::Body,
         TextStyle::Button,
         TextStyle::Monospace,
     ] {
         assert!(
-            cerca(tamano_de_estilo(&ctx, estilo.clone()), 11.0, 1e-3),
-            "ppp 2: {estilo:?}"
+            near(size_of_style(&ctx, style.clone()), 11.0, 1e-3),
+            "ppp 2: {style:?}"
         );
     }
-    assert!(cerca(
-        tamano_de_estilo(&ctx, TextStyle::Heading),
-        22.0,
-        1e-3
-    ));
+    assert!(near(size_of_style(&ctx, TextStyle::Heading), 22.0, 1e-3));
 
     // Segunda llamada seguida: el estilo ni cambia de valor ni se reescribe (con una copia del
     // `Arc` en la mano, cualquier escritura con `Arc::make_mut` lo habría clonado).
     let antes = ctx.global_style();
     apply_scale(&ctx);
-    let despues = ctx.global_style();
-    assert_eq!(*antes, *despues);
+    let after_2 = ctx.global_style();
+    assert_eq!(*antes, *after_2);
     assert!(
-        std::sync::Arc::ptr_eq(&antes, &despues),
+        std::sync::Arc::ptr_eq(&antes, &after_2),
         "la segunda llamada reescribió el estilo"
     );
 }
@@ -793,10 +784,10 @@ fn fila_09_apply_scale_sigue_al_ppp_y_no_toca_el_estilo_si_no_cambia() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_14_el_texto_externo_pasa_por_la_sustitucion() {
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    let casos: [(&str, &str); 8] = [
+fn row_14_the_external_text_goes_through_the_substitution() {
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    let cases: [(&str, &str); 8] = [
         ("日本語.png", "???.png"),
         ("😀 ok", "? ok"),
         ("👨\u{200D}👩\u{200D}👧", "?????"),
@@ -807,31 +798,31 @@ fn fila_14_el_texto_externo_pasa_por_la_sustitucion() {
         // `ñ` precompuesta (U+00F1): igual.
         ("\u{f1}", "\u{f1}"),
     ];
-    for (entrada, esperado) in casos {
-        let salida = replace_missing(entrada, &tiene);
-        assert_eq!(salida, esperado, "entrada {entrada:?}");
+    for (input_2, expected_2) in cases {
+        let output_2 = replace_missing(input_2, &has);
+        assert_eq!(output_2, expected_2, "entrada {input_2:?}");
         assert_eq!(
-            salida.chars().count(),
-            entrada.chars().count(),
-            "mismo número de caracteres: {entrada:?}"
+            output_2.chars().count(),
+            input_2.chars().count(),
+            "mismo número de caracteres: {input_2:?}"
         );
-        assert!(salida.chars().all(&tiene), "todos con glifo: {salida:?}");
+        assert!(output_2.chars().all(&has), "todos con glifo: {output_2:?}");
     }
 }
 
 #[test]
-fn fila_14_un_informe_de_conversion_se_queda_igual() {
-    let ctx = ctx_compartido();
-    let tiene = tiene_glifo(ctx);
-    let informe = "Convertido a 16 colores: año ×2 · se perdieron 3 colores…";
-    assert_eq!(replace_missing(informe, &tiene), informe);
+fn row_14_a_conversion_report_stays_the_same() {
+    let ctx = ctx_shared();
+    let has = has_glyph(ctx);
+    let report = "Convertido a 16 colores: año ×2 · se perdieron 3 colores…";
+    assert_eq!(replace_missing(report, &has), report);
 }
 
 #[test]
-fn fila_14_cada_resultado_se_maqueta_sin_panico() {
-    let banco = Banco::nuevo(1.0);
-    let tiene = tiene_glifo(&banco.ctx);
-    for entrada in [
+fn row_14_each_result_is_laid_out_without_panic() {
+    let bench = Bench::new_2(1.0);
+    let has = has_glyph(&bench.ctx);
+    for input_2 in [
         "日本語.png",
         "😀 ok",
         "👨\u{200D}👩\u{200D}👧",
@@ -843,10 +834,10 @@ fn fila_14_cada_resultado_se_maqueta_sin_panico() {
         "a\0b\x1bc\r\n\u{2028}",
         "Convertido a 16 colores: año ×2 · se perdieron 3 colores…",
     ] {
-        let salida = replace_missing(entrada, &tiene);
+        let output_2 = replace_missing(input_2, &has);
         assert!(
-            maqueta_sin_panico(&banco.ctx, &salida),
-            "{salida:?} (de {entrada:?}) entra en pánico"
+            mockup_without_panic(&bench.ctx, &output_2),
+            "{output_2:?} (de {input_2:?}) entra en pánico"
         );
     }
 }
@@ -856,9 +847,9 @@ fn fila_14_cada_resultado_se_maqueta_sin_panico() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_15_con_los_puntos_suspensivos_en_la_fuente_termina_en_uno() {
-    let con = |_: char| true;
-    let casos: [(usize, &str); 6] = [
+fn row_15_with_the_ellipsis_in_the_font_it_ends_in_one() {
+    let with = |_: char| true;
+    let cases: [(usize, &str); 6] = [
         (6, "abcdef"),
         (5, "abcd…"),
         (3, "ab…"),
@@ -866,15 +857,15 @@ fn fila_15_con_los_puntos_suspensivos_en_la_fuente_termina_en_uno() {
         (1, "…"),
         (0, ""),
     ];
-    for (n, esperado) in casos {
-        assert_eq!(fit_text("abcdef", n, con), esperado, "n = {n}");
+    for (n, expected_2) in cases {
+        assert_eq!(fit_text("abcdef", n, with), expected_2, "n = {n}");
     }
 }
 
 #[test]
-fn fila_15_sin_los_puntos_suspensivos_en_la_fuente_termina_en_tres_puntos() {
-    let sin = |c: char| c != '…';
-    let casos: [(usize, &str); 6] = [
+fn row_15_without_the_ellipsis_in_the_font_it_ends_in_three_dots() {
+    let without = |c: char| c != '…';
+    let cases: [(usize, &str); 6] = [
         (6, "abcdef"),
         (5, "ab..."),
         (3, "..."),
@@ -882,37 +873,37 @@ fn fila_15_sin_los_puntos_suspensivos_en_la_fuente_termina_en_tres_puntos() {
         (1, "."),
         (0, ""),
     ];
-    for (n, esperado) in casos {
-        assert_eq!(fit_text("abcdef", n, sin), esperado, "n = {n}");
+    for (n, expected_2) in cases {
+        assert_eq!(fit_text("abcdef", n, without), expected_2, "n = {n}");
     }
 }
 
 #[test]
-fn fila_15_vacio_da_vacio_y_un_nombre_larguisimo_se_recorta() {
-    let con = |_: char| true;
-    let sin = |c: char| c != '…';
+fn row_15_empty_gives_empty_and_a_very_long_name_is_clipped() {
+    let with = |_: char| true;
+    let without = |c: char| c != '…';
     for n in [0, 1, 40] {
-        assert_eq!(fit_text("", n, con), "");
-        assert_eq!(fit_text("", n, sin), "");
+        assert_eq!(fit_text("", n, with), "");
+        assert_eq!(fit_text("", n, without), "");
     }
     let largo: String = (0..100_000)
         .map(|i| char::from(b'a' + (i % 26) as u8))
         .collect();
-    let recortado = fit_text(&largo, 40, con);
-    assert_eq!(recortado.chars().count(), 40);
-    assert!(recortado.ends_with('…'));
-    assert_eq!(&recortado[..39], &largo[..39]);
-    let sin_puntos = fit_text(&largo, 40, sin);
-    assert_eq!(sin_puntos.chars().count(), 40);
-    assert!(sin_puntos.ends_with("..."));
+    let clipped = fit_text(&largo, 40, with);
+    assert_eq!(clipped.chars().count(), 40);
+    assert!(clipped.ends_with('…'));
+    assert_eq!(&clipped[..39], &largo[..39]);
+    let without_points = fit_text(&largo, 40, without);
+    assert_eq!(without_points.chars().count(), 40);
+    assert!(without_points.ends_with("..."));
 }
 
 #[test]
-fn fila_15_cuenta_caracteres_y_no_bytes() {
-    let con = |_: char| true;
+fn row_15_counts_characters_and_not_bytes() {
+    let with = |_: char| true;
     // 6 caracteres de 2 bytes cada uno.
-    assert_eq!(fit_text("ñÑáéíó", 6, con), "ñÑáéíó");
-    assert_eq!(fit_text("ñÑáéíóú", 4, con), "ñÑá…");
+    assert_eq!(fit_text("ñÑáéíó", 6, with), "ñÑáéíó");
+    assert_eq!(fit_text("ñÑáéíóú", 4, with), "ñÑá…");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -920,7 +911,7 @@ fn fila_15_cuenta_caracteres_y_no_bytes() {
 // ---------------------------------------------------------------------------------------------
 
 /// Cualquier `f32` (incluidos NaN, infinitos, negativos y el rango útil de ppp).
-fn ppp_cualquiera() -> impl Strategy<Value = f32> {
+fn ppp_any() -> impl Strategy<Value = f32> {
     prop_oneof![
         4 => any::<f32>(),
         4 => 0.0_f32..24.0,
@@ -935,45 +926,45 @@ proptest! {
 
     /// Propiedad 1: escala en 1 a 8.
     #[test]
-    fn propiedad_1_la_escala_esta_entre_1_y_8(ppp in ppp_cualquiera()) {
+    fn property_1_the_scale_is_between_1_and_8(ppp in ppp_any()) {
         let n = text_scale(ppp);
         prop_assert!((1..=MAX_TEXT_SCALE).contains(&n), "ppp {ppp}: n = {n}");
     }
 
     /// Propiedad 1: la escala no decrece con ppp.
     #[test]
-    fn propiedad_1_la_escala_no_decrece(a in -10.0_f32..40.0, b in -10.0_f32..40.0) {
-        let (menor, mayor) = if a <= b { (a, b) } else { (b, a) };
-        prop_assert!(text_scale(menor) <= text_scale(mayor), "{menor} y {mayor}");
+    fn property_1_the_scale_does_not_decrease(a in -10.0_f32..40.0, b in -10.0_f32..40.0) {
+        let (smaller, mayor) = if a <= b { (a, b) } else { (b, a) };
+        prop_assert!(text_scale(smaller) <= text_scale(mayor), "{smaller} y {mayor}");
     }
 
     /// Propiedad 1: en [0,5; 8) difiere de ppp en no más de 0,5.
     #[test]
-    fn propiedad_1_la_escala_esta_a_medio_punto_de_ppp(ppp in 0.5_f32..8.0) {
+    fn property_1_the_scale_is_half_a_point_from_ppp(ppp in 0.5_f32..8.0) {
         let n = text_scale(ppp) as f32;
         prop_assert!((n - ppp).abs() <= 0.5 + 1e-6, "ppp {ppp}: n = {n}");
     }
 
     /// Propiedad 1: en [0,25; 16] el tamaño en píxeles físicos es 11·n.
     #[test]
-    fn propiedad_1_el_tamano_fisico_es_11_por_n(ppp in 0.25_f32..=16.0) {
+    fn property_1_the_physical_size_is_11_times_n(ppp in 0.25_f32..=16.0) {
         let n = text_scale(ppp) as f32;
-        let fisico = font_size_points(ppp) * ppp;
-        prop_assert!((fisico - 11.0 * n).abs() <= 1e-3, "ppp {ppp}: {fisico} y n = {n}");
-        let titulo = heading_size_points(ppp) * ppp;
-        prop_assert!((titulo - 22.0 * n).abs() <= 1e-3, "ppp {ppp}: título {titulo}");
+        let physical = font_size_points(ppp) * ppp;
+        prop_assert!((physical - 11.0 * n).abs() <= 1e-3, "ppp {ppp}: {physical} y n = {n}");
+        let title = heading_size_points(ppp) * ppp;
+        prop_assert!((title - 22.0 * n).abs() <= 1e-3, "ppp {ppp}: título {title}");
     }
 }
 
 /// ppp múltiplo de 0,05 entre 1 y 4 (`k / 20` es exacto en `f32` para los medios).
-fn ppp_de_la_propiedad() -> impl Strategy<Value = f32> {
+fn ppp_of_the_property() -> impl Strategy<Value = f32> {
     (20_u32..=80).prop_map(|k| k as f32 / 20.0)
 }
 
 /// De 1 a 60 caracteres de `INTERFACE_CHARSET`.
-fn cadena_de_la_interfaz() -> impl Strategy<Value = String> {
-    let caracteres: Vec<char> = INTERFACE_CHARSET.chars().collect();
-    prop::collection::vec(prop::sample::select(caracteres), 1..=60)
+fn interface_string() -> impl Strategy<Value = String> {
+    let characters: Vec<char> = INTERFACE_CHARSET.chars().collect();
+    prop::collection::vec(prop::sample::select(characters), 1..=60)
         .prop_map(|v| v.into_iter().collect::<String>())
 }
 
@@ -983,49 +974,53 @@ proptest! {
 
     /// Propiedad 2: nitidez geométrica con origen y cadena cualesquiera.
     #[test]
-    fn propiedad_2_nitidez_geometrica(
-        ppp in ppp_de_la_propiedad(),
+    fn property_2_geometric_sharpness(
+        ppp in ppp_of_the_property(),
         x in 0.0_f32..200.0,
         y in 0.0_f32..200.0,
-        texto in cadena_de_la_interfaz(),
+        text_2 in interface_string(),
     ) {
-        let r = nitidez(ppp, pos2(x, y), &texto);
-        prop_assert_eq!(r.fuera_de_pixel, 0, "ppp {}, origen ({}, {}), {:?}", ppp, x, y, texto);
-        prop_assert_eq!(r.uv_fuera_de_texel, 0, "ppp {}, origen ({}, {}), {:?}", ppp, x, y, texto);
-        prop_assert_eq!(r.intermedios, 0, "ppp {}, origen ({}, {}), {:?}", ppp, x, y, texto);
+        let r = sharpness(ppp, pos2(x, y), &text_2);
+        prop_assert_eq!(r.outside_of_pixel, 0, "ppp {}, origen ({}, {}), {:?}", ppp, x, y, text_2);
+        prop_assert_eq!(r.uv_outside_texel, 0, "ppp {}, origen ({}, {}), {:?}", ppp, x, y, text_2);
+        prop_assert_eq!(r.intermediate, 0, "ppp {}, origen ({}, {}), {:?}", ppp, x, y, text_2);
     }
 
     /// Propiedad 3: ancho = 7·n·caracteres y alto = 14·n píxeles.
     #[test]
-    fn propiedad_3_medida(ppp in ppp_de_la_propiedad(), texto in cadena_de_la_interfaz()) {
-        let banco = Banco::nuevo(ppp);
+    fn property_3_measure(ppp in ppp_of_the_property(), text_2 in interface_string()) {
+        let bench = Bench::new_2(ppp);
         let n = text_scale(ppp) as f32;
-        let (w, h) = banco.medida_px(&texto);
-        let caracteres = texto.chars().count() as f32;
-        let tolerancia = tolerancia_de_medida(ppp);
-        prop_assert!((w - 7.0 * n * caracteres).abs() <= tolerancia, "ppp {}: ancho {} de {:?}", ppp, w, texto);
-        prop_assert!((h - 14.0 * n).abs() <= tolerancia, "ppp {}: alto {} de {:?}", ppp, h, texto);
+        let (w, h) = bench.measure_px(&text_2);
+        let characters = text_2.chars().count() as f32;
+        let tolerance = tolerance_of_measure(ppp);
+        prop_assert!((w - 7.0 * n * characters).abs() <= tolerance, "ppp {}: ancho {} de {:?}", ppp, w, text_2);
+        prop_assert!((h - 14.0 * n).abs() <= tolerance, "ppp {}: alto {} de {:?}", ppp, h, text_2);
     }
 }
 
 /// Barrido determinista de la propiedad 2 por **todos** los ppp múltiplos de 0,05 entre 1 y 4
 /// (el proptest elige solo algunos): así un fallo sale siempre y con la lista completa.
 #[test]
-fn propiedad_2_barrido_de_todos_los_ppp_multiplos_de_0_05() {
-    let texto = "Pixoko: 64×48 · ×8 · (12, 7) · lápiz ñÑ ¿Qué? /@WMwm%&$#";
-    let mut fallos = Vec::new();
+fn property_2_sweep_of_all_the_ppp_multiples_of_0_05() {
+    let text_2 = "Pixoko: 64×48 · ×8 · (12, 7) · lápiz ñÑ ¿Qué? /@WMwm%&$#";
+    let mut failures = Vec::new();
     for k in 20_u32..=80 {
         let ppp = k as f32 / 20.0;
-        let r = nitidez(ppp, pos2(3.37, 5.11), texto);
-        if r.fuera_de_pixel != 0 || r.uv_fuera_de_texel != 0 || r.intermedios != 0 {
-            fallos.push(format!("ppp {ppp}: {r:?}"));
+        let r = sharpness(ppp, pos2(3.37, 5.11), text_2);
+        if r.outside_of_pixel != 0 || r.uv_outside_texel != 0 || r.intermediate != 0 {
+            failures.push(format!("ppp {ppp}: {r:?}"));
         }
     }
-    assert!(fallos.is_empty(), "ppp sin nitidez:\n{}", fallos.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "ppp sin nitidez:\n{}",
+        failures.join("\n")
+    );
 }
 
 /// Rangos de caracteres invisibles o combinantes de la spec (sección «Glifo ausente»).
-const INVISIBLES: [(u32, u32); 14] = [
+const INVISIBLE: [(u32, u32); 14] = [
     (0x00AD, 0x00AD),
     (0x061C, 0x061C),
     (0x200B, 0x200F),
@@ -1042,50 +1037,50 @@ const INVISIBLES: [(u32, u32); 14] = [
     (0xFE20, 0xFE2F),
 ];
 
-fn es_invisible_o_combinante(c: char) -> bool {
-    INVISIBLES
+fn is_invisible_or_combining(c: char) -> bool {
+    INVISIBLE
         .iter()
-        .any(|&(desde, hasta)| (desde..=hasta).contains(&(c as u32)))
+        .any(|&(from_2, until)| (from_2..=until).contains(&(c as u32)))
 }
 
-fn rango(desde: u32, hasta: u32) -> proptest::char::CharStrategy<'static> {
+fn range(from_2: u32, until: u32) -> proptest::char::CharStrategy<'static> {
     proptest::char::range(
-        char::from_u32(desde).expect("escalar válido"),
-        char::from_u32(hasta).expect("escalar válido"),
+        char::from_u32(from_2).expect("escalar válido"),
+        char::from_u32(until).expect("escalar válido"),
     )
 }
 
 /// Un carácter con sesgo hacia lo difícil: controles, marcas bidireccionales y de formato,
 /// combinantes, emoji, japonés y el propio juego de caracteres.
-fn caracter_externo() -> impl Strategy<Value = char> {
-    let propios: Vec<char> = INTERFACE_CHARSET.chars().collect();
+fn character_external() -> impl Strategy<Value = char> {
+    let own: Vec<char> = INTERFACE_CHARSET.chars().collect();
     prop_oneof![
         4 => any::<char>(),
-        3 => prop::sample::select(propios),
-        3 => rango(0x00, 0x9F),
+        3 => prop::sample::select(own),
+        3 => range(0x00, 0x9F),
         2 => Just('\u{2028}'),
         2 => Just('\u{2029}'),
-        2 => rango(0x200B, 0x200F),
-        2 => rango(0x202A, 0x202E),
-        1 => rango(0x2060, 0x206F),
+        2 => range(0x200B, 0x200F),
+        2 => range(0x202A, 0x202E),
+        1 => range(0x2060, 0x206F),
         1 => Just('\u{FEFF}'),
         1 => Just('\u{00AD}'),
-        1 => rango(0xFE00, 0xFE0F),
-        1 => rango(0xE0100, 0xE01EF),
-        3 => rango(0x0300, 0x036F),
-        1 => rango(0x1AB0, 0x1AFF),
-        1 => rango(0x1DC0, 0x1DFF),
-        1 => rango(0x20D0, 0x20FF),
-        1 => rango(0xFE20, 0xFE2F),
-        3 => rango(0x1F300, 0x1F64F),
+        1 => range(0xFE00, 0xFE0F),
+        1 => range(0xE0100, 0xE01EF),
+        3 => range(0x0300, 0x036F),
+        1 => range(0x1AB0, 0x1AFF),
+        1 => range(0x1DC0, 0x1DFF),
+        1 => range(0x20D0, 0x20FF),
+        1 => range(0xFE20, 0xFE2F),
+        3 => range(0x1F300, 0x1F64F),
         1 => Just('\u{200D}'),
-        3 => rango(0x3040, 0x30FF),
-        3 => rango(0x4E00, 0x4FFF),
+        3 => range(0x3040, 0x30FF),
+        3 => range(0x4E00, 0x4FFF),
     ]
 }
 
-fn texto_externo() -> impl Strategy<Value = String> {
-    prop::collection::vec(caracter_externo(), 0..=100)
+fn text_external() -> impl Strategy<Value = String> {
+    prop::collection::vec(character_external(), 0..=100)
         .prop_map(|v| v.into_iter().collect::<String>())
 }
 
@@ -1095,49 +1090,49 @@ proptest! {
     /// Propiedad 4: `replace_missing` conserva el número de caracteres, deja solo caracteres con
     /// glifo y no invisibles ni combinantes, y es idempotente.
     #[test]
-    fn propiedad_4_replace_missing_de_cualquier_texto(texto in texto_externo()) {
-        let tiene = tiene_glifo(ctx_compartido());
-        let salida = replace_missing(&texto, &tiene);
-        prop_assert_eq!(salida.chars().count(), texto.chars().count());
-        for c in salida.chars() {
-            prop_assert!(tiene(c), "sin glifo: {:?}", c);
-            prop_assert!(!es_invisible_o_combinante(c), "invisible o combinante: {:?}", c);
+    fn property_4_replace_missing_of_any_text(text_2 in text_external()) {
+        let has = has_glyph(ctx_shared());
+        let output_2 = replace_missing(&text_2, &has);
+        prop_assert_eq!(output_2.chars().count(), text_2.chars().count());
+        for c in output_2.chars() {
+            prop_assert!(has(c), "sin glifo: {:?}", c);
+            prop_assert!(!is_invisible_or_combining(c), "invisible o combinante: {:?}", c);
             prop_assert!(!c.is_control(), "control: {:?}", c);
         }
-        prop_assert_eq!(replace_missing(&salida, &tiene), salida);
+        prop_assert_eq!(replace_missing(&output_2, &has), output_2);
     }
 
     /// Propiedad 4: identidad sobre cualquier cadena de `INTERFACE_CHARSET`.
     #[test]
-    fn propiedad_4_replace_missing_es_la_identidad_en_el_juego_de_la_interfaz(
-        texto in cadena_de_la_interfaz()
+    fn property_4_replace_missing_is_the_identity_in_the_interface_set(
+        text_2 in interface_string()
     ) {
-        let tiene = tiene_glifo(ctx_compartido());
-        prop_assert_eq!(replace_missing(&texto, &tiene), texto);
+        let has = has_glyph(ctx_shared());
+        prop_assert_eq!(replace_missing(&text_2, &has), text_2);
     }
 
     /// Propiedad 4: `fit_text`, con y sin `…` en la fuente.
     #[test]
-    fn propiedad_4_fit_text_de_cualquier_texto(
-        texto in texto_externo(),
+    fn property_4_fit_text_of_any_text(
+        text_2 in text_external(),
         max_chars in 0_usize..=120,
-        con_puntos in any::<bool>(),
+        with_points in any::<bool>(),
     ) {
-        let tiene = |c: char| con_puntos || c != '…';
-        let salida = fit_text(&texto, max_chars, tiene);
-        let largo = texto.chars().count();
-        prop_assert!(salida.chars().count() <= max_chars);
+        let has = |c: char| with_points || c != '…';
+        let output_2 = fit_text(&text_2, max_chars, has);
+        let largo = text_2.chars().count();
+        prop_assert!(output_2.chars().count() <= max_chars);
         if largo <= max_chars {
-            prop_assert_eq!(&salida, &texto, "si cabe, queda igual");
+            prop_assert_eq!(&output_2, &text_2, "si cabe, queda igual");
         } else {
-            let sufijo = if con_puntos { "…" } else { "..." };
-            let largo_sufijo = sufijo.chars().count();
-            if max_chars >= largo_sufijo {
-                prop_assert!(salida.ends_with(sufijo), "termina en {:?}: {:?}", sufijo, salida);
-                prop_assert_eq!(salida.chars().count(), max_chars);
+            let suffix = if with_points { "…" } else { "..." };
+            let long_suffix = suffix.chars().count();
+            if max_chars >= long_suffix {
+                prop_assert!(output_2.ends_with(suffix), "termina en {:?}: {:?}", suffix, output_2);
+                prop_assert_eq!(output_2.chars().count(), max_chars);
             } else {
-                let esperado: String = sufijo.chars().take(max_chars).collect();
-                prop_assert_eq!(salida, esperado);
+                let expected_2: String = suffix.chars().take(max_chars).collect();
+                prop_assert_eq!(output_2, expected_2);
             }
         }
     }

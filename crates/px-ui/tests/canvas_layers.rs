@@ -28,44 +28,44 @@ use px_ui::tool::{Tool, ToolState};
 use px_ui::view::{ViewOp, Zoom};
 
 mod common;
-use common::{PPPS, boton, contexto, en_puntos, fotograma, mover, n_de, rueda_linea};
+use common::{PPPS, button_2, context, frame, in_points, mover, n_de, wheel_line};
 
-const PANTALLA: Vec2 = vec2(800.0, 600.0);
-const POS_DEL_AREA: Pos2 = pos2(300.0, 200.0);
-const ORDENES: [Order; 2] = [Order::Foreground, Order::Middle];
+const TEST_SCREEN: Vec2 = vec2(800.0, 600.0);
+const POS_OF_THE_AREA: Pos2 = pos2(300.0, 200.0);
+const COMMANDS: [Order; 2] = [Order::Foreground, Order::Middle];
 
-fn imagen() -> Image {
+fn image_2() -> Image {
     Image::new(64, 48, Mode::Rgba).expect("imagen válida")
 }
 
-struct Paso {
-    entradas: Vec<CanvasInput>,
+struct Step {
+    entries: Vec<CanvasInput>,
     info: CanvasInfo,
     /// El botón del área recibió un clic en este fotograma.
-    clic_en_el_boton: bool,
+    click_on_the_button: bool,
 }
 
-impl Paso {
-    fn hay_trazo(&self) -> bool {
-        self.entradas
+impl Step {
+    fn there_is_stroke(&self) -> bool {
+        self.entries
             .iter()
             .any(|e| matches!(e, CanvasInput::Stroke(_)))
     }
 
-    fn empieza(&self) -> bool {
-        self.entradas
+    fn starts(&self) -> bool {
+        self.entries
             .iter()
             .any(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeBegin(_))))
     }
 
-    fn termina(&self) -> bool {
-        self.entradas
+    fn ends(&self) -> bool {
+        self.entries
             .iter()
             .any(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeEnd)))
     }
 
-    fn movimientos(&self) -> Vec<(i32, i32)> {
-        self.entradas
+    fn movements(&self) -> Vec<(i32, i32)> {
+        self.entries
             .iter()
             .filter_map(|e| match e {
                 CanvasInput::Stroke(CanvasEvent::StrokeMove(p)) => Some(*p),
@@ -75,86 +75,86 @@ impl Paso {
     }
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     canvas: Canvas,
-    id_del_area: Id,
-    orden: Order,
-    abierta: bool,
+    id_of_the_area: Id,
+    order: Order,
+    open_2: bool,
     /// Rectángulo del botón del área en el último fotograma (puntos).
-    boton: Rect,
+    button_2: Rect,
 }
 
-impl Banco {
-    fn nuevo(ppp: f32, orden: Order, abierta: bool) -> Banco {
+impl Bench {
+    fn new_2(ppp: f32, order: Order, open_2: bool) -> Bench {
         let mut canvas = Canvas::new();
-        canvas.set_image(&imagen());
-        let mut banco = Banco {
-            ctx: contexto(ppp),
+        canvas.set_image(&image_2());
+        let mut bench = Bench {
+            ctx: context(ppp),
             canvas,
-            id_del_area: Id::unique("desplegable"),
-            orden,
-            abierta,
-            boton: Rect::NOTHING,
+            id_of_the_area: Id::unique("desplegable"),
+            order,
+            open_2,
+            button_2: Rect::NOTHING,
         };
         // Reparte el espacio, sube la textura y deja el área en su sitio.
         for _ in 0..3 {
-            banco.paso(vec![]);
+            bench.step(vec![]);
         }
-        banco
+        bench
     }
 
-    fn paso(&mut self, events: Vec<Event>) -> Paso {
-        let mut resultado = None;
-        let mut boton_rect = self.boton;
-        let (orden, abierta, id) = (self.orden, self.abierta, self.id_del_area);
+    fn step(&mut self, events: Vec<Event>) -> Step {
+        let mut result = None;
+        let mut button_rect = self.button_2;
+        let (order, open_2, id) = (self.order, self.open_2, self.id_of_the_area);
         let canvas = &mut self.canvas;
-        fotograma(&self.ctx, PANTALLA, events, |ui| {
-            let mut clic = false;
-            if abierta {
-                let respuesta = Area::new(id)
-                    .order(orden)
-                    .fixed_pos(POS_DEL_AREA)
+        frame(&self.ctx, TEST_SCREEN, events, |ui| {
+            let mut click = false;
+            if open_2 {
+                let response = Area::new(id)
+                    .order(order)
+                    .fixed_pos(POS_OF_THE_AREA)
                     .show(ui.ctx(), |ui| ui.button("Guardar"));
-                clic = respuesta.inner.clicked();
-                boton_rect = respuesta.inner.rect;
+                click = response.inner.clicked();
+                button_rect = response.inner.rect;
             }
-            let entradas = canvas
+            let entries = canvas
                 .interact_roles(ui)
                 .into_iter()
                 .map(|(input, _)| input)
                 .collect::<Vec<_>>();
             let info = canvas.paint(ui);
-            resultado = Some(Paso {
-                entradas,
+            result = Some(Step {
+                entries,
                 info,
-                clic_en_el_boton: clic,
+                click_on_the_button: click,
             });
         });
-        self.boton = boton_rect;
-        resultado.expect("el lienzo se dibuja")
+        self.button_2 = button_rect;
+        result.expect("el lienzo se dibuja")
     }
 
     fn zoom(&mut self) -> Zoom {
-        self.paso(vec![]).info.zoom
+        self.step(vec![]).info.zoom
     }
 
     /// Centro del botón del área (un punto sobre el área).
-    fn sobre_el_area(&self) -> Pos2 {
-        assert!(self.boton.is_positive(), "el área no se ha pintado");
-        self.boton.center()
+    fn over_the_area(&self) -> Pos2 {
+        assert!(self.button_2.is_positive(), "el área no se ha pintado");
+        self.button_2.center()
     }
 
     /// Un punto del lienzo (sobre la imagen) que no toca el área.
-    fn fuera_del_area(&self) -> Pos2 {
+    fn outside_of_the_area(&self) -> Pos2 {
         pos2(100.0, 100.0)
     }
 
     /// Mueve, pulsa y suelta en `pos`; devuelve los tres pasos.
-    fn clic(&mut self, pos: Pos2) -> [Paso; 3] {
-        let a = self.paso(vec![mover(pos)]);
-        let b = self.paso(vec![boton(pos, true)]);
-        let c = self.paso(vec![boton(pos, false)]);
+    fn click(&mut self, pos: Pos2) -> [Step; 3] {
+        let a = self.step(vec![mover(pos)]);
+        let b = self.step(vec![button_2(pos, true)]);
+        let c = self.step(vec![button_2(pos, false)]);
         [a, b, c]
     }
 }
@@ -164,177 +164,174 @@ impl Banco {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9b_el_area_se_pinta_encima_del_lienzo_y_cubre_parte_de_la_imagen() {
+fn row_9b_the_area_is_painted_over_the_canvas_and_covers_part_of_the_image() {
     for ppp in PPPS {
-        for orden in ORDENES {
-            let banco = Banco::nuevo(ppp, orden, true);
-            let rect = banco.boton;
-            assert!(rect.is_positive(), "ppp {ppp} {orden:?}");
-            let pantalla = Rect::from_min_size(Pos2::ZERO, PANTALLA);
-            assert!(
-                pantalla.contains_rect(rect),
-                "ppp {ppp} {orden:?}: {rect:?}"
-            );
+        for order in COMMANDS {
+            let bench = Bench::new_2(ppp, order, true);
+            let rect = bench.button_2;
+            assert!(rect.is_positive(), "ppp {ppp} {order:?}");
+            let screen = Rect::from_min_size(Pos2::ZERO, TEST_SCREEN);
+            assert!(screen.contains_rect(rect), "ppp {ppp} {order:?}: {rect:?}");
             // Cae sobre la imagen: el lienzo ocupa toda la pantalla.
-            let imagen = banco.canvas.zoom().is_some();
-            assert!(imagen);
+            let image_2 = bench.canvas.zoom().is_some();
+            assert!(image_2);
         }
     }
 }
 
 #[test]
-fn fila_9b_con_el_area_abierta_el_clic_no_empieza_trazo_y_llega_al_boton() {
+fn row_9b_with_the_area_open_the_click_does_not_start_a_stroke_and_reaches_the_button() {
     for ppp in PPPS {
-        for orden in ORDENES {
-            let mut banco = Banco::nuevo(ppp, orden, true);
-            let pos = banco.sobre_el_area();
-            let pasos = banco.clic(pos);
-            for (i, paso) in pasos.iter().enumerate() {
+        for order in COMMANDS {
+            let mut bench = Bench::new_2(ppp, order, true);
+            let pos = bench.over_the_area();
+            let steps_2 = bench.click(pos);
+            for (i, step) in steps_2.iter().enumerate() {
                 assert!(
-                    !paso.hay_trazo(),
-                    "ppp {ppp} {orden:?}: el paso {i} produjo {:?}",
-                    paso.entradas
+                    !step.there_is_stroke(),
+                    "ppp {ppp} {order:?}: el paso {i} produjo {:?}",
+                    step.entries
                 );
-                assert_eq!(paso.info.hover, None, "ppp {ppp} {orden:?}: paso {i}");
+                assert_eq!(step.info.hover, None, "ppp {ppp} {order:?}: paso {i}");
             }
             assert!(
-                pasos.iter().any(|p| p.clic_en_el_boton),
-                "ppp {ppp} {orden:?}: el clic no llegó al botón"
+                steps_2.iter().any(|p| p.click_on_the_button),
+                "ppp {ppp} {order:?}: el clic no llegó al botón"
             );
         }
     }
 }
 
 #[test]
-fn fila_9b_con_el_area_abierta_hover_es_none_sobre_ella_y_valido_fuera() {
+fn row_9b_with_the_area_open_hover_is_none_over_it_and_valid_outside() {
     for ppp in PPPS {
-        for orden in ORDENES {
-            let mut banco = Banco::nuevo(ppp, orden, true);
-            let sobre = banco.sobre_el_area();
-            let fuera = banco.fuera_del_area();
-            assert_eq!(banco.paso(vec![mover(sobre)]).info.hover, None);
-            assert_eq!(banco.paso(vec![]).info.hover, None);
-            let paso = banco.paso(vec![mover(fuera)]);
+        for order in COMMANDS {
+            let mut bench = Bench::new_2(ppp, order, true);
+            let over = bench.over_the_area();
+            let outside = bench.outside_of_the_area();
+            assert_eq!(bench.step(vec![mover(over)]).info.hover, None);
+            assert_eq!(bench.step(vec![]).info.hover, None);
+            let step = bench.step(vec![mover(outside)]);
             assert!(
-                paso.info.hover.is_some(),
-                "ppp {ppp} {orden:?}: fuera del área hay hover"
+                step.info.hover.is_some(),
+                "ppp {ppp} {order:?}: fuera del área hay hover"
             );
             // Y vuelve a ser `None` al regresar al área.
-            assert_eq!(banco.paso(vec![mover(sobre)]).info.hover, None);
+            assert_eq!(bench.step(vec![mover(over)]).info.hover, None);
         }
     }
 }
 
 #[test]
-fn fila_9b_con_el_area_abierta_la_rueda_no_cambia_el_zoom() {
+fn row_9b_with_the_area_open_the_wheel_does_not_change_the_zoom() {
     for ppp in PPPS {
-        for orden in ORDENES {
-            let mut banco = Banco::nuevo(ppp, orden, true);
-            let antes = banco.zoom();
-            let sobre = banco.sobre_el_area();
-            banco.paso(vec![mover(sobre)]);
-            banco.paso(vec![]);
-            for arriba in [true, false] {
-                let paso = banco.paso(vec![rueda_linea(arriba), rueda_linea(arriba)]);
+        for order in COMMANDS {
+            let mut bench = Bench::new_2(ppp, order, true);
+            let antes = bench.zoom();
+            let over = bench.over_the_area();
+            bench.step(vec![mover(over)]);
+            bench.step(vec![]);
+            for top in [true, false] {
+                let step = bench.step(vec![wheel_line(top), wheel_line(top)]);
                 assert_eq!(
-                    paso.info.zoom, antes,
-                    "ppp {ppp} {orden:?}: rueda arriba={arriba}"
+                    step.info.zoom, antes,
+                    "ppp {ppp} {order:?}: rueda arriba={top}"
                 );
             }
-            assert_eq!(banco.zoom(), antes);
+            assert_eq!(bench.zoom(), antes);
             // Fuera del área la misma rueda sí hace zoom.
-            let fuera = banco.fuera_del_area();
-            banco.paso(vec![mover(fuera)]);
-            let paso = banco.paso(vec![rueda_linea(true)]);
+            let outside = bench.outside_of_the_area();
+            bench.step(vec![mover(outside)]);
+            let step = bench.step(vec![wheel_line(true)]);
             assert_eq!(
-                paso.info.zoom,
+                step.info.zoom,
                 antes.zoom_in(),
-                "ppp {ppp} {orden:?}: fuera del área"
+                "ppp {ppp} {order:?}: fuera del área"
             );
         }
     }
 }
 
 #[test]
-fn fila_9b_con_el_area_abierta_el_pellizco_no_cambia_el_zoom() {
+fn row_9b_with_the_area_open_the_pinch_does_not_change_the_zoom() {
     for ppp in PPPS {
-        for orden in ORDENES {
-            let mut banco = Banco::nuevo(ppp, orden, true);
-            let antes = banco.zoom();
-            let sobre = banco.sobre_el_area();
-            banco.paso(vec![mover(sobre)]);
-            banco.paso(vec![]);
+        for order in COMMANDS {
+            let mut bench = Bench::new_2(ppp, order, true);
+            let antes = bench.zoom();
+            let over = bench.over_the_area();
+            bench.step(vec![mover(over)]);
+            bench.step(vec![]);
             for factor in [1.3, 0.7] {
-                let paso = banco.paso(vec![Event::Zoom(factor)]);
+                let step = bench.step(vec![Event::Zoom(factor)]);
                 assert_eq!(
-                    paso.info.zoom, antes,
-                    "ppp {ppp} {orden:?}: pellizco {factor}"
+                    step.info.zoom, antes,
+                    "ppp {ppp} {order:?}: pellizco {factor}"
                 );
             }
-            let fuera = banco.fuera_del_area();
-            banco.paso(vec![mover(fuera)]);
-            let paso = banco.paso(vec![Event::Zoom(1.3)]);
+            let outside = bench.outside_of_the_area();
+            bench.step(vec![mover(outside)]);
+            let step = bench.step(vec![Event::Zoom(1.3)]);
             assert_eq!(
-                paso.info.zoom,
+                step.info.zoom,
                 antes.zoom_in(),
-                "ppp {ppp} {orden:?}: fuera del área"
+                "ppp {ppp} {order:?}: fuera del área"
             );
         }
     }
 }
 
 #[test]
-fn fila_9b_un_trazo_empezado_antes_de_abrir_el_area_sigue_y_termina_con_stroke_end() {
+fn row_9b_a_stroke_started_before_opening_the_area_continues_and_ends_with_stroke_end() {
     for ppp in PPPS {
-        for orden in ORDENES {
-            let mut banco = Banco::nuevo(ppp, orden, false);
-            let inicio = banco.fuera_del_area();
-            banco.paso(vec![mover(inicio)]);
-            let empezar = banco.paso(vec![boton(inicio, true)]);
+        for order in COMMANDS {
+            let mut bench = Bench::new_2(ppp, order, false);
+            let start_2 = bench.outside_of_the_area();
+            bench.step(vec![mover(start_2)]);
+            let start_2_2 = bench.step(vec![button_2(start_2, true)]);
             assert!(
-                empezar.empieza(),
-                "ppp {ppp} {orden:?}: con el área cerrada el clic dibuja"
+                start_2_2.starts(),
+                "ppp {ppp} {order:?}: con el área cerrada el clic dibuja"
             );
 
             // Se abre el área a mitad del gesto y se deja asentar (el puntero no se mueve).
-            banco.abierta = true;
-            banco.paso(vec![]);
-            banco.paso(vec![]);
-            let sobre = banco.sobre_el_area();
+            bench.open_2 = true;
+            bench.step(vec![]);
+            bench.step(vec![]);
+            let over = bench.over_the_area();
 
             // El puntero pasa por encima del área: el trazo sigue.
-            let paso = banco.paso(vec![mover(sobre)]);
+            let step = bench.step(vec![mover(over)]);
             assert!(
-                !paso.movimientos().is_empty(),
-                "ppp {ppp} {orden:?}: el trazo debe seguir sobre el área: {:?}",
-                paso.entradas
+                !step.movements().is_empty(),
+                "ppp {ppp} {order:?}: el trazo debe seguir sobre el área: {:?}",
+                step.entries
             );
-            assert!(!paso.empieza() && !paso.termina());
+            assert!(!step.starts() && !step.ends());
             // Soltar sobre el área termina el trazo (y no es un clic del botón).
-            let soltar = banco.paso(vec![boton(sobre, false)]);
+            let release_2 = bench.step(vec![button_2(over, false)]);
             assert!(
-                soltar.termina(),
-                "ppp {ppp} {orden:?}: {:?}",
-                soltar.entradas
+                release_2.ends(),
+                "ppp {ppp} {order:?}: {:?}",
+                release_2.entries
             );
             assert_eq!(
-                soltar
-                    .entradas
+                release_2
+                    .entries
                     .iter()
                     .filter(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeEnd)))
                     .count(),
                 1
             );
             assert!(
-                !soltar.clic_en_el_boton,
-                "ppp {ppp} {orden:?}: no es un clic del botón"
+                !release_2.click_on_the_button,
+                "ppp {ppp} {order:?}: no es un clic del botón"
             );
             // Y el gesto terminó: un movimiento más no dibuja.
-            let despues = banco.paso(vec![mover(inicio)]);
+            let after_2 = bench.step(vec![mover(start_2)]);
             assert!(
-                !despues.hay_trazo(),
-                "ppp {ppp} {orden:?}: {:?}",
-                despues.entradas
+                !after_2.there_is_stroke(),
+                "ppp {ppp} {order:?}: {:?}",
+                after_2.entries
             );
         }
     }
@@ -345,31 +342,31 @@ fn fila_9b_un_trazo_empezado_antes_de_abrir_el_area_sigue_y_termina_con_stroke_e
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9b_con_el_area_cerrada_el_clic_dibuja_la_rueda_hace_zoom_y_hover_es_valido() {
+fn row_9b_with_the_area_closed_the_click_draws_the_wheel_zooms_and_hover_is_valid() {
     for ppp in PPPS {
         // El área está cerrada: el mismo recorrido que en las pruebas de arriba.
-        let mut banco = Banco::nuevo(ppp, Order::Foreground, false);
+        let mut bench = Bench::new_2(ppp, Order::Foreground, false);
         // El punto donde estaría el botón.
-        let pos = pos2(POS_DEL_AREA.x + 10.0, POS_DEL_AREA.y + 8.0);
+        let pos = pos2(POS_OF_THE_AREA.x + 10.0, POS_OF_THE_AREA.y + 8.0);
 
-        let a = banco.paso(vec![mover(pos)]);
+        let a = bench.step(vec![mover(pos)]);
         assert!(a.info.hover.is_some(), "ppp {ppp}: hover válido");
-        let b = banco.paso(vec![boton(pos, true)]);
-        assert!(b.empieza(), "ppp {ppp}: el clic dibuja: {:?}", b.entradas);
-        let c = banco.paso(vec![boton(pos, false)]);
-        assert!(c.termina(), "ppp {ppp}");
+        let b = bench.step(vec![button_2(pos, true)]);
+        assert!(b.starts(), "ppp {ppp}: el clic dibuja: {:?}", b.entries);
+        let c = bench.step(vec![button_2(pos, false)]);
+        assert!(c.ends(), "ppp {ppp}");
 
-        let antes = banco.zoom();
-        let paso = banco.paso(vec![rueda_linea(true)]);
+        let antes = bench.zoom();
+        let step = bench.step(vec![wheel_line(true)]);
         assert_eq!(
-            paso.info.zoom,
+            step.info.zoom,
             antes.zoom_in(),
             "ppp {ppp}: la rueda hace zoom"
         );
-        let antes = banco.zoom();
-        let paso = banco.paso(vec![Event::Zoom(1.3)]);
+        let antes = bench.zoom();
+        let step = bench.step(vec![Event::Zoom(1.3)]);
         assert_eq!(
-            paso.info.zoom,
+            step.info.zoom,
             antes.zoom_in(),
             "ppp {ppp}: el pellizco hace zoom"
         );
@@ -377,19 +374,19 @@ fn fila_9b_con_el_area_cerrada_el_clic_dibuja_la_rueda_hace_zoom_y_hover_es_vali
 }
 
 #[test]
-fn fila_9b_al_cerrar_el_area_el_lienzo_vuelve_a_responder() {
+fn row_9b_when_closing_the_area_the_canvas_responds_again() {
     for ppp in PPPS {
-        let mut banco = Banco::nuevo(ppp, Order::Foreground, true);
-        let sobre = banco.sobre_el_area();
-        let [_, b, _] = banco.clic(sobre);
-        assert!(!b.empieza());
-        banco.abierta = false;
-        banco.paso(vec![]);
-        banco.paso(vec![]);
-        let [a, b, c] = banco.clic(sobre);
+        let mut bench = Bench::new_2(ppp, Order::Foreground, true);
+        let over = bench.over_the_area();
+        let [_, b, _] = bench.click(over);
+        assert!(!b.starts());
+        bench.open_2 = false;
+        bench.step(vec![]);
+        bench.step(vec![]);
+        let [a, b, c] = bench.click(over);
         assert!(a.info.hover.is_some(), "ppp {ppp}");
-        assert!(b.empieza(), "ppp {ppp}: {:?}", b.entradas);
-        assert!(c.termina(), "ppp {ppp}");
+        assert!(b.starts(), "ppp {ppp}: {:?}", b.entries);
+        assert!(c.ends(), "ppp {ppp}");
     }
 }
 
@@ -398,29 +395,29 @@ fn fila_9b_al_cerrar_el_area_el_lienzo_vuelve_a_responder() {
 // ---------------------------------------------------------------------------------------------
 
 /// Banco con `show_menu` arriba y el lienzo debajo: el desplegable de `Archivo` cae sobre el lienzo.
-struct BancoConMenu {
+struct BenchWithMenu {
     ctx: Context,
     canvas: Canvas,
     ppp: f32,
-    estado: UiState,
+    state_2: UiState,
 }
 
-struct PasoConMenu {
-    entradas: Vec<CanvasInput>,
+struct StepWithMenu {
+    entries: Vec<CanvasInput>,
     info: CanvasInfo,
-    accion: Option<AppAction>,
-    textos: common::Pintado,
+    action_2: Option<AppAction>,
+    texts: common::Painted,
 }
 
-impl BancoConMenu {
-    fn nuevo(ppp: f32) -> BancoConMenu {
+impl BenchWithMenu {
+    fn new_2(ppp: f32) -> BenchWithMenu {
         let mut canvas = Canvas::new();
-        canvas.set_image(&imagen());
-        let mut banco = BancoConMenu {
-            ctx: contexto(ppp),
+        canvas.set_image(&image_2());
+        let mut bench = BenchWithMenu {
+            ctx: context(ppp),
             canvas,
             ppp,
-            estado: UiState {
+            state_2: UiState {
                 can_undo: true,
                 can_redo: true,
                 zoom: Zoom::from_int(12),
@@ -429,146 +426,146 @@ impl BancoConMenu {
             },
         };
         for _ in 0..3 {
-            banco.paso(vec![]);
+            bench.step(vec![]);
         }
-        banco
+        bench
     }
 
-    fn paso(&mut self, events: Vec<Event>) -> PasoConMenu {
-        let mut resultado = None;
+    fn step(&mut self, events: Vec<Event>) -> StepWithMenu {
+        let mut result = None;
         let canvas = &mut self.canvas;
-        let estado = &self.estado;
-        let formas = fotograma(&self.ctx, PANTALLA, events, |ui| {
-            let accion = show_menu(ui, estado, Platform::Linux);
-            let entradas = canvas
+        let state_2 = &self.state_2;
+        let shapes_2 = frame(&self.ctx, TEST_SCREEN, events, |ui| {
+            let action_2 = show_menu(ui, state_2, Platform::Linux);
+            let entries = canvas
                 .interact_roles(ui)
                 .into_iter()
                 .map(|(input, _)| input)
                 .collect::<Vec<_>>();
             let info = canvas.paint(ui);
-            resultado = Some((accion, entradas, info));
+            result = Some((action_2, entries, info));
         });
-        let (accion, entradas, info) = resultado.expect("se dibuja");
-        PasoConMenu {
-            entradas,
+        let (action_2, entries, info) = result.expect("se dibuja");
+        StepWithMenu {
+            entries,
             info,
-            accion,
-            textos: common::pintado(&formas),
+            action_2,
+            texts: common::painted(&shapes_2),
         }
     }
 
     /// Mueve, pulsa y suelta en `pos` y devuelve los tres pasos.
-    fn clic(&mut self, pos: Pos2) -> [PasoConMenu; 3] {
-        let a = self.paso(vec![mover(pos)]);
-        let b = self.paso(vec![boton(pos, true)]);
-        let c = self.paso(vec![boton(pos, false)]);
+    fn click(&mut self, pos: Pos2) -> [StepWithMenu; 3] {
+        let a = self.step(vec![mover(pos)]);
+        let b = self.step(vec![button_2(pos, true)]);
+        let c = self.step(vec![button_2(pos, false)]);
         [a, b, c]
     }
 
     /// Abre `Archivo` con un clic en su título (a 4 u del borde, con 61 u de ancho).
-    fn abre_archivo(&mut self) {
+    fn opens_file(&mut self) {
         let n = n_de(self.ppp);
-        let titulo = en_puntos(self.ppp, (4 + 61 / 2) * n, 8 * n);
-        self.clic(titulo);
-        self.paso(vec![]);
-        self.paso(vec![]);
+        let title = in_points(self.ppp, (4 + 61 / 2) * n, 8 * n);
+        self.click(title);
+        self.step(vec![]);
+        self.step(vec![]);
     }
 
-    /// Centro de la entrada `Guardar` del desplegable abierto (no `Guardar como…`).
-    fn centro_de_guardar(&mut self) -> Pos2 {
-        let paso = self.paso(vec![]);
-        let texto = paso
-            .textos
-            .textos
+    /// Centro de la entrada `Guardar` del desplegable abierto (no `Guardar as_word…`).
+    fn center_of_save(&mut self) -> Pos2 {
+        let step = self.step(vec![]);
+        let text_2 = step
+            .texts
+            .texts
             .iter()
-            .find(|t| t.texto.starts_with("Guardar") && !t.texto.starts_with("Guardar como"))
+            .find(|t| t.text_2.starts_with("Guardar") && !t.text_2.starts_with("Guardar como"))
             .unwrap_or_else(|| {
                 panic!(
                     "el desplegable de Archivo no se ve; hay {:?}",
-                    paso.textos.todos_los_textos()
+                    step.texts.all_the_texts()
                 )
             });
-        texto.rect().center()
+        text_2.rect().center()
     }
 }
 
 #[test]
-fn fila_9b_con_el_menu_real_abierto_un_clic_en_guardar_no_dibuja_y_da_save() {
+fn row_9b_with_the_real_menu_open_a_click_on_save_does_not_draw_and_gives_save() {
     for ppp in PPPS {
-        let mut banco = BancoConMenu::nuevo(ppp);
-        banco.abre_archivo();
-        let guardar = banco.centro_de_guardar();
+        let mut bench = BenchWithMenu::new_2(ppp);
+        bench.opens_file();
+        let save = bench.center_of_save();
         // La entrada cae sobre el lienzo (el menú no ocupa más que su barra).
         let n = n_de(ppp);
-        assert!(guardar.y * ppp > (16 * n) as f32, "ppp {ppp}: {guardar:?}");
+        assert!(save.y * ppp > (16 * n) as f32, "ppp {ppp}: {save:?}");
 
-        let pasos = banco.clic(guardar);
-        for (i, paso) in pasos.iter().enumerate() {
+        let steps_2 = bench.click(save);
+        for (i, step) in steps_2.iter().enumerate() {
             assert!(
-                !paso
-                    .entradas
+                !step
+                    .entries
                     .iter()
                     .any(|e| matches!(e, CanvasInput::Stroke(_))),
                 "ppp {ppp}: el paso {i} dibujó: {:?}",
-                paso.entradas
+                step.entries
             );
-            assert_eq!(paso.info.hover, None, "ppp {ppp}: paso {i}");
+            assert_eq!(step.info.hover, None, "ppp {ppp}: paso {i}");
         }
         assert!(
-            pasos.iter().any(|p| p.accion == Some(AppAction::Save)),
+            steps_2.iter().any(|p| p.action_2 == Some(AppAction::Save)),
             "ppp {ppp}: el clic debe dar Save; dio {:?}",
-            pasos.iter().map(|p| p.accion).collect::<Vec<_>>()
+            steps_2.iter().map(|p| p.action_2).collect::<Vec<_>>()
         );
     }
 }
 
 #[test]
-fn fila_9b_con_el_menu_real_abierto_la_rueda_y_el_pellizco_no_cambian_el_zoom() {
+fn row_9b_with_the_real_menu_open_the_wheel_and_the_pinch_do_not_change_the_zoom() {
     for ppp in PPPS {
-        let mut banco = BancoConMenu::nuevo(ppp);
-        let antes = banco.paso(vec![]).info.zoom;
-        banco.abre_archivo();
-        let guardar = banco.centro_de_guardar();
-        banco.paso(vec![mover(guardar)]);
-        banco.paso(vec![]);
-        assert_eq!(banco.paso(vec![]).info.hover, None, "ppp {ppp}");
-        let paso = banco.paso(vec![rueda_linea(true)]);
+        let mut bench = BenchWithMenu::new_2(ppp);
+        let antes = bench.step(vec![]).info.zoom;
+        bench.opens_file();
+        let save = bench.center_of_save();
+        bench.step(vec![mover(save)]);
+        bench.step(vec![]);
+        assert_eq!(bench.step(vec![]).info.hover, None, "ppp {ppp}");
+        let step = bench.step(vec![wheel_line(true)]);
         assert_eq!(
-            paso.info.zoom, antes,
+            step.info.zoom, antes,
             "ppp {ppp}: rueda sobre el desplegable"
         );
-        let paso = banco.paso(vec![Event::Zoom(1.3)]);
+        let step = bench.step(vec![Event::Zoom(1.3)]);
         assert_eq!(
-            paso.info.zoom, antes,
+            step.info.zoom, antes,
             "ppp {ppp}: pellizco sobre el desplegable"
         );
     }
 }
 
 #[test]
-fn fila_9b_con_el_menu_cerrado_el_mismo_punto_dibuja() {
+fn row_9b_with_the_menu_closed_the_same_point_draws() {
     for ppp in PPPS {
-        let mut banco = BancoConMenu::nuevo(ppp);
-        banco.abre_archivo();
-        let guardar = banco.centro_de_guardar();
+        let mut bench = BenchWithMenu::new_2(ppp);
+        bench.opens_file();
+        let save = bench.center_of_save();
         // Elegir `Guardar` cierra el desplegable.
-        banco.clic(guardar);
-        banco.paso(vec![]);
-        banco.paso(vec![]);
-        let [a, b, c] = banco.clic(guardar);
+        bench.click(save);
+        bench.step(vec![]);
+        bench.step(vec![]);
+        let [a, b, c] = bench.click(save);
         assert!(
             a.info.hover.is_some(),
             "ppp {ppp}: hover válido con el menú cerrado"
         );
         assert!(
-            b.entradas
+            b.entries
                 .iter()
                 .any(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeBegin(_)))),
             "ppp {ppp}: con el menú cerrado el clic dibuja: {:?}",
-            b.entradas
+            b.entries
         );
         assert!(
-            c.entradas
+            c.entries
                 .iter()
                 .any(|e| matches!(e, CanvasInput::Stroke(CanvasEvent::StrokeEnd))),
             "ppp {ppp}"
@@ -580,98 +577,98 @@ fn fila_9b_con_el_menu_cerrado_el_mismo_punto_dibuja() {
 // Fila 5b (banco): el zoom a mitad de trazo
 // ---------------------------------------------------------------------------------------------
 
-fn rojo() -> Option<Pixel> {
+fn red() -> Option<Pixel> {
     Some(Pixel::Rgba(Rgba::opaque(255, 0, 0)))
 }
 
 /// El píxel de imagen (con signo) bajo `pos` según el rectángulo de la imagen del fotograma.
-fn pixel_bajo(info: &CanvasInfo, ppp: f32, pos: Pos2) -> (i32, i32) {
+fn pixel_under(info: &CanvasInfo, ppp: f32, pos: Pos2) -> (i32, i32) {
     let rect = info.image_rect.expect("hay imagen");
-    let fisico = |v: f32| (v * ppp).round() as i64;
-    let x = info.zoom.unscale(fisico(pos.x - rect.min.x));
-    let y = info.zoom.unscale(fisico(pos.y - rect.min.y));
+    let physical = |v: f32| (v * ppp).round() as i64;
+    let x = info.zoom.unscale(physical(pos.x - rect.min.x));
+    let y = info.zoom.unscale(physical(pos.y - rect.min.y));
     (x as i32, y as i32)
 }
 
-struct Sesion {
-    banco: Banco,
+struct Session {
+    bench: Bench,
     doc: Document,
     tools: ToolState,
 }
 
-impl Sesion {
-    fn nueva(ppp: f32) -> Sesion {
-        let banco = Banco::nuevo(ppp, Order::Foreground, false);
-        Sesion {
-            banco,
-            doc: Document::new(imagen()),
+impl Session {
+    fn new(ppp: f32) -> Session {
+        let bench = Bench::new_2(ppp, Order::Foreground, false);
+        Session {
+            bench,
+            doc: Document::new(image_2()),
             tools: ToolState::new(),
         }
     }
 
     /// Un fotograma cuyos eventos de trazo pasan por `ToolState` (como `main`).
-    fn paso(&mut self, events: Vec<Event>) -> Paso {
-        let paso = self.banco.paso(events);
+    fn step(&mut self, events: Vec<Event>) -> Step {
+        let step = self.bench.step(events);
         let id = ImageId::from_raw(0);
-        for input in &paso.entradas {
+        for input in &step.entries {
             self.tools
-                .canvas_input_with(&mut self.doc, id, rojo(), *input)
+                .canvas_input_with(&mut self.doc, id, red(), *input)
                 .expect("el evento es válido");
         }
-        paso
+        step
     }
 }
 
 #[test]
-fn fila_5b_un_trazo_a_medias_con_request_view_zoom_in_cambia_el_zoom_y_el_trazo_sigue() {
+fn row_5b_a_half_made_stroke_with_request_view_zoom_in_changes_the_zoom_and_the_stroke_continues() {
     for ppp in PPPS {
-        let mut s = Sesion::nueva(ppp);
-        let estado_inicial = s.doc.state_id();
+        let mut s = Session::new(ppp);
+        let state_initial = s.doc.state_id();
         let p0 = pos2(400.0, 300.0);
         let p1 = pos2(430.0, 300.0);
         let p2 = pos2(460.0, 320.0);
 
-        s.paso(vec![mover(p0)]);
-        let empezar = s.paso(vec![boton(p0, true)]);
-        assert!(empezar.empieza(), "ppp {ppp}");
+        s.step(vec![mover(p0)]);
+        let start_2_2 = s.step(vec![button_2(p0, true)]);
+        assert!(start_2_2.starts(), "ppp {ppp}");
         assert!(s.tools.busy());
-        s.paso(vec![mover(p1)]);
+        s.step(vec![mover(p1)]);
         assert!(s.tools.busy());
 
-        let zoom_antes = s.banco.zoom();
-        s.banco.canvas.request_view(ViewOp::ZoomIn);
-        let tras = s.paso(vec![]);
+        let zoom_antes = s.bench.zoom();
+        s.bench.canvas.request_view(ViewOp::ZoomIn);
+        let after = s.step(vec![]);
         assert_eq!(
-            tras.info.zoom,
+            after.info.zoom,
             zoom_antes.zoom_in(),
             "ppp {ppp}: el zoom cambia a mitad de trazo"
         );
         assert!(s.tools.busy(), "ppp {ppp}: el trazo sigue");
         assert!(
-            !tras.termina(),
+            !after.ends(),
             "ppp {ppp}: pedir la vista no termina el trazo"
         );
         assert_eq!(
             s.doc.state_id(),
-            estado_inicial,
+            state_initial,
             "ppp {ppp}: el documento no cambia hasta soltar"
         );
         assert!(!s.doc.can_undo());
 
         // El siguiente StrokeMove usa la vista nueva.
-        let paso = s.paso(vec![mover(p2)]);
-        let esperado = pixel_bajo(&paso.info, ppp, p2);
-        assert_eq!(paso.movimientos(), vec![esperado], "ppp {ppp}: vista nueva");
+        let step = s.step(vec![mover(p2)]);
+        let expected_2 = pixel_under(&step.info, ppp, p2);
+        assert_eq!(step.movements(), vec![expected_2], "ppp {ppp}: vista nueva");
         assert!(s.tools.busy());
-        assert_eq!(s.doc.state_id(), estado_inicial);
+        assert_eq!(s.doc.state_id(), state_initial);
 
         // Soltar crea un solo paso.
-        let soltar = s.paso(vec![boton(p2, false)]);
-        assert!(soltar.termina(), "ppp {ppp}");
+        let release_2 = s.step(vec![button_2(p2, false)]);
+        assert!(release_2.ends(), "ppp {ppp}");
         assert!(!s.tools.busy());
         assert_ne!(
             s.doc.state_id(),
-            estado_inicial,
+            state_initial,
             "ppp {ppp}: el trazo se aplicó"
         );
         assert!(s.doc.can_undo());
@@ -680,26 +677,26 @@ fn fila_5b_un_trazo_a_medias_con_request_view_zoom_in_cambia_el_zoom_y_el_trazo_
             !s.doc.can_undo(),
             "ppp {ppp}: el trazo entero fue un solo paso"
         );
-        assert_eq!(s.doc.state_id(), estado_inicial);
+        assert_eq!(s.doc.state_id(), state_initial);
     }
 }
 
 #[test]
-fn fila_5b_varias_peticiones_de_vista_a_mitad_de_trazo_siguen_siendo_un_solo_paso() {
-    let mut s = Sesion::nueva(1.0);
+fn row_5b_several_view_requests_in_the_middle_of_a_stroke_are_still_a_single_step() {
+    let mut s = Session::new(1.0);
     let p0 = pos2(400.0, 300.0);
-    s.paso(vec![mover(p0)]);
-    s.paso(vec![boton(p0, true)]);
+    s.step(vec![mover(p0)]);
+    s.step(vec![button_2(p0, true)]);
     for (i, op) in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual, ViewOp::Fit]
         .into_iter()
         .enumerate()
     {
-        s.banco.canvas.request_view(op);
-        s.paso(vec![]);
+        s.bench.canvas.request_view(op);
+        s.step(vec![]);
         assert!(s.tools.busy(), "tras {op:?}");
-        s.paso(vec![mover(pos2(400.0 + 10.0 * i as f32, 310.0))]);
+        s.step(vec![mover(pos2(400.0 + 10.0 * i as f32, 310.0))]);
     }
-    s.paso(vec![boton(p0, false)]);
+    s.step(vec![button_2(p0, false)]);
     assert!(!s.tools.busy());
     assert!(s.doc.can_undo());
     s.doc.undo().expect("un paso");
@@ -710,21 +707,21 @@ fn fila_5b_varias_peticiones_de_vista_a_mitad_de_trazo_siguen_siendo_un_solo_pas
 }
 
 #[test]
-fn fila_5b_la_rueda_a_mitad_de_trazo_sigue_cambiando_el_zoom_como_antes() {
+fn row_5b_the_wheel_in_the_middle_of_a_stroke_keeps_changing_the_zoom_as_before() {
     for ppp in PPPS {
-        let mut s = Sesion::nueva(ppp);
+        let mut s = Session::new(ppp);
         let p0 = pos2(400.0, 300.0);
-        s.paso(vec![mover(p0)]);
-        s.paso(vec![boton(p0, true)]);
-        let antes = s.banco.zoom();
-        let paso = s.paso(vec![rueda_linea(true)]);
+        s.step(vec![mover(p0)]);
+        s.step(vec![button_2(p0, true)]);
+        let antes = s.bench.zoom();
+        let step = s.step(vec![wheel_line(true)]);
         assert_eq!(
-            paso.info.zoom,
+            step.info.zoom,
             antes.zoom_in(),
             "ppp {ppp}: la rueda no cambia"
         );
         assert!(s.tools.busy(), "ppp {ppp}");
-        s.paso(vec![boton(p0, false)]);
+        s.step(vec![button_2(p0, false)]);
         assert!(!s.tools.busy());
         assert!(s.doc.can_undo());
     }

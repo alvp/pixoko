@@ -130,7 +130,7 @@ pub fn button_u(button: PanelButton) -> RectU {
     RectU::new(5 + ROW_PITCH_U * button.index(), 174, 24, 24)
 }
 
-/// Donde va `N capas`, a la derecha de los botones.
+/// Donde va `N layers`, a la derecha de los botones.
 pub fn count_u() -> RectU {
     RectU::new(135, 174, 48, 24)
 }
@@ -313,7 +313,7 @@ impl PanelState {
         ));
     }
 
-    /// Lleva el panel a `desde` más el desplazamiento total `dx_px`, `dy_px` (sin acumular
+    /// Lleva el panel a `from_2` más el desplazamiento total `dx_px`, `dy_px` (sin acumular
     /// redondeos fotograma a fotograma).
     pub fn drag_total(&mut self, from: (i64, i64), dx_px: i64, dy_px: i64, n: u32) {
         self.pos_u = Some(from);
@@ -424,7 +424,7 @@ pub fn format_bytes(bytes: usize) -> String {
     }
 }
 
-/// El pie del panel y si va en aviso: `Memoria: {celdas con píxeles} / {tope}`, recortado a
+/// El pie del panel y si va en aviso: `Memoria: {cels with píxeles} / {tope}`, recortado a
 /// [`MEMORY_CHARS`]; aviso desde 1 GiB (`Document::MEMORY_WARN_BYTES`).
 pub fn memory_line(materialized: usize, limit: usize) -> (String, bool) {
     let text = format!(

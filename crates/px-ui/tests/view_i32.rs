@@ -1,7 +1,7 @@
 //! Tests de `View::screen_to_image_i32` (specs/hito-2-lapiz-deshacer.md, fila 13).
 //!
 //! Es `screen_to_image` sin el `None` de fuera de la imagen: el índice de bloque
-//! `floor((p - origen) / zoom)` en cada eje, saturado a `i32`. `View` solo se construye con
+//! `floor((p - source_2) / zoom)` en cada eje, saturado a `i32`. `View` solo se construye con
 //! `View::fit`; la vista de la fila 13 (zoom ×4, origen (10, 10)) sale de `fit`, `set_zoom` y
 //! `pan`, y se comprueba con `zoom()` y `origin()` antes de usarla.
 
@@ -26,7 +26,7 @@ fn vista_x4_en_10_10() -> (View, Size) {
 }
 
 #[test]
-fn fila_13_zoom_x4_con_origen_10_10() {
+fn row_13_zoom_x4_with_origin_10_10() {
     let (v, _) = vista_x4_en_10_10();
     assert_eq!(v.screen_to_image_i32((10, 10)), (0, 0));
     assert_eq!(v.screen_to_image_i32((9, 9)), (-1, -1));
@@ -37,7 +37,7 @@ fn fila_13_zoom_x4_con_origen_10_10() {
 }
 
 #[test]
-fn los_bloques_de_cuatro_pixeles_y_los_signos_de_cada_eje_son_independientes() {
+fn the_four_pixel_blocks_and_the_signs_of_each_axis_are_independent() {
     let (v, _) = vista_x4_en_10_10();
     // Dentro del primer bloque y en el siguiente.
     assert_eq!(v.screen_to_image_i32((13, 13)), (0, 0));
@@ -58,7 +58,7 @@ fn los_bloques_de_cuatro_pixeles_y_los_signos_de_cada_eje_son_independientes() {
 }
 
 #[test]
-fn dentro_de_la_imagen_coincide_con_screen_to_image() {
+fn inside_the_image_matches_screen_to_image() {
     let (v, img) = vista_x4_en_10_10();
     for p in [(10, 10), (13, 25), (50, 60), (409, 409)] {
         // El bloque (99, 99) llega hasta 10 + 400 - 1 = 409.
@@ -67,13 +67,13 @@ fn dentro_de_la_imagen_coincide_con_screen_to_image() {
     }
 }
 
-/// Modelo: `floor((p - origen) / z)` en `i128`, saturado a `i32`.
-fn modelo(p: i64, origen: i64, z: u32) -> i32 {
-    let bloque = (i128::from(p) - i128::from(origen)).div_euclid(i128::from(z));
-    bloque.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
+/// Modelo: `floor((p - source_2) / z)` en `i128`, saturado a `i32`.
+fn model(p: i64, source_2: i64, z: u32) -> i32 {
+    let block = (i128::from(p) - i128::from(source_2)).div_euclid(i128::from(z));
+    block.clamp(i128::from(i32::MIN), i128::from(i32::MAX)) as i32
 }
 
-fn coordenada() -> impl Strategy<Value = i64> {
+fn coordinate() -> impl Strategy<Value = i64> {
     prop_oneof![
         4 => -(1i64 << 40)..=(1i64 << 40),
         3 => -200i64..=200,
@@ -86,28 +86,28 @@ fn coordenada() -> impl Strategy<Value = i64> {
 
 proptest! {
     #[test]
-    fn coincide_con_el_modelo_y_con_screen_to_image(
+    fn matches_the_model_and_screen_to_image(
         vpw in 0u32..=500,
         vph in 0u32..=500,
         iw in 1u32..=100,
         ih in 1u32..=100,
         n in 1u32..=64,
-        ancla in (-(1i64 << 20)..=(1i64 << 20), -(1i64 << 20)..=(1i64 << 20)),
-        desplazamiento in (-1000i64..=1000, -1000i64..=1000),
-        p in (coordenada(), coordenada()),
+        anchor in (-(1i64 << 20)..=(1i64 << 20), -(1i64 << 20)..=(1i64 << 20)),
+        pan in (-1000i64..=1000, -1000i64..=1000),
+        p in (coordinate(), coordinate()),
     ) {
         let (vp, img) = (Size::new(vpw, vph), Size::new(iw, ih));
         let mut v = View::fit(vp, img);
-        v.set_zoom(zoom(n), ancla);
-        v.pan(desplazamiento.0, desplazamiento.1, vp, img);
+        v.set_zoom(zoom(n), anchor);
+        v.pan(pan.0, pan.1, vp, img);
         let (ox, oy) = v.origin();
         let z = v.zoom().scale(1) as u32;
 
-        let obtenido = v.screen_to_image_i32(p);
-        prop_assert_eq!(obtenido, (modelo(p.0, ox, z), modelo(p.1, oy, z)));
+        let obtained = v.screen_to_image_i32(p);
+        prop_assert_eq!(obtained, (model(p.0, ox, z), model(p.1, oy, z)));
         // Cuando el punto cae sobre la imagen, es el mismo píxel.
         if let Some((x, y)) = v.screen_to_image(p, img) {
-            prop_assert_eq!(obtenido, (x as i32, y as i32));
+            prop_assert_eq!(obtained, (x as i32, y as i32));
         }
         // Ida y vuelta: la esquina de cada bloque da su propio índice.
         let (cx, cy) = v.image_to_screen(iw - 1, ih - 1);

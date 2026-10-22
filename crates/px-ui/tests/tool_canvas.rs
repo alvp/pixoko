@@ -6,7 +6,7 @@
 //! botón va en su propio fotograma. Las posiciones se calculan con el rectángulo de la imagen del
 //! primer fotograma, en el centro de cada píxel: 800×600 con 64×48 da zoom ×12.
 //!
-//! `Sesion` hace de `px-app`: pasa los eventos de `interact` a `ToolState::canvas_event` en el
+//! `Session` hace de `px-app`: pasa los eventos de `interact` a `ToolState::canvas_event` en el
 //! orden en que salieron y guarda los resultados.
 //!
 //! El soltar perdido se fabrica igual que en `tests/pencil.rs`: se baja el botón con
@@ -24,43 +24,43 @@ use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo, CanvasInput};
 use px_ui::tool::{Tool, ToolAction, ToolState};
 
 const SCREEN: Vec2 = vec2(800.0, 600.0);
-const ANCHO: u32 = 64;
-const ALTO: u32 = 48;
+const WIDTH: u32 = 64;
+const HEIGHT: u32 = 48;
 
-fn rojo() -> Pixel {
+fn red() -> Pixel {
     Pixel::Rgba(Rgba::opaque(255, 0, 0))
 }
 
 /// Imagen RGBA de 64×48 vacía.
-fn imagen_rgba() -> Image {
-    Image::new(ANCHO, ALTO, Mode::Rgba).expect("imagen válida")
+fn image_rgba() -> Image {
+    Image::new(WIDTH, HEIGHT, Mode::Rgba).expect("imagen válida")
 }
 
 /// Imagen indexada de 64×48 con una paleta de 3 entradas: la ranura 5 no tiene color.
-fn imagen_indexada() -> Image {
-    let paleta = Palette::from_colors([
+fn image_indexed() -> Image {
+    let palette = Palette::from_colors([
         Rgba::opaque(10, 10, 10),
         Rgba::opaque(20, 20, 20),
         Rgba::opaque(30, 30, 30),
     ])
     .expect("paleta válida");
-    Image::new_indexed(ANCHO, ALTO, paleta).expect("imagen válida")
+    Image::new_indexed(WIDTH, HEIGHT, palette).expect("imagen válida")
 }
 
-struct Banco {
+struct Bench {
     ctx: Context,
     canvas: Canvas,
 }
 
-struct Fotograma {
+struct TestFrame {
     output: FullOutput,
-    eventos: Vec<CanvasInput>,
+    events_2: Vec<CanvasInput>,
     info: CanvasInfo,
 }
 
-impl Banco {
-    fn nuevo() -> Banco {
-        Banco {
+impl Bench {
+    fn new_2() -> Bench {
+        Bench {
             ctx: Context::default(),
             canvas: Canvas::new(),
         }
@@ -68,38 +68,38 @@ impl Banco {
 
     /// Ejecuta un fotograma: `antes` (si lo hay) corre dentro del fotograma, antes de `interact`;
     /// luego `interact_ordered` (o `interact`), y `paint` sin superposición. No limpia los cambios de textura.
-    fn fotograma(&mut self, events: Vec<Event>, antes: Option<fn(&mut Ui)>) -> Fotograma {
+    fn frame(&mut self, events: Vec<Event>, antes: Option<fn(&mut Ui)>) -> TestFrame {
         let input = RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
             events,
             ..RawInput::default()
         };
-        let mut resultado = None;
+        let mut result = None;
         let canvas = &mut self.canvas;
         let output = self.ctx.run_ui(input, |ui| {
             if let Some(antes) = antes {
                 antes(ui);
             }
-            let eventos = canvas
+            let events_2 = canvas
                 .interact_roles(ui)
                 .into_iter()
                 .map(|(input, _)| input)
                 .collect::<Vec<_>>();
             let info = canvas.paint(ui);
-            resultado = Some((eventos, info));
+            result = Some((events_2, info));
         });
-        let (eventos, info) = resultado.expect("el lienzo se dibuja");
-        Fotograma {
+        let (events_2, info) = result.expect("el lienzo se dibuja");
+        TestFrame {
             output,
-            eventos,
+            events_2,
             info,
         }
     }
 
     /// Un fotograma con los cambios de textura ya limpiados (egui entra en pánico si se sueltan
     /// sin aplicar).
-    fn paso(&mut self, events: Vec<Event>) -> Fotograma {
-        let mut f = self.fotograma(events, None);
+    fn step(&mut self, events: Vec<Event>) -> TestFrame {
+        let mut f = self.frame(events, None);
         f.output.textures_delta.clear();
         f
     }
@@ -111,7 +111,7 @@ fn mover(pos: Pos2) -> Event {
     Event::PointerMoved(pos)
 }
 
-fn izquierdo(pos: Pos2, pressed: bool) -> Event {
+fn left_2(pos: Pos2, pressed: bool) -> Event {
     Event::PointerButton {
         pos,
         button: PointerButton::Primary,
@@ -120,7 +120,7 @@ fn izquierdo(pos: Pos2, pressed: bool) -> Event {
     }
 }
 
-fn tecla(key: Key, modifiers: Modifiers, pressed: bool) -> Event {
+fn key_2(key: Key, modifiers: Modifiers, pressed: bool) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -131,16 +131,16 @@ fn tecla(key: Key, modifiers: Modifiers, pressed: bool) -> Event {
 }
 
 fn escape() -> Event {
-    tecla(Key::Escape, Modifiers::NONE, true)
+    key_2(Key::Escape, Modifiers::NONE, true)
 }
 
 /// Lo que ve el lienzo cuando egui ya no ve el botón: el estado del puntero sin pulsaciones.
-fn perder_el_boton(ui: &mut Ui) {
+fn lose_the_button(ui: &mut Ui) {
     ui.input_mut(|i| i.pointer = PointerState::default());
 }
 
 /// Centro del píxel `(x, y)` en una vista con el rectángulo y el zoom dados (puntos de egui).
-fn centro(rect: Rect, zoom: i64, x: i32, y: i32) -> Pos2 {
+fn center(rect: Rect, zoom: i64, x: i32, y: i32) -> Pos2 {
     let z = zoom as f32;
     pos2(
         rect.min.x + (x as f32 + 0.5) * z,
@@ -149,13 +149,13 @@ fn centro(rect: Rect, zoom: i64, x: i32, y: i32) -> Pos2 {
 }
 
 /// Ningún evento de trazo.
-const NADA: [CanvasInput; 0] = [];
+const NOTHING: [CanvasInput; 0] = [];
 
 fn begin(x: i32, y: i32) -> CanvasInput {
     CanvasInput::Stroke(CanvasEvent::StrokeBegin((x, y)))
 }
 
-fn paso_a(x: i32, y: i32) -> CanvasInput {
+fn step_a(x: i32, y: i32) -> CanvasInput {
     CanvasInput::Stroke(CanvasEvent::StrokeMove((x, y)))
 }
 
@@ -164,11 +164,11 @@ fn fin() -> CanvasInput {
 }
 
 /// Los eventos de trazo de una lista ordenada, sin los `Escape`: lo que da `Canvas::interact`.
-fn solo_trazo(entradas: &[CanvasInput]) -> Vec<CanvasEvent> {
-    entradas
+fn only_stroke(entries: &[CanvasInput]) -> Vec<CanvasEvent> {
+    entries
         .iter()
         .filter_map(|e| match e {
-            CanvasInput::Stroke(evento) => Some(*evento),
+            CanvasInput::Stroke(event) => Some(*event),
             CanvasInput::Escape => None,
         })
         .collect()
@@ -176,16 +176,16 @@ fn solo_trazo(entradas: &[CanvasInput]) -> Vec<CanvasEvent> {
 
 /// El banco con la imagen subida y el primer fotograma ya ejecutado, más el documento y la
 /// herramienta que reciben los eventos.
-struct Sesion {
-    banco: Banco,
+struct Session {
+    bench: Bench,
     /// Los eventos de trazo (sin `Escape`) del último fotograma.
     ultimo_interact: Vec<CanvasEvent>,
     rect: Rect,
     zoom: i64,
     /// Todos los eventos del lienzo (`interact_ordered`), en orden.
-    eventos: Vec<CanvasInput>,
-    /// El resultado de `canvas_event` para cada evento de `eventos`.
-    resultados: Vec<bool>,
+    events_2: Vec<CanvasInput>,
+    /// El resultado de `canvas_event` para cada evento de `events_2`.
+    results: Vec<bool>,
     doc: Document,
     id: ImageId,
     tool: ToolState,
@@ -193,25 +193,25 @@ struct Sesion {
     original: Image,
 }
 
-impl Sesion {
-    fn nueva(image: Image, herramienta: Tool, slot: u8) -> Sesion {
-        let mut banco = Banco::nuevo();
-        banco.canvas.set_image(&image);
-        let f = banco.paso(vec![]);
+impl Session {
+    fn new(image: Image, tool_2: Tool, slot: u8) -> Session {
+        let mut bench = Bench::new_2();
+        bench.canvas.set_image(&image);
+        let f = bench.step(vec![]);
         let rect = f.info.image_rect.expect("hay imagen");
         let zoom = f.info.zoom.scale(1);
         assert_eq!(zoom, 12, "800×600 con 64×48 da zoom ×12");
         let doc = Document::new(image.clone());
         let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
-        tool.apply_action(ToolAction::Select(herramienta));
-        Sesion {
-            banco,
+        tool.apply_action(ToolAction::Select(tool_2));
+        Session {
+            bench,
             ultimo_interact: Vec::new(),
             rect,
             zoom,
-            eventos: Vec::new(),
-            resultados: Vec::new(),
+            events_2: Vec::new(),
+            results: Vec::new(),
             doc,
             id,
             tool,
@@ -222,87 +222,87 @@ impl Sesion {
 
     /// Centro del píxel `(x, y)` con la vista del primer fotograma.
     fn pos(&self, x: i32, y: i32) -> Pos2 {
-        centro(self.rect, self.zoom, x, y)
+        center(self.rect, self.zoom, x, y)
     }
 
     /// Pasa los eventos del fotograma a la herramienta, en orden.
-    fn alimentar(&mut self, eventos: &[CanvasInput]) {
-        for &evento in eventos {
+    fn feed(&mut self, events_2: &[CanvasInput]) {
+        for &event in events_2 {
             let r = self
                 .tool
-                .canvas_input(&mut self.doc, self.id, self.slot, evento)
-                .unwrap_or_else(|e| panic!("{evento:?} dio el error {e:?}"));
-            self.eventos.push(evento);
-            self.resultados.push(r);
+                .canvas_input(&mut self.doc, self.id, self.slot, event)
+                .unwrap_or_else(|e| panic!("{event:?} dio el error {e:?}"));
+            self.events_2.push(event);
+            self.results.push(r);
         }
     }
 
     /// Ejecuta un fotograma y devuelve los eventos de este fotograma.
-    fn paso(&mut self, events: Vec<Event>) -> Vec<CanvasInput> {
-        let f = self.banco.paso(events);
-        self.ultimo_interact = solo_trazo(&f.eventos);
-        self.alimentar(&f.eventos);
-        f.eventos
+    fn step(&mut self, events: Vec<Event>) -> Vec<CanvasInput> {
+        let f = self.bench.step(events);
+        self.ultimo_interact = only_stroke(&f.events_2);
+        self.feed(&f.events_2);
+        f.events_2
     }
 
-    /// Como `paso`, pero con una función que corre dentro del fotograma antes de `interact`.
-    fn paso_con(&mut self, events: Vec<Event>, antes: fn(&mut Ui)) -> Vec<CanvasInput> {
-        let mut f = self.banco.fotograma(events, Some(antes));
+    /// Como `step`, pero con una función que corre dentro del fotograma antes de `interact`.
+    fn step_with(&mut self, events: Vec<Event>, antes: fn(&mut Ui)) -> Vec<CanvasInput> {
+        let mut f = self.bench.frame(events, Some(antes));
         f.output.textures_delta.clear();
-        self.ultimo_interact = solo_trazo(&f.eventos);
-        self.alimentar(&f.eventos);
-        f.eventos
+        self.ultimo_interact = only_stroke(&f.events_2);
+        self.feed(&f.events_2);
+        f.events_2
     }
 
-    fn imagen(&self) -> &Image {
+    fn image_2(&self) -> &Image {
         self.doc.image(self.id).expect("hay imagen")
     }
 
     /// Píxeles que difieren de la imagen original.
-    fn cambiados(&self) -> BTreeSet<(u32, u32)> {
-        let imagen = self.imagen();
-        (0..ALTO)
-            .flat_map(|y| (0..ANCHO).map(move |x| (x, y)))
+    fn changed(&self) -> BTreeSet<(u32, u32)> {
+        let image_2 = self.image_2();
+        (0..HEIGHT)
+            .flat_map(|y| (0..WIDTH).map(move |x| (x, y)))
             .filter(|&(x, y)| {
-                imagen.get_pixel(x, y).unwrap() != self.original.get_pixel(x, y).unwrap()
+                image_2.get_pixel(x, y).unwrap() != self.original.get_pixel(x, y).unwrap()
             })
             .collect()
     }
 
     /// Los píxeles de la fila `y` de `x0` a `x1`, incluidos.
-    fn fila(y: u32, x0: u32, x1: u32) -> BTreeSet<(u32, u32)> {
+    fn row_2(y: u32, x0: u32, x1: u32) -> BTreeSet<(u32, u32)> {
         (x0..=x1).map(|x| (x, y)).collect()
     }
 
-    fn sin_cambios(&self) -> bool {
-        self.imagen() == &self.original && !self.doc.can_undo()
+    fn unchanged(&self) -> bool {
+        self.image_2() == &self.original && !self.doc.can_undo()
     }
 
     /// Cuántos `canvas_event` dieron `Ok(true)`.
-    fn verdaderos(&self) -> usize {
-        self.resultados.iter().filter(|&&r| r).count()
+    fn true_value(&self) -> usize {
+        self.results.iter().filter(|&&r| r).count()
     }
 }
 
 /// Una línea horizontal en la fila 20 desde el píxel 30 hasta el 40, con el botón abajo.
-fn trazo_de_linea_abierto() -> Sesion {
-    trazo_abierto(imagen_rgba(), Tool::Line, 3)
+fn open_line_stroke() -> Session {
+    stroke_open(image_rgba(), Tool::Line, 3)
 }
 
-fn trazo_abierto(image: Image, herramienta: Tool, slot: u8) -> Sesion {
-    let mut s = Sesion::nueva(image, herramienta, slot);
+fn stroke_open(image: Image, tool_2: Tool, slot: u8) -> Session {
+    let mut s = Session::new(image, tool_2, slot);
     let (a, b) = (s.pos(30, 20), s.pos(40, 20));
-    s.paso(vec![mover(a)]);
-    assert_eq!(s.paso(vec![izquierdo(a, true)]), [begin(30, 20)]);
-    assert_eq!(s.paso(vec![mover(b)]), [paso_a(40, 20)]);
+    s.step(vec![mover(a)]);
+    assert_eq!(s.step(vec![left_2(a, true)]), [begin(30, 20)]);
+    assert_eq!(s.step(vec![mover(b)]), [step_a(40, 20)]);
     s
 }
 
 /// Tras terminar un gesto no queda ninguno abierto y se puede cambiar de herramienta.
-fn comprobar_que_no_queda_nada_abierto(s: &mut Sesion) {
+fn check_that_nothing_is_left_open(s: &mut Session) {
     assert!(!s.tool.busy(), "busy() debe ser falso");
-    assert_eq!(s.paso(vec![mover(s.pos(45, 22))]), NADA);
-    assert_eq!(s.paso(vec![mover(s.pos(46, 23))]), NADA);
+    assert_eq!(s.step(vec![mover(s.pos(45, 22))]), NOTHING);
+    assert_eq!(s.step(vec![mover(s.pos(46, 23))]), NOTHING);
     assert!(!s.tool.busy());
     s.tool.apply_action(ToolAction::Select(Tool::Fill));
     assert_eq!(s.tool.tool(), Tool::Fill, "Select ya cambia de herramienta");
@@ -311,78 +311,71 @@ fn comprobar_que_no_queda_nada_abierto(s: &mut Sesion) {
 // Fila 20.
 
 #[test]
-fn fila_20_escape_antes_del_soltado_en_el_mismo_fotograma_cancela_la_linea() {
-    let mut s = trazo_de_linea_abierto();
-    let ev = s.paso(vec![escape(), izquierdo(s.pos(41, 20), false)]);
-    assert_eq!(ev, [CanvasInput::Escape, paso_a(41, 20), fin()]);
+fn row_20_escape_before_the_release_in_the_same_frame_cancels_the_line() {
+    let mut s = open_line_stroke();
+    let ev = s.step(vec![escape(), left_2(s.pos(41, 20), false)]);
+    assert_eq!(ev, [CanvasInput::Escape, step_a(41, 20), fin()]);
     // `interact` da lo mismo que antes, sin el `Escape`.
     assert_eq!(
         s.ultimo_interact,
         [CanvasEvent::StrokeMove((41, 20)), CanvasEvent::StrokeEnd]
     );
-    assert!(
-        s.sin_cambios(),
-        "la línea se cancela: ni imagen ni historia"
-    );
-    assert_eq!(s.verdaderos(), 0);
-    comprobar_que_no_queda_nada_abierto(&mut s);
+    assert!(s.unchanged(), "la línea se cancela: ni imagen ni historia");
+    assert_eq!(s.true_value(), 0);
+    check_that_nothing_is_left_open(&mut s);
 }
 
 #[test]
-fn fila_20_escape_despues_del_soltado_en_el_mismo_fotograma_deja_la_linea() {
-    let mut s = trazo_de_linea_abierto();
-    let ev = s.paso(vec![izquierdo(s.pos(41, 20), false), escape()]);
-    assert_eq!(ev, [paso_a(41, 20), fin(), CanvasInput::Escape]);
+fn row_20_escape_after_the_release_in_the_same_frame_leaves_the_line() {
+    let mut s = open_line_stroke();
+    let ev = s.step(vec![left_2(s.pos(41, 20), false), escape()]);
+    assert_eq!(ev, [step_a(41, 20), fin(), CanvasInput::Escape]);
     assert_eq!(
         s.ultimo_interact,
         [CanvasEvent::StrokeMove((41, 20)), CanvasEvent::StrokeEnd],
         "interact: lo mismo que antes, sin el Escape"
     );
     // El soltado ya aplicó la línea hasta el último destino (30 a 41) y `Escape` no la deshace.
-    assert_eq!(s.cambiados(), Sesion::fila(20, 30, 41));
-    assert_eq!(s.imagen().get_pixel(41, 20), Ok(rojo()));
+    assert_eq!(s.changed(), Session::row_2(20, 30, 41));
+    assert_eq!(s.image_2().get_pixel(41, 20), Ok(red()));
     assert!(s.doc.can_undo());
-    assert_eq!(s.verdaderos(), 1);
+    assert_eq!(s.true_value(), 1);
     assert_eq!(
-        s.resultados.last(),
+        s.results.last(),
         Some(&false),
         "Escape da Ok(false) y no hace nada"
     );
-    comprobar_que_no_queda_nada_abierto(&mut s);
+    check_that_nothing_is_left_open(&mut s);
 }
 
 #[test]
-fn fila_20_shift_escape_no_emite_evento_y_el_trazo_sigue() {
-    let mut s = trazo_de_linea_abierto();
-    let ev = s.paso(vec![tecla(Key::Escape, Modifiers::SHIFT, true)]);
-    assert_eq!(ev, NADA, "Escape con Shift no es un Escape");
+fn row_20_shift_escape_emits_no_event_and_the_stroke_continues() {
+    let mut s = open_line_stroke();
+    let ev = s.step(vec![key_2(Key::Escape, Modifiers::SHIFT, true)]);
+    assert_eq!(ev, NOTHING, "Escape con Shift no es un Escape");
     assert_eq!(s.ultimo_interact, []);
     assert!(s.tool.busy());
     // El trazo sigue vivo y se aplica al soltar.
-    s.paso(vec![izquierdo(s.pos(41, 20), false)]);
-    assert_eq!(s.cambiados(), Sesion::fila(20, 30, 41));
-    comprobar_que_no_queda_nada_abierto(&mut s);
+    s.step(vec![left_2(s.pos(41, 20), false)]);
+    assert_eq!(s.changed(), Session::row_2(20, 30, 41));
+    check_that_nothing_is_left_open(&mut s);
 }
 
 #[test]
-fn fila_20_escape_sin_trazo_emite_solo_escape_y_la_herramienta_no_hace_nada() {
-    for herramienta in [Tool::Pencil, Tool::Line, Tool::Fill] {
-        let mut s = Sesion::nueva(imagen_rgba(), herramienta, 3);
-        let ev = s.paso(vec![escape()]);
-        assert_eq!(ev, [CanvasInput::Escape], "{herramienta:?}");
+fn row_20_escape_without_a_stroke_emits_only_escape_and_the_tool_does_nothing() {
+    for tool_2 in [Tool::Pencil, Tool::Line, Tool::Fill] {
+        let mut s = Session::new(image_rgba(), tool_2, 3);
+        let ev = s.step(vec![escape()]);
+        assert_eq!(ev, [CanvasInput::Escape], "{tool_2:?}");
         assert_eq!(
             s.ultimo_interact,
             [],
-            "{herramienta:?}: interact no emite Escape"
+            "{tool_2:?}: interact no emite Escape"
         );
-        assert_eq!(
-            s.resultados,
-            [false],
-            "{herramienta:?}: ToolState no hace nada"
-        );
-        assert!(s.sin_cambios());
+        assert_eq!(s.results, [false], "{tool_2:?}: ToolState no hace nada");
+        assert!(s.unchanged());
         assert!(!s.tool.busy());
-        assert_eq!(s.tool.tool(), herramienta);
+        assert_eq!(s.tool.tool(), tool_2);
     }
 }
 
@@ -390,8 +383,8 @@ fn fila_20_escape_sin_trazo_emite_solo_escape_y_la_herramienta_no_hace_nada() {
 // `Canvas::interact` solo mira las teclas pulsadas).
 
 #[test]
-fn escape_con_cualquier_modificador_no_emite_evento() {
-    let con_ctrl_y_command = Modifiers {
+fn escape_with_any_modifier_emits_no_event() {
+    let with_ctrl_and_command = Modifiers {
         ctrl: true,
         command: true,
         ..Modifiers::NONE
@@ -402,160 +395,157 @@ fn escape_con_cualquier_modificador_no_emite_evento() {
         Modifiers::CTRL,
         Modifiers::COMMAND,
         Modifiers::MAC_CMD,
-        con_ctrl_y_command,
+        with_ctrl_and_command,
     ] {
-        let mut s = Sesion::nueva(imagen_rgba(), Tool::Line, 3);
-        let ev = s.paso(vec![tecla(Key::Escape, modifiers, true)]);
-        assert_eq!(ev, NADA, "Escape con {modifiers:?}");
+        let mut s = Session::new(image_rgba(), Tool::Line, 3);
+        let ev = s.step(vec![key_2(Key::Escape, modifiers, true)]);
+        assert_eq!(ev, NOTHING, "Escape con {modifiers:?}");
     }
 }
 
 #[test]
-fn soltar_la_tecla_escape_no_emite_evento() {
-    let mut s = trazo_de_linea_abierto();
-    let ev = s.paso(vec![tecla(Key::Escape, Modifiers::NONE, false)]);
-    assert_eq!(ev, NADA, "solo la pulsación es un Escape");
+fn releasing_the_escape_key_emits_no_event() {
+    let mut s = open_line_stroke();
+    let ev = s.step(vec![key_2(Key::Escape, Modifiers::NONE, false)]);
+    assert_eq!(ev, NOTHING, "solo la pulsación es un Escape");
     assert!(s.tool.busy());
 }
 
 // Fila 21.
 
 #[test]
-fn fila_21_perder_el_foco_aplica_la_linea_y_no_deja_el_gesto_colgado() {
-    let mut s = trazo_de_linea_abierto();
-    assert_eq!(s.paso(vec![Event::WindowFocused(false)]), [fin()]);
+fn row_21_losing_focus_applies_the_line_and_does_not_leave_the_gesture_hanging() {
+    let mut s = open_line_stroke();
+    assert_eq!(s.step(vec![Event::WindowFocused(false)]), [fin()]);
     assert!(!s.tool.busy());
     assert_eq!(
-        s.cambiados(),
-        Sesion::fila(20, 30, 40),
+        s.changed(),
+        Session::row_2(20, 30, 40),
         "hasta el último destino"
     );
     assert!(s.doc.can_undo());
-    comprobar_que_no_queda_nada_abierto(&mut s);
+    check_that_nothing_is_left_open(&mut s);
 }
 
 #[test]
-fn fila_21_pointer_gone_y_soltar_fuera_aplica_la_linea_hasta_el_punto_de_soltado() {
-    let mut s = trazo_de_linea_abierto();
+fn row_21_pointer_gone_and_releasing_outside_applies_the_line_up_to_the_release_point() {
+    let mut s = open_line_stroke();
     assert_eq!(
-        s.paso(vec![Event::PointerGone]),
-        NADA,
+        s.step(vec![Event::PointerGone]),
+        NOTHING,
         "PointerGone no termina"
     );
     assert!(s.tool.busy());
-    assert_eq!(s.paso(vec![]), NADA);
+    assert_eq!(s.step(vec![]), NOTHING);
     assert!(s.tool.busy());
     // Se suelta fuera de la ventana: píxel (73, 20), con x = 898 > 800.
-    let fuera = s.pos(73, 20);
-    assert!(fuera.x > SCREEN.x);
+    let outside = s.pos(73, 20);
+    assert!(outside.x > SCREEN.x);
     assert_eq!(
-        s.paso(vec![izquierdo(fuera, false)]),
-        [paso_a(73, 20), fin()]
+        s.step(vec![left_2(outside, false)]),
+        [step_a(73, 20), fin()]
     );
     assert!(!s.tool.busy());
     // De 30 al borde derecho (63): 34 píxeles.
-    assert_eq!(s.cambiados(), Sesion::fila(20, 30, 63));
+    assert_eq!(s.changed(), Session::row_2(20, 30, 63));
     assert!(s.doc.can_undo());
-    comprobar_que_no_queda_nada_abierto(&mut s);
+    check_that_nothing_is_left_open(&mut s);
 }
 
 #[test]
-fn fila_21_un_soltar_perdido_aplica_la_linea_en_el_fotograma_siguiente() {
-    let mut s = trazo_de_linea_abierto();
+fn row_21_a_lost_release_applies_the_line_in_the_next_frame() {
+    let mut s = open_line_stroke();
     assert_eq!(
-        s.paso_con(vec![], perder_el_boton),
+        s.step_with(vec![], lose_the_button),
         [fin()],
         "la red de seguridad cierra el trazo"
     );
     assert!(!s.tool.busy());
-    assert_eq!(s.cambiados(), Sesion::fila(20, 30, 40));
+    assert_eq!(s.changed(), Session::row_2(20, 30, 40));
     assert!(s.doc.can_undo());
-    assert_eq!(s.paso(vec![]), NADA, "ni un segundo End");
-    comprobar_que_no_queda_nada_abierto(&mut s);
+    assert_eq!(s.step(vec![]), NOTHING, "ni un segundo End");
+    check_that_nothing_is_left_open(&mut s);
 }
 
 /// Cómo termina un gesto en la fila 21, con el botón ya abajo.
 #[derive(Clone, Copy, Debug)]
 enum Final {
-    Soltar,
-    PerderElFoco,
-    SoltarPerdido,
-    PointerGoneYSoltarFuera,
+    Release,
+    LoseTheFocus,
+    ReleaseLost,
+    PointerGoneAndReleaseOutside,
 }
 
 const FINALES: [Final; 4] = [
-    Final::Soltar,
-    Final::PerderElFoco,
-    Final::SoltarPerdido,
-    Final::PointerGoneYSoltarFuera,
+    Final::Release,
+    Final::LoseTheFocus,
+    Final::ReleaseLost,
+    Final::PointerGoneAndReleaseOutside,
 ];
 
-fn terminar(s: &mut Sesion, final_: Final) {
+fn finish(s: &mut Session, final_: Final) {
     match final_ {
-        Final::Soltar => {
+        Final::Release => {
             let p = s.pos(41, 20);
-            s.paso(vec![izquierdo(p, false)]);
+            s.step(vec![left_2(p, false)]);
         }
-        Final::PerderElFoco => {
-            s.paso(vec![Event::WindowFocused(false)]);
+        Final::LoseTheFocus => {
+            s.step(vec![Event::WindowFocused(false)]);
         }
-        Final::SoltarPerdido => {
-            s.paso_con(vec![], perder_el_boton);
+        Final::ReleaseLost => {
+            s.step_with(vec![], lose_the_button);
         }
-        Final::PointerGoneYSoltarFuera => {
-            s.paso(vec![Event::PointerGone]);
+        Final::PointerGoneAndReleaseOutside => {
+            s.step(vec![Event::PointerGone]);
             let p = s.pos(73, 20);
-            s.paso(vec![izquierdo(p, false)]);
+            s.step(vec![left_2(p, false)]);
         }
     }
 }
 
 #[test]
-fn fila_21_una_ranura_sin_color_no_deja_los_atajos_bloqueados() {
+fn row_21_a_slot_without_color_does_not_leave_the_shortcuts_blocked() {
     // Paleta de 3 entradas: la ranura 5 no tiene color. Pulsar y soltar; lo mismo con las otras
     // formas de terminar el gesto y con las tres herramientas.
-    for herramienta in [Tool::Pencil, Tool::Line, Tool::Fill] {
+    for tool_2 in [Tool::Pencil, Tool::Line, Tool::Fill] {
         for final_ in FINALES {
-            let mut s = Sesion::nueva(imagen_indexada(), herramienta, 5);
+            let mut s = Session::new(image_indexed(), tool_2, 5);
             let a = s.pos(30, 20);
-            s.paso(vec![mover(a)]);
-            assert_eq!(s.paso(vec![izquierdo(a, true)]), [begin(30, 20)]);
-            assert!(
-                s.tool.busy(),
-                "{herramienta:?}/{final_:?}: ocupado tras Begin"
-            );
+            s.step(vec![mover(a)]);
+            assert_eq!(s.step(vec![left_2(a, true)]), [begin(30, 20)]);
+            assert!(s.tool.busy(), "{tool_2:?}/{final_:?}: ocupado tras Begin");
             // Con el botón abajo los atajos no valen.
             s.tool.apply_action(ToolAction::Select(Tool::Fill));
-            assert_eq!(s.tool.tool(), herramienta);
+            assert_eq!(s.tool.tool(), tool_2);
 
-            terminar(&mut s, final_);
+            finish(&mut s, final_);
             assert!(
                 !s.tool.busy(),
-                "{herramienta:?}/{final_:?}: busy() debe volver a falso"
+                "{tool_2:?}/{final_:?}: busy() debe volver a falso"
             );
-            assert!(s.sin_cambios(), "{herramienta:?}/{final_:?}: sin cambios");
-            assert_eq!(s.verdaderos(), 0);
+            assert!(s.unchanged(), "{tool_2:?}/{final_:?}: sin cambios");
+            assert_eq!(s.true_value(), 0);
             s.tool.apply_action(ToolAction::Select(Tool::Fill));
             assert_eq!(
                 s.tool.tool(),
                 Tool::Fill,
-                "{herramienta:?}/{final_:?}: Select ya cambia de herramienta"
+                "{tool_2:?}/{final_:?}: Select ya cambia de herramienta"
             );
         }
     }
 }
 
 #[test]
-fn fila_21_una_ranura_sin_color_pulsar_y_soltar_sin_mover() {
+fn row_21_a_slot_without_color_press_and_release_without_moving() {
     // El caso literal de la fila: pulsar y soltar, con la herramienta de línea.
-    let mut s = Sesion::nueva(imagen_indexada(), Tool::Line, 5);
+    let mut s = Session::new(image_indexed(), Tool::Line, 5);
     let p = s.pos(10, 10);
-    s.paso(vec![mover(p)]);
-    s.paso(vec![izquierdo(p, true)]);
+    s.step(vec![mover(p)]);
+    s.step(vec![left_2(p, true)]);
     assert!(s.tool.busy());
-    s.paso(vec![izquierdo(p, false)]);
+    s.step(vec![left_2(p, false)]);
     assert!(!s.tool.busy());
-    assert!(s.sin_cambios());
+    assert!(s.unchanged());
     s.tool.apply_action(ToolAction::Select(Tool::Fill));
     assert_eq!(s.tool.tool(), Tool::Fill);
 }
@@ -563,28 +553,28 @@ fn fila_21_una_ranura_sin_color_pulsar_y_soltar_sin_mover() {
 // Fila 17, segunda parte.
 
 #[test]
-fn fila_17_con_el_boton_abajo_30_fotogramas_el_relleno_no_se_repite() {
-    let mut s = Sesion::nueva(imagen_rgba(), Tool::Fill, 3);
+fn row_17_with_the_button_down_30_frames_the_fill_does_not_repeat() {
+    let mut s = Session::new(image_rgba(), Tool::Fill, 3);
     let p = s.pos(30, 20);
-    s.paso(vec![mover(p)]);
+    s.step(vec![mover(p)]);
     assert_eq!(
-        s.paso(vec![izquierdo(p, true)]),
+        s.step(vec![left_2(p, true)]),
         [begin(30, 20)],
         "Canvas emite solo Begin"
     );
-    for fotograma in 0..30 {
-        assert_eq!(s.paso(vec![]), NADA, "fotograma {fotograma} sin eventos");
+    for frame in 0..30 {
+        assert_eq!(s.step(vec![]), NOTHING, "fotograma {frame} sin eventos");
     }
-    assert_eq!(s.eventos, [begin(30, 20)], "Canvas solo emitió Begin");
-    assert_eq!(s.resultados, [true], "un solo Ok(true)");
+    assert_eq!(s.events_2, [begin(30, 20)], "Canvas solo emitió Begin");
+    assert_eq!(s.results, [true], "un solo Ok(true)");
     assert!(s.tool.busy(), "ocupado hasta soltar");
     // El relleno ya está hecho (todo el lienzo, que era uniforme).
-    assert_eq!(s.cambiados().len(), (ANCHO * ALTO) as usize);
+    assert_eq!(s.changed().len(), (WIDTH * HEIGHT) as usize);
 
     // Soltar no rellena otra vez.
-    s.paso(vec![izquierdo(p, false)]);
+    s.step(vec![left_2(p, false)]);
     assert!(!s.tool.busy());
-    assert_eq!(s.verdaderos(), 1, "ningún relleno más");
+    assert_eq!(s.true_value(), 1, "ningún relleno más");
     assert_eq!(s.doc.undo(), Ok(()));
-    assert!(s.sin_cambios(), "un solo paso");
+    assert!(s.unchanged(), "un solo paso");
 }

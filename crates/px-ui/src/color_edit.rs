@@ -48,7 +48,7 @@ impl EditTarget {
             EditTarget::Slot(n) => slots.get(n),
         }
     }
-    /// Cabecera del editor: `editar índice 12`, `editar color 3`, `editar color 4 gris`.
+    /// Cabecera del editor: `edit índice 12`, `edit color 3`, `edit color 4 gray_2`.
     pub fn header(self, mode: Mode) -> String {
         match self {
             EditTarget::Entry(i) => format!("editar índice {i}"),
@@ -251,7 +251,7 @@ pub fn hex_text(color: Rgba) -> String {
     color.to_string()
 }
 
-/// Motivo del aviso (sin el prefijo `aviso: `), de 25 caracteres como mucho.
+/// Motivo del aviso (sin el prefijo `notice: `), de 25 caracteres como mucho.
 pub fn hex_notice(error: &HexError) -> &'static str {
     match error {
         HexError::Empty => "escribe un color",
@@ -522,7 +522,7 @@ impl ColorEditor {
         self.pending = None;
     }
 
-    /// Las dos líneas del aviso, con el prefijo `aviso: ` ya puesto (vacías si no hay aviso).
+    /// Las dos líneas del aviso, con el prefijo `notice: ` ya puesto (vacías si no hay aviso).
     /// El del hexadecimal inválido tapa el de la entrada transparente.
     pub fn notice(&self, transparent: bool) -> [String; 2] {
         if let Some(error) = self

@@ -28,7 +28,7 @@ pub const REASON_Y_U: i64 = 5;
 pub const BUTTONS_Y_U: i64 = 21;
 /// Ancho de un botón: 8 caracteres de 7 u y 6 u de margen a cada lado.
 pub const BUTTON_W_U: i64 = 68;
-/// Hueco entre `Aceptar` y `Cancelar`.
+/// Hueco entre `Accept` y `Cancel`.
 pub const BUTTON_GAP_U: i64 = 4;
 /// Alto del campo numérico y del hexadecimal.
 pub const FIELD_H_U: i64 = 18;
@@ -66,7 +66,7 @@ pub struct DialogLayout {
 
 /// Coloca el diálogo, centrado, en una ventana de `window_px` píxeles físicos. `content_h_u` es el
 /// alto del contenido del cuerpo (`Dialog::content_h_u`); con `fill`, el natural. El ancho es
-/// `min(330, ancho de la ventana en u − 16)` y el alto `min(65 + contenido, alto en u − 16)`: cabe
+/// `min(330, width_2 de la window en u − 16)` y el alto `min(65 + content, height_2 en u − 16)`: cabe
 /// siempre y, si el contenido no cabe, se desplaza solo el cuerpo.
 pub fn dialog_layout(
     window_px: (i64, i64),
