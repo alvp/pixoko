@@ -19,6 +19,7 @@
 //! - Lo esperado sale de un modelo ingenuo (rejilla de píxeles y paleta), nunca de `Image`,
 //!   `Session` ni `px-raster`.
 
+mod capas;
 mod comun;
 mod filas;
 mod grande;
