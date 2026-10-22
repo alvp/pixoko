@@ -17,7 +17,7 @@ use proptest::collection::vec;
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use px_core::{Command, Document, Image, ImageId, Mode, Palette, Pixel, Rgba};
-use px_ui::color::{ColorChoice, clamp_choice, info_flags, info_flags_range};
+use px_ui::color::{ColorChoice, clamp_choice, info_flags_alpha0};
 use px_ui::color_edit::{ColorEditor, EditTarget, StaleReason, stale_notice};
 use px_ui::edit_layout::PaletteButton;
 use px_ui::palette_grid::{
@@ -1670,25 +1670,31 @@ fn fila_10_discard_pending_no_da_commit_despues() {
 
 #[test]
 fn fila_11_info_flags_range_de_la_spec() {
-    assert_eq!(info_flags_range(false, false, true, false), "rango");
-    assert_eq!(info_flags_range(true, false, true, false), "cursor · rango");
+    assert_eq!(info_flags_alpha0(false, false, true, false, false), "rango");
     assert_eq!(
-        info_flags_range(true, false, true, true),
+        info_flags_alpha0(true, false, true, false, false),
+        "cursor · rango"
+    );
+    assert_eq!(
+        info_flags_alpha0(true, false, true, true, false),
         "cursor · rango · transparente"
     );
     assert_eq!(
-        info_flags_range(true, true, false, true),
+        info_flags_alpha0(true, true, false, true, false),
         "cursor · activa · transparente"
     );
-    assert_eq!(info_flags_range(false, false, false, false), "");
+    assert_eq!(info_flags_alpha0(false, false, false, false, false), "");
 }
 
 #[test]
 fn fila_11_la_bandera_rango_no_sale_en_la_activa() {
-    assert_eq!(info_flags_range(false, true, true, false), "activa");
-    assert_eq!(info_flags_range(true, true, true, false), "cursor · activa");
+    assert_eq!(info_flags_alpha0(false, true, true, false, false), "activa");
     assert_eq!(
-        info_flags_range(true, true, true, true),
+        info_flags_alpha0(true, true, true, false, false),
+        "cursor · activa"
+    );
+    assert_eq!(
+        info_flags_alpha0(true, true, true, true, false),
         "cursor · activa · transparente"
     );
 }
@@ -1711,16 +1717,8 @@ fn fila_11_info_flags_range_coincide_con_un_modelo_en_las_16_combinaciones() {
         if transparente {
             esperado.push("transparente");
         }
-        let obtenido = info_flags_range(cursor, activa, rango, transparente);
+        let obtenido = info_flags_alpha0(cursor, activa, rango, transparente, false);
         assert_eq!(obtenido, esperado.join(" · "), "bits {bits:04b}");
-        // `info_flags` es el caso sin rango.
-        if !rango {
-            assert_eq!(obtenido, info_flags(cursor, activa, transparente));
-        }
-        assert_eq!(
-            info_flags(cursor, activa, transparente),
-            info_flags_range(cursor, activa, false, transparente)
-        );
         assert!(caracteres(&obtenido) <= 30, "la más larga son 30 columnas");
         assert!(en_el_juego(&obtenido));
     }
@@ -1910,11 +1908,12 @@ fn fila_12_las_lineas_del_editor_y_del_panel_caben_en_32_columnas() {
         }
     }
     for bits in 0..16u8 {
-        lineas.push(info_flags_range(
+        lineas.push(info_flags_alpha0(
             bits & 1 != 0,
             bits & 2 != 0,
             bits & 4 != 0,
             bits & 8 != 0,
+            false,
         ));
     }
     let mas_larga = lineas.iter().map(|linea| caracteres(linea)).max().unwrap();

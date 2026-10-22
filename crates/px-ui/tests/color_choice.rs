@@ -17,8 +17,8 @@ use proptest::prelude::*;
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use px_ui::color::{
     ColorChoice, SLOTS, cell_color, cell_count, cell_label, cell_of_choice, choice_for_cell,
-    choice_label, info_flags, initial_choice, is_transparent_cell, key_choice, pixel_for_choice,
-    pixel_for_slot,
+    choice_label, info_flags_alpha0, initial_choice, is_transparent_cell, key_choice,
+    pixel_for_choice, pixel_for_slot,
 };
 
 fn imagen(mode: Mode) -> Image {
@@ -462,14 +462,16 @@ fn fila_9_info_flags_en_las_ocho_combinaciones() {
     ];
     for (hover, activa, transparente, esperado) in casos {
         assert_eq!(
-            info_flags(hover, activa, transparente),
+            info_flags_alpha0(hover, activa, false, transparente, false),
             esperado,
             "hover {hover}, activa {activa}, transparente {transparente}"
         );
     }
     // El más largo, de 30 caracteres (fila 12).
     assert_eq!(
-        info_flags(true, true, true).chars().count(),
+        info_flags_alpha0(true, true, false, true, false)
+            .chars()
+            .count(),
         30,
         "cursor · activa · transparente"
     );

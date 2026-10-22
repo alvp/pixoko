@@ -255,9 +255,7 @@ proptest! {
 
 mod alfa_0 {
     use super::*;
-    use px_ui::color::{
-        SlotColors, info_flags, info_flags_alpha0, info_flags_range, is_alpha0_cell_with,
-    };
+    use px_ui::color::{SlotColors, info_flags_alpha0, is_alpha0_cell_with};
     use px_ui::text::INTERFACE_CHARSET;
 
     /// Oráculo propio: las banderas que apliquen, en orden, unidas con ` · `.
@@ -377,26 +375,16 @@ mod alfa_0 {
     }
 
     #[test]
-    fn info_flags_e_info_flags_range_no_cambian_y_coinciden_sin_alfa_0() {
-        for (h, a, r, t, _) in combinaciones() {
-            assert_eq!(
-                info_flags_alpha0(h, a, r, t, false),
-                info_flags_range(h, a, r, t)
-            );
-            assert_eq!(
-                info_flags_alpha0(h, a, false, t, false),
-                info_flags(h, a, t)
-            );
-        }
+    fn info_flags_alpha0_sin_alfa_0_da_los_textos_de_siempre() {
         assert_eq!(
-            info_flags(true, true, true),
+            info_flags_alpha0(true, true, false, true, false),
             "cursor · activa · transparente"
         );
         assert_eq!(
-            info_flags_range(true, false, true, true),
+            info_flags_alpha0(true, false, true, true, false),
             "cursor · rango · transparente"
         );
-        assert_eq!(info_flags(false, false, false), "");
+        assert_eq!(info_flags_alpha0(false, false, false, false, false), "");
     }
 
     #[test]

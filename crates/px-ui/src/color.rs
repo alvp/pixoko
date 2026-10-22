@@ -173,42 +173,11 @@ pub fn cell_label(image: &Image, cell: usize) -> Option<String> {
     cell_label_with(image, cell, &SlotColors::defaults(image.mode()))
 }
 
-/// Línea 2 del panel: `cursor`, `activa` y `transparente` (las que apliquen, en ese orden,
-/// unidas con ` · `). Puede ser vacía.
-pub fn info_flags(hover: bool, active: bool, transparent: bool) -> String {
-    let flags = [
-        (hover, "cursor"),
-        (active, "activa"),
-        (transparent, "transparente"),
-    ];
-    let shown: Vec<&str> = flags
-        .iter()
-        .filter(|(on, _)| *on)
-        .map(|(_, name)| *name)
-        .collect();
-    shown.join(" · ")
-}
-
-/// Como [`info_flags`] con la bandera `rango` (la muestra está en el rango de rotación y no es
-/// la activa), entre `activa` y `transparente`.
-pub fn info_flags_range(hover: bool, active: bool, in_range: bool, transparent: bool) -> String {
-    let flags = [
-        (hover, "cursor"),
-        (active, "activa"),
-        (in_range && !active, "rango"),
-        (transparent, "transparente"),
-    ];
-    let shown: Vec<&str> = flags
-        .iter()
-        .filter(|(on, _)| *on)
-        .map(|(_, name)| *name)
-        .collect();
-    shown.join(" · ")
-}
-
-/// Como [`info_flags_range`] con la bandera `alfa 0` (entrada indexada con alfa guardado 0 que no
-/// es el índice transparente), al final. `transparente` y `alfa 0` son excluyentes: si se piden
-/// las dos, gana `transparente` (specs/hito-2-fijar-transparente.md).
+/// Línea 2 del panel: `cursor`, `activa`, `rango` (la muestra está en el rango de rotación y no
+/// es la activa), `transparente` y `alfa 0` (entrada indexada con alfa guardado 0 que no es el
+/// índice transparente), las que apliquen y en ese orden, unidas con ` · `. Puede ser vacía.
+/// `transparente` y `alfa 0` son excluyentes: si se piden las dos, gana `transparente`
+/// (specs/hito-2-fijar-transparente.md).
 pub fn info_flags_alpha0(
     hover: bool,
     active: bool,

@@ -24,7 +24,7 @@ use egui::{
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo, CanvasInput};
 use px_ui::color::{
-    ColorChoice, cell_count, cell_label, choice_for_cell, info_flags, initial_choice,
+    ColorChoice, cell_count, cell_label, choice_for_cell, info_flags_alpha0, initial_choice,
 };
 use px_ui::palette_grid::{
     self, CELL_U, COLUMNS, GAP_U, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, Scroll,
@@ -618,7 +618,13 @@ fn textos_del_panel() -> Vec<String> {
         }
     }
     for bits in 0..8 {
-        textos.push(info_flags(bits & 1 != 0, bits & 2 != 0, bits & 4 != 0));
+        textos.push(info_flags_alpha0(
+            bits & 1 != 0,
+            bits & 2 != 0,
+            false,
+            bits & 4 != 0,
+            false,
+        ));
     }
     textos
 }
@@ -636,10 +642,15 @@ fn fila_12_los_textos_mas_largos_miden_20_y_30_caracteres() {
         "el más largo de cell_label"
     );
     assert_eq!(
-        info_flags(true, true, true),
+        info_flags_alpha0(true, true, false, true, false),
         "cursor · activa · transparente"
     );
-    assert_eq!(info_flags(true, true, true).chars().count(), 30);
+    assert_eq!(
+        info_flags_alpha0(true, true, false, true, false)
+            .chars()
+            .count(),
+        30
+    );
     let mas_largo = textos_del_panel()
         .iter()
         .map(|t| t.chars().count())
