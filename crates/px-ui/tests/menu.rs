@@ -89,6 +89,7 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
                 ("Abrir…", AppAction::Open),
                 ("Guardar", AppAction::Save),
                 ("Guardar como…", AppAction::SaveAs),
+                ("Exportar PNG aplanado…", AppAction::ExportFlat),
                 ("Salir", AppAction::Quit),
             ],
         ),
@@ -109,6 +110,9 @@ fn fila_1_cada_menu_tiene_los_rotulos_y_las_acciones_de_la_decision_2() {
                 ("Quitar", AppAction::RemoveLayer),
                 ("Subir", AppAction::LayerUp),
                 ("Bajar", AppAction::LayerDown),
+                ("Combinar abajo", AppAction::MergeLayerDown),
+                ("Combinar visibles", AppAction::MergeVisibleLayers),
+                ("Aplanar", AppAction::FlattenLayers),
                 ("Renombrar", AppAction::RenameLayer),
                 ("Propiedades", AppAction::LayerProperties),
                 ("Mostrar panel", AppAction::ToggleLayerPanel),
@@ -159,9 +163,9 @@ fn fila_1_el_separador_va_solo_antes_de_salir() {
 }
 
 #[test]
-fn fila_1_hay_dieciseis_entradas_y_ninguna_accion_se_repite() {
+fn fila_1_hay_veintiocho_entradas_y_ninguna_accion_se_repite() {
     let acciones: Vec<AppAction> = entradas().iter().map(|i| i.action).collect();
-    assert_eq!(acciones.len(), 24);
+    assert_eq!(acciones.len(), 28);
     for (i, a) in acciones.iter().enumerate() {
         assert!(
             !acciones[i + 1..].contains(a),
@@ -171,7 +175,10 @@ fn fila_1_hay_dieciseis_entradas_y_ninguna_accion_se_repite() {
     // `Nueva imagen…` (unidad 19) es la primera y `Convertir modo…` (unidad 20) va tras
     // `Rehacer`; las otras 11 siguen siendo las de la 17.
     let mut esperado = vec![AppAction::NewImage];
-    esperado.extend(&ACCIONES_DE_LA_TABLA[..6]);
+    // `Exportar PNG aplanado…` (3.5) va tras `Guardar como…`, antes de `Salir`.
+    esperado.extend(&ACCIONES_DE_LA_TABLA[..3]);
+    esperado.push(AppAction::ExportFlat);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[3..6]);
     // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
     esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
@@ -181,6 +188,9 @@ fn fila_1_hay_dieciseis_entradas_y_ninguna_accion_se_repite() {
         AppAction::RemoveLayer,
         AppAction::LayerUp,
         AppAction::LayerDown,
+        AppAction::MergeLayerDown,
+        AppAction::MergeVisibleLayers,
+        AppAction::FlattenLayers,
         AppAction::RenameLayer,
         AppAction::LayerProperties,
         AppAction::ToggleLayerPanel,
@@ -215,7 +225,7 @@ fn textos_de_atajo(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn algunos(textos: [Option<&str>; 24]) -> Vec<Option<String>> {
+fn algunos(textos: [Option<&str>; 28]) -> Vec<Option<String>> {
     textos.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -228,6 +238,7 @@ fn fila_1_atajos_en_linux() {
             Some("Ctrl+O"),
             Some("Ctrl+S"),
             Some("Ctrl+Mayús+S"),
+            None,
             Some("Ctrl+Q"),
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
@@ -238,6 +249,9 @@ fn fila_1_atajos_en_linux() {
             None,
             Some(")"),
             Some("("),
+            None,
+            None,
+            None,
             None,
             None,
             Some("'"),
@@ -262,6 +276,7 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             Some("Ctrl+S"),
             Some("Ctrl+Mayús+S"),
             None,
+            None,
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             Some("K"),
@@ -271,6 +286,9 @@ fn fila_1_atajos_en_windows_son_los_de_linux_salvo_salir_que_no_tiene() {
             None,
             Some(")"),
             Some("("),
+            None,
+            None,
+            None,
             None,
             None,
             Some("'"),
@@ -296,6 +314,7 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             Some("Cmd+S"),
             Some("Cmd+Mayús+S"),
             None,
+            None,
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
             Some("K"),
@@ -305,6 +324,9 @@ fn fila_1_atajos_en_mac_usan_cmd_rehacer_es_cmd_mayus_z_y_salir_no_tiene() {
             None,
             Some(")"),
             Some("("),
+            None,
+            None,
+            None,
             None,
             None,
             Some("'"),

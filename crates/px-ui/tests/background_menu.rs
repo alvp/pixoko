@@ -206,7 +206,10 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
     // `Nueva imagen…` (unidad 19) es la primera y `Convertir modo…` (unidad 20) va tras
     // `Rehacer`; las otras 11 son las de la 17, sin cambios.
     let mut esperado = vec![AppAction::NewImage];
-    esperado.extend(&ACCIONES_DE_LA_TABLA[..6]);
+    // `Exportar PNG aplanado…` (3.5) va tras `Guardar como…`, antes de `Salir`.
+    esperado.extend(&ACCIONES_DE_LA_TABLA[..3]);
+    esperado.push(AppAction::ExportFlat);
+    esperado.extend(&ACCIONES_DE_LA_TABLA[3..6]);
     // `Borrar página` (I.2a) cierra `Editar`, antes de `Imagen`.
     esperado.push(AppAction::ClearPage);
     esperado.push(AppAction::ConvertMode);
@@ -216,6 +219,9 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
         AppAction::RemoveLayer,
         AppAction::LayerUp,
         AppAction::LayerDown,
+        AppAction::MergeLayerDown,
+        AppAction::MergeVisibleLayers,
+        AppAction::FlattenLayers,
         AppAction::RenameLayer,
         AppAction::LayerProperties,
         AppAction::ToggleLayerPanel,

@@ -108,7 +108,7 @@ fn fila_3_las_cuatro_teclas_dan_sus_acciones_y_la_tabla_no_tiene_conflictos() {
 
 #[test]
 fn fila_3_las_ocho_acciones_tienen_clave_texto_valido_y_son_editables() {
-    assert_eq!(help_table().len(), 30);
+    assert_eq!(help_table().len(), 33);
     for (accion, clave) in ACCIONES {
         assert_eq!(help_key(accion), Some(clave));
         assert_eq!(action_of_key(clave), Some(accion));

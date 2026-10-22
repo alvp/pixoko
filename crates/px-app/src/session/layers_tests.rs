@@ -4,7 +4,7 @@
 //!
 //! Contrato de API que estas pruebas fijan (la lógica debe ofrecerlo):
 //! - `Session`: `active_layer`, `active_cel`, `set_active_layer`, `apply_layer`, `paint_refusal`,
-//!   `convert_refusal`, `layers_info`, `removal_needs_destination`, `begin_removal_for`,
+//!   `convert_all`, `layers_info`, `removal_needs_destination`, `begin_removal_for`,
 //!   `mark_unmodified`; `ClearPageError::HiddenLayer`; `with_flatten_notice`.
 //! - `crate::save_wait` (`SAVING_NOTICE`, `SAVE_SYNC_PIXELS`, `compose_pixels`, `start_save`,
 //!   `StartSave`, `PendingSave::tick`).
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use proptest::prelude::*;
-use px_core::{ImageId, LayerId, Palette, PixelEdit, Rgba};
+use px_core::{Allowed, ImageId, LayerId, Mode, Palette, PixelEdit, Rgba};
 use px_formats::read_png;
 use px_ui::canvas::CanvasEvent;
 use px_ui::dirty::BlockSet;
@@ -503,16 +503,19 @@ fn fila_10_quitar_una_entrada_que_nadie_usa_la_quita_en_seco() {
 }
 
 #[test]
-fn fila_10_convertir_el_modo_con_varias_capas_se_rechaza_con_un_aviso_claro() {
+fn fila_10_convertir_el_modo_con_varias_capas_ya_no_se_rechaza() {
+    // Antes (3.3) esta prueba afirmaba que con dos capas `convert_refusal()` daba el aviso «no se
+    // puede convertir el modo con varias capas: deja una sola o espera a la unidad 3.5». Desde
+    // 3.5 existe `ConvertAll`: ya no hay rechazo ni aviso y la sesión convierte todas las capas.
     let mut sesion = sesion_rgba(4, 4);
-    assert_eq!(sesion.convert_refusal(), None);
     anade(&mut sesion, "B");
-    assert_eq!(
-        sesion.convert_refusal(),
-        Some(
-            "no se puede convertir el modo con varias capas: deja una sola o espera a la unidad 3.5"
-        )
-    );
+    let permitido = Allowed {
+        luma: true,
+        drop_alpha: None,
+    };
+    assert_eq!(sesion.convert_all(Mode::GrayAlpha, permitido), Ok(true));
+    assert_eq!(sesion.document.mode(), Mode::GrayAlpha);
+    assert_eq!(sesion.document.layers().len(), 2);
 }
 
 #[test]

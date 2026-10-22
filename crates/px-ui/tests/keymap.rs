@@ -1146,7 +1146,7 @@ fn fila_5_los_anchos_de_los_desplegables_no_cambian() {
             ("Editar", false) => 124,
             ("Editar", true) => 152,
             ("Imagen", _) => 131,
-            ("Capa", _) => 124,
+            ("Capa", _) => 145,
             ("Ver", _) => 208,
             ("Ayuda", _) => 201,
             otro => panic!("menú {otro:?}"),
