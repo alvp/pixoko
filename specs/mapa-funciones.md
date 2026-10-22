@@ -242,6 +242,8 @@ Todas las herramientas escriben en la capa activa (3.3) con un solo paso de desh
 
 De los modos de pintura, el hito 4 trae Matte, Color, Reemplazar, translucidez y Sombrear (D16); difuminar, mezclar, suavizar y mezcla viva pasan al 7.
 
+**Nota tras C1:** tras C1 la caja de herramientas aloja 3 filas (12 herramientas), no 4 (16), con el panel mínimo de 277 u. El hito 4 tiene unas veinte herramientas: decidir en su primera unidad de interfaz entre desplazamiento de la caja, dos columnas o iconos menores, y qué hace el recuadro de opciones de 138 u.
+
 **Puerta del hito:** dorados contra referencias en verde y la prueba manual del usuario; el cierre fija la decisión D29 (revisión de la pantalla).
 
 | Unidad | Clase | Contenido · crates | Puerta de salida | Decisiones | Riesgo técnico |
