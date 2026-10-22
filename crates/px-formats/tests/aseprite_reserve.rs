@@ -37,67 +37,67 @@ use writer::*;
 const MIB: u64 = 1 << 20;
 
 /// Valor en bytes de un campo de `/proc/self/status` (`VmHWM`, `VmRSS`; vienen en kB).
-fn campo(nombre: &str) -> u64 {
+fn field(name_2: &str) -> u64 {
     let status =
         fs::read_to_string("/proc/self/status").expect("no se pudo leer /proc/self/status");
-    let linea = status
+    let line = status
         .lines()
-        .find_map(|l| l.strip_prefix(nombre)?.strip_prefix(':'))
-        .unwrap_or_else(|| panic!("falta {nombre} en /proc/self/status"));
-    let kb: u64 = linea
+        .find_map(|l| l.strip_prefix(name_2)?.strip_prefix(':'))
+        .unwrap_or_else(|| panic!("falta {name_2} en /proc/self/status"));
+    let kb: u64 = line
         .split_whitespace()
         .next()
         .and_then(|n| n.parse().ok())
-        .unwrap_or_else(|| panic!("{nombre} ilegible: {linea:?}"));
+        .unwrap_or_else(|| panic!("{name_2} ilegible: {line:?}"));
     kb * 1024
 }
 
 /// Reinicia el máximo de RSS del proceso. Algunos contenedores no dejan escribir en
 /// `/proc/self/clear_refs`.
-fn reinicia_pico() -> std::io::Result<()> {
+fn resets_peak() -> std::io::Result<()> {
     fs::write("/proc/self/clear_refs", "5")
 }
 
 /// Ejecuta `f` y devuelve su resultado y cuánto subió el pico de RSS del proceso (en bytes) por
 /// encima del RSS de antes de empezar.
-fn mide<T>(f: impl FnOnce() -> T) -> (T, u64) {
-    reinicia_pico().expect("no se pudo reiniciar el máximo de RSS (/proc/self/clear_refs)");
-    let antes = campo("VmRSS");
-    let resultado = f();
-    let pico = campo("VmHWM");
-    (resultado, pico.saturating_sub(antes))
+fn measures<T>(f: impl FnOnce() -> T) -> (T, u64) {
+    resets_peak().expect("no se pudo reiniciar el máximo de RSS (/proc/self/clear_refs)");
+    let antes = field("VmRSS");
+    let result = f();
+    let peak = field("VmHWM");
+    (result, peak.saturating_sub(antes))
 }
 
-/// Un lienzo de 8 × 8 con una capa y una celda que declara `ancho × alto` píxeles RGBA, con un
+/// Un lienzo de 8 × 8 con una capa y una celda que declara `width × height` píxeles RGBA, con un
 /// flujo zlib mínimo de un byte (unos 9 bytes).
-fn celda_falsa(ancho: u16, alto: u16) -> Vec<u8> {
-    let celda = Celda {
-        ancho,
-        alto,
-        comprimido: Some(zlib(&[0])),
-        ..Celda::nueva(0, 0, 0, 1, 1, vec![0])
+fn cel_false(width: u16, height: u16) -> Vec<u8> {
+    let cel = Cel {
+        width,
+        height,
+        compressed: Some(zlib(&[0])),
+        ..Cel::new(0, 0, 0, 1, 1, vec![0])
     };
-    Fichero::rgba(
+    File::rgba(
         8,
         8,
-        vec![perfil_srgb(), Capa::nueva("a").chunk(), celda.chunk()],
+        vec![profile_srgb(), TestLayer::new("a").chunk(), cel.chunk()],
     )
     .bytes()
 }
 
-/// Un lienzo de 8 × 8 con una capa y una celda que declara `ancho × alto` píxeles RGBA con el flujo
-/// zlib `flujo` (que puede ser válido y descomprimirse a mucho más de lo que cabría en el fichero).
-fn celda_con_flujo(ancho: u16, alto: u16, flujo: Vec<u8>) -> Vec<u8> {
-    let celda = Celda {
-        ancho,
-        alto,
-        comprimido: Some(flujo),
-        ..Celda::nueva(0, 0, 0, 1, 1, vec![0])
+/// Un lienzo de 8 × 8 con una capa y una celda que declara `width × height` píxeles RGBA con el flujo
+/// zlib `flow` (que puede ser válido y descomprimirse a mucho más de lo que cabría en el fichero).
+fn cel_with_flow(width: u16, height: u16, flow: Vec<u8>) -> Vec<u8> {
+    let cel = Cel {
+        width,
+        height,
+        compressed: Some(flow),
+        ..Cel::new(0, 0, 0, 1, 1, vec![0])
     };
-    Fichero::rgba(
+    File::rgba(
         8,
         8,
-        vec![perfil_srgb(), Capa::nueva("a").chunk(), celda.chunk()],
+        vec![profile_srgb(), TestLayer::new("a").chunk(), cel.chunk()],
     )
     .bytes()
 }
@@ -107,10 +107,10 @@ fn es_cel_data(r: &Result<px_formats::AsepriteRead, AsepriteError>) -> bool {
 }
 
 #[test]
-fn fila_09_bombas_se_rechazan_antes_de_reservar_y_el_control_mide() {
+fn row_09_bombs_are_rejected_before_reserving_and_the_control_measures() {
     // Sin poder reiniciar el pico no hay instrumento: se salta, salvo en el CI (variable `CI`
     // definida), donde un fallo aquí es una regresión del entorno y debe verse.
-    if let Err(e) = reinicia_pico() {
+    if let Err(e) = resets_peak() {
         assert!(
             std::env::var_os("CI").is_none(),
             "no se pudo escribir /proc/self/clear_refs en el CI: {e}"
@@ -121,94 +121,94 @@ fn fila_09_bombas_se_rechazan_antes_de_reservar_y_el_control_mide() {
         );
         return;
     }
-    let limites = AsepriteLimits::default();
+    let limits = AsepriteLimits::default();
     // (nombre, fichero falso, ¿el error esperado?): celdas de 65 535², de 8192² y un lienzo de
     // 65 535² con la capa y nada más.
-    let lienzo_enorme = Fichero::rgba(65_535, 65_535, vec![Capa::nueva("a").chunk()]).bytes();
+    let canvas_huge = File::rgba(65_535, 65_535, vec![TestLayer::new("a").chunk()]).bytes();
     // Un flujo zlib válido de 128 MiB de ceros; el búfer se suelta antes de medir.
-    let flujo = zlib(&vec![0u8; (128 * MIB) as usize]);
+    let flow = zlib(&vec![0u8; (128 * MIB) as usize]);
     assert!(
-        flujo.len() as u64 * 1032 < 512 * MIB,
+        flow.len() as u64 * 1032 < 512 * MIB,
         "el flujo de ceros ({} bytes) debe quedar muy por debajo de 512 MiB / 1032",
-        flujo.len()
+        flow.len()
     );
-    let casos: [(&str, Vec<u8>, bool); 4] = [
+    let cases: [(&str, Vec<u8>, bool); 4] = [
         (
             "celda de 65535x65535 con 9 bytes de zlib",
-            celda_falsa(65_535, 65_535),
+            cel_false(65_535, 65_535),
             true,
         ),
         (
             "celda de 8192x8192 con 9 bytes de zlib",
-            celda_falsa(8192, 8192),
+            cel_false(8192, 8192),
             true,
         ),
-        ("lienzo de 65535x65535", lienzo_enorme, false),
+        ("lienzo de 65535x65535", canvas_huge, false),
         (
             "celda de 512 MiB declarada con un flujo válido de 128 MiB de ceros (razón > 1032)",
-            celda_con_flujo(8192, 16_384, flujo.clone()),
+            cel_with_flow(8192, 16_384, flow.clone()),
             true,
         ),
     ];
-    let mut fallos = Vec::new();
-    for (nombre, bytes, es_celda) in &casos {
-        let (r, subida) = mide(|| read_aseprite(bytes, &limites));
-        let bien = if *es_celda {
+    let mut failures = Vec::new();
+    for (name_2, bytes, is_cel) in &cases {
+        let (r, upload) = measures(|| read_aseprite(bytes, &limits));
+        let well = if *is_cel {
             es_cel_data(&r)
         } else {
             matches!(r, Err(AsepriteError::TooLarge { .. }))
         };
-        if !bien {
-            fallos.push(format!(
-                "{nombre}: error distinto del esperado: {:?}",
+        if !well {
+            failures.push(format!(
+                "{name_2}: error distinto del esperado: {:?}",
                 r.as_ref().err()
             ));
         }
         drop(r);
-        if subida >= 32 * MIB {
-            fallos.push(format!(
-                "{nombre}: el pico de RSS subió {} MiB (límite: menos de 32)",
-                subida / MIB
+        if upload >= 32 * MIB {
+            failures.push(format!(
+                "{name_2}: el pico de RSS subió {} MiB (límite: menos de 32)",
+                upload / MIB
             ));
         }
     }
 
     // Control: un indexado de 8192² (64 MiB de celda, rellena con el índice transparente 5, que
     // no es cero, así que se escribe de verdad) y una celda de un píxel.
-    let control = Fichero::indexado(
+    let control = File::indexed(
         8192,
         8192,
         5,
         8,
         vec![
-            perfil_srgb(),
-            paleta_completa(&[[0, 0, 0, 255]; 8]),
-            Capa::nueva("a").chunk(),
-            Celda::nueva(0, 0, 0, 1, 1, vec![0]).chunk(),
+            profile_srgb(),
+            palette_complete(&[[0, 0, 0, 255]; 8]),
+            TestLayer::new("a").chunk(),
+            Cel::new(0, 0, 0, 1, 1, vec![0]).chunk(),
         ],
     )
     .bytes();
-    let (r, subida) = mide(|| read_aseprite(&control, &limites));
+    let (r, upload) = measures(|| read_aseprite(&control, &limits));
     assert!(r.is_ok(), "el control debe ser Ok: {:?}", r.as_ref().err());
     assert!(
-        subida >= 48 * MIB,
+        upload >= 48 * MIB,
         "el instrumento no mide: el control subió solo {} MiB (se esperaban 48 o más)",
-        subida / MIB
+        upload / MIB
     );
     drop(r);
 
     // Control de la regla de 1032×: el mismo flujo en una celda que declara su tamaño real
     // (128 MiB, razón por debajo de 1032) se descomprime de verdad: es `Ok` (todo ceros, la celda
     // queda vacía) y el pico sube, lo que prueba que la descompresión se vería en la medida.
-    let real = celda_con_flujo(8192, 4096, flujo);
-    let (r, subida) = mide(|| read_aseprite(&real, &limites));
+    let real = cel_with_flow(8192, 4096, flow);
+    let (r, upload) = measures(|| read_aseprite(&real, &limits));
     assert!(r.is_ok(), "el control debe ser Ok: {:?}", r.as_ref().err());
     assert!(
-        subida >= 64 * MIB,
+        upload >= 64 * MIB,
         "el instrumento no ve la descompresión: el control subió solo {} MiB (se esperaban 64 o más)",
-        subida / MIB
+        upload / MIB
     );
     drop(r);
 
-    assert!(fallos.is_empty(), "{}", fallos.join("\n"));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

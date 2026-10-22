@@ -15,39 +15,39 @@ use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
-use super::max_ratio::{fichero, plte_negra, z};
+use super::max_ratio::{file, plte_black, z};
 
 // ---------------------------------------------------------------------------------------
 // Formas de comprimir y filtros.
 // ---------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Compresor {
+enum Compressor {
     /// Niveles 1 a 9 de miniz_oxide (por flate2).
-    Nivel(u8),
+    Level(u8),
     /// fdeflate.
     Fdeflate,
     /// Bloques sin comprimir.
-    Sin,
+    Without,
     /// `Z(needed)` hecho a mano (no pasa por el codificador; el filtro no cuenta).
     Z,
 }
 
-const COMPRESORES_PNG: [Compresor; 11] = [
-    Compresor::Nivel(1),
-    Compresor::Nivel(2),
-    Compresor::Nivel(3),
-    Compresor::Nivel(4),
-    Compresor::Nivel(5),
-    Compresor::Nivel(6),
-    Compresor::Nivel(7),
-    Compresor::Nivel(8),
-    Compresor::Nivel(9),
-    Compresor::Fdeflate,
-    Compresor::Sin,
+const COMPRESSORS_PNG: [Compressor; 11] = [
+    Compressor::Level(1),
+    Compressor::Level(2),
+    Compressor::Level(3),
+    Compressor::Level(4),
+    Compressor::Level(5),
+    Compressor::Level(6),
+    Compressor::Level(7),
+    Compressor::Level(8),
+    Compressor::Level(9),
+    Compressor::Fdeflate,
+    Compressor::Without,
 ];
 
-fn filtros() -> [png::Filter; 4] {
+fn filters() -> [png::Filter; 4] {
     [
         png::Filter::NoFilter,
         png::Filter::Sub,
@@ -56,12 +56,12 @@ fn filtros() -> [png::Filter; 4] {
     ]
 }
 
-fn compresion(c: Compresor) -> png::DeflateCompression {
+fn compression(c: Compressor) -> png::DeflateCompression {
     match c {
-        Compresor::Nivel(n) => png::DeflateCompression::Level(n),
-        Compresor::Fdeflate => png::DeflateCompression::FdeflateUltraFast,
-        Compresor::Sin => png::DeflateCompression::NoCompression,
-        Compresor::Z => unreachable!("Z no pasa por el codificador"),
+        Compressor::Level(n) => png::DeflateCompression::Level(n),
+        Compressor::Fdeflate => png::DeflateCompression::FdeflateUltraFast,
+        Compressor::Without => png::DeflateCompression::NoCompression,
+        Compressor::Z => unreachable!("Z no pasa por el codificador"),
     }
 }
 
@@ -70,38 +70,38 @@ fn compresion(c: Compresor) -> png::DeflateCompression {
 // ---------------------------------------------------------------------------------------
 
 /// Imagen ya empaquetada tal como la espera `Encoder::write_image_data`.
-struct Cruda {
-    ancho: u32,
-    alto: u32,
+struct Raw {
+    width: u32,
+    height: u32,
     color: png::ColorType,
     prof: png::BitDepth,
     /// Filas empaquetadas, una detrás de otra.
-    datos: Vec<u8>,
+    data: Vec<u8>,
     /// PLTE (RGB por entrada) si es indexada.
-    paleta: Option<Vec<u8>>,
+    palette: Option<Vec<u8>>,
     /// tRNS si lo lleva.
     trns: Option<Vec<u8>>,
 }
 
-fn codifica(img: &Cruda, comp: Compresor, filtro: png::Filter) -> Vec<u8> {
-    let mut salida = Vec::new();
+fn encodes(img: &Raw, comp: Compressor, filter: png::Filter) -> Vec<u8> {
+    let mut output = Vec::new();
     {
-        let mut enc = png::Encoder::new(&mut salida, img.ancho, img.alto);
+        let mut enc = png::Encoder::new(&mut output, img.width, img.height);
         enc.set_color(img.color);
         enc.set_depth(img.prof);
-        enc.set_deflate_compression(compresion(comp));
-        enc.set_filter(filtro);
-        if let Some(p) = &img.paleta {
+        enc.set_deflate_compression(compression(comp));
+        enc.set_filter(filter);
+        if let Some(p) = &img.palette {
             enc.set_palette(p.as_slice());
         }
         if let Some(t) = &img.trns {
             enc.set_trns(t.as_slice());
         }
         let mut w = enc.write_header().unwrap();
-        w.write_image_data(&img.datos).unwrap();
+        w.write_image_data(&img.data).unwrap();
         w.finish().unwrap();
     }
-    salida
+    output
 }
 
 // ---------------------------------------------------------------------------------------
@@ -109,30 +109,30 @@ fn codifica(img: &Cruda, comp: Compresor, filtro: png::Filter) -> Vec<u8> {
 // ---------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Forma {
-    Gris,
-    Indexado,
+enum Shape {
+    Gray,
+    TestIndexed,
     Rgba,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Contenido {
+enum Content {
     UnColor,
-    Patrones,
+    Patterns,
 }
 
 /// Lado de la imagen: 1024² en RGBA y 2048² con un byte por píxel (4 MiB de datos sin
 /// comprimir). Con menos, la razón de los niveles 6 a 9 de miniz_oxide se queda por debajo de 500
 /// (medido: 1 MiB da ≈ 350; 4 MiB da 500 a 660).
-fn lado(forma: Forma) -> u32 {
-    match forma {
-        Forma::Rgba => 1024,
-        Forma::Gris | Forma::Indexado => 2048,
+fn side(shape: Shape) -> u32 {
+    match shape {
+        Shape::Rgba => 1024,
+        Shape::Gray | Shape::TestIndexed => 2048,
     }
 }
 
 /// Paleta de 16 entradas, algunas con alfa no trivial, para el indexado.
-fn paleta16() -> Vec<Rgba> {
+fn palette_16() -> Vec<Rgba> {
     (0..16u8)
         .map(|i| {
             Rgba::new(
@@ -146,158 +146,158 @@ fn paleta16() -> Vec<Rgba> {
 }
 
 /// Valor del píxel (x, y) como 4 bytes RGBA con alfa no trivial, o su índice / gris.
-fn patron(contenido: Contenido, x: usize, y: usize) -> usize {
-    match contenido {
-        Contenido::UnColor => 5,
+fn patron(content: Content, x: usize, y: usize) -> usize {
+    match content {
+        Content::UnColor => 5,
         // Franjas verticales de 16 y horizontales de 64 combinadas con bloques de 8×8 que se
         // repiten cada 128 píxeles.
-        Contenido::Patrones => {
+        Content::Patterns => {
             (x / 16 + (y / 64) * 3 + usize::from((x % 128 < 8) && (y % 128 < 8)) * 7) % 16
         }
     }
 }
 
 /// Imagen cruda y la `Image` que `read_png` debe devolver, para esa forma y ese contenido.
-fn construye(forma: Forma, contenido: Contenido) -> (Cruda, Image) {
-    let n = lado(forma);
+fn builds(shape: Shape, content: Content) -> (Raw, Image) {
+    let n = side(shape);
     let (w, h) = (n as usize, n as usize);
-    let colores = paleta16();
-    match forma {
-        Forma::Gris => {
-            let datos: Vec<u8> = (0..w * h)
-                .map(|i| (patron(contenido, i % w, i / w) * 16 + 9) as u8)
+    let colors = palette_16();
+    match shape {
+        Shape::Gray => {
+            let data: Vec<u8> = (0..w * h)
+                .map(|i| (patron(content, i % w, i / w) * 16 + 9) as u8)
                 .collect();
-            let esperada = Image::from_bytes(n, n, Mode::Gray, datos.clone()).unwrap();
-            let cruda = Cruda {
-                ancho: n,
-                alto: n,
+            let expected = Image::from_bytes(n, n, Mode::Gray, data.clone()).unwrap();
+            let raw = Raw {
+                width: n,
+                height: n,
                 color: png::ColorType::Grayscale,
                 prof: png::BitDepth::Eight,
-                datos,
-                paleta: None,
+                data,
+                palette: None,
                 trns: None,
             };
-            (cruda, esperada)
+            (raw, expected)
         }
-        Forma::Indexado => {
-            let datos: Vec<u8> = (0..w * h)
-                .map(|i| patron(contenido, i % w, i / w) as u8)
+        Shape::TestIndexed => {
+            let data: Vec<u8> = (0..w * h)
+                .map(|i| patron(content, i % w, i / w) as u8)
                 .collect();
-            let paleta = Palette::from_colors(colores.iter().copied()).unwrap();
-            let esperada = Image::from_bytes_indexed(n, n, paleta, datos.clone()).unwrap();
-            let rgb: Vec<u8> = colores.iter().flat_map(|c| [c.r, c.g, c.b]).collect();
+            let palette = Palette::from_colors(colors.iter().copied()).unwrap();
+            let expected = Image::from_bytes_indexed(n, n, palette, data.clone()).unwrap();
+            let rgb: Vec<u8> = colors.iter().flat_map(|c| [c.r, c.g, c.b]).collect();
             // tRNS: los alfas de las entradas hasta la última no opaca.
-            let ultimo = colores.iter().rposition(|c| c.a != 255).unwrap();
-            let trns: Vec<u8> = colores[..=ultimo].iter().map(|c| c.a).collect();
-            let cruda = Cruda {
-                ancho: n,
-                alto: n,
+            let ultimo = colors.iter().rposition(|c| c.a != 255).unwrap();
+            let trns: Vec<u8> = colors[..=ultimo].iter().map(|c| c.a).collect();
+            let raw = Raw {
+                width: n,
+                height: n,
                 color: png::ColorType::Indexed,
                 prof: png::BitDepth::Eight,
-                datos,
-                paleta: Some(rgb),
+                data,
+                palette: Some(rgb),
                 trns: Some(trns),
             };
-            (cruda, esperada)
+            (raw, expected)
         }
-        Forma::Rgba => {
-            let mut datos = Vec::with_capacity(w * h * 4);
+        Shape::Rgba => {
+            let mut data = Vec::with_capacity(w * h * 4);
             for i in 0..w * h {
-                let c = colores[patron(contenido, i % w, i / w)];
+                let c = colors[patron(content, i % w, i / w)];
                 // Alfa no trivial: la de la paleta si no es opaca y, si lo es, 200.
                 let a = if c.a == 255 { 200 } else { c.a };
-                datos.extend([c.r, c.g, c.b, a]);
+                data.extend([c.r, c.g, c.b, a]);
             }
-            let esperada = Image::from_bytes(n, n, Mode::Rgba, datos.clone()).unwrap();
-            let cruda = Cruda {
-                ancho: n,
-                alto: n,
+            let expected = Image::from_bytes(n, n, Mode::Rgba, data.clone()).unwrap();
+            let raw = Raw {
+                width: n,
+                height: n,
                 color: png::ColorType::Rgba,
                 prof: png::BitDepth::Eight,
-                datos,
-                paleta: None,
+                data,
+                palette: None,
                 trns: None,
             };
-            (cruda, esperada)
+            (raw, expected)
         }
     }
 }
 
 /// Una combinación a probar: (forma, contenido, compresor, filtro).
-type Combinacion = (Forma, Contenido, Compresor, png::Filter);
+type Combination = (Shape, Content, Compressor, png::Filter);
 
 /// Ejecuta las combinaciones repartidas en hilos (el perfil de test no optimiza) y hace pánico
 /// con la combinación que falle.
-fn en_paralelo(trabajos: &[Combinacion]) {
-    let siguiente = AtomicUsize::new(0);
-    let hilos = thread::available_parallelism()
+fn in_parallel(jobs: &[Combination]) {
+    let next = AtomicUsize::new(0);
+    let threads = thread::available_parallelism()
         .map_or(4, |n| n.get())
         .min(8);
     thread::scope(|s| {
-        let manejadores: Vec<_> = (0..hilos)
+        let handlers: Vec<_> = (0..threads)
             .map(|_| {
                 s.spawn(|| {
                     // Cada hilo conserva la última imagen construida para no regenerarla.
-                    let mut cache: Option<((Forma, Contenido), Cruda, Image)> = None;
+                    let mut cache: Option<((Shape, Content), Raw, Image)> = None;
                     loop {
-                        let i = siguiente.fetch_add(1, Ordering::SeqCst);
-                        let Some(&(forma, contenido, comp, filtro)) = trabajos.get(i) else {
+                        let i = next.fetch_add(1, Ordering::SeqCst);
+                        let Some(&(shape, content, comp, filter)) = jobs.get(i) else {
                             break;
                         };
-                        if cache.as_ref().map(|c| c.0) != Some((forma, contenido)) {
-                            let (c, e) = construye(forma, contenido);
-                            cache = Some(((forma, contenido), c, e));
+                        if cache.as_ref().map(|c| c.0) != Some((shape, content)) {
+                            let (c, e) = builds(shape, content);
+                            cache = Some(((shape, content), c, e));
                         }
-                        let (_, cruda, esperada) = cache.as_ref().unwrap();
-                        let nombre = format!("{forma:?} {contenido:?} {comp:?} {filtro:?}");
-                        if comp == Compresor::Z {
+                        let (_, raw, expected) = cache.as_ref().unwrap();
+                        let name_2 = format!("{shape:?} {content:?} {comp:?} {filter:?}");
+                        if comp == Compressor::Z {
                             // Z(needed): la imagen es toda cero (con PLTE en indexado).
-                            let (color, bpp) = match forma {
-                                Forma::Gris => (0u8, 8u64),
-                                Forma::Indexado => (3, 8),
-                                Forma::Rgba => (6, 32),
+                            let (color, bpp) = match shape {
+                                Shape::Gray => (0u8, 8u64),
+                                Shape::TestIndexed => (3, 8),
+                                Shape::Rgba => (6, 32),
                             };
-                            let n = cruda.ancho;
-                            let needed = super::max_ratio::necesarios(n, n, bpp, false);
-                            let flujo = z(needed);
+                            let n = raw.width;
+                            let needed = super::max_ratio::necessary(n, n, bpp, false);
+                            let flow = z(needed);
                             let antes = if color == 3 {
-                                vec![plte_negra(256)]
+                                vec![plte_black(256)]
                             } else {
                                 vec![]
                             };
-                            let bytes = fichero(n, n, 8, color, false, &antes, Some(&flujo));
+                            let bytes = file(n, n, 8, color, false, &antes, Some(&flow));
                             let r = read_png(&bytes)
-                                .unwrap_or_else(|e| panic!("{nombre}: rechazado: {e:?}"));
+                                .unwrap_or_else(|e| panic!("{name_2}: rechazado: {e:?}"));
                             assert!(
                                 r.image.bytes().iter().all(|&b| b == 0),
-                                "{nombre}: la imagen no es toda cero"
+                                "{name_2}: la imagen no es toda cero"
                             );
                             continue;
                         }
-                        let bytes = codifica(cruda, comp, filtro);
-                        if contenido == Contenido::UnColor
-                            && matches!(comp, Compresor::Nivel(6 | 9))
-                            && filtro == png::Filter::Up
+                        let bytes = encodes(raw, comp, filter);
+                        if content == Content::UnColor
+                            && matches!(comp, Compressor::Level(6 | 9))
+                            && filter == png::Filter::Up
                         {
                             // El caso extremo de verdad: razón de expansión por encima de 500.
                             assert!(
-                                bytes.len() * 500 < cruda.datos.len(),
-                                "{nombre}: {} bytes para {}",
+                                bytes.len() * 500 < raw.data.len(),
+                                "{name_2}: {} bytes para {}",
                                 bytes.len(),
-                                cruda.datos.len()
+                                raw.data.len()
                             );
                         }
                         let r = read_png(&bytes)
-                            .unwrap_or_else(|e| panic!("{nombre}: rechazado: {e:?}"));
+                            .unwrap_or_else(|e| panic!("{name_2}: rechazado: {e:?}"));
                         assert!(
-                            r.image == *esperada,
-                            "{nombre}: la imagen leída es distinta"
+                            r.image == *expected,
+                            "{name_2}: la imagen leída es distinta"
                         );
                     }
                 })
             })
             .collect();
-        for m in manejadores {
+        for m in handlers {
             if let Err(e) = m.join() {
                 std::panic::resume_unwind(e);
             }
@@ -305,44 +305,44 @@ fn en_paralelo(trabajos: &[Combinacion]) {
     });
 }
 
-/// Rejilla de la fila 7: `niveles` de miniz_oxide, fdeflate y sin comprimir con los cuatro filtros,
+/// Rejilla de la fila 7: `levels` de miniz_oxide, fdeflate y sin comprimir con los cuatro filtros,
 /// y `Z(needed)` una vez por forma (no usa filtro ni contenido).
-fn rejilla(niveles: &[u8]) -> Vec<Combinacion> {
-    let mut trabajos: Vec<Combinacion> = Vec::new();
-    for forma in [Forma::Gris, Forma::Indexado, Forma::Rgba] {
-        for contenido in [Contenido::UnColor, Contenido::Patrones] {
-            let comps = niveles
+fn grid(levels: &[u8]) -> Vec<Combination> {
+    let mut jobs: Vec<Combination> = Vec::new();
+    for shape in [Shape::Gray, Shape::TestIndexed, Shape::Rgba] {
+        for content in [Content::UnColor, Content::Patterns] {
+            let comps = levels
                 .iter()
-                .map(|&n| Compresor::Nivel(n))
-                .chain([Compresor::Fdeflate, Compresor::Sin]);
+                .map(|&n| Compressor::Level(n))
+                .chain([Compressor::Fdeflate, Compressor::Without]);
             for comp in comps {
-                for filtro in filtros() {
-                    trabajos.push((forma, contenido, comp, filtro));
+                for filter in filters() {
+                    jobs.push((shape, content, comp, filter));
                 }
             }
         }
-        trabajos.push((
-            forma,
-            Contenido::UnColor,
-            Compresor::Z,
+        jobs.push((
+            shape,
+            Content::UnColor,
+            Compressor::Z,
             png::Filter::NoFilter,
         ));
     }
-    trabajos
+    jobs
 }
 
 /// Suite: niveles 1, 6 y 9 (el 1 es el más flojo, el 6 el de por defecto y el 9 el más fuerte).
 #[test]
-fn fila7_ningun_compresor_ni_filtro_es_rechazado() {
-    en_paralelo(&rejilla(&[1, 6, 9]));
+fn row7_no_compressor_or_filter_is_rejected() {
+    in_parallel(&grid(&[1, 6, 9]));
 }
 
 /// Rejilla completa de la spec (niveles 1 a 9 × cuatro filtros, tamaños de la spec): se ejecuta al
 /// cerrar con `cargo test --release -p px-formats -- --ignored`.
 #[test]
 #[ignore = "rejilla completa: lenta sin optimizar; se ejecuta al cerrar con --release -- --ignored"]
-fn fila7_rejilla_completa_niveles_1_a_9() {
-    en_paralelo(&rejilla(&[1, 2, 3, 4, 5, 6, 7, 8, 9]));
+fn row7_full_grid_levels_1_to_9() {
+    in_parallel(&grid(&[1, 2, 3, 4, 5, 6, 7, 8, 9]));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -350,14 +350,14 @@ fn fila7_rejilla_completa_niveles_1_a_9() {
 // ---------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug)]
-enum Relleno {
+enum Fill {
     UnColor,
-    Franjas,
-    Ruido,
+    Bands,
+    Noise,
 }
 
 /// (tipo de color, profundidad, canales) que admite el codificador.
-fn tipos() -> Vec<(png::ColorType, png::BitDepth, usize)> {
+fn types() -> Vec<(png::ColorType, png::BitDepth, usize)> {
     use png::BitDepth::{Eight, Four, One, Sixteen, Two};
     use png::ColorType::{Grayscale, GrayscaleAlpha, Indexed, Rgb, Rgba};
     let mut v = Vec::new();
@@ -375,59 +375,59 @@ fn tipos() -> Vec<(png::ColorType, png::BitDepth, usize)> {
     v
 }
 
-/// Muestra (x, y, canal) del relleno, de `bits` bits, derivada de `semilla`.
-fn muestra(relleno: Relleno, semilla: u64, bits: u32, x: usize, y: usize, c: usize) -> u16 {
+/// Muestra (x, y, canal) del relleno, de `bits` bits, derivada de `seed`.
+fn swatch(fill: Fill, seed: u64, bits: u32, x: usize, y: usize, c: usize) -> u16 {
     let mascara = ((1u32 << bits) - 1) as u16;
-    let mezcla = |a: u64| {
-        let mut s = semilla ^ a.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    let blend = |a: u64| {
+        let mut s = seed ^ a.wrapping_mul(0x9E37_79B9_7F4A_7C15);
         s ^= s >> 30;
         s = s.wrapping_mul(0xBF58_476D_1CE4_E5B9);
         s ^= s >> 27;
         s = s.wrapping_mul(0x94D0_49BB_1331_11EB);
         s ^ (s >> 31)
     };
-    let v = match relleno {
-        Relleno::UnColor => mezcla(c as u64),
-        Relleno::Franjas => mezcla((x / 5 + (y / 3) * 7 + c * 1000) as u64 % 11),
-        Relleno::Ruido => mezcla(((y * 64 + x) * 4 + c) as u64 + 77),
+    let v = match fill {
+        Fill::UnColor => blend(c as u64),
+        Fill::Bands => blend((x / 5 + (y / 3) * 7 + c * 1000) as u64 % 11),
+        Fill::Noise => blend(((y * 64 + x) * 4 + c) as u64 + 77),
     };
     (v as u16) & mascara
 }
 
-fn cruda_aleatoria(
-    ancho: u32,
-    alto: u32,
-    tipo: (png::ColorType, png::BitDepth, usize),
-    relleno: Relleno,
-    semilla: u64,
-) -> Cruda {
-    let (color, prof, canales) = tipo;
+fn raw_random(
+    width: u32,
+    height: u32,
+    kind: (png::ColorType, png::BitDepth, usize),
+    fill: Fill,
+    seed: u64,
+) -> Raw {
+    let (color, prof, channels) = kind;
     let bits = prof as u32;
-    let n_paleta = 1usize << bits;
-    let indexada = color == png::ColorType::Indexed;
-    let mut datos = Vec::new();
-    for y in 0..alto as usize {
-        let fila: Vec<u16> = (0..ancho as usize)
-            .flat_map(|x| (0..canales).map(move |c| (x, c)))
-            .map(|(x, c)| muestra(relleno, semilla, bits, x, y, c))
+    let n_palette = 1usize << bits;
+    let indexed = color == png::ColorType::Indexed;
+    let mut data = Vec::new();
+    for y in 0..height as usize {
+        let row: Vec<u16> = (0..width as usize)
+            .flat_map(|x| (0..channels).map(move |c| (x, c)))
+            .map(|(x, c)| swatch(fill, seed, bits, x, y, c))
             .collect();
-        datos.extend(empaqueta(&fila, bits as u8));
+        data.extend(packs(&row, bits as u8));
     }
-    let (paleta, trns) = if indexada {
-        let rgb: Vec<u8> = (0..n_paleta)
+    let (palette, trns) = if indexed {
+        let rgb: Vec<u8> = (0..n_palette)
             .flat_map(|i| [i as u8, (i * 7) as u8, (i * 13) as u8])
             .collect();
         (Some(rgb), Some(vec![0u8, 128]))
     } else {
         (None, None)
     };
-    Cruda {
-        ancho,
-        alto,
+    Raw {
+        width,
+        height,
         color,
         prof,
-        datos,
-        paleta,
+        data,
+        palette,
         trns,
     }
 }
@@ -438,35 +438,35 @@ proptest! {
     // Propiedad 3: `read_png` es `Ok` para cualquier imagen que el codificador admita y cualquier
     // forma de comprimir de la fila 7, con y sin `Z(needed)` a mano.
     #[test]
-    fn p3_ningun_compresor_es_rechazado(
-        ancho in 1u32..=64,
-        alto in 1u32..=64,
-        tipo in select(tipos()),
-        relleno in select(vec![Relleno::UnColor, Relleno::Franjas, Relleno::Ruido]),
-        semilla in any::<u64>(),
-        compresor in select(COMPRESORES_PNG.to_vec()),
-        filtro in select(filtros().to_vec()),
+    fn p3_no_compressor_is_rejected(
+        width in 1u32..=64,
+        height in 1u32..=64,
+        kind in select(types()),
+        fill in select(vec![Fill::UnColor, Fill::Bands, Fill::Noise]),
+        seed in any::<u64>(),
+        compressor in select(COMPRESSORS_PNG.to_vec()),
+        filter in select(filters().to_vec()),
     ) {
-        let img = cruda_aleatoria(ancho, alto, tipo, relleno, semilla);
-        let bytes = codifica(&img, compresor, filtro);
+        let img = raw_random(width, height, kind, fill, seed);
+        let bytes = encodes(&img, compressor, filter);
         let r = read_png(&bytes);
         prop_assert!(
             r.is_ok(),
             "{}x{} {:?} {:?} {:?} {:?}: {:?}",
-            ancho, alto, tipo, compresor, filtro, relleno, r.as_ref().err()
+            width, height, kind, compressor, filter, fill, r.as_ref().err()
         );
         let r = r.unwrap();
-        prop_assert_eq!((r.image.width(), r.image.height()), (ancho, alto));
+        prop_assert_eq!((r.image.width(), r.image.height()), (width, height));
     }
 
     // Propiedad 3 con `Z(needed)` a mano en cualquier tipo y profundidad.
     #[test]
-    fn p3_z_a_mano_nunca_es_rechazado(
-        ancho in 1u32..=64,
-        alto in 1u32..=64,
-        tipo in select(tipos()),
+    fn p3_z_by_hand_is_never_rejected(
+        width in 1u32..=64,
+        height in 1u32..=64,
+        kind in select(types()),
     ) {
-        let (color, prof, canales) = tipo;
+        let (color, prof, channels) = kind;
         let color_png = match color {
             png::ColorType::Grayscale => 0u8,
             png::ColorType::Rgb => 2,
@@ -475,10 +475,10 @@ proptest! {
             png::ColorType::Rgba => 6,
         };
         let bits = prof as u8;
-        let bpp = (canales as u64) * u64::from(bits);
-        let needed = super::max_ratio::necesarios(ancho, alto, bpp, false);
-        let antes = if color_png == 3 { vec![plte_negra(1 << bits)] } else { vec![] };
-        let bytes = fichero(ancho, alto, bits, color_png, false, &antes, Some(&z(needed)));
+        let bpp = (channels as u64) * u64::from(bits);
+        let needed = super::max_ratio::necessary(width, height, bpp, false);
+        let antes = if color_png == 3 { vec![plte_black(1 << bits)] } else { vec![] };
+        let bytes = file(width, height, bits, color_png, false, &antes, Some(&z(needed)));
         let r = read_png(&bytes);
         prop_assert!(r.is_ok(), "{:?}", r.as_ref().err());
     }

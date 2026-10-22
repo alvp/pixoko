@@ -12,10 +12,25 @@ for rnd in range(8):
     if not found:
         print("sin colisiones en", crate); break
     add = {}
+    kinds = {}
+    nfiles = None
     have_plural = {}
+    if nfiles is None:
+        import collections as _c
+        from regions import rs_files, ROOT
+        from rslex import lex, ident_name
+        nfiles = _c.Counter()
+        for p_ in rs_files():
+            rel_ = str(p_.relative_to(ROOT))
+            if rel_.startswith(f"crates/{crate}/"):
+                for n_ in {ident_name(tk) for tk in lex(p_.read_text(encoding="utf-8")) if tk.kind == "ident"}:
+                    nfiles[n_] += 1
     for rel, kind, old, new, why in found:
-        scope = rel if kind in ("fn", "dup") else f"crates/{crate}/"
+        # un nombre que sale en varios ficheros del crate (campos, métodos, ayudantes compartidos) cambia igual en todos
+        shared = nfiles[old] > 1
+        scope = rel if kind in ("fn", "dup") and not shared else f"crates/{crate}/"
         add[(old, scope)] = new
+        kinds[(old, scope)] = kind
         if kind == "dup" and (old, scope) not in have_plural:
             have_plural[(old, scope)] = True
     lines = AUTO.read_text(encoding="utf-8").splitlines() if AUTO.exists() else []
@@ -26,7 +41,13 @@ for rnd in range(8):
         pascal = new[:1].isupper() and not new.isupper() and "_" not in new
         sep = "" if pascal else "_"
         if cur == new:
-            alt = new + sep + "2"
+            # lo que choca a nivel de módulo recibe un prefijo legible; lo demás, un número
+            if kinds.get((old, scope)) == "item" and pascal:
+                alt = "Test" + new
+            elif kinds.get((old, scope)) == "item" and new.isupper():
+                alt = "TEST_" + new
+            else:
+                alt = new + sep + "2"
         else:
             import re as _re
             m = _re.fullmatch(rf"(.*?){sep}(\d+)", cur)

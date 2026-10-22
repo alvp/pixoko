@@ -49,7 +49,7 @@ def main():
                 continue
             k, new = line.split("\t")
             old = batch[int(k) - 1]
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", new) or new in KW or new.endswith("_") or "__" in new:
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", new) or new in KW or new.endswith("_") or "__" in new:
                 print("INVÁLIDO", k, old, "->", new); bad += 1; continue
             out.append(f"{old}\t{new}")
         if bad:

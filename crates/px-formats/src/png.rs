@@ -52,7 +52,7 @@ pub enum PngError {
     Decode(String),
     /// Las dimensiones, o el búfer de muestras del fichero, superan `Image::MAX_BYTES`.
     TooLarge { width: u32, height: u32 },
-    /// Indexado sin PLTE o con más entradas que `2^profundidad`.
+    /// Indexado sin PLTE o con más entradas que `2^depth`.
     InvalidPalette,
     /// Un píxel apunta fuera de PLTE.
     PaletteIndexOutOfRange { index: u8, len: usize },
@@ -130,7 +130,7 @@ const SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 /// Mayor dimensión que admite el formato (2³¹ − 1).
 const MAX_DIMENSION: u32 = i32::MAX as u32;
 
-/// Lee solo las dimensiones `(ancho, alto)` de la cabecera (specs/hito-2-abrir-guardar.md).
+/// Lee solo las dimensiones `(width, height)` de la cabecera (specs/hito-2-abrir-guardar.md).
 ///
 /// Mira la firma y el primer chunk, que debe ser `IHDR` de 13 bytes. No decodifica, no reserva
 /// memoria y **no verifica el CRC ni nada posterior al IHDR**: de eso se encarga `read_png`.

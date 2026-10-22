@@ -1,6 +1,6 @@
 //! Oráculo de `write_png` (specs/hito-2-image-filas-bytes.md, migración M1).
 //!
-//! `write_png_antiguo` es una copia, dentro de la prueba, de la implementación de `write_png`
+//! `write_png_old` es una copia, dentro de la prueba, de la implementación de `write_png`
 //! anterior a la migración (recorre la imagen con `get_pixel` y copia los píxeles a un `Vec`).
 //! La salida de `write_png` debe ser idéntica byte a byte, con el corpus de `golden/png` y con
 //! imágenes arbitrarias de los cuatro modos. Estas pruebas pasan con la implementación antigua
@@ -22,7 +22,7 @@ fn encode_error(e: png::EncodingError) -> PngError {
     PngError::Encode(e.to_string())
 }
 
-fn write_png_antiguo(image: &Image) -> Result<Vec<u8>, PngError> {
+fn write_png_old(image: &Image) -> Result<Vec<u8>, PngError> {
     let (width, height) = (image.width(), image.height());
     let mut out = Vec::new();
     let mut encoder = Encoder::new(&mut out, width, height);
@@ -83,17 +83,17 @@ fn write_png_antiguo(image: &Image) -> Result<Vec<u8>, PngError> {
 // Ayudantes.
 // ---------------------------------------------------------------------------------------
 
-/// Rellena `img` con `pixeles` en orden de lectura.
-fn rellena(mut img: Image, pixeles: impl IntoIterator<Item = Pixel>) -> Image {
+/// Rellena `img` con `pixels` en orden de lectura.
+fn fills(mut img: Image, pixels: impl IntoIterator<Item = Pixel>) -> Image {
     let w = img.width();
-    for (i, p) in pixeles.into_iter().enumerate() {
+    for (i, p) in pixels.into_iter().enumerate() {
         img.set_pixel(i as u32 % w, i as u32 / w, p).unwrap();
     }
     img
 }
 
 /// Todos los píxeles de `img` en orden de lectura.
-fn pixeles(img: &Image) -> Vec<Pixel> {
+fn pixels(img: &Image) -> Vec<Pixel> {
     (0..img.height())
         .flat_map(|y| (0..img.width()).map(move |x| (x, y)))
         .map(|(x, y)| img.get_pixel(x, y).unwrap())
@@ -102,32 +102,32 @@ fn pixeles(img: &Image) -> Vec<Pixel> {
 
 /// `img`, salvo en un indexado con índice transparente, cuya paleta sale ya resuelta (es lo
 /// que devuelve `read_png`: el alfa 0 va en el tRNS y no queda índice transparente).
-fn normalizada(img: &Image) -> Image {
+fn normalized(img: &Image) -> Image {
     let Some(p) = img.palette() else {
         return img.clone();
     };
     if p.transparent_index().is_none() {
         return img.clone();
     }
-    let colores: Vec<Rgba> = (0..p.len()).map(|i| p.resolved(i as u8).unwrap()).collect();
-    let copia = Image::new_indexed(
+    let colors: Vec<Rgba> = (0..p.len()).map(|i| p.resolved(i as u8).unwrap()).collect();
+    let copy = Image::new_indexed(
         img.width(),
         img.height(),
-        Palette::from_colors(colores).unwrap(),
+        Palette::from_colors(colors).unwrap(),
     )
     .unwrap();
-    rellena(copia, pixeles(img))
+    fills(copy, pixels(img))
 }
 
 /// Comprueba que `write_png` y el oráculo dan lo mismo (bytes o error con el mismo texto).
-fn assert_igual_al_oraculo(img: &Image, contexto: &str) -> Vec<u8> {
-    let nuevo = write_png(img).map_err(|e| e.to_string());
-    let antiguo = write_png_antiguo(img).map_err(|e| e.to_string());
-    assert_eq!(nuevo, antiguo, "{contexto}");
-    nuevo.unwrap_or_else(|e| panic!("{contexto}: no se pudo escribir: {e}"))
+fn assert_equal_to_the_oracle(img: &Image, context: &str) -> Vec<u8> {
+    let new_2 = write_png(img).map_err(|e| e.to_string());
+    let old = write_png_old(img).map_err(|e| e.to_string());
+    assert_eq!(new_2, old, "{context}");
+    new_2.unwrap_or_else(|e| panic!("{context}: no se pudo escribir: {e}"))
 }
 
-fn rgba_arbitrario() -> impl Strategy<Value = Rgba> {
+fn rgba_arbitrary() -> impl Strategy<Value = Rgba> {
     (
         any::<u8>(),
         any::<u8>(),
@@ -140,20 +140,20 @@ fn rgba_arbitrario() -> impl Strategy<Value = Rgba> {
 
 /// Imagen de 1 a 16 de lado en cualquiera de los cuatro modos; el indexado lleva una paleta
 /// de 1 a 256 entradas y a veces un índice transparente fijado.
-fn imagen_arbitraria() -> BoxedStrategy<Image> {
+fn image_arbitrary() -> BoxedStrategy<Image> {
     (1u32..=16, 1u32..=16)
         .prop_flat_map(|(w, h)| {
             let n = (w * h) as usize;
             prop_oneof![
-                vec(rgba_arbitrario(), n).prop_map(move |px| rellena(
+                vec(rgba_arbitrary(), n).prop_map(move |px| fills(
                     Image::new(w, h, Mode::Rgba).unwrap(),
                     px.into_iter().map(Pixel::Rgba)
                 )),
-                vec(any::<u8>(), n).prop_map(move |px| rellena(
+                vec(any::<u8>(), n).prop_map(move |px| fills(
                     Image::new(w, h, Mode::Gray).unwrap(),
                     px.into_iter().map(Pixel::Gray)
                 )),
-                vec(any::<(u8, u8)>(), n).prop_map(move |px| rellena(
+                vec(any::<(u8, u8)>(), n).prop_map(move |px| fills(
                     Image::new(w, h, Mode::GrayAlpha).unwrap(),
                     px.into_iter()
                         .map(|(gray, alpha)| Pixel::GrayAlpha { gray, alpha })
@@ -161,16 +161,16 @@ fn imagen_arbitraria() -> BoxedStrategy<Image> {
                 (1usize..=256)
                     .prop_flat_map(move |len| {
                         (
-                            vec(rgba_arbitrario(), len),
+                            vec(rgba_arbitrary(), len),
                             proptest::option::of(0..len),
                             vec(0..len, n),
                         )
                     })
-                    .prop_map(move |(colores, transparente, px)| {
-                        let mut p = Palette::from_colors(colores).unwrap();
-                        p.set_transparent_index(transparente.map(|t| t as u8))
+                    .prop_map(move |(colors, transparent, px)| {
+                        let mut p = Palette::from_colors(colors).unwrap();
+                        p.set_transparent_index(transparent.map(|t| t as u8))
                             .unwrap();
-                        rellena(
+                        fills(
                             Image::new_indexed(w, h, p).unwrap(),
                             px.into_iter().map(|i| Pixel::Indexed(i as u8)),
                         )
@@ -185,22 +185,22 @@ fn imagen_arbitraria() -> BoxedStrategy<Image> {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn corpus_de_golden_escribe_lo_mismo_que_el_oraculo() {
+fn golden_corpus_writes_the_same_as_the_oracle() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../golden/png");
-    let mut vistos = 0;
-    for entrada in std::fs::read_dir(&dir).unwrap() {
-        let ruta = entrada.unwrap().path();
-        if ruta.extension().and_then(|e| e.to_str()) != Some("png") {
+    let mut seen = 0;
+    for input in std::fs::read_dir(&dir).unwrap() {
+        let path = input.unwrap().path();
+        if path.extension().and_then(|e| e.to_str()) != Some("png") {
             continue;
         }
-        let bytes = std::fs::read(&ruta).unwrap();
-        let Ok(leida) = read_png(&bytes) else {
+        let bytes = std::fs::read(&path).unwrap();
+        let Ok(read) = read_png(&bytes) else {
             continue;
         };
-        assert_igual_al_oraculo(&leida.image, &ruta.display().to_string());
-        vistos += 1;
+        assert_equal_to_the_oracle(&read.image, &path.display().to_string());
+        seen += 1;
     }
-    assert!(vistos >= 4, "el corpus tiene al menos cuatro PNG legibles");
+    assert!(seen >= 4, "el corpus tiene al menos cuatro PNG legibles");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -208,8 +208,8 @@ fn corpus_de_golden_escribe_lo_mismo_que_el_oraculo() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn una_imagen_de_1x1_en_cada_modo_escribe_lo_mismo_que_el_oraculo() {
-    let casos = [
+fn a_1x1_image_in_each_mode_writes_the_same_as_the_oracle() {
+    let cases = [
         (Mode::Rgba, Pixel::Rgba(Rgba::new(1, 2, 3, 4))),
         (Mode::Gray, Pixel::Gray(77)),
         (
@@ -220,30 +220,30 @@ fn una_imagen_de_1x1_en_cada_modo_escribe_lo_mismo_que_el_oraculo() {
             },
         ),
     ];
-    for (modo, pixel) in casos {
-        let img = rellena(Image::new(1, 1, modo).unwrap(), [pixel]);
-        assert_igual_al_oraculo(&img, &format!("{modo:?} 1x1"));
+    for (mode, pixel) in cases {
+        let img = fills(Image::new(1, 1, mode).unwrap(), [pixel]);
+        assert_equal_to_the_oracle(&img, &format!("{mode:?} 1x1"));
     }
-    let paleta = Palette::from_colors([Rgba::new(10, 20, 30, 128)]).unwrap();
-    let img = rellena(
-        Image::new_indexed(1, 1, paleta).unwrap(),
+    let palette = Palette::from_colors([Rgba::new(10, 20, 30, 128)]).unwrap();
+    let img = fills(
+        Image::new_indexed(1, 1, palette).unwrap(),
         [Pixel::Indexed(0)],
     );
-    assert_igual_al_oraculo(&img, "Indexed 1x1");
+    assert_equal_to_the_oracle(&img, "Indexed 1x1");
 }
 
 #[test]
-fn indexado_con_paleta_de_256_escribe_lo_mismo_que_el_oraculo() {
-    let colores = (0..=255u8).map(|i| Rgba::new(i, 255 - i, i ^ 0x5a, i.wrapping_mul(7)));
-    let mut paleta = Palette::from_colors(colores).unwrap();
-    paleta.set_transparent_index(Some(255)).unwrap();
+fn indexed_with_palette_of_256_writes_the_same_as_the_oracle() {
+    let colors = (0..=255u8).map(|i| Rgba::new(i, 255 - i, i ^ 0x5a, i.wrapping_mul(7)));
+    let mut palette = Palette::from_colors(colors).unwrap();
+    palette.set_transparent_index(Some(255)).unwrap();
     // 16 x 16: cada índice aparece una vez.
-    let img = rellena(
-        Image::new_indexed(16, 16, paleta).unwrap(),
+    let img = fills(
+        Image::new_indexed(16, 16, palette).unwrap(),
         (0..=255u8).map(Pixel::Indexed),
     );
-    let bytes = assert_igual_al_oraculo(&img, "Indexed 256 colores");
-    assert_eq!(read_png(&bytes).unwrap().image, normalizada(&img));
+    let bytes = assert_equal_to_the_oracle(&img, "Indexed 256 colores");
+    assert_eq!(read_png(&bytes).unwrap().image, normalized(&img));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -255,12 +255,12 @@ proptest! {
 
     // Salida idéntica byte a byte a la del oráculo, y ida y vuelta por `read_png`.
     #[test]
-    fn p_write_png_igual_al_oraculo_e_ida_y_vuelta(img in imagen_arbitraria()) {
-        let nuevo = write_png(&img).map_err(|e| e.to_string());
-        let antiguo = write_png_antiguo(&img).map_err(|e| e.to_string());
-        prop_assert_eq!(&nuevo, &antiguo);
-        let bytes = nuevo.unwrap();
-        let leida = read_png(&bytes).unwrap();
-        prop_assert_eq!(leida.image, normalizada(&img));
+    fn p_write_png_equals_the_oracle_and_round_trip(img in image_arbitrary()) {
+        let new_2 = write_png(&img).map_err(|e| e.to_string());
+        let old = write_png_old(&img).map_err(|e| e.to_string());
+        prop_assert_eq!(&new_2, &old);
+        let bytes = new_2.unwrap();
+        let read = read_png(&bytes).unwrap();
+        prop_assert_eq!(read.image, normalized(&img));
     }
 }

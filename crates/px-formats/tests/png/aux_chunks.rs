@@ -2,7 +2,7 @@
 //! unidad 13b): filas 1 a 7 (la parte de `read_png`) y propiedades 1 a 3. En ROJO hasta la
 //! implementación de `AuxChunk`, `AuxReport` y `PngRead.aux`.
 //!
-//! Todos los PNG se construyen a mano con los ayudantes del fichero padre (`trozo`, `Png`,
+//! Todos los PNG se construyen a mano con los ayudantes del fichero padre (`piece`, `Png`,
 //! `zlib_stored`); el corpus de `golden/png` solo se lee. Ningún caso reserva más de unos pocos KiB.
 //!
 //! **Suposiciones y ambigüedades** (ver el informe de la unidad):
@@ -30,31 +30,31 @@ use px_formats::AuxReport;
 
 /// RGBA de 1×1 sin ningún auxiliar.
 fn base() -> Png {
-    Png::new(1, 1, 8, 6).muestras(&[10, 20, 30, 40])
+    Png::new(1, 1, 8, 6).swatches(&[10, 20, 30, 40])
 }
 
 /// `base()` con esos chunks entre IHDR e IDAT y después del IDAT.
-fn con(antes: &[Vec<u8>], despues: &[Vec<u8>]) -> Vec<u8> {
+fn with(antes: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
     let mut png = base();
     for c in antes {
         png = png.antes(c.clone());
     }
-    for c in despues {
-        png = png.despues(c.clone());
+    for c in after {
+        png = png.after(c.clone());
     }
     png.bytes()
 }
 
 /// Inserta chunks en un PNG de `write_png` (un solo IDAT): `antes` justo tras el IHDR (que
-/// acaba en el byte 33) y `despues` justo antes del IEND (los últimos 12 bytes).
-fn inserta(bytes: &[u8], antes: &[Vec<u8>], despues: &[Vec<u8>]) -> Vec<u8> {
+/// acaba en el byte 33) y `after` justo antes del IEND (los últimos 12 bytes).
+fn inserts(bytes: &[u8], antes: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
     let iend = bytes.len() - 12;
     let mut v = bytes[..33].to_vec();
     for c in antes {
         v.extend(c);
     }
     v.extend(&bytes[33..iend]);
-    for c in despues {
+    for c in after {
         v.extend(c);
     }
     v.extend(&bytes[iend..]);
@@ -65,7 +65,7 @@ fn aux_de(bytes: &[u8]) -> AuxReport {
     lee(bytes).aux
 }
 
-fn informe(found: &[AuxChunk], appearance: Option<AuxChunk>) -> AuxReport {
+fn report(found: &[AuxChunk], appearance: Option<AuxChunk>) -> AuxReport {
     AuxReport {
         found: found.to_vec(),
         appearance,
@@ -76,19 +76,19 @@ fn c_iccp() -> Vec<u8> {
     let mut d = b"perfil\0".to_vec();
     d.push(0);
     d.extend(zlib_stored(b"datos del perfil", 0));
-    trozo(b"iCCP", &d)
+    piece(b"iCCP", &d)
 }
 
-fn c_cicp(primarios: u8, transferencia: u8, matriz: u8, rango: u8) -> Vec<u8> {
-    trozo(b"cICP", &[primarios, transferencia, matriz, rango])
+fn c_cicp(primary: u8, transfer: u8, matrix: u8, range: u8) -> Vec<u8> {
+    piece(b"cICP", &[primary, transfer, matrix, range])
 }
 
 fn c_srgb() -> Vec<u8> {
-    trozo(b"sRGB", &[0])
+    piece(b"sRGB", &[0])
 }
 
-fn c_gama(valor: u32) -> Vec<u8> {
-    trozo(b"gAMA", &valor.to_be_bytes())
+fn c_gamma(valor: u32) -> Vec<u8> {
+    piece(b"gAMA", &valor.to_be_bytes())
 }
 
 /// Blanco D65 y primarios de sRGB, por este orden: blanco x e y, rojo, verde y azul.
@@ -96,9 +96,9 @@ const CHRM_SRGB: [u32; 8] = [31270, 32900, 64000, 33000, 30000, 60000, 15000, 60
 /// Blanco D65 y primarios de Adobe RGB (1998): solo cambia el verde.
 const CHRM_ADOBE: [u32; 8] = [31270, 32900, 64000, 33000, 21000, 71000, 15000, 6000];
 
-fn c_chrm(valores: [u32; 8]) -> Vec<u8> {
-    let datos: Vec<u8> = valores.iter().flat_map(|v| v.to_be_bytes()).collect();
-    trozo(b"cHRM", &datos)
+fn c_chrm(values: [u32; 8]) -> Vec<u8> {
+    let data: Vec<u8> = values.iter().flat_map(|v| v.to_be_bytes()).collect();
+    piece(b"cHRM", &data)
 }
 
 fn c_phys() -> Vec<u8> {
@@ -106,53 +106,53 @@ fn c_phys() -> Vec<u8> {
     d.extend(2835u32.to_be_bytes());
     d.extend(2835u32.to_be_bytes());
     d.push(1);
-    trozo(b"pHYs", &d)
+    piece(b"pHYs", &d)
 }
 
 fn c_text() -> Vec<u8> {
-    trozo(b"tEXt", b"Title\0pixoko")
+    piece(b"tEXt", b"Title\0pixoko")
 }
 
 fn c_ztxt() -> Vec<u8> {
     let mut d = b"Title\0\0".to_vec();
     d.extend(zlib_stored(b"pixoko", 0));
-    trozo(b"zTXt", &d)
+    piece(b"zTXt", &d)
 }
 
 fn c_itxt() -> Vec<u8> {
     // Palabra clave, indicador y método de compresión, etiqueta de idioma y palabra traducida
     // vacías, y el texto.
-    trozo(b"iTXt", b"Title\0\0\0\0\0pixoko")
+    piece(b"iTXt", b"Title\0\0\0\0\0pixoko")
 }
 
 fn c_time() -> Vec<u8> {
-    trozo(b"tIME", &[0x07, 0xEA, 10, 17, 12, 0, 0])
+    piece(b"tIME", &[0x07, 0xEA, 10, 17, 12, 0, 0])
 }
 
 fn c_exif() -> Vec<u8> {
-    trozo(b"eXIf", b"MM\0*\0\0\0\x08")
+    piece(b"eXIf", b"MM\0*\0\0\0\x08")
 }
 
 fn c_actl() -> Vec<u8> {
-    trozo(b"acTL", &[0, 0, 0, 2, 0, 0, 0, 0])
+    piece(b"acTL", &[0, 0, 0, 2, 0, 0, 0, 0])
 }
 
-fn c_desconocido() -> Vec<u8> {
-    trozo(b"teSt", &[1, 2, 3])
+fn c_unknown() -> Vec<u8> {
+    piece(b"teSt", &[1, 2, 3])
 }
 
 /// El mismo chunk con el último byte del CRC cambiado.
-fn crc_malo(tipo: &[u8; 4], datos: &[u8]) -> Vec<u8> {
-    let mut v = trozo(tipo, datos);
+fn crc_bad(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut v = piece(kind, data);
     let n = v.len();
     v[n - 1] ^= 0xFF;
     v
 }
 
 /// Cabecera de un chunk que declara 2³¹ − 1 bytes de datos y solo trae tres.
-fn gigante(tipo: &[u8; 4]) -> Vec<u8> {
+fn giant(kind: &[u8; 4]) -> Vec<u8> {
     let mut v = (u32::MAX >> 1).to_be_bytes().to_vec();
-    v.extend(tipo);
+    v.extend(kind);
     v.extend([1, 2, 3]);
     v
 }
@@ -162,45 +162,45 @@ fn gigante(tipo: &[u8; 4]) -> Vec<u8> {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_sin_auxiliares_el_informe_esta_vacio() {
+fn row_1_without_auxiliaries_the_report_is_empty() {
     let rgba = lee(&base().bytes());
     assert_eq!(rgba.aux, AuxReport::default());
     assert!(rgba.aux.found.is_empty());
     assert_eq!(rgba.aux.appearance, None);
 
-    let indexada = Png::new(2, 1, 8, 3)
-        .muestras(&[0, 1])
+    let indexed = Png::new(2, 1, 8, 3)
+        .swatches(&[0, 1])
         .antes(plte(&[(0, 0, 0), (255, 0, 0)]))
         .bytes();
-    let r = lee(&indexada);
+    let r = lee(&indexed);
     assert_eq!(r.aux, AuxReport::default());
     assert!(r.aux.found.is_empty());
     assert_eq!(r.aux.appearance, None);
 }
 
 #[test]
-fn fila_1_corpus_de_golden_png() {
+fn row_1_png_golden_corpus() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../golden/png");
     let (mut grafx2, mut libresprite) = (0, 0);
-    for entrada in fs::read_dir(&dir).expect("leer golden/png") {
-        let ruta = entrada.expect("entrada").path();
-        if ruta.extension().is_none_or(|e| e != "png") {
+    for input in fs::read_dir(&dir).expect("leer golden/png") {
+        let path = input.expect("entrada").path();
+        if path.extension().is_none_or(|e| e != "png") {
             continue;
         }
-        let nombre = ruta.file_name().unwrap().to_string_lossy().into_owned();
-        let r = lee(&fs::read(&ruta).unwrap());
-        if nombre.starts_with("grafx2") {
+        let name_2 = path.file_name().unwrap().to_string_lossy().into_owned();
+        let r = lee(&fs::read(&path).unwrap());
+        if name_2.starts_with("grafx2") {
             grafx2 += 1;
             assert_eq!(
                 r.aux,
-                informe(&[AuxChunk::Text, AuxChunk::Other], None),
-                "{nombre}"
+                report(&[AuxChunk::Text, AuxChunk::Other], None),
+                "{name_2}"
             );
-        } else if nombre.starts_with("libresprite") {
+        } else if name_2.starts_with("libresprite") {
             libresprite += 1;
-            assert_eq!(r.aux, AuxReport::default(), "{nombre}");
+            assert_eq!(r.aux, AuxReport::default(), "{name_2}");
         } else {
-            panic!("fichero inesperado en el corpus: {nombre}");
+            panic!("fichero inesperado en el corpus: {name_2}");
         }
     }
     assert_eq!((grafx2, libresprite), (2, 2));
@@ -211,13 +211,13 @@ fn fila_1_corpus_de_golden_png() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_2_cada_tipo_valido_por_separado() {
+fn row_2_each_valid_type_separately() {
     use AuxChunk::*;
-    let casos: Vec<(&str, Vec<u8>, AuxChunk, Option<AuxChunk>)> = vec![
+    let cases: Vec<(&str, Vec<u8>, AuxChunk, Option<AuxChunk>)> = vec![
         ("iCCP", c_iccp(), Icc, Some(Icc)),
         ("cICP (1,13,0,1)", c_cicp(1, 13, 0, 1), CodePoints, None),
         ("sRGB", c_srgb(), Srgb, None),
-        ("gAMA 45455", c_gama(45455), Gamma, None),
+        ("gAMA 45455", c_gamma(45455), Gamma, None),
         ("cHRM de sRGB", c_chrm(CHRM_SRGB), Chromaticities, None),
         ("pHYs", c_phys(), Physical, None),
         ("tEXt", c_text(), Text, None),
@@ -226,14 +226,14 @@ fn fila_2_cada_tipo_valido_por_separado() {
         ("tIME", c_time(), Time, None),
         ("eXIf", c_exif(), Exif, None),
         ("acTL", c_actl(), Animation, Some(Animation)),
-        ("teSt", c_desconocido(), Other, None),
+        ("teSt", c_unknown(), Other, None),
     ];
-    for (nombre, chunk, tipo, apariencia) in casos {
-        let r = lee(&con(&[chunk], &[]));
-        assert_eq!(r.aux, informe(&[tipo], apariencia), "{nombre}");
+    for (name_2, chunk, kind, appearance) in cases {
+        let r = lee(&with(&[chunk], &[]));
+        assert_eq!(r.aux, report(&[kind], appearance), "{name_2}");
         // Lo que se ignora no cambia ni la imagen ni el informe de conversiones.
-        assert!(r.report.is_empty(), "{nombre}");
-        assert_eq!(pixeles(&r.image), [rgba(10, 20, 30, 40)], "{nombre}");
+        assert!(r.report.is_empty(), "{name_2}");
+        assert_eq!(pixels(&r.image), [rgba(10, 20, 30, 40)], "{name_2}");
     }
 }
 
@@ -242,43 +242,43 @@ fn fila_2_cada_tipo_valido_por_separado() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_repetidos_sin_duplicados_y_en_orden_de_declaracion_antes_o_despues_del_idat() {
-    let secuencia = || vec![c_text(), c_iccp(), c_text(), c_gama(45455), c_iccp()];
-    let esperado = informe(
+fn row_3_repeated_without_duplicates_and_in_declaration_order_before_or_after_idat() {
+    let sequence = || vec![c_text(), c_iccp(), c_text(), c_gamma(45455), c_iccp()];
+    let expected = report(
         &[AuxChunk::Icc, AuxChunk::Gamma, AuxChunk::Text],
         Some(AuxChunk::Icc),
     );
-    assert_eq!(aux_de(&con(&secuencia(), &[])), esperado, "antes del IDAT");
+    assert_eq!(aux_de(&with(&sequence(), &[])), expected, "antes del IDAT");
     assert_eq!(
-        aux_de(&con(&[], &secuencia())),
-        esperado,
+        aux_de(&with(&[], &sequence())),
+        expected,
         "después del IDAT"
     );
 }
 
 #[test]
-fn fila_3_dos_mil_text_no_esconden_un_iccp_al_final() {
+fn row_3_two_thousand_text_do_not_hide_an_iccp_at_the_end() {
     let mut chunks: Vec<Vec<u8>> = (0..2000)
-        .map(|i| trozo(b"tEXt", format!("clave{i}\0valor").as_bytes()))
+        .map(|i| piece(b"tEXt", format!("clave{i}\0valor").as_bytes()))
         .collect();
     chunks.push(c_iccp());
-    let r = lee(&con(&chunks, &[]));
+    let r = lee(&with(&chunks, &[]));
     assert_eq!(
         r.aux,
-        informe(&[AuxChunk::Icc, AuxChunk::Text], Some(AuxChunk::Icc))
+        report(&[AuxChunk::Icc, AuxChunk::Text], Some(AuxChunk::Icc))
     );
     assert!(r.report.is_empty());
 }
 
 #[test]
-fn fila_3_de_un_tipo_repetido_vale_el_primero() {
+fn row_3_of_a_repeated_type_the_first_one_counts() {
     // D3: «repetidos ⇒ vale el primero y el tipo se lista una vez».
-    let gamma_sin_causa_primero = aux_de(&con(&[c_gama(45455), c_gama(100_000)], &[]));
-    assert_eq!(gamma_sin_causa_primero, informe(&[AuxChunk::Gamma], None));
-    let gamma_con_causa_primero = aux_de(&con(&[c_gama(100_000), c_gama(45455)], &[]));
+    let gamma_without_cause_first = aux_de(&with(&[c_gamma(45455), c_gamma(100_000)], &[]));
+    assert_eq!(gamma_without_cause_first, report(&[AuxChunk::Gamma], None));
+    let gamma_with_cause_first = aux_de(&with(&[c_gamma(100_000), c_gamma(45455)], &[]));
     assert_eq!(
-        gamma_con_causa_primero,
-        informe(&[AuxChunk::Gamma], Some(AuxChunk::Gamma))
+        gamma_with_cause_first,
+        report(&[AuxChunk::Gamma], Some(AuxChunk::Gamma))
     );
 }
 
@@ -287,10 +287,10 @@ fn fila_3_de_un_tipo_repetido_vale_el_primero() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_causas_segun_la_regla_de_d2() {
+fn row_4_causes_per_the_d2_rule() {
     use AuxChunk::*;
-    type Caso = (&'static str, Vec<Vec<u8>>, Option<AuxChunk>);
-    let casos: Vec<Caso> = vec![
+    type Case = (&'static str, Vec<Vec<u8>>, Option<AuxChunk>);
+    let cases: Vec<Case> = vec![
         ("iCCP", vec![c_iccp()], Some(Icc)),
         ("iCCP + sRGB", vec![c_iccp(), c_srgb()], Some(Icc)),
         ("sRGB + iCCP", vec![c_srgb(), c_iccp()], Some(Icc)),
@@ -321,7 +321,7 @@ fn fila_4_causas_segun_la_regla_de_d2() {
         ),
         (
             "cICP (1,13,0,0) + gAMA 100000: cICP sRGB acaba la búsqueda",
-            vec![c_cicp(1, 13, 0, 0), c_gama(100_000)],
+            vec![c_cicp(1, 13, 0, 0), c_gamma(100_000)],
             None,
         ),
         (
@@ -331,15 +331,15 @@ fn fila_4_causas_segun_la_regla_de_d2() {
         ),
         (
             "sRGB + gAMA 100000 + cHRM Adobe: sRGB acaba la búsqueda",
-            vec![c_srgb(), c_gama(100_000), c_chrm(CHRM_ADOBE)],
+            vec![c_srgb(), c_gamma(100_000), c_chrm(CHRM_ADOBE)],
             None,
         ),
-        ("gAMA 100000", vec![c_gama(100_000)], Some(Gamma)),
-        ("gAMA 45455", vec![c_gama(45455)], None),
-        ("gAMA 44455 (−1000)", vec![c_gama(44455)], None),
-        ("gAMA 46455 (+1000)", vec![c_gama(46455)], None),
-        ("gAMA 46456 (+1001)", vec![c_gama(46456)], Some(Gamma)),
-        ("gAMA 44454 (−1001)", vec![c_gama(44454)], Some(Gamma)),
+        ("gAMA 100000", vec![c_gamma(100_000)], Some(Gamma)),
+        ("gAMA 45455", vec![c_gamma(45455)], None),
+        ("gAMA 44455 (−1000)", vec![c_gamma(44455)], None),
+        ("gAMA 46455 (+1000)", vec![c_gamma(46455)], None),
+        ("gAMA 46456 (+1001)", vec![c_gamma(46456)], Some(Gamma)),
+        ("gAMA 44454 (−1001)", vec![c_gamma(44454)], Some(Gamma)),
         (
             "cHRM Adobe RGB",
             vec![c_chrm(CHRM_ADOBE)],
@@ -348,33 +348,33 @@ fn fila_4_causas_segun_la_regla_de_d2() {
         ("cHRM de sRGB", vec![c_chrm(CHRM_SRGB)], None),
         (
             "gAMA lineal + cHRM Adobe: manda Gamma",
-            vec![c_gama(100_000), c_chrm(CHRM_ADOBE)],
+            vec![c_gamma(100_000), c_chrm(CHRM_ADOBE)],
             Some(Gamma),
         ),
         (
             "gAMA de sRGB + cHRM Adobe",
-            vec![c_gama(45455), c_chrm(CHRM_ADOBE)],
+            vec![c_gamma(45455), c_chrm(CHRM_ADOBE)],
             Some(Chromaticities),
         ),
         (
             "gAMA lineal + cHRM de sRGB",
-            vec![c_gama(100_000), c_chrm(CHRM_SRGB)],
+            vec![c_gamma(100_000), c_chrm(CHRM_SRGB)],
             Some(Gamma),
         ),
     ];
-    for (nombre, chunks, esperado) in casos {
-        let r = aux_de(&con(&chunks, &[]));
-        assert_eq!(r.appearance, esperado, "{nombre}: {r:?}");
-        if let Some(a) = esperado {
-            assert!(r.found.contains(&a), "{nombre}: {r:?}");
+    for (name_2, chunks, expected) in cases {
+        let r = aux_de(&with(&chunks, &[]));
+        assert_eq!(r.appearance, expected, "{name_2}: {r:?}");
+        if let Some(a) = expected {
+            assert!(r.found.contains(&a), "{name_2}: {r:?}");
         }
     }
 }
 
 #[test]
-fn fila_4_chrm_de_srgb_mas_menos_1000_no_activa_y_mas_menos_1001_si() {
+fn row_4_chrm_of_srgb_plus_minus_1000_does_not_trigger_and_plus_minus_1001_does() {
     for i in 0..8 {
-        for (delta, esperado) in [
+        for (delta, expected) in [
             (1000i64, None),
             (-1000, None),
             (1001, Some(AuxChunk::Chromaticities)),
@@ -382,8 +382,8 @@ fn fila_4_chrm_de_srgb_mas_menos_1000_no_activa_y_mas_menos_1001_si() {
         ] {
             let mut v = CHRM_SRGB;
             v[i] = u32::try_from(i64::from(v[i]) + delta).unwrap();
-            let r = aux_de(&con(&[c_chrm(v)], &[]));
-            assert_eq!(r.appearance, esperado, "valor {i}, delta {delta}");
+            let r = aux_de(&with(&[c_chrm(v)], &[]));
+            assert_eq!(r.appearance, expected, "valor {i}, delta {delta}");
             assert_eq!(
                 r.found,
                 [AuxChunk::Chromaticities],
@@ -398,24 +398,24 @@ fn fila_4_chrm_de_srgb_mas_menos_1000_no_activa_y_mas_menos_1001_si() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_5_longitud_imposible_cuenta_como_otro_y_no_activa_nada() {
-    let casos: Vec<(&str, Vec<u8>)> = vec![
-        ("gAMA de 3 bytes", trozo(b"gAMA", &[0, 1, 2])),
-        ("cHRM de 31 bytes", trozo(b"cHRM", &[7; 31])),
-        ("sRGB de 2 bytes", trozo(b"sRGB", &[0, 0])),
-        ("cICP de 5 bytes", trozo(b"cICP", &[9, 16, 9, 1, 0])),
+fn row_5_impossible_length_counts_as_other_and_triggers_nothing() {
+    let cases: Vec<(&str, Vec<u8>)> = vec![
+        ("gAMA de 3 bytes", piece(b"gAMA", &[0, 1, 2])),
+        ("cHRM de 31 bytes", piece(b"cHRM", &[7; 31])),
+        ("sRGB de 2 bytes", piece(b"sRGB", &[0, 0])),
+        ("cICP de 5 bytes", piece(b"cICP", &[9, 16, 9, 1, 0])),
     ];
-    for (nombre, chunk) in casos {
-        let r = lee(&con(&[chunk], &[]));
-        assert_eq!(r.aux, informe(&[AuxChunk::Other], None), "{nombre}");
-        assert!(r.report.is_empty(), "{nombre}");
+    for (name_2, chunk) in cases {
+        let r = lee(&with(&[chunk], &[]));
+        assert_eq!(r.aux, report(&[AuxChunk::Other], None), "{name_2}");
+        assert!(r.report.is_empty(), "{name_2}");
     }
 }
 
 #[test]
-fn fila_5_iccp_vacio_activa_la_copia() {
-    let r = lee(&con(&[trozo(b"iCCP", &[])], &[]));
-    assert_eq!(r.aux, informe(&[AuxChunk::Icc], Some(AuxChunk::Icc)));
+fn row_5_empty_iccp_triggers_the_copy() {
+    let r = lee(&with(&[piece(b"iCCP", &[])], &[]));
+    assert_eq!(r.aux, report(&[AuxChunk::Icc], Some(AuxChunk::Icc)));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -423,8 +423,8 @@ fn fila_5_iccp_vacio_activa_la_copia() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6_crc_erroneo_se_lista_como_si_fuera_bueno() {
-    let casos: Vec<(&str, [u8; 4], Vec<u8>)> = vec![
+fn row_6_wrong_crc_is_listed_as_if_it_were_good() {
+    let cases: Vec<(&str, [u8; 4], Vec<u8>)> = vec![
         ("iCCP", *b"iCCP", {
             let mut d = b"perfil\0\0".to_vec();
             d.extend(zlib_stored(b"datos", 0));
@@ -433,76 +433,76 @@ fn fila_6_crc_erroneo_se_lista_como_si_fuera_bueno() {
         ("gAMA", *b"gAMA", 100_000u32.to_be_bytes().to_vec()),
         ("tEXt", *b"tEXt", b"Title\0pixoko".to_vec()),
     ];
-    for (nombre, tipo, datos) in casos {
-        let bueno = lee(&con(&[trozo(&tipo, &datos)], &[]));
-        let malo = lee(&con(&[crc_malo(&tipo, &datos)], &[]));
-        assert_eq!(malo.aux, bueno.aux, "{nombre}");
-        assert!(!malo.aux.found.is_empty(), "{nombre}: se lista igual");
-        assert_eq!(malo.image, bueno.image, "{nombre}");
-        assert_eq!(malo.report, bueno.report, "{nombre}");
+    for (name_2, kind, data) in cases {
+        let good = lee(&with(&[piece(&kind, &data)], &[]));
+        let bad = lee(&with(&[crc_bad(&kind, &data)], &[]));
+        assert_eq!(bad.aux, good.aux, "{name_2}");
+        assert!(!bad.aux.found.is_empty(), "{name_2}: se lista igual");
+        assert_eq!(bad.image, good.image, "{name_2}");
+        assert_eq!(bad.report, good.report, "{name_2}");
         // Y después del IDAT.
-        let malo_despues = lee(&con(&[], &[crc_malo(&tipo, &datos)]));
-        assert_eq!(malo_despues.aux, bueno.aux, "{nombre} tras el IDAT");
+        let bad_after = lee(&with(&[], &[crc_bad(&kind, &data)]));
+        assert_eq!(bad_after.aux, good.aux, "{name_2} tras el IDAT");
     }
     // Lo que queda dicho en concreto: el iCCP de CRC malo activa la copia.
-    let r = aux_de(&con(&[crc_malo(b"iCCP", b"x")], &[]));
-    assert_eq!(r, informe(&[AuxChunk::Icc], Some(AuxChunk::Icc)));
+    let r = aux_de(&with(&[crc_bad(b"iCCP", b"x")], &[]));
+    assert_eq!(r, report(&[AuxChunk::Icc], Some(AuxChunk::Icc)));
 }
 
 #[test]
-fn fila_6_tipos_raros_y_longitud_cero() {
-    let casos: Vec<(&str, Vec<u8>, Vec<AuxChunk>)> = vec![
-        ("zzZz", trozo(b"zzZz", &[1, 2]), vec![AuxChunk::Other]),
+fn row_6_odd_types_and_zero_length() {
+    let cases: Vec<(&str, Vec<u8>, Vec<AuxChunk>)> = vec![
+        ("zzZz", piece(b"zzZz", &[1, 2]), vec![AuxChunk::Other]),
         (
             "bytes no alfabéticos con minúscula inicial",
-            trozo(&[0x61, 0x01, 0x02, 0x03], &[9, 9]),
+            piece(&[0x61, 0x01, 0x02, 0x03], &[9, 9]),
             vec![AuxChunk::Other],
         ),
         (
             "desconocido de longitud 0",
-            trozo(b"teSt", &[]),
+            piece(b"teSt", &[]),
             vec![AuxChunk::Other],
         ),
         (
             "tEXt de longitud 0",
-            trozo(b"tEXt", &[]),
+            piece(b"tEXt", &[]),
             vec![AuxChunk::Text],
         ),
         (
             "eXIf de longitud 0",
-            trozo(b"eXIf", &[]),
+            piece(b"eXIf", &[]),
             vec![AuxChunk::Exif],
         ),
     ];
-    for (nombre, chunk, found) in casos {
-        for (donde, bytes) in [
-            ("antes", con(std::slice::from_ref(&chunk), &[])),
-            ("después", con(&[], std::slice::from_ref(&chunk))),
+    for (name_2, chunk, found) in cases {
+        for (location, bytes) in [
+            ("antes", with(std::slice::from_ref(&chunk), &[])),
+            ("después", with(&[], std::slice::from_ref(&chunk))),
         ] {
             let r = read_png(&bytes);
-            let r = r.unwrap_or_else(|e| panic!("{nombre} {donde} del IDAT: {e:?}"));
-            assert_eq!(r.aux, informe(&found, None), "{nombre} {donde} del IDAT");
-            assert_eq!(pixeles(&r.image), [rgba(10, 20, 30, 40)], "{nombre}");
+            let r = r.unwrap_or_else(|e| panic!("{name_2} {location} del IDAT: {e:?}"));
+            assert_eq!(r.aux, report(&found, None), "{name_2} {location} del IDAT");
+            assert_eq!(pixels(&r.image), [rgba(10, 20, 30, 40)], "{name_2}");
         }
     }
 }
 
 #[test]
-fn fila_6_longitud_declarada_de_2_31_menos_1_con_el_fichero_corto_es_decode() {
-    let valido = base().bytes();
-    let iend = valido.len() - 12;
-    for tipo in [b"eXIf", b"iCCP", b"tEXt", b"teSt"] {
-        let nombre = String::from_utf8_lossy(tipo).into_owned();
+fn row_6_declared_length_of_2_31_minus_1_with_a_short_file_is_decode() {
+    let valid = base().bytes();
+    let iend = valid.len() - 12;
+    for kind in [b"eXIf", b"iCCP", b"tEXt", b"teSt"] {
+        let name_2 = String::from_utf8_lossy(kind).into_owned();
         // Antes del IDAT (tras el IHDR) y después (antes del IEND).
-        let mut antes = valido[..33].to_vec();
-        antes.extend(gigante(tipo));
-        antes.extend(&valido[33..]);
-        let mut despues = valido[..iend].to_vec();
-        despues.extend(gigante(tipo));
-        despues.extend(&valido[iend..]);
-        for (donde, bytes) in [("antes", antes), ("después", despues)] {
+        let mut antes = valid[..33].to_vec();
+        antes.extend(giant(kind));
+        antes.extend(&valid[33..]);
+        let mut after = valid[..iend].to_vec();
+        after.extend(giant(kind));
+        after.extend(&valid[iend..]);
+        for (location, bytes) in [("antes", antes), ("después", after)] {
             let r = read_png(&bytes);
-            assert!(es_decode(&r), "{nombre} {donde} del IDAT: {r:?}");
+            assert!(es_decode(&r), "{name_2} {location} del IDAT: {r:?}");
         }
     }
 }
@@ -512,9 +512,9 @@ fn fila_6_longitud_declarada_de_2_31_menos_1_con_el_fichero_corto_es_decode() {
 // ---------------------------------------------------------------------------------------
 
 /// `fcTL` de 2×1 sin desplazamiento (26 bytes) con ese número de secuencia.
-fn fctl(secuencia: u32) -> Vec<u8> {
+fn fctl(sequence: u32) -> Vec<u8> {
     let mut d = Vec::new();
-    d.extend(secuencia.to_be_bytes());
+    d.extend(sequence.to_be_bytes());
     d.extend(2u32.to_be_bytes());
     d.extend(1u32.to_be_bytes());
     d.extend([0u8; 8]);
@@ -523,62 +523,62 @@ fn fctl(secuencia: u32) -> Vec<u8> {
 }
 
 /// APNG de 2×1 en gris con el IDAT `[10, 20]` como imagen por defecto y un segundo cuadro
-/// en un `fdAT`. Con `con_actl` falso falta el `acTL`; `extra` va entre el IHDR y el `acTL`.
-fn apng(con_actl: bool, extra: &[Vec<u8>]) -> Vec<u8> {
+/// en un `fdAT`. Con `with_actl` falso falta el `acTL`; `extra` va entre el IHDR y el `acTL`.
+fn apng(with_actl: bool, extra: &[Vec<u8>]) -> Vec<u8> {
     let mut fdat = 2u32.to_be_bytes().to_vec();
     fdat.extend(zlib_stored(&[0, 30, 40], 0));
-    let mut png = Png::new(2, 1, 8, 0).muestras(&[10, 20]);
+    let mut png = Png::new(2, 1, 8, 0).swatches(&[10, 20]);
     for c in extra {
         png = png.antes(c.clone());
     }
-    if con_actl {
+    if with_actl {
         png = png.antes(c_actl());
     }
-    png.antes(trozo(b"fcTL", &fctl(0)))
-        .despues(trozo(b"fcTL", &fctl(1)))
-        .despues(trozo(b"fdAT", &fdat))
+    png.antes(piece(b"fcTL", &fctl(0)))
+        .after(piece(b"fcTL", &fctl(1)))
+        .after(piece(b"fdAT", &fdat))
         .bytes()
 }
 
 #[test]
-fn fila_7_apng_solo_activa_la_copia_con_su_primer_fotograma() {
+fn row_7_apng_only_triggers_the_copy_with_its_first_frame() {
     let r = lee(&apng(true, &[]));
     assert_eq!(
         r.aux,
-        informe(&[AuxChunk::Animation], Some(AuxChunk::Animation))
+        report(&[AuxChunk::Animation], Some(AuxChunk::Animation))
     );
     assert_eq!(r.image.mode(), Mode::Gray);
-    assert_eq!(pixeles(&r.image), grises(&[10, 20]));
+    assert_eq!(pixels(&r.image), grays(&[10, 20]));
     assert!(r.report.is_empty());
 }
 
 #[test]
-fn fila_7_apng_con_iccp_manda_animation() {
+fn row_7_apng_with_iccp_wins_animation() {
     let r = lee(&apng(true, &[c_iccp()]));
     assert_eq!(
         r.aux,
-        informe(
+        report(
             &[AuxChunk::Icc, AuxChunk::Animation],
             Some(AuxChunk::Animation)
         )
     );
-    assert_eq!(pixeles(&r.image), grises(&[10, 20]));
+    assert_eq!(pixels(&r.image), grays(&[10, 20]));
 }
 
 #[test]
-fn fila_7_fctl_sin_actl_se_lista_pero_no_activa_la_copia() {
+fn row_7_fctl_without_actl_is_listed_but_does_not_trigger_the_copy() {
     // Un APNG roto: `fcTL` (y `fdAT`) sin `acTL`.
-    let sin_actl = Png::new(2, 1, 8, 0)
-        .muestras(&[10, 20])
-        .antes(trozo(b"fcTL", &fctl(0)))
+    let without_actl = Png::new(2, 1, 8, 0)
+        .swatches(&[10, 20])
+        .antes(piece(b"fcTL", &fctl(0)))
         .bytes();
-    let r = lee(&sin_actl);
-    assert_eq!(r.aux, informe(&[AuxChunk::Animation], None));
-    assert_eq!(pixeles(&r.image), grises(&[10, 20]));
+    let r = lee(&without_actl);
+    assert_eq!(r.aux, report(&[AuxChunk::Animation], None));
+    assert_eq!(pixels(&r.image), grays(&[10, 20]));
 
     let r = lee(&apng(false, &[]));
-    assert_eq!(r.aux, informe(&[AuxChunk::Animation], None));
-    assert_eq!(pixeles(&r.image), grises(&[10, 20]));
+    assert_eq!(r.aux, report(&[AuxChunk::Animation], None));
+    assert_eq!(pixels(&r.image), grays(&[10, 20]));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -586,8 +586,8 @@ fn fila_7_fctl_sin_actl_se_lista_pero_no_activa_la_copia() {
 // ---------------------------------------------------------------------------------------
 
 /// Un auxiliar válido de los tipos de D2, con valores cualesquiera dentro de lo legal.
-fn aux_valido() -> impl Strategy<Value = Vec<u8>> {
-    let fijos = select(vec![
+fn aux_valid() -> impl Strategy<Value = Vec<u8>> {
+    let fixed = select(vec![
         c_iccp(),
         c_phys(),
         c_text(),
@@ -596,39 +596,39 @@ fn aux_valido() -> impl Strategy<Value = Vec<u8>> {
         c_time(),
         c_exif(),
         c_actl(),
-        c_desconocido(),
+        c_unknown(),
     ]);
     prop_oneof![
-        5 => fijos,
+        5 => fixed,
         1 => (any::<u8>(), any::<u8>(), 0u8..=1)
             .prop_map(|(p, t, r)| c_cicp(p, t, 0, r)),
-        1 => (0u8..=3).prop_map(|i| trozo(b"sRGB", &[i])),
-        1 => (1u32..=200_000).prop_map(c_gama),
+        1 => (0u8..=3).prop_map(|i| piece(b"sRGB", &[i])),
+        1 => (1u32..=200_000).prop_map(c_gamma),
         1 => proptest::array::uniform8(0u32..=100_000).prop_map(c_chrm),
     ]
 }
 
 proptest! {
     #[test]
-    fn propiedad_1_los_auxiliares_no_cambian_la_imagen_ni_el_informe(
-        img in imagen_arbitraria(),
-        chunks in vec((aux_valido(), any::<bool>()), 0..=8),
+    fn property_1_auxiliaries_change_neither_the_image_nor_the_report(
+        img in image_arbitrary(),
+        chunks in vec((aux_valid(), any::<bool>()), 0..=8),
     ) {
-        let sin_bytes = write_png(&img).unwrap();
+        let without_bytes = write_png(&img).unwrap();
         let antes: Vec<Vec<u8>> = chunks.iter().filter(|(_, d)| !d).map(|(c, _)| c.clone()).collect();
-        let despues: Vec<Vec<u8>> = chunks.iter().filter(|(_, d)| *d).map(|(c, _)| c.clone()).collect();
-        let con_bytes = inserta(&sin_bytes, &antes, &despues);
+        let after: Vec<Vec<u8>> = chunks.iter().filter(|(_, d)| *d).map(|(c, _)| c.clone()).collect();
+        let with_bytes = inserts(&without_bytes, &antes, &after);
 
-        let sin = read_png(&sin_bytes).unwrap();
-        let con = read_png(&con_bytes).unwrap();
-        prop_assert_eq!(&con.image, &sin.image);
-        prop_assert_eq!(&con.report, &sin.report);
-        prop_assert_eq!(con.is_exact(), sin.is_exact());
+        let without = read_png(&without_bytes).unwrap();
+        let with = read_png(&with_bytes).unwrap();
+        prop_assert_eq!(&with.image, &without.image);
+        prop_assert_eq!(&with.report, &without.report);
+        prop_assert_eq!(with.is_exact(), without.is_exact());
         prop_assert_eq!(
-            write_png(&con.image).unwrap(),
-            write_png(&sin.image).unwrap()
+            write_png(&with.image).unwrap(),
+            write_png(&without.image).unwrap()
         );
-        prop_assert_eq!(sin.aux, AuxReport::default());
+        prop_assert_eq!(without.aux, AuxReport::default());
     }
 }
 
@@ -637,36 +637,36 @@ proptest! {
 // ---------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
-struct Basura {
-    tipo: [u8; 4],
-    datos: Vec<u8>,
-    crc_bueno: bool,
-    /// Declara 2³¹ − 1 bytes de datos aunque lleve solo `datos`.
-    declara_de_mas: bool,
-    despues: bool,
+struct Garbage {
+    kind: [u8; 4],
+    data: Vec<u8>,
+    crc_good: bool,
+    /// Declara 2³¹ − 1 bytes de datos aunque lleve solo `data`.
+    declares_of_more: bool,
+    after: bool,
 }
 
-impl Basura {
+impl Garbage {
     fn bytes(&self) -> Vec<u8> {
-        let largo = if self.declara_de_mas {
+        let largo = if self.declares_of_more {
             u32::MAX >> 1
         } else {
-            self.datos.len() as u32
+            self.data.len() as u32
         };
-        let mut cuerpo = self.tipo.to_vec();
-        cuerpo.extend(&self.datos);
-        let mut crc = crc32(&cuerpo);
-        if !self.crc_bueno {
+        let mut body = self.kind.to_vec();
+        body.extend(&self.data);
+        let mut crc = crc32(&body);
+        if !self.crc_good {
             crc ^= 0xFF;
         }
         let mut v = largo.to_be_bytes().to_vec();
-        v.extend(&cuerpo);
+        v.extend(&body);
         v.extend(crc.to_be_bytes());
         v
     }
 }
 
-fn basura() -> impl Strategy<Value = Basura> {
+fn garbage() -> impl Strategy<Value = Garbage> {
     (
         b'a'..=b'z',
         any::<[u8; 3]>(),
@@ -676,19 +676,19 @@ fn basura() -> impl Strategy<Value = Basura> {
         any::<bool>(),
     )
         .prop_map(
-            |(inicial, resto, datos, crc_bueno, declara_de_mas, despues)| Basura {
-                tipo: [inicial, resto[0], resto[1], resto[2]],
-                datos,
-                crc_bueno,
-                declara_de_mas,
-                despues,
+            |(initial, rest_2, data, crc_good, declares_of_more, after)| Garbage {
+                kind: [initial, rest_2[0], rest_2[1], rest_2[2]],
+                data,
+                crc_good,
+                declares_of_more,
+                after,
             },
         )
 }
 
 /// `found` ordenado y sin repetidos, y `appearance` o `None` o un elemento de `found` entre
 /// los cinco que activan la copia.
-fn comprueba_forma(aux: &AuxReport) -> Result<(), TestCaseError> {
+fn checks_shape(aux: &AuxReport) -> Result<(), TestCaseError> {
     prop_assert!(
         aux.found.windows(2).all(|w| w[0] < w[1]),
         "found desordenado o con repetidos: {:?}",
@@ -715,21 +715,21 @@ fn comprueba_forma(aux: &AuxReport) -> Result<(), TestCaseError> {
 
 proptest! {
     #[test]
-    fn propiedad_2_nunca_panico_y_el_informe_cumple_su_forma(
-        img in imagen_arbitraria(),
-        chunks in vec(basura(), 0..=8),
-        cambios in vec((any::<usize>(), any::<u8>()), 1..=4),
+    fn property_2_never_a_panic_and_the_report_meets_its_shape(
+        img in image_arbitrary(),
+        chunks in vec(garbage(), 0..=8),
+        changes in vec((any::<usize>(), any::<u8>()), 1..=4),
     ) {
-        let valido = write_png(&img).unwrap();
-        let antes: Vec<Vec<u8>> = chunks.iter().filter(|c| !c.despues).map(Basura::bytes).collect();
-        let despues: Vec<Vec<u8>> = chunks.iter().filter(|c| c.despues).map(Basura::bytes).collect();
-        let mut bytes = inserta(&valido, &antes, &despues);
-        for (donde, nuevo) in cambios {
-            let i = donde % bytes.len();
-            bytes[i] = nuevo;
+        let valid = write_png(&img).unwrap();
+        let antes: Vec<Vec<u8>> = chunks.iter().filter(|c| !c.after).map(Garbage::bytes).collect();
+        let after: Vec<Vec<u8>> = chunks.iter().filter(|c| c.after).map(Garbage::bytes).collect();
+        let mut bytes = inserts(&valid, &antes, &after);
+        for (location, new_2) in changes {
+            let i = location % bytes.len();
+            bytes[i] = new_2;
         }
-        if let Ok(leido) = read_png(&bytes) {
-            comprueba_forma(&leido.aux)?;
+        if let Ok(read) = read_png(&bytes) {
+            checks_shape(&read.aux)?;
         }
     }
 }
@@ -740,31 +740,31 @@ proptest! {
 
 /// Los seis chunks que influyen en `appearance`, cada uno ausente o con sus bytes.
 #[derive(Clone, Debug)]
-struct CasoColor {
+struct CaseColor {
     actl: bool,
     iccp: Option<Vec<u8>>,
     cicp: Option<Vec<u8>>,
     srgb: Option<Vec<u8>>,
-    gama: Option<Vec<u8>>,
+    gamma: Option<Vec<u8>>,
     chrm: Option<Vec<u8>>,
 }
 
-impl CasoColor {
+impl CaseColor {
     /// Los chunks presentes, con CRC bueno, por el orden de los campos.
     fn chunks(&self) -> Vec<Vec<u8>> {
         let mut v = Vec::new();
         if self.actl {
             v.push(c_actl());
         }
-        for (tipo, datos) in [
+        for (kind, data) in [
             (b"iCCP", &self.iccp),
             (b"cICP", &self.cicp),
             (b"sRGB", &self.srgb),
-            (b"gAMA", &self.gama),
+            (b"gAMA", &self.gamma),
             (b"cHRM", &self.chrm),
         ] {
-            if let Some(d) = datos {
-                v.push(trozo(tipo, d));
+            if let Some(d) = data {
+                v.push(piece(kind, d));
             }
         }
         v
@@ -772,12 +772,12 @@ impl CasoColor {
 }
 
 /// Bytes de un chunk con la longitud pedida: los de `base` recortados o completados con ceros.
-fn con_longitud(mut base: Vec<u8>, largo: usize) -> Vec<u8> {
+fn with_length(mut base: Vec<u8>, largo: usize) -> Vec<u8> {
     base.resize(largo, 0);
     base
 }
 
-fn caso_color() -> impl Strategy<Value = CasoColor> {
+fn case_color() -> impl Strategy<Value = CaseColor> {
     let iccp = proptest::option::of(vec(any::<u8>(), 0..=40));
     let cicp = proptest::option::of(
         (
@@ -786,13 +786,13 @@ fn caso_color() -> impl Strategy<Value = CasoColor> {
             0u8..=1,
             select(vec![4usize, 4, 4, 3, 5, 0]),
         )
-            .prop_map(|(p, t, r, largo)| con_longitud(vec![p, t, 0, r], largo)),
+            .prop_map(|(p, t, r, largo)| with_length(vec![p, t, 0, r], largo)),
     );
     let srgb = proptest::option::of(
         (any::<u8>(), select(vec![1usize, 1, 1, 0, 2]))
-            .prop_map(|(v, largo)| con_longitud(vec![v], largo)),
+            .prop_map(|(v, largo)| with_length(vec![v], largo)),
     );
-    let gama = proptest::option::of(
+    let gamma = proptest::option::of(
         (
             prop_oneof![
                 select(vec![
@@ -802,16 +802,16 @@ fn caso_color() -> impl Strategy<Value = CasoColor> {
             ],
             select(vec![4usize, 4, 4, 3, 5]),
         )
-            .prop_map(|(g, largo)| con_longitud(g.to_be_bytes().to_vec(), largo)),
+            .prop_map(|(g, largo)| with_length(g.to_be_bytes().to_vec(), largo)),
     );
-    let desvio = select(vec![0i64, 0, 0, 1000, -1000, 1001, -1001, 20_000, -20_000]);
+    let deviation = select(vec![0i64, 0, 0, 1000, -1000, 1001, -1001, 20_000, -20_000]);
     let chrm = proptest::option::of(
         (
-            proptest::array::uniform8(desvio),
+            proptest::array::uniform8(deviation),
             select(vec![32usize, 32, 32, 31, 33]),
         )
             .prop_map(|(d, largo)| {
-                let datos: Vec<u8> = CHRM_SRGB
+                let data: Vec<u8> = CHRM_SRGB
                     .iter()
                     .zip(d)
                     .flat_map(|(&v, d)| {
@@ -819,23 +819,23 @@ fn caso_color() -> impl Strategy<Value = CasoColor> {
                         valor.to_be_bytes()
                     })
                     .collect();
-                con_longitud(datos, largo)
+                with_length(data, largo)
             }),
     );
-    (any::<bool>(), iccp, cicp, srgb, gama, chrm).prop_map(
-        |(actl, iccp, cicp, srgb, gama, chrm)| CasoColor {
+    (any::<bool>(), iccp, cicp, srgb, gamma, chrm).prop_map(
+        |(actl, iccp, cicp, srgb, gamma, chrm)| CaseColor {
             actl,
             iccp,
             cicp,
             srgb,
-            gama,
+            gamma,
             chrm,
         },
     )
 }
 
 /// La regla de D2, escrita aparte de la implementación.
-fn apariencia_esperada(c: &CasoColor) -> Option<AuxChunk> {
+fn appearance_expected(c: &CaseColor) -> Option<AuxChunk> {
     let be = |d: &[u8], i: usize| u32::from_be_bytes([d[i], d[i + 1], d[i + 2], d[i + 3]]);
     if c.actl {
         return Some(AuxChunk::Animation);
@@ -849,7 +849,7 @@ fn apariencia_esperada(c: &CasoColor) -> Option<AuxChunk> {
     if c.srgb.as_ref().is_some_and(|d| d.len() == 1) {
         return None;
     }
-    if let Some(d) = c.gama.as_ref().filter(|d| d.len() == 4)
+    if let Some(d) = c.gamma.as_ref().filter(|d| d.len() == 4)
         && be(d, 0).abs_diff(45455) > 1000
     {
         return Some(AuxChunk::Gamma);
@@ -863,7 +863,7 @@ fn apariencia_esperada(c: &CasoColor) -> Option<AuxChunk> {
 }
 
 /// `found` esperado: el tipo de cada chunk presente, o `Other` si su tamaño es imposible.
-fn encontrados_esperados(c: &CasoColor) -> Vec<AuxChunk> {
+fn found_expected(c: &CaseColor) -> Vec<AuxChunk> {
     let mut found = Vec::new();
     if c.actl {
         found.push(AuxChunk::Animation);
@@ -871,19 +871,19 @@ fn encontrados_esperados(c: &CasoColor) -> Vec<AuxChunk> {
     if c.iccp.is_some() {
         found.push(AuxChunk::Icc);
     }
-    let mut con_tamano = |presente: &Option<Vec<u8>>, largo: usize, tipo: AuxChunk| {
-        if let Some(d) = presente {
+    let mut with_size = |present: &Option<Vec<u8>>, largo: usize, kind: AuxChunk| {
+        if let Some(d) = present {
             found.push(if d.len() == largo {
-                tipo
+                kind
             } else {
                 AuxChunk::Other
             });
         }
     };
-    con_tamano(&c.cicp, 4, AuxChunk::CodePoints);
-    con_tamano(&c.srgb, 1, AuxChunk::Srgb);
-    con_tamano(&c.gama, 4, AuxChunk::Gamma);
-    con_tamano(&c.chrm, 32, AuxChunk::Chromaticities);
+    with_size(&c.cicp, 4, AuxChunk::CodePoints);
+    with_size(&c.srgb, 1, AuxChunk::Srgb);
+    with_size(&c.gamma, 4, AuxChunk::Gamma);
+    with_size(&c.chrm, 32, AuxChunk::Chromaticities);
     found.sort();
     found.dedup();
     found
@@ -891,11 +891,11 @@ fn encontrados_esperados(c: &CasoColor) -> Vec<AuxChunk> {
 
 proptest! {
     #[test]
-    fn propiedad_3_appearance_coincide_con_el_modelo_de_d2(caso in caso_color()) {
-        let r = read_png(&con(&caso.chunks(), &[])).unwrap();
-        prop_assert_eq!(r.aux.appearance, apariencia_esperada(&caso), "{:?}", caso);
-        prop_assert_eq!(&r.aux.found, &encontrados_esperados(&caso), "{:?}", caso);
+    fn property_3_appearance_matches_the_d2_model(case in case_color()) {
+        let r = read_png(&with(&case.chunks(), &[])).unwrap();
+        prop_assert_eq!(r.aux.appearance, appearance_expected(&case), "{:?}", case);
+        prop_assert_eq!(&r.aux.found, &found_expected(&case), "{:?}", case);
         prop_assert!(r.report.is_empty());
-        prop_assert_eq!(pixeles(&r.image), vec![rgba(10, 20, 30, 40)]);
+        prop_assert_eq!(pixels(&r.image), vec![rgba(10, 20, 30, 40)]);
     }
 }

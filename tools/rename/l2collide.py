@@ -60,9 +60,37 @@ def prod_items(crate: str):
     return names
 
 
+def crate_modnames(crate_dir: str):
+    """Nombres de elementos y de `use` de todos los ficheros del crate (los `use mod::*` de otro fichero los ven)."""
+    names = set()
+    for p in rs_files():
+        rel = str(p.relative_to(ROOT))
+        if not rel.startswith(crate_dir):
+            continue
+        toks = lex(p.read_text(encoding="utf-8"))
+        in_use = False
+        depth = 0
+        for i, tk in enumerate(toks):
+            if tk.kind == "ident":
+                if tk.text == "use":
+                    in_use = True
+                elif in_use:
+                    names.add(ident_name(tk))
+                elif tk.text in ITEM_KW:
+                    j = i + 1
+                    while j < len(toks) and toks[j].kind in ("ws", "comment"):
+                        j += 1
+                    if j < len(toks) and toks[j].kind == "ident":
+                        names.add(ident_name(toks[j]))
+            elif tk.kind == "punct" and tk.text == ";":
+                in_use = False
+    return names
+
+
 def find(crate: str | None = None):
     found = []
     items_cache: dict[str, set[str]] = {}
+    cmod_cache: dict[str, set[str]] = {}
     for p in rs_files():
         rel = str(p.relative_to(ROOT))
         if crate and not rel.startswith(crate):
@@ -88,6 +116,9 @@ def find(crate: str | None = None):
         if cr not in items_cache:
             items_cache[cr] = prod_items(cr)
         items = items_cache[cr]
+        if cr not in cmod_cache:
+            cmod_cache[cr] = crate_modnames(cr)
+        cmods = cmod_cache[cr]
         # fichero: en `fn_of[i]` la región más interior que contiene el token i
         def region(i):
             best = None
@@ -132,7 +163,7 @@ def find(crate: str | None = None):
                 r = region(i)
                 if r is None:
                     # elemento de módulo: pisa a uno de producción del mismo nombre
-                    if (new in items or new in modnames) and ("mod", old) not in done:
+                    if (new in items or new in modnames or new in cmods) and ("mod", old) not in done:
                         found.append((rel, "item", old, new, "pisa un elemento de producción o del módulo"))
                         done.add(("mod", old))
                     # o ya existe como elemento de módulo en este fichero

@@ -194,7 +194,7 @@ pub fn write_aseprite(doc: &Document) -> Result<Vec<u8>, AsepriteError> {
     Ok(out)
 }
 
-/// El rectángulo mínimo `(x, y, ancho, alto)` que contiene todos los píxeles no transparentes, o
+/// El rectángulo mínimo `(x, y, width, height)` que contiene todos los píxeles no transparentes, o
 /// `None` si no hay ninguno (RGBA: alfa 0; indexado: el índice transparente).
 fn visible_rect(image: &Image, mode: Mode, transparent: u8) -> Option<(u32, u32, u32, u32)> {
     let bpp = mode.bytes_per_pixel();
