@@ -30,7 +30,7 @@ use super::common::sha256::sha256_hex;
 use super::{bytes_rgba, folder_golden_png, names_in};
 
 /// Rejilla de celdas de 4 bytes (RGBA `[r, g, b, a]`, gris con alfa `[g, a, 0, 0]`, gris `[g, 0, 0,
-/// 0]` e indexed `[índice, 0, 0, 0]`) y palette: el model ingenuo de las ediciones.
+/// 0]` e indexed `[índice, 0, 0, 0]`) y palette: el model ingenuo from las ediciones.
 #[derive(Clone)]
 struct Model {
     mode: Mode,
@@ -43,7 +43,7 @@ struct Model {
 
 impl Model {
     /// Siembra el modelo con una imagen cuya RGBA ya se comprobó contra su `.sha256`.
-    fn de(image_2: &Image) -> Model {
+    fn from(image_2: &Image) -> Model {
         let mode = image_2.mode();
         let n = match mode {
             Mode::Rgba => 4,
@@ -97,11 +97,11 @@ impl Model {
         self.cels[y * self.width + x] = cel_2;
     }
 
-    /// Mueve la entrada `de` a la posición `a` (como quitar e insertar) y remapea los píxeles y el
+    /// Mueve la entrada `from` a la posición `a` (como quitar e insertar) y remapea los píxeles y el
     /// índice transparente.
-    fn move_pointer(&mut self, de: usize, a: usize) {
+    fn move_pointer(&mut self, from: usize, a: usize) {
         let mut order: Vec<usize> = (0..self.palette.len()).collect();
-        let moved = order.remove(de);
+        let moved = order.remove(from);
         order.insert(a, moved);
         let mut forward = vec![0u8; order.len()];
         for (new_2, &old) in order.iter().enumerate() {
@@ -252,7 +252,7 @@ fn row_11_the_sha256_of_the_reread_is_the_models_in_the_four_real_ones() {
         let initial = sha256_hex(&bytes_rgba(&read.image));
         assert_eq!(&initial, hash, "{name_2}: la lectura no es la del .sha256");
 
-        let model = Model::de(&read.image);
+        let model = Model::from(&read.image);
         let mut document = Document::new(read.image);
         let model = edit(&mut document, model);
         let expected = sha256_hex(&model.rgba());
@@ -287,7 +287,7 @@ fn row_11_the_sha256_of_the_reread_is_the_models_in_the_four_real_ones() {
 fn row_11_control_a_model_with_one_pixel_changed_gives_another_sha256() {
     for (name_2, bytes, _) in &real() {
         let read = read_png(bytes).unwrap_or_else(|e| panic!("{name_2}: read_png: {e}"));
-        let model = Model::de(&read.image);
+        let model = Model::from(&read.image);
         let mut document = Document::new(read.image);
         let model = edit(&mut document, model);
         let edited = document

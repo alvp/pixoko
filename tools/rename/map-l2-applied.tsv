@@ -9602,3 +9602,15 @@ id	spans_de	spans_of	crates/px-raster/
 id	va	pixel_a	crates/px-raster/tests/fill.rs
 id	vb	pixel_b	crates/px-raster/tests/fill.rs
 id	vc	pixel_c	crates/px-raster/tests/fill.rs
+id	de	from	crates/px-golden/
+id	de_16_bits	is_16_bits	crates/px-golden/
+id	de_aseprite	from_aseprite	crates/px-golden/
+id	error_de	error_of	crates/px-golden/
+id	lee	read_bytes	crates/px-golden/
+id	lee_png	read_golden_png	crates/px-golden/
+id	pixel_de	pixel_of	crates/px-golden/
+id	pixel_de_patron	pixel_of_pattern	crates/px-golden/
+id	png_de_16_bits	png_of_16_bits	crates/px-golden/
+id	rgba_de	rgba_of	crates/px-golden/
+id	va	value_a	crates/px-golden/tests/png_interop/aseprite_gate.rs
+id	vb	value_b	crates/px-golden/tests/png_interop/aseprite_gate.rs

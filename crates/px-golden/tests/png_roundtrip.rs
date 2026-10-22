@@ -104,11 +104,11 @@ fn checks_exact(img: &Image, label: &str) -> Image {
     r.image
 }
 
-fn lee(bytes: &[u8]) -> PngRead {
+fn read_bytes(bytes: &[u8]) -> PngRead {
     read_png(bytes).unwrap()
 }
 
-fn error_de(bytes: &[u8]) -> PngError {
+fn error_of(bytes: &[u8]) -> PngError {
     read_png(bytes).unwrap_err()
 }
 
@@ -147,7 +147,7 @@ fn crc32_adler32_helper_and_walker_with_known_values() {
 // ---------------------------------------------------------------------------------------
 
 /// Píxel determinista y distinto de sus vecinos para los modos no indexados.
-fn pixel_de_patron(mode: Mode, k: usize) -> Pixel {
+fn pixel_of_pattern(mode: Mode, k: usize) -> Pixel {
     let b = |m: usize, c: usize| (k * m + c) as u8;
     match mode {
         Mode::Rgba => rgba(b(7, 1), b(13, 2), b(29, 3), b(31, 5)),
@@ -177,7 +177,7 @@ fn row_01_the_four_modes_in_four_shapes() {
         for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
             let img = fills(
                 Image::new(w, h, mode).unwrap(),
-                (0..n).map(|k| pixel_de_patron(mode, k)),
+                (0..n).map(|k| pixel_of_pattern(mode, k)),
             );
             checks_exact(&img, &format!("{mode:?} {w}x{h}"));
         }
@@ -426,14 +426,14 @@ proptest! {
 #[test]
 fn row_07_gray_of_1_2_and_4_bits_is_scaled() {
     // 1 bit: 0 y 255.
-    let r1 = lee(&Png::new(2, 1, 1, 0).swatches(&[0, 1]).bytes());
+    let r1 = read_bytes(&Png::new(2, 1, 1, 0).swatches(&[0, 1]).bytes());
     assert_eq!(r1.image.mode(), Mode::Gray);
     assert_eq!(pixels_2(&r1.image), grays(&[0, 255]));
     assert_eq!(r1.report, [Conversion::DepthExpanded { from_bits: 1 }]);
     assert!(!r1.is_exact());
 
     // 2 bits: 0, 85, 170, 255.
-    let r2 = lee(&Png::new(4, 1, 2, 0).swatches(&[0, 1, 2, 3]).bytes());
+    let r2 = read_bytes(&Png::new(4, 1, 2, 0).swatches(&[0, 1, 2, 3]).bytes());
     assert_eq!(r2.image.mode(), Mode::Gray);
     assert_eq!(pixels_2(&r2.image), grays(&[0, 85, 170, 255]));
     assert_eq!(r2.report, [Conversion::DepthExpanded { from_bits: 2 }]);
@@ -441,7 +441,7 @@ fn row_07_gray_of_1_2_and_4_bits_is_scaled() {
 
     // 4 bits, todos los valores: v * 17 (0, 17, 34, ..., 255).
     let all: Vec<u16> = (0..16).collect();
-    let r4 = lee(&Png::new(16, 1, 4, 0).swatches(&all).bytes());
+    let r4 = read_bytes(&Png::new(16, 1, 4, 0).swatches(&all).bytes());
     let expected_2: Vec<u8> = (0..16u8).map(|v| v * 17).collect();
     assert_eq!(expected_2[15], 255);
     assert_eq!(r4.image.mode(), Mode::Gray);
@@ -466,7 +466,7 @@ fn row_08_sixteen_bits_reduce_with_rounding() {
 
     // Gris 16.
     let swatches_g: Vec<u16> = (0..5).map(m).collect();
-    let g = lee(&Png::new(5, 1, 16, 0).swatches(&swatches_g).bytes());
+    let g = read_bytes(&Png::new(5, 1, 16, 0).swatches(&swatches_g).bytes());
     assert_eq!(g.image.mode(), Mode::Gray);
     assert_eq!(pixels_2(&g.image), grays(&[0, 0, 1, 2, 255]));
     assert_eq!(g.report, [Conversion::Depth16Reduced]);
@@ -474,7 +474,7 @@ fn row_08_sixteen_bits_reduce_with_rounding() {
 
     // Gris con alfa 16: gris = tabla[i], alfa = tabla[4 - i].
     let swatches_ga: Vec<u16> = (0..5).flat_map(|i| [m(i), m(4 - i)]).collect();
-    let ga = lee(&Png::new(5, 1, 16, 4).swatches(&swatches_ga).bytes());
+    let ga = read_bytes(&Png::new(5, 1, 16, 4).swatches(&swatches_ga).bytes());
     assert_eq!(ga.image.mode(), Mode::GrayAlpha);
     let expected_ga: Vec<(u8, u8)> = (0..5).map(|i| (v(i), v(4 - i))).collect();
     assert_eq!(expected_ga, [(0, 255), (0, 2), (1, 1), (2, 0), (255, 0)]);
@@ -486,7 +486,7 @@ fn row_08_sixteen_bits_reduce_with_rounding() {
     let swatches_c: Vec<u16> = (0..5)
         .flat_map(|i| [m(i), m(i + 1), m(i + 2), m(i + 3)])
         .collect();
-    let c = lee(&Png::new(5, 1, 16, 6).swatches(&swatches_c).bytes());
+    let c = read_bytes(&Png::new(5, 1, 16, 6).swatches(&swatches_c).bytes());
     assert_eq!(c.image.mode(), Mode::Rgba);
     let expected_c = [
         rgba(0, 0, 1, 2),
@@ -500,9 +500,11 @@ fn row_08_sixteen_bits_reduce_with_rounding() {
     assert!(!c.is_exact());
 
     // RGB 16 (0x0102, 0x0304, 0xFFFF): Rgba(1, 3, 255, 255).
-    let rgb = lee(&Png::new(1, 1, 16, 2)
-        .swatches(&[0x0102, 0x0304, 0xFFFF])
-        .bytes());
+    let rgb = read_bytes(
+        &Png::new(1, 1, 16, 2)
+            .swatches(&[0x0102, 0x0304, 0xFFFF])
+            .bytes(),
+    );
     assert_eq!(rgb.image.mode(), Mode::Rgba);
     assert_eq!(pixels_2(&rgb.image), [rgba(1, 3, 255, 255)]);
     assert_eq!(
@@ -515,27 +517,31 @@ fn row_08_sixteen_bits_reduce_with_rounding() {
 #[test]
 fn row_09_rgb_and_color_keys_trns() {
     // RGB 8 sin tRNS.
-    let r = lee(&Png::new(1, 1, 8, 2).swatches(&[1, 2, 3]).bytes());
+    let r = read_bytes(&Png::new(1, 1, 8, 2).swatches(&[1, 2, 3]).bytes());
     assert_eq!(r.image.mode(), Mode::Rgba);
     assert_eq!(pixels_2(&r.image), [rgba(1, 2, 3, 255)]);
     assert_eq!(r.report, [Conversion::RgbToRgba]);
     assert!(!r.is_exact());
 
     // tRNS de gris 8 con clave 7 (dos bytes, big-endian) y píxeles [7, 8].
-    let g8 = lee(&Png::new(2, 1, 8, 0)
-        .swatches(&[7, 8])
-        .before(trns(&[0, 7]))
-        .bytes());
+    let g8 = read_bytes(
+        &Png::new(2, 1, 8, 0)
+            .swatches(&[7, 8])
+            .before(trns(&[0, 7]))
+            .bytes(),
+    );
     assert_eq!(g8.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels_2(&g8.image), grays_alpha(&[(7, 0), (8, 255)]));
     assert_eq!(g8.report, [Conversion::ColorKeyToAlpha]);
     assert!(!g8.is_exact());
 
     // Gris de 2 bits con clave 1 y píxeles [1, 2]: 1 -> 85 transparente, 2 -> 170 opaco.
-    let g2 = lee(&Png::new(2, 1, 2, 0)
-        .swatches(&[1, 2])
-        .before(trns(&[0, 1]))
-        .bytes());
+    let g2 = read_bytes(
+        &Png::new(2, 1, 2, 0)
+            .swatches(&[1, 2])
+            .before(trns(&[0, 1]))
+            .bytes(),
+    );
     assert_eq!(g2.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels_2(&g2.image), grays_alpha(&[(85, 0), (170, 255)]));
     assert_eq!(
@@ -549,10 +555,12 @@ fn row_09_rgb_and_color_keys_trns() {
 
     // RGB 8 con clave (1, 2, 3) y píxeles (1, 2, 3) y (1, 2, 4): el RGB de la clave se
     // conserva con alfa 0.
-    let c8 = lee(&Png::new(2, 1, 8, 2)
-        .swatches(&[1, 2, 3, 1, 2, 4])
-        .before(trns(&[0, 1, 0, 2, 0, 3]))
-        .bytes());
+    let c8 = read_bytes(
+        &Png::new(2, 1, 8, 2)
+            .swatches(&[1, 2, 3, 1, 2, 4])
+            .before(trns(&[0, 1, 0, 2, 0, 3]))
+            .bytes(),
+    );
     assert_eq!(c8.image.mode(), Mode::Rgba);
     assert_eq!(pixels_2(&c8.image), [rgba(1, 2, 3, 0), rgba(1, 2, 4, 255)]);
     assert_eq!(
@@ -563,10 +571,12 @@ fn row_09_rgb_and_color_keys_trns() {
 
     // RGB 16 con tRNS: la clave se compara con las muestras de 16 bits originales, antes
     // de reducir. 0xFFFF se reduce a 255 y 0xFF00 a 254 (65280 / 257 = 254,01).
-    let c16 = lee(&Png::new(2, 1, 16, 2)
-        .swatches(&[0x0102, 0x0304, 0xFFFF, 0x0102, 0x0304, 0xFF00])
-        .before(trns(&[0x01, 0x02, 0x03, 0x04, 0xFF, 0xFF]))
-        .bytes());
+    let c16 = read_bytes(
+        &Png::new(2, 1, 16, 2)
+            .swatches(&[0x0102, 0x0304, 0xFFFF, 0x0102, 0x0304, 0xFF00])
+            .before(trns(&[0x01, 0x02, 0x03, 0x04, 0xFF, 0xFF]))
+            .bytes(),
+    );
     assert_eq!(c16.image.mode(), Mode::Rgba);
     assert_eq!(
         pixels_2(&c16.image),
@@ -624,12 +634,12 @@ fn row_10_truncated_corrupt_files_or_with_garbage() {
     // Un byte de más tras IEND.
     let mut with_x = valid.clone();
     with_x.extend(b"x");
-    assert_eq!(error_de(&with_x), PngError::TrailingData);
+    assert_eq!(error_of(&with_x), PngError::TrailingData);
 
     // Un chunk tEXt completo tras IEND.
     let mut with_text = valid.clone();
     with_text.extend(piece(b"tEXt", b"k\0v"));
-    assert_eq!(error_de(&with_text), PngError::TrailingData);
+    assert_eq!(error_of(&with_text), PngError::TrailingData);
 }
 
 #[test]
@@ -640,27 +650,27 @@ fn row_11_invalid_palette_and_trns() {
         .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .bytes();
     assert_eq!(
-        error_de(&outside),
+        error_of(&outside),
         PngError::PaletteIndexOutOfRange { index: 5, len: 2 }
     );
 
     // Indexado sin PLTE.
     let without_plte = Png::new(2, 1, 8, 3).swatches(&[0, 1]).bytes();
-    assert_eq!(error_de(&without_plte), PngError::InvalidPalette);
+    assert_eq!(error_of(&without_plte), PngError::InvalidPalette);
 
     // tRNS de gris de 1 byte (debe ser de 2).
     let gray = Png::new(1, 1, 8, 0)
         .swatches(&[1])
         .before(trns(&[7]))
         .bytes();
-    assert_eq!(error_de(&gray), PngError::InvalidTrns);
+    assert_eq!(error_of(&gray), PngError::InvalidTrns);
 
     // tRNS de RGB de 4 bytes (debe ser de 6).
     let rgb = Png::new(1, 1, 8, 2)
         .swatches(&[1, 2, 3])
         .before(trns(&[0, 1, 0, 2]))
         .bytes();
-    assert_eq!(error_de(&rgb), PngError::InvalidTrns);
+    assert_eq!(error_of(&rgb), PngError::InvalidTrns);
 
     // tRNS de 3 entradas con PLTE de 2.
     let length = Png::new(2, 1, 8, 3)
@@ -668,7 +678,7 @@ fn row_11_invalid_palette_and_trns() {
         .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .before(trns(&[0, 1, 2]))
         .bytes();
-    assert_eq!(error_de(&length), PngError::InvalidTrns);
+    assert_eq!(error_of(&length), PngError::InvalidTrns);
 }
 
 #[test]
@@ -677,7 +687,7 @@ fn row_12_huge_header_with_minimal_data_is_too_large() {
     // mínimo: no se reserva nada y no hay pánico.
     let almost = Png::new(32769, 32768, 8, 0).bytes();
     assert_eq!(
-        error_de(&almost),
+        error_of(&almost),
         PngError::TooLarge {
             width: 32769,
             height: 32768
@@ -687,7 +697,7 @@ fn row_12_huge_header_with_minimal_data_is_too_large() {
     // Gris 8 de 100000 x 100000.
     let huge = Png::new(100_000, 100_000, 8, 0).bytes();
     assert_eq!(
-        error_de(&huge),
+        error_of(&huge),
         PngError::TooLarge {
             width: 100_000,
             height: 100_000

@@ -437,7 +437,7 @@ fn document(case: &Case) -> Document {
 }
 
 /// El PNG aplanado del caso (`golden/aseprite/<case>.png`), RGBA de 8 bits.
-fn lee_png(name_2: &str) -> Image {
+fn read_golden_png(name_2: &str) -> Image {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../golden/aseprite")
         .join(format!("{name_2}.png"));
@@ -448,7 +448,7 @@ fn lee_png(name_2: &str) -> Image {
     read.image
 }
 
-fn pixel_de(img: &Image, x: u32, y: u32) -> Rgba {
+fn pixel_of(img: &Image, x: u32, y: u32) -> Rgba {
     match img.get_pixel(x, y).expect("píxel dentro") {
         Pixel::Rgba(c) => c,
         other_2 => panic!("se esperaba RGBA, hay {other_2:?}"),
@@ -459,7 +459,7 @@ fn pixel_de(img: &Image, x: u32, y: u32) -> Rgba {
 fn composite_and_png(case: &Case) -> (Image, Image) {
     let name_2 = &case.name_2;
     let composite = compose(&document(case)).unwrap_or_else(|e| panic!("{name_2}: compose: {e}"));
-    let png = lee_png(name_2);
+    let png = read_golden_png(name_2);
     assert_eq!(
         (composite.width(), composite.height(), composite.mode()),
         (png.width(), png.height(), Mode::Rgba),
@@ -481,7 +481,7 @@ fn requires_equal_image(case: &Case, composite: &Image, png: &Image) {
     let (mut different, mut first) = (0usize, None);
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let (our, expected) = (pixel_de(composite, x, y), pixel_de(png, x, y));
+            let (our, expected) = (pixel_of(composite, x, y), pixel_of(png, x, y));
             if our != expected {
                 different += 1;
                 first.get_or_insert((x, y, our, expected));
@@ -587,7 +587,7 @@ fn evaluates_image(
     };
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let (our, expected) = (pixel_de(composite, x, y), pixel_de(png, x, y));
+            let (our, expected) = (pixel_of(composite, x, y), pixel_of(png, x, y));
             let inside = in_domain(case, x, y);
             let mut error_pixel = 0;
             let mut reason = None;
@@ -662,7 +662,13 @@ fn row_11_translucent_background_domain_of_the_empirical_formula() {
 fn row_11_with(produce: impl Fn(&Case) -> Image) {
     let evaluates = |case: &Case, group: &dyn Fn(u32, u32) -> usize, groups: usize| {
         let image_2 = produce(case);
-        evaluates_image(case, &image_2, &lee_png(&case.name_2), group, groups)
+        evaluates_image(
+            case,
+            &image_2,
+            &read_golden_png(&case.name_2),
+            group,
+            groups,
+        )
     };
     // `layers-alpha-background`: dos translúcidos a la vez con Normal, que no es del dominio: todo con
     // tolerancia 0.
@@ -758,7 +764,7 @@ fn row_08_flatten_the_17_cases_of_3_2_gives_the_composition_and_meets_its_tolera
     // Filas 9 y 10 de 3.2: tolerancia 0 contra el PNG.
     for case in &cases_exact() {
         let cel_2 = flattens(case);
-        requires_equal_image(case, &cel_2, &lee_png(&case.name_2));
+        requires_equal_image(case, &cel_2, &read_golden_png(&case.name_2));
     }
     // Fila 11 de 3.2: tolerancia 0 fuera del dominio empírico y techo 2 dentro (suelo 1).
     row_11_with(flattens);
@@ -783,6 +789,6 @@ fn row_08_merge_down_in_the_eight_matrices_at_tolerance_0() {
             cel_2, before,
             "{name_2}: la matriz de dos capas se combina sin pérdida"
         );
-        requires_equal_image(&case, &cel_2, &lee_png(&case.name_2));
+        requires_equal_image(&case, &cel_2, &read_golden_png(&case.name_2));
     }
 }

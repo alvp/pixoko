@@ -16,7 +16,7 @@ px-golden	de	from
 px-golden	de_16_bits	is_16_bits
 px-golden	de_aseprite	from_aseprite
 px-golden	error_de	error_of
-px-golden	lee	read
+px-golden	lee	read_bytes
 px-golden	lee_png	read_golden_png
 px-golden	pixel_de	pixel_of
 px-golden	pixel_de_patron	pixel_of_pattern

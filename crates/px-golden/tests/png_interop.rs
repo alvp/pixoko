@@ -140,7 +140,7 @@ fn verify_corpus(files: &[File]) -> Result<Summary, String> {
         let name_2 = &png.name_2;
         // Profundidad de bits: byte 24 del fichero (8 de firma, 4 de longitud, 4 de tipo,
         // 4 de ancho y 4 de alto).
-        let de_16_bits = png.bytes.get(24) == Some(&16);
+        let is_16_bits = png.bytes.get(24) == Some(&16);
         let read = match read_png(&png.bytes) {
             Ok(r) => r,
             Err(e) => {
@@ -152,7 +152,7 @@ fn verify_corpus(files: &[File]) -> Result<Summary, String> {
         println!("{name_2}: informe de conversiones {:?}", read.report);
         reports.push((name_2.clone(), read.report.clone()));
 
-        if de_16_bits {
+        if is_16_bits {
             if !read.report.contains(&Conversion::Depth16Reduced) {
                 problems.push(format!(
                     "{name_2}: es de 16 bits y el informe no incluye Depth16Reduced: {:?}",
@@ -340,7 +340,7 @@ fn with_content(name_2: &str, bytes: impl Into<Vec<u8>>) -> Vec<File> {
 }
 
 /// PNG de 16 bits (gris, 2 × 1) y su nombre.
-fn png_de_16_bits() -> Vec<u8> {
+fn png_of_16_bits() -> Vec<u8> {
     Png::new(2, 1, 16, 0).swatches(&[0x0000, 0xFFFF]).bytes()
 }
 
@@ -365,7 +365,7 @@ fn row_14_helper_the_example_pngs_are_valid_and_the_16_bit_one_is_detected() {
     // Ninguno de los de ejemplo tiene conversiones: las cuatro vistas son las del fichero.
     assert!(summary.reports.iter().all(|(_, r)| r.is_empty()));
     // El byte 24 del PNG de 16 bits es la profundidad.
-    assert_eq!(png_de_16_bits()[24], 16);
+    assert_eq!(png_of_16_bits()[24], 16);
     assert_eq!(pngs_of_example()[0].1[24], 8);
 }
 
@@ -522,7 +522,7 @@ fn row_14_unreadable_png_names_the_file() {
     assert_err_with(verify_corpus(&corpus), &["gris.png", "read_png"]);
 
     // Lo mismo con un fichero de 16 bits truncado: se lee aunque no se hashee.
-    let p16 = png_de_16_bits();
+    let p16 = png_of_16_bits();
     let corpus = [
         file("profundo.png", p16[..p16.len() - 1].to_vec()),
         file("profundo.png.sha256", "x"),
@@ -532,14 +532,14 @@ fn row_14_unreadable_png_names_the_file() {
 
 #[test]
 fn row_14_only_16_bit_pngs_leaves_none_checked() {
-    let corpus = [file("profundo.png", png_de_16_bits())];
+    let corpus = [file("profundo.png", png_of_16_bits())];
     let err = verify_corpus(&corpus).err().expect("debía ser Err");
     assert!(err.contains("ningún PNG comprobado"), "{err}");
     assert!(!err.contains(MESSAGE_EMPTY), "{err}");
 
     // Aunque tenga su .sha256 al lado: sigue sin comprobarse nada.
     let with_hash = [
-        file("profundo.png", png_de_16_bits()),
+        file("profundo.png", png_of_16_bits()),
         file("profundo.png.sha256", format!("{}\n", hash_of_gray())),
     ];
     assert_err_with(verify_corpus(&with_hash), &["ningún PNG comprobado"]);
@@ -548,7 +548,7 @@ fn row_14_only_16_bit_pngs_leaves_none_checked() {
 #[test]
 fn row_14_16_bit_png_without_sha256_next_to_a_valid_one_is_ok_and_listed_as_skipped() {
     let mut corpus = corpus_valid();
-    corpus.push(file("profundo.png", png_de_16_bits()));
+    corpus.push(file("profundo.png", png_of_16_bits()));
     let summary = verify_corpus(&corpus).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(summary.omitted, ["profundo.png"]);
     assert_eq!(summary.checked.len(), 4);

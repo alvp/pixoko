@@ -44,7 +44,7 @@ pub(super) fn reads_document(case: &str) -> Result<Document, String> {
 }
 
 /// El PNG aplanado de un caso, tal como lo lee `read_png`.
-pub(super) fn lee_png(case: &str) -> Image {
+pub(super) fn read_golden_png(case: &str) -> Image {
     read_png(&golden(&format!("{case}.png")))
         .unwrap_or_else(|e| panic!("{case}.png: read_png dio error: {e}"))
         .image
@@ -52,7 +52,7 @@ pub(super) fn lee_png(case: &str) -> Image {
 
 /// El píxel como RGBA resuelto: los indexados, por su paleta (con el índice transparente en
 /// alfa 0).
-pub(super) fn rgba_de(image_2: &Image, x: u32, y: u32) -> Rgba {
+pub(super) fn rgba_of(image_2: &Image, x: u32, y: u32) -> Rgba {
     match image_2.get_pixel(x, y) {
         Ok(Pixel::Rgba(c)) => c,
         Ok(Pixel::Indexed(i)) => image_2
@@ -72,7 +72,7 @@ fn rounds_255(x: u32) -> u32 {
 fn pixel_of_layer(doc: &Document, layer_2: &Layer, x: u32, y: u32) -> Rgba {
     match doc.image(layer_2.cel()) {
         None => Rgba::TRANSPARENT,
-        Some(image_2) => rgba_de(image_2, x, y),
+        Some(image_2) => rgba_of(image_2, x, y),
     }
 }
 
@@ -105,7 +105,7 @@ fn in_domain(doc: &Document, x: u32, y: u32) -> bool {
 fn evaluates_case(case: &str) -> Result<(), String> {
     let doc = reads_document(case)?;
     let composite = compose(&doc).map_err(|e| format!("{case}: compose dio error: {e:?}"))?;
-    evaluates_image(case, &doc, &composite, &lee_png(case))
+    evaluates_image(case, &doc, &composite, &read_golden_png(case))
 }
 
 /// La comparación de `evaluates_case` sobre una imagen ya compuesta y un PNG dados (la usa también la
@@ -137,7 +137,7 @@ pub(super) fn evaluates_image(
     let mut in_the_domain = vec![0usize; groups];
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let (our, expected) = (rgba_de(composite, x, y), rgba_de(png, x, y));
+            let (our, expected) = (rgba_of(composite, x, y), rgba_of(png, x, y));
             let inside = in_domain(doc, x, y);
             let mut error_pixel = 0;
             let mut reason = None;
@@ -249,7 +249,7 @@ fn requires_cels(case: &str, expected_2: &[Expected]) {
                 let inside = (x0..x1).contains(&x) && (y0..y1).contains(&y);
                 if !inside {
                     assert_eq!(pixel, fill, "{name_2}: ({x}, {y}) fuera del recorte");
-                } else if pixel != fill && rgba_de(image_2, x, y).a != 0 {
+                } else if pixel != fill && rgba_of(image_2, x, y).a != 0 {
                     visible_read += 1;
                 }
             }

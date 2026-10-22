@@ -23,7 +23,7 @@ use px_formats::{AsepriteLimits, read_aseprite, write_aseprite, write_png};
 use px_raster::{MergeError, compose, flatten_command, merge_visible_command};
 
 use super::aseprite_corpus::{CASES, compare_with_list, verify};
-use super::aseprite_read::{evaluates_image, golden, lee_png, reads_document, rgba_de};
+use super::aseprite_read::{evaluates_image, golden, read_golden_png, reads_document, rgba_of};
 use super::{reads_folder, root_of_the_repo};
 
 /// Los casos de una sola capa: no hay nada que aplanar ni combinar (`NothingToMerge`).
@@ -33,7 +33,7 @@ fn limits() -> AsepriteLimits {
     AsepriteLimits::default()
 }
 
-fn lee(bytes: &[u8]) -> Result<px_formats::AsepriteRead, String> {
+fn read_bytes(bytes: &[u8]) -> Result<px_formats::AsepriteRead, String> {
     read_aseprite(bytes, &limits()).map_err(|e| format!("read_aseprite dio error: {e}"))
 }
 
@@ -97,9 +97,11 @@ fn same_content(a: &Document, b: &Document) -> Result<(), String> {
         }
         for y in 0..a.height() {
             for x in 0..a.width() {
-                let (va, vb) = (value(a, ca, x, y), value(b, cb, x, y));
-                if va != vb {
-                    return Err(format!("capa {i}, píxel ({x}, {y}): {va:?} y {vb:?}"));
+                let (value_a, value_b) = (value(a, ca, x, y), value(b, cb, x, y));
+                if value_a != value_b {
+                    return Err(format!(
+                        "capa {i}, píxel ({x}, {y}): {value_a:?} y {value_b:?}"
+                    ));
                 }
             }
         }
@@ -116,7 +118,7 @@ fn equal_except_rgb_with_alpha_0(a: &Image, b: &Image) -> Result<(), String> {
     }
     for y in 0..a.height() {
         for x in 0..a.width() {
-            let (pa, pb) = (rgba_de(a, x, y), rgba_de(b, x, y));
+            let (pa, pb) = (rgba_of(a, x, y), rgba_of(b, x, y));
             if pa.a != pb.a {
                 return Err(format!("píxel ({x}, {y}): alfa {} y {}", pa.a, pb.a));
             }
@@ -162,7 +164,7 @@ fn row_01(case: &str, flatten: bool) -> Result<Option<&'static str>, String> {
         return Err(format!("{case}: componer tras la orden no da lo de antes"));
     }
     // La composición tras la orden es la del PNG de Aseprite con las tolerancias de 3.2.
-    evaluates_image(case, &original, &after_2, &lee_png(case))?;
+    evaluates_image(case, &original, &after_2, &read_golden_png(case))?;
     doc.undo().map_err(|e| format!("{case}: undo dio {e:?}"))?;
     if doc.layers().len() != original.layers().len()
         || compose(&doc).map_err(|e| format!("{e:?}"))? != before
@@ -202,10 +204,10 @@ fn row_01_flatten_and_merge_visible_give_the_composition_and_the_png() {
 // ---------------------------------------------------------------------------------------
 
 fn row_02(case: &str) -> Result<(), String> {
-    let read = lee(&golden(&format!("{case}.aseprite")))?;
+    let read = read_bytes(&golden(&format!("{case}.aseprite")))?;
     let original = read.document;
     let bytes = write_aseprite(&original).map_err(|e| format!("{case}: write dio error: {e}"))?;
-    let reopened = lee(&bytes).map_err(|e| format!("{case}: {e}"))?;
+    let reopened = read_bytes(&bytes).map_err(|e| format!("{case}: {e}"))?;
     if reopened.report.lossy || reopened.report.frames_in_file != 1 {
         return Err(format!(
             "{case}: lo escrito se relee con lossy {} y {} fotogramas",
@@ -222,7 +224,7 @@ fn row_02(case: &str) -> Result<(), String> {
     let before = compose(&original).map_err(|e| format!("{case}: {e:?}"))?;
     let after_2 = compose(&reopened.document).map_err(|e| format!("{case}: {e:?}"))?;
     equal_except_rgb_with_alpha_0(&before, &after_2).map_err(|e| format!("{case}: {e}"))?;
-    evaluates_image(case, &original, &after_2, &lee_png(case))
+    evaluates_image(case, &original, &after_2, &read_golden_png(case))
 }
 
 #[test]
@@ -485,7 +487,9 @@ fn compares(case: &str, aseprite: &Structure, pixoko: &Structure) -> Result<(), 
 
 fn row_03(case: &str) -> Result<(), String> {
     let original = golden(&format!("{case}.aseprite"));
-    let document = lee(&original).map_err(|e| format!("{case}: {e}"))?.document;
+    let document = read_bytes(&original)
+        .map_err(|e| format!("{case}: {e}"))?
+        .document;
     let written = write_aseprite(&document).map_err(|e| format!("{case}: {e}"))?;
     compares(case, &structure(&original)?, &structure(&written)?)
 }
@@ -537,7 +541,7 @@ fn row_04_a_the_corpus_missing_a_case_or_with_an_extra_one_fails() {
 fn with_one_pixel_changed(png: &Image) -> (Image, (u32, u32)) {
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let c = rgba_de(png, x, y);
+            let c = rgba_of(png, x, y);
             if c.a > 0 {
                 let mut other_2 = png.clone();
                 other_2
@@ -555,7 +559,7 @@ fn row_04_b_a_changed_pixel_of_a_png_makes_the_composition_and_the_hash_fail() {
     let case = "mixed-rgba";
     let doc = reads_document(case).expect("documento");
     let composite = compose(&doc).expect("compose");
-    let png = lee_png(case);
+    let png = read_golden_png(case);
     evaluates_image(case, &doc, &composite, &png).expect("el PNG original pasa");
     let (changed, (x, y)) = with_one_pixel_changed(&png);
     let error = evaluates_image(case, &doc, &composite, &changed).expect_err("un píxel distinto");
@@ -597,11 +601,11 @@ fn row_04_b_a_changed_pixel_of_a_png_makes_the_composition_and_the_hash_fail() {
 fn row_04_c_a_changed_field_of_the_written_file_makes_the_structure_fail() {
     let case = "mixed-rgba";
     let original = golden(&format!("{case}.aseprite"));
-    let document = lee(&original).expect("lee").document;
+    let document = read_bytes(&original).expect("lee").document;
     let written = write_aseprite(&document).expect("write");
-    let de_aseprite = structure(&original).expect("estructura del original");
+    let from_aseprite = structure(&original).expect("estructura del original");
     let e = structure(&written).expect("estructura de lo escrito");
-    compares(case, &de_aseprite, &e).expect("sin mutar, coincide");
+    compares(case, &from_aseprite, &e).expect("sin mutar, coincide");
     assert!(e.layers.len() >= 4 && !e.cels.is_empty());
 
     // (campo esperado en el mensaje, desplazamiento, máscara que se aplica con XOR)
@@ -628,7 +632,7 @@ fn row_04_c_a_changed_field_of_the_written_file_makes_the_structure_fail() {
         broken[pan] ^= mask;
         let error = match structure(&broken) {
             Err(e) => e,
-            Ok(other) => compares(case, &de_aseprite, &other).expect_err(field),
+            Ok(other) => compares(case, &from_aseprite, &other).expect_err(field),
         };
         assert!(
             error.contains(field),
@@ -773,7 +777,7 @@ fn fail<T, E: std::fmt::Display>(r: Result<T, E>) -> Result<T, TestCaseError> {
 
 fn reopens(doc: &Document) -> Result<Document, TestCaseError> {
     let bytes = fail(write_aseprite(doc))?;
-    Ok(fail(lee(&bytes))?.document)
+    Ok(fail(read_bytes(&bytes))?.document)
 }
 
 /// La composición (o el error) tras aplicar `order` a `doc`; `None` si no hay nada que hacer.
