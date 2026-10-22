@@ -11,7 +11,7 @@
 use super::*;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-const ALTOS: [f32; 5] = [341.0, 272.8, 454.67, 341.0, 341.0];
+const ALTOS: [f32; 5] = [313.0, 250.4, 417.33, 313.0, 313.0];
 const WIDTHS: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
 
 // `min_enabled`.
@@ -86,10 +86,10 @@ fn row_1_min_inner_size_is_that_of_min_window_height_pt_and_width_pt() {
 }
 
 #[test]
-fn row_1_no_minimum_exceeds_65_percent_of_720_in_height_or_half_of_1366_in_width() {
+fn row_1_no_minimum_exceeds_60_percent_of_720_in_height_or_half_of_1366_in_width() {
     for ppp in PPPS {
         let [width, height] = min_inner_size(ppp, true).expect("activo");
-        assert!(height <= 468.0 + 0.01, "ppp {ppp}: {height} pt");
+        assert!(height <= 432.0 + 0.01, "ppp {ppp}: {height} pt");
         assert!(width <= 683.0, "ppp {ppp}: {width} pt");
         assert!(height > 0.0 && width > 0.0);
         assert!(height.is_finite() && width.is_finite());

@@ -4,7 +4,7 @@
 //!
 //! - Fila 7 (parte pura): `toolbar_width_u() = 107 = 2·4 + 99` con 99 = `4·24 + 3·1` (la rejilla de
 //!   iconos de 4 columnas, specs/interfaz-iconos.md); los 9 botones caben en la
-//!   columna sin tocar el borde y no se solapan; el contenido (250 u) cabe en 305 u; el menú entero
+//!   columna sin tocar el borde y no se solapan; el contenido (250 u) cabe en 277 u; el menú entero
 //!   y el desplegable más ancho (208 u) caben en el ancho mínimo; los cinco rectángulos de
 //!   `window_layout` recubren la ventana sin huecos ni solapes, a las cinco escalas y en la ventana
 //!   por defecto y en la mínima. El banco de egui con la pila real está en `window_stack.rs`.
@@ -32,7 +32,7 @@ use px_ui::toolbar::TOOL_BUTTONS;
 use px_ui::view::ScreenRect;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-const ALTOS_PT: [f32; 5] = [341.0, 272.8, 454.67, 341.0, 341.0];
+const ALTOS_PT: [f32; 5] = [313.0, 250.4, 417.33, 313.0, 313.0];
 const WIDTHS_PT: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
 const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
@@ -56,7 +56,7 @@ fn row_7_the_constants_are_worth_what_the_spec_says() {
     assert_eq!(toolbar_button_width_u(), 99);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(bar_height_px(1), 20);
-    assert_eq!(min_panel_height_px(1), 305);
+    assert_eq!(min_panel_height_px(1), 277);
 }
 
 #[test]
@@ -112,7 +112,7 @@ fn row_7_the_nine_buttons_fit_in_the_column_without_touching_the_edge_and_do_not
 }
 
 #[test]
-fn row_7_the_250_u_content_fits_in_the_305_u_of_the_minimum_panel() {
+fn row_7_the_250_u_content_fits_in_the_277_u_of_the_minimum_panel() {
     // Fila de zoom (termina en 104), 4 u, el recuadro de opciones de 138 u y 4 u de margen.
     assert_eq!(80 + 24 + 4 + 138 + 4, TOOLBAR_CONTENT_H_U);
     assert_eq!(TOOLBAR_CONTENT_H_U, 250);
@@ -121,7 +121,7 @@ fn row_7_the_250_u_content_fits_in_the_305_u_of_the_minimum_panel() {
         assert!(TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32));
         assert_eq!(
             min_panel_height_px(n as u32) - TOOLBAR_CONTENT_H_U * n,
-            55 * n
+            27 * n
         );
     }
 }
@@ -356,15 +356,15 @@ fn row_8_minimum_width_in_u_and_in_pt_at_the_five_scales() {
 #[test]
 fn row_8_an_invalid_ppp_gives_the_minimum_of_1_0() {
     for ppp in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.0, -0.5] {
-        assert!(near_pt(min_window_height_pt(ppp), 341.0), "alto con {ppp}");
+        assert!(near_pt(min_window_height_pt(ppp), 313.0), "alto con {ppp}");
         assert!(near_pt(min_window_width_pt(ppp), 468.0), "ancho con {ppp}");
     }
 }
 
 #[test]
-fn row_8_the_height_does_not_pass_65_percent_of_720_and_the_width_does_not_pass_683() {
+fn row_8_the_height_does_not_pass_60_percent_of_720_and_the_width_does_not_pass_683() {
     for ppp in PPPS {
-        assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
+        assert!(min_window_height_pt(ppp) <= 432.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
 }
@@ -390,10 +390,10 @@ fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_column_pan
 }
 
 #[test]
-fn row_8_the_minimum_canvas_measures_128n_by_305n_pixels() {
+fn row_8_the_minimum_canvas_measures_128n_by_277n_pixels() {
     for (ppp, expected_2) in
         PPPS.iter()
-            .zip([(128, 305), (128, 305), (256, 610), (256, 610), (384, 915)])
+            .zip([(128, 277), (128, 277), (256, 554), (256, 554), (384, 831)])
     {
         let n = n_of(*ppp);
         let minimum = windows(*ppp)[1];
@@ -405,7 +405,7 @@ fn row_8_the_minimum_canvas_measures_128n_by_305n_pixels() {
         );
         assert_eq!(
             (layout.canvas.width, layout.canvas.height),
-            (128 * n, 305 * n)
+            (128 * n, 277 * n)
         );
     }
 }
@@ -440,7 +440,7 @@ fn property_3_the_minimums_follow_the_formula_and_meet_the_two_rules_at_all_ppp(
     for i in 0..=60 {
         let ppp = ppp_of_the_step(i);
         let n = n_of(ppp);
-        let height_2 = ((20 + MENU_H_U + 305) * n) as f32 / ppp;
+        let height_2 = ((20 + MENU_H_U + 277) * n) as f32 / ppp;
         let width_2 = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
         assert!(
             near_pt(min_window_height_pt(ppp), height_2),
@@ -450,7 +450,7 @@ fn property_3_the_minimums_follow_the_formula_and_meet_the_two_rules_at_all_ppp(
             near_pt(min_window_width_pt(ppp), width_2),
             "ancho con {ppp}"
         );
-        assert!(min_window_height_pt(ppp) <= 468.0 + 0.01, "alto con {ppp}");
+        assert!(min_window_height_pt(ppp) <= 432.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
     }
 }
@@ -492,7 +492,7 @@ mod toolbox_right {
         OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U, OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U, ZOOM_Y_U,
     };
 
-    const HEIGHT_MAX_PT: f32 = 468.0;
+    const HEIGHT_MAX_PT: f32 = 432.0;
     const WIDTH_MAX_PT: f32 = 683.0;
 
     /// Fila 1: **la única prueba que conoce el orden de las zonas** (lienzo, panel, caja).
@@ -529,7 +529,7 @@ mod toolbox_right {
             );
         }
         for invalid in [f32::NAN, 0.0, -1.0, f32::INFINITY] {
-            assert!(near_pt(min_window_height_pt(invalid), 341.0));
+            assert!(near_pt(min_window_height_pt(invalid), 313.0));
             assert!(near_pt(min_window_width_pt(invalid), 468.0));
         }
         assert_eq!(min_window_width_u(), 468);
@@ -709,7 +709,7 @@ mod icons {
     }
 
     #[test]
-    fn row_5_the_minimums_and_the_toolbox_height_rule_with_four_and_with_five_rows() {
+    fn row_5_the_minimums_and_the_toolbox_height_rule_with_three_and_with_four_rows() {
         for ((ppp, height_2), width_2) in PPPS.iter().zip(ALTOS_PT).zip(WIDTHS_PT) {
             assert!(
                 near_pt(min_window_height_pt(*ppp), height_2),
@@ -719,30 +719,31 @@ mod icons {
                 near_pt(min_window_width_pt(*ppp), width_2),
                 "ancho con {ppp}"
             );
-            assert!(min_window_height_pt(*ppp) <= 468.0 + 0.01, "alto con {ppp}");
+            assert!(min_window_height_pt(*ppp) <= 432.0 + 0.01, "alto con {ppp}");
             assert!(min_window_width_pt(*ppp) <= 683.0, "ancho con {ppp}");
             let n = n_of(*ppp);
-            assert_eq!(block_height_px(Mode::Indexed, n as u32), 305 * n);
-            assert_eq!(min_panel_height_px(n as u32), 305 * n);
-            // La caja de hoy cabe con holgura (55 u)…
+            assert_eq!(block_height_px(Mode::Indexed, n as u32), 277 * n);
+            assert_eq!(min_panel_height_px(n as u32), 277 * n);
+            // Today's toolbox fits with room to spare (27 u)…
             assert!(
                 TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32),
                 "ppp {ppp}"
             );
-            // …con 4 filas de herramientas (16) aún cabe, con 5 filas (17 a 20) la regla falla:
-            // lo que guarda el recuadro de 138 u hasta que el hito 4 decida.
+            // …with 3 rows of tools (12) it still fits, with 4 rows (13 to 16) the rule fails:
+            // what the 138 u box guards until milestone 4 decides (C1 lowered the minimum panel from
+            // 305 u, which held 4 rows, to 277 u).
             let with_rows = |rows_2: i64| (TOOLBAR_CONTENT_H_U + (rows_2 - TOOL_ROWS) * 25) * n;
             assert!(
-                with_rows(4) <= min_panel_height_px(n as u32),
-                "ppp {ppp}: 4 filas"
+                with_rows(3) <= min_panel_height_px(n as u32),
+                "ppp {ppp}: 3 filas"
             );
             assert!(
-                with_rows(5) > min_panel_height_px(n as u32),
-                "ppp {ppp}: 5 filas"
+                with_rows(4) > min_panel_height_px(n as u32),
+                "ppp {ppp}: 4 filas"
             );
         }
         for invalid in [f32::NAN, f32::INFINITY, 0.0, -1.0] {
-            assert!(near_pt(min_window_height_pt(invalid), 341.0));
+            assert!(near_pt(min_window_height_pt(invalid), 313.0));
             assert!(near_pt(min_window_width_pt(invalid), 468.0));
         }
         assert_eq!(min_window_width_u(), 468);
@@ -783,9 +784,9 @@ mod icons {
             }
             prop_assert!(TOOLBAR_CONTENT_H_U * k <= l.toolbar.height);
             prop_assert!(block_height_px(Mode::Indexed, n) <= l.panel.height);
-            let height_2 = ((20 + MENU_H_U + 305) * k) as f32 / ppp;
+            let height_2 = ((20 + MENU_H_U + 277) * k) as f32 / ppp;
             prop_assert!((min_window_height_pt(ppp) - height_2).abs() <= 0.01);
-            prop_assert!(min_window_height_pt(ppp) <= 468.0 + 0.01);
+            prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
             let width_2 = (min_window_width_u() * k) as f32 / ppp;
             prop_assert!((min_window_width_pt(ppp) - width_2).abs() <= 0.01);
             prop_assert!(min_window_width_pt(ppp) <= 683.0);

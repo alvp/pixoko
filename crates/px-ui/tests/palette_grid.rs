@@ -15,10 +15,10 @@ use proptest::collection::vec;
 use proptest::prelude::*;
 use px_core::{Image, Palette, Pixel, Rgba};
 use px_ui::palette_grid::{
-    CELL_U, CHECK_A, CHECK_B, CHECK_U, COLUMNS, GAP_U, GRID_X_U, GRID_Y_U, Grid, LINE_H_U,
-    LINE1_Y_U, LINE2_Y_U, PANEL_WIDTH_U, PITCH_U, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U,
-    SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U, TEXT_X_U, TRACK_W_U, TRACK_X_U, edges_u, max_first_row,
-    ring_rects, swatch_parts, thumb, total_rows, visible_rows,
+    CELL_U, CHECK_A, CHECK_B, CHECK_U, COLUMNS, GAP_U, GRID_X_U, GRID_Y_U, Grid, PANEL_WIDTH_U,
+    PITCH_U, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U,
+    TEXT_X_U, TRACK_W_U, TRACK_X_U, edges_u, max_first_row, ring_rects, swatch_parts, thumb,
+    total_rows, visible_rows,
 };
 use px_ui::texture::pixel_rgba;
 use px_ui::theme::{self, contrast_ratio};
@@ -44,19 +44,16 @@ fn contains(r: ScreenRect, x: i64, y: i64) -> bool {
 #[test]
 fn the_constants_are_worth_what_the_spec_says() {
     assert_eq!(COLUMNS, 16usize);
-    assert_eq!(CELL_U, 10);
-    assert_eq!(GAP_U, 4);
+    assert_eq!(CELL_U, 12);
+    assert_eq!(GAP_U, 2);
     assert_eq!(PITCH_U, 14);
-    assert_eq!(CHECK_U, 5);
+    assert_eq!(CHECK_U, 6);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(GRID_X_U, 4);
-    assert_eq!(GRID_Y_U, 77);
+    assert_eq!(GRID_Y_U, 49);
     assert_eq!(TEXT_X_U, 4);
     assert_eq!(TEXT_WIDTH_U, 225);
-    assert_eq!(LINE_H_U, 14);
-    assert_eq!(LINE1_Y_U, 40);
-    assert_eq!(LINE2_Y_U, 54);
-    assert_eq!(SEPARATOR_Y_U, 72);
+    assert_eq!(SEPARATOR_Y_U, 44);
     assert_eq!(TRACK_X_U, 230);
     assert_eq!(TRACK_W_U, 2);
     assert_eq!(RIGHT_LINE_X_U, 232);
@@ -70,10 +67,6 @@ fn the_constants_are_worth_what_the_spec_says() {
 fn the_constants_are_consistent_with_each_other() {
     assert_eq!(PITCH_U, CELL_U + GAP_U);
     assert_eq!(CHECK_U * 2, CELL_U);
-    assert_eq!(
-        LINE_H_U, PITCH_U,
-        "el paso es el alto de una línea de texto"
-    );
     // 4 (margen) + 224 (16 pasos) + 2 + 2 (pista) + 1 (trazo derecho).
     assert_eq!(
         PANEL_WIDTH_U,
@@ -118,25 +111,25 @@ fn row_1_cell_rect_with_256_entries_and_16_rows() {
     for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 16, 0);
-        assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 10 * k, 10 * k)), "n={n}");
+        assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 12 * k, 12 * k)), "n={n}");
         assert_eq!(
             grid.cell_rect(1),
-            Some(rect(14 * k, 0, 10 * k, 10 * k)),
+            Some(rect(14 * k, 0, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(
             grid.cell_rect(15),
-            Some(rect(210 * k, 0, 10 * k, 10 * k)),
+            Some(rect(210 * k, 0, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(
             grid.cell_rect(16),
-            Some(rect(0, 14 * k, 10 * k, 10 * k)),
+            Some(rect(0, 14 * k, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(
             grid.cell_rect(255),
-            Some(rect(210 * k, 210 * k, 10 * k, 10 * k)),
+            Some(rect(210 * k, 210 * k, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(grid.cell_rect(256), None, "n={n}");
@@ -151,17 +144,17 @@ fn row_1_cell_rect_with_a_scroll_of_3_rows_and_5_visible() {
         assert_eq!(grid.cell_rect(47), None, "n={n}: fila 2, por arriba");
         assert_eq!(
             grid.cell_rect(48),
-            Some(rect(0, 0, 10 * k, 10 * k)),
+            Some(rect(0, 0, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(
             grid.cell_rect(111),
-            Some(rect(210 * k, 42 * k, 10 * k, 10 * k)),
+            Some(rect(210 * k, 42 * k, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(
             grid.cell_rect(112),
-            Some(rect(0, 56 * k, 10 * k, 10 * k)),
+            Some(rect(0, 56 * k, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(grid.cell_rect(128), None, "n={n}: fila 8, por abajo");
@@ -171,16 +164,16 @@ fn row_1_cell_rect_with_a_scroll_of_3_rows_and_5_visible() {
 #[test]
 fn row_1_with_n_1_the_literal_numbers_of_the_spec() {
     let grid = Grid::new(1, 256, 16, 0);
-    assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 10, 10)));
-    assert_eq!(grid.cell_rect(1), Some(rect(14, 0, 10, 10)));
-    assert_eq!(grid.cell_rect(15), Some(rect(210, 0, 10, 10)));
-    assert_eq!(grid.cell_rect(16), Some(rect(0, 14, 10, 10)));
-    assert_eq!(grid.cell_rect(255), Some(rect(210, 210, 10, 10)));
+    assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 12, 12)));
+    assert_eq!(grid.cell_rect(1), Some(rect(14, 0, 12, 12)));
+    assert_eq!(grid.cell_rect(15), Some(rect(210, 0, 12, 12)));
+    assert_eq!(grid.cell_rect(16), Some(rect(0, 14, 12, 12)));
+    assert_eq!(grid.cell_rect(255), Some(rect(210, 210, 12, 12)));
 
     let grid = Grid::new(1, 256, 5, 3);
-    assert_eq!(grid.cell_rect(48), Some(rect(0, 0, 10, 10)));
-    assert_eq!(grid.cell_rect(111), Some(rect(210, 42, 10, 10)));
-    assert_eq!(grid.cell_rect(112), Some(rect(0, 56, 10, 10)));
+    assert_eq!(grid.cell_rect(48), Some(rect(0, 0, 12, 12)));
+    assert_eq!(grid.cell_rect(111), Some(rect(210, 42, 12, 12)));
+    assert_eq!(grid.cell_rect(112), Some(rect(0, 56, 12, 12)));
 }
 
 #[test]
@@ -214,18 +207,18 @@ fn row_2_index_at_with_256_entries_and_16_rows() {
         let cases: [(i64, i64, Option<usize>, &str); 11] = [
             (0, 0, Some(0), "esquina de la muestra 0"),
             (
-                10 * k - 1,
-                10 * k - 1,
+                12 * k - 1,
+                12 * k - 1,
                 Some(0),
                 "último píxel de la muestra 0",
             ),
-            (10 * k, 0, None, "hueco a la derecha de la 0"),
+            (12 * k, 0, None, "hueco a la derecha de la 0"),
             (14 * k - 1, 0, None, "último píxel del hueco"),
             (14 * k, 0, Some(1), "primer píxel de la muestra 1"),
-            (10 * k, 10 * k, None, "esquina de huecos"),
+            (12 * k, 12 * k, None, "esquina de huecos"),
             (-1, 0, None, "fuera por la izquierda"),
             (0, -1, None, "fuera por arriba"),
-            (220 * k, 0, None, "la columna 15 acaba en 220n"),
+            (222 * k, 0, None, "la columna 15 acaba en 222n"),
             (224 * k, 0, None, "no hay columna 16"),
             (0, 224 * k, None, "no hay fila 16"),
         ];
@@ -255,12 +248,12 @@ fn row_2_index_at_with_9_and_with_1_entries() {
 fn row_2_with_n_1_the_literal_numbers_of_the_spec() {
     let grid = Grid::new(1, 256, 16, 0);
     assert_eq!(grid.index_at(0, 0), Some(0));
-    assert_eq!(grid.index_at(9, 9), Some(0));
-    assert_eq!(grid.index_at(10, 0), None);
+    assert_eq!(grid.index_at(11, 11), Some(0));
+    assert_eq!(grid.index_at(12, 0), None);
     assert_eq!(grid.index_at(13, 0), None);
     assert_eq!(grid.index_at(14, 0), Some(1));
-    assert_eq!(grid.index_at(10, 10), None);
-    assert_eq!(grid.index_at(220, 0), None);
+    assert_eq!(grid.index_at(12, 12), None);
+    assert_eq!(grid.index_at(222, 0), None);
     assert_eq!(grid.index_at(224, 0), None);
     assert_eq!(grid.index_at(0, 224), None);
     assert_eq!(grid.index_at(210, 210), Some(255));
@@ -300,12 +293,12 @@ fn row_3_visible_rows() {
     let n1 = [
         (0, 0usize),
         (-5, 0),
-        (90, 0),
-        (91, 1),
-        (104, 1),
-        (105, 2),
-        (300, 15),
-        (301, 16),
+        (62, 0),
+        (63, 1),
+        (76, 1),
+        (77, 2),
+        (272, 15),
+        (273, 16),
     ];
     for (height_2, expected_2) in n1 {
         assert_eq!(
@@ -314,14 +307,14 @@ fn row_3_visible_rows() {
             "n=1, alto {height_2}"
         );
     }
-    for (height_2, expected_2) in [(181, 0usize), (182, 1)] {
+    for (height_2, expected_2) in [(125, 0usize), (126, 1)] {
         assert_eq!(
             visible_rows(height_2, 2),
             expected_2,
             "n=2, alto {height_2}"
         );
     }
-    for (height_2, expected_2) in [(272, 0usize), (273, 1)] {
+    for (height_2, expected_2) in [(188, 0usize), (189, 1)] {
         assert_eq!(
             visible_rows(height_2, 3),
             expected_2,
@@ -464,7 +457,7 @@ fn squares_of_the_checker(parts: &[(ScreenRect, Rgba)], n: u32) -> Vec<(ScreenRe
     squares.sort_by_key(|(r, _)| (r.y, r.x));
     assert_eq!(squares.len(), 4);
     for (r, _) in &squares {
-        assert_eq!((r.width, r.height), (5 * k, 5 * k), "n={n}");
+        assert_eq!((r.width, r.height), (6 * k, 6 * k), "n={n}");
     }
     squares
 }
@@ -476,7 +469,7 @@ fn row_10_opaque_swatch_is_a_single_rectangle() {
         let red = Rgba::opaque(0xff, 0, 0);
         assert_eq!(
             swatch_parts(n, red),
-            vec![(rect(0, 0, 10 * k, 10 * k), red)],
+            vec![(rect(0, 0, 12 * k, 12 * k), red)],
             "n={n}"
         );
     }
@@ -492,7 +485,7 @@ fn row_10_transparent_swatch_is_four_squares_without_color() {
         let positions: Vec<(i64, i64)> = squares.iter().map(|(r, _)| (r.x, r.y)).collect();
         assert_eq!(
             positions,
-            [(0, 0), (5 * k, 0), (0, 5 * k), (5 * k, 5 * k)],
+            [(0, 0), (6 * k, 0), (0, 6 * k), (6 * k, 6 * k)],
             "n={n}"
         );
         let colors_2: Vec<Rgba> = squares.iter().map(|&(_, c)| c).collect();
@@ -519,7 +512,7 @@ fn row_10_swatch_with_partial_alpha_is_checker_and_the_color_on_top() {
             );
             assert_eq!(
                 parts[4],
-                (rect(0, 0, 10 * k, 10 * k), color),
+                (rect(0, 0, 12 * k, 12 * k), color),
                 "n={n}, alfa {alpha}: el color con su alfa encima"
             );
         }
@@ -534,7 +527,7 @@ fn row_10_swatch_with_the_alpha_of_the_spec_in_hexadecimal() {
         assert_eq!(color.a, alpha);
         let parts = swatch_parts(1, color);
         assert_eq!(parts.len(), 5, "{hex}");
-        assert_eq!(parts[4], (rect(0, 0, 10, 10), color), "{hex}");
+        assert_eq!(parts[4], (rect(0, 0, 12, 12), color), "{hex}");
     }
 }
 
@@ -620,7 +613,7 @@ fn row_11_palette_of_one_entry() {
     for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 1, 1, 0);
-        assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 10 * k, 10 * k)), "n={n}");
+        assert_eq!(grid.cell_rect(0), Some(rect(0, 0, 12 * k, 12 * k)), "n={n}");
         assert_eq!(grid.cell_rect(1), None, "n={n}");
         // Una fila, sin pista (con cualquier número de filas visibles).
         for visible_2 in [1usize, 2, 16] {
@@ -643,7 +636,7 @@ fn row_11_palette_of_256_entries() {
         // La 255 está en la columna 15 y la fila 15.
         assert_eq!(
             grid.cell_rect(255),
-            Some(rect(15 * 14 * k, 15 * 14 * k, 10 * k, 10 * k)),
+            Some(rect(15 * 14 * k, 15 * 14 * k, 12 * k, 12 * k)),
             "n={n}"
         );
         assert_eq!(grid.index_at(15 * 14 * k, 15 * 14 * k), Some(255), "n={n}");
@@ -664,7 +657,7 @@ fn row_11_the_nine_slots_of_the_modes_without_a_palette() {
         for i in 0..9usize {
             assert_eq!(
                 grid.cell_rect(i),
-                Some(rect(i as i64 * 14 * k, 0, 10 * k, 10 * k)),
+                Some(rect(i as i64 * 14 * k, 0, 12 * k, 12 * k)),
                 "n={n}, i={i}"
             );
             assert_eq!(grid.index_at(i as i64 * 14 * k, 0), Some(i), "n={n}, i={i}");
@@ -683,7 +676,7 @@ fn row_11_the_nine_slots_of_the_modes_without_a_palette() {
 fn coordinate(raw_2: i64, k: i64, width_2: i64, delta: i64, of_border: bool, n: i64) -> i64 {
     if of_border {
         // Alrededor de los bordes de las muestras y de los huecos.
-        k * 14 * n + width_2 * 10 * n + delta
+        k * 14 * n + width_2 * 12 * n + delta
     } else {
         raw_2
     }
@@ -712,8 +705,8 @@ proptest! {
         let mut contain = Vec::new();
         for i in 0..count {
             if let Some(r) = grid.cell_rect(i) {
-                // Rectángulo de 10n x 10n dentro de las filas visibles.
-                prop_assert_eq!((r.width, r.height), (10 * k, 10 * k));
+                // Rectangle of 12n x 12n inside the visible rows.
+                prop_assert_eq!((r.width, r.height), (12 * k, 12 * k));
                 let row_2 = i / COLUMNS;
                 prop_assert!(row_2 >= first_row && row_2 < first_row + visible_2);
                 if contains(r, x, y) {
@@ -733,7 +726,7 @@ proptest! {
         prop_assert_eq!(grid.index_at(x, y), contain.first().copied());
 
         // Los huecos nunca dan muestra.
-        let gap = x.rem_euclid(14 * k) >= 10 * k || y.rem_euclid(14 * k) >= 10 * k;
+        let gap = x.rem_euclid(14 * k) >= 12 * k || y.rem_euclid(14 * k) >= 12 * k;
         if gap {
             prop_assert_eq!(grid.index_at(x, y), None);
         }

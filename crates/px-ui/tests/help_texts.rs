@@ -45,7 +45,7 @@ const TARGETS_OF_BUTTON: [HelpTarget; 9] = [
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.
-const KEYS: [&str; 33] = [
+const KEYS: [&str; 34] = [
     "tool.pencil",
     "tool.line",
     "tool.fill",
@@ -79,6 +79,7 @@ const KEYS: [&str; 33] = [
     "layer.merge-down",
     "layer.merge-visible",
     "layer.flatten",
+    "color.editor",
 ];
 
 /// Las acciones de la tabla por defecto (22 distintas).
@@ -138,9 +139,9 @@ fn press(c: char) -> Press {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn row_1_the_table_has_22_entries_with_unique_keys_and_limits() {
+fn row_1_the_table_has_34_entries_with_unique_keys_and_limits() {
     let table = help_table();
-    assert_eq!(table.len(), 33);
+    assert_eq!(table.len(), 34);
     let keys: Vec<&str> = table.iter().map(|e| e.key).collect();
     assert_eq!(keys, KEYS, "claves estables y en el orden del anexo");
     for (i, e) in table.iter().enumerate() {
@@ -195,7 +196,7 @@ fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() 
         .iter()
         .filter(|e| is_editable(action_of_key(e.key).unwrap()))
         .count();
-    assert_eq!(editable, 28);
+    assert_eq!(editable, 29);
     for key in [
         "file.new",
         "file.open",

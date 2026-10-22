@@ -147,7 +147,7 @@ fn the_types_are_copy_debug_and_comparable() {
 #[test]
 fn the_grid_constants_are_worth_what_the_spec_says() {
     assert_eq!(DRAG_START_U, 4);
-    assert_eq!(DROP_HALF_GAP_U, 2);
+    assert_eq!(DROP_HALF_GAP_U, 1);
     assert_eq!(RING_RANGE_U, 1);
     assert_eq!(RING_DEST_U, 2);
     assert_eq!(DROP_MARK_W_U, 2);
@@ -155,7 +155,7 @@ fn the_grid_constants_are_worth_what_the_spec_says() {
 
 #[test]
 fn the_grid_constants_are_consistent_with_the_spacing() {
-    // La media separación de captura por cada lado cubre toda la separación de 4 u.
+    // The half gap of capture on each side covers the whole 2 u gap.
     assert_eq!(2 * DROP_HALF_GAP_U, GAP_U);
     // La barra cabe en la separación y no toca las muestras.
     const { assert!(DROP_MARK_W_U <= GAP_U) };
@@ -194,11 +194,11 @@ fn edges_u_includes_the_edges_of_the_range_ring_of_the_target_and_of_the_bar() {
                 start_2 + CELL_U + RING_DEST_U,
             ];
             if name_2 == "x" {
-                // Barra de 2 u: a 3 u a la izquierda o a 11 u a la derecha del origen.
-                expected_2_2.extend([start_2 - 3, start_2 - 1, start_2 + 11, start_2 + 13]);
+                // 2 u bar: filling the 2 u gap, to the left or to the right of the swatch.
+                expected_2_2.extend([start_2 - 2, start_2, start_2 + 12, start_2 + 14]);
             } else {
-                // La barra empieza 2 u por encima de la muestra y mide 14 u.
-                expected_2_2.extend([start_2 - 2, start_2 + 12]);
+                // The bar starts 1 u above the swatch and measures 14 u.
+                expected_2_2.extend([start_2 - 1, start_2 + 13]);
             }
             for border in expected_2_2 {
                 assert!(
@@ -1044,16 +1044,16 @@ fn row_13_rotating_a_one_entry_range_gives_ok_false_without_a_step() {
 #[test]
 fn row_7_drop_index_with_256_entries_and_16_rows() {
     let cases: [((i64, i64), Option<usize>); 10] = [
-        ((-3, 0), None),
-        ((-2, 0), Some(0)),
+        ((-2, 0), None),
+        ((-1, 0), Some(0)),
         ((0, 0), Some(0)),
-        ((11, 0), Some(0)),
-        ((12, 0), Some(1)),
-        ((221, 0), Some(15)),
-        ((222, 0), None),
-        ((0, 12), Some(16)),
-        ((0, 221), Some(240)),
-        ((0, 222), None),
+        ((12, 0), Some(0)),
+        ((13, 0), Some(1)),
+        ((222, 0), Some(15)),
+        ((223, 0), None),
+        ((0, 13), Some(16)),
+        ((0, 222), Some(240)),
+        ((0, 223), None),
     ];
     for n in SCALES {
         let k = i64::from(n);
@@ -1092,8 +1092,8 @@ fn row_7_drop_index_with_first_row_3_and_5_visible_rows() {
         let k = i64::from(n);
         let grid = Grid::new(n, 256, 5, 3);
         assert_eq!(grid.drop_index(0, 0), Some(48), "n={n}");
-        assert_eq!(grid.drop_index(0, 67 * k), Some(112), "n={n}");
-        assert_eq!(grid.drop_index(0, 68 * k), None, "n={n}");
+        assert_eq!(grid.drop_index(0, 68 * k), Some(112), "n={n}");
+        assert_eq!(grid.drop_index(0, 69 * k), None, "n={n}");
     }
 }
 
@@ -1129,10 +1129,10 @@ fn row_7_drop_index_of_a_single_entry_always_lands_on_it() {
     for n in SCALES {
         let k = i64::from(n);
         let grid = Grid::new(n, 1, 16, 0);
-        for x in [-2 * k, 0, 11 * k, 12 * k, 100 * k, 221 * k] {
+        for x in [-k, 0, 11 * k, 12 * k, 100 * k, 222 * k] {
             assert_eq!(grid.drop_index(x, 0), Some(0), "n={n}, x={x}");
         }
-        assert_eq!(grid.drop_index(222 * k, 0), None);
+        assert_eq!(grid.drop_index(223 * k, 0), None);
     }
 }
 
@@ -1162,12 +1162,12 @@ fn row_7_drop_mark_rect_on_the_left_and_on_the_right() {
             let cel = grid.cell_rect(i).unwrap();
             assert_eq!(
                 drop_mark_rect(cel, false, n),
-                rect(cel.x - 3 * k, cel.y - 2 * k, 2 * k, 14 * k),
+                rect(cel.x - 2 * k, cel.y - k, 2 * k, 14 * k),
                 "izquierda, n={n}, i={i}"
             );
             assert_eq!(
                 drop_mark_rect(cel, true, n),
-                rect(cel.x + 11 * k, cel.y - 2 * k, 2 * k, 14 * k),
+                rect(cel.x + 12 * k, cel.y - k, 2 * k, 14 * k),
                 "derecha, n={n}, i={i}"
             );
         }
@@ -1203,7 +1203,7 @@ fn row_7_the_bar_fits_in_the_gap_and_covers_the_height_of_the_swatch() {
             if after_2 {
                 assert!(left >= cel.x + cel.width && right <= cel.x + 14 * i64::from(n));
             } else {
-                assert!(right <= cel.x && left >= cel.x - 4 * i64::from(n));
+                assert!(right <= cel.x && left >= cel.x - 2 * i64::from(n));
             }
             assert!(bar.y <= cel.y && bar.y + bar.height >= cel.y + cel.height);
         }
@@ -2200,7 +2200,7 @@ fn coordinate(selector: u8, raw: i64, step: i64, delta: i64, n: i64, end: usize)
     const ENDS: [i64; 6] = [i64::MIN, i64::MIN + 1, i64::MAX - 1, i64::MAX, -1, 0];
     match selector % 8 {
         // Alrededor de los bordes de las zonas de captura.
-        0..=3 => step * 14 * n - 2 * n + delta,
+        0..=3 => step * 14 * n - n + delta,
         4 => ENDS[end % ENDS.len()],
         _ => raw,
     }
@@ -2219,13 +2219,13 @@ fn model_drop_index(
     let total = count.div_ceil(COLUMNS);
     let with_swatches = visible_2.min(total.saturating_sub(first)) as i128;
     let step = 14 * n;
-    let in_x = x >= -2 * n && x < COLUMNS as i128 * step - 2 * n;
-    let in_y = y >= -2 * n && y < with_swatches * step - 2 * n;
+    let in_x = x >= -n && x < COLUMNS as i128 * step - n;
+    let in_y = y >= -n && y < with_swatches * step - n;
     if !(in_x && in_y) || count == 0 {
         return None;
     }
-    let column = (x + 2 * n).div_euclid(step);
-    let row_2 = (y + 2 * n).div_euclid(step);
+    let column = (x + n).div_euclid(step);
+    let row_2 = (y + n).div_euclid(step);
     let index_2 = (first as i128 + row_2) * COLUMNS as i128 + column;
     let last_2 = count as i128 - 1;
     Some(usize::try_from(index_2.min(last_2)).expect("índice dentro"))

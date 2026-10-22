@@ -478,7 +478,7 @@ fn property_1b_round_trip_with_all_the_combinations_of_the_table() {
             }
         }
     }
-    assert_eq!(checked, 28 * 2 * shortcuts.len());
+    assert_eq!(checked, 29 * 2 * shortcuts.len());
 }
 
 /// Los atajos mostrados siguen funcionando tras leer un fichero cualquiera (la tabla leída es una

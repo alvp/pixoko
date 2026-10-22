@@ -503,6 +503,7 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
         Key::OpenCurlyBracket => Some(AppAction::BackgroundPrev),
         Key::Quote => Some(AppAction::ToggleLayerPanel),
         Key::Semicolon => Some(AppAction::NewLayer),
+        Key::P => Some(AppAction::ToggleColorEditor),
         _ => None,
     }
 }
@@ -735,9 +736,10 @@ fn row_3_each_shortcut_shown_gives_the_action_of_its_entry_round_trip() {
             }
         }
     }
-    // 12 entradas con atajo en Linux y 11 en Windows y Mac (sin `Licencias` ni, fuera de Linux,
-    // `Salir`; con `Nueva image_2…` de la unidad 19 y `Borrar página` de I.2a): 16 + 15 + 15 = 46.
-    assert_eq!(with_shortcut, 16 + 15 + 15);
+    // Entries with a shortcut: Linux 17 and Windows and Mac 16 each (without `Licencias` nor, outside
+    // Linux, `Salir`; with `Nueva image_2…` of unit 19, `Borrar página` of I.2a and `Editor de
+    // color` of C1): 17 + 16 + 16 = 49.
+    assert_eq!(with_shortcut, 17 + 16 + 16);
 }
 
 // ---------------------------------------------------------------------------------------------

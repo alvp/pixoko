@@ -868,7 +868,7 @@ fn row_8_with_a_file_dialog_every_row_of_the_table_gives_blocked_also_home_page_
     let rows = rows_active();
     assert_eq!(
         rows.len(),
-        35 + 34 + 34,
+        36 + 35 + 35,
         "filas activas en las tres plataformas"
     );
     for (action, platform) in rows {

@@ -1,7 +1,7 @@
 //! Unidad I.2a, filas 5 y 6 en el panel (specs/interfaz-dos-colores.md): `palette_panel::show_roles`
 //! con el banco de egui sin ventana (el de `tests/palette_panel.rs`, reducido). Clic y clic
 //! derecho en las muestras, anillos de los dos colores, texto de la muestra, indicador de color
-//! (clic izquierdo: cuentagotas; clic derecho: foco al editor y rol) y los dos selectores.
+//! (clic izquierdo: cuentagotas; clic derecho: abrir el editor con ese rol).
 //!
 //! Las posiciones salen de las constantes y funciones de `palette_grid`; el panel empieza en
 //! `(0, 0)`. Las pruebas de anillos usan `ppp` 1,0 (un punto es un píxel físico).
@@ -17,10 +17,10 @@ use px_ui::color_edit::{ColorEditor, EditTarget};
 use px_ui::color_editor::hex_field_id;
 use px_ui::palette_grid::{
     CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PITCH_U, PanelView, Scroll, corner_rects, indicator_rects,
-    ring_rects, selector_rect,
+    ring_rects,
 };
 use px_ui::palette_ops::PaletteOps;
-use px_ui::palette_panel::{Indicator, PanelOutput, Roles, show_roles};
+use px_ui::palette_panel::{Indicator, PanelOutput, Roles, panel_info, show_roles};
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::{RING_ACTIVE, RING_BACKGROUND};
 use px_ui::view::ScreenRect;
@@ -204,21 +204,6 @@ fn rectangles(shapes_2: &[ClippedShape]) -> Vec<(Rect, Color32)> {
     output_2
 }
 
-fn texts(shapes_2: &[ClippedShape]) -> Vec<String> {
-    fn rec(shape: &Shape, output_2: &mut Vec<String>) {
-        match shape {
-            Shape::Text(text_2) => output_2.push(text_2.galley.text().to_string()),
-            Shape::Vec(shapes_2) => shapes_2.iter().for_each(|f| rec(f, output_2)),
-            _ => {}
-        }
-    }
-    let mut output_2 = Vec::new();
-    for shape_2 in shapes_2 {
-        rec(&shape_2.shape, &mut output_2);
-    }
-    output_2
-}
-
 /// Rectángulos pintados con `color` (a `ppp` 1,0, en píxeles físicos de la ventana).
 fn with_color(shapes_2: &[ClippedShape], color: Color32) -> Vec<Rect> {
     rectangles(shapes_2)
@@ -358,28 +343,21 @@ fn row_5_line_2_says_foreground_and_background_for_the_swatch_of_the_two() {
     let image = indexed(256);
     let mut bench = Bench::new_2(1.0);
     let r = roles(ColorChoice::Entry(7), ColorChoice::Entry(7));
-    let f = bench.frame(&image, r, true, vec![]);
-    let texts = texts(&f.shapes_2);
-    assert!(
-        texts.iter().any(|t| t == "frente · fondo"),
-        "textos: {texts:?}"
-    );
-    // Con el cursor en otra muestra, la línea 2 habla de esa muestra y no del fondo.
+    bench.frame(&image, r, true, vec![]);
+    let info = panel_info(&bench.ctx);
+    assert_eq!(info.lines[1], "frente · fondo", "info: {info:?}");
+    // With the cursor over another swatch, line 2 talks about that swatch and not about the background.
     let pos = pos2(
         center_of_swatch(1, 20).0 as f32,
         center_of_swatch(1, 20).1 as f32,
     );
-    let f = bench.with_pointer(&image, r, true, pos, vec![]);
-    let texts = texts_of(&f);
-    assert!(texts.iter().any(|t| t == "cursor"), "textos: {texts:?}");
-}
-
-fn texts_of(f: &TestFrame) -> Vec<String> {
-    texts(&f.shapes_2)
+    bench.with_pointer(&image, r, true, pos, vec![]);
+    let info = panel_info(&bench.ctx);
+    assert_eq!(info.lines[1], "cursor", "info: {info:?}");
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fila 6: indicador y selector
+// Fila 6: indicador
 // ---------------------------------------------------------------------------------------------
 
 fn center(r: &ScreenRect) -> (i64, i64) {
@@ -403,7 +381,8 @@ fn row_6_left_click_on_the_indicator_asks_for_the_dropper_in_the_two_rectangles(
 }
 
 #[test]
-fn row_6_right_click_takes_the_focus_to_the_editor_with_the_role_of_the_pressed_rectangle() {
+fn row_6_right_click_asks_to_edit_the_role_of_the_pressed_rectangle_and_the_focus_goes_to_the_field()
+ {
     let image = indexed(16);
     let mut bench = Bench::new_2(1.0);
     let (fg, bg) = indicator_rects(1);
@@ -439,22 +418,25 @@ fn row_6_a_click_in_the_gap_of_the_band_or_outside_does_nothing_and_enabled_fals
     for button in [PointerButton::Primary, PointerButton::Secondary] {
         let output_2 = bench.click(&image, r, true, button, corner_empty);
         assert_eq!(output_2.indicator, None, "{button:?}");
-        assert_eq!(output_2.editing, None);
         let output_2 = bench.click(&image, r, false, button, center(&fg));
         assert_eq!(output_2.indicator, None, "{button:?} deshabilitado");
     }
 }
 
 #[test]
-fn row_6_the_selectors_change_the_editor_target_and_exclude_each_other() {
+fn row_6_right_click_on_a_rectangle_asks_to_edit_that_role_also_with_the_editor_open() {
     let image = indexed(16);
     let mut bench = Bench::new_2(1.0);
+    let (fg, bg) = indicator_rects(1);
     let r = roles(ColorChoice::Entry(2), ColorChoice::Entry(3));
-    for role in [Role::Background, Role::Foreground] {
-        let row_2 = selector_rect(role, 1);
-        let output_2 = bench.click(&image, r, true, PointerButton::Primary, center(&row_2));
-        assert_eq!(output_2.editing, Some(role));
-        assert_eq!(output_2.indicator, None);
+    // The editor is open (the default of `PanelView`): the click on the other rectangle switches the
+    // role and the click on the edited one is the one that closes it; the panel reports both the
+    // same way and the app decides.
+    for (role, rect) in [(Role::Background, bg), (Role::Foreground, fg)] {
+        let point = (rect.x + rect.width - 1, rect.y + rect.height - 1);
+        let output_2 = bench.click(&image, r, true, PointerButton::Secondary, point);
+        assert_eq!(output_2.indicator, Some(Indicator::FocusEditor(role)));
+        assert_eq!(output_2.choice, None);
     }
 }
 

@@ -690,11 +690,11 @@ fn row_3_the_editor_is_always_seen_and_the_grid_has_one_row() {
 }
 
 #[test]
-fn row_3_from_305n_to_304n_the_editor_and_the_grid_do_not_jump() {
+fn row_3_from_277n_to_276n_the_editor_and_the_grid_do_not_jump() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
         let mut bench =
-            Bench::with_panel_height(ppp, 305 * n, image_indexed_256(), ColorChoice::Entry(5));
+            Bench::with_panel_height(ppp, 277 * n, image_indexed_256(), ColorChoice::Entry(5));
         let before = bench.rest_2_2();
         let header_before = before
             .text_painted("editar índice 5")
@@ -702,9 +702,9 @@ fn row_3_from_305n_to_304n_the_editor_and_the_grid_do_not_jump() {
             .pos;
         assert!(!bench.layout().scrolling);
 
-        bench.height_of_panel(304 * n);
+        bench.height_of_panel(276 * n);
         let after_2 = bench.rest_2_2();
-        assert!(bench.layout().scrolling, "ppp {ppp}: 304n desplaza");
+        assert!(bench.layout().scrolling, "ppp {ppp}: 276n desplaza");
         assert_eq!(bench.view.offset_px, 0);
         let header_after = after_2
             .text_painted("editar índice 5")
@@ -784,7 +784,7 @@ fn row_4_offset_px_is_always_a_multiple_of_n_and_is_clipped_to_zero_and_to_the_m
         let mut bench =
             Bench::with_panel_height(ppp, 200 * n, image_indexed_256(), ColorChoice::Entry(5));
         let max = bench.max_offset();
-        assert_eq!(max, 105 * n);
+        assert_eq!(max, 77 * n);
         let (x, y) = bench.over_the_text();
         bench.moves(x, y);
         // Subir con el desplazamiento a 0: se queda en 0.
@@ -874,20 +874,20 @@ fn row_4_when_enlarging_up_to_the_block_offset_px_is_0_in_the_same_frame() {
             Bench::with_panel_height(ppp, 200 * n, image_indexed_256(), ColorChoice::Entry(5));
         let (x, y) = bench.over_the_text();
         bench.wheel_in(x, y, 100_000 * n);
-        assert_eq!(bench.view.offset_px, 105 * n);
+        assert_eq!(bench.view.offset_px, 77 * n);
 
         // Agrandar un poco: el máximo baja y el desplazamiento se recorta en el mismo fotograma.
         bench.height_of_panel(220 * n);
         bench.rest_2_2();
-        assert_eq!(bench.view.offset_px, 85 * n, "ppp {ppp}: 220n");
-        assert_eq!(bench.max_offset(), 85 * n);
+        assert_eq!(bench.view.offset_px, 57 * n, "ppp {ppp}: 220n");
+        assert_eq!(bench.max_offset(), 57 * n);
 
         // Hasta el bloque: 0 en el mismo fotograma, sin pista y con el editor en su sitio.
-        bench.height_of_panel(305 * n);
+        bench.height_of_panel(277 * n);
         let f = bench.rest_2_2();
-        assert_eq!(bench.view.offset_px, 0, "ppp {ppp}: 305n");
+        assert_eq!(bench.view.offset_px, 0, "ppp {ppp}: 277n");
         assert!(!bench.layout().scrolling);
-        checks_bar(&f, &bench, &format!("ppp {ppp}, 305n"));
+        checks_bar(&f, &bench, &format!("ppp {ppp}, 277n"));
         let header = f.text_painted("editar índice 5").expect("cabecera");
         assert!(near(header.pos.y * ppp, (91 * n + HEADER_Y_U * n) as f32));
 
@@ -905,9 +905,9 @@ fn row_4_the_bar_is_only_painted_with_scroll_and_the_grid_does_not_paint_its_own
         let n = i64::from(text_scale(ppp));
         for (height_2, pans) in [
             (700 * n, false),
-            (308 * n, false),
-            (305 * n, false),
-            (304 * n, true),
+            (280 * n, false),
+            (277 * n, false),
+            (276 * n, true),
             (200 * n, true),
             (100 * n, true),
         ] {
@@ -1179,9 +1179,9 @@ fn row_6_with_height_200n_there_is_no_low_window_notice_and_the_editor_paints_it
                 Bench::with_panel_height(ppp, height_2, image_f(), ColorChoice::Entry(1));
             for _ in 0..3 {
                 let f = bench.rest_2_2();
-                // `PanelOutput` solo tiene `choice`, `commit`, `notice`, desde 11d `op` y
-                // `op_unused` y, desde I.2a, `background`, `indicator` y `editing`: si recupera
-                // `editor_hidden` (u otro campo) esta desestructuración deja de compilar.
+                // `PanelOutput` only has `choice`, `commit`, `notice`, `op`, `op_unused`,
+                // `background`, `indicator` and `close_editor`: if it gets
+                // `editor_hidden` (or another field) this destructuring stops compiling.
                 let PanelOutput {
                     choice,
                     commit,
@@ -1190,11 +1190,12 @@ fn row_6_with_height_200n_there_is_no_low_window_notice_and_the_editor_paints_it
                     op_unused,
                     background,
                     indicator,
-                    editing,
+                    close_editor,
                 } = f.output_2.clone();
                 assert_eq!((choice, commit, notice), (None, None, None));
                 assert_eq!((op, op_unused), (None, false));
-                assert_eq!((background, indicator, editing), (None, None, None));
+                assert_eq!((background, indicator), (None, None));
+                assert!(!close_editor);
                 assert!(
                     f.paints("editar índice 1"),
                     "ppp {ppp}, alto {height_2}: el editor pinta su cabecera"
@@ -1597,11 +1598,6 @@ fn shrinking_and_enlarging_the_window_does_not_lose_the_pending_text() {
 // Fila 11: mostrar la elegida
 // ---------------------------------------------------------------------------------------------
 
-/// Alto de la fila de iconos de la unidad I.4 con su margen (24 + 4 u), que la rejilla de
-/// indexadas ya no usa: para el mismo número de filas visibles hay que dar tanto panel de más
-/// (antes, con los botones de texto de 11d, 70 + 4 u).
-const BUTTONS_U: i64 = 28;
-
 fn row_of(input_2: usize) -> usize {
     input_2 / COLUMNS
 }
@@ -1627,8 +1623,8 @@ fn bench_256(ppp: f32, panel_h_px: i64, input_2: u8, warm_up: bool) -> Bench {
 fn row_11_the_first_frame_does_not_show_the_chosen_one() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // (436 + 74)·n: 12 filas visibles de 16 y la elegida (200 → fila 12) fuera de la vista.
-        let mut bench = bench_256(ppp, (436 + BUTTONS_U) * n, 200, false);
+        // 436·n: 12 filas visibles de 16 y la elegida (200 → fila 12) fuera de la vista.
+        let mut bench = bench_256(ppp, 436 * n, 200, false);
         assert_eq!(bench.view, PanelView::default());
         bench.rest_2_2();
         assert_eq!(bench.view.last_visible, Some(12), "ppp {ppp}");
@@ -1650,12 +1646,12 @@ fn row_11_the_first_frame_does_not_show_the_chosen_one() {
 fn row_11_changing_the_number_of_visible_rows_shows_the_chosen_one_with_the_minimum_movement() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, (436 + BUTTONS_U) * n, 200, true);
+        let mut bench = bench_256(ppp, 436 * n, 200, true);
         assert_eq!(bench.scroll.first_row, 0);
         assert_eq!(bench.view.last_visible, Some(12));
 
-        // (336 + 74)·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
-        bench.height_of_panel((336 + BUTTONS_U) * n);
+        // 336·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
+        bench.height_of_panel(336 * n);
         bench.rest_2_2();
         assert_eq!(bench.view.last_visible, Some(5), "ppp {ppp}");
         assert_eq!(bench.scroll.first_row, 8, "ppp {ppp}: el mínimo movimiento");
@@ -1666,7 +1662,7 @@ fn row_11_changing_the_number_of_visible_rows_shows_the_chosen_one_with_the_mini
         assert_eq!(bench.scroll.first_row, 8);
 
         // Agrandar: 12 filas visibles; la elegida sigue a la vista.
-        bench.height_of_panel((436 + BUTTONS_U) * n);
+        bench.height_of_panel(436 * n);
         bench.rest_2_2();
         assert_eq!(bench.view.last_visible, Some(12));
         assert!(chosen_visible(&bench, 12), "ppp {ppp}");
@@ -1699,7 +1695,7 @@ fn row_11_when_lowering_to_the_fallback_the_chosen_one_stays_in_view() {
 fn row_11_view_reveal_shows_the_chosen_one_and_the_panel_turns_it_off() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, (436 + BUTTONS_U) * n, 200, true);
+        let mut bench = bench_256(ppp, 436 * n, 200, true);
         assert_eq!(bench.scroll.first_row, 0);
         // Como las teclas 1 a 9, deshacer o rehacer: la sesión lo pone y el panel lo apaga.
         bench.view.reveal = true;
@@ -1744,7 +1740,7 @@ fn row_11_view_reveal_with_a_choice_without_a_swatch_moves_nothing_and_turns_off
 #[test]
 fn row_11_view_reveal_in_the_first_frame_does_show_the_chosen_one() {
     let n = 1;
-    let mut bench = bench_256(1.0, (436 + BUTTONS_U) * n, 200, false);
+    let mut bench = bench_256(1.0, 436 * n, 200, false);
     bench.view.reveal = true;
     bench.rest_2_2();
     assert!(!bench.view.reveal);
@@ -1755,7 +1751,7 @@ fn row_11_view_reveal_in_the_first_frame_does_show_the_chosen_one() {
 fn row_11_the_wheel_does_not_show_the_chosen_one() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, (336 + BUTTONS_U) * n, 0, true);
+        let mut bench = bench_256(ppp, 336 * n, 0, true);
         assert_eq!(bench.view.last_visible, Some(5));
         let (x, y) = center_of_swatch(n, 0, 0);
         bench.moves(x, y);

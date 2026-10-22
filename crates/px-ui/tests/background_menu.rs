@@ -144,7 +144,7 @@ fn row_12_the_types_are_plain() {
 }
 
 #[test]
-fn row_12_view_keeps_its_4_entries() {
+fn row_12_view_has_its_4_entries_and_the_color_editor() {
     let see = menu_titled("Ver");
     assert_eq!(
         labels_and_actions(see.items),
@@ -153,6 +153,7 @@ fn row_12_view_keeps_its_4_entries() {
             ("Alejar", AppAction::ZoomOut),
             ("Ajustar a la ventana", AppAction::ZoomFit),
             ("1:1", AppAction::ZoomActualSize),
+            ("Editor de color", AppAction::ToggleColorEditor),
         ]
     );
 }
@@ -229,6 +230,8 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         AppAction::ToggleLayerPanel,
     ]);
     expected_2.extend(&TABLE_ACTIONS[6..10]);
+    // `Editor de color` (C1) closes `Ver`, after `1:1`.
+    expected_2.push(AppAction::ToggleColorEditor);
     // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
     expected_2.push(AppAction::ShowHelp(HelpTarget::Active));
     expected_2.push(AppAction::ShowShortcuts);
@@ -753,8 +756,9 @@ fn row_2_canvas_background_has_five_entries_and_the_fifth_is_color_without_a_sep
     assert_eq!(last.label.chars().count(), 6);
     assert!(last.label.ends_with('…'));
     assert!(!last.label.contains('?'));
-    // `Ver` conserva sus cuatro entradas y no gana ninguna: la nueva está solo en el submenú.
-    assert_eq!(menu_titled("Ver").items.len(), 4);
+    // `Ver` keeps its four entries and gains only `Editor de color` (C1): the new background one is
+    // only in the submenu.
+    assert_eq!(menu_titled("Ver").items.len(), 5);
     for menu in MENUS.iter() {
         assert!(
             menu.items
@@ -2131,10 +2135,10 @@ mod contrast_of_the_menu {
         let mut failures = Failures::default();
         for (f, per_platform) in results {
             failures.blend_2(f);
-            // Los atajos de la tabla: 12 en Linux (con `Salir`), 11 en Windows y en macOS (con
-            // `Borrar página`, de I.2a).
+            // Shortcuts of the table: 13 on Linux (with `Salir`), 12 on Windows and macOS (with
+            // `Borrar página`, of I.2a, and `Editor de color`, of C1).
             for (platform, n) in per_platform {
-                let expected_2_2 = if platform == Platform::Linux { 12 } else { 11 };
+                let expected_2_2 = if platform == Platform::Linux { 13 } else { 12 };
                 assert_eq!(n, expected_2_2, "atajos de la tabla en {platform:?}");
             }
         }

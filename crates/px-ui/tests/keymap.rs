@@ -317,6 +317,7 @@ fn scheme_expected() -> Vec<Expected> {
         e(AppAction::CenterOnCursor, c('n'), false, false, all_2, t),
         e(AppAction::ClearPage, c('k'), false, true, all_2, t),
         e(AppAction::ToggleLayerPanel, c('\''), false, false, all_2, t),
+        e(AppAction::ToggleColorEditor, c('p'), false, false, all_2, t),
         e(AppAction::NewLayer, c(';'), false, false, all_2, t),
         e(AppAction::LayerUp, c(')'), false, false, all_2, t),
         e(AppAction::LayerDown, c('('), false, false, all_2, t),
@@ -350,11 +351,11 @@ fn row_1_the_types_of_the_table_have_the_derives_of_the_spec() {
 }
 
 #[test]
-fn row_1_the_default_table_is_the_31_rows_of_the_spec_in_order() {
+fn row_1_the_default_table_is_the_36_rows_of_the_spec_in_order() {
     let km = default();
     let expected_2 = scheme_expected();
-    assert_eq!(expected_2.len(), 35);
-    assert_eq!(km.rows().len(), 35, "filas de la tabla por defecto");
+    assert_eq!(expected_2.len(), 36);
+    assert_eq!(km.rows().len(), 36, "filas de la tabla por defecto");
     for (i, (real, expected)) in km.rows().iter().zip(&expected_2).enumerate() {
         assert_eq!(real.action, expected.action, "fila {i}: acción");
         assert_eq!(
@@ -388,11 +389,11 @@ fn row_1_the_default_table_is_the_31_rows_of_the_spec_in_order() {
 }
 
 #[test]
-fn row_1_there_are_22_rows_without_command_and_9_with_it_and_quit_only_on_linux() {
+fn row_1_there_are_27_rows_without_command_and_9_with_it_and_quit_only_on_linux() {
     let km = default();
     let without = km.rows().iter().filter(|f| !f.command).count();
     let with = km.rows().iter().filter(|f| f.command).count();
-    assert_eq!((without, with), (26, 9));
+    assert_eq!((without, with), (27, 9));
     let quit: Vec<&Binding> = km
         .rows()
         .iter()
@@ -403,12 +404,12 @@ fn row_1_there_are_22_rows_without_command_and_9_with_it_and_quit_only_on_linux(
 }
 
 #[test]
-fn row_1_there_are_31_active_rows_on_linux_and_30_on_windows_and_macos() {
+fn row_1_there_are_36_active_rows_on_linux_and_35_on_windows_and_macos() {
     let km = default();
     for (platform, expected_2) in [
-        (Platform::Linux, 35),
-        (Platform::Windows, 34),
-        (Platform::Mac, 34),
+        (Platform::Linux, 36),
+        (Platform::Windows, 35),
+        (Platform::Mac, 35),
     ] {
         let active = km
             .rows()
@@ -709,11 +710,24 @@ fn combinations_without_command(key: KeyId) -> Vec<Press> {
 }
 
 #[test]
-fn row_2_what_is_unassigned_gives_none_with_any_modifier_on_the_three_platforms() {
+fn row_2_p_toggles_the_color_editor_and_what_is_unassigned_gives_none_with_any_modifier_on_the_three_platforms()
+ {
     let km = default();
-    // Sin `command`: `p l i e` y `P L I E` (sin convivencia), las cifras 1 a 9, `K` `D`, las
+    // `p` was unassigned until C1: now it toggles the color editor, with no modifier only.
+    for platform in PLATFORMS {
+        for p in combinations_without_command(KeyId::Char('p')) {
+            let expected =
+                (!p.shift && !p.alt && !p.other_ctrl).then_some(AppAction::ToggleColorEditor);
+            assert_eq!(
+                action_2(&km, &p, platform),
+                expected,
+                "{p:?} en {platform:?}"
+            );
+        }
+    }
+    // Sin `command`: `l i e` y `P L I E` (sin convivencia), las cifras 1 a 9, `K` `D`, las
     // teclas del hito 4, y `. / { }`.
-    let mut without_assign: Vec<KeyId> = "plieKDPLIE./qrcwbtgmasxyzo"
+    let mut without_assign: Vec<KeyId> = "lieKDPLIE./qrcwbtgmasxyzo"
         .chars()
         .map(KeyId::Char)
         .collect();
@@ -1109,7 +1123,7 @@ fn row_5_the_menu_with_shortcut_for_and_shortcut_text_comes_from_the_default_tab
 }
 
 #[test]
-fn row_5_view_shows_greater_and_smaller_and_not_more_or_less() {
+fn row_5_view_shows_greater_smaller_home_one_to_one_and_p_and_not_more_or_less() {
     let see = MENUS.iter().find(|m| m.title == "Ver").expect("menú Ver");
     for platform in PLATFORMS {
         let texts: Vec<Option<String>> = see
@@ -1129,6 +1143,7 @@ fn row_5_view_shows_greater_and_smaller_and_not_more_or_less() {
                 Some("<".to_string()),
                 Some("Inicio".to_string()),
                 Some(format!("{control}+1")),
+                Some("p".to_string()),
             ],
             "{platform:?}"
         );

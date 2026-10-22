@@ -125,6 +125,7 @@ fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
                 ("Alejar", AppAction::ZoomOut),
                 ("Ajustar a la ventana", AppAction::ZoomFit),
                 ("1:1", AppAction::ZoomActualSize),
+                ("Editor de color", AppAction::ToggleColorEditor),
             ],
         ),
         (
@@ -162,9 +163,9 @@ fn row_1_the_separator_goes_only_before_quit() {
 }
 
 #[test]
-fn row_1_there_are_twenty_eight_entries_and_no_action_repeats() {
+fn row_1_there_are_twenty_nine_entries_and_no_action_repeats() {
     let actions: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
-    assert_eq!(actions.len(), 28);
+    assert_eq!(actions.len(), 29);
     for (i, a) in actions.iter().enumerate() {
         assert!(
             !actions[i + 1..].contains(a),
@@ -195,6 +196,8 @@ fn row_1_there_are_twenty_eight_entries_and_no_action_repeats() {
         AppAction::ToggleLayerPanel,
     ]);
     expected_2.extend(&TABLE_ACTIONS[6..10]);
+    // `Editor de color` (C1) closes `Ver`.
+    expected_2.push(AppAction::ToggleColorEditor);
     // `Ayuda` (I.5): la ayuda de la herramienta y los atajos preceden a las licencias.
     expected_2.push(AppAction::ShowHelp(HelpTarget::Active));
     expected_2.push(AppAction::ShowShortcuts);
@@ -224,7 +227,7 @@ fn texts_of_shortcut(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn some(texts: [Option<&str>; 28]) -> Vec<Option<String>> {
+fn some(texts: [Option<&str>; 29]) -> Vec<Option<String>> {
     texts.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -258,6 +261,7 @@ fn row_1_shortcuts_on_linux() {
             Some("<"),
             Some("Inicio"),
             Some("Ctrl+1"),
+            Some("p"),
             None,
             None,
             None,
@@ -295,6 +299,7 @@ fn row_1_shortcuts_on_windows_are_those_of_linux_except_quit_which_has_none() {
             Some("<"),
             Some("Inicio"),
             Some("Ctrl+1"),
+            Some("p"),
             None,
             None,
             None,
@@ -333,6 +338,7 @@ fn row_1_shortcuts_on_mac_use_cmd_redo_is_cmd_shift_z_and_quit_has_none() {
             Some("<"),
             Some("Inicio"),
             Some("Cmd+1"),
+            Some("p"),
             None,
             None,
             None,
@@ -715,11 +721,13 @@ proptest! {
             if state.locks.dialog {
                 prop_assert!(!on, "{:?} con diálogo", action);
             }
-            // Con gesto o campo de texto, falso en todas salvo las cuatro de zoom y `Mostrar panel`
-            // (3.4: abrir o cerrar el panel de capas no modifica el documento).
+            // With a gesture or a text field, false in all but the four zoom ones, `Mostrar panel`
+            // (3.4: opening or closing the layers panel does not modify the document) and
+            // `Editor de color` (C1: neither does opening or closing the color editor).
             if (state.locks.gesture || state.locks.text_focus)
                 && !action.is_zoom()
                 && action != AppAction::ToggleLayerPanel
+                && action != AppAction::ToggleColorEditor
             {
                 prop_assert!(!on, "{:?} con gesto o texto", action);
             }
