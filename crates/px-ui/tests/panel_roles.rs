@@ -25,9 +25,9 @@ use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::{RING_ACTIVE, RING_BACKGROUND};
 use px_ui::view::ScreenRect;
 
-#[path = "common/zonas.rs"]
-mod zonas;
-use zonas::panel_a_la_izquierda;
+#[path = "common/zones.rs"]
+mod zones;
+use zones::panel_a_la_izquierda;
 
 const PANTALLA: Vec2 = vec2(1200.0, 1000.0);
 

@@ -2,7 +2,7 @@
 //! de egui sin ventana y propiedad 1 (la vista incremental es la composición).
 //!
 //! Mismo banco que `tiles_canvas.rs`, reducido: `Context::run_ui` con `RawInput` sintético, el
-//! `TexturesDelta` de cada fotograma aplicado **en orden** con `common::texturas::Texturas` y la
+//! `TexturesDelta` de cada fotograma aplicado **en orden** con `common::textures::Texturas` y la
 //! textura resultante comparada con el oráculo: `esperado(compose(doc))`, esto es,
 //! `Color32::from_rgba_unmultiplied` de cada píxel de la composición completa. Orden de un
 //! fotograma, como en la app: `interact` → (cambios del documento con `invalidate`) →
@@ -26,7 +26,7 @@ use px_ui::view::{Size, ViewOp};
 
 mod common;
 use common::contexto;
-use common::texturas::Texturas;
+use common::textures::Texturas;
 
 mod tiles_support;
 use tiles_support::{B, esperado, imagen_de, modelo_de_pixeles, modelo_lleno, pixel_de};

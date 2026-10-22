@@ -50,7 +50,7 @@ use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::{MIN_VISIBLE, Size, View, ViewOp, Zoom};
 
 mod common;
-use common::caja::{caja, centro_u};
+use common::toolbox::{caja, centro_u};
 use common::{
     PPPS, Pintado, boton, contexto, en_puntos, es_entero_fisico_en_egui, fotograma, mover, n_de,
     pintado, rueda_puntos, tolerancia_de_egui,

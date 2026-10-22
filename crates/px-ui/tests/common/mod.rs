@@ -10,10 +10,10 @@
 //! capturas de pantalla.
 #![allow(dead_code)]
 
-pub mod caja;
-pub mod iconos;
-pub mod texturas;
-pub mod zonas;
+pub mod icons;
+pub mod textures;
+pub mod toolbox;
+pub mod zones;
 
 use egui::epaint::{ClippedShape, Shape};
 use egui::{

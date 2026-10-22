@@ -4,7 +4,7 @@
 //!
 //! Banco de egui sin ventana (`Context::run_ui` con `RawInput` sintético, sin GPU ni capturas). Lo
 //! que llega a la GPU es el `TexturesDelta` de cada fotograma: el banco lo cuenta (qué baldosa, si
-//! es completo o parcial y de qué tamaño) y lo aplica **en orden** con `common::texturas::Texturas`,
+//! es completo o parcial y de qué tamaño) y lo aplica **en orden** con `common::textures::Texturas`,
 //! que da la textura compuesta; esa se compara con el oráculo de la spec: `from_rgba_unmultiplied`
 //! de cada píxel de `to_rgba8(documento)` (con los píxeles pendientes escritos durante un gesto y
 //! con la entrada cambiada durante una vista previa). Orden de un fotograma, como en la app:
@@ -68,7 +68,7 @@ use px_ui::tiles::{TileAlloc, TileRect};
 use px_ui::view::{Size, ViewOp, Zoom};
 
 mod common;
-use common::texturas::{Textura, Texturas};
+use common::textures::{Textura, Texturas};
 use common::{PPPS, boton, boton_de, contexto, mover, tecla};
 
 mod tiles_support;
@@ -228,7 +228,7 @@ struct Banco {
     log: ChangeLog,
     texturas: Texturas,
     max_textura: Option<usize>,
-    /// Aplicar los deltas a `texturas` (las pruebas de memoria grande lo desactivan).
+    /// Aplicar los deltas a `textures` (las pruebas de memoria grande lo desactivan).
     guarda: bool,
     info: Option<CanvasInfo>,
 }

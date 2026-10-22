@@ -12,7 +12,7 @@
 //! Cómo se lee la textura: `egui` no deja leer el contenido de una textura desde el `Context`
 //! (`Context::tex_manager` solo guarda metadatos: nombre, tamaño y bytes por píxel). Lo que sí
 //! se ve es el `TexturesDelta` de cada fotograma (`FullOutput::textures_delta`): lo que `egui`
-//! entregaría a la GPU. El banco los aplica **en orden** con `common::texturas::Texturas` (el
+//! entregaría a la GPU. El banco los aplica **en orden** con `common::textures::Texturas` (el
 //! ayudante de la unidad 14a: componen la textura con deltas completos y parciales, y una textura
 //! por baldosa) y así se puede comparar el contenido de la textura del lienzo con el esperado, y
 //! contar cuántos deltas llegaron en un fotograma (cero = no se subió nada). Con las imágenes de
@@ -32,7 +32,7 @@ use px_ui::canvas::Canvas;
 use px_ui::texture::{to_rgba8, to_rgba8_with_entry};
 
 mod common;
-use common::texturas::Texturas;
+use common::textures::Texturas;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba

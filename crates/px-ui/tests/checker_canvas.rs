@@ -34,7 +34,7 @@
 //! GPU aplica una regla de desempate en las aristas compartidas y aquí se evita el empate). El
 //! rasterizador de esta versión pinta **todo el lienzo** en un búfer y muestrea: la textura de cada
 //! baldosa de la imagen **tal como la deja egui** (el banco aplica en orden los `textures_delta`
-//! de cada fotograma con `common::texturas::Texturas`, y la superposición del trazo va dentro de
+//! de cada fotograma con `common::textures::Texturas`, y la superposición del trazo va dentro de
 //! esa textura), la textura 2×2 del damero (`A, B, B, A` con envoltura y sin filtro, como la GPU)
 //! y, para el modo malla, los vértices coloreados sin textura.
 //!
@@ -68,7 +68,7 @@ use px_ui::tool::{Tool, ToolAction, ToolState};
 use px_ui::view::{MIN_VISIBLE, ScreenRect, Size, ViewOp, Zoom};
 
 mod common;
-use common::texturas::Texturas;
+use common::textures::Texturas;
 use common::{PPPS, boton_de, contexto, en_puntos, mover, rueda_linea, tecla};
 
 const PANTALLA: Vec2 = vec2(400.0, 300.0);
@@ -545,7 +545,7 @@ fn rect_en_puntos(a: ScreenRect, ppp: f32) -> Rect {
 // El banco
 // ---------------------------------------------------------------------------------------------
 
-/// Lo que dejó un fotograma. Los cambios de textura ya están aplicados a `Banco::texturas` y
+/// Lo que dejó un fotograma. Los cambios de textura ya están aplicados a `Banco::textures` y
 /// limpiados (egui entra en pánico si se sueltan sin aplicar) y copiados en `subidas` y
 /// `liberadas`.
 struct Salida {

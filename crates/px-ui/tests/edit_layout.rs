@@ -1421,7 +1421,7 @@ fn fila_2_u21_los_bordes_del_boton_estan_en_edges_u_y_son_enteros_a_los_cinco_pp
 // Unidad I.4 (specs/interfaz-iconos.md): fila 4 y propiedad 3 de la fila de iconos del editor
 // ---------------------------------------------------------------------------------------------
 
-mod iconos {
+mod icons {
     use super::*;
 
     type RectU = (i64, i64, i64, i64);

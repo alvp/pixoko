@@ -6,7 +6,7 @@
 //!
 //! El banco pinta un lienzo con una imagen azul opaca y una superposición
 //! (`Canvas::set_overlay`, cada fotograma tras `interact` y antes de `paint`), aplica los
-//! `textures_delta` de **cada** fotograma (`common::texturas::Texturas`: completos y parciales),
+//! `textures_delta` de **cada** fotograma (`common::textures::Texturas`: completos y parciales),
 //! pasa las formas por el teselador de egui (`Context::tessellate`, con los mismos ajustes que la
 //! app) y rasteriza **a mano** lo teselado en el centro de cada píxel físico del bloque de cada
 //! píxel pendiente: el color que se vería. La malla de la baldosa se rasteriza **muestreando su
@@ -37,7 +37,7 @@ use px_ui::text::text_scale;
 use px_ui::view::ViewOp;
 
 mod common;
-use common::texturas::Texturas;
+use common::textures::Texturas;
 use common::{PPPS, contexto};
 
 const PANTALLA: egui::Vec2 = egui::vec2(400.0, 300.0);

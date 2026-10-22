@@ -3,7 +3,7 @@
 //! aritmética pura en `chrome.rs`).
 //!
 //! Banco de egui sin ventana (`Context::run_ui` con `RawInput` sintético): `show_toolbox` se pinta
-//! sola en una ventana vacía, así que la columna queda pegada al borde derecho (`common::zonas::caja_sola`). Se comprueba a las cinco
+//! sola en una ventana vacía, así que la columna queda pegada al borde derecho (`common::zones::caja_sola`). Se comprueba a las cinco
 //! escalas (`ppp` 1,0, 1,25, 1,5, 2,0 y 3,0), en píxeles físicos:
 //!
 //! - las tablas `TOOL_BUTTONS` y `ZOOM_BUTTONS`;
@@ -34,9 +34,9 @@ use px_ui::toolbar::{TOOL_BUTTONS, ToolboxView, ZOOM_BUTTONS, show_toolbox};
 use px_ui::view::Zoom;
 
 mod common;
-use common::caja::centro_u;
-use common::iconos::IconosDePrueba;
-use common::zonas::caja_sola;
+use common::icons::IconosDePrueba;
+use common::toolbox::centro_u;
+use common::zones::caja_sola;
 use common::{
     PPPS, Pintado, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, tolerancia_de_egui,
 };
@@ -743,7 +743,7 @@ mod caja_derecha {
             .any(|r| r.fill == color && cerca_rect(r.rect, ppp, esperado))
     }
 
-    /// Borde de `grosor` px por dentro de `caja`: las cuatro franjas de un anillo sobre el interior.
+    /// Borde de `grosor` px por dentro de `toolbox`: las cuatro franjas de un anillo sobre el interior.
     fn borde(caja: ScreenRect, grosor: i64) -> [ScreenRect; 4] {
         ring_rects(
             ScreenRect {
@@ -1469,7 +1469,7 @@ mod caja_derecha {
 // Unidad I.4 (specs/interfaz-iconos.md): filas 6 y 8 de la caja, con iconos
 // ---------------------------------------------------------------------------------------------
 
-mod iconos {
+mod icons {
     use super::*;
     use egui::output::OutputEvent;
     use egui::{Pos2, RawInput, Rect, Role};

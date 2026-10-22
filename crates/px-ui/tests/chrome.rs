@@ -601,7 +601,7 @@ mod caja_derecha {
 // Unidad I.4 (specs/interfaz-iconos.md): rejilla de iconos de la caja, mínimos y regla del alto
 // ---------------------------------------------------------------------------------------------
 
-mod iconos {
+mod icons {
     use super::*;
     use px_core::Mode;
     use px_ui::chrome::{

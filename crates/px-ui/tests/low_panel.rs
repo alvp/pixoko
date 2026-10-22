@@ -51,9 +51,9 @@ use px_ui::status::bar_height_px;
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::TEXT_DIM;
 
-#[path = "common/zonas.rs"]
-mod zonas;
-use zonas::panel_a_la_izquierda;
+#[path = "common/zones.rs"]
+mod zones;
+use zones::panel_a_la_izquierda;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba

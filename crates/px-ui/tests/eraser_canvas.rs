@@ -8,7 +8,7 @@
 //!
 //! Qué se ve se lee de la **textura compuesta** (unidad 14a-2, specs/hito-2-zoom-baldosas.md,
 //! decisión 7): el banco aplica en orden los `textures_delta` de cada fotograma con
-//! `common::texturas::Texturas` y guarda en cada `Fotograma` la textura de la baldosa 0 tal como
+//! `common::textures::Texturas` y guarda en cada `Fotograma` la textura de la baldosa 0 tal como
 //! quedó en ese fotograma. Un píxel borrado vale `Color32::TRANSPARENT` (alfa 0) en esa textura y
 //! la GPU lo compone sobre lo que hay debajo (el damero de transparencia o el fondo elegido, que
 //! se dibuja **bajo** las baldosas); por eso no hay ninguna forma de superposición: el fotograma
@@ -26,7 +26,7 @@ use egui::{
     Shape, TextureId, pos2, vec2,
 };
 mod common;
-use common::texturas::{Textura, Texturas};
+use common::textures::{Textura, Texturas};
 use px_core::{Document, Image, ImageId, Mode, Pixel, PixelEdit, Rgba};
 use px_ui::canvas::{BACKGROUND, Canvas, CanvasInfo};
 use px_ui::texture::{pixel_rgba, to_rgba8};
@@ -181,7 +181,7 @@ impl Banco {
     }
 
     /// Un fotograma como el de la app (`interact`, eventos y `apply`, `set_overlay`, `refresh` o
-    /// `sync`, `paint`). Los cambios de textura se aplican a `texturas` y se devuelven también en
+    /// `sync`, `paint`). Los cambios de textura se aplican a `textures` y se devuelven también en
     /// `output` (quien llama decide si los mira y los limpia: egui entra en pánico si se sueltan
     /// sin aplicar).
     fn fotograma(&mut self, events: Vec<Event>) -> Fotograma {

@@ -66,9 +66,9 @@ use px_ui::text::{INTERFACE_CHARSET, apply_scale, install_fonts, text_scale};
 use px_ui::theme::SURFACE_0;
 use px_ui::view::Zoom;
 
-#[path = "common/zonas.rs"]
-mod zonas;
-use zonas::panel_a_la_izquierda;
+#[path = "common/zones.rs"]
+mod zones;
+use zones::panel_a_la_izquierda;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba

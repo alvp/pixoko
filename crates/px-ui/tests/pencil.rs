@@ -12,7 +12,7 @@
 //! trazo (`set_overlay`, tras `interact` y antes de `paint`) se ve en la **textura** y no añade
 //! ninguna forma, y que `refresh` conserva la vista y deja la textura al día. Desde la unidad 14a-2
 //! el banco aplica en orden los `textures_delta` de cada fotograma con
-//! `common::texturas::Texturas` (la textura compuesta) y el fotograma es el de la app: `interact`,
+//! `common::textures::Texturas` (la textura compuesta) y el fotograma es el de la app: `interact`,
 //! `set_overlay`, `sync` y `paint`.
 //!
 //! El soltar perdido de la fila 16 no se puede fabricar solo con `RawInput` (egui solo baja el
@@ -35,7 +35,7 @@ use px_ui::texture::to_rgba8;
 use px_ui::view::Zoom;
 
 mod common;
-use common::texturas::{Textura, Texturas};
+use common::textures::{Textura, Texturas};
 
 const SCREEN: Vec2 = vec2(800.0, 600.0);
 const ANCHO: u32 = 64;
@@ -92,7 +92,7 @@ impl Banco {
     /// Ejecuta un fotograma como el de la app: `antes` (si lo hay) corre dentro del fotograma,
     /// antes de `interact`; luego `interact`, `set_overlay` con la superposición dada (el trazo
     /// pendiente entero; vacía la quita), `sync` y `paint`. Aplica los `textures_delta` a
-    /// `texturas` y no los limpia (quien llama los mira y los limpia).
+    /// `textures` y no los limpia (quien llama los mira y los limpia).
     fn fotograma(
         &mut self,
         events: Vec<Event>,

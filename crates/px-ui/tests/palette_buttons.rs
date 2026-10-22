@@ -49,12 +49,12 @@ use px_ui::theme::{
 };
 use px_ui::view::ScreenRect;
 
-#[path = "common/iconos.rs"]
-mod iconos;
-#[path = "common/zonas.rs"]
-mod zonas;
-use iconos::IconosDePrueba;
-use zonas::panel_a_la_izquierda;
+#[path = "common/icons.rs"]
+mod icons;
+#[path = "common/zones.rs"]
+mod zones;
+use icons::IconosDePrueba;
+use zones::panel_a_la_izquierda;
 
 // ---------------------------------------------------------------------------------------------
 // Imágenes de prueba

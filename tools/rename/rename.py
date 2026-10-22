@@ -150,6 +150,7 @@ def rename_rs(rel: str, src: str, used_mods=None):
     out: list[str] = []
     report = collections.Counter()
     in_use = False
+    use_parents: list[str] = []  # el segmento que precede a cada `{` de un `use`
     stack: list[tuple[str | None, int]] = []  # (macro de formato o None, comas)
     attr_path = False
     for i, t in enumerate(toks):
@@ -165,7 +166,12 @@ def rename_rs(rel: str, src: str, used_mods=None):
                 prev_t = toks[p].text if p >= 0 else ""
                 next_t = toks[n].text + (toks[n + 1].text if n + 1 < len(toks) else "") if n < len(toks) else ""
                 after_dot = prev_t == "."
-                if not after_dot and (prev_t == "mod" or next_t.startswith("::") or in_use):
+                # en un `use`, una hoja igual que el segmento anterior (`caja::caja`) es el elemento, no el módulo
+                sep = p >= 1 and toks[p].text == ":" and toks[p - 1].text == ":"  # `::` son dos signos
+                twin = in_use and sep and toks[sig_prev(toks, p - 1)].text == name
+                if in_use and prev_t in ("{", ",") and use_parents and use_parents[-1] == name:
+                    twin = True
+                if not after_dot and not twin and (prev_t == "mod" or next_t.startswith("::") or in_use):
                     report[("mod", name)] += 1
                     text = MODS[name]
             if name == "use" and t.kind == "ident":
@@ -173,6 +179,14 @@ def rename_rs(rel: str, src: str, used_mods=None):
         elif t.kind == "punct":
             if text == ";" and in_use:
                 in_use = False
+                use_parents.clear()
+            if in_use and text == "{":
+                p = sig_prev(toks, i)
+                sep = p >= 1 and toks[p].text == ":" and toks[p - 1].text == ":"
+                q = sig_prev(toks, p - 1) if sep else -1
+                use_parents.append(toks[q].text if q >= 0 else "")
+            elif in_use and text == "}" and use_parents:
+                use_parents.pop()
             if text in "([{":
                 p = sig_prev(toks, i)
                 macro = None

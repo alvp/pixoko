@@ -11,7 +11,7 @@ use px_ui::canvas::{Canvas, CanvasError, CanvasInfo, CanvasInput};
 use px_ui::view::Zoom;
 
 mod common;
-use common::texturas::{Texturas, texel_de};
+use common::textures::{Texturas, texel_de};
 
 const SCREEN: Vec2 = vec2(800.0, 600.0);
 
@@ -48,7 +48,7 @@ impl Banco {
         }
     }
 
-    /// Aplica a `texturas` los cambios de textura de un fotograma (antes de `limpiar`), sin los de
+    /// Aplica a `textures` los cambios de textura de un fotograma (antes de `limpiar`), sin los de
     /// la fuente de egui. Las pruebas que miran el contenido de las baldosas lo llaman con
     /// **cada** fotograma, en orden.
     fn aplica(&mut self, fotograma: &Fotograma) {

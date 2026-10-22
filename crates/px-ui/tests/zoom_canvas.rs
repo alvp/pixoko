@@ -59,8 +59,8 @@ use px_ui::toolbar::zoom_label;
 use px_ui::view::{Size, ViewOp, Zoom};
 
 mod common;
-use common::caja::caja;
-use common::zonas::caja_sola;
+use common::toolbox::caja;
+use common::zones::caja_sola;
 use common::{
     PPPS, boton, contexto, en_puntos, fotograma, mover, n_de, pintado, rueda_linea, tecla,
     tolerancia_de_egui,
@@ -605,7 +605,7 @@ struct Banco {
     imagen: Option<Imagen>,
     /// El contenido de las texturas tal como egui lo entrega a la GPU: se aplican los
     /// `textures_delta` de **cada** fotograma, en orden.
-    compuestas: common::texturas::Texturas,
+    compuestas: common::textures::Texturas,
 }
 
 impl Banco {
@@ -619,7 +619,7 @@ impl Banco {
             canvas,
             documento: image.clone(),
             imagen: None,
-            compuestas: common::texturas::Texturas::new(),
+            compuestas: common::textures::Texturas::new(),
         };
         for _ in 0..3 {
             banco.reposo();

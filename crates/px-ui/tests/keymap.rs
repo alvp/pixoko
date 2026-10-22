@@ -62,8 +62,8 @@ use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS, tooltip_text};
 use px_ui::view::Zoom;
 
 mod common;
-use common::caja::{caja_con, centro_u};
-use common::zonas::caja_sola;
+use common::toolbox::{caja_con, centro_u};
+use common::zones::caja_sola;
 use common::{Pintado, boton, contexto, en_puntos, modificadores, mover, n_de, pintado};
 
 const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
