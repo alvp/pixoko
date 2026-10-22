@@ -59,13 +59,6 @@ pub fn title_text(info: &TitleInfo) -> String {
     title
 }
 
-/// Título completo: es `title_text`. Existe solo porque varias specs y pruebas citan
-/// `window_title` (filas 22 y 10, propiedad 5); debe quitarse cuando dejen de citarlo, y sus
-/// llamadas pasan a `title_text` (specs/hito-2-limpieza-api.md).
-pub fn window_title(info: &TitleInfo) -> String {
-    title_text(info)
-}
-
 /// `TitleInfo` de la app: el único sitio de producción que lo construye, siempre con la
 /// herramienta (`tool: Some(tool)`). Una prueba vigila que `main.rs` no lo construya aparte.
 pub fn app_title_info(
@@ -90,10 +83,10 @@ pub fn app_title_info(
     }
 }
 
-/// Texto de la barra de estado: el título de `window_title` sin el prefijo `Pixoko: ` y sin el
-/// fichero (specs/hito-2-texto.md). `window_title` es, pues, `Pixoko: ` más esto.
+/// Texto de la barra de estado: el título de `title_text` sin el prefijo `Pixoko: ` y sin el
+/// fichero (specs/hito-2-texto.md). `title_text` es, pues, `Pixoko: ` más esto.
 pub fn status_line(info: &TitleInfo) -> String {
-    let title = window_title(info);
+    let title = title_text(info);
     match title.strip_prefix("Pixoko: ") {
         Some(line) => line.to_string(),
         None => title,
@@ -362,7 +355,7 @@ mod tests {
 
 #[cfg(test)]
 mod window_title_tests {
-    //! Fila 22 de specs/hito-2-linea-relleno-app.md: `window_title(info)` da el título completo,
+    //! Fila 22 de specs/hito-2-linea-relleno-app.md: `title_text(info)` da el título completo,
     //! con la herramienta en el campo `tool` de `TitleInfo` y `status_text(tool, color)` dentro de
     //! `title_text`. No toca los tests del módulo `tests`.
 
@@ -398,7 +391,7 @@ mod window_title_tests {
             ..completo()
         };
         assert_eq!(
-            window_title(&info),
+            title_text(&info),
             "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000 · deshacer · rehacer"
         );
     }
@@ -412,11 +405,11 @@ mod window_title_tests {
             ..completo()
         };
         sin_cursor.tool = Some(Tool::Pencil);
-        assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · lápiz");
+        assert_eq!(title_text(&sin_cursor), "Pixoko: 64×48 · ×8 · lápiz");
         sin_cursor.tool = Some(Tool::Line);
-        assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · línea");
+        assert_eq!(title_text(&sin_cursor), "Pixoko: 64×48 · ×8 · línea");
         sin_cursor.tool = Some(Tool::Fill);
-        assert_eq!(window_title(&sin_cursor), "Pixoko: 64×48 · ×8 · relleno");
+        assert_eq!(title_text(&sin_cursor), "Pixoko: 64×48 · ×8 · relleno");
         let con_cursor = TitleInfo {
             layers: None,
             tool: Some(Tool::Pencil),
@@ -424,7 +417,7 @@ mod window_title_tests {
             ..completo()
         };
         assert_eq!(
-            window_title(&con_cursor),
+            title_text(&con_cursor),
             "Pixoko: 64×48 · ×8 · (3, 4) · lápiz"
         );
     }
@@ -461,7 +454,7 @@ mod window_title_tests {
                 ..completo()
             };
             assert_eq!(
-                window_title(&info),
+                title_text(&info),
                 esperado,
                 "undo {can_undo}, redo {can_redo}"
             );
@@ -482,7 +475,7 @@ mod window_title_tests {
                     ..completo()
                 };
                 assert_eq!(
-                    window_title(&info),
+                    title_text(&info),
                     "Pixoko: no hay memoria para guardar el paso en la historia",
                     "{tool:?}, undo {can_undo}, redo {can_redo}"
                 );
@@ -499,7 +492,7 @@ mod window_title_tests {
             ..completo()
         };
         assert_eq!(
-            window_title(&info),
+            title_text(&info),
             "Pixoko: 64×48 · ×8 · (3, 4) · relleno · color 9 transparente"
         );
     }
@@ -517,7 +510,7 @@ mod window_title_tests {
             can_redo: false,
             error: None,
         };
-        assert_eq!(window_title(&info), "Pixoko:  · ×1 · lápiz");
+        assert_eq!(title_text(&info), "Pixoko:  · ×1 · lápiz");
     }
 }
 
@@ -608,7 +601,7 @@ mod status_line_tests {
     /// Comprueba `window_title == "Pixoko: " + status_line` y que `title_with_file` no cambia.
     fn comprueba_titulo(info: &TitleInfo, linea: &str) {
         assert_eq!(status_line(info), linea);
-        let titulo = window_title(info);
+        let titulo = title_text(info);
         assert_eq!(titulo, format!("Pixoko: {linea}"));
         assert_eq!(
             title_with_file(Some("casa.png"), true, &titulo),
@@ -702,7 +695,7 @@ mod status_line_tests {
             can_redo: false,
             error: None,
         };
-        assert_eq!(window_title(&info), "Pixoko:  · ×1 · lápiz");
+        assert_eq!(title_text(&info), "Pixoko:  · ×1 · lápiz");
         assert_eq!(status_line(&info), " · ×1 · lápiz");
     }
 
@@ -749,7 +742,7 @@ mod status_line_tests {
         ) {
             let info = TitleInfo { layers: None, size, zoom, hover, tool: Some(tool), color, can_undo, can_redo, error: None };
             let linea = status_line(&info);
-            prop_assert_eq!(window_title(&info), format!("Pixoko: {linea}"));
+            prop_assert_eq!(title_text(&info), format!("Pixoko: {linea}"));
             prop_assert!(!linea.contains('\n') && !linea.contains('\r'), "{:?}", linea);
             for c in linea.chars() {
                 prop_assert!(
@@ -768,7 +761,7 @@ mod status_line_tests {
 mod tool_field_tests {
     //! Unidad 14-limpieza (specs/hito-2-limpieza-api.md, filas 1 a 8 y propiedades P1 y P2):
     //! `TitleInfo` tiene un campo propio `tool: Option<Tool>`; `title_text` escribe la herramienta
-    //! (entre el cursor y deshacer) solo si es `Some`; `window_title(&info)` y `status_line(&info)`
+    //! (entre el cursor y deshacer) solo si es `Some`; `title_text(&info)` y `status_line(&info)`
     //! ya no reciben la herramienta; y `app_title_info` construye el `TitleInfo` de producción con
     //! `tool` siempre `Some`.
 
@@ -915,9 +908,8 @@ mod tool_field_tests {
     #[test]
     fn fila_7_window_title_y_status_line_leen_la_herramienta_del_campo() {
         let sin = base();
-        assert_eq!(window_title(&sin), title_text(&sin));
         assert_eq!(
-            window_title(&sin),
+            title_text(&sin),
             "Pixoko: 64×48 · ×8 · (3, 4) · color 3 #ff0000"
         );
         assert_eq!(status_line(&sin), "64×48 · ×8 · (3, 4) · color 3 #ff0000");
@@ -927,9 +919,8 @@ mod tool_field_tests {
             tool: Some(Tool::Line),
             ..base()
         };
-        assert_eq!(window_title(&con), title_text(&con));
         assert_eq!(
-            window_title(&con),
+            title_text(&con),
             "Pixoko: 64×48 · ×8 · (3, 4) · línea · color 3 #ff0000"
         );
         assert_eq!(
@@ -964,7 +955,7 @@ mod tool_field_tests {
                     "{tool:?}, imagen {}",
                     image.is_some()
                 );
-                let titulo = window_title(&info);
+                let titulo = title_text(&info);
                 assert!(
                     titulo.contains(etiqueta),
                     "{tool:?}, imagen {}: {titulo:?}",

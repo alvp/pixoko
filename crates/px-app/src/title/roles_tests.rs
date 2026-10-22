@@ -70,10 +70,7 @@ fn fila_9_el_titulo_y_la_barra_dicen_herramienta_y_los_dos_colores() {
         status_line(&info),
         "64×48 · ×8 · (3, 4) · lápiz · color 3 #ff0000 · fondo color 9 transparente · deshacer"
     );
-    assert_eq!(
-        window_title(&info),
-        format!("Pixoko: {}", status_line(&info))
-    );
+    assert_eq!(title_text(&info), format!("Pixoko: {}", status_line(&info)));
 }
 
 #[test]

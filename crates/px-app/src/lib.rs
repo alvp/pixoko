@@ -99,7 +99,7 @@ use crate::session::{
     LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for, saved_notice,
 };
 use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
-use crate::title::{app_title_info, colors_label, status_line_fit, title_with_file, window_title};
+use crate::title::{app_title_info, colors_label, status_line_fit, title_text, title_with_file};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
 /// Una conversión que espera su fotograma tras `Aceptar` (specs/hito-2-convertir-modo.md, D5).
@@ -1652,7 +1652,7 @@ impl eframe::App for App {
             self.session.document.height(),
         ));
         info.layers = self.session.layers_info();
-        let title = window_title(&info);
+        let title = title_text(&info);
         let columns =
             px_ui::status::bar_columns(ctx.content_rect().width(), ctx.pixels_per_point());
         let status = (status_line_fit(&info, columns), info.error.is_some());
