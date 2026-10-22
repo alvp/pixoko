@@ -4,23 +4,23 @@
 //! argumento o arrastrando, y los guarda con `Ctrl`+`S` (specs/hito-2-abrir-guardar.md).
 
 mod background_color;
+#[cfg(test)]
+mod checker_saved;
 mod config;
 mod confirm;
 mod convert_mode;
-#[cfg(test)]
-mod damero_guardado;
 mod demo;
 mod dialogs;
 mod dispatch;
 mod dropper_once;
 mod files;
+#[cfg(test)]
+mod gate;
 mod icons;
 mod keys;
 mod licenses;
 mod merge_flow;
 mod new_image;
-#[cfg(test)]
-mod puerta;
 mod save_wait;
 mod session;
 mod shortcuts_flow;

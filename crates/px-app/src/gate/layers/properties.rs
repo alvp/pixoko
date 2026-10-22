@@ -13,14 +13,14 @@ use px_formats::read_png;
 use px_raster::compose;
 use px_ui::canvas::Canvas;
 
-use super::guiones::{sesion_indexada_de, sesion_rgba_de};
-use super::modelo::{Celda4, Orden, Pila};
-use super::mundo::Mundo3;
+use super::model::{Celda4, Orden, Pila};
+use super::scripts::{sesion_indexada_de, sesion_rgba_de};
+use super::world::Mundo3;
 use super::{
     Trabajo3, comprobar_golden_aseprite, fuera_de_golden_aseprite, igual_salvo_rgb_con_alfa_0,
 };
+use crate::gate::common::{golden_intacto, sesion_vacia, sin_temporales};
 use crate::merge_flow::MergeKind;
-use crate::puerta::comun::{golden_intacto, sesion_vacia, sin_temporales};
 
 /// Una orden abstracta: se concreta contra el estado del modelo (los índices, las coordenadas y los
 /// colores dependen de él).

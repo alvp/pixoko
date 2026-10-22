@@ -11,7 +11,7 @@ use px_raster::compose;
 use px_ui::canvas::CanvasEvent;
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState};
 
-use super::modelo::{Celda4, Orden, Pila};
+use super::model::{Celda4, Orden, Pila};
 use crate::session::Session;
 
 struct Snap {

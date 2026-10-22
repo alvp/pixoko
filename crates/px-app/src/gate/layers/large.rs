@@ -2,7 +2,7 @@
 //! **`#[ignore]`**: RGBA de 8192² e indexado de 6000².
 //!
 //! Se lanzan a mano, una vez al cierre, en release y con un solo hilo:
-//! `cargo test --release -p px-app -- --ignored --test-threads=1 puerta::capas::grande`. En
+//! `cargo test --release -p px-app -- --ignored --test-threads=1 gate::layers::large`. En
 //! depuración tardan mucho y gastan GiB: no se ejecutan con `cargo test` a secas.
 //!
 //! Las 4 capas (el fondo es la 0; en RGBA la 3 es Multiplicar con opacidad 128):
@@ -28,9 +28,9 @@ use px_ui::tool::{Tool, ToolAction, ToolState};
 
 use super::Trabajo3;
 use super::fuera_de_golden_aseprite;
-use super::guiones::{sesion_indexada_de, sesion_rgba_de};
+use super::scripts::{sesion_indexada_de, sesion_rgba_de};
+use crate::gate::common::{Lcg, sesion_vacia};
 use crate::merge_flow::MergeKind;
-use crate::puerta::comun::{Lcg, sesion_vacia};
 use crate::session::Session;
 
 struct Escenario {

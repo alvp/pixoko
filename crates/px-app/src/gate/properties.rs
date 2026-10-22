@@ -28,7 +28,7 @@ use px_ui::canvas::Canvas;
 use crate::files::FileError;
 use crate::session::{Saved, Session};
 
-use super::comun::*;
+use super::common::*;
 
 /// Casos de una propiedad: los de la spec, o menos si `PROPTEST_CASES` los baja.
 fn casos(de_la_spec: u32) -> u32 {

@@ -1,5 +1,5 @@
 //! Filas 5 a 9 y 11 de la puerta del hito 3 (specs/hito-3-puerta.md, «Casos»). La fila 10 está en
-//! `grande.rs` (`#[ignore]`) y las propiedades 1 a 3 en `propiedades.rs`.
+//! `large.rs` (`#[ignore]`) y las propiedades 1 a 3 en `properties.rs`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,20 +8,20 @@ use px_formats::{read_png, write_png};
 use px_raster::compose;
 use px_ui::canvas::Canvas;
 
-use super::guiones::{
+use super::model::Pila;
+use super::scripts::{
     guion_corto_indexado, guion_corto_rgba, guion_indexado, guion_rgba, sesion_indexada,
     sesion_rgba,
 };
-use super::modelo::Pila;
-use super::mundo::Mundo3;
+use super::world::Mundo3;
 use super::{
     Trabajo3, comprobar_golden_aseprite, fuera_de_golden_aseprite, golden_aseprite,
     igual_salvo_rgb_con_alfa_0, inicial,
 };
 use crate::convert_mode::WAIT_FRAMES;
 use crate::dialogs::{DialogKind, Outcome, SaveRoute, proposed_save_name};
-use crate::puerta::comun::sha256::sha256_hex;
-use crate::puerta::comun::{
+use crate::gate::common::sha256::sha256_hex;
+use crate::gate::common::{
     comparar_instantaneas, dialogos, nombres_en, sesion_vacia, sin_temporales,
 };
 use crate::save_wait::{StartSave, aseprite_pixels, save_pixels, start_save};
@@ -80,7 +80,7 @@ fn historia(mut w: Mundo3) {
     assert!(!w.s.modified());
     w.deshacer();
     assert!(w.s.modified(), "un paso antes de lo guardado");
-    assert!(w.aplicar(&super::modelo::Orden::Nueva));
+    assert!(w.aplicar(&super::model::Orden::Nueva));
     assert!(w.s.modified());
     w.rehacer(); // al final de la rama: `NothingToRedo`, comprobado dentro.
     w.deshacer();
@@ -266,7 +266,7 @@ fn fila_08_un_png_con_dos_capas_pide_el_dialogo_y_propone_aseprite() {
         "una capa: guarda sin diálogo"
     );
     let mut w = Mundo3::de_sesion(sesion, "png con capas");
-    assert!(w.aplicar(&super::modelo::Orden::Nueva));
+    assert!(w.aplicar(&super::model::Orden::Nueva));
     assert_eq!(w.s.save_route(), SaveRoute::Dialog);
     assert_eq!(proposed_save_name(w.s.path(), 2), "base.aseprite");
     // Elegir `.png` en ese diálogo guarda aplanado, como siempre.
@@ -459,7 +459,7 @@ fn fila_11_el_trabajo_cuelga_de_target_y_se_borra_aunque_la_prueba_falle() {
         propia.display()
     );
     assert!(propia.starts_with(
-        fs::canonicalize(crate::puerta::comun::raiz_repo().join("target")).expect("target")
+        fs::canonicalize(crate::gate::common::raiz_repo().join("target")).expect("target")
     ));
     drop(t);
     assert!(!propia.exists(), "el trabajo se borra al soltarse");

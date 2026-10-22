@@ -7,11 +7,11 @@
 //! `px-golden`).
 //!
 //! Reparto:
-//! - `modelo`: el modelo ingenuo de la pila (rejilla de celdas por capa, órdenes con código
+//! - `model`: el modelo ingenuo de la pila (rejilla de celdas por capa, órdenes con código
 //!   ingenuo); no reimplementa la composición (la fijan 3.2 y 3.5 con 46 goldens de Aseprite).
-//! - `mundo`: la sesión real, las herramientas y el modelo, comprobados paso a paso.
-//! - `guiones`: los guiones de punta a punta (RGBA e indexado), con vectores a mano de 3.2.
-//! - `filas`: las filas 5 a 9 y 11; `grande`: la fila 10, `#[ignore]`; `propiedades`: 1 a 3.
+//! - `world`: la sesión real, las herramientas y el modelo, comprobados paso a paso.
+//! - `scripts`: los guiones de punta a punta (RGBA e indexado), con vectores a mano de 3.2.
+//! - `rows`: las filas 5 a 9 y 11; `large`: la fila 10, `#[ignore]`; `properties`: 1 a 3.
 //!
 //! Reglas que cumplen todas las pruebas:
 //! - **Ninguna escritura sale de `target/pixoko-gate/`** (el directorio de trabajo de la puerta 2,
@@ -20,12 +20,12 @@
 //! - **`golden/aseprite/` queda igual**: instantánea y SHA-256 de cada fichero al principio y al
 //!   terminar cada prueba.
 
-mod filas;
-mod grande;
-mod guiones;
-mod modelo;
-mod mundo;
-mod propiedades;
+mod large;
+mod model;
+mod properties;
+mod rows;
+mod scripts;
+mod world;
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -35,8 +35,8 @@ use std::sync::OnceLock;
 
 use px_core::{Image, Pixel, Rgba};
 
-use super::comun::sha256::sha256_hex;
-use super::comun::{
+use super::common::sha256::sha256_hex;
+use super::common::{
     Instantanea, Trabajo, comparar_instantaneas, fuera_de_golden, instantanea_de, raiz_repo,
 };
 

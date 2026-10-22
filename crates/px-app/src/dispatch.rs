@@ -189,8 +189,8 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
 }
 
 #[cfg(test)]
-mod ayuda_tests;
+mod help_tests;
 #[cfg(test)]
-mod teclado_tests;
+mod keyboard_tests;
 #[cfg(test)]
 mod tests;

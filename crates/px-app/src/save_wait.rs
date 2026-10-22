@@ -36,7 +36,7 @@ pub fn compose_pixels(doc: &Document) -> u64 {
 }
 
 /// Píxeles de celda que hay que comprimir al guardar un `.aseprite`: ancho × alto × capas con
-/// imagen (las vacías no se escriben). Medido en release (`puerta::capas::grande`): 4 capas de
+/// imagen (las vacías no se escriben). Medido en release (`gate::layers::large`): 4 capas de
 /// 8192² RGBA de ruido (268 millones de píxeles, sin comprimir) tardan 29,5 s, unos 0,11 µs por
 /// píxel; con 2²⁴ píxeles, unos 1,8 s. Con contenido que comprime (rayas y rellenos) las mismas 4
 /// capas tardan 1,4 s.

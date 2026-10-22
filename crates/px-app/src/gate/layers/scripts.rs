@@ -5,8 +5,8 @@
 
 use px_core::{BlendMode, Document, Image, Mode, Palette, Pixel, Rgba};
 
-use super::modelo::{Celda4, Orden::*};
-use super::mundo::Mundo3;
+use super::model::{Celda4, Orden::*};
+use super::world::Mundo3;
 use crate::confirm::Confirm;
 use crate::merge_flow::{MergeKind, flatten_gate};
 use crate::session::Session;

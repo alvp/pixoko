@@ -1,5 +1,5 @@
 //! Filas 1 a 10 de la puerta del hito 2 (specs/hito-2-puerta.md). La fila 11 está en
-//! `crates/px-golden/tests/png_interop/gate_oraculo.rs` y la 12 en `grande.rs`.
+//! `crates/px-golden/tests/png_interop/gate_oracle.rs` y la 12 en `large.rs`.
 //!
 //! Cada test crea su directorio de trabajo (`Trabajo`), copia allí los reales y abre la copia:
 //! nada se escribe en `golden/png/` y el guardián de `Trabajo` lo comprueba al terminar.
@@ -30,8 +30,8 @@ use crate::dialogs::{DialogKind, Finished, Outcome, open_gate};
 use crate::files::FileError;
 use crate::session::Session;
 
-use super::comun::sha256::{sha256_hex, vectores};
-use super::comun::*;
+use super::common::sha256::{sha256_hex, vectores};
+use super::common::*;
 
 /// Texto del modo que lleva el aviso de apertura.
 fn texto_del_modo(modo: Mode) -> &'static str {

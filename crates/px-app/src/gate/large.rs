@@ -25,7 +25,7 @@ use px_ui::canvas::{Canvas, CanvasEvent};
 use px_ui::color::ColorChoice;
 use px_ui::tool::{Tool, ToolAction, ToolState};
 
-use super::comun::*;
+use super::common::*;
 use crate::session::Session;
 
 /// El lienzo como capas de gestos: la fila `y` tras `k` gestos se calcula sin tocar el documento.
