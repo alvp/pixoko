@@ -40,6 +40,7 @@ use px_formats::{Conversion, read_png};
 const MENSAJE_VACIO: &str = "golden/png no contiene ningún PNG: el corpus de interoperabilidad no puede estar vacío (ver golden/png/README.md)";
 
 /// Un fichero de la carpeta: nombre (sin ruta) y contenido.
+#[derive(Clone)]
 struct Fichero {
     nombre: String,
     bytes: Vec<u8>,

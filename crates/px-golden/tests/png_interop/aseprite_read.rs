@@ -25,10 +25,10 @@ use super::aseprite_corpus::CASOS;
 
 /// Techo del error, en niveles de canal, de la fórmula empírica de 3.2 dentro de su dominio. Es el
 /// mismo de `mezcla.rs`: no se ensancha.
-const TOLERANCIA_EMPIRICA: i32 = 2;
+pub(super) const TOLERANCIA_EMPIRICA: i32 = 2;
 
 /// Un fichero de `golden/aseprite/` (datos, no código).
-fn golden(nombre: &str) -> Vec<u8> {
+pub(super) fn golden(nombre: &str) -> Vec<u8> {
     let ruta = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../golden/aseprite")
         .join(nombre);
@@ -36,7 +36,7 @@ fn golden(nombre: &str) -> Vec<u8> {
 }
 
 /// El documento de un caso, leído con los límites por defecto.
-fn lee_documento(caso: &str) -> Result<Document, String> {
+pub(super) fn lee_documento(caso: &str) -> Result<Document, String> {
     let bytes = golden(&format!("{caso}.aseprite"));
     read_aseprite(&bytes, &AsepriteLimits::default())
         .map(|r| r.document)
@@ -44,7 +44,7 @@ fn lee_documento(caso: &str) -> Result<Document, String> {
 }
 
 /// El PNG aplanado de un caso, tal como lo lee `read_png`.
-fn lee_png(caso: &str) -> Image {
+pub(super) fn lee_png(caso: &str) -> Image {
     read_png(&golden(&format!("{caso}.png")))
         .unwrap_or_else(|e| panic!("{caso}.png: read_png dio error: {e}"))
         .image
@@ -52,7 +52,7 @@ fn lee_png(caso: &str) -> Image {
 
 /// El píxel como RGBA resuelto: los indexados, por su paleta (con el índice transparente en
 /// alfa 0).
-fn rgba_de(imagen: &Image, x: u32, y: u32) -> Rgba {
+pub(super) fn rgba_de(imagen: &Image, x: u32, y: u32) -> Rgba {
     match imagen.get_pixel(x, y) {
         Ok(Pixel::Rgba(c)) => c,
         Ok(Pixel::Indexed(i)) => imagen
@@ -100,8 +100,19 @@ fn en_dominio(doc: &Document, x: u32, y: u32) -> bool {
 /// Evalúa un caso: `Err` con el nombre del caso y el primer píxel que incumple.
 fn evalua_caso(caso: &str) -> Result<(), String> {
     let doc = lee_documento(caso)?;
-    let png = lee_png(caso);
     let compuesto = compose(&doc).map_err(|e| format!("{caso}: compose dio error: {e:?}"))?;
+    evalua_imagen(caso, &doc, &compuesto, &lee_png(caso))
+}
+
+/// La comparación de `evalua_caso` sobre una imagen ya compuesta y un PNG dados (la usa también la
+/// puerta del hito, specs/hito-3-puerta.md, con la imagen de un documento aplanado o reabierto).
+/// `doc` es el documento **original**: de él sale el dominio de la fórmula empírica de 3.2.
+pub(super) fn evalua_imagen(
+    caso: &str,
+    doc: &Document,
+    compuesto: &Image,
+    png: &Image,
+) -> Result<(), String> {
     if (compuesto.width(), compuesto.height()) != (png.width(), png.height()) {
         return Err(format!(
             "{caso}: la composición mide {}×{} y el PNG {}×{}",
@@ -122,8 +133,8 @@ fn evalua_caso(caso: &str) -> Result<(), String> {
     let mut en_el_dominio = vec![0usize; grupos];
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let (nuestro, esperado) = (rgba_de(&compuesto, x, y), rgba_de(&png, x, y));
-            let dentro = en_dominio(&doc, x, y);
+            let (nuestro, esperado) = (rgba_de(compuesto, x, y), rgba_de(png, x, y));
+            let dentro = en_dominio(doc, x, y);
             let mut error_pixel = 0;
             let mut motivo = None;
             if nuestro.a != esperado.a {

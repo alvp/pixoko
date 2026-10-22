@@ -51,7 +51,7 @@ pub(super) const CASOS: [&str; MAX_CASOS] = [
 ];
 
 /// Falta o sobra algún caso respecto de `esperados` (`casos` ordenados).
-fn comparar_con_lista(casos: &[String], esperados: &[&str]) -> Result<(), String> {
+pub(super) fn comparar_con_lista(casos: &[String], esperados: &[&str]) -> Result<(), String> {
     let faltan: Vec<&str> = esperados
         .iter()
         .copied()
@@ -119,7 +119,7 @@ fn cabecera(bytes: &[u8]) -> Result<(usize, usize), String> {
 }
 
 /// Todos los problemas juntos, uno por línea; `Ok` con los nombres de los casos comprobados.
-fn verificar(ficheros: &[Fichero]) -> Result<Vec<String>, String> {
+pub(super) fn verificar(ficheros: &[Fichero]) -> Result<Vec<String>, String> {
     let buscar = |nombre: &str| ficheros.iter().find(|f| f.nombre == nombre);
     let mut problemas = Vec::new();
     let mut casos = Vec::new();
