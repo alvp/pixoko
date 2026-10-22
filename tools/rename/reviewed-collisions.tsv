@@ -1,0 +1,5 @@
+# Colisiones revisadas a mano: el nombre nuevo ya existe en el fichero pero no puede ocultar nada (specs/limpieza-1.md, apartado 1).
+# fichero	clase	viejo	nuevo	motivo
+crates/px-app/src/merge_flow.rs	id	capas	layers	`layers` solo existe en otra función (líneas 36 a 52); `capas` es local de flatten_warning (línea 107)
+crates/px-ui/tests/palette_buttons.rs	mod	iconos	icons	`icons` es un campo (`icons:`) y el módulo de otro crate (`px_ui::icons`, siempre con ruta): no hay un nombre `icons` en el ámbito del módulo
+crates/px-ui/tests/toolbar.rs	mod	iconos	icons	igual: `icons:` es un campo y `px_ui::icons::Icon` va con ruta; el `mod iconos` en línea y `common::iconos` pasan a `icons` sin chocar

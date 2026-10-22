@@ -1,0 +1,64 @@
+# Diccionario palabra a palabra, español -> inglés (specs/limpieza-1.md, etapa L1). Versionado.
+# Las palabras que ya son inglés no figuran. Las filas con comentario son decisiones de contexto.
+alfa	alpha
+aclarar	lighten
+arranque	startup
+atajo	shortcut
+ayuda	help
+baja	low
+bloqueada	locked
+caja	toolbox	# «caja de herramientas»
+capa	layer
+capas	layers
+celda	cel	# el término del formato .aseprite
+celdas	cels
+combinar	merge
+comprobar	check
+comun	common
+con	with
+damero	checker
+defecto	default
+desplazada	shifted
+diferencia	difference
+escritor	writer
+fila	row
+filas	rows
+fondo	background
+generar	generate
+grande	large
+guardado	saved
+guiones	scripts
+iconos	icons
+indexado	indexed
+mezcla	blend
+mixto	mixed
+modelo	model
+multiplicar	multiply
+mundo	world
+navegacion	navigation
+ocho	eight
+ocultas	hidden
+opacidad	opacity
+oraculo	oracle
+origen	source
+oscurecer	darken
+paleta	palette
+por	by
+propiedades	properties
+puerta	gate	# «puerta» del hito (prueba de punta a punta)
+recortada	clipped
+rejilla	grid
+si	yes
+sonda	probe
+sumar	add
+superponer	overlay
+teclado	keyboard
+texturas	textures
+trama	pattern
+translucido	translucent
+transparente	transparent
+tres	three
+una	one
+vacia	empty
+verificar	verify
+zonas	zones
