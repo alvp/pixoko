@@ -61,8 +61,8 @@ fn inserts(bytes: &[u8], before: &[Vec<u8>], after: &[Vec<u8>]) -> Vec<u8> {
     v
 }
 
-fn aux_de(bytes: &[u8]) -> AuxReport {
-    lee(bytes).aux
+fn aux_of(bytes: &[u8]) -> AuxReport {
+    read_bytes(bytes).aux
 }
 
 fn report(found: &[AuxChunk], appearance: Option<AuxChunk>) -> AuxReport {
@@ -163,7 +163,7 @@ fn giant(kind: &[u8; 4]) -> Vec<u8> {
 
 #[test]
 fn row_1_without_auxiliaries_the_report_is_empty() {
-    let rgba = lee(&base().bytes());
+    let rgba = read_bytes(&base().bytes());
     assert_eq!(rgba.aux, AuxReport::default());
     assert!(rgba.aux.found.is_empty());
     assert_eq!(rgba.aux.appearance, None);
@@ -172,7 +172,7 @@ fn row_1_without_auxiliaries_the_report_is_empty() {
         .swatches(&[0, 1])
         .before(plte(&[(0, 0, 0), (255, 0, 0)]))
         .bytes();
-    let r = lee(&indexed);
+    let r = read_bytes(&indexed);
     assert_eq!(r.aux, AuxReport::default());
     assert!(r.aux.found.is_empty());
     assert_eq!(r.aux.appearance, None);
@@ -188,7 +188,7 @@ fn row_1_png_golden_corpus() {
             continue;
         }
         let name_2 = path.file_name().unwrap().to_string_lossy().into_owned();
-        let r = lee(&fs::read(&path).unwrap());
+        let r = read_bytes(&fs::read(&path).unwrap());
         if name_2.starts_with("grafx2") {
             grafx2 += 1;
             assert_eq!(
@@ -229,7 +229,7 @@ fn row_2_each_valid_type_separately() {
         ("teSt", c_unknown(), Other, None),
     ];
     for (name_2, chunk, kind, appearance) in cases {
-        let r = lee(&with(&[chunk], &[]));
+        let r = read_bytes(&with(&[chunk], &[]));
         assert_eq!(r.aux, report(&[kind], appearance), "{name_2}");
         // Lo que se ignora no cambia ni la imagen ni el informe de conversiones.
         assert!(r.report.is_empty(), "{name_2}");
@@ -248,9 +248,9 @@ fn row_3_repeated_without_duplicates_and_in_declaration_order_before_or_after_id
         &[AuxChunk::Icc, AuxChunk::Gamma, AuxChunk::Text],
         Some(AuxChunk::Icc),
     );
-    assert_eq!(aux_de(&with(&sequence(), &[])), expected, "antes del IDAT");
+    assert_eq!(aux_of(&with(&sequence(), &[])), expected, "antes del IDAT");
     assert_eq!(
-        aux_de(&with(&[], &sequence())),
+        aux_of(&with(&[], &sequence())),
         expected,
         "después del IDAT"
     );
@@ -262,7 +262,7 @@ fn row_3_two_thousand_text_do_not_hide_an_iccp_at_the_end() {
         .map(|i| piece(b"tEXt", format!("clave{i}\0valor").as_bytes()))
         .collect();
     chunks.push(c_iccp());
-    let r = lee(&with(&chunks, &[]));
+    let r = read_bytes(&with(&chunks, &[]));
     assert_eq!(
         r.aux,
         report(&[AuxChunk::Icc, AuxChunk::Text], Some(AuxChunk::Icc))
@@ -273,9 +273,9 @@ fn row_3_two_thousand_text_do_not_hide_an_iccp_at_the_end() {
 #[test]
 fn row_3_of_a_repeated_type_the_first_one_counts() {
     // D3: «repetidos ⇒ vale el primero y el tipo se lista una vez».
-    let gamma_without_cause_first = aux_de(&with(&[c_gamma(45455), c_gamma(100_000)], &[]));
+    let gamma_without_cause_first = aux_of(&with(&[c_gamma(45455), c_gamma(100_000)], &[]));
     assert_eq!(gamma_without_cause_first, report(&[AuxChunk::Gamma], None));
-    let gamma_with_cause_first = aux_de(&with(&[c_gamma(100_000), c_gamma(45455)], &[]));
+    let gamma_with_cause_first = aux_of(&with(&[c_gamma(100_000), c_gamma(45455)], &[]));
     assert_eq!(
         gamma_with_cause_first,
         report(&[AuxChunk::Gamma], Some(AuxChunk::Gamma))
@@ -363,7 +363,7 @@ fn row_4_causes_per_the_d2_rule() {
         ),
     ];
     for (name_2, chunks, expected) in cases {
-        let r = aux_de(&with(&chunks, &[]));
+        let r = aux_of(&with(&chunks, &[]));
         assert_eq!(r.appearance, expected, "{name_2}: {r:?}");
         if let Some(a) = expected {
             assert!(r.found.contains(&a), "{name_2}: {r:?}");
@@ -382,7 +382,7 @@ fn row_4_chrm_of_srgb_plus_minus_1000_does_not_trigger_and_plus_minus_1001_does(
         ] {
             let mut v = CHRM_SRGB;
             v[i] = u32::try_from(i64::from(v[i]) + delta).unwrap();
-            let r = aux_de(&with(&[c_chrm(v)], &[]));
+            let r = aux_of(&with(&[c_chrm(v)], &[]));
             assert_eq!(r.appearance, expected, "valor {i}, delta {delta}");
             assert_eq!(
                 r.found,
@@ -406,7 +406,7 @@ fn row_5_impossible_length_counts_as_other_and_triggers_nothing() {
         ("cICP de 5 bytes", piece(b"cICP", &[9, 16, 9, 1, 0])),
     ];
     for (name_2, chunk) in cases {
-        let r = lee(&with(&[chunk], &[]));
+        let r = read_bytes(&with(&[chunk], &[]));
         assert_eq!(r.aux, report(&[AuxChunk::Other], None), "{name_2}");
         assert!(r.report.is_empty(), "{name_2}");
     }
@@ -414,7 +414,7 @@ fn row_5_impossible_length_counts_as_other_and_triggers_nothing() {
 
 #[test]
 fn row_5_empty_iccp_triggers_the_copy() {
-    let r = lee(&with(&[piece(b"iCCP", &[])], &[]));
+    let r = read_bytes(&with(&[piece(b"iCCP", &[])], &[]));
     assert_eq!(r.aux, report(&[AuxChunk::Icc], Some(AuxChunk::Icc)));
 }
 
@@ -434,18 +434,18 @@ fn row_6_wrong_crc_is_listed_as_if_it_were_good() {
         ("tEXt", *b"tEXt", b"Title\0pixoko".to_vec()),
     ];
     for (name_2, kind, data) in cases {
-        let good = lee(&with(&[piece(&kind, &data)], &[]));
-        let bad = lee(&with(&[crc_bad(&kind, &data)], &[]));
+        let good = read_bytes(&with(&[piece(&kind, &data)], &[]));
+        let bad = read_bytes(&with(&[crc_bad(&kind, &data)], &[]));
         assert_eq!(bad.aux, good.aux, "{name_2}");
         assert!(!bad.aux.found.is_empty(), "{name_2}: se lista igual");
         assert_eq!(bad.image, good.image, "{name_2}");
         assert_eq!(bad.report, good.report, "{name_2}");
         // Y después del IDAT.
-        let bad_after = lee(&with(&[], &[crc_bad(&kind, &data)]));
+        let bad_after = read_bytes(&with(&[], &[crc_bad(&kind, &data)]));
         assert_eq!(bad_after.aux, good.aux, "{name_2} tras el IDAT");
     }
     // Lo que queda dicho en concreto: el iCCP de CRC malo activa la copia.
-    let r = aux_de(&with(&[crc_bad(b"iCCP", b"x")], &[]));
+    let r = aux_of(&with(&[crc_bad(b"iCCP", b"x")], &[]));
     assert_eq!(r, report(&[AuxChunk::Icc], Some(AuxChunk::Icc)));
 }
 
@@ -542,7 +542,7 @@ fn apng(with_actl: bool, extra: &[Vec<u8>]) -> Vec<u8> {
 
 #[test]
 fn row_7_apng_only_triggers_the_copy_with_its_first_frame() {
-    let r = lee(&apng(true, &[]));
+    let r = read_bytes(&apng(true, &[]));
     assert_eq!(
         r.aux,
         report(&[AuxChunk::Animation], Some(AuxChunk::Animation))
@@ -554,7 +554,7 @@ fn row_7_apng_only_triggers_the_copy_with_its_first_frame() {
 
 #[test]
 fn row_7_apng_with_iccp_wins_animation() {
-    let r = lee(&apng(true, &[c_iccp()]));
+    let r = read_bytes(&apng(true, &[c_iccp()]));
     assert_eq!(
         r.aux,
         report(
@@ -572,11 +572,11 @@ fn row_7_fctl_without_actl_is_listed_but_does_not_trigger_the_copy() {
         .swatches(&[10, 20])
         .before(piece(b"fcTL", &fctl(0)))
         .bytes();
-    let r = lee(&without_actl);
+    let r = read_bytes(&without_actl);
     assert_eq!(r.aux, report(&[AuxChunk::Animation], None));
     assert_eq!(pixels(&r.image), grays(&[10, 20]));
 
-    let r = lee(&apng(false, &[]));
+    let r = read_bytes(&apng(false, &[]));
     assert_eq!(r.aux, report(&[AuxChunk::Animation], None));
     assert_eq!(pixels(&r.image), grays(&[10, 20]));
 }

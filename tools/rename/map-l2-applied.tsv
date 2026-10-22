@@ -9614,3 +9614,14 @@ id	png_de_16_bits	png_of_16_bits	crates/px-golden/
 id	rgba_de	rgba_of	crates/px-golden/
 id	va	value_a	crates/px-golden/tests/png_interop/aseprite_gate.rs
 id	vb	value_b	crates/px-golden/tests/png_interop/aseprite_gate.rs
+id	UnColor	OneColor	crates/px-formats/
+id	aux_de	aux_of	crates/px-formats/
+id	bytes_de_z	bytes_of_z	crates/px-formats/
+id	error_de	error_of	crates/px-formats/
+id	lee	read_bytes	crates/px-formats/
+id	lee_corpus	read_corpus	crates/px-formats/
+id	lee_err	read_err	crates/px-formats/
+id	lee_ok	read_ok	crates/px-formats/
+id	si	enabled	crates/px-formats/
+id	va	value_a	crates/px-formats/tests/aseprite.rs
+id	vb	value_b	crates/px-formats/tests/aseprite.rs

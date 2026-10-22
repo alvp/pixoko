@@ -117,7 +117,7 @@ enum Shape {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Content {
-    UnColor,
+    OneColor,
     Patterns,
 }
 
@@ -148,7 +148,7 @@ fn palette_16() -> Vec<Rgba> {
 /// Valor del píxel (x, y) como 4 bytes RGBA con alfa no trivial, o su índice / gris.
 fn patron(content: Content, x: usize, y: usize) -> usize {
     match content {
-        Content::UnColor => 5,
+        Content::OneColor => 5,
         // Franjas verticales de 16 y horizontales de 64 combinadas con bloques de 8×8 que se
         // repiten cada 128 píxeles.
         Content::Patterns => {
@@ -275,7 +275,7 @@ fn in_parallel(jobs: &[Combination]) {
                             continue;
                         }
                         let bytes = encodes(raw, comp, filter);
-                        if content == Content::UnColor
+                        if content == Content::OneColor
                             && matches!(comp, Compressor::Level(6 | 9))
                             && filter == png::Filter::Up
                         {
@@ -310,7 +310,7 @@ fn in_parallel(jobs: &[Combination]) {
 fn grid(levels: &[u8]) -> Vec<Combination> {
     let mut jobs: Vec<Combination> = Vec::new();
     for shape in [Shape::Gray, Shape::TestIndexed, Shape::Rgba] {
-        for content in [Content::UnColor, Content::Patterns] {
+        for content in [Content::OneColor, Content::Patterns] {
             let comps = levels
                 .iter()
                 .map(|&n| Compressor::Level(n))
@@ -323,7 +323,7 @@ fn grid(levels: &[u8]) -> Vec<Combination> {
         }
         jobs.push((
             shape,
-            Content::UnColor,
+            Content::OneColor,
             Compressor::Z,
             png::Filter::NoFilter,
         ));
@@ -351,7 +351,7 @@ fn row7_full_grid_levels_1_to_9() {
 
 #[derive(Clone, Copy, Debug)]
 enum Fill {
-    UnColor,
+    OneColor,
     Bands,
     Noise,
 }
@@ -387,7 +387,7 @@ fn swatch(fill: Fill, seed: u64, bits: u32, x: usize, y: usize, c: usize) -> u16
         s ^ (s >> 31)
     };
     let v = match fill {
-        Fill::UnColor => blend(c as u64),
+        Fill::OneColor => blend(c as u64),
         Fill::Bands => blend((x / 5 + (y / 3) * 7 + c * 1000) as u64 % 11),
         Fill::Noise => blend(((y * 64 + x) * 4 + c) as u64 + 77),
     };
@@ -442,7 +442,7 @@ proptest! {
         width in 1u32..=64,
         height in 1u32..=64,
         kind in select(types()),
-        fill in select(vec![Fill::UnColor, Fill::Bands, Fill::Noise]),
+        fill in select(vec![Fill::OneColor, Fill::Bands, Fill::Noise]),
         seed in any::<u64>(),
         compressor in select(COMPRESSORS_PNG.to_vec()),
         filter in select(filters().to_vec()),

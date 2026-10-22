@@ -28,7 +28,7 @@ px-formats	UnColor	OneColor
 px-formats	aux_de	aux_of
 px-formats	bytes_de_z	bytes_of_z
 px-formats	error_de	error_of
-px-formats	lee	read
+px-formats	lee	read_bytes
 px-formats	lee_corpus	read_corpus
 px-formats	lee_err	read_err
 px-formats	lee_ok	read_ok
@@ -81,7 +81,7 @@ px-ui	hover_en	hover_at
 px-ui	info_flags_alpha0_de_la_spec	info_flags_alpha0_of_the_spec
 px-ui	k_de	k_of
 px-ui	layout_de	layout_of
-px-ui	lee	read
+px-ui	lee	load_text
 px-ui	locks_de	locks_of
 px-ui	n_de	n_of
 px-ui	op_de	op_of

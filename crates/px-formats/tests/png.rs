@@ -221,8 +221,8 @@ impl Png {
         self
     }
 
-    fn interlaced_2(mut self, si: bool) -> Png {
-        self.interlaced_2 = si;
+    fn interlaced_2(mut self, enabled: bool) -> Png {
+        self.interlaced_2 = enabled;
         self
     }
 
@@ -337,11 +337,11 @@ fn assert_read_traits<T: Clone + Debug + PartialEq + Eq>() {}
 fn assert_conversion_traits<T: Clone + Copy + Debug + PartialEq + Eq>() {}
 fn assert_error_traits<T: Debug + Clone + PartialEq + Eq + Display + std::error::Error>() {}
 
-fn lee(bytes: &[u8]) -> PngRead {
+fn read_bytes(bytes: &[u8]) -> PngRead {
     read_png(bytes).unwrap()
 }
 
-fn error_de(bytes: &[u8]) -> PngError {
+fn error_of(bytes: &[u8]) -> PngError {
     read_png(bytes).unwrap_err()
 }
 
@@ -466,10 +466,10 @@ fn traits_derived() {
 
 #[test]
 fn is_exact_is_empty_report() {
-    let exact = lee(&Png::new(1, 1, 8, 0).swatches(&[9]).bytes());
+    let exact = read_bytes(&Png::new(1, 1, 8, 0).swatches(&[9]).bytes());
     assert!(exact.report.is_empty());
     assert!(exact.is_exact());
-    let converted = lee(&Png::new(1, 1, 8, 2).swatches(&[1, 2, 3]).bytes());
+    let converted = read_bytes(&Png::new(1, 1, 8, 2).swatches(&[1, 2, 3]).bytes());
     assert!(!converted.report.is_empty());
     assert!(!converted.is_exact());
 }
@@ -494,7 +494,7 @@ fn indexed_intact_at_1_2_4_and_8_bits() {
             .swatches(&px)
             .before(plte(&colors[..n]))
             .bytes();
-        let r = lee(&png);
+        let r = read_bytes(&png);
         assert_eq!(r.image.mode(), Mode::Indexed, "{prof} bits");
         assert_eq!((r.image.width(), r.image.height()), (3, 1));
         let expected_2_2: Vec<u8> = px.iter().map(|&i| i as u8).collect();
@@ -515,7 +515,7 @@ fn indexed_with_short_trns_completes_with_255() {
         .before(plte(&colors))
         .before(trns(&[0, 128]))
         .bytes();
-    let r = lee(&png);
+    let r = read_bytes(&png);
     assert_eq!(r.image.mode(), Mode::Indexed);
     let palette = r.image.palette().unwrap();
     let alphas: Vec<u8> = palette.colors().iter().map(|c| c.a).collect();
@@ -534,20 +534,20 @@ fn invalid_indexed_palette_and_indices() {
         .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .bytes();
     assert_eq!(
-        error_de(&outside),
+        error_of(&outside),
         PngError::PaletteIndexOutOfRange { index: 5, len: 2 }
     );
 
     // Sin PLTE.
     let without_plte = Png::new(2, 1, 8, 3).swatches(&[0, 1]).bytes();
-    assert_eq!(error_de(&without_plte), PngError::InvalidPalette);
+    assert_eq!(error_of(&without_plte), PngError::InvalidPalette);
 
     // PLTE de 3 entradas a 1 bit (el máximo es 2).
     let too_many = Png::new(2, 1, 1, 3)
         .swatches(&[0, 1])
         .before(plte(&[(1, 1, 1), (2, 2, 2), (3, 3, 3)]))
         .bytes();
-    assert_eq!(error_de(&too_many), PngError::InvalidPalette);
+    assert_eq!(error_of(&too_many), PngError::InvalidPalette);
 
     // PLTE vacío: lo rechaza el crate.
     let empty = Png::new(2, 1, 8, 3)
@@ -562,27 +562,29 @@ fn invalid_indexed_palette_and_indices() {
         .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .before(trns(&[0, 1, 2]))
         .bytes();
-    assert_eq!(error_de(&trns_length), PngError::InvalidTrns);
+    assert_eq!(error_of(&trns_length), PngError::InvalidTrns);
 }
 
 #[test]
 fn eight_bit_types_with_alpha_zero_and_nonzero_rgb_are_not_touched() {
     // Gris 8: sin alfa en el fichero.
-    let g = lee(&Png::new(2, 1, 8, 0).swatches(&[77, 200]).bytes());
+    let g = read_bytes(&Png::new(2, 1, 8, 0).swatches(&[77, 200]).bytes());
     assert_eq!(g.image.mode(), Mode::Gray);
     assert_eq!(pixels(&g.image), grays(&[77, 200]));
     assert!(g.report.is_empty());
 
     // Gris con alfa 8: alfa 0 con gris 77.
-    let ga = lee(&Png::new(2, 1, 8, 4).swatches(&[77, 0, 200, 255]).bytes());
+    let ga = read_bytes(&Png::new(2, 1, 8, 4).swatches(&[77, 0, 200, 255]).bytes());
     assert_eq!(ga.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&ga.image), grays_alpha(&[(77, 0), (200, 255)]));
     assert!(ga.report.is_empty());
 
     // RGBA 8: alfa 0 con RGB (10, 20, 30) intacto.
-    let c = lee(&Png::new(2, 1, 8, 6)
-        .swatches(&[10, 20, 30, 0, 40, 50, 60, 255])
-        .bytes());
+    let c = read_bytes(
+        &Png::new(2, 1, 8, 6)
+            .swatches(&[10, 20, 30, 0, 40, 50, 60, 255])
+            .bytes(),
+    );
     assert_eq!(c.image.mode(), Mode::Rgba);
     assert_eq!(
         pixels(&c.image),
@@ -594,19 +596,19 @@ fn eight_bit_types_with_alpha_zero_and_nonzero_rgb_are_not_touched() {
 #[test]
 fn gray_of_1_2_and_4_bits_scales_to_0_255() {
     // 1 bit: 0 y 255.
-    let r1 = lee(&Png::new(2, 1, 1, 0).swatches(&[0, 1]).bytes());
+    let r1 = read_bytes(&Png::new(2, 1, 1, 0).swatches(&[0, 1]).bytes());
     assert_eq!(r1.image.mode(), Mode::Gray);
     assert_eq!(pixels(&r1.image), grays(&[0, 255]));
     assert_eq!(r1.report, [Conversion::DepthExpanded { from_bits: 1 }]);
 
     // 2 bits: 0, 85, 170, 255.
-    let r2 = lee(&Png::new(4, 1, 2, 0).swatches(&[0, 1, 2, 3]).bytes());
+    let r2 = read_bytes(&Png::new(4, 1, 2, 0).swatches(&[0, 1, 2, 3]).bytes());
     assert_eq!(pixels(&r2.image), grays(&[0, 85, 170, 255]));
     assert_eq!(r2.report, [Conversion::DepthExpanded { from_bits: 2 }]);
 
     // 4 bits: v * 17 (0, 17, 34, ..., 255).
     let all: Vec<u16> = (0..16).collect();
-    let r4 = lee(&Png::new(16, 1, 4, 0).swatches(&all).bytes());
+    let r4 = read_bytes(&Png::new(16, 1, 4, 0).swatches(&all).bytes());
     let expected_2_2: Vec<u8> = (0..16u8).map(|v| v * 17).collect();
     assert_eq!(expected_2_2[15], 255);
     assert_eq!(pixels(&r4.image), grays(&expected_2_2));
@@ -618,25 +620,29 @@ fn sixteen_bits_reduce_with_rounding() {
     let swatches: [u16; 5] = [0x0000, 0x0080, 0x0081, 0x01FF, 0xFFFF];
 
     // Gris 16: 0x0080 -> 0, 0x0081 -> 1, 0x01FF -> 2 (el byte alto daría 1), 0xFFFF -> 255.
-    let g = lee(&Png::new(5, 1, 16, 0).swatches(&swatches).bytes());
+    let g = read_bytes(&Png::new(5, 1, 16, 0).swatches(&swatches).bytes());
     assert_eq!(g.image.mode(), Mode::Gray);
     assert_eq!(pixels(&g.image), grays(&[0, 0, 1, 2, 255]));
     assert_eq!(g.report, [Conversion::Depth16Reduced]);
 
     // Gris con alfa 16: cada muestra, gris y alfa, con la misma regla.
-    let ga = lee(&Png::new(3, 1, 16, 4)
-        .swatches(&[0x0000, 0x0080, 0x0081, 0x01FF, 0xFFFF, 0x0000])
-        .bytes());
+    let ga = read_bytes(
+        &Png::new(3, 1, 16, 4)
+            .swatches(&[0x0000, 0x0080, 0x0081, 0x01FF, 0xFFFF, 0x0000])
+            .bytes(),
+    );
     assert_eq!(ga.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&ga.image), grays_alpha(&[(0, 0), (1, 2), (255, 0)]));
     assert_eq!(ga.report, [Conversion::Depth16Reduced]);
 
     // RGBA 16: 0x0100 y 0x0101 y 0x00FF dan 1.
-    let c = lee(&Png::new(2, 1, 16, 6)
-        .swatches(&[
-            0x0000, 0x0080, 0x0081, 0x01FF, 0xFFFF, 0x0100, 0x0101, 0x00FF,
-        ])
-        .bytes());
+    let c = read_bytes(
+        &Png::new(2, 1, 16, 6)
+            .swatches(&[
+                0x0000, 0x0080, 0x0081, 0x01FF, 0xFFFF, 0x0100, 0x0101, 0x00FF,
+            ])
+            .bytes(),
+    );
     assert_eq!(c.image.mode(), Mode::Rgba);
     assert_eq!(pixels(&c.image), [rgba(0, 0, 1, 2), rgba(255, 1, 1, 1)]);
     assert_eq!(c.report, [Conversion::Depth16Reduced]);
@@ -644,14 +650,16 @@ fn sixteen_bits_reduce_with_rounding() {
 
 #[test]
 fn rgb_becomes_opaque_rgba() {
-    let r8 = lee(&Png::new(1, 1, 8, 2).swatches(&[1, 2, 3]).bytes());
+    let r8 = read_bytes(&Png::new(1, 1, 8, 2).swatches(&[1, 2, 3]).bytes());
     assert_eq!(r8.image.mode(), Mode::Rgba);
     assert_eq!(pixels(&r8.image), [rgba(1, 2, 3, 255)]);
     assert_eq!(r8.report, [Conversion::RgbToRgba]);
 
-    let r16 = lee(&Png::new(1, 1, 16, 2)
-        .swatches(&[0x0102, 0x0304, 0xFFFF])
-        .bytes());
+    let r16 = read_bytes(
+        &Png::new(1, 1, 16, 2)
+            .swatches(&[0x0102, 0x0304, 0xFFFF])
+            .bytes(),
+    );
     assert_eq!(r16.image.mode(), Mode::Rgba);
     assert_eq!(pixels(&r16.image), [rgba(1, 3, 255, 255)]);
     assert_eq!(
@@ -663,19 +671,23 @@ fn rgb_becomes_opaque_rgba() {
 #[test]
 fn gray_with_color_key_gives_gray_alpha_comparing_the_original_sample() {
     // Gris 8, clave 7.
-    let r8 = lee(&Png::new(2, 1, 8, 0)
-        .swatches(&[7, 8])
-        .before(trns(&[0, 7]))
-        .bytes());
+    let r8 = read_bytes(
+        &Png::new(2, 1, 8, 0)
+            .swatches(&[7, 8])
+            .before(trns(&[0, 7]))
+            .bytes(),
+    );
     assert_eq!(r8.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&r8.image), grays_alpha(&[(7, 0), (8, 255)]));
     assert_eq!(r8.report, [Conversion::ColorKeyToAlpha]);
 
     // Gris 2 bits, clave 1: 1 -> 85 transparente, 2 -> 170 opaco.
-    let r2 = lee(&Png::new(2, 1, 2, 0)
-        .swatches(&[1, 2])
-        .before(trns(&[0, 1]))
-        .bytes());
+    let r2 = read_bytes(
+        &Png::new(2, 1, 2, 0)
+            .swatches(&[1, 2])
+            .before(trns(&[0, 1]))
+            .bytes(),
+    );
     assert_eq!(r2.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&r2.image), grays_alpha(&[(85, 0), (170, 255)]));
     assert_eq!(
@@ -687,10 +699,12 @@ fn gray_with_color_key_gives_gray_alpha_comparing_the_original_sample() {
     );
 
     // Gris 16, clave 0x0100: 0x0100 y 0x0101 se reducen a 1, pero solo la primera es la clave.
-    let r16 = lee(&Png::new(2, 1, 16, 0)
-        .swatches(&[0x0100, 0x0101])
-        .before(trns(&[0x01, 0x00]))
-        .bytes());
+    let r16 = read_bytes(
+        &Png::new(2, 1, 16, 0)
+            .swatches(&[0x0100, 0x0101])
+            .before(trns(&[0x01, 0x00]))
+            .bytes(),
+    );
     assert_eq!(r16.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&r16.image), grays_alpha(&[(1, 0), (1, 255)]));
     assert_eq!(
@@ -702,10 +716,12 @@ fn gray_with_color_key_gives_gray_alpha_comparing_the_original_sample() {
 #[test]
 fn rgb_with_color_key_keeps_the_rgb_and_gray_without_matches_is_opaque() {
     // tRNS de RGB: tres muestras de 2 bytes (1, 2, 3).
-    let r = lee(&Png::new(2, 1, 8, 2)
-        .swatches(&[1, 2, 3, 1, 2, 4])
-        .before(trns(&[0, 1, 0, 2, 0, 3]))
-        .bytes());
+    let r = read_bytes(
+        &Png::new(2, 1, 8, 2)
+            .swatches(&[1, 2, 3, 1, 2, 4])
+            .before(trns(&[0, 1, 0, 2, 0, 3]))
+            .bytes(),
+    );
     assert_eq!(r.image.mode(), Mode::Rgba);
     assert_eq!(pixels(&r.image), [rgba(1, 2, 3, 0), rgba(1, 2, 4, 255)]);
     assert_eq!(
@@ -714,10 +730,12 @@ fn rgb_with_color_key_keeps_the_rgb_and_gray_without_matches_is_opaque() {
     );
 
     // Gris con tRNS y ningún píxel igual a la clave: el modo lo decide el fichero.
-    let g = lee(&Png::new(2, 1, 8, 0)
-        .swatches(&[1, 2])
-        .before(trns(&[0, 200]))
-        .bytes());
+    let g = read_bytes(
+        &Png::new(2, 1, 8, 0)
+            .swatches(&[1, 2])
+            .before(trns(&[0, 200]))
+            .bytes(),
+    );
     assert_eq!(g.image.mode(), Mode::GrayAlpha);
     assert_eq!(pixels(&g.image), grays_alpha(&[(1, 255), (2, 255)]));
     assert_eq!(g.report, [Conversion::ColorKeyToAlpha]);
@@ -730,33 +748,37 @@ fn malformed_trns_in_gray_and_rgb_and_ignored_in_types_with_alpha() {
         .swatches(&[1])
         .before(trns(&[7]))
         .bytes();
-    assert_eq!(error_de(&short), PngError::InvalidTrns);
+    assert_eq!(error_of(&short), PngError::InvalidTrns);
 
     // RGB con tRNS de 4 bytes.
     let rgb4 = Png::new(1, 1, 8, 2)
         .swatches(&[1, 2, 3])
         .before(trns(&[0, 1, 0, 2]))
         .bytes();
-    assert_eq!(error_de(&rgb4), PngError::InvalidTrns);
+    assert_eq!(error_of(&rgb4), PngError::InvalidTrns);
 
     // Gris de 2 bits con clave 9 (el máximo es 3).
     let outside = Png::new(1, 1, 2, 0)
         .swatches(&[1])
         .before(trns(&[0, 9]))
         .bytes();
-    assert_eq!(error_de(&outside), PngError::InvalidTrns);
+    assert_eq!(error_of(&outside), PngError::InvalidTrns);
 
     // GrayAlpha y RGBA con tRNS: PNG lo prohíbe, se ignora.
-    let ga = lee(&Png::new(1, 1, 8, 4)
-        .swatches(&[5, 6])
-        .before(trns(&[0, 5]))
-        .bytes());
+    let ga = read_bytes(
+        &Png::new(1, 1, 8, 4)
+            .swatches(&[5, 6])
+            .before(trns(&[0, 5]))
+            .bytes(),
+    );
     assert_eq!(pixels(&ga.image), grays_alpha(&[(5, 6)]));
     assert!(ga.report.is_empty());
-    let c = lee(&Png::new(1, 1, 8, 6)
-        .swatches(&[1, 2, 3, 4])
-        .before(trns(&[0, 1, 0, 2, 0, 3]))
-        .bytes());
+    let c = read_bytes(
+        &Png::new(1, 1, 8, 6)
+            .swatches(&[1, 2, 3, 4])
+            .before(trns(&[0, 1, 0, 2, 0, 3]))
+            .bytes(),
+    );
     assert_eq!(pixels(&c.image), [rgba(1, 2, 3, 4)]);
     assert!(c.report.is_empty());
 }
@@ -784,7 +806,7 @@ fn adam7_gives_the_same_image_as_non_interlaced() {
             for c in &previous {
                 p = p.before(c.clone());
             }
-            lee(&p.bytes())
+            read_bytes(&p.bytes())
         };
         let plane = builds(false);
         let interlaced = builds(true);
@@ -819,13 +841,13 @@ fn auxiliary() -> Vec<Vec<u8>> {
 #[test]
 fn auxiliary_chunks_change_neither_image_nor_report() {
     let base = Png::new(2, 1, 8, 2).swatches(&[1, 2, 3, 4, 5, 6]);
-    let without = lee(&base.bytes());
+    let without = read_bytes(&base.bytes());
     assert_eq!(without.report, [Conversion::RgbToRgba]);
     let mut with = base.clone();
     for c in auxiliary() {
         with = with.before(c);
     }
-    let r = lee(&with.bytes());
+    let r = read_bytes(&with.bytes());
     // Los auxiliares no cambian ni la imagen ni el informe de conversiones; solo `aux` los refleja.
     assert_eq!(r.image, without.image);
     assert_eq!(r.report, without.report);
@@ -866,7 +888,7 @@ fn apng_reads_as_its_default_image() {
         .after(piece(b"fcTL", &fctl(1)))
         .after(piece(b"fdAT", &fdat))
         .bytes();
-    let r = lee(&png);
+    let r = read_bytes(&png);
     assert_eq!(r.image.mode(), Mode::Gray);
     assert_eq!(pixels(&r.image), grays(&[10, 20]));
     assert!(r.report.is_empty());
@@ -943,12 +965,12 @@ fn garbage_after_iend_is_trailing_data_and_incomplete_iend_is_decode() {
     // Un byte de más.
     let mut with_x = valid.clone();
     with_x.extend(b"x");
-    assert_eq!(error_de(&with_x), PngError::TrailingData);
+    assert_eq!(error_of(&with_x), PngError::TrailingData);
 
     // Un chunk tEXt completo después de IEND.
     let mut with_text = valid.clone();
     with_text.extend(piece(b"tEXt", b"k\0v"));
-    assert_eq!(error_de(&with_text), PngError::TrailingData);
+    assert_eq!(error_of(&with_text), PngError::TrailingData);
 
     // Sin los últimos 1 a 11 bytes: IEND incompleto.
     for remove in 1..=11 {
@@ -963,7 +985,7 @@ fn huge_header_with_minimal_data_is_too_large_or_decode() {
     // Gris 8 de 32769 x 32768: 1 byte por encima de `Image::MAX_BYTES`.
     let almost = Png::new(32769, 32768, 8, 0).bytes();
     assert_eq!(
-        error_de(&almost),
+        error_of(&almost),
         PngError::TooLarge {
             width: 32769,
             height: 32768
@@ -973,7 +995,7 @@ fn huge_header_with_minimal_data_is_too_large_or_decode() {
     // Gris 8 de 100000 x 100000.
     let huge = Png::new(100_000, 100_000, 8, 0).bytes();
     assert_eq!(
-        error_de(&huge),
+        error_of(&huge),
         PngError::TooLarge {
             width: 100_000,
             height: 100_000
@@ -993,7 +1015,7 @@ fn rgb16_whose_file_buffer_does_not_fit_although_the_image_does() {
     // 84 000 bytes, muy por debajo del límite del crate.
     let png = Png::new(14_000, 14_000, 16, 2).bytes();
     assert_eq!(
-        error_de(&png),
+        error_of(&png),
         PngError::TooLarge {
             width: 14_000,
             height: 14_000
@@ -1018,7 +1040,7 @@ fn writes_indexed_with_plte_and_trns_per_behavior_11() {
     let types: Vec<[u8; 4]> = pieces.iter().map(|t| t.kind).collect();
     assert_eq!(types, [*b"IHDR", *b"PLTE", *b"IDAT", *b"IEND"]);
     assert_eq!(pieces[1].data, [1, 2, 3, 4, 5, 6]);
-    assert_eq!(lee(&bytes).image, opaque_2);
+    assert_eq!(read_bytes(&bytes).image, opaque_2);
 
     // Alfas [0, 255]: tRNS [0] (se omiten los 255 finales).
     let a = indexed(&[c(1, 2, 3, 0), c(4, 5, 6, 255)], None, &[0, 1]);
@@ -1028,7 +1050,7 @@ fn writes_indexed_with_plte_and_trns_per_behavior_11() {
     assert_eq!(types, [*b"IHDR", *b"PLTE", *b"tRNS", *b"IDAT", *b"IEND"]);
     assert_eq!(pieces[1].data.len(), 6);
     assert_eq!(pieces[2].data, [0]);
-    assert_eq!(lee(&bytes).image, a);
+    assert_eq!(read_bytes(&bytes).image, a);
 
     // Alfas [255, 128]: tRNS [255, 128].
     let b = indexed(&[c(1, 2, 3, 255), c(4, 5, 6, 128)], None, &[0, 1]);
@@ -1036,7 +1058,7 @@ fn writes_indexed_with_plte_and_trns_per_behavior_11() {
     let pieces = walks(&bytes).unwrap();
     assert_eq!(pieces[2].kind, *b"tRNS");
     assert_eq!(pieces[2].data, [255, 128]);
-    assert_eq!(lee(&bytes).image, b);
+    assert_eq!(read_bytes(&bytes).image, b);
 
     // transparent_index = Some(1) con alfas guardados 255: tRNS [255, 0]; al leerlo, la
     // entrada 1 sale con a = 0 y sin índice transparente.
@@ -1045,7 +1067,7 @@ fn writes_indexed_with_plte_and_trns_per_behavior_11() {
     let pieces = walks(&bytes).unwrap();
     assert_eq!(pieces[2].kind, *b"tRNS");
     assert_eq!(pieces[2].data, [255, 0]);
-    let r = lee(&bytes);
+    let r = read_bytes(&bytes);
     let palette = r.image.palette().unwrap();
     assert_eq!(palette.colors(), [c(1, 2, 3, 255), c(4, 5, 6, 0)]);
     assert_eq!(palette.transparent_index(), None);
@@ -1067,7 +1089,7 @@ fn writes_gray_gray_alpha_and_rgba_as_is() {
         let types: Vec<[u8; 4]> = pieces.iter().map(|t| t.kind).collect();
         assert_eq!(types, [*b"IHDR", *b"IDAT", *b"IEND"], "{mode:?}");
         assert_eq!(&pieces[0].data[8..], &[8, kind, 0, 0, 0], "{mode:?}");
-        let r = lee(&bytes);
+        let r = read_bytes(&bytes);
         assert_eq!(r.image, img, "{mode:?}");
         assert!(r.report.is_empty(), "{mode:?}");
     }

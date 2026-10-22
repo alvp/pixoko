@@ -77,7 +77,7 @@ fn matches(n: u64) -> u64 {
 }
 
 /// Bytes que produce `z(n)`: `1 + 258 · k >= n`.
-pub(super) fn bytes_de_z(n: u64) -> u64 {
+pub(super) fn bytes_of_z(n: u64) -> u64 {
     1 + 258 * matches(n)
 }
 
@@ -89,7 +89,7 @@ pub(super) fn bytes_de_z(n: u64) -> u64 {
 /// (`((L mod 65521) << 16) | 1`, con `L = 1 + 258 · k`).
 pub(super) fn z(n: u64) -> Vec<u8> {
     let k = matches(n);
-    let produced = bytes_de_z(n);
+    let produced = bytes_of_z(n);
 
     let mut b = Bits::new();
     b.field(1, 1); // BFINAL
@@ -293,19 +293,19 @@ fn reads_with_z(
 fn z_prototype_anchors() {
     // k = 260144 da 67 117 153 bytes en 65 088 bytes de zlib (razón 1031,18).
     let n = 1 + 258 * 260_144;
-    assert_eq!(bytes_de_z(n), 67_117_153);
+    assert_eq!(bytes_of_z(n), 67_117_153);
     assert_eq!(z(n).len(), 65_088);
     // Cabecera zlib y Adler-32 de `produced` ceros.
     let flow = z(n);
     assert_eq!(&flow[..2], [0x78, 0x01]);
     let adler = (((67_117_153u64 % 65521) as u32) << 16) | 1;
     assert_eq!(&flow[flow.len() - 4..], adler.to_be_bytes());
-    // `bytes_de_z` redondea hacia arriba y nunca baja de `n`.
-    assert_eq!(bytes_de_z(0), 1);
-    assert_eq!(bytes_de_z(1), 1);
-    assert_eq!(bytes_de_z(2), 259);
-    assert_eq!(bytes_de_z(259), 259);
-    assert_eq!(bytes_de_z(260), 517);
+    // `bytes_of_z` redondea hacia arriba y nunca baja de `n`.
+    assert_eq!(bytes_of_z(0), 1);
+    assert_eq!(bytes_of_z(1), 1);
+    assert_eq!(bytes_of_z(2), 259);
+    assert_eq!(bytes_of_z(259), 259);
+    assert_eq!(bytes_of_z(260), 517);
 }
 
 #[test]
@@ -447,14 +447,14 @@ fn row8_too_large_beats_the_bound() {
 fn row8_invalid_palette_and_trns_beat_the_bound() {
     // Indexado de 8192 × 8192 sin PLTE (IDAT mínimo): `InvalidPalette`.
     let without_plte = Png::new(8192, 8192, 8, 3).bytes();
-    assert_eq!(error_de(&without_plte), PngError::InvalidPalette);
+    assert_eq!(error_of(&without_plte), PngError::InvalidPalette);
 
     // Indexado con tRNS de 3 entradas y PLTE de 2 (8192 × 8192, IDAT mínimo): `InvalidTrns`.
     let trns_length = Png::new(8192, 8192, 8, 3)
         .before(plte(&[(1, 1, 1), (2, 2, 2)]))
         .before(trns(&[0, 1, 2]))
         .bytes();
-    assert_eq!(error_de(&trns_length), PngError::InvalidTrns);
+    assert_eq!(error_of(&trns_length), PngError::InvalidTrns);
 }
 
 #[test]

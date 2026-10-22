@@ -50,31 +50,31 @@ fn golden(name_2: &str) -> Vec<u8> {
     fs::read(&path).unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()))
 }
 
-fn lee(bytes: &[u8]) -> Result<AsepriteRead, AsepriteError> {
+fn read_bytes(bytes: &[u8]) -> Result<AsepriteRead, AsepriteError> {
     read_aseprite(bytes, &AsepriteLimits::default())
 }
 
-fn lee_ok(context: &str, bytes: &[u8]) -> AsepriteRead {
-    match lee(bytes) {
+fn read_ok(context: &str, bytes: &[u8]) -> AsepriteRead {
+    match read_bytes(bytes) {
         Ok(r) => r,
         Err(e) => panic!("{context}: se esperaba Ok y salió {e:?}"),
     }
 }
 
-fn lee_err(context: &str, bytes: &[u8]) -> AsepriteError {
-    match lee(bytes) {
+fn read_err(context: &str, bytes: &[u8]) -> AsepriteError {
+    match read_bytes(bytes) {
         Ok(_) => panic!("{context}: se esperaba un error y salió Ok"),
         Err(e) => e,
     }
 }
 
-fn lee_corpus(case: &str) -> AsepriteRead {
-    lee_ok(case, &golden(&format!("{case}.aseprite")))
+fn read_corpus(case: &str) -> AsepriteRead {
+    read_ok(case, &golden(&format!("{case}.aseprite")))
 }
 
 /// El `Unsupported` de un fichero que no se admite.
 fn not_supported(context: &str, bytes: &[u8]) -> Unsupported {
-    match lee_err(context, bytes) {
+    match read_err(context, bytes) {
         AsepriteError::Unsupported(u) => u,
         other_2 => panic!("{context}: se esperaba Unsupported y salió {other_2:?}"),
     }
@@ -216,9 +216,11 @@ fn same_content(a: &Document, b: &Document) -> Result<(), String> {
         }
         for y in 0..a.height() {
             for x in 0..a.width() {
-                let (va, vb) = (value(a, ca, x, y), value(b, cb, x, y));
-                if va != vb {
-                    return Err(format!("capa {i}, píxel ({x}, {y}): {va:?} y {vb:?}"));
+                let (value_a, value_b) = (value(a, ca, x, y), value(b, cb, x, y));
+                if value_a != value_b {
+                    return Err(format!(
+                        "capa {i}, píxel ({x}, {y}): {value_a:?} y {value_b:?}"
+                    ));
                 }
             }
         }
@@ -347,7 +349,7 @@ const MODES_OF_THE_CORPUS: [(&str, BlendMode); 8] = [
 
 #[test]
 fn row_02_a_layers_opacity_has_six_layers_with_their_opacities() {
-    let r = lee_corpus("layers-opacity");
+    let r = read_corpus("layers-opacity");
     let doc = &r.document;
     assert_eq!(
         (doc.width(), doc.height(), doc.mode()),
@@ -405,7 +407,7 @@ fn case_word(name_2: &str) -> &'static str {
 fn row_02_b_the_eight_blends_have_the_mode_of_their_source_layer() {
     for (name_2, mode) in MODES_OF_THE_CORPUS {
         let case = format!("blend-{}", case_word(name_2));
-        let r = lee_corpus(&case);
+        let r = read_corpus(&case);
         let layers = r.document.layers();
         assert_eq!(layers.len(), 2, "{case}");
         assert_eq!(
@@ -424,7 +426,7 @@ fn row_02_b_the_eight_blends_have_the_mode_of_their_source_layer() {
         );
     }
     // Las ocho tiras, una capa por modo y todas con opacidad 128.
-    let r = lee_corpus("blend-eight-opacity");
+    let r = read_corpus("blend-eight-opacity");
     let layers = r.document.layers();
     assert_eq!(layers.len(), 9);
     assert_eq!((layers[0].name(), layers[0].opacity()), ("base", 255));
@@ -441,7 +443,7 @@ fn row_02_b_the_eight_blends_have_the_mode_of_their_source_layer() {
 
 #[test]
 fn row_02_c_hidden_layers_and_locked_layer_are_independent() {
-    let r = lee_corpus("layers-hidden");
+    let r = read_corpus("layers-hidden");
     let layers = r.document.layers();
     let data: Vec<(&str, bool)> = layers.iter().map(|c| (c.name(), c.visible())).collect();
     assert_eq!(
@@ -461,7 +463,7 @@ fn row_02_c_hidden_layers_and_locked_layer_are_independent() {
     assert!(layers.iter().all(|c| !c.locked()), "ninguna está bloqueada");
 
     // Bit 1 = visible y bit 2 = editable (bloqueada = bit 2 apagado): banderas 3, 1, 3 y 0.
-    let r = lee_corpus("layer-locked");
+    let r = read_corpus("layer-locked");
     let data: Vec<(&str, bool, bool)> = r
         .document
         .layers()
@@ -481,7 +483,7 @@ fn row_02_c_hidden_layers_and_locked_layer_are_independent() {
 
 #[test]
 fn row_02_d_empty_cel_and_indexed_with_transparent_7() {
-    let r = lee_corpus("cel-empty");
+    let r = read_corpus("cel-empty");
     let doc = &r.document;
     let layers = doc.layers();
     assert_eq!(layers.len(), 3);
@@ -500,7 +502,7 @@ fn row_02_d_empty_cel_and_indexed_with_transparent_7() {
     assert_eq!(layers[2].name(), "transparente");
     assert!(doc.image(layers[2].cel()).is_none());
 
-    let r = lee_corpus("indexed-transparent-7");
+    let r = read_corpus("indexed-transparent-7");
     let doc = &r.document;
     assert_eq!(doc.mode(), Mode::Indexed);
     let palette = doc.palette().expect("el indexado tiene paleta");
@@ -516,7 +518,7 @@ fn row_02_d_empty_cel_and_indexed_with_transparent_7() {
 #[test]
 fn row_04_a_corpus_palette_256_and_new_chunk_with_alpha_names_and_ranges() {
     // El corpus: la paleta de 256 entradas coincide con la de su PNG, con alfa e índice.
-    let r = lee_corpus("indexed-palette-256");
+    let r = read_corpus("indexed-palette-256");
     let palette = r.document.palette().expect("paleta");
     let png = read_png(&golden("indexed-palette-256.png"))
         .expect("png del corpus")
@@ -559,7 +561,7 @@ fn row_04_a_corpus_palette_256_and_new_chunk_with_alpha_names_and_ranges() {
             Cel::new(0, 0, 0, 4, 3, (0..12).map(|i| (i % 8) as u8).collect()).chunk(),
         ],
     );
-    let r = lee_ok("0x2019", &f.bytes());
+    let r = read_ok("0x2019", &f.bytes());
     let palette = r.document.palette().expect("paleta");
     let expected_2_2 = [
         Rgba::new(255, 0, 0, 255),
@@ -596,7 +598,7 @@ fn row_04_b_old_palette_with_jumps_and_zero_is_256() {
         .bytes()
     };
     // «Saltar» cuenta desde el final del paquete anterior: cubre 1 y 2, y después 5.
-    let r = lee_ok(
+    let r = read_ok(
         "saltos",
         &file(vec![(1, 2, vec![a, b]), (2, 1, vec![c])], 8, 5),
     );
@@ -620,21 +622,21 @@ fn row_04_b_old_palette_with_jumps_and_zero_is_256() {
 
     // Número de colores 0 en la cabecera y 0 colores en el paquete: 256 entradas.
     let all: Vec<[u8; 3]> = (0..=255u8).map(|k| [k, 255 - k, 7]).collect();
-    let r = lee_ok("256", &file(vec![(0, 0, all)], 0, 255));
+    let r = read_ok("256", &file(vec![(0, 0, all)], 0, 255));
     let palette = r.document.palette().expect("paleta");
     assert_eq!(palette.len(), 256);
     assert_eq!(palette.colors()[255], Rgba::new(255, 0, 7, 255));
     assert_eq!(palette.transparent_index(), Some(255));
 
     // Un índice transparente fuera de la longitud no es ninguno.
-    let r = lee_ok("sin transparente", &file(vec![(0, 8, vec![a; 8])], 8, 200));
+    let r = read_ok("sin transparente", &file(vec![(0, 8, vec![a; 8])], 8, 200));
     assert_eq!(
         r.document.palette().and_then(Palette::transparent_index),
         None
     );
 
     // Cubrir más allá de la longitud es un error.
-    lee_err("fuera", &file(vec![(3, 2, vec![a, b])], 4, 0));
+    read_err("fuera", &file(vec![(3, 2, vec![a, b])], 4, 0));
 }
 
 #[test]
@@ -652,7 +654,7 @@ fn row_04_c_without_palette_only_6_bit_and_palette_in_rgba() {
         ],
     );
     assert!(matches!(
-        lee_err("sin paleta", &f.bytes()),
+        read_err("sin paleta", &f.bytes()),
         AsepriteError::NoPalette
     ));
 
@@ -675,7 +677,7 @@ fn row_04_c_without_palette_only_6_bit_and_palette_in_rgba() {
     // RGBA con un chunk de paleta: se ignora y se anota, sin `lossy`.
     let mut f = base_rgba();
     f.chunks.insert(1, palette_complete(&PALETTE_4));
-    let r = lee_ok("paleta en RGBA", &f.bytes());
+    let r = read_ok("paleta en RGBA", &f.bytes());
     assert_eq!(count(&r, |k| matches!(k, Ignored::RgbaPalette { .. })), 1);
     assert!(!r.report.lossy);
     assert!(r.document.palette().is_none());
@@ -716,7 +718,7 @@ fn row_05_a_each_discardable_chunk_is_noted_and_warned() {
         }),
     ];
     for (name_2, extra, es) in cases {
-        let r = lee_ok(name_2, &base_with(extra));
+        let r = read_ok(name_2, &base_with(extra));
         assert!(r.report.lossy, "{name_2}: debe avisar (lossy)");
         assert_eq!(count(&r, es), 1, "{name_2}: una vez en `ignored`");
         assert_eq!(r.document.layers().len(), 2, "{name_2}: lo demás se lee");
@@ -733,7 +735,7 @@ fn row_05_a_each_discardable_chunk_is_noted_and_warned() {
         unknown(0x7777),
         unknown(0x1234),
     ]);
-    let r = lee_ok("cuentas", &f.bytes());
+    let r = read_ok("cuentas", &f.bytes());
     assert_eq!(count(&r, |k| matches!(k, Ignored::Tags { .. })), 2);
     assert_eq!(count(&r, |k| matches!(k, Ignored::UserData { .. })), 3);
     assert_eq!(count(&r, |k| matches!(k, Ignored::Unknown { .. })), 2);
@@ -746,7 +748,7 @@ fn row_05_b_what_changes_nothing_does_not_warn_and_the_indexed_background_does()
     for profile in [profile_srgb(), profile(0, 0, 0, &[])] {
         let mut f = base_rgba();
         f.chunks[0] = profile;
-        let r = lee_ok("perfil sin efecto", &f.bytes());
+        let r = read_ok("perfil sin efecto", &f.bytes());
         assert!(!r.report.lossy);
         assert!(r.report.ignored.is_empty(), "{:?}", r.report.ignored);
         assert_eq!(r.report.frames_in_file, 1);
@@ -772,7 +774,7 @@ fn row_05_b_what_changes_nothing_does_not_warn_and_the_indexed_background_does()
     put_u_16(&mut bytes, OFF_GRID + 4, 8);
     put_u_16(&mut bytes, OFF_GRID + 6, 8);
     put_u_16(&mut bytes, OFF_FRAME_DURATION, 250);
-    let r = lee_ok("campos ignorados", &bytes);
+    let r = read_ok("campos ignorados", &bytes);
     assert!(!r.report.lossy, "{:?}", r.report.ignored);
     assert!(r.report.ignored.is_empty());
     assert_eq!(r.document.layers().len(), 2);
@@ -786,7 +788,7 @@ fn row_05_b_what_changes_nothing_does_not_warn_and_the_indexed_background_does()
     .chunk();
     let mut f = base_rgba();
     f.chunks[1] = background.clone();
-    assert!(!lee_ok("fondo RGBA", &f.bytes()).report.lossy);
+    assert!(!read_ok("fondo RGBA", &f.bytes()).report.lossy);
     let indexed = |indices: Vec<u8>| {
         File::indexed(
             4,
@@ -802,12 +804,12 @@ fn row_05_b_what_changes_nothing_does_not_warn_and_the_indexed_background_does()
         )
         .bytes()
     };
-    let r = lee_ok(
+    let r = read_ok(
         "fondo sin transparentes",
         &indexed(vec![1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]),
     );
     assert!(!r.report.lossy);
-    let r = lee_ok(
+    let r = read_ok(
         "fondo con transparentes",
         &indexed(vec![0, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]),
     );
@@ -950,7 +952,7 @@ fn row_06_b_indexed_layer_with_opacity_or_blend_is_an_error() {
         opacity: 128,
         ..TestLayer::new("b")
     });
-    let e = lee_err("opacidad", &with_opacity);
+    let e = read_err("opacidad", &with_opacity);
     assert!(
         matches!(e, AsepriteError::IndexedLayer { layer: 1 }),
         "{e:?}"
@@ -959,13 +961,13 @@ fn row_06_b_indexed_layer_with_opacity_or_blend_is_an_error() {
         blend: BLEND_MULTIPLY,
         ..TestLayer::new("b")
     });
-    let e = lee_err("mezcla", &with_blend);
+    let e = read_err("mezcla", &with_blend);
     assert!(
         matches!(e, AsepriteError::IndexedLayer { layer: 1 }),
         "{e:?}"
     );
     // Con opacidad 255 y Normal, bien.
-    lee_ok("normal", &indexed(TestLayer::new("b")));
+    read_ok("normal", &indexed(TestLayer::new("b")));
 }
 
 #[test]
@@ -1000,7 +1002,7 @@ fn row_06_c_blend_codes_from_0_to_40_follow_the_table() {
         .bytes();
         match valid(code_2) {
             Some(mode) => {
-                let r = lee_ok(&format!("código {code_2}"), &bytes);
+                let r = read_ok(&format!("código {code_2}"), &bytes);
                 assert_eq!(r.document.layers()[0].blend(), mode, "código {code_2}");
                 accepted += 1;
             }
@@ -1023,11 +1025,11 @@ fn row_07_a_with_three_frames_the_first_is_read_and_it_warns() {
     f.frames = 3;
     // Detrás del primero, basura: no se mira (ni se recorren sus cabeceras).
     f.rest_2 = (0..90u8).map(|i| i.wrapping_mul(37) ^ 0x5C).collect();
-    let r = lee_ok("3 fotogramas", &f.bytes());
+    let r = read_ok("3 fotogramas", &f.bytes());
     assert_eq!(r.report.frames_in_file, 3);
     assert!(r.report.lossy);
     assert_eq!(r.document.layers().len(), 2);
-    let a = lee_ok("1 fotograma", &base_rgba().bytes());
+    let a = read_ok("1 fotograma", &base_rgba().bytes());
     assert_eq!(a.report.frames_in_file, 1);
     assert!(same_content(&r.document, &a.document).is_ok());
 }
@@ -1036,13 +1038,13 @@ fn row_07_a_with_three_frames_the_first_is_read_and_it_warns() {
 fn row_07_b_zero_frames_and_extra_bytes_are_malformed() {
     let mut f = base_rgba();
     f.frames = 0;
-    let e = lee_err("0 fotogramas", &f.bytes());
+    let e = read_err("0 fotogramas", &f.bytes());
     assert!(matches!(e, AsepriteError::Malformed(_)), "{e:?}");
 
     // Un fotograma declarado, pero el fichero (con su tamaño al día) trae bytes detrás.
     let mut f = base_rgba();
     f.rest_2 = vec![0; 16];
-    let e = lee_err("bytes de más", &f.bytes());
+    let e = read_err("bytes de más", &f.bytes());
     assert!(matches!(e, AsepriteError::Malformed(_)), "{e:?}");
 }
 
@@ -1183,7 +1185,7 @@ fn row_08_cels_of_types_0_and_2_shifted_clipped_and_outside() {
         };
         chunks.push(cel.chunk());
     }
-    let r = lee_ok(
+    let r = read_ok(
         "celdas",
         &File::rgba(width as u16, height as u16, chunks).bytes(),
     );
@@ -1224,10 +1226,10 @@ fn row_09_a_each_prefix_of_a_valid_file_gives_an_error() {
         ("mixed-rgba", golden("mixed-rgba.aseprite")),
     ];
     for (name_2, bytes) in &files {
-        lee_ok(name_2, bytes);
+        read_ok(name_2, bytes);
         for n in 0..bytes.len() {
             assert!(
-                lee(&bytes[..n]).is_err(),
+                read_bytes(&bytes[..n]).is_err(),
                 "{name_2}: el prefijo de {n} bytes (de {}) debe dar error",
                 bytes.len()
             );
@@ -1384,13 +1386,13 @@ fn row_09_b_header_frame_chunks_layers_and_canvas_wrong() {
         ),
     ];
     for (name_2, bytes, es) in cases {
-        let e = lee_err(name_2, &bytes);
+        let e = read_err(name_2, &bytes);
         assert!(es(&e), "{name_2}: salió {e:?}");
     }
 
     // Un lienzo de más de 2^26 píxeles: el error dice el límite y se rechaza antes de reservar.
     let large = File::rgba(8193, 8192, vec![TestLayer::new("x").chunk()]).bytes();
-    let e = lee_err("lienzo grande", &large);
+    let e = read_err("lienzo grande", &large);
     assert!(matches!(e, AsepriteError::TooLarge { .. }), "{e:?}");
     assert!(e.to_string().contains("67108864"), "{e}");
     assert_eq!(aseprite_dimensions(&large).ok(), Some((8193, 8192)));
@@ -1552,7 +1554,7 @@ fn row_09_c_malformed_cels() {
         ),
     ];
     for (name_2, bytes, es) in cases {
-        let e = lee_err(name_2, &bytes);
+        let e = read_err(name_2, &bytes);
         assert!(es(&e), "{name_2}: salió {e:?}");
     }
 }
@@ -1571,11 +1573,11 @@ fn row_09_eight_cels_of_256_mib_reopen_and_the_ninth_gives_too_large() {
         );
         File::rgba(8192, 8192, chunks).bytes()
     };
-    let r = lee_ok("8 capas", &file(8));
+    let r = read_ok("8 capas", &file(8));
     assert_eq!(r.document.layers().len(), 8);
     assert_eq!(r.document.materialized_bytes(), 8 * 8192 * 8192 * 4);
     drop(r);
-    let e = lee_err("9 capas", &file(9));
+    let e = read_err("9 capas", &file(9));
     assert!(
         matches!(&e, AsepriteError::TooLarge { limit } if *limit == 2u64 << 30),
         "{e:?}"
@@ -1979,7 +1981,7 @@ fn writes(doc: &Document) -> Vec<u8> {
 /// Escribe, lee y exige `same_content`; devuelve el documento leído y los bytes.
 fn round_trip(context: &str, doc: &Document) -> (Document, Vec<u8>) {
     let bytes = writes(doc);
-    let read = lee_ok(context, &bytes);
+    let read = read_ok(context, &bytes);
     assert!(
         !read.report.lossy,
         "{context}: lo que escribe Pixoko no avisa"
@@ -2417,7 +2419,7 @@ proptest! {
         } else {
             File::rgba(width, height, vec![profile_srgb(), layer_chunk, cel.chunk()])
         };
-        let read = fail(lee(&file.bytes()))?;
+        let read = fail(read_bytes(&file.bytes()))?;
         let doc = &read.document;
         prop_assert_eq!(doc.layers().len(), 1);
         let fill: &[u8] = if indexed { &[3] } else { &[0, 0, 0, 0] };
