@@ -6,7 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-# Único crate que puede usar `unsafe`, con comentario en cada bloque.
+# The only crate that may use `unsafe`, with a comment on every block.
 [lints.rust]
 unsafe_code = "deny"
 

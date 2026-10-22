@@ -1,17 +1,17 @@
-# Configuración de `cargo deny` para la crate del fuzzer (fuera del workspace). Se comprueba con:
+# `cargo deny` configuration for the fuzzer crate (outside the workspace). It is checked with:
 #   cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check
-# El CI no la ejecuta (specs/hito-1-fuzz.md, specs/hito-2-puerta.md D9).
+# CI does not run it (specs/hito-1-fuzz.md, specs/hito-2-puerta.md D9).
 
 [licenses]
-# La misma lista que el `deny.toml` de la raíz, sin ninguna otra: si una cambia, cambia la otra.
-# Nunca GPL, LGPL ni AGPL.
+# The same list as the root `deny.toml`, with no other: if one changes, so does the other.
+# Never GPL, LGPL or AGPL.
 allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0"]
 confidence-threshold = 0.9
 
-# 2026-10-17 (movida aquí el 2026-10-20): `libfuzzer-sys` tiene la licencia
-# `(MIT OR Apache-2.0) AND NCSA`: NCSA es obligatoria porque empaqueta libFuzzer (LLVM).
-# NCSA es permisiva y no entra en ningún binario de Pixoko, así que se admite solo para esa
-# crate y no en `allow`. Ver specs/hito-1-fuzz.md y docs/DEPENDENCIES.md.
+# 2026-10-17 (moved here on 2026-10-20): `libfuzzer-sys` has the license
+# `(MIT OR Apache-2.0) AND NCSA`: NCSA is mandatory because it bundles libFuzzer (LLVM).
+# NCSA is permissive and does not end up in any Pixoko binary, so it is allowed only for that
+# crate and not in `allow`. See specs/hito-1-fuzz.md and docs/DEPENDENCIES.md.
 [[licenses.exceptions]]
 crate = "libfuzzer-sys"
 allow = ["NCSA"]

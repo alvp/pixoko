@@ -27,5 +27,5 @@ test = false
 doc = false
 bench = false
 
-# Fuera del workspace raíz (specs/hito-1-fuzz.md): el CI en estable no lo compila.
+# Outside the root workspace (specs/hito-1-fuzz.md): CI on stable does not compile it.
 [workspace]
