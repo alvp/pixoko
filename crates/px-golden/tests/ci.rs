@@ -1,19 +1,19 @@
-//! Test de estructura del workflow de CI (specs/hito-0-ci.md, secciones
-//! "Comportamiento" y "Tests").
+//! Structure test for the CI workflow (specs/hito-0-ci.md, sections
+//! "Comportamiento" and "Tests").
 //!
-//! Solo usa `std`. `.github/workflows/ci.yml` y el `Cargo.toml` raiz se leen
-//! como texto, linea a linea: no hace falta un parser de YAML ni de TOML para
-//! las pocas cosas que se comprueban. Es una red de seguridad contra ediciones
-//! accidentales, no una validacion de la semantica de GitHub Actions.
+//! Uses only `std`. `.github/workflows/ci.yml` and the root `Cargo.toml` are read
+//! as text, line by line: no YAML or TOML parser is needed for the few things
+//! that are checked. It is a safety net against accidental edits, not a
+//! validation of the semantics of GitHub Actions.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Sistemas operativos que debe cubrir la matriz.
+/// Operating systems the matrix must cover.
 const EXPECTED_OS: [&str; 3] = ["ubuntu-latest", "windows-latest", "macos-latest"];
 
-/// Los cinco comandos de comprobacion, en el orden del punto 6 de la spec (el de `build` se
-/// anadio en specs/hito-2-ventana.md).
+/// The five check commands, in the order of point 6 of the spec (the `build` one was
+/// added in specs/hito-2-ventana.md).
 const EXPECTED_COMMANDS: [&str; 5] = [
     "cargo fmt --all --check",
     "cargo clippy --workspace --all-targets --locked -- -D warnings",
@@ -22,17 +22,17 @@ const EXPECTED_COMMANDS: [&str; 5] = [
     "cargo deny --locked check",
 ];
 
-/// Acciones de terceros permitidas en `uses:`.
+/// Third-party actions allowed in `uses:`.
 const ALLOWED_ACTIONS: [&str; 2] = ["actions/checkout", "taiki-e/install-action"];
 
 const WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 
-/// Raiz del workspace: dos niveles por encima de `crates/px-golden`.
+/// Workspace root: two levels above `crates/px-golden`.
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Lee un archivo de texto de la raiz; si falla, el mensaje dice cual falta.
+/// Reads a text file from the root; if it fails, the message says which one is missing.
 fn read_text(relative: &str) -> String {
     let path = workspace_root().join(relative);
     match fs::read_to_string(&path) {
@@ -48,7 +48,7 @@ fn read_workflow() -> String {
     read_text(WORKFLOW_PATH)
 }
 
-/// Quita un comentario YAML (`# ...` al principio o tras un espacio).
+/// Strips a YAML comment (`# ...` at the start or after a space).
 fn strip_comment(line: &str) -> &str {
     if line.trim_start().starts_with('#') {
         return "";
@@ -59,7 +59,7 @@ fn strip_comment(line: &str) -> &str {
     }
 }
 
-/// Lineas sin comentario ni espacios en los extremos, sin las vacias.
+/// Lines without comments or surrounding whitespace, without the empty ones.
 fn code_lines(text: &str) -> Vec<String> {
     text.lines()
         .map(|l| strip_comment(l).trim().to_string())
@@ -67,18 +67,18 @@ fn code_lines(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Quita el guion de elemento de lista (`- `) del principio de una linea.
+/// Strips the list-item dash (`- `) from the start of a line.
 fn strip_list_dash(line: &str) -> &str {
     line.strip_prefix("- ").map_or(line, str::trim_start)
 }
 
-/// Comandos de todos los `run`, ya recortados.
+/// Commands of all the `run` entries, already trimmed.
 ///
-/// Admite `run: comando` (con o sin `- ` delante) y bloques `run: |` o
-/// `run: >`, cuyas lineas, mas indentadas que `run`, cuentan como comandos.
+/// Accepts `run: command` (with or without a leading `- `) and `run: |` or
+/// `run: >` blocks, whose lines, indented deeper than `run`, count as commands.
 fn run_commands(text: &str) -> Vec<String> {
     let mut commands = Vec::new();
-    // Indentacion de la clave `run` del bloque abierto, si hay uno.
+    // Indentation of the `run` key of the open block, if there is one.
     let mut block_indent: Option<usize> = None;
     for raw in text.lines() {
         let indent = raw.len() - raw.trim_start().len();
@@ -99,7 +99,7 @@ fn run_commands(text: &str) -> Vec<String> {
         };
         let rest = rest.trim();
         if rest.starts_with('|') || rest.starts_with('>') {
-            // La clave `run` esta tras el guion si lo hay: sumamos su ancho.
+            // The `run` key comes after the dash if there is one: we add its width.
             let dash = code.len() - item.len();
             block_indent = Some(indent + dash);
         } else if !rest.is_empty() {
@@ -109,7 +109,7 @@ fn run_commands(text: &str) -> Vec<String> {
     commands
 }
 
-/// Valor de `rust-version` en el `Cargo.toml` raiz, sin comillas.
+/// Value of `rust-version` in the root `Cargo.toml`, without quotes.
 fn workspace_rust_version() -> String {
     let text = read_text("Cargo.toml");
     for raw in text.lines() {
@@ -225,7 +225,7 @@ fn permissions_are_declared_and_read_only() {
             "{WORKFLOW_PATH}: falta `contents: read` bajo `permissions:`"
         ));
     }
-    // Se mira el archivo entero, comentarios incluidos: no debe haber `write`.
+    // The whole file is checked, comments included: there must be no `write`.
     for (n, line) in text.lines().enumerate() {
         if line.to_lowercase().contains("write") {
             failures.push(format!(
