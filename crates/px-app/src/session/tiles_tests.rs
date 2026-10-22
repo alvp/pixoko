@@ -23,7 +23,7 @@
 //! - El fotograma de la app (`eframe::App::ui`) no se puede ejecutar sin `eframe::Frame`: el banco
 //!   repite su parte del lienzo (`interact_ordered`, `sync`, `paint`), no el orden de `main.rs`.
 //!
-//! Supuestos: `Loaded` tiene `image` y `text` públicos; `install(Loaded)` no devuelve nada que
+//! Supuestos: `Loaded` tiene `document` y `text` públicos; `install(Loaded)` no devuelve nada que
 //! importe; `take_dirty()` devuelve **todo** si nada se anotó desde la última vez y lo anotado (aunque
 //! sea el conjunto vacío) si algo se anotó.
 
@@ -678,7 +678,7 @@ fn fila_b3_load_no_cambia_nada_e_install_reemplaza_y_vacia_el_registro_como_open
 
     // `load` lee y no cambia nada: ni documento, ni ruta, ni registro.
     let cargado = s.load(&ruta, Canvas::MAX_SIDE, true).expect("load");
-    assert_eq!((cargado.image.width(), cargado.image.height()), (90, 70));
+    assert_eq!((cargado.document.width(), cargado.document.height()), (90, 70));
     assert_eq!(s.document.state_id(), estado);
     assert_eq!(
         s.document.image(s.document.main_image()),

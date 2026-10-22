@@ -1028,7 +1028,7 @@ proptest! {
 
         let loaded = load_png(&saved.path, MAX_FILE_BYTES, 16384).expect("load_png");
         prop_assert!(loaded.report.is_empty(), "informe: {:?}", loaded.report);
-        prop_assert_eq!(loaded.document.image(loaded.document.main_image()), Some(&image));
+        prop_assert_eq!(&loaded.image, &image);
 
         let mut other = fresh_session();
         other.open(&saved.path, 16384, false).expect("abrir en otra sesión");
