@@ -64,6 +64,31 @@ Desde el 21 de octubre de 2026 es la **única referencia automática** de los hi
 
 Regla: la spec de cada unidad confirma que Aseprite tiene la función antes de usarlo como oráculo; si no la tiene, se anota y se decide. Grafx2 se mantiene como referencia manual donde el mapa ya la usa por algo propio, y DPaint V (emulador) en el hito 7.
 
+### Especificación pública del formato `.aseprite` (unidad 3.8)
+
+- **Documento:** `ase-file-specs.md`, <https://github.com/aseprite/aseprite/blob/main/docs/ase-file-specs.md> (el hook solo deja leer este documento por su nombre).
+- **Fecha de consulta:** 2026-10-22.
+- **SHA-256:** `31a6a80526c24209361fc35f9431bd8909603bb106bb6c3ed866f9af28976ae3` (24 392 bytes).
+- **Se consultó; no se copia.** La copia de trabajo está fuera del repositorio, en `~/refs/ase-file-specs.md`. No se sigue ningún enlace a código.
+- **Alcance:** solo la estructura del fichero. Nada de código ni de comentarios que describan cómo lo hace un programa; cada estructura y función de `px-formats` cita el apartado que implementa («Spec: Layer Chunk»).
+
+Tabla campo → apartado, en palabras propias (el detalle campo a campo, con desplazamientos, está en `specs/hito-3-aseprite.md`):
+
+| Qué leemos o escribimos | Apartado de la especificación |
+| --- | --- |
+| Tipos de dato (`WORD`, `DWORD`, `SHORT`, `STRING`, `PIXEL`), orden de bytes | References |
+| Cabecera de 128 bytes: tamaño, magia, fotogramas, ancho, alto, profundidad, banderas, índice transparente, número de colores | Header |
+| Cabecera de cada fotograma y número de chunks | Frames |
+| Cabecera de chunk (tamaño que incluye los 6 bytes, tipo) | Frames |
+| Capa: banderas (visible, editable, fondo, referencia), tipo, nivel, modo de mezcla, opacidad, nombre | Layer Chunk (0x2004), NOTE.1, NOTE.6 |
+| Posición de la capa en el fichero como índice | NOTE.2 |
+| Celda: capa, posición, opacidad, tipo, z-index, tamaño y píxeles | Cel Chunk (0x2005), NOTE.5 |
+| Píxeles sin comprimir y comprimidos con zlib | NOTE.3 |
+| Paleta nueva (rango, alfa, nombre) | Palette Chunk (0x2019) |
+| Paletas antiguas (paquetes, 0–255 y 0–63) | Old palette chunk (0x0004 y 0x0011) |
+| Perfil de color | Color Profile Chunk (0x2007) |
+| Chunks que se saltan sin interpretar | Tags (0x2018), User Data (0x2020), Slice (0x2022), External Files (0x2008), Cel Extra (0x2006), Mask (0x2016), Path (0x2017), Tileset (0x2023) |
+
 ## Pendiente
 
 - Decidir el formato de las notas que acompañan a cada fichero de `golden/` (comando, versión del paquete, fecha).
