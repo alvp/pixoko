@@ -13,13 +13,17 @@ use std::time::{Duration, Instant};
 use px_core::{BlendMode, Command, Document, Image, Pixel, Rgba, Span};
 use px_raster::{flatten_command, merge_down_command, merge_visible_command};
 
-fn documento(lado: u32, capas: usize, escenario: char) -> Document {
-    let alfa_fondo = if escenario == 'c' { 180 } else { 255 };
-    let base = Image::filled(lado, lado, Pixel::Rgba(Rgba::new(40, 90, 160, alfa_fondo)))
-        .expect("imagen de la capa de abajo");
+fn document(side: u32, layers: usize, scenario: char) -> Document {
+    let alpha_background = if scenario == 'c' { 180 } else { 255 };
+    let base = Image::filled(
+        side,
+        side,
+        Pixel::Rgba(Rgba::new(40, 90, 160, alpha_background)),
+    )
+    .expect("imagen de la capa de abajo");
     let mut doc = Document::new(base);
     doc.set_cells_limit(usize::MAX);
-    let modos = [
+    let modes = [
         BlendMode::Multiply,
         BlendMode::Screen,
         BlendMode::Overlay,
@@ -28,29 +32,29 @@ fn documento(lado: u32, capas: usize, escenario: char) -> Document {
         BlendMode::Add,
         BlendMode::Difference,
     ];
-    for i in 1..capas {
+    for i in 1..layers {
         doc.apply(Command::AddLayer {
             name: format!("c{i}"),
             at: i,
         })
         .expect("añadir capa");
         let (id, cel) = (doc.layers()[i].id(), doc.layers()[i].cel());
-        let alfa = if escenario == 'c' { 150 } else { 255 };
-        let tramos: Vec<Span> = (0..lado)
+        let alpha = if scenario == 'c' { 150 } else { 255 };
+        let spans_2: Vec<Span> = (0..side)
             .map(|y| Span {
                 y,
                 x_start: 0,
-                x_end: lado,
+                x_end: side,
             })
             .collect();
-        let color = Rgba::new((i * 30) as u8, (255 - i * 20) as u8, (i * 50) as u8, alfa);
+        let color = Rgba::new((i * 30) as u8, (255 - i * 20) as u8, (i * 50) as u8, alpha);
         doc.apply(Command::FillSpans {
             image: cel,
-            spans: tramos,
+            spans: spans_2,
             pixel: Pixel::Rgba(color),
         })
         .expect("rellenar");
-        if escenario != 'a' {
+        if scenario != 'a' {
             doc.apply(Command::SetLayerOpacity {
                 layer: id,
                 opacity: 128,
@@ -58,7 +62,7 @@ fn documento(lado: u32, capas: usize, escenario: char) -> Document {
             .expect("opacidad");
             doc.apply(Command::SetLayerBlend {
                 layer: id,
-                blend: modos[(i - 1) % modos.len()],
+                blend: modes[(i - 1) % modes.len()],
             })
             .expect("mezcla");
         }
@@ -66,35 +70,35 @@ fn documento(lado: u32, capas: usize, escenario: char) -> Document {
     doc
 }
 
-fn mide<T>(etiqueta: &str, tope: Duration, f: impl FnOnce() -> T) -> T {
-    let inicio = Instant::now();
+fn measures<T>(label: &str, cap: Duration, f: impl FnOnce() -> T) -> T {
+    let start = Instant::now();
     let valor = f();
-    let tiempo = inicio.elapsed();
+    let time = start.elapsed();
     println!(
-        "{etiqueta}: {:.1} ms (tope {:.0} ms)",
-        tiempo.as_secs_f64() * 1e3,
-        tope.as_secs_f64() * 1e3
+        "{label}: {:.1} ms (tope {:.0} ms)",
+        time.as_secs_f64() * 1e3,
+        cap.as_secs_f64() * 1e3
     );
-    assert!(tiempo <= tope, "{etiqueta}: {tiempo:?} pasa de {tope:?}");
+    assert!(time <= cap, "{label}: {time:?} pasa de {cap:?}");
     valor
 }
 
 #[test]
 #[ignore = "rendimiento: umbrales de presupuesto, no de CI"]
-fn combinar_abajo_2_capas_de_2048_y_de_8192() {
-    for (lado, topes) in [(2048u32, [150u64, 150, 150]), (8192, [2500, 2500, 2500])] {
-        for (escenario, tope) in ['a', 'b', 'c'].into_iter().zip(topes) {
-            let mut doc = documento(lado, 2, escenario);
-            let arriba = doc.layers()[1].id();
-            let orden = mide(
-                &format!("combinar abajo {lado}² ({escenario}): construir"),
-                Duration::from_millis(tope),
-                || merge_down_command(&doc, arriba).expect("combinar abajo"),
+fn merge_down_2_layers_of_2048_and_of_8192() {
+    for (side, caps) in [(2048u32, [150u64, 150, 150]), (8192, [2500, 2500, 2500])] {
+        for (scenario, cap) in ['a', 'b', 'c'].into_iter().zip(caps) {
+            let mut doc = document(side, 2, scenario);
+            let top = doc.layers()[1].id();
+            let order = measures(
+                &format!("combinar abajo {side}² ({scenario}): construir"),
+                Duration::from_millis(cap),
+                || merge_down_command(&doc, top).expect("combinar abajo"),
             );
-            mide(
-                &format!("combinar abajo {lado}² ({escenario}): aplicar"),
+            measures(
+                &format!("combinar abajo {side}² ({scenario}): aplicar"),
                 Duration::from_millis(10),
-                || doc.apply(orden).expect("aplicar"),
+                || doc.apply(order).expect("aplicar"),
             );
         }
     }
@@ -102,31 +106,31 @@ fn combinar_abajo_2_capas_de_2048_y_de_8192() {
 
 #[test]
 #[ignore = "rendimiento: umbrales de presupuesto, no de CI"]
-fn aplanar_y_combinar_visibles_8_capas_de_8192() {
-    for (escenario, tope) in [('a', 500u64), ('b', 6000), ('c', 12000)] {
-        let mut doc = documento(8192, 8, escenario);
-        let orden = mide(
-            &format!("combinar visibles 8×8192² ({escenario}): construir"),
-            Duration::from_millis(tope),
+fn flatten_and_merge_visible_8_layers_of_8192() {
+    for (scenario, cap) in [('a', 500u64), ('b', 6000), ('c', 12000)] {
+        let mut doc = document(8192, 8, scenario);
+        let order = measures(
+            &format!("combinar visibles 8×8192² ({scenario}): construir"),
+            Duration::from_millis(cap),
             || merge_visible_command(&doc).expect("combinar visibles"),
         );
-        mide(
-            &format!("combinar visibles 8×8192² ({escenario}): aplicar"),
+        measures(
+            &format!("combinar visibles 8×8192² ({scenario}): aplicar"),
             Duration::from_millis(10),
-            || doc.apply(orden).expect("aplicar"),
+            || doc.apply(order).expect("aplicar"),
         );
         // Deshacer y rehacer solo mueven.
-        mide("deshacer", Duration::from_millis(10), || {
+        measures("deshacer", Duration::from_millis(10), || {
             doc.undo().expect("deshacer")
         });
-        mide("rehacer", Duration::from_millis(10), || {
+        measures("rehacer", Duration::from_millis(10), || {
             doc.redo().expect("rehacer")
         });
         drop(doc);
-        let doc = documento(8192, 8, escenario);
-        mide(
-            &format!("aplanar 8×8192² ({escenario}): construir"),
-            Duration::from_millis(tope),
+        let doc = document(8192, 8, scenario);
+        measures(
+            &format!("aplanar 8×8192² ({scenario}): construir"),
+            Duration::from_millis(cap),
             || flatten_command(&doc).expect("aplanar"),
         );
     }

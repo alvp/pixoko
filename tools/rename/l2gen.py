@@ -201,10 +201,13 @@ def main():
                 if line.strip() and not line.startswith("#"):
                     o, alt, scope = line.split("\t")
                     auto[o].append((alt, scope))
+        applied = set((HERE / "l2-applied-crates.txt").read_text().split()) if (HERE / "l2-applied-crates.txt").exists() else set()
         rows = []
         for o, n in sorted(spanish.items()):
             n = ov.get(o, n)
             for c in sorted(uses[o]):
+                if c.split("/")[1] in applied:
+                    continue
                 base = n
                 for alt, scope in auto.get(o, []):
                     if scope == c:

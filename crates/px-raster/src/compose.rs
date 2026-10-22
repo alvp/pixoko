@@ -3,7 +3,7 @@
 //! Función pura y determinista: enteros, sin estado, sin hilos y sin redondeos que dependan de
 //! la plataforma. Las fórmulas y su motivo están en `specs/hito-3-mezcla.md`; resumen:
 //!
-//! - `αs = div255(a · opacidad)`; un origen exactamente `(0, 0, 0, 0)` es «nada»; contra un
+//! - `αs = div255(a · opacity)`; un origen exactamente `(0, 0, 0, 0)` es «nada»; contra un
 //!   fondo de alfa 0 el resultado es el origen (con su RGB, también si `αs = 0`).
 //! - Teoría (Porter y Duff, W3C): `αr = αs + αb − αs·αb` y `Cr = Cb + (Cm − Cb)·αs/αr` con
 //!   `Cm = Cs + (B − Cs)·αb/255`; con fondo opaco `Cm = B`, con Normal `Cm = Cs`.

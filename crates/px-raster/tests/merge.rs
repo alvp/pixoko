@@ -37,97 +37,97 @@ const fn c(r: u8, g: u8, b: u8, a: u8) -> Rgba {
 }
 
 /// `x / 255` al entero más cercano (sin empates posibles), a partir de la definición.
-fn redondea_255(x: i128) -> i128 {
+fn rounds_255(x: i128) -> i128 {
     (2 * x + 255).div_euclid(510)
 }
 
-/// Una capa de un documento de prueba. `celda: None` es una celda vacía (sin imagen); la capa 0
+/// Una capa de un documento de prueba. `cel_2: None` es una celda vacía (sin imagen); la capa 0
 /// siempre tiene celda, así que en ella `None` deja la imagen inicial (toda a ceros).
 #[derive(Clone, Debug)]
-struct Capa {
+struct Layer2 {
     visible: bool,
     locked: bool,
-    opacidad: u8,
-    modo: BlendMode,
-    celda: Option<Vec<Pixel>>,
+    opacity_2: u8,
+    mode: BlendMode,
+    cel_2: Option<Vec<Pixel>>,
 }
 
-impl Capa {
-    fn nueva(celda: Vec<Pixel>) -> Capa {
-        Capa {
+impl Layer2 {
+    fn new(cel_2: Vec<Pixel>) -> Layer2 {
+        Layer2 {
             visible: true,
             locked: false,
-            opacidad: 255,
-            modo: BlendMode::Normal,
-            celda: Some(celda),
+            opacity_2: 255,
+            mode: BlendMode::Normal,
+            cel_2: Some(cel_2),
         }
     }
 
-    fn rgba(celda: &[Rgba]) -> Capa {
-        Capa::nueva(celda.iter().copied().map(Pixel::Rgba).collect())
+    fn rgba(cel_2: &[Rgba]) -> Layer2 {
+        Layer2::new(cel_2.iter().copied().map(Pixel::Rgba).collect())
     }
 
-    fn gris(celda: &[(u8, u8)]) -> Capa {
-        Capa::nueva(
-            celda
+    fn gray_2(cel_2: &[(u8, u8)]) -> Layer2 {
+        Layer2::new(
+            cel_2
                 .iter()
                 .map(|&(gray, alpha)| Pixel::GrayAlpha { gray, alpha })
                 .collect(),
         )
     }
 
-    fn idx(valores: &[u8]) -> Capa {
-        Capa::nueva(valores.iter().copied().map(Pixel::Indexed).collect())
+    fn idx(values: &[u8]) -> Layer2 {
+        Layer2::new(values.iter().copied().map(Pixel::Indexed).collect())
     }
 
-    fn vacia() -> Capa {
-        Capa {
+    fn empty() -> Layer2 {
+        Layer2 {
             visible: true,
             locked: false,
-            opacidad: 255,
-            modo: BlendMode::Normal,
-            celda: None,
+            opacity_2: 255,
+            mode: BlendMode::Normal,
+            cel_2: None,
         }
     }
 
-    fn modo(mut self, modo: BlendMode) -> Capa {
-        self.modo = modo;
+    fn mode(mut self, mode: BlendMode) -> Layer2 {
+        self.mode = mode;
         self
     }
 
-    fn opacidad(mut self, opacidad: u8) -> Capa {
-        self.opacidad = opacidad;
+    fn opacity_2(mut self, opacity_2: u8) -> Layer2 {
+        self.opacity_2 = opacity_2;
         self
     }
 
-    fn oculta(mut self) -> Capa {
+    fn hidden(mut self) -> Layer2 {
         self.visible = false;
         self
     }
 
-    fn bloqueada(mut self) -> Capa {
+    fn locked(mut self) -> Layer2 {
         self.locked = true;
         self
     }
 }
 
-/// Documento con `capas` de abajo arriba, a partir de la imagen `plantilla` (que es la celda de
+/// Documento con `layers` de abajo arriba, a partir de la imagen `template` (que es la celda de
 /// la capa 0 y fija el tamaño y el modo). Solo usa los comandos del núcleo ya existentes.
-fn construye(plantilla: Image, capas: &[Capa]) -> Document {
-    let mut doc = Document::new(plantilla);
+fn builds(template: Image, layers: &[Layer2]) -> Document {
+    let mut doc = Document::new(template);
     let (w, h) = (doc.width(), doc.height());
-    for i in 1..capas.len() {
+    for i in 1..layers.len() {
         let cmd = Command::AddLayer {
             name: format!("C{i}"),
             at: i,
         };
         assert_eq!(doc.apply(cmd), Ok(true), "añadir la capa {i}");
     }
-    for (i, capa) in capas.iter().enumerate() {
+    for (i, layer_2) in layers.iter().enumerate() {
         let (id, cel) = (doc.layers()[i].id(), doc.layers()[i].cel());
-        if let Some(pixeles) = &capa.celda {
-            assert_eq!(pixeles.len(), (w * h) as usize, "píxeles de la capa {i}");
-            let pixels = pixeles
+        if let Some(pixels_2) = &layer_2.cel_2 {
+            assert_eq!(pixels_2.len(), (w * h) as usize, "píxeles de la capa {i}");
+            let pixels = pixels_2
                 .iter()
                 .enumerate()
                 .map(|(k, &pixel)| PixelEdit {
@@ -139,28 +139,28 @@ fn construye(plantilla: Image, capas: &[Capa]) -> Document {
             doc.apply(Command::SetPixels { image: cel, pixels })
                 .expect("escribir la celda");
         }
-        if capa.opacidad != 255 {
+        if layer_2.opacity_2 != 255 {
             let cmd = Command::SetLayerOpacity {
                 layer: id,
-                opacity: capa.opacidad,
+                opacity: layer_2.opacity_2,
             };
             assert!(doc.apply(cmd).is_ok(), "opacidad de la capa {i}");
         }
-        if capa.modo != BlendMode::Normal {
+        if layer_2.mode != BlendMode::Normal {
             let cmd = Command::SetLayerBlend {
                 layer: id,
-                blend: capa.modo,
+                blend: layer_2.mode,
             };
             assert!(doc.apply(cmd).is_ok(), "modo de la capa {i}");
         }
-        if !capa.visible {
+        if !layer_2.visible {
             let cmd = Command::SetLayerVisible {
                 layer: id,
                 visible: false,
             };
             assert!(doc.apply(cmd).is_ok(), "ocultar la capa {i}");
         }
-        if capa.locked {
+        if layer_2.locked {
             let cmd = Command::SetLayerLocked {
                 layer: id,
                 locked: true,
@@ -171,16 +171,16 @@ fn construye(plantilla: Image, capas: &[Capa]) -> Document {
     doc
 }
 
-fn imagen(w: u32, h: u32, modo: Mode) -> Image {
-    Image::new(w, h, modo).expect("imagen")
+fn image_2(w: u32, h: u32, mode: Mode) -> Image {
+    Image::new(w, h, mode).expect("imagen")
 }
 
-fn doc_rgba(w: u32, h: u32, capas: &[Capa]) -> Document {
-    construye(imagen(w, h, Mode::Rgba), capas)
+fn doc_rgba(w: u32, h: u32, layers: &[Layer2]) -> Document {
+    builds(image_2(w, h, Mode::Rgba), layers)
 }
 
 /// Paleta de `n` colores opacos distintos con el índice transparente `t`.
-fn paleta(n: u8, t: Option<u8>) -> Palette {
+fn palette(n: u8, t: Option<u8>) -> Palette {
     let mut p = Palette::from_colors(
         (0..n).map(|i| Rgba::new(i.wrapping_mul(30), 255 - i.wrapping_mul(30), 7, 255)),
     )
@@ -189,28 +189,28 @@ fn paleta(n: u8, t: Option<u8>) -> Palette {
     p
 }
 
-fn plantilla_indexada(w: u32, h: u32, n: u8, t: Option<u8>) -> Image {
-    Image::new_indexed(w, h, paleta(n, t)).expect("imagen indexada")
+fn template_indexed(w: u32, h: u32, n: u8, t: Option<u8>) -> Image {
+    Image::new_indexed(w, h, palette(n, t)).expect("imagen indexada")
 }
 
-fn doc_indexado(w: u32, h: u32, t: Option<u8>, capas: &[Capa]) -> Document {
-    construye(plantilla_indexada(w, h, 8, t), capas)
+fn doc_indexed(w: u32, h: u32, t: Option<u8>, layers: &[Layer2]) -> Document {
+    builds(template_indexed(w, h, 8, t), layers)
 }
 
 /// Los píxeles de una imagen RGBA, fila a fila.
 fn rgba_de(img: &Image) -> Vec<Rgba> {
     assert_eq!(img.mode(), Mode::Rgba, "se esperaba una imagen RGBA");
-    pixeles_de(img)
+    pixels_of(img)
         .into_iter()
         .map(|p| match p {
             Pixel::Rgba(color) => color,
-            otro => panic!("se esperaba RGBA, hay {otro:?}"),
+            other => panic!("se esperaba RGBA, hay {other:?}"),
         })
         .collect()
 }
 
 /// Los píxeles de una imagen en cualquier modo, fila a fila.
-fn pixeles_de(img: &Image) -> Vec<Pixel> {
+fn pixels_of(img: &Image) -> Vec<Pixel> {
     (0..img.height())
         .flat_map(|y| (0..img.width()).map(move |x| (x, y)))
         .map(|(x, y)| img.get_pixel(x, y).expect("píxel dentro"))
@@ -219,22 +219,22 @@ fn pixeles_de(img: &Image) -> Vec<Pixel> {
 
 /// Los índices de una imagen indexada, fila a fila.
 fn indices_de(img: &Image) -> Vec<u8> {
-    pixeles_de(img)
+    pixels_of(img)
         .into_iter()
         .map(|p| match p {
             Pixel::Indexed(i) => i,
-            otro => panic!("se esperaba indexado, hay {otro:?}"),
+            other => panic!("se esperaba indexado, hay {other:?}"),
         })
         .collect()
 }
 
 /// `compose` que no debe fallar.
-fn componer(doc: &Document) -> Image {
+fn compose_2(doc: &Document) -> Image {
     compose(doc).expect("la composición no debe fallar")
 }
 
 /// `compose_layers` que no debe fallar.
-fn capas_de(doc: &Document, ids: &[LayerId]) -> Image {
+fn layers_of(doc: &Document, ids: &[LayerId]) -> Image {
     compose_layers(doc, ids).expect("la composición de las capas no debe fallar")
 }
 
@@ -251,9 +251,9 @@ fn ids4(doc: &Document) -> [LayerId; 4] {
 }
 
 /// Las propiedades de una capa que deben volver intactas tras deshacer.
-type Firma = (LayerId, ImageId, String, bool, bool, u8, BlendMode);
+type Signature = (LayerId, ImageId, String, bool, bool, u8, BlendMode);
 
-fn firma(l: &Layer) -> Firma {
+fn signature(l: &Layer) -> Signature {
     (
         l.id(),
         l.cel(),
@@ -287,224 +287,232 @@ fn fusion(cmd: &Command) -> Fusion {
             image: image.clone(),
             based_on: *based_on,
         },
-        otro => panic!("se esperaba MergeLayers, hay {otro:?}"),
+        other => panic!("se esperaba MergeLayers, hay {other:?}"),
     }
 }
 
 /// Aplica `cmd` sobre una copia del documento y la devuelve (un solo paso).
-fn aplicado(doc: &Document, cmd: Command) -> Document {
-    let mut copia = doc.clone();
-    assert_eq!(copia.apply(cmd), Ok(true), "aplicar el comando de combinar");
-    assert_ne!(copia.state_id(), doc.state_id(), "estado nuevo");
-    copia
+fn applied(doc: &Document, cmd: Command) -> Document {
+    let mut copy = doc.clone();
+    assert_eq!(copy.apply(cmd), Ok(true), "aplicar el comando de combinar");
+    assert_ne!(copy.state_id(), doc.state_id(), "estado nuevo");
+    copy
 }
 
 // ---------------------------------------------------------------------------------------
 // Fila 5: compose_layers.
 // ---------------------------------------------------------------------------------------
 
-const BLANCO: Rgba = c(255, 255, 255, 255);
-const GRIS_128: Rgba = c(128, 128, 128, 255);
-const A_OPACO: Rgba = c(200, 100, 50, 255);
+const WHITE: Rgba = c(255, 255, 255, 255);
+const GRAY_128: Rgba = c(128, 128, 128, 255);
+const A_OPAQUE: Rgba = c(200, 100, 50, 255);
 
 /// `[A, B, C]` de 2 × 1: el fondo opaco `A = (200, 100, 50)`; encima `B`, Normal, con
 /// `(10, 20, 30)` solo en el primer píxel; y encima `C`, Multiplicar, con blanco y gris 128.
-fn pila_abc() -> Vec<Capa> {
+fn stack_abc() -> Vec<Layer2> {
     vec![
-        Capa::rgba(&[A_OPACO, A_OPACO]),
-        Capa::rgba(&[c(10, 20, 30, 255), T]),
-        Capa::rgba(&[BLANCO, GRIS_128]).modo(BlendMode::Multiply),
+        Layer2::rgba(&[A_OPAQUE, A_OPAQUE]),
+        Layer2::rgba(&[c(10, 20, 30, 255), T]),
+        Layer2::rgba(&[WHITE, GRAY_128]).mode(BlendMode::Multiply),
     ]
 }
 
 #[test]
-fn fila_05_a_subconjuntos_en_orden_y_sin_mirar_la_visibilidad() {
-    let doc = doc_rgba(2, 1, &pila_abc());
+fn row_05_a_subsets_in_order_and_ignoring_visibility() {
+    let doc = doc_rgba(2, 1, &stack_abc());
     let [a, b, c_] = ids3(&doc);
 
     // {A, C}: B no cuenta. A multiplicado por blanco y por 128: div255(200·128) = 100,
     // div255(100·128) = 50 y div255(50·128) = 25.
-    let a_c = [A_OPACO, c(100, 50, 25, 255)];
-    assert_eq!(rgba_de(&capas_de(&doc, &[a, c_])), a_c);
+    let a_c = [A_OPAQUE, c(100, 50, 25, 255)];
+    assert_eq!(rgba_de(&layers_of(&doc, &[a, c_])), a_c);
     // El orden de la lista no manda: manda el del documento.
-    assert_eq!(rgba_de(&capas_de(&doc, &[c_, a])), a_c);
+    assert_eq!(rgba_de(&layers_of(&doc, &[c_, a])), a_c);
     // {B, C}: sin A, contra el vacío (el gris 128 se queda tal cual sobre un fondo sin alfa).
     assert_eq!(
-        rgba_de(&capas_de(&doc, &[b, c_])),
-        [c(10, 20, 30, 255), GRIS_128]
+        rgba_de(&layers_of(&doc, &[b, c_])),
+        [c(10, 20, 30, 255), GRAY_128]
     );
     // Una sola capa: su celda.
-    assert_eq!(rgba_de(&capas_de(&doc, &[b])), [c(10, 20, 30, 255), T]);
+    assert_eq!(rgba_de(&layers_of(&doc, &[b])), [c(10, 20, 30, 255), T]);
 
     // Todas las visibles: `compose` byte a byte.
-    assert_eq!(capas_de(&doc, &[a, b, c_]), componer(&doc));
+    assert_eq!(layers_of(&doc, &[a, b, c_]), compose_2(&doc));
     assert_eq!(
-        rgba_de(&capas_de(&doc, &[a, b, c_])),
+        rgba_de(&layers_of(&doc, &[a, b, c_])),
         [c(10, 20, 30, 255), c(100, 50, 25, 255)]
     );
 
     // Exactamente las visibles de un documento con una oculta: igual que `compose`.
-    let con_oculta = doc_rgba(
+    let with_hidden = doc_rgba(
         2,
         1,
         &[
-            pila_abc()[0].clone(),
-            pila_abc()[1].clone(),
-            pila_abc()[2].clone().oculta(),
+            stack_abc()[0].clone(),
+            stack_abc()[1].clone(),
+            stack_abc()[2].clone().hidden(),
         ],
     );
-    let [a, b, c_] = ids3(&con_oculta);
-    assert_eq!(capas_de(&con_oculta, &[a, b]), componer(&con_oculta));
+    let [a, b, c_] = ids3(&with_hidden);
+    assert_eq!(layers_of(&with_hidden, &[a, b]), compose_2(&with_hidden));
 
     // Una oculta incluida cuenta: {A, C} con C oculta sigue multiplicando, y `compose` no.
-    assert_eq!(rgba_de(&capas_de(&con_oculta, &[a, c_])), a_c);
-    assert_ne!(capas_de(&con_oculta, &[a, c_]), componer(&con_oculta));
+    assert_eq!(rgba_de(&layers_of(&with_hidden, &[a, c_])), a_c);
+    assert_ne!(layers_of(&with_hidden, &[a, c_]), compose_2(&with_hidden));
     // Con todas ocultas, la composición de las tres sigue siendo la de siempre.
-    let todas: Vec<Capa> = pila_abc().into_iter().map(Capa::oculta).collect();
-    let ocultas = doc_rgba(2, 1, &todas);
+    let all: Vec<Layer2> = stack_abc().into_iter().map(Layer2::hidden).collect();
+    let hidden_2 = doc_rgba(2, 1, &all);
     assert_eq!(
-        rgba_de(&capas_de(&ocultas, &ids(&ocultas))),
+        rgba_de(&layers_of(&hidden_2, &ids(&hidden_2))),
         [c(10, 20, 30, 255), c(100, 50, 25, 255)]
     );
 }
 
 #[test]
-fn fila_05_b_vacias_y_opacidad_de_la_capa_de_abajo() {
+fn row_05_b_empty_ones_and_opacity_of_the_bottom_layer() {
     // Una celda vacía no aporta nada, ni siquiera con modo y opacidad raros.
-    let con_vacia = doc_rgba(
+    let with_empty = doc_rgba(
         2,
         1,
         &[
-            pila_abc()[0].clone(),
-            Capa::vacia().modo(BlendMode::Multiply).opacidad(100),
+            stack_abc()[0].clone(),
+            Layer2::empty().mode(BlendMode::Multiply).opacity_2(100),
         ],
     );
-    let [a, d] = <[LayerId; 2]>::try_from(ids(&con_vacia)).expect("dos capas");
-    assert_eq!(rgba_de(&capas_de(&con_vacia, &[a, d])), [A_OPACO, A_OPACO]);
-    assert_eq!(rgba_de(&capas_de(&con_vacia, &[d])), [T, T]);
+    let [a, d] = <[LayerId; 2]>::try_from(ids(&with_empty)).expect("dos capas");
+    assert_eq!(
+        rgba_de(&layers_of(&with_empty, &[a, d])),
+        [A_OPAQUE, A_OPAQUE]
+    );
+    assert_eq!(rgba_de(&layers_of(&with_empty, &[d])), [T, T]);
 
     // La capa de abajo se compone contra el vacío con SU opacidad (el modo no tiene efecto y la
     // opacidad escala el alfa: div255(100·128) = 50).
-    let con_opacidad = doc_rgba(
+    let with_opacity = doc_rgba(
         2,
         1,
-        &[Capa::rgba(&[A_OPACO, c(10, 20, 30, 100)])
-            .modo(BlendMode::Multiply)
-            .opacidad(128)],
+        &[Layer2::rgba(&[A_OPAQUE, c(10, 20, 30, 100)])
+            .mode(BlendMode::Multiply)
+            .opacity_2(128)],
     );
-    let solo = ids(&con_opacidad);
+    let only = ids(&with_opacity);
     assert_eq!(
-        rgba_de(&capas_de(&con_opacidad, &solo)),
+        rgba_de(&layers_of(&with_opacity, &only)),
         [c(200, 100, 50, 128), c(10, 20, 30, 50)]
     );
 }
 
 #[test]
-fn fila_05_c_indexado_y_gris_con_alfa() {
+fn row_05_c_indexed_and_gray_with_alpha() {
     // Indexado, transparente 0: gana el índice más alto no transparente de las capas pedidas.
-    let doc = doc_indexado(
+    let doc = doc_indexed(
         4,
         1,
         Some(0),
         &[
-            Capa::idx(&[1, 2, 3, 0]),
-            Capa::idx(&[0, 4, 0, 0]).oculta(),
-            Capa::idx(&[5, 0, 0, 0]),
-            Capa::vacia(),
+            Layer2::idx(&[1, 2, 3, 0]),
+            Layer2::idx(&[0, 4, 0, 0]).hidden(),
+            Layer2::idx(&[5, 0, 0, 0]),
+            Layer2::empty(),
         ],
     );
-    let [l0, l1, l2, vacia] = ids4(&doc);
-    let salida = capas_de(&doc, &[l0, l2]);
-    assert_eq!(indices_de(&salida), [5, 2, 3, 0]);
-    assert_eq!(salida.mode(), Mode::Indexed);
+    let [l0, l1, l2, empty] = ids4(&doc);
+    let output = layers_of(&doc, &[l0, l2]);
+    assert_eq!(indices_de(&output), [5, 2, 3, 0]);
+    assert_eq!(output.mode(), Mode::Indexed);
     assert_eq!(
-        salida.palette(),
+        output.palette(),
         doc.palette(),
         "la paleta es la del lienzo"
     );
     // La oculta incluida cuenta; la vacía no aporta.
-    assert_eq!(indices_de(&capas_de(&doc, &[l0, l1, vacia])), [1, 4, 3, 0]);
-    assert_eq!(indices_de(&capas_de(&doc, &[l0, l1, l2])), [5, 4, 3, 0]);
+    assert_eq!(indices_de(&layers_of(&doc, &[l0, l1, empty])), [1, 4, 3, 0]);
+    assert_eq!(indices_de(&layers_of(&doc, &[l0, l1, l2])), [5, 4, 3, 0]);
     // Solo la vacía: todo transparente.
-    assert_eq!(indices_de(&capas_de(&doc, &[vacia])), [0, 0, 0, 0]);
+    assert_eq!(indices_de(&layers_of(&doc, &[empty])), [0, 0, 0, 0]);
 
     // Gris con alfa: el canal rojo del RGBA equivalente (R = G = B) y su alfa.
-    let datos = [
+    let data = [
         (vec![(200, 255), (100, 128)], BlendMode::Normal, 255, true),
         (vec![(50, 255), (80, 200)], BlendMode::Multiply, 200, true),
         (vec![(10, 100), (255, 255)], BlendMode::Screen, 128, false),
     ];
-    let gris: Vec<Capa> = datos
+    let gray_2: Vec<Layer2> = data
         .iter()
-        .map(|(px, modo, op, visible)| {
-            let capa = Capa::gris(px).modo(*modo).opacidad(*op);
-            if *visible { capa } else { capa.oculta() }
+        .map(|(px, mode, op, visible)| {
+            let layer_2 = Layer2::gray_2(px).mode(*mode).opacity_2(*op);
+            if *visible { layer_2 } else { layer_2.hidden() }
         })
         .collect();
-    let rgb: Vec<Capa> = datos
+    let rgb: Vec<Layer2> = data
         .iter()
-        .map(|(px, modo, op, visible)| {
+        .map(|(px, mode, op, visible)| {
             let px: Vec<Rgba> = px.iter().map(|&(g, a)| c(g, g, g, a)).collect();
-            let capa = Capa::rgba(&px).modo(*modo).opacidad(*op);
-            if *visible { capa } else { capa.oculta() }
+            let layer_2 = Layer2::rgba(&px).mode(*mode).opacity_2(*op);
+            if *visible { layer_2 } else { layer_2.hidden() }
         })
         .collect();
-    let doc_g = construye(imagen(2, 1, Mode::GrayAlpha), &gris);
+    let doc_g = builds(image_2(2, 1, Mode::GrayAlpha), &gray_2);
     let doc_c = doc_rgba(2, 1, &rgb);
     let (ids_g, ids_c) = (ids(&doc_g), ids(&doc_c));
     for sel in [[0usize, 2].as_slice(), &[1, 2], &[0, 1, 2], &[2]] {
         let en_g: Vec<LayerId> = sel.iter().map(|&i| ids_g[i]).collect();
         let en_c: Vec<LayerId> = sel.iter().map(|&i| ids_c[i]).collect();
-        let salida = capas_de(&doc_g, &en_g);
-        assert_eq!(salida.mode(), Mode::GrayAlpha);
-        let esperado: Vec<Pixel> = rgba_de(&capas_de(&doc_c, &en_c))
+        let output = layers_of(&doc_g, &en_g);
+        assert_eq!(output.mode(), Mode::GrayAlpha);
+        let expected: Vec<Pixel> = rgba_de(&layers_of(&doc_c, &en_c))
             .iter()
             .map(|p| Pixel::GrayAlpha {
                 gray: p.r,
                 alpha: p.a,
             })
             .collect();
-        assert_eq!(pixeles_de(&salida), esperado, "capas {sel:?}");
+        assert_eq!(pixels_of(&output), expected, "capas {sel:?}");
     }
 }
 
 #[test]
-fn fila_05_d_sin_nada_que_dar_en_un_modo_sin_transparente() {
+fn row_05_d_nothing_to_give_in_a_mode_without_transparent() {
     // Indexado sin transparente: con la de abajo llena, esa capa sola es su celda; con solo una
     // vacía no queda ningún píxel que dar.
-    let mut doc = doc_indexado(4, 1, Some(0), &[Capa::idx(&[1, 2, 3, 0]), Capa::vacia()]);
-    let quita = Command::SetTransparentIndex {
+    let mut doc = doc_indexed(
+        4,
+        1,
+        Some(0),
+        &[Layer2::idx(&[1, 2, 3, 0]), Layer2::empty()],
+    );
+    let removes = Command::SetTransparentIndex {
         image: doc.layers()[0].cel(),
         index: None,
     };
-    assert_eq!(doc.apply(quita), Ok(true));
-    let [llena, vacia] = <[LayerId; 2]>::try_from(ids(&doc)).expect("dos capas");
-    assert_eq!(indices_de(&capas_de(&doc, &[llena])), [1, 2, 3, 0]);
-    assert_eq!(indices_de(&capas_de(&doc, &[llena, vacia])), [1, 2, 3, 0]);
+    assert_eq!(doc.apply(removes), Ok(true));
+    let [full, empty] = <[LayerId; 2]>::try_from(ids(&doc)).expect("dos capas");
+    assert_eq!(indices_de(&layers_of(&doc, &[full])), [1, 2, 3, 0]);
+    assert_eq!(indices_de(&layers_of(&doc, &[full, empty])), [1, 2, 3, 0]);
     assert_eq!(
-        compose_layers(&doc, &[vacia]),
+        compose_layers(&doc, &[empty]),
         Err(ComposeError::NoTransparency {
             mode: Mode::Indexed
         })
     );
 
     // Gris sin alfa con la única capa oculta: `compose` no da nada, pero pedirla a mano da su celda.
-    let mut celda = imagen(3, 1, Mode::Gray);
+    let mut cel_2 = image_2(3, 1, Mode::Gray);
     for (x, v) in [0u8, 10, 250].into_iter().enumerate() {
-        celda.set_pixel(x as u32, 0, Pixel::Gray(v)).expect("píxel");
+        cel_2.set_pixel(x as u32, 0, Pixel::Gray(v)).expect("píxel");
     }
-    let mut gris = Document::new(celda.clone());
-    let capa = gris.layers()[0].id();
-    let oculta = Command::SetLayerVisible {
-        layer: capa,
+    let mut gray_2 = Document::new(cel_2.clone());
+    let layer_2 = gray_2.layers()[0].id();
+    let hidden = Command::SetLayerVisible {
+        layer: layer_2,
         visible: false,
     };
-    assert_eq!(gris.apply(oculta), Ok(true));
+    assert_eq!(gray_2.apply(hidden), Ok(true));
     assert_eq!(
-        compose(&gris),
+        compose(&gray_2),
         Err(ComposeError::NoTransparency { mode: Mode::Gray })
     );
-    assert_eq!(compose_layers(&gris, &[capa]), Ok(celda));
+    assert_eq!(compose_layers(&gray_2, &[layer_2]), Ok(cel_2));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -514,33 +522,33 @@ fn fila_05_d_sin_nada_que_dar_en_un_modo_sin_transparente() {
 /// Un vector de la sonda: la capa de abajo `L` (capa 0) y la de arriba `U` (capa 1), de ancho
 /// `l.len()` y alto 1, y lo que dio Aseprite tras combinar.
 struct Vector {
-    nombre: &'static str,
-    l_modo: BlendMode,
-    l_opacidad: u8,
+    name: &'static str,
+    l_mode: BlendMode,
+    l_opacity: u8,
     l: Vec<Rgba>,
-    u_modo: BlendMode,
-    u_opacidad: u8,
+    u_mode: BlendMode,
+    u_opacity: u8,
     u: Vec<Rgba>,
     aseprite: Vec<Rgba>,
 }
 
-const L_COMUN: [Rgba; 2] = [c(200, 100, 50, 255), c(200, 100, 50, 100)];
-const U_COMUN: [Rgba; 2] = [c(100, 200, 255, 255), c(100, 200, 255, 150)];
+const L_COMMON: [Rgba; 2] = [c(200, 100, 50, 255), c(200, 100, 50, 100)];
+const U_COMMON: [Rgba; 2] = [c(100, 200, 255, 255), c(100, 200, 255, 150)];
 
-fn vectores() -> [Vector; 4] {
+fn vectors() -> [Vector; 4] {
     [
         Vector {
-            nombre: "1: L Normal 128, U Multiplicar 200",
-            l_modo: BlendMode::Normal,
-            l_opacidad: 128,
+            name: "1: L Normal 128, U Multiplicar 200",
+            l_mode: BlendMode::Normal,
+            l_opacity: 128,
             l: vec![
                 c(200, 100, 50, 255),
                 c(200, 100, 50, 128),
                 c(0, 0, 0, 0),
                 c(10, 20, 30, 255),
             ],
-            u_modo: BlendMode::Multiply,
-            u_opacidad: 200,
+            u_mode: BlendMode::Multiply,
+            u_opacity: 200,
             u: vec![
                 c(100, 200, 255, 255),
                 c(100, 200, 255, 255),
@@ -555,117 +563,118 @@ fn vectores() -> [Vector; 4] {
             ],
         },
         Vector {
-            nombre: "2: L Multiplicar 255, U Normal 255",
-            l_modo: BlendMode::Multiply,
-            l_opacidad: 255,
-            l: L_COMUN.to_vec(),
-            u_modo: BlendMode::Normal,
-            u_opacidad: 255,
-            u: U_COMUN.to_vec(),
+            name: "2: L Multiplicar 255, U Normal 255",
+            l_mode: BlendMode::Multiply,
+            l_opacity: 255,
+            l: L_COMMON.to_vec(),
+            u_mode: BlendMode::Normal,
+            u_opacity: 255,
+            u: U_COMMON.to_vec(),
             aseprite: vec![c(100, 200, 255, 255), c(122, 178, 210, 191)],
         },
         Vector {
-            nombre: "3: L Trama 128, U Normal 255",
-            l_modo: BlendMode::Screen,
-            l_opacidad: 128,
-            l: L_COMUN.to_vec(),
-            u_modo: BlendMode::Normal,
-            u_opacidad: 255,
-            u: U_COMUN.to_vec(),
+            name: "3: L Trama 128, U Normal 255",
+            l_mode: BlendMode::Screen,
+            l_opacity: 128,
+            l: L_COMMON.to_vec(),
+            u_mode: BlendMode::Normal,
+            u_opacity: 255,
+            u: U_COMMON.to_vec(),
             aseprite: vec![c(100, 200, 255, 255), c(113, 187, 229, 171)],
         },
         Vector {
-            nombre: "4: L Normal 255, U Multiplicar 100",
-            l_modo: BlendMode::Normal,
-            l_opacidad: 255,
-            l: L_COMUN.to_vec(),
-            u_modo: BlendMode::Multiply,
-            u_opacidad: 100,
-            u: U_COMUN.to_vec(),
+            name: "4: L Normal 255, U Multiplicar 100",
+            l_mode: BlendMode::Normal,
+            l_opacity: 255,
+            l: L_COMMON.to_vec(),
+            u_mode: BlendMode::Multiply,
+            u_opacity: 100,
+            u: U_COMMON.to_vec(),
             aseprite: vec![c(153, 92, 50, 255), c(153, 120, 98, 136)],
         },
     ]
 }
 
 #[test]
-fn fila_06_a_los_diez_pixeles_de_aseprite() {
-    for v in vectores() {
+fn row_06_a_the_ten_pixels_of_aseprite() {
+    for v in vectors() {
         let w = v.l.len() as u32;
         let doc = doc_rgba(
             w,
             1,
             &[
-                Capa::rgba(&v.l)
-                    .modo(v.l_modo)
-                    .opacidad(v.l_opacidad)
-                    .bloqueada(),
-                Capa::rgba(&v.u).modo(v.u_modo).opacidad(v.u_opacidad),
+                Layer2::rgba(&v.l)
+                    .mode(v.l_mode)
+                    .opacity_2(v.l_opacity)
+                    .locked(),
+                Layer2::rgba(&v.u).mode(v.u_mode).opacity_2(v.u_opacity),
             ],
         );
         let [l, u] = <[LayerId; 2]>::try_from(ids(&doc)).expect("dos capas");
-        let nombre_l = doc.layer(l).expect("L").name().to_string();
+        let name_l = doc.layer(l).expect("L").name().to_string();
 
-        let cmd = merge_down_command(&doc, u).unwrap_or_else(|e| panic!("{}: {e:?}", v.nombre));
+        let cmd = merge_down_command(&doc, u).unwrap_or_else(|e| panic!("{}: {e:?}", v.name));
         let f = fusion(&cmd);
-        assert_eq!(f.target, l, "{}", v.nombre);
-        assert_eq!(f.remove, [u], "{}", v.nombre);
-        assert_eq!(f.based_on, doc.state_id(), "{}", v.nombre);
-        let imagen = f.image.clone().expect("hay imagen");
-        assert_eq!(imagen, capas_de(&doc, &[l, u]), "{}", v.nombre);
+        assert_eq!(f.target, l, "{}", v.name);
+        assert_eq!(f.remove, [u], "{}", v.name);
+        assert_eq!(f.based_on, doc.state_id(), "{}", v.name);
+        let image_2 = f.image.clone().expect("hay imagen");
+        assert_eq!(image_2, layers_of(&doc, &[l, u]), "{}", v.name);
 
-        for (k, (obtenido, aseprite)) in rgba_de(&imagen).iter().zip(&v.aseprite).enumerate() {
+        for (k, (obtained, aseprite)) in rgba_de(&image_2).iter().zip(&v.aseprite).enumerate() {
             // El fondo ya compuesto (L contra el vacío) y el modo de U fijan el dominio empírico
             // de 3.2: solo ahí se admite ±1 en un canal; el alfa, nunca.
-            let alfa_fondo = redondea_255(i128::from(v.l[k].a) * i128::from(v.l_opacidad));
-            let en_dominio = 0 < alfa_fondo && alfa_fondo < 255 && v.u_modo != BlendMode::Normal;
-            let tolerancia = i32::from(en_dominio);
+            let alpha_background = rounds_255(i128::from(v.l[k].a) * i128::from(v.l_opacity));
+            let in_domain =
+                0 < alpha_background && alpha_background < 255 && v.u_mode != BlendMode::Normal;
+            let tolerance = i32::from(in_domain);
             assert_eq!(
-                obtenido.a, aseprite.a,
-                "{} píxel {k}: el alfa debe coincidir ({obtenido:?} frente a {aseprite:?})",
-                v.nombre
+                obtained.a, aseprite.a,
+                "{} píxel {k}: el alfa debe coincidir ({obtained:?} frente a {aseprite:?})",
+                v.name
             );
             for (canal, o, a) in [
-                ("R", obtenido.r, aseprite.r),
-                ("G", obtenido.g, aseprite.g),
-                ("B", obtenido.b, aseprite.b),
+                ("R", obtained.r, aseprite.r),
+                ("G", obtained.g, aseprite.g),
+                ("B", obtained.b, aseprite.b),
             ] {
                 let dif = (i32::from(o) - i32::from(a)).abs();
                 assert!(
                     dif <= 2,
                     "{} píxel {k}, canal {canal}: {o} frente a {a} (nunca más de 2)",
-                    v.nombre
+                    v.name
                 );
                 assert!(
-                    dif <= tolerancia,
-                    "{} píxel {k}, canal {canal}: {o} frente a {a}; dominio empírico: {en_dominio}",
-                    v.nombre
+                    dif <= tolerance,
+                    "{} píxel {k}, canal {canal}: {o} frente a {a}; dominio empírico: {in_domain}",
+                    v.name
                 );
             }
         }
 
         // Aplicado: queda L, Normal, 255, desbloqueada, con su nombre y visibilidad.
-        let despues = aplicado(&doc, cmd);
-        assert_eq!(ids(&despues), [l], "{}", v.nombre);
-        let capa = &despues.layers()[0];
-        assert_eq!(capa.opacity(), 255, "{}", v.nombre);
-        assert_eq!(capa.blend(), BlendMode::Normal, "{}", v.nombre);
-        assert!(!capa.locked(), "{}: queda desbloqueada", v.nombre);
-        assert!(capa.visible(), "{}", v.nombre);
-        assert_eq!(capa.name(), nombre_l, "{}", v.nombre);
-        assert_eq!(capa.cel(), doc.layer(l).expect("L").cel(), "{}", v.nombre);
-        assert_eq!(despues.image(capa.cel()), Some(&imagen), "{}", v.nombre);
+        let after = applied(&doc, cmd);
+        assert_eq!(ids(&after), [l], "{}", v.name);
+        let layer_2 = &after.layers()[0];
+        assert_eq!(layer_2.opacity(), 255, "{}", v.name);
+        assert_eq!(layer_2.blend(), BlendMode::Normal, "{}", v.name);
+        assert!(!layer_2.locked(), "{}: queda desbloqueada", v.name);
+        assert!(layer_2.visible(), "{}", v.name);
+        assert_eq!(layer_2.name(), name_l, "{}", v.name);
+        assert_eq!(layer_2.cel(), doc.layer(l).expect("L").cel(), "{}", v.name);
+        assert_eq!(after.image(layer_2.cel()), Some(&image_2), "{}", v.name);
     }
 }
 
 #[test]
-fn fila_06_b_errores_vacias_y_la_capa_inmediata() {
+fn row_06_b_errors_empty_ones_and_the_immediate_layer() {
     let doc = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[A_OPACO, A_OPACO]),
-            Capa::rgba(&[c(10, 20, 30, 255), T]).bloqueada(),
-            Capa::rgba(&[BLANCO, GRIS_128]).modo(BlendMode::Multiply),
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE]),
+            Layer2::rgba(&[c(10, 20, 30, 255), T]).locked(),
+            Layer2::rgba(&[WHITE, GRAY_128]).mode(BlendMode::Multiply),
         ],
     );
     let [a, b, c_] = ids3(&doc);
@@ -679,81 +688,78 @@ fn fila_06_b_errores_vacias_y_la_capa_inmediata() {
     let cmd = merge_down_command(&doc, b).expect("combinar B con A");
     assert_eq!(fusion(&cmd).target, a);
     // Capa desconocida.
-    let fantasma = LayerId::from_raw(9999);
+    let ghost = LayerId::from_raw(9999);
     assert_eq!(
-        merge_down_command(&doc, fantasma),
-        Err(MergeError::Document(DocumentError::UnknownLayer(fantasma)))
+        merge_down_command(&doc, ghost),
+        Err(MergeError::Document(DocumentError::UnknownLayer(ghost)))
     );
 
     // Ocultas: primero la de arriba, después la de abajo.
-    let oculta = |arriba: bool, abajo: bool| {
-        let mut capas = vec![
-            Capa::rgba(&[A_OPACO, A_OPACO]),
-            Capa::rgba(&[BLANCO, BLANCO]),
+    let hidden = |top: bool, below: bool| {
+        let mut layers = vec![
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE]),
+            Layer2::rgba(&[WHITE, WHITE]),
         ];
-        capas[0].visible = !abajo;
-        capas[1].visible = !arriba;
-        doc_rgba(2, 1, &capas)
+        layers[0].visible = !below;
+        layers[1].visible = !top;
+        doc_rgba(2, 1, &layers)
     };
-    let solo_arriba = oculta(true, false);
-    let [l, u] = <[LayerId; 2]>::try_from(ids(&solo_arriba)).expect("dos capas");
+    let only_top = hidden(true, false);
+    let [l, u] = <[LayerId; 2]>::try_from(ids(&only_top)).expect("dos capas");
+    assert_eq!(merge_down_command(&only_top, u), Err(MergeError::Hidden(u)));
+    let only_below = hidden(false, true);
     assert_eq!(
-        merge_down_command(&solo_arriba, u),
-        Err(MergeError::Hidden(u))
-    );
-    let solo_abajo = oculta(false, true);
-    assert_eq!(
-        merge_down_command(&solo_abajo, u),
+        merge_down_command(&only_below, u),
         Err(MergeError::Hidden(l))
     );
-    let ambas = oculta(true, true);
-    assert_eq!(merge_down_command(&ambas, u), Err(MergeError::Hidden(u)));
+    let both = hidden(true, true);
+    assert_eq!(merge_down_command(&both, u), Err(MergeError::Hidden(u)));
 
     // Ambas celdas vacías: resultado vacío (la capa 0 siempre tiene imagen, así que va debajo).
-    let vacias = doc_rgba(
+    let empty_2 = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[A_OPACO, A_OPACO]),
-            Capa::vacia(),
-            Capa::vacia(),
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE]),
+            Layer2::empty(),
+            Layer2::empty(),
         ],
     );
-    let [_, l, u] = ids3(&vacias);
-    let cmd = merge_down_command(&vacias, u).expect("combinar dos vacías");
+    let [_, l, u] = ids3(&empty_2);
+    let cmd = merge_down_command(&empty_2, u).expect("combinar dos vacías");
     let f = fusion(&cmd);
     assert_eq!((f.target, f.remove.as_slice()), (l, [u].as_slice()));
     assert_eq!(f.image, None);
-    assert_eq!(f.based_on, vacias.state_id());
+    assert_eq!(f.based_on, empty_2.state_id());
 
     // Solo una con imagen: sale esa con su opacidad horneada.
-    let una = doc_rgba(
+    let a_2 = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[A_OPACO, c(10, 20, 30, 100)])
-                .modo(BlendMode::Multiply)
-                .opacidad(128),
-            Capa::vacia().opacidad(77),
+            Layer2::rgba(&[A_OPAQUE, c(10, 20, 30, 100)])
+                .mode(BlendMode::Multiply)
+                .opacity_2(128),
+            Layer2::empty().opacity_2(77),
         ],
     );
-    let [l, u] = <[LayerId; 2]>::try_from(ids(&una)).expect("dos capas");
-    let f = fusion(&merge_down_command(&una, u).expect("combinar con una vacía"));
-    let imagen = f.image.expect("hay imagen");
-    assert_eq!(rgba_de(&imagen), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
-    assert_eq!(imagen, capas_de(&una, &[l, u]));
+    let [l, u] = <[LayerId; 2]>::try_from(ids(&a_2)).expect("dos capas");
+    let f = fusion(&merge_down_command(&a_2, u).expect("combinar con una vacía"));
+    let image_2 = f.image.expect("hay imagen");
+    assert_eq!(rgba_de(&image_2), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
+    assert_eq!(image_2, layers_of(&a_2, &[l, u]));
 }
 
 // ---------------------------------------------------------------------------------------
 // Fila 7: merge_visible_command y flatten_command.
 // ---------------------------------------------------------------------------------------
 
-/// Comprueba el caso `[A, B oculta, C, D con celda vacía]` de un documento de cualquier modo.
-fn comprueba_abcd(doc: &Document) {
+/// Comprueba el caso `[A, B hidden, C, D con cel_2 vacía]` de un documento de cualquier modo.
+fn checks_abcd(doc: &Document) {
     let [a, b, c_, d] = ids4(doc);
     assert!(!doc.layer(b).expect("B").visible());
     assert!(doc.image(doc.layer(d).expect("D").cel()).is_none());
-    let antes = componer(doc);
+    let antes = compose_2(doc);
 
     // Combinar visibles: A se queda, C y D se quitan, la oculta B no entra en `remove`.
     let cmd = merge_visible_command(doc).expect("combinar visibles");
@@ -762,12 +768,12 @@ fn comprueba_abcd(doc: &Document) {
     assert_eq!(f.remove, [c_, d]);
     assert_eq!(f.image.as_ref(), Some(&antes));
     assert_eq!(f.based_on, doc.state_id());
-    let despues = aplicado(doc, cmd);
-    assert_eq!(ids(&despues), [a, b], "quedan A y la oculta B");
-    assert_eq!(despues.layer(b), doc.layer(b), "la oculta no cambia");
-    assert_eq!(despues.layers().len(), 2);
-    assert_eq!(despues.image(despues.layers()[0].cel()), Some(&antes));
-    assert_eq!(componer(&despues), antes);
+    let after = applied(doc, cmd);
+    assert_eq!(ids(&after), [a, b], "quedan A y la oculta B");
+    assert_eq!(after.layer(b), doc.layer(b), "la oculta no cambia");
+    assert_eq!(after.layers().len(), 2);
+    assert_eq!(after.image(after.layers()[0].cel()), Some(&antes));
+    assert_eq!(compose_2(&after), antes);
 
     // Aplanar: además se quita la oculta.
     let cmd = flatten_command(doc).expect("aplanar");
@@ -776,45 +782,45 @@ fn comprueba_abcd(doc: &Document) {
     assert_eq!(f.remove, [b, c_, d]);
     assert_eq!(f.image.as_ref(), Some(&antes));
     assert_eq!(f.based_on, doc.state_id());
-    let despues = aplicado(doc, cmd);
-    assert_eq!(ids(&despues), [a]);
-    assert_eq!(despues.layers().len(), 1);
-    assert_eq!(despues.image(despues.layers()[0].cel()), Some(&antes));
-    assert_eq!(componer(&despues), antes);
+    let after = applied(doc, cmd);
+    assert_eq!(ids(&after), [a]);
+    assert_eq!(after.layers().len(), 1);
+    assert_eq!(after.image(after.layers()[0].cel()), Some(&antes));
+    assert_eq!(compose_2(&after), antes);
 }
 
 #[test]
-fn fila_07_a_combinar_visibles_y_aplanar_con_abcd_rgba() {
+fn row_07_a_merge_visible_and_flatten_with_abcd_rgba() {
     let doc = doc_rgba(
         3,
         1,
         &[
-            Capa::rgba(&[A_OPACO, A_OPACO, c(20, 40, 60, 90)]),
-            Capa::rgba(&[c(1, 2, 3, 255); 3]).oculta(),
-            Capa::rgba(&[c(10, 20, 30, 255), c(255, 255, 255, 128), T])
-                .modo(BlendMode::Multiply)
-                .opacidad(200),
-            Capa::vacia().modo(BlendMode::Screen).opacidad(100),
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE, c(20, 40, 60, 90)]),
+            Layer2::rgba(&[c(1, 2, 3, 255); 3]).hidden(),
+            Layer2::rgba(&[c(10, 20, 30, 255), c(255, 255, 255, 128), T])
+                .mode(BlendMode::Multiply)
+                .opacity_2(200),
+            Layer2::empty().mode(BlendMode::Screen).opacity_2(100),
         ],
     );
-    comprueba_abcd(&doc);
+    checks_abcd(&doc);
 }
 
 #[test]
-fn fila_07_b_variantes_visibilidad_y_vacias() {
+fn row_07_b_visibility_variants_and_empty_ones() {
     // La visible más baja no es la capa 0: [A oculta, B, C, D oculta].
     let doc = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[A_OPACO, A_OPACO]).oculta(),
-            Capa::rgba(&[c(10, 20, 30, 255), T]),
-            Capa::rgba(&[c(255, 0, 0, 128), c(0, 0, 255, 255)]).modo(BlendMode::Screen),
-            Capa::rgba(&[BLANCO, BLANCO]).oculta(),
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE]).hidden(),
+            Layer2::rgba(&[c(10, 20, 30, 255), T]),
+            Layer2::rgba(&[c(255, 0, 0, 128), c(0, 0, 255, 255)]).mode(BlendMode::Screen),
+            Layer2::rgba(&[WHITE, WHITE]).hidden(),
         ],
     );
     let [a, b, c_, d] = ids4(&doc);
-    let antes = componer(&doc);
+    let antes = compose_2(&doc);
     let f = fusion(&merge_visible_command(&doc).expect("combinar visibles"));
     assert_eq!((f.target, f.remove.as_slice()), (b, [c_].as_slice()));
     assert_eq!(f.image.as_ref(), Some(&antes));
@@ -825,127 +831,127 @@ fn fila_07_b_variantes_visibilidad_y_vacias() {
 
     // Una sola visible entre varias: combinar visibles no tiene nada que combinar; aplanar deja
     // la visible con la opacidad horneada y quita las ocultas.
-    let una = doc_rgba(
+    let a_2 = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[BLANCO, BLANCO]).oculta(),
-            Capa::rgba(&[A_OPACO, c(10, 20, 30, 100)]).opacidad(128),
-            Capa::rgba(&[BLANCO, BLANCO]).oculta(),
+            Layer2::rgba(&[WHITE, WHITE]).hidden(),
+            Layer2::rgba(&[A_OPAQUE, c(10, 20, 30, 100)]).opacity_2(128),
+            Layer2::rgba(&[WHITE, WHITE]).hidden(),
         ],
     );
-    let [a, b, c_] = ids3(&una);
-    assert_eq!(merge_visible_command(&una), Err(MergeError::NothingToMerge));
-    let cmd = flatten_command(&una).expect("aplanar con una visible");
+    let [a, b, c_] = ids3(&a_2);
+    assert_eq!(merge_visible_command(&a_2), Err(MergeError::NothingToMerge));
+    let cmd = flatten_command(&a_2).expect("aplanar con una visible");
     let f = fusion(&cmd);
     assert_eq!((f.target, f.remove.as_slice()), (b, [a, c_].as_slice()));
-    let imagen = f.image.clone().expect("hay imagen");
-    assert_eq!(rgba_de(&imagen), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
-    let despues = aplicado(&una, cmd);
-    assert_eq!(ids(&despues), [b]);
-    assert_eq!(despues.image(despues.layers()[0].cel()), Some(&imagen));
+    let image_2 = f.image.clone().expect("hay imagen");
+    assert_eq!(rgba_de(&image_2), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
+    let after = applied(&a_2, cmd);
+    assert_eq!(ids(&after), [b]);
+    assert_eq!(after.image(after.layers()[0].cel()), Some(&image_2));
 
     // Ninguna visible, o una sola capa: `NothingToMerge` en las dos.
-    let ocultas = doc_rgba(
+    let hidden_2 = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[A_OPACO, A_OPACO]).oculta(),
-            Capa::rgba(&[BLANCO, BLANCO]).oculta(),
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE]).hidden(),
+            Layer2::rgba(&[WHITE, WHITE]).hidden(),
         ],
     );
     assert_eq!(
-        merge_visible_command(&ocultas),
+        merge_visible_command(&hidden_2),
         Err(MergeError::NothingToMerge)
     );
-    assert_eq!(flatten_command(&ocultas), Err(MergeError::NothingToMerge));
-    let sola = doc_rgba(2, 1, &[Capa::rgba(&[A_OPACO, A_OPACO])]);
+    assert_eq!(flatten_command(&hidden_2), Err(MergeError::NothingToMerge));
+    let single = doc_rgba(2, 1, &[Layer2::rgba(&[A_OPAQUE, A_OPAQUE])]);
     assert_eq!(
-        merge_visible_command(&sola),
+        merge_visible_command(&single),
         Err(MergeError::NothingToMerge)
     );
-    assert_eq!(flatten_command(&sola), Err(MergeError::NothingToMerge));
+    assert_eq!(flatten_command(&single), Err(MergeError::NothingToMerge));
 
     // Todas las visibles vacías (la capa 0, oculta, es la única con imagen): resultado vacío.
-    let vacias = doc_rgba(
+    let empty_2 = doc_rgba(
         2,
         1,
         &[
-            Capa::rgba(&[A_OPACO, A_OPACO]).oculta(),
-            Capa::vacia(),
-            Capa::vacia().opacidad(100),
+            Layer2::rgba(&[A_OPAQUE, A_OPAQUE]).hidden(),
+            Layer2::empty(),
+            Layer2::empty().opacity_2(100),
         ],
     );
-    let [a, b, c_] = ids3(&vacias);
-    let antes = componer(&vacias);
-    let f = fusion(&merge_visible_command(&vacias).expect("combinar vacías"));
+    let [a, b, c_] = ids3(&empty_2);
+    let antes = compose_2(&empty_2);
+    let f = fusion(&merge_visible_command(&empty_2).expect("combinar vacías"));
     assert_eq!((f.target, f.remove.as_slice()), (b, [c_].as_slice()));
     assert_eq!(f.image, None);
-    let cmd = flatten_command(&vacias).expect("aplanar vacías");
+    let cmd = flatten_command(&empty_2).expect("aplanar vacías");
     let f = fusion(&cmd);
     assert_eq!((f.target, f.remove.as_slice()), (b, [a, c_].as_slice()));
     assert_eq!(f.image, None);
-    assert_eq!(f.based_on, vacias.state_id());
-    let despues = aplicado(&vacias, cmd);
-    assert_eq!(despues.image(despues.layers()[0].cel()), None);
-    assert_eq!(componer(&despues), antes);
+    assert_eq!(f.based_on, empty_2.state_id());
+    let after = applied(&empty_2, cmd);
+    assert_eq!(after.image(after.layers()[0].cel()), None);
+    assert_eq!(compose_2(&after), antes);
 }
 
 #[test]
-fn fila_07_c_indexado_y_gris_con_alfa() {
+fn row_07_c_indexed_and_gray_with_alpha() {
     // Indexado con transparente 0.
-    let indexado = doc_indexado(
+    let indexed = doc_indexed(
         4,
         1,
         Some(0),
         &[
-            Capa::idx(&[1, 2, 3, 0]),
-            Capa::idx(&[0, 4, 0, 0]).oculta(),
-            Capa::idx(&[5, 0, 0, 0]),
-            Capa::vacia(),
+            Layer2::idx(&[1, 2, 3, 0]),
+            Layer2::idx(&[0, 4, 0, 0]).hidden(),
+            Layer2::idx(&[5, 0, 0, 0]),
+            Layer2::empty(),
         ],
     );
-    assert_eq!(indices_de(&componer(&indexado)), [5, 2, 3, 0]);
-    comprueba_abcd(&indexado);
+    assert_eq!(indices_de(&compose_2(&indexed)), [5, 2, 3, 0]);
+    checks_abcd(&indexed);
 
     // Gris con alfa, con opacidad y mezcla en la tercera capa.
-    let gris = construye(
-        imagen(2, 1, Mode::GrayAlpha),
+    let gray_2 = builds(
+        image_2(2, 1, Mode::GrayAlpha),
         &[
-            Capa::gris(&[(200, 255), (100, 128)]),
-            Capa::gris(&[(1, 255), (1, 255)]).oculta(),
-            Capa::gris(&[(128, 255), (255, 100)])
-                .modo(BlendMode::Multiply)
-                .opacidad(128),
-            Capa::vacia(),
+            Layer2::gray_2(&[(200, 255), (100, 128)]),
+            Layer2::gray_2(&[(1, 255), (1, 255)]).hidden(),
+            Layer2::gray_2(&[(128, 255), (255, 100)])
+                .mode(BlendMode::Multiply)
+                .opacity_2(128),
+            Layer2::empty(),
         ],
     );
-    comprueba_abcd(&gris);
+    checks_abcd(&gray_2);
 
     // Indexado sin transparente con todo oculto: ninguna visible, `NothingToMerge`.
-    let mut sin_t = doc_indexado(
+    let mut without_t = doc_indexed(
         4,
         1,
         Some(0),
-        &[Capa::idx(&[1, 2, 3, 0]), Capa::idx(&[1, 1, 1, 1])],
+        &[Layer2::idx(&[1, 2, 3, 0]), Layer2::idx(&[1, 1, 1, 1])],
     );
-    let quita = Command::SetTransparentIndex {
-        image: sin_t.layers()[0].cel(),
+    let removes = Command::SetTransparentIndex {
+        image: without_t.layers()[0].cel(),
         index: None,
     };
-    assert_eq!(sin_t.apply(quita), Ok(true));
-    for id in ids(&sin_t) {
-        let oculta = Command::SetLayerVisible {
+    assert_eq!(without_t.apply(removes), Ok(true));
+    for id in ids(&without_t) {
+        let hidden = Command::SetLayerVisible {
             layer: id,
             visible: false,
         };
-        assert_eq!(sin_t.apply(oculta), Ok(true));
+        assert_eq!(without_t.apply(hidden), Ok(true));
     }
     assert_eq!(
-        merge_visible_command(&sin_t),
+        merge_visible_command(&without_t),
         Err(MergeError::NothingToMerge)
     );
-    assert_eq!(flatten_command(&sin_t), Err(MergeError::NothingToMerge));
+    assert_eq!(flatten_command(&without_t), Err(MergeError::NothingToMerge));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -953,101 +959,101 @@ fn fila_07_c_indexado_y_gris_con_alfa() {
 // ---------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug)]
-enum Tipo {
+enum Type {
     Rgba,
-    GrisAlfa,
+    GrayAlpha,
     /// Indexado con ese índice transparente (paleta de 4 colores).
-    Indexado(u8),
+    Indexed(u8),
 }
 
 #[derive(Clone, Debug)]
 struct DocGen {
-    tipo: Tipo,
+    kind: Type,
     w: u32,
     h: u32,
-    capas: Vec<Capa>,
+    layers: Vec<Layer2>,
 }
 
 /// Alfa o opacidad con los extremos más frecuentes que en el uniforme.
-fn alfa() -> impl Strategy<Value = u8> {
+fn alpha_2() -> impl Strategy<Value = u8> {
     prop_oneof![1 => Just(0u8), 1 => Just(255u8), 2 => any::<u8>()]
 }
 
-fn modo_cualquiera() -> impl Strategy<Value = BlendMode> {
+fn mode_any() -> impl Strategy<Value = BlendMode> {
     proptest::sample::select(BlendMode::ALL.to_vec())
 }
 
-fn tipo_strategy() -> impl Strategy<Value = Tipo> {
+fn type_strategy() -> impl Strategy<Value = Type> {
     prop_oneof![
-        Just(Tipo::Rgba),
-        Just(Tipo::GrisAlfa),
-        (0u8..4).prop_map(Tipo::Indexado),
+        Just(Type::Rgba),
+        Just(Type::GrayAlpha),
+        (0u8..4).prop_map(Type::Indexed),
     ]
 }
 
-fn pixel_strategy(tipo: Tipo) -> BoxedStrategy<Pixel> {
-    match tipo {
-        Tipo::Rgba => (any::<u8>(), any::<u8>(), any::<u8>(), alfa())
+fn pixel_strategy(kind: Type) -> BoxedStrategy<Pixel> {
+    match kind {
+        Type::Rgba => (any::<u8>(), any::<u8>(), any::<u8>(), alpha_2())
             .prop_map(|(r, g, b, a)| Pixel::Rgba(Rgba::new(r, g, b, a)))
             .boxed(),
-        Tipo::GrisAlfa => (any::<u8>(), alfa())
+        Type::GrayAlpha => (any::<u8>(), alpha_2())
             .prop_map(|(gray, alpha)| Pixel::GrayAlpha { gray, alpha })
             .boxed(),
-        Tipo::Indexado(_) => (0u8..4).prop_map(Pixel::Indexed).boxed(),
+        Type::Indexed(_) => (0u8..4).prop_map(Pixel::Indexed).boxed(),
     }
 }
 
-fn capa_strategy(tipo: Tipo, pixeles: usize) -> impl Strategy<Value = Capa> {
-    let indexado = matches!(tipo, Tipo::Indexado(_));
+fn layer_strategy(kind: Type, pixels_2: usize) -> impl Strategy<Value = Layer2> {
+    let indexed = matches!(kind, Type::Indexed(_));
     (
         proptest::bool::weighted(0.8),
         proptest::bool::weighted(0.3),
-        alfa(),
-        modo_cualquiera(),
+        alpha_2(),
+        mode_any(),
         proptest::option::weighted(
             0.8,
-            proptest::collection::vec(pixel_strategy(tipo), pixeles),
+            proptest::collection::vec(pixel_strategy(kind), pixels_2),
         ),
     )
-        .prop_map(move |(visible, locked, opacidad, modo, celda)| {
+        .prop_map(move |(visible, locked, opacity_2, mode, cel_2)| {
             // En indexado el núcleo solo admite opacidad 255 y modo Normal.
-            let (opacidad, modo) = if indexado {
+            let (opacity_2, mode) = if indexed {
                 (255, BlendMode::Normal)
             } else {
-                (opacidad, modo)
+                (opacity_2, mode)
             };
-            Capa {
+            Layer2 {
                 visible,
                 locked,
-                opacidad,
-                modo,
-                celda,
+                opacity_2,
+                mode,
+                cel_2,
             }
         })
 }
 
 /// Documentos de hasta 6 × 5 con `min` a `max` capas.
 fn doc_strategy(min: usize, max: usize) -> impl Strategy<Value = DocGen> {
-    (tipo_strategy(), 1u32..=6, 1u32..=5).prop_flat_map(move |(tipo, w, h)| {
-        proptest::collection::vec(capa_strategy(tipo, (w * h) as usize), min..=max)
-            .prop_map(move |capas| DocGen { tipo, w, h, capas })
+    (type_strategy(), 1u32..=6, 1u32..=5).prop_flat_map(move |(kind, w, h)| {
+        proptest::collection::vec(layer_strategy(kind, (w * h) as usize), min..=max)
+            .prop_map(move |layers| DocGen { kind, w, h, layers })
     })
 }
 
-fn documento(g: &DocGen) -> Document {
-    let plantilla = match g.tipo {
-        Tipo::Rgba => imagen(g.w, g.h, Mode::Rgba),
-        Tipo::GrisAlfa => imagen(g.w, g.h, Mode::GrayAlpha),
-        Tipo::Indexado(t) => plantilla_indexada(g.w, g.h, 4, Some(t)),
+fn document(g: &DocGen) -> Document {
+    let template = match g.kind {
+        Type::Rgba => image_2(g.w, g.h, Mode::Rgba),
+        Type::GrayAlpha => image_2(g.w, g.h, Mode::GrayAlpha),
+        Type::Indexed(t) => template_indexed(g.w, g.h, 4, Some(t)),
     };
-    construye(plantilla, &g.capas)
+    builds(template, &g.layers)
 }
 
 /// Fuerza que las capas `k` y `k + 1` sean visibles.
-fn con_visibles(g: &DocGen, k: usize) -> DocGen {
+fn with_visible(g: &DocGen, k: usize) -> DocGen {
     let mut g = g.clone();
-    g.capas[k].visible = true;
-    g.capas[k + 1].visible = true;
+    g.layers[k].visible = true;
+    g.layers[k + 1].visible = true;
     g
 }
 
@@ -1055,21 +1061,21 @@ fn con_visibles(g: &DocGen, k: usize) -> DocGen {
 // Propiedad 1: aplanar es la composición.
 // ---------------------------------------------------------------------------------------
 
-fn comprueba_composicion(g: &DocGen, aplanar: bool) -> Result<(), TestCaseError> {
-    let antes_doc = documento(g);
+fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
+    let antes_doc = document(g);
     let antes = compose(&antes_doc).expect("hay índice transparente: compose no falla");
-    let visibles: Vec<LayerId> = antes_doc
+    let visible: Vec<LayerId> = antes_doc
         .layers()
         .iter()
         .filter(|l| l.visible())
         .map(Layer::id)
         .collect();
-    let nada_que_hacer = if aplanar {
-        antes_doc.layers().len() == 1 || visibles.is_empty()
+    let nothing_that_do = if flatten {
+        antes_doc.layers().len() == 1 || visible.is_empty()
     } else {
-        visibles.len() < 2
+        visible.len() < 2
     };
-    let cmd = if aplanar {
+    let cmd = if flatten {
         flatten_command(&antes_doc)
     } else {
         merge_visible_command(&antes_doc)
@@ -1077,33 +1083,33 @@ fn comprueba_composicion(g: &DocGen, aplanar: bool) -> Result<(), TestCaseError>
     let cmd = match cmd {
         Err(e) => {
             prop_assert_eq!(e, MergeError::NothingToMerge);
-            prop_assert!(nada_que_hacer, "`NothingToMerge` sin motivo");
+            prop_assert!(nothing_that_do, "`NothingToMerge` sin motivo");
             return Ok(());
         }
         Ok(cmd) => cmd,
     };
-    prop_assert!(!nada_que_hacer, "había que dar `NothingToMerge`");
+    prop_assert!(!nothing_that_do, "había que dar `NothingToMerge`");
 
     let f = fusion(&cmd);
-    prop_assert_eq!(f.target, visibles[0]);
-    let esperado: Vec<LayerId> = if aplanar {
+    prop_assert_eq!(f.target, visible[0]);
+    let expected: Vec<LayerId> = if flatten {
         ids(&antes_doc)
             .into_iter()
-            .filter(|&id| id != visibles[0])
+            .filter(|&id| id != visible[0])
             .collect()
     } else {
-        visibles[1..].to_vec()
+        visible[1..].to_vec()
     };
-    prop_assert_eq!(&f.remove, &esperado);
+    prop_assert_eq!(&f.remove, &expected);
     prop_assert_eq!(f.based_on, antes_doc.state_id());
-    let ninguna_con_imagen = visibles.iter().all(|&id| {
+    let no_with_image = visible.iter().all(|&id| {
         antes_doc
             .image(antes_doc.layer(id).unwrap().cel())
             .is_none()
     });
-    prop_assert_eq!(f.image.is_none(), ninguna_con_imagen);
-    if let Some(imagen) = &f.image {
-        prop_assert_eq!(imagen, &antes);
+    prop_assert_eq!(f.image.is_none(), no_with_image);
+    if let Some(image_2) = &f.image {
+        prop_assert_eq!(image_2, &antes);
     }
 
     let mut doc = antes_doc.clone();
@@ -1113,17 +1119,17 @@ fn comprueba_composicion(g: &DocGen, aplanar: bool) -> Result<(), TestCaseError>
     // La celda resultante es `compose(antes)` (o vacía).
     let cel = doc.layer(f.target).unwrap().cel();
     prop_assert_eq!(doc.image(cel), f.image.as_ref());
-    let capa = doc.layer(f.target).unwrap();
+    let layer_2 = doc.layer(f.target).unwrap();
     prop_assert_eq!(
-        (capa.opacity(), capa.blend(), capa.locked()),
+        (layer_2.opacity(), layer_2.blend(), layer_2.locked()),
         (255, BlendMode::Normal, false)
     );
-    if aplanar {
+    if flatten {
         prop_assert_eq!(doc.layers().len(), 1);
     } else {
         prop_assert_eq!(
             doc.layers().len(),
-            antes_doc.layers().len() - (visibles.len() - 1)
+            antes_doc.layers().len() - (visible.len() - 1)
         );
         // Las ocultas quedan tal cual.
         for l in antes_doc.layers().iter().filter(|l| !l.visible()) {
@@ -1133,9 +1139,9 @@ fn comprueba_composicion(g: &DocGen, aplanar: bool) -> Result<(), TestCaseError>
     Ok(())
 }
 
-fn comprueba_combinar_abajo_en_el_fondo(g: &DocGen) -> Result<(), TestCaseError> {
-    let g = con_visibles(g, 0);
-    let antes_doc = documento(&g);
+fn checks_merge_down_on_the_background(g: &DocGen) -> Result<(), TestCaseError> {
+    let g = with_visible(g, 0);
+    let antes_doc = document(&g);
     let antes = compose(&antes_doc).expect("compose no falla");
     let upper = antes_doc.layers()[1].id();
     let cmd = merge_down_command(&antes_doc, upper).expect("las dos son visibles");
@@ -1151,32 +1157,32 @@ proptest! {
 
     // 1. Aplanar es la composición.
     #[test]
-    fn propiedad_1_aplanar_es_la_composicion(g in doc_strategy(1, 5)) {
-        comprueba_composicion(&g, true)?;
-        comprueba_composicion(&g, false)?;
-        if g.capas.len() >= 2 {
-            comprueba_combinar_abajo_en_el_fondo(&g)?;
+    fn property_1_flatten_is_the_composition(g in doc_strategy(1, 5)) {
+        checks_composition(&g, true)?;
+        checks_composition(&g, false)?;
+        if g.layers.len() >= 2 {
+            checks_merge_down_on_the_background(&g)?;
         }
     }
 
     // 4. Combinar abajo contra un modelo independiente.
     #[test]
-    fn propiedad_4_combinar_abajo_contra_un_modelo(
+    fn property_4_merge_down_against_a_model(
         g in doc_strategy(2, 5),
         sel in any::<proptest::sample::Index>(),
     ) {
-        let k = sel.index(g.capas.len() - 1);
-        comprueba_modelo(&con_visibles(&g, k), k)?;
+        let k = sel.index(g.layers.len() - 1);
+        checks_model(&with_visible(&g, k), k)?;
     }
 
     // 5. Deshacer una combinación devuelve las capas tal cual.
     #[test]
-    fn propiedad_5_deshacer_devuelve_las_capas_tal_cual(
+    fn property_5_undo_returns_the_layers_as_they_were(
         g in doc_strategy(2, 5),
-        operacion in 0u8..3,
+        operation in 0u8..3,
         sel in any::<proptest::sample::Index>(),
     ) {
-        comprueba_deshacer(&g, operacion, sel.index(g.capas.len() - 1))?;
+        checks_undo(&g, operation, sel.index(g.layers.len() - 1))?;
     }
 }
 
@@ -1188,14 +1194,14 @@ fn a_rgba(p: Pixel) -> Rgba {
     match p {
         Pixel::Rgba(color) => color,
         Pixel::GrayAlpha { gray, alpha } => Rgba::new(gray, gray, gray, alpha),
-        otro => panic!("el modelo no conoce {otro:?}"),
+        other => panic!("el modelo no conoce {other:?}"),
     }
 }
 
-fn indice(p: Pixel) -> u8 {
+fn index(p: Pixel) -> u8 {
     match p {
         Pixel::Indexed(i) => i,
-        otro => panic!("se esperaba indexado, hay {otro:?}"),
+        other => panic!("se esperaba indexado, hay {other:?}"),
     }
 }
 
@@ -1203,10 +1209,10 @@ fn indice(p: Pixel) -> u8 {
 /// plegado de `composite_pixel` sobre vacío (primero la de abajo con su opacidad y modo, luego la
 /// de arriba con los suyos; las celdas vacías no aportan) y, en indexado, el índice de la de
 /// arriba si no es el transparente y si no el de la de abajo (celda vacía = transparente).
-fn modelo(doc: &Document, k: usize, x: u32, y: u32) -> Pixel {
+fn model(doc: &Document, k: usize, x: u32, y: u32) -> Pixel {
     let par = [&doc.layers()[k], &doc.layers()[k + 1]];
-    let pixel_de = |capa: &Layer| {
-        doc.image(capa.cel())
+    let pixel_de = |layer_2: &Layer| {
+        doc.image(layer_2.cel())
             .map(|img| img.get_pixel(x, y).expect("píxel dentro"))
     };
     match doc.mode() {
@@ -1215,31 +1221,32 @@ fn modelo(doc: &Document, k: usize, x: u32, y: u32) -> Pixel {
                 .palette()
                 .and_then(Palette::transparent_index)
                 .expect("el generador siempre da índice transparente");
-            let abajo = pixel_de(par[0]).map_or(t, indice);
-            let arriba = pixel_de(par[1]).map_or(t, indice);
-            Pixel::Indexed(if arriba != t { arriba } else { abajo })
+            let below = pixel_de(par[0]).map_or(t, index);
+            let top = pixel_de(par[1]).map_or(t, index);
+            Pixel::Indexed(if top != t { top } else { below })
         }
-        modo => {
-            let mut acumulado = T;
-            for capa in par {
-                if let Some(p) = pixel_de(capa) {
-                    acumulado = composite_pixel(acumulado, a_rgba(p), capa.opacity(), capa.blend());
+        mode => {
+            let mut accumulated = T;
+            for layer_2 in par {
+                if let Some(p) = pixel_de(layer_2) {
+                    accumulated =
+                        composite_pixel(accumulated, a_rgba(p), layer_2.opacity(), layer_2.blend());
                 }
             }
-            if modo == Mode::GrayAlpha {
+            if mode == Mode::GrayAlpha {
                 Pixel::GrayAlpha {
-                    gray: acumulado.r,
-                    alpha: acumulado.a,
+                    gray: accumulated.r,
+                    alpha: accumulated.a,
                 }
             } else {
-                Pixel::Rgba(acumulado)
+                Pixel::Rgba(accumulated)
             }
         }
     }
 }
 
 /// El píxel de una celda vacía (nada que dar), en el modo del documento.
-fn pixel_vacio(doc: &Document) -> Pixel {
+fn pixel_empty(doc: &Document) -> Pixel {
     match doc.mode() {
         Mode::Indexed => Pixel::Indexed(
             doc.palette()
@@ -1251,8 +1258,8 @@ fn pixel_vacio(doc: &Document) -> Pixel {
     }
 }
 
-fn comprueba_modelo(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
-    let antes_doc = documento(g);
+fn checks_model(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
+    let antes_doc = document(g);
     let antes = compose(&antes_doc).expect("compose no falla");
     let (l, u) = (antes_doc.layers()[k].id(), antes_doc.layers()[k + 1].id());
     let cmd = merge_down_command(&antes_doc, u).expect("las dos son visibles");
@@ -1265,16 +1272,16 @@ fn comprueba_modelo(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
     prop_assert!(doc.materialized_bytes() <= antes_doc.materialized_bytes());
     prop_assert_eq!(doc.layers().len(), antes_doc.layers().len() - 1);
 
-    let resultado = doc.image(doc.layer(l).unwrap().cel());
+    let result = doc.image(doc.layer(l).unwrap().cel());
     for y in 0..g.h {
         for x in 0..g.w {
-            let obtenido = resultado.map_or_else(
-                || pixel_vacio(&antes_doc),
+            let obtained = result.map_or_else(
+                || pixel_empty(&antes_doc),
                 |img| img.get_pixel(x, y).expect("píxel dentro"),
             );
             prop_assert_eq!(
-                obtenido,
-                modelo(&antes_doc, k, x, y),
+                obtained,
+                model(&antes_doc, k, x, y),
                 "píxel ({}, {}) de la combinación de las capas {} y {}",
                 x,
                 y,
@@ -1293,16 +1300,16 @@ fn comprueba_modelo(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
 // Propiedad 5: deshacer y rehacer una combinación.
 // ---------------------------------------------------------------------------------------
 
-/// `operacion`: 0 = combinar abajo (la capa `k + 1` con la `k`), 1 = combinar visibles,
+/// `operation`: 0 = combinar abajo (la capa `k + 1` con la `k`), 1 = combinar visibles,
 /// 2 = aplanar.
-fn comprueba_deshacer(g: &DocGen, operacion: u8, k: usize) -> Result<(), TestCaseError> {
-    let g = if operacion == 0 {
-        con_visibles(g, k)
+fn checks_undo(g: &DocGen, operation: u8, k: usize) -> Result<(), TestCaseError> {
+    let g = if operation == 0 {
+        with_visible(g, k)
     } else {
         g.clone()
     };
-    let antes = documento(&g);
-    let cmd = match operacion {
+    let antes = document(&g);
+    let cmd = match operation {
         0 => merge_down_command(&antes, antes.layers()[k + 1].id()),
         1 => merge_visible_command(&antes),
         _ => flatten_command(&antes),
@@ -1315,7 +1322,7 @@ fn comprueba_deshacer(g: &DocGen, operacion: u8, k: usize) -> Result<(), TestCas
         Ok(cmd) => cmd,
     };
     let f = fusion(&cmd);
-    let quitadas: Vec<(usize, Layer)> = f
+    let removed: Vec<(usize, Layer)> = f
         .remove
         .iter()
         .map(|id| {
@@ -1323,33 +1330,33 @@ fn comprueba_deshacer(g: &DocGen, operacion: u8, k: usize) -> Result<(), TestCas
             (pos, antes.layers()[pos].clone())
         })
         .collect();
-    let objetivo_antes = antes.layer(f.target).unwrap().clone();
+    let goal_before = antes.layer(f.target).unwrap().clone();
 
     let mut doc = antes.clone();
     prop_assert_eq!(doc.apply(cmd), Ok(true));
     prop_assert_ne!(doc.state_id(), antes.state_id());
-    let despues = doc.clone();
+    let after = doc.clone();
 
     prop_assert_eq!(doc.undo(), Ok(()));
     prop_assert_eq!(doc.state_id(), antes.state_id());
     prop_assert_eq!(ids(&doc), ids(&antes));
-    for (pos, original) in &quitadas {
-        let vuelta = &doc.layers()[*pos];
-        prop_assert_eq!(firma(vuelta), firma(original));
+    for (pos, original) in &removed {
+        let ret = &doc.layers()[*pos];
+        prop_assert_eq!(signature(ret), signature(original));
         prop_assert_eq!(doc.image(original.cel()), antes.image(original.cel()));
         prop_assert!(
-            vuelta == original,
+            ret == original,
             "la capa quitada {:?} no vuelve igual",
             original.id()
         );
     }
-    prop_assert_eq!(doc.layer(f.target), Some(&objetivo_antes));
+    prop_assert_eq!(doc.layer(f.target), Some(&goal_before));
     prop_assert!(doc == antes, "tras deshacer el documento no es el de antes");
 
     prop_assert_eq!(doc.redo(), Ok(()));
-    prop_assert_eq!(doc.state_id(), despues.state_id());
+    prop_assert_eq!(doc.state_id(), after.state_id());
     prop_assert!(
-        doc == despues,
+        doc == after,
         "tras rehacer el documento no es el de después"
     );
     Ok(())

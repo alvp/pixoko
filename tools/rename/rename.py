@@ -35,7 +35,7 @@ FORMAT_MACROS = {
 
 def load_map():
     m = collections.defaultdict(list)
-    for name in ("map.tsv", "map-l2.tsv"):
+    for name in ("map.tsv", "map-l2-applied.tsv", "map-l2.tsv"):
         f = HERE / name
         if not f.exists():
             continue

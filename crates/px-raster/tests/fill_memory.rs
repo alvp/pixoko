@@ -24,17 +24,17 @@ use std::time::{Duration, Instant};
 use px_core::{Command, Document, DocumentError, Image, Mode, Palette, Pixel, Rgba};
 use px_raster::fill_command;
 
-const LADO: u32 = 8192;
+const SIDE: u32 = 8192;
 const MIB: u64 = 1024 * 1024;
 
 /// `VmHWM` en bytes: el RSS máximo del proceso hasta ahora.
 fn vm_hwm() -> u64 {
-    let estado = std::fs::read_to_string("/proc/self/status").expect("hay /proc/self/status");
-    let linea = estado
+    let state = std::fs::read_to_string("/proc/self/status").expect("hay /proc/self/status");
+    let line = state
         .lines()
         .find(|l| l.starts_with("VmHWM:"))
         .expect("hay una línea VmHWM");
-    let kib: u64 = linea
+    let kib: u64 = line
         .split_whitespace()
         .nth(1)
         .expect("VmHWM tiene un valor")
@@ -43,7 +43,7 @@ fn vm_hwm() -> u64 {
     kib * 1024
 }
 
-fn paleta() -> Palette {
+fn palette() -> Palette {
     Palette::from_colors([Rgba::opaque(10, 20, 30), Rgba::opaque(200, 100, 50)]).unwrap()
 }
 
@@ -57,87 +57,87 @@ fn c_rgba() -> Pixel {
 
 /// Peine de 8192 x 8192 indexado (índice 0 = `A`, 1 = `B`): fila 0 toda `A`; en el resto, `A`
 /// en las columnas pares y `B` en las impares. `S = 1 + 8191 * 4096 = 33 550 337` tramos.
-fn peine_indexado() -> Image {
-    let lado = LADO as usize;
-    let mut data = Vec::with_capacity(lado * lado);
-    data.resize(lado, 0u8);
-    for _ in 1..lado {
-        data.extend((0..lado).map(|x| u8::from(x % 2 == 1)));
+fn comb_indexed() -> Image {
+    let side = SIDE as usize;
+    let mut data = Vec::with_capacity(side * side);
+    data.resize(side, 0u8);
+    for _ in 1..side {
+        data.extend((0..side).map(|x| u8::from(x % 2 == 1)));
     }
-    Image::from_bytes_indexed(LADO, LADO, paleta(), data).unwrap()
+    Image::from_bytes_indexed(SIDE, SIDE, palette(), data).unwrap()
 }
 
-fn spans_de(comando: &Command) -> usize {
-    match comando {
+fn spans_de(command: &Command) -> usize {
+    match command {
         Command::FillSpans { spans, .. } => spans.len(),
-        otro => panic!("se esperaba FillSpans, salió {otro:?}"),
+        other => panic!("se esperaba FillSpans, salió {other:?}"),
     }
 }
 
 /// Fila 12: el peine indexado se rechaza con `FillTooFragmented` sin disparar la memoria.
 #[test]
 #[ignore = "mide VmHWM: ejecutar sola y en release (ver la cabecera del fichero)"]
-fn fila_12_peine_indexado_8192() {
-    let doc = Document::new(peine_indexado());
+fn row_12_indexed_comb_8192() {
+    let doc = Document::new(comb_indexed());
     let id = ImageId::from_raw(0);
 
     let base = vm_hwm();
-    let inicio = Instant::now();
-    let resultado = fill_command(&doc, id, 0, 0, Pixel::Indexed(1));
-    let tiempo = inicio.elapsed();
-    let crecimiento = vm_hwm().saturating_sub(base);
+    let start = Instant::now();
+    let result = fill_command(&doc, id, 0, 0, Pixel::Indexed(1));
+    let time = start.elapsed();
+    let growth = vm_hwm().saturating_sub(base);
 
     println!(
-        "fila 12: {resultado:?} en {tiempo:?}; VmHWM base {} MiB, crece {} MiB",
+        "fila 12: {result:?} en {time:?}; VmHWM base {} MiB, crece {} MiB",
         base / MIB,
-        crecimiento / MIB
+        growth / MIB
     );
     assert!(
         matches!(
-            resultado,
+            result,
             Err(DocumentError::FillTooFragmented {
                 limit: Document::MAX_FILL_SPANS
             })
         ),
-        "se esperaba FillTooFragmented con el tope real, salió {resultado:?}"
+        "se esperaba FillTooFragmented con el tope real, salió {result:?}"
     );
     assert!(
-        crecimiento < 256 * MIB,
+        growth < 256 * MIB,
         "VmHWM creció {} MiB (el límite es 256)",
-        crecimiento / MIB
+        growth / MIB
     );
-    assert!(tiempo < Duration::from_secs(30), "tardó {tiempo:?}");
+    assert!(time < Duration::from_secs(30), "tardó {time:?}");
 }
 
 /// Fila 14, comprobaciones comunes: relleno de toda la imagen con 8192 tramos, `apply`, `undo` y
 /// `redo` restauran los bytes. Devuelve el crecimiento de `VmHWM` sobre `base`.
-fn rellena_toda_la_imagen(
+fn fills_the_whole_image(
     mut doc: Document,
     original: &Image,
-    rellena: &Image,
+    fills: &Image,
     pixel: Pixel,
-    etiqueta: &str,
+    label: &str,
 ) -> u64 {
     let id = ImageId::from_raw(0);
     let base = vm_hwm();
-    let inicio = Instant::now();
+    let start = Instant::now();
 
     let t0 = Instant::now();
-    let comando = fill_command(&doc, id, 4096, 4096, pixel);
+    let command = fill_command(&doc, id, 4096, 4096, pixel);
     let t_fill = t0.elapsed();
-    let comando = match comando {
+    let command = match command {
         Ok(Some(c)) => c,
-        otro => panic!("{etiqueta}: se esperaba Ok(Some(..)), salió {otro:?}"),
+        other => panic!("{label}: se esperaba Ok(Some(..)), salió {other:?}"),
     };
-    assert_eq!(spans_de(&comando), 8192, "{etiqueta}: un tramo por fila");
+    assert_eq!(spans_de(&command), 8192, "{label}: un tramo por fila");
 
     let t1 = Instant::now();
-    assert_eq!(doc.apply(comando), Ok(true), "{etiqueta}: apply");
+    assert_eq!(doc.apply(command), Ok(true), "{label}: apply");
     let t_apply = t1.elapsed();
     assert_eq!(
         doc.image(id).unwrap().bytes(),
-        rellena.bytes(),
-        "{etiqueta}: la imagen rellena"
+        fills.bytes(),
+        "{label}: la imagen rellena"
     );
 
     let t2 = Instant::now();
@@ -146,7 +146,7 @@ fn rellena_toda_la_imagen(
     assert_eq!(
         doc.image(id).unwrap().bytes(),
         original.bytes(),
-        "{etiqueta}: undo restaura los bytes"
+        "{label}: undo restaura los bytes"
     );
 
     let t3 = Instant::now();
@@ -154,48 +154,44 @@ fn rellena_toda_la_imagen(
     let t_redo = t3.elapsed();
     assert_eq!(
         doc.image(id).unwrap().bytes(),
-        rellena.bytes(),
-        "{etiqueta}: redo vuelve a rellenar"
+        fills.bytes(),
+        "{label}: redo vuelve a rellenar"
     );
 
-    let total = inicio.elapsed();
-    let crecimiento = vm_hwm().saturating_sub(base);
+    let total = start.elapsed();
+    let growth = vm_hwm().saturating_sub(base);
     println!(
-        "fila 14 {etiqueta}: fill_command {t_fill:?}, apply {t_apply:?}, undo {t_undo:?}, \
+        "fila 14 {label}: fill_command {t_fill:?}, apply {t_apply:?}, undo {t_undo:?}, \
          redo {t_redo:?}, total {total:?}; VmHWM base {} MiB, crece {} MiB",
         base / MIB,
-        crecimiento / MIB
+        growth / MIB
     );
-    assert!(
-        total < Duration::from_secs(60),
-        "{etiqueta}: tardó {total:?}"
-    );
-    crecimiento
+    assert!(total < Duration::from_secs(60), "{label}: tardó {total:?}");
+    growth
 }
 
 /// Fila 14: toda la imagen RGBA de un color sigue rellenándose (la memoria solo se imprime).
 #[test]
 #[ignore = "mide VmHWM: ejecutar sola y en release (ver la cabecera del fichero)"]
-fn fila_14_uniforme_rgba_8192() {
-    let original = Image::filled(LADO, LADO, a_rgba()).unwrap();
-    let rellena = Image::filled(LADO, LADO, c_rgba()).unwrap();
+fn row_14_uniform_rgba_8192() {
+    let original = Image::filled(SIDE, SIDE, a_rgba()).unwrap();
+    let fills = Image::filled(SIDE, SIDE, c_rgba()).unwrap();
     let doc = Document::new(original.clone());
-    rellena_toda_la_imagen(doc, &original, &rellena, c_rgba(), "RGBA");
+    fills_the_whole_image(doc, &original, &fills, c_rgba(), "RGBA");
 }
 
 /// Fila 14: lo mismo en indexado, con `VmHWM` creciendo menos de 128 MiB.
 #[test]
 #[ignore = "mide VmHWM: ejecutar sola y en release (ver la cabecera del fichero)"]
-fn fila_14_uniforme_indexado_8192() {
-    let original = Image::filled_indexed(LADO, LADO, paleta(), 0).unwrap();
-    let rellena = Image::filled_indexed(LADO, LADO, paleta(), 1).unwrap();
+fn row_14_uniform_indexed_8192() {
+    let original = Image::filled_indexed(SIDE, SIDE, palette(), 0).unwrap();
+    let fills = Image::filled_indexed(SIDE, SIDE, palette(), 1).unwrap();
     assert_eq!(original.mode(), Mode::Indexed);
     let doc = Document::new(original.clone());
-    let crecimiento =
-        rellena_toda_la_imagen(doc, &original, &rellena, Pixel::Indexed(1), "indexado");
+    let growth = fills_the_whole_image(doc, &original, &fills, Pixel::Indexed(1), "indexado");
     assert!(
-        crecimiento < 128 * MIB,
+        growth < 128 * MIB,
         "VmHWM creció {} MiB (el límite es 128)",
-        crecimiento / MIB
+        growth / MIB
     );
 }

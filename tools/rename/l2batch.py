@@ -33,7 +33,7 @@ def main():
         crate, start, n = sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
         uses = l2gen.collect()
         ov = load_ov()
-        names = sorted(o for o in uses if l2gen.is_spanish(o) and nw(o) >= 5 and o not in ov and any(c.startswith(f"crates/{crate}/") for c in uses[o]))
+        names = sorted(o for o in uses if l2gen.is_spanish(o) and nw(o) >= 4 and o not in ov and any(c.startswith(f"crates/{crate}/") for c in uses[o]))
         batch = names[start : start + n]
         STATE.write_text(json.dumps(batch), encoding="utf-8")
         print(f"# {len(names)} pendientes en {crate}; lote {start}..{start + len(batch)}")
