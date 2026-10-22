@@ -224,8 +224,8 @@ Hecha por el usuario el 22 de octubre en Linux, Windows y macOS (lista de 15 pas
 | Sistema | Aseprite abre lo que escribe Pixoko | Versión de Aseprite |
 | --- | --- | --- |
 | Linux | sí | 1.3.18.6-dev |
-| Windows | sí | 1.3 |
-| macOS | sí | 1.3 |
+| Windows | sí | 1.13 |
+| macOS | sí | 1.13 |
 
 - `Cmd+Q` con cambios sin guardar en macOS (paso 13, antes «no está probado»): avisa como la x.
 - No se anotaron más datos de los pasos (tiempos del paso 10, X11 del paso 14, HiDPI del 12).

@@ -64,5 +64,5 @@ Medido el 22 de octubre con `cargo deny --locked check`: `advisories ok, bans ok
 
 Sin nada pendiente (22 de octubre). Resultados completos, tal como los comunicó el usuario, en «Resultado de la prueba manual» y «Resultado de los fuzzers» de [`hito-3-puerta.md`](hito-3-puerta.md):
 
-1. **Prueba manual:** Aseprite abre lo que escribe Pixoko en Linux (1.3.18.6-dev), Windows (1.3) y macOS (1.3); `Cmd+Q` con cambios sin guardar en macOS: avisa como la x.
+1. **Prueba manual:** Aseprite abre lo que escribe Pixoko en Linux (1.3.18.6-dev), Windows (1.13) y macOS (1.13); `Cmd+Q` con cambios sin guardar en macOS: avisa como la x.
 2. **Fuzzers de 10 minutos:** `read_png` y `read_aseprite`, 601 s cada uno, sin crash; número de ejecuciones: no anotado.
