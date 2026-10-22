@@ -5,7 +5,7 @@
 //! composición de los 29 casos) y la parte de la fila 8 con el corpus viven en `px-golden`; la
 //! bomba de la fila 9 (con medida de RSS) está en `aseprite_reserve.rs`.
 //!
-//! Los ficheros de entrada se construyen aquí, a mano, con `escritor.rs` (un escritor y un lector
+//! Los ficheros de entrada se construyen aquí, a mano, con `writer.rs` (un escritor y un lector
 //! mínimos hechos SOLO con las tablas de la especificación pública del formato); los datos de
 //! `golden/aseprite/` se leen como datos. Los valores esperados salen de la spec y de las tablas
 //! del formato, no del código que se prueba.
@@ -33,10 +33,10 @@ use px_formats::{
     aseprite_dimensions, detect_format, read_aseprite, read_png, write_aseprite, write_png,
 };
 
-#[path = "aseprite/escritor.rs"]
+#[path = "aseprite/writer.rs"]
 #[allow(dead_code)]
-mod escritor;
-use escritor::*;
+mod writer;
+use writer::*;
 
 // ---------------------------------------------------------------------------------------
 // Ayudantes: corpus, lectura, documentos y la igualdad por contenido (condición 1).

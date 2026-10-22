@@ -21,7 +21,7 @@
 //! Si `/proc/self/clear_refs` no se puede escribir (algunos contenedores), la prueba se omite con un
 //! aviso en stderr, salvo que la variable de entorno `CI` esté definida: entonces falla.
 //!
-//! Necesita `miniz_oxide = "0.8.9"` en `[dependencies]` de `px-formats` (por `escritor.rs`).
+//! Necesita `miniz_oxide = "0.8.9"` en `[dependencies]` de `px-formats` (por `writer.rs`).
 
 #![cfg(target_os = "linux")]
 
@@ -29,10 +29,10 @@ use std::fs;
 
 use px_formats::{AsepriteError, AsepriteLimits, read_aseprite};
 
-#[path = "aseprite/escritor.rs"]
+#[path = "aseprite/writer.rs"]
 #[allow(dead_code)]
-mod escritor;
-use escritor::*;
+mod writer;
+use writer::*;
 
 const MIB: u64 = 1 << 20;
 
