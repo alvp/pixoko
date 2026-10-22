@@ -198,7 +198,7 @@ fn doc_indexed(w: u32, h: u32, t: Option<u8>, layers: &[Layer2]) -> Document {
 }
 
 /// Los píxeles de una imagen RGBA, fila a fila.
-fn rgba_de(img: &Image) -> Vec<Rgba> {
+fn rgba_of(img: &Image) -> Vec<Rgba> {
     assert_eq!(img.mode(), Mode::Rgba, "se esperaba una imagen RGBA");
     pixels_of(img)
         .into_iter()
@@ -218,7 +218,7 @@ fn pixels_of(img: &Image) -> Vec<Pixel> {
 }
 
 /// Los índices de una imagen indexada, fila a fila.
-fn indices_de(img: &Image) -> Vec<u8> {
+fn indices_of(img: &Image) -> Vec<u8> {
     pixels_of(img)
         .into_iter()
         .map(|p| match p {
@@ -325,21 +325,21 @@ fn row_05_a_subsets_in_order_and_ignoring_visibility() {
     // {A, C}: B no cuenta. A multiplicado por blanco y por 128: div255(200·128) = 100,
     // div255(100·128) = 50 y div255(50·128) = 25.
     let a_c = [A_OPAQUE, c(100, 50, 25, 255)];
-    assert_eq!(rgba_de(&layers_of(&doc, &[a, c_])), a_c);
+    assert_eq!(rgba_of(&layers_of(&doc, &[a, c_])), a_c);
     // El orden de la lista no manda: manda el del documento.
-    assert_eq!(rgba_de(&layers_of(&doc, &[c_, a])), a_c);
+    assert_eq!(rgba_of(&layers_of(&doc, &[c_, a])), a_c);
     // {B, C}: sin A, contra el vacío (el gris 128 se queda tal cual sobre un fondo sin alfa).
     assert_eq!(
-        rgba_de(&layers_of(&doc, &[b, c_])),
+        rgba_of(&layers_of(&doc, &[b, c_])),
         [c(10, 20, 30, 255), GRAY_128]
     );
     // Una sola capa: su celda.
-    assert_eq!(rgba_de(&layers_of(&doc, &[b])), [c(10, 20, 30, 255), T]);
+    assert_eq!(rgba_of(&layers_of(&doc, &[b])), [c(10, 20, 30, 255), T]);
 
     // Todas las visibles: `compose` byte a byte.
     assert_eq!(layers_of(&doc, &[a, b, c_]), compose_2(&doc));
     assert_eq!(
-        rgba_de(&layers_of(&doc, &[a, b, c_])),
+        rgba_of(&layers_of(&doc, &[a, b, c_])),
         [c(10, 20, 30, 255), c(100, 50, 25, 255)]
     );
 
@@ -357,13 +357,13 @@ fn row_05_a_subsets_in_order_and_ignoring_visibility() {
     assert_eq!(layers_of(&with_hidden, &[a, b]), compose_2(&with_hidden));
 
     // Una oculta incluida cuenta: {A, C} con C oculta sigue multiplicando, y `compose` no.
-    assert_eq!(rgba_de(&layers_of(&with_hidden, &[a, c_])), a_c);
+    assert_eq!(rgba_of(&layers_of(&with_hidden, &[a, c_])), a_c);
     assert_ne!(layers_of(&with_hidden, &[a, c_]), compose_2(&with_hidden));
     // Con todas ocultas, la composición de las tres sigue siendo la de siempre.
     let all: Vec<Layer2> = stack_abc().into_iter().map(Layer2::hidden).collect();
     let hidden_2 = doc_rgba(2, 1, &all);
     assert_eq!(
-        rgba_de(&layers_of(&hidden_2, &ids(&hidden_2))),
+        rgba_of(&layers_of(&hidden_2, &ids(&hidden_2))),
         [c(10, 20, 30, 255), c(100, 50, 25, 255)]
     );
 }
@@ -381,10 +381,10 @@ fn row_05_b_empty_ones_and_opacity_of_the_bottom_layer() {
     );
     let [a, d] = <[LayerId; 2]>::try_from(ids(&with_empty)).expect("dos capas");
     assert_eq!(
-        rgba_de(&layers_of(&with_empty, &[a, d])),
+        rgba_of(&layers_of(&with_empty, &[a, d])),
         [A_OPAQUE, A_OPAQUE]
     );
-    assert_eq!(rgba_de(&layers_of(&with_empty, &[d])), [T, T]);
+    assert_eq!(rgba_of(&layers_of(&with_empty, &[d])), [T, T]);
 
     // La capa de abajo se compone contra el vacío con SU opacidad (el modo no tiene efecto y la
     // opacidad escala el alfa: div255(100·128) = 50).
@@ -397,7 +397,7 @@ fn row_05_b_empty_ones_and_opacity_of_the_bottom_layer() {
     );
     let only = ids(&with_opacity);
     assert_eq!(
-        rgba_de(&layers_of(&with_opacity, &only)),
+        rgba_of(&layers_of(&with_opacity, &only)),
         [c(200, 100, 50, 128), c(10, 20, 30, 50)]
     );
 }
@@ -418,7 +418,7 @@ fn row_05_c_indexed_and_gray_with_alpha() {
     );
     let [l0, l1, l2, empty] = ids4(&doc);
     let output = layers_of(&doc, &[l0, l2]);
-    assert_eq!(indices_de(&output), [5, 2, 3, 0]);
+    assert_eq!(indices_of(&output), [5, 2, 3, 0]);
     assert_eq!(output.mode(), Mode::Indexed);
     assert_eq!(
         output.palette(),
@@ -426,10 +426,10 @@ fn row_05_c_indexed_and_gray_with_alpha() {
         "la paleta es la del lienzo"
     );
     // La oculta incluida cuenta; la vacía no aporta.
-    assert_eq!(indices_de(&layers_of(&doc, &[l0, l1, empty])), [1, 4, 3, 0]);
-    assert_eq!(indices_de(&layers_of(&doc, &[l0, l1, l2])), [5, 4, 3, 0]);
+    assert_eq!(indices_of(&layers_of(&doc, &[l0, l1, empty])), [1, 4, 3, 0]);
+    assert_eq!(indices_of(&layers_of(&doc, &[l0, l1, l2])), [5, 4, 3, 0]);
     // Solo la vacía: todo transparente.
-    assert_eq!(indices_de(&layers_of(&doc, &[empty])), [0, 0, 0, 0]);
+    assert_eq!(indices_of(&layers_of(&doc, &[empty])), [0, 0, 0, 0]);
 
     // Gris con alfa: el canal rojo del RGBA equivalente (R = G = B) y su alfa.
     let data = [
@@ -456,11 +456,11 @@ fn row_05_c_indexed_and_gray_with_alpha() {
     let doc_c = doc_rgba(2, 1, &rgb);
     let (ids_g, ids_c) = (ids(&doc_g), ids(&doc_c));
     for sel in [[0usize, 2].as_slice(), &[1, 2], &[0, 1, 2], &[2]] {
-        let en_g: Vec<LayerId> = sel.iter().map(|&i| ids_g[i]).collect();
-        let en_c: Vec<LayerId> = sel.iter().map(|&i| ids_c[i]).collect();
-        let output = layers_of(&doc_g, &en_g);
+        let in_g: Vec<LayerId> = sel.iter().map(|&i| ids_g[i]).collect();
+        let in_c: Vec<LayerId> = sel.iter().map(|&i| ids_c[i]).collect();
+        let output = layers_of(&doc_g, &in_g);
         assert_eq!(output.mode(), Mode::GrayAlpha);
-        let expected: Vec<Pixel> = rgba_de(&layers_of(&doc_c, &en_c))
+        let expected: Vec<Pixel> = rgba_of(&layers_of(&doc_c, &in_c))
             .iter()
             .map(|p| Pixel::GrayAlpha {
                 gray: p.r,
@@ -487,8 +487,8 @@ fn row_05_d_nothing_to_give_in_a_mode_without_transparent() {
     };
     assert_eq!(doc.apply(removes), Ok(true));
     let [full, empty] = <[LayerId; 2]>::try_from(ids(&doc)).expect("dos capas");
-    assert_eq!(indices_de(&layers_of(&doc, &[full])), [1, 2, 3, 0]);
-    assert_eq!(indices_de(&layers_of(&doc, &[full, empty])), [1, 2, 3, 0]);
+    assert_eq!(indices_of(&layers_of(&doc, &[full])), [1, 2, 3, 0]);
+    assert_eq!(indices_of(&layers_of(&doc, &[full, empty])), [1, 2, 3, 0]);
     assert_eq!(
         compose_layers(&doc, &[empty]),
         Err(ComposeError::NoTransparency {
@@ -621,7 +621,7 @@ fn row_06_a_the_ten_pixels_of_aseprite() {
         let image_2 = f.image.clone().expect("hay imagen");
         assert_eq!(image_2, layers_of(&doc, &[l, u]), "{}", v.name);
 
-        for (k, (obtained, aseprite)) in rgba_de(&image_2).iter().zip(&v.aseprite).enumerate() {
+        for (k, (obtained, aseprite)) in rgba_of(&image_2).iter().zip(&v.aseprite).enumerate() {
             // El fondo ya compuesto (L contra el vacío) y el modo de U fijan el dominio empírico
             // de 3.2: solo ahí se admite ±1 en un canal; el alfa, nunca.
             let alpha_background = rounds_255(i128::from(v.l[k].a) * i128::from(v.l_opacity));
@@ -746,7 +746,7 @@ fn row_06_b_errors_empty_ones_and_the_immediate_layer() {
     let [l, u] = <[LayerId; 2]>::try_from(ids(&a_2)).expect("dos capas");
     let f = fusion(&merge_down_command(&a_2, u).expect("combinar con una vacía"));
     let image_2 = f.image.expect("hay imagen");
-    assert_eq!(rgba_de(&image_2), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
+    assert_eq!(rgba_of(&image_2), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
     assert_eq!(image_2, layers_of(&a_2, &[l, u]));
 }
 
@@ -846,7 +846,7 @@ fn row_07_b_visibility_variants_and_empty_ones() {
     let f = fusion(&cmd);
     assert_eq!((f.target, f.remove.as_slice()), (b, [a, c_].as_slice()));
     let image_2 = f.image.clone().expect("hay imagen");
-    assert_eq!(rgba_de(&image_2), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
+    assert_eq!(rgba_of(&image_2), [c(200, 100, 50, 128), c(10, 20, 30, 50)]);
     let after = applied(&a_2, cmd);
     assert_eq!(ids(&after), [b]);
     assert_eq!(after.image(after.layers()[0].cel()), Some(&image_2));
@@ -911,7 +911,7 @@ fn row_07_c_indexed_and_gray_with_alpha() {
             Layer2::empty(),
         ],
     );
-    assert_eq!(indices_de(&compose_2(&indexed)), [5, 2, 3, 0]);
+    assert_eq!(indices_of(&compose_2(&indexed)), [5, 2, 3, 0]);
     checks_abcd(&indexed);
 
     // Gris con alfa, con opacidad y mezcla en la tercera capa.
@@ -1211,7 +1211,7 @@ fn index(p: Pixel) -> u8 {
 /// arriba si no es el transparente y si no el de la de abajo (celda vacía = transparente).
 fn model(doc: &Document, k: usize, x: u32, y: u32) -> Pixel {
     let par = [&doc.layers()[k], &doc.layers()[k + 1]];
-    let pixel_de = |layer_2: &Layer| {
+    let pixel_of = |layer_2: &Layer| {
         doc.image(layer_2.cel())
             .map(|img| img.get_pixel(x, y).expect("píxel dentro"))
     };
@@ -1221,14 +1221,14 @@ fn model(doc: &Document, k: usize, x: u32, y: u32) -> Pixel {
                 .palette()
                 .and_then(Palette::transparent_index)
                 .expect("el generador siempre da índice transparente");
-            let below = pixel_de(par[0]).map_or(t, index);
-            let top = pixel_de(par[1]).map_or(t, index);
+            let below = pixel_of(par[0]).map_or(t, index);
+            let top = pixel_of(par[1]).map_or(t, index);
             Pixel::Indexed(if top != t { top } else { below })
         }
         mode => {
             let mut accumulated = T;
             for layer_2 in par {
-                if let Some(p) = pixel_de(layer_2) {
+                if let Some(p) = pixel_of(layer_2) {
                     accumulated =
                         composite_pixel(accumulated, a_rgba(p), layer_2.opacity(), layer_2.blend());
                 }

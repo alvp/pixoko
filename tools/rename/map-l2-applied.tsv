@@ -9589,3 +9589,16 @@ id	Actual	ActualSize	crates/px-ui/
 id	Actual	ActualSize	crates/px-app/
 id	ZoomActual	ZoomActualSize	crates/px-ui/
 id	ZoomActual	ZoomActualSize	crates/px-app/
+id	en	with_mode	crates/px-raster/
+id	en_c	in_c	crates/px-raster/
+id	en_g	in_g	crates/px-raster/
+id	en_region	in_region	crates/px-raster/
+id	error_de_apply	error_of_apply	crates/px-raster/
+id	indices_de	indices_of	crates/px-raster/
+id	pixel_de	pixel_of	crates/px-raster/
+id	pixel_en	pixel_at	crates/px-raster/
+id	rgba_de	rgba_of	crates/px-raster/
+id	spans_de	spans_of	crates/px-raster/
+id	va	pixel_a	crates/px-raster/tests/fill.rs
+id	vb	pixel_b	crates/px-raster/tests/fill.rs
+id	vc	pixel_c	crates/px-raster/tests/fill.rs

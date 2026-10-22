@@ -282,7 +282,7 @@ fn idx(values: &[u8]) -> Vec<Pixel> {
 }
 
 /// Los píxeles de una imagen RGBA, fila a fila.
-fn rgba_de(img: &Image) -> Vec<Rgba> {
+fn rgba_of(img: &Image) -> Vec<Rgba> {
     assert_eq!(img.mode(), Mode::Rgba, "se esperaba una imagen RGBA");
     (0..img.height())
         .flat_map(|y| (0..img.width()).map(move |x| (x, y)))
@@ -302,7 +302,7 @@ fn pixels_of(img: &Image) -> Vec<Pixel> {
 }
 
 /// Los índices de una imagen indexada, fila a fila.
-fn indices_de(img: &Image) -> Vec<u8> {
+fn indices_of(img: &Image) -> Vec<u8> {
     pixels_of(img)
         .into_iter()
         .map(|p| match p {
@@ -604,7 +604,7 @@ const COMPOSITE_TO_HAND: [Rgba; 2] = [c(10, 20, 30, 255), c(100, 50, 25, 255)];
 fn row_05_layer_stack() {
     // El compuesto a mano.
     assert_eq!(
-        rgba_de(&compose_2(&doc_rgba(2, 1, &stack_by_hand()))),
+        rgba_of(&compose_2(&doc_rgba(2, 1, &stack_by_hand()))),
         COMPOSITE_TO_HAND
     );
 
@@ -612,14 +612,14 @@ fn row_05_layer_stack() {
     let (a, b) = (c(200, 100, 50, 255), c(10, 20, 30, 255));
     let below_a = doc_rgba(2, 1, &[Layer2::rgba(&[a, a]), Layer2::rgba(&[b, b])]);
     let below_b = doc_rgba(2, 1, &[Layer2::rgba(&[b, b]), Layer2::rgba(&[a, a])]);
-    assert_eq!(rgba_de(&compose_2(&below_a)), [b, b]);
-    assert_eq!(rgba_de(&compose_2(&below_b)), [a, a]);
+    assert_eq!(rgba_of(&compose_2(&below_a)), [b, b]);
+    assert_eq!(rgba_of(&compose_2(&below_b)), [a, a]);
 
     // Una capa oculta no cuenta, aunque cubra todo y sea opaca.
     let mut with_hidden = stack_by_hand();
     with_hidden.push(Layer2::rgba(&[c(1, 2, 3, 255), c(1, 2, 3, 255)]).hidden());
     assert_eq!(
-        rgba_de(&compose_2(&doc_rgba(2, 1, &with_hidden))),
+        rgba_of(&compose_2(&doc_rgba(2, 1, &with_hidden))),
         COMPOSITE_TO_HAND
     );
 
@@ -627,7 +627,7 @@ fn row_05_layer_stack() {
     let mut with_empty = stack_by_hand();
     with_empty.push(Layer2::empty().mode(BlendMode::Multiply).opacity_2(100));
     assert_eq!(
-        rgba_de(&compose_2(&doc_rgba(2, 1, &with_empty))),
+        rgba_of(&compose_2(&doc_rgba(2, 1, &with_empty))),
         COMPOSITE_TO_HAND
     );
 
@@ -642,16 +642,16 @@ fn row_05_layer_stack() {
             Layer2::rgba(&[c(232, 198, 52, 0), T]),
         ],
     );
-    assert_eq!(rgba_de(&compose_2(&with_rgb)), [c(232, 198, 52, 0), T]);
+    assert_eq!(rgba_of(&compose_2(&with_rgb)), [c(232, 198, 52, 0), T]);
     let without_cel = doc_rgba(2, 1, &[Layer2::rgba(&empty_2), Layer2::empty()]);
-    assert_eq!(rgba_de(&compose_2(&without_cel)), [T, T]);
+    assert_eq!(rgba_of(&compose_2(&without_cel)), [T, T]);
 
     // Opacidad 0: igual que oculta sobre un fondo opaco...
     let base = Layer2::rgba(&[a, a]);
     let covers = [b, b];
     let op0 = doc_rgba(2, 1, &[base.clone(), Layer2::rgba(&covers).opacity_2(0)]);
     let hidden = doc_rgba(2, 1, &[base, Layer2::rgba(&covers).hidden()]);
-    assert_eq!(rgba_de(&compose_2(&op0)), [a, a]);
+    assert_eq!(rgba_of(&compose_2(&op0)), [a, a]);
     assert_eq!(compose_2(&op0), compose_2(&hidden));
     // ...y salvo el RGB si el fondo es vacío (αs = 0 contra el vacío conserva el origen).
     let source = [c(232, 198, 52, 200), T];
@@ -665,8 +665,8 @@ fn row_05_layer_stack() {
         1,
         &[Layer2::rgba(&empty_2), Layer2::rgba(&source).hidden()],
     );
-    assert_eq!(rgba_de(&compose_2(&op_0_empty)), [c(232, 198, 52, 0), T]);
-    assert_eq!(rgba_de(&compose_2(&hidden_empty)), [T, T]);
+    assert_eq!(rgba_of(&compose_2(&op_0_empty)), [c(232, 198, 52, 0), T]);
+    assert_eq!(rgba_of(&compose_2(&hidden_empty)), [T, T]);
 
     // Capa de fondo con opacidad 128 y modo Multiplicar: el modo no tiene efecto y el alfa se
     // escala (αs = 128 y div255(100 · 128) = 50).
@@ -678,7 +678,7 @@ fn row_05_layer_stack() {
             .opacity_2(128)],
     );
     assert_eq!(
-        rgba_de(&compose_2(&background)),
+        rgba_of(&compose_2(&background)),
         [c(200, 100, 50, 128), c(10, 20, 30, 50)]
     );
 
@@ -689,7 +689,7 @@ fn row_05_layer_stack() {
         (output.width(), output.height(), output.mode()),
         (2, 1, Mode::Rgba)
     );
-    assert_eq!(rgba_de(&output), [T, T]);
+    assert_eq!(rgba_of(&output), [T, T]);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -747,7 +747,7 @@ fn row_06_grays_with_and_without_alpha() {
         image_2(3, 2, Mode::GrayAlpha),
         &stack_of_grays(|gray, alpha| Pixel::GrayAlpha { gray, alpha }),
     );
-    let expected = rgba_de(&compose_2(&rgba));
+    let expected = rgba_of(&compose_2(&rgba));
     let output = compose_2(&grays);
     assert_eq!(output.mode(), Mode::GrayAlpha);
     assert_eq!((output.width(), output.height()), (3, 2));
@@ -826,7 +826,7 @@ fn row_07_indexed_the_highest_visible_non_transparent_layer_wins() {
 
     let three = builds(base(), &[l0(), l1(), l2()]);
     let output = compose_2(&three);
-    assert_eq!(indices_de(&output), [5, 4, 3, 0]);
+    assert_eq!(indices_of(&output), [5, 4, 3, 0]);
     assert_eq!(output.mode(), Mode::Indexed);
     assert_eq!(
         output.palette(),
@@ -837,17 +837,17 @@ fn row_07_indexed_the_highest_visible_non_transparent_layer_wins() {
 
     // Capa oculta: no cuenta.
     let hidden = builds(base(), &[l0(), l1(), l2().hidden()]);
-    assert_eq!(indices_de(&compose_2(&hidden)), [1, 4, 3, 0]);
+    assert_eq!(indices_of(&compose_2(&hidden)), [1, 4, 3, 0]);
 
     // Celda vacía: no aporta nada (encima y en medio).
     let empty_top = builds(base(), &[l0(), l1(), l2(), Layer2::empty()]);
-    assert_eq!(indices_de(&compose_2(&empty_top)), [5, 4, 3, 0]);
+    assert_eq!(indices_of(&compose_2(&empty_top)), [5, 4, 3, 0]);
     let empty_in_middle = builds(base(), &[l0(), Layer2::empty(), l2().hidden()]);
-    assert_eq!(indices_de(&compose_2(&empty_in_middle)), [1, 2, 3, 0]);
+    assert_eq!(indices_of(&compose_2(&empty_in_middle)), [1, 2, 3, 0]);
 
     // Todo transparente: el índice transparente.
     let nothing = builds(base(), &[Layer2::new(idx(&[0, 0, 0, 0])), Layer2::empty()]);
-    assert_eq!(indices_de(&compose_2(&nothing)), [0, 0, 0, 0]);
+    assert_eq!(indices_of(&compose_2(&nothing)), [0, 0, 0, 0]);
 
     // Con el transparente 7, el índice 0 sí es opaco y tapa a lo de debajo.
     let base7 = || template_indexed(4, 1, 8, Some(7));
@@ -859,12 +859,12 @@ fn row_07_indexed_the_highest_visible_non_transparent_layer_wins() {
         ],
     );
     let output_7 = compose_2(&with_7);
-    assert_eq!(indices_de(&output_7), [3, 2, 0, 3]);
+    assert_eq!(indices_of(&output_7), [3, 2, 0, 3]);
     assert_eq!(output_7.palette(), with_7.palette());
 
     // Y donde no hay nada, el 7.
     let nothing_7 = builds(base7(), &[Layer2::new(idx(&[7, 7, 7, 7]))]);
-    assert_eq!(indices_de(&compose_2(&nothing_7)), [7, 7, 7, 7]);
+    assert_eq!(indices_of(&compose_2(&nothing_7)), [7, 7, 7, 7]);
 }
 
 #[test]
@@ -897,7 +897,7 @@ fn row_07_indexed_without_transparent_index() {
 
     // La capa de abajo llena y visible: gana, también donde vale 0 (sin transparente, el 0 es
     // un color como los demás).
-    assert_eq!(indices_de(&compose_2(&doc)), [1, 2, 3, 0]);
+    assert_eq!(indices_of(&compose_2(&doc)), [1, 2, 3, 0]);
 
     // La de abajo oculta y la de arriba vacía: no queda ningún píxel que dar.
     let hidden = Command::SetLayerVisible {
@@ -1282,9 +1282,9 @@ proptest! {
     ) {
         let back = Rgba::new(cb.0, cb.1, cb.2, 255);
         let src = Rgba::new(cs.0, cs.1, cs.2, 255);
-        let en = |m: BlendMode| composite_pixel(back, src, 255, m);
-        let (dark, light) = (en(BlendMode::Darken), en(BlendMode::Lighten));
-        let (mult, pattern, sum) = (en(BlendMode::Multiply), en(BlendMode::Screen), en(BlendMode::Add));
+        let with_mode = |m: BlendMode| composite_pixel(back, src, 255, m);
+        let (dark, light) = (with_mode(BlendMode::Darken), with_mode(BlendMode::Lighten));
+        let (mult, pattern, sum) = (with_mode(BlendMode::Multiply), with_mode(BlendMode::Screen), with_mode(BlendMode::Add));
 
         for (k, (b, s)) in [(cb.0, cs.0), (cb.1, cs.1), (cb.2, cs.2)].into_iter().enumerate() {
             let channel = |p: Rgba| [p.r, p.g, p.b][k];
@@ -1296,7 +1296,7 @@ proptest! {
 
         // Diferencia es simétrica en Cb y Cs.
         prop_assert_eq!(
-            en(BlendMode::Difference),
+            with_mode(BlendMode::Difference),
             composite_pixel(src, back, 255, BlendMode::Difference)
         );
 

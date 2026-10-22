@@ -31,15 +31,15 @@ fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
 }
 
 /// `A`, `B` y `C` de la tabla: tres colores distintos (`C` es el de relleno).
-fn va() -> Pixel {
+fn pixel_a() -> Pixel {
     Pixel::Rgba(rgba(10, 20, 30, 255))
 }
 
-fn vb() -> Pixel {
+fn pixel_b() -> Pixel {
     Pixel::Rgba(rgba(40, 50, 60, 255))
 }
 
-fn vc() -> Pixel {
+fn pixel_c() -> Pixel {
     Pixel::Rgba(rgba(200, 100, 50, 255))
 }
 
@@ -77,8 +77,8 @@ fn image_matrix(rows: &[&str]) -> Image {
     let width = u32::try_from(rows[0].len()).unwrap();
     image_of(width, height, |x, y| {
         match rows[width_usize(y)].as_bytes()[width_usize(x)] {
-            b'A' => va(),
-            b'B' => vb(),
+            b'A' => pixel_a(),
+            b'B' => pixel_b(),
             other => panic!("carácter {other} no válido en la matriz"),
         }
     })
@@ -124,15 +124,15 @@ fn command(image: ImageId, spans: &[Span], pixel: Pixel) -> Result<Option<Comman
     }))
 }
 
-/// Comprueba una fila «a mano»: `fill_command` da exactamente `spans` con `vc()`, no toca el
+/// Comprueba una fila «a mano»: `fill_command` da exactamente `spans` con `pixel_c()`, no toca el
 /// documento; `flood_fill` lo aplica (`Ok(true)`, la imagen es la original con esos tramos
 /// pintados y nada más) y `undo` la restaura.
 fn checks_region(doc: &Document, seed: (i32, i32), spans: &[Span]) {
     let id = ImageId::from_raw(0);
     let before = snapshot(doc);
     assert_eq!(
-        fill_command(doc, id, seed.0, seed.1, vc()),
-        command(id, spans, vc()),
+        fill_command(doc, id, seed.0, seed.1, pixel_c()),
+        command(id, spans, pixel_c()),
         "semilla {seed:?}"
     );
     assert_eq!(snapshot(doc), before, "fill_command no toca el documento");
@@ -140,11 +140,14 @@ fn checks_region(doc: &Document, seed: (i32, i32), spans: &[Span]) {
     let mut expected = doc.image(id).unwrap().clone();
     for s in spans {
         for x in s.x_start..s.x_end {
-            expected.set_pixel(x, s.y, vc()).unwrap();
+            expected.set_pixel(x, s.y, pixel_c()).unwrap();
         }
     }
     let mut copy = doc.clone();
-    assert_eq!(flood_fill(&mut copy, id, seed.0, seed.1, vc()), Ok(true));
+    assert_eq!(
+        flood_fill(&mut copy, id, seed.0, seed.1, pixel_c()),
+        Ok(true)
+    );
     assert_eq!(copy.image(id), Some(&expected), "semilla {seed:?}");
     assert_eq!(copy.undo(), Ok(()));
     assert_eq!(copy.image(id), doc.image(id), "undo restaura la imagen");
@@ -221,9 +224,9 @@ fn row_05_diagonals_do_not_count() {
     // Las esquinas (`A`) quedan como estaban.
     let mut copy = doc.clone();
     let id = ImageId::from_raw(0);
-    assert_eq!(flood_fill(&mut copy, id, 1, 1, vc()), Ok(true));
+    assert_eq!(flood_fill(&mut copy, id, 1, 1, pixel_c()), Ok(true));
     for (x, y) in [(0, 0), (2, 0), (0, 2), (2, 2)] {
-        assert_eq!(copy.image(id).unwrap().get_pixel(x, y), Ok(va()));
+        assert_eq!(copy.image(id).unwrap().get_pixel(x, y), Ok(pixel_a()));
     }
 }
 
@@ -234,7 +237,7 @@ fn row_06_board_the_region_is_one_pixel() {
     // (1, 1) es `A` (x + y par).
     assert_eq!(
         doc.image(ImageId::from_raw(0)).unwrap().get_pixel(1, 1),
-        Ok(va())
+        Ok(pixel_a())
     );
     checks_region(&doc, (1, 1), &[sp(1, 1, 2)]);
 }
@@ -281,10 +284,10 @@ fn row_09_comb_from_two_seeds() {
 fn row_10_seed_outside_the_canvas() {
     // 3 x 2, con historia y con algo que rehacer: nada se toca.
     let mut doc = doc_matrix(&["AAA", "AAA"]);
-    with_redo(&mut doc, vb());
+    with_redo(&mut doc, pixel_b());
     let id = ImageId::from_raw(0);
     for seed in [(-1, 0), (3, 0), (0, 2), (MIN, MAX)] {
-        checks_outside(&mut doc, id, seed, vc());
+        checks_outside(&mut doc, id, seed, pixel_c());
     }
     // Otros extremos y esquinas contiguas al lienzo.
     for seed in [
@@ -296,12 +299,12 @@ fn row_10_seed_outside_the_canvas() {
         (3, 2),
         (-1, -1),
     ] {
-        checks_outside(&mut doc, id, seed, vc());
+        checks_outside(&mut doc, id, seed, pixel_c());
     }
     // Y la historia de un documento sin pasos tampoco cambia.
     let mut new_2 = doc_matrix(&["AAA", "AAA"]);
     let id = ImageId::from_raw(0);
-    checks_outside(&mut new_2, id, (-1, 0), vc());
+    checks_outside(&mut new_2, id, (-1, 0), pixel_c());
     assert!(!new_2.can_undo());
 }
 
@@ -311,11 +314,11 @@ fn row_11_unknown_image_beats_none() {
     let unknown = ImageId::from_raw(99);
     let error = DocumentError::UnknownImage(unknown);
     // Semilla fuera y `C` distinto.
-    checks_error(&mut doc, unknown, (-1, 0), vc(), &error);
+    checks_error(&mut doc, unknown, (-1, 0), pixel_c(), &error);
     // Semilla dentro y `C` igual al valor de la semilla.
-    checks_error(&mut doc, unknown, (0, 0), va(), &error);
+    checks_error(&mut doc, unknown, (0, 0), pixel_a(), &error);
     // Las dos cosas a la vez: semilla fuera y píxel igual al de la imagen.
-    checks_error(&mut doc, unknown, (MIN, MAX), va(), &error);
+    checks_error(&mut doc, unknown, (MIN, MAX), pixel_a(), &error);
     // También gana a un píxel de otro modo.
     checks_error(&mut doc, unknown, (0, 0), Pixel::Gray(1), &error);
     checks_error(&mut doc, unknown, (0, 0), Pixel::Indexed(200), &error);
@@ -368,23 +371,23 @@ fn row_12_pixel_of_another_mode_or_index_outside_the_palette_beats_outside() {
 #[test]
 fn row_13_pixel_equal_to_the_seeds_is_outside() {
     let mut doc = doc_matrix(&["AAB", "ABB"]);
-    with_redo(&mut doc, vc());
+    with_redo(&mut doc, pixel_c());
     let id = ImageId::from_raw(0);
     let before = snapshot(&doc);
     assert!(!before.1 && before.2);
     // `C` igual al valor de la semilla: `A` en (0, 0) y `B` en (2, 0).
-    checks_outside(&mut doc, id, (0, 0), va());
-    checks_outside(&mut doc, id, (2, 0), vb());
+    checks_outside(&mut doc, id, (0, 0), pixel_a());
+    checks_outside(&mut doc, id, (2, 0), pixel_b());
     assert_eq!(snapshot(&doc), before);
 
     // Con una pila de deshacer no vacía.
     let mut with_steps = doc_matrix(&["AAB", "ABB"]);
     let id = ImageId::from_raw(0);
-    assert_eq!(flood_fill(&mut with_steps, id, 0, 0, vc()), Ok(true));
+    assert_eq!(flood_fill(&mut with_steps, id, 0, 0, pixel_c()), Ok(true));
     let before = snapshot(&with_steps);
     assert!(before.1 && !before.2 && before.3 > 0);
-    checks_outside(&mut with_steps, id, (0, 0), vc());
-    checks_outside(&mut with_steps, id, (2, 1), vb());
+    checks_outside(&mut with_steps, id, (0, 0), pixel_c());
+    checks_outside(&mut with_steps, id, (2, 1), pixel_b());
     assert_eq!(snapshot(&with_steps), before);
 
     // Imagen recién creada: transparente con transparente.
@@ -456,12 +459,12 @@ fn row_15_equal_rgb_with_different_alpha_are_different_values() {
     let doc = Document::new(img);
     let id = ImageId::from_raw(0);
     assert_eq!(
-        fill_command(&doc, id, 0, 0, vc()),
-        command(id, &[sp(0, 0, 1)], vc())
+        fill_command(&doc, id, 0, 0, pixel_c()),
+        command(id, &[sp(0, 0, 1)], pixel_c())
     );
     assert_eq!(
-        fill_command(&doc, id, 1, 0, vc()),
-        command(id, &[sp(0, 1, 2)], vc())
+        fill_command(&doc, id, 1, 0, pixel_c()),
+        command(id, &[sp(0, 1, 2)], pixel_c())
     );
     // Rellenar el primero con el valor del segundo es un cambio real.
     let same_as_the_second = Pixel::Rgba(rgba(10, 20, 30, 254));
@@ -490,12 +493,12 @@ fn row_15_invisible_with_different_rgb_are_different_values() {
     let doc = Document::new(img);
     let id = ImageId::from_raw(0);
     assert_eq!(
-        fill_command(&doc, id, 0, 0, vc()),
-        command(id, &[sp(0, 0, 1)], vc())
+        fill_command(&doc, id, 0, 0, pixel_c()),
+        command(id, &[sp(0, 0, 1)], pixel_c())
     );
     assert_eq!(
-        fill_command(&doc, id, 1, 0, vc()),
-        command(id, &[sp(0, 1, 2)], vc())
+        fill_command(&doc, id, 1, 0, pixel_c()),
+        command(id, &[sp(0, 1, 2)], pixel_c())
     );
 }
 
@@ -586,7 +589,7 @@ impl Large {
     }
 
     /// Casilla que cambia con el relleno.
-    fn en_region(self, l: u32, x: u32, y: u32) -> bool {
+    fn in_region(self, l: u32, x: u32, y: u32) -> bool {
         match self {
             Large::Uniform | Large::Comb => self.es_a(x, y),
             Large::Board => (x, y) == self.seed(l),
@@ -634,14 +637,20 @@ impl Large {
 /// Ejecuta una de las pruebas grandes y escribe sus tiempos.
 fn test_large(case: Large, l: u32) {
     let start = Instant::now();
-    let original = image_of(l, l, |x, y| if case.es_a(x, y) { va() } else { vb() });
-    let fills = image_of(l, l, |x, y| {
-        if case.en_region(l, x, y) {
-            vc()
-        } else if case.es_a(x, y) {
-            va()
+    let original = image_of(l, l, |x, y| {
+        if case.es_a(x, y) {
+            pixel_a()
         } else {
-            vb()
+            pixel_b()
+        }
+    });
+    let fills = image_of(l, l, |x, y| {
+        if case.in_region(l, x, y) {
+            pixel_c()
+        } else if case.es_a(x, y) {
+            pixel_a()
+        } else {
+            pixel_b()
         }
     });
     let t_images = start.elapsed();
@@ -651,7 +660,7 @@ fn test_large(case: Large, l: u32) {
     let (sx, sy) = case.seed(l);
 
     let t0 = Instant::now();
-    let result = fill_command(&doc, id, i(sx), i(sy), vc());
+    let result = fill_command(&doc, id, i(sx), i(sy), pixel_c());
     let t_fill = t0.elapsed();
     let command = match result {
         Ok(Some(c)) => c,
@@ -664,7 +673,7 @@ fn test_large(case: Large, l: u32) {
             pixel,
         } => {
             assert_eq!(*image, id);
-            assert_eq!(*pixel, vc());
+            assert_eq!(*pixel, pixel_c());
             case.checks_spans(l, spans);
             spans.len()
         }
@@ -971,7 +980,7 @@ fn with_region_painted(original: &Image, region: &BTreeSet<(u32, u32)>, pixel: P
 
 /// Error que daría `Document::apply(SetPixels)` con `pixel` sobre un documento del mismo modo
 /// y con la misma paleta que `img` (`None` si el píxel es válido).
-fn error_de_apply(img: &Image, pixel: Pixel) -> Option<DocumentError> {
+fn error_of_apply(img: &Image, pixel: Pixel) -> Option<DocumentError> {
     let reference = match img.palette() {
         Some(p) => Image::new_indexed(1, 1, p.clone()).unwrap(),
         None => Image::new(1, 1, img.mode()).unwrap(),
@@ -1197,7 +1206,7 @@ proptest! {
             prop_assert_eq!(snapshot(&doc), before);
             return Ok(());
         };
-        if let Some(e) = error_de_apply(&img, pixel) {
+        if let Some(e) = error_of_apply(&img, pixel) {
             prop_assert!(
                 matches!(&e, DocumentError::Pixel { pixel: 0, .. }),
                 "apply debería dar Pixel {{ pixel: 0, .. }}, dio {:?}", e
@@ -1282,10 +1291,10 @@ mod limits {
         let img = Image::from_bytes(w, h, Mode::Rgba, data).unwrap();
         assert_eq!(
             img.get_pixel(0, 0),
-            Ok(va()),
+            Ok(pixel_a()),
             "el orden de los bytes es RGBA"
         );
-        assert_eq!(img.get_pixel(1, 0), Ok(va()));
+        assert_eq!(img.get_pixel(1, 0), Ok(pixel_a()));
         img
     }
 
@@ -1316,9 +1325,9 @@ mod limits {
         if cycle {
             let fills = doc.image(id).unwrap().clone();
             assert!(fills != original, "el relleno cambia la imagen");
-            assert_eq!(fills.get_pixel(0, 0), Ok(vc()));
-            assert_eq!(fills.get_pixel(1, 0), Ok(vc()));
-            assert_eq!(fills.get_pixel(1, 1), Ok(vb()), "la pared no cambia");
+            assert_eq!(fills.get_pixel(0, 0), Ok(pixel_c()));
+            assert_eq!(fills.get_pixel(1, 0), Ok(pixel_c()));
+            assert_eq!(fills.get_pixel(1, 1), Ok(pixel_b()), "la pared no cambia");
             assert_eq!(doc.undo(), Ok(()));
             assert!(doc.image(id) == Some(&original), "undo restaura la imagen");
             assert_eq!(doc.redo(), Ok(()));
@@ -1342,21 +1351,21 @@ mod limits {
             sp(2, 4, 5),
         ];
         assert_eq!(
-            fill_command_with_limit(&doc, id, 0, 0, vc(), 7),
-            command(id, &expected_2_2, vc()),
+            fill_command_with_limit(&doc, id, 0, 0, pixel_c(), 7),
+            command(id, &expected_2_2, pixel_c()),
             "7 tramos con tope 7"
         );
         assert_eq!(
-            fill_command_with_limit(&doc, id, 4, 2, vc(), 7),
-            command(id, &expected_2_2, vc()),
+            fill_command_with_limit(&doc, id, 4, 2, pixel_c(), 7),
+            command(id, &expected_2_2, pixel_c()),
             "otra semilla, mismo resultado"
         );
         assert_eq!(
-            fill_command_with_limit(&doc, id, 0, 0, vc(), 6),
+            fill_command_with_limit(&doc, id, 0, 0, pixel_c(), 6),
             Err(too_much(6))
         );
         assert_eq!(
-            fill_command_with_limit(&doc, id, 4, 2, vc(), 6),
+            fill_command_with_limit(&doc, id, 4, 2, pixel_c(), 6),
             Err(too_much(6))
         );
     }
@@ -1368,27 +1377,27 @@ mod limits {
         let doc = doc_matrix(&["AAA"]);
         let id = ImageId::from_raw(0);
         assert_eq!(
-            fill_command_with_limit(&doc, id, 1, 0, vc(), 0),
+            fill_command_with_limit(&doc, id, 1, 0, pixel_c(), 0),
             Err(too_much(0))
         );
         // Con tope 1 el mismo relleno (1 tramo) sí cabe.
         assert_eq!(
-            fill_command_with_limit(&doc, id, 1, 0, vc(), 1),
-            command(id, &[sp(0, 0, 3)], vc())
+            fill_command_with_limit(&doc, id, 1, 0, pixel_c(), 1),
+            command(id, &[sp(0, 0, 3)], pixel_c())
         );
 
         // Tablero de 64 x 64 (`A` si x + y es par), semilla en el centro: la región es un píxel.
-        let board = Document::new(image_of(
-            64,
-            64,
-            |x, y| {
-                if (x + y) % 2 == 0 { va() } else { vb() }
-            },
-        ));
+        let board = Document::new(image_of(64, 64, |x, y| {
+            if (x + y) % 2 == 0 {
+                pixel_a()
+            } else {
+                pixel_b()
+            }
+        }));
         let id = ImageId::from_raw(0);
         assert_eq!(
-            fill_command_with_limit(&board, id, 32, 32, vc(), 1),
-            command(id, &[sp(32, 32, 33)], vc())
+            fill_command_with_limit(&board, id, 32, 32, pixel_c(), 1),
+            command(id, &[sp(32, 32, 33)], pixel_c())
         );
     }
 
@@ -1402,7 +1411,7 @@ mod limits {
 
         let unknown = ImageId::from_raw(99);
         assert_eq!(
-            fill_command_with_limit(&doc, unknown, 0, 0, vc(), 0),
+            fill_command_with_limit(&doc, unknown, 0, 0, pixel_c(), 0),
             Err(DocumentError::UnknownImage(unknown))
         );
         let result = fill_command_with_limit(&doc, id, 0, 0, Pixel::Indexed(0), 0);
@@ -1410,15 +1419,21 @@ mod limits {
             matches!(result, Err(DocumentError::Pixel { pixel: 0, .. })),
             "salió {result:?}"
         );
-        assert_eq!(fill_command_with_limit(&doc, id, -1, 0, vc(), 0), Ok(None));
         assert_eq!(
-            fill_command_with_limit(&doc, id, MIN, MAX, vc(), 0),
+            fill_command_with_limit(&doc, id, -1, 0, pixel_c(), 0),
             Ok(None)
         );
-        assert_eq!(fill_command_with_limit(&doc, id, 0, 0, va(), 0), Ok(None));
+        assert_eq!(
+            fill_command_with_limit(&doc, id, MIN, MAX, pixel_c(), 0),
+            Ok(None)
+        );
+        assert_eq!(
+            fill_command_with_limit(&doc, id, 0, 0, pixel_a(), 0),
+            Ok(None)
+        );
         // Y el tope, si hay algo que rellenar.
         assert_eq!(
-            fill_command_with_limit(&doc, id, 0, 0, vc(), 0),
+            fill_command_with_limit(&doc, id, 0, 0, pixel_c(), 0),
             Err(too_much(0))
         );
         assert_eq!(snapshot(&doc), before, "ninguna llamada toca el documento");
@@ -1434,7 +1449,7 @@ mod limits {
         for x in [1, 3] {
             let step = Command::SetPixels {
                 image: id,
-                pixels: vec![editing(x, 5, vc())],
+                pixels: vec![editing(x, 5, pixel_c())],
             };
             assert_eq!(doc.apply(step), Ok(true));
         }
@@ -1449,7 +1464,7 @@ mod limits {
             doc.state_id(),
         );
 
-        let result = flood_fill(&mut doc, id, 0, 0, vc());
+        let result = flood_fill(&mut doc, id, 0, 0, pixel_c());
         assert!(
             matches!(
                 result,
@@ -1473,7 +1488,7 @@ mod limits {
         // S = 1 + 367 * 8192 = 3 006 465.
         let (doc, id) = doc_comb(16384, 368, None);
         assert_eq!(
-            fill_command(&doc, id, 0, 0, vc()),
+            fill_command(&doc, id, 0, 0, pixel_c()),
             Err(too_much(CAP)),
             "el error lleva el tope real"
         );
@@ -1483,7 +1498,7 @@ mod limits {
     fn row_05_comb_of_367_rows_fits_and_its_step_fits_in_the_history() {
         // S = 1 + 366 * 8192 = 2 998 273.
         let (mut doc, id) = doc_comb(16384, 367, None);
-        let command = fill_command(&doc, id, 0, 0, vc());
+        let command = fill_command(&doc, id, 0, 0, pixel_c());
         let n = spans_of_the(command.clone()).len();
         assert_eq!(n, 2_998_273);
         let command = command.unwrap().unwrap();
@@ -1504,7 +1519,7 @@ mod limits {
     #[test]
     fn row_15_k_1726_one_span_below_the_cap() {
         let (mut doc, id) = doc_comb(16384, 368, Some(1726));
-        let command = fill_command(&doc, id, 0, 0, vc());
+        let command = fill_command(&doc, id, 0, 0, pixel_c());
         assert_eq!(spans_of_the(command.clone()).len(), 2_999_999);
         applies_and_checks(&mut doc, id, command.unwrap().unwrap(), false);
     }
@@ -1512,7 +1527,7 @@ mod limits {
     #[test]
     fn row_15_k_1727_exactly_at_the_cap() {
         let (mut doc, id) = doc_comb(16384, 368, Some(1727));
-        let command = fill_command(&doc, id, 0, 0, vc());
+        let command = fill_command(&doc, id, 0, 0, pixel_c());
         assert_eq!(spans_of_the(command.clone()).len(), 3_000_000);
         applies_and_checks(&mut doc, id, command.unwrap().unwrap(), false);
     }
@@ -1521,7 +1536,7 @@ mod limits {
     fn row_15_k_1728_one_span_above_the_cap() {
         let (doc, id) = doc_comb(16384, 368, Some(1728));
         assert_eq!(
-            fill_command(&doc, id, 0, 0, vc()),
+            fill_command(&doc, id, 0, 0, pixel_c()),
             Err(too_much(CAP)),
             "S = 3 000 001"
         );
@@ -1606,7 +1621,7 @@ mod limits {
                 prop_assert_eq!(c, Err(DocumentError::UnknownImage(id)));
                 return Ok(());
             };
-            if let Some(e) = error_de_apply(&img, pixel) {
+            if let Some(e) = error_of_apply(&img, pixel) {
                 prop_assert!(
                     matches!(&e, DocumentError::Pixel { pixel: 0, .. }),
                     "apply debería dar Pixel {{ pixel: 0, .. }}, dio {:?}", e

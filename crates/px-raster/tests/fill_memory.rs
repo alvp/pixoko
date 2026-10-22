@@ -67,7 +67,7 @@ fn comb_indexed() -> Image {
     Image::from_bytes_indexed(SIDE, SIDE, palette(), data).unwrap()
 }
 
-fn spans_de(command: &Command) -> usize {
+fn spans_of(command: &Command) -> usize {
     match command {
         Command::FillSpans { spans, .. } => spans.len(),
         other => panic!("se esperaba FillSpans, salió {other:?}"),
@@ -129,7 +129,7 @@ fn fills_the_whole_image(
         Ok(Some(c)) => c,
         other => panic!("{label}: se esperaba Ok(Some(..)), salió {other:?}"),
     };
-    assert_eq!(spans_de(&command), 8192, "{label}: un tramo por fila");
+    assert_eq!(spans_of(&command), 8192, "{label}: un tramo por fila");
 
     let t1 = Instant::now();
     assert_eq!(doc.apply(command), Ok(true), "{label}: apply");

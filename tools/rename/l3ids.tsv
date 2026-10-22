@@ -1,0 +1,98 @@
+# L3 (restos de L2): crate	old	new	[fichero]   (palabras de una o dos letras que L2 dejó: de, en, va, si, ya, lee…)
+px-raster	en	with_mode
+px-raster	en_c	in_c
+px-raster	en_g	in_g
+px-raster	en_region	in_region
+px-raster	error_de_apply	error_of_apply
+px-raster	indices_de	indices_of
+px-raster	pixel_de	pixel_of
+px-raster	pixel_en	pixel_at
+px-raster	rgba_de	rgba_of
+px-raster	spans_de	spans_of
+px-raster	va	pixel_a	crates/px-raster/tests/fill.rs
+px-raster	vb	pixel_b	crates/px-raster/tests/fill.rs
+px-raster	vc	pixel_c	crates/px-raster/tests/fill.rs
+px-golden	de	from
+px-golden	de_16_bits	is_16_bits
+px-golden	de_aseprite	from_aseprite
+px-golden	error_de	error_of
+px-golden	lee	read
+px-golden	lee_png	read_golden_png
+px-golden	pixel_de	pixel_of
+px-golden	pixel_de_patron	pixel_of_pattern
+px-golden	png_de_16_bits	png_of_16_bits
+px-golden	rgba_de	rgba_of
+px-golden	va	value_a	crates/px-golden/tests/png_interop/aseprite_gate.rs
+px-golden	vb	value_b	crates/px-golden/tests/png_interop/aseprite_gate.rs
+px-formats	UnColor	OneColor
+px-formats	aux_de	aux_of
+px-formats	bytes_de_z	bytes_of_z
+px-formats	error_de	error_of
+px-formats	lee	read
+px-formats	lee_corpus	read_corpus
+px-formats	lee_err	read_err
+px-formats	lee_ok	read_ok
+px-formats	si	enabled
+px-formats	va	value_a	crates/px-formats/tests/aseprite.rs
+px-formats	vb	value_b	crates/px-formats/tests/aseprite.rs
+px-core	bytes_de	bytes_of
+px-core	de	of
+px-core	di	indexed_doc
+px-core	en	coords_of
+px-core	error_de	error_of
+px-core	pixel_de	pixel_of
+px-core	pixel_en	pixel_at
+px-core	rgba_de	rgba_of
+px-app	allowed_de	allowed_of
+px-app	color_en	color_in
+px-app	command_de	command_of
+px-app	de	from
+px-app	de_la_spec	from_spec
+px-app	en	at
+px-app	id_de	id_of
+px-app	n_de	n_of
+px-app	pixel_de	pixel_of
+px-app	rgba_de	rgba_of
+px-app	rgba_de_indices	rgba_of_indices
+px-app	spec_de	spec_of
+px-app	y_de	y_of
+px-app	ya	already
+px-ui	CTRL_DE_MAC	CTRL_ON_MAC
+px-ui	SI_NO	YES_NO
+px-ui	area_de	area_of
+px-ui	color_de	color_of
+px-ui	de	target_of	crates/px-ui/tests/color_edit.rs
+px-ui	de	of	crates/px-ui/tests/tiles_canvas.rs
+px-ui	de_color	of_color
+px-ui	de_la_op	op_index
+px-ui	de_menu	menu_item
+px-ui	el_menu	menu_titled
+px-ui	en	at
+px-ui	en_0	at_0
+px-ui	en_gpu	in_gpu
+px-ui	en_max	at_max
+px-ui	en_min	at_min
+px-ui	en_rgba	in_rgba
+px-ui	en_warning	in_warning
+px-ui	en_x	in_x
+px-ui	en_y	in_y
+px-ui	hash_de	hash_of
+px-ui	hover_en	hover_at
+px-ui	info_flags_alpha0_de_la_spec	info_flags_alpha0_of_the_spec
+px-ui	k_de	k_of
+px-ui	layout_de	layout_of
+px-ui	lee	read
+px-ui	locks_de	locks_of
+px-ui	n_de	n_of
+px-ui	op_de	op_of
+px-ui	overlay_de	overlay_of
+px-ui	pixel_de	pixel_of
+px-ui	pos_de	pos_of
+px-ui	press_de	press_of
+px-ui	rect_de	rect_of
+px-ui	reset_en	reset_at
+px-ui	rgba_de	rgba_of
+px-ui	texel_de	texel_of
+px-ui	va	window_before	crates/px-ui/tests/dialog_view.rs
+px-ui	vd	window_after	crates/px-ui/tests/dialog_view.rs
+px-ui	ya_visible	already_visible

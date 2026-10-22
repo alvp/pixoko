@@ -188,7 +188,7 @@ fn doc_rgba(width: u32, height: u32) -> Document {
     Document::new(Image::new(width, height, Mode::Rgba).unwrap())
 }
 
-fn pixel_en(doc: &Document, x: u32, y: u32) -> Pixel {
+fn pixel_at(doc: &Document, x: u32, y: u32) -> Pixel {
     doc.image(ImageId::from_raw(0))
         .unwrap()
         .get_pixel(x, y)
@@ -516,7 +516,7 @@ fn row_draw_line_with_pixel_of_another_mode() {
         })
     );
     // La imagen queda intacta, también el primer píxel de la línea.
-    assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(Rgba::TRANSPARENT));
+    assert_eq!(pixel_at(&doc, 0, 0), Pixel::Rgba(Rgba::TRANSPARENT));
     assert_eq!(snapshot(&doc), before);
 }
 
@@ -558,11 +558,11 @@ fn draw_line_in_the_four_modes() {
         let id = ImageId::from_raw(0);
         assert_eq!(draw_line(&mut doc, id, (0, 1), (3, 1), pixel), Ok(true));
         for x in 0..4 {
-            assert_eq!(pixel_en(&doc, x, 1), pixel, "{pixel:?} en x = {x}");
-            assert_ne!(pixel_en(&doc, x, 0), pixel, "{pixel:?} en y = 0");
+            assert_eq!(pixel_at(&doc, x, 1), pixel, "{pixel:?} en x = {x}");
+            assert_ne!(pixel_at(&doc, x, 0), pixel, "{pixel:?} en y = 0");
         }
         assert_eq!(doc.undo(), Ok(()));
-        assert_ne!(pixel_en(&doc, 0, 1), pixel);
+        assert_ne!(pixel_at(&doc, 0, 1), pixel);
     }
 }
 
@@ -575,7 +575,7 @@ fn draw_line_undo_and_redo_is_a_single_step() {
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 3), pixel), Ok(true));
     let drawn = doc.clone();
     for k in 0..4 {
-        assert_eq!(pixel_en(&doc, k, k), pixel);
+        assert_eq!(pixel_at(&doc, k, k), pixel);
     }
     assert_eq!(doc.undo(), Ok(()));
     assert_eq!(doc, initial);
@@ -1040,7 +1040,7 @@ proptest! {
                 } else {
                     image_before.get_pixel(x, y).unwrap()
                 };
-                prop_assert_eq!(pixel_en(&with_apply, x, y), value_expected, "({}, {})", x, y);
+                prop_assert_eq!(pixel_at(&with_apply, x, y), value_expected, "({}, {})", x, y);
             }
         }
 
