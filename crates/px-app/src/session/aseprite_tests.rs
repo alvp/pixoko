@@ -164,7 +164,7 @@ fn es_png(bytes: &[u8]) -> bool {
 #[test]
 fn fila_12_a_abrir_un_aseprite_instala_el_documento_con_capas_la_activa_es_la_de_arriba_y_avisa() {
     let tmp = Tmp::nuevo();
-    let ruta = copia_del_corpus(&tmp, "mixto-rgba", "mixto.aseprite");
+    let ruta = copia_del_corpus(&tmp, "mixed-rgba", "mixto.aseprite");
     let mut sesion = sesion_vacia();
 
     let cargado = sesion
@@ -203,7 +203,7 @@ fn fila_12_a_abrir_un_aseprite_instala_el_documento_con_capas_la_activa_es_la_de
 fn fila_12_b_un_aseprite_con_etiquetas_y_dos_fotogramas_avisa_y_ctrl_s_guarda_una_copia() {
     let tmp = Tmp::nuevo();
     let original = con_fotogramas(
-        con_chunk(corpus("capas-normal-tres"), 0x2018, &etiquetas()),
+        con_chunk(corpus("layers-normal-three"), 0x2018, &etiquetas()),
         2,
     );
     let ruta = tmp.ruta().join("anim.aseprite");
@@ -256,7 +256,7 @@ fn fila_12_b_un_aseprite_con_etiquetas_y_dos_fotogramas_avisa_y_ctrl_s_guarda_un
 #[test]
 fn fila_12_c_ctrl_s_con_ruta_aseprite_escribe_aseprite_y_guardar_como_decide_por_la_extension() {
     let tmp = Tmp::nuevo();
-    let ruta = copia_del_corpus(&tmp, "capas-normal-tres", "tres.aseprite");
+    let ruta = copia_del_corpus(&tmp, "layers-normal-three", "tres.aseprite");
     let mut sesion = sesion_vacia();
     sesion.open(&ruta, 16384, false).expect("abrir");
     anade_capa(&mut sesion, "nueva");
@@ -329,7 +329,7 @@ fn fila_12_d_abrir_va_por_el_contenido_y_el_gris_no_se_guarda_como_aseprite() {
 
     // Un `.aseprite` llamado `.png`.
     let raro = tmp.ruta().join("raro.png");
-    fs::write(&raro, corpus("mezcla-normal")).expect("escribir");
+    fs::write(&raro, corpus("blend-normal")).expect("escribir");
     let texto = sesion
         .open(&raro, 16384, false)
         .expect("un .aseprite con extensión .png se abre");
@@ -391,7 +391,7 @@ fn fila_12_e_un_png_con_capas_pide_dialogo_y_los_nombres_y_titulos_dicen_el_form
     );
     // Sin ruta, siempre diálogo; con ruta `.aseprite`, directo aunque haya muchas capas.
     assert_eq!(sesion_vacia().save_route(), SaveRoute::Dialog);
-    let aseprite = copia_del_corpus(&tmp, "capas-normal-tres", "tres.ASEPRITE");
+    let aseprite = copia_del_corpus(&tmp, "layers-normal-three", "tres.ASEPRITE");
     let mut otra = sesion_vacia();
     otra.open(&aseprite, 16384, false).expect("abrir");
     assert_eq!(

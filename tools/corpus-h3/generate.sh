@@ -3,13 +3,13 @@
 # por lotes y deja, para cada uno, el .aseprite, el PNG aplanado y el .sha256 del PNG.
 #
 # Uso:
-#   tools/corpus-h3/generar.sh                  todos los casos (los 28 primeros deben salir IGUAL)
-#   tools/corpus-h3/generar.sh --nuevos         solo el caso añadido (el de NUEVOS)
-#   tools/corpus-h3/generar.sh --caso NOMBRE    solo ese (se puede repetir; también valen nombres sueltos)
-#   tools/corpus-h3/generar.sh --sobrescribir   (con cualquiera de los anteriores) deja que un caso
+#   tools/corpus-h3/generate.sh                  todos los casos (los 28 primeros deben salir IGUAL)
+#   tools/corpus-h3/generate.sh --nuevos         solo el caso añadido (el de NUEVOS)
+#   tools/corpus-h3/generate.sh --caso NOMBRE    solo ese (se puede repetir; también valen nombres sueltos)
+#   tools/corpus-h3/generate.sh --sobrescribir   (con cualquiera de los anteriores) deja que un caso
 #                                               ya existente cambie si sale distinto
-#   tools/corpus-h3/generar.sh --prueba         paso 0: versión y modo por lotes, sin tocar golden/
-#   tools/corpus-h3/generar.sh --verificar      vuelca capas y celdas de lo ya generado
+#   tools/corpus-h3/generate.sh --prueba         paso 0: versión y modo por lotes, sin tocar golden/
+#   tools/corpus-h3/generate.sh --verificar      vuelca capas y celdas de lo ya generado
 #
 # Los casos se generan primero en una carpeta de prueba (en disco, no en /tmp) y se comparan **byte a
 # byte** con lo que ya hay en golden/aseprite/: un caso existente que sale igual se informa como IGUAL;
@@ -19,7 +19,7 @@
 # Variables: ASEPRITE (orden del programa, por defecto `aseprite`) y SALIDA (por defecto
 # golden/aseprite).
 #
-# Cada caso lo dibuja generar.lua desde cero (colores y formas propios, paleta propia). El PNG sale
+# Cada caso lo dibuja generate.lua desde cero (colores y formas propios, paleta propia). El PNG sale
 # de abrir el .aseprite ya guardado y exportarlo con --save-as (aplana las capas visibles). El hash
 # lo calcula Pillow, no Pixoko: SHA-256 de la imagen en RGBA de 8 bits, sin cabecera, como en
 # golden/png/. Los resultados no se commitean solos: se revisan y se commitean a mano.
@@ -28,22 +28,22 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ASEPRITE="${ASEPRITE:-aseprite}"
 SALIDA="${SALIDA:-$RAIZ/golden/aseprite}"
-LUA="$RAIZ/tools/corpus-h3/generar.lua"
+LUA="$RAIZ/tools/corpus-h3/generate.lua"
 
 # Misma lista que la tabla de specs/corpus-hito-3.md (un caso por fila, 29 como máximo).
 CASOS=(
-  rgba-una-capa capas-normal-tres capas-opacidad capas-alfa-origen capas-alfa-fondo
-  mezcla-normal mezcla-multiplicar mezcla-trama mezcla-superponer
-  mezcla-oscurecer mezcla-aclarar mezcla-sumar mezcla-diferencia
-  mezcla-ocho-opacidad mezcla-ocho-alfa mezcla-ocho-fondo-translucido
-  indexado-capas indexado-transparente-7 indexado-paleta-256 indexado-celdas
-  celda-desplazada celda-recortada celda-vacia capas-ocultas mixto-rgba
-  mezcla-alfa-rejilla-multiplicar mezcla-alfa-rejilla-superponer fondo-con-opacidad
-  capa-bloqueada
+  rgba-one-layer layers-normal-three layers-opacity layers-alpha-source layers-alpha-background
+  blend-normal blend-multiply blend-pattern blend-overlay
+  blend-darken blend-lighten blend-add blend-difference
+  blend-eight-opacity blend-eight-alpha blend-eight-background-translucent
+  indexed-layers indexed-transparent-7 indexed-palette-256 indexed-cels
+  cel-shifted cel-clipped cel-empty layers-hidden mixed-rgba
+  blend-alpha-grid-multiply blend-alpha-grid-overlay background-with-opacity
+  layer-locked
 )
 # El añadido después de los 28 primeros (corpus-hito-3.md, «Caso añadido para 3.8»). Los tres de la
 # ampliación de 3.2 ya están generados.
-NUEVOS=(capa-bloqueada)
+NUEVOS=(layer-locked)
 
 falta() { echo "falta $1" >&2; exit 1; }
 command -v "$ASEPRITE" >/dev/null || falta "$ASEPRITE (pasa ASEPRITE=/ruta/al/programa)"
@@ -66,7 +66,7 @@ if [[ "${1:-}" == "--prueba" ]]; then
   echo "== versión"; "$ASEPRITE" --version
   echo "== script de Lua por lotes"
   # Los --script-param van ANTES de --script: si no, app.params llega vacío.
-  "$ASEPRITE" -b --script-param "salida=$PRUEBA" --script "$RAIZ/tools/corpus-h3/comprobar.lua"
+  "$ASEPRITE" -b --script-param "salida=$PRUEBA" --script "$RAIZ/tools/corpus-h3/check.lua"
   [[ -s "$PRUEBA/humo.aseprite" ]] || falta "humo.aseprite (el script no lo escribió)"
   echo "== exportar PNG aplanado"
   "$ASEPRITE" -b "$PRUEBA/humo.aseprite" --save-as "$PRUEBA/humo.png"
@@ -88,7 +88,7 @@ fi
 if [[ "${1:-}" == "--verificar" ]]; then
   compgen -G "$SALIDA/*.aseprite" >/dev/null || falta "ningún .aseprite en $SALIDA (genera primero)"
   for f in "$SALIDA"/*.aseprite; do
-    "$ASEPRITE" -b "$f" --script "$RAIZ/tools/corpus-h3/verificar.lua"
+    "$ASEPRITE" -b "$f" --script "$RAIZ/tools/corpus-h3/verify.lua"
   done
   exit 0
 fi
@@ -173,7 +173,7 @@ desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en ${#TODOS[@]
 
 - **Programa:** $VERSION
 - **Fecha:** $FECHA
-- **Cómo se generó:** \`tools/corpus-h3/generar.sh\` (MIT, en este repositorio): un script de Lua
+- **Cómo se generó:** \`tools/corpus-h3/generate.sh\` (MIT, en este repositorio): un script de Lua
   propio crea cada caso desde cero y guarda el \`.aseprite\`; el PNG aplanado sale de abrir ese
   fichero y exportarlo con el modo por lotes del programa.
 - **Origen de las imágenes:** son dibujos propios de prueba (rectángulos, discos y diagonales con

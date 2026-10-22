@@ -1,5 +1,5 @@
 -- Paso 0 de specs/corpus-hito-3.md: prueba mínima del modo por lotes.
---   aseprite -b --script-param salida=<carpeta> --script tools/corpus-h3/comprobar.lua
+--   aseprite -b --script-param salida=<carpeta> --script tools/corpus-h3/check.lua
 -- Escribe <carpeta>/humo.aseprite: 4 x 4, RGBA, dos capas, sin paleta ni recurso del programa.
 -- Resultado esperado al exportarlo (ver la spec): esquinas (196, 46, 52, 255) y centro opaco.
 -- Las dudas sobre la API están marcadas con "comprobar".

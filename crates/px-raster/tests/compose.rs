@@ -480,7 +480,7 @@ fn fila_04_a_fondo_translucido_valores() {
         c(211, 17, 99, 255)
     );
 
-    // Empírica (4b). Los dos primeros son iguales al PNG de `mezcla-ocho-fondo-translucido`.
+    // Empírica (4b). Los dos primeros son iguales al PNG de `blend-eight-background-translucent`.
     let negro_150 = c(0, 0, 0, 150);
     assert_eq!(
         composite_pixel(negro_150, c(255, 255, 255, 255), 255, BlendMode::Multiply),

@@ -8,7 +8,7 @@
 //! propiedades 2 y 3 viven en `crates/px-core/tests/` y la fila 8 en `crates/px-golden`.
 //!
 //! Los vectores de la fila 6 son los 10 píxeles observados en Aseprite 1.3.18.6-dev ejecutándolo
-//! como caja negra (`tools/corpus-h3/sonda-combinar.lua`), copiados como literales. El oráculo de
+//! como caja negra (`tools/corpus-h3/merge-probe.lua`), copiados como literales. El oráculo de
 //! la propiedad 4 es un modelo independiente escrito aquí (plegado de `composite_pixel` sobre el
 //! fondo vacío; en indexado, la regla del índice más alto no transparente).
 //!

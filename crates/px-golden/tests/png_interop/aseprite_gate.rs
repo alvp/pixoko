@@ -27,7 +27,7 @@ use super::aseprite_read::{evalua_imagen, golden, lee_documento, lee_png, rgba_d
 use super::{lee_carpeta, raiz_del_repo};
 
 /// Los casos de una sola capa: no hay nada que aplanar ni combinar (`NothingToMerge`).
-const DE_UNA_CAPA: [&str; 2] = ["rgba-una-capa", "indexado-paleta-256"];
+const DE_UNA_CAPA: [&str; 2] = ["rgba-one-layer", "indexed-palette-256"];
 
 fn limites() -> AsepriteLimits {
     AsepriteLimits::default()
@@ -373,8 +373,8 @@ fn estructura(b: &[u8]) -> Result<Estructura, String> {
 /// del lienzo o toda transparente no escribe chunk). Lista cerrada, por caso.
 fn celdas_que_no_se_escriben(caso: &str) -> usize {
     match caso {
-        "celda-recortada" => 2,
-        "celda-vacia" => 1,
+        "cel-clipped" => 2,
+        "cel-empty" => 1,
         _ => 0,
     }
 }
@@ -516,7 +516,7 @@ fn fila_04_a_el_corpus_sin_un_caso_o_con_uno_de_mas_falla() {
     let casos = verificar(&ficheros).expect("golden/aseprite es válida");
     comparar_con_lista(&casos, &CASOS).expect("los 29 casos de la lista");
     // Sin un caso (sus tres ficheros): el verificador no se queja (queda coherente), la lista sí.
-    for quitar in [CASOS[0], "mixto-rgba", "capa-bloqueada"] {
+    for quitar in [CASOS[0], "mixed-rgba", "layer-locked"] {
         let sin: Vec<_> = ficheros
             .iter()
             .filter(|f| !f.nombre.starts_with(&format!("{quitar}.")))
@@ -531,7 +531,7 @@ fn fila_04_a_el_corpus_sin_un_caso_o_con_uno_de_mas_falla() {
     for sufijo in [".aseprite", ".png", ".png.sha256"] {
         let origen = ficheros
             .iter()
-            .find(|f| f.nombre == format!("mixto-rgba{sufijo}"))
+            .find(|f| f.nombre == format!("mixed-rgba{sufijo}"))
             .expect("fichero de origen");
         let mut copia = origen.clone();
         copia.nombre = format!("caso-extra{sufijo}");
@@ -559,7 +559,7 @@ fn con_un_pixel_cambiado(png: &Image) -> (Image, (u32, u32)) {
 
 #[test]
 fn fila_04_b_un_pixel_cambiado_de_un_png_hace_fallar_la_composicion_y_el_hash() {
-    let caso = "mixto-rgba";
+    let caso = "mixed-rgba";
     let doc = lee_documento(caso).expect("documento");
     let compuesto = compose(&doc).expect("compose");
     let png = lee_png(caso);
@@ -587,7 +587,7 @@ fn fila_04_b_un_pixel_cambiado_de_un_png_hace_fallar_la_composicion_y_el_hash() 
     let mut ficheros = lee_carpeta(&raiz_del_repo().join("golden/aseprite"));
     let otro = ficheros
         .iter()
-        .find(|f| f.nombre == "mezcla-normal.png.sha256")
+        .find(|f| f.nombre == "blend-normal.png.sha256")
         .expect("otro hash")
         .bytes
         .clone();
@@ -602,7 +602,7 @@ fn fila_04_b_un_pixel_cambiado_de_un_png_hace_fallar_la_composicion_y_el_hash() 
 /// Cambia un byte del fichero escrito y exige que la comparación de la fila 3 diga qué campo.
 #[test]
 fn fila_04_c_un_campo_cambiado_del_fichero_escrito_hace_fallar_la_estructura() {
-    let caso = "mixto-rgba";
+    let caso = "mixed-rgba";
     let original = golden(&format!("{caso}.aseprite"));
     let documento = lee(&original).expect("lee").document;
     let escrito = write_aseprite(&documento).expect("write");

@@ -5,7 +5,7 @@ desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 29 casos.
 
 - **Programa:** Aseprite 1.3.18.6-dev
 - **Fecha:** 2026-10-22
-- **Cómo se generó:** `tools/corpus-h3/generar.sh` (MIT, en este repositorio): un script de Lua
+- **Cómo se generó:** `tools/corpus-h3/generate.sh` (MIT, en este repositorio): un script de Lua
   propio crea cada caso desde cero y guarda el `.aseprite`; el PNG aplanado sale de abrir ese
   fichero y exportarlo con el modo por lotes del programa.
 - **Origen de las imágenes:** son dibujos propios de prueba (rectángulos, discos y diagonales con
@@ -16,32 +16,32 @@ desplazamiento y con recorte, capas ocultas, paleta y canal alfa, en 29 casos.
 
 | Fichero | PNG aplanado |
 | --- | --- |
-| capa-bloqueada.aseprite | capa-bloqueada.png |
-| capas-alfa-fondo.aseprite | capas-alfa-fondo.png |
-| capas-alfa-origen.aseprite | capas-alfa-origen.png |
-| capas-normal-tres.aseprite | capas-normal-tres.png |
-| capas-ocultas.aseprite | capas-ocultas.png |
-| capas-opacidad.aseprite | capas-opacidad.png |
-| celda-desplazada.aseprite | celda-desplazada.png |
-| celda-recortada.aseprite | celda-recortada.png |
-| celda-vacia.aseprite | celda-vacia.png |
-| fondo-con-opacidad.aseprite | fondo-con-opacidad.png |
-| indexado-capas.aseprite | indexado-capas.png |
-| indexado-celdas.aseprite | indexado-celdas.png |
-| indexado-paleta-256.aseprite | indexado-paleta-256.png |
-| indexado-transparente-7.aseprite | indexado-transparente-7.png |
-| mezcla-aclarar.aseprite | mezcla-aclarar.png |
-| mezcla-alfa-rejilla-multiplicar.aseprite | mezcla-alfa-rejilla-multiplicar.png |
-| mezcla-alfa-rejilla-superponer.aseprite | mezcla-alfa-rejilla-superponer.png |
-| mezcla-diferencia.aseprite | mezcla-diferencia.png |
-| mezcla-multiplicar.aseprite | mezcla-multiplicar.png |
-| mezcla-normal.aseprite | mezcla-normal.png |
-| mezcla-ocho-alfa.aseprite | mezcla-ocho-alfa.png |
-| mezcla-ocho-fondo-translucido.aseprite | mezcla-ocho-fondo-translucido.png |
-| mezcla-ocho-opacidad.aseprite | mezcla-ocho-opacidad.png |
-| mezcla-oscurecer.aseprite | mezcla-oscurecer.png |
-| mezcla-sumar.aseprite | mezcla-sumar.png |
-| mezcla-superponer.aseprite | mezcla-superponer.png |
-| mezcla-trama.aseprite | mezcla-trama.png |
-| mixto-rgba.aseprite | mixto-rgba.png |
-| rgba-una-capa.aseprite | rgba-una-capa.png |
+| layer-locked.aseprite | layer-locked.png |
+| layers-alpha-background.aseprite | layers-alpha-background.png |
+| layers-alpha-source.aseprite | layers-alpha-source.png |
+| layers-normal-three.aseprite | layers-normal-three.png |
+| layers-hidden.aseprite | layers-hidden.png |
+| layers-opacity.aseprite | layers-opacity.png |
+| cel-shifted.aseprite | cel-shifted.png |
+| cel-clipped.aseprite | cel-clipped.png |
+| cel-empty.aseprite | cel-empty.png |
+| background-with-opacity.aseprite | background-with-opacity.png |
+| indexed-layers.aseprite | indexed-layers.png |
+| indexed-cels.aseprite | indexed-cels.png |
+| indexed-palette-256.aseprite | indexed-palette-256.png |
+| indexed-transparent-7.aseprite | indexed-transparent-7.png |
+| blend-lighten.aseprite | blend-lighten.png |
+| blend-alpha-grid-multiply.aseprite | blend-alpha-grid-multiply.png |
+| blend-alpha-grid-overlay.aseprite | blend-alpha-grid-overlay.png |
+| blend-difference.aseprite | blend-difference.png |
+| blend-multiply.aseprite | blend-multiply.png |
+| blend-normal.aseprite | blend-normal.png |
+| blend-eight-alpha.aseprite | blend-eight-alpha.png |
+| blend-eight-background-translucent.aseprite | blend-eight-background-translucent.png |
+| blend-eight-opacity.aseprite | blend-eight-opacity.png |
+| blend-darken.aseprite | blend-darken.png |
+| blend-add.aseprite | blend-add.png |
+| blend-overlay.aseprite | blend-overlay.png |
+| blend-pattern.aseprite | blend-pattern.png |
+| mixed-rgba.aseprite | mixed-rgba.png |
+| rgba-one-layer.aseprite | rgba-one-layer.png |

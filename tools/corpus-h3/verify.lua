@@ -1,7 +1,7 @@
 -- Vuelca capas y celdas de un .aseprite que ya se ha generado (solo lectura, para mirar):
---   aseprite -b <fichero.aseprite> --script tools/corpus-h3/verificar.lua
+--   aseprite -b <fichero.aseprite> --script tools/corpus-h3/verify.lua
 -- Sirve para comprobar que el fichero conserva lo que declara specs/corpus-hito-3.md: sobre todo
--- que las celdas que salen del lienzo no se recortan al guardar. generar.sh --verificar lo lanza
+-- que las celdas que salen del lienzo no se recortan al guardar. generate.sh --verificar lo lanza
 -- con todos los ficheros. Las dudas sobre la API están marcadas con "comprobar".
 
 local s = app.sprite -- comprobar: con un fichero en la línea de órdenes, app.sprite es ese sprite

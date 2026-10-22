@@ -2,16 +2,16 @@
 //! 10 y 11 de «Casos»; specs/corpus-hito-3.md para los casos).
 //!
 //! Cada caso se reconstruye aquí como un `Document` de `px-core` a partir de las tablas `A` y
-//! `B` y de las reglas de `tools/corpus-h3/generar.lua` (rectángulos, rejillas, tiras y el disco
-//! de `fondo-con-opacidad`, por desigualdad entera), y `px_raster::compose` se compara con el PNG
+//! `B` y de las reglas de `tools/corpus-h3/generate.lua` (rectángulos, rejillas, tiras y el disco
+//! de `background-with-opacity`, por desigualdad entera), y `px_raster::compose` se compara con el PNG
 //! aplanado `golden/aseprite/<caso>.png` leído con `px_formats::read_png`. El formato
 //! `.aseprite` no se lee (eso es la 3.8): por eso solo entran los casos que se reconstruyen sin
 //! formas de celda; los demás esperan a la 3.9.
 //!
 //! - Fila 9: las ocho matrices `mezcla-*` (2 capas, 32 × 32), **tolerancia 0**.
-//! - Fila 10: `mezcla-ocho-opacidad`, `mezcla-ocho-alfa`, `capas-opacidad`, `capas-alfa-origen` y
-//!   `fondo-con-opacidad`, **tolerancia 0**.
-//! - Fila 11: `capas-alfa-fondo`, `mezcla-ocho-fondo-translucido` y las dos rejillas de alfas.
+//! - Fila 10: `blend-eight-opacity`, `blend-eight-alpha`, `layers-opacity`, `layers-alpha-source` y
+//!   `background-with-opacity`, **tolerancia 0**.
+//! - Fila 11: `layers-alpha-background`, `blend-eight-background-translucent` y las dos rejillas de alfas.
 //!   Fuera del dominio de la fórmula empírica del paso 4b (`0 < αb < 255` del fondo ya compuesto,
 //!   `αs > 0` y modo distinto de Normal), tolerancia 0; dentro, techo `TOLERANCIA_EMPIRICA` y
 //!   suelo 1 en cada caso agregado (las dos rejillas y cada una de las siete tiras).
@@ -36,7 +36,7 @@ use px_raster::{compose, composite_pixel, flatten_command, merge_down_command};
 const TOLERANCIA_EMPIRICA: i32 = 2;
 
 // ---------------------------------------------------------------------------------------
-// Los colores y las tablas de `generar.lua`.
+// Los colores y las tablas de `generate.lua`.
 // ---------------------------------------------------------------------------------------
 
 const ROJO: [u8; 3] = [196, 46, 52];
@@ -71,7 +71,7 @@ const B: [[u8; 3]; 8] = [
     [211, 17, 99],
 ];
 
-/// Los ocho modos, en el orden de `generar.lua` (el de las tiras).
+/// Los ocho modos, en el orden de `generate.lua` (el de las tiras).
 const MODOS: [(&str, BlendMode); 8] = [
     ("normal", BlendMode::Normal),
     ("multiplicar", BlendMode::Multiply),
@@ -88,7 +88,7 @@ fn color(rgb: [u8; 3], alfa: u8) -> Rgba {
 }
 
 // ---------------------------------------------------------------------------------------
-// Lienzos de píxeles (las formas de `generar.lua`) y casos.
+// Lienzos de píxeles (las formas de `generate.lua`) y casos.
 // ---------------------------------------------------------------------------------------
 
 /// La imagen de una celda: `w × h` píxeles RGBA, fila a fila, transparentes al principio.
@@ -167,6 +167,22 @@ impl Capa {
     }
 }
 
+/// La palabra inglesa del nombre de caso `blend-<palabra>` de un modo de mezcla; el nombre español es el
+/// de la capa dentro del fichero (el contenido del corpus no cambia).
+fn case_word(nombre: &str) -> &'static str {
+    match nombre {
+        "normal" => "normal",
+        "multiplicar" => "multiply",
+        "trama" => "pattern",
+        "superponer" => "overlay",
+        "oscurecer" => "darken",
+        "aclarar" => "lighten",
+        "sumar" => "add",
+        "diferencia" => "difference",
+        _ => panic!("modo desconocido: {nombre}"),
+    }
+}
+
 /// Un caso del corpus: su nombre (el del PNG), el tamaño y las capas de abajo arriba.
 struct Caso {
     nombre: String,
@@ -186,7 +202,7 @@ fn matriz(nombre_modo: &str, modo: BlendMode) -> Caso {
         }
     }
     Caso {
-        nombre: format!("mezcla-{nombre_modo}"),
+        nombre: format!("blend-{}", case_word(nombre_modo)),
         w: 32,
         h: 32,
         capas: vec![Capa::normal(a), Capa::con(modo, 255, b)],
@@ -242,7 +258,7 @@ fn capas_opacidad() -> Caso {
         capas.push(Capa::con(BlendMode::Normal, op, t));
     }
     Caso {
-        nombre: "capas-opacidad".to_string(),
+        nombre: "layers-opacity".to_string(),
         w: 32,
         h: 16,
         capas,
@@ -264,7 +280,7 @@ fn capas_alfa_origen() -> Caso {
         origen.rect(x0, 8, x0 + 3, 15, color(CIAN, a));
     }
     Caso {
-        nombre: "capas-alfa-origen".to_string(),
+        nombre: "layers-alpha-source".to_string(),
         w: 32,
         h: 16,
         capas: vec![Capa::normal(fondo), Capa::normal(origen)],
@@ -281,7 +297,7 @@ fn capas_alfa_fondo() -> Caso {
         arriba.rect(0, 4 * k, 31, 4 * (k + 1) - 1, color(MAGENTA, a));
     }
     Caso {
-        nombre: "capas-alfa-fondo".to_string(),
+        nombre: "layers-alpha-background".to_string(),
         w: 32,
         h: 16,
         capas: vec![Capa::normal(base), Capa::normal(arriba)],
@@ -302,7 +318,7 @@ fn fondo_con_opacidad() -> Caso {
     arriba.disco(16, 16, 9, color(NARANJA, 255));
     arriba.rect(2, 2, 13, 13, color(CIAN, 128));
     Caso {
-        nombre: "fondo-con-opacidad".to_string(),
+        nombre: "background-with-opacity".to_string(),
         w: 32,
         h: 32,
         capas: vec![
@@ -485,8 +501,8 @@ fn fila_09_ocho_matrices_de_mezcla_con_tolerancia_0() {
 #[test]
 fn fila_10_opacidad_alfa_de_origen_y_fondo_con_opacidad_con_tolerancia_0() {
     let casos = [
-        ocho_modos("mezcla-ocho-opacidad", 128, 255, 255, 255),
-        ocho_modos("mezcla-ocho-alfa", 255, 200, 77, 255),
+        ocho_modos("blend-eight-opacity", 128, 255, 255, 255),
+        ocho_modos("blend-eight-alpha", 255, 200, 77, 255),
         capas_opacidad(),
         capas_alfa_origen(),
         // La capa de arriba lleva `(0, 0, 0, 0)` sobre la de abajo con alfa 0 y RGB ≠ 0: el paso 0
@@ -630,20 +646,20 @@ fn fila_11_con(produce: impl Fn(&Caso) -> Image) {
         let imagen = produce(caso);
         evalua_imagen(caso, &imagen, &lee_png(&caso.nombre), grupo, grupos)
     };
-    // `capas-alfa-fondo`: dos translúcidos a la vez con Normal, que no es del dominio: todo con
+    // `layers-alpha-background`: dos translúcidos a la vez con Normal, que no es del dominio: todo con
     // tolerancia 0.
     let informe = evalua(&capas_alfa_fondo(), &|_, _| 0, 1);
     exige_sin_fallo(&informe);
     assert_eq!(
         informe.en_dominio,
         [0],
-        "capas-alfa-fondo: Normal no es del dominio"
+        "layers-alpha-background: Normal no es del dominio"
     );
 
-    // `mezcla-ocho-fondo-translucido`: fondo con alfa 150 y origen con 255 (arriba) y 100
+    // `blend-eight-background-translucent`: fondo con alfa 150 y origen con 255 (arriba) y 100
     // (abajo). La tira Normal (la primera) está fuera del dominio: tolerancia 0. Cada una de las
     // otras siete es del dominio entera (8 columnas × 16 filas) y su error máximo está en [1, 2].
-    let tiras = ocho_modos("mezcla-ocho-fondo-translucido", 255, 255, 100, 150);
+    let tiras = ocho_modos("blend-eight-background-translucent", 255, 255, 100, 150);
     let informe = evalua(&tiras, &|x, _| (x / 8) as usize, 8);
     exige_sin_fallo(&informe);
     assert_eq!(informe.en_dominio[0], 0, "la tira Normal no es del dominio");
@@ -654,7 +670,7 @@ fn fila_11_con(produce: impl Fn(&Caso) -> Image) {
             "la tira {nombre_modo} es del dominio entera"
         );
         exige_techo_y_suelo(
-            "mezcla-ocho-fondo-translucido",
+            "blend-eight-background-translucent",
             &format!("tira {nombre_modo}"),
             informe.max_error[k],
         );
@@ -664,8 +680,8 @@ fn fila_11_con(produce: impl Fn(&Caso) -> Image) {
     // (fondo translúcido, fuente visible, modo distinto de Normal) y el resto, no; el error
     // máximo de las 84 celdas está en [1, 2].
     for (nombre, modo, opacidad) in [
-        ("mezcla-alfa-rejilla-multiplicar", BlendMode::Multiply, 255),
-        ("mezcla-alfa-rejilla-superponer", BlendMode::Overlay, 128),
+        ("blend-alpha-grid-multiply", BlendMode::Multiply, 255),
+        ("blend-alpha-grid-overlay", BlendMode::Overlay, 128),
     ] {
         let informe = evalua(&rejilla(nombre, modo, opacidad), &|_, _| 0, 1);
         exige_sin_fallo(&informe);
@@ -710,8 +726,8 @@ fn casos_exactos() -> Vec<Caso> {
         .map(|(nombre, modo)| matriz(nombre, *modo))
         .collect();
     casos.extend([
-        ocho_modos("mezcla-ocho-opacidad", 128, 255, 255, 255),
-        ocho_modos("mezcla-ocho-alfa", 255, 200, 77, 255),
+        ocho_modos("blend-eight-opacity", 128, 255, 255, 255),
+        ocho_modos("blend-eight-alpha", 255, 200, 77, 255),
         capas_opacidad(),
         capas_alfa_origen(),
         fondo_con_opacidad(),

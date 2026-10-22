@@ -424,21 +424,21 @@ fn fila_11_golden_aseprite_intacto_y_el_control_sabe_fallar() {
     comprobar_golden_aseprite().expect("golden/aseprite es el de antes");
     // Control: un byte cambiado, un fichero más y uno menos dan `Err`, y el SHA-256 lo ve.
     let mut roto = instantanea.clone();
-    roto.get_mut("mixto-rgba.png").expect("fichero")[40] ^= 1;
+    roto.get_mut("mixed-rgba.png").expect("fichero")[40] ^= 1;
     let error = comparar_instantaneas(instantanea, &roto).expect_err("un byte cambiado");
-    assert!(error.contains("mixto-rgba.png"), "{error}");
+    assert!(error.contains("mixed-rgba.png"), "{error}");
     assert_ne!(
-        sha256_hex(&roto["mixto-rgba.png"]),
-        huellas["mixto-rgba.png"]
+        sha256_hex(&roto["mixed-rgba.png"]),
+        huellas["mixed-rgba.png"]
     );
     let mut con = instantanea.clone();
     con.insert("intruso.aseprite".to_string(), vec![1, 2, 3]);
     let error = comparar_instantaneas(instantanea, &con).expect_err("un fichero más");
     assert!(error.contains("aparece intruso.aseprite"), "{error}");
     let mut sin = instantanea.clone();
-    sin.remove("capa-bloqueada.aseprite");
+    sin.remove("layer-locked.aseprite");
     let error = comparar_instantaneas(instantanea, &sin).expect_err("un fichero menos");
-    assert!(error.contains("falta capa-bloqueada.aseprite"), "{error}");
+    assert!(error.contains("falta layer-locked.aseprite"), "{error}");
 }
 
 #[test]

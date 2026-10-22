@@ -347,7 +347,7 @@ const MODOS_DEL_CORPUS: [(&str, BlendMode); 8] = [
 
 #[test]
 fn fila_02_a_capas_opacidad_tiene_seis_capas_con_sus_opacidades() {
-    let r = lee_corpus("capas-opacidad");
+    let r = lee_corpus("layers-opacity");
     let doc = &r.document;
     assert_eq!(
         (doc.width(), doc.height(), doc.mode()),
@@ -377,7 +377,7 @@ fn fila_02_a_capas_opacidad_tiene_seis_capas_con_sus_opacidades() {
     assert!(!r.report.lossy, "el corpus no se descarta nada");
 
     // `detect_format` mira el contenido, no la extensión.
-    let bytes = golden("capas-opacidad.aseprite");
+    let bytes = golden("layers-opacity.aseprite");
     assert!(matches!(detect_format(&bytes), Some(FileFormat::Aseprite)));
     let png = write_png(&Image::new(2, 2, Mode::Rgba).expect("imagen")).expect("png");
     assert!(matches!(detect_format(&png), Some(FileFormat::Png)));
@@ -385,10 +385,26 @@ fn fila_02_a_capas_opacidad_tiene_seis_capas_con_sus_opacidades() {
     assert_eq!(aseprite_dimensions(&bytes).ok(), Some((32, 16)));
 }
 
+/// La palabra inglesa del nombre de caso `blend-<palabra>` de un modo de mezcla; el nombre español es el
+/// de la capa dentro del fichero (el contenido del corpus no cambia).
+fn case_word(nombre: &str) -> &'static str {
+    match nombre {
+        "normal" => "normal",
+        "multiplicar" => "multiply",
+        "trama" => "pattern",
+        "superponer" => "overlay",
+        "oscurecer" => "darken",
+        "aclarar" => "lighten",
+        "sumar" => "add",
+        "diferencia" => "difference",
+        _ => panic!("modo desconocido: {nombre}"),
+    }
+}
+
 #[test]
 fn fila_02_b_los_ocho_mezcla_tienen_el_modo_de_su_capa_fuente() {
     for (nombre, modo) in MODOS_DEL_CORPUS {
-        let caso = format!("mezcla-{nombre}");
+        let caso = format!("blend-{}", case_word(nombre));
         let r = lee_corpus(&caso);
         let capas = r.document.layers();
         assert_eq!(capas.len(), 2, "{caso}");
@@ -408,7 +424,7 @@ fn fila_02_b_los_ocho_mezcla_tienen_el_modo_de_su_capa_fuente() {
         );
     }
     // Las ocho tiras, una capa por modo y todas con opacidad 128.
-    let r = lee_corpus("mezcla-ocho-opacidad");
+    let r = lee_corpus("blend-eight-opacity");
     let capas = r.document.layers();
     assert_eq!(capas.len(), 9);
     assert_eq!((capas[0].name(), capas[0].opacity()), ("base", 255));
@@ -421,7 +437,7 @@ fn fila_02_b_los_ocho_mezcla_tienen_el_modo_de_su_capa_fuente() {
 
 #[test]
 fn fila_02_c_capas_ocultas_y_capa_bloqueada_son_independientes() {
-    let r = lee_corpus("capas-ocultas");
+    let r = lee_corpus("layers-hidden");
     let capas = r.document.layers();
     let datos: Vec<(&str, bool)> = capas.iter().map(|c| (c.name(), c.visible())).collect();
     assert_eq!(
@@ -441,7 +457,7 @@ fn fila_02_c_capas_ocultas_y_capa_bloqueada_son_independientes() {
     assert!(capas.iter().all(|c| !c.locked()), "ninguna está bloqueada");
 
     // Bit 1 = visible y bit 2 = editable (bloqueada = bit 2 apagado): banderas 3, 1, 3 y 0.
-    let r = lee_corpus("capa-bloqueada");
+    let r = lee_corpus("layer-locked");
     let datos: Vec<(&str, bool, bool)> = r
         .document
         .layers()
@@ -461,7 +477,7 @@ fn fila_02_c_capas_ocultas_y_capa_bloqueada_son_independientes() {
 
 #[test]
 fn fila_02_d_celda_vacia_e_indexado_con_transparente_7() {
-    let r = lee_corpus("celda-vacia");
+    let r = lee_corpus("cel-empty");
     let doc = &r.document;
     let capas = doc.layers();
     assert_eq!(capas.len(), 3);
@@ -480,7 +496,7 @@ fn fila_02_d_celda_vacia_e_indexado_con_transparente_7() {
     assert_eq!(capas[2].name(), "transparente");
     assert!(doc.image(capas[2].cel()).is_none());
 
-    let r = lee_corpus("indexado-transparente-7");
+    let r = lee_corpus("indexed-transparent-7");
     let doc = &r.document;
     assert_eq!(doc.mode(), Mode::Indexed);
     let paleta = doc.palette().expect("el indexado tiene paleta");
@@ -496,9 +512,9 @@ fn fila_02_d_celda_vacia_e_indexado_con_transparente_7() {
 #[test]
 fn fila_04_a_paleta_256_del_corpus_y_chunk_nuevo_con_alfa_nombres_y_rangos() {
     // El corpus: la paleta de 256 entradas coincide con la de su PNG, con alfa e índice.
-    let r = lee_corpus("indexado-paleta-256");
+    let r = lee_corpus("indexed-palette-256");
     let paleta = r.document.palette().expect("paleta");
-    let png = read_png(&golden("indexado-paleta-256.png"))
+    let png = read_png(&golden("indexed-palette-256.png"))
         .expect("png del corpus")
         .image;
     let paleta_png = png.palette().expect("el PNG es indexado");
@@ -1206,7 +1222,7 @@ fn fila_09_a_cada_prefijo_de_un_fichero_valido_da_error() {
     let ficheros = [
         ("RGBA a mano", base_rgba().bytes()),
         ("indexado a mano", base_indexada().bytes()),
-        ("mixto-rgba", golden("mixto-rgba.aseprite")),
+        ("mixed-rgba", golden("mixed-rgba.aseprite")),
     ];
     for (nombre, bytes) in &ficheros {
         lee_ok(nombre, bytes);
@@ -1221,7 +1237,7 @@ fn fila_09_a_cada_prefijo_de_un_fichero_valido_da_error() {
     // La cabecera sola, truncada: nunca pánico.
     for n in 0..12 {
         assert!(
-            aseprite_dimensions(&golden("mixto-rgba.aseprite")[..n]).is_err(),
+            aseprite_dimensions(&golden("mixed-rgba.aseprite")[..n]).is_err(),
             "{n}"
         );
     }
@@ -2299,9 +2315,9 @@ fn bases() -> &'static Vec<Vec<u8>> {
         vec![
             base_rgba().bytes(),
             base_indexada().bytes(),
-            golden("mixto-rgba.aseprite"),
-            golden("indexado-celdas.aseprite"),
-            golden("celda-recortada.aseprite"),
+            golden("mixed-rgba.aseprite"),
+            golden("indexed-cels.aseprite"),
+            golden("cel-clipped.aseprite"),
         ]
     })
 }

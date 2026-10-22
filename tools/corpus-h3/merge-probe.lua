@@ -3,7 +3,7 @@
 -- se observó, como caja negra, qué hace Aseprite, y justifica la regla de combinar abajo de la
 -- unidad 3.5. Se ejecuta a mano:
 --   mkdir -p ~/.cache/pixoko-sonda
---   aseprite -b --script-param salida="$HOME/.cache/pixoko-sonda" --script tools/corpus-h3/sonda-combinar.lua
+--   aseprite -b --script-param salida="$HOME/.cache/pixoko-sonda" --script tools/corpus-h3/merge-probe.lua
 -- (los --script-param van antes de --script; ver specs/corpus-hito-3.md, sección 5). Escribe
 -- sonda-combinar.txt con las capas antes y después de cada caso. Borra la carpeta al terminar.
 --

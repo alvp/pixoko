@@ -1,8 +1,8 @@
 -- Corpus del hito 3 (specs/corpus-hito-3.md): genera UN caso con la API de Lua de Aseprite.
 --
--- Lo lanza generar.sh, una vez por caso:
+-- Lo lanza generate.sh, una vez por caso:
 --   aseprite -b --script-param caso=<nombre> --script-param salida=<carpeta> \
---     --script tools/corpus-h3/generar.lua
+--     --script tools/corpus-h3/generate.lua
 -- (los --script-param van antes de --script)
 --
 -- Todo es propio y se crea desde cero: los colores y las formas se definen aquí (rectángulos,
@@ -187,7 +187,7 @@ end
 
 local CASOS = {}
 
-CASOS["rgba-una-capa"] = function()
+CASOS["rgba-one-layer"] = function()
   local s = nuevo_sprite(16, 16, false, PALETA)
   local l = capa(s, "unica")
   local img = imagen(s, 16, 16)
@@ -201,10 +201,10 @@ CASOS["rgba-una-capa"] = function()
     pon(img, x, 15, col("cian", x * 17))
   end
   celda(s, l, img)
-  guardar(s, "rgba-una-capa")
+  guardar(s, "rgba-one-layer")
 end
 
-CASOS["capas-normal-tres"] = function()
+CASOS["layers-normal-three"] = function()
   local s = nuevo_sprite(24, 24, false, PALETA)
   local fondo = capa(s, "fondo")
   local medio = capa(s, "medio")
@@ -223,10 +223,10 @@ CASOS["capas-normal-tres"] = function()
   triangulo(c, 0, 0, 11, col("magenta"))
   diagonal(c, 10, 10, 13, col("rosa"), 2)
   celda(s, arriba, c)
-  guardar(s, "capas-normal-tres")
+  guardar(s, "layers-normal-three")
 end
 
-CASOS["capas-opacidad"] = function()
+CASOS["layers-opacity"] = function()
   local s = nuevo_sprite(32, 16, false, PALETA)
   local base = capa(s, "fondo")
   local img = imagen(s, 32, 16)
@@ -244,10 +244,10 @@ CASOS["capas-opacidad"] = function()
     rect(t, x0, 2, x0 + 4, 13, col("rojo"))
     celda(s, l, t)
   end
-  guardar(s, "capas-opacidad")
+  guardar(s, "layers-opacity")
 end
 
-CASOS["capas-alfa-origen"] = function()
+CASOS["layers-alpha-source"] = function()
   local s = nuevo_sprite(32, 16, false, PALETA)
   local base = capa(s, "fondo")
   local fondo = imagen(s, 32, 16)
@@ -265,10 +265,10 @@ CASOS["capas-alfa-origen"] = function()
     rect(img, x0, 8, x0 + 3, 15, col("cian", a))
   end
   celda(s, arriba, img)
-  guardar(s, "capas-alfa-origen")
+  guardar(s, "layers-alpha-source")
 end
 
-CASOS["capas-alfa-fondo"] = function()
+CASOS["layers-alpha-background"] = function()
   local s = nuevo_sprite(32, 16, false, PALETA)
   local base = capa(s, "base")
   local alfas = { 255, 200, 128, 64 }
@@ -283,7 +283,7 @@ CASOS["capas-alfa-fondo"] = function()
     rect(b, 0, 4 * (k - 1), 31, 4 * k - 1, col("magenta", al))
   end
   celda(s, arriba, b)
-  guardar(s, "capas-alfa-fondo")
+  guardar(s, "layers-alpha-background")
 end
 
 -- Matriz 8 x 8: columnas de 4 px con los colores A (fondo), filas de 4 px con los B (origen).
@@ -337,9 +337,9 @@ local function ocho_modos(nombre, opacidad, alfa_alto, alfa_bajo, alfa_base)
     guardar(s, nombre)
   end
 end
-ocho_modos("mezcla-ocho-opacidad", 128, 255, 255, 255)
-ocho_modos("mezcla-ocho-alfa", 255, 200, 77, 255)
-ocho_modos("mezcla-ocho-fondo-translucido", 255, 255, 100, 150)
+ocho_modos("blend-eight-opacity", 128, 255, 255, 255)
+ocho_modos("blend-eight-alpha", 255, 200, 77, 255)
+ocho_modos("blend-eight-background-translucent", 255, 255, 100, 150)
 
 -- Rejilla de alfas (ampliación del corpus, specs/corpus-hito-3.md «Casos añadidos»): 64 x 32, dos
 -- rejillas de 8 x 8 celdas de 3 px. Columnas = alfa del fondo, filas = alfa de la fuente, los dos
@@ -373,14 +373,14 @@ local function rejilla(nombre, modo, opacidad)
     guardar(s, nombre)
   end
 end
-rejilla("mezcla-alfa-rejilla-multiplicar", BlendMode.MULTIPLY, 255)
-rejilla("mezcla-alfa-rejilla-superponer", BlendMode.OVERLAY, 128)
+rejilla("blend-alpha-grid-multiply", BlendMode.MULTIPLY, 255)
+rejilla("blend-alpha-grid-overlay", BlendMode.OVERLAY, 128)
 
 -- La capa de abajo con opacidad 128 y modo Multiplicar sobre el lienzo transparente (no hay nada
 -- que mezclar debajo) y una capa Normal encima. Alfas de la base 255, 223, 191, 159, 127, 95, 63 y
 -- 0 por filas de 4 px (con 128 la parte fraccionaria de alfa x 128 / 255 es mayor que 0,5 en seis
 -- de las ocho) y los colores A por columnas de 4 px; la fila de alfa 0 lleva RGB distinto de 0.
-CASOS["fondo-con-opacidad"] = function()
+CASOS["background-with-opacity"] = function()
   local s = nuevo_sprite(32, 32, false, PALETA)
   local base = capa(s, "base", { mezcla = BlendMode.MULTIPLY, opacidad = 128 })
   local arriba = capa(s, "arriba")
@@ -396,10 +396,10 @@ CASOS["fondo-con-opacidad"] = function()
   disco(b, 16, 16, 9, col("naranja"))
   rect(b, 2, 2, 13, 13, col("cian", 128))
   celda(s, arriba, b)
-  guardar(s, "fondo-con-opacidad")
+  guardar(s, "background-with-opacity")
 end
 
-CASOS["indexado-capas"] = function()
+CASOS["indexed-layers"] = function()
   local s = nuevo_sprite(16, 16, true, PALETA)
   s.transparentColor = 0 -- comprobar: Sprite.transparentColor
   local fondo = capa(s, "fondo")
@@ -421,10 +421,10 @@ CASOS["indexado-capas"] = function()
   local c = imagen(s, 16, 16, 0)
   diagonal(c, 0, 0, 16, IDX["cian"], 2)
   celda(s, arriba, c)
-  guardar(s, "indexado-capas")
+  guardar(s, "indexed-layers")
 end
 
-CASOS["indexado-transparente-7"] = function()
+CASOS["indexed-transparent-7"] = function()
   local s = nuevo_sprite(16, 16, true, PALETA)
   s.transparentColor = 7
   local fondo = capa(s, "fondo")
@@ -439,10 +439,10 @@ CASOS["indexado-transparente-7"] = function()
   rect(b, 6, 6, 9, 9, 7)
   rect(b, 0, 14, 15, 15, 0)
   celda(s, arriba, b)
-  guardar(s, "indexado-transparente-7")
+  guardar(s, "indexed-transparent-7")
 end
 
-CASOS["indexado-paleta-256"] = function()
+CASOS["indexed-palette-256"] = function()
   local paleta = {}
   for i = 0, 255 do
     paleta[i + 1] = { (i * 53 + 17) % 256, (i * 97 + 43) % 256, (i * 151 + 89) % 256 }
@@ -457,10 +457,10 @@ CASOS["indexado-paleta-256"] = function()
     end
   end
   celda(s, l, img)
-  guardar(s, "indexado-paleta-256")
+  guardar(s, "indexed-palette-256")
 end
 
-CASOS["indexado-celdas"] = function()
+CASOS["indexed-cels"] = function()
   local s = nuevo_sprite(32, 32, true, PALETA)
   s.transparentColor = 0
   local la = capa(s, "desplazada")
@@ -479,10 +479,10 @@ CASOS["indexado-celdas"] = function()
   local c = imagen(s, 10, 10, IDX["azul"])
   rect(c, 0, 0, 4, 4, IDX["naranja"])
   celda(s, lc, c, 27, 25)
-  guardar(s, "indexado-celdas")
+  guardar(s, "indexed-cels")
 end
 
-CASOS["celda-desplazada"] = function()
+CASOS["cel-shifted"] = function()
   local s = nuevo_sprite(32, 32, false, PALETA)
   local la = capa(s, "a")
   local lb = capa(s, "b")
@@ -502,10 +502,10 @@ CASOS["celda-desplazada"] = function()
   celda(s, lc, c, 24, 24)
 
   celda(s, ld, imagen(s, 1, 1, col("naranja")), 31, 31)
-  guardar(s, "celda-desplazada")
+  guardar(s, "cel-shifted")
 end
 
-CASOS["celda-recortada"] = function()
+CASOS["cel-clipped"] = function()
   local s = nuevo_sprite(32, 32, false, PALETA)
   local grande = capa(s, "grande")
   local izq = capa(s, "arriba-izq")
@@ -531,10 +531,10 @@ CASOS["celda-recortada"] = function()
   -- Dos celdas del todo fuera del lienzo: al leerlas, la celda queda vacía.
   celda(s, fd, imagen(s, 16, 16, col("magenta")), 40, 2)
   celda(s, fi, imagen(s, 16, 16, col("naranja")), -16, -16)
-  guardar(s, "celda-recortada")
+  guardar(s, "cel-clipped")
 end
 
-CASOS["celda-vacia"] = function()
+CASOS["cel-empty"] = function()
   local s = nuevo_sprite(16, 16, false, PALETA)
   local con = capa(s, "con-celda")
   local sin = capa(s, "sin-celda", { mezcla = BlendMode.MULTIPLY, opacidad = 100 })
@@ -545,10 +545,10 @@ CASOS["celda-vacia"] = function()
   celda(s, con, a)
   quitar_celda(s, sin) -- la capa existe con sus propiedades pero no tiene celda
   celda(s, transp, imagen(s, 16, 16)) -- celda que existe pero con todo el alfa a 0
-  guardar(s, "celda-vacia")
+  guardar(s, "cel-empty")
 end
 
-CASOS["capas-ocultas"] = function()
+CASOS["layers-hidden"] = function()
   local s = nuevo_sprite(24, 24, false, PALETA)
   local fondo = capa(s, "fondo")
   local o1 = capa(s, "oculta-1", { visible = false })
@@ -565,10 +565,10 @@ CASOS["capas-ocultas"] = function()
   local b = imagen(s, 24, 24)
   triangulo(b, 2, 2, 12, col("cian"))
   celda(s, v2, b)
-  guardar(s, "capas-ocultas")
+  guardar(s, "layers-hidden")
 end
 
-CASOS["mixto-rgba"] = function()
+CASOS["mixed-rgba"] = function()
   local s = nuevo_sprite(48, 48, false, PALETA)
   local fondo = capa(s, "fondo")
   local sombra = capa(s, "sombra", { mezcla = BlendMode.MULTIPLY, opacidad = 192 })
@@ -602,13 +602,13 @@ CASOS["mixto-rgba"] = function()
   local d = imagen(s, 16, 16, col("cian"))
   disco(d, 8, 8, 5, col("rosa"))
   celda(s, dif, d, 30, 30)
-  guardar(s, "mixto-rgba")
+  guardar(s, "mixed-rgba")
 end
 
 -- Caso 29 (unidad 3.8): capas bloqueadas. El bloqueo se pone DESPUÉS de crear las celdas (una capa
 -- bloqueada podría rechazar `newCel`). Nada de esto toca la visibilidad: `bloqueada` es visible y
 -- bloqueada; `oculta-bloqueada`, las dos cosas a la vez.
-CASOS["capa-bloqueada"] = function()
+CASOS["layer-locked"] = function()
   local s = nuevo_sprite(16, 16, false, PALETA)
   local fondo = capa(s, "fondo")
   local medio = capa(s, "bloqueada")
@@ -633,7 +633,7 @@ CASOS["capa-bloqueada"] = function()
   -- guarda en el fichero.
   medio.isEditable = false
   oculta.isEditable = false
-  guardar(s, "capa-bloqueada")
+  guardar(s, "layer-locked")
 end
 
 local generar = CASOS[caso]

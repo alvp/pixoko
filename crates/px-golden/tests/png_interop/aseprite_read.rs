@@ -6,7 +6,7 @@
 //!   de la fórmula empírica de 3.2 (fondo ya compuesto translúcido, `αs > 0` y modo distinto de
 //!   Normal); el RGB bajo alfa 0 no se exige cuando los dos alfa son 0. Dentro del dominio, alfa
 //!   exacto y error de canal como mucho `TOLERANCIA_EMPIRICA`, con un suelo de 1 por caso agregado
-//!   (una tira por modo en `mezcla-ocho-fondo-translucido`, un solo grupo en los demás). Los
+//!   (una tira por modo en `blend-eight-background-translucent`, un solo grupo en los demás). Los
 //!   indexados se comparan por su paleta resuelta. **No se ensancha ninguna tolerancia**: es la
 //!   misma versión de `evalua_imagen` y `en_dominio` de `mezcla.rs`, sobre un `Document` leído.
 //! - Fila 8: la celda del modelo es el recorte exacto de la celda del fichero sobre el relleno;
@@ -123,7 +123,7 @@ pub(super) fn evalua_imagen(
         ));
     }
     // Un grupo por tira en el caso de las ocho tiras (como en `mezcla.rs`) y uno solo en los demás.
-    let grupos = if caso == "mezcla-ocho-fondo-translucido" {
+    let grupos = if caso == "blend-eight-background-translucent" {
         8
     } else {
         1
@@ -259,10 +259,10 @@ fn exige_celdas(caso: &str, esperadas: &[Esperada]) {
 
 #[test]
 fn fila_08_celdas_del_corpus_son_el_recorte_exacto_y_las_de_fuera_quedan_vacias() {
-    // `celda-recortada` (32 × 32): una que cubre todo, una a la izquierda y arriba, una por la
+    // `cel-clipped` (32 × 32): una que cubre todo, una a la izquierda y arriba, una por la
     // derecha, una por abajo y dos del todo fuera.
     exige_celdas(
-        "celda-recortada",
+        "cel-clipped",
         &[
             (0, Some([0, 0, 32, 32]), 1024),
             (1, Some([0, 0, 8, 8]), 64),
@@ -272,18 +272,18 @@ fn fila_08_celdas_del_corpus_son_el_recorte_exacto_y_las_de_fuera_quedan_vacias(
             (5, None, 0),
         ],
     );
-    // `indexado-celdas` (32 × 32, indexado): desplazada y recortada por ambos lados.
+    // `indexed-cels` (32 × 32, indexado): desplazada y recortada por ambos lados.
     exige_celdas(
-        "indexado-celdas",
+        "indexed-cels",
         &[
             (0, Some([5, 7, 17, 19]), 90),
             (1, Some([0, 0, 8, 10]), 80),
             (2, Some([27, 25, 32, 32]), 35),
         ],
     );
-    // `celda-desplazada` (32 × 32): celdas pequeñas, una pegada al borde y una de 1 × 1.
+    // `cel-shifted` (32 × 32): celdas pequeñas, una pegada al borde y una de 1 × 1.
     exige_celdas(
-        "celda-desplazada",
+        "cel-shifted",
         &[
             (0, Some([3, 5, 13, 13]), 80),
             (1, Some([16, 4, 28, 16]), 81),

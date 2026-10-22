@@ -264,7 +264,7 @@ def collisions():
 
 def other_files():
     out = []
-    for p in sorted((ROOT / "tools").rglob("*")):
+    for p in sorted((ROOT / "tools" / "corpus-h3").rglob("*")):
         if p.is_file():
             out.append(p)
     out.append(ROOT / "golden" / "aseprite" / "README.md")
@@ -279,9 +279,13 @@ def tool_text(s: str):
     return s
 
 
-def move_targets():
+def tracked_files():
+    return subprocess.check_output(["git", "ls-files", "crates", "fuzz", "tools", "golden"], cwd=ROOT, text=True).split("\n")
+
+
+def move_targets(tracked=None):
     """(vieja, nueva) para todo fichero versionado que cambia de nombre."""
-    tracked = subprocess.check_output(["git", "ls-files", "crates", "fuzz", "tools", "golden"], cwd=ROOT, text=True).split("\n")
+    tracked = tracked_files() if tracked is None else tracked
     case_new = dict(CASES)
     moves = []
     for f in tracked:

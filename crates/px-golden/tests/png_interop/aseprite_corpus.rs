@@ -14,40 +14,40 @@ use px_formats::read_png;
 use super::common::sha256::sha256_hex;
 use super::{Fichero, bytes_rgba, fichero, hash_bien_formado, lee_carpeta, raiz_del_repo};
 
-/// Tope de casos de la spec (25, los tres de la ampliación de 3.2 y `capa-bloqueada` de 3.8).
+/// Tope de casos de la spec (25, los tres de la ampliación de 3.2 y `layer-locked` de 3.8).
 const MAX_CASOS: usize = 29;
 
-/// Los 29 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generar.sh`).
+/// Los 29 casos de la tabla de specs/corpus-hito-3.md (misma lista que `tools/corpus-h3/generate.sh`).
 pub(super) const CASOS: [&str; MAX_CASOS] = [
-    "rgba-una-capa",
-    "capas-normal-tres",
-    "capas-opacidad",
-    "capas-alfa-origen",
-    "capas-alfa-fondo",
-    "mezcla-normal",
-    "mezcla-multiplicar",
-    "mezcla-trama",
-    "mezcla-superponer",
-    "mezcla-oscurecer",
-    "mezcla-aclarar",
-    "mezcla-sumar",
-    "mezcla-diferencia",
-    "mezcla-ocho-opacidad",
-    "mezcla-ocho-alfa",
-    "mezcla-ocho-fondo-translucido",
-    "indexado-capas",
-    "indexado-transparente-7",
-    "indexado-paleta-256",
-    "indexado-celdas",
-    "celda-desplazada",
-    "celda-recortada",
-    "celda-vacia",
-    "capas-ocultas",
-    "mixto-rgba",
-    "mezcla-alfa-rejilla-multiplicar",
-    "mezcla-alfa-rejilla-superponer",
-    "fondo-con-opacidad",
-    "capa-bloqueada",
+    "rgba-one-layer",
+    "layers-normal-three",
+    "layers-opacity",
+    "layers-alpha-source",
+    "layers-alpha-background",
+    "blend-normal",
+    "blend-multiply",
+    "blend-pattern",
+    "blend-overlay",
+    "blend-darken",
+    "blend-lighten",
+    "blend-add",
+    "blend-difference",
+    "blend-eight-opacity",
+    "blend-eight-alpha",
+    "blend-eight-background-translucent",
+    "indexed-layers",
+    "indexed-transparent-7",
+    "indexed-palette-256",
+    "indexed-cels",
+    "cel-shifted",
+    "cel-clipped",
+    "cel-empty",
+    "layers-hidden",
+    "mixed-rgba",
+    "blend-alpha-grid-multiply",
+    "blend-alpha-grid-overlay",
+    "background-with-opacity",
+    "layer-locked",
 ];
 
 /// Falta o sobra algún caso respecto de `esperados` (`casos` ordenados).
@@ -267,8 +267,8 @@ fn sin(mut v: Vec<Fichero>, nombre: &str) -> Vec<Fichero> {
 #[test]
 fn aseprite_fila_1_un_corpus_correcto_pasa() {
     assert_eq!(
-        verificar(&corpus_bueno("rgba-una-capa")),
-        Ok(vec!["rgba-una-capa".to_string()])
+        verificar(&corpus_bueno("rgba-one-layer")),
+        Ok(vec!["rgba-one-layer".to_string()])
     );
 }
 
@@ -362,7 +362,7 @@ fn aseprite_fila_4_la_lista_exacta_detecta_un_caso_que_falta_o_sobra() {
     assert_eq!(comparar_con_lista(&todos, &CASOS), Ok(()));
     let sin_uno = &todos[1..];
     let e = comparar_con_lista(sin_uno, &CASOS).unwrap_err();
-    assert!(e.contains("rgba-una-capa"), "{e}");
+    assert!(e.contains("rgba-one-layer"), "{e}");
     let mut con_uno_mas = todos.clone();
     con_uno_mas.push("extra".to_string());
     let e = comparar_con_lista(&con_uno_mas, &CASOS).unwrap_err();
