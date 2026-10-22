@@ -265,6 +265,9 @@ pub enum Analysis {
     TooManyColors,
     /// La imagen convertida no cabe.
     TooLarge,
+    /// Con varias capas el destino no existe: lo decide [`layer_block`] antes de mirar los
+    /// píxeles.
+    Blocked(LayerBlock),
 }
 
 /// Por qué un documento con varias capas no puede convertirse a un modo, antes de mirar los
@@ -459,7 +462,10 @@ pub fn pending(
     active: Option<Rgba>,
     value_problem: bool,
 ) -> Vec<Missing> {
-    if matches!(analysis, Analysis::TooManyColors | Analysis::TooLarge) {
+    if matches!(
+        analysis,
+        Analysis::TooManyColors | Analysis::TooLarge | Analysis::Blocked(_)
+    ) {
         return Vec::new();
     }
     let need = needs(analysis);
@@ -491,6 +497,7 @@ pub fn block_reason(
     match analysis {
         Analysis::TooManyColors => return Some("más de 256 colores: sin cuantizador".to_string()),
         Analysis::TooLarge => return Some("la imagen convertida no cabe".to_string()),
+        Analysis::Blocked(block) => return Some(block.reason().to_string()),
         Analysis::Exact { .. } | Analysis::Lossy(_) => {}
     }
     let missing = pending(analysis, perms, active, false);
@@ -644,6 +651,7 @@ fn report_body(
         ),
         Some(Analysis::TooLarge) => lines
             .push("La imagen convertida no cabe en memoria (máximo 1 GiB).".to_string()),
+        Some(Analysis::Blocked(block)) => lines.push(block.explanation().to_string()),
     }
     if let Some(Analysis::Lossy(report)) = analysis
         && report.alpha_lost > 0
@@ -942,9 +950,12 @@ pub fn layer_block(doc: &Document, target: Mode) -> Option<LayerBlock> {
 }
 
 /// El informe de convertir **todas** las capas de `doc` a `target`, sin tocar nada: las pérdidas
-/// sumadas de todas las celdas y, a indexado, la paleta común. Solo si [`layer_block`] no lo
-/// impide.
+/// sumadas de todas las celdas y, a indexado, la paleta común; o `Blocked` si [`layer_block`] lo
+/// impide (sin mirar los píxeles).
 pub fn analyze_document(doc: &Document, target: Mode) -> Analysis {
+    if let Some(block) = layer_block(doc, target) {
+        return Analysis::Blocked(block);
+    }
     let layers = doc.layers();
     let cels: Vec<Option<&Image>> = layers.iter().map(|layer| doc.image(layer.cel())).collect();
     classify_cels(analyze_cels(

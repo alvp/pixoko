@@ -75,9 +75,9 @@ use crate::convert_mode::{
 };
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
-    DialogKind, Dialogs, Finished, Outcome, RfdPicker, SaveRoute, dialog_title, fallback_request,
-    ignored_file_notice, is_aseprite_path, new_gate, open_gate, proposed_save_name,
-    unavailable_notice,
+    DialogKind, Dialogs, Finished, Outcome, RfdPicker, SaveRoute, dialog_title, export_name,
+    fallback_request, ignored_file_notice, is_aseprite_path, new_gate, open_gate,
+    proposed_save_name, unavailable_notice,
 };
 use crate::dispatch::{Dispatched, LayerPanelOp, Targets, dispatch};
 use crate::dropper_once::DropperOnce;
@@ -186,8 +186,6 @@ struct App {
     pending_save: Option<(SaveJob, PendingSave)>,
     /// Combinar o aplanar un documento grande que espera su fotograma: la entrada está bloqueada.
     pending_merge: Option<PendingMerge>,
-    /// El diálogo de guardar que está abierto es el de `Exportar PNG aplanado…`.
-    exporting: bool,
     /// Los colores del trazo pendiente (solo se calculan los píxeles nuevos de cada fotograma).
     overlay: OverlayCache,
     /// Reserva de los búferes de las baldosas (cargar y regenerar); las pruebas la sustituyen por
@@ -246,7 +244,6 @@ impl App {
             pending_convert: None,
             pending_save: None,
             pending_merge: None,
-            exporting: false,
             overlay: OverlayCache::default(),
             tile_alloc: Box::new(SystemTileAlloc),
         }
@@ -581,19 +578,12 @@ impl App {
     /// `Archivo → Exportar PNG aplanado…`: el diálogo de guardar con el nombre
     /// `<nombre>-aplanado.png` (o `sin-titulo-aplanado.png`) junto al fichero del documento.
     fn begin_export_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
-        let proposed = match self.session.path() {
-            Some(path) => {
-                let stem = path
-                    .file_stem()
-                    .and_then(|stem| stem.to_str())
-                    .unwrap_or("sin-titulo");
-                path.with_file_name(format!("{stem}-aplanado.png"))
-            }
-            None => PathBuf::from("sin-titulo-aplanado.png"),
-        };
+        let proposed = export_name(self.session.path());
         let now = ctx.input(|i| i.time);
+        self.dialogs
+            .set_title(dialog_title(DialogKind::Export, 0, None));
         if self.dialogs.begin(
-            DialogKind::SaveAs,
+            DialogKind::Export,
             false,
             Some(&proposed),
             false,
@@ -601,7 +591,6 @@ impl App {
             Some(frame),
         ) {
             self.confirm.clear();
-            self.exporting = true;
             ctx.request_repaint();
         }
     }
@@ -639,7 +628,6 @@ impl App {
             Some(frame),
         ) {
             self.confirm.clear();
-            self.exporting = false;
             // El futuro empieza a ejecutarse al consultarlo: un fotograma ya.
             ctx.request_repaint();
         }
@@ -647,18 +635,8 @@ impl App {
 
     /// Resultado de un diálogo: abre o guarda la ruta elegida, o avisa de que no hay diálogo.
     fn finish_dialog(&mut self, ctx: &egui::Context, finished: Finished) {
-        // El diálogo de exportar es un `SaveAs` con otro nombre propuesto: escribe el aplanado y
-        // no tiene la segunda pulsación de guardar.
-        let exporting = std::mem::take(&mut self.exporting) && finished.kind == DialogKind::SaveAs;
         match finished.outcome {
             Outcome::Cancelled => self.confirm.clear(),
-            Outcome::Unavailable if exporting => {
-                self.notify(
-                    ctx,
-                    "no hay diálogo de archivos: no se puede exportar".to_string(),
-                );
-            }
-            Outcome::Chosen(path) if exporting => self.request_save(ctx, SaveJob::Export(path)),
             Outcome::Unavailable => {
                 self.notify(ctx, unavailable_notice(finished.kind));
                 if let Some(request) = fallback_request(finished.kind) {
@@ -671,6 +649,8 @@ impl App {
                 DialogKind::Save | DialogKind::SaveAs => {
                     self.request_save(ctx, SaveJob::Chosen(path));
                 }
+                // Escribe el aplanado y no tiene la segunda pulsación de guardar.
+                DialogKind::Export => self.request_save(ctx, SaveJob::Export(path)),
             },
         }
     }
@@ -685,7 +665,6 @@ impl App {
         self.pending_convert = None;
         self.pending_save = None;
         self.pending_merge = None;
-        self.exporting = false;
         let now = ctx.input(|i| i.time);
         // Un diálogo modal se abandona sin aplicar nada, como uno de archivo, también con una
         // captura de atajo armada; después, la regla de cierre por repetición.

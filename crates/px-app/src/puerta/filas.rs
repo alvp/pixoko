@@ -568,7 +568,9 @@ fn pegamento(s: &mut Session, terminado: Finished) -> Pegado {
         Outcome::Unavailable => panic!("el selector falso nunca falla"),
         Outcome::Chosen(ruta) => match terminado.kind {
             DialogKind::Open => Pegado::Abierto(s.open(&ruta, Canvas::MAX_SIDE, terminado.discard)),
-            DialogKind::Save | DialogKind::SaveAs => Pegado::Guardado(guardar_en(s, &ruta)),
+            DialogKind::Save | DialogKind::SaveAs | DialogKind::Export => {
+                Pegado::Guardado(guardar_en(s, &ruta))
+            }
         },
     }
 }

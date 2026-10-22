@@ -991,6 +991,7 @@ fn motivo_esperado(
     let report = match analysis {
         Analysis::TooManyColors => return Some(SIN_CUANTIZADOR.to_string()),
         Analysis::TooLarge => return Some(NO_CABE.to_string()),
+        Analysis::Blocked(block) => return Some(block.reason().to_string()),
         Analysis::Exact { .. } => ConversionReport::default(),
         Analysis::Lossy(report) => *report,
     };
@@ -4335,6 +4336,7 @@ fn motivo_por_tabla(
     let (color, fondo) = match analysis {
         Analysis::TooManyColors => return Some("más de 256 colores: sin cuantizador".to_string()),
         Analysis::TooLarge => return Some("la imagen convertida no cabe".to_string()),
+        Analysis::Blocked(block) => return Some(block.reason().to_string()),
         Analysis::Lossy(r) => (r.color_lost > 0 && !luma, r.alpha_lost > 0 && alfa == 0),
         Analysis::Exact { .. } => (false, false),
     };

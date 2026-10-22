@@ -36,6 +36,8 @@ pub enum DialogKind {
     Save,
     /// `Ctrl`+`Mayús`+`S`.
     SaveAs,
+    /// `Archivo → Exportar PNG aplanado…`: no toca la ruta ni el estado de guardado del documento.
+    Export,
 }
 
 /// Formato de guardado de un documento (specs/hito-3-aseprite.md).
@@ -86,6 +88,7 @@ pub fn proposed_save_name(path: Option<&Path>, layers: usize) -> String {
 pub fn dialog_title(kind: DialogKind, layers: usize, path: Option<&Path>) -> &'static str {
     match kind {
         DialogKind::Open => "Abrir imagen (PNG o Aseprite)",
+        DialogKind::Export => "Exportar PNG aplanado",
         DialogKind::Save | DialogKind::SaveAs if layers >= 2 => {
             "Guardar como .aseprite (con capas) o PNG (aplanado)"
         }
@@ -180,6 +183,9 @@ impl FilePicker for RfdPicker {
                 .add_filter("PNG", PNG_EXTENSIONS)
                 .add_filter("Aseprite", ASEPRITE_EXTENSIONS)
                 .add_filter("Todos", &["*"]),
+            DialogKind::Export => dialog
+                .set_title(title.unwrap_or("Exportar PNG aplanado"))
+                .add_filter("PNG", &["png"]),
             DialogKind::Save | DialogKind::SaveAs if aseprite_first => dialog
                 .set_title(title.unwrap_or("Guardar .aseprite"))
                 .add_filter("Aseprite (con capas)", &["aseprite"])
@@ -204,7 +210,7 @@ impl FilePicker for RfdPicker {
                     .await
                     .map(|handle| handle.path().to_path_buf())
             }),
-            DialogKind::Save | DialogKind::SaveAs => Box::pin(async move {
+            DialogKind::Save | DialogKind::SaveAs | DialogKind::Export => Box::pin(async move {
                 dialog
                     .save_file()
                     .await
@@ -363,7 +369,7 @@ pub fn request_for(
         .map(Path::to_path_buf);
     let file_name = match kind {
         DialogKind::Open => None,
-        DialogKind::Save | DialogKind::SaveAs => Some(match path {
+        DialogKind::Save | DialogKind::SaveAs | DialogKind::Export => Some(match path {
             Some(path) if converted => file_label(&copy_path(path)),
             Some(path) => file_label(path),
             None => UNTITLED_NAME.to_string(),
@@ -373,6 +379,21 @@ pub fn request_for(
         kind,
         dir,
         file_name,
+    }
+}
+
+/// El nombre propuesto al exportar: `<nombre>-aplanado.png` junto al fichero del documento, o
+/// `sin-titulo-aplanado.png` sin ruta.
+pub fn export_name(path: Option<&Path>) -> PathBuf {
+    match path {
+        Some(path) => {
+            let stem = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or("sin-titulo");
+            path.with_file_name(format!("{stem}-aplanado.png"))
+        }
+        None => PathBuf::from("sin-titulo-aplanado.png"),
     }
 }
 
@@ -406,7 +427,7 @@ pub fn new_gate(modified: bool, confirm: &mut Confirm, now: f64) -> bool {
 /// Lo que se arma tras un fallo del diálogo: `Open` nada; `Save` y `SaveAs`, su segunda pulsación.
 pub fn fallback_request(kind: DialogKind) -> Option<Request> {
     match kind {
-        DialogKind::Open => None,
+        DialogKind::Open | DialogKind::Export => None,
         DialogKind::Save => Some(Request::SaveFallback { as_copy: false }),
         DialogKind::SaveAs => Some(Request::SaveFallback { as_copy: true }),
     }
@@ -414,6 +435,9 @@ pub fn fallback_request(kind: DialogKind) -> Option<Request> {
 
 pub fn unavailable_notice(kind: DialogKind) -> String {
     let what = match kind {
+        DialogKind::Export => {
+            return "no hay diálogo de archivos: no se puede exportar".to_string();
+        }
         DialogKind::Open => "arrastra un PNG sobre la ventana".to_string(),
         DialogKind::Save => {
             format!("pulsa Ctrl+S otra vez en {CONFIRM_SECS:.0} s para guardar en sin-titulo.png")
