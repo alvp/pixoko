@@ -1,6 +1,6 @@
 # Unidad L1: limpiezas pendientes y código en inglés
 
-Estado: **aprobada** (2026-10-22, en tres etapas L1, L2 y L3 con un freno entre ellas; las condiciones de «Visto bueno» al final **prevalecen sobre cualquier otra frase de la página**).
+Estado: **cerrada (L3b opcional)**: L1, L2 y L3a hechas y verificadas por el usuario (2026-10-22: `verify.py check --release`, tests, clippy, deny, `generate.sh` con 29 IGUAL y CI en los tres sistemas); L3b (comentarios y mensajes de aserción restantes, un crate por sesión) queda como unidad opcional. Aprobada en tres etapas L1, L2 y L3 con un freno entre ellas; las condiciones de «Visto bueno» al final **prevalecen sobre cualquier otra frase de la página**).
 
 Referencias: sección 11 de [`mapa-funciones.md`](mapa-funciones.md) (lista de limpiezas, con su spec de origen), [`hito-3-resumen.md`](hito-3-resumen.md) y `docs/PLAN-RESUMEN.md`. Clase: deseable. Entre el hito 3 y el 4.
 
