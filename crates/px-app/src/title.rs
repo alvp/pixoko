@@ -110,6 +110,16 @@ pub fn colors_label(
     }
 }
 
+/// The text of the status line and whether it is a notice: a notice or an error comes first; then
+/// what the palette panel asks to show (a swatch drag, a pending removal or the swatch under the
+/// pointer, specs/ui-composition.md, decision 7); then the usual line.
+pub fn status_for(usual: String, is_notice: bool, hint: Option<&str>) -> (String, bool) {
+    match hint {
+        Some(hint) if !is_notice => (hint.to_string(), false),
+        _ => (usual, is_notice),
+    }
+}
+
 /// Texto de la barra de estado en `columns` caracteres: con poco ancho la línea pierde primero el
 /// tamaño, después el zoom y por último la posición del cursor y deshacer y rehacer; nunca la
 /// herramienta ni los dos colores. Con un error, el texto del error tal cual.

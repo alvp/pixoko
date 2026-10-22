@@ -43,7 +43,7 @@ use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
 use px_ui::gestures::GestureMap;
-use px_ui::help::{HelpTarget, help_target_at, help_target_in_panel};
+use px_ui::help::{HelpTarget, help_target_at, help_target_in_indicator, help_target_in_panel};
 use px_ui::key_events::{help_pressed, presses};
 use px_ui::keymap::Keymap;
 use px_ui::keymap_file::{Loaded, load_notice};
@@ -99,7 +99,9 @@ use crate::session::{
     LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for, saved_notice,
 };
 use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
-use crate::title::{app_title_info, colors_label, status_line_fit, title_text, title_with_file};
+use crate::title::{
+    app_title_info, colors_label, status_for, status_line_fit, title_text, title_with_file,
+};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
 /// Una conversión que espera su fotograma tras `Accept` (specs/hito-2-convertir-modo.md, D5).
@@ -137,6 +139,8 @@ struct App {
     dropper_once: DropperOnce,
     /// Último error de una herramienta, `undo` o `redo`; caduca a los `NOTICE_SECS`.
     notice: Option<Notice>,
+    /// What the palette panel asked the status line to show in the last frame.
+    panel_hint: Option<String>,
     /// Confirmación por repetición al abrir o cerrar con cambios sin guardar.
     confirm: Confirm,
     /// Diálogos de archivo (specs/hito-2-dialogos-archivo.md).
@@ -217,6 +221,7 @@ impl App {
             tools: ToolState::new(),
             dropper_once: DropperOnce::new(),
             notice: None,
+            panel_hint: None,
             confirm: Confirm::new(),
             dialogs: Dialogs::new(
                 Box::new(RfdPicker::new()),
@@ -291,6 +296,9 @@ impl App {
                     && let Some(target) =
                         help_target_in_panel(point, self.layers.current_rect(window, n), n)
                 {
+                    return target;
+                }
+                if let Some(target) = help_target_in_indicator(point, window, n) {
                     return target;
                 }
                 help_target_at(point, window, n)
@@ -1381,6 +1389,7 @@ impl eframe::App for App {
             || self.modal.is_open()
             || self.waiting());
         self.session.view.icons = self.icons.set;
+        self.session.view.editor_open = self.session.editor_open;
         let panel = {
             // La celda activa si tiene imagen (la quita de una entrada pregunta si la usa); si
             // está vacía, el lienzo da el modo y la paleta.
@@ -1413,9 +1422,10 @@ impl eframe::App for App {
             if let Some(choice) = panel.background {
                 self.session.background = choice;
             }
-            if let Some(role) = panel.editing {
-                self.session.editing = role;
+            if panel.close_editor {
+                self.session.close_editor();
             }
+            self.panel_hint = px_ui::palette_panel::panel_info(&ctx).status_hint;
             match panel.indicator {
                 Some(Indicator::Dropper) => {
                     let before = self.tools.tool();
@@ -1429,7 +1439,7 @@ impl eframe::App for App {
                         self.dropper_once.arm(before);
                     }
                 }
-                Some(Indicator::FocusEditor(role)) => self.session.editing = role,
+                Some(Indicator::FocusEditor(role)) => self.session.indicator_right_click(role),
                 None => {}
             }
             if let Some(commit) = panel.commit {
@@ -1634,7 +1644,13 @@ impl eframe::App for App {
         let title = title_text(&info);
         let columns =
             px_ui::status::bar_columns(ctx.content_rect().width(), ctx.pixels_per_point());
-        let status = (status_line_fit(&info, columns), info.error.is_some());
+        // The status line: a notice or error first; then what the panel asks to show (a swatch
+        // drag, a pending removal or the swatch under the pointer); then the usual line.
+        let status = status_for(
+            status_line_fit(&info, columns),
+            info.error.is_some(),
+            self.panel_hint.as_deref(),
+        );
         if status != self.status {
             self.status = status;
             ctx.request_repaint();

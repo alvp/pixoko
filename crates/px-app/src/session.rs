@@ -104,6 +104,9 @@ pub struct Session {
     pub background: ColorChoice,
     /// Qué color edita el editor de color y sobre cuál actúan los botones de la paleta.
     pub editing: Role,
+    /// The color editor is open (specs/ui-composition.md). It starts closed; `p`, `Esc`, a second
+    /// right click on the edited rectangle of the indicator and changing document toggle it.
+    pub editor_open: bool,
     /// La capa activa: donde actúan las herramientas. Es estado de la sesión, no del documento
     /// (specs/hito-3-capas-vista.md, decisión 1): cambiarla no es un paso de la historia.
     active: LayerId,
@@ -159,6 +162,7 @@ impl Session {
             choice,
             background,
             editing: Role::Foreground,
+            editor_open: false,
             scroll: Scroll::default(),
             view: PanelView::default(),
             slots: SlotBank::new(),
@@ -730,14 +734,49 @@ impl Session {
         self.pixel_of(Role::Foreground)
     }
 
-    /// Pone al día el editor con el destino y el color guardado de la selección actual.
+    /// Pone al día el editor con el destino y el color guardado de la selección actual. Si no hay
+    /// nada que editar (otro modo, otra paleta), el editor se cierra.
     pub fn sync_editor(&mut self) {
         let current = Some(self.document.canvas_image()).and_then(|image| {
             let target = EditTarget::of(image, self.choice_of(self.editing))?;
             let color = target.stored(image, self.slots.get(image.mode()))?;
             Some((target, color))
         });
+        if current.is_none() && self.editor_open {
+            self.close_editor();
+        }
         self.editor.sync(current);
+    }
+
+    /// Opens the color editor on the color of `role`.
+    pub fn open_editor(&mut self, role: Role) {
+        self.editing = role;
+        self.editor_open = true;
+    }
+
+    /// Closes the color editor; the palette operations act on the foreground again.
+    pub fn close_editor(&mut self) {
+        self.editor_open = false;
+        self.editing = Role::Foreground;
+    }
+
+    /// `p`: opens the editor on the role being edited or closes it.
+    pub fn toggle_editor(&mut self) {
+        if self.editor_open {
+            self.close_editor();
+        } else {
+            self.open_editor(self.editing);
+        }
+    }
+
+    /// Right click on the rectangle of `role` in the indicator: opens the editor on it, switches to
+    /// it if the editor is open on the other role, closes the editor if it is open on this one.
+    pub fn indicator_right_click(&mut self, role: Role) {
+        if self.editor_open && self.editing == role {
+            self.close_editor();
+        } else {
+            self.open_editor(role);
+        }
     }
 
     /// Aplica un color del editor: `SetPaletteColor` en indexadas (`Ok(true)` si el documento
@@ -872,6 +911,7 @@ impl Session {
         self.choice = choice;
         self.background = default_background(document.canvas_image());
         self.editing = Role::Foreground;
+        self.editor_open = false;
         // La ranura 9 es el fondo por defecto (transparente, o blanca en gris): abrir o crear la
         // restaura aunque se haya editado. Es la única excepción a «las ranuras duran la sesión».
         for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
@@ -1069,6 +1109,8 @@ pub fn describe_saved_dialog(saved: &Saved) -> String {
 mod aseprite_tests;
 #[cfg(test)]
 mod aux_tests;
+#[cfg(test)]
+mod c1_tests;
 #[cfg(test)]
 mod color_cycle_tests;
 #[cfg(test)]

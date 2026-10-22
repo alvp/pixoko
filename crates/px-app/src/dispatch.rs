@@ -1,9 +1,9 @@
-//! `dispatch`: la capa de acciones de la app (specs/hito-2-menu-herramientas.md, «Piezas»).
+//! `dispatch`: the action layer of the app (specs/hito-2-menu-herramientas.md, "Pieces").
 //!
-//! El menú, la columna de herramientas, los botones de zoom y los atajos producen la misma
-//! [`AppAction`]; aquí se comprueba el bloqueo y se aplica lo que no necesita ventana. Lo que sí la
-//! necesita (diálogos, cerrar, el zoom del lienzo, el panel de licencias) se devuelve como
-//! [`Dispatched`] y lo ejecuta `App`. Sin egui: se prueba sin ventana.
+//! The menu, the toolbox column, the zoom buttons and the shortcuts produce the same
+//! [`AppAction`]; here the blocking is checked and what does not need a window is applied. What does
+//! need one (dialogs, closing, the zoom of the canvas, the licenses panel) is returned as
+//! [`Dispatched`] and `App` runs it. Without egui: it is tested without a window.
 
 use px_ui::actions::{AppAction, Locks, Origin, is_blocked};
 use px_ui::background::CanvasBackground;
@@ -17,68 +17,68 @@ use crate::keys::select_tool;
 use crate::merge_flow::MergeKind;
 use crate::session::{LayerReport, Session};
 
-/// Lo que dejó una acción despachada.
+/// What a dispatched action left.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Dispatched {
-    /// Bloqueada por [`is_blocked`]: no cambió nada.
+    /// Blocked by [`is_blocked`]: nothing changed.
     Blocked,
-    /// Aplicada. `refresh`: el documento cambió y hay que regenerar la textura. `notice`: aviso
-    /// para la barra (un error o el aviso del borrador).
+    /// Applied. `refresh`: the document changed and the texture has to be regenerated. `notice`: notice
+    /// for the bar (an error or the eraser's notice).
     Done {
         refresh: bool,
         notice: Option<String>,
     },
-    /// Una acción de fichero: la ejecuta `App::file_action` (diálogo, confirmación…).
+    /// A file action: `App::file_action` runs it (dialog, confirmation…).
     File(FileAction),
-    /// Cerrar la ventana: pasa por la regla de cierre por repetición de `handle_close`.
+    /// Close the window: it goes through the close-by-repetition rule of `handle_close`.
     Quit,
-    /// Una operación de zoom para el lienzo.
+    /// A zoom operation for the canvas.
     View(ViewOp),
-    /// Abrir (`true`) o cerrar (`false`) el panel de licencias.
+    /// Open (`true`) or close (`false`) the licenses panel.
     Licenses(bool),
-    /// `New image_2…`: la ejecuta `App` (confirmación, diálogo y creación).
+    /// `New image…`: `App` runs it (confirmation, dialog and creation).
     NewImage,
-    /// `Convert mode_2…`: la ejecuta `App` (diálogo, informe y conversión).
+    /// `Convert mode…`: `App` runs it (dialog, report and conversion).
     ConvertMode,
-    /// Elegir el fondo bajo la transparencia del lienzo: preferencia de la sesión, no toca el
-    /// documento.
+    /// Choose the background under the transparency of the canvas: a preference of the session, it does not
+    /// touch the document.
     Background(CanvasBackground),
-    /// `Color…` del fondo del lienzo: la ejecuta `App` (abre el diálogo).
+    /// `Color…` of the canvas background: `App` runs it (opens the dialog).
     BackgroundColor,
-    /// `F1` o `Ayuda → Ayuda from_index la tool_2`: `App` abre la ayuda de ese destino.
+    /// `F1` or `Help → Tool help`: `App` opens the help of that target.
     Help(HelpTarget),
-    /// `Ayuda → Atajos from_index keyboard…`: `App` abre la lista de atajos.
+    /// `Help → Keyboard shortcuts…`: `App` opens the list of shortcuts.
     Shortcuts,
-    /// Una acción del panel de capas que es de la ventana: lo muestra, lo oculta o lleva el foco.
+    /// An action of the layers panel that belongs to the window: it shows it, hides it or takes the focus.
     LayerPanel(LayerPanelOp),
-    /// `New layer_2` o `Duplicate` en gris: el aviso ofrece pasar a gris con alfa; repetir la orden en
-    /// 5 s abre `Convert mode_2…` (la regla de la repetición la lleva `App`).
+    /// `New layer` or `Duplicate` in gray: the notice offers going to gray with alpha; repeating the order in
+    /// 5 s opens `Convert mode…` (the repetition rule is carried by `App`).
     OfferGrayAlpha { notice: String, action: AppAction },
-    /// Combinar abajo, combinar visibles o aplanar: la ejecuta `App` (reglas de rechazo, espera de
-    /// «Combinando…» / «Aplanando…» y confirmación de Aplanar).
+    /// Merge down, merge visible or flatten: `App` runs it (rejection rules, wait of
+    /// "Combinando…" / "Aplanando…" and confirmation of Flatten).
     Merge(MergeKind),
-    /// `Archivo → Export PNG aplanado…`: la ejecuta `App` (diálogo y escritura).
+    /// `File → Export flattened PNG…`: `App` runs it (dialog and writing).
     ExportFlat,
 }
 
-/// Lo que se le pide al panel de capas.
+/// What is asked of the layers panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerPanelOp {
     Toggle,
-    /// `Rename`: abre el panel y lleva el foco al nombre.
+    /// `Rename`: opens the panel and takes the focus to the name.
     FocusName,
-    /// `Propiedades`: abre el panel y lo deja a la vista.
+    /// `Properties`: opens the panel and leaves it in view.
     ShowProperties,
 }
 
-/// Lo que `dispatch` puede tocar, con los bloqueos de este fotograma.
+/// What `dispatch` may touch, with the locks of this frame.
 pub struct Targets<'a> {
     pub session: &'a mut Session,
     pub tools: &'a mut ToolState,
     pub locks: Locks,
 }
 
-/// El resultado de una operación de capa: refresco, aviso y, en gris, la oferta de convertir.
+/// The result of a layer operation: refresh, notice and, in gray, the offer to convert.
 fn layer_done(action: AppAction, report: LayerReport) -> Dispatched {
     match (report.offer_convert, report.notice) {
         (true, Some(notice)) => Dispatched::OfferGrayAlpha { notice, action },
@@ -96,7 +96,7 @@ fn done(refresh: bool) -> Dispatched {
     }
 }
 
-/// Aplica `action`, pedida desde `origin`, salvo que esté bloqueada.
+/// Applies `action`, asked from `origin`, unless it is blocked.
 pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dispatched {
     if is_blocked(action, targets.locks, origin) {
         return Dispatched::Blocked;
@@ -136,6 +136,13 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::ShowHelp(target) => Dispatched::Help(target),
         AppAction::ShowShortcuts => Dispatched::Shortcuts,
         AppAction::ToggleLayerPanel => Dispatched::LayerPanel(LayerPanelOp::Toggle),
+        AppAction::ToggleColorEditor => {
+            session.toggle_editor();
+            Dispatched::Done {
+                refresh: false,
+                notice: None,
+            }
+        }
         AppAction::RenameLayer => Dispatched::LayerPanel(LayerPanelOp::FocusName),
         AppAction::LayerProperties => Dispatched::LayerPanel(LayerPanelOp::ShowProperties),
         AppAction::NewLayer => layer_done(action, session.new_layer()),
