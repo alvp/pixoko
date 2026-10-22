@@ -4079,6 +4079,58 @@ mod from_layers {
         }
     }
 
+    /// Unidad L1, fila 6: un lienzo imposible (ancho o alto 0, más de `Image::MAX_BYTES`) o una
+    /// paleta que no corresponde al modo es `InvalidCanvas`, aunque las capas sean válidas; una
+    /// celda que no encaja sigue siendo `CelMismatch`, y los dos errores se leen distinto.
+    #[test]
+    fn fila_06_lienzo_imposible_es_invalid_canvas_y_celda_que_no_encaja_es_cel_mismatch() {
+        let paleta = Palette::from_colors([ROJO, VERDE, AZUL]).expect("paleta");
+        let casos: Vec<(&str, Result<Document, DocumentError>)> = vec![
+            (
+                "ancho 0",
+                Document::from_layers(0, 3, Mode::Rgba, None, vec![simple("a", None)]),
+            ),
+            (
+                "alto 0",
+                Document::from_layers(4, 0, Mode::Rgba, None, vec![simple("a", None)]),
+            ),
+            (
+                "más de Image::MAX_BYTES",
+                Document::from_layers(100_000, 100_000, Mode::Rgba, None, vec![simple("a", None)]),
+            ),
+            (
+                "paleta en un modo que no es indexado",
+                Document::from_layers(4, 3, Mode::Rgba, Some(paleta), vec![simple("a", None)]),
+            ),
+            (
+                "indexado sin paleta",
+                Document::from_layers(4, 3, Mode::Indexed, None, vec![simple("a", None)]),
+            ),
+        ];
+        for (nombre, resultado) in casos {
+            assert_eq!(
+                resultado.err(),
+                Some(DocumentError::InvalidCanvas),
+                "{nombre}"
+            );
+        }
+        let celda = Document::from_layers(
+            4,
+            3,
+            Mode::Rgba,
+            None,
+            vec![simple("a", Some(img_rgba(3, 3)))],
+        )
+        .err()
+        .expect("la celda no encaja");
+        assert_eq!(celda, DocumentError::CelMismatch { layer: 0 });
+        assert_ne!(
+            DocumentError::InvalidCanvas.to_string(),
+            celda.to_string(),
+            "los dos mensajes son distintos"
+        );
+    }
+
     // -----------------------------------------------------------------------------------
     // P2: `from_layers` no construye documentos inválidos.
     // -----------------------------------------------------------------------------------
