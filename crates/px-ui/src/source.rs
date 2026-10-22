@@ -132,7 +132,7 @@ impl PixelSource for DocSource<'_> {
         }) else {
             return Ok(Vec::new());
         };
-        let composed = compose_rect(
+        let composed = match compose_rect(
             self.0,
             Rect {
                 x: clipped.x,
@@ -140,10 +140,20 @@ impl PixelSource for DocSource<'_> {
                 width: clipped.width,
                 height: clipped.height,
             },
-        )
-        // `EmptyRect` y `RectOutside` no pasan (el rectángulo viene recortado y con área);
-        // `NoTransparency` es un documento sin nada que mostrar; el resto, falta de memoria.
-        .map_err(|_| CanvasError::OutOfMemory)?;
+        ) {
+            Ok(composed) => composed,
+            // Nada visible y sin valor transparente (gris, o indexado sin índice transparente):
+            // se ve como un documento vacío, el fondo del lienzo.
+            Err(ComposeError::NoTransparency { .. }) => {
+                let len = clipped.width as usize * clipped.height as usize;
+                let mut pixels = alloc.pixels(len).ok_or(CanvasError::OutOfMemory)?;
+                pixels.resize(len, Color32::TRANSPARENT);
+                return Ok(pixels);
+            }
+            // `EmptyRect` y `RectOutside` no pasan (el rectángulo viene recortado y con área);
+            // el resto, falta de memoria.
+            Err(_) => return Err(CanvasError::OutOfMemory),
+        };
         composed.region(
             TileRect {
                 x: 0,

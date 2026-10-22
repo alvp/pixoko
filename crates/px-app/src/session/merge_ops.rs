@@ -8,13 +8,12 @@ use std::path::Path;
 use px_core::{Allowed, Command, Document, DocumentError, LayerId, Mode};
 use px_raster::{MergeError, flatten_command, merge_down_command, merge_visible_command};
 use px_ui::layers_panel::format_bytes;
-use px_ui::source::flatten;
 
 use crate::dialogs::with_png_extension;
 use crate::files::{FileError, copy_path, file_label, write_atomic};
 use crate::merge_flow::MergeKind;
 
-use super::{LayerReport, Saved, Session, default_background, same_file};
+use super::{LayerReport, Saved, Session, default_background, flatten_to_save, same_file};
 
 /// Por qué no se combina.
 pub const NO_LAYER_BELOW_NOTICE: &str = "no hay capa debajo con la que combinar";
@@ -207,7 +206,7 @@ impl Session {
             (Some(path), Some(_)) if same_file(path, &dest) => copy_path(path),
             _ => dest,
         };
-        let image = flatten(&self.document).map_err(|error| FileError::Write(error.to_string()))?;
+        let image = flatten_to_save(&self.document)?;
         let bytes = px_formats::write_png(&image).map_err(FileError::Png)?;
         write_atomic(&dest, &bytes)?;
         Ok(Saved {

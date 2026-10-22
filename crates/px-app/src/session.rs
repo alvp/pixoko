@@ -1,6 +1,7 @@
 //! Sesión de edición: el documento, su fichero y si hay cambios sin guardar
 //! (specs/hito-2-abrir-guardar.md). Sin egui: se prueba sin ventana.
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use std::fmt;
@@ -9,6 +10,7 @@ use px_core::{
     Allowed, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Pixel, Span,
 };
 use px_formats::{write_aseprite, write_png};
+use px_raster::ComposeError;
 use px_ui::color::{
     ColorChoice, Role, SlotBank, SlotColors, cell_count, cell_of_choice, choice_for_cell,
     clamp_choice, default_background, initial_choice, pixel_for_choice_with,
@@ -959,8 +961,7 @@ impl Session {
         let bytes = match SaveFormat::of_path(&dest) {
             SaveFormat::Aseprite => write_aseprite(&self.document).map_err(FileError::Aseprite)?,
             SaveFormat::Png => {
-                let image =
-                    flatten(&self.document).map_err(|error| FileError::Write(error.to_string()))?;
+                let image = flatten_to_save(&self.document)?;
                 write_png(&image).map_err(FileError::Png)?
             }
         };
@@ -973,6 +974,23 @@ impl Session {
             copy_reason,
         })
     }
+}
+
+/// La imagen que se guarda como PNG. Sin nada visible en un gris o un indexado sin índice
+/// transparente no hay valor con el que rellenar: el error dice qué hacer, no el de la composición.
+pub(crate) fn flatten_to_save(document: &Document) -> Result<Cow<'_, Image>, FileError> {
+    flatten(document).map_err(|error| {
+        match error {
+        ComposeError::NoTransparency { mode } => FileError::Write(match mode {
+            Mode::Indexed => {
+                "no hay nada visible que guardar: muestra una capa o fija una entrada transparente"
+            }
+            _ => "no hay nada visible que guardar: muestra una capa",
+        }
+        .to_string()),
+        error => FileError::Write(error.to_string()),
+    }
+    })
 }
 
 /// Por qué no se pinta: la capa activa está oculta.
