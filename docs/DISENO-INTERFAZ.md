@@ -146,6 +146,7 @@ La barra de Pixoko sigue los nueve menús del original con nombres en español, 
 | Brush | Pincel | Copiar, pegar, restaurar, tamaño, voltear, borde, rotar, punto de agarre; deformar y cizalla, más tarde | 4 |
 | Mode | Modo | Matte, Color y Reemplazar; después Difuminar, Mezclar, Sombrear, Suavizar y Mezcla | 4; resto, 7 |
 | Anim | Animación | Fotogramas, control, ritmo, paleta por fotograma; después mover, cámara y pincel animado | 5; resto, 7 |
+| (no existe) | Capa | Nueva capa, duplicar, quitar, subir, bajar, renombrar, propiedades y mostrar el panel de capas (hecho en 3.4; atajos `;` `)` `(` y `'`) | 3 |
 | Colour | Color | Rangos, ciclo, editor de color, copiar, intercambiar, degradado de paleta, borrar, cargar y guardar paleta, Remap | 4; rangos y ciclo, 5 |
 | Effect | Efecto | Plantilla, mesa de luz, fijar fondo, antialias, proceso, translucidez, perspectiva, textura | 7 (opcional); mesa de luz, 5 |
 | Macro y User | Macro | Grabar, ejecutar, cargar, guardar y diez ranuras | 8 |
