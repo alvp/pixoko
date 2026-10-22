@@ -506,3 +506,61 @@ fn fila_12_aceptar_convierte_todas_las_capas_en_un_paso_y_se_deshace() {
     assert_eq!(sesion.document.mode(), Mode::Rgba);
     let _: &[Layer] = sesion.document.layers();
 }
+
+// ---------------------------------------------------------------------------------------------
+// Unidad L1, fila 4 (specs/limpieza-1.md): `Analysis::Blocked(LayerBlock)`. En ROJO hasta la lógica.
+// ---------------------------------------------------------------------------------------------
+
+/// Con bloqueo de capas, `analyze_document` da `Analysis::Blocked(..)` (sin mirar los píxeles); sin
+/// bloqueo, lo de siempre.
+#[test]
+fn fila_04_analyze_document_con_bloqueo_de_capas_da_blocked() {
+    let doc = documento(2);
+    assert_eq!(
+        analyze_document(&doc, Mode::Gray),
+        Analysis::Blocked(LayerBlock::MultiLayerGray)
+    );
+    assert_eq!(
+        analyze_document(&doc, Mode::Rgba),
+        Analysis::Exact { palette: None }
+    );
+
+    let mut doc = documento(2);
+    let b = doc.layers()[1].id();
+    doc.apply(Command::SetLayerOpacity {
+        layer: b,
+        opacity: 128,
+    })
+    .expect("opacidad");
+    assert_eq!(
+        analyze_document(&doc, Mode::Indexed),
+        Analysis::Blocked(LayerBlock::LayerProps)
+    );
+}
+
+/// El motivo (≤ 37 caracteres) y la explicación de `Blocked` son los de `LayerBlock`; no hay nada
+/// que permitir ni que pedir.
+#[test]
+fn fila_04_el_motivo_y_el_informe_de_blocked_son_los_del_bloqueo() {
+    let perms = Permissions {
+        luma: false,
+        alpha: AlphaChoice::Keep,
+    };
+    for block in [LayerBlock::MultiLayerGray, LayerBlock::LayerProps] {
+        let analysis = Analysis::Blocked(block);
+        assert_eq!(
+            block_reason(Some(&analysis), &perms, None),
+            Some(block.reason().to_string())
+        );
+        assert!(pending(&analysis, &perms, None, true).is_empty());
+        assert_eq!(
+            needs(&analysis),
+            Needs {
+                luma: false,
+                alpha: false
+            }
+        );
+        let report = report_text_all(Some(&analysis), 2, (4, 4), &perms, None, 32, historial());
+        assert!(report.contains(block.explanation()), "{report}");
+    }
+}

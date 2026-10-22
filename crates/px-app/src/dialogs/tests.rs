@@ -941,3 +941,65 @@ fn fila_6e_el_aviso_solo_depende_de_si_hay_algun_dialogo() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------------------
+// Unidad L1, fila 5 (specs/limpieza-1.md): `DialogKind::Export`. En ROJO hasta la lógica.
+// ---------------------------------------------------------------------------------------
+
+#[test]
+fn fila_05_export_se_titula_exportar_png_aplanado_con_cualquier_capas_y_ruta() {
+    for layers in [0, 1, 2, 5] {
+        for path in [None, Some("dibujo.png"), Some("dibujo.aseprite")] {
+            assert_eq!(
+                dialog_title(DialogKind::Export, layers, path.map(Path::new)),
+                "Exportar PNG aplanado",
+                "{layers} capas, {path:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fila_05_save_save_as_y_open_conservan_sus_titulos() {
+    assert_eq!(
+        dialog_title(DialogKind::Open, 1, None),
+        "Abrir imagen (PNG o Aseprite)"
+    );
+    for kind in [DialogKind::Save, DialogKind::SaveAs] {
+        assert_eq!(dialog_title(kind, 1, None), "Guardar PNG");
+        assert_eq!(
+            dialog_title(kind, 1, Some(Path::new("a.png"))),
+            "Guardar PNG"
+        );
+        assert_eq!(
+            dialog_title(kind, 1, Some(Path::new("a.aseprite"))),
+            "Guardar .aseprite"
+        );
+        assert_eq!(
+            dialog_title(kind, 2, None),
+            "Guardar como .aseprite (con capas) o PNG (aplanado)"
+        );
+    }
+}
+
+#[test]
+fn fila_05_el_nombre_propuesto_al_exportar_es_nombre_aplanado_png() {
+    assert_eq!(
+        export_name(Some(Path::new("/a/b/dibujo.aseprite"))),
+        PathBuf::from("/a/b/dibujo-aplanado.png")
+    );
+    assert_eq!(
+        export_name(Some(Path::new("dibujo.png"))),
+        PathBuf::from("dibujo-aplanado.png")
+    );
+    assert_eq!(export_name(None), PathBuf::from("sin-titulo-aplanado.png"));
+}
+
+#[test]
+fn fila_05_sin_dialogo_de_archivos_exportar_avisa_y_no_arma_segunda_pulsacion() {
+    assert_eq!(
+        unavailable_notice(DialogKind::Export),
+        "no hay diálogo de archivos: no se puede exportar"
+    );
+    assert_eq!(fallback_request(DialogKind::Export), None);
+}
