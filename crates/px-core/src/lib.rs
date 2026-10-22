@@ -9,11 +9,12 @@ mod palette_edit;
 mod rgba;
 
 pub use convert::{
-    Allowed, Conversion, ConversionReport, ConvertError, LUMA_WEIGHTS, convert_image, luma,
-    target_byte_len,
+    Allowed, CelsAnalysis, CelsConversion, Conversion, ConversionReport, ConvertError,
+    LUMA_WEIGHTS, analyze_cels, convert_cels, convert_image, luma, target_byte_len,
 };
 pub use document::{
-    BlendMode, Command, Document, DocumentError, ImageId, Layer, LayerId, PixelEdit, Span,
+    BlendMode, Command, Document, DocumentError, ImageId, Layer, LayerId, MergePlan, PixelEdit,
+    Span,
 };
 pub use hsl::Hsl;
 pub use image::{Image, ImageError, Mode, Pixel};

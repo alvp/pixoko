@@ -5,6 +5,7 @@ use std::error::Error;
 use std::fmt;
 use std::mem::size_of;
 
+use crate::convert::plan_cels;
 use crate::palette_edit::{self, PaletteStep};
 use crate::{
     Allowed, Conversion, ConvertError, Image, ImageError, Mode, Palette, PaletteEditError, Pixel,
@@ -185,7 +186,7 @@ pub enum Command {
     /// Ejecuta los comandos en orden como un solo paso de deshacer. No se anida.
     Batch(Vec<Command>),
     /// Convierte la imagen a otro modo (`convert_image`) como un solo paso de deshacer. Si ya
-    /// está en ese modo no hace nada. Solo como comando suelto: dentro de un `Batch` es
+    /// está en ese modo no hace nada. Con varias capas se usa `ConvertAll`. Solo como comando suelto: dentro de un `Batch` es
     /// `NotBatchable`.
     ConvertMode {
         image: ImageId,
@@ -217,6 +218,23 @@ pub enum Command {
     /// incluido, y el nombre `name`. La celda con imagen se copia; la vacía sigue vacía. Solo como
     /// comando suelto.
     DuplicateLayer { layer: LayerId, name: String },
+    /// Une capas en una sola (specs/hito-3-combinar.md): quita las capas de `remove` (se mueven al
+    /// paso, sin copiar), pone `image` como imagen de la celda de `target` (`None`: celda vacía) y
+    /// deja a `target` con opacidad 255, mezcla `Normal` y desbloqueada; su id, el de su celda,
+    /// su nombre y su visibilidad no cambian. La imagen la calcula quien llama (la composición,
+    /// en `px-raster`) sobre el estado `based_on` (`state_id`): si el documento ya cambió, es
+    /// `StaleImage`. Un solo paso. Solo como comando suelto.
+    MergeLayers {
+        target: LayerId,
+        remove: Vec<LayerId>,
+        image: Option<Image>,
+        based_on: u64,
+    },
+    /// Convierte el modo y la paleta del lienzo y **todas** las celdas con imagen en un solo
+    /// paso, con una paleta común si el destino es indexado (`convert_cels`). Las celdas vacías
+    /// siguen vacías. Con una sola capa equivale a `ConvertMode`; con varias, `ConvertMode`
+    /// sigue dando `MultiLayerConvert`. Solo como comando suelto.
+    ConvertAll { target: Mode, allowed: Allowed },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -246,6 +264,17 @@ pub enum Command {
         len: u16,
         steps: i32,
     },
+}
+
+/// Lo que costaría una combinación (`Document::plan_merge`), calculado sin tocar nada.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MergePlan {
+    /// Bytes de píxeles de las celdas de `target` y de `remove`: lo que irá al paso de historia.
+    pub stored_bytes: usize,
+    /// Ninguna de esas celdas tiene imagen.
+    pub all_empty: bool,
+    /// `materialized_bytes()` más una celda: el pico mientras viven las viejas y la nueva.
+    pub peak_bytes: usize,
 }
 
 /// Un píxel que cambió de valor.
@@ -291,6 +320,9 @@ struct Step {
     /// plantilla del lienzo que le corresponde. `undo` y `redo` las intercambian con las del
     /// documento.
     swapped: Option<Swapped>,
+    /// En un paso de `ConvertAll`, las imágenes de todas las celdas que no están en el documento
+    /// y la plantilla del lienzo del otro lado; `undo` y `redo` las intercambian.
+    converted: Option<Converted>,
     /// En un paso de edición de paleta, el paso (que es todo su contenido).
     palette: Option<PaletteStep>,
     /// En un paso de comando de capa, el paso (que es todo su contenido).
@@ -337,14 +369,25 @@ enum LayerStep {
         before: bool,
         after: bool,
     },
+    /// `MergeLayers`: `positions` son las posiciones (ascendentes, de antes de combinar) de las
+    /// capas quitadas; `removed` las guarda mientras están fuera del documento (vacío si están
+    /// dentro). `image` y `props` (opacidad, mezcla y bloqueo) son los del otro lado de `target`.
+    Merge {
+        target: LayerId,
+        positions: Vec<usize>,
+        removed: Vec<Layer>,
+        image: Option<Image>,
+        props: (u8, BlendMode, bool),
+    },
 }
 
 impl LayerStep {
-    /// `true` si deshacerlo (`undoing`) o rehacerlo mete una capa en el documento.
-    fn inserts(&self, undoing: bool) -> bool {
+    /// Cuántas capas mete en el documento deshacerlo (`undoing`) o rehacerlo.
+    fn inserts(&self, undoing: bool) -> usize {
         match self {
-            LayerStep::Presence { added, .. } => *added != undoing,
-            _ => false,
+            LayerStep::Presence { added, .. } => usize::from(*added != undoing),
+            LayerStep::Merge { positions, .. } if undoing => positions.len(),
+            _ => 0,
         }
     }
 
@@ -354,10 +397,32 @@ impl LayerStep {
                 layer.name.capacity().saturating_add(layer.content_bytes())
             }),
             LayerStep::Name { other, .. } => other.capacity(),
+            LayerStep::Merge {
+                positions,
+                removed,
+                image,
+                ..
+            } => {
+                let layers = removed.iter().fold(0usize, |total, layer| {
+                    total
+                        .saturating_add(layer.name.capacity())
+                        .saturating_add(layer.content_bytes())
+                });
+                layers
+                    .saturating_add(image.as_ref().map_or(0, Image::content_bytes))
+                    .saturating_add(positions.capacity().saturating_mul(size_of::<usize>()))
+            }
             _ => 0,
         }
         .saturating_add(size_of::<LayerStep>())
     }
+}
+
+/// Lo que intercambia un paso de `ConvertAll`: la imagen de cada celda y la plantilla del lienzo.
+#[derive(Clone, Debug)]
+struct Converted {
+    cels: Vec<(ImageId, Image)>,
+    template: Image,
 }
 
 /// Lo que intercambia un paso de conversión de modo.
@@ -379,6 +444,13 @@ impl Step {
         let swapped = self.swapped.as_ref().map_or(0, |swapped| {
             size_of::<Image>().saturating_add(swapped.image.content_bytes())
         });
+        let converted = self.converted.as_ref().map_or(0, |converted| {
+            converted.cels.iter().fold(0usize, |total, (_, image)| {
+                total
+                    .saturating_add(size_of::<Image>())
+                    .saturating_add(image.content_bytes())
+            })
+        });
         let palette = self.palette.as_ref().map_or(0, PaletteStep::cost);
         let layer = self.layer.as_ref().map_or(0, LayerStep::cost);
         let materialized = self
@@ -390,6 +462,7 @@ impl Step {
             .saturating_add(self.fills.capacity().saturating_mul(size_of::<FillPart>()))
             .saturating_add(runs)
             .saturating_add(swapped)
+            .saturating_add(converted)
             .saturating_add(palette)
             .saturating_add(layer)
             .saturating_add(materialized)
@@ -647,6 +720,15 @@ impl Document {
             Command::DuplicateLayer { layer, name } => {
                 return self.apply_duplicate_layer(layer, name);
             }
+            Command::MergeLayers {
+                target,
+                remove,
+                image,
+                based_on,
+            } => return self.apply_merge(target, &remove, image, based_on),
+            Command::ConvertAll { target, allowed } => {
+                return self.apply_convert_all(target, allowed);
+            }
             _ => {}
         }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
@@ -851,6 +933,210 @@ impl Document {
             swapped: Some(Swapped {
                 id,
                 image: new,
+                template,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// Posiciones de `target` y de `remove` (esta, ascendente), validando capas y conjunto.
+    fn merge_positions(
+        &self,
+        target: LayerId,
+        remove: &[LayerId],
+    ) -> Result<(usize, Vec<usize>), DocumentError> {
+        let target_at = self.layer_position(target)?;
+        let mut positions = Vec::new();
+        positions
+            .try_reserve_exact(remove.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        for id in remove {
+            positions.push(self.layer_position(*id)?);
+        }
+        positions.sort_unstable();
+        if positions.is_empty()
+            || positions.contains(&target_at)
+            || positions.windows(2).any(|pair| pair[0] == pair[1])
+        {
+            return Err(DocumentError::InvalidMerge);
+        }
+        Ok((target_at, positions))
+    }
+
+    /// Lo que costaría combinar `remove` en `target`, sin reservar ni tocar nada. Los mismos
+    /// errores de capa que `MergeLayers`: `UnknownLayer` (primero `target`, luego `remove` en
+    /// orden) e `InvalidMerge`.
+    pub fn plan_merge(
+        &self,
+        target: LayerId,
+        remove: &[LayerId],
+    ) -> Result<MergePlan, DocumentError> {
+        let (target_at, positions) = self.merge_positions(target, remove)?;
+        let cell_bytes = |at: usize| {
+            self.layers
+                .get(at)
+                .and_then(|layer| layer.image.as_ref())
+                .map(|image| image.bytes().len())
+        };
+        let mut stored = 0usize;
+        let mut all_empty = true;
+        for at in std::iter::once(target_at).chain(positions.iter().copied()) {
+            if let Some(bytes) = cell_bytes(at) {
+                stored = stored.saturating_add(bytes);
+                all_empty = false;
+            }
+        }
+        Ok(MergePlan {
+            stored_bytes: stored,
+            all_empty,
+            peak_bytes: self.materialized_bytes().saturating_add(self.cel_bytes()),
+        })
+    }
+
+    /// `MergeLayers`. Orden: capa desconocida, conjunto inválido, imagen vieja, imagen de otro
+    /// lienzo, tope de celdas (solo el resultado, y solo si crece) y memoria; nada se modifica
+    /// antes de que todas pasen.
+    fn apply_merge(
+        &mut self,
+        target: LayerId,
+        remove: &[LayerId],
+        image: Option<Image>,
+        based_on: u64,
+    ) -> Result<bool, DocumentError> {
+        let plan = self.plan_merge(target, remove)?;
+        let (target_at, positions) = self.merge_positions(target, remove)?;
+        if based_on != self.current_id {
+            return Err(DocumentError::StaleImage {
+                based_on,
+                current: self.current_id,
+            });
+        }
+        if let Some(image) = &image {
+            let fits = image.width() == self.canvas.width
+                && image.height() == self.canvas.height
+                && image.mode() == self.canvas.template.mode()
+                && image.palette() == self.canvas.template.palette();
+            if !fits {
+                return Err(DocumentError::MergeImageMismatch);
+            }
+        }
+        let new_bytes = image.as_ref().map_or(0, |image| image.bytes().len());
+        let before = self.materialized_bytes();
+        let needed = before
+            .saturating_sub(plan.stored_bytes)
+            .saturating_add(new_bytes);
+        if needed > self.cells_limit && needed > before {
+            return Err(DocumentError::CelsTooLarge {
+                needed,
+                limit: self.cells_limit,
+            });
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let mut removed = Vec::new();
+        removed
+            .try_reserve_exact(positions.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        // Hasta aquí nada ha cambiado; desde aquí no se reserva ni se falla.
+        for at in positions.iter().rev() {
+            removed.push(self.layers.remove(*at));
+        }
+        removed.reverse();
+        let target_now = self
+            .layers
+            .iter()
+            .position(|layer| layer.id == target)
+            .unwrap_or(target_at);
+        let Some(layer) = self.layers.get_mut(target_now) else {
+            return Ok(false);
+        };
+        let old_image = std::mem::replace(&mut layer.image, image);
+        let props = (
+            std::mem::replace(&mut layer.opacity, 255),
+            std::mem::replace(&mut layer.blend, BlendMode::Normal),
+            std::mem::replace(&mut layer.locked, false),
+        );
+        self.commit(Step {
+            layer: Some(LayerStep::Merge {
+                target,
+                positions,
+                removed,
+                image: old_image,
+                props,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `ConvertAll`: todo lo que puede fallar o reservar ocurre antes de tocar el documento;
+    /// después solo se intercambian imágenes.
+    fn apply_convert_all(&mut self, target: Mode, allowed: Allowed) -> Result<bool, DocumentError> {
+        let source = self.mode();
+        if source == target {
+            return Ok(false);
+        }
+        if target == Mode::Gray && self.layers.len() > 1 {
+            return Err(DocumentError::NoTransparency { mode: Mode::Gray });
+        }
+        if target == Mode::Indexed {
+            if self.layers.iter().any(|layer| layer.opacity != 255) {
+                return Err(DocumentError::IndexedOpacity);
+            }
+            if self
+                .layers
+                .iter()
+                .any(|layer| layer.blend != BlendMode::Normal)
+            {
+                return Err(DocumentError::IndexedBlend);
+            }
+        }
+        let mut cels: Vec<Option<&Image>> = Vec::new();
+        cels.try_reserve_exact(self.layers.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        cels.extend(self.layers.iter().map(|layer| layer.image.as_ref()));
+        let plan = plan_cels(
+            &cels,
+            (self.canvas.width, self.canvas.height),
+            source,
+            target,
+            allowed,
+        )
+        .map_err(DocumentError::Convert)?;
+        let needed = plan.total_bytes();
+        if needed > self.cells_limit {
+            return Err(DocumentError::CelsTooLarge {
+                needed,
+                limit: self.cells_limit,
+            });
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let palette = plan.palette().map_err(DocumentError::Convert)?;
+        let converted = plan.build().map_err(DocumentError::Convert)?;
+        let mut template = match palette {
+            Some(palette) => Image::filled_indexed(1, 1, palette, 0),
+            None => Image::new(1, 1, target),
+        }
+        .map_err(|_| DocumentError::OutOfMemory)?;
+        let mut swaps = Vec::new();
+        swaps
+            .try_reserve_exact(converted.images.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        // Hasta aquí nada ha cambiado; desde aquí solo se intercambia.
+        for (layer, new) in self.layers.iter_mut().zip(converted.images) {
+            if let (Some(slot), Some(mut new)) = (layer.image.as_mut(), new) {
+                std::mem::swap(slot, &mut new);
+                swaps.push((layer.cel, new));
+            }
+        }
+        std::mem::swap(&mut self.canvas.template, &mut template);
+        self.commit(Step {
+            converted: Some(Converted {
+                cels: swaps,
                 template,
             }),
             ..Step::default()
@@ -1305,10 +1591,10 @@ impl Document {
         };
         let inserts = step
             .and_then(|step| step.layer.as_ref())
-            .is_some_and(|layer| layer.inserts(undoing));
-        if inserts {
+            .map_or(0, |layer| layer.inserts(undoing));
+        if inserts > 0 {
             self.layers
-                .try_reserve(1)
+                .try_reserve(inserts)
                 .map_err(|_| DocumentError::OutOfMemory)?;
         }
         Ok(())
@@ -1374,6 +1660,33 @@ impl Document {
                     found.locked = if undoing { *before } else { *after };
                 }
             }
+            LayerStep::Merge {
+                target,
+                positions,
+                removed,
+                image,
+                props,
+            } => {
+                if undoing {
+                    // Ascendente: cada posición es la de antes de combinar.
+                    for (at, layer) in positions.iter().zip(removed.drain(..)) {
+                        self.layers.insert((*at).min(self.layers.len()), layer);
+                    }
+                } else {
+                    for at in positions.iter().rev() {
+                        if *at < self.layers.len() {
+                            removed.push(self.layers.remove(*at));
+                        }
+                    }
+                    removed.reverse();
+                }
+                if let Some(found) = self.layers.iter_mut().find(|found| found.id == *target) {
+                    std::mem::swap(&mut found.image, image);
+                    std::mem::swap(&mut found.opacity, &mut props.0);
+                    std::mem::swap(&mut found.blend, &mut props.1);
+                    std::mem::swap(&mut found.locked, &mut props.2);
+                }
+            }
         }
     }
 
@@ -1385,6 +1698,19 @@ impl Document {
         {
             std::mem::swap(slot, &mut swapped.image);
             std::mem::swap(&mut self.canvas.template, &mut swapped.template);
+        }
+    }
+
+    /// Intercambia las imágenes de las celdas y la plantilla del lienzo con las que guarda el paso
+    /// de `ConvertAll`. No reserva ni falla.
+    fn swap_converted(&mut self, step: &mut Step) {
+        if let Some(converted) = step.converted.as_mut() {
+            for (id, image) in &mut converted.cels {
+                if let Some(slot) = self.image_mut(*id) {
+                    std::mem::swap(slot, image);
+                }
+            }
+            std::mem::swap(&mut self.canvas.template, &mut converted.template);
         }
     }
 
@@ -1403,6 +1729,8 @@ impl Document {
         self.undo_bytes = self.undo_bytes.saturating_sub(step.cost());
         if step.swapped.is_some() {
             self.swap_image(&mut step);
+        } else if step.converted.is_some() {
+            self.swap_converted(&mut step);
         } else if let Some(palette) = step.palette.as_ref() {
             self.run_palette_step(palette, true);
         } else if let Some(layer) = step.layer.as_mut() {
@@ -1438,6 +1766,8 @@ impl Document {
         };
         if step.swapped.is_some() {
             self.swap_image(&mut step);
+        } else if step.converted.is_some() {
+            self.swap_converted(&mut step);
         } else if let Some(palette) = step.palette.as_ref() {
             self.run_palette_step(palette, false);
         } else if let Some(layer) = step.layer.as_mut() {
@@ -1794,6 +2124,16 @@ pub enum DocumentError {
     },
     /// `ConvertMode`, un comando de paleta o un comando de capa dentro de un `Batch`.
     NotBatchable,
+    /// `MergeLayers` con la lista `remove` vacía, con repetidas o con la propia capa `target`.
+    InvalidMerge,
+    /// La imagen de `MergeLayers` se calculó sobre el estado `based_on` y el documento ya está en
+    /// el `current`.
+    StaleImage {
+        based_on: u64,
+        current: u64,
+    },
+    /// La imagen de `MergeLayers` no tiene el ancho, alto, modo o paleta del lienzo.
+    MergeImageMismatch,
     /// El documento no tiene esa capa.
     UnknownLayer(LayerId),
     /// Posición de capa fuera de rango; `max` es la mayor válida.
@@ -1821,7 +2161,7 @@ pub enum DocumentError {
     IndexedOpacity,
     /// Modo de mezcla distinto de `Normal` en indexado.
     IndexedBlend,
-    /// `ConvertMode` con más de una capa.
+    /// `ConvertMode` con más de una capa (con varias capas se usa `ConvertAll`).
     MultiLayerConvert {
         layers: usize,
     },
@@ -1870,6 +2210,18 @@ impl fmt::Display for DocumentError {
             DocumentError::InBatch { index, source } => {
                 write!(f, "el comando {index} del Batch falló: {source}")
             }
+            DocumentError::InvalidMerge => write!(
+                f,
+                "las capas que se combinan no valen: hay que dar al menos una, sin repetir y distinta de la que se queda"
+            ),
+            DocumentError::StaleImage { based_on, current } => write!(
+                f,
+                "la imagen combinada se calculó sobre el estado {based_on} y el documento ya está en el {current}"
+            ),
+            DocumentError::MergeImageMismatch => write!(
+                f,
+                "la imagen combinada no tiene el tamaño, el modo o la paleta del lienzo"
+            ),
             DocumentError::NotBatchable => write!(
                 f,
                 "la conversión de modo y la edición de la paleta no pueden ir dentro de un Batch"

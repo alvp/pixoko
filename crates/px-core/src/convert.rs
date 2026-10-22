@@ -164,22 +164,34 @@ pub fn convert_image(
     // Pasada 2, que escribe dentro de la capacidad reservada.
     let background = allowed.drop_alpha.map_or(0, |[r, g, b]| luma(r, g, b));
     for pixel in Pixels::new(image) {
-        let Rgba { r, g, b, a } = pixel;
-        match target {
-            Mode::Rgba => data.extend_from_slice(&[r, g, b, a]),
-            Mode::GrayAlpha => data.extend_from_slice(&[luma(r, g, b), a]),
-            Mode::Gray => data.push(compose(luma(r, g, b), background, a)),
-            Mode::Indexed => {
-                if let Some(builder) = &builder {
-                    data.push(builder.index_of(pixel));
-                }
-            }
-        }
+        push_pixel(&mut data, target, pixel, background, builder.as_ref());
     }
     Ok(Conversion {
         image: Image::from_raw(width, height, target, data, palette),
         report,
     })
+}
+
+/// Escribe el píxel `pixel` ya convertido a `target` (la pasada que escribe de `convert_image` y
+/// de `convert_cels`).
+fn push_pixel(
+    data: &mut Vec<u8>,
+    target: Mode,
+    pixel: Rgba,
+    background: u8,
+    builder: Option<&PaletteBuilder>,
+) {
+    let Rgba { r, g, b, a } = pixel;
+    match target {
+        Mode::Rgba => data.extend_from_slice(&[r, g, b, a]),
+        Mode::GrayAlpha => data.extend_from_slice(&[luma(r, g, b), a]),
+        Mode::Gray => data.push(compose(luma(r, g, b), background, a)),
+        Mode::Indexed => {
+            if let Some(builder) = builder {
+                data.push(builder.index_of(pixel));
+            }
+        }
+    }
 }
 
 /// Recorre los píxeles de una imagen resueltos a `Rgba`, con `a = 0` canonizado a
@@ -317,4 +329,201 @@ fn too_many_colors() -> ConvertError {
     ConvertError::TooManyColors {
         at_least: Palette::MAX_COLORS + 1,
     }
+}
+
+/// Resultado de [`convert_cels`]: una imagen por celda (`None` donde la celda estaba vacía), la
+/// paleta común (solo con destino indexado) y el informe sumado.
+#[derive(Clone, Debug)]
+pub struct CelsConversion {
+    pub images: Vec<Option<Image>>,
+    pub palette: Option<Palette>,
+    pub report: ConversionReport,
+}
+
+/// Resultado de [`analyze_cels`]: lo mismo que [`CelsConversion`] sin las imágenes.
+#[derive(Clone, Debug)]
+pub struct CelsAnalysis {
+    pub report: ConversionReport,
+    pub palette: Option<Palette>,
+}
+
+/// La pasada de solo lectura de una conversión de varias celdas: el informe sumado y, a indexado,
+/// la paleta común. Permite comprobar límites antes de reservar las imágenes de destino.
+pub(crate) struct CelsPlan<'a> {
+    cels: &'a [Option<&'a Image>],
+    size: (u32, u32),
+    target: Mode,
+    allowed: Allowed,
+    /// Bytes de píxeles de cada imagen de destino.
+    len: usize,
+    report: ConversionReport,
+    builder: Option<PaletteBuilder>,
+    /// Origen y destino coinciden: se copian las celdas.
+    same_mode: bool,
+}
+
+impl CelsPlan<'_> {
+    pub(crate) fn report(&self) -> ConversionReport {
+        self.report
+    }
+
+    /// La paleta común (solo a indexado, o la de la primera celda si el modo no cambia).
+    pub(crate) fn palette(&self) -> Result<Option<Palette>, ConvertError> {
+        if self.same_mode {
+            return Ok(self
+                .cels
+                .iter()
+                .flatten()
+                .find_map(|image| image.palette().cloned()));
+        }
+        self.builder
+            .as_ref()
+            .map(PaletteBuilder::palette)
+            .transpose()
+    }
+
+    /// Bytes de píxeles que ocuparán todas las imágenes de destino.
+    pub(crate) fn total_bytes(&self) -> usize {
+        let cells = self.cels.iter().flatten().count();
+        self.len.saturating_mul(cells)
+    }
+
+    /// Reserva y escribe las imágenes de destino.
+    pub(crate) fn build(self) -> Result<CelsConversion, ConvertError> {
+        let (width, height) = self.size;
+        let too_large = || ConvertError::TooLarge { width, height };
+        let palette = self.palette()?;
+        let mut images = Vec::new();
+        images
+            .try_reserve_exact(self.cels.len())
+            .map_err(|_| too_large())?;
+        let background = self.allowed.drop_alpha.map_or(0, |[r, g, b]| luma(r, g, b));
+        for cel in self.cels {
+            let Some(image) = cel else {
+                images.push(None);
+                continue;
+            };
+            let mut data = Vec::new();
+            data.try_reserve_exact(self.len).map_err(|_| too_large())?;
+            if self.same_mode {
+                data.extend_from_slice(image.bytes());
+            } else {
+                for pixel in Pixels::new(image) {
+                    push_pixel(
+                        &mut data,
+                        self.target,
+                        pixel,
+                        background,
+                        self.builder.as_ref(),
+                    );
+                }
+            }
+            images.push(Some(Image::from_raw(
+                width,
+                height,
+                self.target,
+                data,
+                palette.clone(),
+            )));
+        }
+        Ok(CelsConversion {
+            images,
+            palette,
+            report: self.report,
+        })
+    }
+}
+
+/// Pasada 1 de la conversión de varias celdas de `size` (de abajo arriba), sin reservar imágenes.
+/// `source` hace falta porque todas pueden estar vacías. Orden: tamaño del destino, informe sumado
+/// y paleta común, permisos.
+pub(crate) fn plan_cels<'a>(
+    cels: &'a [Option<&'a Image>],
+    size: (u32, u32),
+    source: Mode,
+    target: Mode,
+    allowed: Allowed,
+) -> Result<CelsPlan<'a>, ConvertError> {
+    let (width, height) = size;
+    let too_large = || ConvertError::TooLarge { width, height };
+    let len = target_byte_len(width, height, target)?;
+    let mut plan = CelsPlan {
+        cels,
+        size,
+        target,
+        allowed,
+        len,
+        report: ConversionReport::default(),
+        builder: None,
+        same_mode: source == target,
+    };
+    if plan.same_mode {
+        return Ok(plan);
+    }
+    let mut builder = (target == Mode::Indexed)
+        .then(|| PaletteBuilder::new().ok_or_else(too_large))
+        .transpose()?;
+    // Las celdas vacías valen transparente y más de una capa lo exige (3.1): el transparente va
+    // en el índice 0 aunque ningún píxel sea `a = 0`.
+    if let Some(builder) = builder.as_mut()
+        && (cels.len() > 1 || cels.iter().any(Option::is_none))
+    {
+        builder.has_transparent = true;
+    }
+    let mut report = ConversionReport::default();
+    for image in cels.iter().flatten() {
+        for pixel in Pixels::new(image) {
+            if matches!(target, Mode::Gray | Mode::GrayAlpha)
+                && pixel.a > 0
+                && !(pixel.r == pixel.g && pixel.g == pixel.b)
+            {
+                report.color_lost += 1;
+            }
+            if target == Mode::Gray && pixel.a < 255 {
+                report.alpha_lost += 1;
+            }
+            if let Some(builder) = builder.as_mut() {
+                builder.add(pixel)?;
+            }
+        }
+    }
+    if (report.color_lost > 0 && !allowed.luma)
+        || (report.alpha_lost > 0 && allowed.drop_alpha.is_none())
+    {
+        return Err(ConvertError::LossNotAllowed { report });
+    }
+    plan.report = report;
+    plan.builder = builder;
+    Ok(plan)
+}
+
+/// Como [`convert_image`] para las celdas de un documento, de abajo arriba y todas del tamaño
+/// `size`: el informe es la suma de las celdas y, a indexado, hay **una** paleta común (el
+/// transparente en el índice 0 si hay más de una celda, alguna vacía o algún píxel `a = 0`, y los
+/// demás colores por primera aparición recorriendo las celdas en orden). Las celdas `None` siguen
+/// siendo `None`. `source` es el modo de las celdas (hace falta si todas están vacías).
+pub fn convert_cels(
+    cels: &[Option<&Image>],
+    size: (u32, u32),
+    source: Mode,
+    target: Mode,
+    allowed: Allowed,
+) -> Result<CelsConversion, ConvertError> {
+    plan_cels(cels, size, source, target, allowed)?.build()
+}
+
+/// Solo la pasada de lectura de [`convert_cels`]: el mismo informe y la misma paleta, o el mismo
+/// error, sin reservar ninguna imagen de destino.
+pub fn analyze_cels(
+    cels: &[Option<&Image>],
+    size: (u32, u32),
+    source: Mode,
+    target: Mode,
+    allowed: Allowed,
+) -> Result<CelsAnalysis, ConvertError> {
+    let plan = plan_cels(cels, size, source, target, allowed)?;
+    Ok(CelsAnalysis {
+        report: plan.report(),
+        palette: plan.palette()?,
+    })
 }

@@ -132,7 +132,7 @@ fn pixeles(img: &Image) -> Vec<Pixel> {
 }
 
 /// La celda de la capa, que ha de tener imagen.
-fn imagen<'a>(doc: &'a Document, capa: LayerId) -> &'a Image {
+fn imagen(doc: &Document, capa: LayerId) -> &Image {
     doc.image(celda(doc, capa)).expect("la celda tiene imagen")
 }
 

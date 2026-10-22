@@ -1174,13 +1174,13 @@ proptest! {
         let mut oks = 0usize;
 
         // La preparación (capas y píxeles) es parte de la secuencia que se deshace.
-        for i in 0..=nuevas {
+        for (i, inicial) in iniciales.iter().enumerate().take(nuevas + 1) {
             if i > 0 {
                 prop_assert_eq!(doc.apply(anade_cmd(&format!("Capa {}", i + 1), i)), Ok(true));
                 oks += 1;
             }
-            if !iniciales[i].is_empty() {
-                let cmd = pinta(&doc, i, &iniciales[i]);
+            if !inicial.is_empty() {
+                let cmd = pinta(&doc, i, inicial);
                 match doc.apply(cmd) {
                     Ok(true) => oks += 1,
                     Ok(false) => {}
