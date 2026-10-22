@@ -35,7 +35,7 @@
 //!   `tile_rect(i)` devuelve `TileRect`; `texture_ids()` devuelve `Vec<TextureId>`.
 //! - Geometría de los bancos: pantalla de 160×120 a ppp 1 y baldosas de 128 (con bloques de 64 dentro
 //!   de cada una, para que haya series parciales); imagen de 300×200 (3×2 baldosas: 128, 128 y 44 de
-//!   ancho; 128 y 72 de alto) y, a ×1 tras `Actual`, se ven las baldosas 0, 1, 3 y 4. Cada prueba lo
+//!   ancho; 128 y 72 de alto) y, a ×1 tras `ActualSize`, se ven las baldosas 0, 1, 3 y 4. Cada prueba lo
 //!   comprueba con un oráculo propio (`visible_2`) y falla con un mensaje claro si la preparación no
 //!   es la esperada.
 //! - Las baldosas pequeñas (`with_tile_side(16)`) de B6, B8 y Q2 no son múltiplo de 64: a 1/64 casi
@@ -602,7 +602,7 @@ fn blocks_covered(deltas: &[Delta], tile: TileRect) -> Model {
 /// Banco de las filas B7 y B9: 300×200 RGBA en baldosas de 128 y vista a ×1.
 fn bench_300x200() -> Bench {
     let mut bench = Bench::simple(128, image_of(Mode::Rgba, 300, 200, 7));
-    bench.asks(ViewOp::Actual);
+    bench.asks(ViewOp::ActualSize);
     bench.ensures_visible(&[true, true, false, true, true, false], "300×200 a ×1");
     bench
 }
@@ -1356,7 +1356,7 @@ fn row_b7_at_rest_nothing_is_uploaded() {
 #[test]
 fn row_b7_the_palette_commands_that_do_not_change_the_image_upload_nothing() {
     let mut bench = Bench::simple(128, image_of(Mode::Indexed, 300, 200, 7));
-    bench.asks(ViewOp::Actual);
+    bench.asks(ViewOp::ActualSize);
     let id = ImageId::from_raw(0);
     let ids = bench.ids();
     for (label_2, command) in [
@@ -2408,7 +2408,7 @@ const GREEN_YELLOWISH: Rgba = Rgba::opaque(128, 255, 0);
 /// 300×100 indexada en 3 baldosas de 128; a ×1 se ven las dos primeras.
 fn bench_b_10() -> Bench {
     let mut bench = Bench::simple(128, image_of(Mode::Indexed, 300, 100, 5));
-    bench.asks(ViewOp::Actual);
+    bench.asks(ViewOp::ActualSize);
     bench.ensures_visible(&[true, true, false], "300×100 a ×1");
     bench
 }

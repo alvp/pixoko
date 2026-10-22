@@ -6,7 +6,7 @@
 //!   tres plataformas, contra un oráculo escrito aparte; ida y vuelta con la tabla del menú; las
 //!   tres funciones de teclas anteriores se componen sin cambios.
 //! - Fila 3b: las teclas `1` a `9` sin modificadores no hacen nada (unidad I.1) y `Ctrl`/`Cmd`+`1`
-//!   es solo `ZoomActual`.
+//!   es solo `ZoomActualSize`.
 //! - Fila 5: `is_blocked` en el orden de la spec (con la quita pendiente también frena abrir un
 //!   diálogo: unidad 18, D2), con un modelo independiente que se compara con la
 //!   implementación sobre todas las acciones, orígenes y combinaciones de bloqueos; `enabled`.
@@ -44,7 +44,7 @@ const ZOOMS: [AppAction; 4] = [
     AppAction::ZoomIn,
     AppAction::ZoomOut,
     AppAction::ZoomFit,
-    AppAction::ZoomActual,
+    AppAction::ZoomActualSize,
 ];
 
 /// Todas las acciones posibles: las 11 de la tabla del menú, `CloseLicenses`, las cinco
@@ -60,7 +60,7 @@ fn all_the_actions() -> Vec<AppAction> {
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomFit,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::ShowLicenses,
         AppAction::CloseLicenses,
     ];
@@ -72,7 +72,7 @@ fn all_the_actions() -> Vec<AppAction> {
 fn es_zoom(action: AppAction) -> bool {
     matches!(
         action,
-        AppAction::ZoomIn | AppAction::ZoomOut | AppAction::ZoomFit | AppAction::ZoomActual
+        AppAction::ZoomIn | AppAction::ZoomOut | AppAction::ZoomFit | AppAction::ZoomActualSize
     )
 }
 
@@ -466,7 +466,7 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
             (Key::S, true) => Some(AppAction::SaveAs),
             (Key::O, false) => Some(AppAction::Open),
             (Key::N, false) => Some(AppAction::NewImage),
-            (Key::Num1, false) => Some(AppAction::ZoomActual),
+            (Key::Num1, false) => Some(AppAction::ZoomActualSize),
             (Key::Q, false) if platform == Platform::Linux => Some(AppAction::Quit),
             _ => None,
         };
@@ -779,7 +779,7 @@ fn row_3b_command_and_1_gives_only_zoom_actual_and_never_select_color() {
         ] {
             assert_eq!(
                 action_for_shortcut(Key::Num1, m, platform),
-                Some(AppAction::ZoomActual),
+                Some(AppAction::ZoomActualSize),
                 "{m:?} en {platform:?}"
             );
         }

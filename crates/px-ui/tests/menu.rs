@@ -45,7 +45,7 @@ const TABLE_ACTIONS: [AppAction; 11] = [
     AppAction::ZoomIn,
     AppAction::ZoomOut,
     AppAction::ZoomFit,
-    AppAction::ZoomActual,
+    AppAction::ZoomActualSize,
     AppAction::ShowLicenses,
 ];
 
@@ -124,7 +124,7 @@ fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
                 ("Acercar", AppAction::ZoomIn),
                 ("Alejar", AppAction::ZoomOut),
                 ("Ajustar a la ventana", AppAction::ZoomFit),
-                ("1:1", AppAction::ZoomActual),
+                ("1:1", AppAction::ZoomActualSize),
             ],
         ),
         (
@@ -376,7 +376,7 @@ fn row_1_shortcut_for_gives_the_key_and_the_modifiers_of_each_entry() {
             ),
             (AppAction::ZoomFit, shortcut_2(KeyId::Home, false, false)),
             (
-                AppAction::ZoomActual,
+                AppAction::ZoomActualSize,
                 shortcut_2(KeyId::Char('1'), true, false),
             ),
             (AppAction::ShowLicenses, None),
@@ -637,7 +637,7 @@ fn row_2_zoom_in_is_false_only_at_x64_at_all_the_integer_levels() {
             zoom > Zoom::MIN,
             "×{n}"
         );
-        assert_eq!(enabled(AppAction::ZoomActual, &state), n != 1, "×{n}");
+        assert_eq!(enabled(AppAction::ZoomActualSize, &state), n != 1, "×{n}");
         assert!(enabled(AppAction::ZoomFit, &state), "×{n}");
     }
 }
@@ -730,7 +730,7 @@ proptest! {
                     let per_level = match action {
                         AppAction::ZoomIn => state.zoom < Some(Zoom::MAX),
                         AppAction::ZoomOut => state.zoom > Some(Zoom::MIN),
-                        AppAction::ZoomActual => state.zoom != Zoom::from_int(1),
+                        AppAction::ZoomActualSize => state.zoom != Zoom::from_int(1),
                         _ => true,
                     };
                     prop_assert_eq!(on, per_level, "{:?}", action);

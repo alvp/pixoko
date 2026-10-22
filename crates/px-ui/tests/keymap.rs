@@ -144,7 +144,7 @@ fn all_the_actions() -> Vec<AppAction> {
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomFit,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::ShowLicenses,
         AppAction::CloseLicenses,
         AppAction::BackgroundColor,
@@ -313,7 +313,7 @@ fn scheme_expected() -> Vec<Expected> {
         e(AppAction::ZoomOut, c('<'), false, false, all_2, t),
         e(AppAction::ZoomOut, c('-'), false, false, all_2, None),
         e(AppAction::ZoomFit, KeyId::Home, false, false, all_2, t),
-        e(AppAction::ZoomActual, c('1'), true, false, all_2, t),
+        e(AppAction::ZoomActualSize, c('1'), true, false, all_2, t),
         e(AppAction::CenterOnCursor, c('n'), false, false, all_2, t),
         e(AppAction::ClearPage, c('k'), false, true, all_2, t),
         e(AppAction::ToggleLayerPanel, c('\''), false, false, all_2, t),
@@ -823,7 +823,7 @@ fn modern_expected(key: char, shift: bool, alt: bool, platform: Platform) -> Opt
         ('n', false) => Some(AppAction::NewImage),
         ('s', false) => Some(AppAction::Save),
         ('s', true) => Some(AppAction::SaveAs),
-        ('1', false) => Some(AppAction::ZoomActual),
+        ('1', false) => Some(AppAction::ZoomActualSize),
         ('q', false) if platform == Platform::Linux => Some(AppAction::Quit),
         _ => None,
     }
@@ -840,7 +840,7 @@ fn row_3_the_nine_modern_ones_give_their_action_on_the_three_platforms() {
         ('n', false, AppAction::NewImage),
         ('s', false, AppAction::Save),
         ('s', true, AppAction::SaveAs),
-        ('1', false, AppAction::ZoomActual),
+        ('1', false, AppAction::ZoomActualSize),
     ];
     for platform in PLATFORMS {
         for (key, shift, expected) in cases {
@@ -918,7 +918,7 @@ fn row_3_the_rows_with_command_are_exactly_the_nine_modern_ones() {
         (AppAction::NewImage, 'n', false),
         (AppAction::Save, 's', false),
         (AppAction::SaveAs, 's', true),
-        (AppAction::ZoomActual, '1', false),
+        (AppAction::ZoomActualSize, '1', false),
         (AppAction::Quit, 'q', false),
     ];
     let mut real: Vec<(AppAction, char, bool)> = default()
@@ -964,7 +964,7 @@ fn labels_expected(platform: Platform) -> Vec<(AppAction, Option<String>)> {
         (AppAction::ZoomIn, s(">")),
         (AppAction::ZoomOut, s("<")),
         (AppAction::ZoomFit, s("Inicio")),
-        (AppAction::ZoomActual, Some(format!("{control}+1"))),
+        (AppAction::ZoomActualSize, Some(format!("{control}+1"))),
         (
             AppAction::Quit,
             (platform == Platform::Linux).then(|| "Ctrl+Q".to_string()),
@@ -1063,7 +1063,7 @@ fn row_5_the_zoom_buttons_have_no_letter_but_the_table_shows_their_shortcuts() {
             AppAction::ZoomIn,
             AppAction::ZoomOut,
             AppAction::ZoomFit,
-            AppAction::ZoomActual
+            AppAction::ZoomActualSize
         ]
     );
     for action in actions {

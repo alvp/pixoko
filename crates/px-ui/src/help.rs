@@ -30,7 +30,7 @@ pub enum HelpTarget {
     ZoomIn,
     ZoomOut,
     ZoomFit,
-    ZoomActual,
+    ZoomActualSize,
     /// Un control del panel de capas (`F1` con el puntero encima).
     Layer(LayerHelp),
 }
@@ -83,7 +83,7 @@ impl HelpTarget {
             HelpTarget::ZoomIn => AppAction::ZoomIn,
             HelpTarget::ZoomOut => AppAction::ZoomOut,
             HelpTarget::ZoomFit => AppAction::ZoomFit,
-            HelpTarget::ZoomActual => AppAction::ZoomActual,
+            HelpTarget::ZoomActualSize => AppAction::ZoomActualSize,
             HelpTarget::Layer(help) => match help {
                 LayerHelp::Panel => AppAction::ToggleLayerPanel,
                 LayerHelp::New => AppAction::NewLayer,
@@ -116,7 +116,7 @@ pub fn help_target_for_button(index: usize) -> Option<HelpTarget> {
         5 => HelpTarget::ZoomIn,
         6 => HelpTarget::ZoomOut,
         7 => HelpTarget::ZoomFit,
-        _ => HelpTarget::ZoomActual,
+        _ => HelpTarget::ZoomActualSize,
     })
 }
 

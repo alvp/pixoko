@@ -803,7 +803,7 @@ fn row_8_is_view_is_the_zoom_plus_center_and_is_zoom_does_not_change() {
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomFit,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
     ] {
         assert!(action.is_view(), "{action:?}");
         assert!(action.is_zoom(), "{action:?}");
@@ -1306,10 +1306,10 @@ fn row_10_digits_on_the_keyboard_give_no_action_to_dispatch() {
             );
         }
     }
-    // `Ctrl+1` sigue dando solo `ZoomActual`.
+    // `Ctrl+1` sigue dando solo `ZoomActualSize`.
     assert_eq!(
         actions_of_keyboard(&[key_2(Key::Num1, CTRL)], Platform::Linux),
-        vec![AppAction::ZoomActual]
+        vec![AppAction::ZoomActualSize]
     );
 }
 

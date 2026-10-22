@@ -710,7 +710,7 @@ impl Bench {
     /// Lleva el zoom al nivel `index_2` de la escalera (0 = 1/64, 6 = ×1, 69 = ×64) con peticiones de
     /// vista, empezando por ×1 anclado en el centro.
     fn go_to_level(&mut self, index_2: usize) -> CanvasInfo {
-        let mut info = self.asks(ViewOp::Actual);
+        let mut info = self.asks(ViewOp::ActualSize);
         for _ in 6..index_2 {
             info = self.asks(ViewOp::ZoomIn);
         }
@@ -1062,14 +1062,14 @@ fn row_a6_home_fit_and_request_view_give_that_of_a4() {
             );
         }
         // Home.
-        bench.asks(ViewOp::Actual);
+        bench.asks(ViewOp::ActualSize);
         assert_eq!(bench.canvas.zoom(), Some(Zoom::ONE));
         let info = bench
             .runs(vec![key_2(Key::Home, Modifiers::NONE)], &[])
             .info;
         assert_eq!(info.zoom.to_string(), expected_2, "ppp {ppp}: Home");
         // request_view(Fit) desde otro nivel.
-        bench.asks(ViewOp::Actual);
+        bench.asks(ViewOp::ActualSize);
         let info = bench.asks(ViewOp::Fit);
         assert_eq!(info.zoom.to_string(), expected_2, "ppp {ppp}: Fit");
         assert_eq!(
@@ -1420,7 +1420,7 @@ fn row_a8_the_zoom_actions_along_the_ladder() {
             "ZoomIn con {name_2}"
         );
         assert_eq!(
-            enabled(AppAction::ZoomActual, &s),
+            enabled(AppAction::ZoomActualSize, &s),
             name_2 != "×1",
             "ZoomActual con {name_2}"
         );
@@ -1431,7 +1431,7 @@ fn row_a8_the_zoom_actions_along_the_ladder() {
         let s = state_2(Some(zoom));
         assert_eq!(enabled(AppAction::ZoomOut, &s), i != 0, "{zoom}");
         assert_eq!(enabled(AppAction::ZoomIn, &s), i != 69, "{zoom}");
-        assert_eq!(enabled(AppAction::ZoomActual, &s), i != 6, "{zoom}");
+        assert_eq!(enabled(AppAction::ZoomActualSize, &s), i != 6, "{zoom}");
         assert!(enabled(AppAction::ZoomFit, &s), "{zoom}");
     }
     // Sin imagen, ninguna.
@@ -1439,7 +1439,7 @@ fn row_a8_the_zoom_actions_along_the_ladder() {
     for action_2 in [
         AppAction::ZoomOut,
         AppAction::ZoomIn,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::ZoomFit,
     ] {
         assert!(!enabled(action_2, &s), "{action_2:?} sin imagen");
@@ -1461,7 +1461,7 @@ fn row_a8_the_locks_of_the_17_do_not_change() {
     for action_2 in [
         AppAction::ZoomIn,
         AppAction::ZoomOut,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::ZoomFit,
     ] {
         let text_2 = Locks {

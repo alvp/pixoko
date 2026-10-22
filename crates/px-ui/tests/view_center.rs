@@ -10,7 +10,7 @@
 //!   bajo el centro del lienzo. Fuera de la imagen no rompe nada y manda `clamp`.
 //!   `View::apply_op(ViewOp::CenterOnCursor)` no la conoce y deja la vista como está.
 //! - Zoom por teclas: `>`, `+` y `=` dan `ViewOp::ZoomIn`, `<` y `-` dan `ViewOp::ZoomOut`, `Start`
-//!   da `Fit` y `Ctrl+1` da `Actual`, y aplicadas a las vistas dan lo mismo que el modelo de
+//!   da `Fit` y `Ctrl+1` da `ActualSize`, y aplicadas a las vistas dan lo mismo que el modelo de
 //!   `view_ops.rs` (`set_zoom` en el centro y `clamp`).
 //! - Banco (copiando el estilo de `view_ops.rs` y `canvas_layers.rs`): con el puntero sobre el
 //!   lienzo, el píxel bajo el cursor pasa al centro y el zoom no cambia; sin puntero, con el
@@ -108,7 +108,7 @@ fn op_de(action: AppAction) -> ViewOp {
         AppAction::ZoomIn => ViewOp::ZoomIn,
         AppAction::ZoomOut => ViewOp::ZoomOut,
         AppAction::ZoomFit => ViewOp::Fit,
-        AppAction::ZoomActual => ViewOp::Actual,
+        AppAction::ZoomActualSize => ViewOp::ActualSize,
         other => panic!("{other:?} no es una acción de zoom"),
     }
 }
@@ -119,7 +119,7 @@ fn model(v: View, op: ViewOp) -> View {
     match op {
         ViewOp::ZoomIn => m.set_zoom(v.zoom().zoom_in(), CENTER),
         ViewOp::ZoomOut => m.set_zoom(v.zoom().zoom_out(), CENTER),
-        ViewOp::Actual => m.set_zoom(Zoom::ONE, CENTER),
+        ViewOp::ActualSize => m.set_zoom(Zoom::ONE, CENTER),
         ViewOp::Fit => return View::fit(CANVAS, IMAGE),
         other => panic!("{other:?} no es una operación de zoom"),
     }
@@ -145,7 +145,7 @@ fn row_6_greater_minus_and_plus_equals_minus_give_zoom_in_and_zoom_out_as_before
         let fit = km.action_for(&press_de(KeyId::Home, false), platform);
         assert_eq!(fit.map(op_de), Some(ViewOp::Fit), "{platform:?}");
         let actual = km.action_for(&press_de(KeyId::Char('1'), true), platform);
-        assert_eq!(actual.map(op_de), Some(ViewOp::Actual), "{platform:?}");
+        assert_eq!(actual.map(op_de), Some(ViewOp::ActualSize), "{platform:?}");
     }
 }
 

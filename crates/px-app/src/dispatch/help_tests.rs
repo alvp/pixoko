@@ -29,7 +29,7 @@ fn targets_2() -> Vec<HelpTarget> {
         HelpTarget::Active,
         HelpTarget::Tool(Tool::Fill),
         HelpTarget::ZoomIn,
-        HelpTarget::ZoomActual,
+        HelpTarget::ZoomActualSize,
     ]
 }
 

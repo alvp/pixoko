@@ -41,7 +41,7 @@ const TARGETS_OF_BUTTON: [HelpTarget; 9] = [
     HelpTarget::ZoomIn,
     HelpTarget::ZoomOut,
     HelpTarget::ZoomFit,
-    HelpTarget::ZoomActual,
+    HelpTarget::ZoomActualSize,
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.

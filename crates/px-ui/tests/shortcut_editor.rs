@@ -107,7 +107,7 @@ fn row_5_the_boxes_of_the_default_table() {
         slots(AppAction::ClearPage),
         vec![chord_with(KeyId::Char('k'), false, true)]
     );
-    assert_eq!(slots(AppAction::ZoomActual), vec![]);
+    assert_eq!(slots(AppAction::ZoomActualSize), vec![]);
     // Fijas: las filas con `command` activas en la plataforma.
     assert_eq!(
         slots_of(&table, AppAction::Undo).fixed,

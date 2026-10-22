@@ -93,8 +93,8 @@ pub const ZOOM_BUTTONS: [Button; 4] = [
     },
     Button {
         label: "1:1",
-        icon: Icon::ZoomActual,
-        action: AppAction::ZoomActual,
+        icon: Icon::ZoomActualSize,
+        action: AppAction::ZoomActualSize,
         secondary: Secondary::None,
     },
 ];

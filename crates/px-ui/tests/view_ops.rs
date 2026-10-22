@@ -2,7 +2,7 @@
 //! (specs/hito-2-menu-herramientas.md, «Casos» fila 6, y la decisión 4 en lo que toca al
 //! interruptor `Canvas::set_view_keys`).
 //!
-//! - `View::apply_op` es pura: `ZoomIn` y `ZoomOut` anclados en el **centro** del lienzo, `Actual` =
+//! - `View::apply_op` es pura: `ZoomIn` y `ZoomOut` anclados en el **centro** del lienzo, `ActualSize` =
 //!   ×1 anclado en el centro, `Fit` = `View::fit`, y todas terminan en `clamp`. Se prueba sobre una
 //!   imagen de 64×48 en un lienzo de 700×500, en ×1, ×5 y ×64 y con la vista desplazada, contra un
 //!   modelo escrito con `set_zoom` y `clamp`, más una propiedad con zoom y desplazamientos
@@ -32,7 +32,12 @@ const IMAGE: Size = Size {
     height: 48,
 };
 const CENTER: (i64, i64) = (350, 250);
-const OPERATIONS: [ViewOp; 4] = [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Fit, ViewOp::Actual];
+const OPERATIONS: [ViewOp; 4] = [
+    ViewOp::ZoomIn,
+    ViewOp::ZoomOut,
+    ViewOp::Fit,
+    ViewOp::ActualSize,
+];
 
 fn zoom(n: u32) -> Zoom {
     Zoom::from_int(n).unwrap_or_else(|| panic!("el zoom {n} debería existir"))
@@ -73,7 +78,7 @@ fn model(v: View, op: ViewOp) -> View {
     match op {
         ViewOp::ZoomIn => m.set_zoom(v.zoom().zoom_in(), CENTER),
         ViewOp::ZoomOut => m.set_zoom(v.zoom().zoom_out(), CENTER),
-        ViewOp::Actual => m.set_zoom(Zoom::ONE, CENTER),
+        ViewOp::ActualSize => m.set_zoom(Zoom::ONE, CENTER),
         ViewOp::Fit => return View::fit(CANVAS, IMAGE),
         // Necesita el puntero: `apply_op` la deja como está (solo `clamp`).
         ViewOp::CenterOnCursor => {}
@@ -123,7 +128,7 @@ fn row_6_the_test_views_cover_x1_x5_and_x64_with_the_center_over_the_image() {
 fn row_6_zoom_in_zoom_out_and_actual_do_not_move_the_pixel_under_the_center() {
     for (name_2, before) in views_with_the_center_over_the_image() {
         let pixel = before.screen_to_image_i32(CENTER);
-        for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual] {
+        for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::ActualSize] {
             let after_2 = applies(before, op);
             // Con zoom ≥ ×1 el píxel es el mismo; a 1/K sube a la rejilla del nivel
             // (specs/hito-2-zoom-baldosas.md, decisión 4).
@@ -156,7 +161,7 @@ fn row_6_zoom_in_and_zoom_out_give_a_zoom_step() {
             "{name_2}"
         );
         assert_eq!(
-            applies(before, ViewOp::Actual).zoom(),
+            applies(before, ViewOp::ActualSize).zoom(),
             Zoom::ONE,
             "{name_2}"
         );
@@ -200,7 +205,7 @@ fn row_6_zoom_out_at_zoom_min_changes_nothing() {
 fn row_6_actual_at_x1_changes_nothing() {
     for d in [(0, 0), (7, -5), (-45, -40)] {
         let before = view(1, d);
-        assert_eq!(applies(before, ViewOp::Actual), before, "{d:?}");
+        assert_eq!(applies(before, ViewOp::ActualSize), before, "{d:?}");
     }
 }
 
@@ -277,7 +282,7 @@ proptest! {
             ViewOp::Fit => prop_assert_eq!(after_2, View::fit(canvas_2, image_2)),
             ViewOp::ZoomIn => prop_assert_eq!(after_2.zoom(), before.zoom().zoom_in()),
             ViewOp::ZoomOut => prop_assert_eq!(after_2.zoom(), before.zoom().zoom_out()),
-            ViewOp::Actual => prop_assert_eq!(after_2.zoom(), Zoom::ONE),
+            ViewOp::ActualSize => prop_assert_eq!(after_2.zoom(), Zoom::ONE),
             ViewOp::CenterOnCursor => prop_assert_eq!(after_2.zoom(), before.zoom()),
         }
 
@@ -403,7 +408,7 @@ fn row_6_request_view_zooms_in_out_fits_and_sets_1_to_1_at_the_five_scales() {
         assert_eq!(bench.info(vec![]).zoom, fit, "ppp {ppp}: alejar");
         bench.canvas.request_view(ViewOp::Fit);
         assert_eq!(bench.info(vec![]).zoom, fit, "ppp {ppp}: ajustar");
-        bench.canvas.request_view(ViewOp::Actual);
+        bench.canvas.request_view(ViewOp::ActualSize);
         assert_eq!(bench.info(vec![]).zoom, Zoom::ONE, "ppp {ppp}: 1:1");
     }
 }
@@ -411,7 +416,7 @@ fn row_6_request_view_zooms_in_out_fits_and_sets_1_to_1_at_the_five_scales() {
 #[test]
 fn row_6_request_view_does_not_move_the_pixel_under_the_center_of_the_canvas() {
     for ppp in PPPS {
-        for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual] {
+        for op in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::ActualSize] {
             let mut bench = Bench::new_2(ppp);
             // El puntero queda en el centro del lienzo (la pantalla entera).
             let before = bench.with_the_pointer_at_the_center();

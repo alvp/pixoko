@@ -236,7 +236,7 @@ impl Keymap {
             row(c('<'), false, false, AppAction::ZoomOut, All, All),
             row(c('-'), false, false, AppAction::ZoomOut, All, Never),
             row(KeyId::Home, false, false, AppAction::ZoomFit, All, All),
-            row(c('1'), true, false, AppAction::ZoomActual, All, All),
+            row(c('1'), true, false, AppAction::ZoomActualSize, All, All),
             row(c('n'), false, false, AppAction::CenterOnCursor, All, All),
             row(c('k'), false, true, AppAction::ClearPage, All, All),
             row(c('\''), false, false, AppAction::ToggleLayerPanel, All, All),

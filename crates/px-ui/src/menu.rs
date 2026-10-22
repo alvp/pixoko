@@ -102,7 +102,7 @@ pub const MENUS: [Menu; 6] = [
             item("Acercar", AppAction::ZoomIn),
             item("Alejar", AppAction::ZoomOut),
             item("Ajustar a la ventana", AppAction::ZoomFit),
-            item("1:1", AppAction::ZoomActual),
+            item("1:1", AppAction::ZoomActualSize),
         ],
         submenus: &[Submenu {
             label: "Fondo del lienzo",

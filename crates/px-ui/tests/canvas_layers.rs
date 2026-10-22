@@ -687,9 +687,14 @@ fn row_5b_several_view_requests_in_the_middle_of_a_stroke_are_still_a_single_ste
     let p0 = pos2(400.0, 300.0);
     s.step(vec![move_pointer(p0)]);
     s.step(vec![button_2(p0, true)]);
-    for (i, op) in [ViewOp::ZoomIn, ViewOp::ZoomOut, ViewOp::Actual, ViewOp::Fit]
-        .into_iter()
-        .enumerate()
+    for (i, op) in [
+        ViewOp::ZoomIn,
+        ViewOp::ZoomOut,
+        ViewOp::ActualSize,
+        ViewOp::Fit,
+    ]
+    .into_iter()
+    .enumerate()
     {
         s.bench.canvas.request_view(op);
         s.step(vec![]);

@@ -78,7 +78,7 @@ const TABLE_ACTIONS: [AppAction; 11] = [
     AppAction::ZoomIn,
     AppAction::ZoomOut,
     AppAction::ZoomFit,
-    AppAction::ZoomActual,
+    AppAction::ZoomActualSize,
     AppAction::ShowLicenses,
 ];
 
@@ -152,7 +152,7 @@ fn row_12_view_keeps_its_4_entries() {
             ("Acercar", AppAction::ZoomIn),
             ("Alejar", AppAction::ZoomOut),
             ("Ajustar a la ventana", AppAction::ZoomFit),
-            ("1:1", AppAction::ZoomActual),
+            ("1:1", AppAction::ZoomActualSize),
         ]
     );
 }
@@ -437,7 +437,7 @@ fn row_12_without_repeated_labels_with_those_of_menus() {
 #[test]
 fn row_12_the_text_of_the_shortcuts_of_the_17_does_not_change() {
     // `shortcut_text` y `shortcut_for` de las entradas de siempre, como estaban.
-    let s = shortcut_for(AppAction::ZoomActual, Platform::Linux).expect("tiene atajo");
+    let s = shortcut_for(AppAction::ZoomActualSize, Platform::Linux).expect("tiene atajo");
     assert_eq!(shortcut_text(s, Platform::Linux), "Ctrl+1");
     assert_eq!(shortcut_for(AppAction::ShowLicenses, Platform::Linux), None);
 }
@@ -677,7 +677,7 @@ fn row_13_the_previous_actions_are_enabled_the_same_as_before() {
                     AppAction::ZoomIn => state.zoom.is_some_and(|z| z < Zoom::MAX),
                     AppAction::ZoomOut => state.zoom.is_some_and(|z| z > Zoom::MIN),
                     AppAction::ZoomFit => state.zoom.is_some(),
-                    AppAction::ZoomActual => state.zoom.is_some_and(|z| z != Zoom::ONE),
+                    AppAction::ZoomActualSize => state.zoom.is_some_and(|z| z != Zoom::ONE),
                     _ => true,
                 };
             }

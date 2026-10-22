@@ -57,7 +57,7 @@ fn row_3_each_toolbox_button_has_its_target() {
         HelpTarget::ZoomIn,
         HelpTarget::ZoomOut,
         HelpTarget::ZoomFit,
-        HelpTarget::ZoomActual,
+        HelpTarget::ZoomActualSize,
     ];
     assert_eq!(TOOLBOX_BUTTONS, 9);
     for (i, target_2) in expected_2.into_iter().enumerate() {

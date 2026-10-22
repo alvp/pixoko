@@ -128,7 +128,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::ZoomIn => Dispatched::View(ViewOp::ZoomIn),
         AppAction::ZoomOut => Dispatched::View(ViewOp::ZoomOut),
         AppAction::ZoomFit => Dispatched::View(ViewOp::Fit),
-        AppAction::ZoomActual => Dispatched::View(ViewOp::Actual),
+        AppAction::ZoomActualSize => Dispatched::View(ViewOp::ActualSize),
         AppAction::ShowLicenses => Dispatched::Licenses(true),
         AppAction::CloseLicenses => Dispatched::Licenses(false),
         AppAction::CanvasBackground(background) => Dispatched::Background(background),

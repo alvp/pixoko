@@ -184,7 +184,7 @@ pub enum ViewOp {
     /// Mayor zoom entero con la imagen entera visible, centrada.
     Fit,
     /// Zoom ×1 anclado en el centro del lienzo.
-    Actual,
+    ActualSize,
     /// El punto de la imagen bajo el cursor pasa al centro del lienzo, con el mismo zoom. Necesita
     /// el puntero: lo resuelve `Canvas::interact` con [`View::center_on`]; `apply_op` la deja como
     /// está.
@@ -263,7 +263,7 @@ impl View {
     }
 
     /// Aplica una [`ViewOp`] sobre un lienzo de `viewport` píxeles y una imagen de `image`, y deja
-    /// la vista con `clamp`. `ZoomIn`, `ZoomOut` y `Actual` anclan en el centro del lienzo.
+    /// la vista con `clamp`. `ZoomIn`, `ZoomOut` y `ActualSize` anclan en el centro del lienzo.
     pub fn apply_op(&mut self, op: ViewOp, viewport: Size, image: Size) {
         let center = (
             i64::from(viewport.width) / 2,
@@ -272,7 +272,7 @@ impl View {
         match op {
             ViewOp::ZoomIn => self.zoom_in(center),
             ViewOp::ZoomOut => self.zoom_out(center),
-            ViewOp::Actual => self.set_zoom(Zoom::ONE, center),
+            ViewOp::ActualSize => self.set_zoom(Zoom::ONE, center),
             ViewOp::Fit => *self = View::fit(viewport, image),
             ViewOp::CenterOnCursor => {}
         }

@@ -58,7 +58,7 @@ pub fn embedded(icon: Icon) -> &'static [u8] {
         Icon::ZoomIn => include_bytes!("../../../assets/icons/acercar.png"),
         Icon::ZoomOut => include_bytes!("../../../assets/icons/alejar.png"),
         Icon::ZoomFit => include_bytes!("../../../assets/icons/ajustar.png"),
-        Icon::ZoomActual => include_bytes!("../../../assets/icons/uno-a-uno.png"),
+        Icon::ZoomActualSize => include_bytes!("../../../assets/icons/uno-a-uno.png"),
         Icon::Add => include_bytes!("../../../assets/icons/anadir.png"),
         Icon::Remove => include_bytes!("../../../assets/icons/quitar.png"),
         Icon::RotateLeft => include_bytes!("../../../assets/icons/rotar-izquierda.png"),

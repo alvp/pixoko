@@ -662,12 +662,12 @@ fn row_9_at_the_four_corners_of_the_canvas_and_one_pixel_outside() {
         let mut bench = Bench::new_2(ppp, window, image_2.clone());
         // Ajustar da ahora un nivel 1/K para esta imagen: se pasa a ×1, que es el zoom en el que la
         // imagen cubre el lienzo entero.
-        bench.canvas.request_view(ViewOp::Actual);
+        bench.canvas.request_view(ViewOp::ActualSize);
         let f0 = bench.rest_2_2();
         let (source_2, z) = image_on_the_canvas(&f0, ppp);
         assert_eq!(z, 1, "ppp {ppp}");
         let mut reference = Reference::new_2(ppp, (w, h), &image_2);
-        reference.canvas.request_view(ViewOp::Actual);
+        reference.canvas.request_view(ViewOp::ActualSize);
         reference.frame(vec![]);
         let (ox, oy) = canvas_origin_px(n as u32);
 
@@ -1287,7 +1287,7 @@ mod toolbox_right {
             let window = windows(ppp)[1];
             let layout = window_layout(window, n as u32);
             let mut bench = Bench::new_2(ppp, window, rgba(1200, 1200));
-            bench.canvas.request_view(ViewOp::Actual);
+            bench.canvas.request_view(ViewOp::ActualSize);
             bench.rest_2_2();
             let y = layout.canvas.y + 100 * n;
             // Último píxel del lienzo: sí; primero del panel y de la caja y sus centros: no.

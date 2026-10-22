@@ -833,7 +833,7 @@ impl Bench {
 
     /// Lleva el zoom a ×`zoom` con las operaciones de vista.
     fn with_zoom(&mut self, zoom: u32) {
-        self.canvas.request_view(ViewOp::Actual);
+        self.canvas.request_view(ViewOp::ActualSize);
         for _ in 1..zoom {
             self.canvas.request_view(ViewOp::ZoomIn);
         }
@@ -2011,7 +2011,7 @@ fn row_8_with_a_1x1_physical_pixel_canvas_there_is_no_panic_and_the_clip_is_none
         assert_eq!(bench.viewport(), Size::new(1, 1), "ppp {ppp}");
         // Ajustar da ahora 1/K en un lienzo de 1×1 (el rasterizador del banco es el de los zooms
         // enteros): se pide ×1, el zoom en el que esta prueba se escribió.
-        bench.canvas.request_view(ViewOp::Actual);
+        bench.canvas.request_view(ViewOp::ActualSize);
         for _ in 0..3 {
             bench.runs(vec![], &[]);
         }
@@ -2823,7 +2823,7 @@ proptest! {
 //
 // Suposiciones: a 1/K el píxel físico `(i, j)` del rectángulo de la imagen muestra el píxel de imagen
 // `(i·K, j·K)` (`Zoom::shrink_factor` y `View::pixel_block`, como en `zoom_canvas.rs`); `Zoom::shrink(k)`
-// y `ViewOp::ZoomOut` desde `Actual` dan 1/2, 1/4 y 1/8 con una, dos y tres operaciones.
+// y `ViewOp::ZoomOut` desde `ActualSize` dan 1/2, 1/4 y 1/8 con una, dos y tres operaciones.
 
 const BLUE_STEEL: Rgba = Rgba::opaque(0x33, 0x66, 0x99);
 const ORANGE: Rgba = Rgba::opaque(0xff, 0x80, 0x00);
@@ -3033,7 +3033,7 @@ fn row_6_custom_color_after_dragging_the_view_7_and_13_pixels_the_background_goe
 
 /// Lleva el zoom a 1/`k` (de ×1 por `k` = 2, 4 u 8 con una, dos o tres operaciones de alejar).
 fn with_zoom_out(bench: &mut Bench, k: u32) {
-    bench.canvas.request_view(ViewOp::Actual);
+    bench.canvas.request_view(ViewOp::ActualSize);
     for _ in 0..k.trailing_zeros() {
         bench.canvas.request_view(ViewOp::ZoomOut);
     }

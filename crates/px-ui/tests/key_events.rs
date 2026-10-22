@@ -363,12 +363,12 @@ fn row_4_azerty_ctrl_plus_the_key_of_the_digit_1_is_zoom_actual() {
     assert_actions(
         "Ctrl+tecla de la cifra 1",
         &[key_2(Key::Num1, CTRL)],
-        &[Some(AppAction::ZoomActual)],
+        &[Some(AppAction::ZoomActualSize)],
     );
     assert_actions(
         "Cmd+tecla de la cifra 1",
         &[key_2(Key::Num1, CMD)],
-        &[Some(AppAction::ZoomActual)],
+        &[Some(AppAction::ZoomActualSize)],
     );
     // Sin `Ctrl`, esa tecla escribe `&`: no es ningún atajo.
     assert_actions(
@@ -661,7 +661,7 @@ fn row_4_the_nine_modern_ones_over_events_on_the_three_platforms() {
         (Key::N, CTRL, AppAction::NewImage),
         (Key::S, CTRL, AppAction::Save),
         (Key::S, CTRL | Modifiers::SHIFT, AppAction::SaveAs),
-        (Key::Num1, CTRL, AppAction::ZoomActual),
+        (Key::Num1, CTRL, AppAction::ZoomActualSize),
     ];
     for (key, modifiers, expected) in linux_y_windows {
         assert_actions(
@@ -674,7 +674,7 @@ fn row_4_the_nine_modern_ones_over_events_on_the_three_platforms() {
         (Key::Z, CMD, AppAction::Undo),
         (Key::Z, CMD | Modifiers::SHIFT, AppAction::Redo),
         (Key::S, CMD | Modifiers::SHIFT, AppAction::SaveAs),
-        (Key::Num1, CMD, AppAction::ZoomActual),
+        (Key::Num1, CMD, AppAction::ZoomActualSize),
     ] {
         assert_actions(
             "moderno con Cmd",

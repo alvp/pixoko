@@ -74,7 +74,7 @@ fn all_the_actions() -> Vec<AppAction> {
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomFit,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::ShowLicenses,
         AppAction::CloseLicenses,
     ];
@@ -554,7 +554,7 @@ fn row_6d_with_removal_quit_zoom_background_undo_and_redo_and_tools_stay_free() 
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomFit,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::SelectTool(Tool::Fill),
         AppAction::CanvasBackground(CanvasBackground::Black),
     ];

@@ -9585,3 +9585,7 @@ id	vivas	live	crates/px-app/
 id	vivas	live	crates/px-ui/
 id	x_de_valor	x_of_value	crates/px-ui/
 id	zoom_antes	zoom_before	crates/px-ui/
+id	Actual	ActualSize	crates/px-ui/
+id	Actual	ActualSize	crates/px-app/
+id	ZoomActual	ZoomActualSize	crates/px-ui/
+id	ZoomActual	ZoomActualSize	crates/px-app/

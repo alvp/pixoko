@@ -324,7 +324,7 @@ impl Bench {
 
     /// Lleva el zoom a ×`zoom` (1, 2 o 3) con las operaciones de vista.
     fn with_zoom(&mut self, zoom: u32) {
-        self.canvas.request_view(ViewOp::Actual);
+        self.canvas.request_view(ViewOp::ActualSize);
         for _ in 1..zoom {
             self.canvas.request_view(ViewOp::ZoomIn);
         }

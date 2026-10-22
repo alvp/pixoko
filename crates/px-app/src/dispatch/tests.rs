@@ -5,7 +5,7 @@
 //! - Fila 3b: las cifras 1 a 9 sin modificadores no hacen nada (unidad I.1); las nueve entradas de
 //!   una indexada de 9 se recorren con `ColorNext` (por `action_for_shortcut` + `dispatch`, lo que
 //!   hace `key_actions` traducido) con la sincronización de la rejilla; `command`+`1` es solo
-//!   `ZoomActual` y no cambia `choice`.
+//!   `ZoomActualSize` y no cambia `choice`.
 //! - Fila 4: la misma acción por el menú (buscada por rótulo), por el botón (por rótulo de
 //!   `TOOL_BUTTONS` o `ZOOM_BUTTONS`) y por el atajo: las tres acciones, los tres `Dispatched` y el
 //!   estado final son iguales sobre copias idénticas de sesión y herramienta.
@@ -61,7 +61,7 @@ const ZOOMS: [(AppAction, ViewOp); 4] = [
     (AppAction::ZoomIn, ViewOp::ZoomIn),
     (AppAction::ZoomOut, ViewOp::ZoomOut),
     (AppAction::ZoomFit, ViewOp::Fit),
-    (AppAction::ZoomActual, ViewOp::Actual),
+    (AppAction::ZoomActualSize, ViewOp::ActualSize),
 ];
 
 const NO_INDEX_NOTICE: &str = "esta imagen no tiene índice transparente";
@@ -379,7 +379,7 @@ fn all_the_actions() -> Vec<AppAction> {
         AppAction::ZoomIn,
         AppAction::ZoomOut,
         AppAction::ZoomFit,
-        AppAction::ZoomActual,
+        AppAction::ZoomActualSize,
         AppAction::ShowLicenses,
         AppAction::CloseLicenses,
     ];
@@ -502,10 +502,10 @@ fn row_3b_command_1_gives_only_zoom_actual_and_does_not_change_choice() {
         let before = world.snapshot();
         let action = action_for_shortcut(Key::Num1, command(platform), platform)
             .expect("command+1 da una acción");
-        assert_eq!(action, AppAction::ZoomActual, "{platform:?}");
+        assert_eq!(action, AppAction::ZoomActualSize, "{platform:?}");
         assert!(!matches!(action, AppAction::SelectColor(_)));
         let result = world.dispatches(action, Origin::Key);
-        assert_eq!(result, Dispatched::View(ViewOp::Actual), "{platform:?}");
+        assert_eq!(result, Dispatched::View(ViewOp::ActualSize), "{platform:?}");
         assert_eq!(
             world.snapshot(),
             before,
@@ -816,7 +816,7 @@ fn row_4_the_four_zoom_buttons_give_view_with_their_operation() {
         ("Acercar", ViewOp::ZoomIn),
         ("Alejar", ViewOp::ZoomOut),
         ("Ajustar", ViewOp::Fit),
-        ("1:1", ViewOp::Actual),
+        ("1:1", ViewOp::ActualSize),
     ] {
         let mut world = World::standard();
         let before = world.snapshot();
@@ -1375,7 +1375,7 @@ fn action_any() -> impl Strategy<Value = AppAction> {
         Just(AppAction::ZoomIn),
         Just(AppAction::ZoomOut),
         Just(AppAction::ZoomFit),
-        Just(AppAction::ZoomActual),
+        Just(AppAction::ZoomActualSize),
         Just(AppAction::ShowLicenses),
         Just(AppAction::CloseLicenses),
         (0usize..5).prop_map(|i| AppAction::SelectTool(TOOLS[i])),

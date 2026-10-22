@@ -210,7 +210,7 @@ fn zoom_buttons_are_the_four_buttons_without_a_letter() {
             ("Acercar", AppAction::ZoomIn),
             ("Alejar", AppAction::ZoomOut),
             ("Ajustar", AppAction::ZoomFit),
-            ("1:1", AppAction::ZoomActual),
+            ("1:1", AppAction::ZoomActualSize),
         ]
     );
 }

@@ -29,7 +29,7 @@ pub enum AppAction {
     /// Ajustar a la ventana.
     ZoomFit,
     /// 1:1.
-    ZoomActual,
+    ZoomActualSize,
     ShowLicenses,
     CloseLicenses,
     SelectTool(Tool),
@@ -114,7 +114,7 @@ impl AppAction {
     pub fn is_zoom(self) -> bool {
         matches!(
             self,
-            AppAction::ZoomIn | AppAction::ZoomOut | AppAction::ZoomFit | AppAction::ZoomActual
+            AppAction::ZoomIn | AppAction::ZoomOut | AppAction::ZoomFit | AppAction::ZoomActualSize
         )
     }
 
@@ -285,7 +285,7 @@ pub fn enabled(action: AppAction, state: &UiState) -> bool {
         AppAction::ZoomIn => state.zoom.is_some_and(|zoom| zoom < Zoom::MAX),
         AppAction::ZoomOut => state.zoom.is_some_and(|zoom| zoom > Zoom::MIN),
         AppAction::ZoomFit | AppAction::CenterOnCursor => state.zoom.is_some(),
-        AppAction::ZoomActual => state.zoom.is_some_and(|zoom| zoom != Zoom::ONE),
+        AppAction::ZoomActualSize => state.zoom.is_some_and(|zoom| zoom != Zoom::ONE),
         _ => true,
     }
 }
