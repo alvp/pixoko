@@ -240,3 +240,7 @@ Dos decisiones de estilo y de herramientas, solo anotadas: no se implementan en 
 ## Para más adelante
 
 - **Soltar ficheros no funciona en Linux con Wayland** (el cursor muestra «prohibido»): en winit 0.30.13 solo el backend X11 (`platform_impl/linux/x11/event_processor.rs`) maneja `DroppedFile` y `HoveredFile`; el de Wayland no lo implementa. winit llega como dependencia transitiva de eframe y no se sustituye. Caminos que funcionan: `Ctrl`+`O`, pasar el fichero como argumento (o «Abrir con» del explorador) y lanzar con X11: `env -u WAYLAND_DISPLAY px-app`. No se promete que una versión futura lo resuelva.
+
+### Límite conocido del `.aseprite` (22 de octubre de 2026)
+
+**El RGB bajo alfa 0 fuera del rectángulo mínimo no se guarda; no afecta a nada visible.** Pixoko escribe de cada celda solo el rectángulo mínimo que contiene los píxeles no transparentes (`specs/hito-3-aseprite.md`, decisión 9); un píxel con alfa 0 fuera de él vuelve de la lectura como `(0, 0, 0, 0)`. Medido con los 29 casos del corpus: 4 casos y 133 píxeles, todos con alfa 0 en la composición (`specs/hito-3-puerta.md`). Los píxeles con alfa mayor que 0 se conservan siempre.

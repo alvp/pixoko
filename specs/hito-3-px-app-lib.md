@@ -115,3 +115,7 @@ Decisiones 1 a 6 aprobadas con estas condiciones:
 - Binario de `release`: 12 677 568 bytes antes y 12 676 896 después (−672). No hay `[profile]` en ningún `Cargo.toml` (ni raíz ni paquete; Cargo solo admite perfiles en la raíz), así que antes y después rige el perfil por defecto (`opt-level` 3, sin LTO).
 - `Cargo.lock`, `deny.toml`, `ci.yml`, `ci.rs`, `fuzz/`, `px-core`, `px-raster` y `px-golden`: sin cambios. `cargo deny`, clippy `-D warnings` y fmt, limpios.
 - **3.9** deberá exportar los 11 nombres de la puerta con la misma regla (lo mínimo) y mover entonces la puerta a `px-golden` si procede.
+
+## Actualización de la unidad 3.9 (2026-10-22; decisión con datos)
+
+**La puerta del hito 2 NO se mueve a `px-golden` y los 11 nombres NO se exportan** (`specs/hito-3-puerta.md`, «Dónde va cada pedido»). Datos medidos: 3726 líneas y 30 pruebas que no ganan cobertura en `px-golden` (`cargo test --workspace` ya las ejecuta en los tres sistemas); `Session` llevaría consigo 9 campos públicos (7 de `px-ui`); `Cargo.toml` y `Cargo.lock` de `px-golden` cambiarían y `cargo test -p px-golden` pasaría de 41 a unos 180 paquetes. `px_app` sigue exportando solo `run`. Esto sustituye al «**3.9** deberá exportar los 11 nombres… y mover entonces la puerta a `px-golden` si procede» de la condición 2 y de la corrección posterior.

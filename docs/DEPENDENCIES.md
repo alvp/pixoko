@@ -77,6 +77,8 @@ Notas:
 
 Los 17 avisos son estas 13 filas, contando cada `objc2*` y cada `thiserror*` por separado (`cargo deny` avisa por crate). Medido con `cargo tree --workspace -d --target all`.
 
+**Comprobado de nuevo el 2026-10-22, al cerrar el hito 3** (`hito-3-puerta.md`, condición 4): `cargo deny --locked check` da `advisories ok, bans ok, licenses ok, sources ok` y **los mismos 17 avisos `duplicate`**, con las mismas versiones; el hito 3 **no añadió ninguno**. `miniz_oxide` ya figuraba (0.8.9 la pide `png` y, desde la unidad 3.8, `px-formats` directamente, sin entradas nuevas en `Cargo.lock`; 0.9.1 la pide `flate2`). La línea base no cambia y los 17 siguen aceptados sin `skip`.
+
 ## Acciones de GitHub
 
 No son dependencias de Cargo ni entran en los binarios: solo se ejecutan en el CI (`.github/workflows/ci.yml`). Van fijadas por SHA de commit completo; para actualizarlas se resuelve el SHA de la nueva versión y se cambia aquí y en el workflow.
