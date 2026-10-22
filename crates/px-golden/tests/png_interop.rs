@@ -13,10 +13,13 @@
 //!   (fila 15), aparte de la fila 13: si falla el hash se sabe si es el SHA-256 o el PNG.
 //! - La fila 16 comprueba la estructura del repositorio (`.gitattributes` y el README).
 //! - `aseprite_corpus` hace lo mismo con `golden/aseprite/` (specs/corpus-hito-3.md).
+//! - `aseprite_puerta` es la parte de `px-golden` de la puerta del hito 3 (specs/hito-3-puerta.md).
 //! - `aseprite_read` lee esos `.aseprite` con `read_aseprite` (specs/hito-3-aseprite.md, filas 3 y 8).
 
 #[path = "png_interop/aseprite_corpus.rs"]
 mod aseprite_corpus;
+#[path = "png_interop/aseprite_puerta.rs"]
+mod aseprite_puerta;
 #[path = "png_interop/aseprite_read.rs"]
 mod aseprite_read;
 mod common;
