@@ -726,7 +726,7 @@ impl Document {
     /// aplicación usa la celda de la capa activa. Con varias capas, y si se quitó la capa 0,
     /// `image(main_image())` es `None`.
     ///
-    /// TODO(3.9): retirarla en el cierre del hito 3.
+    /// TODO(limpieza): retirarla en la unidad de limpiezas (`specs/mapa-funciones.md`, sección 11).
     pub fn main_image(&self) -> ImageId {
         ImageId(0)
     }
