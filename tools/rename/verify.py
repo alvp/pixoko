@@ -124,8 +124,18 @@ def name_pairs():
     return ids
 
 
+def inverse_pairs():
+    """nuevo -> viejo, con todos los ámbitos (los nombres con sufijo de colisión incluidos)."""
+    inv = {}
+    for old, new, _ in R.MAP["id"] + R.MAP["mod"]:
+        inv.setdefault(new, old)
+    return inv
+
+
 def norm_literal(s: str) -> str:
     """Quita lo que el mapa puede cambiar: argumentos en línea, variables de entorno, casos y referencias."""
+    if re.fullmatch(r'"[\w./-]+\.rs"', s):  # #[path = "…"]: los componentes de módulo cambian con el mapa
+        s = re.sub(r"[A-Za-z_]\w*", lambda m: R.MODS.get(m.group(0), m.group(0)), s)
     s = re.sub(r"\{[A-Za-z_]\w*", "{", s)
     s = re.sub(r"[A-Za-z_]\w*\$", "$", s)
     for old, new in list(R.ENVS.items()) + list(R.CASES) + list(R.REFS.items()):
@@ -160,8 +170,11 @@ def check(base, now):
         return re.sub(r"[A-Za-z_]\w*", tr, l)
     moves = {}
     moves = dict(_MOVES)
-    exp = sorted(map_test_line(l) for l in base["tests"])
-    got = sorted(now["tests"])
+    inv = inverse_pairs()
+    def unmap(l):
+        return re.sub(r"[A-Za-z_]\w*", lambda m: inv.get(m.group(0), m.group(0)), l)
+    exp = sorted(unmap(map_test_line(l)) for l in base["tests"])
+    got = sorted(unmap(l) for l in now["tests"])
     # los ejecutables de tests/ se renombran con su fichero (mapa `file`)
     def mapfile(l):
         for o, n in R.FILES.items():
@@ -261,9 +274,11 @@ def check(base, now):
         for s in sorted(residual | junk): print("    (borde)", repr(s[:100]))
         for s in list(unexplained)[:15]: print("   ", s[:120])
         if unexplained: ok = False
-    # P4
+    # P4: por fichero, los tokens de ahora son los de antes salvo los renombrados que dice el mapa (con su ámbito);
+    # se compara con una unión de clases (viejo ~ nuevo) construida con el propio mapa para ese fichero
     bad = 0
     reordered = []
+    wrapped = []
     for f, v in base["tokens"].items():
         nf = mapped_path(f)
         w = now["tokens"].get(nf)
@@ -271,24 +286,54 @@ def check(base, now):
             print("P4 falta el fichero", nf); bad += 1; continue
         if nf in MANUAL:
             print("P4 edición a mano declarada:", nf, "-", MANUAL[nf]); continue
-        if len(v) != len(w):
-            print("P4 distinta longitud:", f, len(v), len(w)); bad += 1; continue
-        canon = lambda k, x: (k, pairs.get(x, x) if k == "id" else norm_literal(x) if k == "s" else x)
+        parent = {}
+        def find(x):
+            while parent.get(x, x) != x:
+                parent[x] = parent.get(parent[x], parent[x])
+                x = parent[x]
+            return x
+        def union(a_, b_):
+            ra, rb = find(a_), find(b_)
+            if ra != rb:
+                parent[max(ra, rb)] = min(ra, rb)
+        for k, x in v:
+            if k != "id":
+                continue
+            y = R.id_target(x, f) or R.id_target(x, nf)
+            if y:
+                union(x, y)
+            if x in R.MODS:
+                union(x, R.MODS[x])
+        canon = lambda k, x: (k, find(x) if k == "id" else norm_literal(x) if k == "s" else x)
         mapped_v = [canon(k, x) for k, x in v]
         mapped_w = [canon(k, x) for k, x in w]
-        if sorted(mapped_v) == sorted(mapped_w) and mapped_v != mapped_w:
+        def tidy(seq):
+            """Sin las comas finales que rustfmt añade o quita al reajustar líneas."""
+            out = []
+            for i, (k, x) in enumerate(seq):
+                if x == "," and i + 1 < len(seq) and seq[i + 1][1] in (")", "]", "}"):
+                    continue
+                out.append((k, x))
+            return out
+        def weak(seq):
+            """Además sin `{`, `}` ni `,`: rustfmt envuelve en bloque los brazos largos de `match`."""
+            return [(k, x) for k, x in seq if x not in ("{", "}", ",", ";")]
+        if mapped_v == mapped_w or tidy(mapped_v) == tidy(mapped_w):
+            continue
+        if sorted(tidy(mapped_v)) == sorted(tidy(mapped_w)):
             reordered.append(f)  # rustfmt reordena `mod` y `use`
             continue
-        for (k1, a), (k2, b) in zip(v, w):
-            if a == b: continue
-            if k1 == "id" and k2 == "id" and pairs.get(a) == b: continue
-            if k1 == "id" and k2 == "id":
-                # los renombrados por ámbito (`id`) solo valen si el mapa lo dice
-                if any(o == a and n == b for o, n, _ in R.MAP["id"]): continue
-            if k1 == "s" and k2 == "s" and norm_literal(a) == norm_literal(b): continue
-            if k1 == "s" and k2 == "s" and re.sub(r"[A-Za-z_]\w*", lambda m: pairs.get(m.group(0), m.group(0)), a) == b: continue  # #[path]
-            print("P4 difiere:", f, a[:60], "->", b[:60]); bad += 1; break
-    print(f"P4 equivalencia alfa: {len(base['tokens'])} ficheros;", f"{len(reordered)} con `mod`/`use` reordenados por rustfmt (mismos tokens);", "OK" if not bad else f"{bad} ficheros con diferencias")
+        if weak(mapped_v) == weak(mapped_w):
+            wrapped.append(f)
+            continue
+        if sorted(weak(mapped_v)) == sorted(weak(mapped_w)):
+            reordered.append(f)
+            continue
+        for (k1, a), (k2, b) in zip(mapped_v, mapped_w):
+            if (k1, a) != (k2, b):
+                print("P4 difiere:", f, a[:60], "->", b[:60]); break
+        bad += 1
+    print(f"P4 equivalencia alfa: {len(base['tokens'])} ficheros;", f"{len(reordered)} con `mod`/`use` reordenados y {len(wrapped)} con llaves o comas reajustadas por rustfmt (mismos tokens);", "OK" if not bad else f"{bad} ficheros con diferencias")
     if bad: ok = False
     return ok
 

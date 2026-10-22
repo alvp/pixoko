@@ -35,11 +35,15 @@ FORMAT_MACROS = {
 
 def load_map():
     m = collections.defaultdict(list)
-    for line in (HERE / "map.tsv").read_text(encoding="utf-8").splitlines():
-        if not line.strip() or line.startswith("#"):
+    for name in ("map.tsv", "map-l2.tsv"):
+        f = HERE / name
+        if not f.exists():
             continue
-        kind, old, new, scope = line.split("\t")
-        m[kind].append((old, new, scope))
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip() or line.startswith("#"):
+                continue
+            kind, old, new, scope = line.split("\t")
+            m[kind].append((old, new, scope))
     return m
 
 
@@ -52,11 +56,13 @@ ENVS = {old: new for old, new, _ in MAP["env"]}
 CASES = sorted(((o, n) for o, n, _ in MAP["case"]), key=lambda t: -len(t[0]))
 REFS = {old: new for old, new, _ in MAP["ref"]}
 FILES = {old: new for old, new, _ in MAP["file"]}
+# L2: los `id` con ámbito de carpeta se comprueban por función con l2collide.py, no por fichero
+L2_IDS = {old for old, _, scope in MAP["id"] if scope.endswith("/")}
 
 
 def id_target(old: str, rel: str):
     for new, scopes in IDS.get(old, []):
-        if "*" in scopes or rel in scopes:
+        if "*" in scopes or rel in scopes or any(s.endswith("/") and rel.startswith(s) for s in scopes):
             return new
     return None
 
@@ -192,8 +198,7 @@ def rename_rs(rel: str, src: str, used_mods=None):
                 macro = None
                 if text in "([" and p >= 1 and toks[p].text == "!" and toks[sig_prev(toks, p)].kind == "ident":
                     mname = toks[sig_prev(toks, p)].text
-                    if mname in FORMAT_MACROS:
-                        macro = mname
+                    macro = mname  # cualquier macro: los envoltorios de prueba (`requires!`…) reciben formatos
                 stack.append((macro, 0))
             elif text in ")]}" and stack:
                 stack.pop()
@@ -212,7 +217,7 @@ def rename_rs(rel: str, src: str, used_mods=None):
                 if body != text:
                     report[("path", text)] += 1
             # argumentos en línea de las macros de formato
-            if stack and stack[-1][0] is not None and stack[-1][1] == FORMAT_MACROS[stack[-1][0]]:
+            if stack and stack[-1][0] is not None and (stack[-1][0] not in FORMAT_MACROS or stack[-1][1] == FORMAT_MACROS[stack[-1][0]]):
                 new_body, ch = rename_format_args(body, rel)
                 if ch:
                     report[("format", text)] += 1
@@ -257,6 +262,8 @@ def collisions():
                 new = IDS[name][0][0] if kind == "id" else MODS[name]
                 if kind == "id":
                     new = id_target(name, rel)
+                if kind == "id" and name in L2_IDS:
+                    continue
                 if idents.get(new) and (rel, kind, name, new) not in ok:
                     found.append((rel, kind, name, new, idents[new]))
     return found
@@ -369,6 +376,9 @@ def main():
         return 1 if found else 0
     if cmd == "apply":
         found = collisions()
+        if L2_IDS and "id" in (sys.argv[sys.argv.index("--kinds") + 1].split(",") if "--kinds" in sys.argv else ["id"]):
+            import l2collide
+            found += l2collide.find(CRATE.rstrip("/") + "/" if CRATE else None)
         if found:
             print("hay colisiones sin resolver; ejecuta `rename.py dry`")
             return 1
