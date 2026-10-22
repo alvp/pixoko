@@ -175,7 +175,7 @@ impl GestureMap {
             scope,
             active: Platforms::All,
         };
-        let (n, no, si) = (None, Some(false), Some(true));
+        let (n, no, yes) = (None, Some(false), Some(true));
         GestureMap {
             rows: vec![
                 row(
@@ -186,7 +186,7 @@ impl GestureMap {
                     Draw(Role::Foreground),
                     Scope::Canvas,
                 ),
-                row(Input::Press(Button::Left), n, n, si, Pan, Scope::Canvas),
+                row(Input::Press(Button::Left), n, n, yes, Pan, Scope::Canvas),
                 row(Input::Press(Button::Middle), n, n, n, Pan, Scope::Canvas),
                 row(
                     Input::Press(Button::Right),
@@ -197,7 +197,7 @@ impl GestureMap {
                     Scope::Canvas,
                 ),
                 row(Input::Wheel, no, no, n, ZoomStep, Scope::Canvas),
-                row(Input::Wheel, no, si, n, PanX, Scope::Canvas),
+                row(Input::Wheel, no, yes, n, PanX, Scope::Canvas),
                 row(Input::Scroll, no, n, n, Pan, Scope::Canvas),
                 row(Input::Pinch, n, n, n, ZoomStep, Scope::Canvas),
                 row(

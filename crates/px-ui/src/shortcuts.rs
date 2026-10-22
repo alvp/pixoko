@@ -24,7 +24,7 @@ pub enum Action {
 // llamadores migren a `Keymap::action_for`.
 
 /// La acción de la tabla por defecto para una tecla tecleada (sin texto).
-fn por_defecto(key: Key, modifiers: Modifiers) -> Option<AppAction> {
+fn by_default(key: Key, modifiers: Modifiers) -> Option<AppAction> {
     default_keymap().action_for(&press_from_key(key, modifiers), Platform::Linux)
 }
 
@@ -36,7 +36,7 @@ pub fn action_for_key(key: Key, modifiers: Modifiers) -> Option<Action> {
     if !modifiers.command && (modifiers.ctrl || modifiers.mac_cmd) {
         return None;
     }
-    match por_defecto(key, modifiers)? {
+    match by_default(key, modifiers)? {
         AppAction::Undo => Some(Action::Undo),
         AppAction::Redo => Some(Action::Redo),
         AppAction::ColorNext => Some(Action::ColorNext),
@@ -57,7 +57,7 @@ pub enum FileAction {
 /// como. `command` + O (sin Mayús ni Alt): abrir. `command` es Ctrl en Linux y Windows y Cmd en
 /// macOS (en macOS, Ctrl + S y Ctrl + O no hacen nada).
 pub fn file_action_for_key(key: Key, modifiers: Modifiers) -> Option<FileAction> {
-    match por_defecto(key, modifiers)? {
+    match by_default(key, modifiers)? {
         AppAction::Open => Some(FileAction::Open),
         AppAction::Save => Some(FileAction::Save),
         AppAction::SaveAs => Some(FileAction::SaveAs),

@@ -11,7 +11,7 @@
 //! color.next 1 shift+pagedown
 //! ```
 //!
-//! Cada línea es `<clave> <casilla> <atajo>` (la clave de la tabla de ayuda; la casilla, de 1 a
+//! Cada línea es `<clave> <casilla> <shortcut>` (la clave de la tabla de ayuda; la casilla, de 1 a
 //! 8; el atajo, `none` o `[shift+]<tecla>` con una tecla ASCII imprimible que no sea mayúscula ni
 //! espacio, o `home`, `pageup`, `pagedown`).
 
@@ -66,7 +66,7 @@ fn fatal(default: &Keymap, why: Fatal) -> Loaded {
     }
 }
 
-/// El atajo de un `<atajo>`: `Some(None)` es `none`; `None`, un atajo que no vale.
+/// El atajo de un `<shortcut>`: `Some(None)` es `none`; `None`, un atajo que no vale.
 fn parse_chord(token: &str) -> Option<Option<Chord>> {
     if token == "none" {
         return Some(None);
@@ -273,9 +273,9 @@ pub fn to_text(keymap: &Keymap, default: &Keymap) -> String {
         for i in 0..now.len().max(before.len()).min(MAX_SLOT) {
             let (new, old) = (now.get(i), before.get(i));
             if new != old {
-                let atajo = new.map_or("none".to_string(), |chord| chord_text(*chord));
+                let shortcut = new.map_or("none".to_string(), |chord| chord_text(*chord));
                 out.push_str(&format!(
-                    "{} {} {atajo}\n",
+                    "{} {} {shortcut}\n",
                     help_key(action).unwrap_or(""),
                     i + 1
                 ));
