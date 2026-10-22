@@ -36,7 +36,7 @@ pub enum DialogKind {
     Save,
     /// `Ctrl`+`Mayús`+`S`.
     SaveAs,
-    /// `Archivo → Exportar PNG aplanado…`: no toca la ruta ni el estado de guardado del documento.
+    /// `Archivo → Export PNG aplanado…`: no toca la ruta ni el estado de guardado del documento.
     Export,
 }
 
@@ -73,7 +73,7 @@ pub fn is_aseprite_path(path: &Path) -> bool {
 }
 
 /// Nombre que propone el diálogo de guardar: con 2 o más capas o con ruta `.aseprite`,
-/// `{nombre}.aseprite`; si no, `{nombre}.png`; sin ruta, `sin-titulo.*`.
+/// `{name_2}.aseprite`; si no, `{name_2}.png`; sin ruta, `without-title.*`.
 pub fn proposed_save_name(path: Option<&Path>, layers: usize) -> String {
     let aseprite = layers >= 2 || path.is_some_and(is_aseprite_path);
     let extension = if aseprite { "aseprite" } else { "png" };
@@ -122,7 +122,7 @@ pub struct Finished {
 
 pub trait FilePicker {
     fn start(&mut self, request: &DialogRequest, parent: Option<&eframe::Frame>);
-    /// `None`: sigue abierto. `Some(None)`: se cerró sin ruta. `Some(Some(ruta))`: elegida.
+    /// `None`: sigue abierto. `Some(None)`: se cerró sin ruta. `Some(Some(path_2))`: elegida.
     fn poll(&mut self) -> Option<Option<PathBuf>>;
     /// Abandona el diálogo pendiente: su resultado, si llega, se ignora.
     fn abandon(&mut self);
@@ -353,7 +353,7 @@ impl Dialogs {
 
 /// Directorio y nombre propuestos: el directorio del fichero actual; sin ruta, el último usado y,
 /// si no, el directorio actual del proceso. Abrir no propone nombre; guardar propone el del
-/// fichero (`nombre-copia.png` si se convirtió al abrir) o `sin-titulo.png` sin ruta.
+/// fichero (`name_2-copy.png` si se convirtió al abrir) o `without-title.png` sin ruta.
 pub fn request_for(
     kind: DialogKind,
     path: Option<&Path>,
@@ -382,8 +382,8 @@ pub fn request_for(
     }
 }
 
-/// El nombre propuesto al exportar: `<nombre>-aplanado.png` junto al fichero del documento, o
-/// `sin-titulo-aplanado.png` sin ruta.
+/// El nombre propuesto al exportar: `<name_2>-aplanado.png` junto al fichero del documento, o
+/// `without-title-aplanado.png` sin ruta.
 pub fn export_name(path: Option<&Path>) -> PathBuf {
     match path {
         Some(path) => {

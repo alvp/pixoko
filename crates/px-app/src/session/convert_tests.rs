@@ -45,21 +45,21 @@ use crate::new_image::{ImageAlloc, NewImageSpec, SystemAlloc};
 // Ayudantes.
 // ---------------------------------------------------------------------------------------
 
-const MODOS: [Mode; 4] = [Mode::Indexed, Mode::Rgba, Mode::GrayAlpha, Mode::Gray];
+const TEST_MODES: [Mode; 4] = [Mode::Indexed, Mode::Rgba, Mode::GrayAlpha, Mode::Gray];
 const MIB: usize = 1 << 20;
 
 /// Todo permitido: el color y el fondo blanco para el alfa.
-const TODO: Allowed = Allowed {
+const ALL: Allowed = Allowed {
     luma: true,
     drop_alpha: Some([255, 255, 255]),
 };
 
-const AVISO_HISTORIA_TODO: &str = "aviso: convertir descarta el historial anterior; solo se podrá deshacer hasta tu próxima edición";
-const AVISO_HISTORIA_PARTE: &str = "aviso: convertir descarta parte del historial anterior";
+const NOTICE_HISTORY_ALL: &str = "aviso: convertir descarta el historial anterior; solo se podrá deshacer hasta tu próxima edición";
+const NOTICE_HISTORY_PART: &str = "aviso: convertir descarta parte del historial anterior";
 
 /// Los destinos de `from` en el orden de D2.
-fn destinos(from: Mode) -> [Mode; 3] {
-    let v: Vec<Mode> = MODOS.into_iter().filter(|m| *m != from).collect();
+fn targets_2(from: Mode) -> [Mode; 3] {
+    let v: Vec<Mode> = TEST_MODES.into_iter().filter(|m| *m != from).collect();
     [v[0], v[1], v[2]]
 }
 
@@ -73,7 +73,7 @@ fn rgba_de(pixels: &[Rgba]) -> Image {
     image
 }
 
-fn gris_de(values: &[u8]) -> Image {
+fn gray_of(values: &[u8]) -> Image {
     let mut image = Image::new(values.len() as u32, 1, Mode::Gray).expect("imagen Gray");
     for (x, v) in values.iter().enumerate() {
         image
@@ -83,7 +83,7 @@ fn gris_de(values: &[u8]) -> Image {
     image
 }
 
-fn gris_alfa_de(values: &[(u8, u8)]) -> Image {
+fn gray_alpha_of(values: &[(u8, u8)]) -> Image {
     let mut image = Image::new(values.len() as u32, 1, Mode::GrayAlpha).expect("imagen GrayAlpha");
     for (x, (gray, alpha)) in values.iter().enumerate() {
         image
@@ -100,7 +100,7 @@ fn gris_alfa_de(values: &[(u8, u8)]) -> Image {
     image
 }
 
-fn indexada_de(colors: &[Rgba], transparent: Option<u8>, pixels: &[u8]) -> Image {
+fn indexed_of(colors: &[Rgba], transparent: Option<u8>, pixels: &[u8]) -> Image {
     let mut palette = Palette::from_colors(colors.iter().copied()).expect("paleta");
     palette
         .set_transparent_index(transparent)
@@ -116,7 +116,7 @@ fn indexada_de(colors: &[Rgba], transparent: Option<u8>, pixels: &[u8]) -> Image
 
 /// Una imagen pequeña de cada modo. La indexada tiene 8 entradas (para que `Entry(5)` valga) con la
 /// 2 transparente; la RGBA tiene color (3 píxeles) y alfa (2 píxeles) que perder al pasar a gris.
-fn imagen_de(mode: Mode) -> Image {
+fn image_of(mode: Mode) -> Image {
     match mode {
         Mode::Rgba => rgba_de(&[
             Rgba::opaque(255, 0, 0),
@@ -124,9 +124,9 @@ fn imagen_de(mode: Mode) -> Image {
             Rgba::opaque(7, 7, 7),
             Rgba::new(0, 0, 255, 128),
         ]),
-        Mode::Gray => gris_de(&[0, 127, 255, 40]),
-        Mode::GrayAlpha => gris_alfa_de(&[(10, 0), (10, 255), (200, 128), (30, 0)]),
-        Mode::Indexed => indexada_de(
+        Mode::Gray => gray_of(&[0, 127, 255, 40]),
+        Mode::GrayAlpha => gray_alpha_of(&[(10, 0), (10, 255), (200, 128), (30, 0)]),
+        Mode::Indexed => indexed_of(
             &[
                 Rgba::opaque(10, 10, 10),
                 Rgba::opaque(200, 0, 0),
@@ -143,48 +143,48 @@ fn imagen_de(mode: Mode) -> Image {
     }
 }
 
-fn sesion_de(image: Image) -> Session {
+fn session_of(image: Image) -> Session {
     let mut session = Session::sample(Document::new(image));
     session.view.reveal = false;
     session
 }
 
-fn imagen_actual(session: &Session) -> &Image {
+fn image_current(session: &Session) -> &Image {
     session
         .document
         .image(ImageId::from_raw(0))
         .expect("imagen")
 }
 
-fn modo_actual(session: &Session) -> Mode {
-    imagen_actual(session).mode()
+fn mode_current(session: &Session) -> Mode {
+    image_current(session).mode()
 }
 
-fn bytes_de_pixeles(image: &Image) -> usize {
+fn bytes_of_pixels(image: &Image) -> usize {
     Image::byte_len(image.width(), image.height(), image.mode()).expect("tamaño válido")
 }
 
 /// Cuántos pasos de deshacer tiene el documento (se cuentan en una copia).
-fn pasos_de_deshacer(document: &Document) -> usize {
-    let mut copia = document.clone();
-    let mut pasos = 0;
-    while copia.undo().is_ok() {
-        pasos += 1;
+fn steps_of_undo(document: &Document) -> usize {
+    let mut copy = document.clone();
+    let mut steps_2 = 0;
+    while copy.undo().is_ok() {
+        steps_2 += 1;
     }
-    pasos
+    steps_2
 }
 
 /// La elección que debe quedar para una imagen (escrita aparte de `clamp_choice`): en indexadas,
 /// `Entry(min(i, len − 1))` y `Slot(n)` pasa a `Entry(n − 1)`; en las demás, la ranura si vale y, si
 /// no, la 1.
-fn eleccion_esperada(image: &Image, choice: ColorChoice) -> ColorChoice {
+fn choice_expected(image: &Image, choice: ColorChoice) -> ColorChoice {
     match image.palette() {
         Some(palette) => {
-            let indice = match choice {
+            let index_2 = match choice {
                 ColorChoice::Entry(i) => usize::from(i),
                 ColorChoice::Slot(n) => usize::from(n).saturating_sub(1),
             };
-            ColorChoice::Entry(indice.min(palette.len() - 1) as u8)
+            ColorChoice::Entry(index_2.min(palette.len() - 1) as u8)
         }
         None => match choice {
             ColorChoice::Slot(n) if (1..=9).contains(&n) => choice,
@@ -195,7 +195,7 @@ fn eleccion_esperada(image: &Image, choice: ColorChoice) -> ColorChoice {
 
 /// Todo lo observable que un `Err` o un `Ok(false)` no deben tocar.
 #[derive(Clone, Debug, PartialEq)]
-struct Foto {
+struct TestSnapshot {
     image: Image,
     state_id: u64,
     can_undo: bool,
@@ -207,9 +207,9 @@ struct Foto {
     slots: px_ui::color::SlotBank,
 }
 
-fn foto(session: &Session) -> Foto {
-    Foto {
-        image: imagen_actual(session).clone(),
+fn snapshot(session: &Session) -> TestSnapshot {
+    TestSnapshot {
+        image: image_current(session).clone(),
         state_id: session.document.state_id(),
         can_undo: session.document.can_undo(),
         can_redo: session.document.can_redo(),
@@ -222,9 +222,9 @@ fn foto(session: &Session) -> Foto {
 }
 
 /// Una edición de un píxel que cambia el valor, en el modo que sea (`i` elige un valor distinto).
-fn edita_pixel(session: &mut Session, x: u32, y: u32, i: u8) {
+fn edits_pixel(session: &mut Session, x: u32, y: u32, i: u8) {
     let id = ImageId::from_raw(0);
-    let mode = modo_actual(session);
+    let mode = mode_current(session);
     let pixel = match mode {
         Mode::Rgba => Pixel::Rgba(Rgba::opaque(i, 1, 2)),
         Mode::Gray => Pixel::Gray(i),
@@ -234,14 +234,14 @@ fn edita_pixel(session: &mut Session, x: u32, y: u32, i: u8) {
         },
         Mode::Indexed => Pixel::Indexed(i % 8),
     };
-    let cambio = session
+    let change = session
         .document
         .apply(Command::SetPixels {
             image: id,
             pixels: vec![PixelEdit { x, y, pixel }],
         })
         .expect("editar");
-    assert!(cambio, "la edición {i} debe cambiar el píxel ({x}, {y})");
+    assert!(change, "la edición {i} debe cambiar el píxel ({x}, {y})");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -249,48 +249,48 @@ fn edita_pixel(session: &mut Session, x: u32, y: u32, i: u8) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_desde_cada_modo_a_cada_destino_es_ok_true_con_un_solo_paso_y_la_imagen_de_convert_image()
-{
-    for from in MODOS {
-        for target in destinos(from) {
-            let original = imagen_de(from);
-            let mut session = sesion_de(original.clone());
-            let contexto = format!("{from:?} a {target:?}");
-            assert!(!session.document.can_undo(), "{contexto}");
+fn row_7_from_each_mode_to_each_target_it_is_ok_true_with_a_single_step_and_the_image_of_convert_image()
+ {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
+            let original = image_of(from);
+            let mut session = session_of(original.clone());
+            let context = format!("{from:?} a {target:?}");
+            assert!(!session.document.can_undo(), "{context}");
             let h0 = session.document.history_bytes();
-            let esperada = convert_image(&original, target, TODO)
+            let expected = convert_image(&original, target, ALL)
                 .expect("con todo permitido se puede")
                 .image;
 
-            assert_eq!(session.convert_mode(target, TODO), Ok(true), "{contexto}");
+            assert_eq!(session.convert_mode(target, ALL), Ok(true), "{context}");
 
-            assert_eq!(imagen_actual(&session), &esperada, "{contexto}");
-            assert_eq!(modo_actual(&session), target, "{contexto}");
-            assert!(session.document.can_undo(), "{contexto}");
-            assert!(!session.document.can_redo(), "{contexto}");
+            assert_eq!(image_current(&session), &expected, "{context}");
+            assert_eq!(mode_current(&session), target, "{context}");
+            assert!(session.document.can_undo(), "{context}");
+            assert!(!session.document.can_redo(), "{context}");
             assert_eq!(
-                pasos_de_deshacer(&session.document),
+                steps_of_undo(&session.document),
                 1,
-                "{contexto}: un solo paso"
+                "{context}: un solo paso"
             );
-            let crecimiento = session.document.history_bytes() - h0;
-            let pixeles = bytes_de_pixeles(&original);
+            let growth = session.document.history_bytes() - h0;
+            let pixels_2 = bytes_of_pixels(&original);
             assert!(
-                (pixeles..=pixeles + 2048).contains(&crecimiento),
-                "{contexto}: la historia creció {crecimiento} y los píxeles anteriores son {pixeles}"
+                (pixels_2..=pixels_2 + 2048).contains(&growth),
+                "{context}: la historia creció {growth} y los píxeles anteriores son {pixels_2}"
             );
         }
     }
 }
 
 #[test]
-fn fila_7_el_estado_es_nuevo_y_el_documento_queda_modificado() {
-    for from in MODOS {
-        for target in destinos(from) {
-            let mut session = sesion_de(imagen_de(from));
+fn row_7_the_state_is_new_and_the_document_is_left_modified() {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
+            let mut session = session_of(image_of(from));
             assert!(!session.modified());
             let antes = session.document.state_id();
-            assert_eq!(session.convert_mode(target, TODO), Ok(true));
+            assert_eq!(session.convert_mode(target, ALL), Ok(true));
             assert_ne!(session.document.state_id(), antes, "{from:?} a {target:?}");
             assert!(session.modified(), "{from:?} a {target:?}");
         }
@@ -298,27 +298,27 @@ fn fila_7_el_estado_es_nuevo_y_el_documento_queda_modificado() {
 }
 
 #[test]
-fn fila_7_a_indexado_slot_3_pasa_a_entry_min_2_y_len_menos_1() {
+fn row_7_a_indexed_slot_3_becomes_entry_min_2_and_len_minus_1() {
     // Imágenes con 4 colores, con 3 y con 2 (el mínimo se aplica).
-    for (nombre, image, esperada) in [
+    for (name_2, image, expected) in [
         (
             "RGBA de 4 colores",
-            imagen_de(Mode::Rgba),
+            image_of(Mode::Rgba),
             ColorChoice::Entry(2),
         ),
         (
             "Gray de 4 colores",
-            imagen_de(Mode::Gray),
+            image_of(Mode::Gray),
             ColorChoice::Entry(2),
         ),
         (
             "GrayAlpha de 3 entradas (con el transparente)",
-            imagen_de(Mode::GrayAlpha),
+            image_of(Mode::GrayAlpha),
             ColorChoice::Entry(2),
         ),
         (
             "Gray de 2 colores",
-            gris_de(&[5, 6, 5, 6]),
+            gray_of(&[5, 6, 5, 6]),
             ColorChoice::Entry(1),
         ),
         (
@@ -327,47 +327,47 @@ fn fila_7_a_indexado_slot_3_pasa_a_entry_min_2_y_len_menos_1() {
             ColorChoice::Entry(0),
         ),
     ] {
-        let mut session = sesion_de(image);
+        let mut session = session_of(image);
         session.choice = ColorChoice::Slot(3);
         session.view.reveal = false;
         assert_eq!(
-            session.convert_mode(Mode::Indexed, TODO),
+            session.convert_mode(Mode::Indexed, ALL),
             Ok(true),
-            "{nombre}"
+            "{name_2}"
         );
-        assert_eq!(session.choice, esperada, "{nombre}");
+        assert_eq!(session.choice, expected, "{name_2}");
         assert!(
-            pixel_for_choice(imagen_actual(&session), session.choice).is_some(),
-            "{nombre}: la elección es válida"
+            pixel_for_choice(image_current(&session), session.choice).is_some(),
+            "{name_2}: la elección es válida"
         );
         assert!(
             session.view.reveal,
-            "{nombre}: la elección cambió y el panel la muestra"
+            "{name_2}: la elección cambió y el panel la muestra"
         );
     }
 }
 
 #[test]
-fn fila_7_de_indexado_entry_5_pasa_a_slot_1() {
+fn row_7_from_indexed_entry_5_becomes_slot_1() {
     for target in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
-        let mut session = sesion_de(imagen_de(Mode::Indexed));
+        let mut session = session_of(image_of(Mode::Indexed));
         session.choice = ColorChoice::Entry(5);
         session.view.reveal = false;
-        assert_eq!(session.convert_mode(target, TODO), Ok(true), "{target:?}");
+        assert_eq!(session.convert_mode(target, ALL), Ok(true), "{target:?}");
         assert_eq!(session.choice, ColorChoice::Slot(1), "{target:?}");
         assert!(session.view.reveal, "{target:?}: la elección cambió");
     }
 }
 
 #[test]
-fn fila_7_entre_modos_sin_paleta_la_ranura_se_conserva_y_el_panel_no_se_mueve() {
+fn row_7_between_modes_without_a_palette_the_slot_is_kept_and_the_panel_does_not_move() {
     for from in [Mode::Rgba, Mode::GrayAlpha, Mode::Gray] {
-        for target in destinos(from).into_iter().filter(|t| *t != Mode::Indexed) {
+        for target in targets_2(from).into_iter().filter(|t| *t != Mode::Indexed) {
             for slot in [1u8, 3, 9] {
-                let mut session = sesion_de(imagen_de(from));
+                let mut session = session_of(image_of(from));
                 session.choice = ColorChoice::Slot(slot);
                 session.view.reveal = false;
-                assert_eq!(session.convert_mode(target, TODO), Ok(true));
+                assert_eq!(session.convert_mode(target, ALL), Ok(true));
                 assert_eq!(
                     session.choice,
                     ColorChoice::Slot(slot),
@@ -383,9 +383,9 @@ fn fila_7_entre_modos_sin_paleta_la_ranura_se_conserva_y_el_panel_no_se_mueve() 
 }
 
 #[test]
-fn fila_7_la_eleccion_resultante_coincide_con_el_modelo_para_todas_las_parejas() {
-    for from in MODOS {
-        for target in destinos(from) {
+fn row_7_the_resulting_choice_matches_the_model_for_all_the_pairs() {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
             for choice in [
                 ColorChoice::Slot(1),
                 ColorChoice::Slot(3),
@@ -395,27 +395,27 @@ fn fila_7_la_eleccion_resultante_coincide_con_el_modelo_para_todas_las_parejas()
             ] {
                 // Una elección que valga en el origen: `Entry` solo en indexadas, `Slot` en las
                 // demás.
-                let valida = match (from, choice) {
+                let valid = match (from, choice) {
                     (Mode::Indexed, ColorChoice::Entry(_)) => true,
                     (Mode::Indexed, ColorChoice::Slot(_)) => false,
                     (_, ColorChoice::Slot(_)) => true,
                     (_, ColorChoice::Entry(_)) => false,
                 };
-                if !valida {
+                if !valid {
                     continue;
                 }
-                let mut session = sesion_de(imagen_de(from));
+                let mut session = session_of(image_of(from));
                 session.choice = choice;
                 session.view.reveal = false;
-                assert_eq!(session.convert_mode(target, TODO), Ok(true));
-                let esperada = eleccion_esperada(imagen_actual(&session), choice);
+                assert_eq!(session.convert_mode(target, ALL), Ok(true));
+                let expected = choice_expected(image_current(&session), choice);
                 assert_eq!(
-                    session.choice, esperada,
+                    session.choice, expected,
                     "{from:?} a {target:?} con {choice:?}"
                 );
                 assert_eq!(
                     session.view.reveal,
-                    esperada != choice,
+                    expected != choice,
                     "{from:?} a {target:?} con {choice:?}: reveal"
                 );
             }
@@ -424,114 +424,104 @@ fn fila_7_la_eleccion_resultante_coincide_con_el_modelo_para_todas_las_parejas()
 }
 
 #[test]
-fn fila_7_convertir_descarta_el_rango_de_rotacion_y_cancela_la_quita_pendiente() {
+fn row_7_converting_discards_the_rotation_range_and_cancels_the_pending_removal() {
     // Rango de rotación: RGBA → Indexado (el rango no puede sobrevivir al cambio de paleta).
-    let mut session = sesion_de(imagen_de(Mode::Rgba));
+    let mut session = session_of(image_of(Mode::Rgba));
     session.ops.set_range_end(3);
     assert_eq!(session.ops.range_end(), Some(3));
-    assert_eq!(session.convert_mode(Mode::Indexed, TODO), Ok(true));
+    assert_eq!(session.convert_mode(Mode::Indexed, ALL), Ok(true));
     assert_eq!(session.ops.range_end(), None, "rango fuera");
 
     // Quita pendiente: se cancela (el documento cambió) y se avisa una sola vez.
-    let mut session = sesion_de(imagen_de(Mode::Indexed));
+    let mut session = session_of(image_of(Mode::Indexed));
     session.ops.begin_removal(3, Some(1));
     assert!(session.ops.removal().is_some());
     assert!(!session.take_removal_cancelled());
-    assert_eq!(session.convert_mode(Mode::Rgba, TODO), Ok(true));
+    assert_eq!(session.convert_mode(Mode::Rgba, ALL), Ok(true));
     assert!(session.ops.removal().is_none(), "la quita se canceló");
     assert!(session.take_removal_cancelled(), "se avisa");
     assert!(!session.take_removal_cancelled(), "una sola vez");
 }
 
 #[test]
-fn fila_7_el_mismo_modo_da_ok_false_sin_paso_ni_cambios() {
-    for mode in MODOS {
-        let mut session = sesion_de(imagen_de(mode));
+fn row_7_the_same_mode_gives_ok_false_without_a_step_or_changes() {
+    for mode in TEST_MODES {
+        let mut session = session_of(image_of(mode));
         // Con historia y con un paso por rehacer: el mismo modo no borra la pila de rehacer.
-        edita_pixel(&mut session, 0, 0, 77);
+        edits_pixel(&mut session, 0, 0, 77);
         session.undo().expect("deshacer");
         session.view.reveal = false;
-        let antes = foto(&session);
-        let pasos = pasos_de_deshacer(&session.document);
+        let antes = snapshot(&session);
+        let steps_2 = steps_of_undo(&session.document);
         assert!(session.document.can_redo());
-        for allowed in [Allowed::NOTHING, TODO] {
+        for allowed in [Allowed::NOTHING, ALL] {
             assert_eq!(session.convert_mode(mode, allowed), Ok(false), "{mode:?}");
-            assert_eq!(foto(&session), antes, "{mode:?}");
-            assert_eq!(pasos_de_deshacer(&session.document), pasos, "{mode:?}");
+            assert_eq!(snapshot(&session), antes, "{mode:?}");
+            assert_eq!(steps_of_undo(&session.document), steps_2, "{mode:?}");
         }
     }
 }
 
 #[test]
-fn fila_7_undo_deja_imagen_modo_y_paleta_iguales_y_redo_la_convertida() {
-    for from in MODOS {
-        for target in destinos(from) {
-            let contexto = format!("{from:?} a {target:?}");
-            let original = imagen_de(from);
-            let mut session = sesion_de(original.clone());
+fn row_7_undo_leaves_image_mode_and_palette_equal_and_redo_the_converted() {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
+            let context = format!("{from:?} a {target:?}");
+            let original = image_of(from);
+            let mut session = session_of(original.clone());
             let h0 = session.document.history_bytes();
             let s0 = session.document.state_id();
-            assert_eq!(session.convert_mode(target, TODO), Ok(true), "{contexto}");
-            let convertida = imagen_actual(&session).clone();
+            assert_eq!(session.convert_mode(target, ALL), Ok(true), "{context}");
+            let converted_2 = image_current(&session).clone();
             let h1 = session.document.history_bytes();
             let s1 = session.document.state_id();
-            let eleccion_convertida = session.choice;
+            let choice_converted = session.choice;
 
             session.undo().expect("deshacer");
-            assert_eq!(imagen_actual(&session), &original, "{contexto}: undo");
-            assert_eq!(modo_actual(&session), from, "{contexto}: modo");
+            assert_eq!(image_current(&session), &original, "{context}: undo");
+            assert_eq!(mode_current(&session), from, "{context}: modo");
             assert_eq!(
-                imagen_actual(&session).palette(),
+                image_current(&session).palette(),
                 original.palette(),
-                "{contexto}: paleta"
+                "{context}: paleta"
             );
-            assert_eq!(session.document.state_id(), s0, "{contexto}");
-            assert!(!session.document.can_undo(), "{contexto}");
-            assert!(session.document.can_redo(), "{contexto}");
-            assert_eq!(
-                session.document.history_bytes(),
-                h0,
-                "{contexto}: tras undo"
-            );
+            assert_eq!(session.document.state_id(), s0, "{context}");
+            assert!(!session.document.can_undo(), "{context}");
+            assert!(session.document.can_redo(), "{context}");
+            assert_eq!(session.document.history_bytes(), h0, "{context}: tras undo");
             // La elección se vuelve a normalizar; no se «recuerda» la anterior.
             assert_eq!(
                 session.choice,
-                eleccion_esperada(&original, eleccion_convertida),
-                "{contexto}: elección tras undo"
+                choice_expected(&original, choice_converted),
+                "{context}: elección tras undo"
             );
             assert!(
-                pixel_for_choice(imagen_actual(&session), session.choice).is_some(),
-                "{contexto}"
+                pixel_for_choice(image_current(&session), session.choice).is_some(),
+                "{context}"
             );
             if from == Mode::Indexed {
-                assert_eq!(session.choice, ColorChoice::Entry(0), "{contexto}");
+                assert_eq!(session.choice, ColorChoice::Entry(0), "{context}");
             }
 
             session.redo().expect("rehacer");
-            assert_eq!(imagen_actual(&session), &convertida, "{contexto}: redo");
-            assert_eq!(session.document.state_id(), s1, "{contexto}");
-            assert_eq!(
-                session.document.history_bytes(),
-                h1,
-                "{contexto}: tras redo"
-            );
+            assert_eq!(image_current(&session), &converted_2, "{context}: redo");
+            assert_eq!(session.document.state_id(), s1, "{context}");
+            assert_eq!(session.document.history_bytes(), h1, "{context}: tras redo");
             assert!(session.document.can_undo());
             assert!(!session.document.can_redo());
             assert!(
-                pixel_for_choice(imagen_actual(&session), session.choice).is_some(),
-                "{contexto}"
+                pixel_for_choice(image_current(&session), session.choice).is_some(),
+                "{context}"
             );
         }
     }
 }
 
 #[test]
-fn fila_7_tras_undo_con_origen_no_indexado_la_ranura_es_la_1_aunque_hubiera_otra() {
-    let mut session = sesion_de(imagen_de(Mode::Rgba));
+fn row_7_after_undo_with_a_non_indexed_source_the_slot_is_1_even_if_there_was_another() {
+    let mut session = session_of(image_of(Mode::Rgba));
     session.choice = ColorChoice::Slot(3);
-    session
-        .convert_mode(Mode::Indexed, TODO)
-        .expect("convertir");
+    session.convert_mode(Mode::Indexed, ALL).expect("convertir");
     assert_eq!(session.choice, ColorChoice::Entry(2));
     session.undo().expect("deshacer");
     assert_eq!(
@@ -544,17 +534,17 @@ fn fila_7_tras_undo_con_origen_no_indexado_la_ranura_es_la_1_aunque_hubiera_otra
 }
 
 #[test]
-fn fila_7_dos_conversiones_son_dos_pasos_y_se_deshacen_en_orden() {
-    let original = imagen_de(Mode::Rgba);
-    let mut session = sesion_de(original.clone());
-    assert_eq!(session.convert_mode(Mode::GrayAlpha, TODO), Ok(true));
-    let a_gris_alfa = imagen_actual(&session).clone();
-    assert_eq!(session.convert_mode(Mode::Rgba, TODO), Ok(true));
-    assert_eq!(pasos_de_deshacer(&session.document), 2);
+fn row_7_two_conversions_are_two_steps_and_are_undone_in_order() {
+    let original = image_of(Mode::Rgba);
+    let mut session = session_of(original.clone());
+    assert_eq!(session.convert_mode(Mode::GrayAlpha, ALL), Ok(true));
+    let a_gray_alpha = image_current(&session).clone();
+    assert_eq!(session.convert_mode(Mode::Rgba, ALL), Ok(true));
+    assert_eq!(steps_of_undo(&session.document), 2);
     session.undo().expect("deshacer");
-    assert_eq!(imagen_actual(&session), &a_gris_alfa);
+    assert_eq!(image_current(&session), &a_gray_alpha);
     session.undo().expect("deshacer");
-    assert_eq!(imagen_actual(&session), &original);
+    assert_eq!(image_current(&session), &original);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -562,30 +552,30 @@ fn fila_7_dos_conversiones_son_dos_pasos_y_se_deshacen_en_orden() {
 // ---------------------------------------------------------------------------------------
 
 /// 257×1 con 256 colores y el transparente: más de 256 entradas para indexado.
-fn rgba_de_257_colores() -> Image {
-    let mut colores: Vec<Rgba> = (0..256u32)
+fn rgba_of_257_colors() -> Image {
+    let mut colors: Vec<Rgba> = (0..256u32)
         .map(|i| Rgba::opaque((i % 256) as u8, (i / 256) as u8, 0))
         .collect();
-    colores.push(Rgba::TRANSPARENT);
-    rgba_de(&colores)
+    colors.push(Rgba::TRANSPARENT);
+    rgba_de(&colors)
 }
 
 /// Sesión con historia (3 ediciones) y elección no inicial.
-fn sesion_con_historia(image: Image) -> Session {
-    let mut session = sesion_de(image);
+fn session_with_history(image: Image) -> Session {
+    let mut session = session_of(image);
     for i in 0..3u8 {
-        edita_pixel(&mut session, u32::from(i), 0, 100 + i);
+        edits_pixel(&mut session, u32::from(i), 0, 100 + i);
     }
-    session.choice = eleccion_esperada(imagen_actual(&session), ColorChoice::Slot(3));
+    session.choice = choice_expected(image_current(&session), ColorChoice::Slot(3));
     session.view.reveal = false;
     session
 }
 
 #[test]
-fn fila_8_loss_not_allowed_deja_todo_intacto() {
-    let mut session = sesion_con_historia(imagen_de(Mode::Rgba));
-    let antes = foto(&session);
-    let pasos = pasos_de_deshacer(&session.document);
+fn row_8_loss_not_allowed_leaves_everything_intact() {
+    let mut session = session_with_history(image_of(Mode::Rgba));
+    let antes = snapshot(&session);
+    let steps_2 = steps_of_undo(&session.document);
     for allowed in [
         Allowed::NOTHING,
         Allowed {
@@ -597,16 +587,16 @@ fn fila_8_loss_not_allowed_deja_todo_intacto() {
             drop_alpha: Some([255, 255, 255]),
         },
     ] {
-        let resultado = session.convert_mode(Mode::Gray, allowed);
+        let result = session.convert_mode(Mode::Gray, allowed);
         assert!(
             matches!(
-                resultado,
+                result,
                 Err(DocumentError::Convert(ConvertError::LossNotAllowed { .. }))
             ),
-            "{allowed:?}: {resultado:?}"
+            "{allowed:?}: {result:?}"
         );
-        assert_eq!(foto(&session), antes, "{allowed:?}");
-        assert_eq!(pasos_de_deshacer(&session.document), pasos);
+        assert_eq!(snapshot(&session), antes, "{allowed:?}");
+        assert_eq!(steps_of_undo(&session.document), steps_2);
     }
     // El informe lleva los contadores completos.
     match session.convert_mode(Mode::Gray, Allowed::NOTHING) {
@@ -616,43 +606,43 @@ fn fila_8_loss_not_allowed_deja_todo_intacto() {
             assert_eq!((report.color_lost, report.alpha_lost), (4, 1));
             assert_eq!(Analysis::Lossy(report), analyze(&antes.image, Mode::Gray));
         }
-        otro => panic!("{otro:?}"),
+        other_2 => panic!("{other_2:?}"),
     }
 }
 
 #[test]
-fn fila_8_too_many_colors_deja_todo_intacto() {
-    let mut session = sesion_con_historia(rgba_de_257_colores());
-    let antes = foto(&session);
+fn row_8_too_many_colors_leaves_everything_intact() {
+    let mut session = session_with_history(rgba_of_257_colors());
+    let antes = snapshot(&session);
     assert_eq!(
-        session.convert_mode(Mode::Indexed, TODO),
+        session.convert_mode(Mode::Indexed, ALL),
         Err(DocumentError::Convert(ConvertError::TooManyColors {
             at_least: 257
         }))
     );
-    assert_eq!(foto(&session), antes);
+    assert_eq!(snapshot(&session), antes);
 }
 
 #[test]
-fn fila_8_el_modo_actual_da_ok_false_y_deja_todo_intacto() {
-    for mode in MODOS {
-        let mut session = sesion_con_historia(imagen_de(mode));
-        let antes = foto(&session);
-        assert_eq!(session.convert_mode(mode, TODO), Ok(false), "{mode:?}");
-        assert_eq!(foto(&session), antes, "{mode:?}");
+fn row_8_the_current_mode_gives_ok_false_and_leaves_everything_intact() {
+    for mode in TEST_MODES {
+        let mut session = session_with_history(image_of(mode));
+        let antes = snapshot(&session);
+        assert_eq!(session.convert_mode(mode, ALL), Ok(false), "{mode:?}");
+        assert_eq!(snapshot(&session), antes, "{mode:?}");
     }
 }
 
 #[test]
-fn fila_8_un_error_no_cambia_la_pila_de_rehacer_ni_la_marca_de_modificado() {
-    let mut session = sesion_de(imagen_de(Mode::Rgba));
-    edita_pixel(&mut session, 0, 0, 9);
+fn row_8_an_error_changes_neither_the_redo_stack_nor_the_modified_mark() {
+    let mut session = session_of(image_of(Mode::Rgba));
+    edits_pixel(&mut session, 0, 0, 9);
     session.undo().expect("deshacer");
     assert!(session.document.can_redo());
     assert!(!session.modified());
-    let antes = foto(&session);
+    let antes = snapshot(&session);
     assert!(session.convert_mode(Mode::Gray, Allowed::NOTHING).is_err());
-    assert_eq!(foto(&session), antes);
+    assert_eq!(snapshot(&session), antes);
     assert!(session.document.can_redo(), "el error no borra el rehacer");
     assert!(!session.modified());
 }
@@ -660,25 +650,25 @@ fn fila_8_un_error_no_cambia_la_pila_de_rehacer_ni_la_marca_de_modificado() {
 // --- reserve_for_convert ---
 
 /// Un `ImageAlloc` falso: anota los `probe` y las imágenes pedidas, y falla donde se le dice.
-struct Falso {
+struct False {
     probe_ok: bool,
     probes: Vec<usize>,
-    imagenes: usize,
+    images: usize,
 }
 
-impl Falso {
-    fn nuevo(probe_ok: bool) -> Falso {
-        Falso {
+impl False {
+    fn new_2(probe_ok: bool) -> False {
+        False {
             probe_ok,
             probes: Vec::new(),
-            imagenes: 0,
+            images: 0,
         }
     }
 }
 
-impl ImageAlloc for Falso {
+impl ImageAlloc for False {
     fn image(&mut self, spec: &NewImageSpec) -> Result<Image, ImageError> {
-        self.imagenes += 1;
+        self.images += 1;
         Err(ImageError::TooLarge {
             width: spec.width,
             height: spec.height,
@@ -691,32 +681,33 @@ impl ImageAlloc for Falso {
     }
 }
 
-fn bytes_esperados(image: &Image, target: Mode) -> u64 {
-    let destino = target_byte_len(image.width(), image.height(), target).expect("cabe") as u64;
-    destino + 4 * u64::from(image.width()) * u64::from(image.height())
+fn bytes_expected(image: &Image, target: Mode) -> u64 {
+    let target_2 = target_byte_len(image.width(), image.height(), target).expect("cabe") as u64;
+    target_2 + 4 * u64::from(image.width()) * u64::from(image.height())
 }
 
 #[test]
-fn fila_8_reserve_for_convert_falla_con_memory_de_target_byte_len_mas_4_n_sin_llamar_a_nada_mas() {
-    for from in MODOS {
-        for target in destinos(from) {
-            let image = imagen_de(from);
-            let mut falso = Falso::nuevo(false);
-            let resultado = reserve_for_convert(&image, target, &mut falso);
-            let esperados = bytes_esperados(&image, target);
-            match resultado {
+fn row_8_reserve_for_convert_fails_with_memory_of_target_byte_len_plus_4_n_without_calling_anything_else()
+ {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
+            let image = image_of(from);
+            let mut false_value = False::new_2(false);
+            let result = reserve_for_convert(&image, target, &mut false_value);
+            let expected_2_2_2 = bytes_expected(&image, target);
+            match result {
                 Err(ConvertModeError::Memory { bytes }) => {
-                    assert_eq!(bytes, esperados, "{from:?} a {target:?}");
+                    assert_eq!(bytes, expected_2_2_2, "{from:?} a {target:?}");
                 }
                 Ok(()) => panic!("{from:?} a {target:?}: debía fallar"),
             }
             assert_eq!(
-                falso.probes,
-                [usize::try_from(esperados).expect("cabe")],
+                false_value.probes,
+                [usize::try_from(expected_2_2_2).expect("cabe")],
                 "{from:?} a {target:?}: un solo probe con los bytes"
             );
             assert_eq!(
-                falso.imagenes, 0,
+                false_value.images, 0,
                 "{from:?} a {target:?}: no se pide ninguna imagen"
             );
         }
@@ -724,27 +715,27 @@ fn fila_8_reserve_for_convert_falla_con_memory_de_target_byte_len_mas_4_n_sin_ll
 }
 
 #[test]
-fn fila_8_reserve_for_convert_con_probe_ok_da_ok_con_un_solo_probe() {
-    for from in MODOS {
-        for target in destinos(from) {
-            let image = imagen_de(from);
-            let mut falso = Falso::nuevo(true);
+fn row_8_reserve_for_convert_with_probe_ok_gives_ok_with_a_single_probe() {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
+            let image = image_of(from);
+            let mut false_value = False::new_2(true);
             assert!(
-                reserve_for_convert(&image, target, &mut falso).is_ok(),
+                reserve_for_convert(&image, target, &mut false_value).is_ok(),
                 "{from:?} a {target:?}"
             );
-            assert_eq!(falso.probes.len(), 1, "{from:?} a {target:?}");
-            assert_eq!(falso.imagenes, 0);
+            assert_eq!(false_value.probes.len(), 1, "{from:?} a {target:?}");
+            assert_eq!(false_value.images, 0);
         }
     }
 }
 
 #[test]
-fn fila_8_reserve_for_convert_con_el_real_da_ok() {
-    for from in MODOS {
-        for target in destinos(from) {
+fn row_8_reserve_for_convert_with_the_real_one_gives_ok() {
+    for from in TEST_MODES {
+        for target in targets_2(from) {
             assert!(
-                reserve_for_convert(&imagen_de(from), target, &mut SystemAlloc).is_ok(),
+                reserve_for_convert(&image_of(from), target, &mut SystemAlloc).is_ok(),
                 "{from:?} a {target:?}"
             );
         }
@@ -752,65 +743,65 @@ fn fila_8_reserve_for_convert_con_el_real_da_ok() {
 }
 
 #[test]
-fn fila_8_el_aviso_de_falta_de_memoria_dice_el_tamano_el_modo_y_las_mib() {
+fn row_8_the_out_of_memory_notice_says_the_size_the_mode_and_the_mib() {
     // 8192² a RGBA: 256 MiB del destino y 256 MiB de la subida: 512 MiB exactos.
     let bytes = 512 * MIB as u64;
     assert_eq!(
         convert_memory_notice(8192, 8192, Mode::Rgba, bytes),
         "sin memoria para convertir 8192×8192 a RGBA (~512 MiB)"
     );
-    for (target, modo) in [
+    for (target, mode_2) in [
         (Mode::Indexed, "indexado"),
         (Mode::Rgba, "RGBA"),
         (Mode::GrayAlpha, "gris con alfa"),
         (Mode::Gray, "gris"),
     ] {
-        let texto = convert_memory_notice(3, 2, target, 7 * MIB as u64);
+        let text_2 = convert_memory_notice(3, 2, target, 7 * MIB as u64);
         assert_eq!(
-            texto,
-            format!("sin memoria para convertir 3×2 a {modo} (~7 MiB)")
+            text_2,
+            format!("sin memoria para convertir 3×2 a {mode_2} (~7 MiB)")
         );
     }
     // Con un tamaño que no es múltiplo de MiB, la cifra es la de redondear a un lado o al otro.
-    let texto = convert_memory_notice(10, 10, Mode::Gray, 512 * MIB as u64 + 1);
+    let text_2 = convert_memory_notice(10, 10, Mode::Gray, 512 * MIB as u64 + 1);
     assert!(
-        texto == "sin memoria para convertir 10×10 a gris (~512 MiB)"
-            || texto == "sin memoria para convertir 10×10 a gris (~513 MiB)",
-        "{texto}"
+        text_2 == "sin memoria para convertir 10×10 a gris (~512 MiB)"
+            || text_2 == "sin memoria para convertir 10×10 a gris (~513 MiB)",
+        "{text_2}"
     );
     // Con muy pocos bytes, al menos 1 MiB (nunca «~0 MiB»).
-    let pequeno = convert_memory_notice(1, 1, Mode::Gray, 5);
+    let small = convert_memory_notice(1, 1, Mode::Gray, 5);
     assert!(
-        pequeno.starts_with("sin memoria para convertir 1×1 a gris (~"),
-        "{pequeno}"
+        small.starts_with("sin memoria para convertir 1×1 a gris (~"),
+        "{small}"
     );
-    assert!(pequeno.ends_with(" MiB)"), "{pequeno}");
-    assert!(!pequeno.contains("~0 MiB"), "{pequeno}");
+    assert!(small.ends_with(" MiB)"), "{small}");
+    assert!(!small.contains("~0 MiB"), "{small}");
 }
 
 #[test]
-fn fila_8_el_aviso_de_exito_dice_el_modo_y_solo_las_perdidas_mayores_que_cero() {
+fn row_8_the_success_notice_says_the_mode_and_only_the_losses_greater_than_zero() {
     // Tres rojos a gris con alfa: pierde el color en 3 píxeles (el ejemplo de la spec).
-    let rojos = rgba_de(&[Rgba::opaque(255, 0, 0); 3]);
-    let analisis = analyze(&rojos, Mode::GrayAlpha);
+    let reds = rgba_de(&[Rgba::opaque(255, 0, 0); 3]);
+    let analysis_2 = analyze(&reds, Mode::GrayAlpha);
     assert_eq!(
-        describe_converted(Mode::GrayAlpha, Some(&analisis)),
+        describe_converted(Mode::GrayAlpha, Some(&analysis_2)),
         "imagen convertida a gris con alfa · perdido: color 3 px"
     );
     // Sin pérdida, solo la primera parte.
-    let exacta = analyze(&imagen_de(Mode::Gray), Mode::Rgba);
+    let exact = analyze(&image_of(Mode::Gray), Mode::Rgba);
     assert_eq!(
-        describe_converted(Mode::Rgba, Some(&exacta)),
+        describe_converted(Mode::Rgba, Some(&exact)),
         "imagen convertida a RGBA"
     );
     // Con alfa y color.
-    let con_las_dos = analyze(&imagen_de(Mode::Rgba), Mode::Gray);
+    let with_the_two = analyze(&image_of(Mode::Rgba), Mode::Gray);
     assert_eq!(
-        describe_converted(Mode::Gray, Some(&con_las_dos)),
+        describe_converted(Mode::Gray, Some(&with_the_two)),
         "imagen convertida a gris · perdido: color 3 px, alfa 2 px"
     );
     // Y el informe vigente es el que pasó por `convert_mode`.
-    let mut session = sesion_de(rojos);
+    let mut session = session_of(reds);
     assert_eq!(
         session.convert_mode(
             Mode::GrayAlpha,
@@ -821,16 +812,16 @@ fn fila_8_el_aviso_de_exito_dice_el_modo_y_solo_las_perdidas_mayores_que_cero() 
         ),
         Ok(true)
     );
-    assert!(matches!(analisis, Analysis::Lossy(_)));
+    assert!(matches!(analysis_2, Analysis::Lossy(_)));
 }
 
 // --- Historia ---
 
 /// Gris de 64 × 64 con `n` ediciones de un píxel cada una.
-fn gris_con_ediciones(n: usize) -> Session {
-    let mut session = sesion_de(Image::new(64, 64, Mode::Gray).expect("imagen"));
+fn gray_with_edits(n: usize) -> Session {
+    let mut session = session_of(Image::new(64, 64, Mode::Gray).expect("imagen"));
     for i in 0..n {
-        edita_pixel(
+        edits_pixel(
             &mut session,
             (i % 64) as u32,
             (i / 64) as u32,
@@ -842,81 +833,81 @@ fn gris_con_ediciones(n: usize) -> Session {
 }
 
 #[test]
-fn fila_8_el_paso_de_conversion_se_conserva_aunque_el_limite_sea_0_y_lo_anterior_se_expulsa() {
-    let mut session = sesion_de(imagen_de(Mode::Rgba));
+fn row_8_the_conversion_step_is_kept_even_if_the_limit_is_0_and_the_previous_ones_are_ejected() {
+    let mut session = session_of(image_of(Mode::Rgba));
     for i in 0..3u8 {
-        edita_pixel(&mut session, u32::from(i), 0, 50 + i);
+        edits_pixel(&mut session, u32::from(i), 0, 50 + i);
     }
     session.document.set_history_limit(0);
     assert!(
         session.document.can_undo(),
         "el último paso nunca se descarta"
     );
-    assert_eq!(pasos_de_deshacer(&session.document), 1);
-    let antes_de_convertir = imagen_actual(&session).clone();
+    assert_eq!(steps_of_undo(&session.document), 1);
+    let before_of_convert = image_current(&session).clone();
 
-    assert_eq!(session.convert_mode(Mode::Gray, TODO), Ok(true));
-    let convertida = imagen_actual(&session).clone();
-    assert_eq!(convertida.mode(), Mode::Gray);
+    assert_eq!(session.convert_mode(Mode::Gray, ALL), Ok(true));
+    let converted_2 = image_current(&session).clone();
+    assert_eq!(converted_2.mode(), Mode::Gray);
 
     // Entre los 16 bytes de píxeles de la imagen vieja (4×1 RGBA) y esos más 2048.
     let h = session.document.history_bytes();
     assert!((16..=16 + 2048).contains(&h), "history_bytes = {h}");
     assert_eq!(
-        pasos_de_deshacer(&session.document),
+        steps_of_undo(&session.document),
         1,
         "lo anterior se expulsó: solo queda la conversión"
     );
 
     // `undo` llega a la conversión y no más.
     session.undo().expect("deshacer la conversión");
-    assert_eq!(imagen_actual(&session), &antes_de_convertir);
+    assert_eq!(image_current(&session), &before_of_convert);
     assert_eq!(session.undo(), Err(DocumentError::NothingToUndo));
     session.redo().expect("rehacer");
-    assert_eq!(imagen_actual(&session), &convertida);
+    assert_eq!(image_current(&session), &converted_2);
 }
 
 #[test]
-fn fila_8_con_limite_0_tras_otra_edicion_solo_queda_esa() {
-    let mut session = sesion_de(imagen_de(Mode::Rgba));
+fn row_8_with_limit_0_after_another_edit_only_that_one_remains() {
+    let mut session = session_of(image_of(Mode::Rgba));
     for i in 0..3u8 {
-        edita_pixel(&mut session, u32::from(i), 0, 50 + i);
+        edits_pixel(&mut session, u32::from(i), 0, 50 + i);
     }
     session.document.set_history_limit(0);
-    assert_eq!(session.convert_mode(Mode::Gray, TODO), Ok(true));
-    let convertida = imagen_actual(&session).clone();
+    assert_eq!(session.convert_mode(Mode::Gray, ALL), Ok(true));
+    let converted_2 = image_current(&session).clone();
 
-    edita_pixel(&mut session, 0, 0, 200);
+    edits_pixel(&mut session, 0, 0, 200);
     assert_eq!(
-        pasos_de_deshacer(&session.document),
+        steps_of_undo(&session.document),
         1,
         "la edición expulsa la conversión"
     );
     session.undo().expect("deshacer la edición");
     assert_eq!(
-        imagen_actual(&session),
-        &convertida,
+        image_current(&session),
+        &converted_2,
         "vuelve a la Gray de la conversión"
     );
     assert_eq!(session.undo(), Err(DocumentError::NothingToUndo));
     session.redo().expect("rehacer la edición");
-    assert_eq!(modo_actual(&session), Mode::Gray);
+    assert_eq!(mode_current(&session), Mode::Gray);
 }
 
 #[test]
-fn fila_8_con_el_limite_por_defecto_y_una_imagen_pequena_los_pasos_anteriores_siguen() {
-    let original = imagen_de(Mode::Rgba);
-    let mut session = sesion_de(original.clone());
+fn row_8_with_the_default_limit_and_a_small_image_the_previous_steps_stay() {
+    let original = image_of(Mode::Rgba);
+    let mut session = session_of(original.clone());
     for i in 0..3u8 {
-        edita_pixel(&mut session, u32::from(i), 0, 50 + i);
+        edits_pixel(&mut session, u32::from(i), 0, 50 + i);
     }
     assert_eq!(
         session.document.history_limit(),
         Document::DEFAULT_HISTORY_LIMIT
     );
-    assert_eq!(session.convert_mode(Mode::Gray, TODO), Ok(true));
+    assert_eq!(session.convert_mode(Mode::Gray, ALL), Ok(true));
     assert_eq!(
-        pasos_de_deshacer(&session.document),
+        steps_of_undo(&session.document),
         4,
         "las 3 ediciones y la conversión"
     );
@@ -924,7 +915,7 @@ fn fila_8_con_el_limite_por_defecto_y_una_imagen_pequena_los_pasos_anteriores_si
         session.undo().expect("deshacer");
     }
     assert_eq!(
-        imagen_actual(&session),
+        image_current(&session),
         &original,
         "undo ×4 vuelve al original"
     );
@@ -932,137 +923,137 @@ fn fila_8_con_el_limite_por_defecto_y_una_imagen_pequena_los_pasos_anteriores_si
 }
 
 #[test]
-fn fila_8_el_aviso_de_historia_primero_coincide_con_lo_que_pasa_c_mayor_que_el_limite() {
+fn row_8_the_first_history_notice_matches_what_happens_c_greater_than_the_limit() {
     // Gris 64×64: P = 4096 bytes de píxeles; un paso cuesta de P a P + 2048.
-    let pixeles = 64 * 64;
-    let mut session = gris_con_ediciones(100);
-    let limite = pixeles - 1;
-    session.document.set_history_limit(limite);
-    let usado = session.document.history_bytes();
-    let antes = imagen_actual(&session).clone();
+    let pixels_2 = 64 * 64;
+    let mut session = gray_with_edits(100);
+    let limit_2 = pixels_2 - 1;
+    session.document.set_history_limit(limit_2);
+    let used_2 = session.document.history_bytes();
+    let antes = image_current(&session).clone();
     assert_eq!(
         history_warning(
             &antes,
             History {
-                limit: limite,
-                used: usado
+                limit: limit_2,
+                used: used_2
             }
         )
         .as_deref(),
-        Some(AVISO_HISTORIA_TODO)
+        Some(NOTICE_HISTORY_ALL)
     );
 
-    assert_eq!(session.convert_mode(Mode::Rgba, TODO), Ok(true));
+    assert_eq!(session.convert_mode(Mode::Rgba, ALL), Ok(true));
     assert!(
-        session.document.history_bytes() > limite,
+        session.document.history_bytes() > limit_2,
         "el paso supera el límite y se conserva"
     );
     assert_eq!(
-        pasos_de_deshacer(&session.document),
+        steps_of_undo(&session.document),
         1,
         "expulsa todo lo anterior"
     );
-    let convertida = imagen_actual(&session).clone();
+    let converted_2 = image_current(&session).clone();
 
     // «La siguiente edición lo expulsa a él.»
-    edita_pixel(&mut session, 0, 0, 7);
-    assert_eq!(pasos_de_deshacer(&session.document), 1);
+    edits_pixel(&mut session, 0, 0, 7);
+    assert_eq!(steps_of_undo(&session.document), 1);
     session.undo().expect("deshacer la edición");
-    assert_eq!(imagen_actual(&session), &convertida);
+    assert_eq!(image_current(&session), &converted_2);
     assert_eq!(session.undo(), Err(DocumentError::NothingToUndo));
 }
 
 #[test]
-fn fila_8_el_aviso_de_historia_segundo_coincide_con_lo_que_pasa_se_expulsan_los_mas_antiguos() {
-    let pixeles = 64 * 64;
-    let mut session = gris_con_ediciones(100);
-    let limite = pixeles + 2560; // c = P + 2048 ≤ límite < 2c
-    session.document.set_history_limit(limite);
-    let usado = session.document.history_bytes();
+fn row_8_the_second_history_notice_matches_what_happens_the_oldest_are_ejected() {
+    let pixels_2 = 64 * 64;
+    let mut session = gray_with_edits(100);
+    let limit_2 = pixels_2 + 2560; // c = P + 2048 ≤ límite < 2c
+    session.document.set_history_limit(limit_2);
+    let used_2 = session.document.history_bytes();
     assert!(
-        usado > 2560 && usado <= limite,
-        "la prueba necesita una historia que no quepa junto al paso nuevo: usado = {usado}"
+        used_2 > 2560 && used_2 <= limit_2,
+        "la prueba necesita una historia que no quepa junto al paso nuevo: usado = {used_2}"
     );
-    let antes = imagen_actual(&session).clone();
+    let antes = image_current(&session).clone();
     assert_eq!(
         history_warning(
             &antes,
             History {
-                limit: limite,
-                used: usado
+                limit: limit_2,
+                used: used_2
             }
         )
         .as_deref(),
-        Some(AVISO_HISTORIA_PARTE)
+        Some(NOTICE_HISTORY_PART)
     );
-    let pasos_antes = pasos_de_deshacer(&session.document);
+    let steps_before = steps_of_undo(&session.document);
 
-    assert_eq!(session.convert_mode(Mode::Rgba, TODO), Ok(true));
-    let pasos_despues = pasos_de_deshacer(&session.document);
+    assert_eq!(session.convert_mode(Mode::Rgba, ALL), Ok(true));
+    let steps_after = steps_of_undo(&session.document);
     assert!(
-        (1..=pasos_antes).contains(&pasos_despues),
-        "se expulsan pasos antiguos: antes {pasos_antes}, después {pasos_despues}"
+        (1..=steps_before).contains(&steps_after),
+        "se expulsan pasos antiguos: antes {steps_before}, después {steps_after}"
     );
-    assert!(session.document.history_bytes() <= limite, "ahora cabe");
+    assert!(session.document.history_bytes() <= limit_2, "ahora cabe");
     // La conversión se conserva: el último `undo` posible vuelve a la imagen de antes.
     session.undo().expect("deshacer la conversión");
-    assert_eq!(imagen_actual(&session), &antes);
+    assert_eq!(image_current(&session), &antes);
 }
 
 #[test]
-fn fila_8_sin_aviso_de_historia_no_se_expulsa_nada() {
-    let pixeles = 64 * 64;
+fn row_8_without_a_history_notice_nothing_is_ejected() {
+    let pixels_2 = 64 * 64;
     // Por defecto: c ≪ límite/2.
-    let mut session = gris_con_ediciones(20);
-    let usado = session.document.history_bytes();
-    let antes = imagen_actual(&session).clone();
+    let mut session = gray_with_edits(20);
+    let used_2 = session.document.history_bytes();
+    let antes = image_current(&session).clone();
     assert_eq!(
         history_warning(
             &antes,
             History {
                 limit: session.document.history_limit(),
-                used: usado
+                used: used_2
             }
         ),
         None
     );
-    let pasos_antes = pasos_de_deshacer(&session.document);
-    assert_eq!(session.convert_mode(Mode::Rgba, TODO), Ok(true));
-    assert_eq!(pasos_de_deshacer(&session.document), pasos_antes + 1);
+    let steps_before = steps_of_undo(&session.document);
+    assert_eq!(session.convert_mode(Mode::Rgba, ALL), Ok(true));
+    assert_eq!(steps_of_undo(&session.document), steps_before + 1);
 
     // Con límite/2 < c ≤ límite pero h + c ≤ límite: tampoco hay aviso ni se expulsa nada.
-    let mut session = gris_con_ediciones(3);
-    let limite = pixeles + 2560;
-    session.document.set_history_limit(limite);
-    let usado = session.document.history_bytes();
-    let antes = imagen_actual(&session).clone();
+    let mut session = gray_with_edits(3);
+    let limit_2 = pixels_2 + 2560;
+    session.document.set_history_limit(limit_2);
+    let used_2 = session.document.history_bytes();
+    let antes = image_current(&session).clone();
     assert_eq!(
         history_warning(
             &antes,
             History {
-                limit: limite,
-                used: usado
+                limit: limit_2,
+                used: used_2
             }
         ),
         None
     );
-    let pasos_antes = pasos_de_deshacer(&session.document);
-    assert_eq!(session.convert_mode(Mode::Rgba, TODO), Ok(true));
-    assert_eq!(pasos_de_deshacer(&session.document), pasos_antes + 1);
-    assert!(session.document.history_bytes() <= limite);
+    let steps_before = steps_of_undo(&session.document);
+    assert_eq!(session.convert_mode(Mode::Rgba, ALL), Ok(true));
+    assert_eq!(steps_of_undo(&session.document), steps_before + 1);
+    assert!(session.document.history_bytes() <= limit_2);
 }
 
 #[test]
-fn fila_8_el_margen_de_la_spec_cubre_el_coste_real_de_un_paso_de_conversion() {
+fn row_8_the_margin_of_the_spec_covers_the_real_cost_of_a_conversion_step() {
     // El aviso supone que un paso cuesta como mucho P + `HISTORY_MARGIN`.
-    for from in MODOS {
-        for target in destinos(from) {
-            let original = imagen_de(from);
-            let mut session = sesion_de(original.clone());
-            session.convert_mode(target, TODO).expect("convertir");
+    for from in TEST_MODES {
+        for target in targets_2(from) {
+            let original = image_of(from);
+            let mut session = session_of(original.clone());
+            session.convert_mode(target, ALL).expect("convertir");
             assert!(
                 session.document.history_bytes() as u64
-                    <= bytes_de_pixeles(&original) as u64 + HISTORY_MARGIN,
+                    <= bytes_of_pixels(&original) as u64 + HISTORY_MARGIN,
                 "{from:?} a {target:?}"
             );
         }
@@ -1071,21 +1062,21 @@ fn fila_8_el_margen_de_la_spec_cubre_el_coste_real_de_un_paso_de_conversion() {
 
 #[test]
 #[ignore = "reserva 64 MiB de RGBA y 16 MiB de gris: cargo test -p px-app -- --ignored"]
-fn fila_8_rgba_de_4096_con_el_limite_por_defecto_convertir_undo_otra_edicion_undo() {
+fn row_8_rgba_of_4096_with_the_default_limit_convert_undo_another_edit_undo() {
     let original = Image::new(4096, 4096, Mode::Rgba).expect("RGBA 4096²");
-    let mut session = sesion_de(original);
-    let limite = session.document.history_limit();
-    let antes = imagen_actual(&session).clone();
+    let mut session = session_of(original);
+    let limit_2 = session.document.history_limit();
+    let antes = image_current(&session).clone();
     assert_eq!(
         history_warning(
             &antes,
             History {
-                limit: limite,
+                limit: limit_2,
                 used: 0
             }
         )
         .as_deref(),
-        Some(AVISO_HISTORIA_TODO),
+        Some(NOTICE_HISTORY_ALL),
         "RGBA de 4096² con el límite por defecto: el primer aviso"
     );
     drop(antes);
@@ -1097,16 +1088,16 @@ fn fila_8_rgba_de_4096_con_el_limite_por_defecto_convertir_undo_otra_edicion_und
     // El RGBA de ceros es transparente: pierde el alfa en todos los píxeles.
     assert_eq!(session.convert_mode(Mode::Gray, allowed), Ok(true));
     assert!(
-        session.document.history_bytes() > limite,
+        session.document.history_bytes() > limit_2,
         "el paso supera el límite"
     );
-    assert_eq!(pasos_de_deshacer(&session.document), 1);
+    assert_eq!(steps_of_undo(&session.document), 1);
 
     session.undo().expect("deshacer la conversión");
-    assert_eq!(modo_actual(&session), Mode::Rgba);
-    edita_pixel(&mut session, 0, 0, 9);
+    assert_eq!(mode_current(&session), Mode::Rgba);
+    edits_pixel(&mut session, 0, 0, 9);
     session.undo().expect("deshacer la edición");
-    assert_eq!(modo_actual(&session), Mode::Rgba);
+    assert_eq!(mode_current(&session), Mode::Rgba);
     assert_eq!(session.undo(), Err(DocumentError::NothingToUndo));
 }
 
@@ -1114,20 +1105,20 @@ fn fila_8_rgba_de_4096_con_el_limite_por_defecto_convertir_undo_otra_edicion_und
 // Propiedad 3: aplicar es atómico y reversible (modelo de instantáneas).
 // ---------------------------------------------------------------------------------------
 
-const VALORES: [u8; 5] = [0, 1, 127, 128, 255];
+const VALUES: [u8; 5] = [0, 1, 127, 128, 255];
 
 #[derive(Clone, Debug)]
-struct Semilla {
-    modo: usize,
-    ancho: u32,
-    alto: u32,
-    pixeles: Vec<[usize; 4]>,
-    colores: Vec<[usize; 4]>,
+struct Seed {
+    mode_2: usize,
+    width: u32,
+    height: u32,
+    pixels_2: Vec<[usize; 4]>,
+    colors: Vec<[usize; 4]>,
     n: usize,
-    transparente: usize,
+    transparent: usize,
 }
 
-fn estrategia_de_semilla() -> impl Strategy<Value = Semilla> {
+fn strategy_of_seed() -> impl Strategy<Value = Seed> {
     (
         0usize..4,
         1u32..=6,
@@ -1138,47 +1129,47 @@ fn estrategia_de_semilla() -> impl Strategy<Value = Semilla> {
         0usize..=6,
     )
         .prop_map(
-            |(modo, ancho, alto, pixeles, colores, n, transparente)| Semilla {
-                modo,
-                ancho,
-                alto,
-                pixeles,
-                colores,
+            |(mode_2, width, height, pixels_2, colors, n, transparent)| Seed {
+                mode_2,
+                width,
+                height,
+                pixels_2,
+                colors,
                 n,
-                transparente,
+                transparent,
             },
         )
 }
 
 fn rgba_de_indices(v: &[usize; 4]) -> Rgba {
-    Rgba::new(VALORES[v[0]], VALORES[v[1]], VALORES[v[2]], VALORES[v[3]])
+    Rgba::new(VALUES[v[0]], VALUES[v[1]], VALUES[v[2]], VALUES[v[3]])
 }
 
-fn imagen_de_semilla(s: &Semilla) -> Image {
-    let (w, h) = (s.ancho, s.alto);
+fn image_of_seed(s: &Seed) -> Image {
+    let (w, h) = (s.width, s.height);
     let total = (w * h) as usize;
-    let mode = MODOS[s.modo];
+    let mode = TEST_MODES[s.mode_2];
     let mut image = match mode {
         Mode::Indexed => {
-            let colores: Vec<Rgba> = s.colores.iter().take(s.n).map(rgba_de_indices).collect();
-            let mut palette = Palette::from_colors(colores).expect("paleta");
-            if s.transparente < s.n {
+            let colors: Vec<Rgba> = s.colors.iter().take(s.n).map(rgba_de_indices).collect();
+            let mut palette = Palette::from_colors(colors).expect("paleta");
+            if s.transparent < s.n {
                 palette
-                    .set_transparent_index(Some(s.transparente as u8))
+                    .set_transparent_index(Some(s.transparent as u8))
                     .expect("índice transparente");
             }
             Image::new_indexed(w, h, palette).expect("imagen indexada")
         }
-        otro => Image::new(w, h, otro).expect("imagen"),
+        other_2 => Image::new(w, h, other_2).expect("imagen"),
     };
-    for (i, v) in s.pixeles.iter().take(total).enumerate() {
+    for (i, v) in s.pixels_2.iter().take(total).enumerate() {
         let (x, y) = (i as u32 % w, i as u32 / w);
         let pixel = match mode {
             Mode::Rgba => Pixel::Rgba(rgba_de_indices(v)),
-            Mode::Gray => Pixel::Gray(VALORES[v[0]]),
+            Mode::Gray => Pixel::Gray(VALUES[v[0]]),
             Mode::GrayAlpha => Pixel::GrayAlpha {
-                gray: VALORES[v[0]],
-                alpha: VALORES[v[3]],
+                gray: VALUES[v[0]],
+                alpha: VALUES[v[3]],
             },
             Mode::Indexed => Pixel::Indexed((v[0] % s.n) as u8),
         };
@@ -1189,32 +1180,32 @@ fn imagen_de_semilla(s: &Semilla) -> Image {
 
 #[derive(Clone, Debug)]
 enum Op {
-    /// `destino` 0 a 2: `destinos(actual)[destino]`; 3: el propio modo actual.
-    Convertir {
-        destino: usize,
+    /// `target_2` 0 a 2: `targets_2(actual)[target_2]`; 3: el propio modo actual.
+    Convert {
+        target_2: usize,
         luma: bool,
-        fondo: usize,
+        background_2: usize,
     },
-    Deshacer,
-    Rehacer,
+    Undo,
+    Redo,
 }
 
 fn op() -> impl Strategy<Value = Op> {
     prop_oneof![
-        4 => (0usize..4, any::<bool>(), 0usize..3).prop_map(|(destino, luma, fondo)| Op::Convertir {
-            destino,
+        4 => (0usize..4, any::<bool>(), 0usize..3).prop_map(|(target_2, luma, background_2)| Op::Convert {
+            target_2,
             luma,
-            fondo,
+            background_2,
         }),
-        1 => Just(Op::Deshacer),
-        1 => Just(Op::Rehacer),
+        1 => Just(Op::Undo),
+        1 => Just(Op::Redo),
     ]
 }
 
-fn allowed_de(luma: bool, fondo: usize) -> Allowed {
+fn allowed_de(luma: bool, background_2: usize) -> Allowed {
     Allowed {
         luma,
-        drop_alpha: match fondo {
+        drop_alpha: match background_2 {
             0 => None,
             1 => Some([255, 255, 255]),
             _ => Some([0, 0, 0]),
@@ -1231,108 +1222,108 @@ proptest! {
     /// `Err` o un `Ok(false)` dejan documento, historia, `state_id` y elección **iguales**, y la
     /// elección es siempre válida.
     #[test]
-    fn propiedad_3_aplicar_es_atomico_y_reversible(
-        semilla in estrategia_de_semilla(),
-        eleccion in 0usize..9,
+    fn property_3_applying_is_atomic_and_reversible(
+        seed in strategy_of_seed(),
+        choice in 0usize..9,
         ops in prop::collection::vec(op(), 0..=12),
     ) {
-        let inicial = imagen_de_semilla(&semilla);
-        let mut session = sesion_de(inicial.clone());
-        session.choice = match inicial.palette() {
-            Some(p) => ColorChoice::Entry((eleccion % p.len()) as u8),
-            None => ColorChoice::Slot(eleccion as u8 + 1),
+        let initial = image_of_seed(&seed);
+        let mut session = session_of(initial.clone());
+        session.choice = match initial.palette() {
+            Some(p) => ColorChoice::Entry((choice % p.len()) as u8),
+            None => ColorChoice::Slot(choice as u8 + 1),
         };
-        prop_assert!(pixel_for_choice(&inicial, session.choice).is_some());
+        prop_assert!(pixel_for_choice(&initial, session.choice).is_some());
 
-        let mut instantaneas = vec![inicial];
+        let mut snapshots = vec![initial];
         let mut cursor = 0usize;
 
-        for (i, operacion) in ops.iter().enumerate() {
-            let contexto = format!("paso {i}: {operacion:?}");
-            let antes = foto(&session);
-            let mut cambia = false;
-            match operacion {
-                Op::Convertir { destino, luma, fondo } => {
-                    let actual = instantaneas[cursor].clone();
-                    let target = if *destino == 3 {
+        for (i, operation) in ops.iter().enumerate() {
+            let context = format!("paso {i}: {operation:?}");
+            let antes = snapshot(&session);
+            let mut changes = false;
+            match operation {
+                Op::Convert { target_2, luma, background_2 } => {
+                    let actual = snapshots[cursor].clone();
+                    let target = if *target_2 == 3 {
                         actual.mode()
                     } else {
-                        destinos(actual.mode())[*destino]
+                        targets_2(actual.mode())[*target_2]
                     };
-                    let allowed = allowed_de(*luma, *fondo);
-                    let resultado = session.convert_mode(target, allowed);
+                    let allowed = allowed_de(*luma, *background_2);
+                    let result = session.convert_mode(target, allowed);
                     if target == actual.mode() {
-                        prop_assert_eq!(resultado, Ok(false), "{}", contexto);
+                        prop_assert_eq!(result, Ok(false), "{}", context);
                     } else {
                         match convert_image(&actual, target, allowed) {
                             Ok(conversion) => {
-                                prop_assert_eq!(resultado, Ok(true), "{}", contexto);
-                                instantaneas.truncate(cursor + 1);
-                                instantaneas.push(conversion.image);
+                                prop_assert_eq!(result, Ok(true), "{}", context);
+                                snapshots.truncate(cursor + 1);
+                                snapshots.push(conversion.image);
                                 cursor += 1;
-                                cambia = true;
+                                changes = true;
                             }
                             Err(error) => {
                                 prop_assert_eq!(
-                                    resultado,
+                                    result,
                                     Err(DocumentError::Convert(error)),
                                     "{}",
-                                    contexto
+                                    context
                                 );
                             }
                         }
                     }
                 }
-                Op::Deshacer => {
-                    let resultado = session.undo();
+                Op::Undo => {
+                    let result = session.undo();
                     if cursor > 0 {
-                        prop_assert_eq!(resultado, Ok(()), "{}", contexto);
+                        prop_assert_eq!(result, Ok(()), "{}", context);
                         cursor -= 1;
-                        cambia = true;
+                        changes = true;
                     } else {
-                        prop_assert_eq!(resultado, Err(DocumentError::NothingToUndo), "{}", contexto);
+                        prop_assert_eq!(result, Err(DocumentError::NothingToUndo), "{}", context);
                     }
                 }
-                Op::Rehacer => {
-                    let resultado = session.redo();
-                    if cursor + 1 < instantaneas.len() {
-                        prop_assert_eq!(resultado, Ok(()), "{}", contexto);
+                Op::Redo => {
+                    let result = session.redo();
+                    if cursor + 1 < snapshots.len() {
+                        prop_assert_eq!(result, Ok(()), "{}", context);
                         cursor += 1;
-                        cambia = true;
+                        changes = true;
                     } else {
-                        prop_assert_eq!(resultado, Err(DocumentError::NothingToRedo), "{}", contexto);
+                        prop_assert_eq!(result, Err(DocumentError::NothingToRedo), "{}", context);
                     }
                 }
             }
 
             // El documento es la instantánea del cursor, con su modo y su paleta.
-            let imagen = imagen_actual(&session);
-            prop_assert_eq!(imagen, &instantaneas[cursor], "{}", contexto);
-            prop_assert_eq!(imagen.mode(), instantaneas[cursor].mode(), "{}", contexto);
-            prop_assert_eq!(imagen.palette(), instantaneas[cursor].palette(), "{}", contexto);
-            prop_assert_eq!(session.document.can_undo(), cursor > 0, "{}", contexto);
+            let image_2 = image_current(&session);
+            prop_assert_eq!(image_2, &snapshots[cursor], "{}", context);
+            prop_assert_eq!(image_2.mode(), snapshots[cursor].mode(), "{}", context);
+            prop_assert_eq!(image_2.palette(), snapshots[cursor].palette(), "{}", context);
+            prop_assert_eq!(session.document.can_undo(), cursor > 0, "{}", context);
             prop_assert_eq!(
                 session.document.can_redo(),
-                cursor + 1 < instantaneas.len(),
+                cursor + 1 < snapshots.len(),
                 "{}",
-                contexto
+                context
             );
             // La elección es siempre válida.
             prop_assert!(
-                pixel_for_choice(imagen, session.choice).is_some(),
+                pixel_for_choice(image_2, session.choice).is_some(),
                 "{}: la elección {:?} no vale",
-                contexto,
+                context,
                 session.choice
             );
             // Un `Err` o un `Ok(false)` dejan todo igual.
-            if !cambia && !matches!(operacion, Op::Deshacer | Op::Rehacer) {
-                prop_assert_eq!(foto(&session), antes.clone(), "{}", contexto);
+            if !changes && !matches!(operation, Op::Undo | Op::Redo) {
+                prop_assert_eq!(snapshot(&session), antes.clone(), "{}", context);
             }
-            if !cambia {
-                prop_assert_eq!(session.document.state_id(), antes.state_id, "{}", contexto);
-                prop_assert_eq!(session.document.history_bytes(), antes.history_bytes, "{}", contexto);
-                prop_assert_eq!(session.choice, antes.choice, "{}", contexto);
-                prop_assert_eq!(session.modified(), antes.modified, "{}", contexto);
+            if !changes {
+                prop_assert_eq!(session.document.state_id(), antes.state_id, "{}", context);
+                prop_assert_eq!(session.document.history_bytes(), antes.history_bytes, "{}", context);
+                prop_assert_eq!(session.choice, antes.choice, "{}", context);
+                prop_assert_eq!(session.modified(), antes.modified, "{}", context);
             }
         }
     }

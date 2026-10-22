@@ -95,6 +95,8 @@ PHRASES = {
 
 def phrase_sub(name: str) -> str:
     low = name.lower()
+    if name.isupper() and name != low:  # SCREAMING_SNAKE: se aplica en minúscula y se vuelve a subir
+        return phrase_sub(low).upper()
     if low != name:  # solo nombres en minúscula
         return name
     for k, v in PHRASES.items():

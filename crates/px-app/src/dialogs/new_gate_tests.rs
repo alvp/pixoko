@@ -11,7 +11,7 @@
 //! Suposiciones donde la spec no fija un detalle:
 //! - `new_gate(modified, &mut Confirm, now) -> bool` usa `Request::NewImage` y, con
 //!   `modified == false`, no toca el `Confirm` (como `close_allowed` y `open_gate`).
-//! - La aceptación se prueba con `Session::new_image(imagen, true)`: es lo que hace `App` con el
+//! - La aceptación se prueba con `Session::new_image(image_2, true)`: es lo que hace `App` con el
 //!   descarte que recordó `new_gate`; el diálogo (`Modal`) se abre con `open_new_image`.
 
 use super::*;
@@ -26,10 +26,10 @@ use crate::files::FileError;
 use crate::new_image::open_new_image;
 use crate::session::Session;
 
-fn sesion(modificada: bool) -> Session {
+fn session_2(modified: bool) -> Session {
     let image = Image::new(4, 4, Mode::Rgba).expect("imagen");
     let mut session = Session::sample(Document::new(image));
-    if modificada {
+    if modified {
         let id = ImageId::from_raw(0);
         session
             .document
@@ -47,7 +47,7 @@ fn sesion(modificada: bool) -> Session {
     session
 }
 
-fn imagen_nueva() -> Image {
+fn image_new() -> Image {
     Image::new(8, 8, Mode::Rgba).expect("imagen")
 }
 
@@ -56,7 +56,7 @@ fn imagen_nueva() -> Image {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_sin_cambios_new_gate_da_true_a_la_primera_y_no_arma_nada() {
+fn row_10_without_changes_new_gate_gives_true_the_first_time_and_arms_nothing() {
     let mut confirm = Confirm::new();
     for now in [0.0, 0.1, 100.0] {
         assert!(new_gate(false, &mut confirm, now), "now {now}");
@@ -73,7 +73,7 @@ fn fila_10_sin_cambios_new_gate_da_true_a_la_primera_y_no_arma_nada() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_con_cambios_la_primera_peticion_arma_y_la_segunda_dentro_del_plazo_confirma() {
+fn row_10_with_changes_the_first_request_arms_and_the_second_within_the_deadline_confirms() {
     let mut confirm = Confirm::new();
     assert!(!new_gate(true, &mut confirm, 0.0), "la primera arma");
     assert!(new_gate(true, &mut confirm, 4.9), "la segunda confirma");
@@ -82,7 +82,7 @@ fn fila_10_con_cambios_la_primera_peticion_arma_y_la_segunda_dentro_del_plazo_co
 }
 
 #[test]
-fn fila_10_pasado_el_plazo_vuelve_a_armar_y_la_siguiente_dentro_de_plazo_confirma() {
+fn row_10_after_the_deadline_it_arms_again_and_the_next_within_the_deadline_confirms() {
     let mut confirm = Confirm::new();
     assert!(!new_gate(true, &mut confirm, 0.0));
     assert!(
@@ -93,17 +93,17 @@ fn fila_10_pasado_el_plazo_vuelve_a_armar_y_la_siguiente_dentro_de_plazo_confirm
 }
 
 #[test]
-fn fila_10_la_peticion_armada_es_request_new_image() {
+fn row_10_the_armed_request_is_request_new_image() {
     let mut confirm = Confirm::new();
     assert!(!new_gate(true, &mut confirm, 0.0));
     assert!(confirm.confirm_armed(&Request::NewImage, 1.0));
 }
 
 #[test]
-fn fila_10_una_open_close_u_open_dialog_entre_medias_sustituye_a_la_armada() {
+fn row_10_an_open_close_or_open_dialog_in_between_replaces_the_armed_one() {
     // Cada «otra petición» se arma entre las dos de «Nueva imagen»: la segunda no confirma.
-    type Arma = fn(&mut Confirm, f64);
-    let armas: [(&str, Arma); 3] = [
+    type Arms = fn(&mut Confirm, f64);
+    let arm: [(&str, Arms); 3] = [
         ("Open", |c, now| {
             c.request(Request::Open("a.png".into()), now);
         }),
@@ -114,21 +114,21 @@ fn fila_10_una_open_close_u_open_dialog_entre_medias_sustituye_a_la_armada() {
             assert_eq!(open_gate(true, c, now), None);
         }),
     ];
-    for (nombre, arma) in armas {
+    for (name_2, arms) in arm {
         let mut confirm = Confirm::new();
-        assert!(!new_gate(true, &mut confirm, 0.0), "{nombre}");
-        arma(&mut confirm, 1.0);
+        assert!(!new_gate(true, &mut confirm, 0.0), "{name_2}");
+        arms(&mut confirm, 1.0);
         assert!(
             !new_gate(true, &mut confirm, 2.0),
-            "{nombre}: la otra petición sustituyó a la armada"
+            "{name_2}: la otra petición sustituyó a la armada"
         );
         // Y ahora sí: la armada es otra vez la de «Nueva imagen».
-        assert!(new_gate(true, &mut confirm, 3.0), "{nombre}");
+        assert!(new_gate(true, &mut confirm, 3.0), "{name_2}");
     }
 }
 
 #[test]
-fn fila_10_new_gate_sustituye_a_una_close_armada_y_close_allowed_sigue_su_regla() {
+fn row_10_new_gate_replaces_an_armed_close_and_close_allowed_follows_its_rule() {
     let mut confirm = Confirm::new();
     assert!(!close_allowed(true, &mut confirm, 0.0), "Close armada");
     assert!(
@@ -145,9 +145,10 @@ fn fila_10_new_gate_sustituye_a_una_close_armada_y_close_allowed_sigue_su_regla(
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_quit_con_el_dialogo_abierto_lo_abandona_sin_crear_nada_y_sigue_la_regla_de_cierre() {
-    let session = sesion(true);
-    let imagen_antes = session
+fn row_10_quit_with_the_dialog_open_abandons_it_without_creating_anything_and_follows_the_close_rule()
+ {
+    let session = session_2(true);
+    let image_before = session
         .document
         .image(ImageId::from_raw(0))
         .expect("imagen")
@@ -172,12 +173,12 @@ fn fila_10_quit_con_el_dialogo_abierto_lo_abandona_sin_crear_nada_y_sigue_la_reg
             .document
             .image(ImageId::from_raw(0))
             .expect("imagen"),
-        &imagen_antes
+        &image_before
     );
 }
 
 #[test]
-fn fila_10_sin_cambios_quit_con_el_dialogo_abierto_cierra_a_la_primera() {
+fn row_10_without_changes_quit_with_the_dialog_open_closes_the_first_time() {
     let mut confirm = Confirm::new();
     let mut modal = Modal::default();
     assert!(open_new_image(&mut modal, 16384, Locks::default()));
@@ -190,8 +191,8 @@ fn fila_10_sin_cambios_quit_con_el_dialogo_abierto_cierra_a_la_primera() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_tras_confirmar_aceptar_reemplaza_sin_volver_a_preguntar() {
-    let mut session = sesion(true);
+fn row_10_after_confirming_accept_replaces_without_asking_again() {
+    let mut session = session_2(true);
     let mut confirm = Confirm::new();
     assert!(!new_gate(session.modified(), &mut confirm, 0.0));
     let discard = new_gate(session.modified(), &mut confirm, 1.0);
@@ -201,7 +202,7 @@ fn fila_10_tras_confirmar_aceptar_reemplaza_sin_volver_a_preguntar() {
     );
 
     // Aceptar: el descarte recordado basta; no se consulta el `Confirm`.
-    assert_eq!(session.new_image(imagen_nueva(), discard), Ok(()));
+    assert_eq!(session.new_image(image_new(), discard), Ok(()));
     assert!(!session.modified());
     assert!(!session.document.can_undo());
     assert_eq!(
@@ -212,11 +213,11 @@ fn fila_10_tras_confirmar_aceptar_reemplaza_sin_volver_a_preguntar() {
 }
 
 #[test]
-fn fila_10_sin_el_descarte_recordado_aceptar_con_cambios_no_reemplaza() {
-    let mut session = sesion(true);
+fn row_10_without_the_remembered_discard_accept_with_changes_does_not_replace() {
+    let mut session = session_2(true);
     let before = session.document.state_id();
     assert_eq!(
-        session.new_image(imagen_nueva(), false),
+        session.new_image(image_new(), false),
         Err(FileError::Unsaved)
     );
     assert_eq!(session.document.state_id(), before);
@@ -224,11 +225,12 @@ fn fila_10_sin_el_descarte_recordado_aceptar_con_cambios_no_reemplaza() {
 }
 
 #[test]
-fn fila_10_tras_crear_la_imagen_nueva_no_tiene_cambios_y_el_siguiente_new_gate_abre_a_la_primera() {
-    let mut session = sesion(true);
+fn row_10_after_creating_the_new_image_it_has_no_changes_and_the_next_new_gate_opens_the_first_time()
+ {
+    let mut session = session_2(true);
     let mut confirm = Confirm::new();
     assert!(!new_gate(session.modified(), &mut confirm, 0.0));
     let discard = new_gate(session.modified(), &mut confirm, 1.0);
-    session.new_image(imagen_nueva(), discard).expect("crear");
+    session.new_image(image_new(), discard).expect("crear");
     assert!(new_gate(session.modified(), &mut confirm, 2.0));
 }

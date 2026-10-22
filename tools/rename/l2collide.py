@@ -10,6 +10,11 @@ from regions import ROOT, rs_files, classify
 from rslex import ident_name, lex
 
 ITEM_KW = {"fn", "struct", "enum", "const", "static", "type", "trait", "mod", "union"}
+# nombres del preludio de std (y de macros habituales): un nombre nuevo igual a uno de ellos los taparía
+PRELUDE = {"Box", "Vec", "Option", "Some", "None", "Ok", "Err", "Result", "String", "Default", "Clone", "Copy", "Send", "Sync", "Drop", "Fn",
+           "FnMut", "FnOnce", "Iterator", "IntoIterator", "From", "Into", "ToString", "ToOwned", "Eq", "PartialEq", "Ord", "PartialOrd", "AsRef",
+           "AsMut", "Extend", "DoubleEndedIterator", "ExactSizeIterator", "TryFrom", "TryInto", "FromIterator", "Debug", "Hash", "Self", "Sized",
+           "Unpin", "drop", "Display", "Error", "Path", "File", "Rc", "Arc", "Cell", "RefCell", "Ordering", "Duration", "Instant"}
 
 
 def fn_regions(toks):
@@ -159,6 +164,9 @@ def find(crate: str | None = None):
             new = R.id_target(old, rel)
             if not new:
                 continue
+            if new in PRELUDE and ("prelude", old) not in done:
+                found.append((rel, "item", old, new, "tapa un nombre del preludio o de std"))
+                done.add(("prelude", old))
             for i in ixs:
                 r = region(i)
                 if r is None:

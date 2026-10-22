@@ -1,8 +1,8 @@
 //! Piezas comunes de la puerta del hito 2 (specs/hito-2-puerta.md): directorio de trabajo,
 //! fuentes, modelo independiente, comparador, instantánea de `golden/png/`, `FakePicker` propio y
-//! la ayuda `fuera_de_golden`.
+//! la ayuda `outside_of_golden`.
 //!
-//! **Modelo independiente.** `Modelo` es una rejilla de celdas más una paleta; aplica las mismas
+//! **Modelo independiente.** `Model` es una rejilla de celdas más una paleta; aplica las mismas
 //! ediciones que la app con código ingenuo (relleno por cola, línea solo horizontal, vertical o a
 //! 45°, donde cualquier algoritmo coincide). Lo esperado se calcula siempre con el modelo: nunca con
 //! `Image`, `Session` ni `px-raster` (de `Image` solo se *lee* para comparar y para sembrar el modelo
@@ -47,179 +47,179 @@ use crate::session::{Saved, Session};
 use sha256::sha256_hex;
 
 // ---------------------------------------------------------------------------------------
-// Rutas, directorio de trabajo y `fuera_de_golden`.
+// Rutas, directorio de trabajo y `outside_of_golden`.
 // ---------------------------------------------------------------------------------------
 
 /// Los cuatro PNG reales de `golden/png/`.
-pub const REALES: [&str; 4] = [
+pub const REAL: [&str; 4] = [
     "grafx2-golden1.png",
     "grafx2-golden2.png",
     "libresprite-golden-indexed.png",
     "libresprite-golden-rgba.png",
 ];
 
-pub fn raiz_repo() -> PathBuf {
+pub fn root_repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
 }
 
 pub fn golden_png() -> PathBuf {
-    raiz_repo().join("golden").join("png")
+    root_repo().join("golden").join("png")
 }
 
 /// `<repo>/target/pixoko-gate`: en disco, no en `/tmp` (tmpfs) y en `.gitignore` (`/target`).
-fn base_trabajo() -> PathBuf {
-    raiz_repo().join("target").join("pixoko-gate")
+fn base_work() -> PathBuf {
+    root_repo().join("target").join("pixoko-gate")
 }
 
-static CONTADOR: AtomicU64 = AtomicU64::new(0);
+static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Crear y borrar directorios de trabajo no puede cruzarse con el borrado de la carpeta madre.
-static CERROJO: Mutex<()> = Mutex::new(());
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Directorio de trabajo propio de una prueba (`<repo>/target/pixoko-gate/<pid>-<n>`). El guardián
 /// lo borra al soltarse, también si la prueba falla, y comprueba entonces que `golden/png/` sigue
 /// intacto (salvo que la prueba ya esté en pánico).
-pub struct Trabajo {
-    ruta: PathBuf,
+pub struct Work {
+    path_2: PathBuf,
 }
 
-impl Trabajo {
-    pub fn nuevo() -> Trabajo {
+impl Work {
+    pub fn new_2() -> Work {
         // La instantánea inicial de golden/png se toma antes de que nada pueda escribir.
-        inicial();
-        let ruta = {
-            let _cerrojo = CERROJO.lock().unwrap_or_else(|e| e.into_inner());
-            let n = CONTADOR.fetch_add(1, Ordering::SeqCst);
-            let ruta = base_trabajo().join(format!("{}-{n}", std::process::id()));
-            let _ = fs::remove_dir_all(&ruta);
-            fs::create_dir_all(&ruta).expect("crear el directorio de trabajo");
-            fs::canonicalize(&ruta).expect("canonicalizar el directorio de trabajo")
+        initial();
+        let path_2 = {
+            let _lock = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+            let path_2 = base_work().join(format!("{}-{n}", std::process::id()));
+            let _ = fs::remove_dir_all(&path_2);
+            fs::create_dir_all(&path_2).expect("crear el directorio de trabajo");
+            fs::canonicalize(&path_2).expect("canonicalizar el directorio de trabajo")
         };
-        fuera_de_golden(&ruta);
-        Trabajo { ruta }
+        outside_of_golden(&path_2);
+        Work { path_2 }
     }
 
-    pub fn ruta(&self) -> &Path {
-        &self.ruta
+    pub fn path_2(&self) -> &Path {
+        &self.path_2
     }
 
     /// Deja la fuente en el directorio de trabajo: los reales con `fs::copy`, el resto escritos.
-    pub fn poner(&self, fuente: &Fuente) -> PathBuf {
-        let destino = self.ruta.join(&fuente.nombre);
-        fuera_de_golden(&destino);
-        if fuente.real {
-            fs::copy(golden_png().join(&fuente.nombre), &destino)
-                .unwrap_or_else(|e| panic!("copiar {} al trabajo: {e}", fuente.nombre));
+    pub fn put(&self, source: &Source) -> PathBuf {
+        let target_2 = self.path_2.join(&source.name_2);
+        outside_of_golden(&target_2);
+        if source.real {
+            fs::copy(golden_png().join(&source.name_2), &target_2)
+                .unwrap_or_else(|e| panic!("copiar {} al trabajo: {e}", source.name_2));
         } else {
-            fs::write(&destino, &fuente.bytes)
-                .unwrap_or_else(|e| panic!("escribir {}: {e}", destino.display()));
+            fs::write(&target_2, &source.bytes)
+                .unwrap_or_else(|e| panic!("escribir {}: {e}", target_2.display()));
         }
-        destino
+        target_2
     }
 
     /// Escribe un fichero en el directorio de trabajo.
-    pub fn escribir(&self, nombre: &str, bytes: &[u8]) -> PathBuf {
-        let destino = self.ruta.join(nombre);
-        fuera_de_golden(&destino);
-        fs::write(&destino, bytes)
-            .unwrap_or_else(|e| panic!("escribir {}: {e}", destino.display()));
-        destino
+    pub fn write(&self, name_2: &str, bytes: &[u8]) -> PathBuf {
+        let target_2 = self.path_2.join(name_2);
+        outside_of_golden(&target_2);
+        fs::write(&target_2, bytes)
+            .unwrap_or_else(|e| panic!("escribir {}: {e}", target_2.display()));
+        target_2
     }
 
     /// Nombres de lo que hay en el directorio de trabajo, ordenados.
-    pub fn nombres(&self) -> Vec<String> {
-        nombres_en(&self.ruta)
+    pub fn names(&self) -> Vec<String> {
+        names_in(&self.path_2)
     }
 }
 
-impl Drop for Trabajo {
+impl Drop for Work {
     fn drop(&mut self) {
         {
-            let _cerrojo = CERROJO.lock().unwrap_or_else(|e| e.into_inner());
-            let _ = fs::remove_dir_all(&self.ruta);
+            let _lock = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            let _ = fs::remove_dir_all(&self.path_2);
             // Solo se borra si ya no queda ningún otro directorio de trabajo.
-            let _ = fs::remove_dir(base_trabajo());
+            let _ = fs::remove_dir(base_work());
         }
         if !std::thread::panicking() {
-            golden_intacto();
+            golden_intact();
         }
     }
 }
 
 /// Nombres de lo que hay en `dir`, ordenados.
-pub fn nombres_en(dir: &Path) -> Vec<String> {
-    let mut nombres: Vec<String> = fs::read_dir(dir)
+pub fn names_in(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("leer {}: {e}", dir.display()))
-        .map(|entrada| {
-            entrada
+        .map(|input| {
+            input
                 .expect("entrada de directorio")
                 .file_name()
                 .to_string_lossy()
                 .into_owned()
         })
         .collect();
-    nombres.sort();
-    nombres
+    names.sort();
+    names
 }
 
-/// Que nada con `.pixoko-tmp` en el nombre quede en `nombres`.
-pub fn sin_temporales(nombres: &[String]) {
+/// Que nada con `.pixoko-tmp` en el nombre quede en `names`.
+pub fn without_temporary(names: &[String]) {
     assert!(
-        nombres.iter().all(|n| !n.contains(".pixoko-tmp")),
-        "quedó un temporal de write_atomic: {nombres:?}"
+        names.iter().all(|n| !n.contains(".pixoko-tmp")),
+        "quedó un temporal de write_atomic: {names:?}"
     );
 }
 
 /// La ruta con sus enlaces y `..` resueltos: se canonicaliza el ancestro más largo que exista y se
 /// le añade el resto (la ruta puede no existir todavía).
-fn resolver(ruta: &Path) -> PathBuf {
-    let absoluta = std::path::absolute(ruta).unwrap_or_else(|_| ruta.to_path_buf());
-    let mut resto: Vec<OsString> = Vec::new();
-    let mut actual = absoluta.clone();
+fn resolver(path_2: &Path) -> PathBuf {
+    let absolute = std::path::absolute(path_2).unwrap_or_else(|_| path_2.to_path_buf());
+    let mut rest: Vec<OsString> = Vec::new();
+    let mut actual = absolute.clone();
     loop {
-        if let Ok(canonica) = fs::canonicalize(&actual) {
-            let mut resuelta = canonica;
-            for componente in resto.iter().rev() {
-                resuelta.push(componente);
+        if let Ok(canonical) = fs::canonicalize(&actual) {
+            let mut resolved = canonical;
+            for component in rest.iter().rev() {
+                resolved.push(component);
             }
-            return resuelta;
+            return resolved;
         }
         match (actual.parent(), actual.file_name()) {
-            (Some(padre), Some(nombre)) => {
-                resto.push(nombre.to_os_string());
+            (Some(padre), Some(name_2)) => {
+                rest.push(name_2.to_os_string());
                 actual = padre.to_path_buf();
             }
-            _ => return absoluta,
+            _ => return absolute,
         }
     }
 }
 
-/// Pánico si `ruta` (de escritura) cuelga de `golden/png/`. Se le pasa **toda** ruta de escritura.
-pub fn fuera_de_golden(ruta: &Path) {
-    let prohibida = resolver(&golden_png());
-    let destino = resolver(ruta);
+/// Pánico si `path_2` (de escritura) cuelga de `golden/png/`. Se le pasa **toda** ruta de escritura.
+pub fn outside_of_golden(path_2: &Path) {
+    let forbidden = resolver(&golden_png());
+    let target_2 = resolver(path_2);
     assert!(
-        !destino.starts_with(&prohibida),
+        !target_2.starts_with(&forbidden),
         "escritura prohibida en golden/png: {} (resuelta a {})",
-        ruta.display(),
-        destino.display()
+        path_2.display(),
+        target_2.display()
     );
 }
 
-/// `Session::save` con la comprobación de `fuera_de_golden` sobre el directorio y sobre la ruta del
+/// `Session::save` con la comprobación de `outside_of_golden` sobre el directorio y sobre la ruta del
 /// documento (el destino es esa ruta o su copia, en el mismo directorio).
-pub fn guardar(s: &mut Session, dir: &Path) -> Result<Saved, FileError> {
-    fuera_de_golden(dir);
-    if let Some(ruta) = s.path() {
-        fuera_de_golden(ruta);
+pub fn save(s: &mut Session, dir: &Path) -> Result<Saved, FileError> {
+    outside_of_golden(dir);
+    if let Some(path_2) = s.path() {
+        outside_of_golden(path_2);
     }
     s.save(dir)
 }
 
 /// `Session::save_as` con la misma comprobación.
-pub fn guardar_como(s: &mut Session, dir: &Path) -> Result<Saved, FileError> {
-    fuera_de_golden(dir);
-    if let Some(ruta) = s.path() {
-        fuera_de_golden(ruta);
+pub fn save_as(s: &mut Session, dir: &Path) -> Result<Saved, FileError> {
+    outside_of_golden(dir);
+    if let Some(path_2) = s.path() {
+        outside_of_golden(path_2);
     }
     s.save_as(dir)
 }
@@ -227,14 +227,14 @@ pub fn guardar_como(s: &mut Session, dir: &Path) -> Result<Saved, FileError> {
 /// `Session::save_to` con la comprobación sobre la ruta elegida. La ruta del documento puede ser un
 /// real abierto directamente (solo lectura): `save_to` solo escribe junto a ella si la elegida es
 /// ella misma, y eso ya lo recoge la comprobación de la elegida.
-pub fn guardar_en(s: &mut Session, elegido: &Path) -> Result<Saved, FileError> {
-    fuera_de_golden(elegido);
-    s.save_to(elegido)
+pub fn save_in(s: &mut Session, chosen: &Path) -> Result<Saved, FileError> {
+    outside_of_golden(chosen);
+    s.save_to(chosen)
 }
 
-/// Primer nombre libre `{nombre}-copia.png`, `{nombre}-copia-2.png`… junto a `original`, calculado
+/// Primer nombre libre `{name_2}-copy.png`, `{name_2}-copy-2.png`… junto a `original`, calculado
 /// aquí (independiente de `copy_path`).
-pub fn libre_copia(original: &Path) -> PathBuf {
+pub fn free_copy(original: &Path) -> PathBuf {
     let stem = original
         .file_stem()
         .expect("el original tiene nombre")
@@ -243,30 +243,30 @@ pub fn libre_copia(original: &Path) -> PathBuf {
     let dir = original.parent().expect("el original tiene directorio");
     let mut n = 1u32;
     loop {
-        let nombre = if n == 1 {
+        let name_2 = if n == 1 {
             format!("{stem}-copia.png")
         } else {
             format!("{stem}-copia-{n}.png")
         };
-        let candidato = dir.join(nombre);
-        if fs::symlink_metadata(&candidato).is_err() {
-            return candidato;
+        let candidate = dir.join(name_2);
+        if fs::symlink_metadata(&candidate).is_err() {
+            return candidate;
         }
         n += 1;
     }
 }
 
 /// Añade `.png` salvo que la extensión ya sea `png` (sin distinguir mayúsculas), como un diálogo.
-pub fn con_png(ruta: &Path) -> PathBuf {
-    let es_png = ruta
+pub fn with_png(path_2: &Path) -> PathBuf {
+    let es_png = path_2
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case("png"));
     if es_png {
-        return ruta.to_path_buf();
+        return path_2.to_path_buf();
     }
-    let mut nombre = ruta.as_os_str().to_os_string();
-    nombre.push(".png");
-    PathBuf::from(nombre)
+    let mut name_2 = path_2.as_os_str().to_os_string();
+    name_2.push(".png");
+    PathBuf::from(name_2)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -274,71 +274,71 @@ pub fn con_png(ruta: &Path) -> PathBuf {
 // ---------------------------------------------------------------------------------------
 
 /// Nombre y bytes de cada fichero de una carpeta (un subdirectorio, con barra final y sin bytes).
-pub type Instantanea = BTreeMap<String, Vec<u8>>;
+pub type TestSnapshot = BTreeMap<String, Vec<u8>>;
 
-pub fn instantanea_de(dir: &Path) -> Instantanea {
-    let mut mapa = Instantanea::new();
-    for entrada in fs::read_dir(dir).unwrap_or_else(|e| panic!("leer {}: {e}", dir.display())) {
-        let entrada = entrada.expect("entrada de directorio");
-        let nombre = entrada.file_name().to_string_lossy().into_owned();
-        if entrada.path().is_dir() {
-            mapa.insert(format!("{nombre}/"), Vec::new());
+pub fn snapshot_of(dir: &Path) -> TestSnapshot {
+    let mut map = TestSnapshot::new();
+    for input in fs::read_dir(dir).unwrap_or_else(|e| panic!("leer {}: {e}", dir.display())) {
+        let input = input.expect("entrada de directorio");
+        let name_2 = input.file_name().to_string_lossy().into_owned();
+        if input.path().is_dir() {
+            map.insert(format!("{name_2}/"), Vec::new());
         } else {
-            let bytes = fs::read(entrada.path())
-                .unwrap_or_else(|e| panic!("leer {}: {e}", entrada.path().display()));
-            mapa.insert(nombre, bytes);
+            let bytes = fs::read(input.path())
+                .unwrap_or_else(|e| panic!("leer {}: {e}", input.path().display()));
+            map.insert(name_2, bytes);
         }
     }
-    mapa
+    map
 }
 
-/// `Err` con todos los problemas si `despues` no es `antes`: un fichero que falta, que aparece o
+/// `Err` con todos los problemas si `after_2` no es `antes`: un fichero que falta, que aparece o
 /// con algún byte distinto.
-pub fn comparar_instantaneas(antes: &Instantanea, despues: &Instantanea) -> Result<(), String> {
-    let mut problemas = Vec::new();
-    for (nombre, bytes) in antes {
-        match despues.get(nombre) {
-            None => problemas.push(format!("falta {nombre}")),
-            Some(otros) if otros != bytes => {
-                let primera = bytes
+pub fn compare_snapshots(antes: &TestSnapshot, after_2: &TestSnapshot) -> Result<(), String> {
+    let mut problems = Vec::new();
+    for (name_2, bytes) in antes {
+        match after_2.get(name_2) {
+            None => problems.push(format!("falta {name_2}")),
+            Some(other_2_2) if other_2_2 != bytes => {
+                let first = bytes
                     .iter()
-                    .zip(otros)
+                    .zip(other_2_2)
                     .position(|(a, b)| a != b)
-                    .unwrap_or(bytes.len().min(otros.len()));
-                problemas.push(format!(
-                    "{nombre} cambió ({} → {} bytes, primera diferencia en el byte {primera})",
+                    .unwrap_or(bytes.len().min(other_2_2.len()));
+                problems.push(format!(
+                    "{name_2} cambió ({} → {} bytes, primera diferencia en el byte {first})",
                     bytes.len(),
-                    otros.len()
+                    other_2_2.len()
                 ));
             }
             Some(_) => {}
         }
     }
-    for nombre in despues.keys() {
-        if !antes.contains_key(nombre) {
-            problemas.push(format!("aparece {nombre}"));
+    for name_2 in after_2.keys() {
+        if !antes.contains_key(name_2) {
+            problems.push(format!("aparece {name_2}"));
         }
     }
-    if problemas.is_empty() {
+    if problems.is_empty() {
         Ok(())
     } else {
-        Err(problemas.join("; "))
+        Err(problems.join("; "))
     }
 }
 
-static INICIAL: OnceLock<Instantanea> = OnceLock::new();
+static INITIAL: OnceLock<TestSnapshot> = OnceLock::new();
 
 /// La instantánea de `golden/png/` al empezar la puerta: la toma la primera prueba que la pide (todas
-/// las que usan golden la piden antes de escribir nada, al crear su `Trabajo`).
-pub fn inicial() -> &'static Instantanea {
-    INICIAL.get_or_init(|| instantanea_de(&golden_png()))
+/// las que usan golden la piden antes de escribir nada, al crear su `Work`).
+pub fn initial() -> &'static TestSnapshot {
+    INITIAL.get_or_init(|| snapshot_of(&golden_png()))
 }
 
 /// Pánico si `golden/png/` ya no es la instantánea inicial.
-pub fn golden_intacto() {
-    let ahora = instantanea_de(&golden_png());
-    if let Err(problemas) = comparar_instantaneas(inicial(), &ahora) {
-        panic!("golden/png/ ya no es el de antes de la puerta: {problemas}");
+pub fn golden_intact() {
+    let now = snapshot_of(&golden_png());
+    if let Err(problems) = compare_snapshots(initial(), &now) {
+        panic!("golden/png/ ya no es el de antes de la puerta: {problems}");
     }
 }
 
@@ -350,11 +350,11 @@ pub fn golden_intacto() {
 pub struct Lcg(u64);
 
 impl Lcg {
-    pub fn new(semilla: u64) -> Lcg {
-        Lcg(semilla ^ 0x9E37_79B9_7F4A_7C15)
+    pub fn new(seed: u64) -> Lcg {
+        Lcg(seed ^ 0x9E37_79B9_7F4A_7C15)
     }
 
-    pub fn siguiente(&mut self) -> u32 {
+    pub fn next(&mut self) -> u32 {
         self.0 = self
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
@@ -363,15 +363,15 @@ impl Lcg {
     }
 
     /// Un valor en `0..n` (con `n > 0`).
-    pub fn hasta(&mut self, n: u32) -> u32 {
-        self.siguiente() % n
+    pub fn until(&mut self, n: u32) -> u32 {
+        self.next() % n
     }
 }
 
 /// CRC-32 de la especificación PNG.
-fn crc32(datos: &[u8]) -> u32 {
+fn crc32(data: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
-    for &b in datos {
+    for &b in data {
         crc ^= u32::from(b);
         for _ in 0..8 {
             crc = if crc & 1 != 0 {
@@ -385,9 +385,9 @@ fn crc32(datos: &[u8]) -> u32 {
 }
 
 /// Adler-32 de la especificación zlib.
-fn adler32(datos: &[u8]) -> u32 {
+fn adler32(data: &[u8]) -> u32 {
     let (mut a, mut b) = (1u32, 0u32);
-    for &x in datos {
+    for &x in data {
         a = (a + u32::from(x)) % 65521;
         b = (b + a) % 65521;
     }
@@ -395,40 +395,40 @@ fn adler32(datos: &[u8]) -> u32 {
 }
 
 /// Flujo zlib con un único bloque deflate «stored» (datos pequeños, menos de 65 536 bytes).
-pub fn zlib_stored(datos: &[u8]) -> Vec<u8> {
+pub fn zlib_stored(data: &[u8]) -> Vec<u8> {
     let mut v = vec![0x78, 0x01, 1];
-    let n = u16::try_from(datos.len()).expect("datos pequeños");
+    let n = u16::try_from(data.len()).expect("datos pequeños");
     v.extend(n.to_le_bytes());
     v.extend((!n).to_le_bytes());
-    v.extend(datos);
-    v.extend(adler32(datos).to_be_bytes());
+    v.extend(data);
+    v.extend(adler32(data).to_be_bytes());
     v
 }
 
 /// Chunk completo: longitud, tipo, datos y CRC.
-pub fn trozo(tipo: &[u8; 4], datos: &[u8]) -> Vec<u8> {
-    let mut v = Vec::with_capacity(12 + datos.len());
-    v.extend((datos.len() as u32).to_be_bytes());
-    v.extend(tipo);
-    v.extend(datos);
-    let mut cuerpo = tipo.to_vec();
-    cuerpo.extend(datos);
-    v.extend(crc32(&cuerpo).to_be_bytes());
+pub fn piece(kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut v = Vec::with_capacity(12 + data.len());
+    v.extend((data.len() as u32).to_be_bytes());
+    v.extend(kind);
+    v.extend(data);
+    let mut body = kind.to_vec();
+    body.extend(data);
+    v.extend(crc32(&body).to_be_bytes());
     v
 }
 
 /// Empaqueta las muestras de una fila: sub-8 bits de más a menos significativo con relleno a byte,
 /// 8 bits tal cual y 16 bits en big-endian.
-fn empaqueta(fila: &[u16], prof: u8) -> Vec<u8> {
+fn packs(row: &[u16], prof: u8) -> Vec<u8> {
     match prof {
-        16 => fila.iter().flat_map(|v| v.to_be_bytes()).collect(),
-        8 => fila.iter().map(|&v| v as u8).collect(),
+        16 => row.iter().flat_map(|v| v.to_be_bytes()).collect(),
+        8 => row.iter().map(|&v| v as u8).collect(),
         _ => {
             let p = usize::from(prof);
-            fila.chunks(8 / p)
-                .map(|grupo| {
+            row.chunks(8 / p)
+                .map(|group| {
                     let mut byte = 0u8;
-                    for (i, &v) in grupo.iter().enumerate() {
+                    for (i, &v) in group.iter().enumerate() {
                         byte |= (v as u8) << (8 - p * (i + 1));
                     }
                     byte
@@ -438,45 +438,45 @@ fn empaqueta(fila: &[u16], prof: u8) -> Vec<u8> {
     }
 }
 
-/// PNG entero sin entrelazar (chunks, CRC y deflate «stored» a mano): `muestras` va fila a fila y
+/// PNG entero sin entrelazar (chunks, CRC y deflate «stored» a mano): `swatches` va fila a fila y
 /// píxel a píxel, con los canales del tipo de color; `antes` son chunks ya serializados entre IHDR e
 /// IDAT. Es la forma de `session/aux_tests.rs`, sin importarla.
-pub fn png_crudo(
-    ancho: u32,
-    alto: u32,
+pub fn png_raw(
+    width: u32,
+    height: u32,
     prof: u8,
     color: u8,
-    muestras: &[u16],
+    swatches: &[u16],
     antes: &[Vec<u8>],
 ) -> Vec<u8> {
-    let canales = match color {
+    let channels = match color {
         2 => 3,
         4 => 2,
         6 => 4,
         _ => 1,
     };
-    let por_fila = ancho as usize * canales;
-    let mut crudo = Vec::new();
-    for fila in muestras.chunks(por_fila) {
-        crudo.push(0);
-        crudo.extend(empaqueta(fila, prof));
+    let per_row = width as usize * channels;
+    let mut raw = Vec::new();
+    for row in swatches.chunks(per_row) {
+        raw.push(0);
+        raw.extend(packs(row, prof));
     }
     let mut ihdr = Vec::new();
-    ihdr.extend(ancho.to_be_bytes());
-    ihdr.extend(alto.to_be_bytes());
+    ihdr.extend(width.to_be_bytes());
+    ihdr.extend(height.to_be_bytes());
     ihdr.extend([prof, color, 0, 0, 0]);
     let mut v = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
-    v.extend(trozo(b"IHDR", &ihdr));
+    v.extend(piece(b"IHDR", &ihdr));
     for c in antes {
         v.extend(c);
     }
-    v.extend(trozo(b"IDAT", &zlib_stored(&crudo)));
-    v.extend(trozo(b"IEND", &[]));
+    v.extend(piece(b"IDAT", &zlib_stored(&raw)));
+    v.extend(piece(b"IEND", &[]));
     v
 }
 
 /// Inserta chunks justo tras el IHDR (que acaba en el byte 33) de un PNG de `write_png`.
-pub fn con_chunks(bytes: &[u8], antes: &[Vec<u8>]) -> Vec<u8> {
+pub fn with_chunks(bytes: &[u8], antes: &[Vec<u8>]) -> Vec<u8> {
     let mut v = bytes[..33].to_vec();
     for c in antes {
         v.extend(c);
@@ -487,46 +487,46 @@ pub fn con_chunks(bytes: &[u8], antes: &[Vec<u8>]) -> Vec<u8> {
 
 /// Chunk `iCCP` con un perfil de mentira (`read_png` no lo interpreta: solo lo anota).
 pub fn iccp() -> Vec<u8> {
-    let mut datos = b"perfil\0\0".to_vec();
-    datos.extend(zlib_stored(b"datos del perfil"));
-    trozo(b"iCCP", &datos)
+    let mut data = b"perfil\0\0".to_vec();
+    data.extend(zlib_stored(b"datos del perfil"));
+    piece(b"iCCP", &data)
 }
 
-/// `(ancho, alto, profundidad, tipo de color)` del IHDR.
+/// `(width, height, profundidad, kind de color)` del IHDR.
 pub fn ihdr(bytes: &[u8]) -> (u32, u32, u8, u8) {
-    let ancho = u32::from_be_bytes(bytes[16..20].try_into().expect("ancho"));
-    let alto = u32::from_be_bytes(bytes[20..24].try_into().expect("alto"));
-    (ancho, alto, bytes[24], bytes[25])
+    let width = u32::from_be_bytes(bytes[16..20].try_into().expect("ancho"));
+    let height = u32::from_be_bytes(bytes[20..24].try_into().expect("alto"));
+    (width, height, bytes[24], bytes[25])
 }
 
 /// Tipos de los chunks de un fichero bien formado, en orden.
-pub fn tipos_de_chunks(bytes: &[u8]) -> Vec<[u8; 4]> {
-    let mut tipos = Vec::new();
+pub fn types_of_chunks(bytes: &[u8]) -> Vec<[u8; 4]> {
+    let mut types = Vec::new();
     let mut pos = 8usize;
     while pos + 8 <= bytes.len() {
         let largo = u32::from_be_bytes(bytes[pos..pos + 4].try_into().expect("longitud")) as usize;
-        let tipo: [u8; 4] = bytes[pos + 4..pos + 8].try_into().expect("tipo");
-        tipos.push(tipo);
+        let kind: [u8; 4] = bytes[pos + 4..pos + 8].try_into().expect("tipo");
+        types.push(kind);
         pos += 12 + largo;
     }
-    tipos
+    types
 }
 
 /// El modo que un lector debe dar al fichero (de su IHDR y de si lleva `tRNS`), sin leer los píxeles.
-pub fn modo_del_fichero(bytes: &[u8]) -> Mode {
+pub fn mode_of_the_file(bytes: &[u8]) -> Mode {
     let (_, _, _, color) = ihdr(bytes);
     match color {
         3 => Mode::Indexed,
         2 | 6 => Mode::Rgba,
         4 => Mode::GrayAlpha,
         0 => {
-            if tipos_de_chunks(bytes).contains(b"tRNS") {
+            if types_of_chunks(bytes).contains(b"tRNS") {
                 Mode::GrayAlpha
             } else {
                 Mode::Gray
             }
         }
-        otro => panic!("tipo de color PNG inesperado: {otro}"),
+        other_2 => panic!("tipo de color PNG inesperado: {other_2}"),
     }
 }
 
@@ -536,73 +536,73 @@ pub fn modo_del_fichero(bytes: &[u8]) -> Mode {
 
 /// Lo que elige el color de un gesto: una ranura (1 a 9) o una entrada de la paleta.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Eleccion {
-    Ranura(u8),
-    Entrada(u8),
+pub enum Choice {
+    TestSlot(u8),
+    TestInput(u8),
 }
 
-fn a_color_choice(e: Eleccion) -> ColorChoice {
+fn a_color_choice(e: Choice) -> ColorChoice {
     match e {
-        Eleccion::Ranura(n) => ColorChoice::Slot(n),
-        Eleccion::Entrada(i) => ColorChoice::Entry(i),
+        Choice::TestSlot(n) => ColorChoice::Slot(n),
+        Choice::TestInput(i) => ColorChoice::Entry(i),
     }
 }
 
 /// Un paso del guion: un gesto de una herramienta, una operación de la paleta o una conversión.
 #[derive(Clone, Debug)]
-pub enum Paso {
+pub enum TestStep {
     /// Trayecto del puntero (cada tramo, horizontal, vertical o a 45°) y color.
-    Lapiz(Vec<(i32, i32)>, Eleccion),
-    Linea((i32, i32), (i32, i32), Eleccion),
-    Relleno((i32, i32), Eleccion),
-    Borrador(Vec<(i32, i32)>),
+    Pencil(Vec<(i32, i32)>, Choice),
+    Line((i32, i32), (i32, i32), Choice),
+    Fill((i32, i32), Choice),
+    Eraser(Vec<(i32, i32)>),
     /// Edita el color de una entrada de la paleta.
-    ColorEntrada(u8, [u8; 4]),
-    Rotar {
-        inicio: u8,
+    ColorInput(u8, [u8; 4]),
+    Rotate {
+        start_2: u8,
         largo: u16,
-        pasos: i32,
+        steps_2: i32,
     },
     Mover {
         de: u8,
         a: u8,
     },
     /// Añade una copia del color resuelto de la entrada activa.
-    Anadir {
-        activa: u8,
+    Add {
+        active_2: u8,
     },
-    Transparente(Option<u8>),
+    Transparent(Option<u8>),
     /// La conversión exacta del modo actual: indexado a RGBA, gris a gris con alfa, gris con alfa a
     /// RGBA y RGBA a indexado.
-    Convertir,
+    Convert,
 }
 
 /// Lo que el modelo dice de un paso.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Efecto {
+pub struct Effect {
     /// El documento debe cambiar (y entonces hay un paso de historia nuevo).
-    pub cambio: bool,
+    pub change: bool,
     /// El borrador debe rechazar el gesto (aviso `Refused`).
-    pub rechazado: bool,
+    pub rejected: bool,
     /// La conversión debe fallar con `TooManyColors`, sin cambiar nada.
     pub error: bool,
 }
 
 /// Rejilla de píxeles y paleta. Cada celda son 4 bytes con el significado del modo: RGBA `[r, g, b,
-/// a]`, gris con alfa `[g, a, 0, 0]`, gris `[g, 0, 0, 0]` e indexado `[índice, 0, 0, 0]`.
+/// a]`, gray with alpha_2 `[g, a, 0, 0]`, gray `[g, 0, 0, 0]` e indexed_2 `[índice, 0, 0, 0]`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Modelo {
-    pub modo: Mode,
-    pub ancho: usize,
-    pub alto: usize,
-    pub celdas: Vec<[u8; 4]>,
+pub struct Model {
+    pub mode_2: Mode,
+    pub width: usize,
+    pub height: usize,
+    pub cels: Vec<[u8; 4]>,
     /// Colores guardados de la paleta (solo indexado).
-    pub paleta: Vec<[u8; 4]>,
-    pub transparente: Option<u8>,
+    pub palette: Vec<[u8; 4]>,
+    pub transparent: Option<u8>,
 }
 
-fn bytes_por_pixel(modo: Mode) -> usize {
-    match modo {
+fn bytes_per_pixel(mode_2: Mode) -> usize {
+    match mode_2 {
         Mode::Rgba => 4,
         Mode::GrayAlpha => 2,
         Mode::Gray | Mode::Indexed => 1,
@@ -610,12 +610,12 @@ fn bytes_por_pixel(modo: Mode) -> usize {
 }
 
 /// El transparente canónico de una conversión: todo alfa 0 pasa a `(0, 0, 0, 0)`.
-fn canonico(c: [u8; 4]) -> [u8; 4] {
+fn canonical_2(c: [u8; 4]) -> [u8; 4] {
     if c[3] == 0 { [0, 0, 0, 0] } else { c }
 }
 
 /// Segmento de `a` a `b` incluidos ambos extremos; solo horizontal, vertical o a 45°.
-fn segmento(a: (i32, i32), b: (i32, i32)) -> Vec<(i32, i32)> {
+fn segment(a: (i32, i32), b: (i32, i32)) -> Vec<(i32, i32)> {
     let (dx, dy) = (b.0 - a.0, b.1 - a.1);
     assert!(
         dx == 0 || dy == 0 || dx.abs() == dy.abs(),
@@ -628,44 +628,44 @@ fn segmento(a: (i32, i32), b: (i32, i32)) -> Vec<(i32, i32)> {
 }
 
 /// Píxeles de un trazo del lápiz: el primero y los segmentos entre posiciones sucesivas.
-fn trazo(ruta: &[(i32, i32)]) -> Vec<(i32, i32)> {
-    let mut puntos = Vec::new();
-    let Some(&primero) = ruta.first() else {
-        return puntos;
+fn stroke(path_2: &[(i32, i32)]) -> Vec<(i32, i32)> {
+    let mut points = Vec::new();
+    let Some(&first_2) = path_2.first() else {
+        return points;
     };
-    puntos.push(primero);
-    let mut ultimo = primero;
-    for &siguiente in &ruta[1..] {
-        if siguiente == ultimo {
+    points.push(first_2);
+    let mut ultimo = first_2;
+    for &next in &path_2[1..] {
+        if next == ultimo {
             continue;
         }
-        puntos.extend(segmento(ultimo, siguiente));
-        ultimo = siguiente;
+        points.extend(segment(ultimo, next));
+        ultimo = next;
     }
-    puntos
+    points
 }
 
-impl Modelo {
-    fn indice(&self, x: i32, y: i32) -> Option<usize> {
+impl Model {
+    fn index_2(&self, x: i32, y: i32) -> Option<usize> {
         let (Ok(x), Ok(y)) = (usize::try_from(x), usize::try_from(y)) else {
             return None;
         };
-        (x < self.ancho && y < self.alto).then_some(y * self.ancho + x)
+        (x < self.width && y < self.height).then_some(y * self.width + x)
     }
 
     /// Los bytes en el formato de `Image::bytes`.
     pub fn bytes(&self) -> Vec<u8> {
-        let n = bytes_por_pixel(self.modo);
-        self.celdas
+        let n = bytes_per_pixel(self.mode_2);
+        self.cels
             .iter()
             .flat_map(|c| c[..n].iter().copied())
             .collect()
     }
 
     /// Color de una entrada de la paleta con el índice transparente resuelto (alfa 0).
-    pub fn resuelto(&self, i: u8) -> [u8; 4] {
-        let mut color = self.paleta[usize::from(i)];
-        if self.transparente == Some(i) {
+    pub fn resolved_2(&self, i: u8) -> [u8; 4] {
+        let mut color = self.palette[usize::from(i)];
+        if self.transparent == Some(i) {
             color[3] = 0;
         }
         color
@@ -673,13 +673,13 @@ impl Modelo {
 
     /// RGBA de 8 bits expandido, como el `.sha256` del corpus.
     pub fn rgba(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(self.celdas.len() * 4);
-        for c in &self.celdas {
-            match self.modo {
+        let mut v = Vec::with_capacity(self.cels.len() * 4);
+        for c in &self.cels {
+            match self.mode_2 {
                 Mode::Rgba => v.extend_from_slice(c),
                 Mode::GrayAlpha => v.extend([c[0], c[0], c[0], c[1]]),
                 Mode::Gray => v.extend([c[0], c[0], c[0], 255]),
-                Mode::Indexed => v.extend(self.resuelto(c[0])),
+                Mode::Indexed => v.extend(self.resolved_2(c[0])),
             }
         }
         v
@@ -687,72 +687,72 @@ impl Modelo {
 
     /// Lo que devuelve la relectura de un PNG guardado: un indexado con índice transparente vuelve
     /// con la entrada resuelta (alfa 0) y sin índice (comportamiento 11 de la spec de PNG).
-    pub fn normalizada(&self) -> Modelo {
+    pub fn normalized(&self) -> Model {
         let mut m = self.clone();
-        if let Some(t) = m.transparente.take() {
-            m.paleta[usize::from(t)][3] = 0;
+        if let Some(t) = m.transparent.take() {
+            m.palette[usize::from(t)][3] = 0;
         }
         m
     }
 
     /// La `Image` equivalente (solo como entrada de las pruebas, nunca como esperado).
-    pub fn a_imagen(&self) -> Image {
-        let (ancho, alto) = (self.ancho as u32, self.alto as u32);
-        let datos = self.bytes();
-        if self.modo == Mode::Indexed {
-            let colores = self
-                .paleta
+    pub fn a_image(&self) -> Image {
+        let (width, height) = (self.width as u32, self.height as u32);
+        let data = self.bytes();
+        if self.mode_2 == Mode::Indexed {
+            let colors = self
+                .palette
                 .iter()
                 .map(|c| Rgba::new(c[0], c[1], c[2], c[3]));
-            let mut paleta = Palette::from_colors(colores).expect("paleta del modelo");
-            paleta
-                .set_transparent_index(self.transparente)
+            let mut palette = Palette::from_colors(colors).expect("paleta del modelo");
+            palette
+                .set_transparent_index(self.transparent)
                 .expect("índice transparente del modelo");
-            Image::from_bytes_indexed(ancho, alto, paleta, datos).expect("imagen indexada")
+            Image::from_bytes_indexed(width, height, palette, data).expect("imagen indexada")
         } else {
-            Image::from_bytes(ancho, alto, self.modo, datos).expect("imagen")
+            Image::from_bytes(width, height, self.mode_2, data).expect("imagen")
         }
     }
 
     /// Siembra el modelo con una imagen ya comprobada contra una referencia independiente.
-    pub fn de_imagen(imagen: &Image) -> Modelo {
-        let modo = imagen.mode();
-        let n = bytes_por_pixel(modo);
-        let celdas = imagen
+    pub fn of_image(image_2: &Image) -> Model {
+        let mode_2 = image_2.mode();
+        let n = bytes_per_pixel(mode_2);
+        let cels = image_2
             .bytes()
             .chunks_exact(n)
-            .map(|trozo| {
-                let mut celda = [0u8; 4];
-                celda[..n].copy_from_slice(trozo);
-                celda
+            .map(|piece| {
+                let mut cel = [0u8; 4];
+                cel[..n].copy_from_slice(piece);
+                cel
             })
             .collect();
-        let paleta = imagen
+        let palette = image_2
             .palette()
             .map(|p| p.colors().iter().map(|c| [c.r, c.g, c.b, c.a]).collect())
             .unwrap_or_default();
-        Modelo {
-            modo,
-            ancho: imagen.width() as usize,
-            alto: imagen.height() as usize,
-            celdas,
-            paleta,
-            transparente: imagen.palette().and_then(Palette::transparent_index),
+        Model {
+            mode_2,
+            width: image_2.width() as usize,
+            height: image_2.height() as usize,
+            cels,
+            palette,
+            transparent: image_2.palette().and_then(Palette::transparent_index),
         }
     }
 
     /// La celda que escribe un color elegido; `None` si no hay color para esa elección.
-    pub fn celda_de(&self, e: Eleccion) -> Option<[u8; 4]> {
-        match (e, self.modo) {
-            (Eleccion::Entrada(i), Mode::Indexed) => {
-                (usize::from(i) < self.paleta.len()).then_some([i, 0, 0, 0])
+    pub fn cel_of(&self, e: Choice) -> Option<[u8; 4]> {
+        match (e, self.mode_2) {
+            (Choice::TestInput(i), Mode::Indexed) => {
+                (usize::from(i) < self.palette.len()).then_some([i, 0, 0, 0])
             }
-            (Eleccion::Entrada(_), _) => None,
-            (Eleccion::Ranura(n), _) if !(1..=9).contains(&n) => None,
-            (Eleccion::Ranura(n), Mode::Indexed) => {
-                (usize::from(n - 1) < self.paleta.len()).then_some([n - 1, 0, 0, 0])
+            (Choice::TestInput(_), _) => None,
+            (Choice::TestSlot(n), _) if !(1..=9).contains(&n) => None,
+            (Choice::TestSlot(n), Mode::Indexed) => {
+                (usize::from(n - 1) < self.palette.len()).then_some([n - 1, 0, 0, 0])
             }
-            (Eleccion::Ranura(n), Mode::Rgba) => Some(match n {
+            (Choice::TestSlot(n), Mode::Rgba) => Some(match n {
                 1 => [0, 0, 0, 255],
                 2 => [255, 255, 255, 255],
                 3 => [255, 0, 0, 255],
@@ -763,11 +763,11 @@ impl Modelo {
                 8 => [0, 255, 255, 255],
                 _ => [0, 0, 0, 0],
             }),
-            (Eleccion::Ranura(n), Mode::Gray) => {
-                let gris = if n == 9 { 255 } else { (n - 1) * 32 };
-                Some([gris, 0, 0, 0])
+            (Choice::TestSlot(n), Mode::Gray) => {
+                let gray = if n == 9 { 255 } else { (n - 1) * 32 };
+                Some([gray, 0, 0, 0])
             }
-            (Eleccion::Ranura(n), Mode::GrayAlpha) => Some(if n == 9 {
+            (Choice::TestSlot(n), Mode::GrayAlpha) => Some(if n == 9 {
                 [0, 0, 0, 0]
             } else {
                 [(n - 1) * 32, 255, 0, 0]
@@ -776,27 +776,27 @@ impl Modelo {
     }
 
     /// Alfa resuelto de la celda `i`.
-    fn alfa(&self, i: usize) -> u8 {
-        let c = self.celdas[i];
-        match self.modo {
+    fn alpha_2(&self, i: usize) -> u8 {
+        let c = self.cels[i];
+        match self.mode_2 {
             Mode::Rgba => c[3],
             Mode::GrayAlpha => c[1],
             Mode::Gray => 255,
-            Mode::Indexed => self.resuelto(c[0])[3],
+            Mode::Indexed => self.resolved_2(c[0])[3],
         }
     }
 
     /// Lo que escribe el borrador, o `None` si no puede con la imagen: RGBA y gris con alfa, el
     /// transparente canónico; indexado, el índice transparente o, sin él, la primera entrada de alfa
     /// guardado 0; gris, nada.
-    fn valor_borrado(&self) -> Option<[u8; 4]> {
-        match self.modo {
+    fn value_deleted(&self) -> Option<[u8; 4]> {
+        match self.mode_2 {
             Mode::Rgba | Mode::GrayAlpha => Some([0, 0, 0, 0]),
             Mode::Gray => None,
-            Mode::Indexed => match self.transparente {
+            Mode::Indexed => match self.transparent {
                 Some(t) => Some([t, 0, 0, 0]),
                 None => self
-                    .paleta
+                    .palette
                     .iter()
                     .position(|c| c[3] == 0)
                     .map(|i| [i as u8, 0, 0, 0]),
@@ -804,226 +804,226 @@ impl Modelo {
         }
     }
 
-    fn pintar(&mut self, puntos: &[(i32, i32)], celda: [u8; 4]) -> bool {
-        let mut cambio = false;
-        for &(x, y) in puntos {
-            if let Some(i) = self.indice(x, y)
-                && self.celdas[i] != celda
+    fn paint(&mut self, points: &[(i32, i32)], cel: [u8; 4]) -> bool {
+        let mut change = false;
+        for &(x, y) in points {
+            if let Some(i) = self.index_2(x, y)
+                && self.cels[i] != cel
             {
-                self.celdas[i] = celda;
-                cambio = true;
+                self.cels[i] = cel;
+                change = true;
             }
         }
-        cambio
+        change
     }
 
     /// Relleno por cola de la región de 4 vecinos con el mismo valor guardado que la semilla.
-    fn rellenar(&mut self, semilla: (i32, i32), celda: [u8; 4]) -> bool {
-        let Some(inicio) = self.indice(semilla.0, semilla.1) else {
+    fn fill(&mut self, seed: (i32, i32), cel: [u8; 4]) -> bool {
+        let Some(start_2) = self.index_2(seed.0, seed.1) else {
             return false;
         };
-        let objetivo = self.celdas[inicio];
-        if objetivo == celda {
+        let goal = self.cels[start_2];
+        if goal == cel {
             return false;
         }
-        self.celdas[inicio] = celda;
-        let mut cola = VecDeque::from([semilla]);
-        while let Some((x, y)) = cola.pop_front() {
+        self.cels[start_2] = cel;
+        let mut queue = VecDeque::from([seed]);
+        while let Some((x, y)) = queue.pop_front() {
             for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
-                let vecino = (x + dx, y + dy);
-                if let Some(i) = self.indice(vecino.0, vecino.1)
-                    && self.celdas[i] == objetivo
+                let neighbor = (x + dx, y + dy);
+                if let Some(i) = self.index_2(neighbor.0, neighbor.1)
+                    && self.cels[i] == goal
                 {
-                    self.celdas[i] = celda;
-                    cola.push_back(vecino);
+                    self.cels[i] = cel;
+                    queue.push_back(neighbor);
                 }
             }
         }
         true
     }
 
-    fn borrar(&mut self, ruta: &[(i32, i32)]) -> Efecto {
-        let Some(valor) = self.valor_borrado() else {
-            return Efecto {
-                rechazado: true,
-                ..Efecto::default()
+    fn delete(&mut self, path_2: &[(i32, i32)]) -> Effect {
+        let Some(valor) = self.value_deleted() else {
+            return Effect {
+                rejected: true,
+                ..Effect::default()
             };
         };
-        let mut cambio = false;
-        for (x, y) in trazo(ruta) {
-            if let Some(i) = self.indice(x, y)
-                && self.alfa(i) != 0
+        let mut change = false;
+        for (x, y) in stroke(path_2) {
+            if let Some(i) = self.index_2(x, y)
+                && self.alpha_2(i) != 0
             {
-                self.celdas[i] = valor;
-                cambio = true;
+                self.cels[i] = valor;
+                change = true;
             }
         }
-        Efecto {
-            cambio,
-            ..Efecto::default()
+        Effect {
+            change,
+            ..Effect::default()
         }
     }
 
-    fn convertir(&mut self) -> Efecto {
-        match self.modo {
+    fn convert(&mut self) -> Effect {
+        match self.mode_2 {
             Mode::Indexed => {
-                let nuevas: Vec<[u8; 4]> = self
-                    .celdas
+                let new_2_2: Vec<[u8; 4]> = self
+                    .cels
                     .iter()
-                    .map(|c| canonico(self.resuelto(c[0])))
+                    .map(|c| canonical_2(self.resolved_2(c[0])))
                     .collect();
-                self.celdas = nuevas;
-                self.modo = Mode::Rgba;
-                self.paleta.clear();
-                self.transparente = None;
+                self.cels = new_2_2;
+                self.mode_2 = Mode::Rgba;
+                self.palette.clear();
+                self.transparent = None;
             }
             Mode::Gray => {
-                for c in &mut self.celdas {
+                for c in &mut self.cels {
                     *c = [c[0], 255, 0, 0];
                 }
-                self.modo = Mode::GrayAlpha;
+                self.mode_2 = Mode::GrayAlpha;
             }
             Mode::GrayAlpha => {
-                for c in &mut self.celdas {
-                    *c = canonico([c[0], c[0], c[0], c[1]]);
+                for c in &mut self.cels {
+                    *c = canonical_2([c[0], c[0], c[0], c[1]]);
                 }
-                self.modo = Mode::Rgba;
+                self.mode_2 = Mode::Rgba;
             }
             Mode::Rgba => {
                 // El transparente, si lo hay, en el índice 0; el resto por primera aparición.
-                let mut colores: Vec<[u8; 4]> = Vec::new();
-                let mut hay_transparente = false;
-                for c in &self.celdas {
+                let mut colors: Vec<[u8; 4]> = Vec::new();
+                let mut there_is_transparent = false;
+                for c in &self.cels {
                     if c[3] == 0 {
-                        hay_transparente = true;
-                    } else if !colores.contains(c) {
-                        colores.push(*c);
+                        there_is_transparent = true;
+                    } else if !colors.contains(c) {
+                        colors.push(*c);
                     }
                 }
-                if colores.len() + usize::from(hay_transparente) > 256 {
-                    return Efecto {
+                if colors.len() + usize::from(there_is_transparent) > 256 {
+                    return Effect {
                         error: true,
-                        ..Efecto::default()
+                        ..Effect::default()
                     };
                 }
-                let desplazamiento = usize::from(hay_transparente);
-                let nuevas: Vec<[u8; 4]> = self
-                    .celdas
+                let pan = usize::from(there_is_transparent);
+                let new_2_2: Vec<[u8; 4]> = self
+                    .cels
                     .iter()
                     .map(|c| {
                         if c[3] == 0 {
                             [0, 0, 0, 0]
                         } else {
-                            let at = colores.iter().position(|k| k == c).expect("registrado");
-                            [(at + desplazamiento) as u8, 0, 0, 0]
+                            let at = colors.iter().position(|k| k == c).expect("registrado");
+                            [(at + pan) as u8, 0, 0, 0]
                         }
                     })
                     .collect();
-                let mut paleta = Vec::new();
-                if hay_transparente {
-                    paleta.push([0, 0, 0, 0]);
+                let mut palette = Vec::new();
+                if there_is_transparent {
+                    palette.push([0, 0, 0, 0]);
                 }
-                paleta.extend(colores);
-                self.celdas = nuevas;
-                self.modo = Mode::Indexed;
-                self.paleta = paleta;
-                self.transparente = hay_transparente.then_some(0);
+                palette.extend(colors);
+                self.cels = new_2_2;
+                self.mode_2 = Mode::Indexed;
+                self.palette = palette;
+                self.transparent = there_is_transparent.then_some(0);
             }
         }
-        Efecto {
-            cambio: true,
-            ..Efecto::default()
+        Effect {
+            change: true,
+            ..Effect::default()
         }
     }
 
     /// Aplica un paso al modelo y dice qué debe pasar en la sesión. Con un error de conversión, el
     /// modelo no cambia.
-    pub fn aplicar(&mut self, paso: &Paso) -> Efecto {
-        let por_celda = |cambio: bool| Efecto {
-            cambio,
-            ..Efecto::default()
+    pub fn apply(&mut self, step: &TestStep) -> Effect {
+        let per_cel = |change: bool| Effect {
+            change,
+            ..Effect::default()
         };
-        match paso {
-            Paso::Lapiz(ruta, e) => match self.celda_de(*e) {
-                Some(celda) => por_celda(self.pintar(&trazo(ruta), celda)),
-                None => Efecto::default(),
+        match step {
+            TestStep::Pencil(path_2, e) => match self.cel_of(*e) {
+                Some(cel) => per_cel(self.paint(&stroke(path_2), cel)),
+                None => Effect::default(),
             },
-            Paso::Linea(a, b, e) => match self.celda_de(*e) {
-                Some(celda) => por_celda(self.pintar(&segmento(*a, *b), celda)),
-                None => Efecto::default(),
+            TestStep::Line(a, b, e) => match self.cel_of(*e) {
+                Some(cel) => per_cel(self.paint(&segment(*a, *b), cel)),
+                None => Effect::default(),
             },
-            Paso::Relleno(semilla, e) => match self.celda_de(*e) {
-                Some(celda) => por_celda(self.rellenar(*semilla, celda)),
-                None => Efecto::default(),
+            TestStep::Fill(seed, e) => match self.cel_of(*e) {
+                Some(cel) => per_cel(self.fill(*seed, cel)),
+                None => Effect::default(),
             },
-            Paso::Borrador(ruta) => self.borrar(ruta),
-            Paso::ColorEntrada(i, color) => {
-                let cambio = self.paleta[usize::from(*i)] != *color;
-                self.paleta[usize::from(*i)] = *color;
-                por_celda(cambio)
+            TestStep::Eraser(path_2) => self.delete(path_2),
+            TestStep::ColorInput(i, color) => {
+                let change = self.palette[usize::from(*i)] != *color;
+                self.palette[usize::from(*i)] = *color;
+                per_cel(change)
             }
-            Paso::Rotar {
-                inicio,
+            TestStep::Rotate {
+                start_2,
                 largo,
-                pasos,
+                steps_2,
             } => {
-                let (inicio, largo) = (usize::from(*inicio), usize::from(*largo));
+                let (start_2, largo) = (usize::from(*start_2), usize::from(*largo));
                 assert!(
-                    inicio + largo <= self.paleta.len(),
+                    start_2 + largo <= self.palette.len(),
                     "rango fuera de la paleta"
                 );
                 if largo < 2 {
-                    return Efecto::default();
+                    return Effect::default();
                 }
-                let k = pasos.rem_euclid(largo as i32) as usize;
-                let original = self.paleta.clone();
+                let k = steps_2.rem_euclid(largo as i32) as usize;
+                let original = self.palette.clone();
                 for i in 0..largo {
-                    self.paleta[inicio + (i + k) % largo] = original[inicio + i];
+                    self.palette[start_2 + (i + k) % largo] = original[start_2 + i];
                 }
-                por_celda(self.paleta != original)
+                per_cel(self.palette != original)
             }
-            Paso::Mover { de, a } => {
+            TestStep::Mover { de, a } => {
                 let (de, a) = (usize::from(*de), usize::from(*a));
                 if de == a {
-                    return Efecto::default();
+                    return Effect::default();
                 }
-                // `orden[nuevo] = antiguo`, como quitar e insertar.
-                let mut orden: Vec<usize> = (0..self.paleta.len()).collect();
-                let movida = orden.remove(de);
-                orden.insert(a, movida);
-                let mut adelante = vec![0u8; orden.len()];
-                for (nuevo, &antiguo) in orden.iter().enumerate() {
-                    adelante[antiguo] = nuevo as u8;
+                // `order[new_2] = old`, como quitar e insertar.
+                let mut order: Vec<usize> = (0..self.palette.len()).collect();
+                let moved = order.remove(de);
+                order.insert(a, moved);
+                let mut forward = vec![0u8; order.len()];
+                for (new_2, &old) in order.iter().enumerate() {
+                    forward[old] = new_2 as u8;
                 }
-                self.paleta = orden.iter().map(|&antiguo| self.paleta[antiguo]).collect();
-                for c in &mut self.celdas {
-                    c[0] = adelante[usize::from(c[0])];
+                self.palette = order.iter().map(|&old| self.palette[old]).collect();
+                for c in &mut self.cels {
+                    c[0] = forward[usize::from(c[0])];
                 }
-                self.transparente = self.transparente.map(|t| adelante[usize::from(t)]);
-                por_celda(true)
+                self.transparent = self.transparent.map(|t| forward[usize::from(t)]);
+                per_cel(true)
             }
-            Paso::Anadir { activa } => {
-                assert!(self.paleta.len() < 256, "la paleta está llena");
-                let color = self.resuelto(*activa);
-                self.paleta.push(color);
-                por_celda(true)
+            TestStep::Add { active_2 } => {
+                assert!(self.palette.len() < 256, "la paleta está llena");
+                let color = self.resolved_2(*active_2);
+                self.palette.push(color);
+                per_cel(true)
             }
-            Paso::Transparente(indice) => {
-                let cambio = self.transparente != *indice;
-                self.transparente = *indice;
-                por_celda(cambio)
+            TestStep::Transparent(index_2) => {
+                let change = self.transparent != *index_2;
+                self.transparent = *index_2;
+                per_cel(change)
             }
-            Paso::Convertir => self.convertir(),
+            TestStep::Convert => self.convert(),
         }
     }
 }
 
 /// RGBA expandido de una `Image`, leído de sus bytes y su paleta (con el índice transparente
 /// resuelto): es la «vista RGBA» del corpus.
-pub fn expandir(imagen: &Image) -> Vec<u8> {
-    let bytes = imagen.bytes();
+pub fn expand(image_2: &Image) -> Vec<u8> {
+    let bytes = image_2.bytes();
     let mut v = Vec::with_capacity(bytes.len() * 4);
-    match imagen.mode() {
+    match image_2.mode() {
         Mode::Rgba => v.extend_from_slice(bytes),
         Mode::Gray => {
             for &g in bytes {
@@ -1036,12 +1036,12 @@ pub fn expandir(imagen: &Image) -> Vec<u8> {
             }
         }
         Mode::Indexed => {
-            let paleta = imagen.palette().expect("una indexada tiene paleta");
-            let transparente = paleta.transparent_index();
+            let palette = image_2.palette().expect("una indexada tiene paleta");
+            let transparent = palette.transparent_index();
             for &i in bytes {
-                let c = paleta.colors()[usize::from(i)];
-                let alfa = if transparente == Some(i) { 0 } else { c.a };
-                v.extend([c.r, c.g, c.b, alfa]);
+                let c = palette.colors()[usize::from(i)];
+                let alpha_2 = if transparent == Some(i) { 0 } else { c.a };
+                v.extend([c.r, c.g, c.b, alpha_2]);
             }
         }
     }
@@ -1050,50 +1050,50 @@ pub fn expandir(imagen: &Image) -> Vec<u8> {
 
 /// Pánico, con el primer píxel que difiere, si la imagen no es el modelo: modo, tamaño, bytes,
 /// paleta, índice transparente y RGBA expandido.
-pub fn assert_igual(imagen: &Image, modelo: &Modelo, ctx: &str) {
-    assert_eq!(imagen.mode(), modelo.modo, "{ctx}: modo");
+pub fn assert_equal(image_2: &Image, model: &Model, ctx: &str) {
+    assert_eq!(image_2.mode(), model.mode_2, "{ctx}: modo");
     assert_eq!(
-        (imagen.width() as usize, imagen.height() as usize),
-        (modelo.ancho, modelo.alto),
+        (image_2.width() as usize, image_2.height() as usize),
+        (model.width, model.height),
         "{ctx}: tamaño"
     );
-    let esperado = modelo.bytes();
-    if imagen.bytes() != &esperado[..] {
-        let n = bytes_por_pixel(modelo.modo);
-        let pos = imagen
+    let expected_2 = model.bytes();
+    if image_2.bytes() != &expected_2[..] {
+        let n = bytes_per_pixel(model.mode_2);
+        let pos = image_2
             .bytes()
             .iter()
-            .zip(&esperado)
+            .zip(&expected_2)
             .position(|(a, b)| a != b)
             .unwrap_or(0)
             / n;
         panic!(
             "{ctx}: el píxel ({}, {}) difiere: imagen {:?}, modelo {:?}",
-            pos % modelo.ancho,
-            pos / modelo.ancho,
-            &imagen.bytes()[pos * n..(pos + 1) * n],
-            &esperado[pos * n..(pos + 1) * n]
+            pos % model.width,
+            pos / model.width,
+            &image_2.bytes()[pos * n..(pos + 1) * n],
+            &expected_2[pos * n..(pos + 1) * n]
         );
     }
-    let paleta: Vec<[u8; 4]> = imagen
+    let palette: Vec<[u8; 4]> = image_2
         .palette()
         .map(|p| p.colors().iter().map(|c| [c.r, c.g, c.b, c.a]).collect())
         .unwrap_or_default();
-    assert_eq!(paleta, modelo.paleta, "{ctx}: paleta");
+    assert_eq!(palette, model.palette, "{ctx}: paleta");
     assert_eq!(
-        imagen.palette().and_then(Palette::transparent_index),
-        modelo.transparente,
+        image_2.palette().and_then(Palette::transparent_index),
+        model.transparent,
         "{ctx}: índice transparente"
     );
     assert!(
-        expandir(imagen) == modelo.rgba(),
+        expand(image_2) == model.rgba(),
         "{ctx}: el RGBA expandido no coincide con el del modelo"
     );
 }
 
 /// SHA-256 de la RGBA expandida de una imagen (la técnica del corpus).
-pub fn sha_rgba(imagen: &Image) -> String {
-    sha256_hex(&expandir(imagen))
+pub fn sha_rgba(image_2: &Image) -> String {
+    sha256_hex(&expand(image_2))
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1101,84 +1101,84 @@ pub fn sha_rgba(imagen: &Image) -> String {
 // ---------------------------------------------------------------------------------------
 
 /// Un PNG de partida de la puerta.
-pub struct Fuente {
-    pub nombre: String,
+pub struct Source {
+    pub name_2: String,
     /// Los bytes del fichero.
     pub bytes: Vec<u8>,
     /// Es uno de `golden/png/` (se copia con `fs::copy`).
     pub real: bool,
     /// Lo que debe dar su apertura (generadas y construidas); los reales, `None`.
-    pub esperado: Option<Modelo>,
+    pub expected_2: Option<Model>,
     /// SHA-256 de la RGBA expandida que dice su `.sha256` (solo los reales).
     pub sha: Option<String>,
     /// Si Pixoko debe convertirlo al abrir, cuando se sabe por construcción.
-    pub convertida: Option<bool>,
+    pub converted_2: Option<bool>,
 }
 
 /// Los 4 reales: su esperado es el `.sha256` que dejó otra herramienta.
-pub fn reales() -> Vec<Fuente> {
-    REALES
-        .iter()
-        .map(|nombre| {
-            let ruta = golden_png().join(nombre);
-            let bytes = fs::read(&ruta).unwrap_or_else(|e| panic!("leer {}: {e}", ruta.display()));
-            let ruta_sha = golden_png().join(format!("{nombre}.sha256"));
-            let sha = fs::read_to_string(&ruta_sha)
-                .unwrap_or_else(|e| panic!("leer {}: {e}", ruta_sha.display()))
+pub fn real_2() -> Vec<Source> {
+    REAL.iter()
+        .map(|name_2| {
+            let path_2 = golden_png().join(name_2);
+            let bytes =
+                fs::read(&path_2).unwrap_or_else(|e| panic!("leer {}: {e}", path_2.display()));
+            let path_sha = golden_png().join(format!("{name_2}.sha256"));
+            let sha = fs::read_to_string(&path_sha)
+                .unwrap_or_else(|e| panic!("leer {}: {e}", path_sha.display()))
                 .trim()
                 .to_ascii_lowercase();
-            Fuente {
-                nombre: (*nombre).to_string(),
+            Source {
+                name_2: (*name_2).to_string(),
                 bytes,
                 real: true,
-                esperado: None,
+                expected_2: None,
                 sha: Some(sha),
-                convertida: None,
+                converted_2: None,
             }
         })
         .collect()
 }
 
-/// Una fuente construida: sus bytes se escriben tal cual y se espera `esperado` al abrir.
-fn construida(nombre: &str, bytes: Vec<u8>, esperado: Modelo, convertida: bool) -> Fuente {
-    Fuente {
-        nombre: nombre.to_string(),
+/// Una fuente construida: sus bytes se escriben tal cual y se espera `expected_2` al abrir.
+fn built(name_2: &str, bytes: Vec<u8>, expected_2: Model, converted_2: bool) -> Source {
+    Source {
+        name_2: name_2.to_string(),
         bytes,
         real: false,
-        esperado: Some(esperado),
+        expected_2: Some(expected_2),
         sha: None,
-        convertida: Some(convertida),
+        converted_2: Some(converted_2),
     }
 }
 
-const ANCHO_GENERADO: usize = 37;
-const ALTO_GENERADO: usize = 23;
+const WIDTH_GENERATED: usize = 37;
+const HEIGHT_GENERATED: usize = 23;
 
-fn generar(modo: Mode, celda: impl Fn(usize, usize) -> [u8; 4]) -> Modelo {
-    let mut celdas = Vec::new();
-    for y in 0..ALTO_GENERADO {
-        for x in 0..ANCHO_GENERADO {
-            celdas.push(celda(x, y));
+fn generate(mode_2: Mode, cel: impl Fn(usize, usize) -> [u8; 4]) -> Model {
+    let mut cels = Vec::new();
+    for y in 0..HEIGHT_GENERATED {
+        for x in 0..WIDTH_GENERATED {
+            cels.push(cel(x, y));
         }
     }
-    Modelo {
-        modo,
-        ancho: ANCHO_GENERADO,
-        alto: ALTO_GENERADO,
-        celdas,
-        paleta: Vec::new(),
-        transparente: None,
+    Model {
+        mode_2,
+        width: WIDTH_GENERATED,
+        height: HEIGHT_GENERATED,
+        cels,
+        palette: Vec::new(),
+        transparent: None,
     }
 }
 
 /// Una fuente generada con `write_png` desde el modelo; al abrir debe dar el modelo normalizado.
-fn generada(nombre: &str, modelo: Modelo) -> Fuente {
-    let bytes = write_png(&modelo.a_imagen()).expect("write_png de la fuente generada");
-    construida(nombre, bytes, modelo.normalizada(), false)
+fn generated(name_2: &str, model: Model) -> Source {
+    let bytes = write_png(&model.a_image()).expect("write_png de la fuente generada");
+    built(name_2, bytes, model.normalized(), false)
 }
 
 /// Las cuatro generadas de 37×23 (que no es múltiplo de nada).
-pub fn generadas() -> Vec<Fuente> {
+pub fn generated_2() -> Vec<Source> {
     // RGBA con píxeles de alfa 0 (con RGB distinto de cero) y de alfa 128.
     let tabla = [
         [255, 0, 0, 255],
@@ -1188,55 +1188,55 @@ pub fn generadas() -> Vec<Fuente> {
         [10, 200, 200, 128],
         [90, 90, 90, 255],
     ];
-    let rgba = generar(Mode::Rgba, |x, y| tabla[(x + 2 * y) % tabla.len()]);
+    let rgba = generate(Mode::Rgba, |x, y| tabla[(x + 2 * y) % tabla.len()]);
     // Indexada de 5 colores con alfa propio y el índice 2 transparente.
-    let mut indexada = generar(Mode::Indexed, |x, y| {
+    let mut indexed = generate(Mode::Indexed, |x, y| {
         [((x * 3 + y * 5 + x / 4) % 5) as u8, 0, 0, 0]
     });
-    indexada.paleta = vec![
+    indexed.palette = vec![
         [10, 20, 30, 255],
         [200, 100, 50, 128],
         [0, 255, 0, 255],
         [255, 255, 0, 64],
         [255, 0, 255, 255],
     ];
-    indexada.transparente = Some(2);
-    let gris = generar(Mode::Gray, |x, y| [((x * 5 + y * 3) % 256) as u8, 0, 0, 0]);
-    let gris_alfa = generar(Mode::GrayAlpha, |x, y| {
-        let alfa = [0, 100, 200, 255][(x + 2 * y) % 4];
-        [((x * 7 + y * 2) % 256) as u8, alfa, 0, 0]
+    indexed.transparent = Some(2);
+    let gray = generate(Mode::Gray, |x, y| [((x * 5 + y * 3) % 256) as u8, 0, 0, 0]);
+    let gray_alpha = generate(Mode::GrayAlpha, |x, y| {
+        let alpha_2 = [0, 100, 200, 255][(x + 2 * y) % 4];
+        [((x * 7 + y * 2) % 256) as u8, alpha_2, 0, 0]
     });
     vec![
-        generada("generada-rgba.png", rgba),
-        generada("generada-indexada.png", indexada),
-        generada("generada-gris.png", gris),
-        generada("generada-gris-alfa.png", gris_alfa),
+        generated("generada-rgba.png", rgba),
+        generated("generada-indexada.png", indexed),
+        generated("generada-gris.png", gray),
+        generated("generada-gris-alfa.png", gray_alpha),
     ]
 }
 
 /// Reales y generadas.
-pub fn todas() -> Vec<Fuente> {
-    let mut fuentes = reales();
-    fuentes.extend(generadas());
-    fuentes
+pub fn all() -> Vec<Source> {
+    let mut sources = real_2();
+    sources.extend(generated_2());
+    sources
 }
 
 /// Un modelo pequeño de celdas dadas.
-pub fn modelo_de(modo: Mode, ancho: usize, alto: usize, celdas: Vec<[u8; 4]>) -> Modelo {
-    assert_eq!(celdas.len(), ancho * alto);
-    Modelo {
-        modo,
-        ancho,
-        alto,
-        celdas,
-        paleta: Vec::new(),
-        transparente: None,
+pub fn model_of(mode_2: Mode, width: usize, height: usize, cels: Vec<[u8; 4]>) -> Model {
+    assert_eq!(cels.len(), width * height);
+    Model {
+        mode_2,
+        width,
+        height,
+        cels,
+        palette: Vec::new(),
+        transparent: None,
     }
 }
 
 /// PNG RGB de 8 bits de 4×2 (Pixoko lo lee como RGBA).
-pub fn fuente_rgb8() -> Fuente {
-    let pixeles: [[u8; 3]; 8] = [
+pub fn source_rgb_8() -> Source {
+    let pixels_2: [[u8; 3]; 8] = [
         [255, 0, 0],
         [0, 255, 0],
         [0, 0, 255],
@@ -1246,58 +1246,58 @@ pub fn fuente_rgb8() -> Fuente {
         [255, 255, 255],
         [0, 0, 0],
     ];
-    let muestras: Vec<u16> = pixeles.iter().flatten().map(|&v| u16::from(v)).collect();
-    let celdas = pixeles.iter().map(|p| [p[0], p[1], p[2], 255]).collect();
-    construida(
+    let swatches: Vec<u16> = pixels_2.iter().flatten().map(|&v| u16::from(v)).collect();
+    let cels = pixels_2.iter().map(|p| [p[0], p[1], p[2], 255]).collect();
+    built(
         "rgb8.png",
-        png_crudo(4, 2, 8, 2, &muestras, &[]),
-        modelo_de(Mode::Rgba, 4, 2, celdas),
+        png_raw(4, 2, 8, 2, &swatches, &[]),
+        model_of(Mode::Rgba, 4, 2, cels),
         true,
     )
 }
 
 /// PNG de gris de 4 bits de 4×2 (se amplía a 8: `v · 17`).
-pub fn fuente_gris4() -> Fuente {
-    let muestras: [u16; 8] = [0, 1, 5, 15, 7, 8, 9, 10];
-    let celdas = muestras
+pub fn source_gray_4() -> Source {
+    let swatches: [u16; 8] = [0, 1, 5, 15, 7, 8, 9, 10];
+    let cels = swatches
         .iter()
         .map(|&v| [(v * 17) as u8, 0, 0, 0])
         .collect();
-    construida(
+    built(
         "gris4.png",
-        png_crudo(4, 2, 4, 0, &muestras, &[]),
-        modelo_de(Mode::Gray, 4, 2, celdas),
+        png_raw(4, 2, 4, 0, &swatches, &[]),
+        model_of(Mode::Gray, 4, 2, cels),
         true,
     )
 }
 
 /// PNG de gris de 16 bits de 3×2 con `tRNS` de color clave: las muestras son múltiplos de 257, así
 /// que la reducción a 8 bits es exacta (`v / 257`); el píxel de la clave pasa a alfa 0.
-pub fn fuente_gris16_trns() -> Fuente {
-    let clave = 0x8080u16;
-    let muestras: [u16; 6] = [0x0000, clave, 0xFFFF, 0x1010, clave, 0x4242];
-    let celdas = muestras
+pub fn source_gray16_trns() -> Source {
+    let key = 0x8080u16;
+    let swatches: [u16; 6] = [0x0000, key, 0xFFFF, 0x1010, key, 0x4242];
+    let cels = swatches
         .iter()
-        .map(|&v| [(v / 257) as u8, if v == clave { 0 } else { 255 }, 0, 0])
+        .map(|&v| [(v / 257) as u8, if v == key { 0 } else { 255 }, 0, 0])
         .collect();
-    construida(
+    built(
         "gris16-trns.png",
-        png_crudo(
+        png_raw(
             3,
             2,
             16,
             0,
-            &muestras,
-            &[trozo(b"tRNS", &clave.to_be_bytes())],
+            &swatches,
+            &[piece(b"tRNS", &key.to_be_bytes())],
         ),
-        modelo_de(Mode::GrayAlpha, 3, 2, celdas),
+        model_of(Mode::GrayAlpha, 3, 2, cels),
         true,
     )
 }
 
 /// PNG RGBA de 5×3 de `write_png` con un `iCCP` (la apariencia cambiaría al guardar sobre él).
-pub fn fuente_con_iccp() -> Fuente {
-    let celdas = (0..15u8)
+pub fn source_with_iccp() -> Source {
+    let cels = (0..15u8)
         .map(|i| {
             [
                 i * 16,
@@ -1307,27 +1307,24 @@ pub fn fuente_con_iccp() -> Fuente {
             ]
         })
         .collect();
-    let modelo = modelo_de(Mode::Rgba, 5, 3, celdas);
-    let bytes = con_chunks(
-        &write_png(&modelo.a_imagen()).expect("write_png"),
-        &[iccp()],
-    );
-    construida("con-iccp.png", bytes, modelo, true)
+    let model = model_of(Mode::Rgba, 5, 3, cels);
+    let bytes = with_chunks(&write_png(&model.a_image()).expect("write_png"), &[iccp()]);
+    built("con-iccp.png", bytes, model, true)
 }
 
 /// Los PNG construidos en la prueba que Pixoko convierte al abrir.
-pub fn convertidas() -> Vec<Fuente> {
+pub fn converted_2_2() -> Vec<Source> {
     vec![
-        fuente_rgb8(),
-        fuente_gris4(),
-        fuente_gris16_trns(),
-        fuente_con_iccp(),
+        source_rgb_8(),
+        source_gray_4(),
+        source_gray16_trns(),
+        source_with_iccp(),
     ]
 }
 
 /// Un modelo RGBA de 37×23 con más de 256 colores distintos (para `TooManyColors`).
-pub fn rgba_de_muchos_colores() -> Modelo {
-    generar(Mode::Rgba, |x, y| {
+pub fn rgba_of_many_colors() -> Model {
+    generate(Mode::Rgba, |x, y| {
         [(x * 6) as u8, (y * 10) as u8, ((x + y) * 3) as u8, 255]
     })
 }
@@ -1337,51 +1334,51 @@ pub fn rgba_de_muchos_colores() -> Modelo {
 // ---------------------------------------------------------------------------------------
 
 /// Una sesión sin fichero, de la que se parte para abrir.
-pub fn sesion_vacia() -> Session {
-    let imagen = Image::new(1, 1, Mode::Rgba).expect("imagen de 1×1");
-    Session::sample(Document::new(imagen))
+pub fn session_empty() -> Session {
+    let image_2 = Image::new(1, 1, Mode::Rgba).expect("imagen de 1×1");
+    Session::sample(Document::new(image_2))
 }
 
 /// Sesión, herramientas, modelo y la historia anotada: el `state_id` y el modelo de cada paso.
-pub struct Mundo {
+pub struct World {
     pub s: Session,
     pub tools: ToolState,
-    pub m: Modelo,
+    pub m: Model,
     /// `snaps[n]`: `state_id` y modelo tras `n` pasos de la rama actual.
-    pub snaps: Vec<(u64, Modelo)>,
+    pub snaps: Vec<(u64, Model)>,
     /// Posición actual en `snaps` (cambia con `undo` y `redo`).
     pub pos: usize,
     /// Todos los `state_id` que ha tenido el documento: no se reutiliza ninguno.
-    pub usados: HashSet<u64>,
+    pub used: HashSet<u64>,
     /// `state_id` y modelo del último estado guardado (el de apertura, al principio).
-    pub guardado: (u64, Modelo),
+    pub saved: (u64, Model),
     /// Cuántos gestos del borrador se rechazaron.
-    pub rechazos: usize,
-    pub etiqueta: String,
+    pub rejections: usize,
+    pub label_2: String,
 }
 
-impl Mundo {
-    pub fn de_sesion(s: Session, etiqueta: &str) -> Mundo {
-        let imagen = s
+impl World {
+    pub fn of_session(s: Session, label_2: &str) -> World {
+        let image_2 = s
             .document
             .image(ImageId::from_raw(0))
             .expect("el documento tiene imagen");
-        let m = Modelo::de_imagen(imagen);
+        let m = Model::of_image(image_2);
         let id = s.document.state_id();
-        Mundo {
+        World {
             s,
             tools: ToolState::new(),
             snaps: vec![(id, m.clone())],
             pos: 0,
-            usados: HashSet::from([id]),
-            guardado: (id, m.clone()),
+            used: HashSet::from([id]),
+            saved: (id, m.clone()),
             m,
-            rechazos: 0,
-            etiqueta: etiqueta.to_string(),
+            rejections: 0,
+            label_2: label_2.to_string(),
         }
     }
 
-    pub fn imagen(&self) -> &Image {
+    pub fn image_2(&self) -> &Image {
         self.s
             .document
             .image(ImageId::from_raw(0))
@@ -1389,62 +1386,57 @@ impl Mundo {
     }
 
     /// Pasos de historia de la rama actual.
-    pub fn pasos(&self) -> usize {
+    pub fn steps_2(&self) -> usize {
         self.snaps.len() - 1
     }
 
-    fn gesto(
-        &mut self,
-        herramienta: Tool,
-        eleccion: Eleccion,
-        eventos: Vec<CanvasEvent>,
-    ) -> (bool, bool) {
+    fn gesture(&mut self, tool_2: Tool, choice: Choice, events: Vec<CanvasEvent>) -> (bool, bool) {
         let id = ImageId::from_raw(0);
-        self.tools.apply_action(ToolAction::Select(herramienta));
-        let mut cambio = false;
-        for evento in eventos {
-            cambio |= self
+        self.tools.apply_action(ToolAction::Select(tool_2));
+        let mut change = false;
+        for event_2 in events {
+            change |= self
                 .tools
-                .canvas_event(&mut self.s.document, id, a_color_choice(eleccion), evento)
-                .unwrap_or_else(|e| panic!("{}: el gesto dio error: {e}", self.etiqueta));
+                .canvas_event(&mut self.s.document, id, a_color_choice(choice), event_2)
+                .unwrap_or_else(|e| panic!("{}: el gesto dio error: {e}", self.label_2));
         }
-        let cambios = self.tools.take_changes();
-        self.s.absorb(cambios);
-        let rechazado = self
+        let changes_2 = self.tools.take_changes();
+        self.s.absorb(changes_2);
+        let rejected = self
             .tools
             .take_events()
             .iter()
             .any(|e| matches!(e, ToolEvent::Refused(_)));
-        (cambio, rechazado)
+        (change, rejected)
     }
 
-    fn operacion(&mut self, op: PaletteOp, activa: u8) -> bool {
-        self.s.choice = ColorChoice::Entry(activa);
+    fn operation(&mut self, op: PaletteOp, active_2: u8) -> bool {
+        self.s.choice = ColorChoice::Entry(active_2);
         self.s
             .apply_palette_op(op, false)
-            .unwrap_or_else(|e| panic!("{}: {op:?} dio error: {e}", self.etiqueta))
+            .unwrap_or_else(|e| panic!("{}: {op:?} dio error: {e}", self.label_2))
             .changed
     }
 
     /// Aplica el paso a la sesión y al modelo y comprueba que coinciden: un paso de historia por
     /// gesto con cambio, ninguno sin él, `state_id` nuevo, rechazo del borrador y estado de
     /// `modified`. Devuelve si hubo cambio.
-    pub fn aplicar(&mut self, paso: &Paso) -> bool {
-        let ctx = format!("{}: {paso:?}", self.etiqueta);
+    pub fn apply(&mut self, step: &TestStep) -> bool {
+        let ctx = format!("{}: {step:?}", self.label_2);
         let antes_id = self.s.document.state_id();
-        let antes_imagen = self.imagen().try_clone().expect("copia de la imagen");
-        let puede_deshacer = self.s.document.can_undo();
-        let mut nuevo = self.m.clone();
-        let efecto = nuevo.aplicar(paso);
+        let before_image = self.image_2().try_clone().expect("copia de la imagen");
+        let can_undo = self.s.document.can_undo();
+        let mut new_2 = self.m.clone();
+        let effect = new_2.apply(step);
 
-        let (cambio, rechazado) = match paso {
-            Paso::Lapiz(ruta, e) => {
-                let mut eventos = vec![CanvasEvent::StrokeBegin(ruta[0])];
-                eventos.extend(ruta[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
-                eventos.push(CanvasEvent::StrokeEnd);
-                self.gesto(Tool::Pencil, *e, eventos)
+        let (change, rejected) = match step {
+            TestStep::Pencil(path_2, e) => {
+                let mut events = vec![CanvasEvent::StrokeBegin(path_2[0])];
+                events.extend(path_2[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
+                events.push(CanvasEvent::StrokeEnd);
+                self.gesture(Tool::Pencil, *e, events)
             }
-            Paso::Linea(a, b, e) => self.gesto(
+            TestStep::Line(a, b, e) => self.gesture(
                 Tool::Line,
                 *e,
                 vec![
@@ -1453,65 +1445,65 @@ impl Mundo {
                     CanvasEvent::StrokeEnd,
                 ],
             ),
-            Paso::Relleno(semilla, e) => self.gesto(
+            TestStep::Fill(seed, e) => self.gesture(
                 Tool::Fill,
                 *e,
-                vec![CanvasEvent::StrokeBegin(*semilla), CanvasEvent::StrokeEnd],
+                vec![CanvasEvent::StrokeBegin(*seed), CanvasEvent::StrokeEnd],
             ),
-            Paso::Borrador(ruta) => {
-                let mut eventos = vec![CanvasEvent::StrokeBegin(ruta[0])];
-                eventos.extend(ruta[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
-                eventos.push(CanvasEvent::StrokeEnd);
-                self.gesto(Tool::Eraser, Eleccion::Ranura(1), eventos)
+            TestStep::Eraser(path_2) => {
+                let mut events = vec![CanvasEvent::StrokeBegin(path_2[0])];
+                events.extend(path_2[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
+                events.push(CanvasEvent::StrokeEnd);
+                self.gesture(Tool::Eraser, Choice::TestSlot(1), events)
             }
-            Paso::ColorEntrada(i, c) => {
+            TestStep::ColorInput(i, c) => {
                 let commit = Commit {
                     target: EditTarget::Entry(*i),
                     color: Rgba::new(c[0], c[1], c[2], c[3]),
                 };
-                let cambio = self
+                let change = self
                     .s
                     .commit_edit(commit)
                     .unwrap_or_else(|e| panic!("{ctx}: dio error: {e}"));
-                (cambio, false)
+                (change, false)
             }
-            Paso::Rotar {
-                inicio,
+            TestStep::Rotate {
+                start_2,
                 largo,
-                pasos,
+                steps_2,
             } => (
-                self.operacion(
+                self.operation(
                     PaletteOp::Rotate {
-                        start: *inicio,
+                        start: *start_2,
                         len: *largo,
-                        steps: *pasos,
+                        steps: *steps_2,
                     },
                     0,
                 ),
                 false,
             ),
-            Paso::Mover { de, a } => (
-                self.operacion(PaletteOp::Move { from: *de, to: *a }, 0),
+            TestStep::Mover { de, a } => (
+                self.operation(PaletteOp::Move { from: *de, to: *a }, 0),
                 false,
             ),
-            Paso::Anadir { activa } => (self.operacion(PaletteOp::Add, *activa), false),
-            Paso::Transparente(indice) => (
-                self.operacion(PaletteOp::SetTransparent { index: *indice }, 0),
+            TestStep::Add { active_2 } => (self.operation(PaletteOp::Add, *active_2), false),
+            TestStep::Transparent(index_2) => (
+                self.operation(PaletteOp::SetTransparent { index: *index_2 }, 0),
                 false,
             ),
-            Paso::Convertir => {
-                let destino = match self.m.modo {
+            TestStep::Convert => {
+                let target_2 = match self.m.mode_2 {
                     Mode::Indexed | Mode::GrayAlpha => Mode::Rgba,
                     Mode::Gray => Mode::GrayAlpha,
                     Mode::Rgba => Mode::Indexed,
                 };
-                match self.s.convert_mode(destino, Allowed::NOTHING) {
-                    Ok(cambio) => {
-                        assert!(!efecto.error, "{ctx}: se esperaba TooManyColors y dio Ok");
-                        (cambio, false)
+                match self.s.convert_mode(target_2, Allowed::NOTHING) {
+                    Ok(change) => {
+                        assert!(!effect.error, "{ctx}: se esperaba TooManyColors y dio Ok");
+                        (change, false)
                     }
                     Err(DocumentError::Convert(ConvertError::TooManyColors { .. }))
-                        if efecto.error =>
+                        if effect.error =>
                     {
                         (false, false)
                     }
@@ -1520,277 +1512,274 @@ impl Mundo {
             }
         };
 
-        assert_eq!(cambio, efecto.cambio, "{ctx}: ¿hubo cambio?");
-        assert_eq!(
-            rechazado, efecto.rechazado,
-            "{ctx}: ¿se rechazó el borrador?"
-        );
-        let despues_id = self.s.document.state_id();
-        if efecto.cambio {
-            assert_ne!(antes_id, despues_id, "{ctx}: el state_id no cambió");
+        assert_eq!(change, effect.change, "{ctx}: ¿hubo cambio?");
+        assert_eq!(rejected, effect.rejected, "{ctx}: ¿se rechazó el borrador?");
+        let after_id = self.s.document.state_id();
+        if effect.change {
+            assert_ne!(antes_id, after_id, "{ctx}: el state_id no cambió");
             assert!(
-                self.usados.insert(despues_id),
-                "{ctx}: el state_id {despues_id} ya se había usado"
+                self.used.insert(after_id),
+                "{ctx}: el state_id {after_id} ya se había usado"
             );
             assert!(self.s.document.can_undo(), "{ctx}: sin paso de historia");
             self.snaps.truncate(self.pos + 1);
-            self.snaps.push((despues_id, nuevo.clone()));
+            self.snaps.push((after_id, new_2.clone()));
             self.pos += 1;
         } else {
-            assert_eq!(antes_id, despues_id, "{ctx}: el state_id cambió sin cambio");
+            assert_eq!(antes_id, after_id, "{ctx}: el state_id cambió sin cambio");
             assert_eq!(
                 self.s.document.can_undo(),
-                puede_deshacer,
+                can_undo,
                 "{ctx}: cambió la historia sin cambio"
             );
             assert!(
-                self.imagen() == &antes_imagen,
+                self.image_2() == &before_image,
                 "{ctx}: la imagen cambió sin cambio"
             );
         }
-        if rechazado {
-            self.rechazos += 1;
+        if rejected {
+            self.rejections += 1;
         }
-        self.m = nuevo;
-        self.comprobar();
-        efecto.cambio
+        self.m = new_2;
+        self.check();
+        effect.change
     }
 
     /// Imagen igual al modelo y `modified` coherente con el estado guardado: es falso si y solo si el
     /// `state_id` es el guardado, y nunca lo es con una imagen distinta de la guardada.
-    pub fn comprobar(&self) {
-        let ctx = &self.etiqueta;
-        assert_igual(self.imagen(), &self.m, ctx);
-        let (id_guardado, modelo_guardado) = &self.guardado;
+    pub fn check(&self) {
+        let ctx = &self.label_2;
+        assert_equal(self.image_2(), &self.m, ctx);
+        let (id_saved, model_saved) = &self.saved;
         assert_eq!(
             self.s.modified(),
-            self.s.document.state_id() != *id_guardado,
+            self.s.document.state_id() != *id_saved,
             "{ctx}: modified no corresponde al state_id guardado"
         );
         if !self.s.modified() {
             assert!(
-                &self.m == modelo_guardado,
+                &self.m == model_saved,
                 "{ctx}: modified es falso con una imagen distinta de la guardada"
             );
         }
     }
 
     /// Anota el estado actual como el guardado (tras un `save` que salió bien).
-    pub fn marcar_guardado(&mut self) {
-        self.guardado = (self.s.document.state_id(), self.m.clone());
+    pub fn mark_saved(&mut self) {
+        self.saved = (self.s.document.state_id(), self.m.clone());
         assert!(
             !self.s.modified(),
             "{}: modified tras guardar",
-            self.etiqueta
+            self.label_2
         );
-        self.comprobar();
+        self.check();
     }
 
     /// `undo`: da la instantánea de un paso atrás, o `NothingToUndo` al principio.
-    pub fn deshacer(&mut self) {
-        let resultado = self.s.undo();
+    pub fn undo(&mut self) {
+        let result = self.s.undo();
         if self.pos == 0 {
             assert_eq!(
-                resultado,
+                result,
                 Err(DocumentError::NothingToUndo),
                 "{}: undo al principio",
-                self.etiqueta
+                self.label_2
             );
         } else {
-            resultado.unwrap_or_else(|e| panic!("{}: undo dio {e:?}", self.etiqueta));
+            result.unwrap_or_else(|e| panic!("{}: undo dio {e:?}", self.label_2));
             self.pos -= 1;
             self.m = self.snaps[self.pos].1.clone();
             assert_eq!(
                 self.s.document.state_id(),
                 self.snaps[self.pos].0,
                 "{}: state_id tras undo",
-                self.etiqueta
+                self.label_2
             );
         }
-        self.comprobar();
+        self.check();
     }
 
     /// `redo`: da la instantánea de un paso adelante, o `NothingToRedo` al final de la rama.
-    pub fn rehacer(&mut self) {
-        let resultado = self.s.redo();
+    pub fn redo(&mut self) {
+        let result = self.s.redo();
         if self.pos + 1 == self.snaps.len() {
             assert_eq!(
-                resultado,
+                result,
                 Err(DocumentError::NothingToRedo),
                 "{}: redo al final",
-                self.etiqueta
+                self.label_2
             );
         } else {
-            resultado.unwrap_or_else(|e| panic!("{}: redo dio {e:?}", self.etiqueta));
+            result.unwrap_or_else(|e| panic!("{}: redo dio {e:?}", self.label_2));
             self.pos += 1;
             self.m = self.snaps[self.pos].1.clone();
             assert_eq!(
                 self.s.document.state_id(),
                 self.snaps[self.pos].0,
                 "{}: state_id tras redo",
-                self.etiqueta
+                self.label_2
             );
         }
-        self.comprobar();
+        self.check();
     }
 
     /// `undo` hasta el principio (y uno más, que debe fallar); devuelve cuántos hizo.
-    pub fn deshacer_todo(&mut self) -> usize {
-        let mut hechos = 0;
+    pub fn undo_all(&mut self) -> usize {
+        let mut facts = 0;
         while self.pos > 0 {
-            self.deshacer();
-            hechos += 1;
+            self.undo();
+            facts += 1;
         }
-        self.deshacer();
-        hechos
+        self.undo();
+        facts
     }
 
     /// `redo` hasta el final de la rama (y uno más, que debe fallar); devuelve cuántos hizo.
-    pub fn rehacer_todo(&mut self) -> usize {
-        let mut hechos = 0;
+    pub fn redo_all(&mut self) -> usize {
+        let mut facts = 0;
         while self.pos + 1 < self.snaps.len() {
-            self.rehacer();
-            hechos += 1;
+            self.redo();
+            facts += 1;
         }
-        self.rehacer();
-        hechos
+        self.redo();
+        facts
     }
 }
 
 /// Abre la fuente en un directorio de trabajo (copia de los reales) y comprueba la imagen contra su
 /// referencia independiente: el modelo (generadas y construidas) o el `.sha256` (reales).
-pub fn abrir(t: &Trabajo, fuente: &Fuente) -> Mundo {
-    let ruta = t.poner(fuente);
-    let mut s = sesion_vacia();
-    s.open(&ruta, Canvas::MAX_SIDE, false)
-        .unwrap_or_else(|e| panic!("{}: open dio error: {e}", fuente.nombre));
-    let imagen = s
+pub fn open(t: &Work, source: &Source) -> World {
+    let path_2 = t.put(source);
+    let mut s = session_empty();
+    s.open(&path_2, Canvas::MAX_SIDE, false)
+        .unwrap_or_else(|e| panic!("{}: open dio error: {e}", source.name_2));
+    let image_2 = s
         .document
         .image(ImageId::from_raw(0))
         .expect("el documento tiene imagen");
-    comprobar_apertura(fuente, imagen);
-    Mundo::de_sesion(s, &fuente.nombre)
+    check_opening(source, image_2);
+    World::of_session(s, &source.name_2)
 }
 
 /// La imagen abierta es la referencia independiente de la fuente.
-pub fn comprobar_apertura(fuente: &Fuente, imagen: &Image) {
-    if let Some(esperado) = &fuente.esperado {
-        assert_igual(imagen, esperado, &fuente.nombre);
+pub fn check_opening(source: &Source, image_2: &Image) {
+    if let Some(expected_2) = &source.expected_2 {
+        assert_equal(image_2, expected_2, &source.name_2);
     }
-    if let Some(sha) = &fuente.sha {
+    if let Some(sha) = &source.sha {
         assert_eq!(
-            &sha_rgba(imagen),
+            &sha_rgba(image_2),
             sha,
             "{}: el SHA-256 de la RGBA expandida no es el de su .sha256",
-            fuente.nombre
+            source.name_2
         );
     }
 }
 
 /// Elección número `k` del color: una entrada de la paleta (módulo su longitud) o una ranura.
-pub fn eleccion_n(m: &Modelo, k: usize) -> Eleccion {
-    if m.modo == Mode::Indexed {
-        Eleccion::Entrada((k % m.paleta.len()) as u8)
+pub fn choice_n(m: &Model, k: usize) -> Choice {
+    if m.mode_2 == Mode::Indexed {
+        Choice::TestInput((k % m.palette.len()) as u8)
     } else {
-        Eleccion::Ranura(1 + (k % 9) as u8)
+        Choice::TestSlot(1 + (k % 9) as u8)
     }
 }
 
 /// Lápiz, línea, relleno y borrador: con repeticiones que no deben dar paso (el mismo trazo con el
 /// mismo color y el mismo relleno).
-pub fn guion_herramientas(m: &Modelo) -> Vec<Paso> {
+pub fn script_tools(m: &Model) -> Vec<TestStep> {
     let (c1, c2, c3, c4) = (
-        eleccion_n(m, 1),
-        eleccion_n(m, 2),
-        eleccion_n(m, 3),
-        eleccion_n(m, 4),
+        choice_n(m, 1),
+        choice_n(m, 2),
+        choice_n(m, 3),
+        choice_n(m, 4),
     );
     vec![
-        Paso::Lapiz(vec![(2, 2), (9, 2), (9, 9), (5, 5)], c1),
-        Paso::Lapiz(vec![(2, 2), (9, 2)], c1),
-        Paso::Linea((1, 12), (14, 12), c2),
-        Paso::Linea((12, 1), (12, 10), c3),
-        Paso::Linea((0, 15), (10, 5), c2),
-        Paso::Relleno((0, 0), c4),
-        Paso::Relleno((0, 0), c4),
-        Paso::Borrador(vec![(3, 3), (8, 3)]),
-        Paso::Borrador(vec![(3, 3), (8, 3)]),
+        TestStep::Pencil(vec![(2, 2), (9, 2), (9, 9), (5, 5)], c1),
+        TestStep::Pencil(vec![(2, 2), (9, 2)], c1),
+        TestStep::Line((1, 12), (14, 12), c2),
+        TestStep::Line((12, 1), (12, 10), c3),
+        TestStep::Line((0, 15), (10, 5), c2),
+        TestStep::Fill((0, 0), c4),
+        TestStep::Fill((0, 0), c4),
+        TestStep::Eraser(vec![(3, 3), (8, 3)]),
+        TestStep::Eraser(vec![(3, 3), (8, 3)]),
     ]
 }
 
 /// Edición de color, `Rotate`, `Move`, `Add` y `SetTransparent` (de una indexada), con un par de
 /// repeticiones que no deben dar paso.
-pub fn guion_paleta(m: &Modelo) -> Vec<Paso> {
-    assert_eq!(m.modo, Mode::Indexed);
-    let largo = m.paleta.len();
-    let mut pasos = vec![
-        Paso::ColorEntrada(0, [1, 2, 3, 255]),
-        Paso::ColorEntrada(0, [1, 2, 3, 255]),
-        Paso::Rotar {
-            inicio: 0,
+pub fn script_palette(m: &Model) -> Vec<TestStep> {
+    assert_eq!(m.mode_2, Mode::Indexed);
+    let largo = m.palette.len();
+    let mut steps_2 = vec![
+        TestStep::ColorInput(0, [1, 2, 3, 255]),
+        TestStep::ColorInput(0, [1, 2, 3, 255]),
+        TestStep::Rotate {
+            start_2: 0,
             largo: largo as u16,
-            pasos: 1,
+            steps_2: 1,
         },
     ];
     if largo >= 2 {
-        pasos.push(Paso::Mover {
+        steps_2.push(TestStep::Mover {
             de: 0,
             a: (largo - 1) as u8,
         });
     }
     if largo < 256 {
-        pasos.push(Paso::Anadir { activa: 0 });
-        pasos.push(Paso::ColorEntrada(largo as u8, [9, 8, 7, 200]));
+        steps_2.push(TestStep::Add { active_2: 0 });
+        steps_2.push(TestStep::ColorInput(largo as u8, [9, 8, 7, 200]));
     }
-    pasos.push(Paso::Transparente(Some(1.min(largo - 1) as u8)));
-    pasos.push(Paso::Rotar {
-        inicio: 0,
+    steps_2.push(TestStep::Transparent(Some(1.min(largo - 1) as u8)));
+    steps_2.push(TestStep::Rotate {
+        start_2: 0,
         largo: largo.min(3) as u16,
-        pasos: -1,
+        steps_2: -1,
     });
     // Con el índice transparente fijado, el borrador ya escribe en él.
-    pasos.push(Paso::Borrador(vec![(3, 3), (8, 3)]));
-    pasos.push(Paso::Transparente(Some(0)));
-    pasos.push(Paso::Transparente(Some(0)));
-    pasos.push(Paso::Transparente(None));
-    pasos
+    steps_2.push(TestStep::Eraser(vec![(3, 3), (8, 3)]));
+    steps_2.push(TestStep::Transparent(Some(0)));
+    steps_2.push(TestStep::Transparent(Some(0)));
+    steps_2.push(TestStep::Transparent(None));
+    steps_2
 }
 
 /// El guion entero: herramientas, paleta (si es indexada) y, al final, la conversión exacta.
-pub fn guion_completo(m: &Modelo) -> Vec<Paso> {
-    let mut pasos = guion_herramientas(m);
-    if m.modo == Mode::Indexed {
-        pasos.extend(guion_paleta(m));
+pub fn script_complete(m: &Model) -> Vec<TestStep> {
+    let mut steps_2 = script_tools(m);
+    if m.mode_2 == Mode::Indexed {
+        steps_2.extend(script_palette(m));
     }
-    pasos.push(Paso::Convertir);
-    pasos
+    steps_2.push(TestStep::Convert);
+    steps_2
 }
 
 /// Un lápiz de un píxel en (0, 0) con un color que cambia ese píxel, o `None` si ninguno lo hace.
-pub fn edicion_que_cambia_opt(m: &Modelo) -> Option<Paso> {
-    let elecciones: Vec<Eleccion> = if m.modo == Mode::Indexed {
-        (0..m.paleta.len().min(256))
-            .map(|i| Eleccion::Entrada(i as u8))
+pub fn edit_that_changes_opt(m: &Model) -> Option<TestStep> {
+    let choices: Vec<Choice> = if m.mode_2 == Mode::Indexed {
+        (0..m.palette.len().min(256))
+            .map(|i| Choice::TestInput(i as u8))
             .collect()
     } else {
-        (1..=9).map(Eleccion::Ranura).collect()
+        (1..=9).map(Choice::TestSlot).collect()
     };
-    elecciones.into_iter().find_map(|e| {
-        let paso = Paso::Lapiz(vec![(0, 0)], e);
-        let mut copia = m.clone();
-        copia.aplicar(&paso).cambio.then_some(paso)
+    choices.into_iter().find_map(|e| {
+        let step = TestStep::Pencil(vec![(0, 0)], e);
+        let mut copy = m.clone();
+        copy.apply(&step).change.then_some(step)
     })
 }
 
-/// Como `edicion_que_cambia_opt`, con pánico si no hay ninguna.
-pub fn edicion_que_cambia(m: &Modelo) -> Paso {
-    edicion_que_cambia_opt(m).expect("alguna edición cambia el píxel (0, 0)")
+/// Como `edit_that_changes_opt`, con pánico si no hay ninguna.
+pub fn editing_that_changes(m: &Model) -> TestStep {
+    edit_that_changes_opt(m).expect("alguna edición cambia el píxel (0, 0)")
 }
 
 /// Lee un PNG del disco con `read_png`, con pánico si falla.
-pub fn leer(ruta: &Path) -> px_formats::PngRead {
-    let bytes = fs::read(ruta).unwrap_or_else(|e| panic!("leer {}: {e}", ruta.display()));
-    read_png(&bytes).unwrap_or_else(|e| panic!("read_png de {}: {e}", ruta.display()))
+pub fn leer(path_2: &Path) -> px_formats::PngRead {
+    let bytes = fs::read(path_2).unwrap_or_else(|e| panic!("leer {}: {e}", path_2.display()));
+    read_png(&bytes).unwrap_or_else(|e| panic!("read_png de {}: {e}", path_2.display()))
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1798,69 +1787,69 @@ pub fn leer(ruta: &Path) -> px_formats::PngRead {
 // ---------------------------------------------------------------------------------------
 
 #[derive(Default)]
-struct EstadoSelector {
-    arranques: usize,
-    ultima: Option<DialogRequest>,
+struct StateSelector {
+    startups: usize,
+    last_2: Option<DialogRequest>,
     /// `None`: sigue abierto. `Some(r)`: lo que dará el próximo `poll`.
-    resultado: Option<Option<PathBuf>>,
+    result: Option<Option<PathBuf>>,
 }
 
 /// Mando del test sobre el selector que se entregó a `Dialogs`: resuelve cuando el test lo dice.
 #[derive(Clone, Default)]
-pub struct Mando(Rc<RefCell<EstadoSelector>>);
+pub struct TestControl(Rc<RefCell<StateSelector>>);
 
-impl Mando {
-    /// El usuario elige `ruta`.
-    pub fn elegir(&self, ruta: &Path) {
-        self.0.borrow_mut().resultado = Some(Some(ruta.to_path_buf()));
+impl TestControl {
+    /// El usuario elige `path_2`.
+    pub fn choose(&self, path_2: &Path) {
+        self.0.borrow_mut().result = Some(Some(path_2.to_path_buf()));
     }
 
     /// El diálogo se cierra sin ruta.
-    pub fn cerrar(&self) {
-        self.0.borrow_mut().resultado = Some(None);
+    pub fn close(&self) {
+        self.0.borrow_mut().result = Some(None);
     }
 
     /// La última petición que recibió el selector.
-    pub fn ultima(&self) -> DialogRequest {
+    pub fn last_2(&self) -> DialogRequest {
         self.0
             .borrow()
-            .ultima
+            .last_2
             .clone()
             .expect("el selector recibió alguna petición")
     }
 
-    pub fn arranques(&self) -> usize {
-        self.0.borrow().arranques
+    pub fn startups(&self) -> usize {
+        self.0.borrow().startups
     }
 }
 
-struct SelectorFalso(Mando);
+struct SelectorFalse(TestControl);
 
-impl FilePicker for SelectorFalso {
+impl FilePicker for SelectorFalse {
     fn start(&mut self, request: &DialogRequest, parent: Option<&eframe::Frame>) {
         assert!(parent.is_none(), "las pruebas no tienen ventana");
-        let mut estado = self.0.0.borrow_mut();
-        estado.arranques += 1;
-        estado.ultima = Some(request.clone());
-        estado.resultado = None;
+        let mut state_2 = self.0.0.borrow_mut();
+        state_2.startups += 1;
+        state_2.last_2 = Some(request.clone());
+        state_2.result = None;
     }
 
     fn poll(&mut self) -> Option<Option<PathBuf>> {
-        self.0.0.borrow_mut().resultado.take()
+        self.0.0.borrow_mut().result.take()
     }
 
     fn abandon(&mut self) {
-        self.0.0.borrow_mut().resultado = None;
+        self.0.0.borrow_mut().result = None;
     }
 }
 
 /// `Dialogs` como los monta la app (fallo rápido solo en Linux), sobre un selector falso.
-pub fn dialogos(cwd: &Path) -> (Dialogs, Mando) {
-    let mando = Mando::default();
-    let dialogos = Dialogs::new(
-        Box::new(SelectorFalso(mando.clone())),
+pub fn dialogs_2(cwd: &Path) -> (Dialogs, TestControl) {
+    let control = TestControl::default();
+    let dialogs_2 = Dialogs::new(
+        Box::new(SelectorFalse(control.clone())),
         cfg!(target_os = "linux"),
         Some(cwd.to_path_buf()),
     );
-    (dialogos, mando)
+    (dialogs_2, control)
 }

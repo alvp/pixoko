@@ -16,7 +16,7 @@
 //! Reglas que cumplen todas las pruebas:
 //! - **Ninguna escritura sale de `target/pixoko-gate/`** (el directorio de trabajo de la puerta 2,
 //!   que se borra siempre): los casos del corpus se copian allí y se abre la copia; toda ruta de
-//!   escritura pasa por `fuera_de_golden_aseprite` (y por `fuera_de_golden`).
+//!   escritura pasa por `outside_golden_aseprite` (y por `outside_of_golden`).
 //! - **`golden/aseprite/` queda igual**: instantánea y SHA-256 de cada fichero al principio y al
 //!   terminar cada prueba.
 
@@ -37,85 +37,85 @@ use px_core::{Image, Pixel, Rgba};
 
 use super::common::sha256::sha256_hex;
 use super::common::{
-    Instantanea, Trabajo, comparar_instantaneas, fuera_de_golden, instantanea_de, raiz_repo,
+    TestSnapshot, Work, compare_snapshots, outside_of_golden, root_repo, snapshot_of,
 };
 
 pub fn golden_aseprite() -> PathBuf {
-    raiz_repo().join("golden").join("aseprite")
+    root_repo().join("golden").join("aseprite")
 }
 
 /// La ruta con sus enlaces y `..` resueltos: se canonicaliza el ancestro más largo que exista y se
 /// le añade el resto (la ruta puede no existir todavía).
-fn resolver(ruta: &Path) -> PathBuf {
-    let absoluta = std::path::absolute(ruta).unwrap_or_else(|_| ruta.to_path_buf());
-    let mut resto: Vec<OsString> = Vec::new();
-    let mut actual = absoluta.clone();
+fn resolver(path_2: &Path) -> PathBuf {
+    let absolute = std::path::absolute(path_2).unwrap_or_else(|_| path_2.to_path_buf());
+    let mut rest: Vec<OsString> = Vec::new();
+    let mut actual = absolute.clone();
     loop {
-        if let Ok(canonica) = fs::canonicalize(&actual) {
-            let mut resuelta = canonica;
-            for componente in resto.iter().rev() {
-                resuelta.push(componente);
+        if let Ok(canonical) = fs::canonicalize(&actual) {
+            let mut resolved = canonical;
+            for component in rest.iter().rev() {
+                resolved.push(component);
             }
-            return resuelta;
+            return resolved;
         }
         match (actual.parent(), actual.file_name()) {
-            (Some(padre), Some(nombre)) => {
-                resto.push(nombre.to_os_string());
+            (Some(padre), Some(name_2)) => {
+                rest.push(name_2.to_os_string());
                 actual = padre.to_path_buf();
             }
-            _ => return absoluta,
+            _ => return absolute,
         }
     }
 }
 
-/// Pánico si `ruta` (de escritura) cuelga de `golden/aseprite/` o de `golden/png/`. Se le pasa
+/// Pánico si `path_2` (de escritura) cuelga de `golden/aseprite/` o de `golden/png/`. Se le pasa
 /// **toda** ruta de escritura de la puerta de capas.
-pub fn fuera_de_golden_aseprite(ruta: &Path) {
-    let prohibida = resolver(&golden_aseprite());
-    let destino = resolver(ruta);
+pub fn outside_golden_aseprite(path_2: &Path) {
+    let forbidden = resolver(&golden_aseprite());
+    let target_2 = resolver(path_2);
     assert!(
-        !destino.starts_with(&prohibida),
+        !target_2.starts_with(&forbidden),
         "escritura prohibida en golden/aseprite: {} (resuelta a {})",
-        ruta.display(),
-        destino.display()
+        path_2.display(),
+        target_2.display()
     );
-    fuera_de_golden(ruta);
+    outside_of_golden(path_2);
 }
 
 /// SHA-256 de cada fichero de una carpeta (un subdirectorio, con barra final y sin huella).
-pub fn huellas(dir: &Path) -> BTreeMap<String, String> {
-    instantanea_de(dir)
+pub fn fingerprints(dir: &Path) -> BTreeMap<String, String> {
+    snapshot_of(dir)
         .into_iter()
-        .map(|(nombre, bytes)| {
-            let huella = if nombre.ends_with('/') {
+        .map(|(name_2, bytes)| {
+            let fingerprint = if name_2.ends_with('/') {
                 String::new()
             } else {
                 sha256_hex(&bytes)
             };
-            (nombre, huella)
+            (name_2, fingerprint)
         })
         .collect()
 }
 
-static INICIAL: OnceLock<(Instantanea, BTreeMap<String, String>)> = OnceLock::new();
+static INITIAL: OnceLock<(TestSnapshot, BTreeMap<String, String>)> = OnceLock::new();
 
 /// Instantánea y huellas de `golden/aseprite/` al empezar la puerta de capas: la toma la primera
-/// prueba que la pide (todas lo hacen al crear su `Trabajo3`, antes de escribir nada).
-pub fn inicial() -> &'static (Instantanea, BTreeMap<String, String>) {
-    INICIAL.get_or_init(|| {
+/// prueba que la pide (todas lo hacen al crear su `Work3`, antes de escribir nada).
+pub fn initial() -> &'static (TestSnapshot, BTreeMap<String, String>) {
+    INITIAL.get_or_init(|| {
         let dir = golden_aseprite();
-        (instantanea_de(&dir), huellas(&dir))
+        (snapshot_of(&dir), fingerprints(&dir))
     })
 }
 
 /// `Err` con los problemas si `golden/aseprite/` ya no es la instantánea inicial, por bytes y por
 /// SHA-256 de cada fichero.
-pub fn comprobar_golden_aseprite() -> Result<(), String> {
+pub fn check_golden_aseprite() -> Result<(), String> {
     let dir = golden_aseprite();
-    let (instantanea, hashes) = inicial();
-    comparar_instantaneas(instantanea, &instantanea_de(&dir))?;
-    let ahora = huellas(&dir);
-    if &ahora != hashes {
+    let (snapshot, hashes) = initial();
+    compare_snapshots(snapshot, &snapshot_of(&dir))?;
+    let now = fingerprints(&dir);
+    if &now != hashes {
         return Err("alguna huella SHA-256 de golden/aseprite cambió".to_string());
     }
     Ok(())
@@ -123,64 +123,67 @@ pub fn comprobar_golden_aseprite() -> Result<(), String> {
 
 /// Directorio de trabajo de la puerta de capas: el de la puerta 2 (`target/pixoko-gate/…`, se borra
 /// siempre) más la vigilancia de `golden/aseprite/` al soltarse.
-pub struct Trabajo3 {
-    pub t: Trabajo,
+pub struct Work3 {
+    pub t: Work,
 }
 
-impl Trabajo3 {
-    pub fn nuevo() -> Trabajo3 {
+impl Work3 {
+    pub fn new_2() -> Work3 {
         // La instantánea inicial se toma antes de que nada pueda escribir.
-        inicial();
-        let t = Trabajo::nuevo();
-        fuera_de_golden_aseprite(t.ruta());
-        Trabajo3 { t }
+        initial();
+        let t = Work::new_2();
+        outside_golden_aseprite(t.path_2());
+        Work3 { t }
     }
 
-    pub fn ruta(&self) -> &Path {
-        self.t.ruta()
+    pub fn path_2(&self) -> &Path {
+        self.t.path_2()
     }
 
     /// Nombres de lo que hay en el directorio de trabajo, ordenados.
-    pub fn nombres(&self) -> Vec<String> {
-        self.t.nombres()
+    pub fn names(&self) -> Vec<String> {
+        self.t.names()
     }
 
     /// Copia un caso del corpus (solo lectura) al directorio de trabajo con el nombre dado.
-    pub fn copia_del_corpus(&self, caso: &str, como: &str) -> PathBuf {
-        let destino = self.ruta().join(como);
-        fuera_de_golden_aseprite(&destino);
-        fs::copy(golden_aseprite().join(format!("{caso}.aseprite")), &destino)
-            .unwrap_or_else(|e| panic!("copiar {caso} al trabajo: {e}"));
-        destino
+    pub fn copy_of_the_corpus(&self, case: &str, as_word: &str) -> PathBuf {
+        let target_2 = self.path_2().join(as_word);
+        outside_golden_aseprite(&target_2);
+        fs::copy(
+            golden_aseprite().join(format!("{case}.aseprite")),
+            &target_2,
+        )
+        .unwrap_or_else(|e| panic!("copiar {case} al trabajo: {e}"));
+        target_2
     }
 }
 
-impl Drop for Trabajo3 {
+impl Drop for Work3 {
     fn drop(&mut self) {
         if !std::thread::panicking()
-            && let Err(problemas) = comprobar_golden_aseprite()
+            && let Err(problems) = check_golden_aseprite()
         {
-            panic!("golden/aseprite/ ya no es el de antes de la puerta de capas: {problemas}");
+            panic!("golden/aseprite/ ya no es el de antes de la puerta de capas: {problems}");
         }
     }
 }
 
 /// El píxel como RGBA resuelto (los indexados, por su paleta).
-pub fn rgba_de(imagen: &Image, x: u32, y: u32) -> Rgba {
-    match imagen.get_pixel(x, y).expect("píxel dentro") {
+pub fn rgba_de(image_2: &Image, x: u32, y: u32) -> Rgba {
+    match image_2.get_pixel(x, y).expect("píxel dentro") {
         Pixel::Rgba(c) => c,
-        Pixel::Indexed(i) => imagen
+        Pixel::Indexed(i) => image_2
             .palette()
             .and_then(|p| p.resolved(i).ok())
             .unwrap_or_else(|| panic!("índice {i} sin entrada")),
-        otro => panic!("se esperaba RGBA o indexado, hay {otro:?}"),
+        other_2 => panic!("se esperaba RGBA o indexado, hay {other_2:?}"),
     }
 }
 
 /// Dos composiciones iguales con la exención **exacta** de la decisión 3: el alfa es exacto y un
 /// píxel con alfa mayor que 0 que difiera en cualquier canal falla siempre; solo se exime el RGB
 /// cuando los dos píxeles tienen alfa 0.
-pub fn igual_salvo_rgb_con_alfa_0(a: &Image, b: &Image) -> Result<(), String> {
+pub fn equal_except_rgb_with_alpha_0(a: &Image, b: &Image) -> Result<(), String> {
     if (a.width(), a.height()) != (b.width(), b.height()) {
         return Err("composiciones de distinto tamaño".to_string());
     }

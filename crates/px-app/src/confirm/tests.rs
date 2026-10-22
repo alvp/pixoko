@@ -20,12 +20,12 @@ fn open(name: &str) -> Request {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn la_ventana_de_confirmacion_son_5_segundos() {
+fn the_confirmation_window_is_5_seconds() {
     assert_eq!(CONFIRM_SECS, 5.0);
 }
 
 #[test]
-fn fila_18_armar_confirmar_y_vaciarse() {
+fn row_18_arm_confirm_and_empty() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 0.0), Confirmation::Armed);
     assert_eq!(confirm.request(open("a"), 4.9), Confirmation::Confirmed);
@@ -38,21 +38,21 @@ fn fila_18_armar_confirmar_y_vaciarse() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_19_a_los_5_segundos_justos_ya_no_confirma() {
+fn row_19_at_exactly_5_seconds_it_no_longer_confirms() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 0.0), Confirmation::Armed);
     assert_eq!(confirm.request(open("a"), 5.0), Confirmation::Armed);
 }
 
 #[test]
-fn fila_19_otra_ruta_vuelve_a_armar() {
+fn row_19_another_path_arms_again() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 0.0), Confirmation::Armed);
     assert_eq!(confirm.request(open("b"), 1.0), Confirmation::Armed);
 }
 
 #[test]
-fn fila_19_otra_peticion_vuelve_a_armar() {
+fn row_19_another_request_arms_again() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 0.0), Confirmation::Armed);
     assert_eq!(confirm.request(Request::Close, 1.0), Confirmation::Armed);
@@ -60,7 +60,7 @@ fn fila_19_otra_peticion_vuelve_a_armar() {
 }
 
 #[test]
-fn fila_19_close_se_confirma_con_close() {
+fn row_19_close_is_confirmed_with_close() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(Request::Close, 0.0), Confirmation::Armed);
     assert_eq!(
@@ -70,7 +70,7 @@ fn fila_19_close_se_confirma_con_close() {
 }
 
 #[test]
-fn fila_19_clear_entre_dos_peticiones() {
+fn row_19_clear_between_two_requests() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 0.0), Confirmation::Armed);
     confirm.clear();
@@ -78,14 +78,14 @@ fn fila_19_clear_entre_dos_peticiones() {
 }
 
 #[test]
-fn fila_19_el_tiempo_hacia_atras_no_confirma() {
+fn row_19_time_going_backwards_does_not_confirm() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 10.0), Confirmation::Armed);
     assert_eq!(confirm.request(open("a"), 9.0), Confirmation::Armed);
 }
 
 #[test]
-fn fila_19_una_peticion_que_arma_de_nuevo_cuenta_desde_su_instante() {
+fn row_19_a_request_that_arms_again_counts_from_its_instant() {
     // Supuesto: al rearmar, la ventana de 5 s cuenta desde la petición que rearma.
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a"), 0.0), Confirmation::Armed);
@@ -103,7 +103,7 @@ fn fila_19_una_peticion_que_arma_de_nuevo_cuenta_desde_su_instante() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_20_avisos_de_confirmacion() {
+fn row_20_confirmation_notices() {
     assert_eq!(
         open_warning("casa.png"),
         "hay cambios sin guardar: suelta casa.png otra vez en 5 s para descartarlos, o guarda con Ctrl+S"
@@ -115,7 +115,7 @@ fn fila_20_avisos_de_confirmacion() {
 }
 
 #[test]
-fn fila_20_describe_saved() {
+fn row_20_describe_saved() {
     let plain = Saved {
         path: PathBuf::from("/d/casa.png"),
         copy_reason: None,
@@ -168,7 +168,7 @@ fn increasing_steps() -> impl Strategy<Value = Vec<Step>> {
 
 proptest! {
     #[test]
-    fn propiedad_8_confirmed_si_y_solo_si_repite_dentro_de_la_ventana(steps in increasing_steps()) {
+    fn property_8_confirmed_if_and_only_if_it_repeats_within_the_window(steps in increasing_steps()) {
         let mut confirm = Confirm::new();
         // Modelo: la última petición que armó y su instante.
         let mut armed: Option<(Request, f64)> = None;
@@ -197,7 +197,7 @@ proptest! {
     }
 
     #[test]
-    fn propiedad_8_con_tiempos_arbitrarios_no_entra_en_panico(
+    fn property_8_with_arbitrary_times_it_does_not_panic(
         steps in prop::collection::vec((any_request(), proptest::num::f64::ANY), 0..40)
     ) {
         let mut confirm = Confirm::new();

@@ -27,23 +27,23 @@ use super::Session;
 // Ayudantes
 // ---------------------------------------------------------------------------------------------
 
-fn distintos(n: usize) -> Vec<Rgba> {
+fn different(n: usize) -> Vec<Rgba> {
     (0..n)
         .map(|i| Rgba::opaque(i as u8, 255 - i as u8, (i * 7) as u8))
         .collect()
 }
 
-fn indexada(n: usize) -> Image {
-    let paleta = Palette::from_colors(distintos(n)).expect("paleta");
-    Image::new_indexed(4, 4, paleta).expect("imagen indexada")
+fn indexed(n: usize) -> Image {
+    let palette = Palette::from_colors(different(n)).expect("paleta");
+    Image::new_indexed(4, 4, palette).expect("imagen indexada")
 }
 
-fn de_modo(mode: Mode) -> Image {
+fn of_mode(mode: Mode) -> Image {
     Image::new(4, 4, mode).expect("imagen")
 }
 
 /// Sesión con un paso de historia hecho y otro deshecho (se puede deshacer y rehacer).
-fn sesion(image: Image) -> Session {
+fn session_2(image: Image) -> Session {
     let mut document = Document::new(image);
     let id = ImageId::from_raw(0);
     for x in 0..2u32 {
@@ -77,7 +77,7 @@ fn sesion(image: Image) -> Session {
     session
 }
 
-fn imagen(session: &Session) -> &Image {
+fn image_2(session: &Session) -> &Image {
     session
         .document
         .image(ImageId::from_raw(0))
@@ -86,36 +86,36 @@ fn imagen(session: &Session) -> &Image {
 
 /// Lo que `cycle_choice` no debe tocar nunca.
 #[derive(Clone, Debug, PartialEq)]
-struct Documento {
+struct TestDocument {
     state_id: u64,
     can_undo: bool,
     can_redo: bool,
     image: Image,
 }
 
-fn documento(session: &Session) -> Documento {
-    Documento {
+fn document(session: &Session) -> TestDocument {
+    TestDocument {
         state_id: session.document.state_id(),
         can_undo: session.document.can_undo(),
         can_redo: session.document.can_redo(),
-        image: imagen(session).clone(),
+        image: image_2(session).clone(),
     }
 }
 
 /// Un paso con `delta`, comprobando elección, `reveal` y documento.
-fn ciclo(session: &mut Session, delta: i8, esperada: ColorChoice, contexto: &str) {
-    let antes = documento(session);
-    let cambia = session.choice != esperada;
+fn cycle(session: &mut Session, delta: i8, expected: ColorChoice, context: &str) {
+    let antes = document(session);
+    let changes = session.choice != expected;
     session.view.reveal = false;
     session.cycle_choice(delta);
-    assert_eq!(session.choice, esperada, "{contexto}: delta {delta}");
-    if cambia {
+    assert_eq!(session.choice, expected, "{context}: delta {delta}");
+    if changes {
         assert!(
             session.view.reveal,
-            "{contexto}: delta {delta} no muestra la fila elegida"
+            "{context}: delta {delta} no muestra la fila elegida"
         );
     }
-    assert_eq!(documento(session), antes, "{contexto}: delta {delta}");
+    assert_eq!(document(session), antes, "{context}: delta {delta}");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -123,33 +123,33 @@ fn ciclo(session: &mut Session, delta: i8, esperada: ColorChoice, contexto: &str
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn indexada_de_256_la_ultima_mas_uno_da_la_primera() {
-    let mut s = sesion(indexada(256));
+fn indexed_of_256_the_last_plus_one_gives_the_first() {
+    let mut s = session_2(indexed(256));
     s.set_choice_revealing(ColorChoice::Entry(255));
-    ciclo(&mut s, 1, ColorChoice::Entry(0), "256");
+    cycle(&mut s, 1, ColorChoice::Entry(0), "256");
 }
 
 #[test]
-fn indexada_de_256_la_primera_menos_uno_da_la_ultima() {
-    let mut s = sesion(indexada(256));
+fn indexed_of_256_the_first_minus_one_gives_the_last() {
+    let mut s = session_2(indexed(256));
     assert_eq!(s.choice, ColorChoice::Entry(0));
-    ciclo(&mut s, -1, ColorChoice::Entry(255), "256");
+    cycle(&mut s, -1, ColorChoice::Entry(255), "256");
 }
 
 #[test]
-fn indexada_de_256_un_paso_por_llamada_en_los_dos_sentidos() {
-    let mut s = sesion(indexada(256));
-    for entrada in 1..=20u8 {
-        ciclo(&mut s, 1, ColorChoice::Entry(entrada), "256 hacia delante");
+fn indexed_of_256_one_step_per_call_in_both_directions() {
+    let mut s = session_2(indexed(256));
+    for input in 1..=20u8 {
+        cycle(&mut s, 1, ColorChoice::Entry(input), "256 hacia delante");
     }
-    for entrada in (0..20u8).rev() {
-        ciclo(&mut s, -1, ColorChoice::Entry(entrada), "256 hacia atrás");
+    for input in (0..20u8).rev() {
+        cycle(&mut s, -1, ColorChoice::Entry(input), "256 hacia atrás");
     }
 }
 
 #[test]
-fn indexada_de_256_una_vuelta_entera_vuelve_al_principio() {
-    let mut s = sesion(indexada(256));
+fn indexed_of_256_a_whole_turn_goes_back_to_the_start() {
+    let mut s = session_2(indexed(256));
     s.set_choice_revealing(ColorChoice::Entry(100));
     for _ in 0..256 {
         s.cycle_choice(1);
@@ -162,27 +162,27 @@ fn indexada_de_256_una_vuelta_entera_vuelve_al_principio() {
 }
 
 #[test]
-fn indexada_de_9_da_la_vuelta_en_los_dos_extremos() {
-    let mut s = sesion(indexada(9));
+fn indexed_of_9_wraps_around_at_both_ends() {
+    let mut s = session_2(indexed(9));
     s.set_choice_revealing(ColorChoice::Entry(8));
-    ciclo(&mut s, 1, ColorChoice::Entry(0), "9 de la última");
-    ciclo(&mut s, -1, ColorChoice::Entry(8), "9 de la primera");
+    cycle(&mut s, 1, ColorChoice::Entry(0), "9 de la última");
+    cycle(&mut s, -1, ColorChoice::Entry(8), "9 de la primera");
 }
 
 #[test]
-fn indexada_de_una_sola_entrada_se_queda_donde_esta() {
-    let mut s = sesion(indexada(1));
+fn indexed_of_a_single_entry_stays_where_it_is() {
+    let mut s = session_2(indexed(1));
     for delta in [1, -1] {
-        ciclo(&mut s, delta, ColorChoice::Entry(0), "1 entrada");
+        cycle(&mut s, delta, ColorChoice::Entry(0), "1 entrada");
     }
 }
 
 #[test]
-fn indexada_de_dos_entradas_alterna() {
-    let mut s = sesion(indexada(2));
-    ciclo(&mut s, 1, ColorChoice::Entry(1), "2 entradas");
-    ciclo(&mut s, 1, ColorChoice::Entry(0), "2 entradas");
-    ciclo(&mut s, -1, ColorChoice::Entry(1), "2 entradas");
+fn indexed_of_two_entries_toggles() {
+    let mut s = session_2(indexed(2));
+    cycle(&mut s, 1, ColorChoice::Entry(1), "2 entradas");
+    cycle(&mut s, 1, ColorChoice::Entry(0), "2 entradas");
+    cycle(&mut s, -1, ColorChoice::Entry(1), "2 entradas");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -190,51 +190,52 @@ fn indexada_de_dos_entradas_alterna() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn rgba_slot_9_mas_uno_da_slot_1_y_slot_1_menos_uno_da_slot_9() {
-    let mut s = sesion(de_modo(Mode::Rgba));
+fn rgba_slot_9_plus_one_gives_slot_1_and_slot_1_minus_one_gives_slot_9() {
+    let mut s = session_2(of_mode(Mode::Rgba));
     s.set_choice_revealing(ColorChoice::Slot(9));
-    ciclo(&mut s, 1, ColorChoice::Slot(1), "RGBA");
-    ciclo(&mut s, -1, ColorChoice::Slot(9), "RGBA");
+    cycle(&mut s, 1, ColorChoice::Slot(1), "RGBA");
+    cycle(&mut s, -1, ColorChoice::Slot(9), "RGBA");
 }
 
 #[test]
-fn rgba_recorre_las_nueve_ranuras_de_una_en_una() {
-    let mut s = sesion(de_modo(Mode::Rgba));
+fn rgba_walks_the_nine_slots_one_by_one() {
+    let mut s = session_2(of_mode(Mode::Rgba));
     assert_eq!(s.choice, ColorChoice::Slot(1));
-    for ranura in 2..=9u8 {
-        ciclo(&mut s, 1, ColorChoice::Slot(ranura), "RGBA hacia delante");
+    for slot in 2..=9u8 {
+        cycle(&mut s, 1, ColorChoice::Slot(slot), "RGBA hacia delante");
     }
-    ciclo(&mut s, 1, ColorChoice::Slot(1), "RGBA de la última");
+    cycle(&mut s, 1, ColorChoice::Slot(1), "RGBA de la última");
     // De la 1 hacia atrás da la 9 y luego baja de una en una.
-    ciclo(&mut s, -1, ColorChoice::Slot(9), "RGBA de la primera");
-    for ranura in (1..=8u8).rev() {
-        ciclo(&mut s, -1, ColorChoice::Slot(ranura), "RGBA hacia atrás");
+    cycle(&mut s, -1, ColorChoice::Slot(9), "RGBA de la primera");
+    for slot in (1..=8u8).rev() {
+        cycle(&mut s, -1, ColorChoice::Slot(slot), "RGBA hacia atrás");
     }
 }
 
 #[test]
-fn gray_y_gray_alpha_dan_la_vuelta_en_las_nueve_ranuras() {
-    for (nombre, mode) in [("Gray", Mode::Gray), ("GrayAlpha", Mode::GrayAlpha)] {
-        let mut s = sesion(de_modo(mode));
+fn gray_and_gray_alpha_wrap_around_in_the_nine_slots() {
+    for (name_2, mode) in [("Gray", Mode::Gray), ("GrayAlpha", Mode::GrayAlpha)] {
+        let mut s = session_2(of_mode(mode));
         s.set_choice_revealing(ColorChoice::Slot(9));
-        ciclo(&mut s, 1, ColorChoice::Slot(1), nombre);
-        ciclo(&mut s, -1, ColorChoice::Slot(9), nombre);
-        ciclo(&mut s, -1, ColorChoice::Slot(8), nombre);
-        ciclo(&mut s, 1, ColorChoice::Slot(9), nombre);
+        cycle(&mut s, 1, ColorChoice::Slot(1), name_2);
+        cycle(&mut s, -1, ColorChoice::Slot(9), name_2);
+        cycle(&mut s, -1, ColorChoice::Slot(8), name_2);
+        cycle(&mut s, 1, ColorChoice::Slot(9), name_2);
     }
 }
 
 #[test]
-fn en_los_modos_sin_paleta_siempre_hay_nueve_muestras() {
+fn in_modes_without_a_palette_there_are_always_nine_swatches() {
     for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
-        let mut s = sesion(de_modo(mode));
+        let mut s = session_2(of_mode(mode));
         let mut vistas = vec![s.choice];
         for _ in 0..9 {
             s.cycle_choice(1);
             vistas.push(s.choice);
         }
-        let esperadas: Vec<ColorChoice> = (0..=9u8).map(|i| ColorChoice::Slot(i % 9 + 1)).collect();
-        assert_eq!(vistas, esperadas, "{mode:?}");
+        let expected_2_2: Vec<ColorChoice> =
+            (0..=9u8).map(|i| ColorChoice::Slot(i % 9 + 1)).collect();
+        assert_eq!(vistas, expected_2_2, "{mode:?}");
     }
 }
 
@@ -243,41 +244,41 @@ fn en_los_modos_sin_paleta_siempre_hay_nueve_muestras() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn delta_de_mas_de_un_paso_suma_modulo_el_numero_de_muestras() {
-    let mut s = sesion(indexada(9));
+fn delta_of_more_than_one_step_adds_modulo_the_number_of_swatches() {
+    let mut s = session_2(indexed(9));
     s.set_choice_revealing(ColorChoice::Entry(7));
-    ciclo(&mut s, 2, ColorChoice::Entry(0), "9 con +2");
-    ciclo(&mut s, -2, ColorChoice::Entry(7), "9 con -2");
-    ciclo(&mut s, 9, ColorChoice::Entry(7), "9 con +9");
-    ciclo(&mut s, -9, ColorChoice::Entry(7), "9 con -9");
+    cycle(&mut s, 2, ColorChoice::Entry(0), "9 con +2");
+    cycle(&mut s, -2, ColorChoice::Entry(7), "9 con -2");
+    cycle(&mut s, 9, ColorChoice::Entry(7), "9 con +9");
+    cycle(&mut s, -9, ColorChoice::Entry(7), "9 con -9");
 }
 
 #[test]
-fn cycle_choice_no_toca_el_documento_ni_la_historia_en_ningun_modo() {
-    let imagenes = [
-        indexada(9),
-        indexada(256),
-        de_modo(Mode::Rgba),
-        de_modo(Mode::Gray),
-        de_modo(Mode::GrayAlpha),
+fn cycle_choice_does_not_touch_the_document_or_the_history_in_any_mode() {
+    let images = [
+        indexed(9),
+        indexed(256),
+        of_mode(Mode::Rgba),
+        of_mode(Mode::Gray),
+        of_mode(Mode::GrayAlpha),
     ];
-    for image in imagenes {
-        let mut s = sesion(image);
-        let antes = documento(&s);
+    for image in images {
+        let mut s = session_2(image);
+        let antes = document(&s);
         assert!(antes.can_redo, "la sesión de prueba puede rehacer");
         for _ in 0..30 {
             s.cycle_choice(1);
             s.cycle_choice(-1);
             s.cycle_choice(-1);
         }
-        assert_eq!(documento(&s), antes, "{:?}", imagen(&s).mode());
+        assert_eq!(document(&s), antes, "{:?}", image_2(&s).mode());
     }
 }
 
 #[test]
-fn la_fila_elegida_se_muestra_tras_cada_cambio() {
-    for image in [indexada(9), de_modo(Mode::Rgba)] {
-        let mut s = sesion(image);
+fn the_chosen_row_is_shown_after_each_change() {
+    for image in [indexed(9), of_mode(Mode::Rgba)] {
+        let mut s = session_2(image);
         for _ in 0..12 {
             s.view.reveal = false;
             s.cycle_choice(1);
@@ -291,65 +292,65 @@ fn la_fila_elegida_se_muestra_tras_cada_cambio() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn con_una_choice_invalida_cycle_choice_da_la_eleccion_inicial_en_los_dos_sentidos() {
-    let casos: Vec<(&str, Image, ColorChoice)> = vec![
+fn with_an_invalid_choice_cycle_choice_gives_the_initial_choice_in_both_directions() {
+    let cases: Vec<(&str, Image, ColorChoice)> = vec![
         (
             "indexada con una ranura sin entrada",
-            indexada(4),
+            indexed(4),
             ColorChoice::Slot(9),
         ),
         (
             "indexada con una entrada fuera de la paleta",
-            indexada(4),
+            indexed(4),
             ColorChoice::Entry(200),
         ),
         (
             "indexada de 9 con la entrada 9",
-            indexada(9),
+            indexed(9),
             ColorChoice::Entry(9),
         ),
         (
             "RGBA con una entrada",
-            de_modo(Mode::Rgba),
+            of_mode(Mode::Rgba),
             ColorChoice::Entry(3),
         ),
         (
             "Gray con una entrada",
-            de_modo(Mode::Gray),
+            of_mode(Mode::Gray),
             ColorChoice::Entry(0),
         ),
         (
             "GrayAlpha con una entrada",
-            de_modo(Mode::GrayAlpha),
+            of_mode(Mode::GrayAlpha),
             ColorChoice::Entry(1),
         ),
         (
             "RGBA con la ranura 0",
-            de_modo(Mode::Rgba),
+            of_mode(Mode::Rgba),
             ColorChoice::Slot(0),
         ),
         (
             "RGBA con la ranura 10",
-            de_modo(Mode::Rgba),
+            of_mode(Mode::Rgba),
             ColorChoice::Slot(10),
         ),
     ];
-    for (nombre, image, invalida) in casos {
+    for (name_2, image, invalid) in cases {
         for delta in [1i8, -1] {
-            let mut s = sesion(image.clone());
-            let inicial = initial_choice(imagen(&s));
-            s.choice = invalida;
-            let antes = documento(&s);
+            let mut s = session_2(image.clone());
+            let initial = initial_choice(image_2(&s));
+            s.choice = invalid;
+            let antes = document(&s);
             s.cycle_choice(delta);
-            assert_eq!(s.choice, inicial, "{nombre}: delta {delta}");
-            assert_eq!(documento(&s), antes, "{nombre}: delta {delta}");
+            assert_eq!(s.choice, initial, "{name_2}: delta {delta}");
+            assert_eq!(document(&s), antes, "{name_2}: delta {delta}");
         }
     }
 }
 
 #[test]
-fn tras_una_choice_invalida_el_siguiente_paso_ya_es_normal() {
-    let mut s = sesion(indexada(4));
+fn after_an_invalid_choice_the_next_step_is_already_normal() {
+    let mut s = session_2(indexed(4));
     s.choice = ColorChoice::Entry(200);
     s.cycle_choice(1);
     assert_eq!(s.choice, ColorChoice::Entry(0));

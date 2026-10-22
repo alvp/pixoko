@@ -269,21 +269,21 @@ fn load(path: &Path) -> Result<px_formats::PngRead, FileError> {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_parse_args() {
+fn row_1_parse_args() {
     assert_eq!(parse_args(&[]), Ok(None));
     assert_eq!(
         parse_args(&[OsString::from("a.png")]),
         Ok(Some(PathBuf::from("a.png")))
     );
-    let uso = parse_args(&[OsString::from("a"), OsString::from("b")]);
-    match uso {
+    let usage = parse_args(&[OsString::from("a"), OsString::from("b")]);
+    match usage {
         Err(text) => assert!(!text.is_empty(), "el uso no puede ir vacío"),
         Ok(other) => panic!("con dos argumentos se esperaba el uso, no {other:?}"),
     }
 }
 
 #[test]
-fn fila_1_pick_dropped() {
+fn row_1_pick_dropped() {
     let a = PathBuf::from("/d/a.png");
     let b = PathBuf::from("/d/b.png");
     assert_eq!(
@@ -301,14 +301,14 @@ fn fila_1_pick_dropped() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_ruta_inexistente_es_read() {
+fn row_3_nonexistent_path_is_read() {
     let tmp = TmpDir::new();
     let result = load(&tmp.path().join("no-existe.png"));
     assert!(matches!(result, Err(FileError::Read(_))), "{result:?}");
 }
 
 #[test]
-fn fila_3_directorio_es_not_a_file() {
+fn row_3_directory_is_not_a_file() {
     let tmp = TmpDir::new();
     let dir = tmp.path().join("carpeta.png");
     fs::create_dir(&dir).unwrap();
@@ -317,7 +317,7 @@ fn fila_3_directorio_es_not_a_file() {
 
 #[cfg(unix)]
 #[test]
-fn fila_3_dispositivo_es_not_a_file() {
+fn row_3_device_is_not_a_file() {
     assert_eq!(
         load(Path::new("/dev/null")).unwrap_err(),
         FileError::NotAFile
@@ -325,14 +325,14 @@ fn fila_3_dispositivo_es_not_a_file() {
 }
 
 #[test]
-fn fila_3_vacio_basura_y_cabecera_sin_datos_son_png() {
+fn row_3_empty_garbage_and_header_without_data_are_png() {
     let tmp = TmpDir::new();
-    let casos: [(&str, Vec<u8>); 3] = [
+    let cases: [(&str, Vec<u8>); 3] = [
         ("vacio.png", Vec::new()),
         ("basura.png", b"esto no es un PNG, ni de lejos".to_vec()),
         ("sin-datos.png", header_only(8, 8)),
     ];
-    for (name, bytes) in casos {
+    for (name, bytes) in cases {
         let path = write_file(tmp.path(), name, &bytes);
         let result = load(&path);
         assert!(
@@ -343,7 +343,7 @@ fn fila_3_vacio_basura_y_cabecera_sin_datos_son_png() {
 }
 
 #[test]
-fn fila_3_fichero_mayor_que_max_bytes_es_too_big_file() {
+fn row_3_a_file_larger_than_max_bytes_is_too_big_file() {
     let tmp = TmpDir::new();
     let path = write_file(tmp.path(), "grande.png", &[0u8; 200]);
     assert_eq!(
@@ -356,7 +356,7 @@ fn fila_3_fichero_mayor_que_max_bytes_es_too_big_file() {
 }
 
 #[test]
-fn fila_3_el_tope_de_bytes_es_inclusivo() {
+fn row_3_the_byte_cap_is_inclusive() {
     // «de hasta MAX_FILE_BYTES»: con exactamente `max_bytes` no es TooBigFile (aquí, basura).
     let tmp = TmpDir::new();
     let path = write_file(tmp.path(), "justo.png", &[0u8; 100]);
@@ -365,7 +365,7 @@ fn fila_3_el_tope_de_bytes_es_inclusivo() {
 }
 
 #[test]
-fn fila_3_un_png_valido_del_corpus_se_lee_igual_que_read_png() {
+fn row_3_a_valid_png_of_the_corpus_reads_the_same_as_read_png() {
     let files = corpus();
     assert!(files.len() >= 4, "el corpus tiene cuatro ficheros");
     for path in files {
@@ -376,7 +376,7 @@ fn fila_3_un_png_valido_del_corpus_se_lee_igual_que_read_png() {
 }
 
 #[test]
-fn las_constantes_de_los_topes() {
+fn the_constants_of_the_caps() {
     assert_eq!(MAX_FILE_BYTES, 256 << 20);
     assert_eq!(MAX_OPEN_PIXELS, 1 << 26);
 }
@@ -386,7 +386,7 @@ fn las_constantes_de_los_topes() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_ancho_mayor_que_max_side() {
+fn row_4_width_greater_than_max_side() {
     let tmp = TmpDir::new();
     let path = write_file(tmp.path(), "ancho.png", &header_only(20000, 1));
     assert_eq!(
@@ -400,7 +400,7 @@ fn fila_4_ancho_mayor_que_max_side() {
 }
 
 #[test]
-fn fila_4_demasiados_pixeles() {
+fn row_4_too_many_pixels() {
     let tmp = TmpDir::new();
     let path = write_file(tmp.path(), "pixeles.png", &header_only(8193, 8192));
     assert_eq!(
@@ -414,7 +414,7 @@ fn fila_4_demasiados_pixeles() {
 }
 
 #[test]
-fn fila_4_el_max_side_es_el_que_se_pasa() {
+fn row_4_the_max_side_is_the_one_passed() {
     let tmp = TmpDir::new();
     let path = write_file(tmp.path(), "lado.png", &header_only(2049, 1));
     assert_eq!(
@@ -428,7 +428,7 @@ fn fila_4_el_max_side_es_el_que_se_pasa() {
 }
 
 #[test]
-fn fila_4_justo_el_tope_pasa_check_fits_y_llega_a_read_png() {
+fn row_4_exactly_the_cap_passes_check_fits_and_reaches_read_png() {
     let tmp = TmpDir::new();
     let path = write_file(tmp.path(), "justo.png", &header_only(8192, 8192));
     // No hay datos: el error es de `read_png` (`Png`), no de `check_fits`.
@@ -441,7 +441,7 @@ fn fila_4_justo_el_tope_pasa_check_fits_y_llega_a_read_png() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_5_check_fits() {
+fn row_5_check_fits() {
     assert_eq!(check_fits(8192, 8192, 16384), Ok(()));
     assert_eq!(check_fits(16384, 4096, 16384), Ok(()));
     assert_eq!(
@@ -484,7 +484,7 @@ fn fila_5_check_fits() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_12_exito_sobre_destino_nuevo() {
+fn row_12_success_on_a_new_target() {
     let tmp = TmpDir::new();
     let target = tmp.path().join("nuevo.png");
     let bytes: Vec<u8> = (0..5000u32).map(|n| (n % 251) as u8).collect();
@@ -494,7 +494,7 @@ fn fila_12_exito_sobre_destino_nuevo() {
 }
 
 #[test]
-fn fila_12_destino_directorio_no_vacio_falla_sin_dejar_rastro() {
+fn row_12_non_empty_target_directory_fails_without_leaving_a_trace() {
     let tmp = TmpDir::new();
     let target = tmp.path().join("destino");
     fs::create_dir(&target).unwrap();
@@ -515,7 +515,7 @@ fn fila_12_destino_directorio_no_vacio_falla_sin_dejar_rastro() {
 
 #[cfg(unix)]
 #[test]
-fn fila_13_se_conservan_los_permisos() {
+fn row_13_the_permissions_are_kept() {
     let tmp = TmpDir::new();
     let target = write_file(tmp.path(), "existente.png", &[7u8; 1024]);
     set_mode(&target, 0o640);
@@ -532,7 +532,7 @@ fn fila_13_se_conservan_los_permisos() {
 
 #[cfg(unix)]
 #[test]
-fn fila_14_write_atomic_rechaza_un_fichero_de_solo_lectura() {
+fn row_14_write_atomic_rejects_a_read_only_file() {
     if !permissions_enforced() {
         return;
     }
@@ -547,7 +547,7 @@ fn fila_14_write_atomic_rechaza_un_fichero_de_solo_lectura() {
 
 #[cfg(unix)]
 #[test]
-fn fila_14_write_atomic_en_un_directorio_sin_permiso_da_write() {
+fn row_14_write_atomic_in_a_directory_without_permission_gives_write() {
     if !permissions_enforced() {
         return;
     }
@@ -566,7 +566,7 @@ fn fila_14_write_atomic_en_un_directorio_sin_permiso_da_write() {
 
 #[cfg(unix)]
 #[test]
-fn fila_14_sesion_con_fichero_de_solo_lectura() {
+fn row_14_session_with_a_read_only_file() {
     if !permissions_enforced() {
         return;
     }
@@ -604,7 +604,7 @@ fn fila_14_sesion_con_fichero_de_solo_lectura() {
 
 #[cfg(unix)]
 #[test]
-fn fila_14_sesion_con_directorio_de_solo_lectura() {
+fn row_14_session_with_a_read_only_directory() {
     if !permissions_enforced() {
         return;
     }
@@ -639,7 +639,7 @@ fn fila_14_sesion_con_directorio_de_solo_lectura() {
 
 #[cfg(unix)]
 #[test]
-fn fila_15_save_escribe_en_el_destino_real_y_el_enlace_sigue_siendo_enlace() {
+fn row_15_save_writes_to_the_real_target_and_the_link_stays_a_link() {
     let tmp = TmpDir::new();
     let real = write_file(
         tmp.path(),
@@ -671,7 +671,7 @@ fn fila_15_save_escribe_en_el_destino_real_y_el_enlace_sigue_siendo_enlace() {
 
 #[cfg(unix)]
 #[test]
-fn fila_15_write_atomic_directo_sobre_un_enlace() {
+fn row_15_write_atomic_directly_over_a_link() {
     let tmp = TmpDir::new();
     let real = write_file(tmp.path(), "real.bin", b"viejo");
     let link = tmp.path().join("l.bin");
@@ -692,7 +692,7 @@ fn fila_15_write_atomic_directo_sobre_un_enlace() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_21_file_label() {
+fn row_21_file_label() {
     assert_eq!(file_label(Path::new("/a/b/casa.png")), "casa.png");
     assert_eq!(file_label(Path::new("casa.png")), "casa.png");
     assert_eq!(file_label(Path::new("/")), "/");
@@ -700,7 +700,7 @@ fn fila_21_file_label() {
 }
 
 #[test]
-fn copy_path_y_untitled_path_numeran_sin_pisar() {
+fn copy_path_and_untitled_path_number_without_overwriting() {
     let tmp = TmpDir::new();
     let original = tmp.path().join("x.png");
     assert_eq!(copy_path(&original), tmp.path().join("x-copia.png"));
@@ -723,7 +723,7 @@ fn copy_path_y_untitled_path_numeran_sin_pisar() {
 }
 
 #[test]
-fn los_errores_se_muestran_en_texto_no_vacio() {
+fn errors_are_shown_in_a_non_empty_text() {
     let errors = [
         FileError::NotAFile,
         FileError::TooBigFile { bytes: 2, max: 1 },
@@ -750,7 +750,7 @@ fn los_errores_se_muestran_en_texto_no_vacio() {
 /// Unidad 14a-2 (decisión 9): el rechazo ya no depende de una textura de la GPU (el lado
 /// máximo es `Canvas::MAX_SIDE`), así que el texto deja de hablar de «una textura».
 #[test]
-fn too_large_to_show_habla_del_lado_maximo_mostrable_y_no_de_una_textura() {
+fn too_large_to_show_talks_about_the_maximum_displayable_side_and_not_about_a_texture() {
     let error = FileError::TooLargeToShow {
         width: 20000,
         height: 3,
@@ -809,7 +809,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    fn propiedad_4_un_fallo_no_destruye(
+    fn property_4_a_failure_does_not_destroy(
         previous in prop::collection::vec(any::<u8>(), 0..2048),
         new in prop::collection::vec(any::<u8>(), 0..512),
         directory in any::<bool>(),
@@ -836,7 +836,7 @@ fn max_side() -> impl Strategy<Value = usize> {
 
 proptest! {
     #[test]
-    fn propiedad_6_check_fits_es_ok_si_y_solo_si_cabe(w in side(), h in side(), m in max_side()) {
+    fn property_6_check_fits_is_ok_if_and_only_if_it_fits(w in side(), h in side(), m in max_side()) {
         let m64 = m as u64;
         let fits_side = u64::from(w) <= m64 && u64::from(h) <= m64;
         let fits_pixels = u64::from(w) * u64::from(h) <= (1u64 << 26);
@@ -897,7 +897,7 @@ fn valid_file_name(name: &str) -> bool {
 
 /// Nombres de fichero válidos en todas las plataformas: espacios (no al final), Unicode, sin
 /// extensión, `.PNG`, empezando por punto... Los que solo valen en Unix (`a.`, `C:.png`) los
-/// cubre `copy_path_con_nombres_validos_solo_en_unix`.
+/// cubre `copy_path_with_valid_names_only_on_unix`.
 fn file_name() -> impl Strategy<Value = String> {
     (
         "[^<>:\"/\\\\|?*\\x00-\\x1f\\x7f]{0,20}",
@@ -916,12 +916,12 @@ fn file_name() -> impl Strategy<Value = String> {
 /// Regresión del CI de Windows (`name = "C:.png"`): un nombre con prefijo de unidad no es un
 /// nombre de fichero válido, y el oráculo de la propiedad 7 no puede aceptarlo.
 #[test]
-fn regresion_c_dos_puntos_png_no_es_nombre_valido() {
+fn regression_c_colon_png_is_not_a_valid_name() {
     assert!(!valid_file_name("C:.png"));
 }
 
 #[test]
-fn nombres_invalidos_en_alguna_plataforma_se_rechazan() {
+fn names_invalid_on_some_platform_are_rejected() {
     for name in [
         "",
         ".",
@@ -961,7 +961,7 @@ fn nombres_invalidos_en_alguna_plataforma_se_rechazan() {
 }
 
 #[test]
-fn nombres_validos_en_todas_las_plataformas_se_aceptan() {
+fn names_valid_on_all_platforms_are_accepted() {
     for name in [
         "a",
         "a.png",
@@ -985,7 +985,7 @@ fn nombres_validos_en_todas_las_plataformas_se_aceptan() {
 }
 
 #[test]
-fn un_unico_componente_normal_es_un_nombre_de_una_pieza() {
+fn a_single_normal_component_is_a_one_piece_name() {
     for name in ["a", "a.png", ".png", "a b.png"] {
         assert!(is_single_normal_component(name), "{name:?}");
     }
@@ -997,7 +997,7 @@ fn un_unico_componente_normal_es_un_nombre_de_una_pieza() {
 /// En Windows `C:.png` es un prefijo de unidad más `.png`: `join` sustituye la carpeta.
 #[cfg(windows)]
 #[test]
-fn windows_c_dos_puntos_png_no_cuelga_de_la_carpeta() {
+fn windows_c_colon_png_does_not_hang_from_the_folder() {
     let tmp = TmpDir::new();
     assert!(!is_single_normal_component("C:.png"));
     assert!(is_single_normal_component("a.png"));
@@ -1008,7 +1008,7 @@ fn windows_c_dos_puntos_png_no_cuelga_de_la_carpeta() {
 /// lo que cubría el generador antes de limitarse a nombres válidos en todas partes.
 #[cfg(unix)]
 #[test]
-fn copy_path_con_nombres_validos_solo_en_unix() {
+fn copy_path_with_valid_names_only_on_unix() {
     for name in [
         "a.",
         "a ",
@@ -1036,7 +1036,7 @@ fn copy_path_con_nombres_validos_solo_en_unix() {
 /// `copy_path` no entra en pánico con nombres raros ni con la ruta vacía, y siempre da un
 /// nombre libre que termina en `.png`. No escribe nada: solo mira si existe el candidato.
 #[test]
-fn copy_path_no_entra_en_panico_con_nombres_raros() {
+fn copy_path_does_not_panic_with_odd_names() {
     for name in [
         "a.png:stream",
         "C:",
@@ -1069,7 +1069,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    fn propiedad_7_copy_path(name in file_name(), existing in 0usize..=5) {
+    fn property_7_copy_path(name in file_name(), existing in 0usize..=5) {
         let tmp = TmpDir::new();
         let original = tmp.path().join(&name);
         // Nunca se escribe fuera de la carpeta temporal: con un nombre que no sea un único
@@ -1095,7 +1095,7 @@ proptest! {
     }
 
     #[test]
-    fn propiedad_7_untitled_path(existing in 0usize..=5) {
+    fn property_7_untitled_path(existing in 0usize..=5) {
         let tmp = TmpDir::new();
         let mut seen: Vec<PathBuf> = Vec::new();
         for i in 0..=existing {

@@ -107,7 +107,7 @@ fn session_with_pending() -> Session {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_un_open_correcto_con_texto_pendiente_lo_descarta_y_lo_dice_una_vez() {
+fn row_10_a_successful_open_with_pending_text_discards_it_and_says_so_once() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_256());
     let mut session = session_with_pending();
@@ -123,7 +123,7 @@ fn fila_10_un_open_correcto_con_texto_pendiente_lo_descarta_y_lo_dice_una_vez() 
 }
 
 #[test]
-fn fila_10_el_texto_descartado_no_se_aplica_a_nada() {
+fn row_10_the_discarded_text_is_not_applied_to_anything() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_f());
     let mut session = session_with_pending();
@@ -140,7 +140,7 @@ fn fila_10_el_texto_descartado_no_se_aplica_a_nada() {
 }
 
 #[test]
-fn fila_10_un_open_con_error_no_cambia_la_sesion_ni_descarta_el_texto() {
+fn row_10_an_open_with_an_error_changes_neither_the_session_nor_discards_the_text() {
     let tmp = TmpDir::new();
 
     // Fichero inexistente, con y sin `discard`.
@@ -194,7 +194,7 @@ fn fila_10_un_open_con_error_no_cambia_la_sesion_ni_descarta_el_texto() {
 }
 
 #[test]
-fn fila_10_sin_texto_pendiente_un_open_no_avisa() {
+fn row_10_without_pending_text_an_open_does_not_warn() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_256());
     let mut session = session_f();
@@ -216,7 +216,7 @@ fn fila_10_sin_texto_pendiente_un_open_no_avisa() {
 }
 
 #[test]
-fn fila_10_el_aviso_vale_para_cada_open_con_texto_pendiente() {
+fn row_10_the_notice_applies_to_each_open_with_pending_text() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_f());
     let mut session = session_with_pending();
@@ -238,7 +238,7 @@ fn fila_10_el_aviso_vale_para_cada_open_con_texto_pendiente() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn una_sesion_nueva_parte_con_la_vista_por_defecto() {
+fn a_new_session_starts_with_the_default_view() {
     let session = session_f();
     assert_eq!(session.view, PanelView::default());
     assert!(!session.view.reveal);
@@ -247,7 +247,7 @@ fn una_sesion_nueva_parte_con_la_vista_por_defecto() {
 }
 
 #[test]
-fn fila_11_set_choice_revealing_con_otra_eleccion_la_asigna_y_pone_reveal() {
+fn row_11_set_choice_revealing_with_another_choice_assigns_it_and_sets_reveal() {
     let mut session = Session::sample(Document::new(image_256()));
     assert_eq!(session.choice, ColorChoice::Entry(0));
     assert!(!session.view.reveal);
@@ -267,7 +267,7 @@ fn fila_11_set_choice_revealing_con_otra_eleccion_la_asigna_y_pone_reveal() {
 }
 
 #[test]
-fn fila_11_set_choice_revealing_con_la_misma_eleccion_no_pone_reveal() {
+fn row_11_set_choice_revealing_with_the_same_choice_does_not_set_reveal() {
     let mut session = Session::sample(Document::new(image_256()));
     session.choice = ColorChoice::Entry(200);
     assert!(!session.view.reveal);
@@ -277,7 +277,7 @@ fn fila_11_set_choice_revealing_con_la_misma_eleccion_no_pone_reveal() {
 }
 
 #[test]
-fn fila_11_set_choice_revealing_con_la_misma_eleccion_no_apaga_un_reveal_pendiente() {
+fn row_11_set_choice_revealing_with_the_same_choice_does_not_turn_off_a_pending_reveal() {
     let mut session = Session::sample(Document::new(image_256()));
     session.choice = ColorChoice::Entry(7);
     session.view.reveal = true;
@@ -286,7 +286,7 @@ fn fila_11_set_choice_revealing_con_la_misma_eleccion_no_apaga_un_reveal_pendien
 }
 
 #[test]
-fn fila_11_set_choice_revealing_no_toca_el_resto_de_la_vista_ni_del_desplazamiento() {
+fn row_11_set_choice_revealing_does_not_touch_the_rest_of_the_view_or_the_scroll() {
     let mut session = Session::sample(Document::new(image_256()));
     session.view = PanelView {
         offset_px: 12,
@@ -321,7 +321,7 @@ fn fila_11_set_choice_revealing_no_toca_el_resto_de_la_vista_ni_del_desplazamien
 }
 
 #[test]
-fn fila_11_reveal_if_choice_changed_solo_pone_reveal_si_la_eleccion_cambio() {
+fn row_11_reveal_if_choice_changed_only_sets_reveal_if_the_choice_changed() {
     let mut session = Session::sample(Document::new(image_256()));
     session.choice = ColorChoice::Entry(10);
 
@@ -346,7 +346,7 @@ fn fila_11_reveal_if_choice_changed_solo_pone_reveal_si_la_eleccion_cambio() {
 }
 
 #[test]
-fn fila_11_abrir_un_fichero_reinicia_la_vista() {
+fn row_11_opening_a_file_resets_the_view() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_f());
     let mut session = Session::sample(Document::new(image_256()));
@@ -364,7 +364,7 @@ fn fila_11_abrir_un_fichero_reinicia_la_vista() {
 }
 
 #[test]
-fn fila_11_un_open_con_error_no_cambia_la_vista() {
+fn row_11_an_open_with_an_error_does_not_change_the_view() {
     let tmp = TmpDir::new();
     let vista = PanelView {
         offset_px: 30,

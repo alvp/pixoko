@@ -255,7 +255,7 @@ fn rgb_1x1(r: u8, g: u8, b: u8) -> Vec<u8> {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn la_sesion_de_muestra_no_tiene_ruta_ni_cambios() {
+fn the_sample_session_has_no_path_or_changes() {
     let session = fresh_session();
     assert!(session.path().is_none());
     assert!(!session.modified());
@@ -269,7 +269,7 @@ fn la_sesion_de_muestra_no_tiene_ruta_ni_cambios() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_2_abrir_el_corpus() {
+fn row_2_open_the_corpus() {
     let files = corpus();
     assert!(files.len() >= 4, "el corpus tiene cuatro ficheros");
     for path in files {
@@ -311,7 +311,7 @@ fn fila_2_abrir_el_corpus() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6_con_cambios_sin_discard_no_se_lee_el_fichero() {
+fn row_6_with_changes_without_discard_the_file_is_not_read() {
     let tmp = TmpDir::new();
     let mut session = fresh_session();
     assert!(edit_one(&mut session.document, 0, 0));
@@ -329,7 +329,7 @@ fn fila_6_con_cambios_sin_discard_no_se_lee_el_fichero() {
 }
 
 #[test]
-fn fila_6_con_discard_abre_y_descarta() {
+fn row_6_with_discard_it_opens_and_discards() {
     let mut session = fresh_session();
     assert!(edit_one(&mut session.document, 0, 0));
     let path = corpus().remove(0);
@@ -346,7 +346,7 @@ fn fila_6_con_discard_abre_y_descarta() {
 }
 
 #[test]
-fn fila_6_un_error_al_abrir_deja_la_sesion_intacta() {
+fn row_6_an_error_on_opening_leaves_the_session_intact() {
     let tmp = TmpDir::new();
     let mut session = fresh_session();
     assert!(edit_one(&mut session.document, 1, 1));
@@ -364,7 +364,7 @@ fn fila_6_un_error_al_abrir_deja_la_sesion_intacta() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_guardar_y_abrir_otro() {
+fn row_7_save_and_open_another() {
     let tmp = TmpDir::new();
     let files = corpus();
     let first = copy_to(tmp.path(), &files[0]);
@@ -427,10 +427,10 @@ fn scrolled() -> Scroll {
 }
 
 #[test]
-fn fila_8_abrir_reinicia_la_seleccion_y_el_desplazamiento() {
+fn row_8_open_resets_the_selection_and_the_scroll() {
     let tmp = TmpDir::new();
     // (imagen de la sesión, selección que se deja, fichero que se abre).
-    let casos: Vec<(&str, Image, ColorChoice, Image)> = vec![
+    let cases: Vec<(&str, Image, ColorChoice, Image)> = vec![
         (
             "indexada de 256 con Entry(200) -> RGBA",
             indexed_of_256(),
@@ -462,7 +462,7 @@ fn fila_8_abrir_reinicia_la_seleccion_y_el_desplazamiento() {
             sample_image(Mode::GrayAlpha),
         ),
     ];
-    for (index, (label, start, choice, opened)) in casos.into_iter().enumerate() {
+    for (index, (label, start, choice, opened)) in cases.into_iter().enumerate() {
         let path = write_image(tmp.path(), &format!("abrir-{index}.png"), &opened);
         let expected = read_png(&fs::read(&path).unwrap())
             .expect("PNG válido")
@@ -490,7 +490,7 @@ fn fila_8_abrir_reinicia_la_seleccion_y_el_desplazamiento() {
 }
 
 #[test]
-fn fila_8_la_seleccion_inicial_depende_del_modo_de_la_imagen_nueva() {
+fn row_8_the_initial_selection_depends_on_the_mode_of_the_new_image() {
     let tmp = TmpDir::new();
     for (mode, expected) in [
         (Mode::Rgba, ColorChoice::Slot(1)),
@@ -513,7 +513,7 @@ fn fila_8_la_seleccion_inicial_depende_del_modo_de_la_imagen_nueva() {
 }
 
 #[test]
-fn fila_8_la_sesion_de_muestra_empieza_con_la_seleccion_inicial() {
+fn row_8_the_sample_session_starts_with_the_initial_selection() {
     for mode in MODES {
         let image = sample_image(mode);
         let expected = initial_choice(&image);
@@ -524,7 +524,7 @@ fn fila_8_la_sesion_de_muestra_empieza_con_la_seleccion_inicial() {
 }
 
 #[test]
-fn fila_8_un_open_con_error_no_cambia_la_seleccion_ni_el_desplazamiento() {
+fn row_8_an_open_with_an_error_changes_neither_the_selection_nor_the_scroll() {
     let tmp = TmpDir::new();
 
     // Fichero inexistente, con y sin `discard`.
@@ -571,7 +571,7 @@ fn fila_8_un_open_con_error_no_cambia_la_seleccion_ni_el_desplazamiento() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_13_guardar_no_reinicia_la_seleccion() {
+fn row_13_save_does_not_reset_the_selection() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "paleta.png", &indexed_of_256());
 
@@ -596,7 +596,7 @@ fn fila_13_guardar_no_reinicia_la_seleccion() {
     session.save_as(tmp.path()).expect("save_as");
     keep(&session, "save_as");
 
-    // Una sesión de muestra sin ruta: `save` escribe `sin-titulo.png`.
+    // Una sesión de muestra sin ruta: `save` escribe `without-title.png`.
     let mut sample = Session::sample(Document::new(sample_image(Mode::Indexed)));
     sample.choice = ColorChoice::Entry(2);
     sample.scroll = scrolled();
@@ -606,7 +606,7 @@ fn fila_13_guardar_no_reinicia_la_seleccion() {
 }
 
 #[test]
-fn fila_13_si_el_guardado_falla_tampoco_cambian() {
+fn row_13_if_saving_fails_they_do_not_change_either() {
     let tmp = TmpDir::new();
     let missing = tmp.path().join("no-existe").join("tampoco");
 
@@ -638,14 +638,14 @@ fn fila_13_si_el_guardado_falla_tampoco_cambian() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_informe_vacio_y_modos() {
-    let casos = [
+fn row_9_empty_report_and_modes() {
+    let cases = [
         (Mode::Rgba, "RGBA"),
         (Mode::Gray, "gris"),
         (Mode::GrayAlpha, "gris con alfa"),
         (Mode::Indexed, "indexado"),
     ];
-    for (mode, label) in casos {
+    for (mode, label) in cases {
         let image = match mode {
             Mode::Indexed => Image::new_indexed(
                 16,
@@ -663,7 +663,7 @@ fn fila_9_informe_vacio_y_modos() {
 }
 
 #[test]
-fn fila_9_con_informe_avisa_de_la_copia() {
+fn row_9_with_a_report_it_warns_about_the_copy() {
     let image = Image::new(16, 16, Mode::Rgba).unwrap();
     assert_eq!(
         describe_open(
@@ -692,7 +692,7 @@ fn fila_9_con_informe_avisa_de_la_copia() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_indicador_de_modificado() {
+fn row_10_modified_indicator() {
     let tmp = TmpDir::new();
     let mut session = Session::sample(Document::new(sample_image(Mode::Rgba)));
     assert!(!session.modified());
@@ -712,7 +712,7 @@ fn fila_10_indicador_de_modificado() {
 }
 
 #[test]
-fn fila_10_el_estado_guardado_deja_de_ser_alcanzable() {
+fn row_10_the_saved_state_stops_being_reachable() {
     let tmp = TmpDir::new();
     let mut session = Session::sample(Document::new(sample_image(Mode::Rgba)));
     assert!(edit_one(&mut session.document, 0, 0));
@@ -794,7 +794,7 @@ fn check_round_trip(tmp: &TmpDir, source: &Path) {
 }
 
 #[test]
-fn fila_11_corpus_indexado_y_rgba() {
+fn row_11_indexed_and_rgba_corpus() {
     let files = corpus();
     let indexed = files
         .iter()
@@ -815,7 +815,7 @@ fn fila_11_corpus_indexado_y_rgba() {
 }
 
 #[test]
-fn fila_11_gris_y_gris_con_alfa_sinteticos() {
+fn row_11_synthetic_gray_and_gray_alpha() {
     for mode in [Mode::Gray, Mode::GrayAlpha] {
         let dir = TmpDir::new();
         let path = dir.path().join("origen.png");
@@ -829,7 +829,7 @@ fn fila_11_gris_y_gris_con_alfa_sinteticos() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_16_sin_ruta_nunca_pisa() {
+fn row_16_without_a_path_it_never_overwrites() {
     let tmp = TmpDir::new();
     let first_image = sample_image(Mode::Rgba);
     let mut first = Session::sample(Document::new(first_image.clone()));
@@ -851,7 +851,7 @@ fn fila_16_sin_ruta_nunca_pisa() {
 }
 
 #[test]
-fn fila_16_save_as_en_dos_sesiones_que_abren_el_mismo_fichero() {
+fn row_16_save_as_in_two_sessions_that_open_the_same_file() {
     let tmp = TmpDir::new();
     let x = tmp.path().join("x.png");
     fs::write(&x, write_png(&sample_image(Mode::Indexed)).unwrap()).unwrap();
@@ -884,9 +884,9 @@ fn fila_16_save_as_en_dos_sesiones_que_abren_el_mismo_fichero() {
 }
 
 #[test]
-fn fila_16_save_as_repetido_en_la_misma_sesion_copia_la_copia() {
+fn row_16_repeated_save_as_in_the_same_session_copies_the_copy() {
     // Según la corrección de la spec: la ruta pasa a ser la copia, así que un segundo
-    // `save_as` en la misma sesión parte de ella (`x-copia-copia.png`) y no pisa nada.
+    // `save_as` en la misma sesión parte de ella (`x-copy-copy.png`) y no pisa nada.
     let tmp = TmpDir::new();
     let x = tmp.path().join("x.png");
     fs::write(&x, write_png(&sample_image(Mode::Gray)).unwrap()).unwrap();
@@ -900,7 +900,7 @@ fn fila_16_save_as_repetido_en_la_misma_sesion_copia_la_copia() {
 }
 
 #[test]
-fn fila_16_save_as_sin_ruta_escribe_sin_titulo() {
+fn row_16_save_as_without_a_path_writes_untitled() {
     let tmp = TmpDir::new();
     let mut session = Session::sample(Document::new(sample_image(Mode::GrayAlpha)));
     let saved = session.save_as(tmp.path()).expect("save_as sin ruta");
@@ -908,7 +908,7 @@ fn fila_16_save_as_sin_ruta_escribe_sin_titulo() {
     assert_eq!(saved.copy_reason, None);
     assert_eq!(session.path(), Some(saved.path.as_path()));
     assert!(!session.modified());
-    // Con ruta, `save_as` ya no usa `sin-titulo`: copia la del documento y no pisa nada.
+    // Con ruta, `save_as` ya no usa `without-title`: copia la del documento y no pisa nada.
     let other = session.save_as(tmp.path()).expect("segundo save_as");
     assert_ne!(other.path, saved.path);
     assert!(saved.path.exists() && other.path.exists());
@@ -919,7 +919,7 @@ fn fila_16_save_as_sin_ruta_escribe_sin_titulo() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_17_rgb_se_guarda_como_copia_y_despues_se_sobrescribe() {
+fn row_17_rgb_is_saved_as_a_copy_and_then_overwritten() {
     let tmp = TmpDir::new();
     let x = tmp.path().join("x.png");
     let original_bytes = rgb_1x1(10, 20, 30);
@@ -1020,7 +1020,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    fn propiedad_1_ida_y_vuelta_por_disco(image in any_image()) {
+    fn property_1_round_trip_through_disk(image in any_image()) {
         let tmp = TmpDir::new();
         let mut session = Session::sample(Document::new(image.clone()));
         let saved = session.save(tmp.path()).expect("save");
@@ -1063,7 +1063,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    fn propiedad_2_el_indicador_no_tiene_falsos_negativos(
+    fn property_2_the_indicator_has_no_false_negatives(
         ops in prop::collection::vec(any_op(), 0..30)
     ) {
         let tmp = TmpDir::new();
@@ -1157,7 +1157,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    fn propiedad_5_abrir_no_entra_en_panico(bytes in input_bytes()) {
+    fn property_5_opening_does_not_panic(bytes in input_bytes()) {
         let tmp = TmpDir::new();
         let path = tmp.path().join("entrada.png");
         fs::write(&path, &bytes).unwrap();

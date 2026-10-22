@@ -24,13 +24,13 @@
 //!   `key_actions`: `u`, `]`, `Av Pág` y `<` repetidos repiten (n pulsaciones, n pasos); `Open`,
 //!   `Save`, `SaveAs`, `NewImage` y `Quit` mantenidos no repiten.
 //!
-//! Los ayudantes de `dispatch/tests.rs` son privados: aquí se duplican los mínimos (`Mundo`,
-//! `Foto`, los gestos de verdad).
+//! Los ayudantes de `dispatch/tests.rs` son privados: aquí se duplican los mínimos (`World`,
+//! `TestSnapshot`, los gestos de verdad).
 //!
 //! Suposiciones sobre lo que la spec no fija (anotadas en el informe):
 //! - `dispatch(ColorNext | ColorPrev)` da `Done { refresh: false, notice: None }` (como
 //!   `SelectColor`) y `dispatch(CenterOnCursor)` da `Dispatched::View(ViewOp::CenterOnCursor)`.
-//! - `key_actions` se traduce en `acciones_de_teclado`: `presses`, la tabla por defecto y el
+//! - `key_actions` se traduce en `actions_of_keyboard`: `presses`, la tabla por defecto y el
 //!   descarte de las repeticiones de las acciones con `ignores_repeat`.
 //! - Con `modal` el atajo de salir (`Ctrl+Q`, Linux) sigue pasando (regla 2 de `is_blocked`).
 
@@ -57,11 +57,11 @@ use crate::session::Session;
 // Ayudantes (copia de los mínimos de `dispatch/tests.rs`)
 // ---------------------------------------------------------------------------------------------
 
-const PLATAFORMAS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
-const ORIGENES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
+const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
+const SOURCES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
 const NO_INDEX_NOTICE: &str = "esta imagen no tiene índice transparente";
 
-fn distintos(n: usize) -> Vec<Rgba> {
+fn different(n: usize) -> Vec<Rgba> {
     (0..n)
         .map(|i| Rgba::opaque(i as u8, 255 - i as u8, (i * 7) as u8))
         .collect()
@@ -71,21 +71,21 @@ fn rgba() -> Image {
     Image::new(4, 4, Mode::Rgba).expect("imagen RGBA")
 }
 
-fn gris() -> Image {
+fn gray() -> Image {
     Image::new(4, 4, Mode::Gray).expect("imagen Gray")
 }
 
-fn gris_alfa() -> Image {
+fn gray_alpha() -> Image {
     Image::new(4, 4, Mode::GrayAlpha).expect("imagen GrayAlpha")
 }
 
 /// Indexada de 4×4 con `n` entradas distintas y sin índice transparente.
-fn indexada(n: usize) -> Image {
-    let paleta = Palette::from_colors(distintos(n)).expect("paleta");
-    Image::new_indexed(4, 4, paleta).expect("imagen indexada")
+fn indexed(n: usize) -> Image {
+    let palette = Palette::from_colors(different(n)).expect("paleta");
+    Image::new_indexed(4, 4, palette).expect("imagen indexada")
 }
 
-fn pixel_distinto(image: &Image, i: usize) -> Pixel {
+fn pixel_different(image: &Image, i: usize) -> Pixel {
     match image.mode() {
         Mode::Rgba => Pixel::Rgba(Rgba::opaque(10 + i as u8, 20, 30)),
         Mode::Indexed => {
@@ -101,33 +101,33 @@ fn pixel_distinto(image: &Image, i: usize) -> Pixel {
 }
 
 /// Un paso de historia: escribe un píxel de una fila distinta cada vez.
-fn un_paso(document: &mut Document, i: usize) {
+fn a_step(document: &mut Document, i: usize) {
     let id = ImageId::from_raw(0);
     let image = document.image(id).expect("imagen").clone();
     let x = (i / 4) as u32 % 4;
     let y = (i % 4) as u32;
-    let cambiado = document
+    let changed = document
         .apply(Command::SetPixels {
             image: id,
             pixels: vec![PixelEdit {
                 x,
                 y,
-                pixel: pixel_distinto(&image, i),
+                pixel: pixel_different(&image, i),
             }],
         })
         .expect("comando válido");
-    assert!(cambiado, "el paso {i} debe cambiar la imagen");
+    assert!(changed, "el paso {i} debe cambiar la imagen");
 }
 
 /// Sesión y herramienta: todo lo que `dispatch` puede tocar.
-struct Mundo {
+struct World {
     session: Session,
     tools: ToolState,
 }
 
 /// Lo que se compara entre orígenes y lo que un `Blocked` no debe tocar.
 #[derive(Clone, Debug, PartialEq)]
-struct Foto {
+struct TestSnapshot {
     state_id: u64,
     can_undo: bool,
     can_redo: bool,
@@ -136,43 +136,43 @@ struct Foto {
     tool: Tool,
     removal: Option<Removal>,
     reveal: bool,
-    gesto: bool,
+    gesture: bool,
 }
 
 /// Lo que ni elegir color ni centrar la vista tocan: el documento y su historia.
 #[derive(Clone, Debug, PartialEq)]
-struct Documento {
+struct TestDocument {
     state_id: u64,
     can_undo: bool,
     can_redo: bool,
     image: Image,
 }
 
-impl Mundo {
-    /// Sesión con `pasos` pasos de historia y, de ellos, `deshechos` deshechos.
-    fn nuevo(image: Image, pasos: usize, deshechos: usize) -> Mundo {
+impl World {
+    /// Sesión con `steps_2` pasos de historia y, de ellos, `undone` deshechos.
+    fn new_2(image: Image, steps_2: usize, undone: usize) -> World {
         let mut document = Document::new(image);
-        for i in 0..pasos {
-            un_paso(&mut document, i);
+        for i in 0..steps_2 {
+            a_step(&mut document, i);
         }
         let mut session = Session::sample(document);
-        for _ in 0..deshechos {
+        for _ in 0..undone {
             session.undo().expect("hay un paso que deshacer");
         }
         let _ = session.take_removal_cancelled();
         session.view.reveal = false;
-        Mundo {
+        World {
             session,
             tools: ToolState::new(),
         }
     }
 
     /// Indexada de 4 entradas sin transparente, con 2 pasos y 1 deshecho.
-    fn estandar() -> Mundo {
-        Mundo::nuevo(indexada(4), 2, 1)
+    fn standard() -> World {
+        World::new_2(indexed(4), 2, 1)
     }
 
-    fn imagen(&self) -> &Image {
+    fn image_2(&self) -> &Image {
         self.session
             .document
             .image(ImageId::from_raw(0))
@@ -188,7 +188,7 @@ impl Mundo {
         }
     }
 
-    fn despacha_con(&mut self, action: AppAction, origin: Origin, locks: Locks) -> Dispatched {
+    fn dispatches_with(&mut self, action: AppAction, origin: Origin, locks: Locks) -> Dispatched {
         dispatch(
             action,
             origin,
@@ -201,35 +201,35 @@ impl Mundo {
     }
 
     /// Despacha con los bloqueos del estado real.
-    fn despacha(&mut self, action: AppAction, origin: Origin) -> Dispatched {
+    fn dispatches(&mut self, action: AppAction, origin: Origin) -> Dispatched {
         let locks = self.locks();
-        self.despacha_con(action, origin, locks)
+        self.dispatches_with(action, origin, locks)
     }
 
-    fn foto(&self) -> Foto {
-        Foto {
+    fn snapshot(&self) -> TestSnapshot {
+        TestSnapshot {
             state_id: self.session.document.state_id(),
             can_undo: self.session.document.can_undo(),
             can_redo: self.session.document.can_redo(),
-            image: self.imagen().clone(),
+            image: self.image_2().clone(),
             choice: self.session.choice,
             tool: self.tools.tool(),
             removal: self.session.ops.removal(),
             reveal: self.session.view.reveal,
-            gesto: self.tools.busy() || self.session.busy(),
+            gesture: self.tools.busy() || self.session.busy(),
         }
     }
 
-    fn documento(&self) -> Documento {
-        Documento {
+    fn document(&self) -> TestDocument {
+        TestDocument {
             state_id: self.session.document.state_id(),
             can_undo: self.session.document.can_undo(),
             can_redo: self.session.document.can_redo(),
-            image: self.imagen().clone(),
+            image: self.image_2().clone(),
         }
     }
 
-    fn estado_de_la_ui(&self, locks: Locks) -> UiState {
+    fn ui_state(&self, locks: Locks) -> UiState {
         UiState {
             can_undo: self.session.document.can_undo(),
             can_redo: self.session.document.can_redo(),
@@ -240,20 +240,20 @@ impl Mundo {
     }
 }
 
-fn hecho(refresh: bool) -> Dispatched {
+fn done(refresh: bool) -> Dispatched {
     Dispatched::Done {
         refresh,
         notice: None,
     }
 }
 
-fn locks_con(f: impl FnOnce(&mut Locks)) -> Locks {
+fn locks_with(f: impl FnOnce(&mut Locks)) -> Locks {
     let mut locks = Locks::default();
     f(&mut locks);
     locks
 }
 
-fn bloqueos(bits: u8) -> Locks {
+fn locks_2(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
         stroke: false,
@@ -266,7 +266,7 @@ fn bloqueos(bits: u8) -> Locks {
 
 // --- Teclas como las entrega egui ---
 
-fn tecla(key: Key, modifiers: Modifiers) -> Event {
+fn key_2(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -276,7 +276,7 @@ fn tecla(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn repetida(key: Key, modifiers: Modifiers) -> Event {
+fn repeated(key: Key, modifiers: Modifiers) -> Event {
     Event::Key {
         key,
         physical_key: Some(key),
@@ -286,13 +286,13 @@ fn repetida(key: Key, modifiers: Modifiers) -> Event {
     }
 }
 
-fn texto(t: &str) -> Event {
+fn text_2(t: &str) -> Event {
     Event::Text(t.to_string())
 }
 
 /// La tecla con el texto que produce, como la entrega `egui-winit`.
-fn escribe(key: Key, modifiers: Modifiers, t: &str) -> Vec<Event> {
-    vec![tecla(key, modifiers), texto(t)]
+fn writes(key: Key, modifiers: Modifiers, t: &str) -> Vec<Event> {
+    vec![key_2(key, modifiers), text_2(t)]
 }
 
 const CTRL: Modifiers = Modifiers {
@@ -305,7 +305,7 @@ const CTRL: Modifiers = Modifiers {
 
 /// `key_actions` traducido: las pulsaciones de `presses`, la tabla por defecto y, si la tecla se
 /// repite, las acciones que no repiten se descartan (`ignores_repeat`).
-fn acciones_de_teclado(events: &[Event], platform: Platform) -> Vec<AppAction> {
+fn actions_of_keyboard(events: &[Event], platform: Platform) -> Vec<AppAction> {
     let km = Keymap::default_scheme();
     presses(events)
         .iter()
@@ -316,58 +316,54 @@ fn acciones_de_teclado(events: &[Event], platform: Platform) -> Vec<AppAction> {
 }
 
 /// La primera (y única) acción que da una secuencia.
-fn una_accion(events: &[Event], platform: Platform) -> AppAction {
-    let acciones = acciones_de_teclado(events, platform);
-    assert_eq!(
-        acciones.len(),
-        1,
-        "{events:?} en {platform:?}: {acciones:?}"
-    );
-    acciones[0]
+fn a_action(events: &[Event], platform: Platform) -> AppAction {
+    let actions = actions_of_keyboard(events, platform);
+    assert_eq!(actions.len(), 1, "{events:?} en {platform:?}: {actions:?}");
+    actions[0]
 }
 
 // --- Gestos de verdad ---
 
-fn empieza_un_trazo(mundo: &mut Mundo) {
+fn starts_a_stroke(world: &mut World) {
     let id = ImageId::from_raw(0);
-    let pixel = mundo.session.active_pixel();
+    let pixel = world.session.active_pixel();
     assert!(pixel.is_some(), "hay un color activo");
-    mundo
+    world
         .tools
         .canvas_event_with(
-            &mut mundo.session.document,
+            &mut world.session.document,
             id,
             pixel,
             CanvasEvent::StrokeBegin((0, 0)),
         )
         .expect("pulsar");
-    assert!(mundo.tools.busy(), "el trazo está en curso");
+    assert!(world.tools.busy(), "el trazo está en curso");
 }
 
-fn pulsa_el_deslizador(mundo: &mut Mundo) {
-    mundo.session.sync_editor();
+fn presses_the_slider(world: &mut World) {
+    world.session.sync_editor();
     assert!(
-        mundo.session.editor.begin(Control::Red, 10),
+        world.session.editor.begin(Control::Red, 10),
         "el editor admite el arrastre"
     );
-    assert!(mundo.session.busy());
+    assert!(world.session.busy());
 }
 
-fn arrastra_una_muestra(mundo: &mut Mundo) {
-    mundo.session.ops.begin_drag(1, (0, 0));
-    mundo
+fn drags_a_swatch(world: &mut World) {
+    world.session.ops.begin_drag(1, (0, 0));
+    world
         .session
         .ops
         .drag()
         .expect("hay arrastre")
         .update((200, 200), 1, Some(2));
-    assert!(mundo.session.busy());
+    assert!(world.session.busy());
 }
 
 /// Quita pendiente de la entrada 3 de una indexada de 5 (que usan dos píxeles).
-fn mundo_con_quita_pendiente() -> Mundo {
-    let paleta = Palette::from_colors(distintos(5)).expect("paleta");
-    let mut image = Image::new_indexed(5, 1, paleta).expect("imagen indexada");
+fn world_with_a_pending_removal() -> World {
+    let palette = Palette::from_colors(different(5)).expect("paleta");
+    let mut image = Image::new_indexed(5, 1, palette).expect("imagen indexada");
     for (x, i) in [0u8, 1, 2, 3, 3].into_iter().enumerate() {
         image
             .set_pixel(x as u32, 0, Pixel::Indexed(i))
@@ -379,39 +375,43 @@ fn mundo_con_quita_pendiente() -> Mundo {
     session.normalize();
     let _ = session.take_removal_cancelled();
     session.view.reveal = false;
-    let destino = {
+    let target_2 = {
         let image = session
             .document
             .image(ImageId::from_raw(0))
             .expect("imagen");
         default_destination(image.palette().expect("indexada"), 3)
     };
-    session.ops.begin_removal(3, destino);
+    session.ops.begin_removal(3, target_2);
     assert!(session.ops.removal().is_some());
-    Mundo {
+    World {
         session,
         tools: ToolState::new(),
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-enum Gesto {
-    Trazo,
-    Deslizador,
-    Muestra,
+enum TestGesture {
+    Stroke,
+    Slider,
+    Swatch,
 }
 
-const GESTOS: [Gesto; 3] = [Gesto::Trazo, Gesto::Deslizador, Gesto::Muestra];
+const GESTURES: [TestGesture; 3] = [
+    TestGesture::Stroke,
+    TestGesture::Slider,
+    TestGesture::Swatch,
+];
 
-fn mundo_con_gesto(gesto: Gesto) -> Mundo {
-    let mut mundo = Mundo::estandar();
-    match gesto {
-        Gesto::Trazo => empieza_un_trazo(&mut mundo),
-        Gesto::Deslizador => pulsa_el_deslizador(&mut mundo),
-        Gesto::Muestra => arrastra_una_muestra(&mut mundo),
+fn world_with_gesture(gesture: TestGesture) -> World {
+    let mut world = World::standard();
+    match gesture {
+        TestGesture::Stroke => starts_a_stroke(&mut world),
+        TestGesture::Slider => presses_the_slider(&mut world),
+        TestGesture::Swatch => drags_a_swatch(&mut world),
     }
-    assert!(mundo.locks().gesture, "{gesto:?}");
-    mundo
+    assert!(world.locks().gesture, "{gesture:?}");
+    world
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -420,36 +420,36 @@ fn mundo_con_gesto(gesto: Gesto) -> Mundo {
 
 /// Pulsa `acción` con `Origin::Key` y comprueba lo común: `Done` sin refresco ni aviso, el
 /// documento intacto y la fila elegida marcada para mostrarse.
-fn pulsa_y_comprueba(mundo: &mut Mundo, action: AppAction, esperada: ColorChoice, contexto: &str) {
-    let documento = mundo.documento();
-    mundo.session.view.reveal = false;
-    let resultado = mundo.despacha(action, Origin::Key);
-    assert_eq!(resultado, hecho(false), "{contexto}: {action:?}");
-    assert_eq!(mundo.session.choice, esperada, "{contexto}: {action:?}");
+fn presses_and_checks(world: &mut World, action: AppAction, expected: ColorChoice, context: &str) {
+    let document = world.document();
+    world.session.view.reveal = false;
+    let result = world.dispatches(action, Origin::Key);
+    assert_eq!(result, done(false), "{context}: {action:?}");
+    assert_eq!(world.session.choice, expected, "{context}: {action:?}");
     assert!(
-        mundo.session.view.reveal,
-        "{contexto}: {action:?} no muestra la fila elegida"
+        world.session.view.reveal,
+        "{context}: {action:?} no muestra la fila elegida"
     );
     assert_eq!(
-        mundo.documento(),
-        documento,
-        "{contexto}: {action:?} cambió el documento"
+        world.document(),
+        document,
+        "{context}: {action:?} cambió el documento"
     );
 }
 
 #[test]
-fn fila_7_indexada_de_256_color_next_en_la_ultima_da_la_primera_y_color_prev_en_la_primera_la_ultima()
+fn row_7_indexed_of_256_color_next_at_the_last_gives_the_first_and_color_prev_at_the_first_the_last()
  {
-    let mut mundo = Mundo::nuevo(indexada(256), 2, 1);
-    mundo.session.set_choice_revealing(ColorChoice::Entry(255));
-    pulsa_y_comprueba(
-        &mut mundo,
+    let mut world = World::new_2(indexed(256), 2, 1);
+    world.session.set_choice_revealing(ColorChoice::Entry(255));
+    presses_and_checks(
+        &mut world,
         AppAction::ColorNext,
         ColorChoice::Entry(0),
         "256, de la última",
     );
-    pulsa_y_comprueba(
-        &mut mundo,
+    presses_and_checks(
+        &mut world,
         AppAction::ColorPrev,
         ColorChoice::Entry(255),
         "256, de la primera",
@@ -457,64 +457,65 @@ fn fila_7_indexada_de_256_color_next_en_la_ultima_da_la_primera_y_color_prev_en_
 }
 
 #[test]
-fn fila_7_indexada_de_256_un_paso_por_pulsacion_en_los_dos_sentidos() {
-    let mut mundo = Mundo::nuevo(indexada(256), 0, 0);
-    assert_eq!(mundo.session.choice, ColorChoice::Entry(0));
-    for entrada in 1..=10u8 {
-        pulsa_y_comprueba(
-            &mut mundo,
+fn row_7_indexed_of_256_one_step_per_press_in_both_directions() {
+    let mut world = World::new_2(indexed(256), 0, 0);
+    assert_eq!(world.session.choice, ColorChoice::Entry(0));
+    for input in 1..=10u8 {
+        presses_and_checks(
+            &mut world,
             AppAction::ColorNext,
-            ColorChoice::Entry(entrada),
+            ColorChoice::Entry(input),
             "256 hacia delante",
         );
     }
-    for entrada in (0..10u8).rev() {
-        pulsa_y_comprueba(
-            &mut mundo,
+    for input in (0..10u8).rev() {
+        presses_and_checks(
+            &mut world,
             AppAction::ColorPrev,
-            ColorChoice::Entry(entrada),
+            ColorChoice::Entry(input),
             "256 hacia atrás",
         );
     }
 }
 
 #[test]
-fn fila_7_indexada_de_9_da_la_vuelta_en_las_dos_direcciones_y_recorre_todas_las_entradas() {
-    let mut mundo = Mundo::nuevo(indexada(9), 0, 0);
-    let mut vistas = vec![mundo.session.choice];
+fn row_7_indexed_of_9_wraps_around_in_both_directions_and_walks_all_the_entries() {
+    let mut world = World::new_2(indexed(9), 0, 0);
+    let mut vistas = vec![world.session.choice];
     for _ in 0..9 {
-        mundo.despacha(AppAction::ColorNext, Origin::Key);
-        vistas.push(mundo.session.choice);
+        world.dispatches(AppAction::ColorNext, Origin::Key);
+        vistas.push(world.session.choice);
     }
-    let esperadas: Vec<ColorChoice> = (0..=9u8).map(|i| ColorChoice::Entry(i % 9)).collect();
+    let expected_2_2: Vec<ColorChoice> = (0..=9u8).map(|i| ColorChoice::Entry(i % 9)).collect();
     assert_eq!(
-        vistas, esperadas,
+        vistas, expected_2_2,
         "nueve pasos hacia delante y vuelta al principio"
     );
-    let mut atras = vec![mundo.session.choice];
+    let mut back = vec![world.session.choice];
     for _ in 0..9 {
-        mundo.despacha(AppAction::ColorPrev, Origin::Key);
-        atras.push(mundo.session.choice);
+        world.dispatches(AppAction::ColorPrev, Origin::Key);
+        back.push(world.session.choice);
     }
-    let esperadas: Vec<ColorChoice> = (0..=9u8).map(|i| ColorChoice::Entry((9 - i) % 9)).collect();
+    let expected_2_2: Vec<ColorChoice> =
+        (0..=9u8).map(|i| ColorChoice::Entry((9 - i) % 9)).collect();
     assert_eq!(
-        atras, esperadas,
+        back, expected_2_2,
         "nueve pasos hacia atrás y vuelta al principio"
     );
 }
 
 #[test]
-fn fila_7_rgba_slot_9_da_slot_1_y_slot_1_da_slot_9() {
-    let mut mundo = Mundo::nuevo(rgba(), 2, 1);
-    mundo.session.set_choice_revealing(ColorChoice::Slot(9));
-    pulsa_y_comprueba(
-        &mut mundo,
+fn row_7_rgba_slot_9_gives_slot_1_and_slot_1_gives_slot_9() {
+    let mut world = World::new_2(rgba(), 2, 1);
+    world.session.set_choice_revealing(ColorChoice::Slot(9));
+    presses_and_checks(
+        &mut world,
         AppAction::ColorNext,
         ColorChoice::Slot(1),
         "RGBA",
     );
-    pulsa_y_comprueba(
-        &mut mundo,
+    presses_and_checks(
+        &mut world,
         AppAction::ColorPrev,
         ColorChoice::Slot(9),
         "RGBA",
@@ -522,135 +523,135 @@ fn fila_7_rgba_slot_9_da_slot_1_y_slot_1_da_slot_9() {
 }
 
 #[test]
-fn fila_7_rgba_recorre_las_nueve_ranuras_un_paso_por_pulsacion() {
-    let mut mundo = Mundo::nuevo(rgba(), 0, 0);
-    assert_eq!(mundo.session.choice, ColorChoice::Slot(1));
-    for ranura in 2..=9u8 {
-        pulsa_y_comprueba(
-            &mut mundo,
+fn row_7_rgba_walks_the_nine_slots_one_step_per_press() {
+    let mut world = World::new_2(rgba(), 0, 0);
+    assert_eq!(world.session.choice, ColorChoice::Slot(1));
+    for slot in 2..=9u8 {
+        presses_and_checks(
+            &mut world,
             AppAction::ColorNext,
-            ColorChoice::Slot(ranura),
+            ColorChoice::Slot(slot),
             "RGBA hacia delante",
         );
     }
-    for ranura in (1..=8u8).rev() {
-        pulsa_y_comprueba(
-            &mut mundo,
+    for slot in (1..=8u8).rev() {
+        presses_and_checks(
+            &mut world,
             AppAction::ColorPrev,
-            ColorChoice::Slot(ranura),
+            ColorChoice::Slot(slot),
             "RGBA hacia atrás",
         );
     }
 }
 
 #[test]
-fn fila_7_gray_y_gray_alpha_tambien_dan_la_vuelta_en_las_nueve_ranuras() {
-    for (nombre, imagen) in [("Gray", gris()), ("GrayAlpha", gris_alfa())] {
-        let mut mundo = Mundo::nuevo(imagen, 2, 1);
-        mundo.session.set_choice_revealing(ColorChoice::Slot(9));
-        pulsa_y_comprueba(
-            &mut mundo,
+fn row_7_gray_and_gray_alpha_also_wrap_around_in_the_nine_slots() {
+    for (name_2, image_2) in [("Gray", gray()), ("GrayAlpha", gray_alpha())] {
+        let mut world = World::new_2(image_2, 2, 1);
+        world.session.set_choice_revealing(ColorChoice::Slot(9));
+        presses_and_checks(
+            &mut world,
             AppAction::ColorNext,
             ColorChoice::Slot(1),
-            nombre,
+            name_2,
         );
-        pulsa_y_comprueba(
-            &mut mundo,
+        presses_and_checks(
+            &mut world,
             AppAction::ColorPrev,
             ColorChoice::Slot(9),
-            nombre,
+            name_2,
         );
-        pulsa_y_comprueba(
-            &mut mundo,
+        presses_and_checks(
+            &mut world,
             AppAction::ColorNext,
             ColorChoice::Slot(1),
-            nombre,
+            name_2,
         );
-        pulsa_y_comprueba(
-            &mut mundo,
+        presses_and_checks(
+            &mut world,
             AppAction::ColorNext,
             ColorChoice::Slot(2),
-            nombre,
+            name_2,
         );
     }
 }
 
 #[test]
-fn fila_7_elegir_color_no_cambia_el_documento_ni_la_historia() {
-    for image in [indexada(9), rgba(), gris(), gris_alfa()] {
-        let mut mundo = Mundo::nuevo(image, 3, 1);
-        let antes = mundo.documento();
+fn row_7_choosing_a_color_does_not_change_the_document_or_the_history() {
+    for image in [indexed(9), rgba(), gray(), gray_alpha()] {
+        let mut world = World::new_2(image, 3, 1);
+        let antes = world.document();
         for _ in 0..12 {
-            mundo.despacha(AppAction::ColorNext, Origin::Key);
-            mundo.despacha(AppAction::ColorPrev, Origin::Key);
-            mundo.despacha(AppAction::ColorPrev, Origin::Key);
+            world.dispatches(AppAction::ColorNext, Origin::Key);
+            world.dispatches(AppAction::ColorPrev, Origin::Key);
+            world.dispatches(AppAction::ColorPrev, Origin::Key);
         }
-        assert_eq!(mundo.documento(), antes, "{:?}", mundo.imagen().mode());
+        assert_eq!(world.document(), antes, "{:?}", world.image_2().mode());
     }
 }
 
 #[test]
-fn fila_7_con_una_sola_entrada_color_next_y_color_prev_se_quedan_donde_estan() {
-    let mut mundo = Mundo::nuevo(indexada(1), 0, 0);
-    let documento = mundo.documento();
+fn row_7_with_a_single_entry_color_next_and_color_prev_stay_where_they_are() {
+    let mut world = World::new_2(indexed(1), 0, 0);
+    let document = world.document();
     for action in [AppAction::ColorNext, AppAction::ColorPrev] {
         assert_eq!(
-            mundo.despacha(action, Origin::Key),
-            hecho(false),
+            world.dispatches(action, Origin::Key),
+            done(false),
             "{action:?}"
         );
-        assert_eq!(mundo.session.choice, ColorChoice::Entry(0), "{action:?}");
+        assert_eq!(world.session.choice, ColorChoice::Entry(0), "{action:?}");
     }
-    assert_eq!(mundo.documento(), documento);
+    assert_eq!(world.document(), document);
 }
 
 #[test]
-fn fila_7_con_una_eleccion_que_ya_no_vale_da_la_eleccion_inicial() {
+fn row_7_with_a_choice_that_is_no_longer_valid_it_gives_the_initial_choice() {
     // Indexada con una ranura sin entrada (`Slot(n)` sobre una indexada solo vale si hay entrada
     // `n − 1`), indexada con una entrada fuera de la paleta, y los otros modos con una entrada
     // (no vale): `initial_choice`.
-    let casos: Vec<(&str, Image, ColorChoice)> = vec![
+    let cases: Vec<(&str, Image, ColorChoice)> = vec![
         (
             "indexada con una ranura sin entrada",
-            indexada(4),
+            indexed(4),
             ColorChoice::Slot(9),
         ),
         (
             "indexada con entrada fuera",
-            indexada(4),
+            indexed(4),
             ColorChoice::Entry(200),
         ),
         ("RGBA con Entry", rgba(), ColorChoice::Entry(3)),
-        ("Gray con Entry", gris(), ColorChoice::Entry(0)),
-        ("GrayAlpha con Entry", gris_alfa(), ColorChoice::Entry(1)),
+        ("Gray con Entry", gray(), ColorChoice::Entry(0)),
+        ("GrayAlpha con Entry", gray_alpha(), ColorChoice::Entry(1)),
     ];
-    for (nombre, image, invalida) in casos {
+    for (name_2, image, invalid) in cases {
         for action in [AppAction::ColorNext, AppAction::ColorPrev] {
-            let mut mundo = Mundo::nuevo(image.clone(), 0, 0);
-            let inicial = initial_choice(mundo.imagen());
-            mundo.session.choice = invalida;
-            let documento = mundo.documento();
+            let mut world = World::new_2(image.clone(), 0, 0);
+            let initial = initial_choice(world.image_2());
+            world.session.choice = invalid;
+            let document = world.document();
             assert_eq!(
-                mundo.despacha(action, Origin::Key),
-                hecho(false),
-                "{nombre}: {action:?}"
+                world.dispatches(action, Origin::Key),
+                done(false),
+                "{name_2}: {action:?}"
             );
-            assert_eq!(mundo.session.choice, inicial, "{nombre}: {action:?}");
-            assert_eq!(mundo.documento(), documento, "{nombre}: {action:?}");
+            assert_eq!(world.session.choice, initial, "{name_2}: {action:?}");
+            assert_eq!(world.document(), document, "{name_2}: {action:?}");
         }
     }
 }
 
 #[test]
-fn fila_7_el_menu_y_el_boton_dan_el_mismo_resultado_que_la_tecla_con_origenes_distintos() {
-    for origin in ORIGENES {
-        let mut mundo = Mundo::nuevo(indexada(9), 0, 0);
+fn row_7_the_menu_and_the_button_give_the_same_result_as_the_key_with_different_sources() {
+    for origin in SOURCES {
+        let mut world = World::new_2(indexed(9), 0, 0);
         assert_eq!(
-            mundo.despacha(AppAction::ColorNext, origin),
-            hecho(false),
+            world.dispatches(AppAction::ColorNext, origin),
+            done(false),
             "{origin:?}"
         );
-        assert_eq!(mundo.session.choice, ColorChoice::Entry(1), "{origin:?}");
+        assert_eq!(world.session.choice, ColorChoice::Entry(1), "{origin:?}");
     }
 }
 
@@ -659,25 +660,25 @@ fn fila_7_el_menu_y_el_boton_dan_el_mismo_resultado_que_la_tecla_con_origenes_di
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_color_next_y_color_prev_se_bloquean_con_cada_bloqueo_y_origen_como_select_color() {
+fn row_8_color_next_and_color_prev_are_blocked_with_each_lock_and_source_like_select_color() {
     for action in [AppAction::ColorNext, AppAction::ColorPrev] {
         for bits in 0..32u8 {
-            let locks = bloqueos(bits);
-            for origin in ORIGENES {
-                let mut mundo = Mundo::estandar();
-                let antes = mundo.foto();
-                let resultado = mundo.despacha_con(action, origin, locks);
+            let locks = locks_2(bits);
+            for origin in SOURCES {
+                let mut world = World::standard();
+                let antes = world.snapshot();
+                let result = world.dispatches_with(action, origin, locks);
                 // Las mismas reglas que `SelectColor`: cualquier bloqueo (gesto, campo de texto,
                 // quita pendiente, diálogo y modal) la para.
-                let bloqueada = bits != 0;
+                let locked_2 = bits != 0;
                 assert_eq!(
-                    resultado == Dispatched::Blocked,
-                    bloqueada,
-                    "{action:?} con {locks:?} y {origin:?}: {resultado:?}"
+                    result == Dispatched::Blocked,
+                    locked_2,
+                    "{action:?} con {locks:?} y {origin:?}: {result:?}"
                 );
                 assert_eq!(
                     is_blocked(action, locks, origin),
-                    bloqueada,
+                    locked_2,
                     "{action:?} con {locks:?} y {origin:?}"
                 );
                 assert_eq!(
@@ -685,11 +686,11 @@ fn fila_8_color_next_y_color_prev_se_bloquean_con_cada_bloqueo_y_origen_como_sel
                     is_blocked(AppAction::SelectColor(3), locks, origin),
                     "{action:?} se bloquea como SelectColor con {locks:?} y {origin:?}"
                 );
-                if bloqueada {
-                    assert_eq!(mundo.foto(), antes, "{action:?} con {locks:?}");
+                if locked_2 {
+                    assert_eq!(world.snapshot(), antes, "{action:?} con {locks:?}");
                 } else {
-                    assert_eq!(resultado, hecho(false));
-                    assert_ne!(mundo.session.choice, antes.choice);
+                    assert_eq!(result, done(false));
+                    assert_ne!(world.session.choice, antes.choice);
                 }
             }
         }
@@ -700,103 +701,103 @@ fn fila_8_color_next_y_color_prev_se_bloquean_con_cada_bloqueo_y_origen_como_sel
 /// una herramienta no lo bloquea (el trazo conserva el color con el que empezó) y el deslizador del
 /// editor y el arrastre de una muestra siguen bloqueándolo.
 #[test]
-fn fila_8_color_next_y_color_prev_con_un_trazo_en_curso_siguen_permitidos() {
+fn row_8_color_next_and_color_prev_with_a_stroke_in_progress_are_still_allowed() {
     for action in [AppAction::ColorNext, AppAction::ColorPrev] {
-        let mut mundo = mundo_con_gesto(Gesto::Trazo);
-        let antes = mundo.foto();
+        let mut world = world_with_gesture(TestGesture::Stroke);
+        let antes = world.snapshot();
         assert_eq!(
-            mundo.despacha(action, Origin::Key),
-            hecho(false),
+            world.dispatches(action, Origin::Key),
+            done(false),
             "{action:?}"
         );
-        assert_ne!(mundo.session.choice, antes.choice, "{action:?}");
-        assert!(mundo.tools.busy(), "el trazo sigue en curso");
+        assert_ne!(world.session.choice, antes.choice, "{action:?}");
+        assert!(world.tools.busy(), "el trazo sigue en curso");
     }
 }
 
 #[test]
-fn fila_8_color_next_y_color_prev_no_hacen_nada_con_el_deslizador_o_una_muestra_arrastrandose() {
-    for gesto in [Gesto::Deslizador, Gesto::Muestra] {
+fn row_8_color_next_and_color_prev_do_nothing_with_the_slider_or_a_swatch_being_dragged() {
+    for gesture in [TestGesture::Slider, TestGesture::Swatch] {
         for action in [AppAction::ColorNext, AppAction::ColorPrev] {
-            let mut mundo = mundo_con_gesto(gesto);
-            let antes = mundo.foto();
+            let mut world = world_with_gesture(gesture);
+            let antes = world.snapshot();
             assert_eq!(
-                mundo.despacha(action, Origin::Key),
+                world.dispatches(action, Origin::Key),
                 Dispatched::Blocked,
-                "{gesto:?}: {action:?}"
+                "{gesture:?}: {action:?}"
             );
-            assert_eq!(mundo.foto(), antes, "{gesto:?}: {action:?}");
+            assert_eq!(world.snapshot(), antes, "{gesture:?}: {action:?}");
         }
     }
 }
 
 #[test]
-fn fila_8_color_next_y_color_prev_se_bloquean_con_una_quita_pendiente() {
+fn row_8_color_next_and_color_prev_are_blocked_with_a_pending_removal() {
     for action in [AppAction::ColorNext, AppAction::ColorPrev] {
-        let mut mundo = mundo_con_quita_pendiente();
-        let antes = mundo.foto();
-        assert!(mundo.locks().removal);
+        let mut world = world_with_a_pending_removal();
+        let antes = world.snapshot();
+        assert!(world.locks().removal);
         assert_eq!(
-            mundo.despacha(action, Origin::Key),
+            world.dispatches(action, Origin::Key),
             Dispatched::Blocked,
             "{action:?}"
         );
-        assert_eq!(mundo.foto(), antes, "{action:?}");
+        assert_eq!(world.snapshot(), antes, "{action:?}");
     }
 }
 
 #[test]
-fn fila_8_center_on_cursor_solo_se_bloquea_con_dialogo_modal_y_con_tecla_campo_enfocado() {
+fn row_8_center_on_cursor_is_blocked_only_by_a_modal_dialog_and_by_a_key_with_a_focused_field() {
     for bits in 0..32u8 {
-        let locks = bloqueos(bits);
-        for origin in ORIGENES {
-            let mut mundo = Mundo::estandar();
-            let antes = mundo.foto();
-            let resultado = mundo.despacha_con(AppAction::CenterOnCursor, origin, locks);
-            let bloqueada =
+        let locks = locks_2(bits);
+        for origin in SOURCES {
+            let mut world = World::standard();
+            let antes = world.snapshot();
+            let result = world.dispatches_with(AppAction::CenterOnCursor, origin, locks);
+            let locked_2 =
                 locks.dialog || locks.modal || (locks.text_focus && origin == Origin::Key);
             assert_eq!(
-                resultado == Dispatched::Blocked,
-                bloqueada,
-                "CenterOnCursor con {locks:?} y {origin:?}: {resultado:?}"
+                result == Dispatched::Blocked,
+                locked_2,
+                "CenterOnCursor con {locks:?} y {origin:?}: {result:?}"
             );
             assert_eq!(
                 is_blocked(AppAction::CenterOnCursor, locks, origin),
-                bloqueada,
+                locked_2,
                 "CenterOnCursor con {locks:?} y {origin:?}"
             );
-            if !bloqueada {
-                assert_eq!(resultado, Dispatched::View(ViewOp::CenterOnCursor));
+            if !locked_2 {
+                assert_eq!(result, Dispatched::View(ViewOp::CenterOnCursor));
             }
             // Es una acción de vista: no toca el documento ni la elección ni la herramienta.
-            assert_eq!(mundo.foto(), antes, "CenterOnCursor con {locks:?}");
+            assert_eq!(world.snapshot(), antes, "CenterOnCursor con {locks:?}");
         }
     }
 }
 
 #[test]
-fn fila_8_center_on_cursor_no_la_paran_un_gesto_de_verdad_ni_una_quita_pendiente() {
-    for gesto in GESTOS {
-        let mut mundo = mundo_con_gesto(gesto);
-        let antes = mundo.foto();
+fn row_8_center_on_cursor_is_stopped_neither_by_a_real_gesture_nor_by_a_pending_removal() {
+    for gesture in GESTURES {
+        let mut world = world_with_gesture(gesture);
+        let antes = world.snapshot();
         assert_eq!(
-            mundo.despacha(AppAction::CenterOnCursor, Origin::Key),
+            world.dispatches(AppAction::CenterOnCursor, Origin::Key),
             Dispatched::View(ViewOp::CenterOnCursor),
-            "{gesto:?}"
+            "{gesture:?}"
         );
-        assert_eq!(mundo.foto(), antes, "{gesto:?}");
+        assert_eq!(world.snapshot(), antes, "{gesture:?}");
     }
-    let mut mundo = mundo_con_quita_pendiente();
-    let antes = mundo.foto();
+    let mut world = world_with_a_pending_removal();
+    let antes = world.snapshot();
     assert_eq!(
-        mundo.despacha(AppAction::CenterOnCursor, Origin::Key),
+        world.dispatches(AppAction::CenterOnCursor, Origin::Key),
         Dispatched::View(ViewOp::CenterOnCursor)
     );
-    assert_eq!(mundo.foto(), antes);
+    assert_eq!(world.snapshot(), antes);
 }
 
 #[test]
-fn fila_8_is_view_es_el_zoom_mas_centrar_y_is_zoom_no_cambia() {
+fn row_8_is_view_is_the_zoom_plus_center_and_is_zoom_does_not_change() {
     assert!(AppAction::CenterOnCursor.is_view());
     for action in [
         AppAction::ZoomIn,
@@ -822,17 +823,17 @@ fn fila_8_is_view_es_el_zoom_mas_centrar_y_is_zoom_no_cambia() {
 }
 
 #[test]
-fn fila_8_enabled_es_lo_contrario_de_blocked_con_origen_menu_en_las_acciones_nuevas() {
+fn row_8_enabled_is_the_opposite_of_blocked_with_menu_source_in_the_new_actions() {
     for action in [
         AppAction::ColorNext,
         AppAction::ColorPrev,
         AppAction::CenterOnCursor,
     ] {
         for bits in 0..32u8 {
-            let locks = bloqueos(bits);
-            let mundo = Mundo::estandar();
+            let locks = locks_2(bits);
+            let world = World::standard();
             assert_eq!(
-                enabled(action, &mundo.estado_de_la_ui(locks)),
+                enabled(action, &world.ui_state(locks)),
                 !is_blocked(action, locks, Origin::Menu),
                 "{action:?} con {locks:?}"
             );
@@ -841,21 +842,21 @@ fn fila_8_enabled_es_lo_contrario_de_blocked_con_origen_menu_en_las_acciones_nue
 }
 
 /// Todas las filas activas de la tabla por defecto, con la plataforma donde valen.
-fn filas_activas() -> Vec<(AppAction, Platform)> {
+fn rows_active() -> Vec<(AppAction, Platform)> {
     let km = Keymap::default_scheme();
     let mut v = Vec::new();
-    for platform in PLATAFORMAS {
-        for fila in km.rows() {
+    for platform in PLATFORMS {
+        for row in km.rows() {
             let p = px_ui::keymap::Press {
-                key: Some(fila.key),
-                command: fila.command,
-                shift: fila.shift,
+                key: Some(row.key),
+                command: row.command,
+                shift: row.shift,
                 alt: false,
                 other_ctrl: false,
                 repeat: false,
             };
-            if km.action_for(&p, platform) == Some(fila.action) {
-                v.push((fila.action, platform));
+            if km.action_for(&p, platform) == Some(row.action) {
+                v.push((row.action, platform));
             }
         }
     }
@@ -863,73 +864,68 @@ fn filas_activas() -> Vec<(AppAction, Platform)> {
 }
 
 #[test]
-fn fila_8_con_un_dialogo_de_archivo_toda_fila_de_la_tabla_da_blocked_tambien_inicio_re_pag_y_av_pag()
- {
-    let filas = filas_activas();
+fn row_8_with_a_file_dialog_every_row_of_the_table_gives_blocked_also_home_page_up_and_page_down() {
+    let rows = rows_active();
     assert_eq!(
-        filas.len(),
+        rows.len(),
         35 + 34 + 34,
         "filas activas en las tres plataformas"
     );
-    for (action, platform) in filas {
-        let mut mundo = Mundo::estandar();
-        let antes = mundo.foto();
-        let locks = locks_con(|l| l.dialog = true);
+    for (action, platform) in rows {
+        let mut world = World::standard();
+        let antes = world.snapshot();
+        let locks = locks_with(|l| l.dialog = true);
         assert_eq!(
-            mundo.despacha_con(action, Origin::Key, locks),
+            world.dispatches_with(action, Origin::Key, locks),
             Dispatched::Blocked,
             "{action:?} en {platform:?} con un diálogo de archivo"
         );
-        assert_eq!(mundo.foto(), antes, "{action:?} en {platform:?}");
+        assert_eq!(world.snapshot(), antes, "{action:?} en {platform:?}");
     }
 }
 
 #[test]
-fn fila_8_con_el_panel_modal_toda_fila_da_blocked_salvo_salir() {
-    for (action, platform) in filas_activas() {
-        let mut mundo = Mundo::estandar();
-        let antes = mundo.foto();
-        let locks = locks_con(|l| l.modal = true);
-        let resultado = mundo.despacha_con(action, Origin::Key, locks);
+fn row_8_with_the_modal_panel_every_row_gives_blocked_except_quit() {
+    for (action, platform) in rows_active() {
+        let mut world = World::standard();
+        let antes = world.snapshot();
+        let locks = locks_with(|l| l.modal = true);
+        let result = world.dispatches_with(action, Origin::Key, locks);
         if action == AppAction::Quit {
             // `Salir` pasa con el panel modal (unidad 18, D1).
-            assert_eq!(resultado, Dispatched::Quit, "{platform:?}");
+            assert_eq!(result, Dispatched::Quit, "{platform:?}");
         } else {
             assert_eq!(
-                resultado,
+                result,
                 Dispatched::Blocked,
                 "{action:?} en {platform:?} con el panel modal"
             );
         }
-        assert_eq!(mundo.foto(), antes, "{action:?} en {platform:?}");
+        assert_eq!(world.snapshot(), antes, "{action:?} en {platform:?}");
     }
 }
 
 #[test]
-fn fila_8_con_modal_las_teclas_re_pag_av_pag_e_inicio_dan_blocked_y_fin_no_da_accion() {
-    let locks = locks_con(|l| l.modal = true);
-    for (key, esperada) in [
+fn row_8_with_a_modal_the_page_up_page_down_home_keys_give_blocked_and_end_gives_no_action() {
+    let locks = locks_with(|l| l.modal = true);
+    for (key, expected) in [
         (Key::PageUp, Some(AppAction::ColorPrev)),
         (Key::PageDown, Some(AppAction::ColorNext)),
         (Key::Home, Some(AppAction::ZoomFit)),
         (Key::End, None),
     ] {
-        for platform in PLATAFORMAS {
-            let acciones = acciones_de_teclado(&[tecla(key, Modifiers::NONE)], platform);
-            assert_eq!(
-                acciones,
-                esperada.into_iter().collect::<Vec<_>>(),
-                "{key:?}"
-            );
-            for action in acciones {
-                let mut mundo = Mundo::estandar();
-                let antes = mundo.foto();
+        for platform in PLATFORMS {
+            let actions = actions_of_keyboard(&[key_2(key, Modifiers::NONE)], platform);
+            assert_eq!(actions, expected.into_iter().collect::<Vec<_>>(), "{key:?}");
+            for action in actions {
+                let mut world = World::standard();
+                let antes = world.snapshot();
                 assert_eq!(
-                    mundo.despacha_con(action, Origin::Key, locks),
+                    world.dispatches_with(action, Origin::Key, locks),
                     Dispatched::Blocked,
                     "{key:?} en {platform:?}"
                 );
-                assert_eq!(mundo.foto(), antes);
+                assert_eq!(world.snapshot(), antes);
             }
         }
     }
@@ -939,144 +935,148 @@ fn fila_8_con_modal_las_teclas_re_pag_av_pag_e_inicio_dan_blocked_y_fin_no_da_ac
 // Fila 9: la misma acción, el mismo efecto
 // ---------------------------------------------------------------------------------------------
 
-fn por_rotulo_de_menu(rotulo: &str) -> AppAction {
+fn by_menu_label(label: &str) -> AppAction {
     MENUS
         .iter()
         .flat_map(|m| m.items.iter())
-        .find(|i| i.label == rotulo)
-        .unwrap_or_else(|| panic!("no hay entrada de menú {rotulo:?}"))
+        .find(|i| i.label == label)
+        .unwrap_or_else(|| panic!("no hay entrada de menú {label:?}"))
         .action
 }
 
-fn por_rotulo_de_boton(rotulo: &str) -> AppAction {
+fn by_button_label(label: &str) -> AppAction {
     TOOL_BUTTONS
         .iter()
         .chain(ZOOM_BUTTONS.iter())
-        .find(|b| b.label == rotulo)
-        .unwrap_or_else(|| panic!("no hay botón {rotulo:?}"))
+        .find(|b| b.label == label)
+        .unwrap_or_else(|| panic!("no hay botón {label:?}"))
         .action
 }
 
-struct Caso {
-    esperada: AppAction,
+struct TestCase {
+    expected: AppAction,
     menu: Option<&'static str>,
-    boton: Option<&'static str>,
-    /// Cada secuencia de eventos que tiene que dar `esperada` (una tecla, o dos atajos).
-    teclas: Vec<Vec<Event>>,
+    button_2: Option<&'static str>,
+    /// Cada secuencia de eventos que tiene que dar `expected` (una tecla, o dos atajos).
+    keys_2: Vec<Vec<Event>>,
 }
 
-fn casos_de_la_fila_9() -> Vec<Caso> {
+fn cases_of_row_9() -> Vec<TestCase> {
     let s = Modifiers::SHIFT;
     vec![
-        Caso {
-            esperada: AppAction::Undo,
+        TestCase {
+            expected: AppAction::Undo,
             menu: Some("Deshacer"),
-            boton: None,
-            teclas: vec![
-                vec![tecla(Key::Z, CTRL)],
-                escribe(Key::U, Modifiers::NONE, "u"),
+            button_2: None,
+            keys_2: vec![
+                vec![key_2(Key::Z, CTRL)],
+                writes(Key::U, Modifiers::NONE, "u"),
             ],
         },
-        Caso {
-            esperada: AppAction::SelectTool(Tool::Pencil),
+        TestCase {
+            expected: AppAction::SelectTool(Tool::Pencil),
             menu: None,
-            boton: Some("Lápiz"),
-            teclas: vec![escribe(Key::D, Modifiers::NONE, "d")],
+            button_2: Some("Lápiz"),
+            keys_2: vec![writes(Key::D, Modifiers::NONE, "d")],
         },
-        Caso {
-            esperada: AppAction::SelectTool(Tool::Line),
+        TestCase {
+            expected: AppAction::SelectTool(Tool::Line),
             menu: None,
-            boton: Some("Línea"),
-            teclas: vec![escribe(Key::V, Modifiers::NONE, "v")],
+            button_2: Some("Línea"),
+            keys_2: vec![writes(Key::V, Modifiers::NONE, "v")],
         },
-        Caso {
-            esperada: AppAction::SelectTool(Tool::Fill),
+        TestCase {
+            expected: AppAction::SelectTool(Tool::Fill),
             menu: None,
-            boton: Some("Relleno"),
-            teclas: vec![escribe(Key::F, Modifiers::NONE, "f")],
+            button_2: Some("Relleno"),
+            keys_2: vec![writes(Key::F, Modifiers::NONE, "f")],
         },
-        Caso {
-            esperada: AppAction::SelectTool(Tool::Dropper),
+        TestCase {
+            expected: AppAction::SelectTool(Tool::Dropper),
             menu: None,
-            boton: Some("Cuentagotas"),
-            teclas: vec![escribe(Key::Comma, Modifiers::NONE, ",")],
+            button_2: Some("Cuentagotas"),
+            keys_2: vec![writes(Key::Comma, Modifiers::NONE, ",")],
         },
-        Caso {
-            esperada: AppAction::ZoomIn,
+        TestCase {
+            expected: AppAction::ZoomIn,
             menu: Some("Acercar"),
-            boton: Some("Acercar"),
-            teclas: vec![
-                escribe(Key::IntlBackslash, s, ">"),
-                escribe(Key::Plus, s, "+"),
-                escribe(Key::Equals, Modifiers::NONE, "="),
+            button_2: Some("Acercar"),
+            keys_2: vec![
+                writes(Key::IntlBackslash, s, ">"),
+                writes(Key::Plus, s, "+"),
+                writes(Key::Equals, Modifiers::NONE, "="),
             ],
         },
-        Caso {
-            esperada: AppAction::ZoomOut,
+        TestCase {
+            expected: AppAction::ZoomOut,
             menu: Some("Alejar"),
-            boton: Some("Alejar"),
-            teclas: vec![
-                escribe(Key::IntlBackslash, Modifiers::NONE, "<"),
-                escribe(Key::Minus, Modifiers::NONE, "-"),
+            button_2: Some("Alejar"),
+            keys_2: vec![
+                writes(Key::IntlBackslash, Modifiers::NONE, "<"),
+                writes(Key::Minus, Modifiers::NONE, "-"),
             ],
         },
-        Caso {
-            esperada: AppAction::ColorNext,
+        TestCase {
+            expected: AppAction::ColorNext,
             menu: None,
-            boton: None,
-            teclas: vec![
-                escribe(Key::CloseBracket, Modifiers::NONE, "]"),
-                vec![tecla(Key::PageDown, Modifiers::NONE)],
+            button_2: None,
+            keys_2: vec![
+                writes(Key::CloseBracket, Modifiers::NONE, "]"),
+                vec![key_2(Key::PageDown, Modifiers::NONE)],
             ],
         },
-        Caso {
-            esperada: AppAction::ColorPrev,
+        TestCase {
+            expected: AppAction::ColorPrev,
             menu: None,
-            boton: None,
-            teclas: vec![
-                escribe(Key::OpenBracket, Modifiers::ALT, "["),
-                vec![tecla(Key::PageUp, Modifiers::NONE)],
+            button_2: None,
+            keys_2: vec![
+                writes(Key::OpenBracket, Modifiers::ALT, "["),
+                vec![key_2(Key::PageUp, Modifiers::NONE)],
             ],
         },
-        Caso {
-            esperada: AppAction::SelectTool(Tool::Eraser),
+        TestCase {
+            expected: AppAction::SelectTool(Tool::Eraser),
             menu: None,
-            boton: Some("Borrador"),
-            teclas: vec![escribe(Key::K, Modifiers::NONE, "k")],
+            button_2: Some("Borrador"),
+            keys_2: vec![writes(Key::K, Modifiers::NONE, "k")],
         },
     ]
 }
 
 #[test]
-fn fila_9_menu_boton_y_tecla_dan_la_misma_accion() {
-    for caso in casos_de_la_fila_9() {
-        let mut obtenidas = Vec::new();
-        if let Some(rotulo) = caso.menu {
-            obtenidas.push(("menú", por_rotulo_de_menu(rotulo)));
+fn row_9_menu_button_and_key_give_the_same_action() {
+    for case in cases_of_row_9() {
+        let mut obtained = Vec::new();
+        if let Some(label) = case.menu {
+            obtained.push(("menú", by_menu_label(label)));
         }
-        if let Some(rotulo) = caso.boton {
-            obtenidas.push(("botón", por_rotulo_de_boton(rotulo)));
+        if let Some(label) = case.button_2 {
+            obtained.push(("botón", by_button_label(label)));
         }
-        for events in &caso.teclas {
-            obtenidas.push(("tecla", una_accion(events, Platform::Linux)));
+        for events in &case.keys_2 {
+            obtained.push(("tecla", a_action(events, Platform::Linux)));
         }
-        assert!(!obtenidas.is_empty(), "{:?}", caso.esperada);
-        for (origen, action) in obtenidas {
-            assert_eq!(action, caso.esperada, "{:?} por el {origen}", caso.esperada);
+        assert!(!obtained.is_empty(), "{:?}", case.expected);
+        for (source_2, action) in obtained {
+            assert_eq!(
+                action, case.expected,
+                "{:?} por el {source_2}",
+                case.expected
+            );
         }
     }
 }
 
 #[test]
-fn fila_9_las_teclas_de_cada_caso_dan_lo_mismo_en_las_tres_plataformas() {
-    for caso in casos_de_la_fila_9() {
-        for events in &caso.teclas {
-            for platform in PLATAFORMAS {
+fn row_9_the_keys_of_each_case_give_the_same_on_the_three_platforms() {
+    for case in cases_of_row_9() {
+        for events in &case.keys_2 {
+            for platform in PLATFORMS {
                 assert_eq!(
-                    una_accion(events, platform),
-                    caso.esperada,
+                    a_action(events, platform),
+                    case.expected,
                     "{:?} en {platform:?}",
-                    caso.esperada
+                    case.expected
                 );
             }
         }
@@ -1084,173 +1084,169 @@ fn fila_9_las_teclas_de_cada_caso_dan_lo_mismo_en_las_tres_plataformas() {
 }
 
 #[test]
-fn fila_9_los_dispatched_y_el_estado_final_son_iguales_desde_el_menu_el_boton_y_la_tecla() {
-    for caso in casos_de_la_fila_9() {
-        let mut fuentes: Vec<(String, Origin, AppAction)> = Vec::new();
-        if let Some(rotulo) = caso.menu {
-            fuentes.push((
-                format!("menú {rotulo}"),
-                Origin::Menu,
-                por_rotulo_de_menu(rotulo),
-            ));
+fn row_9_the_dispatched_and_the_final_state_are_equal_from_the_menu_the_button_and_the_key() {
+    for case in cases_of_row_9() {
+        let mut sources: Vec<(String, Origin, AppAction)> = Vec::new();
+        if let Some(label) = case.menu {
+            sources.push((format!("menú {label}"), Origin::Menu, by_menu_label(label)));
         }
-        if let Some(rotulo) = caso.boton {
-            fuentes.push((
-                format!("botón {rotulo}"),
+        if let Some(label) = case.button_2 {
+            sources.push((
+                format!("botón {label}"),
                 Origin::Button,
-                por_rotulo_de_boton(rotulo),
+                by_button_label(label),
             ));
         }
-        for (i, events) in caso.teclas.iter().enumerate() {
-            fuentes.push((
+        for (i, events) in case.keys_2.iter().enumerate() {
+            sources.push((
                 format!("tecla {i}"),
                 Origin::Key,
-                una_accion(events, Platform::Linux),
+                a_action(events, Platform::Linux),
             ));
         }
-        let resultados: Vec<(String, Dispatched, Foto)> = fuentes
+        let results: Vec<(String, Dispatched, TestSnapshot)> = sources
             .iter()
-            .map(|(nombre, origin, action)| {
-                let mut mundo = Mundo::estandar();
-                let resultado = mundo.despacha(*action, *origin);
-                (nombre.clone(), resultado, mundo.foto())
+            .map(|(name_2, origin, action)| {
+                let mut world = World::standard();
+                let result = world.dispatches(*action, *origin);
+                (name_2.clone(), result, world.snapshot())
             })
             .collect();
-        for pareja in resultados.windows(2) {
+        for pair in results.windows(2) {
             assert_eq!(
-                pareja[0].1, pareja[1].1,
+                pair[0].1, pair[1].1,
                 "{:?}: {} y {} difieren",
-                caso.esperada, pareja[0].0, pareja[1].0
+                case.expected, pair[0].0, pair[1].0
             );
             assert_eq!(
-                pareja[0].2, pareja[1].2,
+                pair[0].2, pair[1].2,
                 "{:?}: el estado tras {} y tras {} difiere",
-                caso.esperada, pareja[0].0, pareja[1].0
+                case.expected, pair[0].0, pair[1].0
             );
         }
 
         // Y lo que cada una hace.
-        let antes = Mundo::estandar().foto();
-        let (_, resultado, despues) = &resultados[0];
-        match caso.esperada {
+        let antes = World::standard().snapshot();
+        let (_, result, after_2) = &results[0];
+        match case.expected {
             AppAction::Undo => {
-                assert_eq!(*resultado, hecho(true));
-                assert_ne!(despues.state_id, antes.state_id);
-                assert!(despues.can_redo);
+                assert_eq!(*result, done(true));
+                assert_ne!(after_2.state_id, antes.state_id);
+                assert!(after_2.can_redo);
             }
             AppAction::SelectTool(Tool::Eraser) => {
                 // Indexada sin transparencia: con aviso.
                 assert_eq!(
-                    *resultado,
+                    *result,
                     Dispatched::Done {
                         refresh: false,
                         notice: Some(NO_INDEX_NOTICE.to_string())
                     }
                 );
-                assert_eq!(despues.tool, Tool::Eraser);
+                assert_eq!(after_2.tool, Tool::Eraser);
             }
             AppAction::SelectTool(tool) => {
-                assert_eq!(*resultado, hecho(false));
-                assert_eq!(despues.tool, tool);
-                assert_eq!(despues.state_id, antes.state_id);
+                assert_eq!(*result, done(false));
+                assert_eq!(after_2.tool, tool);
+                assert_eq!(after_2.state_id, antes.state_id);
             }
-            AppAction::ZoomIn => assert_eq!(*resultado, Dispatched::View(ViewOp::ZoomIn)),
-            AppAction::ZoomOut => assert_eq!(*resultado, Dispatched::View(ViewOp::ZoomOut)),
+            AppAction::ZoomIn => assert_eq!(*result, Dispatched::View(ViewOp::ZoomIn)),
+            AppAction::ZoomOut => assert_eq!(*result, Dispatched::View(ViewOp::ZoomOut)),
             AppAction::ColorNext => {
-                assert_eq!(*resultado, hecho(false));
-                assert_eq!(despues.choice, ColorChoice::Entry(1));
+                assert_eq!(*result, done(false));
+                assert_eq!(after_2.choice, ColorChoice::Entry(1));
             }
             AppAction::ColorPrev => {
-                assert_eq!(*resultado, hecho(false));
+                assert_eq!(*result, done(false));
                 // Da la vuelta desde la primera entrada.
-                assert_eq!(despues.choice, ColorChoice::Entry(3));
+                assert_eq!(after_2.choice, ColorChoice::Entry(3));
             }
-            otra => panic!("caso sin comprobar: {otra:?}"),
+            other => panic!("caso sin comprobar: {other:?}"),
         }
     }
 }
 
 #[test]
-fn fila_9_el_aviso_del_borrador_sale_igual_desde_el_boton() {
-    let mut a = Mundo::estandar();
-    let mut b = Mundo::estandar();
-    let desde_boton = a.despacha(por_rotulo_de_boton("Borrador"), Origin::Button);
-    let directa = b.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Key);
-    assert_eq!(desde_boton, directa);
+fn row_9_the_eraser_notice_comes_out_the_same_from_the_button() {
+    let mut a = World::standard();
+    let mut b = World::standard();
+    let from_button = a.dispatches(by_button_label("Borrador"), Origin::Button);
+    let direct = b.dispatches(AppAction::SelectTool(Tool::Eraser), Origin::Key);
+    assert_eq!(from_button, direct);
     assert_eq!(
-        desde_boton,
+        from_button,
         Dispatched::Done {
             refresh: false,
             notice: Some(NO_INDEX_NOTICE.to_string())
         }
     );
-    assert_eq!(a.foto(), b.foto());
+    assert_eq!(a.snapshot(), b.snapshot());
     // El Borrador tiene la `k` (la `e` no es nada, ni sola ni con `Mayús`).
-    for letra in ["e", "E"] {
+    for letter in ["e", "E"] {
         assert_eq!(
-            acciones_de_teclado(&escribe(Key::E, Modifiers::NONE, letra), Platform::Linux),
+            actions_of_keyboard(&writes(Key::E, Modifiers::NONE, letter), Platform::Linux),
             vec![],
-            "{letra}"
+            "{letter}"
         );
     }
 }
 
 #[test]
-fn borrador_k_elige_el_borrador_con_o_sin_bloq_mayus_y_k_con_mayus_borra_la_pagina() {
-    for platform in PLATAFORMAS {
+fn eraser_k_chooses_the_eraser_with_or_without_caps_lock_and_shift_k_clears_the_page() {
+    for platform in PLATFORMS {
         // `k` (y la `K` que escribe el Bloq Mayús, sin `Mayús`): el Borrador.
-        for texto in ["k", "K"] {
+        for text_2 in ["k", "K"] {
             assert_eq!(
-                una_accion(&escribe(Key::K, Modifiers::NONE, texto), platform),
+                a_action(&writes(Key::K, Modifiers::NONE, text_2), platform),
                 AppAction::SelectTool(Tool::Eraser),
-                "{texto} en {platform:?}"
+                "{text_2} en {platform:?}"
             );
         }
         // `Mayús`+`k`: Borrar página, no el Borrador.
         assert_eq!(
-            una_accion(&escribe(Key::K, Modifiers::SHIFT, "K"), platform),
+            a_action(&writes(Key::K, Modifiers::SHIFT, "K"), platform),
             AppAction::ClearPage
         );
     }
-    let mut mundo = Mundo::estandar();
-    mundo.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Key);
-    assert_eq!(mundo.tools.tool(), Tool::Eraser);
-    let mut mundo = Mundo::estandar();
-    let antes = mundo.foto();
-    mundo.despacha(AppAction::ClearPage, Origin::Key);
-    assert_eq!(mundo.tools.tool(), antes.tool);
+    let mut world = World::standard();
+    world.dispatches(AppAction::SelectTool(Tool::Eraser), Origin::Key);
+    assert_eq!(world.tools.tool(), Tool::Eraser);
+    let mut world = World::standard();
+    let antes = world.snapshot();
+    world.dispatches(AppAction::ClearPage, Origin::Key);
+    assert_eq!(world.tools.tool(), antes.tool);
 }
 
 #[test]
-fn borrador_k_no_actua_con_un_campo_enfocado_un_dialogo_abierto_o_un_trazo_en_curso() {
-    let k = escribe(Key::K, Modifiers::NONE, "k");
+fn eraser_k_does_not_act_with_a_focused_field_an_open_dialog_or_a_stroke_in_progress() {
+    let k = writes(Key::K, Modifiers::NONE, "k");
     // Campo de texto enfocado: el filtro de teclas no deja pasar la `k`.
     assert_eq!(
-        acciones_de_teclado(&px_ui::shortcuts::gate_keys(&k, true), Platform::Linux),
+        actions_of_keyboard(&px_ui::shortcuts::gate_keys(&k, true), Platform::Linux),
         vec![]
     );
     // Diálogo abierto o campo enfocado: la acción llega bloqueada y no cambia nada.
     for locks in [
-        locks_con(|l| l.dialog = true),
-        locks_con(|l| l.text_focus = true),
+        locks_with(|l| l.dialog = true),
+        locks_with(|l| l.text_focus = true),
     ] {
-        let mut mundo = Mundo::estandar();
-        let antes = mundo.foto();
+        let mut world = World::standard();
+        let antes = world.snapshot();
         assert_eq!(
-            mundo.despacha_con(AppAction::SelectTool(Tool::Eraser), Origin::Key, locks),
+            world.dispatches_with(AppAction::SelectTool(Tool::Eraser), Origin::Key, locks),
             Dispatched::Blocked
         );
-        assert_eq!(mundo.foto(), antes);
+        assert_eq!(world.snapshot(), antes);
     }
     // Trazo en curso: bloqueada también.
-    let mut mundo = mundo_con_gesto(Gesto::Trazo);
-    let antes = mundo.foto();
+    let mut world = world_with_gesture(TestGesture::Stroke);
+    let antes = world.snapshot();
     assert_eq!(
-        mundo.despacha(AppAction::SelectTool(Tool::Eraser), Origin::Key),
+        world.dispatches(AppAction::SelectTool(Tool::Eraser), Origin::Key),
         Dispatched::Blocked
     );
-    assert_eq!(mundo.foto(), antes);
-    assert_ne!(mundo.tools.tool(), Tool::Eraser);
+    assert_eq!(world.snapshot(), antes);
+    assert_ne!(world.tools.tool(), Tool::Eraser);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1258,61 +1254,61 @@ fn borrador_k_no_actua_con_un_campo_enfocado_un_dialogo_abierto_o_un_trazo_en_cu
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_select_color_3_directo_en_una_indexada_de_9_cambia_choice_con_la_rejilla_sincronizada() {
-    let mut mundo = Mundo::nuevo(indexada(9), 0, 0);
-    let documento = mundo.documento();
+fn row_10_select_color_3_direct_in_an_indexed_of_9_changes_choice_with_the_grid_synchronized() {
+    let mut world = World::new_2(indexed(9), 0, 0);
+    let document = world.document();
     assert_eq!(
-        mundo.despacha(AppAction::SelectColor(3), Origin::Key),
-        hecho(false)
+        world.dispatches(AppAction::SelectColor(3), Origin::Key),
+        done(false)
     );
-    assert_eq!(mundo.session.choice, ColorChoice::Entry(2));
+    assert_eq!(world.session.choice, ColorChoice::Entry(2));
     assert!(
-        mundo.session.view.reveal,
+        world.session.view.reveal,
         "la rejilla muestra la fila elegida"
     );
-    assert_eq!(mundo.documento(), documento);
+    assert_eq!(world.document(), document);
 }
 
 #[test]
-fn fila_10_select_color_3_directo_en_rgba_elige_la_ranura_3() {
-    let mut mundo = Mundo::nuevo(rgba(), 0, 0);
+fn row_10_select_color_3_direct_in_rgba_chooses_slot_3() {
+    let mut world = World::new_2(rgba(), 0, 0);
     assert_eq!(
-        mundo.despacha(AppAction::SelectColor(3), Origin::Key),
-        hecho(false)
+        world.dispatches(AppAction::SelectColor(3), Origin::Key),
+        done(false)
     );
-    assert_eq!(mundo.session.choice, ColorChoice::Slot(3));
+    assert_eq!(world.session.choice, ColorChoice::Slot(3));
 }
 
 #[test]
-fn fila_10_select_color_se_sigue_bloqueando_como_antes() {
-    let mut mundo = mundo_con_quita_pendiente();
-    let antes = mundo.foto();
+fn row_10_select_color_keeps_blocking_as_before() {
+    let mut world = world_with_a_pending_removal();
+    let antes = world.snapshot();
     assert_eq!(
-        mundo.despacha(AppAction::SelectColor(1), Origin::Key),
+        world.dispatches(AppAction::SelectColor(1), Origin::Key),
         Dispatched::Blocked
     );
-    assert_eq!(mundo.foto(), antes);
+    assert_eq!(world.snapshot(), antes);
 }
 
 #[test]
-fn fila_10_las_cifras_por_teclado_no_dan_ninguna_accion_que_despachar() {
-    for platform in PLATAFORMAS {
-        for (key, cifra) in [
+fn row_10_digits_on_the_keyboard_give_no_action_to_dispatch() {
+    for platform in PLATFORMS {
+        for (key, figure) in [
             (Key::Num1, "1"),
             (Key::Num2, "2"),
             (Key::Num3, "3"),
             (Key::Num9, "9"),
         ] {
             assert_eq!(
-                acciones_de_teclado(&escribe(key, Modifiers::NONE, cifra), platform),
+                actions_of_keyboard(&writes(key, Modifiers::NONE, figure), platform),
                 vec![],
-                "{cifra} en {platform:?}"
+                "{figure} en {platform:?}"
             );
         }
     }
     // `Ctrl+1` sigue dando solo `ZoomActual`.
     assert_eq!(
-        acciones_de_teclado(&[tecla(Key::Num1, CTRL)], Platform::Linux),
+        actions_of_keyboard(&[key_2(Key::Num1, CTRL)], Platform::Linux),
         vec![AppAction::ZoomActual]
     );
 }
@@ -1322,11 +1318,11 @@ fn fila_10_las_cifras_por_teclado_no_dan_ninguna_accion_que_despachar() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_12_ignores_repeat_es_solo_open_save_save_as_new_image_y_quit_en_toda_la_tabla() {
+fn row_12_ignores_repeat_is_only_open_save_save_as_new_image_and_quit_in_the_whole_table() {
     let km = Keymap::default_scheme();
-    for fila in km.rows() {
-        let esperado = matches!(
-            fila.action,
+    for row in km.rows() {
+        let expected_2 = matches!(
+            row.action,
             AppAction::Open
                 | AppAction::Save
                 | AppAction::SaveAs
@@ -1334,11 +1330,11 @@ fn fila_12_ignores_repeat_es_solo_open_save_save_as_new_image_y_quit_en_toda_la_
                 | AppAction::Quit
         );
         assert_eq!(
-            fila.action.ignores_repeat(),
-            esperado,
+            row.action.ignores_repeat(),
+            expected_2,
             "{:?} ({:?})",
-            fila.action,
-            fila.key
+            row.action,
+            row.key
         );
     }
     for action in [
@@ -1357,95 +1353,95 @@ fn fila_12_ignores_repeat_es_solo_open_save_save_as_new_image_y_quit_en_toda_la_
 }
 
 #[test]
-fn fila_12_u_repetida_deshace_un_paso_por_pulsacion() {
-    let mut mundo = Mundo::nuevo(indexada(4), 4, 0);
+fn row_12_u_repeated_undoes_one_step_per_press() {
+    let mut world = World::new_2(indexed(4), 4, 0);
     let events = [
-        tecla(Key::U, Modifiers::NONE),
-        texto("u"),
-        repetida(Key::U, Modifiers::NONE),
-        texto("u"),
-        repetida(Key::U, Modifiers::NONE),
-        texto("u"),
+        key_2(Key::U, Modifiers::NONE),
+        text_2("u"),
+        repeated(Key::U, Modifiers::NONE),
+        text_2("u"),
+        repeated(Key::U, Modifiers::NONE),
+        text_2("u"),
     ];
-    let acciones = acciones_de_teclado(&events, Platform::Linux);
-    assert_eq!(acciones, vec![AppAction::Undo; 3]);
-    let mut ids = vec![mundo.session.document.state_id()];
-    for action in acciones {
-        assert_eq!(mundo.despacha(action, Origin::Key), hecho(true));
-        ids.push(mundo.session.document.state_id());
+    let actions = actions_of_keyboard(&events, Platform::Linux);
+    assert_eq!(actions, vec![AppAction::Undo; 3]);
+    let mut ids = vec![world.session.document.state_id()];
+    for action in actions {
+        assert_eq!(world.dispatches(action, Origin::Key), done(true));
+        ids.push(world.session.document.state_id());
     }
     // Tres pasos deshechos: queda uno por deshacer y tres por rehacer.
-    assert!(mundo.session.document.can_undo());
-    assert!(mundo.session.document.can_redo());
+    assert!(world.session.document.can_undo());
+    assert!(world.session.document.can_redo());
     ids.dedup();
     assert_eq!(ids.len(), 4, "cada pulsación cambió el estado: {ids:?}");
     // Una cuarta pulsación agota la historia.
-    mundo.despacha(AppAction::Undo, Origin::Key);
-    assert!(!mundo.session.document.can_undo());
+    world.dispatches(AppAction::Undo, Origin::Key);
+    assert!(!world.session.document.can_undo());
 }
 
 #[test]
-fn fila_12_corchete_y_av_pag_repetidos_dan_un_paso_de_color_por_pulsacion() {
-    let casos: Vec<(&str, Vec<Event>)> = vec![
+fn row_12_bracket_and_page_down_repeated_give_one_color_step_per_press() {
+    let cases: Vec<(&str, Vec<Event>)> = vec![
         (
             "]",
             vec![
-                tecla(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
-                repetida(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
-                repetida(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
-                repetida(Key::CloseBracket, Modifiers::NONE),
-                texto("]"),
+                key_2(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
+                repeated(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
+                repeated(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
+                repeated(Key::CloseBracket, Modifiers::NONE),
+                text_2("]"),
             ],
         ),
         (
             "Av Pág",
             vec![
-                tecla(Key::PageDown, Modifiers::NONE),
-                repetida(Key::PageDown, Modifiers::NONE),
-                repetida(Key::PageDown, Modifiers::NONE),
-                repetida(Key::PageDown, Modifiers::NONE),
+                key_2(Key::PageDown, Modifiers::NONE),
+                repeated(Key::PageDown, Modifiers::NONE),
+                repeated(Key::PageDown, Modifiers::NONE),
+                repeated(Key::PageDown, Modifiers::NONE),
             ],
         ),
     ];
-    for (nombre, events) in casos {
-        let mut mundo = Mundo::nuevo(indexada(9), 0, 0);
-        let acciones = acciones_de_teclado(&events, Platform::Linux);
-        assert_eq!(acciones, vec![AppAction::ColorNext; 4], "{nombre}");
-        for action in acciones {
-            mundo.despacha(action, Origin::Key);
+    for (name_2, events) in cases {
+        let mut world = World::new_2(indexed(9), 0, 0);
+        let actions = actions_of_keyboard(&events, Platform::Linux);
+        assert_eq!(actions, vec![AppAction::ColorNext; 4], "{name_2}");
+        for action in actions {
+            world.dispatches(action, Origin::Key);
         }
         assert_eq!(
-            mundo.session.choice,
+            world.session.choice,
             ColorChoice::Entry(4),
-            "{nombre}: cuatro pulsaciones, cuatro pasos"
+            "{name_2}: cuatro pulsaciones, cuatro pasos"
         );
     }
 }
 
 #[test]
-fn fila_12_menor_repetido_aleja_una_vez_por_pulsacion() {
+fn row_12_repeated_smaller_zooms_out_once_per_press() {
     let events = [
-        tecla(Key::IntlBackslash, Modifiers::NONE),
-        texto("<"),
-        repetida(Key::IntlBackslash, Modifiers::NONE),
-        texto("<"),
-        repetida(Key::IntlBackslash, Modifiers::NONE),
-        texto("<"),
+        key_2(Key::IntlBackslash, Modifiers::NONE),
+        text_2("<"),
+        repeated(Key::IntlBackslash, Modifiers::NONE),
+        text_2("<"),
+        repeated(Key::IntlBackslash, Modifiers::NONE),
+        text_2("<"),
     ];
-    let mut mundo = Mundo::estandar();
-    let resultados: Vec<Dispatched> = acciones_de_teclado(&events, Platform::Linux)
+    let mut world = World::standard();
+    let results: Vec<Dispatched> = actions_of_keyboard(&events, Platform::Linux)
         .into_iter()
-        .map(|a| mundo.despacha(a, Origin::Key))
+        .map(|a| world.dispatches(a, Origin::Key))
         .collect();
-    assert_eq!(resultados, vec![Dispatched::View(ViewOp::ZoomOut); 3]);
+    assert_eq!(results, vec![Dispatched::View(ViewOp::ZoomOut); 3]);
 }
 
 #[test]
-fn fila_12_abrir_guardar_guardar_como_nueva_imagen_y_salir_mantenidos_no_repiten() {
-    for (key, modifiers, esperada, resultado) in [
+fn row_12_open_save_save_as_new_image_and_quit_held_down_do_not_repeat() {
+    for (key, modifiers, expected, result) in [
         (
             Key::O,
             CTRL,
@@ -1468,18 +1464,18 @@ fn fila_12_abrir_guardar_guardar_como_nueva_imagen_y_salir_mantenidos_no_repiten
         (Key::Q, CTRL, AppAction::Quit, Dispatched::Quit),
     ] {
         let events = [
-            tecla(key, modifiers),
-            repetida(key, modifiers),
-            repetida(key, modifiers),
-            repetida(key, modifiers),
+            key_2(key, modifiers),
+            repeated(key, modifiers),
+            repeated(key, modifiers),
+            repeated(key, modifiers),
         ];
-        let acciones = acciones_de_teclado(&events, Platform::Linux);
+        let actions = actions_of_keyboard(&events, Platform::Linux);
         assert_eq!(
-            acciones,
-            vec![esperada],
-            "{esperada:?}: solo la primera pulsación"
+            actions,
+            vec![expected],
+            "{expected:?}: solo la primera pulsación"
         );
-        let mut mundo = Mundo::estandar();
-        assert_eq!(mundo.despacha(acciones[0], Origin::Key), resultado);
+        let mut world = World::standard();
+        assert_eq!(world.dispatches(actions[0], Origin::Key), result);
     }
 }

@@ -1,7 +1,7 @@
 //! El flujo de las ventanas de ayuda y de atajos (specs/interfaz-ayuda.md, decisiones 5 a 8 y 10 a
 //! 12): **sustitución con vuelta** (hay un solo modal: el editor sustituye a la ayuda o a la lista y,
 //! al cerrarse, estas se reabren desde la tabla viva), la captura de teclas con `Esc` en cadena, la
-//! marca de conflicto y `Restablecer todo`. Sin egui: se prueba alimentándolo con las `Reaction` de
+//! marca de conflicto y `Restablecer all`. Sin egui: se prueba alimentándolo con las `Reaction` de
 //! los diálogos y con los eventos del fotograma.
 
 use px_ui::actions::{AppAction, Locks, Platform};
@@ -44,7 +44,7 @@ pub enum FlowOutcome {
     None,
     /// El editor aceptó: la tabla viva cambió por esa acción (hay que guardarla).
     KeymapChanged(AppAction),
-    /// `Restablecer todo` confirmado: la tabla es la de fábrica (hay que guardarla, con copia).
+    /// `Restablecer all` confirmado: la tabla es la de fábrica (hay que guardarla, con copia).
     ResetAll,
 }
 
@@ -224,7 +224,7 @@ impl Flow {
     }
 
     /// La reacción de una ventana del flujo. Aplica la tabla viva (`keymap`) al aceptar el editor o
-    /// `Restablecer todo`, y sustituye una ventana por otra o vuelve a la de origen.
+    /// `Restablecer all`, y sustituye una ventana por otra o vuelve a la de origen.
     pub fn react(
         &mut self,
         modal: &mut Modal,

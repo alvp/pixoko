@@ -13,13 +13,13 @@ pub enum Request {
     Close,
     /// Ctrl+O con cambios sin guardar (specs/hito-2-dialogos-archivo.md).
     OpenDialog,
-    /// `Nueva imagen…` con cambios sin guardar (specs/hito-2-nueva-imagen.md, D6).
+    /// `New image_2…` con cambios sin guardar (specs/hito-2-nueva-imagen.md, D6).
     NewImage,
     /// Segunda pulsación de guardar tras un diálogo que no se pudo abrir.
     SaveFallback {
         as_copy: bool,
     },
-    /// `Nueva capa` o `Duplicar` en una imagen en gris, repetida en 5 s: abre `Convertir modo…`
+    /// `New layer_2` o `Duplicate` en una imagen en gris, repetida en 5 s: abre `Convert mode_2…`
     /// con «Gris con alfa» elegido (specs/hito-3-capas-interfaz.md, decisión 13).
     LayersToGrayAlpha,
     /// `Aplanar` con capas ocultas con píxeles, repetido en 5 s: las quita
@@ -91,7 +91,7 @@ pub fn open_dialog_warning() -> String {
     )
 }
 
-/// Aviso al elegir `Nueva imagen…` con cambios sin guardar.
+/// Aviso al elegir `New image_2…` con cambios sin guardar.
 pub fn new_warning() -> String {
     format!(
         "hay cambios sin guardar: elige Nueva imagen otra vez en {CONFIRM_SECS:.0} s para descartarlos, o guarda con Ctrl+S"

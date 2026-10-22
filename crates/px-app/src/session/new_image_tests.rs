@@ -8,7 +8,7 @@
 //!   descartado) y operaciones de paleta (con el aviso de quita cancelada). Las ranuras de color
 //!   **no** (son de la sesión).
 //! - Con cambios y sin `discard`: `Err(Unsaved)` y no cambia nada; con `discard` o sin cambios, `Ok`.
-//! - `Guardar` sin ruta pide el diálogo con `sin-titulo.png`; `open` se comporta como antes.
+//! - `Save` sin ruta pide el diálogo con `without-title.png`; `open` se comporta como antes.
 //!
 //! Los ayudantes de los demás ficheros de este directorio son privados de sus módulos: aquí se
 //! duplican los mínimos (directorio temporal, `F`, selector falso). Cada test usa su propio directorio
@@ -92,10 +92,10 @@ fn image_f() -> Image {
 
 /// La imagen nueva de cada modo, como la entregaría `build_new_image` (con la paleta de D2 en
 /// indexado).
-fn imagen_nueva(mode: Mode) -> Image {
+fn image_new(mode: Mode) -> Image {
     match mode {
         Mode::Indexed => Image::new_indexed(8, 6, initial_palette()).expect("indexada"),
-        otro => Image::new(8, 6, otro).expect("imagen"),
+        other_2 => Image::new(8, 6, other_2).expect("imagen"),
     }
 }
 
@@ -105,24 +105,24 @@ fn session_f() -> Session {
 
 /// Una edición de la paleta que marca el documento como modificado (cada llamada cambia el color:
 /// dos seguidas son dos pasos).
-fn edita(session: &mut Session) {
+fn edits(session: &mut Session) {
     let image = ImageId::from_raw(0);
-    let tono = (session.document.state_id() % 200) as u8 + 1;
+    let tone = (session.document.state_id() % 200) as u8 + 1;
     session
         .document
         .apply(Command::SetPaletteColor {
             image,
             index: 0,
-            color: Rgba::opaque(9, 9, tono),
+            color: Rgba::opaque(9, 9, tone),
         })
         .expect("editar");
     assert!(session.modified());
 }
 
 /// Una edición de un píxel, distinta del contenido de una imagen nueva, en el modo que sea.
-fn edita_pixel(session: &mut Session) {
+fn edits_pixel(session: &mut Session) {
     let image = ImageId::from_raw(0);
-    let pixel = match imagen_de(session).mode() {
+    let pixel = match image_of(session).mode() {
         Mode::Indexed => Pixel::Indexed(1),
         Mode::Rgba => Pixel::Rgba(Rgba::opaque(1, 2, 3)),
         Mode::Gray => Pixel::Gray(7),
@@ -143,9 +143,9 @@ fn edita_pixel(session: &mut Session) {
 
 /// Sesión con historia, sin guardar, con elección, desplazamiento y vista del panel no iniciales,
 /// texto pendiente en el editor y una quita pendiente.
-fn session_con_de_todo() -> Session {
+fn session_with_everything() -> Session {
     let mut session = session_f();
-    edita(&mut session);
+    edits(&mut session);
     session.choice = ColorChoice::Entry(2);
     session.sync_editor();
     session.scroll = Scroll {
@@ -170,7 +170,7 @@ fn session_con_de_todo() -> Session {
 
 /// Todo lo observable que `new_image` con error no debe tocar.
 #[derive(Clone, Debug, PartialEq)]
-struct Foto {
+struct TestSnapshot {
     image: Image,
     state_id: u64,
     can_undo: bool,
@@ -186,8 +186,8 @@ struct Foto {
     converted: bool,
 }
 
-fn foto(session: &Session) -> Foto {
-    Foto {
+fn snapshot(session: &Session) -> TestSnapshot {
+    TestSnapshot {
         image: session
             .document
             .image(ImageId::from_raw(0))
@@ -208,7 +208,7 @@ fn foto(session: &Session) -> Foto {
     }
 }
 
-fn imagen_de(session: &Session) -> &Image {
+fn image_of(session: &Session) -> &Image {
     session
         .document
         .image(ImageId::from_raw(0))
@@ -252,22 +252,18 @@ fn dialogs() -> (Dialogs, Handle) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_el_documento_nuevo_no_tiene_historia_ni_ruta_ni_cambios() {
+fn row_8_the_new_document_has_no_history_or_path_or_changes() {
     let tmp = TmpDir::new();
-    let mut session = session_con_de_todo();
+    let mut session = session_with_everything();
     // Con ruta (guardada una vez) y de nuevo con cambios.
     session.save(tmp.path()).expect("guardar");
     assert!(session.path().is_some());
-    edita(&mut session);
+    edits(&mut session);
 
-    let nueva = imagen_nueva(Mode::Rgba);
-    session.new_image(nueva.clone(), true).expect("crear");
+    let new = image_new(Mode::Rgba);
+    session.new_image(new.clone(), true).expect("crear");
 
-    assert_eq!(
-        imagen_de(&session),
-        &nueva,
-        "el documento es la imagen dada"
-    );
+    assert_eq!(image_of(&session), &new, "el documento es la imagen dada");
     assert!(!session.document.can_undo());
     assert!(!session.document.can_redo());
     assert_eq!(session.document.state_id(), 0);
@@ -277,10 +273,10 @@ fn fila_8_el_documento_nuevo_no_tiene_historia_ni_ruta_ni_cambios() {
 }
 
 #[test]
-fn fila_8_cerrar_y_abrir_no_preguntan_en_la_imagen_nueva_y_dibujar_lo_marca_modificado() {
-    let mut session = session_con_de_todo();
+fn row_8_closing_and_opening_do_not_ask_on_the_new_image_and_drawing_marks_it_modified() {
+    let mut session = session_with_everything();
     session
-        .new_image(imagen_nueva(Mode::Indexed), true)
+        .new_image(image_new(Mode::Indexed), true)
         .expect("crear");
 
     let mut confirm = Confirm::new();
@@ -291,7 +287,7 @@ fn fila_8_cerrar_y_abrir_no_preguntan_en_la_imagen_nueva_y_dibujar_lo_marca_modi
     );
 
     // La base de «modificado» es el estado nuevo: una edición sí lo marca.
-    edita_pixel(&mut session);
+    edits_pixel(&mut session);
     assert!(session.modified());
 }
 
@@ -300,8 +296,8 @@ fn fila_8_cerrar_y_abrir_no_preguntan_en_la_imagen_nueva_y_dibujar_lo_marca_modi
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_el_color_activo_es_el_negro_25_en_indexado_y_slot_1_en_los_demas() {
-    for (mode, esperado) in [
+fn row_8_the_active_color_is_the_black_25_in_indexed_and_slot_1_in_the_others() {
+    for (mode, expected_2) in [
         (Mode::Indexed, ColorChoice::Entry(25)),
         (Mode::Rgba, ColorChoice::Slot(1)),
         (Mode::GrayAlpha, ColorChoice::Slot(1)),
@@ -309,12 +305,12 @@ fn fila_8_el_color_activo_es_el_negro_25_en_indexado_y_slot_1_en_los_demas() {
     ] {
         let mut session = session_f();
         session.choice = ColorChoice::Entry(2);
-        let nueva = imagen_nueva(mode);
-        session.new_image(nueva.clone(), false).expect("crear");
-        assert_eq!(session.choice, esperado, "{mode:?}");
+        let new = image_new(mode);
+        session.new_image(new.clone(), false).expect("crear");
+        assert_eq!(session.choice, expected_2, "{mode:?}");
         // La elección es válida para la imagen y su color es el esperado.
         if mode == Mode::Indexed {
-            let palette = nueva.palette().expect("paleta");
+            let palette = new.palette().expect("paleta");
             assert_eq!(palette.get(25), Ok(BLACK), "la 25 es el negro");
         }
         assert!(
@@ -325,15 +321,15 @@ fn fila_8_el_color_activo_es_el_negro_25_en_indexado_y_slot_1_en_los_demas() {
 }
 
 #[test]
-fn fila_8_el_color_activo_de_indexado_no_es_initial_choice() {
-    let nueva = imagen_nueva(Mode::Indexed);
+fn row_8_the_active_color_of_indexed_is_not_initial_choice() {
+    let new = image_new(Mode::Indexed);
     assert_eq!(
-        initial_choice(&nueva),
+        initial_choice(&new),
         ColorChoice::Entry(0),
         "initial_choice da el transparente (la spec lo descarta para la imagen nueva)"
     );
     let mut session = session_f();
-    session.new_image(nueva, false).expect("crear");
+    session.new_image(new, false).expect("crear");
     assert_ne!(session.choice, ColorChoice::Entry(0));
 }
 
@@ -342,10 +338,10 @@ fn fila_8_el_color_activo_de_indexado_no_es_initial_choice() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_se_reinician_el_desplazamiento_la_vista_el_editor_y_las_operaciones() {
-    let mut session = session_con_de_todo();
+fn row_8_the_scroll_the_view_the_editor_and_the_operations_are_reset() {
+    let mut session = session_with_everything();
     session
-        .new_image(imagen_nueva(Mode::Indexed), true)
+        .new_image(image_new(Mode::Indexed), true)
         .expect("crear");
 
     assert_eq!(session.scroll, Scroll::default());
@@ -357,40 +353,40 @@ fn fila_8_se_reinician_el_desplazamiento_la_vista_el_editor_y_las_operaciones() 
 }
 
 #[test]
-fn fila_8_el_texto_pendiente_descartado_se_dice_una_sola_vez() {
-    let mut session = session_con_de_todo();
+fn row_8_the_discarded_pending_text_is_said_only_once() {
+    let mut session = session_with_everything();
     assert!(!session.take_discarded_text(), "antes no hay nada");
     session
-        .new_image(imagen_nueva(Mode::Rgba), true)
+        .new_image(image_new(Mode::Rgba), true)
         .expect("crear");
     assert!(session.take_discarded_text(), "se avisa");
     assert!(!session.take_discarded_text(), "se lee una sola vez");
 }
 
 #[test]
-fn fila_8_la_quita_pendiente_cancelada_se_dice_una_sola_vez() {
-    let mut session = session_con_de_todo();
+fn row_8_the_cancelled_pending_removal_is_said_only_once() {
+    let mut session = session_with_everything();
     assert!(!session.take_removal_cancelled(), "antes no hay nada");
     session
-        .new_image(imagen_nueva(Mode::Rgba), true)
+        .new_image(image_new(Mode::Rgba), true)
         .expect("crear");
     assert!(session.take_removal_cancelled(), "se avisa");
     assert!(!session.take_removal_cancelled(), "se lee una sola vez");
 }
 
 #[test]
-fn fila_8_sin_texto_ni_quita_pendientes_no_hay_avisos() {
+fn row_8_without_pending_text_or_removal_there_are_no_notices() {
     let mut session = session_f();
     session
-        .new_image(imagen_nueva(Mode::Gray), false)
+        .new_image(image_new(Mode::Gray), false)
         .expect("crear");
     assert!(!session.take_discarded_text());
     assert!(!session.take_removal_cancelled());
 }
 
 #[test]
-fn fila_8_las_ranuras_de_color_no_se_tocan() {
-    let mut session = session_con_de_todo();
+fn row_8_the_color_slots_are_not_touched() {
+    let mut session = session_with_everything();
     session
         .slots
         .get_mut(Mode::Rgba)
@@ -401,7 +397,7 @@ fn fila_8_las_ranuras_de_color_no_se_tocan() {
         .set(3, Rgba::opaque(50, 50, 50));
     let antes = session.slots.clone();
     session
-        .new_image(imagen_nueva(Mode::Rgba), true)
+        .new_image(image_new(Mode::Rgba), true)
         .expect("crear");
     assert_eq!(session.slots, antes);
 }
@@ -411,44 +407,44 @@ fn fila_8_las_ranuras_de_color_no_se_tocan() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_con_cambios_y_sin_discard_da_unsaved_y_no_cambia_nada() {
-    let mut session = session_con_de_todo();
-    let antes = foto(&session);
-    let result = session.new_image(imagen_nueva(Mode::Rgba), false);
+fn row_8_with_changes_and_without_discard_it_gives_unsaved_and_changes_nothing() {
+    let mut session = session_with_everything();
+    let antes = snapshot(&session);
+    let result = session.new_image(image_new(Mode::Rgba), false);
     assert_eq!(result, Err(FileError::Unsaved));
-    assert_eq!(foto(&session), antes, "nada cambió");
+    assert_eq!(snapshot(&session), antes, "nada cambió");
     assert!(!session.take_discarded_text(), "tampoco los avisos");
     assert!(!session.take_removal_cancelled());
 }
 
 #[test]
-fn fila_8_con_cambios_y_discard_reemplaza() {
-    let mut session = session_con_de_todo();
-    let nueva = imagen_nueva(Mode::Gray);
-    assert_eq!(session.new_image(nueva.clone(), true), Ok(()));
-    assert_eq!(imagen_de(&session), &nueva);
+fn row_8_with_changes_and_discard_it_replaces() {
+    let mut session = session_with_everything();
+    let new = image_new(Mode::Gray);
+    assert_eq!(session.new_image(new.clone(), true), Ok(()));
+    assert_eq!(image_of(&session), &new);
 }
 
 #[test]
-fn fila_8_sin_cambios_reemplaza_con_o_sin_discard() {
+fn row_8_without_changes_it_replaces_with_or_without_discard() {
     for discard in [false, true] {
         let mut session = session_f();
         assert!(!session.modified());
-        let nueva = imagen_nueva(Mode::GrayAlpha);
-        assert_eq!(session.new_image(nueva.clone(), discard), Ok(()));
-        assert_eq!(imagen_de(&session), &nueva, "discard {discard}");
+        let new = image_new(Mode::GrayAlpha);
+        assert_eq!(session.new_image(new.clone(), discard), Ok(()));
+        assert_eq!(image_of(&session), &new, "discard {discard}");
     }
 }
 
 // ---------------------------------------------------------------------------------------
-// Fila 8: `Guardar` y `open`.
+// Fila 8: `Save` y `open`.
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_guardar_sin_ruta_pide_el_dialogo_con_sin_titulo_png() {
-    let mut session = session_con_de_todo();
+fn row_8_saving_without_a_path_asks_for_the_dialog_with_untitled_png() {
+    let mut session = session_with_everything();
     session
-        .new_image(imagen_nueva(Mode::Rgba), true)
+        .new_image(image_new(Mode::Rgba), true)
         .expect("crear");
     assert!(session.path().is_none());
 
@@ -466,13 +462,13 @@ fn fila_8_guardar_sin_ruta_pide_el_dialogo_con_sin_titulo_png() {
 }
 
 #[test]
-fn fila_8_guardar_la_imagen_nueva_escribe_sin_titulo_png_y_deja_de_estar_modificada() {
+fn row_8_saving_the_new_image_writes_untitled_png_and_stops_being_modified() {
     let tmp = TmpDir::new();
     let mut session = session_f();
     session
-        .new_image(imagen_nueva(Mode::Rgba), false)
+        .new_image(image_new(Mode::Rgba), false)
         .expect("crear");
-    edita_pixel(&mut session);
+    edits_pixel(&mut session);
     let saved = session.save(tmp.path()).expect("guardar");
     assert_eq!(
         saved.path.file_name().and_then(|n| n.to_str()),
@@ -483,21 +479,21 @@ fn fila_8_guardar_la_imagen_nueva_escribe_sin_titulo_png_y_deja_de_estar_modific
 }
 
 #[test]
-fn fila_8_open_se_comporta_como_antes_tras_crear_una_imagen_nueva() {
+fn row_8_open_behaves_as_before_after_creating_a_new_image() {
     let tmp = TmpDir::new();
-    let otra = image_f();
+    let other = image_f();
     let path = tmp.path().join("otra.png");
-    fs::write(&path, write_png(&otra).expect("write_png")).expect("escribir el PNG");
+    fs::write(&path, write_png(&other).expect("write_png")).expect("escribir el PNG");
 
     let mut session = session_f();
     session
-        .new_image(imagen_nueva(Mode::Rgba), false)
+        .new_image(image_new(Mode::Rgba), false)
         .expect("crear");
     // La imagen nueva no tiene cambios: `open` no pregunta.
     let text = session.open(&path, 16384, false).expect("abrir");
     assert!(text.contains("otra.png"), "{text}");
     assert!(session.path().is_some());
-    assert_eq!(session.choice, initial_choice(&otra));
+    assert_eq!(session.choice, initial_choice(&other));
     assert!(!session.modified());
-    assert_eq!(imagen_de(&session), &otra);
+    assert_eq!(image_of(&session), &other);
 }

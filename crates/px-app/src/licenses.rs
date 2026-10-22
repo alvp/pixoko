@@ -24,8 +24,8 @@ mod tests {
     use super::wants_licenses;
     use crate::files::parse_args;
 
-    fn args(valores: &[&str]) -> Vec<OsString> {
-        valores.iter().map(OsString::from).collect()
+    fn args(values_2: &[&str]) -> Vec<OsString> {
+        values_2.iter().map(OsString::from).collect()
     }
 
     /// Un `OsString` que no es UTF-8 válido: `fo` seguido de un byte suelto (Unix) o de un
@@ -43,19 +43,19 @@ mod tests {
     }
 
     #[test]
-    fn fila_17_sin_argumentos_no_se_piden_las_licencias() {
+    fn row_17_without_arguments_the_licenses_are_not_requested() {
         assert!(!wants_licenses(&[]));
     }
 
     #[test]
-    fn fila_17_licencias_solo_o_con_un_fichero_si_se_piden() {
+    fn row_17_licenses_alone_or_with_a_file_if_requested() {
         assert!(wants_licenses(&args(&["--licencias"])));
         assert!(wants_licenses(&args(&["a.png", "--licencias"])));
         assert!(wants_licenses(&args(&["--licencias", "a.png"])));
     }
 
     #[test]
-    fn fila_17_un_fichero_o_una_variante_del_nombre_no_las_piden() {
+    fn row_17_a_file_or_a_variant_of_the_name_does_not_request_them() {
         assert!(!wants_licenses(&args(&["a.png"])));
         assert!(!wants_licenses(&args(&["--licencia"])));
         assert!(!wants_licenses(&args(&["--LICENCIAS"])));
@@ -67,23 +67,20 @@ mod tests {
     }
 
     #[test]
-    fn fila_17_un_argumento_que_no_es_utf8_no_entra_en_panico_y_no_las_pide() {
-        let raro = no_utf8();
-        assert!(
-            raro.to_str().is_none(),
-            "el argumento de prueba no es UTF-8"
-        );
-        assert!(!wants_licenses(std::slice::from_ref(&raro)));
+    fn row_17_a_non_utf8_argument_does_not_panic_and_does_not_request_them() {
+        let odd = no_utf8();
+        assert!(odd.to_str().is_none(), "el argumento de prueba no es UTF-8");
+        assert!(!wants_licenses(std::slice::from_ref(&odd)));
         // Junto a un argumento válido, `--licencias` se sigue reconociendo.
         assert!(wants_licenses(&[
-            raro.clone(),
+            odd.clone(),
             OsString::from("--licencias")
         ]));
-        assert!(wants_licenses(&[OsString::from("--licencias"), raro]));
+        assert!(wants_licenses(&[OsString::from("--licencias"), odd]));
     }
 
     #[test]
-    fn fila_17_parse_args_no_cambia() {
+    fn row_17_parse_args_does_not_change() {
         assert_eq!(parse_args(&[]), Ok(None));
         assert_eq!(
             parse_args(&args(&["a.png"])),

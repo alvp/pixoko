@@ -4,7 +4,7 @@
 use super::*;
 
 #[test]
-fn vuelve_a_la_herramienta_anterior_al_soltar_el_primer_gesto() {
+fn it_returns_to_the_previous_tool_on_releasing_the_first_gesture() {
     let mut once = DropperOnce::new();
     once.arm(Tool::Pencil);
     assert_eq!(
@@ -25,19 +25,19 @@ fn vuelve_a_la_herramienta_anterior_al_soltar_el_primer_gesto() {
 }
 
 #[test]
-fn elegir_otra_herramienta_antes_del_gesto_lo_cancela() {
-    for otra in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Eraser] {
+fn choosing_another_tool_before_the_gesture_cancels_it() {
+    for other in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Eraser] {
         let mut once = DropperOnce::new();
         once.arm(Tool::Line);
-        assert_eq!(once.update(otra, false), None);
+        assert_eq!(once.update(other, false), None);
         // Aunque luego vuelva a elegir el cuentagotas a mano y lo use, no hay retorno.
         assert_eq!(once.update(Tool::Dropper, true), None);
-        assert_eq!(once.update(Tool::Dropper, false), None, "{otra:?}");
+        assert_eq!(once.update(Tool::Dropper, false), None, "{other:?}");
     }
 }
 
 #[test]
-fn con_el_cuentagotas_ya_elegido_se_queda_y_no_hay_retorno() {
+fn with_the_dropper_already_chosen_it_stays_and_there_is_no_return() {
     let mut once = DropperOnce::new();
     once.arm(Tool::Dropper);
     assert_eq!(once.update(Tool::Dropper, true), None);
@@ -45,7 +45,7 @@ fn con_el_cuentagotas_ya_elegido_se_queda_y_no_hay_retorno() {
 }
 
 #[test]
-fn volver_a_pulsar_el_indicador_con_el_cuentagotas_armado_conserva_la_herramienta_anterior() {
+fn pressing_the_indicator_again_with_the_dropper_armed_keeps_the_previous_tool() {
     let mut once = DropperOnce::new();
     once.arm(Tool::Fill);
     once.arm(Tool::Dropper);
@@ -54,7 +54,7 @@ fn volver_a_pulsar_el_indicador_con_el_cuentagotas_armado_conserva_la_herramient
 }
 
 #[test]
-fn rearmar_desde_otra_herramienta_cambia_la_anterior_y_cancel_borra_todo() {
+fn rearming_from_another_tool_changes_the_previous_one_and_cancel_clears_everything() {
     let mut once = DropperOnce::new();
     once.arm(Tool::Fill);
     once.arm(Tool::Line);

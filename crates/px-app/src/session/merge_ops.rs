@@ -193,9 +193,9 @@ impl Session {
         Ok(changed)
     }
 
-    /// Exporta el PNG aplanado (`Archivo → Exportar PNG aplanado…`): escribe lo que se ve sin tocar
+    /// Exporta el PNG aplanado (`Archivo → Export PNG aplanado…`): escribe lo que se ve sin tocar
     /// la ruta del documento, lo guardado, «modificado» ni la conversión. Mismas reglas de ruta
-    /// que `Guardar como…`: extensión `.png`, no pisa la que se añadió y no sobrescribe el
+    /// que `Save as_word…`: extensión `.png`, no pisa la que se añadió y no sobrescribe el
     /// original que se convierte al abrir (escribe su copia).
     pub fn export_flat(&mut self, chosen: &Path) -> Result<Saved, FileError> {
         let dest = with_png_extension(chosen.to_path_buf());

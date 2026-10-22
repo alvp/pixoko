@@ -3,7 +3,7 @@
 //! implementación.
 //!
 //! **Suposiciones y ambigüedades:**
-//! - «Cláusula ≤ 40» se mide sin el separador ` · `: `ignorados: texto, Exif, animación, otros`
+//! - «Cláusula ≤ 40» se mide sin el separador ` · `: `ignorados: text_2, Exif, animación, other`
 //!   son 40 caracteres justos; con el separador serían 43.
 //! - Con causa **y** chunks de texto, Exif, animación u otros, la spec no dice si la cláusula
 //!   `ignorados:` se añade. Ningún test lo fija: la propiedad 4 solo comprueba, si aparece, que
@@ -27,9 +27,9 @@ use crate::session::{Saved, describe_saved};
 // Ayudantes.
 // ---------------------------------------------------------------------------------------
 
-const COLETILLA: &str = "; Ctrl+S guardará una copia";
+const SUFFIX: &str = "; Ctrl+S guardará una copia";
 
-const CAUSAS: [(AuxChunk, &str); 5] = [
+const CAUSES: [(AuxChunk, &str); 5] = [
     (AuxChunk::Icc, "perfil de color ICC ignorado"),
     (AuxChunk::CodePoints, "espacio de color cICP ignorado"),
     (AuxChunk::Gamma, "gamma no sRGB ignorada"),
@@ -37,7 +37,7 @@ const CAUSAS: [(AuxChunk, &str); 5] = [
     (AuxChunk::Animation, "APNG: solo el 1.er fotograma"),
 ];
 
-const TODOS: [AuxChunk; 11] = [
+const ALL: [AuxChunk; 11] = [
     AuxChunk::Icc,
     AuxChunk::CodePoints,
     AuxChunk::Srgb,
@@ -52,29 +52,29 @@ const TODOS: [AuxChunk; 11] = [
 ];
 
 /// Imagen RGBA de 16×16, la de los ejemplos de la spec.
-fn casa() -> Image {
+fn matches() -> Image {
     Image::new(16, 16, Mode::Rgba).expect("imagen RGBA de 16×16")
 }
 
-const ABIERTO: &str = "abierto casa.png · 16×16 · RGBA";
+const OPEN: &str = "abierto casa.png · 16×16 · RGBA";
 
-fn informe(found: &[AuxChunk], appearance: Option<AuxChunk>) -> AuxReport {
+fn report(found: &[AuxChunk], appearance: Option<AuxChunk>) -> AuxReport {
     AuxReport {
         found: found.to_vec(),
         appearance,
     }
 }
 
-fn aviso(report: &[Conversion], aux: &AuxReport) -> String {
-    describe_open_aux("casa.png", &casa(), report, aux)
+fn notice(report: &[Conversion], aux: &AuxReport) -> String {
+    describe_open_aux("casa.png", &matches(), report, aux)
 }
 
-fn veces(texto: &str, buscado: &str) -> usize {
-    texto.matches(buscado).count()
+fn times(text_2: &str, searched: &str) -> usize {
+    text_2.matches(searched).count()
 }
 
-fn en_el_juego_de_caracteres(texto: &str) -> bool {
-    texto.chars().all(|c| INTERFACE_CHARSET.contains(c))
+fn in_the_character_set(text_2: &str) -> bool {
+    text_2.chars().all(|c| INTERFACE_CHARSET.contains(c))
 }
 
 // ---------------------------------------------------------------------------------------
@@ -82,9 +82,9 @@ fn en_el_juego_de_caracteres(texto: &str) -> bool {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn aux_cause_da_las_cinco_causas_y_chunk_ignorado_para_el_resto() {
-    for (chunk, causa) in CAUSAS {
-        assert_eq!(aux_cause(chunk), causa, "{chunk:?}");
+fn aux_cause_gives_the_five_causes_and_ignored_chunk_for_the_rest() {
+    for (chunk, cause) in CAUSES {
+        assert_eq!(aux_cause(chunk), cause, "{chunk:?}");
     }
     for chunk in [
         AuxChunk::Srgb,
@@ -103,72 +103,72 @@ fn aux_cause_da_las_cinco_causas_y_chunk_ignorado_para_el_resto() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_informe_vacio_es_describe_open_de_hoy() {
-    let vacio = AuxReport::default();
-    assert_eq!(aviso(&[], &vacio), ABIERTO);
-    assert_eq!(aviso(&[], &vacio), describe_open("casa.png", &casa(), &[]));
+fn row_8_empty_report_is_todays_describe_open() {
+    let empty = AuxReport::default();
+    assert_eq!(notice(&[], &empty), OPEN);
+    assert_eq!(notice(&[], &empty), describe_open("casa.png", &matches(), &[]));
     let conversion = [Conversion::RgbToRgba];
     assert_eq!(
-        aviso(&conversion, &vacio),
-        describe_open("casa.png", &casa(), &conversion)
+        notice(&conversion, &empty),
+        describe_open("casa.png", &matches(), &conversion)
     );
     // La forma de hoy: la coletilla va al final cuando solo hay conversiones.
     assert_eq!(
-        aviso(&conversion, &vacio),
-        format!("{ABIERTO} · convertido: RGB convertido a RGBA · Ctrl+S guardará una copia")
+        notice(&conversion, &empty),
+        format!("{OPEN} · convertido: RGB convertido a RGBA · Ctrl+S guardará una copia")
     );
 }
 
 #[test]
-fn fila_8_iccp_pone_la_causa_delante_con_su_coletilla() {
-    let aux = informe(&[AuxChunk::Icc], Some(AuxChunk::Icc));
+fn row_8_iccp_puts_the_cause_first_with_its_suffix() {
+    let aux = report(&[AuxChunk::Icc], Some(AuxChunk::Icc));
     assert_eq!(
-        aviso(&[], &aux),
+        notice(&[], &aux),
         "perfil de color ICC ignorado; Ctrl+S guardará una copia · abierto casa.png · 16×16 · RGBA"
     );
 }
 
 #[test]
-fn fila_8_iccp_y_conversion_no_repiten_la_coletilla() {
-    let aux = informe(&[AuxChunk::Icc], Some(AuxChunk::Icc));
-    let text = aviso(&[Conversion::DepthExpanded { from_bits: 4 }], &aux);
+fn row_8_iccp_and_conversion_do_not_repeat_the_suffix() {
+    let aux = report(&[AuxChunk::Icc], Some(AuxChunk::Icc));
+    let text = notice(&[Conversion::DepthExpanded { from_bits: 4 }], &aux);
     assert_eq!(
         text,
         "perfil de color ICC ignorado; Ctrl+S guardará una copia · abierto casa.png · 16×16 · RGBA · convertido: gris de 4 bits ampliado a 8"
     );
-    assert_eq!(veces(&text, "Ctrl+S guardará una copia"), 1);
+    assert_eq!(times(&text, "Ctrl+S guardará una copia"), 1);
 }
 
 #[test]
-fn fila_8_solo_texto_y_fecha_nombra_solo_texto() {
-    let aux = informe(&[AuxChunk::Text, AuxChunk::Time], None);
-    assert_eq!(aviso(&[], &aux), format!("{ABIERTO} · ignorados: texto"));
+fn row_8_only_text_and_date_names_only_text() {
+    let aux = report(&[AuxChunk::Text, AuxChunk::Time], None);
+    assert_eq!(notice(&[], &aux), format!("{OPEN} · ignorados: texto"));
 }
 
 #[test]
-fn fila_8_resolucion_fecha_y_chunks_de_color_sin_causa_no_dicen_nada() {
-    let sin_nada = aviso(&[], &AuxReport::default());
-    for (nombre, aux) in [
+fn row_8_resolution_date_and_color_chunks_without_a_cause_say_nothing() {
+    let without_nothing = notice(&[], &AuxReport::default());
+    for (name_2, aux) in [
         (
             "pHYs + tIME",
-            informe(&[AuxChunk::Physical, AuxChunk::Time], None),
+            report(&[AuxChunk::Physical, AuxChunk::Time], None),
         ),
         (
             "sRGB + gAMA 45455 + cHRM sRGB",
-            informe(
+            report(
                 &[AuxChunk::Srgb, AuxChunk::Gamma, AuxChunk::Chromaticities],
                 None,
             ),
         ),
-        ("solo cICP sRGB", informe(&[AuxChunk::CodePoints], None)),
+        ("solo cICP sRGB", report(&[AuxChunk::CodePoints], None)),
     ] {
-        assert_eq!(aviso(&[], &aux), sin_nada, "{nombre}");
+        assert_eq!(notice(&[], &aux), without_nothing, "{name_2}");
     }
 }
 
 #[test]
-fn fila_8_texto_exif_fctl_y_desconocido_dan_los_cuatro_rotulos() {
-    let aux = informe(
+fn row_8_text_exif_fctl_and_unknown_give_the_four_labels() {
+    let aux = report(
         &[
             AuxChunk::Text,
             AuxChunk::Exif,
@@ -178,39 +178,39 @@ fn fila_8_texto_exif_fctl_y_desconocido_dan_los_cuatro_rotulos() {
         None,
     );
     assert_eq!(
-        aviso(&[], &aux),
-        format!("{ABIERTO} · ignorados: texto, Exif, animación, otros")
+        notice(&[], &aux),
+        format!("{OPEN} · ignorados: texto, Exif, animación, otros")
     );
 }
 
 #[test]
-fn fila_8_la_clausula_va_tras_las_conversiones_cuando_no_hay_causa() {
+fn row_8_the_clause_goes_after_the_conversions_when_there_is_no_cause() {
     // Tras el aviso de siempre, que con conversiones ya lleva su coletilla.
-    let aux = informe(&[AuxChunk::Text], None);
+    let aux = report(&[AuxChunk::Text], None);
     let conversion = [Conversion::RgbToRgba];
-    let text = aviso(&conversion, &aux);
+    let text = notice(&conversion, &aux);
     assert!(
-        text.starts_with(&describe_open("casa.png", &casa(), &conversion)),
+        text.starts_with(&describe_open("casa.png", &matches(), &conversion)),
         "{text}"
     );
     assert!(text.ends_with(" · ignorados: texto"), "{text}");
-    assert_eq!(veces(&text, "Ctrl+S guardará una copia"), 1);
+    assert_eq!(times(&text, "Ctrl+S guardará una copia"), 1);
 }
 
 #[test]
-fn fila_8_las_otras_cuatro_causas() {
-    for (chunk, causa) in CAUSAS.into_iter().skip(1) {
-        let aux = informe(&[chunk], Some(chunk));
+fn row_8_the_other_four_causes() {
+    for (chunk, cause) in CAUSES.into_iter().skip(1) {
+        let aux = report(&[chunk], Some(chunk));
         assert_eq!(
-            aviso(&[], &aux),
-            format!("{causa}; Ctrl+S guardará una copia · {ABIERTO}"),
+            notice(&[], &aux),
+            format!("{cause}; Ctrl+S guardará una copia · {OPEN}"),
             "{chunk:?}"
         );
     }
     assert_eq!(
-        aviso(
+        notice(
             &[],
-            &informe(&[AuxChunk::Animation], Some(AuxChunk::Animation))
+            &report(&[AuxChunk::Animation], Some(AuxChunk::Animation))
         ),
         "APNG: solo el 1.er fotograma; Ctrl+S guardará una copia · abierto casa.png · 16×16 · RGBA"
     );
@@ -220,73 +220,73 @@ fn fila_8_las_otras_cuatro_causas() {
 // Fila 12: anchos.
 // ---------------------------------------------------------------------------------------
 
-const ESCALAS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-/// Columnas del texto de un aviso en la barra a la ventana mínima (66 menos `aviso: `).
-const COLUMNAS_DE_TEXTO: usize = 59;
+const SCALES: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
+/// Columnas del texto de un aviso en la barra a la ventana mínima (66 menos `notice: `).
+const COLUMNS_OF_TEXT: usize = 59;
 
-fn largo(texto: &str) -> usize {
-    texto.chars().count()
+fn largo(text_2: &str) -> usize {
+    text_2.chars().count()
 }
 
 #[test]
-fn fila_12_la_barra_a_la_ventana_minima_tiene_66_columnas_en_las_cinco_escalas() {
-    for ppp in ESCALAS {
-        let ancho_px = min_window_width_pt(ppp) * ppp;
-        assert_eq!(columns(ancho_px, ppp), 66, "ppp {ppp}");
+fn row_12_the_bar_at_the_minimum_window_has_66_columns_at_the_five_scales() {
+    for ppp in SCALES {
+        let width_px = min_window_width_pt(ppp) * ppp;
+        assert_eq!(columns(width_px, ppp), 66, "ppp {ppp}");
     }
 }
 
 #[test]
-fn fila_12_cada_causa_con_su_coletilla_cabe_entera() {
-    for (chunk, causa) in CAUSAS {
-        let frase = format!("{causa}{COLETILLA}");
+fn row_12_each_cause_with_its_suffix_fits_whole() {
+    for (chunk, cause) in CAUSES {
+        let sentence = format!("{cause}{SUFFIX}");
         assert!(
-            largo(&frase) <= COLUMNAS_DE_TEXTO,
+            largo(&sentence) <= COLUMNS_OF_TEXT,
             "{chunk:?}: {} columnas",
-            largo(&frase)
+            largo(&sentence)
         );
-        assert!(en_el_juego_de_caracteres(&frase), "{frase}");
+        assert!(in_the_character_set(&sentence), "{sentence}");
         // Y es lo que `describe_open_aux` pone al principio, que es lo que no se recorta.
-        let text = aviso(&[], &informe(&[chunk], Some(chunk)));
-        assert!(text.starts_with(&frase), "{text}");
+        let text = notice(&[], &report(&[chunk], Some(chunk)));
+        assert!(text.starts_with(&sentence), "{text}");
     }
     // Las medidas de la spec.
-    assert_eq!(largo(&format!("{}{COLETILLA}", CAUSAS[0].1)), 55);
-    assert_eq!(largo(&format!("{}{COLETILLA}", CAUSAS[1].1)), 57);
-    assert_eq!(largo(&format!("{}{COLETILLA}", CAUSAS[2].1)), 49);
-    assert_eq!(largo(&format!("{}{COLETILLA}", CAUSAS[3].1)), 54);
-    assert_eq!(largo(&format!("{}{COLETILLA}", CAUSAS[4].1)), 55);
+    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[0].1)), 55);
+    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[1].1)), 57);
+    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[2].1)), 49);
+    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[3].1)), 54);
+    assert_eq!(largo(&format!("{}{SUFFIX}", CAUSES[4].1)), 55);
 }
 
 #[test]
-fn fila_12_la_frase_de_guardado_con_nombre_de_15_caracteres_cabe_entera() {
-    let nombre = "casas-copia.png";
-    assert_eq!(largo(nombre), 15);
-    for (chunk, causa) in [CAUSAS[0], CAUSAS[4]] {
+fn row_12_the_save_sentence_with_a_15_character_name_fits_whole() {
+    let name_2 = "casas-copia.png";
+    assert_eq!(largo(name_2), 15);
+    for (chunk, cause) in [CAUSES[0], CAUSES[4]] {
         let saved = Saved {
-            path: PathBuf::from("/algun/directorio").join(nombre),
-            copy_reason: Some(causa.to_string()),
+            path: PathBuf::from("/algun/directorio").join(name_2),
+            copy_reason: Some(cause.to_string()),
         };
-        let frase = describe_saved(&saved);
+        let sentence = describe_saved(&saved);
         assert_eq!(
-            frase,
-            format!("{causa}; guardado como {nombre}"),
+            sentence,
+            format!("{cause}; guardado como {name_2}"),
             "{chunk:?}"
         );
         assert!(
-            largo(&frase) <= COLUMNAS_DE_TEXTO,
+            largo(&sentence) <= COLUMNS_OF_TEXT,
             "{chunk:?}: {}",
-            largo(&frase)
+            largo(&sentence)
         );
         // Salvo el nombre, todo es texto fijo de la interfaz.
-        let fijo = frase.replace(nombre, "");
-        assert!(en_el_juego_de_caracteres(&fijo), "{fijo}");
+        let fixed = sentence.replace(name_2, "");
+        assert!(in_the_character_set(&fixed), "{fixed}");
     }
 }
 
 #[test]
-fn fila_12_la_clausula_con_los_cuatro_rotulos_mide_40_o_menos() {
-    let aux = informe(
+fn row_12_the_clause_with_the_four_labels_measures_40_or_less() {
+    let aux = report(
         &[
             AuxChunk::Text,
             AuxChunk::Exif,
@@ -295,29 +295,29 @@ fn fila_12_la_clausula_con_los_cuatro_rotulos_mide_40_o_menos() {
         ],
         None,
     );
-    let text = aviso(&[], &aux);
-    let clausula = text.rsplit(" · ").next().expect("cláusula");
-    assert_eq!(clausula, "ignorados: texto, Exif, animación, otros");
-    assert!(largo(clausula) <= 40, "{} columnas", largo(clausula));
-    assert!(en_el_juego_de_caracteres(&text), "{text}");
+    let text = notice(&[], &aux);
+    let clause = text.rsplit(" · ").next().expect("cláusula");
+    assert_eq!(clause, "ignorados: texto, Exif, animación, otros");
+    assert!(largo(clause) <= 40, "{} columnas", largo(clause));
+    assert!(in_the_character_set(&text), "{text}");
 }
 
 // ---------------------------------------------------------------------------------------
 // Propiedad 4: textos.
 // ---------------------------------------------------------------------------------------
 
-fn aux_arbitrario() -> impl Strategy<Value = AuxReport> {
+fn aux_arbitrary() -> impl Strategy<Value = AuxReport> {
     (
-        subsequence(TODOS.to_vec(), 0..=TODOS.len()),
+        subsequence(ALL.to_vec(), 0..=ALL.len()),
         proptest::option::of(proptest::sample::select(
-            CAUSAS.iter().map(|(c, _)| *c).collect::<Vec<_>>(),
+            CAUSES.iter().map(|(c, _)| *c).collect::<Vec<_>>(),
         )),
     )
         .prop_map(|(found, appearance)| AuxReport { found, appearance })
 }
 
-fn conversiones_arbitrarias() -> impl Strategy<Value = Vec<Conversion>> {
-    let todas = vec![
+fn conversions_arbitrary() -> impl Strategy<Value = Vec<Conversion>> {
+    let all = vec![
         Conversion::DepthExpanded { from_bits: 1 },
         Conversion::DepthExpanded { from_bits: 2 },
         Conversion::DepthExpanded { from_bits: 4 },
@@ -325,13 +325,13 @@ fn conversiones_arbitrarias() -> impl Strategy<Value = Vec<Conversion>> {
         Conversion::RgbToRgba,
         Conversion::ColorKeyToAlpha,
     ];
-    subsequence(todas, 0..=6)
+    subsequence(all, 0..=6)
 }
 
 proptest! {
     #[test]
-    fn propiedad_4_textos(aux in aux_arbitrario(), report in conversiones_arbitrarias()) {
-        let image = casa();
+    fn property_4_texts(aux in aux_arbitrary(), report in conversions_arbitrary()) {
+        let image = matches();
         let text = describe_open_aux("casa.png", &image, &report, &aux);
 
         // Con el informe vacío es `describe_open`.
@@ -342,34 +342,34 @@ proptest! {
 
         // Empieza por la causa si y solo si hay `appearance`.
         match aux.appearance {
-            Some(causa) => prop_assert!(
-                text.starts_with(&format!("{}{COLETILLA} · abierto casa.png", aux_cause(causa))),
+            Some(cause) => prop_assert!(
+                text.starts_with(&format!("{}{SUFFIX} · abierto casa.png", aux_cause(cause))),
                 "{}", text
             ),
             None => prop_assert!(text.starts_with("abierto casa.png"), "{}", text),
         }
 
         // La coletilla, una sola vez si hay causa o conversiones y ninguna si no.
-        let esperadas = usize::from(aux.appearance.is_some() || !report.is_empty());
-        prop_assert_eq!(veces(&text, "Ctrl+S guardará una copia"), esperadas, "{}", text);
+        let expected_2_2 = usize::from(aux.appearance.is_some() || !report.is_empty());
+        prop_assert_eq!(times(&text, "Ctrl+S guardará una copia"), expected_2_2, "{}", text);
 
         // La cláusula: solo los cuatro rótulos, en orden, y ≤ 40 columnas.
-        if let Some(inicio) = text.find("ignorados:") {
-            let clausula = &text[inicio..];
-            prop_assert!(largo(clausula) <= 40, "{}", clausula);
-            prop_assert!(text[..inicio].ends_with(" · "), "{}", text);
-            let rotulos: Vec<&str> = clausula["ignorados:".len()..].split(',').map(str::trim).collect();
-            let permitidos = ["texto", "Exif", "animación", "otros"];
-            prop_assert!(rotulos.iter().all(|r| permitidos.contains(r)), "{:?}", rotulos);
-            let posiciones: Vec<usize> = rotulos
+        if let Some(start_2) = text.find("ignorados:") {
+            let clause = &text[start_2..];
+            prop_assert!(largo(clause) <= 40, "{}", clause);
+            prop_assert!(text[..start_2].ends_with(" · "), "{}", text);
+            let labels: Vec<&str> = clause["ignorados:".len()..].split(',').map(str::trim).collect();
+            let allowed = ["texto", "Exif", "animación", "otros"];
+            prop_assert!(labels.iter().all(|r| allowed.contains(r)), "{:?}", labels);
+            let positions: Vec<usize> = labels
                 .iter()
-                .filter_map(|r| permitidos.iter().position(|p| p == r))
+                .filter_map(|r| allowed.iter().position(|p| p == r))
                 .collect();
-            prop_assert!(posiciones.windows(2).all(|w| w[0] < w[1]), "{:?}", rotulos);
+            prop_assert!(positions.windows(2).all(|w| w[0] < w[1]), "{:?}", labels);
         }
         // Sin causa, la cláusula es exactamente lo que haya de texto, Exif, animación y otros.
         if aux.appearance.is_none() {
-            let rotulos: Vec<&str> = [
+            let labels: Vec<&str> = [
                 (AuxChunk::Text, "texto"),
                 (AuxChunk::Exif, "Exif"),
                 (AuxChunk::Animation, "animación"),
@@ -380,15 +380,15 @@ proptest! {
             .map(|(_, r)| r)
             .collect();
             let base = describe_open("casa.png", &image, &report);
-            if rotulos.is_empty() {
+            if labels.is_empty() {
                 prop_assert_eq!(&text, &base);
             } else {
-                prop_assert_eq!(&text, &format!("{base} · ignorados: {}", rotulos.join(", ")));
+                prop_assert_eq!(&text, &format!("{base} · ignorados: {}", labels.join(", ")));
             }
         }
 
         // Ni resolución, ni fecha, ni chunks de color en el aviso, y todo el texto fijo en el juego.
         prop_assert!(!text.contains("resolución") && !text.contains("fecha"), "{}", text);
-        prop_assert!(en_el_juego_de_caracteres(&text), "{}", text);
+        prop_assert!(in_the_character_set(&text), "{}", text);
     }
 }

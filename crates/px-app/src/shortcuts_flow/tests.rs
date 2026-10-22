@@ -1,12 +1,12 @@
 //! Tests del flujo de ayuda y atajos de la app (specs/interfaz-ayuda.md, unidad I.5): sustitución
-//! con vuelta, `Esc` en cadena, lista de atajos, `Restablecer todo`, marca de conflicto y cierre de
+//! con vuelta, `Esc` en cadena, lista de atajos, `Restablecer all`, marca de conflicto y cierre de
 //! la ventana con una captura armada. Filas 8 y 12 y condiciones 1 y 2 del visto bueno. Sin
 //! ventana: se alimentan las `Reaction` de los diálogos como lo hace `show_modal`. En ROJO hasta la
 //! lógica: `shortcuts_flow` no existe todavía.
 
 use eframe::egui::{Event, Key, Modifiers};
 use px_ui::actions::{AppAction, Locks, Platform};
-use px_ui::dialog::{Dialog, DialogKind, Event as Evento, Modal, Reaction};
+use px_ui::dialog::{Dialog, DialogKind, Event as TestEvent, Modal, Reaction};
 use px_ui::help::{HELP_PRIMARY, HELP_SECONDARY, HELP_ZONE, HelpTarget, SHORTCUTS_RESET};
 use px_ui::keymap::{Chord, KeyId, Keymap};
 use px_ui::shortcut_editor::{EDITOR_CONFLICT, EDITOR_PRIMARY, EDITOR_RESET, slots_of};
@@ -17,15 +17,15 @@ use crate::confirm::Confirm;
 
 const LINUX: Platform = Platform::Linux;
 
-fn lapiz() -> AppAction {
+fn pencil() -> AppAction {
     AppAction::SelectTool(Tool::Pencil)
 }
 
-fn relleno() -> AppAction {
+fn fill() -> AppAction {
     AppAction::SelectTool(Tool::Fill)
 }
 
-fn tecla(key: Key, texto: Option<&str>) -> Vec<Event> {
+fn key_2(key: Key, text_2: Option<&str>) -> Vec<Event> {
     let mut v = vec![Event::Key {
         key,
         physical_key: Some(key),
@@ -33,7 +33,7 @@ fn tecla(key: Key, texto: Option<&str>) -> Vec<Event> {
         repeat: false,
         modifiers: Modifiers::NONE,
     }];
-    if let Some(t) = texto {
+    if let Some(t) = text_2 {
         v.push(Event::Text(t.to_string()));
     }
     v
@@ -47,22 +47,22 @@ fn chord(c: char) -> Chord {
     }
 }
 
-struct Mundo {
+struct World {
     modal: Modal,
     flow: Flow,
     keymap: Keymap,
 }
 
-impl Mundo {
-    fn nuevo() -> Mundo {
-        Mundo {
+impl World {
+    fn new_2() -> World {
+        World {
             modal: Modal::Closed,
             flow: Flow::new(Vec::new()),
             keymap: Keymap::default_scheme(),
         }
     }
 
-    fn abre_ayuda(&mut self, target: HelpTarget) {
+    fn opens_help(&mut self, target: HelpTarget) {
         assert!(self.flow.open_help(
             &mut self.modal,
             target,
@@ -73,61 +73,61 @@ impl Mundo {
         ));
     }
 
-    fn abre_lista(&mut self) {
+    fn opens_list(&mut self) {
         assert!(
             self.flow
                 .open_list(&mut self.modal, &self.keymap, LINUX, Locks::default())
         );
     }
 
-    fn dialogo(&self) -> &Dialog {
+    fn dialog(&self) -> &Dialog {
         match &self.modal {
             Modal::Open(d) => d,
             Modal::Closed => panic!("no hay diálogo abierto"),
         }
     }
 
-    fn clase(&self) -> Option<DialogKind> {
+    fn class(&self) -> Option<DialogKind> {
         self.modal.kind()
     }
 
     /// Un evento al diálogo (como el pintado) y su reacción al flujo.
-    fn evento(&mut self, evento: Evento) -> FlowOutcome {
-        let reaccion = match &mut self.modal {
-            Modal::Open(d) => d.event(evento),
+    fn event_2(&mut self, event_2: TestEvent) -> FlowOutcome {
+        let reaction = match &mut self.modal {
+            Modal::Open(d) => d.event(event_2),
             Modal::Closed => Reaction::None,
         };
-        self.reacciona(reaccion)
+        self.reacts(reaction)
     }
 
-    fn reacciona(&mut self, reaccion: Reaction) -> FlowOutcome {
+    fn reacts(&mut self, reaction: Reaction) -> FlowOutcome {
         self.flow.react(
             &mut self.modal,
-            reaccion,
+            reaction,
             &mut self.keymap,
             LINUX,
             Tool::Pencil,
         )
     }
 
-    fn pulsa(&mut self, field: &'static str, aside: bool) -> FlowOutcome {
-        self.evento(Evento::Press { field, aside })
+    fn presses(&mut self, field: &'static str, aside: bool) -> FlowOutcome {
+        self.event_2(TestEvent::Press { field, aside })
     }
 
-    /// `Aceptar` o `Cancelar` del diálogo abierto, como lo da `show_dialog`.
-    fn acepta(&mut self) -> FlowOutcome {
-        self.evento(Evento::Accept)
+    /// `Accept` o `Cancel` del diálogo abierto, como lo da `show_dialog`.
+    fn accepts(&mut self) -> FlowOutcome {
+        self.event_2(TestEvent::Accept)
     }
 
-    fn cancela(&mut self) -> FlowOutcome {
-        self.evento(Evento::Cancel)
+    fn cancels(&mut self) -> FlowOutcome {
+        self.event_2(TestEvent::Cancel)
     }
 
-    fn teclas(&mut self, eventos: &[Event]) -> Strip {
-        self.flow.keys(eventos, false)
+    fn keys_2(&mut self, events: &[Event]) -> Strip {
+        self.flow.keys(events, false)
     }
 
-    fn sincroniza(&mut self) {
+    fn synchronizes(&mut self) {
         self.flow.sync(&mut self.modal, LINUX);
     }
 }
@@ -137,25 +137,25 @@ impl Mundo {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_ayuda_editor_aceptar_vuelve_a_la_ayuda_con_la_tabla_viva_y_su_linea() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-    assert_eq!(m.clase(), Some(DialogKind::Help));
+fn row_8_help_editor_accept_returns_to_the_help_with_the_live_table_and_its_line() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::Tool(Tool::Pencil));
+    assert_eq!(m.class(), Some(DialogKind::Help));
     if let Modal::Open(d) = &mut m.modal {
         d.set_first_line(HELP_ZONE, 2);
     }
     // `Principal` abre el editor: la ayuda se cierra (un solo modal) y la casilla queda armada.
-    assert_eq!(m.pulsa(HELP_PRIMARY, false), FlowOutcome::None);
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutEditor));
+    assert_eq!(m.presses(HELP_PRIMARY, false), FlowOutcome::None);
+    assert_eq!(m.class(), Some(DialogKind::ShortcutEditor));
     assert_eq!(
         m.flow.returns_to(),
         Some(Return::Help(HelpTarget::Tool(Tool::Pencil), 2))
     );
     assert!(m.flow.editor().unwrap().capturing().is_some());
     // Capturar `x` (con el pase de eventos del fotograma).
-    assert_eq!(m.teclas(&tecla(Key::X, Some("x"))), Strip::All);
+    assert_eq!(m.keys_2(&key_2(Key::X, Some("x"))), Strip::All);
     assert_eq!(
-        slots_of(m.flow.editor().unwrap().keymap(), lapiz()).slots,
+        slots_of(m.flow.editor().unwrap().keymap(), pencil()).slots,
         vec![chord('x')]
     );
     assert_eq!(
@@ -163,68 +163,68 @@ fn fila_8_ayuda_editor_aceptar_vuelve_a_la_ayuda_con_la_tabla_viva_y_su_linea() 
         Keymap::default_scheme(),
         "la tabla viva no cambia hasta aceptar"
     );
-    // `Aceptar`: la tabla cambia y vuelve la ayuda, con `x` y en su línea.
-    assert_eq!(m.acepta(), FlowOutcome::KeymapChanged(lapiz()));
-    assert_eq!(slots_of(&m.keymap, lapiz()).slots, vec![chord('x')]);
-    assert_eq!(m.clase(), Some(DialogKind::Help));
-    assert_eq!(m.dialogo().first_line(HELP_ZONE), 2);
-    assert_eq!(m.dialogo().button_text(HELP_PRIMARY).as_deref(), Some("x"));
+    // `Accept`: la tabla cambia y vuelve la ayuda, con `x` y en su línea.
+    assert_eq!(m.accepts(), FlowOutcome::KeymapChanged(pencil()));
+    assert_eq!(slots_of(&m.keymap, pencil()).slots, vec![chord('x')]);
+    assert_eq!(m.class(), Some(DialogKind::Help));
+    assert_eq!(m.dialog().first_line(HELP_ZONE), 2);
+    assert_eq!(m.dialog().button_text(HELP_PRIMARY).as_deref(), Some("x"));
     assert!(m.flow.editor().is_none() && m.flow.returns_to().is_none());
     // `Cerrar` la cierra del todo.
-    assert_eq!(m.acepta(), FlowOutcome::None);
-    assert_eq!(m.clase(), None);
+    assert_eq!(m.accepts(), FlowOutcome::None);
+    assert_eq!(m.class(), None);
 }
 
 #[test]
-fn fila_8_cancelar_y_escape_vuelven_a_la_ayuda_sin_tocar_la_tabla() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::ZoomIn);
-    m.pulsa(HELP_SECONDARY, false);
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutEditor));
-    m.teclas(&tecla(Key::X, Some("x")));
-    assert_eq!(m.cancela(), FlowOutcome::None);
-    assert_eq!(m.clase(), Some(DialogKind::Help));
+fn row_8_cancel_and_escape_return_to_the_help_without_touching_the_table() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::ZoomIn);
+    m.presses(HELP_SECONDARY, false);
+    assert_eq!(m.class(), Some(DialogKind::ShortcutEditor));
+    m.keys_2(&key_2(Key::X, Some("x")));
+    assert_eq!(m.cancels(), FlowOutcome::None);
+    assert_eq!(m.class(), Some(DialogKind::Help));
     assert_eq!(m.keymap, Keymap::default_scheme());
-    assert_eq!(m.dialogo().spec().title, "Acercar");
-    // Un `Cancelar` tras reasignar tampoco deja huella.
-    m.pulsa(HELP_PRIMARY, false);
-    m.teclas(&tecla(Key::V, Some("v")));
+    assert_eq!(m.dialog().spec().title, "Acercar");
+    // Un `Cancel` tras reasignar tampoco deja huella.
+    m.presses(HELP_PRIMARY, false);
+    m.keys_2(&key_2(Key::V, Some("v")));
     assert!(m.flow.editor().unwrap().pending().is_some());
-    m.sincroniza();
-    m.pulsa(EDITOR_CONFLICT, false);
-    m.cancela();
+    m.synchronizes();
+    m.presses(EDITOR_CONFLICT, false);
+    m.cancels();
     assert_eq!(m.keymap, Keymap::default_scheme());
     // `Cerrar` de la ayuda: sin vuelta.
-    assert_eq!(m.cancela(), FlowOutcome::None);
-    assert_eq!(m.clase(), None);
+    assert_eq!(m.cancels(), FlowOutcome::None);
+    assert_eq!(m.class(), None);
     assert!(m.flow.returns_to().is_none());
 }
 
 #[test]
-fn fila_8_escape_en_cadena_captura_conflicto_dialogo() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-    m.pulsa(HELP_PRIMARY, false);
+fn row_8_escape_in_chain_capture_conflict_dialog() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::Tool(Tool::Pencil));
+    m.presses(HELP_PRIMARY, false);
     // 1. Con la captura armada, Escape la desarma y se retiran todos los eventos.
-    assert_eq!(m.teclas(&tecla(Key::Escape, None)), Strip::All);
+    assert_eq!(m.keys_2(&key_2(Key::Escape, None)), Strip::All);
     assert!(m.flow.editor().unwrap().capturing().is_none());
     // 2. Sin captura ni conflicto, el Escape es del diálogo.
-    assert_eq!(m.teclas(&tecla(Key::Escape, None)), Strip::None);
+    assert_eq!(m.keys_2(&key_2(Key::Escape, None)), Strip::None);
     // 3. Con un conflicto pendiente, Escape lo descarta y se retira solo el Escape.
-    m.pulsa(EDITOR_PRIMARY, false);
-    assert_eq!(m.teclas(&tecla(Key::V, Some("v"))), Strip::All);
+    m.presses(EDITOR_PRIMARY, false);
+    assert_eq!(m.keys_2(&key_2(Key::V, Some("v"))), Strip::All);
     assert!(m.flow.editor().unwrap().pending().is_some());
-    assert_eq!(m.teclas(&tecla(Key::Escape, None)), Strip::Escape);
+    assert_eq!(m.keys_2(&key_2(Key::Escape, None)), Strip::Escape);
     assert!(m.flow.editor().unwrap().pending().is_none());
     // 4. Y el siguiente Escape es del diálogo.
-    assert_eq!(m.teclas(&tecla(Key::Escape, None)), Strip::None);
+    assert_eq!(m.keys_2(&key_2(Key::Escape, None)), Strip::None);
 }
 
 #[test]
-fn fila_8_un_clic_desarma_la_captura_y_las_teclas_no_llegan_a_las_acciones() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-    m.pulsa(HELP_PRIMARY, false);
+fn row_8_a_click_disarms_the_capture_and_the_keys_do_not_reach_the_actions() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::Tool(Tool::Pencil));
+    m.presses(HELP_PRIMARY, false);
     assert!(m.flow.editor().unwrap().capturing().is_some());
     assert_eq!(
         m.flow.keys(&[], true),
@@ -233,11 +233,11 @@ fn fila_8_un_clic_desarma_la_captura_y_las_teclas_no_llegan_a_las_acciones() {
     );
     assert!(m.flow.editor().unwrap().capturing().is_none());
     // Sin captura, las teclas no se retiran.
-    assert_eq!(m.teclas(&tecla(Key::D, Some("d"))), Strip::None);
+    assert_eq!(m.keys_2(&key_2(Key::D, Some("d"))), Strip::None);
     // Armada otra vez: `Ctrl+Q` ni siquiera llega a las acciones (se retira) y `F1` tampoco.
-    m.sincroniza();
-    m.pulsa(EDITOR_PRIMARY, false);
-    let mut ctrl_q = tecla(Key::Q, None);
+    m.synchronizes();
+    m.presses(EDITOR_PRIMARY, false);
+    let mut ctrl_q = key_2(Key::Q, None);
     if let Event::Key { modifiers, .. } = &mut ctrl_q[0] {
         *modifiers = Modifiers {
             ctrl: true,
@@ -245,47 +245,47 @@ fn fila_8_un_clic_desarma_la_captura_y_las_teclas_no_llegan_a_las_acciones() {
             ..Modifiers::NONE
         };
     }
-    assert_eq!(m.teclas(&ctrl_q), Strip::All);
+    assert_eq!(m.keys_2(&ctrl_q), Strip::All);
     assert!(
         m.flow.editor().unwrap().capturing().is_some(),
         "rechazada: sigue armada"
     );
-    assert_eq!(m.teclas(&tecla(Key::F1, None)), Strip::All);
+    assert_eq!(m.keys_2(&key_2(Key::F1, None)), Strip::All);
     // Las repeticiones también se retiran y no capturan.
-    let mut repetida = tecla(Key::X, Some("x"));
-    if let Event::Key { repeat, .. } = &mut repetida[0] {
+    let mut repeated = key_2(Key::X, Some("x"));
+    if let Event::Key { repeat, .. } = &mut repeated[0] {
         *repeat = true;
     }
-    assert_eq!(m.teclas(&repetida), Strip::All);
-    assert!(slots_of(m.flow.editor().unwrap().keymap(), lapiz()).slots == vec![chord('d')]);
+    assert_eq!(m.keys_2(&repeated), Strip::All);
+    assert!(slots_of(m.flow.editor().unwrap().keymap(), pencil()).slots == vec![chord('d')]);
 }
 
 #[test]
-fn fila_8_el_editor_responde_a_sus_botones() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::ZoomIn);
-    m.pulsa(HELP_PRIMARY, false);
-    m.teclas(&tecla(Key::Escape, None));
-    // `Quitar` de la principal: la secundaria sube.
-    m.pulsa(EDITOR_PRIMARY, true);
+fn row_8_the_editor_responds_to_its_buttons() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::ZoomIn);
+    m.presses(HELP_PRIMARY, false);
+    m.keys_2(&key_2(Key::Escape, None));
+    // `Remove` de la principal: la secundaria sube.
+    m.presses(EDITOR_PRIMARY, true);
     assert_eq!(
         slots_of(m.flow.editor().unwrap().keymap(), AppAction::ZoomIn).slots,
         vec![chord('+'), chord('=')]
     );
     // `Restablecer` devuelve la acción a lo de fábrica.
-    m.pulsa(EDITOR_RESET, false);
+    m.presses(EDITOR_RESET, false);
     assert_eq!(
         slots_of(m.flow.editor().unwrap().keymap(), AppAction::ZoomIn).slots,
         vec![chord('>'), chord('+'), chord('=')]
     );
     // Pulsar una casilla la arma; `Reasignar` (botón principal) con un conflicto aplica.
-    m.pulsa(EDITOR_PRIMARY, false);
+    m.presses(EDITOR_PRIMARY, false);
     assert!(m.flow.editor().unwrap().capturing().is_some());
-    m.teclas(&tecla(Key::V, Some("v")));
-    m.sincroniza();
-    m.pulsa(EDITOR_CONFLICT, false);
+    m.keys_2(&key_2(Key::V, Some("v")));
+    m.synchronizes();
+    m.presses(EDITOR_CONFLICT, false);
     assert!(m.flow.editor().unwrap().pending().is_none());
-    assert_eq!(m.acepta(), FlowOutcome::KeymapChanged(AppAction::ZoomIn));
+    assert_eq!(m.accepts(), FlowOutcome::KeymapChanged(AppAction::ZoomIn));
     assert_eq!(slots_of(&m.keymap, AppAction::ZoomIn).slots[0], chord('v'));
     assert!(
         slots_of(&m.keymap, AppAction::SelectTool(Tool::Line))
@@ -296,22 +296,22 @@ fn fila_8_el_editor_responde_a_sus_botones() {
 }
 
 #[test]
-fn fila_8_cualquier_otro_cierre_borra_la_vuelta_y_el_editor() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-    m.pulsa(HELP_PRIMARY, false);
+fn row_8_any_other_close_clears_the_return_and_the_editor() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::Tool(Tool::Pencil));
+    m.presses(HELP_PRIMARY, false);
     assert!(m.flow.returns_to().is_some());
     m.flow.abandon(&mut m.modal);
-    assert_eq!(m.clase(), None);
+    assert_eq!(m.class(), None);
     assert!(m.flow.returns_to().is_none() && m.flow.editor().is_none());
     // Y con el diálogo ya cerrado por otro camino, lo que llegue no abre nada.
-    assert_eq!(m.acepta(), FlowOutcome::None);
-    assert_eq!(m.clase(), None);
+    assert_eq!(m.accepts(), FlowOutcome::None);
+    assert_eq!(m.class(), None);
 }
 
 #[test]
-fn fila_8_no_se_abre_con_bloqueos_ni_con_otro_dialogo() {
-    let mut m = Mundo::nuevo();
+fn row_8_it_is_not_opened_with_locks_or_with_another_dialog() {
+    let mut m = World::new_2();
     for locks in [
         Locks {
             gesture: true,
@@ -343,9 +343,9 @@ fn fila_8_no_se_abre_con_bloqueos_ni_con_otro_dialogo() {
             locks
         ));
         assert!(!m.flow.open_list(&mut m.modal, &m.keymap, LINUX, locks));
-        assert_eq!(m.clase(), None);
+        assert_eq!(m.class(), None);
     }
-    m.abre_ayuda(HelpTarget::Active);
+    m.opens_help(HelpTarget::Active);
     assert!(
         !m.flow
             .open_list(&mut m.modal, &m.keymap, LINUX, Locks::default())
@@ -357,10 +357,10 @@ fn fila_8_no_se_abre_con_bloqueos_ni_con_otro_dialogo() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn condicion_2_cerrar_con_la_x_pasa_por_la_regla_de_repeticion_aunque_haya_captura_armada() {
-    let mut m = Mundo::nuevo();
-    m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-    m.pulsa(HELP_PRIMARY, false);
+fn condition_2_closing_with_the_x_goes_through_the_repeat_rule_even_with_an_armed_capture() {
+    let mut m = World::new_2();
+    m.opens_help(HelpTarget::Tool(Tool::Pencil));
+    m.presses(HELP_PRIMARY, false);
     assert!(m.flow.editor().unwrap().capturing().is_some());
     let mut confirm = Confirm::new();
     // Con cambios sin guardar: la primera petición se cancela (y el editor se abandona sin
@@ -369,7 +369,7 @@ fn condicion_2_cerrar_con_la_x_pasa_por_la_regla_de_repeticion_aunque_haya_captu
         !m.flow
             .close_requested(&mut m.modal, true, &mut confirm, 10.0)
     );
-    assert_eq!(m.clase(), None);
+    assert_eq!(m.class(), None);
     assert!(m.flow.editor().is_none() && m.flow.returns_to().is_none());
     assert_eq!(m.keymap, Keymap::default_scheme());
     assert!(
@@ -377,16 +377,16 @@ fn condicion_2_cerrar_con_la_x_pasa_por_la_regla_de_repeticion_aunque_haya_captu
             .close_requested(&mut m.modal, true, &mut confirm, 12.0)
     );
     // Pasados 5 s, vuelve a pedir confirmación.
-    let mut otra = Confirm::new();
-    assert!(!m.flow.close_requested(&mut m.modal, true, &mut otra, 20.0));
-    assert!(!m.flow.close_requested(&mut m.modal, true, &mut otra, 26.0));
+    let mut other = Confirm::new();
+    assert!(!m.flow.close_requested(&mut m.modal, true, &mut other, 20.0));
+    assert!(!m.flow.close_requested(&mut m.modal, true, &mut other, 26.0));
     // Sin cambios, cierra a la primera con o sin captura.
-    m.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-    m.pulsa(HELP_PRIMARY, false);
-    let mut limpia = Confirm::new();
+    m.opens_help(HelpTarget::Tool(Tool::Pencil));
+    m.presses(HELP_PRIMARY, false);
+    let mut cleans = Confirm::new();
     assert!(
         m.flow
-            .close_requested(&mut m.modal, false, &mut limpia, 1.0)
+            .close_requested(&mut m.modal, false, &mut cleans, 1.0)
     );
 }
 
@@ -394,34 +394,36 @@ fn condicion_2_cerrar_con_la_x_pasa_por_la_regla_de_repeticion_aunque_haya_captu
 // Fila 12 y condición 1: lista, restablecer todo y marca de conflicto
 // ---------------------------------------------------------------------------------------------
 
-fn texto_del_boton(d: &Dialog, id: &'static str) -> String {
+fn text_of_the_button(d: &Dialog, id: &'static str) -> String {
     d.button_text(id)
         .unwrap_or_else(|| panic!("no hay botón {id}"))
 }
 
 #[test]
-fn fila_12_la_lista_abre_el_editor_de_las_editables_y_vuelve_a_su_posicion() {
-    let mut m = Mundo::nuevo();
-    m.abre_lista();
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
+fn row_12_the_list_opens_the_editor_of_the_editable_ones_and_returns_to_its_position() {
+    let mut m = World::new_2();
+    m.opens_list();
+    assert_eq!(m.class(), Some(DialogKind::ShortcutList));
     if let Modal::Open(d) = &mut m.modal {
         d.set_scroll_u(40);
     }
     // Las de archivo no abren nada (están atenuadas).
-    assert_eq!(m.pulsa("file.save", false), FlowOutcome::None);
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
+    assert_eq!(m.presses("file.save", false), FlowOutcome::None);
+    assert_eq!(m.class(), Some(DialogKind::ShortcutList));
     // Una editable abre el editor con la principal armada.
-    assert_eq!(m.pulsa("tool.fill", false), FlowOutcome::None);
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutEditor));
+    assert_eq!(m.presses("tool.fill", false), FlowOutcome::None);
+    assert_eq!(m.class(), Some(DialogKind::ShortcutEditor));
     assert_eq!(m.flow.returns_to(), Some(Return::List(40)));
     assert!(m.flow.editor().unwrap().capturing().is_some());
-    m.teclas(&tecla(Key::Y, Some("y")));
-    assert_eq!(m.acepta(), FlowOutcome::KeymapChanged(relleno()));
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
-    assert_eq!(m.dialogo().scroll_u(), 40);
-    assert!(texto_del_boton(m.dialogo(), "tool.fill").contains('y'));
-    // La línea es `{nombre:<20}{atajos}` de 44 columnas como mucho.
-    assert!(texto_del_boton(m.dialogo(), "tool.pencil").starts_with(&format!("{:<20}d", "Lápiz")));
+    m.keys_2(&key_2(Key::Y, Some("y")));
+    assert_eq!(m.accepts(), FlowOutcome::KeymapChanged(fill()));
+    assert_eq!(m.class(), Some(DialogKind::ShortcutList));
+    assert_eq!(m.dialog().scroll_u(), 40);
+    assert!(text_of_the_button(m.dialog(), "tool.fill").contains('y'));
+    // La línea es `{name_2:<20}{atajos}` de 44 columnas como mucho.
+    assert!(
+        text_of_the_button(m.dialog(), "tool.pencil").starts_with(&format!("{:<20}d", "Lápiz"))
+    );
     for id in [
         "tool.pencil",
         "edit.undo",
@@ -430,66 +432,66 @@ fn fila_12_la_lista_abre_el_editor_de_las_editables_y_vuelve_a_su_posicion() {
         "color.bg-next",
     ] {
         assert!(
-            texto_del_boton(m.dialogo(), id).chars().count() <= 44,
+            text_of_the_button(m.dialog(), id).chars().count() <= 44,
             "{id}"
         );
     }
 }
 
 #[test]
-fn fila_12_restablecer_todo_pide_confirmacion_cancelar_no_hace_nada_y_aceptar_restablece() {
-    let mut m = Mundo::nuevo();
+fn row_12_reset_all_asks_for_confirmation_cancel_does_nothing_and_accept_resets() {
+    let mut m = World::new_2();
     m.keymap = {
         // Una tabla con un atajo cambiado.
-        let mut f = Mundo::nuevo();
-        f.abre_ayuda(HelpTarget::Tool(Tool::Pencil));
-        f.pulsa(HELP_PRIMARY, false);
-        f.teclas(&tecla(Key::X, Some("x")));
-        f.acepta();
+        let mut f = World::new_2();
+        f.opens_help(HelpTarget::Tool(Tool::Pencil));
+        f.presses(HELP_PRIMARY, false);
+        f.keys_2(&key_2(Key::X, Some("x")));
+        f.accepts();
         f.keymap
     };
     assert_ne!(m.keymap, Keymap::default_scheme());
-    m.abre_lista();
-    assert_eq!(m.pulsa(SHORTCUTS_RESET, false), FlowOutcome::None);
-    assert_eq!(m.clase(), Some(DialogKind::ResetShortcuts));
+    m.opens_list();
+    assert_eq!(m.presses(SHORTCUTS_RESET, false), FlowOutcome::None);
+    assert_eq!(m.class(), Some(DialogKind::ResetShortcuts));
     // Cancelar: vuelve a la lista y no cambia nada.
     let antes = m.keymap.clone();
-    assert_eq!(m.cancela(), FlowOutcome::None);
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
+    assert_eq!(m.cancels(), FlowOutcome::None);
+    assert_eq!(m.class(), Some(DialogKind::ShortcutList));
     assert_eq!(m.keymap, antes);
     // Aceptar: el esquema por defecto en vivo, y de vuelta a la lista.
-    m.pulsa(SHORTCUTS_RESET, false);
-    assert_eq!(m.acepta(), FlowOutcome::ResetAll);
+    m.presses(SHORTCUTS_RESET, false);
+    assert_eq!(m.accepts(), FlowOutcome::ResetAll);
     assert_eq!(m.keymap, Keymap::default_scheme());
-    assert_eq!(m.clase(), Some(DialogKind::ShortcutList));
-    assert!(texto_del_boton(m.dialogo(), "tool.pencil").contains('d'));
+    assert_eq!(m.class(), Some(DialogKind::ShortcutList));
+    assert!(text_of_the_button(m.dialog(), "tool.pencil").contains('d'));
 }
 
 #[test]
-fn condicion_1_la_marca_conflicto_sale_en_la_lista_hasta_que_se_edita_la_accion() {
-    let mut m = Mundo::nuevo();
-    m.flow = Flow::new(vec![relleno()]);
-    m.abre_lista();
-    assert!(texto_del_boton(m.dialogo(), "tool.fill").contains("conflicto"));
-    assert!(!texto_del_boton(m.dialogo(), "tool.line").contains("conflicto"));
-    assert!(texto_del_boton(m.dialogo(), "tool.fill").chars().count() <= 44);
+fn condition_1_the_conflict_mark_stays_in_the_list_until_the_action_is_edited() {
+    let mut m = World::new_2();
+    m.flow = Flow::new(vec![fill()]);
+    m.opens_list();
+    assert!(text_of_the_button(m.dialog(), "tool.fill").contains("conflicto"));
+    assert!(!text_of_the_button(m.dialog(), "tool.line").contains("conflicto"));
+    assert!(text_of_the_button(m.dialog(), "tool.fill").chars().count() <= 44);
     // Editar la acción quita la marca.
-    m.pulsa("tool.fill", false);
-    m.teclas(&tecla(Key::Y, Some("y")));
-    m.acepta();
+    m.presses("tool.fill", false);
+    m.keys_2(&key_2(Key::Y, Some("y")));
+    m.accepts();
     assert!(m.flow.conflicted().is_empty());
-    assert!(!texto_del_boton(m.dialogo(), "tool.fill").contains("conflicto"));
-    // `Restablecer todo` también las quita.
-    m.flow = Flow::new(vec![relleno()]);
-    m.abre_lista_cerrando();
-    m.pulsa(SHORTCUTS_RESET, false);
-    m.acepta();
+    assert!(!text_of_the_button(m.dialog(), "tool.fill").contains("conflicto"));
+    // `Restablecer all` también las quita.
+    m.flow = Flow::new(vec![fill()]);
+    m.opens_list_closing();
+    m.presses(SHORTCUTS_RESET, false);
+    m.accepts();
     assert!(m.flow.conflicted().is_empty());
 }
 
-impl Mundo {
-    fn abre_lista_cerrando(&mut self) {
+impl World {
+    fn opens_list_closing(&mut self) {
         self.modal = Modal::Closed;
-        self.abre_lista();
+        self.opens_list();
     }
 }

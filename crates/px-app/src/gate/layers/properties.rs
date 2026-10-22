@@ -13,66 +13,64 @@ use px_formats::read_png;
 use px_raster::compose;
 use px_ui::canvas::Canvas;
 
-use super::model::{Celda4, Orden, Pila};
-use super::scripts::{sesion_indexada_de, sesion_rgba_de};
-use super::world::Mundo3;
-use super::{
-    Trabajo3, comprobar_golden_aseprite, fuera_de_golden_aseprite, igual_salvo_rgb_con_alfa_0,
-};
-use crate::gate::common::{golden_intacto, sesion_vacia, sin_temporales};
+use super::model::{Cel4, Order, Stack};
+use super::scripts::{session_indexed_of, session_rgba_of};
+use super::world::World3;
+use super::{Work3, check_golden_aseprite, equal_except_rgb_with_alpha_0, outside_golden_aseprite};
+use crate::gate::common::{golden_intact, session_empty, without_temporary};
 use crate::merge_flow::MergeKind;
 
 /// Una orden abstracta: se concreta contra el estado del modelo (los índices, las coordenadas y los
 /// colores dependen de él).
 #[derive(Clone, Debug)]
 enum A {
-    Nueva,
-    Duplicar,
-    Quitar,
-    Subir,
-    Bajar,
-    Activar(u8),
+    New,
+    Duplicate,
+    Remove,
+    Raise,
+    Lower,
+    Activate(u8),
     Visible(u8, bool),
-    Bloqueo(u8, bool),
-    Opacidad(u8, u8),
-    Mezcla(u8, u8),
-    Lapiz(u8, u8, u8, u8, u8),
-    Linea(u8, u8, u8, u8, u8),
-    Relleno(u8, u8, u8),
-    Borrador(u8, u8, u8, u8),
-    Combinar(u8),
-    ConvertirIndexado,
-    ConvertirRgba,
-    Guardar,
+    Lock(u8, bool),
+    Opacity(u8, u8),
+    Blend(u8, u8),
+    Pencil(u8, u8, u8, u8, u8),
+    Line(u8, u8, u8, u8, u8),
+    Fill(u8, u8, u8),
+    Eraser(u8, u8, u8, u8),
+    Merge(u8),
+    ConvertIndexed,
+    ConvertRgba,
+    Save,
 }
 
-fn orden_a() -> impl Strategy<Value = A> {
+fn order_a() -> impl Strategy<Value = A> {
     let b = any::<u8>;
     prop_oneof![
-        3 => Just(A::Nueva),
-        1 => Just(A::Duplicar),
-        1 => Just(A::Quitar),
-        1 => Just(A::Subir),
-        1 => Just(A::Bajar),
-        3 => b().prop_map(A::Activar),
+        3 => Just(A::New),
+        1 => Just(A::Duplicate),
+        1 => Just(A::Remove),
+        1 => Just(A::Raise),
+        1 => Just(A::Lower),
+        3 => b().prop_map(A::Activate),
         2 => (b(), any::<bool>()).prop_map(|(i, v)| A::Visible(i, v)),
-        1 => (b(), any::<bool>()).prop_map(|(i, v)| A::Bloqueo(i, v)),
-        2 => (b(), b()).prop_map(|(i, o)| A::Opacidad(i, o)),
-        2 => (b(), b()).prop_map(|(i, m)| A::Mezcla(i, m)),
-        4 => (b(), b(), b(), b(), b()).prop_map(|(x, y, d, l, c)| A::Lapiz(x, y, d, l, c)),
-        3 => (b(), b(), b(), b(), b()).prop_map(|(x, y, d, l, c)| A::Linea(x, y, d, l, c)),
-        3 => (b(), b(), b()).prop_map(|(x, y, c)| A::Relleno(x, y, c)),
-        2 => (b(), b(), b(), b()).prop_map(|(x, y, d, l)| A::Borrador(x, y, d, l)),
-        2 => b().prop_map(A::Combinar),
-        1 => Just(A::ConvertirIndexado),
-        1 => Just(A::ConvertirRgba),
-        1 => Just(A::Guardar),
+        1 => (b(), any::<bool>()).prop_map(|(i, v)| A::Lock(i, v)),
+        2 => (b(), b()).prop_map(|(i, o)| A::Opacity(i, o)),
+        2 => (b(), b()).prop_map(|(i, m)| A::Blend(i, m)),
+        4 => (b(), b(), b(), b(), b()).prop_map(|(x, y, d, l, c)| A::Pencil(x, y, d, l, c)),
+        3 => (b(), b(), b(), b(), b()).prop_map(|(x, y, d, l, c)| A::Line(x, y, d, l, c)),
+        3 => (b(), b(), b()).prop_map(|(x, y, c)| A::Fill(x, y, c)),
+        2 => (b(), b(), b(), b()).prop_map(|(x, y, d, l)| A::Eraser(x, y, d, l)),
+        2 => b().prop_map(A::Merge),
+        1 => Just(A::ConvertIndexed),
+        1 => Just(A::ConvertRgba),
+        1 => Just(A::Save),
     ]
 }
 
 /// Los seis colores RGBA de las propiedades (con translúcidos, nunca alfa 0) o un índice de 1 a 15.
-fn color(m: &Pila, n: u8) -> Celda4 {
-    const RGBA: [Celda4; 6] = [
+fn color(m: &Stack, n: u8) -> Cel4 {
+    const RGBA: [Cel4; 6] = [
         [255, 0, 0, 255],
         [0, 255, 0, 255],
         [0, 0, 255, 255],
@@ -80,15 +78,15 @@ fn color(m: &Pila, n: u8) -> Celda4 {
         [10, 20, 30, 255],
         [200, 100, 0, 64],
     ];
-    match m.modo {
+    match m.mode_2 {
         Mode::Indexed => {
             // Una entrada de la paleta que no sea la transparente.
-            let paleta = m.paleta.as_ref().expect("paleta");
-            let t = paleta.transparent_index();
-            let validas: Vec<u8> = (0..paleta.len() as u8).filter(|&j| Some(j) != t).collect();
+            let palette = m.palette.as_ref().expect("paleta");
+            let t = palette.transparent_index();
+            let valid: Vec<u8> = (0..palette.len() as u8).filter(|&j| Some(j) != t).collect();
             [
-                validas
-                    .get(usize::from(n) % validas.len().max(1))
+                valid
+                    .get(usize::from(n) % valid.len().max(1))
                     .copied()
                     .unwrap_or(0),
                 0,
@@ -101,9 +99,9 @@ fn color(m: &Pila, n: u8) -> Celda4 {
 }
 
 /// Un segmento horizontal, vertical o a 45° que cabe en el lienzo desde `(x, y)`.
-fn segmento_dentro(m: &Pila, x: u8, y: u8, dir: u8, largo: u8) -> ((i32, i32), (i32, i32)) {
-    let (ancho, alto) = (m.ancho as i32, m.alto as i32);
-    let inicio = (i32::from(x) % ancho, i32::from(y) % alto);
+fn segment_inside(m: &Stack, x: u8, y: u8, dir: u8, largo: u8) -> ((i32, i32), (i32, i32)) {
+    let (width, height) = (m.width as i32, m.height as i32);
+    let start_2 = (i32::from(x) % width, i32::from(y) % height);
     const DIRS: [(i32, i32); 8] = [
         (1, 0),
         (-1, 0),
@@ -115,84 +113,87 @@ fn segmento_dentro(m: &Pila, x: u8, y: u8, dir: u8, largo: u8) -> ((i32, i32), (
         (-1, -1),
     ];
     let (dx, dy) = DIRS[usize::from(dir) % 8];
-    let hasta = |pos: i32, d: i32, tope: i32| match d {
-        1 => tope - 1 - pos,
+    let until = |pos: i32, d: i32, cap: i32| match d {
+        1 => cap - 1 - pos,
         -1 => pos,
         _ => i32::MAX,
     };
-    let maximo = hasta(inicio.0, dx, ancho).min(hasta(inicio.1, dy, alto));
-    let pasos = i32::from(largo) % (maximo + 1);
-    (inicio, (inicio.0 + dx * pasos, inicio.1 + dy * pasos))
+    let maximum = until(start_2.0, dx, width).min(until(start_2.1, dy, height));
+    let steps_2 = i32::from(largo) % (maximum + 1);
+    (
+        start_2,
+        (start_2.0 + dx * steps_2, start_2.1 + dy * steps_2),
+    )
 }
 
-fn concreta(a: &A, m: &Pila) -> Orden {
-    let capa = |i: u8| usize::from(i) % m.capas.len();
+fn concrete(a: &A, m: &Stack) -> Order {
+    let layer_2 = |i: u8| usize::from(i) % m.layers_2.len();
     match a {
-        A::Nueva => Orden::Nueva,
-        A::Duplicar => Orden::Duplicar,
-        A::Quitar => Orden::Quitar,
-        A::Subir => Orden::Mover(1),
-        A::Bajar => Orden::Mover(-1),
-        A::Activar(i) => Orden::Activar(capa(*i)),
-        A::Visible(i, v) => Orden::Visible(capa(*i), *v),
-        A::Bloqueo(i, v) => Orden::Bloqueo(capa(*i), *v),
-        A::Opacidad(i, o) => Orden::Opacidad(capa(*i), *o),
-        A::Mezcla(i, k) => Orden::Mezcla(capa(*i), BlendMode::ALL[usize::from(*k) % 8]),
-        A::Lapiz(x, y, d, l, c) => {
-            let (a, b) = segmento_dentro(m, *x, *y, *d, *l);
-            Orden::Lapiz(vec![a, b], color(m, *c))
+        A::New => Order::New,
+        A::Duplicate => Order::Duplicate,
+        A::Remove => Order::Remove,
+        A::Raise => Order::Mover(1),
+        A::Lower => Order::Mover(-1),
+        A::Activate(i) => Order::Activate(layer_2(*i)),
+        A::Visible(i, v) => Order::Visible(layer_2(*i), *v),
+        A::Lock(i, v) => Order::Lock(layer_2(*i), *v),
+        A::Opacity(i, o) => Order::Opacity(layer_2(*i), *o),
+        A::Blend(i, k) => Order::Blend(layer_2(*i), BlendMode::ALL[usize::from(*k) % 8]),
+        A::Pencil(x, y, d, l, c) => {
+            let (a, b) = segment_inside(m, *x, *y, *d, *l);
+            Order::Pencil(vec![a, b], color(m, *c))
         }
-        A::Linea(x, y, d, l, c) => {
-            let (a, b) = segmento_dentro(m, *x, *y, *d, *l);
-            Orden::Linea(a, b, color(m, *c))
+        A::Line(x, y, d, l, c) => {
+            let (a, b) = segment_inside(m, *x, *y, *d, *l);
+            Order::Line(a, b, color(m, *c))
         }
-        A::Relleno(x, y, c) => Orden::Relleno(
+        A::Fill(x, y, c) => Order::Fill(
             (
-                i32::from(*x) % m.ancho as i32,
-                i32::from(*y) % m.alto as i32,
+                i32::from(*x) % m.width as i32,
+                i32::from(*y) % m.height as i32,
             ),
             color(m, *c),
         ),
-        A::Borrador(x, y, d, l) => {
-            let (a, b) = segmento_dentro(m, *x, *y, *d, *l);
-            Orden::Borrador(vec![a, b])
+        A::Eraser(x, y, d, l) => {
+            let (a, b) = segment_inside(m, *x, *y, *d, *l);
+            Order::Eraser(vec![a, b])
         }
-        A::Combinar(k) => Orden::Combinar(match k % 3 {
+        A::Merge(k) => Order::Merge(match k % 3 {
             0 => MergeKind::Down,
             1 => MergeKind::Visible,
             _ => MergeKind::Flatten,
         }),
         // Solo tienen sentido en el modo de origen; en el otro son una elección de capa sin paso.
-        A::ConvertirIndexado if m.modo == Mode::Rgba => Orden::Convertir(Mode::Indexed),
-        A::ConvertirRgba if m.modo == Mode::Indexed => Orden::Convertir(Mode::Rgba),
-        A::ConvertirIndexado | A::ConvertirRgba | A::Guardar => Orden::Activar(m.activa),
+        A::ConvertIndexed if m.mode_2 == Mode::Rgba => Order::Convert(Mode::Indexed),
+        A::ConvertRgba if m.mode_2 == Mode::Indexed => Order::Convert(Mode::Rgba),
+        A::ConvertIndexed | A::ConvertRgba | A::Save => Order::Activate(m.active_2),
     }
 }
 
 /// Un indexado sin índice transparente (el de un RGBA de una capa sin alfa 0 convertido).
-fn sin_transparente(w: &Mundo3) -> bool {
-    w.m.modo == Mode::Indexed
+fn without_transparent(w: &World3) -> bool {
+    w.m.mode_2 == Mode::Indexed
         && w.m
-            .paleta
+            .palette
             .as_ref()
             .is_none_or(|p| p.transparent_index().is_none())
 }
 
-fn mundo(indexado: bool, ancho: u32, alto: u32) -> Mundo3 {
-    if indexado {
-        Mundo3::de_sesion(sesion_indexada_de(ancho, alto), "propiedad")
+fn world(indexed_2: bool, width: u32, height: u32) -> World3 {
+    if indexed_2 {
+        World3::of_session(session_indexed_of(width, height), "propiedad")
     } else {
-        Mundo3::de_sesion(sesion_rgba_de(ancho, alto), "propiedad")
+        World3::of_session(session_rgba_of(width, height), "propiedad")
     }
 }
 
-fn ejecutar(w: &mut Mundo3, ordenes: &[A]) {
-    for a in ordenes {
-        let orden = concreta(a, &w.m);
-        w.aplicar(&orden);
-        if matches!(a, A::Guardar) {
+fn run(w: &mut World3, commands: &[A]) {
+    for a in commands {
+        let order = concrete(a, &w.m);
+        w.apply(&order);
+        if matches!(a, A::Save) {
             w.s.mark_unmodified();
-            w.marcar_guardado();
+            w.mark_saved();
         }
     }
 }
@@ -204,90 +205,90 @@ proptest! {
     /// y la composición la de `from_layers`; al final, guardar en `.aseprite` y reabrir da el
     /// mismo contenido (con la exención exacta del RGB bajo alfa 0).
     #[test]
-    fn propiedad_1_guion_aleatorio_contra_el_modelo(
-        indexado in any::<bool>(),
-        ancho in 1u32..=10,
-        alto in 1u32..=10,
-        ordenes in vec(orden_a(), 1..=40),
+    fn property_1_random_script_against_the_model(
+        indexed_2 in any::<bool>(),
+        width in 1u32..=10,
+        height in 1u32..=10,
+        commands in vec(order_a(), 1..=40),
     ) {
-        let mut w = mundo(indexado, ancho, alto);
-        ejecutar(&mut w, &ordenes);
-        let t = Trabajo3::nuevo();
-        let ruta = t.ruta().join("p1.aseprite");
-        fuera_de_golden_aseprite(&ruta);
-        if sin_transparente(&w) {
+        let mut w = world(indexed_2, width, height);
+        run(&mut w, &commands);
+        let t = Work3::new_2();
+        let path_2 = t.path_2().join("p1.aseprite");
+        outside_golden_aseprite(&path_2);
+        if without_transparent(&w) {
             // Indexado sin índice transparente: el escritor lo rechaza (3.8, decisión 2) y no
             // deja ningún fichero.
-            let error = w.s.save_to(&ruta).expect_err("indexado sin índice transparente");
+            let error = w.s.save_to(&path_2).expect_err("indexado sin índice transparente");
             prop_assert!(error.to_string().contains("no tiene entrada transparente"), "{error}");
-            prop_assert!(t.nombres().is_empty());
+            prop_assert!(t.names().is_empty());
             return Ok(());
         }
-        w.s.save_to(&ruta).expect("guardar el .aseprite");
-        let mut otra = sesion_vacia();
-        otra.open(&ruta, Canvas::MAX_SIDE, true).expect("reabrir");
-        let capas = otra.document.layers().len();
-        let leida = Pila::de_documento(&otra.document, capas - 1);
+        w.s.save_to(&path_2).expect("guardar el .aseprite");
+        let mut other = session_empty();
+        other.open(&path_2, Canvas::MAX_SIDE, true).expect("reabrir");
+        let layers_2 = other.document.layers().len();
+        let read = Stack::of_document(&other.document, layers_2 - 1);
         prop_assert!(
-            w.m.canonica().igual_contenido(&leida.canonica()).is_ok(),
+            w.m.canonical().equal_content(&read.canonical()).is_ok(),
             "{:?}",
-            w.m.canonica().igual_contenido(&leida.canonica())
+            w.m.canonical().equal_content(&read.canonical())
         );
         let antes = compose(&w.s.document).expect("compose");
-        let despues = compose(&otra.document).expect("compose");
-        prop_assert_eq!(igual_salvo_rgb_con_alfa_0(&antes, &despues), Ok(()));
+        let after_2 = compose(&other.document).expect("compose");
+        prop_assert_eq!(equal_except_rgb_with_alpha_0(&antes, &after_2), Ok(()));
     }
 
     /// P2. Historia con capas: deshacer k veces da la instantánea anotada tras el paso `n − k`
     /// para todo k (con una capa activa que existe siempre) y rehacer las vuelve a dar; «modificado»
     /// es falso si y solo si el `state_id` es el guardado, y nunca con otro contenido.
     #[test]
-    fn propiedad_2_la_historia_con_capas_es_exacta(
-        indexado in any::<bool>(),
-        ancho in 1u32..=10,
-        alto in 1u32..=10,
-        ordenes in vec(orden_a(), 1..=40),
+    fn property_2_the_history_with_layers_is_exact(
+        indexed_2 in any::<bool>(),
+        width in 1u32..=10,
+        height in 1u32..=10,
+        commands in vec(order_a(), 1..=40),
     ) {
-        let mut w = mundo(indexado, ancho, alto);
-        ejecutar(&mut w, &ordenes);
-        let (pasos, final_) = (w.pasos(), w.leer());
-        prop_assert_eq!(w.deshacer_todo(), pasos);
+        let mut w = world(indexed_2, width, height);
+        run(&mut w, &commands);
+        let (steps_2, final_) = (w.steps_2(), w.leer());
+        prop_assert_eq!(w.undo_all(), steps_2);
         prop_assert_eq!(w.s.document.state_id(), 0);
-        prop_assert_eq!(w.rehacer_todo(), pasos);
-        prop_assert_eq!(final_.igual_contenido(&w.leer()), Ok(()));
-        // Un paso a paso desde el final, cada vez comprobado dentro de `deshacer` y `rehacer`.
-        for _ in 0..pasos {
-            w.deshacer();
+        prop_assert_eq!(w.redo_all(), steps_2);
+        prop_assert_eq!(final_.equal_content(&w.leer()), Ok(()));
+        // Un paso a paso desde el final, cada vez comprobado dentro de `undo` y `redo`.
+        for _ in 0..steps_2 {
+            w.undo();
         }
-        for _ in 0..pasos {
-            w.rehacer();
+        for _ in 0..steps_2 {
+            w.redo();
         }
-        prop_assert_eq!(final_.igual_contenido(&w.leer()), Ok(()));
+        prop_assert_eq!(final_.equal_content(&w.leer()), Ok(()));
     }
 }
 
 /// Lo que debe haber en un fichero escrito.
-enum Esperado {
-    Aseprite(Pila),
+enum Expected {
+    Aseprite(Stack),
     Png(px_core::Image),
 }
 
 #[derive(Clone, Debug)]
 enum B {
-    Editar(u8),
-    GuardarComo(u8, bool),
-    Exportar(u8),
-    Directo,
-    Copia,
+    Edit(u8),
+    SaveAs(u8, bool),
+    Export(u8),
+    Direct,
+    TestCopy,
 }
 
-fn orden_b() -> impl Strategy<Value = B> {
+fn order_b() -> impl Strategy<Value = B> {
     prop_oneof![
-        3 => any::<u8>().prop_map(B::Editar),
-        3 => (0u8..3, any::<bool>()).prop_map(|(n, a)| B::GuardarComo(n, a)),
-        2 => (0u8..3).prop_map(B::Exportar),
-        1 => Just(B::Directo),
-        1 => Just(B::Copia),
+        3 => any::<u8>().prop_map(B::Edit),
+        3 => (0u8..3, any::<bool>()).prop_map(|(n, a)| B::SaveAs(n, a)),
+        2 => (0u8..3).prop_map(B::Export),
+        1 => Just(B::Direct),
+        1 => Just(B::TestCopy),
     ]
 }
 
@@ -299,95 +300,95 @@ proptest! {
     /// los `Saved` devueltos (sin `.pixoko-tmp`), cada uno con el contenido esperado en su último
     /// guardado, y `golden/aseprite/` y `golden/png/` quedan iguales.
     #[test]
-    fn propiedad_3_solo_se_escribe_lo_que_se_pide(
-        indexado in any::<bool>(),
-        ordenes in vec(orden_b(), 1..=14),
+    fn property_3_only_what_is_asked_is_written(
+        indexed_2 in any::<bool>(),
+        commands in vec(order_b(), 1..=14),
     ) {
-        let t = Trabajo3::nuevo();
-        let mut w = mundo(indexado, 6, 5);
-        let mut esperado: BTreeMap<PathBuf, Esperado> = BTreeMap::new();
-        let guardar = |w: &mut Mundo3, esperado: &mut BTreeMap<PathBuf, Esperado>, ruta: PathBuf| {
-            let aseprite = ruta.extension().is_some_and(|e| e == "aseprite");
-            let contenido = if aseprite {
-                Esperado::Aseprite(w.m.canonica())
+        let t = Work3::new_2();
+        let mut w = world(indexed_2, 6, 5);
+        let mut expected_2: BTreeMap<PathBuf, Expected> = BTreeMap::new();
+        let save = |w: &mut World3, expected_2: &mut BTreeMap<PathBuf, Expected>, path_2: PathBuf| {
+            let aseprite = path_2.extension().is_some_and(|e| e == "aseprite");
+            let content = if aseprite {
+                Expected::Aseprite(w.m.canonical())
             } else {
-                Esperado::Png(compose(&w.s.document).expect("compose"))
+                Expected::Png(compose(&w.s.document).expect("compose"))
             };
-            esperado.insert(ruta, contenido);
+            expected_2.insert(path_2, content);
         };
-        for orden in &ordenes {
-            match orden {
-                B::Editar(n) => {
+        for order in &commands {
+            match order {
+                B::Edit(n) => {
                     let o = if n % 3 == 0 {
-                        Orden::Nueva
+                        Order::New
                     } else {
                         let c = color(&w.m, *n);
-                        Orden::Relleno((i32::from(*n) % 6, i32::from(*n) % 5), c)
+                        Order::Fill((i32::from(*n) % 6, i32::from(*n) % 5), c)
                     };
-                    w.aplicar(&o);
+                    w.apply(&o);
                 }
-                B::GuardarComo(n, aseprite) => {
+                B::SaveAs(n, aseprite) => {
                     let ext = if *aseprite { "aseprite" } else { "png" };
-                    let elegida = t.ruta().join(format!("f{n}.{ext}"));
-                    fuera_de_golden_aseprite(&elegida);
-                    if *aseprite && sin_transparente(&w) {
-                        let error = w.s.save_to(&elegida).expect_err("sin índice transparente");
+                    let chosen = t.path_2().join(format!("f{n}.{ext}"));
+                    outside_golden_aseprite(&chosen);
+                    if *aseprite && without_transparent(&w) {
+                        let error = w.s.save_to(&chosen).expect_err("sin índice transparente");
                         prop_assert!(error.to_string().contains("no tiene entrada transparente"), "{error}");
                         continue;
                     }
-                    let saved = w.s.save_to(&elegida).expect("guardar");
-                    prop_assert_eq!(&saved.path, &elegida);
-                    w.marcar_guardado();
-                    guardar(&mut w, &mut esperado, saved.path);
+                    let saved = w.s.save_to(&chosen).expect("guardar");
+                    prop_assert_eq!(&saved.path, &chosen);
+                    w.mark_saved();
+                    save(&mut w, &mut expected_2, saved.path);
                 }
-                B::Exportar(n) => {
-                    let elegida = t.ruta().join(format!("e{n}.png"));
-                    fuera_de_golden_aseprite(&elegida);
-                    let saved = w.s.export_flat(&elegida).expect("exportar");
-                    guardar(&mut w, &mut esperado, saved.path);
+                B::Export(n) => {
+                    let chosen = t.path_2().join(format!("e{n}.png"));
+                    outside_golden_aseprite(&chosen);
+                    let saved = w.s.export_flat(&chosen).expect("exportar");
+                    save(&mut w, &mut expected_2, saved.path);
                 }
-                B::Directo => {
+                B::Direct => {
                     if w.s.path().is_some() && w.s.save_route() == crate::dialogs::SaveRoute::Direct {
-                        let saved = w.s.save(t.ruta()).expect("guardar");
-                        w.marcar_guardado();
-                        guardar(&mut w, &mut esperado, saved.path);
+                        let saved = w.s.save(t.path_2()).expect("guardar");
+                        w.mark_saved();
+                        save(&mut w, &mut expected_2, saved.path);
                     }
                 }
-                B::Copia => {
+                B::TestCopy => {
                     if w.s.path().is_some() {
-                        let saved = w.s.save_as(t.ruta()).expect("guardar copia");
-                        w.marcar_guardado();
-                        guardar(&mut w, &mut esperado, saved.path);
+                        let saved = w.s.save_as(t.path_2()).expect("guardar copia");
+                        w.mark_saved();
+                        save(&mut w, &mut expected_2, saved.path);
                     }
                 }
             }
         }
-        let nombres = t.nombres();
-        sin_temporales(&nombres);
-        let mut pedidos: Vec<String> = esperado
+        let names = t.names();
+        without_temporary(&names);
+        let mut requested: Vec<String> = expected_2
             .keys()
             .map(|r| r.file_name().expect("nombre").to_string_lossy().into_owned())
             .collect();
-        pedidos.sort();
-        prop_assert_eq!(&nombres, &pedidos, "el directorio tiene lo que se pidió y nada más");
-        for (ruta, contenido) in &esperado {
-            match contenido {
-                Esperado::Aseprite(pila) => {
-                    let mut otra = sesion_vacia();
-                    otra.open(ruta, Canvas::MAX_SIDE, true).expect("reabrir");
-                    let capas = otra.document.layers().len();
-                    let leida = Pila::de_documento(&otra.document, capas - 1);
-                    let r = pila.igual_contenido(&leida.canonica());
-                    prop_assert!(r.is_ok(), "{}: {:?}", ruta.display(), r);
+        requested.sort();
+        prop_assert_eq!(&names, &requested, "el directorio tiene lo que se pidió y nada más");
+        for (path_2, content) in &expected_2 {
+            match content {
+                Expected::Aseprite(stack) => {
+                    let mut other = session_empty();
+                    other.open(path_2, Canvas::MAX_SIDE, true).expect("reabrir");
+                    let layers_2 = other.document.layers().len();
+                    let read = Stack::of_document(&other.document, layers_2 - 1);
+                    let r = stack.equal_content(&read.canonical());
+                    prop_assert!(r.is_ok(), "{}: {:?}", path_2.display(), r);
                 }
-                Esperado::Png(imagen) => {
-                    let leido = read_png(&fs::read(ruta).expect("leer")).expect("PNG").image;
-                    let r = igual_salvo_rgb_con_alfa_0(&leido, imagen);
-                    prop_assert!(r.is_ok(), "{}: {:?}", ruta.display(), r);
+                Expected::Png(image_2) => {
+                    let read_2 = read_png(&fs::read(path_2).expect("leer")).expect("PNG").image;
+                    let r = equal_except_rgb_with_alpha_0(&read_2, image_2);
+                    prop_assert!(r.is_ok(), "{}: {:?}", path_2.display(), r);
                 }
             }
         }
-        prop_assert_eq!(comprobar_golden_aseprite(), Ok(()));
-        golden_intacto();
+        prop_assert_eq!(check_golden_aseprite(), Ok(()));
+        golden_intact();
     }
 }

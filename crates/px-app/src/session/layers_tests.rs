@@ -8,7 +8,7 @@
 //!   `mark_unmodified`; `ClearPageError::HiddenLayer`; `with_flatten_notice`.
 //! - `crate::save_wait` (`SAVING_NOTICE`, `SAVE_SYNC_PIXELS`, `compose_pixels`, `start_save`,
 //!   `StartSave`, `PendingSave::tick`).
-//! - `TitleInfo.layers` pinta ` · capa {posición}/{total}` tras las coordenadas.
+//! - `TitleInfo.layers` pinta ` · layer_2 {posición}/{total}` tras las coordenadas.
 
 use super::*;
 
@@ -31,70 +31,70 @@ use crate::title::{TitleInfo, title_text};
 // Ayudantes
 // ---------------------------------------------------------------------------------------------
 
-static CONTADOR: AtomicU64 = AtomicU64::new(0);
+static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 struct Tmp {
-    ruta: PathBuf,
+    path_2: PathBuf,
 }
 
 impl Tmp {
-    fn nuevo() -> Tmp {
-        let n = CONTADOR.fetch_add(1, Ordering::SeqCst);
-        let ruta =
+    fn new_2() -> Tmp {
+        let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path_2 =
             std::env::temp_dir().join(format!("pixoko-px-app-capas-{}-{n}", std::process::id()));
-        fs::create_dir_all(&ruta).expect("directorio temporal");
-        Tmp { ruta }
+        fs::create_dir_all(&path_2).expect("directorio temporal");
+        Tmp { path_2 }
     }
 
-    fn ruta(&self) -> &Path {
-        &self.ruta
+    fn path_2(&self) -> &Path {
+        &self.path_2
     }
 }
 
 impl Drop for Tmp {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.ruta);
+        let _ = fs::remove_dir_all(&self.path_2);
     }
 }
 
-const ROJO: Rgba = Rgba::opaque(255, 0, 0);
-const VERDE: Rgba = Rgba::opaque(0, 255, 0);
-const AZUL: Rgba = Rgba::opaque(0, 0, 255);
-const FONDO: Rgba = Rgba::opaque(10, 20, 30);
-const OCULTA: &str = "la capa activa está oculta";
+const TEST_RED: Rgba = Rgba::opaque(255, 0, 0);
+const TEST_GREEN: Rgba = Rgba::opaque(0, 255, 0);
+const TEST_BLUE: Rgba = Rgba::opaque(0, 0, 255);
+const TEST_BACKGROUND: Rgba = Rgba::opaque(10, 20, 30);
+const HIDDEN: &str = "la capa activa está oculta";
 
-fn rgba_lleno(ancho: u32, alto: u32, color: Rgba) -> Image {
-    let mut imagen = Image::new(ancho, alto, Mode::Rgba).expect("imagen");
-    for y in 0..alto {
-        for x in 0..ancho {
-            imagen.set_pixel(x, y, Pixel::Rgba(color)).expect("dentro");
+fn rgba_full(width: u32, height: u32, color: Rgba) -> Image {
+    let mut image_2 = Image::new(width, height, Mode::Rgba).expect("imagen");
+    for y in 0..height {
+        for x in 0..width {
+            image_2.set_pixel(x, y, Pixel::Rgba(color)).expect("dentro");
         }
     }
-    imagen
+    image_2
 }
 
-fn sesion_rgba(ancho: u32, alto: u32) -> Session {
-    Session::sample(Document::new(rgba_lleno(ancho, alto, FONDO)))
+fn session_rgba(width: u32, height: u32) -> Session {
+    Session::sample(Document::new(rgba_full(width, height, TEST_BACKGROUND)))
 }
 
 /// Añade una capa encima con `apply_layer` y devuelve su `LayerId` y su celda.
-fn anade(sesion: &mut Session, nombre: &str) -> (LayerId, ImageId) {
-    let at = sesion.document.layers().len();
-    sesion
+fn adds(session_2: &mut Session, name_2: &str) -> (LayerId, ImageId) {
+    let at = session_2.document.layers().len();
+    session_2
         .apply_layer(Command::AddLayer {
-            name: nombre.to_string(),
+            name: name_2.to_string(),
             at,
         })
         .expect("añadir capa");
-    let capa = &sesion.document.layers()[at];
-    (capa.id(), capa.cel())
+    let layer_2 = &session_2.document.layers()[at];
+    (layer_2.id(), layer_2.cel())
 }
 
-fn pinta(documento: &mut Document, celda: ImageId, puntos: &[(u32, u32)], pixel: Pixel) {
-    documento
+fn paints(document: &mut Document, cel: ImageId, points: &[(u32, u32)], pixel: Pixel) {
+    document
         .apply(Command::SetPixels {
-            image: celda,
-            pixels: puntos
+            image: cel,
+            pixels: points
                 .iter()
                 .map(|&(x, y)| PixelEdit { x, y, pixel })
                 .collect(),
@@ -102,36 +102,36 @@ fn pinta(documento: &mut Document, celda: ImageId, puntos: &[(u32, u32)], pixel:
         .expect("pintar");
 }
 
-/// Un gesto de `herramienta` con el color de primer plano sobre la capa activa, como la app:
+/// Un gesto de `tool_2` con el color de primer plano sobre la capa activa, como la app:
 /// primero la guardia (`paint_refusal`), después los eventos y el registro de lo cambiado.
-fn gesto(
-    sesion: &mut Session,
+fn gesture(
+    session_2: &mut Session,
     tools: &mut ToolState,
-    herramienta: Tool,
-    puntos: &[(i32, i32)],
+    tool_2: Tool,
+    points: &[(i32, i32)],
 ) -> Result<bool, DocumentError> {
-    if sesion.paint_refusal(herramienta).is_some() {
+    if session_2.paint_refusal(tool_2).is_some() {
         return Ok(false);
     }
-    let celda = sesion.active_cel();
-    let pixel = sesion.pixel_of(Role::Foreground);
-    tools.apply_action(ToolAction::Select(herramienta));
-    let mut cambio = false;
-    let mut eventos = vec![CanvasEvent::StrokeBegin(puntos[0])];
-    eventos.extend(puntos[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
-    eventos.push(CanvasEvent::StrokeEnd);
-    let mut resultado = Ok(());
-    for evento in eventos {
-        match tools.canvas_event_with(&mut sesion.document, celda, pixel, evento) {
-            Ok(c) => cambio |= c,
+    let cel = session_2.active_cel();
+    let pixel = session_2.pixel_of(Role::Foreground);
+    tools.apply_action(ToolAction::Select(tool_2));
+    let mut change = false;
+    let mut events = vec![CanvasEvent::StrokeBegin(points[0])];
+    events.extend(points[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
+    events.push(CanvasEvent::StrokeEnd);
+    let mut result = Ok(());
+    for event_2 in events {
+        match tools.canvas_event_with(&mut session_2.document, cel, pixel, event_2) {
+            Ok(c) => change |= c,
             Err(error) => {
-                resultado = Err(error);
+                result = Err(error);
                 break;
             }
         }
     }
-    sesion.absorb(tools.take_changes());
-    resultado.map(|()| cambio)
+    session_2.absorb(tools.take_changes());
+    result.map(|()| change)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -139,93 +139,105 @@ fn gesto(
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_por_defecto_la_activa_es_la_capa_0_y_su_celda() {
-    let mut sesion = sesion_rgba(8, 6);
-    assert_eq!(sesion.active_layer(), sesion.document.layers()[0].id());
-    assert_eq!(sesion.active_cel(), sesion.document.layers()[0].cel());
-    let (capa_c, celda_c) = {
-        anade(&mut sesion, "B");
-        anade(&mut sesion, "C")
+fn row_1_by_default_the_active_one_is_layer_0_and_its_cel() {
+    let mut session_2 = session_rgba(8, 6);
+    assert_eq!(
+        session_2.active_layer(),
+        session_2.document.layers()[0].id()
+    );
+    assert_eq!(session_2.active_cel(), session_2.document.layers()[0].cel());
+    let (layer_c, cel_c) = {
+        adds(&mut session_2, "B");
+        adds(&mut session_2, "C")
     };
-    sesion.set_active_layer(capa_c).expect("existe");
-    assert_eq!(sesion.active_cel(), celda_c);
-    assert_ne!(sesion.active_cel(), ImageId::from_raw(0));
+    session_2.set_active_layer(layer_c).expect("existe");
+    assert_eq!(session_2.active_cel(), cel_c);
+    assert_ne!(session_2.active_cel(), ImageId::from_raw(0));
 }
 
 #[test]
-fn fila_1_cambiar_de_capa_no_toca_el_documento_ni_la_historia_ni_lo_modificado() {
-    let mut sesion = sesion_rgba(8, 6);
-    let (capa_b, _) = anade(&mut sesion, "B");
-    sesion.mark_unmodified();
-    let (estado, copia) = (sesion.document.state_id(), sesion.document.clone());
-    let (deshacer, rehacer) = (sesion.document.can_undo(), sesion.document.can_redo());
-    sesion.set_active_layer(capa_b).expect("existe");
-    let desconocida = LayerId::from_raw(4242);
+fn row_1_changing_layer_does_not_touch_the_document_the_history_or_the_modified_flag() {
+    let mut session_2 = session_rgba(8, 6);
+    let (layer_b, _) = adds(&mut session_2, "B");
+    session_2.mark_unmodified();
+    let (state_2, copy) = (session_2.document.state_id(), session_2.document.clone());
+    let (undo, redo) = (session_2.document.can_undo(), session_2.document.can_redo());
+    session_2.set_active_layer(layer_b).expect("existe");
+    let unknown = LayerId::from_raw(4242);
     assert_eq!(
-        sesion.set_active_layer(desconocida),
-        Err(DocumentError::UnknownLayer(desconocida))
+        session_2.set_active_layer(unknown),
+        Err(DocumentError::UnknownLayer(unknown))
     );
     assert_eq!(
-        sesion.active_layer(),
-        capa_b,
+        session_2.active_layer(),
+        layer_b,
         "un error no cambia la activa"
     );
-    assert_eq!(sesion.document.state_id(), estado);
-    assert_eq!(sesion.document, copia);
+    assert_eq!(session_2.document.state_id(), state_2);
+    assert_eq!(session_2.document, copy);
     assert_eq!(
-        (sesion.document.can_undo(), sesion.document.can_redo()),
-        (deshacer, rehacer)
+        (session_2.document.can_undo(), session_2.document.can_redo()),
+        (undo, redo)
     );
-    assert!(!sesion.modified());
+    assert!(!session_2.modified());
 }
 
 #[test]
-fn fila_1_abrir_o_crear_un_documento_reinicia_la_activa() {
-    let mut sesion = sesion_rgba(8, 6);
-    let (capa_b, _) = anade(&mut sesion, "B");
-    sesion.set_active_layer(capa_b).expect("existe");
-    sesion
-        .new_image(rgba_lleno(4, 4, FONDO), true)
+fn row_1_opening_or_creating_a_document_resets_the_active_one() {
+    let mut session_2 = session_rgba(8, 6);
+    let (layer_b, _) = adds(&mut session_2, "B");
+    session_2.set_active_layer(layer_b).expect("existe");
+    session_2
+        .new_image(rgba_full(4, 4, TEST_BACKGROUND), true)
         .expect("nueva imagen");
-    assert_eq!(sesion.active_layer(), sesion.document.layers()[0].id());
-    assert_eq!(sesion.document.layers().len(), 1);
+    assert_eq!(
+        session_2.active_layer(),
+        session_2.document.layers()[0].id()
+    );
+    assert_eq!(session_2.document.layers().len(), 1);
 }
 
 #[test]
-fn fila_1_si_la_activa_desaparece_pasa_a_la_vecina() {
+fn row_1_if_the_active_one_disappears_it_moves_to_the_neighbor() {
     // [A, B, C] con B activa: al quitarla pasa a la que ocupa su posición (C).
-    let mut sesion = sesion_rgba(8, 6);
-    let (capa_b, _) = anade(&mut sesion, "B");
-    let (capa_c, _) = anade(&mut sesion, "C");
-    sesion.set_active_layer(capa_b).expect("existe");
-    sesion
-        .apply_layer(Command::RemoveLayer { layer: capa_b })
+    let mut session_2 = session_rgba(8, 6);
+    let (layer_b, _) = adds(&mut session_2, "B");
+    let (layer_c, _) = adds(&mut session_2, "C");
+    session_2.set_active_layer(layer_b).expect("existe");
+    session_2
+        .apply_layer(Command::RemoveLayer { layer: layer_b })
         .expect("quitar");
-    assert_eq!(sesion.active_layer(), capa_c);
+    assert_eq!(session_2.active_layer(), layer_c);
     // La última activa: pasa a la nueva última.
-    sesion.set_active_layer(capa_c).expect("existe");
-    sesion
-        .apply_layer(Command::RemoveLayer { layer: capa_c })
+    session_2.set_active_layer(layer_c).expect("existe");
+    session_2
+        .apply_layer(Command::RemoveLayer { layer: layer_c })
         .expect("quitar");
-    assert_eq!(sesion.active_layer(), sesion.document.layers()[0].id());
+    assert_eq!(
+        session_2.active_layer(),
+        session_2.document.layers()[0].id()
+    );
     // La de abajo con otra encima: la que queda en su posición.
-    let (capa_d, _) = anade(&mut sesion, "D");
-    let abajo = sesion.document.layers()[0].id();
-    sesion.set_active_layer(abajo).expect("existe");
-    sesion
-        .apply_layer(Command::RemoveLayer { layer: abajo })
+    let (layer_d, _) = adds(&mut session_2, "D");
+    let below = session_2.document.layers()[0].id();
+    session_2.set_active_layer(below).expect("existe");
+    session_2
+        .apply_layer(Command::RemoveLayer { layer: below })
         .expect("quitar");
-    assert_eq!(sesion.active_layer(), capa_d);
+    assert_eq!(session_2.active_layer(), layer_d);
 }
 
 #[test]
-fn fila_1_deshacer_el_añadir_de_la_capa_activa_pasa_a_la_ultima() {
-    let mut sesion = sesion_rgba(8, 6);
-    let (capa_b, _) = anade(&mut sesion, "B");
-    sesion.set_active_layer(capa_b).expect("existe");
-    sesion.undo().expect("deshacer");
-    assert_eq!(sesion.document.layers().len(), 1);
-    assert_eq!(sesion.active_layer(), sesion.document.layers()[0].id());
+fn row_1_undoing_the_add_of_the_active_layer_moves_to_the_last() {
+    let mut session_2 = session_rgba(8, 6);
+    let (layer_b, _) = adds(&mut session_2, "B");
+    session_2.set_active_layer(layer_b).expect("existe");
+    session_2.undo().expect("deshacer");
+    assert_eq!(session_2.document.layers().len(), 1);
+    assert_eq!(
+        session_2.active_layer(),
+        session_2.document.layers()[0].id()
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -233,79 +245,79 @@ fn fila_1_deshacer_el_añadir_de_la_capa_activa_pasa_a_la_ultima() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_2_el_lapiz_sobre_una_celda_vacia_la_materializa_en_un_paso_y_deshacer_la_vacia() {
-    let mut sesion = sesion_rgba(8, 6);
-    let (_, celda_b) = anade(&mut sesion, "B");
-    let (capa_c, _) = anade(&mut sesion, "C");
-    let capa_b = sesion.document.layers()[1].id();
-    let _ = capa_c;
-    sesion.set_active_layer(capa_b).expect("existe");
-    sesion.slots.get_mut(Mode::Rgba).set(1, ROJO);
-    sesion.choice = ColorChoice::Slot(1);
-    let antes = sesion.document.clone();
-    let celda_a = sesion.document.layers()[0].cel();
+fn row_2_the_pencil_on_an_empty_cel_materializes_it_in_one_step_and_undo_empties_it() {
+    let mut session_2 = session_rgba(8, 6);
+    let (_, cel_b) = adds(&mut session_2, "B");
+    let (layer_c, _) = adds(&mut session_2, "C");
+    let layer_b = session_2.document.layers()[1].id();
+    let _ = layer_c;
+    session_2.set_active_layer(layer_b).expect("existe");
+    session_2.slots.get_mut(Mode::Rgba).set(1, TEST_RED);
+    session_2.choice = ColorChoice::Slot(1);
+    let antes = session_2.document.clone();
+    let cel_a = session_2.document.layers()[0].cel();
     let mut tools = ToolState::new();
     assert_eq!(
-        gesto(&mut sesion, &mut tools, Tool::Pencil, &[(1, 1), (4, 1)]),
+        gesture(&mut session_2, &mut tools, Tool::Pencil, &[(1, 1), (4, 1)]),
         Ok(true)
     );
-    let imagen = sesion.document.image(celda_b).expect("materializada");
-    assert_eq!(imagen.get_pixel(3, 1), Ok(Pixel::Rgba(ROJO)));
-    assert_eq!(sesion.document.image(celda_a), antes.image(celda_a));
-    sesion.undo().expect("un solo paso");
-    assert_eq!(sesion.document, antes);
-    assert!(sesion.document.image(celda_b).is_none());
-    sesion.redo().expect("rehacer");
-    assert!(sesion.document.image(celda_b).is_some());
+    let image_2 = session_2.document.image(cel_b).expect("materializada");
+    assert_eq!(image_2.get_pixel(3, 1), Ok(Pixel::Rgba(TEST_RED)));
+    assert_eq!(session_2.document.image(cel_a), antes.image(cel_a));
+    session_2.undo().expect("un solo paso");
+    assert_eq!(session_2.document, antes);
+    assert!(session_2.document.image(cel_b).is_none());
+    session_2.redo().expect("rehacer");
+    assert!(session_2.document.image(cel_b).is_some());
 }
 
 #[test]
-fn fila_2_sin_memoria_para_la_celda_el_documento_queda_intacto() {
-    let mut sesion = sesion_rgba(8, 6);
-    anade(&mut sesion, "B");
-    let capa_b = sesion.document.layers()[1].id();
-    sesion.set_active_layer(capa_b).expect("existe");
-    sesion.slots.get_mut(Mode::Rgba).set(1, ROJO);
-    sesion.choice = ColorChoice::Slot(1);
-    let limite = sesion.document.cel_bytes();
-    sesion.document.set_cells_limit(limite);
-    let antes = sesion.document.clone();
+fn row_2_without_memory_for_the_cel_the_document_stays_intact() {
+    let mut session_2 = session_rgba(8, 6);
+    adds(&mut session_2, "B");
+    let layer_b = session_2.document.layers()[1].id();
+    session_2.set_active_layer(layer_b).expect("existe");
+    session_2.slots.get_mut(Mode::Rgba).set(1, TEST_RED);
+    session_2.choice = ColorChoice::Slot(1);
+    let limit_2 = session_2.document.cel_bytes();
+    session_2.document.set_cells_limit(limit_2);
+    let antes = session_2.document.clone();
     let mut tools = ToolState::new();
-    let resultado = gesto(&mut sesion, &mut tools, Tool::Pencil, &[(1, 1), (4, 1)]);
+    let result = gesture(&mut session_2, &mut tools, Tool::Pencil, &[(1, 1), (4, 1)]);
     assert!(
-        matches!(resultado, Err(DocumentError::CelsTooLarge { .. })),
-        "{resultado:?}"
+        matches!(result, Err(DocumentError::CelsTooLarge { .. })),
+        "{result:?}"
     );
-    assert_eq!(sesion.document, antes);
-    assert_eq!(sesion.document.state_id(), antes.state_id());
-    assert!(!sesion.document.can_undo() || antes.can_undo());
+    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document.state_id(), antes.state_id());
+    assert!(!session_2.document.can_undo() || antes.can_undo());
 }
 
 #[test]
-fn fila_2_borrar_la_pagina_actua_sobre_la_activa() {
-    let mut sesion = sesion_rgba(6, 4);
-    let (_, celda_b) = anade(&mut sesion, "B");
-    let capa_b = sesion.document.layers()[1].id();
-    sesion.set_active_layer(capa_b).expect("existe");
+fn row_2_clear_page_acts_on_the_active_one() {
+    let mut session_2 = session_rgba(6, 4);
+    let (_, cel_b) = adds(&mut session_2, "B");
+    let layer_b = session_2.document.layers()[1].id();
+    session_2.set_active_layer(layer_b).expect("existe");
     // Con el fondo transparente por defecto sobre una celda vacía no hay nada que cambiar.
-    let antes = sesion.document.clone();
-    assert_eq!(sesion.clear_page(), Ok(false));
-    assert_eq!(sesion.document, antes);
-    assert!(sesion.document.image(celda_b).is_none());
+    let antes = session_2.document.clone();
+    assert_eq!(session_2.clear_page(), Ok(false));
+    assert_eq!(session_2.document, antes);
+    assert!(session_2.document.image(cel_b).is_none());
     // Con fondo rojo la rellena (se materializa) en un paso.
-    sesion.slots.get_mut(Mode::Rgba).set(3, ROJO);
-    sesion.background = ColorChoice::Slot(3);
-    assert_eq!(sesion.clear_page(), Ok(true));
+    session_2.slots.get_mut(Mode::Rgba).set(3, TEST_RED);
+    session_2.background = ColorChoice::Slot(3);
+    assert_eq!(session_2.clear_page(), Ok(true));
     assert_eq!(
-        sesion
+        session_2
             .document
-            .image(celda_b)
+            .image(cel_b)
             .expect("materializada")
             .get_pixel(5, 3),
-        Ok(Pixel::Rgba(ROJO))
+        Ok(Pixel::Rgba(TEST_RED))
     );
-    sesion.undo().expect("un paso");
-    assert_eq!(sesion.document, antes);
+    session_2.undo().expect("un paso");
+    assert_eq!(session_2.document, antes);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -313,45 +325,41 @@ fn fila_2_borrar_la_pagina_actua_sobre_la_activa() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_6_con_la_activa_oculta_nada_pinta_y_el_cuentagotas_si_funciona() {
-    let mut sesion = sesion_rgba(8, 6);
-    let (capa_b, _) = anade(&mut sesion, "B");
-    sesion.set_active_layer(capa_b).expect("existe");
-    sesion
+fn row_6_with_the_active_one_hidden_nothing_paints_and_the_dropper_works() {
+    let mut session_2 = session_rgba(8, 6);
+    let (layer_b, _) = adds(&mut session_2, "B");
+    session_2.set_active_layer(layer_b).expect("existe");
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_b,
+            layer: layer_b,
             visible: false,
         })
         .expect("ocultar");
-    for herramienta in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Eraser] {
-        assert_eq!(
-            sesion.paint_refusal(herramienta),
-            Some(OCULTA),
-            "{herramienta:?}"
-        );
+    for tool_2 in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Eraser] {
+        assert_eq!(session_2.paint_refusal(tool_2), Some(HIDDEN), "{tool_2:?}");
     }
-    assert_eq!(sesion.paint_refusal(Tool::Dropper), None);
-    let antes = sesion.document.clone();
+    assert_eq!(session_2.paint_refusal(Tool::Dropper), None);
+    let antes = session_2.document.clone();
     let mut tools = ToolState::new();
     assert_eq!(
-        gesto(&mut sesion, &mut tools, Tool::Pencil, &[(1, 1), (3, 1)]),
+        gesture(&mut session_2, &mut tools, Tool::Pencil, &[(1, 1), (3, 1)]),
         Ok(false)
     );
-    sesion.slots.get_mut(Mode::Rgba).set(3, ROJO);
-    sesion.background = ColorChoice::Slot(3);
-    assert_eq!(sesion.clear_page(), Err(ClearPageError::HiddenLayer));
-    assert_eq!(ClearPageError::HiddenLayer.to_string(), OCULTA);
-    assert_eq!(sesion.document, antes);
-    assert_eq!(sesion.document.state_id(), antes.state_id());
+    session_2.slots.get_mut(Mode::Rgba).set(3, TEST_RED);
+    session_2.background = ColorChoice::Slot(3);
+    assert_eq!(session_2.clear_page(), Err(ClearPageError::HiddenLayer));
+    assert_eq!(ClearPageError::HiddenLayer.to_string(), HIDDEN);
+    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.document.state_id(), antes.state_id());
     // Al mostrarla se vuelve a pintar.
-    sesion
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_b,
+            layer: layer_b,
             visible: true,
         })
         .expect("mostrar");
-    assert_eq!(sesion.paint_refusal(Tool::Pencil), None);
-    assert_eq!(sesion.clear_page(), Ok(true));
+    assert_eq!(session_2.paint_refusal(Tool::Pencil), None);
+    assert_eq!(session_2.clear_page(), Ok(true));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -359,51 +367,51 @@ fn fila_6_con_la_activa_oculta_nada_pinta_y_el_cuentagotas_si_funciona() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_8_apply_layer_anota_la_region_sucia_y_deshacer_la_invalida() {
-    let mut sesion = sesion_rgba(70, 70);
-    let _ = sesion.take_dirty();
-    let (capa_b, _) = anade(&mut sesion, "B");
+fn row_8_apply_layer_notes_the_dirty_region_and_undo_invalidates_it() {
+    let mut session_2 = session_rgba(70, 70);
+    let _ = session_2.take_dirty();
+    let (layer_b, _) = adds(&mut session_2, "B");
     assert!(
-        sesion.take_dirty().is_empty(),
+        session_2.take_dirty().is_empty(),
         "añadir una capa vacía no cambia lo que se ve"
     );
-    sesion
+    session_2
         .apply_layer(Command::RenameLayer {
-            layer: capa_b,
+            layer: layer_b,
             name: "Z".to_string(),
         })
         .expect("renombrar");
-    assert!(sesion.take_dirty().is_empty());
-    sesion
+    assert!(session_2.take_dirty().is_empty());
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_b,
+            layer: layer_b,
             visible: false,
         })
         .expect("ocultar");
-    assert_eq!(sesion.take_dirty(), BlockSet::full(70, 70));
+    assert_eq!(session_2.take_dirty(), BlockSet::full(70, 70));
     // Un comando sin cambios no ensucia ni deja paso.
-    let estado = sesion.document.state_id();
+    let state_2 = session_2.document.state_id();
     assert_eq!(
-        sesion.apply_layer(Command::SetLayerVisible {
-            layer: capa_b,
+        session_2.apply_layer(Command::SetLayerVisible {
+            layer: layer_b,
             visible: false
         }),
         Ok(false)
     );
-    assert_eq!(sesion.document.state_id(), estado);
+    assert_eq!(session_2.document.state_id(), state_2);
     // Deshacer lo que ensució todo lo vuelve a ensuciar todo.
-    sesion.undo().expect("deshacer");
-    assert_eq!(sesion.take_dirty(), BlockSet::full(70, 70));
-    sesion.redo().expect("rehacer");
-    assert_eq!(sesion.take_dirty(), BlockSet::full(70, 70));
+    session_2.undo().expect("deshacer");
+    assert_eq!(session_2.take_dirty(), BlockSet::full(70, 70));
+    session_2.redo().expect("rehacer");
+    assert_eq!(session_2.take_dirty(), BlockSet::full(70, 70));
 }
 
 // ---------------------------------------------------------------------------------------------
 // Fila 10: indexado, paleta y conversión con varias capas
 // ---------------------------------------------------------------------------------------------
 
-fn paleta_de_seis() -> Palette {
-    let mut paleta = Palette::from_colors([
+fn palette_of_six() -> Palette {
+    let mut palette = Palette::from_colors([
         Rgba::opaque(0, 0, 0),
         Rgba::opaque(200, 20, 20),
         Rgba::opaque(20, 200, 20),
@@ -412,141 +420,143 @@ fn paleta_de_seis() -> Palette {
         Rgba::opaque(255, 255, 255),
     ])
     .expect("paleta");
-    paleta.set_transparent_index(Some(5)).expect("existe");
-    paleta
+    palette.set_transparent_index(Some(5)).expect("existe");
+    palette
 }
 
-fn indexada_de(ancho: u32, alto: u32, indice: u8) -> Image {
-    let mut imagen = Image::new_indexed(ancho, alto, paleta_de_seis()).expect("imagen");
-    for y in 0..alto {
-        for x in 0..ancho {
-            imagen
-                .set_pixel(x, y, Pixel::Indexed(indice))
+fn indexed_of(width: u32, height: u32, index_2: u8) -> Image {
+    let mut image_2 = Image::new_indexed(width, height, palette_of_six()).expect("imagen");
+    for y in 0..height {
+        for x in 0..width {
+            image_2
+                .set_pixel(x, y, Pixel::Indexed(index_2))
                 .expect("dentro");
         }
     }
-    imagen
+    image_2
 }
 
 #[test]
-fn fila_10_con_la_celda_activa_vacia_el_color_sale_del_lienzo() {
-    let imagen = indexada_de(6, 4, 1);
-    let uno = Session::sample(Document::new(imagen.clone()));
-    let mut dos = Session::sample(Document::new(imagen));
-    anade(&mut dos, "B");
-    let capa_b = dos.document.layers()[1].id();
-    dos.set_active_layer(capa_b).expect("existe");
-    assert!(dos.document.image(dos.active_cel()).is_none());
-    assert_eq!(dos.choice, uno.choice);
-    assert_eq!(dos.background, uno.background);
+fn row_10_with_the_active_cel_empty_the_color_comes_from_the_canvas() {
+    let image_2 = indexed_of(6, 4, 1);
+    let one = Session::sample(Document::new(image_2.clone()));
+    let mut two = Session::sample(Document::new(image_2));
+    adds(&mut two, "B");
+    let layer_b = two.document.layers()[1].id();
+    two.set_active_layer(layer_b).expect("existe");
+    assert!(two.document.image(two.active_cel()).is_none());
+    assert_eq!(two.choice, one.choice);
+    assert_eq!(two.background, one.background);
     assert_eq!(
-        dos.pixel_of(Role::Foreground),
-        uno.pixel_of(Role::Foreground)
+        two.pixel_of(Role::Foreground),
+        one.pixel_of(Role::Foreground)
     );
     assert_eq!(
-        dos.pixel_of(Role::Background),
-        uno.pixel_of(Role::Background)
+        two.pixel_of(Role::Background),
+        one.pixel_of(Role::Background)
     );
-    let mut uno = uno;
-    uno.cycle_choice(1);
-    dos.cycle_choice(1);
-    assert_eq!(dos.choice, uno.choice);
-    dos.sync_editor();
-    uno.sync_editor();
-    assert_eq!(dos.editor.pending_target(), uno.editor.pending_target());
+    let mut one = one;
+    one.cycle_choice(1);
+    two.cycle_choice(1);
+    assert_eq!(two.choice, one.choice);
+    two.sync_editor();
+    one.sync_editor();
+    assert_eq!(two.editor.pending_target(), one.editor.pending_target());
 }
 
 #[test]
-fn fila_10_quitar_una_entrada_que_usa_otra_celda_pide_destino() {
-    let mut base = indexada_de(6, 4, 1);
+fn row_10_removing_an_entry_another_cel_uses_asks_for_a_target() {
+    let mut base = indexed_of(6, 4, 1);
     base.set_pixel(2, 2, Pixel::Indexed(3)).expect("dentro");
-    let mut sesion = Session::sample(Document::new(base));
-    anade(&mut sesion, "B");
-    let capa_b = sesion.document.layers()[1].id();
-    sesion.set_active_layer(capa_b).expect("existe");
-    assert!(sesion.document.image(sesion.active_cel()).is_none());
+    let mut session_2 = Session::sample(Document::new(base));
+    adds(&mut session_2, "B");
+    let layer_b = session_2.document.layers()[1].id();
+    session_2.set_active_layer(layer_b).expect("existe");
+    assert!(session_2.document.image(session_2.active_cel()).is_none());
     // La 3 solo la usa la celda de abajo, no la activa.
-    assert!(sesion.removal_needs_destination(3));
-    assert!(!sesion.removal_needs_destination(4));
-    sesion.choice = ColorChoice::Entry(3);
-    let antes = sesion.document.clone();
-    assert!(sesion.begin_removal_for(3));
-    assert_eq!(sesion.ops.removal().map(|r| r.index), Some(3));
+    assert!(session_2.removal_needs_destination(3));
+    assert!(!session_2.removal_needs_destination(4));
+    session_2.choice = ColorChoice::Entry(3);
+    let antes = session_2.document.clone();
+    assert!(session_2.begin_removal_for(3));
+    assert_eq!(session_2.ops.removal().map(|r| r.index), Some(3));
     assert_eq!(
-        sesion.document, antes,
+        session_2.document, antes,
         "pedir el destino no toca el documento"
     );
     // Confirmar con destino la quita de todas las celdas en un paso.
-    let salida = sesion
+    let output = session_2
         .apply_palette_op(PaletteOp::Remove { index: 3, into: 1 }, false)
         .expect("quitar");
-    assert!(salida.changed);
-    let celda_a = sesion.document.layers()[0].cel();
-    let imagen = sesion.document.image(celda_a).expect("imagen");
-    assert_eq!(imagen.get_pixel(2, 2), Ok(Pixel::Indexed(1)));
-    assert_eq!(sesion.document.palette().expect("paleta").len(), 5);
-    sesion.undo().expect("un paso");
-    assert_eq!(sesion.document, antes);
+    assert!(output.changed);
+    let cel_a = session_2.document.layers()[0].cel();
+    let image_2 = session_2.document.image(cel_a).expect("imagen");
+    assert_eq!(image_2.get_pixel(2, 2), Ok(Pixel::Indexed(1)));
+    assert_eq!(session_2.document.palette().expect("paleta").len(), 5);
+    session_2.undo().expect("un paso");
+    assert_eq!(session_2.document, antes);
 }
 
 #[test]
-fn fila_10_quitar_una_entrada_que_nadie_usa_la_quita_en_seco() {
-    let mut sesion = Session::sample(Document::new(indexada_de(6, 4, 1)));
-    anade(&mut sesion, "B");
-    sesion.choice = ColorChoice::Entry(4);
-    assert!(!sesion.removal_needs_destination(4));
-    let salida = sesion
+fn row_10_removing_an_entry_nobody_uses_removes_it_outright() {
+    let mut session_2 = Session::sample(Document::new(indexed_of(6, 4, 1)));
+    adds(&mut session_2, "B");
+    session_2.choice = ColorChoice::Entry(4);
+    assert!(!session_2.removal_needs_destination(4));
+    let output = session_2
         .apply_palette_op(PaletteOp::Remove { index: 4, into: 0 }, true)
         .expect("quitar");
-    assert!(salida.changed);
-    assert!(sesion.ops.removal().is_none());
+    assert!(output.changed);
+    assert!(session_2.ops.removal().is_none());
 }
 
 #[test]
-fn fila_10_convertir_el_modo_con_varias_capas_ya_no_se_rechaza() {
+fn row_10_converting_the_mode_with_several_layers_is_no_longer_rejected() {
     // Antes (3.3) esta prueba afirmaba que con dos capas `convert_refusal()` daba el aviso «no se
     // puede convertir el modo con varias capas: deja una sola o espera a la unidad 3.5». Desde
     // 3.5 existe `ConvertAll`: ya no hay rechazo ni aviso y la sesión convierte todas las capas.
-    let mut sesion = sesion_rgba(4, 4);
-    anade(&mut sesion, "B");
-    let permitido = Allowed {
+    let mut session_2 = session_rgba(4, 4);
+    adds(&mut session_2, "B");
+    let allowed = Allowed {
         luma: true,
         drop_alpha: None,
     };
-    assert_eq!(sesion.convert_all(Mode::GrayAlpha, permitido), Ok(true));
-    assert_eq!(sesion.document.mode(), Mode::GrayAlpha);
-    assert_eq!(sesion.document.layers().len(), 2);
+    assert_eq!(session_2.convert_all(Mode::GrayAlpha, allowed), Ok(true));
+    assert_eq!(session_2.document.mode(), Mode::GrayAlpha);
+    assert_eq!(session_2.document.layers().len(), 2);
 }
 
 #[test]
-fn fila_10_las_cifras_y_las_herramientas_funcionan_con_la_celda_activa_vacia() {
+fn row_10_digits_and_tools_work_with_the_active_cel_empty() {
     use crate::dispatch::{Dispatched, Targets, dispatch};
     use px_ui::actions::{AppAction, Locks, Origin};
-    fn despacha(sesion: &mut Session, tools: &mut ToolState, accion: AppAction) -> Dispatched {
+    fn dispatches(session_2: &mut Session, tools: &mut ToolState, action: AppAction) -> Dispatched {
         dispatch(
-            accion,
+            action,
             Origin::Key,
             &mut Targets {
-                session: sesion,
+                session: session_2,
                 tools,
                 locks: Locks::default(),
             },
         )
     }
-    let mut sesion = Session::sample(Document::new(indexada_de(6, 4, 1)));
-    anade(&mut sesion, "B");
-    let capa_b = sesion.document.layers()[1].id();
-    sesion.set_active_layer(capa_b).expect("existe");
-    assert!(sesion.document.image(sesion.active_cel()).is_none());
+    let mut session_2 = Session::sample(Document::new(indexed_of(6, 4, 1)));
+    adds(&mut session_2, "B");
+    let layer_b = session_2.document.layers()[1].id();
+    session_2.set_active_layer(layer_b).expect("existe");
+    assert!(session_2.document.image(session_2.active_cel()).is_none());
     let mut tools = ToolState::new();
     // La cifra 3 elige la entrada 2 aunque la celda activa no tenga imagen.
-    let hecho = despacha(&mut sesion, &mut tools, AppAction::SelectColor(3));
-    assert!(matches!(hecho, Dispatched::Done { .. }));
-    assert_eq!(sesion.choice, ColorChoice::Entry(2));
+    let done = dispatches(&mut session_2, &mut tools, AppAction::SelectColor(3));
+    assert!(matches!(done, Dispatched::Done { .. }));
+    assert_eq!(session_2.choice, ColorChoice::Entry(2));
     // El borrador se elige y su aviso sale del lienzo (la paleta tiene índice transparente).
-    let Dispatched::Done { notice, .. } =
-        despacha(&mut sesion, &mut tools, AppAction::SelectTool(Tool::Eraser))
-    else {
+    let Dispatched::Done { notice, .. } = dispatches(
+        &mut session_2,
+        &mut tools,
+        AppAction::SelectTool(Tool::Eraser),
+    ) else {
         panic!("se despacha");
     };
     assert_eq!(notice, None);
@@ -558,204 +568,227 @@ fn fila_10_las_cifras_y_las_herramientas_funcionan_con_la_celda_activa_vacia() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_con_una_capa_se_guarda_la_celda_tal_cual() {
-    let mut imagen = rgba_lleno(5, 4, FONDO);
-    imagen
+fn row_11_with_one_layer_the_cel_is_saved_as_is() {
+    let mut image_2 = rgba_full(5, 4, TEST_BACKGROUND);
+    image_2
         .set_pixel(2, 2, Pixel::Rgba(Rgba::new(9, 8, 7, 0)))
         .expect("dentro");
-    let mut sesion = Session::sample(Document::new(imagen.clone()));
-    let tmp = Tmp::nuevo();
-    let guardado = sesion.save_as(tmp.ruta()).expect("guardar");
+    let mut session_2 = Session::sample(Document::new(image_2.clone()));
+    let tmp = Tmp::new_2();
+    let saved = session_2.save_as(tmp.path_2()).expect("guardar");
     assert_eq!(
-        fs::read(&guardado.path).expect("leer"),
-        px_formats::write_png(&imagen).expect("PNG")
+        fs::read(&saved.path).expect("leer"),
+        px_formats::write_png(&image_2).expect("PNG")
     );
 }
 
 #[test]
-fn fila_11_con_tres_capas_se_guarda_lo_visible_y_el_documento_no_cambia() {
-    let mut sesion = sesion_rgba(6, 4);
-    let (_, celda_b) = anade(&mut sesion, "B");
-    let (capa_c, celda_c) = anade(&mut sesion, "C");
-    pinta(&mut sesion.document, celda_b, &[(1, 1)], Pixel::Rgba(ROJO));
-    pinta(&mut sesion.document, celda_c, &[(2, 2)], Pixel::Rgba(AZUL));
-    sesion
+fn row_11_with_three_layers_the_visible_is_saved_and_the_document_does_not_change() {
+    let mut session_2 = session_rgba(6, 4);
+    let (_, cel_b) = adds(&mut session_2, "B");
+    let (layer_c, cel_c) = adds(&mut session_2, "C");
+    paints(
+        &mut session_2.document,
+        cel_b,
+        &[(1, 1)],
+        Pixel::Rgba(TEST_RED),
+    );
+    paints(
+        &mut session_2.document,
+        cel_c,
+        &[(2, 2)],
+        Pixel::Rgba(TEST_BLUE),
+    );
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_c,
+            layer: layer_c,
             visible: false,
         })
         .expect("ocultar");
-    let copia = sesion.document.clone();
-    let tmp = Tmp::nuevo();
-    let guardado = sesion.save_as(tmp.ruta()).expect("guardar");
-    let leida = read_png(&fs::read(&guardado.path).expect("leer"))
+    let copy = session_2.document.clone();
+    let tmp = Tmp::new_2();
+    let saved = session_2.save_as(tmp.path_2()).expect("guardar");
+    let read = read_png(&fs::read(&saved.path).expect("leer"))
         .expect("PNG")
         .image;
-    let mut esperada = rgba_lleno(6, 4, FONDO);
-    esperada.set_pixel(1, 1, Pixel::Rgba(ROJO)).expect("dentro");
-    assert_eq!(leida, esperada, "la capa oculta no entra");
-    assert_eq!(sesion.document, copia);
-    assert!(!sesion.modified());
+    let mut expected = rgba_full(6, 4, TEST_BACKGROUND);
+    expected
+        .set_pixel(1, 1, Pixel::Rgba(TEST_RED))
+        .expect("dentro");
+    assert_eq!(read, expected, "la capa oculta no entra");
+    assert_eq!(session_2.document, copy);
+    assert!(!session_2.modified());
 }
 
 #[test]
-fn fila_11_un_gris_con_todo_oculto_no_se_guarda_y_sigue_modificado() {
-    let mut sesion = Session::sample(Document::new(Image::new(3, 3, Mode::Gray).expect("imagen")));
-    let capa = sesion.document.layers()[0].id();
-    sesion
+fn row_11_a_gray_with_everything_hidden_is_not_saved_and_stays_modified() {
+    let mut session_2 =
+        Session::sample(Document::new(Image::new(3, 3, Mode::Gray).expect("imagen")));
+    let layer_2 = session_2.document.layers()[0].id();
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa,
+            layer: layer_2,
             visible: false,
         })
         .expect("ocultar");
-    assert!(sesion.modified());
-    let tmp = Tmp::nuevo();
-    let resultado = sesion.save_as(tmp.ruta());
-    assert!(
-        matches!(resultado, Err(FileError::Write(_))),
-        "{resultado:?}"
-    );
-    assert!(sesion.modified());
-    assert_eq!(fs::read_dir(tmp.ruta()).expect("directorio").count(), 0);
+    assert!(session_2.modified());
+    let tmp = Tmp::new_2();
+    let result = session_2.save_as(tmp.path_2());
+    assert!(matches!(result, Err(FileError::Write(_))), "{result:?}");
+    assert!(session_2.modified());
+    assert_eq!(fs::read_dir(tmp.path_2()).expect("directorio").count(), 0);
 }
 
 /// Una sesión de una sola capa, oculta: gris, indexado sin índice transparente o RGBA.
-fn sesion_con_la_unica_capa_oculta(modo: Mode) -> Session {
-    let imagen = match modo {
+fn session_with_the_only_layer_hidden(mode_2: Mode) -> Session {
+    let image_2 = match mode_2 {
         Mode::Indexed => Image::new_indexed(
             3,
             3,
             Palette::from_colors([Rgba::opaque(1, 2, 3), Rgba::opaque(4, 5, 6)]).expect("paleta"),
         )
         .expect("imagen"),
-        _ => Image::new(3, 3, modo).expect("imagen"),
+        _ => Image::new(3, 3, mode_2).expect("imagen"),
     };
-    let mut sesion = Session::sample(Document::new(imagen));
-    let capa = sesion.document.layers()[0].id();
-    sesion
+    let mut session_2 = Session::sample(Document::new(image_2));
+    let layer_2 = session_2.document.layers()[0].id();
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa,
+            layer: layer_2,
             visible: false,
         })
         .expect("ocultar");
-    sesion
+    session_2
 }
 
 #[test]
-fn sin_nada_visible_guardar_y_exportar_png_dan_un_error_que_dice_que_hacer() {
-    for (modo, remedio) in [
+fn with_nothing_visible_save_and_export_png_give_an_error_that_says_what_to_do() {
+    for (mode_2, remedy) in [
         (Mode::Gray, "muestra una capa"),
         (
             Mode::Indexed,
             "muestra una capa o fija una entrada transparente",
         ),
     ] {
-        let tmp = Tmp::nuevo();
-        let mut sesion = sesion_con_la_unica_capa_oculta(modo);
-        let guardar = sesion.save_as(tmp.ruta()).expect_err("guardar").to_string();
-        let exportar = sesion
-            .export_flat(&tmp.ruta().join("plano.png"))
+        let tmp = Tmp::new_2();
+        let mut session_2 = session_with_the_only_layer_hidden(mode_2);
+        let save = session_2
+            .save_as(tmp.path_2())
+            .expect_err("guardar")
+            .to_string();
+        let export = session_2
+            .export_flat(&tmp.path_2().join("plano.png"))
             .expect_err("exportar")
             .to_string();
-        for texto in [guardar, exportar] {
+        for text_2 in [save, export] {
             assert!(
-                texto.contains(&format!("no hay nada visible que guardar: {remedio}")),
-                "{modo:?}: {texto}"
+                text_2.contains(&format!("no hay nada visible que guardar: {remedy}")),
+                "{mode_2:?}: {text_2}"
             );
-            assert!(!texto.contains("NoTransparency"), "{modo:?}: {texto}");
+            assert!(!text_2.contains("NoTransparency"), "{mode_2:?}: {text_2}");
         }
-        assert!(sesion.modified(), "{modo:?}");
-        assert_eq!(fs::read_dir(tmp.ruta()).expect("directorio").count(), 0);
+        assert!(session_2.modified(), "{mode_2:?}");
+        assert_eq!(fs::read_dir(tmp.path_2()).expect("directorio").count(), 0);
     }
 }
 
 #[test]
-fn sin_nada_visible_un_rgba_se_guarda_como_png_transparente() {
-    let tmp = Tmp::nuevo();
-    let mut sesion = sesion_con_la_unica_capa_oculta(Mode::Rgba);
-    let guardado = sesion.save_as(tmp.ruta()).expect("guardar");
-    let leida = read_png(&fs::read(&guardado.path).expect("leer")).expect("PNG");
-    let transparente = (0..3).all(|y| {
-        (0..3).all(|x| matches!(leida.image.get_pixel(x, y), Ok(Pixel::Rgba(c)) if c.a == 0))
+fn with_nothing_visible_an_rgba_is_saved_as_a_transparent_png() {
+    let tmp = Tmp::new_2();
+    let mut session_2 = session_with_the_only_layer_hidden(Mode::Rgba);
+    let saved = session_2.save_as(tmp.path_2()).expect("guardar");
+    let read = read_png(&fs::read(&saved.path).expect("leer")).expect("PNG");
+    let transparent = (0..3).all(|y| {
+        (0..3).all(|x| matches!(read.image.get_pixel(x, y), Ok(Pixel::Rgba(c)) if c.a == 0))
     });
-    assert!(transparente);
+    assert!(transparent);
 }
 
 #[test]
-fn fila_11_el_aviso_dice_aplanado_solo_con_mas_de_una_capa() {
-    let mut sesion = sesion_rgba(4, 4);
-    let texto = || "guardado a.png".to_string();
-    assert_eq!(with_flatten_notice(texto(), &sesion.document), texto());
-    let (_, _) = anade(&mut sesion, "B");
-    let (capa_c, _) = anade(&mut sesion, "C");
-    let plano = " · se guarda aplanado; con Guardar como… .aseprite conservas las capas";
+fn row_11_the_notice_says_flattened_only_with_more_than_one_layer() {
+    let mut session_2 = session_rgba(4, 4);
+    let text_2 = || "guardado a.png".to_string();
+    assert_eq!(with_flatten_notice(text_2(), &session_2.document), text_2());
+    let (_, _) = adds(&mut session_2, "B");
+    let (layer_c, _) = adds(&mut session_2, "C");
+    let plane = " · se guarda aplanado; con Guardar como… .aseprite conservas las capas";
     assert_eq!(
-        with_flatten_notice(texto(), &sesion.document),
-        format!("{}{plano}", texto())
+        with_flatten_notice(text_2(), &session_2.document),
+        format!("{}{plane}", text_2())
     );
-    sesion
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_c,
+            layer: layer_c,
             visible: false,
         })
         .expect("ocultar");
     assert_eq!(
-        with_flatten_notice(texto(), &sesion.document),
-        format!("{}{plano} · 1 capa oculta no se guarda", texto())
+        with_flatten_notice(text_2(), &session_2.document),
+        format!("{}{plane} · 1 capa oculta no se guarda", text_2())
     );
-    let capa_b = sesion.document.layers()[1].id();
-    sesion
+    let layer_b = session_2.document.layers()[1].id();
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_b,
+            layer: layer_b,
             visible: false,
         })
         .expect("ocultar");
     assert_eq!(
-        with_flatten_notice(texto(), &sesion.document),
-        format!("{}{plano} · 2 capas ocultas no se guardan", texto())
+        with_flatten_notice(text_2(), &session_2.document),
+        format!("{}{plane} · 2 capas ocultas no se guardan", text_2())
     );
 }
 
 #[test]
-fn fila_11_guardando_se_pide_dos_fotogramas_antes_si_hay_mucho_que_componer() {
+fn row_11_saving_asks_for_two_frames_first_if_there_is_a_lot_to_compose() {
     assert_eq!(SAVING_NOTICE, "Guardando…");
     assert_eq!(SAVE_SYNC_PIXELS, 1 << 24);
     // Hasta 2^24 píxeles de capa visible se guarda en el acto.
     assert_eq!(start_save(0), StartSave::Now);
     assert_eq!(start_save(SAVE_SYNC_PIXELS), StartSave::Now);
     // Con más, el aviso se ve antes: la acción llega en el segundo fotograma, una sola vez.
-    let StartSave::Later(mut espera) = start_save(SAVE_SYNC_PIXELS + 1) else {
+    let StartSave::Later(mut waits) = start_save(SAVE_SYNC_PIXELS + 1) else {
         panic!("más de 2^24 píxeles esperan");
     };
-    assert!(!espera.tick(), "fotograma 1: solo el aviso");
-    assert!(espera.tick(), "fotograma 2: guarda");
-    assert!(!espera.tick(), "nunca más");
-    assert!(!espera.tick());
+    assert!(!waits.tick(), "fotograma 1: solo el aviso");
+    assert!(waits.tick(), "fotograma 2: guarda");
+    assert!(!waits.tick(), "nunca más");
+    assert!(!waits.tick());
 }
 
 #[test]
-fn fila_11_los_pixeles_a_componer_son_ancho_por_alto_por_capas_visibles_salvo_la_identidad() {
-    let mut sesion = sesion_rgba(4, 4);
+fn row_11_the_pixels_to_compose_are_width_times_height_times_visible_layers_except_the_identity() {
+    let mut session_2 = session_rgba(4, 4);
     assert_eq!(
-        compose_pixels(&sesion.document),
+        compose_pixels(&session_2.document),
         0,
         "una capa visible y opaca: nada que componer"
     );
-    let (_, celda_b) = anade(&mut sesion, "B");
-    let (capa_c, celda_c) = anade(&mut sesion, "C");
+    let (_, cel_b) = adds(&mut session_2, "B");
+    let (layer_c, cel_c) = adds(&mut session_2, "C");
     // B vacía: no cuenta; A y C sí.
-    pinta(&mut sesion.document, celda_c, &[(0, 0)], Pixel::Rgba(ROJO));
-    assert_eq!(compose_pixels(&sesion.document), 4 * 4 * 2);
-    pinta(&mut sesion.document, celda_b, &[(0, 0)], Pixel::Rgba(ROJO));
-    assert_eq!(compose_pixels(&sesion.document), 4 * 4 * 3);
-    sesion
+    paints(
+        &mut session_2.document,
+        cel_c,
+        &[(0, 0)],
+        Pixel::Rgba(TEST_RED),
+    );
+    assert_eq!(compose_pixels(&session_2.document), 4 * 4 * 2);
+    paints(
+        &mut session_2.document,
+        cel_b,
+        &[(0, 0)],
+        Pixel::Rgba(TEST_RED),
+    );
+    assert_eq!(compose_pixels(&session_2.document), 4 * 4 * 3);
+    session_2
         .apply_layer(Command::SetLayerVisible {
-            layer: capa_c,
+            layer: layer_c,
             visible: false,
         })
         .expect("ocultar");
     assert_eq!(
-        compose_pixels(&sesion.document),
+        compose_pixels(&session_2.document),
         4 * 4 * 2,
         "la oculta no cuenta"
     );
@@ -765,7 +798,7 @@ fn fila_11_los_pixeles_a_componer_son_ancho_por_alto_por_capas_visibles_salvo_la
 // Fila 12: título y variable de depuración
 // ---------------------------------------------------------------------------------------------
 
-fn informacion(capas: Option<(usize, usize)>) -> TitleInfo {
+fn information(layers_2: Option<(usize, usize)>) -> TitleInfo {
     TitleInfo {
         size: Some((64, 48)),
         zoom: Zoom::from_int(8).expect("zoom"),
@@ -775,27 +808,27 @@ fn informacion(capas: Option<(usize, usize)>) -> TitleInfo {
         can_undo: false,
         can_redo: false,
         error: None,
-        layers: capas,
+        layers: layers_2,
     }
 }
 
 #[test]
-fn fila_12_el_titulo_lleva_la_capa_solo_con_mas_de_una() {
+fn row_12_the_title_carries_the_layer_only_with_more_than_one() {
     assert_eq!(
-        title_text(&informacion(None)),
+        title_text(&information(None)),
         "Pixoko: 64×48 · ×8 · (3, 4) · lápiz · color 1 #000000"
     );
     assert_eq!(
-        title_text(&informacion(Some((2, 3)))),
+        title_text(&information(Some((2, 3)))),
         "Pixoko: 64×48 · ×8 · (3, 4) · capa 2/3 · lápiz · color 1 #000000"
     );
-    let mut sesion = sesion_rgba(4, 4);
-    assert_eq!(sesion.layers_info(), None);
-    anade(&mut sesion, "B");
-    anade(&mut sesion, "C");
-    let capa_b = sesion.document.layers()[1].id();
-    sesion.set_active_layer(capa_b).expect("existe");
-    assert_eq!(sesion.layers_info(), Some((2, 3)));
+    let mut session_2 = session_rgba(4, 4);
+    assert_eq!(session_2.layers_info(), None);
+    adds(&mut session_2, "B");
+    adds(&mut session_2, "C");
+    let layer_b = session_2.document.layers()[1].id();
+    session_2.set_active_layer(layer_b).expect("existe");
+    assert_eq!(session_2.layers_info(), Some((2, 3)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -806,50 +839,50 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn propiedad_3_un_gesto_solo_toca_la_capa_activa_y_se_deshace_exactamente(
-        capas in prop::collection::vec((0u8..2, 0u8..3), 0..3),
-        pasos in prop::collection::vec((0u8..7, 0u8..4, any::<u32>(), any::<u32>(), any::<u32>()), 1..8),
+    fn property_3_a_gesture_only_touches_the_active_layer_and_is_undone_exactly(
+        layers_2 in prop::collection::vec((0u8..2, 0u8..3), 0..3),
+        steps_2 in prop::collection::vec((0u8..7, 0u8..4, any::<u32>(), any::<u32>(), any::<u32>()), 1..8),
     ) {
-        let mut sesion = sesion_rgba(12, 9);
-        sesion.slots.get_mut(Mode::Rgba).set(1, ROJO);
-        sesion.slots.get_mut(Mode::Rgba).set(3, VERDE);
-        for (i, &(relleno, _)) in capas.iter().enumerate() {
-            let (_, celda) = anade(&mut sesion, &format!("C{i}"));
-            if relleno != 0 {
-                pinta(&mut sesion.document, celda, &[(i as u32, 1), (2, i as u32)], Pixel::Rgba(AZUL));
+        let mut session_2 = session_rgba(12, 9);
+        session_2.slots.get_mut(Mode::Rgba).set(1, TEST_RED);
+        session_2.slots.get_mut(Mode::Rgba).set(3, TEST_GREEN);
+        for (i, &(fill, _)) in layers_2.iter().enumerate() {
+            let (_, cel) = adds(&mut session_2, &format!("C{i}"));
+            if fill != 0 {
+                paints(&mut session_2.document, cel, &[(i as u32, 1), (2, i as u32)], Pixel::Rgba(TEST_BLUE));
             }
         }
         let mut tools = ToolState::new();
-        for &(tipo, capa, a, b, c) in &pasos {
-            let total = sesion.document.layers().len();
-            let id = sesion.document.layers()[usize::from(capa) % total].id();
-            sesion.set_active_layer(id).expect("existe");
-            match tipo {
+        for &(kind, layer_2, a, b, c) in &steps_2 {
+            let total = session_2.document.layers().len();
+            let id = session_2.document.layers()[usize::from(layer_2) % total].id();
+            session_2.set_active_layer(id).expect("existe");
+            match kind {
                 5 => {
                     let visible = a % 2 == 0;
-                    let _ = sesion.apply_layer(Command::SetLayerVisible { layer: id, visible });
+                    let _ = session_2.apply_layer(Command::SetLayerVisible { layer: id, visible });
                     continue;
                 }
                 6 => {
-                    let limite = if a % 2 == 0 { sesion.document.cel_bytes() } else { usize::MAX };
-                    sesion.document.set_cells_limit(limite);
+                    let limit_2 = if a % 2 == 0 { session_2.document.cel_bytes() } else { usize::MAX };
+                    session_2.document.set_cells_limit(limit_2);
                     continue;
                 }
                 _ => {}
             }
-            let antes = sesion.document.clone();
-            let celdas: Vec<ImageId> = antes.layers().iter().map(|l| l.cel()).collect();
-            let activa = sesion.active_cel();
-            let puntos = [
+            let antes = session_2.document.clone();
+            let cels: Vec<ImageId> = antes.layers().iter().map(|l| l.cel()).collect();
+            let active_2 = session_2.active_cel();
+            let points = [
                 ((a % 14) as i32 - 1, (b % 11) as i32 - 1),
                 ((b % 14) as i32 - 1, (c % 11) as i32 - 1),
             ];
-            let resultado = match tipo {
-                0 => gesto(&mut sesion, &mut tools, Tool::Pencil, &puntos),
-                1 => gesto(&mut sesion, &mut tools, Tool::Line, &puntos),
-                2 => gesto(&mut sesion, &mut tools, Tool::Fill, &puntos[..1]),
-                3 => gesto(&mut sesion, &mut tools, Tool::Eraser, &puntos),
-                _ => sesion.clear_page().map_err(|e| match e {
+            let result = match kind {
+                0 => gesture(&mut session_2, &mut tools, Tool::Pencil, &points),
+                1 => gesture(&mut session_2, &mut tools, Tool::Line, &points),
+                2 => gesture(&mut session_2, &mut tools, Tool::Fill, &points[..1]),
+                3 => gesture(&mut session_2, &mut tools, Tool::Eraser, &points),
+                _ => session_2.clear_page().map_err(|e| match e {
                     ClearPageError::Document(error) => error,
                     ClearPageError::OutOfMemory => DocumentError::OutOfMemory,
                     ClearPageError::HiddenLayer
@@ -857,21 +890,21 @@ proptest! {
                     | ClearPageError::HiddenAndLockedLayer => DocumentError::EmptyCommand,
                 }),
             };
-            match resultado {
+            match result {
                 Ok(true) => {
-                    for celda in celdas.iter().filter(|&&celda| celda != activa) {
-                        prop_assert_eq!(sesion.document.image(*celda), antes.image(*celda));
+                    for cel in cels.iter().filter(|&&cel| cel != active_2) {
+                        prop_assert_eq!(session_2.document.image(*cel), antes.image(*cel));
                     }
-                    let despues = sesion.document.clone();
-                    sesion.undo().expect("deshacer");
-                    prop_assert_eq!(&sesion.document, &antes);
-                    prop_assert_eq!(sesion.document.state_id(), antes.state_id());
-                    sesion.redo().expect("rehacer");
-                    prop_assert_eq!(&sesion.document, &despues);
+                    let after_2 = session_2.document.clone();
+                    session_2.undo().expect("deshacer");
+                    prop_assert_eq!(&session_2.document, &antes);
+                    prop_assert_eq!(session_2.document.state_id(), antes.state_id());
+                    session_2.redo().expect("rehacer");
+                    prop_assert_eq!(&session_2.document, &after_2);
                 }
                 Ok(false) | Err(_) => {
-                    prop_assert_eq!(&sesion.document, &antes);
-                    prop_assert_eq!(sesion.document.state_id(), antes.state_id());
+                    prop_assert_eq!(&session_2.document, &antes);
+                    prop_assert_eq!(session_2.document.state_id(), antes.state_id());
                 }
             }
         }
@@ -885,79 +918,79 @@ proptest! {
 /// El oráculo de la composición en el dominio de la prueba (capas a opacidad 255 y Normal, con
 /// píxeles opacos o exactamente transparentes): gana la capa visible más alta con un píxel que
 /// no es transparente. La mezcla con alfa y modos se verifica contra `compose` en `px-ui`.
-fn oraculo(documento: &Document) -> Image {
-    let (ancho, alto) = (documento.width(), documento.height());
-    let transparente = documento.palette().and_then(|p| p.transparent_index());
-    let mut salida = match documento.palette() {
-        Some(paleta) => Image::new_indexed(ancho, alto, paleta.clone()).expect("imagen"),
-        None => Image::new(ancho, alto, documento.mode()).expect("imagen"),
+fn oracle(document: &Document) -> Image {
+    let (width, height) = (document.width(), document.height());
+    let transparent = document.palette().and_then(|p| p.transparent_index());
+    let mut output = match document.palette() {
+        Some(palette) => Image::new_indexed(width, height, palette.clone()).expect("imagen"),
+        None => Image::new(width, height, document.mode()).expect("imagen"),
     };
-    let vacio = match documento.mode() {
-        Mode::Indexed => Pixel::Indexed(transparente.expect("transparente")),
+    let empty = match document.mode() {
+        Mode::Indexed => Pixel::Indexed(transparent.expect("transparente")),
         _ => Pixel::Rgba(Rgba::TRANSPARENT),
     };
-    for y in 0..alto {
-        for x in 0..ancho {
-            let mut pixel = vacio;
-            for capa in documento.layers() {
-                if !capa.visible() {
+    for y in 0..height {
+        for x in 0..width {
+            let mut pixel = empty;
+            for layer_2 in document.layers() {
+                if !layer_2.visible() {
                     continue;
                 }
-                let Some(celda) = documento.image(capa.cel()) else {
+                let Some(cel) = document.image(layer_2.cel()) else {
                     continue;
                 };
-                let valor = celda.get_pixel(x, y).expect("dentro");
-                let cuenta = match valor {
+                let valor = cel.get_pixel(x, y).expect("dentro");
+                let count = match valor {
                     Pixel::Rgba(color) => color.a != 0,
-                    Pixel::Indexed(i) => Some(i) != transparente,
+                    Pixel::Indexed(i) => Some(i) != transparent,
                     _ => true,
                 };
-                if cuenta {
+                if count {
                     pixel = valor;
                 }
             }
-            salida.set_pixel(x, y, pixel).expect("dentro");
+            output.set_pixel(x, y, pixel).expect("dentro");
         }
     }
-    salida
+    output
 }
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn propiedad_4_el_png_guardado_es_la_composicion(
-        indexado in any::<bool>(),
-        capas in prop::collection::vec((any::<bool>(), any::<u32>(), any::<u32>()), 0..4),
+    fn property_4_the_saved_png_is_the_composition(
+        indexed_2 in any::<bool>(),
+        layers_2 in prop::collection::vec((any::<bool>(), any::<u32>(), any::<u32>()), 0..4),
     ) {
-        let base = if indexado { indexada_de(5, 4, 1) } else { rgba_lleno(5, 4, FONDO) };
-        let mut sesion = Session::sample(Document::new(base));
-        for (i, &(visible, a, b)) in capas.iter().enumerate() {
-            let (id, celda) = anade(&mut sesion, &format!("C{i}"));
+        let base = if indexed_2 { indexed_of(5, 4, 1) } else { rgba_full(5, 4, TEST_BACKGROUND) };
+        let mut session_2 = Session::sample(Document::new(base));
+        for (i, &(visible, a, b)) in layers_2.iter().enumerate() {
+            let (id, cel) = adds(&mut session_2, &format!("C{i}"));
             if a % 3 != 0 {
-                let pixel = if indexado {
+                let pixel = if indexed_2 {
                     Pixel::Indexed((a % 6) as u8)
                 } else {
-                    Pixel::Rgba([ROJO, VERDE, AZUL, Rgba::TRANSPARENT][(a % 4) as usize])
+                    Pixel::Rgba([TEST_RED, TEST_GREEN, TEST_BLUE, Rgba::TRANSPARENT][(a % 4) as usize])
                 };
-                pinta(&mut sesion.document, celda, &[(a % 5, b % 4), ((a / 5) % 5, (b / 4) % 4)], pixel);
+                paints(&mut session_2.document, cel, &[(a % 5, b % 4), ((a / 5) % 5, (b / 4) % 4)], pixel);
             }
             if !visible {
-                sesion.apply_layer(Command::SetLayerVisible { layer: id, visible: false }).expect("ocultar");
+                session_2.apply_layer(Command::SetLayerVisible { layer: id, visible: false }).expect("ocultar");
             }
         }
-        let copia = sesion.document.clone();
-        let tmp = Tmp::nuevo();
-        let guardado = sesion.save_as(tmp.ruta()).expect("guardar");
-        let leida = read_png(&fs::read(&guardado.path).expect("leer")).expect("PNG").image;
+        let copy = session_2.document.clone();
+        let tmp = Tmp::new_2();
+        let saved = session_2.save_as(tmp.path_2()).expect("guardar");
+        let read = read_png(&fs::read(&saved.path).expect("leer")).expect("PNG").image;
         // El PNG guarda el índice transparente como alfa 0 de la entrada: se compara lo que se ve.
-        let esperada = oraculo(&sesion.document);
-        prop_assert_eq!((leida.width(), leida.height()), (esperada.width(), esperada.height()));
-        prop_assert_eq!(px_ui::texture::to_rgba8(&leida), px_ui::texture::to_rgba8(&esperada));
-        prop_assert_eq!(&sesion.document, &copia);
-        prop_assert!(!sesion.modified());
-        let aviso = with_flatten_notice("guardado".to_string(), &sesion.document);
-        prop_assert_eq!(aviso.contains("aplanado"), sesion.document.layers().len() > 1);
+        let expected = oracle(&session_2.document);
+        prop_assert_eq!((read.width(), read.height()), (expected.width(), expected.height()));
+        prop_assert_eq!(px_ui::texture::to_rgba8(&read), px_ui::texture::to_rgba8(&expected));
+        prop_assert_eq!(&session_2.document, &copy);
+        prop_assert!(!session_2.modified());
+        let notice = with_flatten_notice("guardado".to_string(), &session_2.document);
+        prop_assert_eq!(notice.contains("aplanado"), session_2.document.layers().len() > 1);
     }
 }
 
@@ -965,20 +998,22 @@ proptest! {
 // Propiedad 5: ninguna celda referencia una entrada de paleta que no existe
 // ---------------------------------------------------------------------------------------------
 
-fn consistente(documento: &Document) -> Result<(), String> {
-    let paleta = documento.palette().expect("indexado");
-    for capa in documento.layers() {
-        let Some(celda) = documento.image(capa.cel()) else {
+fn consistent(document: &Document) -> Result<(), String> {
+    let palette = document.palette().expect("indexado");
+    for layer_2 in document.layers() {
+        let Some(cel) = document.image(layer_2.cel()) else {
             continue;
         };
-        if celda.palette() != Some(paleta) {
+        if cel.palette() != Some(palette) {
             return Err("una celda tiene otra paleta".to_string());
         }
-        for y in 0..celda.height() {
-            for x in 0..celda.width() {
-                match celda.get_pixel(x, y) {
-                    Ok(Pixel::Indexed(i)) if usize::from(i) < paleta.len() => {}
-                    otro => return Err(format!("({x}, {y}) de {:?}: {otro:?}", capa.id())),
+        for y in 0..cel.height() {
+            for x in 0..cel.width() {
+                match cel.get_pixel(x, y) {
+                    Ok(Pixel::Indexed(i)) if usize::from(i) < palette.len() => {}
+                    other_2 => {
+                        return Err(format!("({x}, {y}) de {:?}: {other_2:?}", layer_2.id()));
+                    }
                 }
             }
         }
@@ -986,11 +1021,11 @@ fn consistente(documento: &Document) -> Result<(), String> {
     Ok(())
 }
 
-fn usa_alguna_celda(documento: &Document, indice: u8) -> bool {
-    documento.layers().iter().any(|capa| {
-        documento.image(capa.cel()).is_some_and(|celda| {
-            (0..celda.height()).any(|y| {
-                (0..celda.width()).any(|x| celda.get_pixel(x, y) == Ok(Pixel::Indexed(indice)))
+fn uses_some_cel(document: &Document, index_2: u8) -> bool {
+    document.layers().iter().any(|layer_2| {
+        document.image(layer_2.cel()).is_some_and(|cel| {
+            (0..cel.height()).any(|y| {
+                (0..cel.width()).any(|x| cel.get_pixel(x, y) == Ok(Pixel::Indexed(index_2)))
             })
         })
     })
@@ -1000,68 +1035,68 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    fn propiedad_5_ninguna_celda_referencia_una_entrada_que_no_existe(
-        capas in prop::collection::vec((any::<bool>(), any::<u32>()), 0..4),
-        pasos in prop::collection::vec((0u8..9, any::<u32>(), any::<u32>(), any::<u32>()), 0..20),
+    fn property_5_no_cel_references_an_entry_that_does_not_exist(
+        layers_2 in prop::collection::vec((any::<bool>(), any::<u32>()), 0..4),
+        steps_2 in prop::collection::vec((0u8..9, any::<u32>(), any::<u32>(), any::<u32>()), 0..20),
     ) {
-        let mut sesion = Session::sample(Document::new(indexada_de(4, 4, 1)));
-        for (i, &(contenido, a)) in capas.iter().enumerate() {
-            let (_, celda) = anade(&mut sesion, &format!("C{i}"));
-            if contenido {
-                pinta(&mut sesion.document, celda, &[(a % 4, (a / 4) % 4)], Pixel::Indexed((a % 6) as u8));
+        let mut session_2 = Session::sample(Document::new(indexed_of(4, 4, 1)));
+        for (i, &(content, a)) in layers_2.iter().enumerate() {
+            let (_, cel) = adds(&mut session_2, &format!("C{i}"));
+            if content {
+                paints(&mut session_2.document, cel, &[(a % 4, (a / 4) % 4)], Pixel::Indexed((a % 6) as u8));
             }
         }
-        prop_assert_eq!(consistente(&sesion.document), Ok(()));
-        for &(tipo, a, b, c) in &pasos {
-            let largo = sesion.document.palette().expect("paleta").len();
-            let total = sesion.document.layers().len();
-            let id = sesion.document.layers()[(a as usize) % total].id();
-            sesion.set_active_layer(id).expect("existe");
-            match tipo {
-                0 => { let _ = sesion.apply_palette_op(PaletteOp::Add, false); }
+        prop_assert_eq!(consistent(&session_2.document), Ok(()));
+        for &(kind, a, b, c) in &steps_2 {
+            let largo = session_2.document.palette().expect("paleta").len();
+            let total = session_2.document.layers().len();
+            let id = session_2.document.layers()[(a as usize) % total].id();
+            session_2.set_active_layer(id).expect("existe");
+            match kind {
+                0 => { let _ = session_2.apply_palette_op(PaletteOp::Add, false); }
                 1 | 2 if largo > 1 => {
-                    let indice = (b as usize % largo) as u8;
-                    let destino = ((usize::from(indice) + 1 + c as usize % (largo - 1)) % largo) as u8;
-                    sesion.choice = ColorChoice::Entry(indice);
+                    let index_2 = (b as usize % largo) as u8;
+                    let target_2 = ((usize::from(index_2) + 1 + c as usize % (largo - 1)) % largo) as u8;
+                    session_2.choice = ColorChoice::Entry(index_2);
                     // Pedir destino ⇔ alguna celda (no solo la activa) usa la entrada.
                     prop_assert_eq!(
-                        sesion.removal_needs_destination(indice),
-                        usa_alguna_celda(&sesion.document, indice)
+                        session_2.removal_needs_destination(index_2),
+                        uses_some_cel(&session_2.document, index_2)
                     );
-                    let _ = sesion.apply_palette_op(PaletteOp::Remove { index: indice, into: destino }, false);
+                    let _ = session_2.apply_palette_op(PaletteOp::Remove { index: index_2, into: target_2 }, false);
                 }
                 3 if largo > 1 => {
-                    let _ = sesion.apply_palette_op(
+                    let _ = session_2.apply_palette_op(
                         PaletteOp::Move { from: (b as usize % largo) as u8, to: (c as usize % largo) as u8 },
                         false,
                     );
                 }
                 4 => {
-                    let inicio = (b as usize % largo) as u8;
-                    let _ = sesion.apply_palette_op(
-                        PaletteOp::Rotate { start: inicio, len: 1 + (c as usize % (largo - usize::from(inicio))) as u16, steps: (c % 5) as i32 - 2 },
+                    let start_2 = (b as usize % largo) as u8;
+                    let _ = session_2.apply_palette_op(
+                        PaletteOp::Rotate { start: start_2, len: 1 + (c as usize % (largo - usize::from(start_2))) as u16, steps: (c % 5) as i32 - 2 },
                         false,
                     );
                 }
                 5 => {
-                    let _ = sesion.apply_palette_op(
+                    let _ = session_2.apply_palette_op(
                         PaletteOp::SetTransparent { index: (b % 4 != 0).then(|| (c as usize % largo) as u8) },
                         false,
                     );
                 }
                 6 => {
-                    let celda = sesion.active_cel();
-                    let _ = sesion.document.apply(Command::SetPixels {
-                        image: celda,
+                    let cel = session_2.active_cel();
+                    let _ = session_2.document.apply(Command::SetPixels {
+                        image: cel,
                         pixels: vec![PixelEdit { x: b % 4, y: c % 4, pixel: Pixel::Indexed((b as usize % largo) as u8) }],
                     });
                 }
-                7 => { let _ = sesion.undo(); }
-                8 => { let _ = sesion.redo(); }
+                7 => { let _ = session_2.undo(); }
+                8 => { let _ = session_2.redo(); }
                 _ => {}
             }
-            sesion.normalize();
-            prop_assert_eq!(consistente(&sesion.document), Ok(()), "tras el paso {}", tipo);
+            session_2.normalize();
+            prop_assert_eq!(consistent(&session_2.document), Ok(()), "tras el paso {}", kind);
         }
     }
 }

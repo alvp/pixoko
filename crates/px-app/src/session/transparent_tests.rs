@@ -5,7 +5,7 @@
 //! Todo se escribe contra la API que aún no existe y debe estar en rojo hasta la lógica:
 //! `PaletteOp::SetTransparent { index }`, `transparent_toggle`, `transparent_button_label`,
 //! `info_flags_alpha0` e `is_alpha0_cell_with`. El botón se simula como el panel: el índice sale de
-//! `transparent_toggle(palette, activa)` y se aplica con `Session::apply_palette_op`.
+//! `transparent_toggle(palette, active_2)` y se aplica con `Session::apply_palette_op`.
 //!
 //! Los ayudantes de los otros módulos de tests son privados: aquí se duplican los mínimos.
 
@@ -43,8 +43,8 @@ const X: Rgba = Rgba::opaque(200, 30, 30);
 /// `Y` de `P5`.
 const Y: Rgba = Rgba::opaque(10, 10, 240);
 
-const FIJAR: &str = "Fijar transparente";
-const QUITAR: &str = "Quitar transparente";
+const SET: &str = "Fijar transparente";
+const REMOVE: &str = "Quitar transparente";
 
 /// Indexada de una fila con esa paleta, índice transparente y píxeles.
 fn indexed(colors: &[Rgba], transparent: Option<u8>, pixels: &[u8]) -> Image {
@@ -171,7 +171,7 @@ fn run_ok(session: &mut Session, op: PaletteOp) -> String {
     outcome.notice.expect("la operación da un aviso")
 }
 
-/// Pulsar `Quitar` (de la paleta) en la activa como el panel: con píxeles queda pendiente.
+/// Pulsar `Remove` (de la paleta) en la activa como el panel: con píxeles queda pendiente.
 fn press_remove(session: &mut Session) -> Option<PaletteOutcome> {
     session.normalize();
     let index = entry_of(session);
@@ -218,14 +218,14 @@ fn slots() -> SlotColors {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_fijar_mueve_solo_el_indice_en_un_paso_y_conserva_seleccion_y_rango() {
+fn row_3_set_moves_only_the_index_in_one_step_and_keeps_selection_and_range() {
     let mut session = session_f(None);
     select(&mut session, ColorChoice::Entry(2));
     session.ops.set_range_end(3);
     let initial = img(&session).clone();
     let colors = colors_of(&initial);
 
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
     let palette = initial.palette().expect("indexada");
     assert_eq!(transparent_toggle(palette, 2), Some(2));
     assert!(!session.modified());
@@ -242,7 +242,7 @@ fn fila_3_fijar_mueve_solo_el_indice_en_un_paso_y_conserva_seleccion_y_rango() {
     assert_eq!(session.choice, ColorChoice::Entry(2), "selección intacta");
     assert_eq!(session.ops.range_end(), Some(3), "rango conservado");
     assert!(session.modified());
-    assert_eq!(label_of(&session), QUITAR, "el rótulo sale del estado");
+    assert_eq!(label_of(&session), REMOVE, "el rótulo sale del estado");
 
     // Un solo paso.
     session.undo().expect("deshacer");
@@ -250,22 +250,22 @@ fn fila_3_fijar_mueve_solo_el_indice_en_un_paso_y_conserva_seleccion_y_rango() {
     assert_eq!(img(&session), &initial, "la imagen original");
     assert!(!session.document.can_undo(), "un solo paso");
     assert!(!session.modified(), "el estado guardado");
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
 
     session.redo().expect("rehacer");
     assert_eq!(transparent_of(img(&session)), Some(2));
     assert!(session.modified());
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
 }
 
 #[test]
-fn fila_3_quitar_deja_la_entrada_con_su_color_guardado_y_el_rotulo_sale_del_estado() {
+fn row_3_remove_leaves_the_entry_with_its_stored_color_and_the_label_comes_from_the_state() {
     let mut session = session_f(Some(2));
     select(&mut session, ColorChoice::Entry(2));
     session.ops.set_range_end(3);
     let initial = img(&session).clone();
 
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
     let palette = initial.palette().expect("indexada");
     assert_eq!(transparent_toggle(palette, 2), None);
     assert_eq!(resolved(&initial, 2), Rgba::new(0, 0, 255, 0));
@@ -287,7 +287,7 @@ fn fila_3_quitar_deja_la_entrada_con_su_color_guardado_y_el_rotulo_sale_del_esta
     assert_eq!(pixels_of(img(&session)), [0, 1, 2, 3]);
     assert_eq!(session.choice, ColorChoice::Entry(2));
     assert_eq!(session.ops.range_end(), Some(3));
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
     assert!(session.modified());
 
     session.undo().expect("deshacer");
@@ -295,7 +295,7 @@ fn fila_3_quitar_deja_la_entrada_con_su_color_guardado_y_el_rotulo_sale_del_esta
     assert_eq!(img(&session), &initial);
     assert_eq!(
         label_of(&session),
-        QUITAR,
+        REMOVE,
         "tras deshacer, el rótulo cambia"
     );
     assert!(!session.document.can_undo());
@@ -303,7 +303,7 @@ fn fila_3_quitar_deja_la_entrada_con_su_color_guardado_y_el_rotulo_sale_del_esta
 }
 
 #[test]
-fn fila_3_poner_el_mismo_valor_da_ok_false_y_no_toca_nada() {
+fn row_3_putting_the_same_value_gives_ok_false_and_touches_nothing() {
     let mut session = session_f(Some(2));
     select(&mut session, ColorChoice::Entry(2));
     let before = img(&session).clone();
@@ -336,10 +336,10 @@ fn edit_first_color(session: &mut Session) {
 }
 
 #[test]
-fn fila_3_el_mismo_valor_no_crea_paso_ni_marca_el_documento_ni_toca_el_historial() {
+fn row_3_the_same_value_creates_no_step_or_marks_the_document_or_touches_the_history() {
     // (transparente de partida, valor igual que se pide).
     for (start, same) in [(Some(2), Some(2)), (None, None)] {
-        // `editada`: ya había un paso de color; `undone`: además se deshizo (hay rehacer).
+        // `edited`: ya había un paso de color; `undone`: además se deshizo (hay rehacer).
         for (edited, undone) in [(false, false), (true, false), (true, true)] {
             let tag = format!("{start:?} editada {edited} deshecha {undone}");
             let mut session = session_f(start);
@@ -401,7 +401,7 @@ fn fila_3_el_mismo_valor_no_crea_paso_ni_marca_el_documento_ni_toca_el_historial
 }
 
 #[test]
-fn fila_3_el_comando_directo_con_el_mismo_valor_da_ok_false_sin_paso_ni_marca() {
+fn row_3_the_direct_command_with_the_same_value_gives_ok_false_without_a_step_or_mark() {
     for (start, same) in [(Some(2), Some(2)), (None, None)] {
         for edited in [false, true] {
             let tag = format!("{start:?} editada {edited}");
@@ -449,12 +449,12 @@ fn fila_3_el_comando_directo_con_el_mismo_valor_da_ok_false_sin_paso_ni_marca() 
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_fijar_otra_reemplaza_la_marca_y_la_anterior_vuelve_a_su_alfa_guardado() {
+fn row_4_setting_another_replaces_the_mark_and_the_previous_one_goes_back_to_its_stored_alpha() {
     let mut session = session_f(Some(1));
     select(&mut session, ColorChoice::Entry(3));
     let initial = img(&session).clone();
     assert_eq!(resolved(&initial, 1), Rgba::new(0, 255, 0, 0));
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
 
     let notice = press_ok(&mut session);
 
@@ -473,7 +473,7 @@ fn fila_4_fijar_otra_reemplaza_la_marca_y_la_anterior_vuelve_a_su_alfa_guardado(
 }
 
 #[test]
-fn fila_4_si_la_anterior_tenia_alfa_guardado_0_sigue_con_alfa_0() {
+fn row_4_if_the_previous_one_had_stored_alpha_0_it_stays_with_alpha_0() {
     let clear_green = Rgba::new(0, 255, 0, 0);
     let mut session = Session::sample(Document::new(row(
         &[RED, clear_green, BLUE, BLACK],
@@ -489,7 +489,7 @@ fn fila_4_si_la_anterior_tenia_alfa_guardado_0_sigue_con_alfa_0() {
 }
 
 #[test]
-fn fila_4_con_tres_cifras_el_aviso_cabe_en_43_caracteres() {
+fn row_4_with_three_digits_the_notice_fits_in_43_characters() {
     let mut session = Session::sample(Document::new(row(&distinct(256), Some(254))));
     select(&mut session, ColorChoice::Entry(255));
 
@@ -511,7 +511,7 @@ fn opaque_four() -> Session {
 }
 
 #[test]
-fn fila_7_fijar_la_1_guarda_trns_con_alfa_0_y_plte_intacta_y_al_reabrir_pierde_la_marca_no_el_aspecto()
+fn row_7_setting_the_1_saves_trns_with_alpha_0_and_plte_intact_and_on_reopening_it_loses_the_mark_not_the_look()
  {
     let mut session = opaque_four();
     select(&mut session, ColorChoice::Entry(1));
@@ -538,7 +538,7 @@ fn fila_7_fijar_la_1_guarda_trns_con_alfa_0_y_plte_intacta_y_al_reabrir_pierde_l
 
     // El panel y el botón tras reabrir.
     let palette = reopened.palette().expect("indexada");
-    assert_eq!(transparent_button_label(palette, 1), FIJAR);
+    assert_eq!(transparent_button_label(palette, 1), SET);
     assert_eq!(
         transparent_toggle(palette, 1),
         Some(1),
@@ -556,7 +556,7 @@ fn fila_7_fijar_la_1_guarda_trns_con_alfa_0_y_plte_intacta_y_al_reabrir_pierde_l
 }
 
 #[test]
-fn fila_7_quitar_deja_un_png_sin_trns_y_la_imagen_reabierta_es_opaca() {
+fn row_7_removing_leaves_a_png_without_trns_and_the_reopened_image_is_opaque() {
     let mut session = opaque_four();
     let original = img(&session).clone();
     select(&mut session, ColorChoice::Entry(1));
@@ -587,12 +587,12 @@ fn session_new_indexed() -> Session {
 }
 
 #[test]
-fn fila_8_en_la_imagen_nueva_la_0_dice_quitar_y_al_pulsarlo_el_aspecto_no_cambia() {
+fn row_8_in_the_new_image_the_0_says_remove_and_when_pressed_the_look_does_not_change() {
     let mut session = session_new_indexed();
     select(&mut session, ColorChoice::Entry(0));
     let initial = img(&session).clone();
     assert_eq!(transparent_of(&initial), Some(0));
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
     let before = to_rgba8(&initial);
     assert!(
         before.chunks(4).all(|pixel| pixel[3] == 0),
@@ -606,7 +606,7 @@ fn fila_8_en_la_imagen_nueva_la_0_dice_quitar_y_al_pulsarlo_el_aspecto_no_cambia
     assert_eq!(transparent_of(image), None);
     assert_eq!(colors_of(image)[0], Rgba::new(0, 0, 0, 0), "#00000000");
     assert_eq!(to_rgba8(image), before, "todo sigue igual de transparente");
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
     assert!(is_alpha0_cell_with(image, 0, &slots()), "dice alfa 0");
     assert_eq!(
         info_flags_alpha0(false, false, false, false, true),
@@ -621,14 +621,14 @@ fn fila_8_en_la_imagen_nueva_la_0_dice_quitar_y_al_pulsarlo_el_aspecto_no_cambia
     session.undo().expect("deshacer");
     assert_eq!(transparent_of(img(&session)), Some(0));
     assert_eq!(img(&session), &initial);
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
 }
 
 #[test]
-fn fila_8_con_la_25_negro_activa_el_boton_dice_fijar() {
+fn row_8_with_the_25_black_active_the_button_says_set() {
     let session = session_new_indexed();
     assert_eq!(session.choice, ColorChoice::Entry(25), "el negro");
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -648,7 +648,7 @@ fn session_with_pending_text() -> Session {
 }
 
 #[test]
-fn fila_9_el_texto_pendiente_no_se_descarta_al_aplicar_la_marca() {
+fn row_9_the_pending_text_is_not_discarded_when_applying_the_mark() {
     let mut session = session_with_pending_text();
 
     let notice = press_ok(&mut session);
@@ -663,7 +663,7 @@ fn fila_9_el_texto_pendiente_no_se_descarta_al_aplicar_la_marca() {
 }
 
 #[test]
-fn fila_9_con_el_campo_enfocado_el_commit_llega_antes_y_son_dos_pasos_en_ese_orden() {
+fn row_9_with_the_field_focused_the_commit_arrives_first_and_they_are_two_steps_in_that_order() {
     let mut session = session_with_pending_text();
     let original = colors_of(img(&session))[3];
 
@@ -688,7 +688,7 @@ fn fila_9_con_el_campo_enfocado_el_commit_llega_antes_y_son_dos_pasos_en_ese_ord
 }
 
 #[test]
-fn fila_9_con_quita_pendiente_se_aplica_la_marca_y_la_quita_se_cancela_con_aviso() {
+fn row_9_with_a_pending_removal_the_mark_is_applied_and_the_removal_is_cancelled_with_a_notice() {
     let mut session = session_p5();
     select(&mut session, ColorChoice::Entry(3));
     session.ops.set_range_end(4);
@@ -720,16 +720,16 @@ fn fila_9_con_quita_pendiente_se_aplica_la_marca_y_la_quita_se_cancela_con_aviso
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_con_una_entrada_fijar_y_quitar_funcionan_y_todo_queda_transparente() {
+fn row_10_with_one_entry_set_and_remove_work_and_everything_stays_transparent() {
     let mut session = Session::sample(Document::new(indexed(&[RED], None, &[0, 0])));
     assert_eq!(len_of(&session), 1);
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
 
     let notice = press_ok(&mut session);
     assert_eq!(notice, "entrada 0 transparente");
     assert_eq!(transparent_of(img(&session)), Some(0));
     assert!(to_rgba8(img(&session)).chunks(4).all(|p| p[3] == 0));
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
 
     let notice = press_ok(&mut session);
     assert_eq!(notice, "entrada 0 ya no es transparente");
@@ -738,27 +738,27 @@ fn fila_10_con_una_entrada_fijar_y_quitar_funcionan_y_todo_queda_transparente() 
 }
 
 #[test]
-fn fila_10_con_256_entradas_fijar_en_la_255_y_quitar_la_marcada_en_0_y_en_la_ultima() {
+fn row_10_with_256_entries_set_at_255_and_remove_the_marked_at_0_and_at_the_last() {
     let mut session = Session::sample(Document::new(row(&distinct(256), None)));
     select(&mut session, ColorChoice::Entry(255));
     assert_eq!(press_ok(&mut session), "entrada 255 transparente");
     assert_eq!(transparent_of(img(&session)), Some(255));
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
     assert_eq!(press_ok(&mut session), "entrada 255 ya no es transparente");
     assert_eq!(transparent_of(img(&session)), None);
 
     for marked in [0u8, 255] {
         let mut session = Session::sample(Document::new(row(&distinct(256), Some(marked))));
         select(&mut session, ColorChoice::Entry(marked));
-        assert_eq!(label_of(&session), QUITAR, "marcada {marked}");
+        assert_eq!(label_of(&session), REMOVE, "marcada {marked}");
         press_ok(&mut session);
         assert_eq!(transparent_of(img(&session)), None, "marcada {marked}");
-        assert_eq!(label_of(&session), FIJAR, "marcada {marked}");
+        assert_eq!(label_of(&session), SET, "marcada {marked}");
     }
 }
 
 #[test]
-fn fila_10_el_rango_marcado_se_conserva_al_fijar_y_al_quitar() {
+fn row_10_the_marked_range_is_kept_when_setting_and_when_removing() {
     let mut session = session_f(None);
     select(&mut session, ColorChoice::Entry(1));
     session.ops.set_range_end(3);
@@ -784,7 +784,7 @@ fn fila_10_el_rango_marcado_se_conserva_al_fijar_y_al_quitar() {
 }
 
 #[test]
-fn fila_10_undo_y_redo_con_la_elegida_mas_alla_del_final_recortan_y_el_rotulo_es_el_del_estado() {
+fn row_10_undo_and_redo_with_the_chosen_one_past_the_end_clip_and_the_label_is_the_states() {
     let mut session = session_f(None);
     select(&mut session, ColorChoice::Entry(3));
     run_ok(&mut session, PaletteOp::Add);
@@ -792,17 +792,17 @@ fn fila_10_undo_y_redo_con_la_elegida_mas_alla_del_final_recortan_y_el_rotulo_es
     assert_eq!(session.choice, ColorChoice::Entry(4));
     press_ok(&mut session);
     assert_eq!(transparent_of(img(&session)), Some(4));
-    assert_eq!(label_of(&session), QUITAR);
+    assert_eq!(label_of(&session), REMOVE);
 
     session.undo().expect("deshacer la marca");
     assert_eq!(transparent_of(img(&session)), None);
     assert_eq!(session.choice, ColorChoice::Entry(4));
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
 
     session.undo().expect("deshacer el Add");
     assert_eq!(len_of(&session), 4);
     assert_eq!(session.choice, ColorChoice::Entry(3), "recortada");
-    assert_eq!(label_of(&session), FIJAR);
+    assert_eq!(label_of(&session), SET);
 
     session.redo().expect("rehacer el Add");
     assert_eq!(len_of(&session), 5);
@@ -815,9 +815,9 @@ fn fila_10_undo_y_redo_con_la_elegida_mas_alla_del_final_recortan_y_el_rotulo_es
         ColorChoice::Entry(3),
         "la elección se queda"
     );
-    assert_eq!(label_of(&session), FIJAR, "la activa (3) no es la marcada");
+    assert_eq!(label_of(&session), SET, "la activa (3) no es la marcada");
     select(&mut session, ColorChoice::Entry(4));
-    assert_eq!(label_of(&session), QUITAR, "la activa (4) es la marcada");
+    assert_eq!(label_of(&session), REMOVE, "la activa (4) es la marcada");
 }
 
 /// Imagen indexada grande (varios bloques) con la paleta de `F`.
@@ -828,7 +828,7 @@ fn big_session() -> Session {
 }
 
 #[test]
-fn fila_10_dirty_of_de_set_transparent_index_es_la_imagen_entera() {
+fn row_10_dirty_of_set_transparent_index_is_the_whole_image() {
     let id = ImageId::from_raw(0);
     let size = Size::new(300, 200);
     let full = BlockSet::full(300, 200);
@@ -840,7 +840,7 @@ fn fila_10_dirty_of_de_set_transparent_index_es_la_imagen_entera() {
 }
 
 #[test]
-fn fila_10_pulsar_anota_toda_la_imagen_en_el_registro_y_undo_y_redo_la_invalidan() {
+fn row_10_pressing_notes_the_whole_image_in_the_log_and_undo_and_redo_invalidate_it() {
     let mut session = big_session();
     let full = BlockSet::full(300, 200);
     select(&mut session, ColorChoice::Entry(2));
@@ -896,7 +896,7 @@ fn frame_uploads(app: &mut App, ctx: &Context) -> Vec<([usize; 2], Vec<u8>)> {
 }
 
 #[test]
-fn fila_10_pulsar_sube_una_sola_textura_con_el_alfa_0_y_el_siguiente_fotograma_ninguna() {
+fn row_10_pressing_uploads_a_single_texture_with_alpha_0_and_the_next_frame_none() {
     let mut app = App::new(Document::new(image_f(None)), None);
     let ctx = Context::default();
     frame_uploads(&mut app, &ctx);
@@ -932,10 +932,10 @@ fn fila_10_pulsar_sube_una_sola_textura_con_el_alfa_0_y_el_siguiente_fotograma_n
 
 #[derive(Clone, Debug)]
 enum Action {
-    /// El botón nuevo: `Fijar` o `Quitar` según el estado.
+    /// El botón nuevo: `Fijar` o `Remove` según el estado.
     Toggle,
     Add,
-    /// `Quitar` en la activa: con quita pendiente, `Confirmar` o `Cancelar`; sin ella, empieza
+    /// `Remove` en la activa: con quita pendiente, `Confirmar` o `Cancel`; sin ella, empieza
     /// (o se aplica ya) con un destino aleatorio.
     Remove {
         dest: u8,
@@ -1153,9 +1153,9 @@ fn check_invariants(session: &Session) -> Result<(), TestCaseError> {
     };
     prop_assert!(usize::from(active) < len, "Entry({active}) con {len}");
     let expected = if transparent == Some(active) {
-        QUITAR
+        REMOVE
     } else {
-        FIJAR
+        SET
     };
     prop_assert_eq!(label_of(session), expected);
     if let Some(end) = session.ops.range_end() {
@@ -1168,7 +1168,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     #[test]
-    fn propiedad_2_sesion_con_el_boton_nuevo_mezclado_con_las_demas_acciones(
+    fn property_2_session_with_the_new_button_mixed_with_the_other_actions(
         initial in arb_image(),
         actions in prop::collection::vec(arb_action(), 0..=24),
     ) {
@@ -1304,7 +1304,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     #[test]
-    fn propiedad_3_guardar_y_reabrir_conserva_el_aspecto_y_el_panel_marca_alfa_0(
+    fn property_3_saving_and_reopening_keeps_the_look_and_the_panel_marks_alpha_0(
         image in arb_saved_image(),
     ) {
         let saved = colors_of(&image);
@@ -1334,7 +1334,7 @@ proptest! {
             let cell = i;
             prop_assert_eq!(
                 transparent_button_label(palette, i as u8),
-                FIJAR,
+                SET,
                 "entrada {}", i
             );
             let alpha0 = color.a == 0;

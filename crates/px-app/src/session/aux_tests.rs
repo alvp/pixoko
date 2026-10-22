@@ -8,7 +8,7 @@
 //!
 //! **Suposiciones y ambigüedades:**
 //! - `describe_saved_dialog` de la fila 11 (causa **y** conversión) se lee como «la forma larga de
-//!   hoy»: `el original se convirtió al abrir; guardado como x-copia.png`.
+//!   hoy»: `el original se convirtió al open; saved as_word x-copy.png`.
 //! - Los dos ficheros de Grafx2 se abren sin conversión (así lo dice la fila 10).
 
 use super::*;
@@ -272,7 +272,7 @@ fn open_with_iccp(dir: &Path) -> (Session, Vec<u8>, String) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_abrir_con_iccp_avisa_y_save_escribe_la_copia() {
+fn row_9_opening_with_iccp_warns_and_save_writes_the_copy() {
     let tmp = TmpDir::new();
     let (mut session, original, opened) = open_with_iccp(tmp.path());
 
@@ -306,7 +306,7 @@ fn fila_9_abrir_con_iccp_avisa_y_save_escribe_la_copia() {
 }
 
 #[test]
-fn fila_9_el_segundo_save_sobrescribe_la_copia_sin_motivo() {
+fn row_9_the_second_save_overwrites_the_copy_without_a_reason() {
     let tmp = TmpDir::new();
     let (mut session, original, _) = open_with_iccp(tmp.path());
     session.save(tmp.path()).expect("primer save");
@@ -330,7 +330,7 @@ fn fila_9_el_segundo_save_sobrescribe_la_copia_sin_motivo() {
 }
 
 #[test]
-fn fila_9_save_to_con_la_ruta_del_documento_o_una_equivalente_escribe_la_copia() {
+fn row_9_save_to_with_the_document_path_or_an_equivalent_one_writes_the_copy() {
     for variant in ["igual", "punto", "punto-punto"] {
         let tmp = TmpDir::new();
         fs::create_dir(tmp.path().join("sub")).unwrap();
@@ -367,7 +367,7 @@ fn fila_9_save_to_con_la_ruta_del_documento_o_una_equivalente_escribe_la_copia()
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_texto_resolucion_fecha_y_exif_solo_se_informan() {
+fn row_10_text_resolution_date_and_exif_are_only_reported() {
     let tmp = TmpDir::new();
     let original = rgba_with(&[text(), phys(), time(), exif()]);
     let path = write_x(tmp.path(), &original);
@@ -404,7 +404,7 @@ fn fila_10_texto_resolucion_fecha_y_exif_solo_se_informan() {
 }
 
 #[test]
-fn fila_10_los_dos_grafx2_dicen_texto_y_otros_y_se_sobrescriben() {
+fn row_10_the_two_grafx2_say_text_and_others_and_are_overwritten() {
     let mut grafx2: Vec<PathBuf> = fs::read_dir(corpus_dir())
         .expect("leer golden/png")
         .map(|entry| entry.expect("entrada").path())
@@ -459,7 +459,7 @@ fn fila_10_los_dos_grafx2_dicen_texto_y_otros_y_se_sobrescriben() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_rgb_con_iccp_une_conversion_y_causa() {
+fn row_11_rgb_with_iccp_joins_conversion_and_cause() {
     let tmp = TmpDir::new();
     let original = rgb_with(&[iccp()]);
     let path = write_x(tmp.path(), &original);
@@ -491,7 +491,7 @@ fn fila_11_rgb_con_iccp_une_conversion_y_causa() {
 }
 
 #[test]
-fn fila_11_el_dialogo_usa_la_forma_larga_de_hoy_cuando_hay_conversion() {
+fn row_11_the_dialog_uses_todays_long_form_when_there_is_a_conversion() {
     let tmp = TmpDir::new();
     let path = write_x(tmp.path(), &rgb_with(&[iccp()]));
     let mut session = fresh_session();
@@ -514,7 +514,7 @@ fn fila_11_el_dialogo_usa_la_forma_larga_de_hoy_cuando_hay_conversion() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_apng_se_abre_como_su_primer_fotograma_y_save_escribe_la_copia() {
+fn row_7_apng_opens_as_its_first_frame_and_save_writes_the_copy() {
     let tmp = TmpDir::new();
     let original = apng();
     let path = write_x(tmp.path(), &original);

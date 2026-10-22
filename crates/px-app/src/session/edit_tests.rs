@@ -174,7 +174,7 @@ fn shown_values(session: &Session) -> (u32, u32, u32, u32) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_1_commit_con_entrada_fuera_de_la_paleta_da_error_y_no_toca_el_documento() {
+fn row_1_commit_with_an_entry_outside_the_palette_gives_an_error_and_does_not_touch_the_document() {
     let mut session = session_f();
     let image_before = main_image(&session.document).clone();
     let id_before = session.document.state_id();
@@ -206,7 +206,7 @@ fn fila_1_commit_con_entrada_fuera_de_la_paleta_da_error_y_no_toca_el_documento(
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_un_arrastre_es_un_solo_paso_y_el_documento_no_cambia_hasta_soltar() {
+fn row_4_a_drag_is_a_single_step_and_the_document_does_not_change_until_release() {
     let mut session = session_f();
     let original = image_f();
     select(&mut session, ColorChoice::Entry(1));
@@ -281,7 +281,7 @@ fn fila_4_un_arrastre_es_un_solo_paso_y_el_documento_no_cambia_hasta_soltar() {
 }
 
 #[test]
-fn fila_4_tras_confirmar_el_editor_sigue_mostrando_el_color_confirmado() {
+fn row_4_after_confirming_the_editor_keeps_showing_the_confirmed_color() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     let commit = drag_and_release(&mut session, Control::Red, 255, &[128, 255]).expect("cambio");
@@ -292,7 +292,7 @@ fn fila_4_tras_confirmar_el_editor_sigue_mostrando_el_color_confirmado() {
 }
 
 #[test]
-fn fila_4_cancelar_un_arrastre_no_deja_ni_un_paso() {
+fn row_4_cancelling_a_drag_leaves_not_even_a_step() {
     let mut session = session_f();
     let original = image_f();
     select(&mut session, ColorChoice::Entry(1));
@@ -317,7 +317,7 @@ fn fila_4_cancelar_un_arrastre_no_deja_ni_un_paso() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_13a_duplicadas_se_sustituye_por_indice_y_las_demas_no_cambian() {
+fn row_13a_duplicates_are_replaced_by_index_and_the_others_do_not_change() {
     let a = Rgba::opaque(200, 100, 50);
     let mut session = Session::sample(Document::new(indexed_row(
         Palette::from_colors([a, a, a]).expect("paleta"),
@@ -356,7 +356,7 @@ fn fila_13a_duplicadas_se_sustituye_por_indice_y_las_demas_no_cambian() {
 }
 
 #[test]
-fn fila_13b_entrada_transparente_se_edita_el_color_guardado() {
+fn row_13b_transparent_entry_the_stored_color_is_edited() {
     let mut palette = Palette::from_colors([RED, GREEN, BLUE]).expect("paleta");
     palette
         .set_transparent_index(Some(2))
@@ -411,7 +411,7 @@ fn fila_13b_entrada_transparente_se_edita_el_color_guardado() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_14_deshacer_y_rehacer_mantienen_choice_y_actualizan_valores() {
+fn row_14_undo_and_redo_keep_choice_and_update_values() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     assert_eq!(shown_values(&session), (0, 255, 0, 120));
@@ -446,7 +446,7 @@ fn fila_14_deshacer_y_rehacer_mantienen_choice_y_actualizan_valores() {
 }
 
 #[test]
-fn fila_14_deshacer_un_cambio_ajeno_al_color_no_recalcula_el_hsl() {
+fn row_14_undoing_a_change_unrelated_to_the_color_does_not_recompute_the_hsl() {
     // Entrada 0 gris: `Hsl::from_rgba` daría H 0, pero el editor conserva el H 100 que se le dio.
     let gray = Rgba::opaque(128, 128, 128);
     let palette = Palette::from_colors([gray, GREEN, BLUE, BLACK]).expect("paleta");
@@ -494,7 +494,7 @@ fn fila_14_deshacer_un_cambio_ajeno_al_color_no_recalcula_el_hsl() {
 }
 
 #[test]
-fn fila_14_con_un_arrastre_en_curso_sync_no_cambia_nada() {
+fn row_14_with_a_drag_in_progress_sync_changes_nothing() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     assert!(session.editor.begin(Control::Red, 255));
@@ -515,7 +515,7 @@ fn fila_14_con_un_arrastre_en_curso_sync_no_cambia_nada() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn active_pixel_en_indexadas_es_la_entrada_y_none_si_no_existe() {
+fn active_pixel_in_indexed_is_the_entry_and_none_if_it_does_not_exist() {
     let mut session = session_f();
     session.choice = ColorChoice::Entry(2);
     assert_eq!(session.active_pixel(), Some(Pixel::Indexed(2)));
@@ -524,7 +524,7 @@ fn active_pixel_en_indexadas_es_la_entrada_y_none_si_no_existe() {
 }
 
 #[test]
-fn active_pixel_sin_editar_usa_los_valores_por_defecto_de_cada_modo() {
+fn active_pixel_without_editing_uses_the_default_values_of_each_mode() {
     let mut session = Session::sample(Document::new(sample_image(Mode::Rgba)));
     session.choice = ColorChoice::Slot(1);
     assert_eq!(session.active_pixel(), Some(Pixel::Rgba(BLACK)));
@@ -544,7 +544,7 @@ fn active_pixel_sin_editar_usa_los_valores_por_defecto_de_cada_modo() {
 }
 
 #[test]
-fn sync_editor_toma_el_destino_y_el_color_guardado_de_la_seleccion() {
+fn sync_editor_takes_the_target_and_the_stored_color_from_the_selection() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(2));
     assert_eq!(
@@ -571,7 +571,7 @@ fn sync_editor_toma_el_destino_y_el_color_guardado_de_la_seleccion() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_15_editar_una_ranura_no_es_un_paso_ni_modifica_el_documento() {
+fn row_15_editing_a_slot_is_not_a_step_and_does_not_modify_the_document() {
     let mut session = Session::sample(Document::new(sample_image(Mode::Rgba)));
     select(&mut session, ColorChoice::Slot(3));
     let image_before = main_image(&session.document).clone();
@@ -613,7 +613,7 @@ fn fila_15_editar_una_ranura_no_es_un_paso_ni_modifica_el_documento() {
 }
 
 #[test]
-fn fila_15_el_lapiz_pinta_con_la_ranura_editada() {
+fn row_15_the_pencil_paints_with_the_edited_slot() {
     let mut session = Session::sample(Document::new(sample_image(Mode::Rgba)));
     select(&mut session, ColorChoice::Slot(3));
     let commit = drag_and_release(&mut session, Control::Green, 255, &[]).expect("cambio");
@@ -644,7 +644,7 @@ fn fila_15_el_lapiz_pinta_con_la_ranura_editada() {
 }
 
 #[test]
-fn fila_15_ranura_9_y_gris_por_modo() {
+fn row_15_slot_9_and_gray_per_mode() {
     // RGBA: la ranura 9 es {0,0,0,0}; A a 255 la deja negra y opaca.
     let mut session = Session::sample(Document::new(sample_image(Mode::Rgba)));
     select(&mut session, ColorChoice::Slot(9));
@@ -736,7 +736,7 @@ fn assert_bank_as_left(bank: &SlotBank, context: &str) {
 }
 
 #[test]
-fn fila_15_el_banco_se_conserva_al_abrir_otros_ficheros() {
+fn row_15_the_bench_is_kept_when_opening_other_files() {
     let tmp = TmpDir::new();
     let (mut session, rgba_path) = session_with_edited_bank(tmp.path());
     let bank = session.slots.clone();
@@ -768,7 +768,7 @@ fn fila_15_el_banco_se_conserva_al_abrir_otros_ficheros() {
 }
 
 #[test]
-fn fila_15_el_banco_se_conserva_al_guardar_y_guardar_como() {
+fn row_15_the_bench_is_kept_on_save_and_save_as() {
     let tmp = TmpDir::new();
     let (mut session, _) = session_with_edited_bank(tmp.path());
     let bank = session.slots.clone();
@@ -811,7 +811,7 @@ fn fila_15_el_banco_se_conserva_al_guardar_y_guardar_como() {
 }
 
 #[test]
-fn fila_15_abrir_reinicia_choice_scroll_y_editor() {
+fn row_15_open_resets_choice_scroll_and_editor() {
     let tmp = TmpDir::new();
     let (mut session, rgba_path) = session_with_edited_bank(tmp.path());
     let image = sample_image(Mode::Rgba);
@@ -840,7 +840,7 @@ fn fila_15_abrir_reinicia_choice_scroll_y_editor() {
 }
 
 #[test]
-fn fila_15_abrir_cancela_un_arrastre_en_curso() {
+fn row_15_open_cancels_a_drag_in_progress() {
     let tmp = TmpDir::new();
     let (mut session, rgba_path) = session_with_edited_bank(tmp.path());
     select(&mut session, ColorChoice::Slot(5));
@@ -856,7 +856,7 @@ fn fila_15_abrir_cancela_un_arrastre_en_curso() {
 }
 
 #[test]
-fn fila_15_un_open_fallido_no_reinicia_el_editor() {
+fn row_15_a_failed_open_does_not_reset_the_editor() {
     let tmp = TmpDir::new();
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(2));
@@ -972,7 +972,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     #[test]
-    fn propiedad_4b_state_id_solo_cambia_con_confirmaciones_y_se_deshace_todo(
+    fn property_4b_state_id_only_changes_with_confirmations_and_everything_is_undone(
         ops in prop::collection::vec(any_op(), 0..16)
     ) {
         let initial = sample_image(Mode::Indexed);

@@ -1,10 +1,10 @@
 //! Propiedades 1 a 4 de la puerta del hito 2 (specs/hito-2-puerta.md), con `proptest`.
 //!
 //! Casos fijados por la spec (D6): 64 en las propiedades 1 y 2 y 32 en la 3 y la 4 (tocan el
-//! disco). `PROPTEST_CASES` solo puede **bajarlos** al desarrollar (`casos`): sin él, valen los de la
+//! disco). `PROPTEST_CASES` solo puede **bajarlos** al desarrollar (`cases`): sin él, valen los de la
 //! spec.
 //!
-//! Los gestos se generan como números crudos que se interpretan contra el modelo actual (`accion`):
+//! Los gestos se generan como números crudos que se interpretan contra el modelo actual (`action`):
 //! así toda secuencia es válida para el modo y la paleta del momento y se puede cambiar de modo a
 //! mitad de secuencia con las conversiones exactas. El modelo restringe la línea a H, V y 45°.
 //!
@@ -31,25 +31,25 @@ use crate::session::{Saved, Session};
 use super::common::*;
 
 /// Casos de una propiedad: los de la spec, o menos si `PROPTEST_CASES` los baja.
-fn casos(de_la_spec: u32) -> u32 {
+fn cases(de_la_spec: u32) -> u32 {
     std::env::var("PROPTEST_CASES")
         .ok()
         .and_then(|valor| valor.parse::<u32>().ok())
-        .map_or(de_la_spec, |pedidos| pedidos.min(de_la_spec))
+        .map_or(de_la_spec, |requested| requested.min(de_la_spec))
 }
 
 /// Un gesto o una operación en bruto: un tipo y seis números.
-type Crudo = (u8, [u16; 6]);
+type Raw = (u8, [u16; 6]);
 
-fn estrategia_crudos(max: usize) -> impl Strategy<Value = Vec<Crudo>> {
+fn strategy_raw(max: usize) -> impl Strategy<Value = Vec<Raw>> {
     proptest::collection::vec(
         (any::<u8>(), proptest::array::uniform6(any::<u16>())),
         1..=max,
     )
 }
 
-fn modo_de(seleccion: u8) -> Mode {
-    match seleccion % 4 {
+fn mode_of(selection: u8) -> Mode {
+    match selection % 4 {
         0 => Mode::Rgba,
         1 => Mode::Indexed,
         2 => Mode::Gray,
@@ -59,65 +59,65 @@ fn modo_de(seleccion: u8) -> Mode {
 
 /// Imagen aleatoria repetible: RGBA con alfa 0, 128 y 255 y 3 a 300 colores; indexada con 1 a 40
 /// entradas con alfa propio y, a veces, índice transparente; gris; gris con alfa.
-fn modelo_aleatorio(modo: Mode, ancho: usize, alto: usize, semilla: u64) -> Modelo {
-    let mut r = Lcg::new(semilla);
-    let mut m = modelo_de(modo, ancho, alto, vec![[0; 4]; ancho * alto]);
-    const ALFAS: [u8; 4] = [0, 128, 255, 255];
-    match modo {
+fn model_random(mode_2: Mode, width: usize, height: usize, seed: u64) -> Model {
+    let mut r = Lcg::new(seed);
+    let mut m = model_of(mode_2, width, height, vec![[0; 4]; width * height]);
+    const ALPHAS: [u8; 4] = [0, 128, 255, 255];
+    match mode_2 {
         Mode::Rgba => {
-            let pool = [3u32, 8, 40, 300][r.hasta(4) as usize];
-            let colores: Vec<[u8; 4]> = (0..pool)
+            let pool = [3u32, 8, 40, 300][r.until(4) as usize];
+            let colors: Vec<[u8; 4]> = (0..pool)
                 .map(|_| {
                     [
-                        r.hasta(256) as u8,
-                        r.hasta(256) as u8,
-                        r.hasta(256) as u8,
-                        ALFAS[r.hasta(4) as usize],
+                        r.until(256) as u8,
+                        r.until(256) as u8,
+                        r.until(256) as u8,
+                        ALPHAS[r.until(4) as usize],
                     ]
                 })
                 .collect();
-            for celda in &mut m.celdas {
-                *celda = colores[r.hasta(pool) as usize];
+            for cel in &mut m.cels {
+                *cel = colors[r.until(pool) as usize];
             }
         }
         Mode::Indexed => {
-            let tope = if r.hasta(4) == 0 { 40 } else { 8 };
-            let largo = 1 + r.hasta(tope);
-            m.paleta = (0..largo)
+            let cap = if r.until(4) == 0 { 40 } else { 8 };
+            let largo = 1 + r.until(cap);
+            m.palette = (0..largo)
                 .map(|_| {
                     [
-                        r.hasta(256) as u8,
-                        r.hasta(256) as u8,
-                        r.hasta(256) as u8,
-                        ALFAS[r.hasta(4) as usize],
+                        r.until(256) as u8,
+                        r.until(256) as u8,
+                        r.until(256) as u8,
+                        ALPHAS[r.until(4) as usize],
                     ]
                 })
                 .collect();
-            m.transparente = (r.hasta(2) == 0).then(|| r.hasta(largo) as u8);
-            for celda in &mut m.celdas {
-                *celda = [r.hasta(largo) as u8, 0, 0, 0];
+            m.transparent = (r.until(2) == 0).then(|| r.until(largo) as u8);
+            for cel in &mut m.cels {
+                *cel = [r.until(largo) as u8, 0, 0, 0];
             }
         }
         Mode::Gray => {
-            for celda in &mut m.celdas {
-                *celda = [r.hasta(256) as u8, 0, 0, 0];
+            for cel in &mut m.cels {
+                *cel = [r.until(256) as u8, 0, 0, 0];
             }
         }
         Mode::GrayAlpha => {
-            for celda in &mut m.celdas {
-                *celda = [r.hasta(256) as u8, ALFAS[r.hasta(4) as usize], 0, 0];
+            for cel in &mut m.cels {
+                *cel = [r.until(256) as u8, ALPHAS[r.until(4) as usize], 0, 0];
             }
         }
     }
     m
 }
 
-enum Accion {
-    Paso(Paso),
-    Guardar,
+enum TestAction {
+    TestStep(TestStep),
+    Save,
 }
 
-const DIRECCIONES: [(i32, i32); 8] = [
+const DIRECTIONS: [(i32, i32); 8] = [
     (1, 0),
     (-1, 0),
     (0, 1),
@@ -129,59 +129,59 @@ const DIRECCIONES: [(i32, i32); 8] = [
 ];
 
 /// Un punto en el lienzo o a un par de píxeles de él (para ejercitar el recorte).
-fn coord(m: &Modelo, v: &[u16; 6]) -> (i32, i32) {
+fn coord(m: &Model, v: &[u16; 6]) -> (i32, i32) {
     (
-        i32::from(v[0]) % (m.ancho as i32 + 4) - 2,
-        i32::from(v[1]) % (m.alto as i32 + 4) - 2,
+        i32::from(v[0]) % (m.width as i32 + 4) - 2,
+        i32::from(v[1]) % (m.height as i32 + 4) - 2,
     )
 }
 
-fn largo(m: &Modelo, bits: u16) -> i32 {
-    1 + i32::from(bits) % (m.ancho.max(m.alto) as i32 + 3)
+fn largo(m: &Model, bits: u16) -> i32 {
+    1 + i32::from(bits) % (m.width.max(m.height) as i32 + 3)
 }
 
-fn eleccion_de(m: &Modelo, v: u16) -> Eleccion {
-    if m.modo == Mode::Indexed {
-        Eleccion::Entrada((usize::from(v) % m.paleta.len()) as u8)
+fn choice_of(m: &Model, v: u16) -> Choice {
+    if m.mode_2 == Mode::Indexed {
+        Choice::TestInput((usize::from(v) % m.palette.len()) as u8)
     } else {
-        Eleccion::Ranura(1 + (v % 9) as u8)
+        Choice::TestSlot(1 + (v % 9) as u8)
     }
 }
 
 /// Un trayecto de 1 a 3 tramos, cada uno horizontal, vertical o a 45°.
-fn ruta_de(m: &Modelo, v: &[u16; 6]) -> Vec<(i32, i32)> {
-    let mut punto = coord(m, v);
-    let mut ruta = vec![punto];
+fn path_of(m: &Model, v: &[u16; 6]) -> Vec<(i32, i32)> {
+    let mut point = coord(m, v);
+    let mut path_2 = vec![point];
     for i in 0..=usize::from(v[5] % 3) {
-        let (dx, dy) = DIRECCIONES[usize::from((v[2] >> (3 * i)) % 8)];
+        let (dx, dy) = DIRECTIONS[usize::from((v[2] >> (3 * i)) % 8)];
         let n = largo(m, v[3] >> (4 * i));
-        punto = (punto.0 + dx * n, punto.1 + dy * n);
-        ruta.push(punto);
+        point = (point.0 + dx * n, point.1 + dy * n);
+        path_2.push(point);
     }
-    ruta
+    path_2
 }
 
 /// Interpreta un gesto crudo contra el modelo actual. Las operaciones de paleta solo valen en
 /// indexadas y, en las demás, se cambian por un gesto.
-fn accion(m: &Modelo, tipo: u8, v: &[u16; 6], con_guardar: bool) -> Accion {
-    let indexada = m.modo == Mode::Indexed;
-    let largo_paleta = m.paleta.len().max(1);
-    let lapiz = || Paso::Lapiz(ruta_de(m, v), eleccion_de(m, v[4]));
-    let linea = || {
+fn action(m: &Model, kind: u8, v: &[u16; 6], with_save: bool) -> TestAction {
+    let indexed = m.mode_2 == Mode::Indexed;
+    let long_palette = m.palette.len().max(1);
+    let pencil = || TestStep::Pencil(path_of(m, v), choice_of(m, v[4]));
+    let line = || {
         let a = coord(m, v);
-        let (dx, dy) = DIRECCIONES[usize::from(v[2] % 8)];
+        let (dx, dy) = DIRECTIONS[usize::from(v[2] % 8)];
         let n = largo(m, v[3]);
-        Paso::Linea(a, (a.0 + dx * n, a.1 + dy * n), eleccion_de(m, v[4]))
+        TestStep::Line(a, (a.0 + dx * n, a.1 + dy * n), choice_of(m, v[4]))
     };
-    let relleno = || Paso::Relleno(coord(m, v), eleccion_de(m, v[4]));
-    let borrador = || Paso::Borrador(ruta_de(m, v));
-    Accion::Paso(match tipo % 12 {
-        0 | 1 => lapiz(),
-        2 => linea(),
-        3 => relleno(),
-        4 => borrador(),
-        5 if indexada => Paso::ColorEntrada(
-            (usize::from(v[0]) % largo_paleta) as u8,
+    let fill = || TestStep::Fill(coord(m, v), choice_of(m, v[4]));
+    let eraser = || TestStep::Eraser(path_of(m, v));
+    TestAction::TestStep(match kind % 12 {
+        0 | 1 => pencil(),
+        2 => line(),
+        3 => fill(),
+        4 => eraser(),
+        5 if indexed => TestStep::ColorInput(
+            (usize::from(v[0]) % long_palette) as u8,
             [
                 v[1] as u8,
                 (v[1] >> 8) as u8,
@@ -189,218 +189,218 @@ fn accion(m: &Modelo, tipo: u8, v: &[u16; 6], con_guardar: bool) -> Accion {
                 [0, 128, 255][usize::from(v[3] % 3)],
             ],
         ),
-        5 => lapiz(),
-        6 if indexada => {
-            let inicio = usize::from(v[0]) % largo_paleta;
-            Paso::Rotar {
-                inicio: inicio as u8,
-                largo: (1 + usize::from(v[1]) % (largo_paleta - inicio)) as u16,
-                pasos: i32::from(v[2] % 7) - 3,
+        5 => pencil(),
+        6 if indexed => {
+            let start_2 = usize::from(v[0]) % long_palette;
+            TestStep::Rotate {
+                start_2: start_2 as u8,
+                largo: (1 + usize::from(v[1]) % (long_palette - start_2)) as u16,
+                steps_2: i32::from(v[2] % 7) - 3,
             }
         }
-        6 => linea(),
-        7 if indexada => Paso::Mover {
-            de: (usize::from(v[0]) % largo_paleta) as u8,
-            a: (usize::from(v[1]) % largo_paleta) as u8,
+        6 => line(),
+        7 if indexed => TestStep::Mover {
+            de: (usize::from(v[0]) % long_palette) as u8,
+            a: (usize::from(v[1]) % long_palette) as u8,
         },
-        7 => relleno(),
-        8 if indexada && largo_paleta < 256 => Paso::Anadir {
-            activa: (usize::from(v[0]) % largo_paleta) as u8,
+        7 => fill(),
+        8 if indexed && long_palette < 256 => TestStep::Add {
+            active_2: (usize::from(v[0]) % long_palette) as u8,
         },
-        8 => borrador(),
-        9 if indexada => Paso::Transparente(if v[0].is_multiple_of(4) {
+        8 => eraser(),
+        9 if indexed => TestStep::Transparent(if v[0].is_multiple_of(4) {
             None
         } else {
-            Some((usize::from(v[1]) % largo_paleta) as u8)
+            Some((usize::from(v[1]) % long_palette) as u8)
         }),
-        9 => lapiz(),
-        10 => Paso::Convertir,
-        _ if con_guardar => return Accion::Guardar,
-        _ => lapiz(),
+        9 => pencil(),
+        10 => TestStep::Convert,
+        _ if with_save => return TestAction::Save,
+        _ => pencil(),
     })
 }
 
 /// `save` y relectura: lo escrito es el modelo normalizado, sin conversiones.
-fn guardar_y_releer(w: &mut Mundo, t: &Trabajo) {
-    let sin_ruta = w.s.path().is_none();
-    let guardado = guardar(&mut w.s, t.ruta()).unwrap_or_else(|e| panic!("save dio {e}"));
-    if sin_ruta {
-        assert_eq!(guardado.path, t.ruta().join("sin-titulo.png"));
+fn save_and_reread(w: &mut World, t: &Work) {
+    let without_path = w.s.path().is_none();
+    let saved = save(&mut w.s, t.path_2()).unwrap_or_else(|e| panic!("save dio {e}"));
+    if without_path {
+        assert_eq!(saved.path, t.path_2().join("sin-titulo.png"));
     }
-    w.marcar_guardado();
-    let leido = leer(&guardado.path);
-    assert!(leido.report.is_empty(), "relectura con conversiones");
-    assert_igual(&leido.image, &w.m.normalizada(), "relectura tras save");
+    w.mark_saved();
+    let read_2 = leer(&saved.path);
+    assert!(read_2.report.is_empty(), "relectura con conversiones");
+    assert_equal(&read_2.image, &w.m.normalized(), "relectura tras save");
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(casos(64)))]
+    #![proptest_config(ProptestConfig::with_cases(cases(64)))]
 
     /// Propiedad 1: tras cada paso de un guion aleatorio, `Session` es el modelo; al final, la
     /// relectura es el modelo normalizado.
     #[test]
-    fn propiedad_1_guion_aleatorio_contra_el_modelo(
-        seleccion in any::<u8>(),
-        ancho in 1usize..=24,
-        alto in 1usize..=24,
-        semilla in any::<u64>(),
-        crudos in estrategia_crudos(30),
+    fn property_1_random_script_against_the_model(
+        selection in any::<u8>(),
+        width in 1usize..=24,
+        height in 1usize..=24,
+        seed in any::<u64>(),
+        raw in strategy_raw(30),
     ) {
-        let t = Trabajo::nuevo();
-        let modelo = modelo_aleatorio(modo_de(seleccion), ancho, alto, semilla);
-        let sesion = Session::sample(Document::new(modelo.a_imagen()));
-        let mut w = Mundo::de_sesion(sesion, "propiedad 1");
-        w.comprobar();
-        for (tipo, v) in &crudos {
-            match accion(&w.m, *tipo, v, true) {
-                Accion::Paso(paso) => {
-                    w.aplicar(&paso);
+        let t = Work::new_2();
+        let model = model_random(mode_of(selection), width, height, seed);
+        let session_2 = Session::sample(Document::new(model.a_image()));
+        let mut w = World::of_session(session_2, "propiedad 1");
+        w.check();
+        for (kind, v) in &raw {
+            match action(&w.m, *kind, v, true) {
+                TestAction::TestStep(step) => {
+                    w.apply(&step);
                 }
-                Accion::Guardar => guardar_y_releer(&mut w, &t),
+                TestAction::Save => save_and_reread(&mut w, &t),
             }
         }
-        guardar_y_releer(&mut w, &t);
-        prop_assert_eq!(t.nombres(), vec!["sin-titulo.png".to_string()]);
+        save_and_reread(&mut w, &t);
+        prop_assert_eq!(t.names(), vec!["sin-titulo.png".to_string()]);
     }
 
     /// Propiedad 2: `undo` k veces da la instantánea del paso `n − k` y `redo` la vuelve a dar;
     /// `modified` es falso si y solo si el `state_id` es el guardado, y nunca con una imagen distinta.
     #[test]
-    fn propiedad_2_historia(
-        seleccion in any::<u8>(),
-        ancho in 1usize..=24,
-        alto in 1usize..=24,
-        semilla in any::<u64>(),
-        crudos in estrategia_crudos(30),
-        rama in (any::<u8>(), proptest::array::uniform6(any::<u16>())),
-        corte in any::<u8>(),
+    fn property_2_history(
+        selection in any::<u8>(),
+        width in 1usize..=24,
+        height in 1usize..=24,
+        seed in any::<u64>(),
+        raw in strategy_raw(30),
+        branch in (any::<u8>(), proptest::array::uniform6(any::<u16>())),
+        cut in any::<u8>(),
     ) {
-        let modelo = modelo_aleatorio(modo_de(seleccion), ancho, alto, semilla);
-        let sesion = Session::sample(Document::new(modelo.a_imagen()));
-        let mut w = Mundo::de_sesion(sesion, "propiedad 2");
-        for (tipo, v) in &crudos {
-            if let Accion::Paso(paso) = accion(&w.m, *tipo, v, false) {
-                w.aplicar(&paso);
+        let model = model_random(mode_of(selection), width, height, seed);
+        let session_2 = Session::sample(Document::new(model.a_image()));
+        let mut w = World::of_session(session_2, "propiedad 2");
+        for (kind, v) in &raw {
+            if let TestAction::TestStep(step) = action(&w.m, *kind, v, false) {
+                w.apply(&step);
             }
         }
-        let n = w.pasos();
+        let n = w.steps_2();
         prop_assert_eq!(w.pos, n);
 
         // `undo` k veces: la instantánea anotada tras el paso n − k (lo comprueba el mundo).
         for k in 1..=n {
-            w.deshacer();
+            w.undo();
             prop_assert_eq!(w.pos, n - k);
         }
         prop_assert_eq!(w.s.document.state_id(), 0);
         prop_assert!(!w.s.modified());
-        w.deshacer();
+        w.undo();
         // `redo` las vuelve a dar.
         for k in 1..=n {
-            w.rehacer();
+            w.redo();
             prop_assert_eq!(w.pos, k);
         }
-        w.rehacer();
+        w.redo();
         // Para todo k: k pasos atrás y k adelante.
         for k in 1..=n {
             for _ in 0..k {
-                w.deshacer();
+                w.undo();
             }
             for _ in 0..k {
-                w.rehacer();
+                w.redo();
             }
             prop_assert_eq!(w.pos, n);
         }
 
         // Una rama nueva tras deshacer unos pasos: `redo` falla y no se reutiliza ningún estado.
-        let atras = usize::from(corte) % (n + 1);
-        for _ in 0..atras {
-            w.deshacer();
+        let back = usize::from(cut) % (n + 1);
+        for _ in 0..back {
+            w.undo();
         }
-        let (tipo, v) = rama;
-        let cambio = match accion(&w.m, tipo, &v, false) {
-            Accion::Paso(paso) => w.aplicar(&paso),
-            Accion::Guardar => false,
+        let (kind, v) = branch;
+        let change = match action(&w.m, kind, &v, false) {
+            TestAction::TestStep(step) => w.apply(&step),
+            TestAction::Save => false,
         };
-        if cambio {
-            prop_assert_eq!(w.pasos(), n - atras + 1);
+        if change {
+            prop_assert_eq!(w.steps_2(), n - back + 1);
         }
-        w.rehacer();
-        w.deshacer_todo();
-        w.rehacer_todo();
+        w.redo();
+        w.undo_all();
+        w.redo_all();
     }
 
     /// Propiedad 3: con secuencias aleatorias de `save`, `save_as` y `save_to` desde una copia, el
     /// directorio de trabajo contiene exactamente los ficheros de los `Saved` devueltos (y el de
     /// origen), sin temporales; cada uno es la relectura esperada y `golden/png/` queda igual.
     #[test]
-    fn propiedad_3_solo_se_escribe_lo_que_se_pide(
-        fuente in 0usize..6,
-        operaciones in proptest::collection::vec(
-            (0u8..4, proptest::array::uniform6(any::<u16>()), 0usize..NOMBRES.len()),
+    fn property_3_only_what_is_asked_is_written(
+        source in 0usize..6,
+        operations in proptest::collection::vec(
+            (0u8..4, proptest::array::uniform6(any::<u16>()), 0usize..NAMES.len()),
             1..=8,
         ),
     ) {
-        let t = Trabajo::nuevo();
-        let mut fuentes = reales();
-        fuentes.push(fuente_rgb8());
-        fuentes.push(fuente_con_iccp());
-        let mut w = abrir(&t, &fuentes[fuente]);
-        let origen = w.s.path().expect("ruta").to_path_buf();
-        let bytes_origen = fs::read(&origen).expect("leer el origen");
-        let mut escritos: BTreeMap<PathBuf, Modelo> = BTreeMap::new();
+        let t = Work::new_2();
+        let mut sources = real_2();
+        sources.push(source_rgb_8());
+        sources.push(source_with_iccp());
+        let mut w = open(&t, &sources[source]);
+        let source_2 = w.s.path().expect("ruta").to_path_buf();
+        let bytes_source = fs::read(&source_2).expect("leer el origen");
+        let mut written: BTreeMap<PathBuf, Model> = BTreeMap::new();
 
-        for (tipo, v, nombre) in &operaciones {
+        for (kind, v, name_2) in &operations {
             let actual = w.s.path().expect("ruta").to_path_buf();
-            let convertida = w.s.converted();
-            match tipo {
+            let converted_2 = w.s.converted();
+            match kind {
                 0 => {
-                    let paso = Paso::Lapiz(ruta_de(&w.m, v), eleccion_de(&w.m, v[4]));
-                    w.aplicar(&paso);
+                    let step = TestStep::Pencil(path_of(&w.m, v), choice_of(&w.m, v[4]));
+                    w.apply(&step);
                 }
                 1 => {
-                    let destino = if convertida { libre_copia(&actual) } else { actual.clone() };
-                    let guardado = guardar(&mut w.s, t.ruta()).expect("save");
-                    registrar(&mut w, &mut escritos, &guardado, &destino, convertida);
+                    let target_2 = if converted_2 { free_copy(&actual) } else { actual.clone() };
+                    let saved = save(&mut w.s, t.path_2()).expect("save");
+                    registrar(&mut w, &mut written, &saved, &target_2, converted_2);
                 }
                 2 => {
-                    let destino = libre_copia(&actual);
-                    let guardado = guardar_como(&mut w.s, t.ruta()).expect("save_as");
-                    registrar(&mut w, &mut escritos, &guardado, &destino, false);
+                    let target_2 = free_copy(&actual);
+                    let saved = save_as(&mut w.s, t.path_2()).expect("save_as");
+                    registrar(&mut w, &mut written, &saved, &target_2, false);
                 }
                 _ => {
-                    let elegido = t.ruta().join(NOMBRES[*nombre]);
-                    let destino = con_png(&elegido);
-                    let existe = destino != elegido && fs::symlink_metadata(&destino).is_ok();
-                    let modificado = w.s.modified();
-                    let resultado = guardar_en(&mut w.s, &elegido);
-                    if existe {
-                        prop_assert_eq!(resultado, Err(FileError::Exists(destino)));
+                    let chosen = t.path_2().join(NAMES[*name_2]);
+                    let target_2 = with_png(&chosen);
+                    let exists = target_2 != chosen && fs::symlink_metadata(&target_2).is_ok();
+                    let modified_2 = w.s.modified();
+                    let result = save_in(&mut w.s, &chosen);
+                    if exists {
+                        prop_assert_eq!(result, Err(FileError::Exists(target_2)));
                         prop_assert_eq!(w.s.path(), Some(actual.as_path()));
-                        prop_assert_eq!(w.s.modified(), modificado);
+                        prop_assert_eq!(w.s.modified(), modified_2);
                     } else {
-                        let copia = convertida && destino == actual;
-                        let esperado = if copia { libre_copia(&actual) } else { destino };
-                        let guardado = resultado.expect("save_to");
-                        registrar(&mut w, &mut escritos, &guardado, &esperado, copia);
+                        let copy = converted_2 && target_2 == actual;
+                        let expected_2 = if copy { free_copy(&actual) } else { target_2 };
+                        let saved = result.expect("save_to");
+                        registrar(&mut w, &mut written, &saved, &expected_2, copy);
                     }
                 }
             }
         }
 
         // Exactamente los ficheros de los `Saved` y el de origen, sin temporales.
-        let mut esperados: BTreeSet<String> = escritos
+        let mut expected_2_2_2: BTreeSet<String> = written
             .keys()
-            .map(|ruta| ruta.file_name().expect("nombre").to_string_lossy().into_owned())
+            .map(|path_2| path_2.file_name().expect("nombre").to_string_lossy().into_owned())
             .collect();
-        esperados.insert(origen.file_name().expect("nombre").to_string_lossy().into_owned());
-        let hay = t.nombres();
-        sin_temporales(&hay);
-        prop_assert_eq!(hay, esperados.into_iter().collect::<Vec<_>>());
-        for (ruta, modelo) in &escritos {
-            assert_igual(&leer(ruta).image, modelo, &format!("{}", ruta.display()));
+        expected_2_2_2.insert(source_2.file_name().expect("nombre").to_string_lossy().into_owned());
+        let there_is = t.names();
+        without_temporary(&there_is);
+        prop_assert_eq!(there_is, expected_2_2_2.into_iter().collect::<Vec<_>>());
+        for (path_2, model) in &written {
+            assert_equal(&leer(path_2).image, model, &format!("{}", path_2.display()));
         }
-        if !escritos.contains_key(&origen) {
-            prop_assert_eq!(fs::read(&origen).expect("leer el origen"), bytes_origen);
+        if !written.contains_key(&source_2) {
+            prop_assert_eq!(fs::read(&source_2).expect("leer el origen"), bytes_source);
         }
         // `golden/png/` queda igual: lo comprueba el guardián del trabajo al soltarse.
     }
@@ -408,51 +408,51 @@ proptest! {
     /// Propiedad 4: un real con 1 a 4 bytes cambiados da `Ok` o `Err` sin pánico; con `Err` la
     /// sesión queda igual; con `Ok`, editar, guardar y reabrir da el modelo.
     #[test]
-    fn propiedad_4_reales_mutados(
+    fn property_4_mutated_real_ones(
         real in 0usize..4,
-        cambios in proptest::collection::vec((any::<usize>(), 1u8..=255), 1..=4),
+        changes_2 in proptest::collection::vec((any::<usize>(), 1u8..=255), 1..=4),
     ) {
-        let t = Trabajo::nuevo();
-        let fuente = reales().remove(real);
-        let mut mutado = fuente.bytes.clone();
-        for (posicion, xor) in &cambios {
-            let en = posicion % mutado.len();
-            mutado[en] ^= xor;
+        let t = Work::new_2();
+        let source = real_2().remove(real);
+        let mut mutated = source.bytes.clone();
+        for (position, xor) in &changes_2 {
+            let en = position % mutated.len();
+            mutated[en] ^= xor;
         }
-        let ruta_mutada = t.escribir("mutado.png", &mutado);
+        let path_mutated = t.write("mutado.png", &mutated);
 
         // Una sesión con cambios sin guardar, que abre el fichero mutado descartándolos.
-        let mut w = abrir(&t, &fuente);
-        w.aplicar(&edicion_que_cambia(&w.m));
-        let documento = w.s.document.clone();
-        let (id, ruta, modificado) = (
+        let mut w = open(&t, &source);
+        w.apply(&editing_that_changes(&w.m));
+        let document = w.s.document.clone();
+        let (id, path_2, modified_2) = (
             w.s.document.state_id(),
             w.s.path().map(|p| p.to_path_buf()),
             w.s.modified(),
         );
-        match w.s.open(&ruta_mutada, Canvas::MAX_SIDE, true) {
+        match w.s.open(&path_mutated, Canvas::MAX_SIDE, true) {
             Err(_) => {
-                prop_assert!(w.s.document == documento, "un open fallido cambió el documento");
+                prop_assert!(w.s.document == document, "un open fallido cambió el documento");
                 prop_assert_eq!(w.s.document.state_id(), id);
-                prop_assert_eq!(w.s.path().map(|p| p.to_path_buf()), ruta);
-                prop_assert_eq!(w.s.modified(), modificado);
-                w.comprobar();
+                prop_assert_eq!(w.s.path().map(|p| p.to_path_buf()), path_2);
+                prop_assert_eq!(w.s.modified(), modified_2);
+                w.check();
             }
             Ok(_) => {
-                let mut w = Mundo::de_sesion(w.s, "mutado");
+                let mut w = World::of_session(w.s, "mutado");
                 prop_assert_eq!(w.s.document.state_id(), 0);
                 prop_assert!(!w.s.modified());
-                if let Some(paso) = edicion_que_cambia_opt(&w.m) {
-                    prop_assert!(w.aplicar(&paso));
+                if let Some(step) = edit_that_changes_opt(&w.m) {
+                    prop_assert!(w.apply(&step));
                 }
-                let abierta = w.s.path().expect("ruta").to_path_buf();
-                let destino = if w.s.converted() { libre_copia(&abierta) } else { abierta };
-                let guardado = guardar(&mut w.s, t.ruta()).expect("save");
-                prop_assert_eq!(&guardado.path, &destino);
-                let mut otra = sesion_vacia();
-                otra.open(&guardado.path, Canvas::MAX_SIDE, false).expect("reabrir");
-                let imagen = otra.document.image(ImageId::from_raw(0)).expect("imagen");
-                assert_igual(imagen, &w.m.normalizada(), "mutado reabierto");
+                let open_2 = w.s.path().expect("ruta").to_path_buf();
+                let target_2 = if w.s.converted() { free_copy(&open_2) } else { open_2 };
+                let saved = save(&mut w.s, t.path_2()).expect("save");
+                prop_assert_eq!(&saved.path, &target_2);
+                let mut other = session_empty();
+                other.open(&saved.path, Canvas::MAX_SIDE, false).expect("reabrir");
+                let image_2 = other.document.image(ImageId::from_raw(0)).expect("imagen");
+                assert_equal(image_2, &w.m.normalized(), "mutado reabierto");
             }
         }
     }
@@ -460,26 +460,26 @@ proptest! {
 
 /// Nombres como los que da un diálogo: sin extensión, con ella en minúsculas o mayúsculas, con
 /// espacios y varios puntos.
-const NOMBRES: [&str; 6] = ["a", "b.png", "C.PNG", "con espacios", "d.e", "otra.png"];
+const NAMES: [&str; 6] = ["a", "b.png", "C.PNG", "con espacios", "d.e", "otra.png"];
 
 /// Tras un guardado que salió bien: destino y motivo de copia esperados, `modified` falso y
 /// relectura igual al modelo normalizado.
 fn registrar(
-    w: &mut Mundo,
-    escritos: &mut BTreeMap<PathBuf, Modelo>,
-    guardado: &Saved,
-    esperado: &std::path::Path,
-    con_razon: bool,
+    w: &mut World,
+    written: &mut BTreeMap<PathBuf, Model>,
+    saved: &Saved,
+    expected_2: &std::path::Path,
+    with_reason: bool,
 ) {
-    assert_eq!(guardado.path, esperado, "destino del guardado");
-    assert_eq!(guardado.copy_reason.is_some(), con_razon, "copy_reason");
-    w.marcar_guardado();
-    assert_eq!(w.s.path(), Some(esperado), "ruta tras guardar");
+    assert_eq!(saved.path, expected_2, "destino del guardado");
+    assert_eq!(saved.copy_reason.is_some(), with_reason, "copy_reason");
+    w.mark_saved();
+    assert_eq!(w.s.path(), Some(expected_2), "ruta tras guardar");
     assert!(!w.s.converted(), "sigue convertida tras guardar");
-    assert_igual(
-        &leer(esperado).image,
-        &w.m.normalizada(),
+    assert_equal(
+        &leer(expected_2).image,
+        &w.m.normalized(),
         "relectura tras guardar",
     );
-    escritos.insert(esperado.to_path_buf(), w.m.normalizada());
+    written.insert(expected_2.to_path_buf(), w.m.normalized());
 }

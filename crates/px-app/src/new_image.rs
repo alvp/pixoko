@@ -39,7 +39,7 @@ pub const FIELD_BG_GRAY: FieldId = "fondo_gris";
 pub const FIELD_COLOR_GRAY: FieldId = "color_gris";
 pub const FIELD_REPORT: FieldId = "informe";
 
-/// Los modos en el orden del campo `modo`.
+/// Los modos en el orden del campo `mode_2`.
 const MODES: [Mode; 4] = [Mode::Indexed, Mode::Rgba, Mode::GrayAlpha, Mode::Gray];
 const MODE_OPTIONS: &[&str] = &["Indexado", "RGBA", "Gris con alfa", "Gris"];
 const BG_INDEXED_OPTIONS: &[&str] = &["Transparente", "Blanco", "Negro"];

@@ -20,7 +20,7 @@ fn open(name: &str) -> Request {
 }
 
 #[test]
-fn fila_12_sin_cambios_cierra_a_la_primera() {
+fn row_12_without_changes_it_closes_the_first_time() {
     let mut confirm = Confirm::new();
     assert!(close_allowed(false, &mut confirm, 0.0));
     assert!(close_allowed(false, &mut confirm, 0.1));
@@ -28,7 +28,7 @@ fn fila_12_sin_cambios_cierra_a_la_primera() {
 }
 
 #[test]
-fn fila_12_sin_cambios_no_arma_la_confirmacion() {
+fn row_12_without_changes_it_does_not_arm_the_confirmation() {
     let mut confirm = Confirm::new();
     assert!(close_allowed(false, &mut confirm, 0.0));
     // Si ahora hubiera cambios, la primera petición sigue siendo la que arma.
@@ -37,7 +37,7 @@ fn fila_12_sin_cambios_no_arma_la_confirmacion() {
 }
 
 #[test]
-fn fila_12_con_cambios_la_primera_peticion_no_cierra_y_queda_armada() {
+fn row_12_with_changes_the_first_request_does_not_close_and_stays_armed() {
     let mut confirm = Confirm::new();
     assert!(!close_allowed(true, &mut confirm, 0.0));
     // Queda armada: la misma petición de cierre por `Confirm` confirma.
@@ -49,7 +49,7 @@ fn fila_12_con_cambios_la_primera_peticion_no_cierra_y_queda_armada() {
 }
 
 #[test]
-fn fila_12_la_segunda_peticion_dentro_del_plazo_cierra() {
+fn row_12_the_second_request_within_the_deadline_closes() {
     let mut confirm = Confirm::new();
     assert!(!close_allowed(true, &mut confirm, 0.0));
     assert!(
@@ -63,7 +63,7 @@ fn fila_12_la_segunda_peticion_dentro_del_plazo_cierra() {
 }
 
 #[test]
-fn fila_12_pasado_el_plazo_vuelve_a_pedir_confirmacion() {
+fn row_12_after_the_deadline_it_asks_for_confirmation_again() {
     let mut confirm = Confirm::new();
     assert!(!close_allowed(true, &mut confirm, 0.0));
     // A los `CONFIRM_SECS` justos ya no confirma: arma de nuevo.
@@ -73,7 +73,7 @@ fn fila_12_pasado_el_plazo_vuelve_a_pedir_confirmacion() {
 }
 
 #[test]
-fn fila_12_dos_peticiones_separadas_por_mas_de_confirm_secs_no_cierran() {
+fn row_12_two_requests_separated_by_more_than_confirm_secs_do_not_close() {
     let mut confirm = Confirm::new();
     assert!(!close_allowed(true, &mut confirm, 0.0));
     assert!(!close_allowed(true, &mut confirm, CONFIRM_SECS + 1.0));
@@ -85,7 +85,7 @@ fn fila_12_dos_peticiones_separadas_por_mas_de_confirm_secs_no_cierran() {
 }
 
 #[test]
-fn fila_12_la_confirmacion_se_gasta_y_la_siguiente_peticion_vuelve_a_armar() {
+fn row_12_the_confirmation_is_spent_and_the_next_request_arms_again() {
     let mut confirm = Confirm::new();
     assert!(!close_allowed(true, &mut confirm, 0.0));
     assert!(close_allowed(true, &mut confirm, 1.0));
@@ -97,7 +97,7 @@ fn fila_12_la_confirmacion_se_gasta_y_la_siguiente_peticion_vuelve_a_armar() {
 }
 
 #[test]
-fn fila_12_otra_peticion_armada_no_confirma_el_cierre_y_se_sustituye() {
+fn row_12_another_armed_request_does_not_confirm_the_close_and_is_replaced() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(open("a.png"), 0.0), Confirmation::Armed);
     assert!(
@@ -109,7 +109,7 @@ fn fila_12_otra_peticion_armada_no_confirma_el_cierre_y_se_sustituye() {
 }
 
 #[test]
-fn fila_12_los_textos_y_el_plazo_de_la_confirmacion_son_los_de_siempre() {
+fn row_12_the_texts_and_the_deadline_of_the_confirmation_are_the_usual_ones() {
     assert_eq!(CONFIRM_SECS, 5.0);
     assert!(close_warning().contains("cierra otra vez en 5 s"));
 }
@@ -120,19 +120,19 @@ proptest! {
     /// La regla es la de la `x` de la ventana: `Confirm::request(Request::Close, now)` con cambios y
     /// `true` sin ellos, sobre cualquier secuencia de instantes no decrecientes.
     #[test]
-    fn fila_12_close_allowed_sigue_la_regla_de_confirm_request_con_cierre(
+    fn row_12_close_allowed_follows_the_confirm_request_rule_with_close(
         modified: bool,
-        pasos in prop::collection::vec(0.0f64..9.0, 1..12),
+        steps_2 in prop::collection::vec(0.0f64..9.0, 1..12),
     ) {
         let mut real = Confirm::new();
-        let mut modelo = Confirm::new();
+        let mut model = Confirm::new();
         let mut now = 0.0;
-        for paso in pasos {
-            now += paso;
-            let esperado = !modified || modelo.request(Request::Close, now) == Confirmation::Confirmed;
+        for step in steps_2 {
+            now += step;
+            let expected_2 = !modified || model.request(Request::Close, now) == Confirmation::Confirmed;
             prop_assert_eq!(
                 close_allowed(modified, &mut real, now),
-                esperado,
+                expected_2,
                 "modified {}, now {}", modified, now
             );
         }
@@ -141,17 +141,17 @@ proptest! {
     /// Sin cambios, siempre `true`; con cambios, nunca `true` dos veces seguidas sin una petición
     /// armada entre medias.
     #[test]
-    fn fila_12_con_cambios_nunca_cierra_dos_veces_seguidas(
-        pasos in prop::collection::vec(0.0f64..9.0, 2..12),
+    fn row_12_with_changes_it_never_closes_twice_in_a_row(
+        steps_2 in prop::collection::vec(0.0f64..9.0, 2..12),
     ) {
         let mut confirm = Confirm::new();
         let mut now = 0.0;
         let mut anterior = false;
-        for paso in pasos {
-            now += paso;
-            let cierra = close_allowed(true, &mut confirm, now);
-            prop_assert!(!(anterior && cierra), "dos cierres seguidos en {}", now);
-            anterior = cierra;
+        for step in steps_2 {
+            now += step;
+            let closes = close_allowed(true, &mut confirm, now);
+            prop_assert!(!(anterior && closes), "dos cierres seguidos en {}", now);
+            anterior = closes;
         }
     }
 }

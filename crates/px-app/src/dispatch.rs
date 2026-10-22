@@ -36,28 +36,28 @@ pub enum Dispatched {
     View(ViewOp),
     /// Abrir (`true`) o cerrar (`false`) el panel de licencias.
     Licenses(bool),
-    /// `Nueva imagen…`: la ejecuta `App` (confirmación, diálogo y creación).
+    /// `New image_2…`: la ejecuta `App` (confirmación, diálogo y creación).
     NewImage,
-    /// `Convertir modo…`: la ejecuta `App` (diálogo, informe y conversión).
+    /// `Convert mode_2…`: la ejecuta `App` (diálogo, informe y conversión).
     ConvertMode,
     /// Elegir el fondo bajo la transparencia del lienzo: preferencia de la sesión, no toca el
     /// documento.
     Background(CanvasBackground),
     /// `Color…` del fondo del lienzo: la ejecuta `App` (abre el diálogo).
     BackgroundColor,
-    /// `F1` o `Ayuda → Ayuda de la herramienta`: `App` abre la ayuda de ese destino.
+    /// `F1` o `Ayuda → Ayuda de la tool_2`: `App` abre la ayuda de ese destino.
     Help(HelpTarget),
-    /// `Ayuda → Atajos de teclado…`: `App` abre la lista de atajos.
+    /// `Ayuda → Atajos de keyboard…`: `App` abre la lista de atajos.
     Shortcuts,
     /// Una acción del panel de capas que es de la ventana: lo muestra, lo oculta o lleva el foco.
     LayerPanel(LayerPanelOp),
-    /// `Nueva capa` o `Duplicar` en gris: el aviso ofrece pasar a gris con alfa; repetir la orden en
-    /// 5 s abre `Convertir modo…` (la regla de la repetición la lleva `App`).
+    /// `New layer_2` o `Duplicate` en gris: el aviso ofrece pasar a gris con alfa; repetir la orden en
+    /// 5 s abre `Convert mode_2…` (la regla de la repetición la lleva `App`).
     OfferGrayAlpha { notice: String, action: AppAction },
     /// Combinar abajo, combinar visibles o aplanar: la ejecuta `App` (reglas de rechazo, espera de
     /// «Combinando…» / «Aplanando…» y confirmación de Aplanar).
     Merge(MergeKind),
-    /// `Archivo → Exportar PNG aplanado…`: la ejecuta `App` (diálogo y escritura).
+    /// `Archivo → Export PNG aplanado…`: la ejecuta `App` (diálogo y escritura).
     ExportFlat,
 }
 
@@ -65,7 +65,7 @@ pub enum Dispatched {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerPanelOp {
     Toggle,
-    /// `Renombrar`: abre el panel y lleva el foco al nombre.
+    /// `Rename`: abre el panel y lleva el foco al nombre.
     FocusName,
     /// `Propiedades`: abre el panel y lo deja a la vista.
     ShowProperties,

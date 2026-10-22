@@ -15,47 +15,47 @@ use px_ui::tool::Tool;
 
 use super::{SaveError, ShortcutStore, config_dir, shortcuts_path};
 
-static CONTADOR: AtomicU64 = AtomicU64::new(0);
+static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-struct Carpeta(PathBuf);
+struct Folder(PathBuf);
 
-impl Carpeta {
-    fn nueva() -> Carpeta {
-        let n = CONTADOR.fetch_add(1, Ordering::SeqCst);
-        let ruta = Path::new(env!("CARGO_MANIFEST_DIR"))
+impl Folder {
+    fn new() -> Folder {
+        let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path_2 = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/pixoko-test-config")
             .join(format!("{}-{n}", std::process::id()));
-        fs::create_dir_all(&ruta).unwrap();
-        Carpeta(ruta)
+        fs::create_dir_all(&path_2).unwrap();
+        Folder(path_2)
     }
 
-    fn ruta(&self) -> &Path {
+    fn path_2(&self) -> &Path {
         &self.0
     }
 }
 
-impl Drop for Carpeta {
+impl Drop for Folder {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
 }
 
-fn entorno(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
-    move |nombre| {
+fn environment(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+    move |name_2| {
         vars.iter()
-            .find(|(clave, _)| *clave == nombre)
+            .find(|(key, _)| *key == name_2)
             .map(|(_, valor)| (*valor).to_string())
     }
 }
 
-fn defecto() -> Keymap {
+fn default() -> Keymap {
     Keymap::default_scheme()
 }
 
-fn lapiz_con_x() -> Keymap {
+fn pencil_with_x() -> Keymap {
     let mut e = px_ui::shortcut_editor::ShortcutEditor::new(
         AppAction::SelectTool(Tool::Pencil),
-        &defecto(),
+        &default(),
         Platform::Linux,
     )
     .unwrap();
@@ -71,12 +71,12 @@ fn lapiz_con_x() -> Keymap {
     e.accept()
 }
 
-fn sin_archivos_temporales(dir: &Path) {
-    for entrada in fs::read_dir(dir).unwrap() {
-        let nombre = entrada.unwrap().file_name().to_string_lossy().into_owned();
+fn without_files_temporary(dir: &Path) {
+    for input in fs::read_dir(dir).unwrap() {
+        let name_2 = input.unwrap().file_name().to_string_lossy().into_owned();
         assert!(
-            !nombre.contains("pixoko-tmp"),
-            "temporal sin borrar: {nombre}"
+            !name_2.contains("pixoko-tmp"),
+            "temporal sin borrar: {name_2}"
         );
     }
 }
@@ -86,9 +86,9 @@ fn sin_archivos_temporales(dir: &Path) {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_la_carpeta_de_configuracion_por_sistema() {
+fn row_11_the_configuration_folder_per_system() {
     // Linux: XDG_CONFIG_HOME si es absoluta y no vacía; si no, $HOME/.config.
-    let linux = |vars| config_dir(Platform::Linux, &entorno(vars));
+    let linux = |vars| config_dir(Platform::Linux, &environment(vars));
     assert_eq!(
         linux(&[("XDG_CONFIG_HOME", "/cfg"), ("HOME", "/home/a")]),
         Some(PathBuf::from("/cfg"))
@@ -110,14 +110,14 @@ fn fila_11_la_carpeta_de_configuracion_por_sistema() {
     assert_eq!(linux(&[]), None, "sin HOME no hay carpeta");
     assert_eq!(linux(&[("HOME", "")]), None);
     // Windows: APPDATA.
-    let windows = |vars| config_dir(Platform::Windows, &entorno(vars));
+    let windows = |vars| config_dir(Platform::Windows, &environment(vars));
     assert_eq!(
         windows(&[("APPDATA", "C:\\Users\\a\\AppData\\Roaming")]),
         Some(PathBuf::from("C:\\Users\\a\\AppData\\Roaming"))
     );
     assert_eq!(windows(&[("HOME", "/home/a")]), None);
     // macOS: ~/Library/Application Support.
-    let mac = |vars| config_dir(Platform::Mac, &entorno(vars));
+    let mac = |vars| config_dir(Platform::Mac, &environment(vars));
     assert_eq!(
         mac(&[("HOME", "/Users/a")]),
         Some(PathBuf::from("/Users/a/Library/Application Support"))
@@ -125,10 +125,10 @@ fn fila_11_la_carpeta_de_configuracion_por_sistema() {
     assert_eq!(mac(&[]), None);
     // El fichero cuelga de `pixoko/atajos.txt`.
     assert_eq!(
-        shortcuts_path(Platform::Linux, &entorno(&[("HOME", "/home/a")])),
+        shortcuts_path(Platform::Linux, &environment(&[("HOME", "/home/a")])),
         Some(PathBuf::from("/home/a/.config/pixoko/atajos.txt"))
     );
-    assert_eq!(shortcuts_path(Platform::Linux, &entorno(&[])), None);
+    assert_eq!(shortcuts_path(Platform::Linux, &environment(&[])), None);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -136,137 +136,137 @@ fn fila_11_la_carpeta_de_configuracion_por_sistema() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_guardar_crea_la_carpeta_escribe_atomico_y_se_lee_igual() {
-    let dir = Carpeta::nueva();
-    let ruta = dir.ruta().join("pixoko").join("atajos.txt");
-    let mut tienda = ShortcutStore::new(Some(ruta.clone()));
+fn row_11_save_creates_the_folder_writes_atomically_and_reads_back_the_same() {
+    let dir = Folder::new();
+    let path_2 = dir.path_2().join("pixoko").join("atajos.txt");
+    let mut store = ShortcutStore::new(Some(path_2.clone()));
     // Sin fichero: la tabla por defecto, sin aviso.
-    let cargado = tienda.load(&defecto());
-    assert_eq!(cargado.keymap, defecto());
-    assert!(cargado.fatal.is_none());
-    let tabla = lapiz_con_x();
-    tienda.save(&tabla, &defecto(), false).expect("guarda");
-    assert!(ruta.is_file());
-    sin_archivos_temporales(ruta.parent().unwrap());
+    let loaded = store.load(&default());
+    assert_eq!(loaded.keymap, default());
+    assert!(loaded.fatal.is_none());
+    let tabla = pencil_with_x();
+    store.save(&tabla, &default(), false).expect("guarda");
+    assert!(path_2.is_file());
+    without_files_temporary(path_2.parent().unwrap());
     assert_eq!(
-        fs::read_to_string(&ruta).unwrap(),
-        to_text(&tabla, &defecto())
+        fs::read_to_string(&path_2).unwrap(),
+        to_text(&tabla, &default())
     );
-    let mut otra = ShortcutStore::new(Some(ruta.clone()));
-    assert_eq!(otra.load(&defecto()).keymap, tabla);
+    let mut other = ShortcutStore::new(Some(path_2.clone()));
+    assert_eq!(other.load(&default()).keymap, tabla);
     // Nada ignorado: sin copia `.bak`.
-    assert!(!ruta.with_file_name("atajos.txt.bak").exists());
+    assert!(!path_2.with_file_name("atajos.txt.bak").exists());
     // Sobrescribir otra vez tampoco la crea.
-    tienda.save(&defecto(), &defecto(), false).unwrap();
-    assert!(!ruta.with_file_name("atajos.txt.bak").exists());
-    sin_archivos_temporales(ruta.parent().unwrap());
+    store.save(&default(), &default(), false).unwrap();
+    assert!(!path_2.with_file_name("atajos.txt.bak").exists());
+    without_files_temporary(path_2.parent().unwrap());
 }
 
 #[test]
-fn condicion_3_si_la_lectura_ignoro_algo_la_primera_escritura_copia_el_original() {
-    let dir = Carpeta::nueva();
-    let ruta = dir.ruta().join("atajos.txt");
-    let bak = dir.ruta().join("atajos.txt.bak");
+fn condition_3_if_the_read_ignored_something_the_first_write_copies_the_original() {
+    let dir = Folder::new();
+    let path_2 = dir.path_2().join("atajos.txt");
+    let bak = dir.path_2().join("atajos.txt.bak");
     let original = "pixoko-atajos 1\ntool.pencil 1 x\nlinea mala\n";
-    fs::write(&ruta, original).unwrap();
+    fs::write(&path_2, original).unwrap();
     // Un `.bak` anterior se sustituye.
     fs::write(&bak, "viejo").unwrap();
-    let mut tienda = ShortcutStore::new(Some(ruta.clone()));
-    let cargado = tienda.load(&defecto());
-    assert_eq!(cargado.ignored_lines, 1);
+    let mut store = ShortcutStore::new(Some(path_2.clone()));
+    let loaded = store.load(&default());
+    assert_eq!(loaded.ignored_lines, 1);
     assert_eq!(
-        fs::read_to_string(&ruta).unwrap(),
+        fs::read_to_string(&path_2).unwrap(),
         original,
         "leer no toca el fichero"
     );
-    tienda.save(&lapiz_con_x(), &defecto(), false).unwrap();
+    store.save(&pencil_with_x(), &default(), false).unwrap();
     assert_eq!(
         fs::read_to_string(&bak).unwrap(),
         original,
         "copia de lo que había"
     );
-    assert_ne!(fs::read_to_string(&ruta).unwrap(), original);
+    assert_ne!(fs::read_to_string(&path_2).unwrap(), original);
     // Solo la primera escritura de la sesión: una segunda no vuelve a copiar.
     fs::write(&bak, "marca").unwrap();
-    tienda.save(&defecto(), &defecto(), false).unwrap();
+    store.save(&default(), &default(), false).unwrap();
     assert_eq!(fs::read_to_string(&bak).unwrap(), "marca");
 }
 
 #[test]
-fn condicion_3_un_fichero_ilegible_se_ignora_y_su_copia_precede_a_la_escritura() {
-    let dir = Carpeta::nueva();
-    let ruta = dir.ruta().join("atajos.txt");
-    let bak = dir.ruta().join("atajos.txt.bak");
-    fs::write(&ruta, [0xffu8, 0xfe, 0x80]).unwrap();
-    let mut tienda = ShortcutStore::new(Some(ruta.clone()));
-    let cargado = tienda.load(&defecto());
-    assert_eq!(cargado.fatal, Some(Fatal::Unreadable));
+fn condition_3_an_unreadable_file_is_ignored_and_its_copy_precedes_the_write() {
+    let dir = Folder::new();
+    let path_2 = dir.path_2().join("atajos.txt");
+    let bak = dir.path_2().join("atajos.txt.bak");
+    fs::write(&path_2, [0xffu8, 0xfe, 0x80]).unwrap();
+    let mut store = ShortcutStore::new(Some(path_2.clone()));
+    let loaded = store.load(&default());
+    assert_eq!(loaded.fatal, Some(Fatal::Unreadable));
     assert_eq!(
-        fs::read(&ruta).unwrap(),
+        fs::read(&path_2).unwrap(),
         [0xff, 0xfe, 0x80],
         "sin borrar ni tocar"
     );
-    tienda.save(&lapiz_con_x(), &defecto(), false).unwrap();
+    store.save(&pencil_with_x(), &default(), false).unwrap();
     assert_eq!(fs::read(&bak).unwrap(), [0xff, 0xfe, 0x80]);
 }
 
 #[test]
-fn condicion_3_restablecer_todo_siempre_copia_y_deja_solo_la_cabecera() {
-    let dir = Carpeta::nueva();
-    let ruta = dir.ruta().join("atajos.txt");
-    let bak = dir.ruta().join("atajos.txt.bak");
-    let tabla = lapiz_con_x();
-    let guardado = to_text(&tabla, &defecto());
-    fs::write(&ruta, &guardado).unwrap();
+fn condition_3_reset_all_always_copies_and_leaves_only_the_header() {
+    let dir = Folder::new();
+    let path_2 = dir.path_2().join("atajos.txt");
+    let bak = dir.path_2().join("atajos.txt.bak");
+    let tabla = pencil_with_x();
+    let saved = to_text(&tabla, &default());
+    fs::write(&path_2, &saved).unwrap();
     fs::write(&bak, "viejo").unwrap();
-    let mut tienda = ShortcutStore::new(Some(ruta.clone()));
-    let cargado = tienda.load(&defecto());
-    assert_eq!((cargado.ignored_lines, cargado.dropped_rows), (0, 0));
-    tienda.save(&defecto(), &defecto(), true).unwrap();
+    let mut store = ShortcutStore::new(Some(path_2.clone()));
+    let loaded = store.load(&default());
+    assert_eq!((loaded.ignored_lines, loaded.dropped_rows), (0, 0));
+    store.save(&default(), &default(), true).unwrap();
     assert_eq!(
         fs::read_to_string(&bak).unwrap(),
-        guardado,
+        saved,
         "sustituye cualquier .bak"
     );
     assert_eq!(
-        fs::read_to_string(&ruta).unwrap(),
-        to_text(&defecto(), &defecto())
+        fs::read_to_string(&path_2).unwrap(),
+        to_text(&default(), &default())
     );
     // Sin fichero previo, restablecer escribe la cabecera y no falla por no haber qué copiar.
-    let otra = Carpeta::nueva();
-    let nueva = otra.ruta().join("a").join("atajos.txt");
-    let mut t2 = ShortcutStore::new(Some(nueva.clone()));
-    t2.save(&defecto(), &defecto(), true).unwrap();
-    assert!(nueva.is_file());
-    assert!(!nueva.with_file_name("atajos.txt.bak").exists());
+    let other = Folder::new();
+    let new = other.path_2().join("a").join("atajos.txt");
+    let mut t2 = ShortcutStore::new(Some(new.clone()));
+    t2.save(&default(), &default(), true).unwrap();
+    assert!(new.is_file());
+    assert!(!new.with_file_name("atajos.txt.bak").exists());
 }
 
 #[test]
-fn fila_11_los_fallos_son_errores_y_sin_carpeta_no_se_guarda() {
-    let mut sin = ShortcutStore::new(None);
+fn row_11_failures_are_errors_and_without_a_folder_it_is_not_saved() {
+    let mut without = ShortcutStore::new(None);
     assert!(matches!(
-        sin.save(&defecto(), &defecto(), false),
+        without.save(&default(), &default(), false),
         Err(SaveError::NoDirectory)
     ));
-    assert_eq!(sin.load(&defecto()).keymap, defecto());
+    assert_eq!(without.load(&default()).keymap, default());
     // El destino es un directorio.
-    let dir = Carpeta::nueva();
-    let ruta = dir.ruta().join("atajos.txt");
-    fs::create_dir_all(&ruta).unwrap();
-    let mut t = ShortcutStore::new(Some(ruta.clone()));
+    let dir = Folder::new();
+    let path_2 = dir.path_2().join("atajos.txt");
+    fs::create_dir_all(&path_2).unwrap();
+    let mut t = ShortcutStore::new(Some(path_2.clone()));
     assert!(matches!(
-        t.save(&lapiz_con_x(), &defecto(), false),
+        t.save(&pencil_with_x(), &default(), false),
         Err(SaveError::File(_))
     ));
-    assert!(ruta.is_dir());
-    sin_archivos_temporales(dir.ruta());
+    assert!(path_2.is_dir());
+    without_files_temporary(dir.path_2());
     // La carpeta padre es un fichero.
-    let fichero = dir.ruta().join("fichero");
-    fs::write(&fichero, "x").unwrap();
-    let mut t = ShortcutStore::new(Some(fichero.join("atajos.txt")));
+    let file = dir.path_2().join("fichero");
+    fs::write(&file, "x").unwrap();
+    let mut t = ShortcutStore::new(Some(file.join("atajos.txt")));
     assert!(matches!(
-        t.save(&lapiz_con_x(), &defecto(), false),
+        t.save(&pencil_with_x(), &default(), false),
         Err(SaveError::File(_))
     ));
-    assert_eq!(fs::read_to_string(&fichero).unwrap(), "x");
+    assert_eq!(fs::read_to_string(&file).unwrap(), "x");
 }

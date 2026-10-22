@@ -2,8 +2,8 @@
 //! forma de `crates/px-golden/tests/common/sha256.rs`. Solo `std` y sin dependencias nuevas. Sirve
 //! para anotar el SHA-256 de cada PNG de `golden/png/` al empezar y comprobarlo al terminar.
 //!
-//! Los vectores de prueba viven aquí como datos (`vectores`) y los ejecuta el test
-//! `fila_9_sha256_propio_cumple_sus_vectores`.
+//! Los vectores de prueba viven aquí como datos (`vectors`) y los ejecuta el test
+//! `row_9_own_sha256_meets_its_vectors`.
 
 /// Constantes de ronda: los 32 primeros bits de las partes fraccionarias de las raíces
 /// cúbicas de los 64 primeros números primos.
@@ -24,10 +24,10 @@ const H0: [u32; 8] = [
 ];
 
 /// Procesa un bloque de 64 bytes.
-fn bloque(h: &mut [u32; 8], datos: &[u8; 64]) {
+fn block(h: &mut [u32; 8], data: &[u8; 64]) {
     let mut w = [0u32; 64];
-    for (i, palabra) in datos.as_chunks::<4>().0.iter().enumerate() {
-        w[i] = u32::from_be_bytes(*palabra);
+    for (i, word) in data.as_chunks::<4>().0.iter().enumerate() {
+        w[i] = u32::from_be_bytes(*word);
     }
     for i in 16..64 {
         let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -58,47 +58,47 @@ fn bloque(h: &mut [u32; 8], datos: &[u8; 64]) {
         b = a;
         a = t1.wrapping_add(t2);
     }
-    for (estado, v) in h.iter_mut().zip([a, b, c, d, e, f, g, hh]) {
-        *estado = estado.wrapping_add(v);
+    for (state_2, v) in h.iter_mut().zip([a, b, c, d, e, f, g, hh]) {
+        *state_2 = state_2.wrapping_add(v);
     }
 }
 
-/// SHA-256 de `datos`.
-pub fn sha256(datos: &[u8]) -> [u8; 32] {
+/// SHA-256 de `data`.
+pub fn sha256(data: &[u8]) -> [u8; 32] {
     let mut h = H0;
-    let (bloques, resto) = datos.as_chunks::<64>();
-    for b in bloques {
-        bloque(&mut h, b);
+    let (blocks, rest) = data.as_chunks::<64>();
+    for b in blocks {
+        block(&mut h, b);
     }
     // Relleno: un 1, ceros hasta 56 mod 64 y la longitud en bits como u64 big-endian.
-    let mut cola = resto.to_vec();
-    cola.push(0x80);
-    while cola.len() % 64 != 56 {
-        cola.push(0);
+    let mut queue = rest.to_vec();
+    queue.push(0x80);
+    while queue.len() % 64 != 56 {
+        queue.push(0);
     }
-    cola.extend(((datos.len() as u64) * 8).to_be_bytes());
-    for b in cola.as_chunks::<64>().0 {
-        bloque(&mut h, b);
+    queue.extend(((data.len() as u64) * 8).to_be_bytes());
+    for b in queue.as_chunks::<64>().0 {
+        block(&mut h, b);
     }
-    let mut salida = [0u8; 32];
-    for (trozo, palabra) in salida.as_chunks_mut::<4>().0.iter_mut().zip(h) {
-        *trozo = palabra.to_be_bytes();
+    let mut output = [0u8; 32];
+    for (piece, word) in output.as_chunks_mut::<4>().0.iter_mut().zip(h) {
+        *piece = word.to_be_bytes();
     }
-    salida
+    output
 }
 
-/// SHA-256 de `datos` como 64 dígitos hexadecimales en minúsculas.
-pub fn sha256_hex(datos: &[u8]) -> String {
-    sha256(datos).iter().map(|b| format!("{b:02x}")).collect()
+/// SHA-256 de `data` como 64 dígitos hexadecimales en minúsculas.
+pub fn sha256_hex(data: &[u8]) -> String {
+    sha256(data).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Vectores de prueba: (nombre, mensaje, resumen esperado en hexadecimal).
 ///
 /// Los tres primeros y el de 1 000 000 de `a` son los de FIPS 180-4 / NIST. Los de `n` bytes
 /// `a` se calcularon con `sha256sum` del sistema (`head -c N /dev/zero | tr '\0' a |
-/// sha256sum`); 55, 56 y 64 son las fronteras del relleno (55 cabe en un bloque, 56 obliga a
+/// sha256sum`); 55, 56 y 64 son las fronteras del fill (55 cabe en un block, 56 obliga a
 /// un segundo y 64 es un bloque justo).
-pub fn vectores() -> Vec<(String, Vec<u8>, &'static str)> {
+pub fn vectors() -> Vec<(String, Vec<u8>, &'static str)> {
     let aes = |n: usize| vec![b'a'; n];
     vec![
         (

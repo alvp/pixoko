@@ -2,3 +2,4 @@ px-core
 px-raster
 px-formats
 px-golden
+px-app

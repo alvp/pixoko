@@ -251,8 +251,8 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), FileError> {
     })
 }
 
-/// Primer nombre libre `{nombre}-copia.png`, `{nombre}-copia-2.png`… junto al original; un
-/// `.aseprite` conserva su extensión (`{nombre}-copia.aseprite`).
+/// Primer nombre libre `{name_2}-copy.png`, `{name_2}-copy-2.png`… junto al original; un
+/// `.aseprite` conserva su extensión (`{name_2}-copy.aseprite`).
 pub fn copy_path(original: &Path) -> PathBuf {
     let stem = original
         .file_stem()
@@ -273,7 +273,7 @@ pub fn copy_path(original: &Path) -> PathBuf {
     })
 }
 
-/// Primer nombre libre `sin-titulo.png`, `sin-titulo-2.png`… en `dir`.
+/// Primer nombre libre `without-title.png`, `without-title-2.png`… en `dir`.
 pub fn untitled_path(dir: &Path) -> PathBuf {
     first_free(|n| match n {
         1 => dir.join(format!("{UNTITLED}.png")),
@@ -366,7 +366,7 @@ fn ignored_label(kind: Ignored) -> Option<&'static str> {
     })
 }
 
-/// Lo ignorado de un `.aseprite` en texto (`etiquetas (2), datos de usuario`), sin lo que no se
+/// Lo ignorado de un `.aseprite` en texto (`labels (2), data de usuario`), sin lo que no se
 /// avisa. Vacío si no hay nada.
 fn describe_ignored(report: &AsepriteReport) -> String {
     report
@@ -459,8 +459,8 @@ pub fn describe_open(name: &str, image: &Image, report: &[Conversion]) -> String
 }
 
 /// `describe_open` con los chunks auxiliares ignorados: con una causa de copia, va delante
-/// (`{causa}; Ctrl+S guardará una copia · …`) y sustituye la coletilla de las conversiones; los
-/// chunks de texto, Exif, animación y otros se nombran al final (` · ignorados: texto, Exif`).
+/// (`{cause}; Ctrl+S guardará a_2 copy · …`) y sustituye la coletilla de las conversiones; los
+/// chunks de texto, Exif, animación y otros se nombran al final (` · ignorados: text_2, Exif`).
 pub fn describe_open_aux(
     name: &str,
     image: &Image,

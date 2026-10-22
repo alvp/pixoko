@@ -13,7 +13,7 @@ pub fn min_enabled(value: Option<&str>) -> bool {
     value != Some("1")
 }
 
-/// Tamaño interior mínimo `[ancho, alto]` en píxeles lógicos para `ppp`, o `None` si está
+/// Tamaño interior mínimo `[width, height]` en píxeles lógicos para `ppp`, o `None` si está
 /// desactivado.
 pub fn min_inner_size(ppp: f32, enabled: bool) -> Option<[f32; 2]> {
     enabled.then(|| [min_window_width_pt(ppp), min_window_height_pt(ppp)])

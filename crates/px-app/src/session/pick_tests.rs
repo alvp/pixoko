@@ -225,7 +225,7 @@ fn last_pixel(session: &Session) -> Pixel {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9a_entry_elige_la_entrada_muestra_su_fila_y_borra_el_rango() {
+fn row_9a_entry_chooses_the_entry_shows_its_row_and_clears_the_range() {
     let mut session = session_indexed(12);
     session.choice = ColorChoice::Entry(2);
     session.ops.set_range_end(5);
@@ -243,7 +243,7 @@ fn fila_9a_entry_elige_la_entrada_muestra_su_fila_y_borra_el_rango() {
 }
 
 #[test]
-fn fila_9a_entry_a_la_entrada_ya_elegida_no_toca_la_vista_ni_el_rango() {
+fn row_9a_entry_to_the_already_chosen_entry_does_not_touch_the_view_or_the_range() {
     let mut session = session_indexed(12);
     session.choice = ColorChoice::Entry(2);
     session.ops.set_range_end(5);
@@ -261,7 +261,7 @@ fn fila_9a_entry_a_la_entrada_ya_elegida_no_toca_la_vista_ni_el_rango() {
 }
 
 #[test]
-fn fila_9a_entry_en_la_ultima_entrada_y_la_transparente_sin_aviso() {
+fn row_9a_entry_at_the_last_entry_and_the_transparent_without_a_notice() {
     let mut session = Session::sample(Document::new(sample_image(Mode::Indexed, 3, 3)));
 
     let last = session.apply_pick(Picked::Entry(5));
@@ -272,7 +272,7 @@ fn fila_9a_entry_en_la_ultima_entrada_y_la_transparente_sin_aviso() {
 }
 
 #[test]
-fn fila_9a_entry_fuera_de_la_paleta_se_ignora() {
+fn row_9a_entry_outside_the_palette_is_ignored() {
     for index in [12u8, 13, 200, 255] {
         let mut session = session_indexed(12);
         session.choice = ColorChoice::Entry(2);
@@ -290,7 +290,7 @@ fn fila_9a_entry_fuera_de_la_paleta_se_ignora() {
 }
 
 #[test]
-fn fila_9b_con_quita_pendiente_el_cuentagotas_indexado_se_ignora() {
+fn row_9b_with_a_pending_removal_the_indexed_dropper_is_ignored() {
     let mut session = session_indexed(12);
     session.choice = ColorChoice::Entry(2);
     session.ops.set_range_end(5);
@@ -311,7 +311,7 @@ fn fila_9b_con_quita_pendiente_el_cuentagotas_indexado_se_ignora() {
 }
 
 #[test]
-fn fila_9b_cancelada_la_quita_el_cuentagotas_vuelve_a_valer() {
+fn row_9b_once_the_removal_is_cancelled_the_dropper_works_again() {
     let mut session = session_indexed(12);
     session.choice = ColorChoice::Entry(2);
     session.ops.begin_removal(2, Some(3));
@@ -323,7 +323,7 @@ fn fila_9b_cancelada_la_quita_el_cuentagotas_vuelve_a_valer() {
 }
 
 #[test]
-fn fila_9_entry_en_un_modo_sin_paleta_se_ignora() {
+fn row_9_entry_in_a_mode_without_a_palette_is_ignored() {
     for mode in [Mode::Rgba, Mode::Gray, Mode::GrayAlpha] {
         let mut session = session_of(mode);
         session.choice = ColorChoice::Slot(3);
@@ -341,7 +341,7 @@ fn fila_9_entry_en_un_modo_sin_paleta_se_ignora() {
 }
 
 #[test]
-fn fila_9c_rgba_escribe_la_ranura_activa_y_no_cambia_la_eleccion() {
+fn row_9c_rgba_writes_the_active_slot_and_does_not_change_the_choice() {
     let mut session = session_of(Mode::Rgba);
     session.choice = ColorChoice::Slot(3);
     let color = Rgba::new(10, 20, 30, 128);
@@ -363,7 +363,7 @@ fn fila_9c_rgba_escribe_la_ranura_activa_y_no_cambia_la_eleccion() {
 }
 
 #[test]
-fn fila_9c_rgba_transparente_se_copia_tal_cual_y_avisa() {
+fn row_9c_rgba_transparent_is_copied_as_is_and_warns() {
     let mut session = session_of(Mode::Rgba);
     session.choice = ColorChoice::Slot(3);
     let color = Rgba::new(10, 20, 30, 0);
@@ -379,7 +379,7 @@ fn fila_9c_rgba_transparente_se_copia_tal_cual_y_avisa() {
 }
 
 #[test]
-fn fila_9c_cada_ranura_recibe_su_color() {
+fn row_9c_each_slot_receives_its_color() {
     for slot in 1..=9u8 {
         let mut session = session_of(Mode::Rgba);
         session.choice = ColorChoice::Slot(slot);
@@ -395,7 +395,7 @@ fn fila_9c_cada_ranura_recibe_su_color() {
 }
 
 #[test]
-fn fila_9d_gray_escribe_la_ranura_del_modo_sin_aviso() {
+fn row_9d_gray_writes_the_slot_of_the_mode_without_a_notice() {
     let mut session = session_of(Mode::Gray);
     session.choice = ColorChoice::Slot(5);
     let color = Rgba::opaque(96, 96, 96);
@@ -413,7 +413,7 @@ fn fila_9d_gray_escribe_la_ranura_del_modo_sin_aviso() {
 }
 
 #[test]
-fn fila_9d_gray_alpha_transparente_avisa_con_el_valor_exacto() {
+fn row_9d_gray_alpha_transparent_warns_with_the_exact_value() {
     let mut session = session_of(Mode::GrayAlpha);
     session.choice = ColorChoice::Slot(2);
     let color = Rgba::new(7, 7, 7, 0);
@@ -437,7 +437,7 @@ fn fila_9d_gray_alpha_transparente_avisa_con_el_valor_exacto() {
 }
 
 #[test]
-fn fila_9d_gray_alpha_semitransparente_sin_aviso() {
+fn row_9d_gray_alpha_semitransparent_without_a_notice() {
     let mut session = session_of(Mode::GrayAlpha);
     session.choice = ColorChoice::Slot(1);
 
@@ -454,7 +454,7 @@ fn fila_9d_gray_alpha_semitransparente_sin_aviso() {
 }
 
 #[test]
-fn fila_9_color_con_imagen_indexada_se_ignora() {
+fn row_9_color_with_an_indexed_image_is_ignored() {
     let mut session = session_indexed(12);
     session.choice = ColorChoice::Entry(2);
     session.ops.set_range_end(5);
@@ -475,7 +475,7 @@ fn fila_9_color_con_imagen_indexada_se_ignora() {
 }
 
 #[test]
-fn fila_9_color_con_una_eleccion_que_no_es_ranura_se_ignora() {
+fn row_9_color_with_a_choice_that_is_not_a_slot_is_ignored() {
     let mut session = session_of(Mode::Rgba);
     session.choice = ColorChoice::Entry(2);
     let slots = session.slots.clone();
@@ -490,7 +490,7 @@ fn fila_9_color_con_una_eleccion_que_no_es_ranura_se_ignora() {
 }
 
 #[test]
-fn fila_9_dos_elecciones_seguidas_se_quedan_con_la_ultima() {
+fn row_9_two_consecutive_choices_keep_the_last() {
     let mut session = session_of(Mode::Rgba);
     session.choice = ColorChoice::Slot(4);
 
@@ -616,27 +616,27 @@ fn check_dropper_leaves_document_alone(mode: Mode) {
 }
 
 #[test]
-fn fila_12_rgba_el_cuentagotas_no_modifica_el_documento() {
+fn row_12_rgba_the_dropper_does_not_modify_the_document() {
     check_dropper_leaves_document_alone(Mode::Rgba);
 }
 
 #[test]
-fn fila_12_indexada_el_cuentagotas_no_modifica_el_documento() {
+fn row_12_indexed_the_dropper_does_not_modify_the_document() {
     check_dropper_leaves_document_alone(Mode::Indexed);
 }
 
 #[test]
-fn fila_12_gray_el_cuentagotas_no_modifica_el_documento() {
+fn row_12_gray_the_dropper_does_not_modify_the_document() {
     check_dropper_leaves_document_alone(Mode::Gray);
 }
 
 #[test]
-fn fila_12_gray_alpha_el_cuentagotas_no_modifica_el_documento() {
+fn row_12_gray_alpha_the_dropper_does_not_modify_the_document() {
     check_dropper_leaves_document_alone(Mode::GrayAlpha);
 }
 
 #[test]
-fn fila_12_un_clic_en_un_pixel_transparente_tampoco_modifica_el_documento() {
+fn row_12_a_click_on_a_transparent_pixel_does_not_modify_the_document_either() {
     for mode in [Mode::Rgba, Mode::GrayAlpha] {
         let mut session = session_of(mode);
         let before = snapshot(&session);
@@ -656,7 +656,7 @@ fn fila_12_un_clic_en_un_pixel_transparente_tampoco_modifica_el_documento() {
 }
 
 #[test]
-fn fila_12_indexada_la_eleccion_sigue_a_los_pixeles_y_el_documento_no_cambia() {
+fn row_12_indexed_the_choice_follows_the_pixels_and_the_document_does_not_change() {
     let mut session = Session::sample(Document::new(indexed_row(&distinct(6))));
     let before = snapshot(&session);
     let mut tools = picking_tools();
@@ -748,7 +748,7 @@ fn image_from(mode: Mode, w: u32, h: u32, seeds: &[[u8; 4]]) -> Image {
 
 proptest! {
     #[test]
-    fn propiedad_2_sesion_active_pixel_es_el_ultimo_pixel_visitado(
+    fn property_2_session_active_pixel_is_the_last_visited_pixel(
         mode in arb_mode(),
         w in 1u32..=16,
         h in 1u32..=16,

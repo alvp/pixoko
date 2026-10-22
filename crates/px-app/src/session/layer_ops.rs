@@ -25,7 +25,7 @@ pub struct LayerReport {
     pub changed: bool,
     /// El aviso de 5 s, si lo hay.
     pub notice: Option<String>,
-    /// El aviso ofrece abrir `Convertir modo…` con «Gris con alfa» (repetir la orden en 5 s).
+    /// El aviso ofrece abrir `Convert mode_2…` con «Gris con alfa» (repetir la orden en 5 s).
     pub offer_convert: bool,
 }
 
@@ -153,7 +153,7 @@ impl Session {
         }
     }
 
-    /// `Nueva capa`: vacía, encima de la activa, que pasa a ser la activa.
+    /// `New layer_2`: vacía, encima de la activa, que pasa a ser la activa.
     pub fn new_layer(&mut self) -> LayerReport {
         if let Some(refusal) = self.creation_refusal() {
             return refusal;
@@ -166,7 +166,7 @@ impl Session {
         }
     }
 
-    /// `Duplicar`: la copia va encima de la original y pasa a ser la activa.
+    /// `Duplicate`: la copia va encima de la original y pasa a ser la activa.
     pub fn duplicate_layer(&mut self) -> LayerReport {
         if let Some(refusal) = self.creation_refusal() {
             return refusal;
@@ -186,7 +186,7 @@ impl Session {
         }
     }
 
-    /// `Quitar`: la activa pasa a la vecina; la última capa no se quita.
+    /// `Remove`: la activa pasa a la vecina; la última capa no se quita.
     pub fn remove_layer(&mut self) -> LayerReport {
         if self.document.layers().len() < 2 {
             return LayerReport::refused(LAST_LAYER_NOTICE, false);
@@ -195,7 +195,7 @@ impl Session {
         LayerReport::from_result(self.apply_layer(Command::RemoveLayer { layer }))
     }
 
-    /// `Subir` (`delta` > 0) o `Bajar` (`delta` < 0) la activa; en un extremo no hace nada.
+    /// `Raise` (`delta` > 0) o `Lower` (`delta` < 0) la activa; en un extremo no hace nada.
     pub fn move_layer(&mut self, delta: i32) -> LayerReport {
         let to = self.active_position() as i64 + i64::from(delta);
         if to < 0 || to >= self.document.layers().len() as i64 {

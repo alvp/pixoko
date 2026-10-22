@@ -5,7 +5,7 @@
 //! horizontal de lado a lado, un relleno, `undo` ×3, `redo` ×3, `save` y relectura.
 //!
 //! Se lanzan a mano, una vez al cierre, en release y con un solo hilo:
-//! `cargo test --release -p px-app -- --ignored --test-threads=1 grande`. En depuración tardan
+//! `cargo test --release -p px-app -- --ignored --test-threads=1 large`. En depuración tardan
 //! mucho y gastan ~1 GiB: no se ejecutan con `cargo test` a secas.
 //!
 //! Lo esperado sale de una **fórmula cerrada** sobre `Image::row`: el fondo, los tres píxeles del
@@ -29,60 +29,60 @@ use super::common::*;
 use crate::session::Session;
 
 /// El lienzo como capas de gestos: la fila `y` tras `k` gestos se calcula sin tocar el documento.
-struct Capas {
-    ancho: usize,
-    alto: usize,
+struct Layers {
+    width: usize,
+    height: usize,
     /// Bytes por píxel: 4 (RGBA) o 1 (índice).
     bpp: usize,
-    fondo: [u8; 4],
+    background_2: [u8; 4],
     /// Los tres píxeles de lápiz, con su posición y su valor.
-    lapiz: [((usize, usize), [u8; 4]); 3],
-    y_linea: usize,
-    linea: [u8; 4],
-    relleno: [u8; 4],
+    pencil: [((usize, usize), [u8; 4]); 3],
+    y_line: usize,
+    line: [u8; 4],
+    fill: [u8; 4],
 }
 
-impl Capas {
-    fn nueva(ancho: usize, alto: usize, bpp: usize, valores: [[u8; 4]; 6]) -> Capas {
-        Capas {
-            ancho,
-            alto,
+impl Layers {
+    fn new(width: usize, height: usize, bpp: usize, values_2: [[u8; 4]; 6]) -> Layers {
+        Layers {
+            width,
+            height,
             bpp,
-            fondo: valores[0],
-            lapiz: [
-                ((100, 50), valores[1]),
-                ((ancho - 200, alto / 2 - 100), valores[2]),
-                ((ancho - 1, alto - 1), valores[3]),
+            background_2: values_2[0],
+            pencil: [
+                ((100, 50), values_2[1]),
+                ((width - 200, height / 2 - 100), values_2[2]),
+                ((width - 1, height - 1), values_2[3]),
             ],
-            y_linea: alto / 2,
-            linea: valores[4],
-            relleno: valores[5],
+            y_line: height / 2,
+            line: values_2[4],
+            fill: values_2[5],
         }
     }
 
     /// La fila `y` en el formato de `Image::row`, tras `k` gestos (0 a 5: tres píxeles, la línea y
-    /// el relleno), en `fila`.
-    fn fila(&self, y: usize, k: usize, fila: &mut Vec<u8>) {
+    /// el relleno), en `row`.
+    fn row(&self, y: usize, k: usize, row: &mut Vec<u8>) {
         let n = self.bpp;
-        fila.clear();
-        for _ in 0..self.ancho {
-            fila.extend_from_slice(&self.fondo[..n]);
+        row.clear();
+        for _ in 0..self.width {
+            row.extend_from_slice(&self.background_2[..n]);
         }
-        for (i, ((x, py), valor)) in self.lapiz.iter().enumerate() {
+        for (i, ((x, py), valor)) in self.pencil.iter().enumerate() {
             if k > i && *py == y {
-                fila[x * n..(x + 1) * n].copy_from_slice(&valor[..n]);
+                row[x * n..(x + 1) * n].copy_from_slice(&valor[..n]);
             }
         }
-        if k >= 4 && y == self.y_linea {
-            for pixel in fila.chunks_exact_mut(n) {
-                pixel.copy_from_slice(&self.linea[..n]);
+        if k >= 4 && y == self.y_line {
+            for pixel in row.chunks_exact_mut(n) {
+                pixel.copy_from_slice(&self.line[..n]);
             }
         }
         // El relleno toma lo que sigue siendo fondo en la mitad de arriba.
-        if k >= 5 && y < self.y_linea {
-            for pixel in fila.chunks_exact_mut(n) {
-                if pixel == &self.fondo[..n] {
-                    pixel.copy_from_slice(&self.relleno[..n]);
+        if k >= 5 && y < self.y_line {
+            for pixel in row.chunks_exact_mut(n) {
+                if pixel == &self.background_2[..n] {
+                    pixel.copy_from_slice(&self.fill[..n]);
                 }
             }
         }
@@ -90,28 +90,28 @@ impl Capas {
 
     /// Pánico, con la primera fila y columna que difieren, si la imagen no es el lienzo tras `k`
     /// gestos.
-    fn verificar(&self, imagen: &Image, k: usize, ctx: &str) {
+    fn verify(&self, image_2: &Image, k: usize, ctx: &str) {
         assert_eq!(
-            (imagen.width() as usize, imagen.height() as usize),
-            (self.ancho, self.alto),
+            (image_2.width() as usize, image_2.height() as usize),
+            (self.width, self.height),
             "{ctx}: tamaño"
         );
         let n = self.bpp;
-        let mut esperada = Vec::new();
-        for y in 0..self.alto {
-            self.fila(y, k, &mut esperada);
-            let real = imagen.row(y as u32).expect("la fila existe");
-            if real != &esperada[..] {
+        let mut expected = Vec::new();
+        for y in 0..self.height {
+            self.row(y, k, &mut expected);
+            let real = image_2.row(y as u32).expect("la fila existe");
+            if real != &expected[..] {
                 let x = real
                     .iter()
-                    .zip(&esperada)
+                    .zip(&expected)
                     .position(|(a, b)| a != b)
                     .unwrap_or(0)
                     / n;
                 panic!(
                     "{ctx}: tras {k} gestos, el píxel ({x}, {y}) difiere: imagen {:?}, esperado {:?}",
                     &real[x * n..(x + 1) * n],
-                    &esperada[x * n..(x + 1) * n]
+                    &expected[x * n..(x + 1) * n]
                 );
             }
         }
@@ -119,144 +119,144 @@ impl Capas {
 }
 
 /// Un gesto con la herramienta, por `ToolState::canvas_event` sobre el documento de la sesión.
-fn gesto(
+fn gesture(
     tools: &mut ToolState,
     s: &mut Session,
-    herramienta: Tool,
-    eleccion: ColorChoice,
-    eventos: Vec<CanvasEvent>,
+    tool_2: Tool,
+    choice: ColorChoice,
+    events: Vec<CanvasEvent>,
 ) -> bool {
     let id = ImageId::from_raw(0);
-    tools.apply_action(ToolAction::Select(herramienta));
-    let mut cambio = false;
-    for evento in eventos {
-        cambio |= tools
-            .canvas_event(&mut s.document, id, eleccion, evento)
+    tools.apply_action(ToolAction::Select(tool_2));
+    let mut change = false;
+    for event_2 in events {
+        change |= tools
+            .canvas_event(&mut s.document, id, choice, event_2)
             .unwrap_or_else(|e| panic!("el gesto dio error: {e}"));
     }
-    let cambios = tools.take_changes();
-    s.absorb(cambios);
-    cambio
+    let changes_2 = tools.take_changes();
+    s.absorb(changes_2);
+    change
 }
 
-fn tomar(ctx: &str, que: &str, desde: Instant) {
-    eprintln!("fila 12 · {ctx} · {que}: {:?}", desde.elapsed());
+fn take(ctx: &str, that: &str, from_2: Instant) {
+    eprintln!("fila 12 · {ctx} · {that}: {:?}", from_2.elapsed());
 }
 
-/// El recorrido de la fila 12 sobre `imagen` (el fondo ya construido).
-fn recorrido(ctx: &str, imagen: Image, capas: &Capas, colores: [ColorChoice; 5]) {
-    let t = Trabajo::nuevo();
+/// El recorrido de la fila 12 sobre `image_2` (el fondo ya construido).
+fn walk(ctx: &str, image_2: Image, layers_2: &Layers, colors: [ColorChoice; 5]) {
+    let t = Work::new_2();
 
     // Generar y guardar con write_png.
-    let inicio = Instant::now();
-    let bytes = write_png(&imagen).unwrap_or_else(|e| panic!("{ctx}: write_png: {e}"));
-    drop(imagen);
-    tomar(ctx, &format!("write_png ({} bytes)", bytes.len()), inicio);
-    let ruta = t.escribir("grande.png", &bytes);
+    let start_2 = Instant::now();
+    let bytes = write_png(&image_2).unwrap_or_else(|e| panic!("{ctx}: write_png: {e}"));
+    drop(image_2);
+    take(ctx, &format!("write_png ({} bytes)", bytes.len()), start_2);
+    let path_2 = t.write("grande.png", &bytes);
     drop(bytes);
 
     // `Session::load` + `install`.
-    let mut s = sesion_vacia();
-    let inicio = Instant::now();
-    let cargado = s
-        .load(&ruta, Canvas::MAX_SIDE, false)
+    let mut s = session_empty();
+    let start_2 = Instant::now();
+    let loaded = s
+        .load(&path_2, Canvas::MAX_SIDE, false)
         .unwrap_or_else(|e| panic!("{ctx}: load: {e}"));
-    tomar(ctx, "load", inicio);
-    let inicio = Instant::now();
-    s.install(cargado);
-    tomar(ctx, "install", inicio);
+    take(ctx, "load", start_2);
+    let start_2 = Instant::now();
+    s.install(loaded);
+    take(ctx, "install", start_2);
     {
-        let imagen = s.document.image(ImageId::from_raw(0)).expect("imagen");
-        capas.verificar(imagen, 0, &format!("{ctx}: tras abrir"));
+        let image_2 = s.document.image(ImageId::from_raw(0)).expect("imagen");
+        layers_2.verify(image_2, 0, &format!("{ctx}: tras abrir"));
     }
 
     // Tres píxeles de lápiz, una línea horizontal de lado a lado y un relleno.
     let mut tools = ToolState::new();
-    let ancho = capas.ancho as i32;
-    let alto_linea = capas.y_linea as i32;
-    let gestos: Vec<(&str, Tool, ColorChoice, Vec<CanvasEvent>)> = vec![
+    let width = layers_2.width as i32;
+    let height_line = layers_2.y_line as i32;
+    let gestures: Vec<(&str, Tool, ColorChoice, Vec<CanvasEvent>)> = vec![
         (
             "lápiz 1",
             Tool::Pencil,
-            colores[0],
-            pixel_de(capas.lapiz[0].0),
+            colors[0],
+            pixel_de(layers_2.pencil[0].0),
         ),
         (
             "lápiz 2",
             Tool::Pencil,
-            colores[1],
-            pixel_de(capas.lapiz[1].0),
+            colors[1],
+            pixel_de(layers_2.pencil[1].0),
         ),
         (
             "lápiz 3",
             Tool::Pencil,
-            colores[2],
-            pixel_de(capas.lapiz[2].0),
+            colors[2],
+            pixel_de(layers_2.pencil[2].0),
         ),
         (
             "línea",
             Tool::Line,
-            colores[3],
+            colors[3],
             vec![
-                CanvasEvent::StrokeBegin((0, alto_linea)),
-                CanvasEvent::StrokeMove((ancho - 1, alto_linea)),
+                CanvasEvent::StrokeBegin((0, height_line)),
+                CanvasEvent::StrokeMove((width - 1, height_line)),
                 CanvasEvent::StrokeEnd,
             ],
         ),
         (
             "relleno",
             Tool::Fill,
-            colores[4],
+            colors[4],
             vec![CanvasEvent::StrokeBegin((5, 5)), CanvasEvent::StrokeEnd],
         ),
     ];
-    for (nombre, herramienta, color, eventos) in gestos {
-        let inicio = Instant::now();
+    for (name_2, tool_2, color, events) in gestures {
+        let start_2 = Instant::now();
         assert!(
-            gesto(&mut tools, &mut s, herramienta, color, eventos),
-            "{ctx}: el gesto {nombre} no cambió nada"
+            gesture(&mut tools, &mut s, tool_2, color, events),
+            "{ctx}: el gesto {name_2} no cambió nada"
         );
-        tomar(ctx, nombre, inicio);
+        take(ctx, name_2, start_2);
     }
-    let comprobar = |s: &Session, k: usize, que: &str| {
-        let inicio = Instant::now();
-        let imagen = s.document.image(ImageId::from_raw(0)).expect("imagen");
-        capas.verificar(imagen, k, &format!("{ctx}: {que}"));
-        tomar(ctx, &format!("comprobar {que}"), inicio);
+    let check = |s: &Session, k: usize, that: &str| {
+        let start_2 = Instant::now();
+        let image_2 = s.document.image(ImageId::from_raw(0)).expect("imagen");
+        layers_2.verify(image_2, k, &format!("{ctx}: {that}"));
+        take(ctx, &format!("comprobar {that}"), start_2);
     };
-    comprobar(&s, 5, "tras los 5 gestos");
+    check(&s, 5, "tras los 5 gestos");
 
     // `undo` ×3 y `redo` ×3, con la imagen comprobada tras cada uno.
     for k in [4, 3, 2] {
-        let inicio = Instant::now();
+        let start_2 = Instant::now();
         s.undo().unwrap_or_else(|e| panic!("{ctx}: undo: {e}"));
-        tomar(ctx, "undo", inicio);
-        comprobar(&s, k, &format!("tras undo a {k} gestos"));
+        take(ctx, "undo", start_2);
+        check(&s, k, &format!("tras undo a {k} gestos"));
     }
     for k in [3, 4, 5] {
-        let inicio = Instant::now();
+        let start_2 = Instant::now();
         s.redo().unwrap_or_else(|e| panic!("{ctx}: redo: {e}"));
-        tomar(ctx, "redo", inicio);
-        comprobar(&s, k, &format!("tras redo a {k} gestos"));
+        take(ctx, "redo", start_2);
+        check(&s, k, &format!("tras redo a {k} gestos"));
     }
 
     // `save` y relectura.
-    let inicio = Instant::now();
-    let guardado = guardar(&mut s, t.ruta()).unwrap_or_else(|e| panic!("{ctx}: save: {e}"));
-    tomar(ctx, "save", inicio);
+    let start_2 = Instant::now();
+    let saved = save(&mut s, t.path_2()).unwrap_or_else(|e| panic!("{ctx}: save: {e}"));
+    take(ctx, "save", start_2);
     assert_eq!(
-        guardado.path, ruta,
+        saved.path, path_2,
         "{ctx}: el save no sobrescribió el fichero abierto"
     );
     drop(s);
-    let inicio = Instant::now();
-    let leido = read_png(&std::fs::read(&ruta).expect("leer lo guardado"))
+    let start_2 = Instant::now();
+    let read_2 = read_png(&std::fs::read(&path_2).expect("leer lo guardado"))
         .unwrap_or_else(|e| panic!("{ctx}: read_png: {e}"));
-    tomar(ctx, "relectura", inicio);
-    assert!(leido.report.is_empty(), "{ctx}: la relectura se convirtió");
-    capas.verificar(&leido.image, 5, &format!("{ctx}: relectura"));
+    take(ctx, "relectura", start_2);
+    assert!(read_2.report.is_empty(), "{ctx}: la relectura se convirtió");
+    layers_2.verify(&read_2.image, 5, &format!("{ctx}: relectura"));
     assert_eq!(
-        t.nombres(),
+        t.names(),
         vec!["grande.png".to_string()],
         "{ctx}: ficheros del trabajo"
     );
@@ -271,11 +271,11 @@ fn pixel_de((x, y): (usize, usize)) -> Vec<CanvasEvent> {
     ]
 }
 
-/// El recorrido de la fila 12 con una RGBA cuadrada de `lado` píxeles.
-fn rgba(lado: usize) {
-    let etiqueta = format!("RGBA {lado}²");
+/// El recorrido de la fila 12 con una RGBA cuadrada de `side_2` píxeles.
+fn rgba(side_2: usize) {
+    let label_2 = format!("RGBA {side_2}²");
     // Fondo (10, 20, 30) y los colores de las ranuras 3 a 7 de RGBA.
-    let valores = [
+    let values_2 = [
         [10, 20, 30, 255],
         [255, 0, 0, 255],
         [0, 255, 0, 255],
@@ -283,21 +283,25 @@ fn rgba(lado: usize) {
         [255, 255, 0, 255],
         [255, 0, 255, 255],
     ];
-    let capas = Capas::nueva(lado, lado, 4, valores);
-    let [r, g, b, a] = valores[0];
-    let inicio = Instant::now();
-    let imagen = Image::filled(lado as u32, lado as u32, Pixel::Rgba(Rgba::new(r, g, b, a)))
-        .expect("imagen RGBA");
-    tomar(&etiqueta, "generar", inicio);
-    let colores = [3, 4, 5, 6, 7].map(ColorChoice::Slot);
-    recorrido(&etiqueta, imagen, &capas, colores);
+    let layers_2 = Layers::new(side_2, side_2, 4, values_2);
+    let [r, g, b, a] = values_2[0];
+    let start_2 = Instant::now();
+    let image_2 = Image::filled(
+        side_2 as u32,
+        side_2 as u32,
+        Pixel::Rgba(Rgba::new(r, g, b, a)),
+    )
+    .expect("imagen RGBA");
+    take(&label_2, "generar", start_2);
+    let colors = [3, 4, 5, 6, 7].map(ColorChoice::Slot);
+    walk(&label_2, image_2, &layers_2, colors);
 }
 
-/// El recorrido de la fila 12 con una indexada cuadrada de `lado` píxeles.
-fn indexada(lado: usize) {
-    let etiqueta = format!("indexada {lado}²");
+/// El recorrido de la fila 12 con una indexada cuadrada de `side_2` píxeles.
+fn indexed(side_2: usize) {
+    let label_2 = format!("indexada {side_2}²");
     // Seis entradas: el fondo en el índice 0 y un índice por gesto.
-    let valores = [
+    let values_2 = [
         [10, 20, 30, 255],
         [255, 0, 0, 255],
         [0, 255, 0, 255],
@@ -313,38 +317,38 @@ fn indexada(lado: usize) {
         [4, 0, 0, 0],
         [5, 0, 0, 0],
     ];
-    let capas = Capas::nueva(lado, lado, 1, indices);
-    let paleta = Palette::from_colors(valores.iter().map(|c| Rgba::new(c[0], c[1], c[2], c[3])))
+    let layers_2 = Layers::new(side_2, side_2, 1, indices);
+    let palette = Palette::from_colors(values_2.iter().map(|c| Rgba::new(c[0], c[1], c[2], c[3])))
         .expect("paleta");
-    let inicio = Instant::now();
-    let imagen =
-        Image::filled_indexed(lado as u32, lado as u32, paleta, 0).expect("imagen indexada");
-    tomar(&etiqueta, "generar", inicio);
-    let colores = [1, 2, 3, 4, 5].map(ColorChoice::Entry);
-    recorrido(&etiqueta, imagen, &capas, colores);
+    let start_2 = Instant::now();
+    let image_2 =
+        Image::filled_indexed(side_2 as u32, side_2 as u32, palette, 0).expect("imagen indexada");
+    take(&label_2, "generar", start_2);
+    let colors = [1, 2, 3, 4, 5].map(ColorChoice::Entry);
+    walk(&label_2, image_2, &layers_2, colors);
 }
 
 #[test]
 #[ignore = "lienzo grande: se lanza a mano, en release (cargo test --release -p px-app -- --ignored --test-threads=1 grande)"]
-fn fila_12_grande_rgba_8192() {
+fn row_12_large_rgba_8192() {
     rgba(8192);
 }
 
 #[test]
 #[ignore = "lienzo grande: se lanza a mano, en release (cargo test --release -p px-app -- --ignored --test-threads=1 grande)"]
-fn fila_12_grande_indexada_6000() {
-    indexada(6000);
+fn row_12_large_indexed_6000() {
+    indexed(6000);
 }
 
 /// Control de la fórmula cerrada y del recorrido, a escala pequeña y sin `#[ignore]`: lo mismo que
 /// los dos grandes con 512² píxeles. Si la fórmula estuviera mal, los grandes fallarían por ella y no
 /// por el código bajo prueba; así se ve aquí, en depuración y en el CI.
 #[test]
-fn fila_12_el_mismo_recorrido_a_escala_pequena_rgba() {
+fn row_12_the_same_walk_at_small_rgba_scale() {
     rgba(512);
 }
 
 #[test]
-fn fila_12_el_mismo_recorrido_a_escala_pequena_indexada() {
-    indexada(512);
+fn row_12_the_same_walk_at_small_indexed_scale() {
+    indexed(512);
 }

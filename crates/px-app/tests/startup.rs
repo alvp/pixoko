@@ -26,7 +26,7 @@ fn launch(args: &[&str]) -> std::process::Output {
 /// Fila 1: `lib.rs` y `main.rs` existen; `main.rs` no declara módulos, solo llama a `px_app::run`
 /// y tiene como mucho 12 líneas de código (sin comentarios ni vacías).
 #[test]
-fn main_es_minimo_y_lib_existe() {
+fn main_is_minimal_and_lib_exists() {
     assert!(!src("lib.rs").is_empty(), "src/lib.rs está vacío");
     let main = src("main.rs");
     let code: Vec<&str> = main
@@ -53,7 +53,7 @@ fn main_es_minimo_y_lib_existe() {
 /// Fila 2: la lib exporta una sola cosa. Ninguna línea de nivel 0 de `lib.rs` es un `pub` salvo
 /// `pub fn run`.
 #[test]
-fn la_lib_solo_exporta_run() {
+fn the_lib_only_exports_run() {
     let lib = src("lib.rs");
     let public: Vec<&str> = lib.lines().filter(|l| l.starts_with("pub")).collect();
     assert_eq!(public.len(), 1, "exportado en lib.rs: {public:?}");
@@ -66,7 +66,7 @@ fn la_lib_solo_exporta_run() {
 
 /// Fila 3: `--licencias` escribe `docs/THIRD-PARTY.md` tal cual y sale con 0.
 #[test]
-fn licencias_imprime_y_sale_con_cero() {
+fn licenses_prints_and_exits_with_zero() {
     let out = launch(&["--licencias"]);
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(out.stdout, third_party());
@@ -74,7 +74,7 @@ fn licencias_imprime_y_sale_con_cero() {
 
 /// Fila 4: dos argumentos dan el uso en la salida de errores, nada en la estándar y el código 2.
 #[test]
-fn dos_argumentos_dan_uso_y_codigo_dos() {
+fn two_arguments_give_usage_and_code_two() {
     let out = launch(&["a.png", "b.png"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(out.stdout.is_empty());

@@ -33,71 +33,71 @@ use crate::merge_flow::{
 // Ayudantes
 // ---------------------------------------------------------------------------------------------
 
-static CONTADOR: AtomicU64 = AtomicU64::new(0);
+static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 struct Tmp {
-    ruta: PathBuf,
+    path_2: PathBuf,
 }
 
 impl Tmp {
-    fn nuevo() -> Tmp {
-        let n = CONTADOR.fetch_add(1, Ordering::SeqCst);
-        let ruta =
+    fn new_2() -> Tmp {
+        let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path_2 =
             std::env::temp_dir().join(format!("pixoko-px-app-combinar-{}-{n}", std::process::id()));
-        fs::create_dir_all(&ruta).expect("directorio temporal");
-        Tmp { ruta }
+        fs::create_dir_all(&path_2).expect("directorio temporal");
+        Tmp { path_2 }
     }
 
-    fn ruta(&self) -> &Path {
-        &self.ruta
+    fn path_2(&self) -> &Path {
+        &self.path_2
     }
 }
 
 impl Drop for Tmp {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.ruta);
+        let _ = fs::remove_dir_all(&self.path_2);
     }
 }
 
-const FONDO: Rgba = Rgba::opaque(10, 20, 30);
-const VERDE: Rgba = Rgba::opaque(0, 255, 0);
-const AZUL: Rgba = Rgba::opaque(0, 0, 255);
-const ROJO: Rgba = Rgba::opaque(255, 0, 0);
+const TEST_BACKGROUND: Rgba = Rgba::opaque(10, 20, 30);
+const TEST_GREEN: Rgba = Rgba::opaque(0, 255, 0);
+const TEST_BLUE: Rgba = Rgba::opaque(0, 0, 255);
+const TEST_RED: Rgba = Rgba::opaque(255, 0, 0);
 
-fn rgba_lleno(ancho: u32, alto: u32, color: Rgba) -> Image {
-    Image::filled(ancho, alto, Pixel::Rgba(color)).expect("imagen")
+fn rgba_full(width: u32, height: u32, color: Rgba) -> Image {
+    Image::filled(width, height, Pixel::Rgba(color)).expect("imagen")
 }
 
-/// Un documento de 4 × 4 con las capas `nombres` de abajo arriba: la de abajo llena de `FONDO` y
+/// Un documento de 4 × 4 con las capas `names` de abajo arriba: la de abajo llena de `TEST_BACKGROUND` y
 /// las demás vacías.
-fn sesion_con(nombres: &[&str]) -> Session {
-    let mut sesion = Session::sample(Document::new(rgba_lleno(4, 4, FONDO)));
-    for (i, nombre) in nombres.iter().enumerate().skip(1) {
-        sesion
+fn session_with(names: &[&str]) -> Session {
+    let mut session_2 = Session::sample(Document::new(rgba_full(4, 4, TEST_BACKGROUND)));
+    for (i, name_2) in names.iter().enumerate().skip(1) {
+        session_2
             .apply_layer(Command::AddLayer {
-                name: (*nombre).to_string(),
+                name: (*name_2).to_string(),
                 at: i,
             })
             .expect("añadir capa");
     }
-    sesion
+    session_2
 }
 
-fn id(sesion: &Session, posicion: usize) -> LayerId {
-    sesion.document.layers()[posicion].id()
+fn id(session_2: &Session, position: usize) -> LayerId {
+    session_2.document.layers()[position].id()
 }
 
-fn celda(sesion: &Session, posicion: usize) -> ImageId {
-    sesion.document.layers()[posicion].cel()
+fn cel(session_2: &Session, position: usize) -> ImageId {
+    session_2.document.layers()[position].cel()
 }
 
-fn pinta(sesion: &mut Session, posicion: usize, puntos: &[(u32, u32)], color: Rgba) {
-    let image = celda(sesion, posicion);
-    sesion
+fn paints(session_2: &mut Session, position: usize, points: &[(u32, u32)], color: Rgba) {
+    let image = cel(session_2, position);
+    session_2
         .document
         .apply(Command::SetPixels {
             image,
-            pixels: puntos
+            pixels: points
                 .iter()
                 .map(|&(x, y)| PixelEdit {
                     x,
@@ -109,13 +109,13 @@ fn pinta(sesion: &mut Session, posicion: usize, puntos: &[(u32, u32)], color: Rg
         .expect("pintar");
 }
 
-fn ejecuta(sesion: &mut Session, accion: AppAction) -> Dispatched {
+fn runs(session_2: &mut Session, action: AppAction) -> Dispatched {
     let mut tools = px_ui::tool::ToolState::new();
     dispatch(
-        accion,
+        action,
         Origin::Menu,
         &mut Targets {
-            session: sesion,
+            session: session_2,
             tools: &mut tools,
             locks: Locks::default(),
         },
@@ -127,54 +127,58 @@ fn ejecuta(sesion: &mut Session, accion: AppAction) -> Dispatched {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_combinar_abajo_une_la_activa_con_la_de_abajo_y_la_activa_vuelve_al_deshacer() {
-    let mut sesion = sesion_con(&["A", "B", "C"]);
-    pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-    pinta(&mut sesion, 2, &[(1, 0)], AZUL);
-    sesion
+fn row_9_merge_down_joins_the_active_with_the_one_below_and_the_active_one_returns_on_undo() {
+    let mut session_2 = session_with(&["A", "B", "C"]);
+    paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+    paints(&mut session_2, 2, &[(1, 0)], TEST_BLUE);
+    session_2
         .apply_layer(Command::SetLayerOpacity {
-            layer: id(&sesion, 1),
+            layer: id(&session_2, 1),
             opacity: 128,
         })
         .expect("opacidad");
-    let (b, c) = (id(&sesion, 1), id(&sesion, 2));
-    sesion.set_active_layer(c).expect("activa");
-    let antes = sesion.document.clone();
+    let (b, c) = (id(&session_2, 1), id(&session_2, 2));
+    session_2.set_active_layer(c).expect("activa");
+    let antes = session_2.document.clone();
 
-    let informe = sesion.merge(MergeKind::Down);
-    assert!(informe.changed, "{informe:?}");
+    let report = session_2.merge(MergeKind::Down);
+    assert!(report.changed, "{report:?}");
     assert!(
-        informe
+        report
             .notice
             .as_deref()
             .is_some_and(|t| t.contains("combinada")),
-        "{informe:?}"
+        "{report:?}"
     );
-    let capas = sesion.document.layers();
-    assert_eq!(capas.len(), 2);
-    assert_eq!(capas[1].id(), b, "queda la de abajo, con su id");
+    let layers_2 = session_2.document.layers();
+    assert_eq!(layers_2.len(), 2);
+    assert_eq!(layers_2[1].id(), b, "queda la de abajo, con su id");
     assert_eq!(
-        (capas[1].opacity(), capas[1].blend(), capas[1].locked()),
+        (
+            layers_2[1].opacity(),
+            layers_2[1].blend(),
+            layers_2[1].locked()
+        ),
         (255, BlendMode::Normal, false)
     );
-    assert_eq!(sesion.active_layer(), b, "la activa es la que queda");
-    assert!(sesion.modified());
+    assert_eq!(session_2.active_layer(), b, "la activa es la que queda");
+    assert!(session_2.modified());
 
     // Deshacer: vuelve C con sus propiedades y la activa vuelve a C (nota de la combinación).
-    sesion.undo().expect("deshacer");
-    assert_eq!(sesion.document, antes);
-    assert_eq!(sesion.active_layer(), c);
+    session_2.undo().expect("deshacer");
+    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.active_layer(), c);
     // Rehacer: la activa es la superviviente.
-    sesion.redo().expect("rehacer");
-    assert_eq!(sesion.document.layers().len(), 2);
-    assert_eq!(sesion.active_layer(), b);
+    session_2.redo().expect("rehacer");
+    assert_eq!(session_2.document.layers().len(), 2);
+    assert_eq!(session_2.active_layer(), b);
 }
 
 #[test]
-fn fila_9_combinar_abajo_rechaza_con_su_aviso_y_sin_tocar_nada() {
+fn row_9_merge_down_rejects_with_its_notice_and_without_touching_anything() {
     // (cómo dejar el documento, qué trozo debe decir el aviso)
-    type Preparar = fn(&mut Session);
-    let casos: [(&str, Preparar, &str); 4] = [
+    type Prepare = fn(&mut Session);
+    let cases: [(&str, Prepare, &str); 4] = [
         (
             "activa oculta",
             |s| {
@@ -220,47 +224,47 @@ fn fila_9_combinar_abajo_rechaza_con_su_aviso_y_sin_tocar_nada() {
             "no hay capa debajo",
         ),
     ];
-    for (nombre, preparar, aviso) in casos {
-        let mut sesion = sesion_con(&["A", "B", "C"]);
-        pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-        pinta(&mut sesion, 2, &[(1, 0)], AZUL);
-        let c = id(&sesion, 2);
-        sesion.set_active_layer(c).expect("activa");
-        preparar(&mut sesion);
-        let (copia, estado) = (sesion.document.clone(), sesion.document.state_id());
-        let motivo = sesion.merge_refusal(MergeKind::Down);
+    for (name_2, prepare, notice) in cases {
+        let mut session_2 = session_with(&["A", "B", "C"]);
+        paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+        paints(&mut session_2, 2, &[(1, 0)], TEST_BLUE);
+        let c = id(&session_2, 2);
+        session_2.set_active_layer(c).expect("activa");
+        prepare(&mut session_2);
+        let (copy, state_2) = (session_2.document.clone(), session_2.document.state_id());
+        let reason_2 = session_2.merge_refusal(MergeKind::Down);
         assert!(
-            motivo.is_some_and(|m| m.contains(aviso)),
-            "{nombre}: {motivo:?}"
+            reason_2.is_some_and(|m| m.contains(notice)),
+            "{name_2}: {reason_2:?}"
         );
-        let informe = sesion.merge(MergeKind::Down);
-        assert!(!informe.changed, "{nombre}");
+        let report = session_2.merge(MergeKind::Down);
+        assert!(!report.changed, "{name_2}");
         assert!(
-            informe.notice.as_deref().is_some_and(|t| t.contains(aviso)),
-            "{nombre}: {informe:?}"
+            report.notice.as_deref().is_some_and(|t| t.contains(notice)),
+            "{name_2}: {report:?}"
         );
-        assert_eq!(sesion.document, copia, "{nombre}");
-        assert_eq!(sesion.document.state_id(), estado, "{nombre}");
+        assert_eq!(session_2.document, copy, "{name_2}");
+        assert_eq!(session_2.document.state_id(), state_2, "{name_2}");
     }
 }
 
 #[test]
-fn fila_9_combinar_abajo_con_la_activa_bloqueada_vale() {
+fn row_9_merge_down_with_the_active_one_locked_works() {
     // El candado de la que se consume no protege de quitarla (decisión 9 de 3.4).
-    let mut sesion = sesion_con(&["A", "B"]);
-    pinta(&mut sesion, 1, &[(2, 2)], VERDE);
-    let b = id(&sesion, 1);
-    sesion
+    let mut session_2 = session_with(&["A", "B"]);
+    paints(&mut session_2, 1, &[(2, 2)], TEST_GREEN);
+    let b = id(&session_2, 1);
+    session_2
         .apply_layer(Command::SetLayerLocked {
             layer: b,
             locked: true,
         })
         .expect("bloquear");
-    sesion.set_active_layer(b).expect("activa");
-    assert_eq!(sesion.merge_refusal(MergeKind::Down), None);
-    assert!(sesion.merge(MergeKind::Down).changed);
-    assert_eq!(sesion.document.layers().len(), 1);
-    assert!(!sesion.document.layers()[0].locked());
+    session_2.set_active_layer(b).expect("activa");
+    assert_eq!(session_2.merge_refusal(MergeKind::Down), None);
+    assert!(session_2.merge(MergeKind::Down).changed);
+    assert_eq!(session_2.document.layers().len(), 1);
+    assert!(!session_2.document.layers()[0].locked());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -268,150 +272,150 @@ fn fila_9_combinar_abajo_con_la_activa_bloqueada_vale() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_combinar_visibles_deja_las_ocultas_y_necesita_dos_visibles() {
-    let mut sesion = sesion_con(&["A", "B", "C", "D"]);
-    pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-    pinta(&mut sesion, 2, &[(1, 0)], AZUL);
-    pinta(&mut sesion, 3, &[(2, 0)], ROJO);
-    let (a, b, d) = (id(&sesion, 0), id(&sesion, 1), id(&sesion, 3));
-    sesion
+fn row_9_merge_visible_leaves_the_hidden_ones_and_needs_two_visible() {
+    let mut session_2 = session_with(&["A", "B", "C", "D"]);
+    paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+    paints(&mut session_2, 2, &[(1, 0)], TEST_BLUE);
+    paints(&mut session_2, 3, &[(2, 0)], TEST_RED);
+    let (a, b, d) = (id(&session_2, 0), id(&session_2, 1), id(&session_2, 3));
+    session_2
         .apply_layer(Command::SetLayerVisible {
             layer: b,
             visible: false,
         })
         .expect("ocultar");
-    sesion
+    session_2
         .apply_layer(Command::SetLayerLocked {
             layer: d,
             locked: true,
         })
         .expect("bloquear");
-    sesion.set_active_layer(d).expect("activa");
-    let antes = sesion.document.clone();
+    session_2.set_active_layer(d).expect("activa");
+    let antes = session_2.document.clone();
 
-    assert_eq!(sesion.merge_refusal(MergeKind::Visible), None);
-    let informe = sesion.merge(MergeKind::Visible);
-    assert!(informe.changed, "{informe:?}");
-    let ids: Vec<LayerId> = sesion.document.layers().iter().map(Layer::id).collect();
+    assert_eq!(session_2.merge_refusal(MergeKind::Visible), None);
+    let report = session_2.merge(MergeKind::Visible);
+    assert!(report.changed, "{report:?}");
+    let ids: Vec<LayerId> = session_2.document.layers().iter().map(Layer::id).collect();
     assert_eq!(ids, [a, b], "se quedan la visible más baja y la oculta");
     assert!(
-        !sesion.document.layers()[0].locked(),
+        !session_2.document.layers()[0].locked(),
         "el resultado queda desbloqueado"
     );
-    assert_eq!(sesion.active_layer(), a);
-    sesion.undo().expect("deshacer");
-    assert_eq!(sesion.document, antes);
-    assert_eq!(sesion.active_layer(), d);
+    assert_eq!(session_2.active_layer(), a);
+    session_2.undo().expect("deshacer");
+    assert_eq!(session_2.document, antes);
+    assert_eq!(session_2.active_layer(), d);
 
     // Con una sola visible no hay nada que combinar.
-    let mut una = sesion_con(&["A", "B"]);
-    let b = id(&una, 1);
-    una.apply_layer(Command::SetLayerVisible {
+    let mut a_2 = session_with(&["A", "B"]);
+    let b = id(&a_2, 1);
+    a_2.apply_layer(Command::SetLayerVisible {
         layer: b,
         visible: false,
     })
     .expect("ocultar");
-    let (copia, estado) = (una.document.clone(), una.document.state_id());
+    let (copy, state_2) = (a_2.document.clone(), a_2.document.state_id());
     assert!(
-        una.merge_refusal(MergeKind::Visible)
+        a_2.merge_refusal(MergeKind::Visible)
             .is_some_and(|m| m.contains("hace falta más de una capa visible"))
     );
-    assert!(!una.merge(MergeKind::Visible).changed);
+    assert!(!a_2.merge(MergeKind::Visible).changed);
     assert_eq!(
-        (una.document.clone(), una.document.state_id()),
-        (copia, estado)
+        (a_2.document.clone(), a_2.document.state_id()),
+        (copy, state_2)
     );
 }
 
 #[test]
-fn fila_9_aplanar_quita_las_ocultas_pide_confirmacion_y_se_deshace_entero() {
-    let mut sesion = sesion_con(&["A", "B", "C"]);
-    pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-    pinta(&mut sesion, 2, &[(1, 0)], AZUL);
-    let (b, c) = (id(&sesion, 1), id(&sesion, 2));
-    sesion
+fn row_9_flatten_removes_the_hidden_ones_asks_for_confirmation_and_is_undone_whole() {
+    let mut session_2 = session_with(&["A", "B", "C"]);
+    paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+    paints(&mut session_2, 2, &[(1, 0)], TEST_BLUE);
+    let (b, c) = (id(&session_2, 1), id(&session_2, 2));
+    session_2
         .apply_layer(Command::SetLayerVisible {
             layer: b,
             visible: false,
         })
         .expect("ocultar");
-    sesion.set_active_layer(c).expect("activa");
-    let antes = sesion.document.clone();
-    assert_eq!(sesion.flatten_hidden_with_pixels(), 1);
+    session_2.set_active_layer(c).expect("activa");
+    let antes = session_2.document.clone();
+    assert_eq!(session_2.flatten_hidden_with_pixels(), 1);
 
-    let informe = sesion.merge(MergeKind::Flatten);
-    assert!(informe.changed, "{informe:?}");
+    let report = session_2.merge(MergeKind::Flatten);
+    assert!(report.changed, "{report:?}");
     assert!(
-        informe
+        report
             .notice
             .as_deref()
             .is_some_and(|t| t.contains("aplanadas")),
-        "{informe:?}"
+        "{report:?}"
     );
-    assert_eq!(sesion.document.layers().len(), 1);
-    assert_eq!(sesion.active_layer(), id(&sesion, 0));
-    sesion.undo().expect("deshacer");
-    assert_eq!(sesion.document, antes, "vuelven las tres con sus ids");
-    assert_eq!(sesion.active_layer(), c);
-    sesion.redo().expect("rehacer");
-    assert_eq!(sesion.document.layers().len(), 1);
+    assert_eq!(session_2.document.layers().len(), 1);
+    assert_eq!(session_2.active_layer(), id(&session_2, 0));
+    session_2.undo().expect("deshacer");
+    assert_eq!(session_2.document, antes, "vuelven las tres con sus ids");
+    assert_eq!(session_2.active_layer(), c);
+    session_2.redo().expect("rehacer");
+    assert_eq!(session_2.document.layers().len(), 1);
 
     // Una oculta sin píxeles no pide confirmación.
-    let mut vacia = sesion_con(&["A", "B", "C"]);
-    let b = id(&vacia, 1);
-    vacia
+    let mut empty = session_with(&["A", "B", "C"]);
+    let b = id(&empty, 1);
+    empty
         .apply_layer(Command::SetLayerVisible {
             layer: b,
             visible: false,
         })
         .expect("ocultar");
-    assert_eq!(vacia.flatten_hidden_with_pixels(), 0);
+    assert_eq!(empty.flatten_hidden_with_pixels(), 0);
 }
 
 #[test]
-fn fila_9_aplanar_sin_capas_visibles_o_con_una_sola_capa_se_rechaza() {
-    let mut sesion = sesion_con(&["A", "B"]);
-    for posicion in 0..2 {
-        let capa = id(&sesion, posicion);
-        sesion
+fn row_9_flatten_without_visible_layers_or_with_a_single_layer_is_rejected() {
+    let mut session_2 = session_with(&["A", "B"]);
+    for position in 0..2 {
+        let layer_2 = id(&session_2, position);
+        session_2
             .apply_layer(Command::SetLayerVisible {
-                layer: capa,
+                layer: layer_2,
                 visible: false,
             })
             .expect("ocultar");
     }
     assert!(
-        sesion
+        session_2
             .merge_refusal(MergeKind::Flatten)
             .is_some_and(|m| m.contains("no hay capas visibles que aplanar"))
     );
-    let (copia, estado) = (sesion.document.clone(), sesion.document.state_id());
-    assert!(!sesion.merge(MergeKind::Flatten).changed);
+    let (copy, state_2) = (session_2.document.clone(), session_2.document.state_id());
+    assert!(!session_2.merge(MergeKind::Flatten).changed);
     assert_eq!(
-        (sesion.document.clone(), sesion.document.state_id()),
-        (copia, estado)
+        (session_2.document.clone(), session_2.document.state_id()),
+        (copy, state_2)
     );
 
-    let mut una = sesion_con(&["A"]);
-    assert!(una.merge_refusal(MergeKind::Flatten).is_some());
-    assert!(!una.merge(MergeKind::Flatten).changed);
+    let mut a_2 = session_with(&["A"]);
+    assert!(a_2.merge_refusal(MergeKind::Flatten).is_some());
+    assert!(!a_2.merge(MergeKind::Flatten).changed);
 }
 
 #[test]
-fn fila_9_el_aviso_de_historia_sale_solo_si_lo_guardado_supera_el_limite() {
-    for (limite, esperado) in [(16usize, true), (64 << 20, false)] {
-        let mut sesion = sesion_con(&["A", "B"]);
-        pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-        sesion.document.set_history_limit(limite);
-        let b = id(&sesion, 1);
-        sesion.set_active_layer(b).expect("activa");
-        let informe = sesion.merge(MergeKind::Down);
-        assert!(informe.changed);
-        let dice = informe
+fn row_9_the_history_notice_comes_out_only_if_what_is_saved_exceeds_the_limit() {
+    for (limit_2, expected_2) in [(16usize, true), (64 << 20, false)] {
+        let mut session_2 = session_with(&["A", "B"]);
+        paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+        session_2.document.set_history_limit(limit_2);
+        let b = id(&session_2, 1);
+        session_2.set_active_layer(b).expect("activa");
+        let report = session_2.merge(MergeKind::Down);
+        assert!(report.changed);
+        let dice = report
             .notice
             .as_deref()
             .is_some_and(|t| t.contains("siguen en la historia hasta tu próxima edición"));
-        assert_eq!(dice, esperado, "límite {limite}: {informe:?}");
+        assert_eq!(dice, expected_2, "límite {limit_2}: {report:?}");
     }
 }
 
@@ -420,7 +424,7 @@ fn fila_9_el_aviso_de_historia_sale_solo_si_lo_guardado_supera_el_limite() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_aplanar_con_ocultas_con_pixeles_se_confirma_repitiendo_en_5_segundos() {
+fn row_9_flatten_with_hidden_ones_with_pixels_is_confirmed_by_repeating_within_5_seconds() {
     // Sin ocultas con píxeles se ejecuta a la primera.
     let mut confirm = Confirm::new();
     assert!(flatten_gate(0, &mut confirm, 0.0));
@@ -435,57 +439,53 @@ fn fila_9_aplanar_con_ocultas_con_pixeles_se_confirma_repitiendo_en_5_segundos()
 }
 
 #[test]
-fn fila_9_combinar_y_aplanar_muestran_su_aviso_antes_de_empezar_si_pasan_de_2_a_la_24() {
+fn row_9_merge_and_flatten_show_their_notice_before_starting_if_they_exceed_2_to_the_24() {
     assert_eq!(MERGE_SYNC_PIXELS, 1 << 24);
     assert_eq!(wait_notice(MergeKind::Down), "Combinando…");
     assert_eq!(wait_notice(MergeKind::Visible), "Combinando…");
     assert_eq!(wait_notice(MergeKind::Flatten), "Aplanando…");
-    for tipo in [MergeKind::Down, MergeKind::Visible, MergeKind::Flatten] {
+    for kind in [MergeKind::Down, MergeKind::Visible, MergeKind::Flatten] {
         // Hasta 2²⁴: en el acto.
-        assert_eq!(start_merge(tipo, MERGE_SYNC_PIXELS), StartMerge::Now);
+        assert_eq!(start_merge(kind, MERGE_SYNC_PIXELS), StartMerge::Now);
         // Más: espera `WAIT_FRAMES` fotogramas, ejecuta exactamente en el último y nunca después.
-        let StartMerge::Later(mut espera) = start_merge(tipo, MERGE_SYNC_PIXELS + 1) else {
-            panic!("{tipo:?}: debía esperar");
+        let StartMerge::Later(mut waits) = start_merge(kind, MERGE_SYNC_PIXELS + 1) else {
+            panic!("{kind:?}: debía esperar");
         };
-        assert_eq!(espera.kind(), tipo);
-        for fotograma in 1..=WAIT_FRAMES {
-            assert_eq!(
-                espera.tick(),
-                fotograma == WAIT_FRAMES,
-                "{tipo:?} {fotograma}"
-            );
+        assert_eq!(waits.kind(), kind);
+        for frame in 1..=WAIT_FRAMES {
+            assert_eq!(waits.tick(), frame == WAIT_FRAMES, "{kind:?} {frame}");
         }
-        assert!(!espera.tick());
-        assert!(!espera.tick());
+        assert!(!waits.tick());
+        assert!(!waits.tick());
     }
 }
 
 #[test]
-fn fila_9_los_pixeles_a_componer_son_ancho_por_alto_por_capas_visibles_con_imagen() {
-    let mut sesion = sesion_con(&["A", "B", "C", "D"]);
-    pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-    pinta(&mut sesion, 2, &[(1, 0)], AZUL);
+fn row_9_the_pixels_to_compose_are_width_times_height_times_visible_layers_with_an_image() {
+    let mut session_2 = session_with(&["A", "B", "C", "D"]);
+    paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+    paints(&mut session_2, 2, &[(1, 0)], TEST_BLUE);
     // D queda vacía; C se oculta: componen A y B.
-    let c = id(&sesion, 2);
-    sesion
+    let c = id(&session_2, 2);
+    session_2
         .apply_layer(Command::SetLayerVisible {
             layer: c,
             visible: false,
         })
         .expect("ocultar");
-    let d = id(&sesion, 3);
-    sesion.set_active_layer(d).expect("activa");
+    let d = id(&session_2, 3);
+    session_2.set_active_layer(d).expect("activa");
     assert_eq!(
-        merge_pixels(&sesion.document, MergeKind::Visible, d),
+        merge_pixels(&session_2.document, MergeKind::Visible, d),
         4 * 4 * 2
     );
     assert_eq!(
-        merge_pixels(&sesion.document, MergeKind::Flatten, d),
+        merge_pixels(&session_2.document, MergeKind::Flatten, d),
         4 * 4 * 2
     );
     // Combinar abajo: la activa (vacía) y la de abajo (oculta, con imagen): una sola con imagen
     // entra en la cuenta si es visible; aquí C está oculta, así que 0 con imagen visible.
-    assert_eq!(merge_pixels(&sesion.document, MergeKind::Down, d), 0);
+    assert_eq!(merge_pixels(&session_2.document, MergeKind::Down, d), 0);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -493,9 +493,9 @@ fn fila_9_los_pixeles_a_componer_son_ancho_por_alto_por_capas_visibles_con_image
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_dispatch_pasa_las_cuatro_acciones_a_la_ventana_y_respeta_los_bloqueos() {
-    let mut sesion = sesion_con(&["A", "B"]);
-    for (accion, esperado) in [
+fn row_10_dispatch_passes_the_four_actions_to_the_window_and_respects_the_locks() {
+    let mut session_2 = session_with(&["A", "B"]);
+    for (action, expected_2) in [
         (
             AppAction::MergeLayerDown,
             Dispatched::Merge(MergeKind::Down),
@@ -510,109 +510,109 @@ fn fila_10_dispatch_pasa_las_cuatro_acciones_a_la_ventana_y_respeta_los_bloqueos
         ),
         (AppAction::ExportFlat, Dispatched::ExportFlat),
     ] {
-        assert_eq!(ejecuta(&mut sesion, accion), esperado, "{accion:?}");
+        assert_eq!(runs(&mut session_2, action), expected_2, "{action:?}");
     }
     // No tocan el documento por sí solas: lo hace la ventana tras la espera.
-    assert_eq!(sesion.document.layers().len(), 2);
+    assert_eq!(session_2.document.layers().len(), 2);
     // Con un trazo en curso, bloqueadas.
     let mut tools = px_ui::tool::ToolState::new();
     let locks = Locks {
         gesture: true,
         ..Locks::default()
     };
-    let bloqueada = dispatch(
+    let locked_2 = dispatch(
         AppAction::FlattenLayers,
         Origin::Key,
         &mut Targets {
-            session: &mut sesion,
+            session: &mut session_2,
             tools: &mut tools,
             locks,
         },
     );
-    assert_eq!(bloqueada, Dispatched::Blocked);
+    assert_eq!(locked_2, Dispatched::Blocked);
 }
 
 // ---------------------------------------------------------------------------------------------
 // Fila 11: Exportar PNG aplanado
 // ---------------------------------------------------------------------------------------------
 
-fn sesion_con_tres_capas_y_una_oculta() -> Session {
-    let mut sesion = sesion_con(&["A", "B", "C"]);
-    pinta(&mut sesion, 1, &[(0, 0)], VERDE);
-    pinta(&mut sesion, 2, &[(1, 0)], AZUL);
-    let b = id(&sesion, 1);
-    sesion
+fn session_with_three_layers_and_one_hidden() -> Session {
+    let mut session_2 = session_with(&["A", "B", "C"]);
+    paints(&mut session_2, 1, &[(0, 0)], TEST_GREEN);
+    paints(&mut session_2, 2, &[(1, 0)], TEST_BLUE);
+    let b = id(&session_2, 1);
+    session_2
         .apply_layer(Command::SetLayerVisible {
             layer: b,
             visible: false,
         })
         .expect("ocultar");
-    sesion
+    session_2
 }
 
 #[test]
-fn fila_11_exportar_escribe_el_aplanado_y_no_toca_el_estado_del_documento() {
-    let tmp = Tmp::nuevo();
-    let mut sesion = sesion_con_tres_capas_y_una_oculta();
-    let original = tmp.ruta().join("dibujo.png");
+fn row_11_export_writes_the_flattened_and_does_not_touch_the_document_state() {
+    let tmp = Tmp::new_2();
+    let mut session_2 = session_with_three_layers_and_one_hidden();
+    let original = tmp.path_2().join("dibujo.png");
     fs::write(&original, b"x").expect("fichero");
-    sesion.path = Some(original.clone());
-    let (ruta, guardado, modificado, convertido) = (
-        sesion.path().map(Path::to_path_buf),
-        sesion.saved_id,
-        sesion.modified(),
-        sesion.converted(),
+    session_2.path = Some(original.clone());
+    let (path_2, saved, modified_2, converted) = (
+        session_2.path().map(Path::to_path_buf),
+        session_2.saved_id,
+        session_2.modified(),
+        session_2.converted(),
     );
-    assert!(modificado, "hay cambios sin guardar");
-    let copia = sesion.document.clone();
+    assert!(modified_2, "hay cambios sin guardar");
+    let copy = session_2.document.clone();
 
-    let destino = tmp.ruta().join("plano.png");
-    let guardado_en = sesion.export_flat(&destino).expect("exportar");
-    assert_eq!(guardado_en.path, destino);
-    let esperado =
-        write_png(&px_ui::source::flatten(&sesion.document).expect("aplanar")).expect("png");
-    assert_eq!(fs::read(&destino).expect("leer"), esperado);
+    let target_2 = tmp.path_2().join("plano.png");
+    let saved_in = session_2.export_flat(&target_2).expect("exportar");
+    assert_eq!(saved_in.path, target_2);
+    let expected_2 =
+        write_png(&px_ui::source::flatten(&session_2.document).expect("aplanar")).expect("png");
+    assert_eq!(fs::read(&target_2).expect("leer"), expected_2);
     assert_eq!(
         fs::read(&original).expect("leer"),
         b"x",
         "el original no se toca"
     );
 
-    assert_eq!(sesion.path().map(Path::to_path_buf), ruta);
-    assert_eq!(sesion.saved_id, guardado);
-    assert_eq!(sesion.modified(), modificado);
-    assert_eq!(sesion.converted(), convertido);
-    assert_eq!(sesion.document, copia);
+    assert_eq!(session_2.path().map(Path::to_path_buf), path_2);
+    assert_eq!(session_2.saved_id, saved);
+    assert_eq!(session_2.modified(), modified_2);
+    assert_eq!(session_2.converted(), converted);
+    assert_eq!(session_2.document, copy);
 
     // El aviso cuenta capas y ocultas.
-    let texto = sesion.describe_exported(&guardado_en);
-    assert!(texto.contains("exportado plano.png"), "{texto}");
-    assert!(texto.contains("aplanado de 3 capas"), "{texto}");
-    assert!(texto.contains("1 oculta"), "{texto}");
+    let text_2 = session_2.describe_exported(&saved_in);
+    assert!(text_2.contains("exportado plano.png"), "{text_2}");
+    assert!(text_2.contains("aplanado de 3 capas"), "{text_2}");
+    assert!(text_2.contains("1 oculta"), "{text_2}");
 }
 
 #[test]
-fn fila_11_exportar_con_una_capa_vale_y_sigue_las_reglas_de_ruta_de_guardar_como() {
-    let tmp = Tmp::nuevo();
-    let mut sesion = sesion_con(&["A"]);
+fn row_11_export_with_one_layer_works_and_follows_the_path_rules_of_save_as() {
+    let tmp = Tmp::new_2();
+    let mut session_2 = session_with(&["A"]);
     // Sin extensión se añade `.png`; si ya existe ese fichero no se pisa.
-    let elegido = tmp.ruta().join("salida");
-    let guardado = sesion.export_flat(&elegido).expect("exportar");
-    assert_eq!(guardado.path, tmp.ruta().join("salida.png"));
-    assert!(guardado.path.exists());
-    let otra_vez = sesion.export_flat(&elegido);
+    let chosen = tmp.path_2().join("salida");
+    let saved = session_2.export_flat(&chosen).expect("exportar");
+    assert_eq!(saved.path, tmp.path_2().join("salida.png"));
+    assert!(saved.path.exists());
+    let other_time = session_2.export_flat(&chosen);
     assert!(
-        otra_vez.is_err(),
+        other_time.is_err(),
         "no pisa el fichero al que se añadió .png"
     );
 
     // El original que se convierte al abrir no se sobrescribe: se escribe la copia.
-    let original = tmp.ruta().join("foto.png");
+    let original = tmp.path_2().join("foto.png");
     fs::write(&original, b"original").expect("fichero");
-    sesion.path = Some(original.clone());
-    sesion.conversion = Some("modo".to_string());
-    let guardado = sesion.export_flat(&original).expect("exportar");
-    assert_ne!(guardado.path, original);
+    session_2.path = Some(original.clone());
+    session_2.conversion = Some("modo".to_string());
+    let saved = session_2.export_flat(&original).expect("exportar");
+    assert_ne!(saved.path, original);
     assert_eq!(fs::read(&original).expect("leer"), b"original");
-    assert!(sesion.converted(), "exportar no limpia la conversión");
+    assert!(session_2.converted(), "exportar no limpia la conversión");
 }

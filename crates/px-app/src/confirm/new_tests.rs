@@ -16,9 +16,9 @@ use std::path::PathBuf;
 
 use px_ui::text::INTERFACE_CHARSET;
 
-const AVISO: &str = "hay cambios sin guardar: elige Nueva imagen otra vez en 5 s para descartarlos, o guarda con Ctrl+S";
+const NOTICE: &str = "hay cambios sin guardar: elige Nueva imagen otra vez en 5 s para descartarlos, o guarda con Ctrl+S";
 
-fn otras_peticiones() -> Vec<Request> {
+fn other_requests() -> Vec<Request> {
     vec![
         Request::Open(PathBuf::from("a")),
         Request::Close,
@@ -33,16 +33,16 @@ fn otras_peticiones() -> Vec<Request> {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_new_warning_dice_nueva_imagen_y_los_cinco_segundos() {
+fn row_10_new_warning_says_new_image_and_the_five_seconds() {
     let text = new_warning();
-    assert_eq!(text, AVISO);
+    assert_eq!(text, NOTICE);
     assert!(text.contains("Nueva imagen"));
     assert!(text.contains(&format!("{CONFIRM_SECS:.0} s")));
     assert!(text.contains("Ctrl+S"), "dice cómo guardar");
 }
 
 #[test]
-fn fila_10_new_warning_no_nombra_atajos_de_sistema_y_esta_en_el_juego_de_caracteres() {
+fn row_10_new_warning_does_not_name_system_shortcuts_and_is_in_the_character_set() {
     let text = new_warning();
     assert!(!text.contains("Ctrl+N"), "{text}");
     assert!(!text.contains("Cmd+N"), "{text}");
@@ -59,7 +59,7 @@ fn fila_10_new_warning_no_nombra_atajos_de_sistema_y_esta_en_el_juego_de_caracte
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_10_nueva_imagen_se_arma_y_se_confirma_con_la_misma_peticion_y_se_vacia() {
+fn row_10_new_image_arms_and_confirms_with_the_same_request_and_empties() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(Request::NewImage, 0.0), Confirmation::Armed);
     assert_eq!(
@@ -71,7 +71,7 @@ fn fila_10_nueva_imagen_se_arma_y_se_confirma_con_la_misma_peticion_y_se_vacia()
 }
 
 #[test]
-fn fila_10_a_los_cinco_segundos_justos_la_peticion_armada_ya_caduco() {
+fn row_10_a_at_exactly_five_seconds_the_armed_request_has_already_expired() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(Request::NewImage, 0.0), Confirmation::Armed);
     assert_eq!(
@@ -81,40 +81,40 @@ fn fila_10_a_los_cinco_segundos_justos_la_peticion_armada_ya_caduco() {
 }
 
 #[test]
-fn fila_10_otra_peticion_sustituye_a_la_armada_y_nueva_imagen_no_confirma_a_las_demas() {
-    for otra in otras_peticiones() {
+fn row_10_another_request_replaces_the_armed_one_and_new_image_does_not_confirm_the_others() {
+    for other in other_requests() {
         // Armada otra; `NewImage` no la confirma y la sustituye.
         let mut confirm = Confirm::new();
-        assert_eq!(confirm.request(otra.clone(), 0.0), Confirmation::Armed);
+        assert_eq!(confirm.request(other.clone(), 0.0), Confirmation::Armed);
         assert_eq!(
             confirm.request(Request::NewImage, 1.0),
             Confirmation::Armed,
-            "{otra:?} armada y luego NewImage"
+            "{other:?} armada y luego NewImage"
         );
         assert_eq!(
-            confirm.request(otra.clone(), 2.0),
+            confirm.request(other.clone(), 2.0),
             Confirmation::Armed,
-            "NewImage sustituyó a {otra:?}"
+            "NewImage sustituyó a {other:?}"
         );
 
         // Armada `NewImage`; la otra no la confirma y la sustituye.
         let mut confirm = Confirm::new();
         assert_eq!(confirm.request(Request::NewImage, 0.0), Confirmation::Armed);
         assert_eq!(
-            confirm.request(otra.clone(), 1.0),
+            confirm.request(other.clone(), 1.0),
             Confirmation::Armed,
-            "NewImage armada y luego {otra:?}"
+            "NewImage armada y luego {other:?}"
         );
         assert_eq!(
             confirm.request(Request::NewImage, 2.0),
             Confirmation::Armed,
-            "{otra:?} sustituyó a NewImage"
+            "{other:?} sustituyó a NewImage"
         );
     }
 }
 
 #[test]
-fn fila_10_clear_desarma_nueva_imagen() {
+fn row_10_clear_disarms_new_image() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(Request::NewImage, 0.0), Confirmation::Armed);
     confirm.clear();
@@ -122,7 +122,7 @@ fn fila_10_clear_desarma_nueva_imagen() {
 }
 
 #[test]
-fn fila_10_confirm_armed_acepta_nueva_imagen_solo_dentro_del_plazo_y_no_arma() {
+fn row_10_confirm_armed_accepts_new_image_only_within_the_deadline_and_does_not_arm() {
     let mut confirm = Confirm::new();
     // Sin nada armado: falso y no arma.
     assert!(!confirm.confirm_armed(&Request::NewImage, 0.0));

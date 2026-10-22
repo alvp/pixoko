@@ -153,7 +153,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn la_imagen_de_muestra_tiene_el_tamano_y_los_casos_esperados() {
+    fn the_sample_image_has_the_size_and_the_expected_cases() {
         let image = demo_image();
         assert_eq!((image.width(), image.height()), (WIDTH, HEIGHT));
         let at = |x, y| image.get_pixel(x, y).expect("dentro");
@@ -192,13 +192,13 @@ mod fill_tests {
     use super::*;
 
     /// Recorrido ingenuo pixel a pixel con cola: 4 vecinos y valor exacto (`get_pixel`).
-    fn region_ingenua(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
+    fn region_naive(img: &Image, sx: u32, sy: u32) -> BTreeSet<(u32, u32)> {
         let valor = img.get_pixel(sx, sy).expect("dentro");
         let mut region = BTreeSet::new();
-        let mut cola = VecDeque::new();
+        let mut queue = VecDeque::new();
         region.insert((sx, sy));
-        cola.push_back((sx, sy));
-        while let Some((x, y)) = cola.pop_front() {
+        queue.push_back((sx, sy));
+        while let Some((x, y)) = queue.pop_front() {
             let (xi, yi) = (i64::from(x), i64::from(y));
             for (nx, ny) in [(xi - 1, yi), (xi + 1, yi), (xi, yi - 1), (xi, yi + 1)] {
                 let (Ok(nx), Ok(ny)) = (u32::try_from(nx), u32::try_from(ny)) else {
@@ -206,7 +206,7 @@ mod fill_tests {
                 };
                 if !region.contains(&(nx, ny)) && img.get_pixel(nx, ny) == Ok(valor) {
                     region.insert((nx, ny));
-                    cola.push_back((nx, ny));
+                    queue.push_back((nx, ny));
                 }
             }
         }
@@ -214,39 +214,39 @@ mod fill_tests {
     }
 
     /// Rachas máximas de la región en cada fila, ordenadas por `(y, x_start)`.
-    fn tramos_de(region: &BTreeSet<(u32, u32)>) -> Vec<Span> {
-        let mut tramos: Vec<Span> = Vec::new();
+    fn spans_of(region: &BTreeSet<(u32, u32)>) -> Vec<Span> {
+        let mut spans_2: Vec<Span> = Vec::new();
         // `BTreeSet` de `(x, y)` ordena por `x` primero: se pasa a `(y, x)` para recorrer por filas.
-        let por_filas: BTreeSet<(u32, u32)> = region.iter().map(|&(x, y)| (y, x)).collect();
-        for (y, x) in por_filas {
-            match tramos.last_mut() {
+        let per_rows: BTreeSet<(u32, u32)> = region.iter().map(|&(x, y)| (y, x)).collect();
+        for (y, x) in per_rows {
+            match spans_2.last_mut() {
                 Some(t) if t.y == y && t.x_end == x => t.x_end = x + 1,
-                _ => tramos.push(Span {
+                _ => spans_2.push(Span {
                     y,
                     x_start: x,
                     x_end: x + 1,
                 }),
             }
         }
-        tramos
+        spans_2
     }
 
     /// Cuántas veces ha dado `Ok(true)` un clic de relleno y con qué documento queda.
-    struct Clic {
+    struct Click {
         doc: Document,
         id: px_core::ImageId,
-        cambio: bool,
+        change: bool,
     }
 
     /// Un clic de relleno con la ranura `slot` en `(x, y)` sobre una imagen de muestra nueva:
     /// `Begin`, un `Move` y `End`, con la herramienta elegida con `Select(Fill)`.
-    fn clic(slot: u8, x: i32, y: i32) -> Clic {
+    fn click(slot: u8, x: i32, y: i32) -> Click {
         let mut doc = Document::new(demo_image());
         let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(Tool::Fill));
         assert_eq!(tool.tool(), Tool::Fill);
-        let cambio = tool
+        let change = tool
             .canvas_event(&mut doc, id, slot, CanvasEvent::StrokeBegin((x, y)))
             .expect("el relleno no falla");
         assert_eq!(
@@ -258,83 +258,83 @@ mod fill_tests {
             Ok(false)
         );
         assert!(!tool.busy());
-        Clic { doc, id, cambio }
+        Click { doc, id, change }
     }
 
     /// Fila 13: el resultado de la herramienta es el del oráculo ingenuo, con las cifras a mano.
-    fn comprueba_relleno(slot: u8, (x, y): (u32, u32), pixeles: usize, tramos: usize) {
+    fn checks_fill(slot: u8, (x, y): (u32, u32), pixels_2: usize, spans_2: usize) {
         let original = demo_image();
         let pixel = pixel_for_slot(&original, slot).expect("la ranura tiene color");
-        let region = region_ingenua(&original, x, y);
-        let del_oraculo = tramos_de(&region);
-        assert_eq!(region.len(), pixeles, "píxeles de la región (a mano)");
-        assert_eq!(del_oraculo.len(), tramos, "tramos de la región (a mano)");
+        let region = region_naive(&original, x, y);
+        let of_the_oracle = spans_of(&region);
+        assert_eq!(region.len(), pixels_2, "píxeles de la región (a mano)");
+        assert_eq!(of_the_oracle.len(), spans_2, "tramos de la región (a mano)");
 
-        let hecho = clic(slot, x as i32, y as i32);
-        assert!(hecho.cambio, "Ok(true) en el Begin");
+        let done = click(slot, x as i32, y as i32);
+        assert!(done.change, "Ok(true) en el Begin");
 
         // Igual al oráculo: la original con la región en `pixel` y nada más.
-        let mut esperada = original.clone();
+        let mut expected = original.clone();
         for &(rx, ry) in &region {
-            esperada.set_pixel(rx, ry, pixel).expect("dentro");
+            expected.set_pixel(rx, ry, pixel).expect("dentro");
         }
-        let resultado = hecho.doc.image(hecho.id).expect("hay imagen");
-        assert_eq!(resultado, &esperada);
-        let cambiados = (0..HEIGHT)
+        let result = done.doc.image(done.id).expect("hay imagen");
+        assert_eq!(result, &expected);
+        let changed = (0..HEIGHT)
             .flat_map(|py| (0..WIDTH).map(move |px| (px, py)))
-            .filter(|&(px, py)| resultado.get_pixel(px, py) != original.get_pixel(px, py))
+            .filter(|&(px, py)| result.get_pixel(px, py) != original.get_pixel(px, py))
             .count();
-        assert_eq!(cambiados, pixeles, "solo cambia la región");
+        assert_eq!(changed, pixels_2, "solo cambia la región");
 
         // Un solo `FillSpans` con los tramos del oráculo: mismo peso de historia.
-        let mut referencia = Document::new(original.clone());
+        let mut reference = Document::new(original.clone());
         let rid = ImageId::from_raw(0);
-        let paso = Command::FillSpans {
+        let step = Command::FillSpans {
             image: rid,
-            spans: del_oraculo,
+            spans: of_the_oracle,
             pixel,
         };
-        assert_eq!(referencia.apply(paso), Ok(true));
-        assert_eq!(hecho.doc.history_bytes(), referencia.history_bytes());
-        assert_eq!(resultado, referencia.image(rid).expect("hay imagen"));
+        assert_eq!(reference.apply(step), Ok(true));
+        assert_eq!(done.doc.history_bytes(), reference.history_bytes());
+        assert_eq!(result, reference.image(rid).expect("hay imagen"));
 
         // Un paso y `undo` exacto.
-        let mut doc = hecho.doc;
+        let mut doc = done.doc;
         assert!(doc.can_undo());
         assert_eq!(doc.undo(), Ok(()));
-        assert_eq!(doc.image(hecho.id), Some(&original), "undo exacto");
+        assert_eq!(doc.image(done.id), Some(&original), "undo exacto");
         assert!(!doc.can_undo(), "un solo paso");
         assert_eq!(doc.redo(), Ok(()));
-        assert_eq!(doc.image(hecho.id), Some(&esperada), "redo exacto");
+        assert_eq!(doc.image(done.id), Some(&expected), "redo exacto");
     }
 
     #[test]
-    fn fila_13_el_marco_blanco_son_220_pixeles_en_94_tramos() {
+    fn row_13_the_white_frame_is_220_pixels_in_94_spans() {
         // Ranura 1: negro.
-        comprueba_relleno(1, (0, 0), 220, 94);
+        checks_fill(1, (0, 0), 220, 94);
     }
 
     #[test]
-    fn fila_13_el_agujero_transparente_son_64_pixeles_en_8_tramos() {
+    fn row_13_the_transparent_hole_is_64_pixels_in_8_spans() {
         // Ranura 3: rojo.
-        comprueba_relleno(3, (30, 22), 64, 8);
+        checks_fill(3, (30, 22), 64, 8);
     }
 
     #[test]
-    fn fila_13_un_pixel_interior_es_su_propia_region() {
+    fn row_13_an_interior_pixel_is_its_own_region() {
         // (10, 10) es de la diagonal semitransparente; ningún vecino de 4 vale lo mismo.
-        comprueba_relleno(3, (10, 10), 1, 1);
+        checks_fill(3, (10, 10), 1, 1);
     }
 
     #[test]
-    fn fila_13_un_pixel_de_fuera_del_agujero_ni_del_marco_tambien_es_su_region() {
+    fn row_13_a_pixel_outside_the_hole_and_the_frame_is_also_its_region() {
         // Fuera de la fila 13 de la tabla: otro píxel interior, sin diagonal, también vale distinto
         // que sus vecinos (`(10, 11)` del degradado).
-        comprueba_relleno(3, (10, 11), 1, 1);
+        checks_fill(3, (10, 11), 1, 1);
     }
 
     #[test]
-    fn fila_14_rellenar_con_el_valor_que_ya_hay_no_da_paso() {
+    fn row_14_filling_with_the_value_already_there_gives_no_step() {
         let original = demo_image();
         // (30, 22) ya es transparente y la ranura 9 también; (0, 0) ya es blanco y la ranura 2
         // también.
@@ -344,12 +344,12 @@ mod fill_tests {
                 original.get_pixel(x as u32, y as u32).ok(),
                 "ranura {slot}: el valor ya es ese"
             );
-            let hecho = clic(slot, x, y);
-            assert!(!hecho.cambio, "ranura {slot} en ({x}, {y}): Ok(false)");
-            assert!(!hecho.doc.can_undo(), "sin paso");
-            assert!(!hecho.doc.can_redo());
-            assert_eq!(hecho.doc.history_bytes(), 0);
-            assert_eq!(hecho.doc.image(hecho.id), Some(&original));
+            let done = click(slot, x, y);
+            assert!(!done.change, "ranura {slot} en ({x}, {y}): Ok(false)");
+            assert!(!done.doc.can_undo(), "sin paso");
+            assert!(!done.doc.can_redo());
+            assert_eq!(done.doc.history_bytes(), 0);
+            assert_eq!(done.doc.image(done.id), Some(&original));
         }
     }
 }

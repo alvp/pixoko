@@ -179,7 +179,7 @@ fn run_ok(session: &mut Session, op: PaletteOp) -> String {
     outcome.notice.expect("la operación da un resumen")
 }
 
-/// Pulsar `Quitar` en la activa como el panel: sin píxeles se aplica ya con el destino por
+/// Pulsar `Remove` en la activa como el panel: sin píxeles se aplica ya con el destino por
 /// defecto (`None` si es pendiente); con píxeles queda pendiente con el destino por defecto.
 fn press_remove(session: &mut Session) -> Option<PaletteOutcome> {
     session.normalize();
@@ -237,7 +237,7 @@ fn edit_color(session: &mut Session, index: u8, color: Rgba) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_3_anadir_copia_el_color_de_la_activa_y_selecciona_la_nueva() {
+fn row_3_add_copies_the_color_of_the_active_one_and_selects_the_new_one() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     assert!(!session.view.reveal);
@@ -267,7 +267,7 @@ fn fila_3_anadir_copia_el_color_de_la_activa_y_selecciona_la_nueva() {
 }
 
 #[test]
-fn fila_3_deshacer_y_rehacer_recortan_la_seleccion_y_piden_mostrarla() {
+fn row_3_undo_and_redo_clip_the_selection_and_ask_to_reveal_it() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     run_ok(&mut session, PaletteOp::Add);
@@ -298,7 +298,7 @@ fn fila_3_deshacer_y_rehacer_recortan_la_seleccion_y_piden_mostrarla() {
 }
 
 #[test]
-fn fila_3_la_copia_de_la_transparente_es_su_color_resuelto_y_no_es_transparente() {
+fn row_3_the_copy_of_the_transparent_is_its_resolved_color_and_is_not_transparent() {
     let mut session = Session::sample(Document::new(image_f(Some(3))));
     select(&mut session, ColorChoice::Entry(3));
 
@@ -313,7 +313,7 @@ fn fila_3_la_copia_de_la_transparente_es_su_color_resuelto_y_no_es_transparente(
 }
 
 #[test]
-fn fila_3_con_256_entradas_anadir_da_error_y_no_toca_nada() {
+fn row_3_with_256_entries_add_gives_an_error_and_touches_nothing() {
     let mut session = Session::sample(Document::new(row(&distinct(256), None)));
     select(&mut session, ColorChoice::Entry(10));
     let before = img(&session).clone();
@@ -336,7 +336,7 @@ fn fila_3_con_256_entradas_anadir_da_error_y_no_toca_nada() {
 }
 
 #[test]
-fn fila_3_con_255_entradas_pasa_a_256_y_el_siguiente_da_error() {
+fn row_3_with_255_entries_it_goes_to_256_and_the_next_gives_an_error() {
     let mut session = Session::sample(Document::new(row(&distinct(255), None)));
     select(&mut session, ColorChoice::Entry(254));
 
@@ -357,7 +357,7 @@ fn fila_3_con_255_entradas_pasa_a_256_y_el_siguiente_da_error() {
 }
 
 #[test]
-fn fila_3_con_una_entrada_anadir_da_dos_y_selecciona_la_segunda() {
+fn row_3_with_one_entry_add_gives_two_and_selects_the_second() {
     let mut session = Session::sample(Document::new(indexed(&[RED], None, &[0, 0])));
     run_ok(&mut session, PaletteOp::Add);
     assert_eq!(colors_of(img(&session)), [RED, RED]);
@@ -370,7 +370,7 @@ fn fila_3_con_una_entrada_anadir_da_dos_y_selecciona_la_segunda() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_4_destino_por_defecto_y_uso_de_las_entradas_de_p5() {
+fn row_4_default_target_and_use_of_the_entries_of_p5() {
     let session = session_p5(None);
     let image = img(&session);
     let palette = image.palette().expect("indexada");
@@ -384,7 +384,7 @@ fn fila_4_destino_por_defecto_y_uso_de_las_entradas_de_p5() {
 }
 
 #[test]
-fn fila_4_quitar_con_pixeles_queda_pendiente_y_confirmar_aplica_un_solo_paso() {
+fn row_4_removing_with_pixels_stays_pending_and_confirming_applies_a_single_step() {
     let mut session = session_p5(None);
     select(&mut session, ColorChoice::Entry(3));
     let initial = img(&session).clone();
@@ -434,7 +434,7 @@ fn fila_4_quitar_con_pixeles_queda_pendiente_y_confirmar_aplica_un_solo_paso() {
 }
 
 #[test]
-fn fila_4_cancelar_la_quita_deja_el_documento_intacto() {
+fn row_4_cancelling_the_removal_leaves_the_document_intact() {
     let mut session = session_p5(None);
     select(&mut session, ColorChoice::Entry(3));
     let initial = img(&session).clone();
@@ -455,7 +455,7 @@ fn fila_4_cancelar_la_quita_deja_el_documento_intacto() {
 }
 
 #[test]
-fn fila_4_quitar_una_entrada_sin_pixeles_se_aplica_ya() {
+fn row_4_removing_an_entry_without_pixels_applies_right_away() {
     let mut session = session_p5(None);
     select(&mut session, ColorChoice::Entry(4));
 
@@ -478,7 +478,7 @@ fn fila_4_quitar_una_entrada_sin_pixeles_se_aplica_ya() {
 }
 
 #[test]
-fn fila_4_quitar_de_en_medio_deja_la_seleccion_en_el_mismo_indice() {
+fn row_4_removing_from_the_middle_leaves_the_selection_at_the_same_index() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     let notice = run_ok(&mut session, PaletteOp::Remove { index: 1, into: 0 });
@@ -490,7 +490,7 @@ fn fila_4_quitar_de_en_medio_deja_la_seleccion_en_el_mismo_indice() {
 }
 
 #[test]
-fn fila_4_el_destino_mayor_usa_la_numeracion_posterior_en_el_resumen() {
+fn row_4_the_larger_target_uses_the_later_numbering_in_the_summary() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(0));
     let notice = run_ok(&mut session, PaletteOp::Remove { index: 0, into: 2 });
@@ -505,7 +505,7 @@ fn fila_4_el_destino_mayor_usa_la_numeracion_posterior_en_el_resumen() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_5_la_transparente_no_tiene_destino_por_defecto_y_confirma_con_el_elegido() {
+fn row_5_the_transparent_has_no_default_target_and_confirms_with_the_chosen_one() {
     let mut session = session_p5(Some(3));
     select(&mut session, ColorChoice::Entry(3));
     let initial = img(&session).clone();
@@ -541,7 +541,7 @@ fn fila_5_la_transparente_no_tiene_destino_por_defecto_y_confirma_con_el_elegido
 }
 
 #[test]
-fn fila_5_quitar_la_transparente_sin_pixeles_se_aplica_directo() {
+fn row_5_removing_the_transparent_without_pixels_applies_directly() {
     let mut session = session_p5(Some(4));
     select(&mut session, ColorChoice::Entry(4));
 
@@ -558,7 +558,7 @@ fn fila_5_quitar_la_transparente_sin_pixeles_se_aplica_directo() {
 }
 
 #[test]
-fn fila_5_con_destino_la_transparente_los_pixeles_quedan_transparentes() {
+fn row_5_with_the_transparent_as_target_the_pixels_stay_transparent() {
     // Y es la transparente (4); la entrada 3 pasa sus píxeles a ella.
     let mut session = session_p5(Some(4));
     select(&mut session, ColorChoice::Entry(3));
@@ -570,7 +570,7 @@ fn fila_5_con_destino_la_transparente_los_pixeles_quedan_transparentes() {
 }
 
 #[test]
-fn fila_5_con_una_sola_entrada_quitar_da_error_y_no_deja_nada_pendiente() {
+fn row_5_with_a_single_entry_removing_gives_an_error_and_leaves_nothing_pending() {
     let mut session = Session::sample(Document::new(indexed(&[RED], None, &[0, 0])));
     let before = img(&session).clone();
     let id = session.document.state_id();
@@ -592,7 +592,7 @@ fn fila_5_con_una_sola_entrada_quitar_da_error_y_no_deja_nada_pendiente() {
 }
 
 #[test]
-fn fila_5_duplicadas_quitar_la_1_tiene_destino_0_y_quitar_la_0_destino_1() {
+fn row_5_duplicates_removing_the_1_has_target_0_and_removing_the_0_target_1() {
     let colors = [RED, RED, BLUE];
     for (index, expected_destination, expected_pixels) in
         [(1u8, 0u8, [0u8, 0, 1]), (0, 1, [0, 0, 1])]
@@ -627,7 +627,7 @@ fn fila_5_duplicadas_quitar_la_1_tiene_destino_0_y_quitar_la_0_destino_1() {
 }
 
 #[test]
-fn fila_5_con_256_entradas_quitar_la_ultima_deja_la_254() {
+fn row_5_with_256_entries_removing_the_last_leaves_254() {
     let mut session = Session::sample(Document::new(row(&distinct(256), None)));
     select(&mut session, ColorChoice::Entry(255));
     let initial = img(&session).clone();
@@ -676,7 +676,7 @@ fn rotated_directly(
 }
 
 #[test]
-fn fila_6_rotar_toda_la_paleta_es_igual_que_el_comando_directo() {
+fn row_6_rotating_the_whole_palette_is_the_same_as_the_direct_command() {
     for (steps, expected, notice) in [
         (1, [BLACK, RED, GREEN, BLUE], "paleta rotada a la derecha"),
         (
@@ -706,7 +706,7 @@ fn fila_6_rotar_toda_la_paleta_es_igual_que_el_comando_directo() {
 }
 
 #[test]
-fn fila_6_rotar_con_rango_conserva_la_seleccion_y_el_rango() {
+fn row_6_rotating_with_a_range_keeps_the_selection_and_the_range() {
     for (steps, expected, notice) in [
         (
             1,
@@ -741,7 +741,7 @@ fn fila_6_rotar_con_rango_conserva_la_seleccion_y_el_rango() {
 }
 
 #[test]
-fn fila_6_con_la_transparente_dentro_del_rango_se_queda_en_su_ranura() {
+fn row_6_with_the_transparent_inside_the_range_it_stays_in_its_slot() {
     let mut session = Session::sample(Document::new(image_f(Some(3))));
     select(&mut session, ColorChoice::Entry(2));
     run_ok(
@@ -757,7 +757,7 @@ fn fila_6_con_la_transparente_dentro_del_rango_se_queda_en_su_ranura() {
 }
 
 #[test]
-fn fila_6_rotar_colores_iguales_da_ok_false_con_aviso_y_no_toca_el_documento() {
+fn row_6_rotating_equal_colors_gives_ok_false_with_a_notice_and_does_not_touch_the_document() {
     // Rotar un rango de dos entradas con colores iguales no hace nada.
     let mut session = Session::sample(Document::new(row(&[RED, RED, BLUE], None)));
     let before = img(&session).clone();
@@ -785,7 +785,7 @@ fn fila_6_rotar_colores_iguales_da_ok_false_con_aviso_y_no_toca_el_documento() {
 }
 
 #[test]
-fn fila_6_las_otras_operaciones_borran_el_rango_y_rotar_no() {
+fn row_6_the_other_operations_clear_the_range_and_rotating_does_not() {
     let ops = [
         PaletteOp::Add,
         PaletteOp::Remove { index: 2, into: 0 },
@@ -814,7 +814,7 @@ fn fila_6_las_otras_operaciones_borran_el_rango_y_rotar_no() {
 }
 
 #[test]
-fn fila_6_un_clic_normal_que_cambia_la_eleccion_borra_el_rango() {
+fn row_6_a_normal_click_that_changes_the_choice_clears_the_range() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     session.ops.set_range_end(3);
@@ -828,7 +828,7 @@ fn fila_6_un_clic_normal_que_cambia_la_eleccion_borra_el_rango() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_7_mover_de_0_a_2_reordena_selecciona_to_y_es_un_solo_paso() {
+fn row_7_moving_from_0_to_2_reorders_selects_to_and_is_a_single_step() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(0));
     let initial = img(&session).clone();
@@ -851,7 +851,7 @@ fn fila_7_mover_de_0_a_2_reordena_selecciona_to_y_es_un_solo_paso() {
 }
 
 #[test]
-fn fila_7_mover_a_la_misma_posicion_no_hace_nada() {
+fn row_7_moving_to_the_same_position_does_nothing() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     let before = img(&session).clone();
@@ -894,7 +894,7 @@ fn selection_problem(session: &Session) -> Option<String> {
 }
 
 #[test]
-fn fila_8_tras_deshacer_y_rehacer_la_seleccion_es_valida_y_el_rango_esta_vacio() {
+fn row_8_after_undo_and_redo_the_selection_is_valid_and_the_range_is_empty() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     session.ops.set_range_end(3);
@@ -919,7 +919,7 @@ fn fila_8_tras_deshacer_y_rehacer_la_seleccion_es_valida_y_el_rango_esta_vacio()
 }
 
 #[test]
-fn fila_8_quitar_la_ultima_deshacer_no_persigue_y_rehacer_recorta_con_reveal() {
+fn row_8_removing_the_last_undo_does_not_chase_and_redo_clips_with_reveal() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(3));
     run_ok(&mut session, PaletteOp::Remove { index: 3, into: 2 });
@@ -947,7 +947,7 @@ fn fila_8_quitar_la_ultima_deshacer_no_persigue_y_rehacer_recorta_con_reveal() {
 }
 
 #[test]
-fn fila_8_quitar_de_en_medio_y_mover_no_persiguen_a_la_entrada() {
+fn row_8_removing_from_the_middle_and_moving_do_not_chase_the_entry() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(1));
     run_ok(&mut session, PaletteOp::Remove { index: 1, into: 0 });
@@ -981,7 +981,7 @@ fn fila_8_quitar_de_en_medio_y_mover_no_persiguen_a_la_entrada() {
 }
 
 #[test]
-fn fila_8_undo_y_redo_sin_nada_que_hacer_dan_error_y_no_tocan_nada() {
+fn row_8_undo_and_redo_with_nothing_to_do_give_an_error_and_touch_nothing() {
     let mut session = session_f();
     select(&mut session, ColorChoice::Entry(2));
     let before = img(&session).clone();
@@ -1008,7 +1008,7 @@ fn session_with_pending_removal() -> Session {
 }
 
 #[test]
-fn fila_9_sin_cambios_en_el_documento_la_quita_sigue_y_no_avisa() {
+fn row_9_without_changes_in_the_document_the_removal_continues_and_does_not_warn() {
     let mut session = session_with_pending_removal();
     for _ in 0..3 {
         session.normalize();
@@ -1024,7 +1024,7 @@ fn fila_9_sin_cambios_en_el_documento_la_quita_sigue_y_no_avisa() {
 }
 
 #[test]
-fn fila_9_deshacer_cancela_la_quita_y_avisa_una_sola_vez() {
+fn row_9_undo_cancels_the_removal_and_warns_only_once() {
     let mut session = session_p5(None);
     edit_color(&mut session, 4, BLACK);
     select(&mut session, ColorChoice::Entry(3));
@@ -1038,7 +1038,7 @@ fn fila_9_deshacer_cancela_la_quita_y_avisa_una_sola_vez() {
 }
 
 #[test]
-fn fila_9_rehacer_cancela_la_quita() {
+fn row_9_redo_cancels_the_removal() {
     let mut session = session_p5(None);
     edit_color(&mut session, 4, BLACK);
     session.undo().expect("deshacer");
@@ -1052,7 +1052,7 @@ fn fila_9_rehacer_cancela_la_quita() {
 }
 
 #[test]
-fn fila_9_un_apply_directo_cancela_la_quita_al_normalizar() {
+fn row_9_a_direct_apply_cancels_the_removal_when_normalizing() {
     let mut session = session_with_pending_removal();
     edit_color(&mut session, 0, BLACK);
     session.normalize();
@@ -1062,7 +1062,7 @@ fn fila_9_un_apply_directo_cancela_la_quita_al_normalizar() {
 }
 
 #[test]
-fn fila_9_abrir_otro_fichero_cancela_la_quita_y_avisa_una_vez() {
+fn row_9_opening_another_file_cancels_the_removal_and_warns_once() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_f(None));
     let mut session = session_with_pending_removal();
@@ -1075,7 +1075,7 @@ fn fila_9_abrir_otro_fichero_cancela_la_quita_y_avisa_una_vez() {
 }
 
 #[test]
-fn fila_9_un_open_con_error_no_cancela_la_quita() {
+fn row_9_an_open_with_an_error_does_not_cancel_the_removal() {
     let tmp = TmpDir::new();
     let mut session = session_with_pending_removal();
     let result = session.open(&tmp.path().join("no-existe.png"), 16384, true);
@@ -1086,7 +1086,7 @@ fn fila_9_un_open_con_error_no_cancela_la_quita() {
 }
 
 #[test]
-fn fila_9_abrir_sin_quita_pendiente_no_avisa_y_reinicia_el_rango() {
+fn row_9_opening_without_a_pending_removal_does_not_warn_and_resets_the_range() {
     let tmp = TmpDir::new();
     let path = write_image(tmp.path(), "otro.png", &image_f(None));
     let mut session = session_f();
@@ -1097,7 +1097,7 @@ fn fila_9_abrir_sin_quita_pendiente_no_avisa_y_reinicia_el_rango() {
 }
 
 #[test]
-fn fila_9_la_op_remove_de_la_propia_quita_no_deja_el_aviso() {
+fn row_9_the_remove_op_of_the_removal_itself_does_not_leave_the_notice() {
     let mut session = session_with_pending_removal();
     let outcome = confirm_removal(&mut session).expect("confirmar");
     assert!(outcome.changed);
@@ -1107,7 +1107,7 @@ fn fila_9_la_op_remove_de_la_propia_quita_no_deja_el_aviso() {
 }
 
 #[test]
-fn fila_9_otra_operacion_cancela_la_quita_y_deja_el_aviso() {
+fn row_9_another_operation_cancels_the_removal_and_leaves_the_notice() {
     let ops = [
         PaletteOp::Add,
         PaletteOp::Move { from: 3, to: 1 },
@@ -1128,7 +1128,7 @@ fn fila_9_otra_operacion_cancela_la_quita_y_deja_el_aviso() {
 }
 
 #[test]
-fn fila_9_una_operacion_que_no_cambia_nada_no_cancela_la_quita() {
+fn row_9_an_operation_that_changes_nothing_does_not_cancel_the_removal() {
     let mut session = session_with_pending_removal();
     let outcome = session
         .apply_palette_op(
@@ -1147,7 +1147,7 @@ fn fila_9_una_operacion_que_no_cambia_nada_no_cancela_la_quita() {
 }
 
 #[test]
-fn fila_9_el_aviso_de_cancelacion_es_el_de_la_spec() {
+fn row_9_the_cancellation_notice_is_the_spec_one() {
     assert_eq!(
         REMOVAL_CANCELLED_NOTICE,
         "quitar cancelado: el documento cambió"
@@ -1171,7 +1171,7 @@ fn session_with_pending_text() -> Session {
 }
 
 #[test]
-fn fila_10_el_texto_pendiente_se_descarta_o_se_conserva_segun_el_destino_de_la_entrada() {
+fn row_10_the_pending_text_is_discarded_or_kept_depending_on_the_entry_target() {
     // (operación, aviso de descarte o `None` si el texto se conserva, resumen).
     let cases: [(PaletteOp, Option<&str>, &str); 11] = [
         (
@@ -1264,7 +1264,7 @@ fn fila_10_el_texto_pendiente_se_descarta_o_se_conserva_segun_el_destino_de_la_e
 }
 
 #[test]
-fn fila_10_el_texto_descartado_no_se_aplica_al_documento() {
+fn row_10_the_discarded_text_is_not_applied_to_the_document() {
     let mut session = session_with_pending_text();
     let before = colors_of(img(&session));
     run_ok(&mut session, PaletteOp::Move { from: 3, to: 5 });
@@ -1283,7 +1283,7 @@ fn fila_10_el_texto_descartado_no_se_aplica_al_documento() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_con_una_entrada_rotar_da_ok_false_y_anadir_da_dos() {
+fn row_11_with_one_entry_rotate_gives_ok_false_and_add_gives_two() {
     let mut session = Session::sample(Document::new(indexed(&[RED], None, &[0])));
     let outcome = session
         .apply_palette_op(
@@ -1304,7 +1304,7 @@ fn fila_11_con_una_entrada_rotar_da_ok_false_y_anadir_da_dos() {
 }
 
 #[test]
-fn fila_11_con_256_entradas_mover_de_0_a_255_selecciona_la_255() {
+fn row_11_with_256_entries_moving_from_0_to_255_selects_255() {
     let mut session = Session::sample(Document::new(row(&distinct(256), None)));
     select(&mut session, ColorChoice::Entry(0));
     let first = colors_of(img(&session))[0];
@@ -1315,7 +1315,7 @@ fn fila_11_con_256_entradas_mover_de_0_a_255_selecciona_la_255() {
 }
 
 #[test]
-fn fila_11_la_transparente_en_0_se_lleva_con_mover_y_en_la_ultima_no_se_mueve_al_rotar() {
+fn row_11_the_transparent_at_0_goes_with_move_and_at_the_last_does_not_move_when_rotating() {
     let mut session = Session::sample(Document::new(image_f(Some(0))));
     select(&mut session, ColorChoice::Entry(0));
     run_ok(&mut session, PaletteOp::Move { from: 0, to: 3 });
@@ -1335,7 +1335,7 @@ fn fila_11_la_transparente_en_0_se_lleva_con_mover_y_en_la_ultima_no_se_mueve_al
 }
 
 #[test]
-fn fila_11_un_rango_de_toda_la_paleta_da_los_mismos_pasos_que_sin_rango() {
+fn row_11_a_range_of_the_whole_palette_gives_the_same_steps_as_without_a_range() {
     let mut with_range = session_f();
     select(&mut with_range, ColorChoice::Entry(0));
     with_range.ops.set_range_end(3);
@@ -1405,7 +1405,7 @@ fn assert_nothing_to_rotate(session: &mut Session, op: PaletteOp) {
 }
 
 #[test]
-fn fila_13_rotar_con_una_entrada_da_ok_false_sin_paso_y_con_aviso() {
+fn row_13_rotating_with_one_entry_gives_ok_false_without_a_step_and_with_a_notice() {
     for steps in [1, -1] {
         let mut session = with_undo_and_redo(&[RED]);
         assert_eq!(len_of(&session), 1);
@@ -1421,7 +1421,7 @@ fn fila_13_rotar_con_una_entrada_da_ok_false_sin_paso_y_con_aviso() {
 }
 
 #[test]
-fn fila_13_rotar_con_un_rango_de_una_entrada_da_ok_false_y_conserva_el_rango() {
+fn row_13_rotating_with_a_one_entry_range_gives_ok_false_and_keeps_the_range() {
     for steps in [1, -1] {
         let mut session = with_undo_and_redo(&[RED, GREEN, BLUE, BLACK]);
         select(&mut session, ColorChoice::Entry(2));
@@ -1440,7 +1440,7 @@ fn fila_13_rotar_con_un_rango_de_una_entrada_da_ok_false_y_conserva_el_rango() {
 #[derive(Clone, Debug)]
 enum Action {
     Add,
-    /// `Quitar` en la activa: con quita pendiente, `Confirmar` o `Cancelar`; sin ella, empieza
+    /// `Remove` en la activa: con quita pendiente, `Confirmar` o `Cancel`; sin ella, empieza
     /// (o se aplica ya) con un destino aleatorio.
     Remove {
         dest: u8,
@@ -1706,7 +1706,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
     #[test]
-    fn propiedad_4_sesion_indexada_con_acciones_mezcladas(
+    fn property_4_indexed_session_with_mixed_actions(
         initial in arb_image(),
         actions in prop::collection::vec(arb_action(), 0..=24),
     ) {

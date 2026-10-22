@@ -233,7 +233,7 @@ fn assert_in_charset(text: &str) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_5_sin_extension_escribe_nombre_png() {
+fn row_5_without_an_extension_it_writes_name_png() {
     let tmp = TmpDir::new();
     let mut session = modified_session();
     let expected = main_image(&session.document).clone();
@@ -253,7 +253,7 @@ fn fila_5_sin_extension_escribe_nombre_png() {
 }
 
 #[test]
-fn fila_5_la_eleccion_sobrescribe_un_png_existente_entero() {
+fn row_5_the_choice_overwrites_an_existing_png_entirely() {
     let tmp = TmpDir::new();
     let old = tmp.path().join("viejo.png");
     fs::write(&old, vec![0xAAu8; 1024]).unwrap();
@@ -276,7 +276,7 @@ fn fila_5_la_eleccion_sobrescribe_un_png_existente_entero() {
 }
 
 #[test]
-fn fila_5_si_se_anade_la_extension_y_existe_es_exists_y_no_escribe_nada() {
+fn row_5_if_the_extension_is_added_and_it_exists_it_is_exists_and_writes_nothing() {
     let tmp = TmpDir::new();
     let existing = tmp.path().join("otro.png");
     fs::write(&existing, b"no tocar").unwrap();
@@ -297,7 +297,7 @@ fn fila_5_si_se_anade_la_extension_y_existe_es_exists_y_no_escribe_nada() {
 }
 
 #[test]
-fn fila_5_exists_tambien_con_otra_extension_distinta_de_png() {
+fn row_5_exists_also_with_another_extension_other_than_png() {
     let tmp = TmpDir::new();
     fs::write(tmp.path().join("casa.bmp.png"), b"no tocar").unwrap();
     let mut session = modified_session();
@@ -312,7 +312,7 @@ fn fila_5_exists_tambien_con_otra_extension_distinta_de_png() {
 }
 
 #[test]
-fn fila_5_extension_png_en_mayusculas_no_se_toca() {
+fn row_5_uppercase_png_extension_is_left_alone() {
     let tmp = TmpDir::new();
     let mut session = modified_session();
 
@@ -325,7 +325,7 @@ fn fila_5_extension_png_en_mayusculas_no_se_toca() {
 }
 
 #[test]
-fn fila_5_otra_extension_recibe_png_al_final() {
+fn row_5_another_extension_gets_png_at_the_end() {
     let tmp = TmpDir::new();
     let mut session = modified_session();
 
@@ -336,7 +336,7 @@ fn fila_5_otra_extension_recibe_png_al_final() {
 }
 
 #[test]
-fn fila_5_un_directorio_que_no_existe_es_error_y_la_sesion_no_cambia() {
+fn row_5_a_directory_that_does_not_exist_is_an_error_and_the_session_does_not_change() {
     let tmp = TmpDir::new();
     let mut session = modified_session();
     let before = session.document.clone();
@@ -351,7 +351,7 @@ fn fila_5_un_directorio_que_no_existe_es_error_y_la_sesion_no_cambia() {
 }
 
 #[test]
-fn fila_5_la_ruta_del_documento_sin_conversion_se_sobrescribe_sin_motivo() {
+fn row_5_the_document_path_without_conversion_is_overwritten_without_a_reason() {
     let tmp = TmpDir::new();
     write_plain_png(tmp.path(), "y.png");
     let mut session = Session::sample(Document::new(sample_image()));
@@ -401,7 +401,7 @@ fn assert_copy_written(tmp: &Path, session: &Session, saved: &Saved, original: &
 }
 
 #[test]
-fn fila_6_elegir_la_ruta_del_documento_escribe_la_copia() {
+fn row_6_choosing_the_document_path_writes_the_copy() {
     let tmp = TmpDir::new();
     let (mut session, original) = converted_session(tmp.path());
 
@@ -412,7 +412,7 @@ fn fila_6_elegir_la_ruta_del_documento_escribe_la_copia() {
 }
 
 #[test]
-fn fila_6_una_ruta_equivalente_con_punto_y_punto_punto_tambien() {
+fn row_6_an_equivalent_path_with_dot_and_dot_dot_too() {
     for variant in ["dot", "dotdot"] {
         let tmp = TmpDir::new();
         let (mut session, original) = converted_session(tmp.path());
@@ -435,7 +435,7 @@ fn fila_6_una_ruta_equivalente_con_punto_y_punto_punto_tambien() {
 
 #[cfg(unix)]
 #[test]
-fn fila_6_un_enlace_simbolico_al_documento_tambien() {
+fn row_6_a_symbolic_link_to_the_document_too() {
     let tmp = TmpDir::new();
     let (mut session, original) = converted_session(tmp.path());
     std::os::unix::fs::symlink(tmp.path().join("x.png"), tmp.path().join("link.png")).unwrap();
@@ -456,7 +456,7 @@ fn fila_6_un_enlace_simbolico_al_documento_tambien() {
 }
 
 #[test]
-fn fila_6_si_el_original_ya_no_existe_se_compara_con_la_ruta_absoluta() {
+fn row_6_if_the_original_no_longer_exists_it_is_compared_with_the_absolute_path() {
     // `canonicalize` falla sin el fichero: se compara con `std::path::absolute`.
     let tmp = TmpDir::new();
     let (mut session, _original) = converted_session(tmp.path());
@@ -474,7 +474,8 @@ fn fila_6_si_el_original_ya_no_existe_se_compara_con_la_ruta_absoluta() {
 }
 
 #[test]
-fn fila_6_con_otra_ruta_se_escribe_la_elegida_sin_motivo_y_se_borra_la_conversion() {
+fn row_6_with_another_path_the_chosen_one_is_written_without_a_reason_and_the_conversion_is_cleared()
+ {
     let tmp = TmpDir::new();
     let (mut session, original) = converted_session(tmp.path());
 
@@ -528,7 +529,7 @@ fn finished_open(result: Option<PathBuf>, discard: bool) -> Finished {
 }
 
 #[test]
-fn fila_8_chosen_con_discard_abre_y_descarta() {
+fn row_8_chosen_with_discard_opens_and_discards() {
     let path = corpus().remove(0);
     let expected = read_png(&fs::read(&path).unwrap()).unwrap().image;
     let mut session = modified_session();
@@ -551,7 +552,7 @@ fn fila_8_chosen_con_discard_abre_y_descarta() {
 }
 
 #[test]
-fn fila_8_cancelled_deja_la_sesion_intacta() {
+fn row_8_cancelled_leaves_the_session_intact() {
     let session = modified_session();
     let before = session.document.clone();
 
@@ -565,7 +566,7 @@ fn fila_8_cancelled_deja_la_sesion_intacta() {
 }
 
 #[test]
-fn fila_8_chosen_de_un_fichero_que_no_es_png_es_error_y_deja_la_sesion_intacta() {
+fn row_8_chosen_of_a_file_that_is_not_a_png_is_an_error_and_leaves_the_session_intact() {
     let tmp = TmpDir::new();
     let text = tmp.path().join("nota.png");
     fs::write(&text, b"esto no es un PNG").unwrap();
@@ -589,7 +590,7 @@ fn fila_8_chosen_de_un_fichero_que_no_es_png_es_error_y_deja_la_sesion_intacta()
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_9_segunda_pulsacion_de_guardar_escribe_sin_titulo_en_el_directorio() {
+fn row_9_second_press_of_save_writes_untitled_in_the_directory() {
     let tmp = TmpDir::new();
     let mut confirm = Confirm::new();
     let mut session = modified_session();
@@ -614,7 +615,7 @@ fn fila_9_segunda_pulsacion_de_guardar_escribe_sin_titulo_en_el_directorio() {
 }
 
 #[test]
-fn fila_9_la_segunda_pulsacion_no_pisa_un_sin_titulo_existente() {
+fn row_9_the_second_press_does_not_overwrite_an_existing_untitled() {
     let tmp = TmpDir::new();
     fs::write(tmp.path().join("sin-titulo.png"), b"no tocar").unwrap();
     let mut confirm = Confirm::new();
@@ -634,7 +635,7 @@ fn fila_9_la_segunda_pulsacion_no_pisa_un_sin_titulo_existente() {
 }
 
 #[test]
-fn fila_9_segunda_pulsacion_de_guardar_como_escribe_la_copia() {
+fn row_9_second_press_of_save_as_writes_the_copy() {
     let tmp = TmpDir::new();
     let original = write_plain_png(tmp.path(), "y.png");
     let mut session = Session::sample(Document::new(sample_image()));
@@ -655,7 +656,7 @@ fn fila_9_segunda_pulsacion_de_guardar_como_escribe_la_copia() {
 }
 
 #[test]
-fn fila_9_sin_segunda_pulsacion_no_se_escribe_nada() {
+fn row_9_without_a_second_press_nothing_is_written() {
     // Expirada o de otra clase: `confirm_armed` es falso y la app abre el diálogo, no escribe.
     let tmp = TmpDir::new();
     let mut confirm = Confirm::new();
@@ -673,7 +674,7 @@ fn fila_9_sin_segunda_pulsacion_no_se_escribe_nada() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_12_display_de_exists_dice_solo_el_nombre() {
+fn row_12_display_of_exists_says_only_the_name() {
     let error = FileError::Exists(PathBuf::from("/a/b/casa.png"));
     let text = error.to_string();
     assert_eq!(text, "ya existe casa.png; elige otro nombre");
@@ -682,7 +683,7 @@ fn fila_12_display_de_exists_dice_solo_el_nombre() {
 }
 
 #[test]
-fn fila_12_describe_saved_dialog_con_copia_dice_que_el_original_no_se_toco() {
+fn row_12_describe_saved_dialog_with_a_copy_says_the_original_was_not_touched() {
     let saved = Saved {
         path: PathBuf::from("/a/b/casa-copia.png"),
         copy_reason: Some("RGB convertido a RGBA".to_string()),
@@ -696,7 +697,7 @@ fn fila_12_describe_saved_dialog_con_copia_dice_que_el_original_no_se_toco() {
 }
 
 #[test]
-fn fila_12_describe_saved_dialog_sin_copia_dice_guardado() {
+fn row_12_describe_saved_dialog_without_a_copy_says_saved() {
     let saved = Saved {
         path: PathBuf::from("/a/b/casa.png"),
         copy_reason: None,

@@ -8,21 +8,21 @@ use px_formats::{read_png, write_png};
 use px_raster::compose;
 use px_ui::canvas::Canvas;
 
-use super::model::Pila;
+use super::model::Stack;
 use super::scripts::{
-    guion_corto_indexado, guion_corto_rgba, guion_indexado, guion_rgba, sesion_indexada,
-    sesion_rgba,
+    script_indexed, script_rgba, script_short_indexed, script_short_rgba, session_indexed_2,
+    session_rgba,
 };
-use super::world::Mundo3;
+use super::world::World3;
 use super::{
-    Trabajo3, comprobar_golden_aseprite, fuera_de_golden_aseprite, golden_aseprite,
-    igual_salvo_rgb_con_alfa_0, inicial,
+    Work3, check_golden_aseprite, equal_except_rgb_with_alpha_0, golden_aseprite, initial,
+    outside_golden_aseprite,
 };
 use crate::convert_mode::WAIT_FRAMES;
 use crate::dialogs::{DialogKind, Outcome, SaveRoute, proposed_save_name};
 use crate::gate::common::sha256::sha256_hex;
 use crate::gate::common::{
-    comparar_instantaneas, dialogos, nombres_en, sesion_vacia, sin_temporales,
+    compare_snapshots, dialogs_2, names_in, session_empty, without_temporary,
 };
 use crate::save_wait::{StartSave, aseprite_pixels, save_pixels, start_save};
 use crate::session::with_flatten_notice;
@@ -32,24 +32,24 @@ use crate::session::with_flatten_notice;
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_05_rgba_de_punta_a_punta() {
-    let mut w = Mundo3::de_sesion(sesion_rgba(), "rgba");
-    guion_rgba(&mut w);
-    assert!(w.pasos() >= 35, "el guion hace {} pasos", w.pasos());
+fn row_05_rgba_end_to_end() {
+    let mut w = World3::of_session(session_rgba(), "rgba");
+    script_rgba(&mut w);
+    assert!(w.steps_2() >= 35, "el guion hace {} pasos", w.steps_2());
     assert!(w.s.modified());
 }
 
 #[test]
-fn fila_06_indexado_de_punta_a_punta() {
-    let mut w = Mundo3::de_sesion(sesion_indexada(), "indexado");
-    guion_indexado(&mut w);
-    assert!(w.pasos() >= 20, "el guion hace {} pasos", w.pasos());
-    // La paleta es la misma en todas las celdas tras cada orden (la comprueba `igual` del modelo,
+fn row_06_indexed_end_to_end() {
+    let mut w = World3::of_session(session_indexed_2(), "indexado");
+    script_indexed(&mut w);
+    assert!(w.steps_2() >= 20, "el guion hace {} pasos", w.steps_2());
+    // La paleta es la misma en todas las celdas tras cada orden (la comprueba `equal` del modelo,
     // que compara la paleta del documento) y, además, la de cada celda.
-    let paleta = w.s.document.palette().expect("paleta").clone();
-    for capa in w.s.document.layers() {
-        if let Some(imagen) = w.s.document.image(capa.cel()) {
-            assert_eq!(imagen.palette(), Some(&paleta), "paleta de la celda");
+    let palette = w.s.document.palette().expect("paleta").clone();
+    for layer_2 in w.s.document.layers() {
+        if let Some(image_2) = w.s.document.image(layer_2.cel()) {
+            assert_eq!(image_2.palette(), Some(&palette), "paleta de la celda");
         }
     }
 }
@@ -58,154 +58,154 @@ fn fila_06_indexado_de_punta_a_punta() {
 // Fila 7: deshacer y rehacer todo.
 // ---------------------------------------------------------------------------------------
 
-fn historia(mut w: Mundo3) {
-    let pasos = w.pasos();
+fn history(mut w: World3) {
+    let steps_2 = w.steps_2();
     let ultimo = w.leer();
-    assert_eq!(w.deshacer_todo(), pasos, "deshacer hasta el principio");
+    assert_eq!(w.undo_all(), steps_2, "deshacer hasta el principio");
     assert_eq!(w.s.document.state_id(), 0, "al principio, state_id 0");
     assert!(!w.s.modified(), "al principio no hay cambios");
-    assert_eq!(w.m.capas.len(), 1, "al principio, el documento original");
-    assert_eq!(w.rehacer_todo(), pasos, "rehacer hasta el final");
+    assert_eq!(w.m.layers_2.len(), 1, "al principio, el documento original");
+    assert_eq!(w.redo_all(), steps_2, "rehacer hasta el final");
     ultimo
-        .igual_contenido(&w.leer())
+        .equal_content(&w.leer())
         .expect("el final es el final");
     assert!(w.s.modified());
 
     // Guardado en medio, una orden nueva tras deshacer y el estado guardado deja de ser alcanzable.
     for _ in 0..5 {
-        w.deshacer();
+        w.undo();
     }
     w.s.mark_unmodified();
-    w.marcar_guardado();
+    w.mark_saved();
     assert!(!w.s.modified());
-    w.deshacer();
+    w.undo();
     assert!(w.s.modified(), "un paso antes de lo guardado");
-    assert!(w.aplicar(&super::model::Orden::Nueva));
+    assert!(w.apply(&super::model::Order::New));
     assert!(w.s.modified());
-    w.rehacer(); // al final de la rama: `NothingToRedo`, comprobado dentro.
-    w.deshacer();
+    w.redo(); // al final de la rama: `NothingToRedo`, comprobado dentro.
+    w.undo();
     assert!(
         w.s.modified(),
         "el estado guardado ya no es alcanzable: sigue modificado"
     );
-    w.comprobar();
+    w.check();
 }
 
 #[test]
-fn fila_07_deshacer_y_rehacer_todo_en_rgba_y_en_indexado() {
-    let mut rgba = Mundo3::de_sesion(sesion_rgba(), "historia rgba");
-    guion_rgba(&mut rgba);
-    historia(rgba);
-    let mut indexado = Mundo3::de_sesion(sesion_indexada(), "historia indexado");
-    guion_indexado(&mut indexado);
-    historia(indexado);
+fn row_07_undo_and_redo_everything_in_rgba_and_in_indexed() {
+    let mut rgba = World3::of_session(session_rgba(), "historia rgba");
+    script_rgba(&mut rgba);
+    history(rgba);
+    let mut indexed_2 = World3::of_session(session_indexed_2(), "historia indexado");
+    script_indexed(&mut indexed_2);
+    history(indexed_2);
 }
 
 // ---------------------------------------------------------------------------------------
 // Fila 8: guardar y reabrir.
 // ---------------------------------------------------------------------------------------
 
-fn guardar_y_reabrir(indexado: bool) {
-    let t = Trabajo3::nuevo();
-    let etiqueta = if indexado {
+fn save_and_reopen(indexed_2: bool) {
+    let t = Work3::new_2();
+    let label_2 = if indexed_2 {
         "guardar indexado"
     } else {
         "guardar rgba"
     };
-    let mut w = Mundo3::de_sesion(
-        if indexado {
-            sesion_indexada()
+    let mut w = World3::of_session(
+        if indexed_2 {
+            session_indexed_2()
         } else {
-            sesion_rgba()
+            session_rgba()
         },
-        etiqueta,
+        label_2,
     );
-    if indexado {
-        guion_corto_indexado(&mut w);
+    if indexed_2 {
+        script_short_indexed(&mut w);
     } else {
-        guion_corto_rgba(&mut w);
+        script_short_rgba(&mut w);
     }
-    let capas = w.m.capas.len();
-    assert!(capas >= 3);
+    let layers_2 = w.m.layers_2.len();
+    assert!(layers_2 >= 3);
 
-    // `Ctrl+S` sin ruta con 3 o más capas: diálogo que propone `sin-titulo.aseprite`.
+    // `Ctrl+S` sin ruta con 3 o más capas: diálogo que propone `without-title.aseprite`.
     assert_eq!(w.s.save_route(), SaveRoute::Dialog);
-    let (mut dialogos, mando) = dialogos(t.ruta());
-    let propuesto = PathBuf::from(proposed_save_name(w.s.path(), capas));
-    assert!(dialogos.begin(
+    let (mut dialogs_2, control) = dialogs_2(t.path_2());
+    let proposed = PathBuf::from(proposed_save_name(w.s.path(), layers_2));
+    assert!(dialogs_2.begin(
         DialogKind::Save,
         false,
-        Some(&propuesto),
+        Some(&proposed),
         w.s.converted(),
         0.0,
         None
     ));
     assert_eq!(
-        mando.ultima().file_name.as_deref(),
+        control.last_2().file_name.as_deref(),
         Some("sin-titulo.aseprite")
     );
-    let destino = t.ruta().join("prueba.aseprite");
-    mando.elegir(&destino);
-    let terminado = dialogos.poll(1.0).expect("el diálogo terminó");
-    let Outcome::Chosen(elegida) = terminado.outcome else {
+    let target_2 = t.path_2().join("prueba.aseprite");
+    control.choose(&target_2);
+    let finished = dialogs_2.poll(1.0).expect("el diálogo terminó");
+    let Outcome::Chosen(chosen) = finished.outcome else {
         panic!("el diálogo no eligió ninguna ruta");
     };
-    fuera_de_golden_aseprite(&elegida);
-    let guardado = w.s.save_to(&elegida).expect("guardar el .aseprite");
-    assert_eq!(guardado.path, destino);
-    assert!(guardado.copy_reason.is_none());
-    w.marcar_guardado();
+    outside_golden_aseprite(&chosen);
+    let saved = w.s.save_to(&chosen).expect("guardar el .aseprite");
+    assert_eq!(saved.path, target_2);
+    assert!(saved.copy_reason.is_none());
+    w.mark_saved();
     assert_eq!(
         w.s.path(),
-        Some(destino.as_path()),
+        Some(target_2.as_path()),
         "la sesión pasa a ese fichero"
     );
     assert_eq!(w.s.save_route(), SaveRoute::Direct);
-    assert_eq!(t.nombres(), vec!["prueba.aseprite".to_string()]);
+    assert_eq!(t.names(), vec!["prueba.aseprite".to_string()]);
 
     // Reabrir: la capa activa es la de arriba y el documento es el de antes, sin ids.
-    let mut otra = sesion_vacia();
-    let aviso = otra
-        .open(&destino, Canvas::MAX_SIDE, true)
+    let mut other = session_empty();
+    let notice = other
+        .open(&target_2, Canvas::MAX_SIDE, true)
         .expect("reabrir el .aseprite");
-    assert!(aviso.contains("prueba.aseprite"), "{aviso}");
-    assert!(!otra.converted() && !otra.modified());
-    assert_eq!(otra.document.state_id(), 0);
-    let ultima = otra.document.layers().last().expect("capas").id();
+    assert!(notice.contains("prueba.aseprite"), "{notice}");
+    assert!(!other.converted() && !other.modified());
+    assert_eq!(other.document.state_id(), 0);
+    let last_2 = other.document.layers().last().expect("capas").id();
     assert_eq!(
-        otra.active_layer(),
-        ultima,
+        other.active_layer(),
+        last_2,
         "la capa activa es la de arriba"
     );
-    let leida = Pila::de_documento(&otra.document, capas - 1);
-    w.m.canonica()
-        .igual_contenido(&leida.canonica())
+    let read = Stack::of_document(&other.document, layers_2 - 1);
+    w.m.canonical()
+        .equal_content(&read.canonical())
         .expect("el reabierto es el documento guardado");
     let antes = compose(&w.s.document).expect("compose");
-    let despues = compose(&otra.document).expect("compose");
-    igual_salvo_rgb_con_alfa_0(&antes, &despues).expect("la composición sobrevive");
-    if !indexado {
-        // Vector a mano de 3.2: Multiplicar de `ORIGEN` sobre `FONDO`.
+    let after_2 = compose(&other.document).expect("compose");
+    equal_except_rgb_with_alpha_0(&antes, &after_2).expect("la composición sobrevive");
+    if !indexed_2 {
+        // Vector a mano de 3.2: Multiplicar de `SOURCE` sobre `TEST_BACKGROUND`.
         assert_eq!(
-            super::rgba_de(&despues, 0, 0),
+            super::rgba_de(&after_2, 0, 0),
             px_core::Rgba::new(69, 11, 45, 255)
         );
     }
 
     // Exportar el PNG aplanado: ni ruta, ni historia ni «modificado» cambian.
-    let (id, ruta_doc) = (w.s.document.state_id(), w.s.path().map(Path::to_path_buf));
-    let plano = t.ruta().join("plano");
-    fuera_de_golden_aseprite(&plano);
-    let exportado = w.s.export_flat(&plano).expect("exportar");
-    assert_eq!(exportado.path, t.ruta().join("plano.png"));
+    let (id, path_doc) = (w.s.document.state_id(), w.s.path().map(Path::to_path_buf));
+    let plane = t.path_2().join("plano");
+    outside_golden_aseprite(&plane);
+    let exported = w.s.export_flat(&plane).expect("exportar");
+    assert_eq!(exported.path, t.path_2().join("plano.png"));
     assert_eq!(w.s.document.state_id(), id);
-    assert_eq!(w.s.path(), ruta_doc.as_deref());
+    assert_eq!(w.s.path(), path_doc.as_deref());
     assert!(!w.s.modified());
-    let png = read_png(&fs::read(&exportado.path).expect("leer"))
+    let png = read_png(&fs::read(&exported.path).expect("leer"))
         .expect("PNG")
         .image;
-    igual_salvo_rgb_con_alfa_0(&png, &antes).expect("el PNG exportado es la composición");
-    if !indexado {
+    equal_except_rgb_with_alpha_0(&png, &antes).expect("el PNG exportado es la composición");
+    if !indexed_2 {
         assert_eq!(
             super::rgba_de(&png, 0, 0),
             px_core::Rgba::new(69, 11, 45, 255)
@@ -213,25 +213,28 @@ fn guardar_y_reabrir(indexado: bool) {
     }
 
     // Guardar como PNG: aplanado, con su aviso, y la sesión pasa a ese PNG.
-    let aviso = with_flatten_notice("guardado".to_string(), &w.s.document);
-    assert!(aviso.contains("se guarda aplanado"), "{aviso}");
-    let otro = t.ruta().join("aplanado.png");
-    fuera_de_golden_aseprite(&otro);
-    let guardado = w.s.save_to(&otro).expect("guardar el PNG aplanado");
-    assert_eq!(guardado.path, otro);
-    w.marcar_guardado();
-    let png = read_png(&fs::read(&otro).expect("leer"))
+    let notice = with_flatten_notice("guardado".to_string(), &w.s.document);
+    assert!(notice.contains("se guarda aplanado"), "{notice}");
+    let other_2 = t.path_2().join("aplanado.png");
+    outside_golden_aseprite(&other_2);
+    let saved = w.s.save_to(&other_2).expect("guardar el PNG aplanado");
+    assert_eq!(saved.path, other_2);
+    w.mark_saved();
+    let png = read_png(&fs::read(&other_2).expect("leer"))
         .expect("PNG")
         .image;
-    igual_salvo_rgb_con_alfa_0(&png, &antes).expect("el PNG guardado es la composición");
+    equal_except_rgb_with_alpha_0(&png, &antes).expect("el PNG guardado es la composición");
     // Con 3 o más capas y ruta PNG, `Ctrl+S` pide el diálogo (y propone `.aseprite`).
     assert_eq!(w.s.save_route(), SaveRoute::Dialog);
-    assert_eq!(proposed_save_name(w.s.path(), capas), "aplanado.aseprite");
-
-    let nombres = t.nombres();
-    sin_temporales(&nombres);
     assert_eq!(
-        nombres,
+        proposed_save_name(w.s.path(), layers_2),
+        "aplanado.aseprite"
+    );
+
+    let names = t.names();
+    without_temporary(&names);
+    assert_eq!(
+        names,
         vec![
             "aplanado.png".to_string(),
             "plano.png".to_string(),
@@ -241,158 +244,161 @@ fn guardar_y_reabrir(indexado: bool) {
 }
 
 #[test]
-fn fila_08_guardar_y_reabrir_en_rgba() {
-    guardar_y_reabrir(false);
+fn row_08_save_and_reopen_in_rgba() {
+    save_and_reopen(false);
 }
 
 #[test]
-fn fila_08_guardar_y_reabrir_en_indexado() {
-    guardar_y_reabrir(true);
+fn row_08_save_and_reopen_in_indexed() {
+    save_and_reopen(true);
 }
 
 #[test]
-fn fila_08_un_png_con_dos_capas_pide_el_dialogo_y_propone_aseprite() {
-    let t = Trabajo3::nuevo();
-    let base = t.ruta().join("base.png");
-    let imagen =
+fn row_08_a_png_with_two_layers_asks_for_the_dialog_and_proposes_aseprite() {
+    let t = Work3::new_2();
+    let base = t.path_2().join("base.png");
+    let image_2 =
         px_core::Image::filled(4, 4, px_core::Pixel::Rgba(px_core::Rgba::new(1, 2, 3, 255)))
             .expect("imagen");
-    fs::write(&base, write_png(&imagen).expect("PNG")).expect("escribir base.png");
-    let mut sesion = sesion_vacia();
-    sesion.open(&base, Canvas::MAX_SIDE, true).expect("abrir");
+    fs::write(&base, write_png(&image_2).expect("PNG")).expect("escribir base.png");
+    let mut session_2 = session_empty();
+    session_2
+        .open(&base, Canvas::MAX_SIDE, true)
+        .expect("abrir");
     assert_eq!(
-        sesion.save_route(),
+        session_2.save_route(),
         SaveRoute::Direct,
         "una capa: guarda sin diálogo"
     );
-    let mut w = Mundo3::de_sesion(sesion, "png con capas");
-    assert!(w.aplicar(&super::model::Orden::Nueva));
+    let mut w = World3::of_session(session_2, "png con capas");
+    assert!(w.apply(&super::model::Order::New));
     assert_eq!(w.s.save_route(), SaveRoute::Dialog);
     assert_eq!(proposed_save_name(w.s.path(), 2), "base.aseprite");
     // Elegir `.png` en ese diálogo guarda aplanado, como siempre.
-    let (mut dialogos, mando) = dialogos(t.ruta());
-    let propuesto = PathBuf::from("base.aseprite");
-    assert!(dialogos.begin(DialogKind::Save, false, Some(&propuesto), false, 0.0, None));
-    mando.elegir(&t.ruta().join("elegido.png"));
-    let Some(Outcome::Chosen(ruta)) = dialogos.poll(1.0).map(|f| f.outcome) else {
+    let (mut dialogs_2, control) = dialogs_2(t.path_2());
+    let proposed = PathBuf::from("base.aseprite");
+    assert!(dialogs_2.begin(DialogKind::Save, false, Some(&proposed), false, 0.0, None));
+    control.choose(&t.path_2().join("elegido.png"));
+    let Some(Outcome::Chosen(path_2)) = dialogs_2.poll(1.0).map(|f| f.outcome) else {
         panic!("el diálogo no eligió");
     };
-    let guardado = w.s.save_to(&ruta).expect("guardar");
-    assert_eq!(guardado.path, t.ruta().join("elegido.png"));
+    let saved = w.s.save_to(&path_2).expect("guardar");
+    assert_eq!(saved.path, t.path_2().join("elegido.png"));
 }
 
 // ---------------------------------------------------------------------------------------
 // Fila 9: los 29 por la sesión.
 // ---------------------------------------------------------------------------------------
 
-fn casos_del_corpus() -> Vec<String> {
-    let mut casos: Vec<String> = nombres_en(&golden_aseprite())
+fn cases_of_the_corpus() -> Vec<String> {
+    let mut cases: Vec<String> = names_in(&golden_aseprite())
         .into_iter()
         .filter_map(|n| n.strip_suffix(".aseprite").map(str::to_string))
         .collect();
-    casos.sort();
-    casos
+    cases.sort();
+    cases
 }
 
 #[test]
-fn fila_09_los_29_por_la_sesion_se_abren_se_guardan_y_se_reabren() {
-    let t = Trabajo3::nuevo();
-    let casos = casos_del_corpus();
-    assert_eq!(casos.len(), 29, "golden/aseprite tiene los 29 casos");
-    for caso in &casos {
-        let nombre = format!("{caso}.aseprite");
-        let copia = t.copia_del_corpus(caso, &nombre);
-        let mut s = sesion_vacia();
-        let aviso = s
-            .open(&copia, Canvas::MAX_SIDE, true)
-            .unwrap_or_else(|e| panic!("{caso}: abrir dio {e}"));
-        assert!(aviso.contains(&nombre), "{caso}: {aviso}");
+fn row_09_the_29_through_the_session_are_opened_saved_and_reopened() {
+    let t = Work3::new_2();
+    let cases = cases_of_the_corpus();
+    assert_eq!(cases.len(), 29, "golden/aseprite tiene los 29 casos");
+    for case in &cases {
+        let name_2 = format!("{case}.aseprite");
+        let copy = t.copy_of_the_corpus(case, &name_2);
+        let mut s = session_empty();
+        let notice = s
+            .open(&copy, Canvas::MAX_SIDE, true)
+            .unwrap_or_else(|e| panic!("{case}: abrir dio {e}"));
+        assert!(notice.contains(&name_2), "{case}: {notice}");
         assert!(
-            aviso.contains(&format!("{}×{}", s.document.width(), s.document.height())),
-            "{caso}: {aviso}"
+            notice.contains(&format!("{}×{}", s.document.width(), s.document.height())),
+            "{case}: {notice}"
         );
-        assert!(!s.converted(), "{caso}: sin avisos de lo ignorado");
-        assert_eq!(s.document.state_id(), 0, "{caso}");
-        assert!(!s.modified(), "{caso}");
-        let capas = s.document.layers().len();
-        let ultima = s.document.layers().last().expect("capas").id();
+        assert!(!s.converted(), "{case}: sin avisos de lo ignorado");
+        assert_eq!(s.document.state_id(), 0, "{case}");
+        assert!(!s.modified(), "{case}");
+        let layers_2 = s.document.layers().len();
+        let last_2 = s.document.layers().last().expect("capas").id();
         assert_eq!(
             s.active_layer(),
-            ultima,
-            "{caso}: la activa es la de arriba"
+            last_2,
+            "{case}: la activa es la de arriba"
         );
-        let original = Pila::de_documento(&s.document, capas - 1);
+        let original = Stack::of_document(&s.document, layers_2 - 1);
 
-        fuera_de_golden_aseprite(&copia);
-        let guardado = s
-            .save(t.ruta())
-            .unwrap_or_else(|e| panic!("{caso}: guardar dio {e}"));
-        assert_eq!(guardado.path, copia, "{caso}: sobrescribe la copia");
-        assert!(guardado.copy_reason.is_none(), "{caso}");
+        outside_golden_aseprite(&copy);
+        let saved = s
+            .save(t.path_2())
+            .unwrap_or_else(|e| panic!("{case}: guardar dio {e}"));
+        assert_eq!(saved.path, copy, "{case}: sobrescribe la copia");
+        assert!(saved.copy_reason.is_none(), "{case}");
 
-        let mut otra = sesion_vacia();
-        otra.open(&copia, Canvas::MAX_SIDE, true)
-            .unwrap_or_else(|e| panic!("{caso}: reabrir dio {e}"));
-        let leida = Pila::de_documento(&otra.document, capas - 1);
+        let mut other = session_empty();
+        other
+            .open(&copy, Canvas::MAX_SIDE, true)
+            .unwrap_or_else(|e| panic!("{case}: reabrir dio {e}"));
+        let read = Stack::of_document(&other.document, layers_2 - 1);
         original
-            .canonica()
-            .igual_contenido(&leida.canonica())
-            .unwrap_or_else(|e| panic!("{caso}: {e}"));
+            .canonical()
+            .equal_content(&read.canonical())
+            .unwrap_or_else(|e| panic!("{case}: {e}"));
     }
-    let nombres = t.nombres();
-    sin_temporales(&nombres);
-    assert_eq!(nombres.len(), 29, "una copia por caso y nada más");
+    let names = t.names();
+    without_temporary(&names);
+    assert_eq!(names.len(), 29, "una copia por caso y nada más");
 }
 
 // ---------------------------------------------------------------------------------------
 // Fila 10 (condición 6): «Guardando…» al guardar un `.aseprite` grande.
 // ---------------------------------------------------------------------------------------
 
-/// Un documento de `lado` × `lado` con una capa por elemento de `visibles` (`Some` sin imagen no
+/// Un documento de `side_2` × `side_2` con una capa por elemento de `visible` (`Some` sin imagen no
 /// existe: las vacías son `None`).
-fn documento_de_celdas(lado: u32, capas: &[(bool, bool)]) -> px_core::Document {
+fn document_of_cels(side_2: u32, layers_2: &[(bool, bool)]) -> px_core::Document {
     use px_core::{BlendMode, Image, LayerSpec, Mode, Pixel, Rgba};
-    let specs = capas
+    let specs = layers_2
         .iter()
         .enumerate()
-        .map(|(i, &(visible, con_imagen))| LayerSpec {
+        .map(|(i, &(visible, with_image))| LayerSpec {
             name: format!("capa {i}"),
             visible,
             opacity: 255,
             blend: BlendMode::Normal,
             locked: false,
-            image: con_imagen.then(|| {
-                Image::filled(lado, lado, Pixel::Rgba(Rgba::new(i as u8, 2, 3, 255)))
+            image: with_image.then(|| {
+                Image::filled(side_2, side_2, Pixel::Rgba(Rgba::new(i as u8, 2, 3, 255)))
                     .expect("imagen")
             }),
         })
         .collect();
-    px_core::Document::from_layers(lado, lado, Mode::Rgba, None, specs).expect("documento")
+    px_core::Document::from_layers(side_2, side_2, Mode::Rgba, None, specs).expect("documento")
 }
 
 #[test]
-fn fila_10_un_aseprite_grande_pide_guardando_y_espera_los_fotogramas_de_siempre() {
+fn row_10_a_big_aseprite_asks_for_saving_and_waits_the_usual_frames() {
     // 4 capas con imagen de 2048² son exactamente 2²⁴ píxeles de celda: se guarda ya; con 5, no.
-    let cuatro = documento_de_celdas(2048, &[(true, true); 4]);
-    assert_eq!(aseprite_pixels(&cuatro), 1 << 24);
-    assert_eq!(start_save(save_pixels(&cuatro, true)), StartSave::Now);
-    let cinco = documento_de_celdas(2048, &[(true, true); 5]);
-    assert_eq!(aseprite_pixels(&cinco), 5 * 2048 * 2048);
-    let StartSave::Later(mut espera) = start_save(save_pixels(&cinco, true)) else {
+    let four = document_of_cels(2048, &[(true, true); 4]);
+    assert_eq!(aseprite_pixels(&four), 1 << 24);
+    assert_eq!(start_save(save_pixels(&four, true)), StartSave::Now);
+    let five = document_of_cels(2048, &[(true, true); 5]);
+    assert_eq!(aseprite_pixels(&five), 5 * 2048 * 2048);
+    let StartSave::Later(mut waits) = start_save(save_pixels(&five, true)) else {
         panic!("5 capas de 2048² pasan de 2²⁴ píxeles: debía esperar");
     };
     // La misma secuencia que «Guardando…» de un PNG: ni un fotograma antes ni después.
-    for fotograma in 1..WAIT_FRAMES {
-        assert!(!espera.tick(), "el fotograma {fotograma} aún no guarda");
+    for frame in 1..WAIT_FRAMES {
+        assert!(!waits.tick(), "el fotograma {frame} aún no guarda");
     }
     assert!(
-        espera.tick(),
+        waits.tick(),
         "guarda exactamente en el fotograma {WAIT_FRAMES}"
     );
-    assert!(!espera.tick(), "y no vuelve a guardar");
+    assert!(!waits.tick(), "y no vuelve a guardar");
     // Las celdas vacías no se escriben y no cuentan; las ocultas sí (el `.aseprite` las guarda),
     // y un PNG solo compone las visibles.
-    let mezcla = documento_de_celdas(
+    let blend_2 = document_of_cels(
         2048,
         &[
             (true, true),
@@ -402,9 +408,9 @@ fn fila_10_un_aseprite_grande_pide_guardando_y_espera_los_fotogramas_de_siempre(
             (true, true),
         ],
     );
-    assert_eq!(aseprite_pixels(&mezcla), 4 * 2048 * 2048);
-    assert_eq!(save_pixels(&mezcla, true), 4 * 2048 * 2048);
-    assert_eq!(save_pixels(&mezcla, false), 2 * 2048 * 2048);
+    assert_eq!(aseprite_pixels(&blend_2), 4 * 2048 * 2048);
+    assert_eq!(save_pixels(&blend_2, true), 4 * 2048 * 2048);
+    assert_eq!(save_pixels(&blend_2, false), 2 * 2048 * 2048);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -412,68 +418,64 @@ fn fila_10_un_aseprite_grande_pide_guardando_y_espera_los_fotogramas_de_siempre(
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_golden_aseprite_intacto_y_el_control_sabe_fallar() {
-    let _t = Trabajo3::nuevo();
-    let (instantanea, huellas) = inicial();
-    assert_eq!(
-        instantanea.len(),
-        88,
-        "29 casos de tres ficheros y el README"
-    );
-    assert_eq!(huellas.len(), 88);
-    comprobar_golden_aseprite().expect("golden/aseprite es el de antes");
+fn row_11_golden_aseprite_intact_and_the_control_knows_how_to_fail() {
+    let _t = Work3::new_2();
+    let (snapshot, fingerprints) = initial();
+    assert_eq!(snapshot.len(), 88, "29 casos de tres ficheros y el README");
+    assert_eq!(fingerprints.len(), 88);
+    check_golden_aseprite().expect("golden/aseprite es el de antes");
     // Control: un byte cambiado, un fichero más y uno menos dan `Err`, y el SHA-256 lo ve.
-    let mut roto = instantanea.clone();
-    roto.get_mut("mixed-rgba.png").expect("fichero")[40] ^= 1;
-    let error = comparar_instantaneas(instantanea, &roto).expect_err("un byte cambiado");
+    let mut broken = snapshot.clone();
+    broken.get_mut("mixed-rgba.png").expect("fichero")[40] ^= 1;
+    let error = compare_snapshots(snapshot, &broken).expect_err("un byte cambiado");
     assert!(error.contains("mixed-rgba.png"), "{error}");
     assert_ne!(
-        sha256_hex(&roto["mixed-rgba.png"]),
-        huellas["mixed-rgba.png"]
+        sha256_hex(&broken["mixed-rgba.png"]),
+        fingerprints["mixed-rgba.png"]
     );
-    let mut con = instantanea.clone();
-    con.insert("intruso.aseprite".to_string(), vec![1, 2, 3]);
-    let error = comparar_instantaneas(instantanea, &con).expect_err("un fichero más");
+    let mut with = snapshot.clone();
+    with.insert("intruso.aseprite".to_string(), vec![1, 2, 3]);
+    let error = compare_snapshots(snapshot, &with).expect_err("un fichero más");
     assert!(error.contains("aparece intruso.aseprite"), "{error}");
-    let mut sin = instantanea.clone();
-    sin.remove("layer-locked.aseprite");
-    let error = comparar_instantaneas(instantanea, &sin).expect_err("un fichero menos");
+    let mut without = snapshot.clone();
+    without.remove("layer-locked.aseprite");
+    let error = compare_snapshots(snapshot, &without).expect_err("un fichero menos");
     assert!(error.contains("falta layer-locked.aseprite"), "{error}");
 }
 
 #[test]
 #[should_panic(expected = "escritura prohibida en golden/aseprite")]
-fn fila_11_una_ruta_de_golden_aseprite_hace_panico() {
-    fuera_de_golden_aseprite(&golden_aseprite().join("nuevo.aseprite"));
+fn row_11_a_golden_aseprite_path_panics() {
+    outside_golden_aseprite(&golden_aseprite().join("nuevo.aseprite"));
 }
 
 #[test]
-fn fila_11_el_trabajo_cuelga_de_target_y_se_borra_aunque_la_prueba_falle() {
+fn row_11_the_work_hangs_from_target_and_is_deleted_even_if_the_test_fails() {
     use std::sync::Mutex;
-    let ruta = Mutex::new(None::<PathBuf>);
-    let t = Trabajo3::nuevo();
-    let propia = t.ruta().to_path_buf();
+    let path_2 = Mutex::new(None::<PathBuf>);
+    let t = Work3::new_2();
+    let own = t.path_2().to_path_buf();
     assert!(
-        propia.components().any(|c| c.as_os_str() == "pixoko-gate"),
+        own.components().any(|c| c.as_os_str() == "pixoko-gate"),
         "{}",
-        propia.display()
+        own.display()
     );
-    assert!(propia.starts_with(
-        fs::canonicalize(crate::gate::common::raiz_repo().join("target")).expect("target")
+    assert!(own.starts_with(
+        fs::canonicalize(crate::gate::common::root_repo().join("target")).expect("target")
     ));
     drop(t);
-    assert!(!propia.exists(), "el trabajo se borra al soltarse");
-    let fallo = std::panic::catch_unwind(|| {
-        let t = Trabajo3::nuevo();
-        *ruta.lock().unwrap_or_else(|e| e.into_inner()) = Some(t.ruta().to_path_buf());
-        fs::write(t.ruta().join("x"), b"x").expect("escribir");
+    assert!(!own.exists(), "el trabajo se borra al soltarse");
+    let failure = std::panic::catch_unwind(|| {
+        let t = Work3::new_2();
+        *path_2.lock().unwrap_or_else(|e| e.into_inner()) = Some(t.path_2().to_path_buf());
+        fs::write(t.path_2().join("x"), b"x").expect("escribir");
         panic!("la prueba falla a propósito");
     });
-    assert!(fallo.is_err());
-    let propia = ruta
+    assert!(failure.is_err());
+    let own = path_2
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
         .expect("ruta");
-    assert!(!propia.exists(), "también se borra si la prueba falla");
+    assert!(!own.exists(), "también se borra si la prueba falla");
 }

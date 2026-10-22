@@ -11,37 +11,37 @@ use px_raster::compose;
 use px_ui::canvas::CanvasEvent;
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState};
 
-use super::model::{Celda4, Orden, Pila};
+use super::model::{Cel4, Order, Stack};
 use crate::session::Session;
 
 struct Snap {
     id: u64,
-    pila: Pila,
+    stack: Stack,
     /// La capa activa justo antes de aplicar el paso (a lo que vuelve el modelo al deshacerlo).
-    activa_antes: usize,
-    estructural: bool,
+    active_before: usize,
+    structural: bool,
     /// La orden que dio el paso (para los mensajes).
-    orden: String,
+    order: String,
     /// Fue un combinar o aplanar: la sesión recuerda la capa activa de antes y de después.
     fusion: bool,
-    /// Fue `Nueva` o `Duplicar`: al deshacerlo la activa es la que ocupa su posición (3.4).
-    crea: bool,
+    /// Fue `New` o `Duplicate`: al deshacerlo la activa es la que ocupa su posición (3.4).
+    creates: bool,
 }
 
-pub struct Mundo3 {
+pub struct World3 {
     pub s: Session,
     pub tools: ToolState,
-    pub m: Pila,
+    pub m: Stack,
     /// `snaps[n]`: el estado tras `n` pasos de la rama actual.
     snaps: Vec<Snap>,
     pub pos: usize,
-    usados: HashSet<u64>,
+    used: HashSet<u64>,
     /// `state_id` del último estado guardado (el de apertura, al principio).
-    pub guardado: u64,
-    pub etiqueta: String,
+    pub saved: u64,
+    pub label_2: String,
 }
 
-fn posicion_activa(s: &Session) -> usize {
+fn position_active(s: &Session) -> usize {
     s.document
         .layers()
         .iter()
@@ -49,48 +49,48 @@ fn posicion_activa(s: &Session) -> usize {
         .expect("la capa activa existe")
 }
 
-impl Mundo3 {
-    pub fn de_sesion(s: Session, etiqueta: &str) -> Mundo3 {
-        let activa = posicion_activa(&s);
-        let m = Pila::de_documento(&s.document, activa);
+impl World3 {
+    pub fn of_session(s: Session, label_2: &str) -> World3 {
+        let active_2 = position_active(&s);
+        let m = Stack::of_document(&s.document, active_2);
         let id = s.document.state_id();
-        Mundo3 {
+        World3 {
             s,
             tools: ToolState::new(),
             snaps: vec![Snap {
                 id,
-                pila: m.clone(),
-                activa_antes: activa,
-                estructural: false,
-                orden: "estado inicial".to_string(),
+                stack: m.clone(),
+                active_before: active_2,
+                structural: false,
+                order: "estado inicial".to_string(),
                 fusion: false,
-                crea: false,
+                creates: false,
             }],
             pos: 0,
-            usados: HashSet::from([id]),
-            guardado: id,
+            used: HashSet::from([id]),
+            saved: id,
             m,
-            etiqueta: etiqueta.to_string(),
+            label_2: label_2.to_string(),
         }
     }
 
     /// La pila que hay ahora en la sesión.
-    pub fn leer(&self) -> Pila {
-        Pila::de_documento(&self.s.document, posicion_activa(&self.s))
+    pub fn leer(&self) -> Stack {
+        Stack::of_document(&self.s.document, position_active(&self.s))
     }
 
-    pub fn pasos(&self) -> usize {
+    pub fn steps_2(&self) -> usize {
         self.snaps.len() - 1
     }
 
     /// Pila y composición iguales al modelo y «modificado» coherente con el estado guardado.
-    pub fn comprobar(&self) {
-        let ctx = &self.etiqueta;
-        if let Err(e) = self.m.igual(&self.leer()) {
+    pub fn check(&self) {
+        let ctx = &self.label_2;
+        if let Err(e) = self.m.equal(&self.leer()) {
             panic!("{ctx}: la sesión no es el modelo: {e}");
         }
-        let de_la_sesion = compose(&self.s.document).map_err(|e| format!("{e:?}"));
-        match (de_la_sesion, self.m.componer()) {
+        let of_the_session = compose(&self.s.document).map_err(|e| format!("{e:?}"));
+        match (of_the_session, self.m.compose_2()) {
             (Ok(a), Ok(b)) => assert!(
                 a == b,
                 "{ctx}: la composición de la sesión no es la del modelo"
@@ -104,149 +104,144 @@ impl Mundo3 {
         }
         assert_eq!(
             self.s.modified(),
-            self.s.document.state_id() != self.guardado,
+            self.s.document.state_id() != self.saved,
             "{ctx}: modified no corresponde al state_id guardado"
         );
         if !self.s.modified() {
-            let (id, pila) = (&self.snaps[self.pos].id, &self.snaps[self.pos].pila);
-            assert_eq!(*id, self.guardado, "{ctx}: sin modificar y otro estado");
+            let (id, stack) = (&self.snaps[self.pos].id, &self.snaps[self.pos].stack);
+            assert_eq!(*id, self.saved, "{ctx}: sin modificar y otro estado");
             assert!(
-                pila.igual_contenido(&self.m).is_ok(),
+                stack.equal_content(&self.m).is_ok(),
                 "{ctx}: modified es falso con otro contenido"
             );
         }
     }
 
     /// Anota el estado actual como el guardado (tras un guardado que salió bien).
-    pub fn marcar_guardado(&mut self) {
-        self.guardado = self.s.document.state_id();
+    pub fn mark_saved(&mut self) {
+        self.saved = self.s.document.state_id();
         assert!(
             !self.s.modified(),
             "{}: modified tras guardar",
-            self.etiqueta
+            self.label_2
         );
-        self.comprobar();
+        self.check();
     }
 
     /// Lanza los eventos de un gesto y devuelve si el documento cambió y si la herramienta
     /// rechazó el gesto (el borrador sin valor de borrado).
-    fn gesto(
-        &mut self,
-        herramienta: Tool,
-        color: Celda4,
-        eventos: Vec<CanvasEvent>,
-    ) -> (bool, bool) {
-        self.tools.apply_action(ToolAction::Select(herramienta));
+    fn gesture(&mut self, tool_2: Tool, color: Cel4, events: Vec<CanvasEvent>) -> (bool, bool) {
+        self.tools.apply_action(ToolAction::Select(tool_2));
         let pixel = self.m.pixel(color);
         let id = self.s.active_cel();
-        let mut cambio = false;
-        for evento in eventos {
-            cambio |= self
+        let mut change = false;
+        for event_2 in events {
+            change |= self
                 .tools
-                .canvas_event_with(&mut self.s.document, id, Some(pixel), evento)
-                .unwrap_or_else(|e| panic!("{}: el gesto dio error: {e}", self.etiqueta));
+                .canvas_event_with(&mut self.s.document, id, Some(pixel), event_2)
+                .unwrap_or_else(|e| panic!("{}: el gesto dio error: {e}", self.label_2));
         }
-        let cambios = self.tools.take_changes();
-        self.s.absorb(cambios);
-        let rechazado = self
+        let changes_2 = self.tools.take_changes();
+        self.s.absorb(changes_2);
+        let rejected = self
             .tools
             .take_events()
             .iter()
             .any(|e| matches!(e, ToolEvent::Refused(_)));
-        (cambio, rechazado)
+        (change, rejected)
     }
 
-    fn pintar(&mut self, herramienta: Tool, color: Celda4, ruta: &[(i32, i32)]) -> bool {
+    fn paint(&mut self, tool_2: Tool, color: Cel4, path_2: &[(i32, i32)]) -> bool {
         // Como la aplicación: con la activa oculta o bloqueada no se empieza ningún gesto.
-        let rechazo = self.s.paint_refusal(herramienta);
+        let rejection = self.s.paint_refusal(tool_2);
         assert_eq!(
-            rechazo.is_some(),
-            !self.m.puede_pintar(),
+            rejection.is_some(),
+            !self.m.can_paint(),
             "{}: la sesión y el modelo no coinciden en si se puede pintar",
-            self.etiqueta
+            self.label_2
         );
-        if rechazo.is_some() {
+        if rejection.is_some() {
             return false;
         }
-        let mut eventos = vec![CanvasEvent::StrokeBegin(ruta[0])];
-        eventos.extend(ruta[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
-        eventos.push(CanvasEvent::StrokeEnd);
-        let (cambio, rechazado) = self.gesto(herramienta, color, eventos);
-        let borrador_sin_valor = herramienta == Tool::Eraser && !self.m.puede_borrar();
+        let mut events = vec![CanvasEvent::StrokeBegin(path_2[0])];
+        events.extend(path_2[1..].iter().map(|&p| CanvasEvent::StrokeMove(p)));
+        events.push(CanvasEvent::StrokeEnd);
+        let (change, rejected) = self.gesture(tool_2, color, events);
+        let eraser_without_value = tool_2 == Tool::Eraser && !self.m.can_delete();
         assert_eq!(
-            rechazado, borrador_sin_valor,
+            rejected, eraser_without_value,
             "{}: ¿rechazó la herramienta el gesto?",
-            self.etiqueta
+            self.label_2
         );
-        cambio
+        change
     }
 
-    fn en_sesion(&mut self, orden: &Orden) -> bool {
+    fn in_session(&mut self, order: &Order) -> bool {
         let s = &mut self.s;
-        match orden {
-            Orden::Nueva => s.new_layer().changed,
-            Orden::Duplicar => s.duplicate_layer().changed,
-            Orden::Quitar => s.remove_layer().changed,
-            Orden::Mover(delta) => s.move_layer(*delta).changed,
-            Orden::Activar(i) => {
+        match order {
+            Order::New => s.new_layer().changed,
+            Order::Duplicate => s.duplicate_layer().changed,
+            Order::Remove => s.remove_layer().changed,
+            Order::Mover(delta) => s.move_layer(*delta).changed,
+            Order::Activate(i) => {
                 let id = s.document.layers()[*i].id();
                 s.set_active_layer(id).expect("activar");
                 false
             }
-            Orden::Visible(i, v) => {
+            Order::Visible(i, v) => {
                 let id = s.document.layers()[*i].id();
                 s.set_layer_visible(id, *v).changed
             }
-            Orden::Bloqueo(i, v) => {
+            Order::Lock(i, v) => {
                 let id = s.document.layers()[*i].id();
                 s.set_layer_locked(id, *v).changed
             }
-            Orden::Renombrar(i, nombre) => {
+            Order::Rename(i, name_2) => {
                 let id = s.document.layers()[*i].id();
-                s.rename_layer(id, nombre.clone()).changed
+                s.rename_layer(id, name_2.clone()).changed
             }
-            Orden::Opacidad(i, o) => {
+            Order::Opacity(i, o) => {
                 let id = s.document.layers()[*i].id();
                 if s.document.mode() == Mode::Indexed && *o != 255 {
                     let r = s.apply_layer(Command::SetLayerOpacity {
                         layer: id,
                         opacity: *o,
                     });
-                    assert_eq!(r, Err(DocumentError::IndexedOpacity), "{}", self.etiqueta);
+                    assert_eq!(r, Err(DocumentError::IndexedOpacity), "{}", self.label_2);
                     return false;
                 }
                 s.set_layer_opacity(id, *o).changed
             }
-            Orden::Mezcla(i, m) => {
+            Order::Blend(i, m) => {
                 let id = s.document.layers()[*i].id();
                 if s.document.mode() == Mode::Indexed && *m != px_core::BlendMode::Normal {
                     let r = s.apply_layer(Command::SetLayerBlend {
                         layer: id,
                         blend: *m,
                     });
-                    assert_eq!(r, Err(DocumentError::IndexedBlend), "{}", self.etiqueta);
+                    assert_eq!(r, Err(DocumentError::IndexedBlend), "{}", self.label_2);
                     return false;
                 }
                 s.set_layer_blend(id, *m).changed
             }
-            Orden::Lapiz(ruta, color) => self.pintar(Tool::Pencil, *color, ruta),
-            Orden::Linea(a, b, color) => self.pintar(Tool::Line, *color, &[*a, *b]),
-            Orden::Relleno(semilla, color) => self.pintar(Tool::Fill, *color, &[*semilla]),
-            Orden::Borrador(ruta) => self.pintar(Tool::Eraser, [0, 0, 0, 0], ruta),
-            Orden::Combinar(tipo) => s.merge(*tipo).changed,
-            Orden::Convertir(destino) => s
-                .convert_all(*destino, Allowed::NOTHING)
-                .unwrap_or_else(|e| panic!("{}: convertir a {destino:?} dio {e:?}", self.etiqueta)),
-            Orden::Vector((x, y), esperado) => {
-                let compuesta = compose(&s.document).expect("compose");
-                let c = match compuesta.get_pixel(*x, *y).expect("píxel") {
+            Order::Pencil(path_2, color) => self.paint(Tool::Pencil, *color, path_2),
+            Order::Line(a, b, color) => self.paint(Tool::Line, *color, &[*a, *b]),
+            Order::Fill(seed, color) => self.paint(Tool::Fill, *color, &[*seed]),
+            Order::Eraser(path_2) => self.paint(Tool::Eraser, [0, 0, 0, 0], path_2),
+            Order::Merge(kind) => s.merge(*kind).changed,
+            Order::Convert(target_2) => s
+                .convert_all(*target_2, Allowed::NOTHING)
+                .unwrap_or_else(|e| panic!("{}: convertir a {target_2:?} dio {e:?}", self.label_2)),
+            Order::Vector((x, y), expected_2) => {
+                let composite = compose(&s.document).expect("compose");
+                let c = match composite.get_pixel(*x, *y).expect("píxel") {
                     Pixel::Rgba(c) => [c.r, c.g, c.b, c.a],
-                    otro => panic!("{}: se esperaba RGBA, hay {otro:?}", self.etiqueta),
+                    other_2 => panic!("{}: se esperaba RGBA, hay {other_2:?}", self.label_2),
                 };
                 assert_eq!(
-                    c, *esperado,
+                    c, *expected_2,
                     "{}: vector a mano en ({x}, {y}) de la composición",
-                    self.etiqueta
+                    self.label_2
                 );
                 false
             }
@@ -254,80 +249,80 @@ impl Mundo3 {
     }
 
     /// Aplica la orden a la sesión y al modelo y comprueba que coinciden. Devuelve si hubo cambio.
-    pub fn aplicar(&mut self, orden: &Orden) -> bool {
-        let ctx = format!("{}: {orden:?}", self.etiqueta);
+    pub fn apply(&mut self, order: &Order) -> bool {
+        let ctx = format!("{}: {order:?}", self.label_2);
         let antes_id = self.s.document.state_id();
-        let activa_antes = self.m.activa;
-        let mut nuevo = self.m.clone();
-        if let Orden::Convertir(Mode::Indexed) = orden {
-            return self.convertir_a_indexado(orden, &ctx, antes_id, activa_antes);
+        let active_before = self.m.active_2;
+        let mut new_2 = self.m.clone();
+        if let Order::Convert(Mode::Indexed) = order {
+            return self.convert_to_indexed(order, &ctx, antes_id, active_before);
         }
-        let efecto = nuevo.aplicar(orden);
-        let cambio = self.en_sesion(orden);
-        assert_eq!(cambio, efecto.cambia, "{ctx}: ¿hubo paso de historia?");
+        let effect = new_2.apply(order);
+        let change = self.in_session(order);
+        assert_eq!(change, effect.changes, "{ctx}: ¿hubo paso de historia?");
         let id = self.s.document.state_id();
-        if cambio {
+        if change {
             assert_ne!(id, antes_id, "{ctx}: state_id sin cambiar");
-            assert!(self.usados.insert(id), "{ctx}: state_id repetido");
+            assert!(self.used.insert(id), "{ctx}: state_id repetido");
             self.snaps.truncate(self.pos + 1);
             self.pos += 1;
             self.snaps.push(Snap {
                 id,
-                pila: nuevo.clone(),
-                activa_antes,
-                estructural: efecto.estructural,
-                orden: format!("{orden:?}"),
-                fusion: matches!(orden, Orden::Combinar(_)),
-                crea: matches!(orden, Orden::Nueva | Orden::Duplicar),
+                stack: new_2.clone(),
+                active_before,
+                structural: effect.structural,
+                order: format!("{order:?}"),
+                fusion: matches!(order, Order::Merge(_)),
+                creates: matches!(order, Order::New | Order::Duplicate),
             });
         } else {
             assert_eq!(id, antes_id, "{ctx}: state_id cambió sin paso");
         }
-        self.m = nuevo;
-        self.comprobar();
-        cambio
+        self.m = new_2;
+        self.check();
+        change
     }
 
     /// RGBA → indexado: la paleta nueva la decide la sesión; el modelo la adopta **comprobando que
     /// la conversión es exacta** (cada píxel conserva su color resuelto). Si la sesión la rechaza
     /// (`Err`) no cambia nada. Devuelve si hubo paso.
-    fn convertir_a_indexado(
+    fn convert_to_indexed(
         &mut self,
-        orden: &Orden,
+        order: &Order,
         ctx: &str,
         antes_id: u64,
-        activa_antes: usize,
+        active_before: usize,
     ) -> bool {
         match self.s.convert_all(Mode::Indexed, Allowed::NOTHING) {
             Ok(true) => {
-                let mut nuevo = self.m.clone();
-                let paleta = self.s.document.palette().cloned().expect("paleta nueva");
-                nuevo
-                    .adopta_paleta(paleta)
+                let mut new_2 = self.m.clone();
+                let palette = self.s.document.palette().cloned().expect("paleta nueva");
+                new_2
+                    .adopts_palette(palette)
                     .unwrap_or_else(|e| panic!("{ctx}: la conversión no es exacta: {e}"));
                 let id = self.s.document.state_id();
-                assert!(self.usados.insert(id), "{ctx}: state_id repetido");
+                assert!(self.used.insert(id), "{ctx}: state_id repetido");
                 self.snaps.truncate(self.pos + 1);
                 self.pos += 1;
                 self.snaps.push(Snap {
                     id,
-                    pila: nuevo.clone(),
-                    activa_antes,
-                    estructural: false,
-                    orden: format!("{orden:?}"),
+                    stack: new_2.clone(),
+                    active_before,
+                    structural: false,
+                    order: format!("{order:?}"),
                     fusion: false,
-                    crea: false,
+                    creates: false,
                 });
-                self.m = nuevo;
-                self.comprobar();
+                self.m = new_2;
+                self.check();
                 true
             }
-            otro => {
+            other_2 => {
                 assert!(
-                    !matches!(otro, Ok(true)) && self.s.document.state_id() == antes_id,
-                    "{ctx}: convertir {otro:?} cambió el estado"
+                    !matches!(other_2, Ok(true)) && self.s.document.state_id() == antes_id,
+                    "{ctx}: convertir {other_2:?} cambió el estado"
                 );
-                self.comprobar();
+                self.check();
                 false
             }
         }
@@ -335,16 +330,16 @@ impl Mundo3 {
 
     /// La capa activa que la sesión recuerda si el estado `pos` es el de antes o el de después de
     /// un combinar (3.5, decisión D2).
-    fn activa_en_frontera(&self, pos: usize) -> Option<usize> {
+    fn active_in_boundary(&self, pos: usize) -> Option<usize> {
         let id = self.snaps[pos].id;
         (1..self.snaps.len()).rev().find_map(|j| {
-            let paso = &self.snaps[j];
-            if !paso.fusion {
+            let step = &self.snaps[j];
+            if !step.fusion {
                 None
             } else if self.snaps[j - 1].id == id {
-                Some(paso.activa_antes)
-            } else if paso.id == id {
-                Some(paso.pila.activa)
+                Some(step.active_before)
+            } else if step.id == id {
+                Some(step.stack.active_2)
             } else {
                 None
             }
@@ -354,133 +349,133 @@ impl Mundo3 {
     /// Tras `undo` o `redo`: contenido igual al de la instantánea, `state_id` y la capa activa
     /// (la de antes del paso al deshacer una orden de estructura, la de después al rehacerla; en
     /// las demás no cambia).
-    fn tras_historia(&mut self, pos: usize, activa_esperada: Option<usize>, antes: LayerId) {
+    fn after_history(&mut self, pos: usize, active_expected: Option<usize>, antes: LayerId) {
         let ctx = format!(
             "{} (instantánea {pos}, paso «{}»)",
-            self.etiqueta, self.snaps[pos].orden
+            self.label_2, self.snaps[pos].order
         );
         let snap = &self.snaps[pos];
         assert_eq!(self.s.document.state_id(), snap.id, "{ctx}: state_id");
-        let leida = self.leer();
-        if let Err(e) = snap.pila.igual_contenido(&leida) {
+        let read = self.leer();
+        if let Err(e) = snap.stack.equal_content(&read) {
             panic!("{ctx}: la sesión no es la instantánea: {e}");
         }
         // Llegar al estado de antes o de después de un combinar devuelve la capa activa de entonces
         // (las notas de 3.5), también si el paso que se cruza no era el combinar, y **gana** a la
         // regla de la capa que entra (las notas se aplican después).
-        let activa_esperada = self.activa_en_frontera(pos).or(activa_esperada);
-        match activa_esperada {
-            Some(esperada) => assert_eq!(leida.activa, esperada, "{ctx}: capa activa"),
+        let active_expected = self.active_in_boundary(pos).or(active_expected);
+        match active_expected {
+            Some(expected) => assert_eq!(read.active_2, expected, "{ctx}: capa activa"),
             None => assert_eq!(self.s.active_layer(), antes, "{ctx}: la activa cambió"),
         }
-        self.m = leida;
-        self.comprobar();
+        self.m = read;
+        self.check();
     }
 
-    pub fn deshacer(&mut self) {
+    pub fn undo(&mut self) {
         let antes = self.s.active_layer();
         // Lo que depende del estado de antes de deshacer: la capa que creó el paso.
-        let creada = (self.pos > 0 && self.snaps[self.pos].crea)
-            .then(|| self.s.document.layers()[self.snaps[self.pos].pila.activa].id());
-        let resultado = self.s.undo();
+        let created = (self.pos > 0 && self.snaps[self.pos].creates)
+            .then(|| self.s.document.layers()[self.snaps[self.pos].stack.active_2].id());
+        let result = self.s.undo();
         if self.pos == 0 {
             assert_eq!(
-                resultado,
+                result,
                 Err(DocumentError::NothingToUndo),
                 "{}",
-                self.etiqueta
+                self.label_2
             );
-            self.comprobar();
+            self.check();
             return;
         }
-        resultado.unwrap_or_else(|e| panic!("{}: undo dio {e:?}", self.etiqueta));
-        let paso = &self.snaps[self.pos];
+        result.unwrap_or_else(|e| panic!("{}: undo dio {e:?}", self.label_2));
+        let step = &self.snaps[self.pos];
         // Combinar y Quitar: vuelve la capa de antes (notas de 3.5; la capa que entra, 3.4).
         // Nueva y Duplicar: si la activa era la creada deja de existir y pasa a la que ocupa su
         // posición, o a la última (`keep_active_layer`); si era otra, no cambia.
-        let esperada = if paso.crea {
-            let quedan = self.snaps[self.pos - 1].pila.capas.len();
-            (Some(antes) == creada).then(|| paso.pila.activa.min(quedan - 1))
+        let expected = if step.creates {
+            let stay = self.snaps[self.pos - 1].stack.layers_2.len();
+            (Some(antes) == created).then(|| step.stack.active_2.min(stay - 1))
         } else {
-            paso.estructural.then_some(paso.activa_antes)
+            step.structural.then_some(step.active_before)
         };
         self.pos -= 1;
-        self.tras_historia(self.pos, esperada, antes);
+        self.after_history(self.pos, expected, antes);
     }
 
-    pub fn rehacer(&mut self) {
+    pub fn redo(&mut self) {
         let antes = self.s.active_layer();
         // Lo que depende del estado de antes de rehacer: la capa que quitará el paso.
-        let quitada = self.snaps.get(self.pos + 1).and_then(|paso| {
-            (paso.estructural && !paso.crea && !paso.fusion)
-                .then(|| self.s.document.layers()[paso.activa_antes].id())
+        let removed = self.snaps.get(self.pos + 1).and_then(|step| {
+            (step.structural && !step.creates && !step.fusion)
+                .then(|| self.s.document.layers()[step.active_before].id())
         });
-        let resultado = self.s.redo();
+        let result = self.s.redo();
         if self.pos + 1 == self.snaps.len() {
             assert_eq!(
-                resultado,
+                result,
                 Err(DocumentError::NothingToRedo),
                 "{}",
-                self.etiqueta
+                self.label_2
             );
-            self.comprobar();
+            self.check();
             return;
         }
-        resultado.unwrap_or_else(|e| panic!("{}: redo dio {e:?}", self.etiqueta));
+        result.unwrap_or_else(|e| panic!("{}: redo dio {e:?}", self.label_2));
         self.pos += 1;
-        let paso = &self.snaps[self.pos];
+        let step = &self.snaps[self.pos];
         // Nueva, Duplicar y combinar: la capa que entra o la de las notas. Quitar: si la activa
         // era la quitada pasa a la que ocupa su posición; si era otra, no cambia.
-        let esperada = if paso.crea || paso.fusion {
-            Some(paso.pila.activa)
-        } else if paso.estructural {
-            (Some(antes) == quitada).then_some(paso.pila.activa)
+        let expected = if step.creates || step.fusion {
+            Some(step.stack.active_2)
+        } else if step.structural {
+            (Some(antes) == removed).then_some(step.stack.active_2)
         } else {
             None
         };
-        self.tras_historia(self.pos, esperada, antes);
+        self.after_history(self.pos, expected, antes);
     }
 
     /// `undo` hasta el principio (y uno más, que debe fallar); devuelve cuántos hizo.
-    pub fn deshacer_todo(&mut self) -> usize {
-        let mut hechos = 0;
+    pub fn undo_all(&mut self) -> usize {
+        let mut facts = 0;
         while self.pos > 0 {
-            self.deshacer();
-            hechos += 1;
+            self.undo();
+            facts += 1;
         }
-        self.deshacer();
-        hechos
+        self.undo();
+        facts
     }
 
     /// `redo` hasta el final de la rama (y uno más, que debe fallar); devuelve cuántos hizo.
-    pub fn rehacer_todo(&mut self) -> usize {
-        let mut hechos = 0;
+    pub fn redo_all(&mut self) -> usize {
+        let mut facts = 0;
         while self.pos + 1 < self.snaps.len() {
-            self.rehacer();
-            hechos += 1;
+            self.redo();
+            facts += 1;
         }
-        self.rehacer();
-        hechos
+        self.redo();
+        facts
     }
 
     /// Con varias capas, `convert_mode` da error y una conversión que pierde datos sin permiso
     /// también: ni el documento ni la historia cambian.
-    pub fn rechaza_convertir(&mut self, destino: Mode) {
+    pub fn rejects_convert(&mut self, target_2: Mode) {
         assert!(self.s.document.layers().len() > 1);
         let antes = self.s.document.state_id();
         assert!(
-            self.s.convert_mode(destino, Allowed::NOTHING).is_err(),
+            self.s.convert_mode(target_2, Allowed::NOTHING).is_err(),
             "{}: convert_mode con varias capas debía dar error",
-            self.etiqueta
+            self.label_2
         );
         assert!(
             self.s
                 .convert_all(Mode::GrayAlpha, Allowed::NOTHING)
                 .is_err(),
             "{}: convertir a gris con alfa sin permiso debía dar error",
-            self.etiqueta
+            self.label_2
         );
-        assert_eq!(self.s.document.state_id(), antes, "{}", self.etiqueta);
-        self.comprobar();
+        assert_eq!(self.s.document.state_id(), antes, "{}", self.label_2);
+        self.check();
     }
 }

@@ -14,7 +14,7 @@ fn fallback(as_copy: bool) -> Request {
 }
 
 #[test]
-fn fila_9_sin_armar_da_falso_y_no_arma() {
+fn row_9_without_arming_it_gives_false_and_does_not_arm() {
     let mut confirm = Confirm::new();
     assert!(!confirm.confirm_armed(&fallback(false), 0.0));
     // No armó: la primera `request` sigue siendo la que arma.
@@ -26,7 +26,7 @@ fn fila_9_sin_armar_da_falso_y_no_arma() {
 }
 
 #[test]
-fn fila_9_armada_y_dentro_de_5_s_da_verdadero_y_vacia() {
+fn row_9_armed_and_within_5_s_gives_true_and_empty() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(false), 0.0), Confirmation::Armed);
 
@@ -38,14 +38,14 @@ fn fila_9_armada_y_dentro_de_5_s_da_verdadero_y_vacia() {
 }
 
 #[test]
-fn fila_9_el_mismo_instante_en_que_se_armo_ya_vale() {
+fn row_9_the_same_instant_it_was_armed_already_counts() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(true), 3.0), Confirmation::Armed);
     assert!(confirm.confirm_armed(&fallback(true), 3.0));
 }
 
 #[test]
-fn fila_9_a_los_5_segundos_justos_da_falso() {
+fn row_9_at_exactly_5_seconds_it_gives_false() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(false), 0.0), Confirmation::Armed);
     assert!(!confirm.confirm_armed(&fallback(false), 5.0));
@@ -53,14 +53,14 @@ fn fila_9_a_los_5_segundos_justos_da_falso() {
 }
 
 #[test]
-fn fila_9_un_instante_anterior_al_armado_da_falso() {
+fn row_9_an_instant_before_the_arming_gives_false() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(false), 3.0), Confirmation::Armed);
     assert!(!confirm.confirm_armed(&fallback(false), 2.0));
 }
 
 #[test]
-fn fila_9_otra_clase_de_peticion_da_falso() {
+fn row_9_another_kind_of_request_gives_false() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(true), 0.0), Confirmation::Armed);
     assert!(!confirm.confirm_armed(&fallback(false), 1.0));
@@ -80,7 +80,7 @@ fn fila_9_otra_clase_de_peticion_da_falso() {
 }
 
 #[test]
-fn fila_9_un_falso_no_cambia_la_pendiente() {
+fn row_9_a_false_does_not_change_the_pending_one() {
     // Otra clase: la armada sigue ahí.
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(false), 0.0), Confirmation::Armed);
@@ -95,7 +95,7 @@ fn fila_9_un_falso_no_cambia_la_pendiente() {
 }
 
 #[test]
-fn fila_9_funciona_con_cualquier_peticion_armada_por_request() {
+fn row_9_works_with_any_request_armed_by_request() {
     for request in [
         Request::Open(PathBuf::from("a.png")),
         Request::Close,
@@ -111,7 +111,7 @@ fn fila_9_funciona_con_cualquier_peticion_armada_por_request() {
 }
 
 #[test]
-fn fila_9_armar_con_otra_peticion_sustituye_a_la_anterior() {
+fn row_9_arming_with_another_request_replaces_the_previous_one() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(false), 0.0), Confirmation::Armed);
     assert_eq!(confirm.request(Request::Close, 1.0), Confirmation::Armed);
@@ -120,7 +120,7 @@ fn fila_9_armar_con_otra_peticion_sustituye_a_la_anterior() {
 }
 
 #[test]
-fn fila_9_clear_la_borra() {
+fn row_9_clear_deletes_it() {
     let mut confirm = Confirm::new();
     assert_eq!(confirm.request(fallback(false), 0.0), Confirmation::Armed);
     confirm.clear();
@@ -140,7 +140,7 @@ proptest! {
     /// `confirm_armed` coincide con `request` salvo en que no arma: confirma exactamente cuando
     /// `request` daría `Confirmed`, y en ese caso deja el mismo estado.
     #[test]
-    fn fila_9_propiedad_confirm_armed_coincide_con_request(
+    fn row_9_property_confirm_armed_matches_request(
         armed in any_request(),
         asked in any_request(),
         armed_at in 0.0f64..100.0,

@@ -1,4 +1,4 @@
-//! `Ver → Fondo del lienzo → Color…` (specs/hito-2-fondo-color.md): el formulario de un campo
+//! `Ver → TestBackground del canvas → Color…` (specs/hito-2-fondo-color.md): el formulario de un campo
 //! hexadecimal que solo acepta colores opacos, el color con el que nace y cómo se lee lo aceptado.
 //! Sin egui: los tipos del formulario son de `px-ui` y se prueba sin ventana.
 

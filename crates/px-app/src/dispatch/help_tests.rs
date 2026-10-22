@@ -1,5 +1,5 @@
 //! Tests de `dispatch` con las acciones de ayuda (specs/interfaz-ayuda.md, unidad I.5, filas 3 y 4,
-//! la parte de `dispatch`): `ShowHelp(destino)` y `ShowShortcuts` dan `Dispatched::Help` y
+//! la parte de `dispatch`): `ShowHelp(target_2)` y `ShowShortcuts` dan `Dispatched::Help` y
 //! `Dispatched::Shortcuts`, con los bloqueos de una acción que abre un diálogo, sin tocar el
 //! documento. En ROJO hasta la lógica: las acciones y las variantes no existen todavía.
 
@@ -11,9 +11,9 @@ use px_ui::tool::{Tool, ToolState};
 use super::{Dispatched, Targets, dispatch};
 use crate::session::Session;
 
-const ORIGENES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
+const SOURCES: [Origin; 3] = [Origin::Menu, Origin::Button, Origin::Key];
 
-fn bloqueos(bits: u8) -> Locks {
+fn locks_2(bits: u8) -> Locks {
     Locks {
         gesture: bits & 1 != 0,
         stroke: bits & 2 != 0,
@@ -24,7 +24,7 @@ fn bloqueos(bits: u8) -> Locks {
     }
 }
 
-fn destinos() -> Vec<HelpTarget> {
+fn targets_2() -> Vec<HelpTarget> {
     vec![
         HelpTarget::Active,
         HelpTarget::Tool(Tool::Fill),
@@ -34,40 +34,40 @@ fn destinos() -> Vec<HelpTarget> {
 }
 
 #[test]
-fn fila_4_show_help_y_show_shortcuts_se_despachan_o_se_bloquean_sin_tocar_el_documento() {
+fn row_4_show_help_and_show_shortcuts_dispatch_or_are_blocked_without_touching_the_document() {
     for bits in 0..64u8 {
-        let locks = bloqueos(bits);
-        for origen in ORIGENES {
+        let locks = locks_2(bits);
+        for source_2 in SOURCES {
             let mut session = Session::sample(Document::new(Image::new(4, 4, Mode::Rgba).unwrap()));
             let mut tools = ToolState::new();
-            let estado = session.document.state_id();
-            let bloqueada =
+            let state_2 = session.document.state_id();
+            let locked_2 =
                 locks.modal || locks.dialog || locks.gesture || locks.text_focus || locks.removal;
-            let mut todas: Vec<(AppAction, Dispatched)> = destinos()
+            let mut all: Vec<(AppAction, Dispatched)> = targets_2()
                 .into_iter()
                 .map(|d| (AppAction::ShowHelp(d), Dispatched::Help(d)))
                 .collect();
-            todas.push((AppAction::ShowShortcuts, Dispatched::Shortcuts));
-            for (action, esperado) in todas {
-                let resultado = dispatch(
+            all.push((AppAction::ShowShortcuts, Dispatched::Shortcuts));
+            for (action, expected_2) in all {
+                let result = dispatch(
                     action,
-                    origen,
+                    source_2,
                     &mut Targets {
                         session: &mut session,
                         tools: &mut tools,
                         locks,
                     },
                 );
-                if bloqueada {
+                if locked_2 {
                     assert_eq!(
-                        resultado,
+                        result,
                         Dispatched::Blocked,
-                        "{action:?} {locks:?} {origen:?}"
+                        "{action:?} {locks:?} {source_2:?}"
                     );
                 } else {
-                    assert_eq!(resultado, esperado, "{action:?} {locks:?} {origen:?}");
+                    assert_eq!(result, expected_2, "{action:?} {locks:?} {source_2:?}");
                 }
-                assert_eq!(session.document.state_id(), estado);
+                assert_eq!(session.document.state_id(), state_2);
                 assert_eq!(tools.tool(), Tool::Pencil);
             }
         }

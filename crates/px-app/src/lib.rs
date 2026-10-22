@@ -102,7 +102,7 @@ use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
 use crate::title::{app_title_info, colors_label, status_line_fit, title_text, title_with_file};
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
 
-/// Una conversión que espera su fotograma tras `Aceptar` (specs/hito-2-convertir-modo.md, D5).
+/// Una conversión que espera su fotograma tras `Accept` (specs/hito-2-convertir-modo.md, D5).
 struct PendingConversion {
     pending: PendingConvert,
     /// El informe vigente al aceptar, para el aviso de 5 s.
@@ -118,7 +118,7 @@ enum SaveJob {
     File { as_copy: bool },
     /// La ruta elegida en el diálogo.
     Chosen(PathBuf),
-    /// `Exportar PNG aplanado…` en la ruta elegida (no cambia el estado del documento).
+    /// `Export PNG aplanado…` en la ruta elegida (no cambia el estado del documento).
     Export(PathBuf),
 }
 
@@ -561,7 +561,7 @@ impl App {
     }
 
     /// Guardar con diálogo. Si un diálogo anterior falló y su aviso sigue armado, esta segunda
-    /// pulsación guarda sin diálogo (`sin-titulo.png` o la copia, sin pisar nada).
+    /// pulsación guarda sin diálogo (`without-title.png` o la copia, sin pisar nada).
     fn save_via_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame, kind: DialogKind) {
         let as_copy = kind == DialogKind::SaveAs;
         let now = ctx.input(|i| i.time);
@@ -575,8 +575,8 @@ impl App {
         self.begin_dialog(ctx, frame, kind, false);
     }
 
-    /// `Archivo → Exportar PNG aplanado…`: el diálogo de guardar con el nombre
-    /// `<nombre>-aplanado.png` (o `sin-titulo-aplanado.png`) junto al fichero del documento.
+    /// `Archivo → Export PNG aplanado…`: el diálogo de guardar con el nombre
+    /// `<name_2>-aplanado.png` (o `without-title-aplanado.png`) junto al fichero del documento.
     fn begin_export_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         let proposed = export_name(self.session.path());
         let now = ctx.input(|i| i.time);
@@ -776,7 +776,7 @@ impl App {
                 }
             },
             Dispatched::OfferGrayAlpha { notice, .. } => {
-                // Repetir la orden en 5 s abre `Convertir modo…` con «Gris con alfa» elegido.
+                // Repetir la orden en 5 s abre `Convert mode_2…` con «Gris con alfa» elegido.
                 let now = ctx.input(|i| i.time);
                 match self.confirm.request(Request::LayersToGrayAlpha, now) {
                     Confirmation::Confirmed => self.begin_convert_mode(ctx, Some(Mode::GrayAlpha)),
@@ -884,7 +884,7 @@ impl App {
         }
     }
 
-    /// `Archivo → Nueva imagen…`: con cambios sin guardar, pide confirmación por repetición; luego
+    /// `Archivo → New image_2…`: con cambios sin guardar, pide confirmación por repetición; luego
     /// abre el diálogo (el lado máximo es `Canvas::MAX_SIDE`).
     fn begin_new_image(&mut self, ctx: &egui::Context) {
         let modified = self.session.modified();
@@ -957,7 +957,7 @@ impl App {
                 .is_none()
     }
 
-    /// `Imagen → Convertir modo…`: abre el diálogo con el modo y el color activo de ahora.
+    /// `TestImage → Convert mode_2…`: abre el diálogo con el modo y el color activo de ahora.
     fn begin_convert_mode(&mut self, ctx: &egui::Context, target: Option<Mode>) {
         // El modo y la paleta son los del lienzo (con varias capas, o con la celda activa vacía, no
         // hay otra imagen de la que leerlos).

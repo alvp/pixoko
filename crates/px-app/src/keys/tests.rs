@@ -97,7 +97,7 @@ fn end_stroke(tools: &mut ToolState, doc: &mut Document) {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_11_borrador_con_gray_elige_y_avisa() {
+fn row_11_eraser_with_gray_chooses_and_warns() {
     let mut tools = ToolState::new();
 
     let notice = select(&mut tools, Tool::Eraser, false, &gray());
@@ -107,7 +107,7 @@ fn fila_11_borrador_con_gray_elige_y_avisa() {
 }
 
 #[test]
-fn fila_11_borrador_con_indexada_sin_transparente_elige_y_avisa() {
+fn row_11_eraser_with_indexed_without_transparent_chooses_and_warns() {
     let mut tools = ToolState::new();
 
     let notice = select(&mut tools, Tool::Eraser, false, &indexed(None));
@@ -117,7 +117,7 @@ fn fila_11_borrador_con_indexada_sin_transparente_elige_y_avisa() {
 }
 
 #[test]
-fn fila_11_borrador_con_imagen_que_admite_borrar_no_avisa() {
+fn row_11_eraser_with_an_image_that_allows_erasing_does_not_warn() {
     for (name, image) in [
         ("RGBA", rgba()),
         ("GrayAlpha", gray_alpha()),
@@ -133,7 +133,7 @@ fn fila_11_borrador_con_imagen_que_admite_borrar_no_avisa() {
 }
 
 #[test]
-fn fila_11_los_textos_son_los_de_erase_error() {
+fn row_11_the_texts_are_those_of_erase_error() {
     assert_eq!(
         eraser_pixel(&gray()).unwrap_err().to_string(),
         GRAY_NOTICE,
@@ -156,7 +156,7 @@ fn fila_11_los_textos_son_los_de_erase_error() {
 }
 
 #[test]
-fn fila_11_repetir_e_con_el_borrador_ya_elegido_repite_el_aviso() {
+fn row_11_repeating_e_with_the_eraser_already_chosen_repeats_the_notice() {
     let mut tools = tools_with(Tool::Eraser);
     let image = gray();
 
@@ -169,7 +169,7 @@ fn fila_11_repetir_e_con_el_borrador_ya_elegido_repite_el_aviso() {
 }
 
 #[test]
-fn fila_11_volver_al_borrador_tras_otra_herramienta_avisa_otra_vez() {
+fn row_11_going_back_to_the_eraser_after_another_tool_warns_again() {
     let mut tools = ToolState::new();
     let image = indexed(None);
 
@@ -185,7 +185,7 @@ fn fila_11_volver_al_borrador_tras_otra_herramienta_avisa_otra_vez() {
 }
 
 #[test]
-fn fila_11_con_otra_imagen_el_aviso_es_el_que_corresponde() {
+fn row_11_with_another_image_the_notice_is_the_corresponding_one() {
     let mut tools = tools_with(Tool::Eraser);
 
     assert_eq!(
@@ -200,7 +200,7 @@ fn fila_11_con_otra_imagen_el_aviso_es_el_que_corresponde() {
 }
 
 #[test]
-fn fila_11_las_otras_herramientas_con_gray_no_avisan() {
+fn row_11_the_other_tools_with_gray_do_not_warn() {
     for tool in [Tool::Pencil, Tool::Line, Tool::Fill, Tool::Dropper] {
         let mut tools = tools_with(Tool::Eraser);
 
@@ -217,7 +217,7 @@ fn fila_11_las_otras_herramientas_con_gray_no_avisan() {
 }
 
 #[test]
-fn fila_11_cancel_no_cambia_la_herramienta_ni_avisa() {
+fn row_11_cancel_changes_neither_the_tool_nor_warns() {
     let mut tools = tools_with(Tool::Eraser);
 
     let notice = select_tool(&mut tools, ToolAction::Cancel, false, Some(&gray()));
@@ -227,7 +227,7 @@ fn fila_11_cancel_no_cambia_la_herramienta_ni_avisa() {
 }
 
 #[test]
-fn fila_11_con_busy_verdadero_no_cambia_la_herramienta_ni_avisa() {
+fn row_11_with_busy_true_it_changes_neither_the_tool_nor_warns() {
     for image in [gray(), indexed(None), rgba()] {
         let mut tools = ToolState::new();
 
@@ -239,7 +239,7 @@ fn fila_11_con_busy_verdadero_no_cambia_la_herramienta_ni_avisa() {
 }
 
 #[test]
-fn fila_11_con_busy_verdadero_y_el_borrador_ya_elegido_tampoco_repite_el_aviso() {
+fn row_11_with_busy_true_and_the_eraser_already_chosen_it_does_not_repeat_the_notice_either() {
     let mut tools = tools_with(Tool::Eraser);
 
     let notice = select(&mut tools, Tool::Eraser, true, &gray());
@@ -249,7 +249,7 @@ fn fila_11_con_busy_verdadero_y_el_borrador_ya_elegido_tampoco_repite_el_aviso()
 }
 
 #[test]
-fn fila_11_sin_imagen_elige_la_herramienta_sin_aviso() {
+fn row_11_without_an_image_it_chooses_the_tool_without_a_notice() {
     let mut tools = ToolState::new();
 
     let notice = select_tool(&mut tools, ToolAction::Select(Tool::Eraser), false, None);
@@ -259,7 +259,7 @@ fn fila_11_sin_imagen_elige_la_herramienta_sin_aviso() {
 }
 
 #[test]
-fn fila_11_con_un_gesto_del_borrador_en_curso_no_cambia_ni_avisa() {
+fn row_11_with_an_eraser_gesture_in_progress_it_changes_nothing_and_does_not_warn() {
     let mut doc = Document::new(gray());
     let mut tools = tools_with(Tool::Eraser);
     begin_stroke(&mut tools, &mut doc, (1, 1));
@@ -278,7 +278,7 @@ fn fila_11_con_un_gesto_del_borrador_en_curso_no_cambia_ni_avisa() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_13_session_busy_es_cierto_durante_el_arrastre_del_deslizador_y_falso_al_soltar() {
+fn row_13_session_busy_is_true_during_the_slider_drag_and_false_on_release() {
     let mut session = session_of(rgba());
     assert!(!session.busy());
 
@@ -292,7 +292,7 @@ fn fila_13_session_busy_es_cierto_durante_el_arrastre_del_deslizador_y_falso_al_
 }
 
 #[test]
-fn fila_13_session_busy_con_un_arrastre_de_muestra_de_verdad() {
+fn row_13_session_busy_with_a_real_swatch_drag() {
     let mut session =
         session_of(Image::new_indexed(1, 1, Palette::from_colors(distinct(6)).unwrap()).unwrap());
     assert!(!session.busy());
@@ -311,7 +311,7 @@ fn fila_13_session_busy_con_un_arrastre_de_muestra_de_verdad() {
 }
 
 #[test]
-fn fila_13_con_el_deslizador_pulsado_cuentagotas_a_lapiz_no_cambia_y_tras_soltar_si() {
+fn row_13_with_the_slider_pressed_dropper_to_pencil_does_not_change_and_after_releasing_it_does() {
     let mut session = session_of(rgba());
     let mut tools = tools_with(Tool::Dropper);
     press_slider(&mut session);
@@ -327,7 +327,8 @@ fn fila_13_con_el_deslizador_pulsado_cuentagotas_a_lapiz_no_cambia_y_tras_soltar
 }
 
 #[test]
-fn fila_13_con_el_deslizador_pulsado_lapiz_a_borrador_no_cambia_ni_avisa_y_tras_soltar_si() {
+fn row_13_with_the_slider_pressed_pencil_to_eraser_does_not_change_or_warn_and_after_releasing_it_does()
+ {
     let image = indexed(None);
     let mut session = session_of(image.clone());
     let mut tools = tools_with(Tool::Pencil);
@@ -344,7 +345,7 @@ fn fila_13_con_el_deslizador_pulsado_lapiz_a_borrador_no_cambia_ni_avisa_y_tras_
 }
 
 #[test]
-fn fila_13_con_un_arrastre_de_muestra_lapiz_a_borrador_no_cambia_y_tras_soltar_si() {
+fn row_13_with_a_swatch_drag_pencil_to_eraser_does_not_change_and_after_releasing_it_does() {
     let image = indexed(None);
     let mut session = session_of(image.clone());
     let mut tools = tools_with(Tool::Pencil);
@@ -366,7 +367,8 @@ fn fila_13_con_un_arrastre_de_muestra_lapiz_a_borrador_no_cambia_y_tras_soltar_s
 }
 
 #[test]
-fn fila_13_con_un_trazo_en_curso_cuentagotas_a_lapiz_no_cambia_y_tras_soltar_si() {
+fn row_13_with_a_stroke_in_progress_dropper_to_pencil_does_not_change_and_after_releasing_it_does()
+{
     let mut doc = Document::new(rgba());
     let mut tools = tools_with(Tool::Dropper);
     begin_stroke(&mut tools, &mut doc, (1, 1));
@@ -382,7 +384,8 @@ fn fila_13_con_un_trazo_en_curso_cuentagotas_a_lapiz_no_cambia_y_tras_soltar_si(
 }
 
 #[test]
-fn fila_13_con_un_trazo_en_curso_lapiz_a_borrador_no_cambia_ni_avisa_y_tras_soltar_si() {
+fn row_13_with_a_stroke_in_progress_pencil_to_eraser_does_not_change_or_warn_and_after_releasing_it_does()
+ {
     let image = indexed(None);
     let mut doc = Document::new(image.clone());
     let mut tools = tools_with(Tool::Pencil);
@@ -399,7 +402,7 @@ fn fila_13_con_un_trazo_en_curso_lapiz_a_borrador_no_cambia_ni_avisa_y_tras_solt
 }
 
 #[test]
-fn fila_13_con_busy_verdadero_por_un_dialogo_cuentagotas_a_lapiz_no_cambia() {
+fn row_13_with_busy_true_because_of_a_dialog_dropper_to_pencil_does_not_change() {
     let mut tools = tools_with(Tool::Dropper);
 
     let blocked = select(&mut tools, Tool::Pencil, true, &rgba());
@@ -412,7 +415,7 @@ fn fila_13_con_busy_verdadero_por_un_dialogo_cuentagotas_a_lapiz_no_cambia() {
 }
 
 #[test]
-fn fila_13_con_busy_verdadero_por_un_dialogo_lapiz_a_borrador_no_cambia_ni_avisa() {
+fn row_13_with_busy_true_because_of_a_dialog_pencil_to_eraser_does_not_change_or_warn() {
     let image = gray();
     let mut tools = tools_with(Tool::Pencil);
 
@@ -426,7 +429,7 @@ fn fila_13_con_busy_verdadero_por_un_dialogo_lapiz_a_borrador_no_cambia_ni_avisa
 }
 
 #[test]
-fn fila_13_con_varias_causas_a_la_vez_basta_con_una_para_bloquear() {
+fn row_13_with_several_causes_at_once_one_is_enough_to_block() {
     let image = indexed(None);
     let mut doc = Document::new(image.clone());
     let mut session = session_of(image.clone());
@@ -456,15 +459,15 @@ fn fila_13_con_varias_causas_a_la_vez_basta_con_una_para_bloquear() {
 // Fila 16: la regla de la entrada de alfa 0 en el aviso de elegir el borrador.
 // ---------------------------------------------------------------------------------------
 
-/// La paleta de la fila 14: `[azul, rojo, (0,255,0,α0), azul claro, (9,9,9,α0)]`, sin
-/// `transparent_index`; `alfa_2` y `alfa_4` son el alfa guardado de las entradas 2 y 4.
-fn indexed_with_alpha_zero_entries(alfa_2: u8, alfa_4: u8) -> Image {
+/// La paleta de la fila 14: `[blue, rojo, (0,255,0,α0), blue claro, (9,9,9,α0)]`, sin
+/// `transparent_index`; `alpha_2` y `alpha_4` son el alfa guardado de las entradas 2 y 4.
+fn indexed_with_alpha_zero_entries(alpha_2: u8, alpha_4: u8) -> Image {
     let palette = Palette::from_colors([
         Rgba::opaque(0, 0, 255),
         Rgba::opaque(255, 0, 0),
-        Rgba::new(0, 255, 0, alfa_2),
+        Rgba::new(0, 255, 0, alpha_2),
         Rgba::opaque(100, 150, 255),
-        Rgba::new(9, 9, 9, alfa_4),
+        Rgba::new(9, 9, 9, alpha_4),
     ])
     .expect("paleta");
     Image::new_indexed(8, 8, palette).expect("imagen indexada")
@@ -481,7 +484,7 @@ fn case_14d() -> Image {
 }
 
 #[test]
-fn fila_16_borrador_con_el_caso_14a_elige_y_no_avisa() {
+fn row_16_eraser_with_case_14a_chooses_and_does_not_warn() {
     let mut tools = ToolState::new();
 
     let notice = select(&mut tools, Tool::Eraser, false, &case_14a());
@@ -491,7 +494,7 @@ fn fila_16_borrador_con_el_caso_14a_elige_y_no_avisa() {
 }
 
 #[test]
-fn fila_16_borrador_con_el_caso_14d_elige_y_no_avisa() {
+fn row_16_eraser_with_case_14d_chooses_and_does_not_warn() {
     let mut tools = ToolState::new();
 
     let notice = select(&mut tools, Tool::Eraser, false, &case_14d());
@@ -501,7 +504,7 @@ fn fila_16_borrador_con_el_caso_14d_elige_y_no_avisa() {
 }
 
 #[test]
-fn fila_16_repetir_e_con_entrada_de_alfa_0_no_avisa_ninguna_de_las_veces() {
+fn row_16_repeating_e_with_an_alpha_0_entry_does_not_warn_either_time() {
     let mut tools = tools_with(Tool::Eraser);
     let image = case_14a();
 
@@ -511,7 +514,7 @@ fn fila_16_repetir_e_con_entrada_de_alfa_0_no_avisa_ninguna_de_las_veces() {
 }
 
 #[test]
-fn fila_16_con_las_entradas_de_alfa_0_convertidas_en_opacas_avisa() {
+fn row_16_with_the_alpha_0_entries_turned_opaque_it_warns() {
     // Los casos 14(a) y 14(d) con todas sus entradas de alfa 0 pasadas a alfa 255.
     let image = indexed_with_alpha_zero_entries(255, 255);
     let mut tools = ToolState::new();
@@ -523,20 +526,20 @@ fn fila_16_con_las_entradas_de_alfa_0_convertidas_en_opacas_avisa() {
 }
 
 #[test]
-fn fila_16_una_sola_entrada_que_pasa_de_alfa_0_a_opaca_cambia_el_aviso() {
+fn row_16_a_single_entry_going_from_alpha_0_to_opaque_changes_the_notice() {
     // Se calcula al elegir, no se guarda: la misma paleta, antes y después de editarla.
     let mut tools = ToolState::new();
 
     assert_eq!(select(&mut tools, Tool::Eraser, false, &case_14d()), None);
-    let editada = indexed_with_alpha_zero_entries(255, 255);
+    let edited = indexed_with_alpha_zero_entries(255, 255);
     assert_eq!(
-        select(&mut tools, Tool::Eraser, false, &editada).as_deref(),
+        select(&mut tools, Tool::Eraser, false, &edited).as_deref(),
         Some(NO_INDEX_NOTICE)
     );
 }
 
 #[test]
-fn fila_16_con_busy_verdadero_y_entrada_de_alfa_0_tampoco_cambia_nada() {
+fn row_16_with_busy_true_and_an_alpha_0_entry_it_changes_nothing_either() {
     let mut tools = ToolState::new();
 
     let notice = select(&mut tools, Tool::Eraser, true, &case_14a());
@@ -546,7 +549,7 @@ fn fila_16_con_busy_verdadero_y_entrada_de_alfa_0_tampoco_cambia_nada() {
 }
 
 #[test]
-fn fila_16_el_aviso_de_pulsar_tampoco_sale_con_entrada_de_alfa_0() {
+fn row_16_the_press_notice_does_not_come_out_either_with_an_alpha_0_entry() {
     // Sin `Refused` ni en el `Begin` ni durante el trazo ni en el `End`.
     for image in [case_14a(), case_14d()] {
         let mut doc = Document::new(image);
@@ -567,7 +570,7 @@ fn fila_16_el_aviso_de_pulsar_tampoco_sale_con_entrada_de_alfa_0() {
 }
 
 #[test]
-fn fila_16_el_aviso_de_pulsar_sale_con_las_entradas_de_alfa_0_convertidas_en_opacas() {
+fn row_16_the_press_notice_comes_out_with_the_alpha_0_entries_turned_opaque() {
     let mut doc = Document::new(indexed_with_alpha_zero_entries(255, 255));
     let id = ImageId::from_raw(0);
     let mut tools = tools_with(Tool::Eraser);

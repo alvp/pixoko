@@ -1,6 +1,6 @@
 //! Convertir modo (specs/hito-2-convertir-modo.md): el formulario por modo de origen, el informe
 //! de `convert_image` sin tocar el documento (solo al cambiar de destino, en dos tiempos si la
-//! imagen es grande), los permisos, el motivo que deja `Aceptar` atenuado, el aviso de historia y
+//! imagen es grande), los permisos, el motivo que deja `Accept` atenuado, el aviso de historia y
 //! la reserva previa de memoria. Sin egui: los tipos del formulario son de `px-ui` y se prueba sin
 //! ventana.
 
@@ -174,7 +174,7 @@ fn check_values(values: &Values) -> Option<String> {
         .map(|_| NO_ALPHA_IN_HEX.to_string())
 }
 
-/// Abre el diálogo de convertir desde `from`; hasta el primer informe, `Aceptar` queda atenuado.
+/// Abre el diálogo de convertir desde `from`; hasta el primer informe, `Accept` queda atenuado.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn open_convert_mode(modal: &mut Modal, from: Mode, locks: Locks) -> bool {
     if !modal.open(DialogKind::ConvertMode, convert_form(from), locks) {
@@ -281,7 +281,7 @@ pub enum LayerBlock {
 }
 
 impl LayerBlock {
-    /// El motivo de `Aceptar` atenuado (≤ 37 caracteres).
+    /// El motivo de `Accept` atenuado (≤ 37 caracteres).
     pub fn reason(self) -> &'static str {
         match self {
             LayerBlock::MultiLayerGray => "con varias capas: aplana antes",
@@ -484,7 +484,7 @@ pub fn pending(
     missing
 }
 
-/// Por qué `Aceptar` está atenuado; `analysis = None` es «pendiente». Una lista de pendientes
+/// Por qué `Accept` está atenuado; `analysis = None` es «pendiente». Una lista de pendientes
 /// lleva `falta: ` (≤ 44 columnas); lo demás, ≤ 37 caracteres (el pie les pone `error: `).
 pub fn block_reason(
     analysis: Option<&Analysis>,
