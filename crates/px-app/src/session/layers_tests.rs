@@ -619,6 +619,68 @@ fn fila_11_un_gris_con_todo_oculto_no_se_guarda_y_sigue_modificado() {
     assert_eq!(fs::read_dir(tmp.ruta()).expect("directorio").count(), 0);
 }
 
+/// Una sesión de una sola capa, oculta: gris, indexado sin índice transparente o RGBA.
+fn sesion_con_la_unica_capa_oculta(modo: Mode) -> Session {
+    let imagen = match modo {
+        Mode::Indexed => Image::new_indexed(
+            3,
+            3,
+            Palette::from_colors([Rgba::opaque(1, 2, 3), Rgba::opaque(4, 5, 6)]).expect("paleta"),
+        )
+        .expect("imagen"),
+        _ => Image::new(3, 3, modo).expect("imagen"),
+    };
+    let mut sesion = Session::sample(Document::new(imagen));
+    let capa = sesion.document.layers()[0].id();
+    sesion
+        .apply_layer(Command::SetLayerVisible {
+            layer: capa,
+            visible: false,
+        })
+        .expect("ocultar");
+    sesion
+}
+
+#[test]
+fn sin_nada_visible_guardar_y_exportar_png_dan_un_error_que_dice_que_hacer() {
+    for (modo, remedio) in [
+        (Mode::Gray, "muestra una capa"),
+        (
+            Mode::Indexed,
+            "muestra una capa o fija una entrada transparente",
+        ),
+    ] {
+        let tmp = Tmp::nuevo();
+        let mut sesion = sesion_con_la_unica_capa_oculta(modo);
+        let guardar = sesion.save_as(tmp.ruta()).expect_err("guardar").to_string();
+        let exportar = sesion
+            .export_flat(&tmp.ruta().join("plano.png"))
+            .expect_err("exportar")
+            .to_string();
+        for texto in [guardar, exportar] {
+            assert!(
+                texto.contains(&format!("no hay nada visible que guardar: {remedio}")),
+                "{modo:?}: {texto}"
+            );
+            assert!(!texto.contains("NoTransparency"), "{modo:?}: {texto}");
+        }
+        assert!(sesion.modified(), "{modo:?}");
+        assert_eq!(fs::read_dir(tmp.ruta()).expect("directorio").count(), 0);
+    }
+}
+
+#[test]
+fn sin_nada_visible_un_rgba_se_guarda_como_png_transparente() {
+    let tmp = Tmp::nuevo();
+    let mut sesion = sesion_con_la_unica_capa_oculta(Mode::Rgba);
+    let guardado = sesion.save_as(tmp.ruta()).expect("guardar");
+    let leida = read_png(&fs::read(&guardado.path).expect("leer")).expect("PNG");
+    let transparente = (0..3).all(|y| {
+        (0..3).all(|x| matches!(leida.image.get_pixel(x, y), Ok(Pixel::Rgba(c)) if c.a == 0))
+    });
+    assert!(transparente);
+}
+
 #[test]
 fn fila_11_el_aviso_dice_aplanado_solo_con_mas_de_una_capa() {
     let mut sesion = sesion_rgba(4, 4);

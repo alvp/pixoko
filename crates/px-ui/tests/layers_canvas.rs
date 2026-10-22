@@ -320,6 +320,55 @@ fn fila_7_con_una_capa_las_texturas_son_las_de_hoy_y_la_transparencia_deja_ver_e
 }
 
 // ---------------------------------------------------------------------------------------------
+// Defecto del hito 3: todas las capas ocultas
+// ---------------------------------------------------------------------------------------------
+
+/// Un documento de una sola capa, oculta, en cada modo; el indexado sin índice transparente.
+fn doc_con_la_unica_capa_oculta(modo: Mode) -> Document {
+    let imagen = match modo {
+        Mode::Indexed => Image::new_indexed(
+            ANCHO,
+            ALTO,
+            px_core::Palette::from_colors([Rgba::opaque(1, 2, 3), Rgba::opaque(4, 5, 6)])
+                .expect("paleta"),
+        )
+        .expect("imagen"),
+        _ => Image::new(ANCHO, ALTO, modo).expect("imagen"),
+    };
+    let mut doc = Document::new(imagen);
+    let capa = doc.layers()[0].id();
+    doc.apply(Command::SetLayerVisible {
+        layer: capa,
+        visible: false,
+    })
+    .expect("ocultar");
+    doc
+}
+
+#[test]
+fn con_todas_las_capas_ocultas_el_lienzo_carga_y_se_ve_transparente_en_todos_los_modos() {
+    for modo in [Mode::Rgba, Mode::GrayAlpha, Mode::Indexed, Mode::Gray] {
+        let doc = doc_con_la_unica_capa_oculta(modo);
+        let ctx = contexto(1.0);
+        let mut canvas = Canvas::with_tile_side(64);
+        let cargado = canvas.load(&ctx, &DocSource(&doc));
+        assert_eq!(cargado, Ok(()), "{modo:?}: cargar el lienzo");
+        let mut banco = Banco::nuevo(doc);
+        for _ in 0..2 {
+            banco.corre(|_, _, _, _| {});
+        }
+        let todo_transparente = banco
+            .contenidos()
+            .iter()
+            .all(|baldosa| baldosa.iter().all(|&c| c == Color32::TRANSPARENT));
+        assert!(
+            todo_transparente,
+            "{modo:?}: la vista es el fondo del lienzo"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Fila 8: el refresco recompone solo lo sucio
 // ---------------------------------------------------------------------------------------------
 
