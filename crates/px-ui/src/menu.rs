@@ -1,5 +1,5 @@
-//! Barra de menú (specs/hito-2-menu-herramientas.md, «Piezas» y «Geometría»): la tabla de
-//! entradas con su acción y su atajo por plataforma es lógica pura; `show_menu` solo la pinta.
+//! Menu bar (specs/hito-2-menu-herramientas.md, "Pieces" and "Geometry"): the table of entries
+//! with their action and their shortcut per platform is pure logic; `show_menu` only paints it.
 
 use egui::containers::menu::{MenuBar, MenuConfig, menu_style};
 use egui::{Button, Frame, Panel, Sense, Style, Ui, vec2};
@@ -14,24 +14,23 @@ use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
 use crate::theme::{SURFACE_0, SURFACE_1, SURFACE_3};
 
-/// Una entrada de un desplegable.
+/// An entry of a dropdown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MenuItem {
     pub label: &'static str,
     pub action: AppAction,
-    /// Una línea separadora antes de la entrada.
+    /// A separator line before the entry.
     pub separator_before: bool,
 }
 
-/// Un submenú dentro de un desplegable: su rótulo y sus entradas.
+/// A submenu inside a dropdown: its label and its entries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Submenu {
     pub label: &'static str,
     pub items: &'static [MenuItem],
 }
 
-/// Un menú de la barra: su título, sus entradas y sus submenús (que se pintan después de las
-/// entradas).
+/// A menu of the bar: its title, its entries and its submenus (painted after the entries).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Menu {
     pub title: &'static str,
@@ -47,7 +46,7 @@ const fn item(label: &'static str, action: AppAction) -> MenuItem {
     }
 }
 
-/// Los seis menús. Solo hay entradas de funciones que existen.
+/// The six menus. There are only entries for functions that exist.
 pub const MENUS: [Menu; 6] = [
     Menu {
         title: "Archivo",
@@ -103,6 +102,7 @@ pub const MENUS: [Menu; 6] = [
             item("Alejar", AppAction::ZoomOut),
             item("Ajustar a la ventana", AppAction::ZoomFit),
             item("1:1", AppAction::ZoomActualSize),
+            item("Editor de color", AppAction::ToggleColorEditor),
         ],
         submenus: &[Submenu {
             label: "Fondo del lienzo",
@@ -138,8 +138,8 @@ pub const MENUS: [Menu; 6] = [
     },
 ];
 
-/// `true` si `action` es la del fondo `current`: la entrada del submenú que lleva la marca. Con un
-/// color propio la lleva `Color…`, no la entrada del fondo liso que tenga el mismo color.
+/// `true` if `action` is the one of the background `current`: the entry of the submenu that carries the mark.
+/// With a custom color it is `Color…` that carries it, not the plain-background entry of the same color.
 pub fn background_checked(action: AppAction, current: CanvasBackground) -> bool {
     match current {
         CanvasBackground::Custom(_) => action == AppAction::BackgroundColor,
@@ -147,45 +147,45 @@ pub fn background_checked(action: AppAction, current: CanvasBackground) -> bool 
     }
 }
 
-/// Un atajo para mostrarlo: la tecla, si lleva `command` (`Ctrl` o `Cmd`) y si lleva `Mayús`. Es
-/// el [`Chord`] de la tabla de teclas.
+/// A shortcut to show it: the key, whether it carries `command` (`Ctrl` or `Cmd`) and whether it carries
+/// `Shift`. It is the [`Chord`] of the key table.
 pub type Shortcut = Chord;
 
-/// El atajo que muestra `keymap` para `action` en `platform`, si lo tiene: la primera fila de la
-/// tabla marcada como mostrada en esa plataforma (`Redo` enseña `Ctrl+Y` y, en macOS,
-/// `Cmd+Mayús+Z`; `Salir` solo tiene atajo en Linux).
+/// The shortcut `keymap` shows for `action` on `platform`, if it has one: the first row of the table
+/// marked as shown on that platform (`Redo` shows `Ctrl+Y` and, on macOS, `Cmd+Shift+Z`; `Quit` only
+/// has a shortcut on Linux).
 pub fn shortcut_in(keymap: &Keymap, action: AppAction, platform: Platform) -> Option<Shortcut> {
     keymap.shown(action, platform)
 }
 
-/// Como [`shortcut_in`] con la tabla por defecto.
+/// Like [`shortcut_in`] with the default table.
 pub fn shortcut_for(action: AppAction, platform: Platform) -> Option<Shortcut> {
     shortcut_in(default_keymap(), action, platform)
 }
 
-/// El atajo fijo de una entrada que no sale de la tabla de teclas: `F1` en `Ayuda de la
-/// herramienta` (`F1` es de la help y no se reasigna).
+/// The fixed shortcut of an entry that does not come from the key table: `F1` in `Tool help`
+/// (`F1` belongs to the help and is not reassigned).
 pub fn fixed_shortcut(action: AppAction) -> Option<&'static str> {
     matches!(action, AppAction::ShowHelp(_)).then_some("F1")
 }
 
-/// Texto de un atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Start`, `>`, `d`.
+/// Text of a shortcut: `Ctrl+O`, `Cmd+Shift+S`, `Home`, `>`, `d`.
 pub fn shortcut_text(shortcut: Shortcut, platform: Platform) -> String {
     shortcut.text(platform)
 }
 
-/// Margen del texto de un botón del menú, en `u`, a cada lado.
+/// Margin of the text of a menu button, in `u`, on each side.
 const PAD_X_U: i64 = 6;
-/// Margen a la izquierda de la barra, en `u`.
+/// Margin on the left of the bar, in `u`.
 const BAR_MARGIN_U: i64 = 4;
 
-/// Ancho de un desplegable en `u`: márgenes y el mayor `rótulo + 2 + shortcut_2`, a 7 u por carácter
-/// (con la tabla de teclas por defecto).
+/// Width of a dropdown in `u`: margins and the largest `label + 2 + shortcut`, at 7 u per character
+/// (with the default key table).
 pub fn popup_width_u(menu: &Menu, platform: Platform) -> i64 {
     popup_width_in(menu, platform, default_keymap())
 }
 
-/// Como [`popup_width_u`] con los atajos de `keymap`.
+/// Like [`popup_width_u`] with the shortcuts of `keymap`.
 pub fn popup_width_in(menu: &Menu, platform: Platform, keymap: &Keymap) -> i64 {
     let widest = menu
         .items
@@ -207,23 +207,23 @@ pub fn popup_width_in(menu: &Menu, platform: Platform, keymap: &Keymap) -> i64 {
     2 * PAD_X_U + widest * i64::from(ADVANCE_PX)
 }
 
-/// Caracteres del valor de un color propio (`#rrggbb`).
+/// Characters of the value of a custom color (`#rrggbb`).
 const VALUE_CHARS: i64 = 7;
 
-/// Ancho de un submenú en `u`: márgenes, la marca (`· `), el rótulo más largo, un hueco y la
-/// columna del valor, que se reserva **siempre** para que el submenú no cambie de ancho al elegir.
+/// Width of a submenu in `u`: margins, the mark (`· `), the longest label, a gap and the value column,
+/// which is **always** reserved so that the submenu does not change width when choosing.
 pub fn submenu_width_u(submenu: &Submenu) -> i64 {
     2 * PAD_X_U + (submenu_label_chars(submenu) + 2 + 2 + VALUE_CHARS) * i64::from(ADVANCE_PX)
 }
 
-/// Como [`show_menu_with_background`] con el fondo por defecto marcado.
+/// Like [`show_menu_with_background`] with the default background marked.
 pub fn show_menu(ui: &mut Ui, state: &UiState, platform: Platform) -> Option<AppAction> {
     show_menu_with_background(ui, state, platform, CanvasBackground::default())
 }
 
-/// Pinta la barra en el borde superior de `ui` y devuelve la entrada elegida, si la hay, con la
-/// marca del submenú de fondo en `background`. Hay que llamarla **antes** de lo que ocupa el
-/// resto de la ventana.
+/// Paints the bar at the top edge of `ui` and returns the chosen entry, if any, with the mark of the
+/// background submenu in `background`. It has to be called **before** what takes up the rest of the
+/// window.
 pub fn show_menu_with_background(
     ui: &mut Ui,
     state: &UiState,
@@ -233,7 +233,7 @@ pub fn show_menu_with_background(
     show_menu_in(ui, state, platform, background, default_keymap())
 }
 
-/// Como [`show_menu_with_background`] con los atajos de `keymap` (la app pasa su tabla).
+/// Like [`show_menu_with_background`] with the shortcuts of `keymap` (the app passes its table).
 pub fn show_menu_in(
     ui: &mut Ui,
     state: &UiState,
@@ -251,8 +251,8 @@ pub fn show_menu_in(
     )
 }
 
-/// Como [`show_menu_in`] con la pila de capas, que atenúa `Remove`, `Subir`, `Bajar`, `Nueva layer_2` y
-/// `Duplicar` cuando no se pueden hacer (la app pasa la suya).
+/// Like [`show_menu_in`] with the layer stack, which dims `Remove`, `Up`, `Down`, `New layer` and
+/// `Duplicate` when they cannot be done (the app passes its own).
 pub fn show_menu_full(
     ui: &mut Ui,
     state: &UiState,
@@ -265,15 +265,15 @@ pub fn show_menu_full(
     let ppp = ctx.pixels_per_point();
     let u = ui_unit(ppp);
     let mut chosen = None;
-    // Botones de 16 u con 6 u de margen a cada lado del texto y 1 u arriba, sin separación.
+    // 16 u buttons with 6 u of margin on each side of the text and 1 u above, without separation.
     let style = move |style: &mut Style| {
         menu_style(style);
         style.spacing.button_padding = vec2(PAD_X_U as f32 * u, TEXT_BUTTON_TEXT_Y_U as f32 * u);
         style.spacing.item_spacing = vec2(0.0, 0.0);
         style.spacing.interact_size.y = TEXT_BUTTON_H_U as f32 * u;
         style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::NONE;
-        // Los atajos se pintan «débiles» (60 % de alfa): con el ratón encima, sobre `SURFACE_3`,
-        // dan 3,84:1. En el menú van en `TEXT`, sin atenuar.
+        // Shortcuts are painted "weak" (60 % alpha): with the mouse over, on `SURFACE_3`,
+        // they give 3.84:1. In the menu they go in `TEXT`, not dimmed.
         style.visuals.weak_text_alpha = 1.0;
     };
     Panel::top("menu")
@@ -281,7 +281,7 @@ pub fn show_menu_full(
         .show_separator_line(false)
         .frame(Frame::new().fill(SURFACE_1))
         .show(ui, |ui| {
-            // La fila de la barra mide `interact_size.y`: sin esto el panel crece a 18 pt.
+            // The row of the bar measures `interact_size.y`: without this the panel grows to 18 pt.
             style(ui.style_mut());
             MenuBar::new()
                 .style(style)
@@ -331,8 +331,8 @@ pub fn show_menu_full(
     chosen
 }
 
-/// Una fila del desplegable: de 16 u, el rótulo a la izquierda y el atajo a la derecha. Devuelve si
-/// se ha pulsado estando habilitada.
+/// A row of the dropdown: 16 u, the label on the left and the shortcut on the right. Returns whether
+/// it was clicked.
 fn menu_entry(
     ui: &mut Ui,
     ctx: &egui::Context,
@@ -354,7 +354,7 @@ fn menu_entry(
     ui.add_enabled(on, button).clicked()
 }
 
-/// Caracteres del rótulo más largo de las entradas de un submenú.
+/// Characters of the longest label among the entries of a submenu.
 fn submenu_label_chars(submenu: &Submenu) -> i64 {
     submenu
         .items
@@ -364,9 +364,8 @@ fn submenu_label_chars(submenu: &Submenu) -> i64 {
         .unwrap_or(0) as i64
 }
 
-/// Una fila de un submenú con marca: `· ` delante del rótulo de la activa (dos espacios si no, en
-/// la fuente monoespaciada el texto no se mueve) y la fila resaltada. Devuelve si se ha pulsado
-/// estando habilitada.
+/// A row of a submenu with mark: `· ` in front of the label of the active one (two spaces if not; in
+/// the monospaced font the text does not move) and the highlighted row. Returns whether it was clicked.
 fn marked_entry(
     ui: &mut Ui,
     ctx: &egui::Context,
@@ -384,8 +383,8 @@ fn marked_entry(
         None
     };
     let text = format!("{} {}", if checked { '·' } else { ' ' }, item.label);
-    // `override_text_color` (TEXT) gana al trazo de la selección: sin color propio el rótulo de la
-    // fila marcada (relleno `ACCENT`) sale a 1,47:1. `SURFACE_0` da 8,98:1.
+    // `override_text_color` (TEXT) wins over the stroke of the selection: without its own color the
+    // label of the marked row (`ACCENT` fill) comes out at 1.47:1. `SURFACE_0` gives 8.98:1.
     let label = egui::RichText::new(printable(ctx, &text));
     let label = if checked {
         label.color(SURFACE_0)
@@ -395,7 +394,7 @@ fn marked_entry(
     let mut button = Button::new(label)
         .selected(checked)
         .min_size(vec2(width, TEXT_BUTTON_H_U as f32 * u));
-    // El valor del color propio, a la derecha como un atajo, también en `SURFACE_0`.
+    // The value of the custom color, on the right like a shortcut, also in `SURFACE_0`.
     if let Some(value) = value {
         button = button.shortcut_text(egui::RichText::new(printable(ctx, &value)).color(SURFACE_0));
     }

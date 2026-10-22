@@ -1,20 +1,20 @@
-//! El teclado como tabla de datos (specs/interfaz-teclado.md, unidad I.1).
+//! The keyboard as a data table (specs/interfaz-teclado.md, unit I.1).
 //!
-//! `Keymap` asigna teclas a [`AppAction`]; es la única fuente de la traducción de teclas, del atajo
-//! que enseña el menú y de la letra de los botones. Todo es lógica pura, sin egui: la entrada
-//! normalizada es una [`Press`] (la construye `key_events` a partir de los eventos de egui).
+//! `Keymap` assigns keys to [`AppAction`]; it is the only source of the translation of keys, of the
+//! shortcut the menu shows and of the letter of the buttons. All of it is pure logic, without egui:
+//! the normalized input is a [`Press`] (built by `key_events` from the egui events).
 //!
-//! Se compara el **carácter que produce la tecla**, no la tecla física: `<` y `>` son la misma
-//! cosa en un teclado español (tecla propia) y en uno inglés (`Mayús`+`,`), y `[` o `]` valen donde
-//! el rótulo de la tecla los ponga. Las letras van en minúscula y `Mayús` aparte, para que el Bloq
-//! Mayús no las rompa.
+//! The **character the key produces** is compared, not the physical key: `<` and `>` are the same
+//! thing on a Spanish keyboard (own key) and on an English one (`Shift`+`,`), and `[` or `]` work
+//! wherever the label of the key puts them. Letters go in lowercase and `Shift` apart, so that Caps
+//! Lock does not break them.
 
 use std::sync::OnceLock;
 
 use crate::actions::{AppAction, Platform};
 use crate::tool::Tool;
 
-/// Una tecla de la tabla: un carácter (las letras en minúscula) o una tecla con nombre.
+/// A key of the table: a character (letters in lowercase) or a named key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KeyId {
     Char(char),
@@ -23,18 +23,18 @@ pub enum KeyId {
     PageDown,
 }
 
-/// En qué plataformas vale una fila o se muestra.
+/// On which platforms a row works or is shown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Platforms {
     All,
     Only(Platform),
     Except(Platform),
-    /// En ninguna (una fila que funciona pero no se muestra).
+    /// On none (a row that works but is not shown).
     Never,
 }
 
 impl Platforms {
-    /// Si `platform` está incluida.
+    /// Whether `platform` is included.
     pub fn includes(self, platform: Platform) -> bool {
         match self {
             Platforms::All => true,
@@ -53,24 +53,24 @@ impl Platforms {
 
 const ALL_PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
-/// Una fila de la tabla.
+/// A row of the table.
 ///
-/// `shift` solo cuenta en letras, con `command` y... en ninguna otra tecla: en un símbolo o una
-/// cifra sin `command` el propio carácter ya dice si hubo `Mayús` (`<` frente a `,`), así que ahí
-/// debe ir en `false`.
+/// `shift` only counts in letters, with `command` and... in no other key: in a symbol or a digit
+/// without `command` the character itself already says whether `Shift` was held (`<` versus `,`),
+/// so it must be `false` there.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Binding {
     pub key: KeyId,
     pub command: bool,
     pub shift: bool,
     pub action: AppAction,
-    /// Dónde funciona la fila.
+    /// Where the row works.
     pub active: Platforms,
-    /// Dónde es la fila que se muestra en el menú y los rótulos.
+    /// Where the row is the one shown in the menu and the labels.
     pub shown: Platforms,
 }
 
-/// Un atajo para mostrarlo: la tecla, si lleva `command` (`Ctrl` o `Cmd`) y si lleva `Mayús`.
+/// A shortcut to show it: the key, whether it carries `command` (`Ctrl` or `Cmd`) and whether it carries `Shift`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Chord {
     pub key: KeyId,
@@ -79,8 +79,8 @@ pub struct Chord {
 }
 
 impl Chord {
-    /// Texto del atajo: `Ctrl+O`, `Cmd+Mayús+S`, `Start`, `d`, `>`. Con `command` la letra va en
-    /// mayúscula (como los menús de siempre); sin él, como se teclea.
+    /// Text of the shortcut: `Ctrl+O`, `Cmd+Shift+S`, `Home`, `d`, `>`. With `command` the letter goes in
+    /// uppercase (as the menus have always done); without it, as it is typed.
     pub fn text(self, platform: Platform) -> String {
         let key = match self.key {
             KeyId::Home => "Inicio".to_string(),
@@ -96,7 +96,7 @@ impl Chord {
             KeyId::Char(c) => c.to_string(),
         };
         let mut text = String::new();
-        // `Mayús` con `Re Pág` o `Av Pág` (el color de fondo) se dice aunque no haya `command`.
+        // `Shift` with `Page Up` or `Page Down` (the background color) is said even without `command`.
         if self.shift && !self.command && matches!(self.key, KeyId::PageUp | KeyId::PageDown) {
             text.push_str("Mayús+");
         }
@@ -115,32 +115,32 @@ impl Chord {
     }
 }
 
-/// Lo que el usuario ha pulsado, ya normalizado.
+/// What the user has pressed, already normalized.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Press {
-    /// El carácter que produce la tecla (letras en minúscula) o la tecla con nombre; `None` si no
-    /// da ninguno (una tecla muerta, una composición, una tecla sin carácter).
+    /// The character the key produces (letters in lowercase) or the named key; `None` if it gives none
+    /// (a dead key, a composition, a key without character).
     pub key: Option<KeyId>,
-    /// `Ctrl` en Linux y Windows, `Cmd` en macOS.
+    /// `Ctrl` on Linux and Windows, `Cmd` on macOS.
     pub command: bool,
     pub shift: bool,
     pub alt: bool,
-    /// Un `Ctrl` que no es `command` (el de macOS).
+    /// A `Ctrl` that is not `command` (the one of macOS).
     pub other_ctrl: bool,
-    /// Pulsación repetida por mantener la tecla.
+    /// Press repeated because the key is held down.
     pub repeat: bool,
 }
 
-/// Un problema de una tabla.
+/// A problem of a table.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Conflict {
-    /// Las filas `i` y `j` (`i < j`) casan con la misma pulsación en alguna plataforma.
+    /// Rows `i` and `j` (`i < j`) match the same press on some platform.
     Duplicate(usize, usize),
-    /// La fila `i` usa una tecla reservada.
+    /// Row `i` uses a reserved key.
     Reserved(usize),
 }
 
-/// La tabla de teclas.
+/// The table of keys.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Keymap {
     rows: Vec<Binding>,
@@ -165,7 +165,7 @@ fn row(
 }
 
 impl Keymap {
-    /// El esquema por defecto: 35 filas (26 sin `command` y 9 con él).
+    /// The default scheme: 36 rows (27 without `command` and 9 with it).
     pub fn default_scheme() -> Keymap {
         use Platforms::{All, Except, Never, Only};
         let c = KeyId::Char;
@@ -240,6 +240,7 @@ impl Keymap {
             row(c('n'), false, false, AppAction::CenterOnCursor, All, All),
             row(c('k'), false, true, AppAction::ClearPage, All, All),
             row(c('\''), false, false, AppAction::ToggleLayerPanel, All, All),
+            row(c('p'), false, false, AppAction::ToggleColorEditor, All, All),
             row(c(';'), false, false, AppAction::NewLayer, All, All),
             row(c(')'), false, false, AppAction::LayerUp, All, All),
             row(c('('), false, false, AppAction::LayerDown, All, All),
@@ -258,7 +259,7 @@ impl Keymap {
         ])
     }
 
-    /// Una tabla con exactamente estas filas (sustitución entera, hito 8).
+    /// A table with exactly these rows (whole replacement, milestone 8).
     pub fn new(rows: Vec<Binding>) -> Keymap {
         Keymap { rows }
     }
@@ -267,7 +268,7 @@ impl Keymap {
         &self.rows
     }
 
-    /// La acción de la primera fila que casa con `press` en `platform`.
+    /// The action of the first row that matches `press` on `platform`.
     pub fn action_for(&self, press: &Press, platform: Platform) -> Option<AppAction> {
         self.rows
             .iter()
@@ -275,7 +276,7 @@ impl Keymap {
             .map(|row| row.action)
     }
 
-    /// El atajo que se muestra para `action` en `platform`: la primera fila `shown` en ella.
+    /// The shortcut shown for `action` on `platform`: the first `shown` row on it.
     pub fn shown(&self, action: AppAction, platform: Platform) -> Option<Chord> {
         self.rows
             .iter()
@@ -287,14 +288,14 @@ impl Keymap {
             })
     }
 
-    /// Texto del atajo que se muestra para `action` en `platform`.
+    /// Text of the shortcut shown for `action` on `platform`.
     pub fn shown_text(&self, action: AppAction, platform: Platform) -> Option<String> {
         self.shown(action, platform)
             .map(|chord| chord.text(platform))
     }
 
-    /// Duplicados (`Duplicate(i, j)` con `i < j`, ordenados por `i` y luego `j`) y filas
-    /// reservadas (`Reserved(i)`, por orden de fila, tras los duplicados).
+    /// Duplicates (`Duplicate(i, j)` with `i < j`, sorted by `i` and then `j`) and reserved rows
+    /// (`Reserved(i)`, in row order, after the duplicates).
     pub fn conflicts(&self) -> Vec<Conflict> {
         let mut conflicts = Vec::new();
         for (i, a) in self.rows.iter().enumerate() {
@@ -313,7 +314,7 @@ impl Keymap {
     }
 }
 
-/// La tabla por defecto, construida una sola vez, para las funciones que no reciben una tabla.
+/// The default table, built only once, for the functions that do not receive a table.
 pub fn default_keymap() -> &'static Keymap {
     static DEFAULT: OnceLock<Keymap> = OnceLock::new();
     DEFAULT.get_or_init(Keymap::default_scheme)
@@ -327,8 +328,8 @@ fn is_digit(key: KeyId) -> bool {
     matches!(key, KeyId::Char(c) if c.is_ascii_digit())
 }
 
-/// Si `shift` cuenta para casar la fila: en letras, con `command` y en `Re Pág` y `Av Pág`
-/// (`Mayús` con ellas es el color de fondo).
+/// Whether `shift` counts to match the row: in letters, with `command` and in `Page Up` and `Page Down`
+/// (`Shift` with them is the background color).
 fn shift_counts(row: &Binding) -> bool {
     row.command || is_letter(row.key) || matches!(row.key, KeyId::PageUp | KeyId::PageDown)
 }
@@ -340,23 +341,23 @@ fn matches(row: &Binding, press: &Press, platform: Platform) -> bool {
     if press.key != Some(row.key) {
         return false;
     }
-    // Con `command`, `Mayús` es exacto y `Alt` anula la fila, sea la tecla que sea
-    // (`Ctrl+Alt+Z` no es `Ctrl+Z`).
+    // With `command`, `Shift` is exact and `Alt` cancels the row, whatever the key
+    // (`Ctrl+Alt+Z` is not `Ctrl+Z`).
     if row.command {
         return press.shift == row.shift && !press.alt;
     }
     match row.key {
-        // Una letra no admite `Alt` (`Alt`+`d` no es la `d`) ni un `Ctrl` que no es `command`, y
-        // `Mayús` es exacto.
+        // A letter does not admit `Alt` (`Alt`+`d` is not `d`) nor a `Ctrl` that is not `command`, and
+        // `Shift` is exact.
         KeyId::Char(_) if is_letter(row.key) => {
             !press.alt && !press.other_ctrl && press.shift == row.shift
         }
         KeyId::Char(_) if is_digit(row.key) => !press.alt && !press.other_ctrl,
-        // Símbolos: el carácter ya lleva `Mayús`, AltGr u `Option`.
+        // Symbols: the character already carries `Shift`, AltGr or `Option`.
         KeyId::Char(_) => true,
-        // `Re Pág` y `Av Pág`: `Mayús` es exacto; `Alt` y `Ctrl` suelto no cuentan.
+        // `Page Up` and `Page Down`: `Shift` is exact; `Alt` and a lone `Ctrl` do not count.
         KeyId::PageUp | KeyId::PageDown => press.shift == row.shift,
-        // `Start`: `Mayús`, `Alt` y `Ctrl` suelto no cuentan.
+        // `Home`: `Shift`, `Alt` and a lone `Ctrl` do not count.
         KeyId::Home => true,
     }
 }
@@ -367,11 +368,11 @@ fn same_chord(a: &Binding, b: &Binding) -> bool {
 
 fn is_reserved(row: &Binding) -> bool {
     match row.key {
-        // Espacio, `Escape` y demás caracteres de control: son del lienzo.
+        // Space, `Escape` and the other control characters: they belong to the canvas.
         KeyId::Char(c) if !c.is_ascii_graphic() => true,
-        // El portapapeles de los campos de texto.
+        // The clipboard of the text fields.
         KeyId::Char('c' | 'x' | 'v' | 'a') if row.command && !row.shift => true,
-        // `Ctrl+Q` solo en Linux: en Windows `Alt+F4` es del sistema y `Cmd+Q` también.
+        // `Ctrl+Q` only on Linux: on Windows `Alt+F4` belongs to the system and so does `Cmd+Q`.
         KeyId::Char('q')
             if row.command
                 && !row.shift

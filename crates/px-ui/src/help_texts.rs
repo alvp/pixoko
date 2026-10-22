@@ -1,34 +1,35 @@
-//! La tabla de ayuda (specs/interfaz-ayuda.md, decisión 1): una entrada por acción de la tabla de
-//! teclado, con una **clave** estable e independiente del idioma (es también la del fichero de
-//! atajos), y las funciones que relacionan acciones, claves y textos. Los textos viven en
-//! `help_texts_es` (solo datos, preparados para traducir en el hito 8); sin egui.
+//! The help table (specs/interfaz-ayuda.md, decision 1): one entry per action of the keyboard table,
+//! with a stable **key** independent of the language (it is also the one of the shortcuts file), and
+//! the functions that relate actions, keys and texts. The texts live in `help_texts_es` (data only,
+//! ready to translate in milestone 8); without egui.
 
 use crate::actions::AppAction;
 use std::sync::LazyLock;
 
+use crate::help_texts_color_es::HELP_COLOR_ES;
 use crate::help_texts_es::{HELP_ES, UI_ES};
 use crate::help_texts_layers_es::HELP_LAYERS_ES;
 use crate::help_texts_merge_es::HELP_MERGE_ES;
 use crate::tool::Tool;
 
-/// El texto de ayuda de una acción.
+/// The help text of an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HelpEntry {
     /// Clave estable (`tool.pencil`, `view.zoom-in`…).
     pub key: &'static str,
     /// Nombre (≤ 20 caracteres).
     pub name: &'static str,
-    /// Descripción corta (≤ 8 líneas de 42 columnas).
+    /// Short description (≤ 8 lines of 42 columns).
     pub description: &'static str,
-    /// Qué hace el clic izquierdo, si algo.
+    /// What the left click does, if anything.
     pub mouse_left: Option<&'static str>,
-    /// Qué hace el clic derecho, si algo.
+    /// What the right click does, if anything.
     pub mouse_right: Option<&'static str>,
-    /// Opciones: nombre y descripción de cada una. Vacío hoy (ninguna herramienta las tiene).
+    /// Options: name and description of each. Empty today (no tool has them).
     pub options: &'static [(&'static str, &'static str)],
 }
 
-/// El texto fijo de las ventanas de ayuda y de atajos.
+/// The fixed text of the help and shortcuts windows.
 #[derive(Clone, Copy, Debug)]
 pub struct UiStrings {
     pub primary: &'static str,
@@ -68,31 +69,33 @@ pub struct UiStrings {
     pub f1_reserved: &'static str,
 }
 
-/// La tabla de textos de ayuda (hoy en español: 22 entradas, las 8 de capas y las 3 de combinar, en este orden).
+/// The table of help texts (today in Spanish: 22 entries, the 8 of layers, the 3 of merge and the one
+/// of the color editor, in this order).
 pub fn help_table() -> &'static [HelpEntry] {
     static TABLE: LazyLock<Vec<HelpEntry>> = LazyLock::new(|| {
         HELP_ES
             .iter()
             .chain(HELP_LAYERS_ES.iter())
             .chain(HELP_MERGE_ES.iter())
+            .chain(HELP_COLOR_ES.iter())
             .copied()
             .collect()
     });
     TABLE.as_slice()
 }
 
-/// El texto fijo de la interfaz (hoy en español).
+/// The fixed text of the interface (today in Spanish).
 pub fn ui() -> &'static UiStrings {
     &UI_ES
 }
 
-/// La entrada de clave `key`.
+/// The entry with key `key`.
 pub fn help_entry(key: &str) -> Option<&'static HelpEntry> {
     help_table().iter().find(|entry| entry.key == key)
 }
 
-/// La clave de ayuda de `action`: `None` para lo que no tiene ayuda (las ranuras de color, los
-/// fondos del lienzo, las acciones de diálogo…).
+/// The help key of `action`: `None` for what has no help (the color slots, the canvas backgrounds,
+/// the dialog actions…).
 pub fn help_key(action: AppAction) -> Option<&'static str> {
     Some(match action {
         AppAction::SelectTool(Tool::Pencil) => "tool.pencil",
@@ -118,6 +121,7 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::SaveAs => "file.save-as",
         AppAction::Quit => "file.quit",
         AppAction::ToggleLayerPanel => "layer.panel",
+        AppAction::ToggleColorEditor => "color.editor",
         AppAction::NewLayer => "layer.new",
         AppAction::DuplicateLayer => "layer.duplicate",
         AppAction::RemoveLayer => "layer.remove",
@@ -132,7 +136,7 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
     })
 }
 
-/// La acción de una clave de ayuda: la inversa de [`help_key`].
+/// The action of a help key: the inverse of [`help_key`].
 pub fn action_of_key(key: &str) -> Option<AppAction> {
     Some(match key {
         "tool.pencil" => AppAction::SelectTool(Tool::Pencil),
@@ -158,6 +162,7 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "file.save-as" => AppAction::SaveAs,
         "file.quit" => AppAction::Quit,
         "layer.panel" => AppAction::ToggleLayerPanel,
+        "color.editor" => AppAction::ToggleColorEditor,
         "layer.new" => AppAction::NewLayer,
         "layer.duplicate" => AppAction::DuplicateLayer,
         "layer.remove" => AppAction::RemoveLayer,
@@ -172,8 +177,8 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
     })
 }
 
-/// Si el usuario puede editar los atajos de `action`: las de la tabla de ayuda, salvo las cinco de
-/// archivo (nueva, abrir, guardar, guardar como y salir), que conservan sus combinaciones modernas.
+/// Whether the user can edit the shortcuts of `action`: those of the help table, except the five file
+/// ones (new, open, save, save as and quit), which keep their modern combinations.
 pub fn is_editable(action: AppAction) -> bool {
     help_key(action).is_some()
         && !matches!(

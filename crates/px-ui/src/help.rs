@@ -1,5 +1,5 @@
-//! La ayuda contextual y la lista de atajos (specs/interfaz-ayuda.md, decisiones 2, 3 y 12), sin
-//! egui: el destino de `F1`, los formularios de la ayuda, de la lista y de la confirmación.
+//! The contextual help and the list of shortcuts (specs/interfaz-ayuda.md, decisions 2, 3 and 12), without
+//! egui: the target of `F1`, the forms of the help, of the list and of the confirmation.
 
 use crate::actions::{AppAction, Platform};
 use crate::chrome::{TOOLBOX_BUTTONS, toolbox_hit, window_layout};
@@ -12,30 +12,32 @@ use crate::layers_panel::PanelHit;
 use crate::shortcut_editor::{fixed_chords, slots_of};
 use crate::tool::Tool;
 
-/// Campos de la ventana de ayuda.
+/// Fields of the help window.
 pub const HELP_ZONE: FieldId = "texto";
 pub const HELP_PRIMARY: FieldId = "principal";
 pub const HELP_SECONDARY: FieldId = "secundario";
-/// El botón `Reset all` de la lista de atajos.
+/// The `Reset all` button of the list of shortcuts.
 pub const SHORTCUTS_RESET: FieldId = "restablecer-todo";
-/// La zona de la confirmación de `Reset all`.
+/// The zone of the `Reset all` confirmation.
 pub const RESET_TEXT: FieldId = "texto";
 
-/// De qué pide ayuda `F1`.
+/// What `F1` asks help about.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HelpTarget {
-    /// La herramienta activa.
+    /// The active tool.
     Active,
     Tool(Tool),
     ZoomIn,
     ZoomOut,
     ZoomFit,
     ZoomActualSize,
-    /// Un control del panel de capas (`F1` con el puntero encima).
+    /// A control of the layers panel (`F1` with the pointer over it).
     Layer(LayerHelp),
+    /// One of the two rectangles of the color indicator (`F1` with the pointer over it).
+    Indicator,
 }
 
-/// El control del panel de capas del que se pide ayuda: una por acción de capa.
+/// The control of the layers panel help is asked about: one per layer action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerHelp {
     Panel,
@@ -48,8 +50,8 @@ pub enum LayerHelp {
     Properties,
 }
 
-/// La ayuda del control `hit` del panel: los cinco botones, el campo del nombre (renombrar), las
-/// filas y las demás opciones (propiedades) y el resto del panel (el propio panel).
+/// The help of control `hit` of the panel: the five buttons, the name field (rename), the rows and
+/// the other options (properties) and the rest of the panel (the panel itself).
 pub fn layer_help_for(hit: PanelHit) -> LayerHelp {
     use crate::layers_panel::PanelButton;
     match hit {
@@ -75,7 +77,7 @@ pub fn layer_help_for(hit: PanelHit) -> LayerHelp {
 }
 
 impl HelpTarget {
-    /// La acción de este destino; `Active` es la de la herramienta `active`.
+    /// The action of this target; `Active` is the one of the `active` tool.
     pub fn action(self, active: Tool) -> AppAction {
         match self {
             HelpTarget::Active => AppAction::SelectTool(active),
@@ -84,6 +86,7 @@ impl HelpTarget {
             HelpTarget::ZoomOut => AppAction::ZoomOut,
             HelpTarget::ZoomFit => AppAction::ZoomFit,
             HelpTarget::ZoomActualSize => AppAction::ZoomActualSize,
+            HelpTarget::Indicator => AppAction::ToggleColorEditor,
             HelpTarget::Layer(help) => match help {
                 LayerHelp::Panel => AppAction::ToggleLayerPanel,
                 LayerHelp::New => AppAction::NewLayer,
@@ -98,8 +101,8 @@ impl HelpTarget {
     }
 }
 
-/// El destino del botón `index` de la caja (las cinco herramientas y los cuatro de zoom, en el
-/// orden de `chrome::toolbox_hit`).
+/// The target of button `index` of the toolbox (the five tools and the four zoom ones, in the
+/// order of `chrome::toolbox_hit`).
 pub fn help_target_for_button(index: usize) -> Option<HelpTarget> {
     const TOOLS: [Tool; 5] = [
         Tool::Pencil,
@@ -120,9 +123,9 @@ pub fn help_target_for_button(index: usize) -> Option<HelpTarget> {
     })
 }
 
-/// El destino de `F1` con el puntero en `point_px` (píxeles físicos de la ventana) si cae dentro del
-/// panel de capas, que está en `panel` (su rectángulo en esta ventana): la ayuda del control de
-/// debajo. `None` fuera del panel.
+/// The target of `F1` with the pointer at `point_px` (physical pixels of the window) if it falls inside the
+/// layers panel, which is at `panel` (its rectangle in this window): the help of the control below.
+/// `None` outside the panel.
 pub fn help_target_in_panel(
     point_px: (i64, i64),
     panel: crate::view::ScreenRect,
@@ -132,8 +135,20 @@ pub fn help_target_in_panel(
         .map(|hit| HelpTarget::Layer(layer_help_for(hit)))
 }
 
-/// El destino de `F1` con el puntero en `point_px` (píxeles físicos de la ventana): el botón de la
-/// caja que haya debajo, también atenuado; en cualquier otro sitio, la herramienta activa.
+/// The target of `F1` with the pointer at `point_px` (physical window pixels) if it falls on one of
+/// the rectangles of the color indicator. `None` elsewhere.
+pub fn help_target_in_indicator(
+    point_px: (i64, i64),
+    window_px: (i64, i64),
+    n: u32,
+) -> Option<HelpTarget> {
+    let panel = window_layout(window_px, n).panel;
+    crate::palette_grid::indicator_hit(point_px.0 - panel.x, point_px.1 - panel.y, n)
+        .map(|_| HelpTarget::Indicator)
+}
+
+/// The target of `F1` with the pointer at `point_px` (physical pixels of the window): the toolbox
+/// button below, also dimmed; anywhere else, the active tool.
 pub fn help_target_at(point_px: (i64, i64), window_px: (i64, i64), n: u32) -> HelpTarget {
     let toolbar = window_layout(window_px, n).toolbar;
     let (x, y) = (point_px.0 - toolbar.x, point_px.1 - toolbar.y);
@@ -149,7 +164,7 @@ fn join(chords: impl IntoIterator<Item = String>) -> String {
     chords.into_iter().collect::<Vec<_>>().join(", ")
 }
 
-/// El texto de la zona de ayuda: la descripción, los clics, las opciones y los atajos fijos.
+/// The text of the help zone: the description, the clicks, the options and the fixed shortcuts.
 fn zone_text(entry: &HelpEntry, action: AppAction, keymap: &Keymap, platform: Platform) -> String {
     let strings = ui();
     let mut blocks = vec![entry.description.to_string()];
@@ -205,9 +220,9 @@ fn zone_text(entry: &HelpEntry, action: AppAction, keymap: &Keymap, platform: Pl
     blocks.join("\n\n")
 }
 
-/// El formulario de ayuda de la acción de clave `key`: el título es el nombre; una zona de texto
-/// con desplazamiento y, para una acción editable, los botones `Principal` y `Secundario` con su
-/// atajo. `None` si la clave no existe.
+/// The help form of the action with key `key`: the title is the name; a scrolling text zone and,
+/// for an editable action, the `Principal` and `Secundario` buttons with their shortcut. `None` if
+/// the key does not exist.
 pub fn help_form_for(key: &str, keymap: &Keymap, platform: Platform) -> Option<FormSpec> {
     let strings = ui();
     let entry = help_entry(key)?;
@@ -249,7 +264,7 @@ pub fn help_form_for(key: &str, keymap: &Keymap, platform: Platform) -> Option<F
     })
 }
 
-/// El formulario de ayuda de un destino; `active` es la herramienta activa (para `Active`).
+/// The help form of a target; `active` is the active tool (for `Active`).
 pub fn help_form(
     target: HelpTarget,
     active: Tool,
@@ -261,8 +276,8 @@ pub fn help_form(
     help_form_for(key, keymap, platform).expect("la clave existe")
 }
 
-/// La línea de la lista de una acción: `{name_2:<20}{shortcuts}` (44 columnas como mucho), con la
-/// marca `conflicto` si la acción perdió un atajo en un choque.
+/// The line of the list for an action: `{name:<20}{shortcuts}` (44 columns at most), with the
+/// `conflicto` mark if the action lost a shortcut in a clash.
 fn list_line(
     entry: &HelpEntry,
     action: AppAction,
@@ -295,9 +310,9 @@ fn list_line(
     }
 }
 
-/// La lista de atajos: un botón por acción (`{name_2:<20}{shortcuts}`), `Reset all` al final y
-/// `Cerrar`. `conflicted` son las acciones con la marca `conflicto`. Hay que pasar el diálogo por
-/// [`prepare_shortcut_list`] para atenuar las acciones fijas.
+/// The list of shortcuts: one button per action (`{name:<20}{shortcuts}`), `Reset all` at the end and
+/// `Cerrar`. `conflicted` are the actions with the `conflicto` mark. The dialog has to go through
+/// [`prepare_shortcut_list`] to dim the fixed actions.
 pub fn shortcuts_form(keymap: &Keymap, platform: Platform, conflicted: &[AppAction]) -> FormSpec {
     let strings = ui();
     let mut fields: Vec<FieldSpec> = help_table()
@@ -339,7 +354,7 @@ pub fn shortcuts_form(keymap: &Keymap, platform: Platform, conflicted: &[AppActi
     }
 }
 
-/// Atenúa en la lista las acciones fijas (sus combinaciones se ven pero no abren el editor).
+/// Dims in the list the fixed actions (their combinations are seen but do not open the editor).
 pub fn prepare_shortcut_list(dialog: &mut Dialog) {
     for entry in help_table() {
         if action_of_key(entry.key).is_some_and(|action| !is_editable(action)) {
@@ -348,7 +363,7 @@ pub fn prepare_shortcut_list(dialog: &mut Dialog) {
     }
 }
 
-/// La confirmación de `Reset all`.
+/// The `Reset all` confirmation.
 pub fn confirm_reset_form() -> FormSpec {
     let strings = ui();
     FormSpec {

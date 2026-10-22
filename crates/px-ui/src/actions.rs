@@ -1,6 +1,6 @@
-//! Capa de acciones única: el menú, la columna de herramientas, los botones de zoom y los atajos
-//! de teclado producen la misma [`AppAction`] y obedecen las mismas reglas de bloqueo
-//! (specs/hito-2-menu-herramientas.md, decisiones 2 a 5). Todo es lógica pura, sin ventana.
+//! Single action layer: the menu, the toolbox column, the zoom buttons and the keyboard shortcuts
+//! produce the same [`AppAction`] and obey the same blocking rules
+//! (specs/hito-2-menu-herramientas.md, decisions 2 to 5). All of it is pure logic, without a window.
 
 use egui::{Key, Modifiers};
 
@@ -11,12 +11,12 @@ use crate::keymap::default_keymap;
 use crate::tool::Tool;
 use crate::view::Zoom;
 
-/// Lo que se puede pedir a la app, venga de donde venga.
+/// What can be asked of the app, wherever it comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AppAction {
     /// `Archivo → Nueva image_2…` (specs/hito-2-nueva-imagen.md).
     NewImage,
-    /// `TestImage → Convertir mode_2…` (specs/hito-2-convertir-modo.md): sin atajo.
+    /// `Image → Convert mode…` (specs/hito-2-convertir-modo.md): no shortcut.
     ConvertMode,
     Open,
     Save,
@@ -26,41 +26,43 @@ pub enum AppAction {
     Redo,
     ZoomIn,
     ZoomOut,
-    /// Ajustar a la ventana.
+    /// Fit to the window.
     ZoomFit,
     /// 1:1.
     ZoomActualSize,
     ShowLicenses,
     CloseLicenses,
     SelectTool(Tool),
-    /// Ranura de color, de 1 a 9 (sin tecla por defecto: asignable en el hito 8).
+    /// Color slot, from 1 to 9 (no default key: assignable in milestone 8).
     SelectColor(u8),
-    /// Color siguiente (`]`): la entrada en indexado, la ranura en los demás modos.
+    /// Next color (`]`): the entry in indexed images, the slot in the other modes.
     ColorNext,
     /// Color anterior (`[`).
     ColorPrev,
-    /// Centra el área bajo el cursor (`n`): necesita el puntero, no tiene entrada de menú.
+    /// Centers the area under the cursor (`n`): it needs the pointer, it has no menu entry.
     CenterOnCursor,
-    /// Color de fondo siguiente (`}` y `Mayús`+`Av Pág`), como `ColorNext` pero para el fondo.
+    /// Next background color (`}` and `Shift`+`Page Down`), like `ColorNext` but for the background.
     BackgroundNext,
-    /// Color de fondo anterior (`{` y `Mayús`+`Re Pág`).
+    /// Previous background color (`{` and `Shift`+`Page Up`).
     BackgroundPrev,
-    /// `Editar → Borrar página` (`K`): rellena toda la imagen con el color de fondo, en un paso.
+    /// `Edit → Clear page` (`K`): fills the whole image with the background color, in one step.
     ClearPage,
-    /// Fondo bajo la transparencia del lienzo: preferencia de la sesión, no del documento.
+    /// Background under the transparency of the canvas: a preference of the session, not of the document.
     CanvasBackground(CanvasBackground),
-    /// `Ver → Fondo del canvas_2 → Color…` (specs/hito-2-fondo-color.md): abre un diálogo.
+    /// `View → Canvas background → Color…` (specs/hito-2-fondo-color.md): opens a dialog.
     BackgroundColor,
-    /// `F1` o `Ayuda → Ayuda de la tool_2` (specs/interfaz-ayuda.md): abre la ayuda del
-    /// destino (la herramienta activa o el botón de la caja bajo el puntero).
+    /// `F1` or `Help → Tool help` (specs/interfaz-ayuda.md): opens the help of the
+    /// target (the active tool or the toolbox button under the pointer).
     ShowHelp(HelpTarget),
-    /// `Ayuda → Atajos de teclado…`: abre la lista de atajos.
+    /// `Help → Keyboard shortcuts…`: opens the list of shortcuts.
     ShowShortcuts,
-    /// `Layer → Mostrar panel`: muestra u oculta el panel de capas (specs/hito-3-capas-interfaz.md).
+    /// `Layer → Show panel`: shows or hides the layers panel (specs/hito-3-capas-interfaz.md).
     ToggleLayerPanel,
-    /// `Layer → Nueva layer_2`: una capa vacía encima de la activa.
+    /// `View → Color editor` (`p`): opens or closes the color editor (specs/ui-composition.md).
+    ToggleColorEditor,
+    /// `Layer → New layer`: an empty layer above the active one.
     NewLayer,
-    /// `Layer → Duplicar`: la copia va justo encima de la activa.
+    /// `Layer → Duplicate`: the copy goes right above the active one.
     DuplicateLayer,
     /// `Layer → Remove`.
     RemoveLayer,
@@ -68,22 +70,22 @@ pub enum AppAction {
     LayerUp,
     /// `Layer → Bajar`: un puesto.
     LayerDown,
-    /// `Layer → Renombrar`: lleva el foco al nombre en el panel.
+    /// `Layer → Rename`: takes the focus to the name in the panel.
     RenameLayer,
-    /// `Layer → Propiedades`: lleva el foco a las opciones de la capa en el panel.
+    /// `Layer → Properties`: takes the focus to the options of the layer in the panel.
     LayerProperties,
-    /// `Layer → Combinar below`: une la activa con la de debajo (specs/hito-3-combinar.md).
+    /// `Layer → Merge down`: joins the active one with the one below (specs/hito-3-combinar.md).
     MergeLayerDown,
-    /// `Layer → Combinar visible_2`: une todas las visibles en la visible más baja.
+    /// `Layer → Merge visible`: joins all the visible ones into the lowest visible one.
     MergeVisibleLayers,
-    /// `Layer → Aplanar`: una sola capa con lo que se ve; las ocultas se quitan.
+    /// `Layer → Flatten`: a single layer with what is seen; the hidden ones are removed.
     FlattenLayers,
-    /// `Archivo → Exportar PNG aplanado…`: guarda lo que se ve sin tocar el estado del documento.
+    /// `File → Export flattened PNG…`: saves what is seen without touching the state of the document.
     ExportFlat,
 }
 
 impl AppAction {
-    /// Los atajos de fichero y `Salir` no repiten con la tecla mantenida: confirmarían solos.
+    /// The file shortcuts and `Quit` do not repeat with the key held down: they would confirm by themselves.
     pub fn ignores_repeat(self) -> bool {
         matches!(
             self,
@@ -96,8 +98,8 @@ impl AppAction {
         )
     }
 
-    /// Las acciones que abren un diálogo modal (las licencias, nueva imagen, convertir modo, el
-    /// color del fondo, la ayuda y la lista de atajos): no se abren con un gesto en curso ni con una quita pendiente.
+    /// The actions that open a modal dialog (licenses, new image, convert mode, the background
+    /// color, the help and the list of shortcuts): they do not open with a gesture in progress nor with a pending removal.
     pub fn opens_dialog(self) -> bool {
         matches!(
             self,
@@ -110,7 +112,7 @@ impl AppAction {
         )
     }
 
-    /// Las cuatro acciones de zoom, que no modifican el documento.
+    /// The four zoom actions, which do not modify the document.
     pub fn is_zoom(self) -> bool {
         matches!(
             self,
@@ -118,13 +120,13 @@ impl AppAction {
         )
     }
 
-    /// Las acciones de vista: el zoom y centrar bajo el cursor. No modifican el documento.
+    /// The view actions: zoom and centering under the cursor. They do not modify the document.
     pub fn is_view(self) -> bool {
         self.is_zoom() || self == AppAction::CenterOnCursor
     }
 
-    /// Las que cambian uno de los dos colores: se bloquean con una quita pendiente y no con un
-    /// trazo en curso (specs/interfaz-dos-colores.md, decisión 6).
+    /// Those that change one of the two colors: they are blocked with a pending removal and not with a
+    /// stroke in progress (specs/interfaz-dos-colores.md, decision 6).
     fn changes_color(self) -> bool {
         matches!(
             self,
@@ -137,8 +139,8 @@ impl AppAction {
     }
 }
 
-/// De dónde viene una acción. No cambia el efecto; solo cuenta para el bloqueo del zoom con un
-/// campo de texto enfocado.
+/// Where an action comes from. It does not change the effect; it only counts for the blocking of the zoom with a
+/// focused text field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
     Menu,
@@ -146,7 +148,7 @@ pub enum Origin {
     Key,
 }
 
-/// Sistema operativo, para los atajos y su texto.
+/// Operating system, for the shortcuts and their text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Platform {
     Linux,
@@ -155,7 +157,7 @@ pub enum Platform {
 }
 
 impl Platform {
-    /// El sistema para el que se compiló.
+    /// The system it was compiled for.
     pub fn current() -> Platform {
         if cfg!(target_os = "macos") {
             Platform::Mac
@@ -167,34 +169,35 @@ impl Platform {
     }
 }
 
-/// Por qué una acción puede estar bloqueada en este fotograma.
+/// Why an action may be blocked in this frame.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Locks {
-    /// Un trazo de una herramienta, el deslizador del editor o el arrastre de una muestra.
+    /// A stroke of a tool, the slider of the editor or the drag of a swatch.
     pub gesture: bool,
-    /// El gesto en curso es solo un trazo de una herramienta (no hay deslizador ni arrastre de
-    /// muestra): las acciones de color valen con el botón pulsado y afectan al trazo siguiente.
+    /// The gesture in progress is only a stroke of a tool (there is no slider or swatch drag):
+    /// the color actions work with the button pressed and affect the next stroke.
     pub stroke: bool,
-    /// Un diálogo de archivo abierto.
+    /// An open file dialog.
     pub dialog: bool,
-    /// Un campo de texto con el foco.
+    /// A text field with the focus.
     pub text_focus: bool,
-    /// Una quita de la paleta pendiente de confirmar.
+    /// A palette removal pending confirmation.
     pub removal: bool,
-    /// Un diálogo modal abierto.
+    /// An open modal dialog.
     pub modal: bool,
 }
 
-/// `true` si `action`, pedida desde `origin`, no debe ejecutarse con estos bloqueos.
+/// `true` if `action`, asked from `origin`, must not run with these locks.
 ///
-/// En este orden: (1) `CloseLicenses` nunca; (2) con `modal`, todo salvo `Quit`; (3) con `dialog`,
-/// todo; (4) las acciones de vista (el zoom y centrar bajo el cursor) solo se bloquean con
-/// `text_focus` y desde el teclado (no modifican el documento: un gesto o una quita pendiente no
-/// las paran); (5) las de color, con `text_focus`, con `removal` o con un `gesture` que no sea solo
-/// un trazo (`stroke`); (6) el resto, con `gesture` o `text_focus`, y con `removal` solo las que
-/// abren un diálogo; (7) si no, nada. El fondo del lienzo
-/// (`CanvasBackground`) tampoco toca el documento: tras (1) a (3) solo lo bloquea `text_focus`, con
-/// cualquier origen; un gesto o una quita pendiente no.
+/// In this order: (1) `CloseLicenses` never; (2) with `modal`, everything but `Quit`; (3) with
+/// `dialog`, everything; (4) the view actions (zoom, centering under the cursor, the layers panel
+/// and the color editor) are only blocked with `text_focus` and from the keyboard (they do not
+/// modify the document: a gesture or a pending removal does not stop them); (5) the color ones,
+/// with `text_focus`, with `removal` or with a `gesture` that is not just a stroke (`stroke`); (6)
+/// the rest, with `gesture` or `text_focus`, and with `removal` only those that open a dialog; (7)
+/// otherwise, nothing. The canvas background (`CanvasBackground`) does not touch the document
+/// either: after (1) to (3) only `text_focus` blocks it, with any origin; a gesture or a pending
+/// removal does not.
 pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if action == AppAction::CloseLicenses {
         return false;
@@ -208,12 +211,15 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if matches!(action, AppAction::CanvasBackground(_)) {
         return locks.text_focus;
     }
-    if action.is_view() || action == AppAction::ToggleLayerPanel {
+    if action.is_view()
+        || action == AppAction::ToggleLayerPanel
+        || action == AppAction::ToggleColorEditor
+    {
         return locks.text_focus && origin == Origin::Key;
     }
     if action.changes_color() {
-        // Con un trazo de una herramienta en curso el color se puede cambiar: el trazo conserva el
-        // que tenía al pulsar. Con el deslizador del editor o un arrastre de muestra, no.
+        // With a stroke of a tool in progress the color can be changed: the stroke keeps the one it had
+        // when pressed. With the slider of the editor or a swatch drag, it cannot.
         return locks.text_focus || locks.removal || (locks.gesture && !locks.stroke);
     }
     if locks.gesture || locks.text_focus {
@@ -222,21 +228,21 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     locks.removal && action.opens_dialog()
 }
 
-/// Si se puede abrir un diálogo modal: ni un gesto en curso, ni una quita pendiente, ni un diálogo
-/// de archivo, ni un campo de texto enfocado, ni otro modal.
+/// Whether a modal dialog can be opened: neither a gesture in progress, nor a pending removal, nor a file dialog,
+/// nor a focused text field, nor another modal.
 pub fn can_open_dialog(locks: Locks) -> bool {
     !(locks.gesture || locks.dialog || locks.text_focus || locks.removal || locks.modal)
 }
 
-/// La pila de capas, lo que el menú y el panel necesitan para habilitar sus acciones (no entra en
-/// [`UiState`]: la app lo pasa a `show_menu_full`). El valor por defecto lo deja todo habilitado.
+/// The layer stack, what the menu and the panel need to enable their actions (it is not part of
+/// [`UiState`]: the app passes it to `show_menu_full`). The default leaves everything enabled.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LayerNav {
-    /// Número de capas.
+    /// Number of layers.
     pub count: usize,
-    /// Posición de la activa desde abajo (0 es el fondo).
+    /// Position of the active one from the bottom (0 is the bottom).
     pub active_pos: usize,
-    /// Cabe una capa más (`count < 256`).
+    /// One more layer fits (`count < 256`).
     pub can_add: bool,
 }
 
@@ -250,7 +256,7 @@ impl Default for LayerNav {
     }
 }
 
-/// Si la acción de capa está habilitada con esta pila; lo que no es de capas siempre lo está.
+/// Whether the layer action is enabled with this stack; what is not a layer action always is.
 pub fn layer_enabled(action: AppAction, nav: &LayerNav) -> bool {
     match action {
         AppAction::RemoveLayer => nav.count > 1,
@@ -263,18 +269,18 @@ pub fn layer_enabled(action: AppAction, nav: &LayerNav) -> bool {
     }
 }
 
-/// Lo que la interfaz necesita saber para habilitar o deshabilitar el menú y la columna.
+/// What the interface needs to know to enable or disable the menu and the column.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UiState {
     pub can_undo: bool,
     pub can_redo: bool,
-    /// Zoom del lienzo, o `None` si no hay imagen que mostrar.
+    /// Zoom of the canvas, or `None` if there is no image to show.
     pub zoom: Option<Zoom>,
     pub tool: Tool,
     pub locks: Locks,
 }
 
-/// Si la entrada del menú o el botón (que actúan con `Origin::Menu`) está habilitada.
+/// Whether the menu entry or the button (which act with `Origin::Menu`) is enabled.
 pub fn enabled(action: AppAction, state: &UiState) -> bool {
     if is_blocked(action, state.locks, Origin::Menu) {
         return false;
@@ -290,11 +296,11 @@ pub fn enabled(action: AppAction, state: &UiState) -> bool {
     }
 }
 
-/// Traduce una tecla pulsada y sus modificadores (sin texto: la tecla se toma como tecleada) con
-/// la tabla por defecto. Es [`crate::keymap::Keymap::action_for`] sobre
-/// [`press_from_key`]; los eventos de la ventana pasan por `key_events::presses`.
+/// Translates a pressed key and its modifiers (without text: the key is taken as typed) with
+/// the default table. It is [`crate::keymap::Keymap::action_for`] over
+/// [`press_from_key`]; the events of the window go through `key_events::presses`.
 ///
-/// `Escape` no es una acción: la ordena el lienzo con los eventos de trazo.
+/// `Escape` is not an action: the canvas orders it with the stroke events.
 pub fn action_for_shortcut(
     key: Key,
     modifiers: Modifiers,

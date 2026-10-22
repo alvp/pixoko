@@ -1,8 +1,9 @@
-//! Geometría del editor de color, sin tipos de egui (specs/hito-2-editar-color.md).
+//! Geometry of the color editor, without egui types (specs/hito-2-editar-color.md), and of the row of
+//! palette icons (specs/ui-composition.md).
 //!
-//! Las medidas son constantes en «píxeles de interfaz» `u` (`n = text_scale(ppp)` píxeles físicos
-//! cada una) desde la esquina superior izquierda del editor, que empieza en `top_px` (anclado al
-//! fondo del panel). Las funciones trabajan en píxeles físicos con `n`.
+//! The measures are constants in "interface pixels" `u` (`n = text_scale(ppp)` physical pixels
+//! each) from the top-left corner of the editor, which starts at `top_px` (anchored to the bottom of
+//! the panel). The functions work in physical pixels with `n`.
 
 use px_core::Mode;
 
@@ -14,18 +15,18 @@ use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, visibl
 use crate::status::bar_height_px;
 use crate::text::text_scale;
 
-/// Franja de 1 u en la parte superior del editor.
+/// 1 u strip at the top of the editor.
 pub const SEPARATOR_Y_U: i64 = 0;
-/// Cabecera: origen del texto.
+/// Header: origin of the text.
 pub const HEADER_X_U: i64 = 4;
 pub const HEADER_Y_U: i64 = 4;
-/// Alto de una fila de texto y de deslizador.
+/// Height of a row of text and of a slider.
 pub const ROW_H_U: i64 = 14;
-/// Primera fila de deslizadores.
+/// First row of sliders.
 pub const FIRST_ROW_Y_U: i64 = 22;
-/// Hueco entre grupos de deslizadores (RGB | HSL | A).
+/// Gap between groups of sliders (RGB | HSL | A).
 pub const GROUP_GAP_U: i64 = 4;
-/// Dentro de una fila: letra, pista, marca, valor y zona activa.
+/// Inside a row: letter, track, thumb, value and active zone.
 pub const LABEL_X_U: i64 = 4;
 pub const LABEL_W_U: i64 = 7;
 pub const TRACK_X_U: i64 = 15;
@@ -35,57 +36,64 @@ pub const THUMB_W_U: i64 = 3;
 pub const THUMB_H_U: i64 = 12;
 pub const VALUE_X_U: i64 = 203;
 pub const VALUE_W_U: i64 = 21;
-/// Zona activa de la fila: de `HIT_X0_U` (incluido) a `HIT_X1_U` (excluido).
+/// Active zone of the row: from `HIT_X0_U` (included) to `HIT_X1_U` (excluded).
 pub const HIT_X0_U: i64 = 13;
 pub const HIT_X1_U: i64 = 201;
-/// Campo hexadecimal.
+/// Hexadecimal field.
 pub const FIELD_X_U: i64 = 4;
 pub const FIELD_W_U: i64 = 69;
 pub const FIELD_H_U: i64 = 18;
 pub const FIELD_PAD_U: i64 = 3;
-/// Hueco entre bloques (controles, campo y aviso) y margen inferior.
+/// Gap between blocks (controls, field and notice) and bottom margin.
 pub const BLOCK_GAP_U: i64 = 4;
-/// Anchura mínima del lienzo en la ventana, en píxeles de interfaz
+/// Minimum width of the canvas in the window, in interface pixels
 /// (specs/hito-2-panel-ventana-baja.md).
 pub const MIN_CANVAS_WIDTH_U: i64 = 128;
-/// Líneas del aviso.
+/// Lines of the notice.
 pub const NOTICE_LINES: i64 = 2;
-/// Botones de la paleta (solo indexadas; specs/interfaz-iconos.md): una fila de cinco iconos de
-/// 24 u (hueco de 1 u dentro de un grupo y de 8 u entre grupos: añadir y quitar | rotar a un lado
-/// y a otro | transparente) o, con una quita pendiente, `Confirmar` y `Cancel` en texto en su
-/// lugar (dos botones de 110 u y 5 u de hueco). Filas, alto, origen, ancho de los dos botones de
-/// texto y hueco entre ellos, margen del texto dentro del botón y hueco entre grupos de iconos.
+/// Buttons of the palette (indexed only; specs/interfaz-iconos.md, specs/ui-composition.md): a row
+/// of five 24 u icons (1 u gap inside a group and 8 u between groups: add and remove | rotate to one
+/// side and the other | transparent) or, with a pending removal, `Confirmar` and `Cancel` as text in
+/// their place (two 110 u buttons and a 5 u gap). Rows, height, origin, width of the two text
+/// buttons and gap between them, margin of the text inside the button and gap between groups of icons.
 pub const BUTTON_ROWS: i64 = 1;
+/// The icon row sits under the grid, outside the editor (so it is visible with the editor closed):
+/// a 2 u gap above the buttons and 2 u below them.
+pub const ICON_ROW_PAD_U: i64 = 2;
+pub const ICON_ROW_H_U: i64 = BUTTON_ROWS * BUTTON_U + 2 * ICON_ROW_PAD_U;
 pub const BUTTON_H_U: i64 = BUTTON_U;
 pub const BUTTON_X_U: i64 = 4;
 pub const BUTTON_HALF_W_U: i64 = 110;
 pub const BUTTON_COL_GAP_U: i64 = 5;
 pub const BUTTON_FULL_W_U: i64 = TEXT_WIDTH_U;
 pub const BUTTON_TEXT_X_U: i64 = 6;
-/// El rótulo (14 u de alto) centrado en el alto del botón.
+/// The label (14 u high) centered in the height of the button.
 pub const BUTTON_TEXT_Y_U: i64 = (BUTTON_H_U - ROW_H_U) / 2;
 pub const ICON_GROUP_GAP_U: i64 = 8;
-/// Alto de un botón de **texto** (las filas de los menús y los botones de los diálogos) y margen
-/// superior de su rótulo, en `u`: no cambian con los iconos.
+/// Height of a **text** button (the rows of the menus and the buttons of the dialogs) and top
+/// margin of its label, in `u`: they do not change with the icons.
 pub const TEXT_BUTTON_H_U: i64 = 16;
 pub const TEXT_BUTTON_TEXT_Y_U: i64 = 1;
-/// Modos de imagen: la altura del editor depende de ellos.
+/// Image modes: the height of the editor depends on them.
 const MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
-/// Alto del editor del modo, en `u`: hasta el final del aviso más el margen inferior y, en
-/// indexadas, los botones con su margen. Es el **único** sitio donde se calcula
-/// (specs/hito-2-panel-ventana-baja.md): todo lo demás cuelga de ella.
+/// Height of the editor of the mode, in `u`: up to the end of the notice plus the bottom margin.
+/// It is the **only** place where it is worked out (specs/hito-2-panel-ventana-baja.md):
+/// everything else hangs from it.
 pub fn editor_height_u(mode: Mode) -> i64 {
-    let buttons = buttons_height_u(mode);
-    buttons_y_u(mode)
-        + if buttons > 0 {
-            buttons + BLOCK_GAP_U
-        } else {
-            0
-        }
+    notice_y_u(mode) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
 }
 
-/// Alto de los botones del modo, en `u`: 0 si no tiene.
+/// Height of the icon row of the mode under the grid, in `u`: 0 if the mode has none.
+pub fn icons_height_u(mode: Mode) -> i64 {
+    if mode == Mode::Indexed {
+        ICON_ROW_H_U
+    } else {
+        0
+    }
+}
+
+/// Height of the buttons of the mode, in `u`: 0 if it has none.
 pub fn buttons_height_u(mode: Mode) -> i64 {
     if mode == Mode::Indexed {
         BUTTON_ROWS * BUTTON_H_U
@@ -94,13 +102,8 @@ pub fn buttons_height_u(mode: Mode) -> i64 {
     }
 }
 
-/// Primera `y` de los botones, desde `top_px`: tras el aviso y un hueco.
-pub fn buttons_y_u(mode: Mode) -> i64 {
-    notice_y_u(mode) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
-}
-
-/// Botones de la paleta. `Confirm` y `Cancel` (texto) sustituyen a toda la fila de iconos mientras
-/// hay una quita pendiente.
+/// Buttons of the palette. `Confirm` and `Cancel` (text) replace the whole icon row while there is
+/// a pending removal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaletteButton {
     Add,
@@ -109,11 +112,11 @@ pub enum PaletteButton {
     Cancel,
     RotateLeft,
     RotateRight,
-    /// Fijar o quitar la transparente (el quinto icono, specs/hito-2-fijar-transparente.md).
+    /// Set or remove the transparent entry (the fifth icon, specs/hito-2-fijar-transparente.md).
     Transparent,
 }
 
-/// El icono de un botón de la fila; `None` en `Confirm` y `Cancel`, que son de texto.
+/// The icon of a button of the row; `None` for `Confirm` and `Cancel`, which are text.
 pub fn palette_icon(button: PaletteButton) -> Option<Icon> {
     match button {
         PaletteButton::Add => Some(Icon::Add),
@@ -125,13 +128,13 @@ pub fn palette_icon(button: PaletteButton) -> Option<Icon> {
     }
 }
 
-/// Rectángulo `(x, y, width_2, height_2)` del botón, en `u` desde la esquina del editor. `None` en los
-/// modos sin botones.
+/// Rectangle `(x, y, width, height)` of the button in `u` from the top-left corner of the icon row.
+/// `None` in the modes without buttons.
 pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64, i64)> {
     if buttons_height_u(mode) == 0 {
         return None;
     }
-    let top = buttons_y_u(mode);
+    let top = ICON_ROW_PAD_U;
     let remove_x = BUTTON_X_U + BUTTON_U + GAP_U;
     let rotate_left_x = remove_x + BUTTON_U + ICON_GROUP_GAP_U;
     let rotate_right_x = rotate_left_x + BUTTON_U + GAP_U;
@@ -153,8 +156,8 @@ pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64
     })
 }
 
-/// Botón bajo un punto en píxeles físicos, relativo a la esquina del editor. `removing`: hay una
-/// quita pendiente (solo `Confirm` y `Cancel` golpean; los iconos no se ven).
+/// Button under a point in physical pixels, relative to the top-left corner of the icon row.
+/// `removing`: there is a pending removal (only `Confirm` and `Cancel` hit; the icons are not seen).
 pub fn button_hit(
     mode: Mode,
     removing: bool,
@@ -181,7 +184,7 @@ pub fn button_hit(
     })
 }
 
-/// El mayor alto de editor entre los modos.
+/// The largest editor height among the modes.
 pub fn editor_height_u_max() -> i64 {
     MODES
         .iter()
@@ -190,23 +193,40 @@ pub fn editor_height_u_max() -> i64 {
         .unwrap_or(0)
 }
 
+/// The tallest icon row plus editor among the modes, in `u`: what the minimum panel holds below the
+/// first grid row with the editor open.
+fn open_tail_u_max() -> i64 {
+    MODES
+        .iter()
+        .map(|mode| icons_height_u(*mode) + editor_height_u(*mode))
+        .max()
+        .unwrap_or(0)
+}
+
 fn scale(n: u32) -> i64 {
     i64::from(n.max(1))
 }
 
-/// Alto del bloque `[text_2 · a row_2 de grid · editor]` del modo, en píxeles físicos: el
-/// alto del panel a partir del cual no hay desplazamiento.
+/// Height of the block `[band · one grid row · icons · editor]` of the mode with the editor open,
+/// in physical pixels: the height of the panel from which there is no scrolling.
 pub fn block_height_px(mode: Mode, n: u32) -> i64 {
-    (GRID_Y_U + PITCH_U + editor_height_u(mode)) * scale(n)
+    (GRID_Y_U + PITCH_U + icons_height_u(mode) + editor_height_u(mode)) * scale(n)
 }
 
-/// Alto mínimo del panel, en píxeles físicos, para cualquier modo.
+/// Like [`block_height_px`] with the editor closed: `[band · one grid row · icons]`.
+pub fn block_height_closed_px(mode: Mode, n: u32) -> i64 {
+    (GRID_Y_U + PITCH_U + icons_height_u(mode)) * scale(n)
+}
+
+/// Minimum height of the panel, in physical pixels, for any mode (with the editor open, which is
+/// the largest: closed it needs less, and the floor is set by the layers panel, 277 u, which this
+/// number equals).
 pub fn min_panel_height_px(n: u32) -> i64 {
-    (GRID_Y_U + PITCH_U + editor_height_u_max()) * scale(n)
+    (GRID_Y_U + PITCH_U + open_tail_u_max()) * scale(n)
 }
 
-/// Alto mínimo de la ventana en píxeles lógicos (puntos de egui): el menú, la barra de estado y
-/// el panel mínimo.
+/// Minimum height of the window in logical pixels (egui points): the menu, the status bar and
+/// the minimum panel.
 pub fn min_window_height_pt(ppp: f32) -> f32 {
     let ppp = if ppp.is_finite() && ppp > 0.0 {
         ppp
@@ -218,13 +238,13 @@ pub fn min_window_height_pt(ppp: f32) -> f32 {
     physical as f32 / ppp
 }
 
-/// Ancho mínimo de la ventana en píxeles de interfaz: la columna de herramientas, el panel y el
-/// lienzo mínimo.
+/// Minimum width of the window in interface pixels: the toolbox column, the panel and the
+/// minimum canvas.
 pub fn min_window_width_u() -> i64 {
     toolbar_width_u() + PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
 }
 
-/// Ancho mínimo de la ventana en píxeles lógicos (puntos de egui).
+/// Minimum width of the window in logical pixels (egui points).
 pub fn min_window_width_pt(ppp: f32) -> f32 {
     let ppp = if ppp.is_finite() && ppp > 0.0 {
         ppp
@@ -235,44 +255,72 @@ pub fn min_window_width_pt(ppp: f32) -> f32 {
     (min_window_width_u() * scale(n)) as f32 / ppp
 }
 
-/// Reparto vertical del panel: dónde va el editor y cuántas filas ve la rejilla.
+/// Vertical split of the panel: where the icon row and the editor go and how many rows the grid sees.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PanelLayout {
-    /// El panel es más bajo que su bloque y se desplaza entero.
+    /// The panel is lower than its block and scrolls as a whole.
     pub scrolling: bool,
-    /// Desplazamiento aplicado: 0 si no hay, si no un múltiplo de `n` en `0..=max_offset_px`.
+    /// Applied scroll: 0 if none, else a multiple of `n` in `0..=max_offset_px`.
     pub offset_px: i64,
     pub max_offset_px: i64,
-    /// Borde superior del editor desde el del panel, en píxeles físicos (puede ser negativo).
+    /// Top edge of the editor from the panel's, in physical pixels (may be negative). With the
+    /// editor closed it is the bottom edge of the icon row.
     pub top_px: i64,
+    /// Top edge of the icon row from the panel's, in physical pixels (equal to `top_px` in the modes
+    /// without icons).
+    pub icons_top_px: i64,
     pub visible_rows: usize,
 }
 
-/// Reparto del panel de `panel_h_px` con el editor del modo. Con alto suficiente, el editor se
-/// ancla al fondo y la rejilla usa el resto; con menos, el bloque se desplaza `offset_px` (se
-/// recorta a lo que cabe) y la rejilla enseña una fila. Con `offset_px = 0` y `height_2 = block`
-/// los dos repartos coinciden.
+/// Split of a panel of `panel_h_px` with the editor of the mode open. With enough height, the editor
+/// is anchored to the bottom, the icon row goes right above it and the grid takes the rest; with
+/// less, the block scrolls `offset_px` (clamped to what fits) and the grid shows one row. With
+/// `offset_px = 0` and `height = block` both splits coincide.
 pub fn panel_layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64) -> PanelLayout {
+    layout(mode, panel_h_px, n, offset_px, true)
+}
+
+/// Like [`panel_layout`] with the editor closed: the icon row is anchored to the bottom and the grid
+/// takes the rest.
+pub fn panel_layout_closed(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64) -> PanelLayout {
+    layout(mode, panel_h_px, n, offset_px, false)
+}
+
+fn layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64, editor_open: bool) -> PanelLayout {
     let n = scale(n);
-    let height = editor_height_u(mode) * n;
-    let block = block_height_px(mode, n as u32);
+    let editor = if editor_open {
+        editor_height_u(mode) * n
+    } else {
+        0
+    };
+    let icons = icons_height_u(mode) * n;
+    let block = if editor_open {
+        block_height_px(mode, n as u32)
+    } else {
+        block_height_closed_px(mode, n as u32)
+    };
     if panel_h_px >= block {
-        let top = panel_h_px.saturating_sub(height).div_euclid(n) * n;
+        let top = panel_h_px.saturating_sub(editor + icons).div_euclid(n) * n;
+        // The editor (or the bottom edge) closes the panel; the icon row sits right above it.
+        let editor_top = top + icons;
         return PanelLayout {
             scrolling: false,
             offset_px: 0,
             max_offset_px: 0,
-            top_px: top,
+            top_px: editor_top,
+            icons_top_px: top,
             visible_rows: visible_rows_reserved(panel_h_px, panel_h_px - top, n as u32),
         };
     }
     let max = block.saturating_sub(panel_h_px).div_euclid(n) * n;
     let offset = offset_px.clamp(0, max).div_euclid(n) * n;
+    let icons_top = (GRID_Y_U + PITCH_U) * n - offset;
     PanelLayout {
         scrolling: true,
         offset_px: offset,
         max_offset_px: max,
-        top_px: (GRID_Y_U + PITCH_U) * n - offset,
+        top_px: icons_top + icons,
+        icons_top_px: icons_top,
         visible_rows: 1,
     }
 }
@@ -348,7 +396,7 @@ pub fn edges_u(mode: Mode) -> Vec<i64> {
         PaletteButton::Transparent,
     ] {
         if let Some((x, y, w, h)) = button_rect_u(mode, button) {
-            // Cara, relieve (1 u), icono a 4 u del borde (5 u hundido) y rótulo de los de texto.
+            // Face, relief (1 u), icon 4 u from the edge (5 u when sunken) and label of the text ones.
             e.extend([
                 x,
                 x + 1,

@@ -1,8 +1,8 @@
-//! px-ui: modelo de vista del lienzo, conversión de imágenes, lienzo de egui, texto, tema y
-//! barra de estado, el panel de paletas, el editor de color, la capa de acciones (`actions`), el
-//! menú, la columna de herramientas, el panel de licencias y el damero de transparencia del lienzo
-//! con su fondo elegible (`checker`, `background`), el teclado como tabla de datos (`keymap`,
-//! `key_events`) y los iconos propios con sus botones de relieve (`icons`, `icon_button`).
+//! px-ui: view model of the canvas, image conversion, egui canvas, text, theme and status bar,
+//! the palette panel, the color editor, the action layer (`actions`), the menu, the toolbox, the
+//! licenses panel and the transparency checker of the canvas with its selectable background
+//! (`checker`, `background`), the keyboard as a data table (`keymap`, `key_events`) and the own icons
+//! with their relief buttons (`icons`, `icon_button`).
 
 pub mod actions;
 pub mod background;
@@ -21,6 +21,7 @@ pub mod edit_layout;
 pub mod gestures;
 pub mod help;
 pub mod help_texts;
+mod help_texts_color_es;
 mod help_texts_es;
 mod help_texts_layers_es;
 mod help_texts_merge_es;
