@@ -1230,7 +1230,7 @@ impl Mundo {
     /// posterior sin guardar (el redo se pierde).
     fn nuevo(fondo: CanvasBackground, modificada: bool) -> Mundo {
         let mut document = Document::new(imagen_rgba());
-        let id = document.main_image();
+        let id = ImageId::from_raw(0);
         for i in 0..2 {
             document.apply(edicion(id, i)).expect("paso");
         }
@@ -1254,7 +1254,7 @@ impl Mundo {
         let image = self
             .session
             .document
-            .image(self.session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
             .clone();
         Foto {
@@ -1676,7 +1676,9 @@ fn fila_8_write_png_da_los_mismos_bytes_con_cualquier_fondo_y_la_lectura_es_la_o
     // color de los fondos que se prueban ni con un gris del damero.
     let original = imagen_rgba();
     let doc = Document::new(original.clone());
-    let documento = doc.image(doc.main_image()).expect("imagen del documento");
+    let documento = doc
+        .image(ImageId::from_raw(0))
+        .expect("imagen del documento");
     let state_id = doc.state_id();
     let bytes_rgba = to_rgba8(documento);
     let png_antes = write_png(documento).expect("PNG antes");
@@ -2042,7 +2044,7 @@ proptest! {
                 }
                 Paso::Trazo(i) => {
                     if !abierto {
-                        let id = m.session.document.main_image();
+                        let id = ImageId::from_raw(0);
                         let (ancho, alto) = {
                             let imagen = m.imagen();
                             (imagen.width(), imagen.height())

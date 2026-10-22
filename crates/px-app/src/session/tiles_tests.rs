@@ -143,7 +143,7 @@ fn vacio() -> BlockSet {
 
 #[test]
 fn fila_b3_dirty_of_de_set_pixels_son_los_bloques_de_sus_pixeles() {
-    let id = Document::new(rgba(ANCHO, ALTO)).main_image();
+    let id = ImageId::from_raw(0);
     let comando = pixeles_rojos(id, &[(63, 0), (64, 0), (199, 129), (0, 0)]);
     assert_eq!(
         dirty_of(&comando, tamano()),
@@ -164,7 +164,7 @@ fn fila_b3_dirty_of_de_set_pixels_son_los_bloques_de_sus_pixeles() {
 
 #[test]
 fn fila_b3_dirty_of_de_fill_spans_son_los_bloques_de_sus_tramos() {
-    let id = Document::new(rgba(ANCHO, ALTO)).main_image();
+    let id = ImageId::from_raw(0);
     let tramos = |spans: Vec<Span>| Command::FillSpans {
         image: id,
         spans,
@@ -209,7 +209,7 @@ fn fila_b3_dirty_of_de_fill_spans_son_los_bloques_de_sus_tramos() {
 
 #[test]
 fn fila_b3_dirty_of_de_un_lote_es_la_union_de_sus_comandos() {
-    let id = Document::new(rgba(ANCHO, ALTO)).main_image();
+    let id = ImageId::from_raw(0);
     let a = pixeles_rojos(id, &[(1, 1)]);
     let b = Command::FillSpans {
         image: id,
@@ -231,7 +231,7 @@ fn fila_b3_dirty_of_de_un_lote_es_la_union_de_sus_comandos() {
 
 #[test]
 fn fila_b3_dirty_of_de_los_comandos_de_paleta_que_no_cambian_la_imagen_es_vacio() {
-    let id = Document::new(indexada(ANCHO, ALTO)).main_image();
+    let id = ImageId::from_raw(0);
     for comando in [
         Command::MovePaletteEntry {
             image: id,
@@ -255,7 +255,7 @@ fn fila_b3_dirty_of_de_los_comandos_de_paleta_que_no_cambian_la_imagen_es_vacio(
 
 #[test]
 fn fila_b3_dirty_of_de_conversion_color_quitar_transparente_y_rotar_es_toda_la_imagen() {
-    let id = Document::new(indexada(ANCHO, ALTO)).main_image();
+    let id = ImageId::from_raw(0);
     for comando in [
         Command::ConvertMode {
             image: id,
@@ -355,7 +355,7 @@ fn trazo_de_lapiz(
     hasta: (i32, i32),
     pixel: Pixel,
 ) -> Vec<Change> {
-    let id = sesion.document.main_image();
+    let id = ImageId::from_raw(0);
     for evento in [
         CanvasEvent::StrokeBegin(desde),
         CanvasEvent::StrokeMove(hasta),
@@ -399,7 +399,7 @@ fn fila_b3_take_changes_del_lapiz_da_un_cambio_con_el_state_id_y_la_region_del_t
 #[test]
 fn fila_b3_take_changes_de_la_linea_y_del_relleno() {
     let mut s = sesion_de(rgba(ANCHO, ALTO));
-    let id = s.document.main_image();
+    let id = ImageId::from_raw(0);
     let mut herramientas = ToolState::new();
     // Línea de (5, 5) a (130, 70): sus píxeles son los que cambian, y su región son sus bloques.
     herramientas.apply_action(ToolAction::Select(Tool::Line));
@@ -432,7 +432,7 @@ fn fila_b3_take_changes_de_la_linea_y_del_relleno() {
     // imagen vacía menos la línea: toca todos los bloques.
     herramientas.apply_action(ToolAction::Select(Tool::Fill));
     let azul = Pixel::Rgba(Rgba::opaque(0, 0, 255));
-    let id = s.document.main_image();
+    let id = ImageId::from_raw(0);
     for evento in [CanvasEvent::StrokeBegin((199, 129)), CanvasEvent::StrokeEnd] {
         herramientas
             .canvas_event_with(&mut s.document, id, Some(azul), evento)
@@ -507,7 +507,7 @@ fn fila_b3_session_absorb_take_dirty_undo_y_redo_invalidan_lo_anotado() {
 fn fila_b3_session_con_la_clave_ausente_o_el_registro_desbordado_invalida_toda_la_imagen() {
     // Clave ausente: el paso se aplicó sin anotarlo (por ejemplo, un paso de otro origen).
     let mut s = sesion_de(rgba(ANCHO, ALTO));
-    let id = s.document.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(s.document.apply(pixeles_rojos(id, &[(1, 1)])), Ok(true));
     assert_eq!(s.change_log().get(s.document.state_id()), None);
     s.undo().expect("undo");
@@ -665,7 +665,7 @@ fn fila_b3_load_no_cambia_nada_e_install_reemplaza_y_vacia_el_registro_como_open
     let (estado, imagen_antes) = (
         s.document.state_id(),
         s.document
-            .image(s.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
             .clone(),
     );
@@ -683,10 +683,7 @@ fn fila_b3_load_no_cambia_nada_e_install_reemplaza_y_vacia_el_registro_como_open
         (90, 70)
     );
     assert_eq!(s.document.state_id(), estado);
-    assert_eq!(
-        s.document.image(s.document.main_image()),
-        Some(&imagen_antes)
-    );
+    assert_eq!(s.document.image(ImageId::from_raw(0)), Some(&imagen_antes));
     assert_eq!(s.path(), None);
     assert_eq!(s.change_log().len(), 1);
     assert!(s.modified());
@@ -697,7 +694,7 @@ fn fila_b3_load_no_cambia_nada_e_install_reemplaza_y_vacia_el_registro_como_open
     assert!(!s.document.can_undo());
     assert_eq!(
         s.document
-            .image(s.document.main_image())
+            .image(ImageId::from_raw(0))
             .map(|i| (i.width(), i.height())),
         Some((90, 70))
     );
@@ -861,7 +858,7 @@ fn fotograma(app: &mut App, ctx: &Context) -> CanvasInfo {
     let mut info = None;
     let mut salida = ctx.run_ui(entrada, |ui| {
         app.canvas.interact_roles(ui);
-        let id = app.session.document.main_image();
+        let id = ImageId::from_raw(0);
         let imagen = app.session.document.image(id).expect("imagen");
         let _ = app.canvas.sync(ui.ctx(), imagen);
         info = Some(app.canvas.paint(ui));
@@ -891,7 +888,7 @@ fn fila_b11_un_png_de_1025_por_2_con_una_gpu_de_1024_se_abre_y_se_pinta_en_2_bal
     let imagen = app
         .session
         .document
-        .image(app.session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen");
     assert_eq!((imagen.width(), imagen.height()), (1025, 2));
     let ahora = ctx.input(|i| i.time);
@@ -965,7 +962,7 @@ fn instantanea(app: &App, ctx: &Context) -> Instantanea {
         estado: doc.state_id(),
         puede_deshacer: doc.can_undo(),
         puede_rehacer: doc.can_redo(),
-        imagen: doc.image(doc.main_image()).expect("imagen").clone(),
+        imagen: doc.image(ImageId::from_raw(0)).expect("imagen").clone(),
         ruta: app.session.path().map(Path::to_path_buf),
         modificado: app.session.modified(),
         texturas: app.canvas.texture_ids(),
@@ -991,7 +988,7 @@ fn app_con_historia(tmp: &Tmp) -> (App, Context) {
     let (mut app, ctx) = app_con(rgba(8, 8));
     app.open_file(&ctx, &ruta, 0, false, false);
     fotograma(&mut app, &ctx);
-    let id = app.session.document.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         app.session
             .document
@@ -1080,7 +1077,7 @@ fn fila_b12_nueva_imagen_con_el_fallo_avisa_5_segundos_y_deja_todo_como_estaba()
     let imagen = app
         .session
         .document
-        .image(app.session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen");
     assert_eq!((imagen.width(), imagen.height()), (64, 64));
     assert_eq!(app.session.document.state_id(), 0);
@@ -1150,7 +1147,7 @@ fn fila_b12_convertir_sin_fallo_aplica_la_conversion_y_refresca_el_lienzo() {
     let imagen = app
         .session
         .document
-        .image(app.session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen");
     assert_eq!(imagen.mode(), Mode::GrayAlpha);
     assert_ne!(app.session.document.state_id(), antes);

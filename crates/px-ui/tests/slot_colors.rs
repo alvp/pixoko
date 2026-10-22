@@ -513,7 +513,7 @@ struct Escena {
 impl Escena {
     fn nueva(image: Image, herramienta: Tool) -> Escena {
         let doc = Document::new(image);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(herramienta));
         Escena { doc, id, tool }

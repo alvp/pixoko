@@ -106,7 +106,7 @@ fn session_f() -> Session {
 /// Una edición de la paleta que marca el documento como modificado (cada llamada cambia el color:
 /// dos seguidas son dos pasos).
 fn edita(session: &mut Session) {
-    let image = session.document.main_image();
+    let image = ImageId::from_raw(0);
     let tono = (session.document.state_id() % 200) as u8 + 1;
     session
         .document
@@ -121,7 +121,7 @@ fn edita(session: &mut Session) {
 
 /// Una edición de un píxel, distinta del contenido de una imagen nueva, en el modo que sea.
 fn edita_pixel(session: &mut Session) {
-    let image = session.document.main_image();
+    let image = ImageId::from_raw(0);
     let pixel = match imagen_de(session).mode() {
         Mode::Indexed => Pixel::Indexed(1),
         Mode::Rgba => Pixel::Rgba(Rgba::opaque(1, 2, 3)),
@@ -190,7 +190,7 @@ fn foto(session: &Session) -> Foto {
     Foto {
         image: session
             .document
-            .image(session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
             .clone(),
         state_id: session.document.state_id(),
@@ -211,7 +211,7 @@ fn foto(session: &Session) -> Foto {
 fn imagen_de(session: &Session) -> &Image {
     session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen")
 }
 

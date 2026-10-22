@@ -20,6 +20,7 @@
 //! - Un indexado con índice transparente vuelve de `write_png` más `read_png` con la entrada resuelta
 //!   (alfa 0) y sin índice: la RGBA expandida es la misma, que es lo que se compara.
 
+use px_core::ImageId;
 use std::fs;
 
 use px_core::{Command, Document, Image, Mode, Pixel, PixelEdit, Rgba, Span};
@@ -142,7 +143,7 @@ fn valor(modo: Mode, k: usize, entradas: usize) -> (Pixel, [u8; 4]) {
 
 /// Edita el documento con comandos de `px-core` y el modelo con código ingenuo; devuelve el modelo.
 fn editar(documento: &mut Document, mut modelo: Modelo) -> Modelo {
-    let id = documento.main_image();
+    let id = ImageId::from_raw(0);
     let (modo, ancho, alto) = (modelo.modo, modelo.ancho, modelo.alto);
     let entradas = modelo.paleta.len().max(1);
 
@@ -262,7 +263,7 @@ fn fila_11_el_sha256_de_la_relectura_es_el_del_modelo_en_los_cuatro_reales() {
 
         // El documento editado es el modelo.
         let editada = documento
-            .image(documento.main_image())
+            .image(ImageId::from_raw(0))
             .expect("el documento tiene imagen");
         assert_eq!(
             sha256_hex(&bytes_rgba(editada)),
@@ -290,7 +291,7 @@ fn fila_11_control_un_modelo_con_un_pixel_cambiado_da_otro_sha256() {
         let mut documento = Document::new(leido.image);
         let modelo = editar(&mut documento, modelo);
         let editada = documento
-            .image(documento.main_image())
+            .image(ImageId::from_raw(0))
             .expect("el documento tiene imagen");
         let relectura = read_png(&write_png(editada).expect("write_png")).expect("read_png");
         let leido_sha = sha256_hex(&bytes_rgba(&relectura.image));

@@ -160,7 +160,7 @@ impl Banco {
     fn nuevo() -> Banco {
         let image = imagen_azul();
         let doc = Document::new(image.clone());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(Tool::Eraser));
         assert_eq!(tool.tool(), Tool::Eraser);

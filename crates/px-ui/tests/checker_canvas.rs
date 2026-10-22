@@ -48,6 +48,7 @@
 //! - El origen del damero es la esquina del rectángulo de la imagen en píxeles físicos, redondeada
 //!   desde `CanvasInfo::image_rect`.
 
+use px_core::ImageId;
 use std::collections::{HashMap, HashSet};
 
 use egui::epaint::{ClippedPrimitive, ClippedShape, ImageDelta, Primitive, Shape, Vertex};
@@ -1605,7 +1606,7 @@ fn fila_6_el_documento_la_textura_de_la_imagen_y_el_state_id_quedan_intactos() {
     let ppp = 2.0;
     let imagen = imagen_transparente().con(5, 5, ROJO).con(6, 5, ROJO_MEDIO);
     let doc = Document::new(imagen.image());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let state_id = doc.state_id();
     let bytes = to_rgba8(doc.image(id).expect("imagen"));
     let mut banco = Banco::sin_calentar(
@@ -2175,7 +2176,7 @@ impl Trazo {
     fn fotograma(&mut self, events: Vec<Event>) -> Salida {
         let doc = &mut self.doc;
         let tool = &mut self.tool;
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         self.banco.corre_con(events, None, |canvas, ui| {
             let mut cambio = false;
             for entrada in canvas
@@ -2213,7 +2214,7 @@ impl Trazo {
     }
 
     fn pendientes(&self) -> Vec<Pendiente> {
-        let image = self.doc.image(self.doc.main_image()).expect("imagen");
+        let image = self.doc.image(ImageId::from_raw(0)).expect("imagen");
         self.tool
             .preview()
             .filter_map(|e| Some((e.x, e.y, pixel_rgba(image, e.pixel)?)))
@@ -2234,7 +2235,7 @@ impl Trazo {
 fn fila_14_cambiar_de_fondo_a_mitad_de_trazo_cambia_el_siguiente_fotograma_sin_tocar_nada() {
     let mut t = Trazo::nuevo(1.0);
     let state_id = t.doc.state_id();
-    let bytes = to_rgba8(t.doc.image(t.doc.main_image()).expect("imagen"));
+    let bytes = to_rgba8(t.doc.image(ImageId::from_raw(0)).expect("imagen"));
     let mover_a = |x| mover(x);
     let inicio = t.centro(10, 5);
     t.fotograma(vec![mover_a(inicio)]);
@@ -2280,7 +2281,7 @@ fn fila_14_cambiar_de_fondo_a_mitad_de_trazo_cambia_el_siguiente_fotograma_sin_t
         assert!(!t.doc.can_undo());
         assert_eq!(t.pendientes().len(), n_pendientes);
         assert_eq!(
-            to_rgba8(t.doc.image(t.doc.main_image()).expect("imagen")),
+            to_rgba8(t.doc.image(ImageId::from_raw(0)).expect("imagen")),
             bytes
         );
     }
@@ -3261,7 +3262,7 @@ fn fila_8_color_propio_cambiar_de_fondo_a_mitad_de_trazo_se_ve_en_el_siguiente_f
     let b = CanvasBackground::Custom(NARANJA);
     let mut t = Trazo::con_fondo(1.0, a);
     let state_id = t.doc.state_id();
-    let bytes = to_rgba8(t.doc.image(t.doc.main_image()).expect("imagen"));
+    let bytes = to_rgba8(t.doc.image(ImageId::from_raw(0)).expect("imagen"));
     let inicio = t.centro(10, 5);
     t.fotograma(vec![mover(inicio)]);
     t.fotograma(vec![boton_de(inicio, PointerButton::Primary, true)]);
@@ -3332,7 +3333,7 @@ fn fila_8_color_propio_cambiar_de_fondo_a_mitad_de_trazo_se_ve_en_el_siguiente_f
         assert!(!t.doc.can_undo(), "{etiqueta}");
         assert_eq!(t.pendientes().len(), n_pendientes, "{etiqueta}");
         assert_eq!(
-            to_rgba8(t.doc.image(t.doc.main_image()).expect("imagen")),
+            to_rgba8(t.doc.image(ImageId::from_raw(0)).expect("imagen")),
             bytes,
             "{etiqueta}"
         );
@@ -3423,7 +3424,7 @@ fn fila_8_color_propio_el_documento_to_rgba8_el_state_id_y_la_textura_de_la_imag
     let ppp = 2.0;
     let imagen = imagen_de_alfas();
     let doc = Document::new(imagen.image());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let state_id = doc.state_id();
     let bytes = to_rgba8(doc.image(id).expect("imagen"));
     let mut banco = Banco::sin_calentar(

@@ -15,6 +15,7 @@
 use egui::{Key, Modifiers};
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::color::{ColorChoice, SlotColors, choice_label_with};
 use px_ui::pick::{
@@ -853,7 +854,7 @@ fn fila_14d_sin_transparent_index_y_solo_la_entrada_4_de_alfa_0() {
 
 /// Cambia el color guardado de una entrada de la imagen principal con un comando.
 fn edita_entrada(doc: &mut Document, index: u8, color: Rgba) {
-    let image = doc.main_image();
+    let image = ImageId::from_raw(0);
     let comando = Command::SetPaletteColor {
         image,
         index,
@@ -865,7 +866,7 @@ fn edita_entrada(doc: &mut Document, index: u8, color: Rgba) {
 #[test]
 fn fila_14e_tras_editar_la_paleta_el_valor_de_borrado_se_calcula_de_nuevo() {
     let mut doc = Document::new(caso_14a());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(eraser_pixel(doc.image(id).unwrap()), Ok(Pixel::Indexed(2)));
 
     // La entrada 2 pasa a alfa 255: queda la 4.
@@ -897,7 +898,7 @@ fn fila_14e_tras_editar_la_paleta_el_valor_de_borrado_se_calcula_de_nuevo() {
 #[test]
 fn fila_14e_una_sola_entrada_de_alfa_0_que_se_vuelve_opaca_no_deja_ninguna() {
     let mut doc = Document::new(caso_14d());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(eraser_pixel(doc.image(id).unwrap()), Ok(Pixel::Indexed(4)));
     edita_entrada(&mut doc, 4, Rgba::opaque(9, 9, 9));
     let image = doc.image(id).unwrap();
@@ -908,7 +909,7 @@ fn fila_14e_una_sola_entrada_de_alfa_0_que_se_vuelve_opaca_no_deja_ninguna() {
 #[test]
 fn fila_14e_fijar_transparent_index_cambia_el_valor_en_el_siguiente_calculo() {
     let mut doc = Document::new(caso_14a());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(eraser_pixel(doc.image(id).unwrap()), Ok(Pixel::Indexed(2)));
     let comando = Command::SetTransparentIndex {
         image: id,

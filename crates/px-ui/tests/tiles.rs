@@ -24,6 +24,7 @@
 //!   `screen_rect` y `visible` también con lados pequeños (16, 64) y a 1/64 (cuadriláteros de ancho
 //!   cero que no se ven).
 
+use px_core::ImageId;
 use std::collections::HashSet;
 
 use egui::{Color32, ColorImage};
@@ -1339,7 +1340,7 @@ proptest! {
         let mut doc = Document::new(imagen);
         let mut registro = ChangeLog::new();
         for (n, s) in pasos.into_iter().enumerate() {
-            let id = doc.main_image();
+            let id = ImageId::from_raw(0);
             let antes = doc.image(id).expect("imagen").clone();
             match paso_de(&doc, s) {
                 Paso::Nada => {}
@@ -1379,7 +1380,7 @@ proptest! {
 /// bloques, con la región escrita a mano.
 #[test]
 fn propiedad_q3_casos_fijos_de_los_bordes_de_bloque() {
-    let id = |d: &Document| d.main_image();
+    let id = |_: &Document| ImageId::from_raw(0);
     let mut doc = Document::new(imagen_de(Mode::Rgba, 200, 130, 5));
     let tamano = Size::new(200, 130);
     let pixel = Pixel::Rgba(Rgba::opaque(1, 2, 3));

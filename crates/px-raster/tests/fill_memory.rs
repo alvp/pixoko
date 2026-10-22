@@ -18,6 +18,7 @@
 
 #![cfg(target_os = "linux")]
 
+use px_core::ImageId;
 use std::time::{Duration, Instant};
 
 use px_core::{Command, Document, DocumentError, Image, Mode, Palette, Pixel, Rgba};
@@ -78,7 +79,7 @@ fn spans_de(comando: &Command) -> usize {
 #[ignore = "mide VmHWM: ejecutar sola y en release (ver la cabecera del fichero)"]
 fn fila_12_peine_indexado_8192() {
     let doc = Document::new(peine_indexado());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     let base = vm_hwm();
     let inicio = Instant::now();
@@ -117,7 +118,7 @@ fn rellena_toda_la_imagen(
     pixel: Pixel,
     etiqueta: &str,
 ) -> u64 {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let base = vm_hwm();
     let inicio = Instant::now();
 

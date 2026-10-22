@@ -22,6 +22,7 @@
 
 pub mod sha256;
 
+use px_core::ImageId;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::ffi::OsString;
@@ -1363,7 +1364,7 @@ impl Mundo {
     pub fn de_sesion(s: Session, etiqueta: &str) -> Mundo {
         let imagen = s
             .document
-            .image(s.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("el documento tiene imagen");
         let m = Modelo::de_imagen(imagen);
         let id = s.document.state_id();
@@ -1383,7 +1384,7 @@ impl Mundo {
     pub fn imagen(&self) -> &Image {
         self.s
             .document
-            .image(self.s.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("el documento tiene imagen")
     }
 
@@ -1398,7 +1399,7 @@ impl Mundo {
         eleccion: Eleccion,
         eventos: Vec<CanvasEvent>,
     ) -> (bool, bool) {
-        let id = self.s.document.main_image();
+        let id = ImageId::from_raw(0);
         self.tools.apply_action(ToolAction::Select(herramienta));
         let mut cambio = false;
         for evento in eventos {
@@ -1665,7 +1666,7 @@ pub fn abrir(t: &Trabajo, fuente: &Fuente) -> Mundo {
         .unwrap_or_else(|e| panic!("{}: open dio error: {e}", fuente.nombre));
     let imagen = s
         .document
-        .image(s.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("el documento tiene imagen");
     comprobar_apertura(fuente, imagen);
     Mundo::de_sesion(s, &fuente.nombre)

@@ -720,17 +720,6 @@ impl Document {
         self.current_id
     }
 
-    /// El id de la celda de la capa con la que se creó el documento (siempre `ImageId(0)`).
-    ///
-    /// **Obsoleta**: es un atajo para pruebas y documentos de una capa. El código de la
-    /// aplicación usa la celda de la capa activa. Con varias capas, y si se quitó la capa 0,
-    /// `image(main_image())` es `None`.
-    ///
-    /// TODO(limpieza): retirarla en la unidad de limpiezas (`specs/mapa-funciones.md`, sección 11).
-    pub fn main_image(&self) -> ImageId {
-        ImageId(0)
-    }
-
     /// Las capas, de abajo a arriba: la posición 0 es el fondo y la última, la de encima.
     pub fn layers(&self) -> &[Layer] {
         &self.layers

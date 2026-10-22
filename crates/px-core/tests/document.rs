@@ -90,7 +90,7 @@ fn lote(comandos: Vec<Command>) -> Command {
 }
 
 fn pixel_en(doc: &Document, x: u32, y: u32) -> Pixel {
-    doc.image(doc.main_image())
+    doc.image(ImageId::from_raw(0))
         .unwrap()
         .get_pixel(x, y)
         .unwrap()
@@ -143,7 +143,7 @@ fn pasos_rehacibles(doc: &Document) -> usize {
 /// un documento nuevo con el límite por defecto.
 fn coste_de_un_paso() -> usize {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
     doc.history_bytes()
 }
@@ -182,13 +182,6 @@ fn image_id_ida_y_vuelta_del_valor_crudo() {
     assert_eq!(ImageId::from_raw(7), ImageId::from_raw(7));
     assert_ne!(ImageId::from_raw(7), ImageId::from_raw(8));
     assert!(ImageId::from_raw(1) < ImageId::from_raw(2));
-}
-
-#[test]
-fn la_imagen_principal_tiene_el_valor_crudo_0() {
-    let doc = doc_d();
-    assert_eq!(doc.main_image().raw(), 0);
-    assert_eq!(doc.main_image(), ImageId::from_raw(0));
 }
 
 #[test]
@@ -251,7 +244,7 @@ fn igualdad_de_documentos_compara_contenido_y_no_historia() {
     // Mismo contenido por caminos distintos.
     let mut a = doc_d();
     let mut b = doc_d();
-    let id = a.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(a.apply(s(id, &[px(0, 0, c1()), px(0, 0, c2())])), Ok(true));
     assert_eq!(b.apply(s(id, &[px(0, 0, c2())])), Ok(true));
     assert_eq!(a, b);
@@ -284,7 +277,7 @@ fn history_limit_se_lee_y_se_escribe() {
 fn fila_new_deja_el_documento_sin_historia() {
     let img = Image::new(4, 3, Mode::Rgba).unwrap();
     let doc = Document::new(img.clone());
-    assert_eq!(doc.image(doc.main_image()), Some(&img));
+    assert_eq!(doc.image(ImageId::from_raw(0)), Some(&img));
     assert!(!doc.can_undo());
     assert!(!doc.can_redo());
     assert_eq!(doc.history_bytes(), 0);
@@ -295,7 +288,7 @@ fn fila_new_deja_el_documento_sin_historia() {
 fn fila_new_con_imagen_indexada() {
     let img = Image::new_indexed(2, 2, paleta_de(3)).unwrap();
     let doc = Document::new(img.clone());
-    assert_eq!(doc.image(doc.main_image()), Some(&img));
+    assert_eq!(doc.image(ImageId::from_raw(0)), Some(&img));
     assert!(!doc.can_undo());
     assert!(!doc.can_redo());
     assert_eq!(doc.history_bytes(), 0);
@@ -306,7 +299,7 @@ fn fila_new_con_imagen_indexada() {
 fn fila_apply_undo_redo() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
     assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
@@ -328,7 +321,7 @@ fn fila_apply_undo_redo() {
 #[test]
 fn fila_apply_nuevo_borra_la_pila_de_rehacer() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let a = px(0, 0, c1());
     let b = px(1, 0, c2());
 
@@ -361,7 +354,7 @@ fn fila_coordenadas_repetidas_en_un_mismo_set_pixels() {
     // Gana la última escritura; deshacer restaura el valor anterior al comando.
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         doc.apply(s(id, &[px(0, 0, c1()), px(0, 0, c2())])),
         Ok(true)
@@ -377,7 +370,7 @@ fn fila_coordenadas_repetidas_en_un_mismo_set_pixels() {
 fn fila_escritura_que_cambia_y_restaura_cuenta_como_cambio() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         doc.apply(s(id, &[px(0, 0, c1()), px(0, 0, c0())])),
         Ok(true)
@@ -399,7 +392,7 @@ fn fila_escritura_que_cambia_y_restaura_cuenta_como_cambio() {
 fn fila_comandos_vacios_son_empty_command() {
     // En un documento nuevo.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
     assert_eq!(doc.apply(s(id, &[])), Err(DocumentError::EmptyCommand));
     assert_eq!(doc.apply(lote(vec![])), Err(DocumentError::EmptyCommand));
@@ -419,7 +412,7 @@ fn fila_comandos_vacios_son_empty_command() {
 #[test]
 fn fila_fuera_de_rango() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
 
     assert_eq!(
@@ -440,7 +433,7 @@ fn fila_fuera_de_rango() {
 #[test]
 fn fila_fallo_tras_escrituras_repetidas_restaura_el_valor_original() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c3())])), Ok(true));
     let antes = estado(&doc);
 
@@ -462,7 +455,7 @@ fn fila_fallo_tras_escrituras_repetidas_restaura_el_valor_original() {
 fn fila_otro_modo_e_indice_fuera_de_la_paleta() {
     // Gray(1) en una imagen RGBA.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
     let gris = PixelEdit {
         x: 0,
@@ -483,7 +476,7 @@ fn fila_otro_modo_e_indice_fuera_de_la_paleta() {
 
     // Indexed(9) en una imagen indexada con paleta de 2.
     let mut doc = Document::new(Image::new_indexed(4, 3, paleta_de(2)).unwrap());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
     let indice = PixelEdit {
         x: 0,
@@ -535,7 +528,7 @@ fn orden_de_comprobacion_de_set_pixels() {
 
 #[test]
 fn fila_comando_invalido_tras_undo_conserva_rehacer() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     let invalidos = [
         s(id, &[]),
         s(id, &[px(4, 0, c1())]),
@@ -561,7 +554,7 @@ fn fila_comando_invalido_tras_undo_conserva_rehacer() {
 #[test]
 fn fila_escribir_el_valor_que_ya_hay_no_cambia_nada() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c0())])), Ok(false));
     assert!(!doc.can_undo());
@@ -572,7 +565,7 @@ fn fila_escribir_el_valor_que_ya_hay_no_cambia_nada() {
 #[test]
 fn fila_no_op_tras_undo_conserva_rehacer() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
     let con_a = doc.clone();
     assert_eq!(doc.undo(), Ok(()));
@@ -593,7 +586,7 @@ fn fila_no_op_tras_undo_conserva_rehacer() {
 fn fila_batch_es_un_solo_paso() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let comando = lote(vec![
         s(id, &[px(0, 0, c1())]),
         s(id, &[px(1, 0, c2())]),
@@ -621,7 +614,7 @@ fn fila_batch_es_un_solo_paso() {
 #[test]
 fn fila_batch_con_no_ops() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let no_op = s(id, &[px(3, 2, c0())]);
     let a = s(id, &[px(0, 0, c1())]);
 
@@ -645,7 +638,7 @@ fn fila_batch_con_no_ops() {
 #[test]
 fn fila_batch_con_fallo_interno_no_cambia_nada() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(3, 2, c2())])), Ok(true));
     let antes = estado(&doc);
 
@@ -680,7 +673,7 @@ fn fila_batch_con_fallo_interno_no_cambia_nada() {
 #[test]
 fn batch_con_comando_vacio_o_imagen_desconocida_dentro() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
 
     assert_eq!(
@@ -714,7 +707,7 @@ fn batch_con_comando_vacio_o_imagen_desconocida_dentro() {
 #[test]
 fn fila_limite_cero_conserva_solo_el_ultimo_paso() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     doc.set_history_limit(0);
     for x in 0..3 {
         assert_eq!(doc.apply(s(id, &[px(x, 0, c1())])), Ok(true));
@@ -732,7 +725,7 @@ fn fila_limite_cero_conserva_solo_el_ultimo_paso() {
 #[test]
 fn fila_limite_justo_para_dos_pasos() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(s(id, &[px(0, 0, c1())])), Ok(true));
     assert_eq!(doc.apply(s(id, &[px(1, 0, c1())])), Ok(true));
     let dos = doc.history_bytes();
@@ -770,7 +763,7 @@ fn fila_limite_justo_para_dos_pasos() {
 fn fila_un_paso_mayor_que_el_limite_se_conserva() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     doc.set_history_limit(1);
     let grande: Vec<PixelEdit> = (0..4).map(|x| px(x, 0, c1())).collect();
 
@@ -793,7 +786,7 @@ fn fila_un_paso_mayor_que_el_limite_se_conserva() {
 #[test]
 fn bajar_el_limite_no_borra_la_pila_de_rehacer() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for x in 0..3 {
         assert_eq!(doc.apply(s(id, &[px(x, 0, c1())])), Ok(true));
     }
@@ -1151,7 +1144,7 @@ fn modelo_apply(
 
 /// El documento tiene exactamente `esperado` como contenido.
 fn comprueba_contenido(doc: &Document, esperado: &Image) -> Result<(), TestCaseError> {
-    prop_assert_eq!(doc.image(doc.main_image()), Some(esperado));
+    prop_assert_eq!(doc.image(ImageId::from_raw(0)), Some(esperado));
     prop_assert_eq!(doc, &Document::new(esperado.clone()));
     Ok(())
 }
@@ -1177,7 +1170,7 @@ fn op() -> impl Strategy<Value = Op> {
 fn ejecuta_modelo(img: Image, ops: &[Op]) -> Result<(), TestCaseError> {
     let f = forma(&img);
     let mut doc = Document::new(img.clone());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut instantes = vec![img];
     let mut cursor = 0usize;
 
@@ -1323,7 +1316,7 @@ fn aplica_validos(
     cmds: &[CmdRaw],
     limite: Option<usize>,
 ) -> Result<(), TestCaseError> {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for raw in cmds {
         let cmd = comando(f, id, raw);
         let actual = instantes.last().unwrap().clone();
@@ -1357,7 +1350,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let inicial = Document::new(img);
-        let id = inicial.main_image();
+        let id = ImageId::from_raw(0);
         let mut doc = inicial.clone();
 
         let mut con_cambio = 0usize;
@@ -1398,7 +1391,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let mut doc = Document::new(img);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         for raw in &semilla {
             let _ = doc.apply(comando(f, id, raw));
         }
@@ -1450,7 +1443,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let inicial = Document::new(img);
-        let id = inicial.main_image();
+        let id = ImageId::from_raw(0);
         let cmds: Vec<Command> = lista.iter().map(|s| set_cmd(f, id, s)).collect();
 
         // Uno a uno.

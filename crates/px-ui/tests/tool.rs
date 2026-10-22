@@ -79,7 +79,7 @@ struct Escena {
 impl Escena {
     fn nueva(image: Image, herramienta: Tool, slot: u8) -> Escena {
         let doc = Document::new(image);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(herramienta));
         Escena {
@@ -526,7 +526,7 @@ fn fila_11_el_relleno_se_hace_al_pulsar_y_el_arrastre_no_hace_nada_mas() {
     }
     // Un solo `FillSpans`: lo mismo que `flood_fill` directamente sobre otro documento.
     let mut referencia = Document::new(copia.clone());
-    let id = referencia.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(flood_fill(&mut referencia, id, 3, 3, rojo()), Ok(true));
     assert_eq!(es.doc.history_bytes(), referencia.history_bytes());
     assert_eq!(es.imagen(), referencia.image(id).unwrap());
@@ -1360,7 +1360,7 @@ mod limites_relleno {
 
         // El mismo estado de la herramienta rellena un documento de 8 x 8 con el mismo clic.
         let mut pequeno = Document::new(imagen_8x8());
-        let id = pequeno.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(
             es.tool.canvas_event(&mut pequeno, id, 3, begin(0, 0)),
             Ok(true)

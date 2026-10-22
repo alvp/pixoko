@@ -105,7 +105,7 @@ fn edicion(x: u32, y: u32, pixel: Pixel) -> PixelEdit {
 /// Deja en `doc` un paso deshecho (`can_undo` a `false`, `can_redo` a `true`): así se ve si
 /// una operación borra la pila de rehacer. El píxel `(0, 0)` debe poder cambiar a `otro`.
 fn con_rehacer(doc: &mut Document, otro: Pixel) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let paso = Command::SetPixels {
         image: id,
         pixels: vec![edicion(0, 0, otro)],
@@ -128,7 +128,7 @@ fn comando(image: ImageId, spans: &[Span], pixel: Pixel) -> Result<Option<Comman
 /// documento; `flood_fill` lo aplica (`Ok(true)`, la imagen es la original con esos tramos
 /// pintados y nada más) y `undo` la restaura.
 fn comprueba_region(doc: &Document, semilla: (i32, i32), spans: &[Span]) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = instantanea(doc);
     assert_eq!(
         fill_command(doc, id, semilla.0, semilla.1, vc()),
@@ -223,7 +223,7 @@ fn fila_05_las_diagonales_no_cuentan() {
     comprueba_region(&doc, (1, 1), &[sp(1, 1, 2)]);
     // Las esquinas (`A`) quedan como estaban.
     let mut copia = doc.clone();
-    let id = copia.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(flood_fill(&mut copia, id, 1, 1, vc()), Ok(true));
     for (x, y) in [(0, 0), (2, 0), (0, 2), (2, 2)] {
         assert_eq!(copia.image(id).unwrap().get_pixel(x, y), Ok(va()));
@@ -236,7 +236,7 @@ fn fila_06_tablero_la_region_es_un_pixel() {
     let doc = doc_matriz(&filas);
     // (1, 1) es `A` (x + y par).
     assert_eq!(
-        doc.image(doc.main_image()).unwrap().get_pixel(1, 1),
+        doc.image(ImageId::from_raw(0)).unwrap().get_pixel(1, 1),
         Ok(va())
     );
     comprueba_region(&doc, (1, 1), &[sp(1, 1, 2)]);
@@ -285,7 +285,7 @@ fn fila_10_semilla_fuera_del_lienzo() {
     // 3 x 2, con historia y con algo que rehacer: nada se toca.
     let mut doc = doc_matriz(&["AAA", "AAA"]);
     con_rehacer(&mut doc, vb());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for semilla in [(-1, 0), (3, 0), (0, 2), (MIN, MAX)] {
         comprueba_fuera(&mut doc, id, semilla, vc());
     }
@@ -303,7 +303,7 @@ fn fila_10_semilla_fuera_del_lienzo() {
     }
     // Y la historia de un documento sin pasos tampoco cambia.
     let mut nuevo = doc_matriz(&["AAA", "AAA"]);
-    let id = nuevo.main_image();
+    let id = ImageId::from_raw(0);
     comprueba_fuera(&mut nuevo, id, (-1, 0), vc());
     assert!(!nuevo.can_undo());
 }
@@ -328,7 +328,7 @@ fn fila_11_imagen_desconocida_gana_a_none() {
 fn fila_12_pixel_de_otro_modo_o_indice_fuera_de_la_paleta_gana_a_fuera() {
     // Indexed(0) sobre una imagen RGBA, con semilla fuera.
     let mut doc = doc_matriz(&["AAA", "AAA"]);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let error = DocumentError::Pixel {
         pixel: 0,
         source: ImageError::ModeMismatch {
@@ -348,7 +348,7 @@ fn fila_12_pixel_de_otro_modo_o_indice_fuera_de_la_paleta_gana_a_fuera() {
         rgba(0, 0, 255, 255),
     ];
     let mut indexado = Document::new(Image::new_indexed(3, 2, paleta(&colores)).unwrap());
-    let id = indexado.main_image();
+    let id = ImageId::from_raw(0);
     let error = DocumentError::Pixel {
         pixel: 0,
         source: ImageError::IndexNotInPalette { index: 5, len: 3 },
@@ -372,7 +372,7 @@ fn fila_12_pixel_de_otro_modo_o_indice_fuera_de_la_paleta_gana_a_fuera() {
 fn fila_13_pixel_igual_al_de_la_semilla_es_fuera() {
     let mut doc = doc_matriz(&["AAB", "ABB"]);
     con_rehacer(&mut doc, vc());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = instantanea(&doc);
     assert!(!antes.1 && antes.2);
     // `C` igual al valor de la semilla: `A` en (0, 0) y `B` en (2, 0).
@@ -382,7 +382,7 @@ fn fila_13_pixel_igual_al_de_la_semilla_es_fuera() {
 
     // Con una pila de deshacer no vacía.
     let mut con_pasos = doc_matriz(&["AAB", "ABB"]);
-    let id = con_pasos.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(flood_fill(&mut con_pasos, id, 0, 0, vc()), Ok(true));
     let antes = instantanea(&con_pasos);
     assert!(antes.1 && !antes.2 && antes.3 > 0);
@@ -392,7 +392,7 @@ fn fila_13_pixel_igual_al_de_la_semilla_es_fuera() {
 
     // Imagen recién creada: transparente con transparente.
     let mut nueva = Document::new(Image::new(2, 2, Mode::Rgba).unwrap());
-    let id = nueva.main_image();
+    let id = ImageId::from_raw(0);
     comprueba_fuera(&mut nueva, id, (1, 1), Pixel::Rgba(Rgba::TRANSPARENT));
 }
 
@@ -407,7 +407,7 @@ fn fila_14_indices_con_el_mismo_color_son_valores_distintos() {
     let rojo = rgba(255, 0, 0, 255);
     let azul = rgba(0, 0, 255, 255);
     let doc = doc_indexado_0_1_0(&[rojo, rojo, azul]);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for relleno in [Pixel::Indexed(2), Pixel::Indexed(1)] {
         // El índice 1 tiene el mismo color que el 0, pero es otro valor: la región es (0, 0).
         let antes = instantanea(&doc);
@@ -437,7 +437,7 @@ fn fila_14_indices_con_distinto_alfa_de_paleta_son_valores_distintos() {
     let rojo = rgba(255, 0, 0, 255);
     let rojo_translucido = rgba(255, 0, 0, 128);
     let doc = doc_indexado_0_1_0(&[rojo, rojo_translucido, rgba(0, 0, 255, 255)]);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         fill_command(&doc, id, 0, 0, Pixel::Indexed(2)),
         comando(id, &[sp(0, 0, 1)], Pixel::Indexed(2))
@@ -460,7 +460,7 @@ fn fila_15_rgb_igual_con_distinto_alfa_son_valores_distintos() {
     img.set_pixel(1, 0, Pixel::Rgba(rgba(10, 20, 30, 254)))
         .unwrap();
     let doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         fill_command(&doc, id, 0, 0, vc()),
         comando(id, &[sp(0, 0, 1)], vc())
@@ -494,7 +494,7 @@ fn fila_15_invisibles_con_distinto_rgb_son_valores_distintos() {
     img.set_pixel(1, 0, Pixel::Rgba(rgba(9, 9, 9, 0))).unwrap();
     assert_eq!(img.get_pixel(0, 0), Ok(Pixel::Rgba(Rgba::TRANSPARENT)));
     let doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         fill_command(&doc, id, 0, 0, vc()),
         comando(id, &[sp(0, 0, 1)], vc())
@@ -513,7 +513,7 @@ fn fila_15_gray_alpha_con_igual_gris_o_igual_alfa_son_valores_distintos() {
     img.set_pixel(1, 0, Pixel::GrayAlpha { gray: 6, alpha: 0 })
         .unwrap();
     let doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let relleno = Pixel::GrayAlpha { gray: 9, alpha: 9 };
     assert_eq!(
         fill_command(&doc, id, 0, 0, relleno),
@@ -553,7 +553,7 @@ fn fila_15_gray_alpha_con_igual_gris_o_igual_alfa_son_valores_distintos() {
     )
     .unwrap();
     let doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         fill_command(&doc, id, 0, 0, relleno),
         comando(id, &[sp(0, 0, 1)], relleno)
@@ -653,7 +653,7 @@ fn prueba_grande(caso: Grande, l: u32) {
     let t_imagenes = inicio.elapsed();
 
     let mut doc = Document::new(original.clone());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let (sx, sy) = caso.semilla(l);
 
     let t0 = Instant::now();
@@ -869,7 +869,7 @@ struct Caso {
 impl Caso {
     fn documento(&self) -> (Document, ImageId) {
         let doc = Document::new(self.image.clone());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         (doc, id)
     }
 
@@ -983,7 +983,7 @@ fn error_de_apply(img: &Image, pixel: Pixel) -> Option<DocumentError> {
         None => Image::new(1, 1, img.mode()).unwrap(),
     };
     let mut doc = Document::new(referencia);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let paso = Command::SetPixels {
         image: id,
         pixels: vec![edicion(0, 0, pixel)],
@@ -993,7 +993,7 @@ fn error_de_apply(img: &Image, pixel: Pixel) -> Option<DocumentError> {
 
 /// Un paso previo que cambia `(0, 0)` por otro valor (si lo hay).
 fn paso_previo(doc: &mut Document) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let imagen = doc.image(id).unwrap();
     let actual = imagen.get_pixel(0, 0).unwrap();
     let otro = pool_relleno(imagen.mode())
@@ -1299,7 +1299,7 @@ mod limites {
 
     fn doc_peine(w: u32, h: u32, dientes: Option<u32>) -> (Document, ImageId) {
         let doc = Document::new(peine(w, h, dientes));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         (doc, id)
     }
 
@@ -1339,7 +1339,7 @@ mod limites {
     #[test]
     fn fila_01_peine_5x3_justo_en_el_tope_y_uno_por_debajo() {
         let doc = doc_matriz(&["AAAAA", "ABABA", "ABABA"]);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let esperados = [
             sp(0, 0, 5),
             sp(1, 0, 1),
@@ -1374,7 +1374,7 @@ mod limites {
     #[test]
     fn fila_02_tope_cero_da_error_y_el_tablero_cabe_en_uno() {
         let doc = doc_matriz(&["AAA"]);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(
             fill_command_with_limit(&doc, id, 1, 0, vc(), 0),
             Err(demasiado(0))
@@ -1389,7 +1389,7 @@ mod limites {
         let tablero = Document::new(imagen_de(64, 64, |x, y| {
             if (x + y) % 2 == 0 { va() } else { vb() }
         }));
-        let id = tablero.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(
             fill_command_with_limit(&tablero, id, 32, 32, vc(), 1),
             comando(id, &[sp(32, 32, 33)], vc())
@@ -1401,7 +1401,7 @@ mod limites {
     #[test]
     fn fila_03_con_tope_cero_el_tope_se_comprueba_el_ultimo() {
         let doc = doc_matriz(&["AAA", "AAA"]);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let antes = instantanea(&doc);
 
         let desconocida = ImageId::from_raw(99);

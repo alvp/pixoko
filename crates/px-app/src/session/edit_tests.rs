@@ -98,7 +98,7 @@ fn write_image(dir: &Path, name: &str, image: &Image) -> PathBuf {
 
 fn main_image(document: &Document) -> &Image {
     document
-        .image(document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 
@@ -457,7 +457,7 @@ fn fila_14_deshacer_un_cambio_ajeno_al_color_no_recalcula_el_hsl() {
     assert_eq!(shown_values(&session).3, 100);
 
     // Un cambio de píxeles (como un trazo) no toca el color guardado de la entrada 0.
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     assert!(
         session
             .document
@@ -621,7 +621,7 @@ fn fila_15_el_lapiz_pinta_con_la_ranura_editada() {
 
     let pixel = session.active_pixel();
     assert_eq!(pixel, Some(Pixel::Rgba(YELLOW)));
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let mut tools = ToolState::new();
     tools
         .canvas_event_with(
@@ -773,7 +773,7 @@ fn fila_15_el_banco_se_conserva_al_guardar_y_guardar_como() {
     let (mut session, _) = session_with_edited_bank(tmp.path());
     let bank = session.slots.clone();
     // Algo que guardar: un trazo en el Gray abierto.
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     session
         .document
         .apply(Command::SetPixels {

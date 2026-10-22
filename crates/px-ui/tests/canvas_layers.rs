@@ -19,6 +19,7 @@
 //! dos fotogramas con el área abierta antes de pulsar.
 
 use egui::{Area, Context, Event, Id, Order, Pos2, Rect, Vec2, pos2, vec2};
+use px_core::ImageId;
 use px_core::{Document, Image, Mode, Pixel, Rgba};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo, CanvasInput};
@@ -611,7 +612,7 @@ impl Sesion {
     /// Un fotograma cuyos eventos de trazo pasan por `ToolState` (como `main`).
     fn paso(&mut self, events: Vec<Event>) -> Paso {
         let paso = self.banco.paso(events);
-        let id = self.doc.main_image();
+        let id = ImageId::from_raw(0);
         for input in &paso.entradas {
             self.tools
                 .canvas_input_with(&mut self.doc, id, rojo(), *input)

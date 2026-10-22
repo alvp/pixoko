@@ -26,6 +26,7 @@
 use egui::{Color32, ColorImage, Context, FullOutput, Pos2, RawInput, Rect, Vec2, vec2};
 use proptest::collection::vec;
 use proptest::prelude::*;
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::canvas::Canvas;
 use px_ui::texture::{to_rgba8, to_rgba8_with_entry};
@@ -77,7 +78,7 @@ fn imagen_f() -> Image {
 /// La imagen que queda al aplicar `SetPaletteColor` con `Document` (la referencia del test).
 fn con_set_palette_color(imagen: &Image, index: u8, color: Rgba) -> Image {
     let mut documento = Document::new(imagen.clone());
-    let id = documento.main_image();
+    let id = ImageId::from_raw(0);
     documento
         .apply(Command::SetPaletteColor {
             image: id,

@@ -152,7 +152,7 @@ fn sesion_de(image: Image) -> Session {
 fn imagen_actual(session: &Session) -> &Image {
     session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen")
 }
 
@@ -223,7 +223,7 @@ fn foto(session: &Session) -> Foto {
 
 /// Una edición de un píxel que cambia el valor, en el modo que sea (`i` elige un valor distinto).
 fn edita_pixel(session: &mut Session, x: u32, y: u32, i: u8) {
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let mode = modo_actual(session);
     let pixel = match mode {
         Mode::Rgba => Pixel::Rgba(Rgba::opaque(i, 1, 2)),

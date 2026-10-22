@@ -75,7 +75,7 @@ impl Mundo {
     fn nuevo(image: Image) -> Mundo {
         let mut session = Session::sample(Document::new(image));
         // Dos colores distintos y que no son el de la imagen.
-        let (fg, bg) = match session.document.image(session.document.main_image()) {
+        let (fg, bg) = match session.document.image(ImageId::from_raw(0)) {
             Some(image) if image.mode() == Mode::Indexed => {
                 (ColorChoice::Entry(2), ColorChoice::Entry(4))
             }
@@ -92,7 +92,7 @@ impl Mundo {
     fn imagen(&self) -> &Image {
         self.session
             .document
-            .image(self.session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
     }
 
@@ -119,7 +119,7 @@ impl Mundo {
     }
 
     fn evento(&mut self, pixel: Option<Pixel>, event: CanvasEvent) {
-        let id = self.session.document.main_image();
+        let id = ImageId::from_raw(0);
         self.tools
             .canvas_event_with(&mut self.session.document, id, pixel, event)
             .expect("evento");

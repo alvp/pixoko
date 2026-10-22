@@ -6,6 +6,7 @@
 //! herramienta lo cubre `ToolState::busy()` por su cuenta.
 
 use super::select_tool;
+use px_core::ImageId;
 
 use px_core::{Document, Image, Mode, Palette, Rgba};
 use px_ui::canvas::CanvasEvent;
@@ -75,7 +76,7 @@ fn press_slider(session: &mut Session) {
 
 /// Empieza un gesto de la herramienta de `tools` sobre `doc` (sin soltar).
 fn begin_stroke(tools: &mut ToolState, doc: &mut Document, pixel: (i32, i32)) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     tools
         .canvas_event_with(doc, id, None, CanvasEvent::StrokeBegin(pixel))
         .expect("pulsar");
@@ -84,7 +85,7 @@ fn begin_stroke(tools: &mut ToolState, doc: &mut Document, pixel: (i32, i32)) {
 }
 
 fn end_stroke(tools: &mut ToolState, doc: &mut Document) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     tools
         .canvas_event_with(doc, id, None, CanvasEvent::StrokeEnd)
         .expect("soltar");
@@ -549,7 +550,7 @@ fn fila_16_el_aviso_de_pulsar_tampoco_sale_con_entrada_de_alfa_0() {
     // Sin `Refused` ni en el `Begin` ni durante el trazo ni en el `End`.
     for image in [case_14a(), case_14d()] {
         let mut doc = Document::new(image);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tools = tools_with(Tool::Eraser);
 
         for event in [
@@ -568,7 +569,7 @@ fn fila_16_el_aviso_de_pulsar_tampoco_sale_con_entrada_de_alfa_0() {
 #[test]
 fn fila_16_el_aviso_de_pulsar_sale_con_las_entradas_de_alfa_0_convertidas_en_opacas() {
     let mut doc = Document::new(indexed_with_alpha_zero_entries(255, 255));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut tools = tools_with(Tool::Eraser);
 
     tools

@@ -165,7 +165,7 @@ fn other_pixel(image: &Image, x: u32, y: u32) -> Pixel {
 
 /// Cambia el píxel `(x, y)` del documento por otro distinto; `true` si hubo cambio.
 fn edit_one(document: &mut Document, x: u32, y: u32) -> bool {
-    let id = document.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = other_pixel(document.image(id).expect("imagen"), x, y);
     document
         .apply(Command::SetPixels {
@@ -177,7 +177,7 @@ fn edit_one(document: &mut Document, x: u32, y: u32) -> bool {
 
 fn main_image(document: &Document) -> &Image {
     document
-        .image(document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 
@@ -743,7 +743,7 @@ fn check_round_trip(tmp: &TmpDir, source: &Path) {
 
     let mut session = fresh_session();
     session.open(source, 16384, false).expect("abrir");
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let pixels: Vec<PixelEdit> = [(0, 0), (1, 0), (2, 1)]
         .into_iter()
         .map(|(x, y)| PixelEdit {
@@ -1075,7 +1075,7 @@ proptest! {
         for op in ops {
             match op {
                 Op::Edit(x, y, v) => {
-                    let id = session.document.main_image();
+                    let id = ImageId::from_raw(0);
                     let changed = session
                         .document
                         .apply(Command::SetPixels {

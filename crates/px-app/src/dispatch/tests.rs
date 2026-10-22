@@ -27,6 +27,7 @@
 
 use eframe::egui::{Key, Modifiers};
 use proptest::prelude::*;
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, PixelEdit, Rgba};
 use px_ui::actions::{
     AppAction, Locks, Origin, Platform, UiState, action_for_shortcut, enabled, is_blocked,
@@ -111,7 +112,7 @@ fn pixel_distinto(image: &Image, i: usize) -> Pixel {
 /// Un paso de historia: escribe un píxel de una fila distinta cada vez (hasta 4 pasos por
 /// columna 0 y otros 4 por la columna 1).
 fn un_paso(document: &mut Document, i: usize) {
-    let id = document.main_image();
+    let id = ImageId::from_raw(0);
     let image = document.image(id).expect("imagen").clone();
     let x = (i / 4) as u32 % 4;
     let y = (i % 4) as u32;
@@ -177,7 +178,7 @@ impl Mundo {
     fn imagen(&self) -> &Image {
         self.session
             .document
-            .image(self.session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
     }
 
@@ -251,7 +252,7 @@ fn hecho(refresh: bool) -> Dispatched {
 
 /// Empieza un trazo del lápiz sin soltar (el documento no cambia).
 fn empieza_un_trazo(mundo: &mut Mundo) {
-    let id = mundo.session.document.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = mundo.session.active_pixel();
     assert!(pixel.is_some(), "hay un color activo");
     mundo
@@ -299,7 +300,7 @@ fn mundo_con_quita_pendiente() -> Mundo {
             .expect("píxel");
     }
     let mut document = Document::new(image);
-    let id = document.main_image();
+    let id = ImageId::from_raw(0);
     // Un paso de historia (y un deshecho) que no toca los píxeles de la entrada 3.
     document
         .apply(Command::SetPixels {
@@ -331,7 +332,7 @@ fn mundo_con_quita_pendiente() -> Mundo {
     let destino = {
         let image = session
             .document
-            .image(session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen");
         default_destination(image.palette().expect("indexada"), 3)
     };
@@ -1209,7 +1210,7 @@ fn fila_5b_el_zoom_a_mitad_de_trazo_no_corta_el_trazo_y_deja_un_solo_paso() {
         for (action, op) in ZOOMS {
             let mut mundo = Mundo::nuevo(rgba(), 0, 0);
             let inicial = mundo.foto();
-            let id = mundo.session.document.main_image();
+            let id = ImageId::from_raw(0);
             let pixel = mundo.session.active_pixel();
             empieza_un_trazo(&mut mundo);
             let mover = |mundo: &mut Mundo, x: i32| {
@@ -1454,7 +1455,7 @@ proptest! {
             prop_assert_eq!(real.session.document.state_id(), modelo.state_id());
             prop_assert_eq!(real.session.document.can_undo(), modelo.can_undo());
             prop_assert_eq!(real.session.document.can_redo(), modelo.can_redo());
-            prop_assert_eq!(real.imagen(), modelo.image(modelo.main_image()).expect("imagen"));
+            prop_assert_eq!(real.imagen(), modelo.image(ImageId::from_raw(0)).expect("imagen"));
         }
     }
 }

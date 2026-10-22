@@ -30,6 +30,7 @@ use egui::{
     Color32, Context, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelSource, MouseWheelUnit,
     PointerButton, Pos2, RawInput, Rect, TouchPhase, Vec2, pos2, vec2,
 };
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Rgba};
 use px_ui::canvas::Canvas;
 use px_ui::color::{ColorChoice, SlotColors, cell_of_choice};
@@ -509,7 +510,7 @@ impl Banco {
     // --- Documento ---
 
     fn refresca(&mut self) {
-        let id = self.documento.main_image();
+        let id = ImageId::from_raw(0);
         self.image = self.documento.image(id).expect("la imagen").clone();
     }
 
@@ -529,7 +530,7 @@ impl Banco {
     }
 
     fn pone_color(&mut self, index: u8, color: Rgba) {
-        let image = self.documento.main_image();
+        let image = ImageId::from_raw(0);
         self.aplica(Command::SetPaletteColor {
             image,
             index,
@@ -1372,7 +1373,7 @@ fn fila_7_con_una_ranura_y_el_texto_valido_se_aplica_a_la_ranura_original() {
 #[test]
 fn fila_8_la_entrada_ya_no_existe_y_se_pierde_el_foco() {
     let mut banco = banco_con_pendiente(imagen_f(), ColorChoice::Entry(3), "#00ff00");
-    let image = banco.documento.main_image();
+    let image = ImageId::from_raw(0);
     banco.aplica(Command::RemovePaletteEntry {
         image,
         index: 3,
@@ -1417,7 +1418,7 @@ fn fila_8_la_entrada_ya_no_existe_y_se_queda_sin_destino() {
 #[test]
 fn fila_8_deshacer_un_add_deja_la_entrada_sin_existir() {
     let mut banco = banco_f(1.0, 0);
-    let image = banco.documento.main_image();
+    let image = ImageId::from_raw(0);
     banco.aplica(Command::AddPaletteEntry {
         image,
         color: AMARILLO,

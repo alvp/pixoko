@@ -257,7 +257,7 @@ fn fila_3_la_seleccion_tras_anadir_es_la_nueva() {
 #[test]
 fn fila_3_anadir_sobre_f_copia_la_activa_y_deshacer_recorta_la_seleccion() {
     let mut doc = Document::new(imagen_f(None));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let activa = 1u8;
     let color = imagen_de(&doc, id)
         .palette()
@@ -297,7 +297,7 @@ fn fila_3_anadir_sobre_f_copia_la_activa_y_deshacer_recorta_la_seleccion() {
 #[test]
 fn fila_3_anadir_la_copia_de_la_transparente_es_alfa_0_y_no_es_la_transparente() {
     let mut doc = Document::new(imagen_f(Some(3)));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let color = imagen_de(&doc, id).palette().unwrap().resolved(3).unwrap();
     assert_eq!(color, Rgba::new(0, 0, 0, 0));
     doc.apply(Command::AddPaletteEntry { image: id, color })
@@ -442,7 +442,7 @@ fn fila_4_uses_entry_encuentra_un_pixel_en_cualquier_posicion() {
 #[test]
 fn fila_4_quitar_la_3_de_p5_pasa_los_pixeles_a_la_2_y_un_undo_la_restaura() {
     let mut doc = Document::new(imagen_p5(None));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let inicial = imagen_de(&doc, id).clone();
     let (indice, destino) = (3u8, 2u8);
     let op = PaletteOp::Remove {
@@ -474,7 +474,7 @@ fn fila_4_quitar_la_3_de_p5_pasa_los_pixeles_a_la_2_y_un_undo_la_restaura() {
 #[test]
 fn fila_4_quitar_la_4_sin_pixeles_se_aplica_con_el_destino_por_defecto() {
     let mut doc = Document::new(imagen_p5(None));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let destino = default_destination(imagen_de(&doc, id).palette().unwrap(), 4).unwrap();
     assert_eq!(destino, 2);
     let op = PaletteOp::Remove {
@@ -644,7 +644,7 @@ fn fila_5_quitar_la_primera_linea_sin_destino_dice_pulsa_un_destino() {
 #[test]
 fn fila_5_quitar_la_transparente_con_destino_la_4_deja_la_y_opaca() {
     let mut doc = Document::new(imagen_p5(Some(3)));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let inicial = imagen_de(&doc, id).clone();
     assert!(
         doc.apply(Command::RemovePaletteEntry {
@@ -800,7 +800,7 @@ proptest! {
 #[test]
 fn fila_6_el_signo_de_rotate_colors_derecha_es_mas_1_sobre_f() {
     let mut doc = Document::new(imagen_f(None));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let inicial = imagen_de(&doc, id).clone();
     let [a, b, c, d] = [ROJO, VERDE, AZUL, NEGRO];
 
@@ -841,7 +841,7 @@ fn fila_6_rotar_sin_rango_con_la_activa_2_da_lo_mismo_que_el_comando_directo() {
         (-1, vec![VERDE, AZUL, NEGRO, ROJO]),
     ] {
         let mut doc = Document::new(imagen_f(None));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let (inicio, longitud) = rotation_range(4, 2, None);
         doc.apply(Command::RotateColors {
             image: id,
@@ -870,7 +870,7 @@ fn fila_6_con_rango_de_1_a_3_desde_la_1_y_la_activa_1() {
         (-1, vec![ROJO, AZUL, NEGRO, VERDE]),
     ] {
         let mut doc = Document::new(imagen_f(None));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         doc.apply(Command::RotateColors {
             image: id,
             start: inicio,
@@ -886,7 +886,7 @@ fn fila_6_con_rango_de_1_a_3_desde_la_1_y_la_activa_1() {
 #[test]
 fn fila_6_con_la_transparente_dentro_del_rango_se_queda_en_su_ranura() {
     let mut doc = Document::new(imagen_f(Some(3)));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     doc.apply(Command::RotateColors {
         image: id,
         start: 0,
@@ -1007,7 +1007,7 @@ fn fila_6_la_seleccion_tras_rotar_es_la_misma() {
 #[test]
 fn fila_13_rotar_un_rango_de_una_entrada_da_ok_false_sin_paso() {
     let mut doc = Document::new(imagen_f(None));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let estado = doc.state_id();
     for pasos in [1, -1] {
         let (inicio, longitud) = rotation_range(4, 2, Some(2));
@@ -1024,7 +1024,7 @@ fn fila_13_rotar_un_rango_de_una_entrada_da_ok_false_sin_paso() {
     }
     // Una paleta de una entrada, igual.
     let mut una = Document::new(imagen_con(&[ROJO], None, &[0, 0]));
-    let id_una = una.main_image();
+    let id_una = ImageId::from_raw(0);
     let estado_una = una.state_id();
     let (inicio, longitud) = rotation_range(1, 0, None);
     assert!(
@@ -1257,7 +1257,7 @@ fn fila_7_la_seleccion_tras_mover_es_to() {
 #[test]
 fn fila_7_mover_de_0_a_2_en_f_da_g_b_r_k_y_un_solo_undo() {
     let mut doc = Document::new(imagen_f(None));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let inicial = imagen_de(&doc, id).clone();
     assert!(
         doc.apply(Command::MovePaletteEntry {
@@ -2600,7 +2600,7 @@ proptest! {
         let ids: Vec<u32> = (0..largo as u32).collect();
         let colores: Vec<Rgba> = ids.iter().map(|&id| color_de(id)).collect();
         let mut doc = Document::new(imagen_con(&colores, None, &[0]));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let comando = match op {
             PaletteOp::Add => Command::AddPaletteEntry { image: id, color: color_de(NUEVA) },
             PaletteOp::Remove { index, into } => {
@@ -2705,7 +2705,7 @@ mod fijar_transparente {
 
     /// Lo que hace pulsar el botón con `activa`: el `PaletteOp` y el comando de `px-core`.
     fn pulsar(doc: &mut Document, activa: u8) -> Result<bool, px_core::DocumentError> {
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let palette = imagen_de(doc, id).palette().expect("indexada");
         let op = PaletteOp::SetTransparent {
             index: transparent_toggle(palette, activa),
@@ -2717,21 +2717,21 @@ mod fijar_transparente {
     }
 
     fn marca(doc: &Document) -> Option<u8> {
-        imagen_de(doc, doc.main_image())
+        imagen_de(doc, ImageId::from_raw(0))
             .palette()
             .expect("indexada")
             .transparent_index()
     }
 
     fn rotulo(doc: &Document, activa: u8) -> &'static str {
-        let paleta = imagen_de(doc, doc.main_image())
+        let paleta = imagen_de(doc, ImageId::from_raw(0))
             .palette()
             .expect("indexada");
         transparent_button_label(paleta, activa)
     }
 
     fn resuelto(doc: &Document, indice: u8) -> Rgba {
-        imagen_de(doc, doc.main_image())
+        imagen_de(doc, ImageId::from_raw(0))
             .palette()
             .expect("indexada")
             .resolved(indice)
@@ -2775,7 +2775,7 @@ mod fijar_transparente {
     fn fila_3_fijar_sobre_f_con_la_2_es_un_solo_paso_que_solo_mueve_el_indice() {
         let original = imagen_f(None);
         let mut doc = Document::new(original.clone());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let paleta = original.palette().unwrap();
         assert_eq!(transparent_button_label(paleta, 2), FIJAR);
         assert_eq!(transparent_toggle(paleta, 2), Some(2));
@@ -2821,7 +2821,7 @@ mod fijar_transparente {
     fn fila_3_quitar_con_la_2_marcada_deja_el_color_guardado() {
         let original = imagen_f(Some(2));
         let mut doc = Document::new(original.clone());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(rotulo(&doc, 2), QUITAR);
         assert_eq!(
             transparent_toggle(original.palette().unwrap(), 2),
@@ -2903,7 +2903,7 @@ mod fijar_transparente {
     fn fila_4_fijar_la_3_con_la_1_marcada_reemplaza_y_la_1_vuelve_a_verse() {
         let original = imagen_f(Some(1));
         let mut doc = Document::new(original.clone());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(resuelto(&doc, 1), Rgba::new(0, 255, 0, 0));
         assert_eq!(rotulo(&doc, 3), FIJAR);
 
@@ -2979,7 +2979,7 @@ mod fijar_transparente {
     #[test]
     fn fila_6_con_fijar_en_j_el_borrador_usa_j_aunque_haya_una_anterior_de_alfa_0() {
         let mut doc = con_una_de_alfa_0();
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         // Antes de fijar: la primera de alfa 0.
         assert_eq!(eraser_pixel(imagen_de(&doc, id)), Ok(Pixel::Indexed(0)));
         assert_eq!(
@@ -3008,7 +3008,7 @@ mod fijar_transparente {
     #[test]
     fn fila_6_quitar_sin_ninguna_entrada_de_alfa_0_deja_al_borrador_sin_valor() {
         let mut doc = Document::new(imagen_f(None));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(
             eraser_pixel(imagen_de(&doc, id)),
             Err(EraseError::NoTransparentIndex)
@@ -3045,7 +3045,7 @@ mod fijar_transparente {
         let mut imagen = Image::new_indexed(4, 1, paleta_inicial()).unwrap();
         imagen.set_pixel(3, 0, Pixel::Indexed(25)).unwrap();
         let mut doc = Document::new(imagen);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let antes = visibles(imagen_de(&doc, id));
         assert_eq!(rotulo(&doc, 0), QUITAR);
         assert_eq!(rotulo(&doc, 25), FIJAR);
@@ -3078,7 +3078,7 @@ mod fijar_transparente {
     #[test]
     fn fila_10_con_una_sola_entrada_fijar_y_quitar_funcionan() {
         let mut doc = Document::new(imagen_con(&[ROJO], None, &[0, 0, 0]));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(rotulo(&doc, 0), FIJAR);
         assert_eq!(pulsar(&mut doc, 0), Ok(true));
         assert_eq!(marca(&doc), Some(0));
@@ -3178,7 +3178,7 @@ mod fijar_transparente {
     #[test]
     fn fila_10_undo_y_redo_no_mueven_la_seleccion_y_la_elegida_mas_alla_del_final_se_recorta() {
         let mut doc = Document::new(imagen_f(None));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         pulsar(&mut doc, 2).unwrap();
         for paso in 0..2 {
             for elegida in [0u8, 2, 3, 7, 200] {
@@ -3244,7 +3244,7 @@ mod fijar_transparente {
             prop_assert_eq!(transparent_toggle(&paleta_original, activa), marca_esperada);
 
             let mut doc = Document::new(original.clone());
-            let id = doc.main_image();
+            let id = ImageId::from_raw(0);
             prop_assert_eq!(pulsar(&mut doc, activa), Ok(true));
             let despues = imagen_de(&doc, id).clone();
 

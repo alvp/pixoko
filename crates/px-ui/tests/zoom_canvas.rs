@@ -36,6 +36,7 @@
 //! - El título de la ventana y la barra de estado son de `px-app` (usan `Zoom::to_string`): aquí solo
 //!   se comprueba que `zoom_label` es `Zoom {Display}`.
 
+use px_core::ImageId;
 use std::collections::{HashMap, HashSet};
 
 use egui::epaint::{ClippedPrimitive, ClippedShape, Primitive, Shape, Vertex};
@@ -1286,9 +1287,9 @@ fn fila_a7_un_trazo_a_1_4_va_por_la_rejilla_en_un_solo_paso() {
                 CanvasEvent::StrokeEnd => {}
             }
         }
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(stroke.commit(&mut doc, id), Ok(true));
-        let imagen = doc.image(doc.main_image()).expect("hay imagen");
+        let imagen = doc.image(ImageId::from_raw(0)).expect("hay imagen");
         assert_eq!(imagen.get_pixel(8, 4), Ok(rojo()));
         assert_eq!(imagen.get_pixel(20, 4), Ok(rojo()));
         assert_eq!(
@@ -1301,7 +1302,7 @@ fn fila_a7_un_trazo_a_1_4_va_por_la_rejilla_en_un_solo_paso() {
         assert_eq!(doc.undo(), Ok(()));
         assert!(!doc.can_undo(), "un solo paso");
         assert_eq!(
-            doc.image(doc.main_image()),
+            doc.image(ImageId::from_raw(0)),
             Some(&original),
             "undo restaura"
         );

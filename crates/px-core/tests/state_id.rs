@@ -42,7 +42,7 @@ fn pone(image: ImageId, x: u32, y: u32, c: Rgba) -> Command {
 /// Un `apply` que cambia seguro: el píxel `(i, 0)` pasa a un color que no tenía (el inicial
 /// es transparente y los pasos de las pruebas no repiten píxel).
 fn paso(doc: &mut Document, i: u32) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(pone(id, i, 0, color(1))), Ok(true), "paso {i}");
 }
 
@@ -91,7 +91,7 @@ fn fila_25_apply_con_cambio_da_ids_nuevos() {
 fn fila_25_apply_sin_cambios_no_mueve_el_id() {
     // Fila 25: `apply` sin cambios (Ok(false)) ⇒ sin cambio de id.
     let mut d = doc();
-    let id = d.main_image();
+    let id = ImageId::from_raw(0);
     // Pintar de transparente una imagen transparente no cambia nada.
     assert_eq!(d.apply(pone(id, 0, 0, color(0))), Ok(false));
     assert_eq!(d.state_id(), 0);
@@ -106,7 +106,7 @@ fn fila_25_apply_sin_cambios_no_mueve_el_id() {
 fn fila_25_apply_con_error_no_mueve_el_id() {
     // Fila 25: `apply` con error (píxel fuera) ⇒ sin cambio de id.
     let mut d = doc();
-    let id = d.main_image();
+    let id = ImageId::from_raw(0);
     assert!(d.apply(pone(id, 10, 10, color(1))).is_err());
     assert_eq!(d.state_id(), 0);
     // También con historia previa, y con un lote que falla a medias (la primera parte se
@@ -169,7 +169,7 @@ fn fila_26_un_apply_tras_deshacer_da_un_id_nunca_usado() {
     // (el paso B) se descarte.
     d.undo().unwrap();
     assert_eq!(d.state_id(), a);
-    let id = d.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(d.apply(pone(id, 2, 0, color(2))), Ok(true));
     let c = d.state_id();
     assert_ne!(c, a);
@@ -224,7 +224,7 @@ fn fila_27_set_history_limit_no_cambia_ningun_id() {
         ids.push(d.state_id());
     }
     // Cinco pasos (el quinto, en otro píxel) para tener historia que descartar.
-    let id = d.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(d.apply(pone(id, 0, 1, color(2))), Ok(true));
     ids.push(d.state_id());
     assert_eq!(ids.len(), 6);
@@ -329,7 +329,7 @@ fn op() -> impl Strategy<Value = Op> {
 }
 
 fn imagen(d: &Document) -> Image {
-    d.image(d.main_image()).unwrap().clone()
+    d.image(ImageId::from_raw(0)).unwrap().clone()
 }
 
 /// Dos instantes con el mismo id tienen la misma imagen.
@@ -364,7 +364,7 @@ proptest! {
             let ctx = format!("paso {n}: {op:?}");
             match op {
                 Op::Apply { x, y, color: c } => {
-                    let id = d.main_image();
+                    let id = ImageId::from_raw(0);
                     match d.apply(pone(id, *x, *y, color(*c))) {
                         Ok(true) => {
                             // Un id nuevo, que nunca se había dado.

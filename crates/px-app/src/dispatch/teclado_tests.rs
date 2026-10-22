@@ -35,6 +35,7 @@
 //! - Con `modal` el atajo de salir (`Ctrl+Q`, Linux) sigue pasando (regla 2 de `is_blocked`).
 
 use eframe::egui::{Event, Key, Modifiers};
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, PixelEdit, Rgba};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, enabled, is_blocked};
 use px_ui::canvas::CanvasEvent;
@@ -101,7 +102,7 @@ fn pixel_distinto(image: &Image, i: usize) -> Pixel {
 
 /// Un paso de historia: escribe un píxel de una fila distinta cada vez.
 fn un_paso(document: &mut Document, i: usize) {
-    let id = document.main_image();
+    let id = ImageId::from_raw(0);
     let image = document.image(id).expect("imagen").clone();
     let x = (i / 4) as u32 % 4;
     let y = (i % 4) as u32;
@@ -174,7 +175,7 @@ impl Mundo {
     fn imagen(&self) -> &Image {
         self.session
             .document
-            .image(self.session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
     }
 
@@ -328,7 +329,7 @@ fn una_accion(events: &[Event], platform: Platform) -> AppAction {
 // --- Gestos de verdad ---
 
 fn empieza_un_trazo(mundo: &mut Mundo) {
-    let id = mundo.session.document.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = mundo.session.active_pixel();
     assert!(pixel.is_some(), "hay un color activo");
     mundo
@@ -381,7 +382,7 @@ fn mundo_con_quita_pendiente() -> Mundo {
     let destino = {
         let image = session
             .document
-            .image(session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen");
         default_destination(image.palette().expect("indexada"), 3)
     };

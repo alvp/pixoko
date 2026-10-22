@@ -19,6 +19,7 @@
 //! botón con un evento de soltar): se baja con `InputState::pointer` dentro del fotograma, antes
 //! de `interact`, que es exactamente lo que ve el lienzo cuando egui «ya no ve el botón».
 
+use px_core::ImageId;
 use std::collections::HashSet;
 
 use egui::epaint::Primitive;
@@ -356,7 +357,7 @@ impl Mini {
                 }
                 CanvasEvent::StrokeEnd => {
                     if let Some(stroke) = self.stroke.take() {
-                        let id = self.doc.main_image();
+                        let id = ImageId::from_raw(0);
                         stroke
                             .commit(&mut self.doc, id)
                             .expect("el trazo se aplica");
@@ -367,7 +368,7 @@ impl Mini {
     }
 
     fn imagen(&self) -> &Image {
-        self.doc.image(self.doc.main_image()).expect("hay imagen")
+        self.doc.image(ImageId::from_raw(0)).expect("hay imagen")
     }
 
     /// Píxeles que difieren de la imagen original.

@@ -189,7 +189,7 @@ fn doc_rgba(width: u32, height: u32) -> Document {
 }
 
 fn pixel_en(doc: &Document, x: u32, y: u32) -> Pixel {
-    doc.image(doc.main_image())
+    doc.image(ImageId::from_raw(0))
         .unwrap()
         .get_pixel(x, y)
         .unwrap()
@@ -347,7 +347,7 @@ fn fila_recorte_vacio_con_caja_que_corta_el_lienzo() {
     assert_eq!(l.len(), 0);
 
     let doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = Pixel::Rgba(rgba(1, 2, 3, 255));
     assert_eq!(line_command(&doc, id, (-3, 2), (2, -3), pixel), Ok(None));
     assert_eq!(line_command(&doc, id, (10, 10), (20, 20), pixel), Ok(None));
@@ -377,7 +377,7 @@ fn fila_recorte_con_lado_cero_y_con_inicio_fuera() {
 #[test]
 fn fila_line_command_diagonal_rgba() {
     let doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
     let esperado = Command::SetPixels {
         image: id,
@@ -400,7 +400,7 @@ fn fila_line_command_diagonal_rgba() {
 #[test]
 fn fila_draw_line_totalmente_fuera() {
     let mut doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
 
     // En un documento nuevo.
@@ -417,7 +417,7 @@ fn fila_draw_line_totalmente_fuera() {
 fn fila_draw_line_fuera_con_historia_y_rehacer() {
     // Con historia y con algo que rehacer: nada se toca (ni `can_undo`, `can_redo` ni los bytes).
     let mut doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 0), pixel), Ok(true));
     assert_eq!(draw_line(&mut doc, id, (0, 3), (3, 3), pixel), Ok(true));
@@ -433,7 +433,7 @@ fn fila_draw_line_fuera_con_historia_y_rehacer() {
 #[test]
 fn fila_draw_line_con_el_mismo_color_que_ya_hay() {
     let mut doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 3), pixel), Ok(true));
     let antes = instantanea(&doc);
@@ -464,7 +464,7 @@ fn fila_draw_line_con_imagen_desconocida() {
 #[test]
 fn fila_imagen_desconocida_gana_a_linea_fuera_del_lienzo() {
     let mut doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let desconocida = ImageId::from_raw(99);
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
     let fuera: [Par; 6] = [
@@ -506,7 +506,7 @@ fn fila_imagen_desconocida_gana_a_linea_fuera_del_lienzo() {
 #[test]
 fn fila_draw_line_con_pixel_de_otro_modo() {
     let mut doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = instantanea(&doc);
     assert_eq!(
         draw_line(&mut doc, id, (0, 0), (3, 3), Pixel::Gray(7)),
@@ -529,7 +529,7 @@ fn fila_draw_line_con_pixel_de_otro_modo() {
 fn line_command_no_comprueba_el_modo_del_pixel() {
     // Lo valida `Document` al aplicar el comando (comportamiento 9).
     let doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let esperado = Command::SetPixels {
         image: id,
         pixels: vec![edicion(0, 0, Pixel::Gray(7)), edicion(1, 0, Pixel::Gray(7))],
@@ -558,7 +558,7 @@ fn draw_line_en_los_cuatro_modos() {
         ),
     ];
     for (mut doc, pixel) in casos {
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(draw_line(&mut doc, id, (0, 1), (3, 1), pixel), Ok(true));
         for x in 0..4 {
             assert_eq!(pixel_en(&doc, x, 1), pixel, "{pixel:?} en x = {x}");
@@ -572,7 +572,7 @@ fn draw_line_en_los_cuatro_modos() {
 #[test]
 fn draw_line_deshacer_y_rehacer_es_un_solo_paso() {
     let mut doc = doc_rgba(4, 4);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let inicial = doc.clone();
     let pixel = Pixel::Rgba(rgba(200, 100, 50, 255));
     assert_eq!(draw_line(&mut doc, id, (0, 0), (3, 3), pixel), Ok(true));
@@ -976,7 +976,7 @@ proptest! {
             }
         }
         let mut doc = Document::new(imagen);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
 
         // Historia previa: ninguna, un paso, o un paso deshecho (con algo que rehacer).
         // Este color no está en el fondo, así que el paso siempre cambia algo.

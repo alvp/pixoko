@@ -8,6 +8,7 @@
 //! Los lienzos y las imágenes miden como mucho 16 x 16, y las posiciones son `i32` arbitrarios:
 //! `Stroke` recorta antes de recorrer, así que ninguna prueba recorre un segmento grande.
 
+use px_core::ImageId;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use proptest::collection::vec;
@@ -83,7 +84,7 @@ fn doc_rgba(width: u32, height: u32) -> Document {
 }
 
 fn imagen_de(doc: &Document) -> Image {
-    doc.image(doc.main_image()).unwrap().clone()
+    doc.image(ImageId::from_raw(0)).unwrap().clone()
 }
 
 /// Todo lo observable de un documento, para comprobar que una operación no tocó nada.
@@ -184,7 +185,7 @@ fn fila_5_todo_fuera_deja_el_trazo_vacio_pero_recuerda_la_ultima_posicion() {
     assert_eq!(stroke.last(), Some((-3, 0)));
 
     let mut doc = doc_rgba(8, 8);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = instantanea(&doc);
     assert_eq!(stroke.commit(&mut doc, id), Ok(false));
     assert_eq!(instantanea(&doc), antes);
@@ -248,7 +249,7 @@ fn todas_las_esquinas_de_i32_entre_si_no_entran_en_panico() {
 #[test]
 fn fila_8_un_trazo_que_cambia_es_un_paso_de_historia() {
     let mut doc = doc_rgba(8, 8);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc);
     let mut editada = original.clone();
     for x in 1..=3 {
@@ -272,7 +273,7 @@ fn fila_8_un_trazo_que_cambia_es_un_paso_de_historia() {
 #[test]
 fn fila_8_con_dos_trazos_un_undo_deshace_solo_el_ultimo() {
     let mut doc = doc_rgba(8, 8);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc);
 
     let primero = trazo_con(8, 8, &[(1, 1), (3, 1)], pixel_a());
@@ -293,7 +294,7 @@ fn fila_8_con_dos_trazos_un_undo_deshace_solo_el_ultimo() {
 #[test]
 fn fila_9_los_trazos_que_no_cambian_nada_no_tocan_la_historia() {
     let mut doc = doc_rgba(8, 8);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let a = trazo_con(8, 8, &[(1, 1), (3, 1)], pixel_a());
     assert_eq!(a.commit(&mut doc, id), Ok(true));
     let b = trazo_con(8, 8, &[(1, 3), (3, 3)], pixel_b());
@@ -322,7 +323,7 @@ fn fila_9_los_trazos_que_no_cambian_nada_no_tocan_la_historia() {
 #[test]
 fn fila_10_un_pixel_de_otro_modo_da_error_y_no_toca_el_documento() {
     let mut doc = doc_rgba(8, 8);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = instantanea(&doc);
     let stroke = trazo_con(8, 8, &[(1, 1), (3, 1)], Pixel::Indexed(0));
     assert_eq!(
@@ -344,7 +345,7 @@ fn commit_aplica_un_solo_set_pixels_con_los_pixeles_del_trazo() {
     let stroke = trazo_con(8, 8, &[(0, 2), (4, 2), (2, 0)], pixel_a());
     let pixels = stroke.pixels().to_vec();
     let mut con_trazo = doc_rgba(8, 8);
-    let id = con_trazo.main_image();
+    let id = ImageId::from_raw(0);
     let mut a_mano = doc_rgba(8, 8);
     assert_eq!(
         a_mano.apply(Command::SetPixels { image: id, pixels }),
@@ -585,7 +586,7 @@ fn imagen_uniforme(modo: Mode, width: u32, height: u32, v: u8) -> Image {
 
 /// `SetPixels` que pone toda la imagen al valor `v`.
 fn rellenar(doc: &mut Document, modo: Mode, v: u8) {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let (width, height) = {
         let image = doc.image(id).unwrap();
         (image.width(), image.height())
@@ -613,7 +614,7 @@ fn comprobar_un_paso(
     pos: &[Punto],
     v: u8,
 ) -> Result<bool, TestCaseError> {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let image = imagen_de(doc);
     let pixel = valor(modo, v);
     let stroke = trazo_con(image.width(), image.height(), pos, pixel);
@@ -702,7 +703,7 @@ proptest! {
             prop_assert_eq!(doc.undo(), Ok(()));
             prop_assert!(doc.can_redo());
             let nuevo = trazo_con(width, height, &[(0, 0)], valor(modo, 3));
-            let id = doc.main_image();
+            let id = ImageId::from_raw(0);
             prop_assert_eq!(nuevo.commit(&mut doc, id), Ok(true));
             prop_assert!(!doc.can_redo());
         }
@@ -724,7 +725,7 @@ proptest! {
     ) {
         let modo = MODOS[modo];
         let mut doc = Document::new(imagen_uniforme(modo, width, height, 0));
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         // Historia previa: ninguna, un paso (la imagen entera pasa a valer 1), o ese paso
         // deshecho (con algo que rehacer).
         let mut actual = 0;

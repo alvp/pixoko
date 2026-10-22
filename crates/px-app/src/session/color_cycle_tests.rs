@@ -17,6 +17,7 @@
 //! - Con una elección inválida, `reveal` no se comprueba (la spec solo fija `initial_choice`).
 //! - Ni `ops` (la quita pendiente y el rango) ni el editor se comprueban aquí: son de `dispatch`.
 
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, PixelEdit, Rgba};
 use px_ui::color::{ColorChoice, initial_choice};
 
@@ -44,7 +45,7 @@ fn de_modo(mode: Mode) -> Image {
 /// Sesión con un paso de historia hecho y otro deshecho (se puede deshacer y rehacer).
 fn sesion(image: Image) -> Session {
     let mut document = Document::new(image);
-    let id = document.main_image();
+    let id = ImageId::from_raw(0);
     for x in 0..2u32 {
         let image = document.image(id).expect("imagen").clone();
         let pixel = match image.mode() {
@@ -79,7 +80,7 @@ fn sesion(image: Image) -> Session {
 fn imagen(session: &Session) -> &Image {
     session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 

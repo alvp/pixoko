@@ -15,6 +15,7 @@
 //!   descarte que recordó `new_gate`; el diálogo (`Modal`) se abre con `open_new_image`.
 
 use super::*;
+use px_core::ImageId;
 
 use px_core::{Command, Document, Image, Mode, Pixel, PixelEdit, Rgba};
 use px_ui::actions::Locks;
@@ -29,7 +30,7 @@ fn sesion(modificada: bool) -> Session {
     let image = Image::new(4, 4, Mode::Rgba).expect("imagen");
     let mut session = Session::sample(Document::new(image));
     if modificada {
-        let id = session.document.main_image();
+        let id = ImageId::from_raw(0);
         session
             .document
             .apply(Command::SetPixels {
@@ -148,7 +149,7 @@ fn fila_10_quit_con_el_dialogo_abierto_lo_abandona_sin_crear_nada_y_sigue_la_reg
     let session = sesion(true);
     let imagen_antes = session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen")
         .clone();
     let mut confirm = Confirm::new();
@@ -169,7 +170,7 @@ fn fila_10_quit_con_el_dialogo_abierto_lo_abandona_sin_crear_nada_y_sigue_la_reg
     assert_eq!(
         session
             .document
-            .image(session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen"),
         &imagen_antes
     );

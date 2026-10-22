@@ -181,6 +181,7 @@ mod fill_tests {
     //! tramos se arma un `FillSpans` en un documento de referencia, y su historia ha de pesar lo
     //! mismo que la de la herramienta: un solo paso de relleno, sin trozos de más.
 
+    use px_core::ImageId;
     use std::collections::{BTreeSet, VecDeque};
 
     use px_core::{Command, Document, Span};
@@ -241,7 +242,7 @@ mod fill_tests {
     /// `Begin`, un `Move` y `End`, con la herramienta elegida con `Select(Fill)`.
     fn clic(slot: u8, x: i32, y: i32) -> Clic {
         let mut doc = Document::new(demo_image());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(Tool::Fill));
         assert_eq!(tool.tool(), Tool::Fill);
@@ -287,7 +288,7 @@ mod fill_tests {
 
         // Un solo `FillSpans` con los tramos del oráculo: mismo peso de historia.
         let mut referencia = Document::new(original.clone());
-        let rid = referencia.main_image();
+        let rid = ImageId::from_raw(0);
         let paso = Command::FillSpans {
             image: rid,
             spans: del_oraculo,

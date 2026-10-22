@@ -259,7 +259,7 @@ pub enum Paso {
 /// 12 rotar colores, 13 convertir de modo, 14 deshacer y 15 rehacer.
 pub fn paso_de(doc: &Document, semilla: Semilla) -> Paso {
     let (tipo, a, b, c, d) = semilla;
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let Some(imagen) = doc.image(id) else {
         return Paso::Nada;
     };
@@ -410,6 +410,6 @@ pub fn imagen_aleatoria(modo: u8, ancho: u32, alto: u32, celda: u32) -> Image {
 }
 
 /// El id de la imagen principal de un documento.
-pub fn principal(doc: &Document) -> ImageId {
-    doc.main_image()
+pub fn principal(_doc: &Document) -> ImageId {
+    ImageId::from_raw(0)
 }

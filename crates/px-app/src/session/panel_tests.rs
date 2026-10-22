@@ -172,7 +172,7 @@ fn fila_10_un_open_con_error_no_cambia_la_sesion_ni_descarta_el_texto() {
     // Cambios sin guardar y sin `discard`: `Unsaved`, sin leer el fichero válido que hay.
     let valid = write_image(tmp.path(), "valido.png", &image_f());
     let mut session = session_with_pending();
-    let image = session.document.main_image();
+    let image = ImageId::from_raw(0);
     session
         .document
         .apply(Command::SetPaletteColor {

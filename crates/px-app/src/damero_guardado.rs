@@ -30,6 +30,7 @@
 //! Suposición sobre «Piezas»: el fondo y el camino se eligen con `Canvas::set_background` y
 //! `Canvas::set_checker_mesh`.
 
+use px_core::ImageId;
 use std::collections::HashMap;
 
 use eframe::egui::{
@@ -243,7 +244,9 @@ fn textura_es(
 fn comprueba(nombre: &str, image: &Image) {
     let original = image.clone();
     let doc = Document::new(image.clone());
-    let documento = doc.image(doc.main_image()).expect("imagen del documento");
+    let documento = doc
+        .image(ImageId::from_raw(0))
+        .expect("imagen del documento");
     let state_id = doc.state_id();
     let bytes_de_la_imagen = to_rgba8(image);
     let png_antes = write_png(image).expect("PNG antes");

@@ -16,6 +16,7 @@
 //! Sin aserciones de tiempo (serían frágiles): los tiempos van por `eprintln!`. Todo se escribe en un
 //! directorio de trabajo que se borra al terminar.
 
+use px_core::ImageId;
 use std::time::Instant;
 
 use px_core::{Image, Palette, Pixel, Rgba};
@@ -125,7 +126,7 @@ fn gesto(
     eleccion: ColorChoice,
     eventos: Vec<CanvasEvent>,
 ) -> bool {
-    let id = s.document.main_image();
+    let id = ImageId::from_raw(0);
     tools.apply_action(ToolAction::Select(herramienta));
     let mut cambio = false;
     for evento in eventos {
@@ -165,7 +166,7 @@ fn recorrido(ctx: &str, imagen: Image, capas: &Capas, colores: [ColorChoice; 5])
     s.install(cargado);
     tomar(ctx, "install", inicio);
     {
-        let imagen = s.document.image(s.document.main_image()).expect("imagen");
+        let imagen = s.document.image(ImageId::from_raw(0)).expect("imagen");
         capas.verificar(imagen, 0, &format!("{ctx}: tras abrir"));
     }
 
@@ -219,7 +220,7 @@ fn recorrido(ctx: &str, imagen: Image, capas: &Capas, colores: [ColorChoice; 5])
     }
     let comprobar = |s: &Session, k: usize, que: &str| {
         let inicio = Instant::now();
-        let imagen = s.document.image(s.document.main_image()).expect("imagen");
+        let imagen = s.document.image(ImageId::from_raw(0)).expect("imagen");
         capas.verificar(imagen, k, &format!("{ctx}: {que}"));
         tomar(ctx, &format!("comprobar {que}"), inicio);
     };

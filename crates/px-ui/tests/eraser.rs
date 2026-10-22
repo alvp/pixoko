@@ -112,7 +112,7 @@ impl Escena {
 
     fn con(image: Image, herramienta: Tool) -> Escena {
         let doc = Document::new(image);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(herramienta));
         assert_eq!(tool.tool(), herramienta);

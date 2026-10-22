@@ -16,6 +16,7 @@
 //! - Propiedad 4: con `Ok`, el modelo se siembra con lo que abrió la sesión (el fichero mutado no tiene
 //!   lectura independiente) y se comprueba que editar, guardar y reabrir lo conserva.
 
+use px_core::ImageId;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
@@ -450,7 +451,7 @@ proptest! {
                 prop_assert_eq!(&guardado.path, &destino);
                 let mut otra = sesion_vacia();
                 otra.open(&guardado.path, Canvas::MAX_SIDE, false).expect("reabrir");
-                let imagen = otra.document.image(otra.document.main_image()).expect("imagen");
+                let imagen = otra.document.image(ImageId::from_raw(0)).expect("imagen");
                 assert_igual(imagen, &w.m.normalizada(), "mutado reabierto");
             }
         }

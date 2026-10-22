@@ -116,7 +116,7 @@ fn session_p5(transparent: Option<u8>) -> Session {
 
 fn main_image(document: &Document) -> &Image {
     document
-        .image(document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 
@@ -220,7 +220,7 @@ fn confirm_removal(session: &mut Session) -> Result<PaletteOutcome, DocumentErro
 
 /// Cambia el color de la entrada 0 con un `SetPaletteColor` directo (un paso de deshacer).
 fn edit_color(session: &mut Session, index: u8, color: Rgba) {
-    let image = session.document.main_image();
+    let image = ImageId::from_raw(0);
     let changed = session
         .document
         .apply(Command::SetPaletteColor {
@@ -662,7 +662,7 @@ fn rotated_directly(
     expect_change: bool,
 ) -> Image {
     let mut document = Document::new(image_f(transparent));
-    let image = document.main_image();
+    let image = ImageId::from_raw(0);
     let changed = document
         .apply(Command::RotateColors {
             image,

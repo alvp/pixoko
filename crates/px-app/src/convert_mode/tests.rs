@@ -46,6 +46,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use super::*;
+use px_core::ImageId;
 
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -933,7 +934,7 @@ fn fila_2_analyze_coincide_con_classify_de_convert_image_sin_permisos() {
 #[test]
 fn fila_2_analyze_no_toca_el_documento() {
     let documento = Document::new(rgba_fila_7());
-    let id = documento.main_image();
+    let id = ImageId::from_raw(0);
     let antes = documento.image(id).expect("imagen").clone();
     let state_id = documento.state_id();
     for target in [Mode::Indexed, Mode::Gray, Mode::GrayAlpha] {
@@ -3142,7 +3143,7 @@ proptest! {
         };
         let motivo = block_reason(Some(&analysis), &perms, activo);
         let mut documento = Document::new(image.clone());
-        let id = documento.main_image();
+        let id = ImageId::from_raw(0);
         let resultado = documento.apply(Command::ConvertMode { image: id, target, allowed });
         prop_assert_eq!(
             motivo.is_none(),
@@ -3728,7 +3729,7 @@ fn fila_12_medicion_de_informe_apply_y_refresco_a_4096_y_8192() {
 
         // `apply` y refresco de la textura.
         let mut documento = Document::new(image);
-        let id = documento.main_image();
+        let id = ImageId::from_raw(0);
         let t = Instant::now();
         let aplicado = documento
             .apply(Command::ConvertMode {
@@ -4521,7 +4522,7 @@ proptest! {
 /// `apply` acepta la conversión con ese `Allowed` en una copia de la imagen.
 fn apply_acepta(image: &Image, target: Mode, allowed: Allowed) -> bool {
     let mut documento = Document::new(image.clone());
-    let id = documento.main_image();
+    let id = ImageId::from_raw(0);
     documento
         .apply(Command::ConvertMode {
             image: id,

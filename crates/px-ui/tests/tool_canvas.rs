@@ -202,7 +202,7 @@ impl Sesion {
         let zoom = f.info.zoom.scale(1);
         assert_eq!(zoom, 12, "800×600 con 64×48 da zoom ×12");
         let doc = Document::new(image.clone());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut tool = ToolState::new();
         tool.apply_action(ToolAction::Select(herramienta));
         Sesion {

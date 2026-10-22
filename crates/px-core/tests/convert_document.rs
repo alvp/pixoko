@@ -69,7 +69,7 @@ fn doc_d() -> Document {
 }
 
 fn imagen_de(doc: &Document) -> &Image {
-    doc.image(doc.main_image()).unwrap()
+    doc.image(ImageId::from_raw(0)).unwrap()
 }
 
 fn convertir(image: ImageId, target: Mode, allowed: Allowed) -> Command {
@@ -193,7 +193,7 @@ fn errores_nuevos_del_documento() {
 #[test]
 fn fila_13_convertir_y_deshacer() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
 
     // Sin permiso: error y nada cambia.
@@ -233,7 +233,7 @@ fn fila_13_convertir_y_deshacer() {
 fn fila_14_errores_del_documento_dejan_todo_intacto() {
     // Pérdida no permitida.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(&mut doc, convertir(id, Mode::Gray, N), perdida(2, 0));
 
     // Imagen desconocida: el id 99.
@@ -254,7 +254,7 @@ fn fila_14_errores_del_documento_dejan_todo_intacto() {
         .map(|i| ((i % 256) as u8, (i / 256) as u8, 0, 255))
         .collect();
     let mut grande = Document::new(rgba_img(257, 1, &colores));
-    let id_grande = grande.main_image();
+    let id_grande = ImageId::from_raw(0);
     rechaza(
         &mut grande,
         convertir(id_grande, Mode::Indexed, N),
@@ -269,7 +269,7 @@ fn fila_14_errores_del_documento_dejan_todo_intacto() {
 
     // `ConvertMode` dentro de un `Batch`: el `SetPixels` anterior se revierte.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let lote = Command::Batch(vec![
         set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
         convertir(id, Mode::Gray, L),
@@ -317,7 +317,7 @@ fn rechaza_en_lote(
 #[test]
 fn fila_20_not_batchable_gana_a_unknown_image_y_el_primer_error_gana() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let desconocida = ImageId::from_raw(99);
     let fuera = |image: ImageId| set(image, 5, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255)));
     let es_not_batchable = |e: &DocumentError| *e == DocumentError::NotBatchable;
@@ -367,7 +367,7 @@ fn fila_20_not_batchable_gana_a_unknown_image_y_el_primer_error_gana() {
 #[test]
 fn fila_15_con_limite_cero_el_paso_grande_se_conserva() {
     let mut doc = Document::new(Image::new(4, 4, Mode::Rgba).unwrap());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let rgba_inicial = imagen_de(&doc).clone();
     doc.set_history_limit(0);
 
@@ -406,7 +406,7 @@ fn fila_15_con_limite_cero_el_paso_grande_se_conserva() {
 #[test]
 fn fila_15_con_el_limite_por_defecto_se_deshace_todo() {
     let mut doc = Document::new(Image::new(4, 4, Mode::Rgba).unwrap());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let rgba_inicial = imagen_de(&doc).clone();
 
     assert_eq!(doc.apply(convertir(id, Mode::Gray, L_Y_A)), Ok(true));
@@ -434,7 +434,7 @@ fn fila_15_con_el_limite_por_defecto_se_deshace_todo() {
 #[test]
 fn fila_19_convertir_al_modo_actual_no_es_un_paso() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         doc.apply(set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255)))),
         Ok(true)
@@ -692,7 +692,7 @@ fn modelo_fill(img: &Image, span: Span, pixel: Pixel) -> Previsto {
 /// cursor) y los compara tras cada operación.
 fn ejecuta_modelo(inicial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
     let mut doc = Document::new(inicial.clone());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut instantes = vec![inicial];
     let mut cursor = 0usize;
 
@@ -835,7 +835,7 @@ fn aplica_previsto(
 /// un `undo` que deja un paso por rehacer.
 fn documento_con_historia(img: Image, sets: &[(u32, u32, u8)], deshacer: bool) -> Document {
     let mut doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for &(x, y, v) in sets {
         let img = imagen_de(&doc);
         let pixel = pixel_de(img.mode(), longitud_de_paleta(img), v);
@@ -875,7 +875,7 @@ fn prop_atomicidad(
     allowed: Allowed,
 ) -> Result<(), TestCaseError> {
     let mut doc = documento_con_historia(img, &sets, deshacer);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
     let actual = imagen_de(&doc).clone();
 
@@ -939,7 +939,7 @@ fn prop_atomicidad(
 fn prop_limite(img: Image, limite: usize, ops: &[(Mode, Allowed)]) -> Result<(), TestCaseError> {
     let mut doc = Document::new(img);
     doc.set_history_limit(limite);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut hubo_paso = false;
 
     for &(target, allowed) in ops {

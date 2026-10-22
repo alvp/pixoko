@@ -47,6 +47,7 @@
 //! - `overlay_blocks()` cuenta los bloques de trabajo vivos: 1, 2 y 3 con el lápiz de B9, y en la
 //!   línea que cambia de extremo solo los de la línea actual (los anteriores «vuelven al documento»).
 
+use px_core::ImageId;
 use std::collections::{HashMap, HashSet};
 
 use egui::epaint::{ClippedPrimitive, ClippedShape, Primitive, Shape, Vertex};
@@ -160,7 +161,7 @@ struct Salida {
 // ---------------------------------------------------------------------------------------------
 
 fn tamano_de(doc: &Document) -> Size {
-    let imagen = doc.image(doc.main_image()).expect("imagen");
+    let imagen = doc.image(ImageId::from_raw(0)).expect("imagen");
     Size::new(imagen.width(), imagen.height())
 }
 
@@ -252,7 +253,7 @@ impl Banco {
     /// Con la imagen cargada (`load`) y tres fotogramas de reposo, ya aplicados los deltas.
     fn con(ctx: Context, ppp: f32, pantalla: Vec2, canvas: Canvas, image: Image) -> Banco {
         let mut banco = Banco::vacio(ctx, ppp, pantalla, canvas, image);
-        let imagen = banco.doc.image(banco.doc.main_image()).expect("imagen");
+        let imagen = banco.doc.image(ImageId::from_raw(0)).expect("imagen");
         banco.canvas.load(&banco.ctx, imagen).expect("load");
         for _ in 0..3 {
             banco.reposo();
@@ -272,7 +273,7 @@ impl Banco {
     }
 
     fn imagen(&self) -> &Image {
-        self.doc.image(self.doc.main_image()).expect("imagen")
+        self.doc.image(ImageId::from_raw(0)).expect("imagen")
     }
 
     /// Un fotograma: `interact`, la fase del documento (que puede llamar a `invalidate`,
@@ -301,7 +302,7 @@ impl Banco {
             if let Some(fase) = fase.take() {
                 fase(ui.ctx(), canvas, doc, log);
             }
-            let id = doc.main_image();
+            let id = ImageId::from_raw(0);
             let imagen = doc.image(id).expect("imagen");
             let sync = canvas.sync(ui.ctx(), imagen);
             let info = canvas.paint(ui);
@@ -905,7 +906,7 @@ fn fila_b5_sync_with_devuelve_out_of_memory_si_el_asignador_falla() {
     let mut resultado = None;
     banco.corre(vec![], |ctx, canvas, doc, _| {
         canvas.invalidate_all();
-        let imagen = doc.image(doc.main_image()).expect("imagen");
+        let imagen = doc.image(ImageId::from_raw(0)).expect("imagen");
         resultado = Some(canvas.sync_with(ctx, imagen, &mut Falla::tras(0)));
     });
     assert_eq!(resultado, Some(Err(CanvasError::OutOfMemory)));
@@ -947,7 +948,7 @@ fn otro_modo(modo: Mode) -> Mode {
 fn operaciones_b6(banco: &mut Banco, etiqueta: &str) {
     let modo = banco.imagen().mode();
     let (w, h) = (banco.imagen().width(), banco.imagen().height());
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let entradas = banco.imagen().palette().map_or(1, |p| p.len());
     let pixel = |k: u32| pixel_de(modo, k, entradas);
 
@@ -1113,7 +1114,7 @@ fn fila_b6_las_no_visibles_conservan_su_contenido_y_al_hacerse_visibles_quedan_i
     banco.al_nivel(N_X5);
     let visibles = banco.visibles();
     assert_eq!(visibles.iter().filter(|&&v| v).count(), 1, "{visibles:?}");
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = banco.contenidos();
     let trazo = Command::SetPixels {
         image: id,
@@ -1199,7 +1200,7 @@ fn trazo(id: px_core::ImageId, puntos: &[(u32, u32)]) -> Command {
 #[test]
 fn fila_b7_un_trazo_en_una_baldosa_visible_sube_solo_sus_bloques_y_solo_en_esa_baldosa() {
     let mut banco = banco_300x200();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     // Un bloque en la baldosa 4 (columna 1, fila 1): el bloque (2, 2) → serie (128,128,64,64).
     let comando = trazo(id, &[(130, 130), (131, 131)]);
     let sucio = modelo_de_pixeles(&pixeles_de(&comando), 300, 200);
@@ -1248,7 +1249,7 @@ fn fila_b7_un_trazo_en_una_baldosa_visible_sube_solo_sus_bloques_y_solo_en_esa_b
 #[test]
 fn fila_b7_un_trazo_que_cruza_el_borde_de_dos_baldosas_sube_un_bloque_en_cada_una() {
     let mut banco = banco_300x200();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let comando = trazo(id, &[(126, 10), (127, 10), (128, 10), (129, 10)]);
     let sucio = modelo_de_pixeles(&pixeles_de(&comando), 300, 200);
     let salida = banco.aplica(comando);
@@ -1261,7 +1262,7 @@ fn fila_b7_un_trazo_que_cruza_el_borde_de_dos_baldosas_sube_un_bloque_en_cada_un
 #[test]
 fn fila_b7_si_todos_los_bloques_de_la_baldosa_estan_sucios_sube_un_delta_completo() {
     let mut banco = banco_300x200();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     // La baldosa 0 (128×128) tiene 2×2 bloques: tres sucios dan series; cuatro, un delta completo.
     let tres = trazo(id, &[(1, 1), (70, 1), (1, 70)]);
     let sucio = modelo_de_pixeles(&pixeles_de(&tres), 300, 200);
@@ -1294,7 +1295,7 @@ fn fila_b7_si_todos_los_bloques_de_la_baldosa_estan_sucios_sube_un_delta_complet
 #[test]
 fn fila_b7_un_trazo_en_una_baldosa_fuera_del_lienzo_no_sube_nada_y_conserva_sus_bloques() {
     let mut banco = banco_300x200();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let ids = banco.ids();
     let antes = banco.contenidos();
     // La baldosa 2 (x de 256 a 300, y de 0 a 128) no se ve: el bloque (4, 0) queda pendiente.
@@ -1359,7 +1360,7 @@ fn fila_b7_en_reposo_no_se_sube_nada() {
 fn fila_b7_los_comandos_de_paleta_que_no_cambian_la_imagen_no_suben_nada() {
     let mut banco = Banco::simple(128, imagen_de(Mode::Indexed, 300, 200, 7));
     banco.pide(ViewOp::Actual);
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let ids = banco.ids();
     for (etiqueta, comando) in [
         (
@@ -1415,7 +1416,7 @@ fn fila_b7_una_operacion_de_imagen_entera_con_todo_visible_sube_cada_baldosa_una
         );
     }
     // Una conversión de modo del documento: igual.
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let salida = banco.aplica(Command::ConvertMode {
         image: id,
         target: Mode::GrayAlpha,
@@ -1430,7 +1431,7 @@ fn fila_b7_una_operacion_de_imagen_entera_con_todo_visible_sube_cada_baldosa_una
     // Y un cambio de color de paleta de una imagen indexada.
     let mut indexado = Banco::simple(128, imagen_de(Mode::Indexed, 300, 200, 7));
     indexado.pide(ViewOp::Fit);
-    let id = indexado.doc.main_image();
+    let id = ImageId::from_raw(0);
     let salida = indexado.aplica(Command::SetPaletteColor {
         image: id,
         index: 2,
@@ -1921,7 +1922,7 @@ fn comprueba_b8(ctx: &Context, ppp: f32, nivel: usize, fondo: CanvasBackground, 
     for _ in 0..2 {
         let pend = pendientes.clone();
         salida = banco.corre(vec![], move |ctx, canvas, doc, _| {
-            canvas.set_overlay(ctx, doc.image(doc.main_image()).expect("imagen"), &pend);
+            canvas.set_overlay(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"), &pend);
         });
     }
     assert_eq!(salida.sync, Ok(()), "{etiqueta}");
@@ -1947,7 +1948,7 @@ fn comprueba_b8(ctx: &Context, ppp: f32, nivel: usize, fondo: CanvasBackground, 
 
     // Soltar: el trazo se aplica al documento y la superposición se descarta.
     let aplicar = Command::SetPixels {
-        image: banco.doc.main_image(),
+        image: ImageId::from_raw(0),
         pixels: pendientes
             .iter()
             .map(|&(x, y, c)| PixelEdit {
@@ -2042,7 +2043,7 @@ fn fila_b8_el_borrador_deja_ver_el_fondo_elegido_y_el_color_borrado_es_el_mismo_
             borrados.iter().map(|&(x, y, c)| ((x, y), c)).collect();
         let pend = borrados.clone();
         let salida = banco.corre(vec![], move |ctx, canvas, doc, _| {
-            canvas.set_overlay(ctx, doc.image(doc.main_image()).expect("imagen"), &pend);
+            canvas.set_overlay(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"), &pend);
         });
         let g = Geom::de(&banco, N_X3);
         let antes = raster(&banco, &salida);
@@ -2068,7 +2069,7 @@ fn fila_b8_el_borrador_deja_ver_el_fondo_elegido_y_el_color_borrado_es_el_mismo_
         let fallos = compara_b8(&antes, &g, banco.imagen(), &mapa, fondo, "borrador");
         assert!(fallos.is_empty(), "{fallos:#?}");
         // Soltar con el borrador aplicado.
-        let id = banco.doc.main_image();
+        let id = ImageId::from_raw(0);
         let borrar = Command::SetPixels {
             image: id,
             pixels: borrados
@@ -2118,7 +2119,7 @@ fn fotograma_con_overlay(banco: &mut Banco, pendientes: Vec<(u32, u32, Rgba)>) -
     banco.corre(vec![], move |ctx, canvas, doc, _| {
         canvas.set_overlay(
             ctx,
-            doc.image(doc.main_image()).expect("imagen"),
+            doc.image(ImageId::from_raw(0)).expect("imagen"),
             &pendientes,
         );
     })
@@ -2222,7 +2223,7 @@ fn tras_el_gesto(banco: &mut Banco, esperado_doc: &Image, etiqueta: &str) {
 #[test]
 fn fila_b9_soltar_con_ok_true_deja_la_textura_con_el_trazo_y_libera_la_copia() {
     let (mut banco, _, pend) = banco_b9_con_el_lapiz_a_medias();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let comando = Command::SetPixels {
         image: id,
         pixels: pend
@@ -2268,7 +2269,7 @@ fn fila_b9_escape_y_set_overlay_vacio_devuelven_la_textura_al_documento() {
     let salida = banco.corre(
         vec![tecla(Key::Escape, Modifiers::NONE)],
         |ctx, canvas, doc, _| {
-            canvas.set_overlay(ctx, doc.image(doc.main_image()).expect("imagen"), &[]);
+            canvas.set_overlay(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"), &[]);
         },
     );
     assert!(salida.entradas.contains(&CanvasInput::Escape));
@@ -2278,7 +2279,7 @@ fn fila_b9_escape_y_set_overlay_vacio_devuelven_la_textura_al_documento() {
 #[test]
 fn fila_b9_un_error_de_apply_deja_el_documento_y_la_textura_como_antes_del_gesto() {
     let (mut banco, inicial, pend) = banco_b9_con_el_lapiz_a_medias();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     // Un píxel de otro modo: `apply` da error y el documento queda intacto.
     let mala = Command::SetPixels {
         image: id,
@@ -2347,7 +2348,7 @@ fn fila_b9_la_linea_que_cambia_de_extremo_sube_los_bloques_de_la_anterior_y_la_n
     assert_eq!(banco.doc.state_id(), estado);
     assert_eq!(banco.imagen(), &inicial);
     // Soltar con la línea real del documento.
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     let comando = line_command(&banco.doc, id, (50, 45), (100, 45), Pixel::Rgba(ROJO))
         .expect("línea")
         .expect("cae dentro");
@@ -2366,7 +2367,7 @@ fn fila_b9_una_linea_diagonal_de_8192_px_en_8192_toca_como_mucho_255_bloques() {
     let imagen = Image::new(8192, 8192, Mode::Gray).expect("imagen de 64 MiB");
     let mut banco = Banco::vacio(contexto(1.0), 1.0, PANTALLA, Canvas::new(), imagen);
     banco.guarda = false;
-    let cargada = banco.doc.image(banco.doc.main_image()).expect("imagen");
+    let cargada = banco.doc.image(ImageId::from_raw(0)).expect("imagen");
     banco.canvas.load(&banco.ctx, cargada).expect("load");
     let _ = banco.reposo();
     assert_eq!(banco.baldosas(), 16, "8192² en baldosas de 2048");
@@ -2414,7 +2415,7 @@ fn previsualiza(banco: &mut Banco, index: u8, color: Rgba) -> Salida {
     banco.corre(vec![], move |ctx, canvas, doc, _| {
         canvas.preview_entry(
             ctx,
-            doc.image(doc.main_image()).expect("imagen"),
+            doc.image(ImageId::from_raw(0)).expect("imagen"),
             index,
             color,
         );
@@ -2423,7 +2424,7 @@ fn previsualiza(banco: &mut Banco, index: u8, color: Rgba) -> Salida {
 
 fn termina_la_vista_previa(banco: &mut Banco) -> Salida {
     banco.corre(vec![], |ctx, canvas, doc, _| {
-        canvas.end_preview(ctx, doc.image(doc.main_image()).expect("imagen"));
+        canvas.end_preview(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"));
     })
 }
 
@@ -2508,7 +2509,7 @@ fn fila_b10_un_pan_a_mitad_construye_la_baldosa_que_aparece_ya_con_la_vista_prev
     for s in banco.arrastra_con(-120, 0, |ctx, canvas, doc, _| {
         canvas.preview_entry(
             ctx,
-            doc.image(doc.main_image()).expect("imagen"),
+            doc.image(ImageId::from_raw(0)).expect("imagen"),
             2,
             AMARILLO,
         );
@@ -2578,7 +2579,7 @@ fn fila_b10_cancelar_devuelve_las_visibles_al_documento_y_las_no_visibles_al_ver
     banco.arrastra_con(-200, 0, |ctx, canvas, doc, _| {
         canvas.preview_entry(
             ctx,
-            doc.image(doc.main_image()).expect("imagen"),
+            doc.image(ImageId::from_raw(0)).expect("imagen"),
             2,
             AMARILLO,
         );
@@ -2601,7 +2602,7 @@ fn fila_b10_cancelar_devuelve_las_visibles_al_documento_y_las_no_visibles_al_ver
 #[test]
 fn fila_b10_soltar_con_paso_deja_las_texturas_del_documento_nuevo() {
     let mut banco = banco_b10();
-    let id = banco.doc.main_image();
+    let id = ImageId::from_raw(0);
     previsualiza(&mut banco, 2, AMARILLO);
     previsualiza(&mut banco, 2, VERDE_AMARILLENTO);
     // Soltar: la edición se aplica (`SetPaletteColor`), la app invalida y termina la vista previa.
@@ -2612,7 +2613,7 @@ fn fila_b10_soltar_con_paso_deja_las_texturas_del_documento_nuevo() {
     };
     let salida = banco.corre(vec![], move |ctx, canvas, doc, log| {
         assert_eq!(aplica_y_registra(doc, log, canvas, comando), Ok(true));
-        canvas.end_preview(ctx, doc.image(doc.main_image()).expect("imagen"));
+        canvas.end_preview(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"));
     });
     assert_eq!(salida.sync, Ok(()));
     let nuevo = banco.imagen().clone();
@@ -2790,7 +2791,7 @@ proptest! {
         }
 
         // El final del gesto: aplicado, cancelado, con error o con Esc.
-        let id = banco.doc.main_image();
+        let id = ImageId::from_raw(0);
         match fin {
             0 => {
                 let comando = if es_linea {
@@ -2830,7 +2831,7 @@ proptest! {
             }
             _ => {
                 banco.corre(vec![tecla(Key::Escape, Modifiers::NONE)], |ctx, canvas, doc, _| {
-                    canvas.set_overlay(ctx, doc.image(doc.main_image()).expect("imagen"), &[]);
+                    canvas.set_overlay(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"), &[]);
                 });
             }
         }

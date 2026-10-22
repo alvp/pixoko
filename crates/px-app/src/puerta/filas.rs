@@ -18,6 +18,7 @@
 //!   alfa guardado 0 el borrador la usa (spec del cuentagotas y el borrador), así que solo se
 //!   rechaza cuando no hay ninguna; el test de rechazos usa una paleta sin alfa 0.
 
+use px_core::ImageId;
 use std::fs;
 
 use px_core::{Allowed, ConvertError, Document, DocumentError, Mode};
@@ -65,7 +66,7 @@ fn fila_1_open_de_los_reales_y_los_generados() {
             .unwrap_or_else(|e| panic!("{ctx}: open dio error: {e}"));
         let imagen = s
             .document
-            .image(s.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("el documento tiene imagen");
 
         // Imagen = lectura independiente del fichero (modelo, o el .sha256 de los reales).
@@ -526,7 +527,7 @@ fn fila_6_un_real_abierto_directamente_se_guarda_en_el_trabajo() {
             .unwrap_or_else(|e| panic!("{ctx}: open del real: {e}"));
         comprobar_apertura(
             &fuente,
-            s.document.image(s.document.main_image()).expect("imagen"),
+            s.document.image(ImageId::from_raw(0)).expect("imagen"),
         );
         let mut w = Mundo::de_sesion(s, &ctx);
         w.aplicar(&edicion_que_cambia(&w.m));
@@ -727,10 +728,7 @@ fn fila_7_dialogos_con_selector_falso() {
         panic!("Open no abrió");
     };
     resultado.expect("Open abrió");
-    let abierta =
-        w.s.document
-            .image(w.s.document.main_image())
-            .expect("imagen");
+    let abierta = w.s.document.image(ImageId::from_raw(0)).expect("imagen");
     // Lo guardado en `mi-dibujo.png` era el modelo de entonces (`snaps[1]`), normalizado.
     assert_igual(
         abierta,
@@ -771,7 +769,7 @@ fn fila_8_relectura_y_segundo_guardado_con_los_mismos_bytes() {
         let mut s2 = sesion_vacia();
         s2.open(&guardado.path, Canvas::MAX_SIDE, false)
             .unwrap_or_else(|e| panic!("{ctx}: reabrir: {e}"));
-        let imagen = s2.document.image(s2.document.main_image()).expect("imagen");
+        let imagen = s2.document.image(ImageId::from_raw(0)).expect("imagen");
         assert_igual(imagen, &w.m.normalizada(), &format!("{ctx}: relectura"));
         assert!(!s2.converted(), "{ctx}: lo guardado se convierte al abrir");
         assert_eq!(s2.document.state_id(), 0, "{ctx}: state_id");

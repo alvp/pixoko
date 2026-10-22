@@ -232,13 +232,13 @@ fn write_x(dir: &Path, bytes: &[u8]) -> PathBuf {
 fn main_image(session: &Session) -> &Image {
     session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 
 /// Cambia el píxel (0, 0) del documento por otro distinto.
 fn edit_first_pixel(session: &mut Session) {
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = match main_image(session).get_pixel(0, 0).expect("píxel") {
         Pixel::Rgba(c) => Pixel::Rgba(Rgba::new(!c.r, c.g, c.b, c.a)),
         Pixel::Gray(g) => Pixel::Gray(g.wrapping_add(1)),

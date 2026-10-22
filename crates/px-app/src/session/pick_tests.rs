@@ -53,7 +53,7 @@ impl Drop for TmpDir {
 fn img(session: &Session) -> &Image {
     session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 
@@ -122,7 +122,7 @@ fn session_of(mode: Mode) -> Session {
 
 /// Una edición como un paso: el píxel `(0, 0)` pasa a un valor que no tenía.
 fn edit_first_pixel(session: &mut Session) {
-    let image = session.document.main_image();
+    let image = ImageId::from_raw(0);
     let pixel = match img(session).mode() {
         Mode::Rgba => Pixel::Rgba(Rgba::new(1, 2, 3, 255)),
         Mode::Indexed => Pixel::Indexed(1),
@@ -176,7 +176,7 @@ fn send(
     session: &mut Session,
     event: CanvasEvent,
 ) -> Vec<(Picked, PickOutcome)> {
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let changed = tools
         .canvas_event_with(&mut session.document, id, None, event)
         .expect("el cuentagotas no da error");
@@ -759,7 +759,7 @@ proptest! {
         let image = image_from(mode, w, h, &seeds);
         let mut session = Session::sample(Document::new(image));
         if edit_first {
-            let id = session.document.main_image();
+            let id = ImageId::from_raw(0);
             let pixel = match mode {
                 Mode::Rgba => Pixel::Rgba(Rgba::new(9, 9, 9, 9)),
                 Mode::Indexed => Pixel::Indexed(15),

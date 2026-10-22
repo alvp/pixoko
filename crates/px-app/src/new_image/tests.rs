@@ -48,6 +48,7 @@
 //!   (≤ 4 líneas, ≤ 42 caracteres, dentro del juego, empieza por `Memoria:`).
 
 use super::*;
+use px_core::ImageId;
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -1945,7 +1946,7 @@ fn foto_de(session: &Session) -> FotoDeSesion {
     FotoDeSesion {
         image: session
             .document
-            .image(session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
             .clone(),
         state_id: session.document.state_id(),
@@ -1962,7 +1963,7 @@ fn sesion(modificada: bool) -> Session {
     let image = Image::new(6, 4, Mode::Rgba).expect("imagen");
     let mut session = Session::sample(Document::new(image));
     if modificada {
-        let id = session.document.main_image();
+        let id = ImageId::from_raw(0);
         session
             .document
             .apply(Command::SetPixels {
@@ -2008,7 +2009,7 @@ fn crea(
         Ok(()) => {
             let del_documento = session
                 .document
-                .image(session.document.main_image())
+                .image(ImageId::from_raw(0))
                 .expect("imagen");
             lienzo.canvas.set_image(del_documento);
             Ok(())
@@ -2025,7 +2026,7 @@ fn fila_7_un_fallo_deja_la_sesion_y_el_lienzo_iguales() {
         let mut lienzo = Lienzo::nuevo(
             session
                 .document
-                .image(session.document.main_image())
+                .image(ImageId::from_raw(0))
                 .expect("imagen")
                 .clone(),
         );
@@ -2060,7 +2061,7 @@ fn fila_7_con_exito_se_reemplazan_sesion_y_lienzo_una_vez() {
     let mut lienzo = Lienzo::nuevo(
         session
             .document
-            .image(session.document.main_image())
+            .image(ImageId::from_raw(0))
             .expect("imagen")
             .clone(),
     );
@@ -2079,7 +2080,7 @@ fn fila_7_con_exito_se_reemplazan_sesion_y_lienzo_una_vez() {
 
     let image = session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen");
     assert_eq!(
         (image.width(), image.height(), image.mode()),
@@ -2555,7 +2556,7 @@ fn propiedad_4_fallar_no_cambia_nada() {
                 let mut lienzo = Lienzo::nuevo(
                     session
                         .document
-                        .image(session.document.main_image())
+                        .image(ImageId::from_raw(0))
                         .expect("imagen")
                         .clone(),
                 );
@@ -2583,7 +2584,7 @@ fn propiedad_4_fallar_no_cambia_nada() {
             let mut lienzo = Lienzo::nuevo(
                 session
                     .document
-                    .image(session.document.main_image())
+                    .image(ImageId::from_raw(0))
                     .expect("imagen")
                     .clone(),
             );
@@ -2598,7 +2599,7 @@ fn propiedad_4_fallar_no_cambia_nada() {
             assert_eq!(falso.llamadas.len(), 2, "{contexto}: se construyó una vez");
             let image = session
                 .document
-                .image(session.document.main_image())
+                .image(ImageId::from_raw(0))
                 .expect("imagen");
             assert_eq!(
                 (image.width(), image.height(), image.mode()),
@@ -2619,7 +2620,7 @@ fn propiedad_4_fallar_no_cambia_nada() {
         let mut lienzo = Lienzo::nuevo(
             session
                 .document
-                .image(session.document.main_image())
+                .image(ImageId::from_raw(0))
                 .expect("imagen")
                 .clone(),
         );

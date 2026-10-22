@@ -111,7 +111,7 @@ fn pixel_en(doc: &Document, x: u32, y: u32) -> Pixel {
 }
 
 fn imagen_de(doc: &Document) -> &Image {
-    doc.image(doc.main_image()).unwrap()
+    doc.image(ImageId::from_raw(0)).unwrap()
 }
 
 fn fuera(x: u32, y: u32, width: u32, height: u32) -> ImageError {
@@ -218,7 +218,7 @@ fn sin_cambios(doc: &mut Document, cmd: Command) {
 /// Coste de la historia tras un relleno de una fila entera de `D` (un solo trozo).
 fn coste_de_un_relleno(y: u32) -> usize {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(fr(id, &[sp(y, 0, 4)], c1())), Ok(true));
     doc.history_bytes()
 }
@@ -281,7 +281,7 @@ fn errores_nuevos_tienen_mensaje() {
 fn fila_01_una_fila_entera_con_undo_y_redo() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     assert_eq!(doc.apply(fr(id, &[sp(0, 0, 4)], c1())), Ok(true));
     comprueba_imagen(
@@ -310,7 +310,7 @@ fn fila_01_una_fila_entera_con_undo_y_redo() {
 fn fila_02_tramos_en_varias_filas_y_pegados() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let spans = [sp(0, 1, 3), sp(1, 0, 2), sp(1, 2, 4), sp(2, 3, 4)];
 
     assert_eq!(doc.apply(fr(id, &spans, c1())), Ok(true));
@@ -342,7 +342,7 @@ fn fila_02_tramos_en_varias_filas_y_pegados() {
 fn fila_03_el_valor_anterior_distinto_se_restaura() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     assert_eq!(doc.apply(set(id, &[px(1, 0, c2())])), Ok(true));
     let con_a = doc.clone();
@@ -372,7 +372,7 @@ fn fila_03_el_valor_anterior_distinto_se_restaura() {
 fn fila_04_los_pixeles_que_ya_valian_el_color_no_se_tocan() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     assert_eq!(doc.apply(set(id, &[px(1, 0, c1())])), Ok(true));
     let con_a = doc.clone();
@@ -400,7 +400,7 @@ fn fila_04_los_pixeles_que_ya_valian_el_color_no_se_tocan() {
 fn fila_05_sin_cambios_es_ok_false() {
     // En D: rellenar con el valor que ya hay.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     sin_cambios(&mut doc, fr(id, &[sp(0, 0, 4)], c0()));
     assert!(!doc.can_undo());
     assert!(!doc.can_redo());
@@ -432,7 +432,7 @@ fn fila_05_sin_cambios_es_ok_false() {
 #[test]
 fn fila_06_lista_vacia_imagen_desconocida_y_pixel_invalido() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     rechaza(&mut doc, fr(id, &[], c1()), DocumentError::EmptyCommand);
 
@@ -461,7 +461,7 @@ fn fila_06_lista_vacia_imagen_desconocida_y_pixel_invalido() {
 
     // Indexed(9) en una imagen indexada con paleta de 2.
     let mut doc = doc_indexado();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(
         &mut doc,
         fill(id, &[sp(0, 0, 4)], Pixel::Indexed(9)),
@@ -472,7 +472,7 @@ fn fila_06_lista_vacia_imagen_desconocida_y_pixel_invalido() {
 #[test]
 fn orden_de_comprobacion_de_fill_spans() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let desconocida = ImageId::from_raw(99);
     let malos = [sp(9, 5, 2), sp(0, 0, 1)];
 
@@ -509,7 +509,7 @@ fn orden_de_comprobacion_de_fill_spans() {
 
     // En un documento indexado, un índice fuera de la paleta gana a los tramos malos.
     let mut doc = doc_indexado();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(
         &mut doc,
         fill(id, &malos, Pixel::Indexed(2)),
@@ -541,7 +541,7 @@ fn fila_07_tramo_fuera_del_lienzo() {
     ];
     for (spans, n, fallo) in casos {
         let mut doc = doc_d();
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         rechaza(&mut doc, fr(id, &spans, c1()), fallo_span(n, fallo));
         // Atomicidad: los tramos anteriores al defectuoso no se escribieron.
         comprueba_imagen(&doc, &[], c0());
@@ -553,7 +553,7 @@ fn fila_07_tramo_fuera_del_lienzo() {
 #[test]
 fn fila_07_tramo_fuera_deja_intacta_la_historia_existente() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(set(id, &[px(3, 2, c2())])), Ok(true));
     assert_eq!(doc.apply(set(id, &[px(2, 2, c3())])), Ok(true));
     assert_eq!(doc.undo(), Ok(()));
@@ -571,7 +571,7 @@ fn fila_07_tramo_fuera_deja_intacta_la_historia_existente() {
 fn fila_08_tramos_vacios_o_invertidos() {
     for spans in [vec![sp(0, 2, 2)], vec![sp(0, 3, 1)]] {
         let mut doc = doc_d();
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         rechaza(
             &mut doc,
             fr(id, &spans, c1()),
@@ -582,7 +582,7 @@ fn fila_08_tramos_vacios_o_invertidos() {
     }
     // Un tramo vacío tampoco se tolera en medio de una lista válida.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(
         &mut doc,
         fr(id, &[sp(0, 0, 2), sp(1, 1, 1), sp(2, 0, 1)], c1()),
@@ -600,7 +600,7 @@ fn fila_09_tramos_desordenados_solapados_o_repetidos() {
     ];
     for spans in casos {
         let mut doc = doc_d();
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         rechaza(
             &mut doc,
             fr(id, &spans, c1()),
@@ -611,7 +611,7 @@ fn fila_09_tramos_desordenados_solapados_o_repetidos() {
     }
     // Desorden dentro de la misma fila: el segundo empieza antes del fin del primero.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(
         &mut doc,
         fr(id, &[sp(0, 2, 4), sp(0, 0, 1)], c1()),
@@ -630,7 +630,7 @@ fn fila_10_pegados_validos_y_orden_de_errores() {
     // Dos tramos pegados son válidos.
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         doc.apply(fr(id, &[sp(0, 0, 2), sp(0, 2, 4)], c1())),
         Ok(true)
@@ -645,7 +645,7 @@ fn fila_10_pegados_validos_y_orden_de_errores() {
 
     // Gana el primer tramo defectuoso, aunque el siguiente también lo sea.
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(
         &mut doc,
         fr(id, &[sp(1, 0, 9), sp(0, 0, 1)], c1()),
@@ -671,7 +671,7 @@ fn fila_11_batch_mezclado_es_un_solo_paso() {
     for ((ax, ac), (bx, bc)) in variantes {
         let mut doc = doc_d();
         let inicial = doc.clone();
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let comando = lote(vec![
             set(id, &[px(ax, 0, ac)]),
             fr(id, &[sp(0, 0, 4)], c1()),
@@ -712,7 +712,7 @@ fn fila_12_batch_con_dos_rellenos() {
     // Dos rellenos iguales: solo cambia el primero, y es un único paso.
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(
         doc.apply(lote(vec![fr(id, &fila0, c1()), fr(id, &fila0, c1())])),
         Ok(true)
@@ -747,7 +747,7 @@ fn fila_12_batch_con_dos_rellenos() {
 #[test]
 fn batch_solo_con_rellenos_sin_cambios_no_crea_paso() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let fila0 = [sp(0, 0, 4)];
     sin_cambios(
         &mut doc,
@@ -781,7 +781,7 @@ fn batch_solo_con_rellenos_sin_cambios_no_crea_paso() {
 fn documentos_con_y_sin_historia() -> Vec<Document> {
     let nuevo = doc_d();
     let mut con_historia = doc_d();
-    let id = con_historia.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(con_historia.apply(set(id, &[px(3, 2, c2())])), Ok(true));
     assert_eq!(con_historia.apply(set(id, &[px(2, 2, c3())])), Ok(true));
     assert_eq!(con_historia.undo(), Ok(()));
@@ -792,7 +792,7 @@ fn documentos_con_y_sin_historia() -> Vec<Document> {
 #[test]
 fn fila_13_batch_con_fallo_interno_no_cambia_nada() {
     for mut doc in documentos_con_y_sin_historia() {
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let fila0 = [sp(0, 0, 4)];
 
         // `Span` en el comando 1; el relleno anterior se revierte.
@@ -828,7 +828,7 @@ fn fila_13_batch_con_fallo_interno_no_cambia_nada() {
 fn batch_con_relleno_vacio_desconocido_o_con_pixel_invalido() {
     let desconocida = ImageId::from_raw(99);
     for mut doc in documentos_con_y_sin_historia() {
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let bueno = set(id, &[px(0, 0, c1())]);
 
         rechaza(
@@ -871,7 +871,7 @@ fn batch_con_relleno_vacio_desconocido_o_con_pixel_invalido() {
 fn fila_14_el_coste_no_depende_del_ancho() {
     fn bytes_de_rellenar_todo(width: u32) -> usize {
         let mut doc = Document::new(Image::new(width, 3, Mode::Rgba).unwrap());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let spans = [sp(0, 0, width), sp(1, 0, width), sp(2, 0, width)];
         assert_eq!(doc.apply(fr(id, &spans, c1())), Ok(true));
         assert_eq!(pixel_en(&doc, 0, 0), Pixel::Rgba(c1()));
@@ -889,7 +889,7 @@ fn fila_14_el_coste_no_depende_del_ancho() {
     // Con `SetPixels`, en cambio, el coste crece con los píxeles: el relleno es mucho
     // más barato en el lienzo ancho.
     let mut doc = Document::new(Image::new(4000, 3, Mode::Rgba).unwrap());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixeles: Vec<PixelEdit> = (0..3)
         .flat_map(|y| (0..4000).map(move |x| px(x, y, c1())))
         .collect();
@@ -905,7 +905,7 @@ fn fila_14_el_coste_no_depende_del_ancho() {
 #[test]
 fn fila_15_limite_cero_conserva_solo_el_ultimo_relleno() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     doc.set_history_limit(0);
     assert_eq!(doc.apply(fr(id, &[sp(0, 0, 4)], c1())), Ok(true));
     assert_eq!(doc.apply(fr(id, &[sp(1, 0, 4)], c1())), Ok(true));
@@ -926,7 +926,7 @@ fn fila_15_limite_cero_conserva_solo_el_ultimo_relleno() {
 fn fila_15_un_relleno_mayor_que_el_limite_se_conserva() {
     let mut doc = doc_d();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     doc.set_history_limit(1);
 
     let toda = [sp(0, 0, 4), sp(1, 0, 4), sp(2, 0, 4)];
@@ -949,7 +949,7 @@ fn fila_15_un_relleno_mayor_que_el_limite_se_conserva() {
 #[test]
 fn fila_15_limite_justo_para_dos_rellenos() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(fr(id, &[sp(0, 0, 4)], c1())), Ok(true));
     assert_eq!(doc.apply(fr(id, &[sp(1, 0, 4)], c1())), Ok(true));
     let dos = doc.history_bytes();
@@ -992,7 +992,7 @@ fn fila_16_indice_fuera_de_la_paleta() {
     ];
     for (indice, esperado) in casos {
         let mut doc = doc_indexado();
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
 
         // Suelto.
         rechaza(
@@ -1024,7 +1024,7 @@ fn fila_16_indice_fuera_de_la_paleta() {
 fn fila_16_indexed_1_es_valido_en_paleta_de_2() {
     let mut doc = doc_indexado();
     let inicial = doc.clone();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     assert_eq!(
         doc.apply(fill(id, &[sp(0, 0, 2)], Pixel::Indexed(1))),
@@ -1063,7 +1063,7 @@ fn fila_16_indexed_1_es_valido_en_paleta_de_2() {
 /// `D'` de la spec: `D` tras `S(px(1,0,c1))` y `S(px(2,1,c2))`.
 fn d_prima() -> Document {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(set(id, &[px(1, 0, c1())])), Ok(true));
     assert_eq!(doc.apply(set(id, &[px(2, 1, c2())])), Ok(true));
     doc
@@ -1098,7 +1098,7 @@ fn comprueba_fila_17(comando: Command, esperado: &[(u32, u32, Rgba)]) {
 
 #[test]
 fn fila_17a_el_relleno_pisa_al_pixel_suelto() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     comprueba_fila_17(
         lote(vec![
             set(id, &[px(1, 0, c2())]),
@@ -1116,7 +1116,7 @@ fn fila_17a_el_relleno_pisa_al_pixel_suelto() {
 
 #[test]
 fn fila_17b_el_pixel_suelto_pisa_al_relleno() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     comprueba_fila_17(
         lote(vec![
             fr(id, &[sp(0, 0, 4)], c1()),
@@ -1134,7 +1134,7 @@ fn fila_17b_el_pixel_suelto_pisa_al_relleno() {
 
 #[test]
 fn fila_17c_pixel_relleno_pixel() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     // `p` en (1,0) y `p'` en otra casilla de la fila.
     comprueba_fila_17(
         lote(vec![
@@ -1184,7 +1184,7 @@ fn fila_17c_pixel_relleno_pixel() {
 
 #[test]
 fn fila_17d_dos_rellenos_seguidos_que_se_solapan() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     comprueba_fila_17(
         lote(vec![
             fr(id, &[sp(0, 0, 3)], c3()),
@@ -1639,7 +1639,7 @@ fn comando(f: Forma, id: ImageId, raw: &Cmd) -> Command {
 fn documento_inicial(img: Image, semilla: &[Cmd]) -> Document {
     let f = forma(&img);
     let mut doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for c in semilla {
         let _ = doc.apply(comando(f, id, c));
     }
@@ -1859,7 +1859,7 @@ fn modelo_apply(
 
 /// El documento tiene exactamente `esperado` como contenido.
 fn comprueba_contenido(doc: &Document, esperado: &Image) -> Result<(), TestCaseError> {
-    prop_assert_eq!(doc.image(doc.main_image()), Some(esperado));
+    prop_assert_eq!(doc.image(ImageId::from_raw(0)), Some(esperado));
     prop_assert_eq!(doc, &Document::new(esperado.clone()));
     Ok(())
 }
@@ -1886,7 +1886,7 @@ fn ejecuta_modelo(inicial: Document, ops: &[Op]) -> Result<(), TestCaseError> {
     let img = imagen_de(&inicial).clone();
     let f = forma(&img);
     let mut doc = inicial;
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut instantes = vec![img];
     let mut cursor = 0usize;
 
@@ -2045,7 +2045,7 @@ fn aplica_validos(
     cmds: &[Cmd],
     limite: usize,
 ) -> Result<(), TestCaseError> {
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     for raw in cmds {
         let cmd = comando(f, id, raw);
         let actual = instantes.last().unwrap().clone();
@@ -2097,7 +2097,7 @@ fn comprueba_bytes_de_la_pila(mut doc: Document, cmds: Vec<Command>) -> Vec<usiz
 
 #[test]
 fn fila_18_history_bytes_sigue_la_pila_de_deshacer() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     // Un `SetPixels`, un `FillSpans` y un `Batch` que mezcla ambos, uno tras otro.
     let bytes = comprueba_bytes_de_la_pila(
         doc_d(),
@@ -2116,7 +2116,7 @@ fn fila_18_history_bytes_sigue_la_pila_de_deshacer() {
 
 #[test]
 fn fila_18_un_solo_paso_de_cada_clase() {
-    let id = doc_d().main_image();
+    let id = ImageId::from_raw(0);
     let casos = [
         set(id, &[px(0, 0, c1())]),
         fr(id, &[sp(0, 0, 4), sp(1, 0, 4), sp(2, 0, 4)], c1()),
@@ -2149,7 +2149,7 @@ fn fila_18_un_solo_paso_de_cada_clase() {
 #[test]
 fn fila_18_un_apply_tras_undo_cuenta_solo_su_paso() {
     let mut doc = doc_d();
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(doc.apply(fr(id, &[sp(0, 0, 4)], c1())), Ok(true));
     assert_eq!(doc.apply(fr(id, &[sp(1, 0, 4)], c2())), Ok(true));
     let dos = doc.history_bytes();
@@ -2180,7 +2180,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let inicial = documento_inicial(img, &semilla);
-        let id = inicial.main_image();
+        let id = ImageId::from_raw(0);
         let mut doc = inicial.clone();
 
         let mut con_cambio = 0usize;
@@ -2222,7 +2222,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let mut doc = Document::new(img);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         for raw in &semilla {
             let _ = doc.apply(comando(f, id, raw));
         }
@@ -2273,7 +2273,7 @@ proptest! {
 
         let mut con_relleno = Document::new(imagen.clone());
         let mut con_set = Document::new(imagen);
-        let id = con_relleno.main_image();
+        let id = ImageId::from_raw(0);
         let r_relleno = con_relleno.apply(Command::FillSpans { image: id, spans, pixel });
         let r_set = con_set.apply(Command::SetPixels { image: id, pixels: pixeles });
 
@@ -2306,7 +2306,7 @@ proptest! {
 
         let mut completo = Document::new(img.clone());
         let mut reducido = Document::new(img);
-        let id = completo.main_image();
+        let id = ImageId::from_raw(0);
         let r_completo = completo.apply(Command::FillSpans { image: id, spans, pixel });
         let r_reducido = reducido.apply(Command::FillSpans { image: id, spans: mitad, pixel });
 
@@ -2338,7 +2338,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let mut doc = Document::new(img);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mut bytes = vec![0usize];
         for raw in &cmds {
             if doc.apply(comando(f, id, raw)) == Ok(true) {
@@ -2366,7 +2366,7 @@ proptest! {
     ) {
         let f = forma(&img);
         let inicial = documento_inicial(img, &semilla);
-        let id = inicial.main_image();
+        let id = ImageId::from_raw(0);
         let cmds = resuelve(f, id, &hojas);
 
         // Uno a uno.
@@ -2474,7 +2474,7 @@ mod limites {
     /// Deja `doc` con un paso de deshacer y otro de rehacer (sobre columnas impares y sobre
     /// una fila a la que no llegan los tramos de las pruebas).
     fn con_deshacer_y_rehacer(doc: &mut Document) {
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         assert_eq!(doc.apply(set(id, &[px(1, 1, c2())])), Ok(true));
         assert_eq!(doc.apply(set(id, &[px(3, 1, c3())])), Ok(true));
         assert_eq!(doc.undo(), Ok(()));
@@ -2490,7 +2490,7 @@ mod limites {
         assert_eq!(Document::MAX_FILL_SPANS, TOPE);
 
         let mut doc = uniforme(368);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let original = imagen_de(&doc).clone();
         let spans = tramos_de_un_pixel(Document::MAX_FILL_SPANS);
         assert_eq!(spans.len(), TOPE);
@@ -2517,7 +2517,7 @@ mod limites {
     fn fila_07_un_trozo_mas_que_el_tope_se_rechaza_sin_tocar_nada() {
         let mut doc = uniforme(368);
         con_deshacer_y_rehacer(&mut doc);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let antes = foto(&doc);
 
         let spans = tramos_de_un_pixel(TOPE + 1);
@@ -2545,7 +2545,7 @@ mod limites {
         // 184 tramos de 16384 píxeles, cada píxel distinto de `c1` y de su vecino: 3 014 656
         // trozos.
         let mut doc = alterna(184);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let antes = foto(&doc);
         assert_eq!(
             doc.apply(fr(id, &filas_completas(184), c1())),
@@ -2558,7 +2558,7 @@ mod limites {
     fn fila_08_183_filas_caben_y_undo_restaura() {
         // 183 tramos: 2 998 272 trozos.
         let mut doc = alterna(184);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let original = imagen_de(&doc).clone();
         assert_eq!(doc.apply(fr(id, &filas_completas(183), c1())), Ok(true));
         assert!(doc.history_bytes() <= Document::DEFAULT_HISTORY_LIMIT);
@@ -2580,7 +2580,7 @@ mod limites {
     fn fila_09_batch_con_un_relleno_demasiado_fragmentado_se_revierte() {
         let mut doc = uniforme(368);
         con_deshacer_y_rehacer(&mut doc);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let antes = foto(&doc);
 
         // `S` pinta una columna impar de la fila 0 (los tramos solo tocan columnas pares).

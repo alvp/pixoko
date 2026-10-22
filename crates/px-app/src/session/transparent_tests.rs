@@ -95,7 +95,7 @@ fn session_p5() -> Session {
 fn img(session: &Session) -> &Image {
     session
         .document
-        .image(session.document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 
@@ -323,7 +323,7 @@ fn fila_3_poner_el_mismo_valor_da_ok_false_y_no_toca_nada() {
 
 /// Una edición previa de color (un paso de deshacer) en la entrada 0.
 fn edit_first_color(session: &mut Session) {
-    let image = session.document.main_image();
+    let image = ImageId::from_raw(0);
     let changed = session
         .document
         .apply(Command::SetPaletteColor {
@@ -406,7 +406,7 @@ fn fila_3_el_comando_directo_con_el_mismo_valor_da_ok_false_sin_paso_ni_marca() 
         for edited in [false, true] {
             let tag = format!("{start:?} editada {edited}");
             let mut document = Document::new(image_f(start));
-            let image = document.main_image();
+            let image = ImageId::from_raw(0);
             if edited {
                 assert!(
                     document
@@ -829,8 +829,7 @@ fn big_session() -> Session {
 
 #[test]
 fn fila_10_dirty_of_de_set_transparent_index_es_la_imagen_entera() {
-    let session = big_session();
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let size = Size::new(300, 200);
     let full = BlockSet::full(300, 200);
     assert!(!full.is_empty());
@@ -873,7 +872,7 @@ fn frame_uploads(app: &mut App, ctx: &Context) -> Vec<([usize; 2], Vec<u8>)> {
     };
     let mut output = ctx.run_ui(input, |ui| {
         app.canvas.interact_roles(ui);
-        let id = app.session.document.main_image();
+        let id = ImageId::from_raw(0);
         let image = app.session.document.image(id).expect("imagen");
         let _ = app.canvas.sync(ui.ctx(), image);
         let _ = app.canvas.paint(ui);

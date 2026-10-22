@@ -25,6 +25,7 @@ use egui::{
     Color32, Context, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelSource, MouseWheelUnit,
     PointerButton, Pos2, RawInput, Rect, TextureId, TouchPhase, Vec2, pos2, vec2,
 };
+use px_core::ImageId;
 use px_core::{Command, Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::canvas::Canvas;
 use px_ui::color::{ColorChoice, SlotColors, cell_count, initial_choice};
@@ -717,7 +718,7 @@ impl Banco {
     // --- Documento ---
 
     fn refresca(&mut self) {
-        let id = self.documento.main_image();
+        let id = ImageId::from_raw(0);
         self.image = self.documento.image(id).expect("la imagen").clone();
         self.doc_state += 1;
     }
@@ -733,7 +734,7 @@ impl Banco {
     }
 
     fn pone_color(&mut self, index: u8, color: Rgba) {
-        let image = self.documento.main_image();
+        let image = ImageId::from_raw(0);
         self.aplica(Command::SetPaletteColor {
             image,
             index,
@@ -2591,6 +2592,7 @@ fn un_cambio_del_documento_cancela_la_quita_pendiente_y_los_botones_vuelven() {
 
 mod fijar_transparente {
     use super::*;
+    use px_core::ImageId;
     use px_ui::edit_layout::min_panel_height_px;
     use px_ui::text::{INTERFACE_CHARSET, fit_text};
 
@@ -2808,7 +2810,7 @@ mod fijar_transparente {
     fn fila_3_aplicada_la_op_el_rotulo_y_la_linea_2_cambian_y_pulsar_otra_vez_quita() {
         for ppp in PPPS {
             let mut banco = banco_f(ppp, 2);
-            let id = banco.documento.main_image();
+            let id = ImageId::from_raw(0);
             banco.clic_boton(PaletteButton::Transparent);
             banco.aplica(Command::SetTransparentIndex {
                 image: id,
@@ -2950,7 +2952,7 @@ mod fijar_transparente {
             assert!(f.pinta("activa · transparente"), "ppp {ppp}");
             assert!(!f.pinta("activa · alfa 0"), "ppp {ppp}");
             // Tras `Quitar` (aplicado en el documento), pasa a decir `alfa 0`.
-            let id = banco.documento.main_image();
+            let id = ImageId::from_raw(0);
             banco.aplica(Command::SetTransparentIndex {
                 image: id,
                 index: None,
@@ -3179,7 +3181,7 @@ mod fijar_transparente {
      {
         for ppp in PPPS {
             let mut banco = banco_p5(ppp, 3);
-            let id = banco.documento.main_image();
+            let id = ImageId::from_raw(0);
             // Rango de rotación 3..=4 con Mayús, y la quita pendiente de la 3.
             banco.clic_muestra_con(4, MAYUS);
             assert_eq!(banco.ops.range_end(), Some(4), "ppp {ppp}");
@@ -3371,6 +3373,7 @@ mod fijar_transparente_clic_y_barra {
 
 mod iconos_editor {
     use super::*;
+    use px_core::ImageId;
     use px_ui::icon_button::{Look, look};
     use px_ui::palette_ops::palette_button_tooltip;
     use px_ui::text::INTERFACE_CHARSET;
@@ -3812,7 +3815,7 @@ mod iconos_editor {
             // Pulsar aplica `SetTransparentIndex` (un paso) y el icono cambia en el siguiente
             // fotograma, con la op aplicada.
             let mut banco = banco_f(ppp, 2);
-            let id = banco.documento.main_image();
+            let id = ImageId::from_raw(0);
             let f = banco.clic_boton(PaletteButton::Transparent);
             assert_eq!(
                 f.salida.op,

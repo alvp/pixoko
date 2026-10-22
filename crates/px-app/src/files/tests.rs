@@ -6,6 +6,7 @@
 //! `modified` y del enlace pasa por `save`) y se saltan donde no apliquen: `root` y no Unix.
 
 use super::*;
+use px_core::ImageId;
 
 use std::ffi::OsString;
 use std::fs;
@@ -201,7 +202,7 @@ fn other_pixel(image: &Image, x: u32, y: u32) -> Pixel {
 /// Cambia el píxel `(x, y)` del documento por otro distinto; `true` si hubo cambio.
 #[cfg_attr(not(unix), allow(dead_code))]
 fn edit_one(document: &mut Document, x: u32, y: u32) -> bool {
-    let id = document.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = other_pixel(document.image(id).expect("imagen"), x, y);
     document
         .apply(Command::SetPixels {
@@ -214,7 +215,7 @@ fn edit_one(document: &mut Document, x: u32, y: u32) -> bool {
 #[cfg_attr(not(unix), allow(dead_code))]
 fn main_image(document: &Document) -> &Image {
     document
-        .image(document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 

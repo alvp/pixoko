@@ -5,6 +5,7 @@
 //! el color nunca es de otro modo ni de fuera de la paleta, para cualquier ranura de 0 a 255.
 
 use proptest::prelude::*;
+use px_core::ImageId;
 use px_core::{Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::color::{SLOTS, pixel_for_slot, slot_label};
 use px_ui::stroke::Stroke;
@@ -235,7 +236,7 @@ proptest! {
 
             // Un trazo con ese color nunca da `Err(Pixel { .. })`.
             let mut doc = Document::new(image);
-            let id = doc.main_image();
+            let id = ImageId::from_raw(0);
             let mut stroke = Stroke::new(width, height);
             stroke.move_to((0, 0), pixel);
             stroke.move_to((width as i32 - 1, height as i32 - 1), pixel);

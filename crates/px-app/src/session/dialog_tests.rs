@@ -105,7 +105,7 @@ fn sample_image() -> Image {
 
 /// Cambia el píxel `(0, 0)` por un color distinto.
 fn edit(session: &mut Session) {
-    let id = session.document.main_image();
+    let id = ImageId::from_raw(0);
     let changed = session
         .document
         .apply(Command::SetPixels {
@@ -122,7 +122,7 @@ fn edit(session: &mut Session) {
 
 fn main_image(document: &Document) -> &Image {
     document
-        .image(document.main_image())
+        .image(ImageId::from_raw(0))
         .expect("imagen principal")
 }
 

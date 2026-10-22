@@ -70,7 +70,7 @@ fn doc_con_paleta(w: u32, h: u32, n: usize, t: Option<u8>) -> Document {
 }
 
 fn imagen_de(doc: &Document) -> &Image {
-    doc.image(doc.main_image()).unwrap()
+    doc.image(ImageId::from_raw(0)).unwrap()
 }
 
 fn paleta_de(img: &Image) -> Vec<Rgba> {
@@ -348,7 +348,7 @@ fn tipos_nuevos_de_la_api() {
 #[test]
 fn fila_01_set_palette_color_y_deshacer() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
 
     con_paso(&mut doc, pon_color(id, 1, Y));
@@ -374,7 +374,7 @@ fn fila_01_set_palette_color_y_deshacer() {
 #[test]
 fn fila_02_mismo_color_fuera_de_rango_y_entrada_transparente() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     // Mismo color: `Ok(false)` sin paso.
     sin_paso(&mut doc, pon_color(id, 1, G));
@@ -383,7 +383,7 @@ fn fila_02_mismo_color_fuera_de_rango_y_entrada_transparente() {
 
     // Sobre la entrada transparente: `Ok(true)`, el RGB guardado cambia aunque no se vea.
     let mut doc = doc_f(Some(2));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     con_paso(&mut doc, pon_color(id, 2, Rgba::new(9, 9, 9, 255)));
     let img = imagen_de(&doc);
     assert_eq!(paleta_de(img)[2], Rgba::new(9, 9, 9, 255));
@@ -395,7 +395,7 @@ fn fila_02_mismo_color_fuera_de_rango_y_entrada_transparente() {
 #[test]
 fn fila_03_permutar_con_transparente() {
     let mut doc = doc_f(Some(0));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = resueltos(imagen_de(&doc));
     let esperados = vec![
         Rgba::new(255, 0, 0, 0),
@@ -416,7 +416,7 @@ fn fila_03_permutar_con_transparente() {
 #[test]
 fn fila_04_permutar_con_entradas_sin_usar() {
     let mut doc = Document::new(indexada(4, 1, &[R, G, B, K], None, &[0, 0, 2, 2]));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     assert_eq!(resueltos(imagen_de(&doc)), vec![R, R, B, B]);
 
     con_paso(&mut doc, permuta(id, &[2, 0, 3, 1]));
@@ -430,7 +430,7 @@ fn fila_04_permutar_con_entradas_sin_usar() {
 #[test]
 fn fila_05_permutacion_identidad_y_mal_formadas() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
 
     sin_paso(&mut doc, permuta(id, &[0, 1, 2, 3]));
@@ -444,7 +444,7 @@ fn fila_05_permutacion_identidad_y_mal_formadas() {
 #[test]
 fn fila_06_mover_con_transparente_equivale_a_permutar() {
     let mut doc = doc_f(Some(1));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut con_permute = doc.clone();
 
     con_paso(&mut doc, mueve(id, 0, 2));
@@ -461,7 +461,7 @@ fn fila_06_mover_con_transparente_equivale_a_permutar() {
 #[test]
 fn fila_07_mover_sin_cambio_y_fuera_de_rango() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     con_paso(&mut doc, mueve(id, 3, 1));
     let img = imagen_de(&doc);
@@ -477,7 +477,7 @@ fn fila_07_mover_sin_cambio_y_fuera_de_rango() {
 #[test]
 fn fila_08_anadir_entrada() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
 
     con_paso(&mut doc, anade(id, W));
@@ -497,7 +497,7 @@ fn fila_08_anadir_entrada() {
 
     // Con 256 entradas: `PaletteFull`, todo intacto.
     let mut llena = Document::new(indexada(2, 1, &colores_distintos(256), None, &[0, 255]));
-    let id = llena.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(
         &mut llena,
         anade(id, W),
@@ -510,7 +510,7 @@ fn fila_08_anadir_entrada() {
 fn fila_08_anadir_transparente_no_lo_vuelve_el_indice_transparente() {
     for t in [None, Some(2)] {
         let mut doc = doc_f(t);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         con_paso(&mut doc, anade(id, Rgba::TRANSPARENT));
         let img = imagen_de(&doc);
         assert_eq!(paleta_de(img), vec![R, G, B, K, Rgba::TRANSPARENT]);
@@ -522,7 +522,7 @@ fn fila_08_anadir_transparente_no_lo_vuelve_el_indice_transparente() {
 #[test]
 fn fila_09_quitar_y_deshacer_con_la_mascara() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
     assert_eq!(resueltos(&original), vec![R, G, B, K]);
 
@@ -546,7 +546,7 @@ fn fila_09_quitar_y_deshacer_con_la_mascara() {
 #[test]
 fn fila_10_quitar_con_transparente_mayor_que_el_quitado() {
     let mut doc = doc_f(Some(2));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
 
     // `into' = 3 - 1 = 2`.
@@ -566,7 +566,7 @@ fn fila_11_quitar_la_transparente_y_quitar_hacia_la_transparente() {
     // Se quita la transparente: deja de haber transparente y sus píxeles toman el color de
     // `into`, ahora opaco.
     let mut doc = doc_f(Some(2));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     con_paso(&mut doc, quita(id, 2, 0));
     let img = imagen_de(&doc);
     assert_eq!(paleta_de(img), vec![R, G, K]);
@@ -576,7 +576,7 @@ fn fila_11_quitar_la_transparente_y_quitar_hacia_la_transparente() {
 
     // `into` es la transparente: los píxeles quedan transparentes.
     let mut doc = doc_f(Some(2));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     con_paso(&mut doc, quita(id, 0, 2));
     let img = imagen_de(&doc);
     // `into' = 2 - 1 = 1`.
@@ -591,7 +591,7 @@ fn fila_11_quitar_la_transparente_y_quitar_hacia_la_transparente() {
 #[test]
 fn fila_12_quitar_errores_y_su_orden() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(&mut doc, quita(id, 4, 0), fuera(4, 4));
     rechaza(&mut doc, quita(id, 0, 4), fuera(4, 4));
     // `index` antes que `into`.
@@ -604,7 +604,7 @@ fn fila_12_quitar_errores_y_su_orden() {
 
     // Imagen 2 x 1 de una sola entrada.
     let mut una = Document::new(indexada(2, 1, &[R], None, &[0, 0]));
-    let id = una.main_image();
+    let id = ImageId::from_raw(0);
     // `LastEntry` gana a `RemoveIntoSelf`.
     rechaza(
         &mut una,
@@ -618,7 +618,7 @@ fn fila_12_quitar_errores_y_su_orden() {
 #[test]
 fn fila_13_transparente_fijar_y_quitar() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
 
     con_paso(&mut doc, transparente(id, Some(2)));
     let img = imagen_de(&doc);
@@ -641,7 +641,7 @@ fn fila_13_transparente_fijar_y_quitar() {
 fn fila_14_imagen_no_indexada() {
     for mode in [Mode::Rgba, Mode::Gray] {
         let mut doc = Document::new(Image::new(2, 1, mode).unwrap());
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let mala = edicion(PaletteEditError::NotIndexed { mode });
         // Los siete comandos, con argumentos válidos y con argumentos inválidos: el modo
         // se comprueba antes que los argumentos.
@@ -680,7 +680,7 @@ fn fila_14_imagen_desconocida() {
 #[test]
 fn fila_14_dentro_de_un_batch_no_se_admiten() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let desconocida = ImageId::from_raw(99);
     let original = imagen_de(&doc).clone();
 
@@ -723,7 +723,7 @@ fn fila_15_permute_cuesta_lo_mismo_en_cualquier_tamano() {
     let order: Vec<u8> = (1..16).chain(std::iter::once(0)).collect();
     let mut pequeno = doc_con_paleta(8, 8, 16, None);
     let mut grande = doc_con_paleta(512, 512, 16, None);
-    let id = pequeno.main_image();
+    let id = ImageId::from_raw(0);
 
     let coste_pequeno = coste_del_paso(&mut pequeno, permuta(id, &order));
     let coste_grande = coste_del_paso(&mut grande, permuta(id, &order));
@@ -738,7 +738,7 @@ fn fila_15_permute_cuesta_lo_mismo_en_cualquier_tamano() {
 fn fila_15_remove_sin_usar_y_remove_usado() {
     // Entrada sin usar en 512 x 512: no hay máscara.
     let mut doc = doc_con_paleta(512, 512, 16, None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let coste = coste_del_paso(&mut doc, quita(id, 5, 0));
     assert!(coste <= 512, "history_bytes() subió {coste}");
 
@@ -746,7 +746,7 @@ fn fila_15_remove_sin_usar_y_remove_usado() {
     let mut img = imagen_de(&doc_con_paleta(64, 64, 16, None)).clone();
     img.set_pixel(0, 0, Pixel::Indexed(1)).unwrap();
     let mut doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let coste = coste_del_paso(&mut doc, quita(id, 1, 0));
     assert!(
         (512..=1024).contains(&coste),
@@ -758,7 +758,7 @@ fn fila_15_remove_sin_usar_y_remove_usado() {
 fn fila_15_rotate_colors_cuesta_lo_mismo_en_cualquier_tamano() {
     let mut pequeno = doc_con_paleta(8, 8, 16, None);
     let mut grande = doc_con_paleta(512, 512, 16, None);
-    let id = pequeno.main_image();
+    let id = ImageId::from_raw(0);
 
     let coste_pequeno = coste_del_paso(&mut pequeno, rota(id, 0, 16, 1));
     let coste_grande = coste_del_paso(&mut grande, rota(id, 0, 16, 1));
@@ -772,7 +772,7 @@ fn fila_15_rotate_colors_cuesta_lo_mismo_en_cualquier_tamano() {
 #[test]
 fn fila_15_la_mascara_cuenta_en_el_limite_de_la_historia() {
     let mut doc = doc_con_paleta(64, 64, 16, None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     doc.set_history_limit(300);
 
     // El `Permute` cuesta menos de 300 y cabe. Con `order[nuevo] = antiguo`, el índice
@@ -816,7 +816,7 @@ fn fila_16_rotar_colores() {
     ];
     for ((start, len, steps), esperada) in casos {
         let mut doc = doc_f(None);
-        let id = doc.main_image();
+        let id = ImageId::from_raw(0);
         let original = imagen_de(&doc).clone();
 
         con_paso(&mut doc, rota(id, start, len, steps));
@@ -839,7 +839,7 @@ fn fila_16_rotar_colores() {
 #[test]
 fn fila_17_rotaciones_que_no_hacen_nada() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     // Múltiplos de `len` (también negativos), `len < 2` y rangos vacíos válidos (`start = 4`
     // es la longitud de la paleta).
     sin_paso(&mut doc, rota(id, 0, 4, 4));
@@ -854,7 +854,7 @@ fn fila_17_rotaciones_que_no_hacen_nada() {
 #[test]
 fn fila_17_steps_i32_min_sin_panico() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     // `i32::MIN = -2^31`, `2^31 mod 3 = 2`, luego `k = 1` y `[R,G,B]` pasa a `[B,R,G]`.
     con_paso(&mut doc, rota(id, 0, 3, i32::MIN));
     assert_eq!(paleta_de(imagen_de(&doc)), vec![B, R, G, K]);
@@ -865,13 +865,13 @@ fn fila_17_steps_i32_min_sin_panico() {
 fn fila_17_paleta_con_colores_iguales_y_paleta_de_256() {
     // La rotación deja la paleta igual: `Ok(false)`.
     let mut doc = Document::new(indexada(4, 1, &[R, R, R, R], None, &[0, 1, 2, 3]));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     sin_paso(&mut doc, rota(id, 0, 4, 1));
 
     // 256 entradas distintas: `len = 256` cabe en `u16`.
     let colores = colores_distintos(256);
     let mut doc = Document::new(indexada(2, 1, &colores, None, &[0, 255]));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     // `-2^31` es múltiplo de 256.
     sin_paso(&mut doc, rota(id, 0, 256, i32::MIN));
     con_paso(&mut doc, rota(id, 0, 256, 1));
@@ -886,7 +886,7 @@ fn fila_17_paleta_con_colores_iguales_y_paleta_de_256() {
 #[test]
 fn fila_18_rango_fuera_de_la_paleta() {
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     // 2 + 3 = 5 > 4.
     rechaza(&mut doc, rota(id, 2, 3, 1), rango_fuera(2, 3, 4));
     rechaza(&mut doc, rota(id, 5, 1, 1), rango_fuera(5, 1, 4));
@@ -899,7 +899,7 @@ fn fila_18_rango_fuera_de_la_paleta() {
 fn fila_18_el_error_de_rango_gana_a_ok_false() {
     // Un rango fuera de la paleta sigue siendo error aunque la rotación no hiciera nada.
     let mut doc = doc_f(None);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     rechaza(&mut doc, rota(id, 0, 5, 0), rango_fuera(0, 5, 4));
     rechaza(&mut doc, rota(id, 5, 0, 1), rango_fuera(5, 0, 4));
     rechaza(&mut doc, rota(id, 3, 2, 2), rango_fuera(3, 2, 4));
@@ -908,7 +908,7 @@ fn fila_18_el_error_de_rango_gana_a_ok_false() {
 #[test]
 fn fila_19_el_transparente_se_queda_en_su_ranura() {
     let mut doc = doc_f(Some(3));
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let original = imagen_de(&doc).clone();
     assert_eq!(resueltos(&original), vec![R, G, B, Rgba::new(0, 0, 0, 0)]);
 
@@ -1183,7 +1183,7 @@ fn pixel_para(img: &Image, v: u8, malo: bool) -> Pixel {
 /// un `undo` que deja un paso por rehacer.
 fn doc_con_historia(img: Image, v: u8, deshacer: bool) -> Document {
     let mut doc = Document::new(img);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let pixel = pixel_para(imagen_de(&doc), v, false);
     let _ = doc.apply(set(id, 0, 0, pixel));
     if deshacer {
@@ -1368,7 +1368,7 @@ fn comprueba_reordenar(
     prop_assert_eq!(transparente_de(imagen_de(&doc)), transparente_de(&esperada));
     // (b) Ningún color visible cambia.
     prop_assert_eq!(resueltos(imagen_de(&doc)), antes);
-    comprueba_invariante(&doc, doc.main_image())?;
+    comprueba_invariante(&doc, ImageId::from_raw(0))?;
 
     // Ida y vuelta.
     prop_assert_eq!(doc.apply(ida_y_vuelta), Ok(!identidad));
@@ -1423,7 +1423,7 @@ fn prop_quitar(img: Image, a: u16, b: u16) -> Result<(), TestCaseError> {
     let into_nuevo = if into < index { into } else { into - 1 };
 
     let mut doc = Document::new(img.clone());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     prop_assert_eq!(doc.apply(quita(id, index as u8, into as u8)), Ok(true));
     let despues = imagen_de(&doc);
     let pix_despues = pixeles_de(despues);
@@ -1536,7 +1536,7 @@ fn ejecuta_secuencia(inicial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
     let mut doc = Document::new(inicial.clone());
     // Un límite de historia tan grande que nunca se descarta un paso.
     doc.set_history_limit(usize::MAX);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut instantes = vec![inicial];
     let mut cursor = 0usize;
 
@@ -1694,7 +1694,7 @@ fn prop_validacion(
     forma: u8,
 ) -> Result<(), TestCaseError> {
     let mut doc = doc_con_historia(img, v, deshacer);
-    let principal = doc.main_image();
+    let principal = ImageId::from_raw(0);
     let id = if desconocida {
         ImageId::from_raw(1 + u32::from(c.a % 4))
     } else {
@@ -1841,7 +1841,7 @@ fn imagen_grande() -> impl Strategy<Value = Image> {
 fn prop_limite(img: Image, limite: usize, ops: &[(u8, Crudo)]) -> Result<(), TestCaseError> {
     let mut doc = Document::new(img);
     doc.set_history_limit(limite);
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let mut hubo_paso = false;
 
     for (tipo, c) in ops {
@@ -1888,7 +1888,7 @@ fn prop_toca_solo_lo_suyo(img: Image, a: u16, b: u16, color: Rgba) -> Result<(),
     // `SetPaletteColor(i, c)`: los mismos bytes y el resuelto cambia solo en los píxeles de
     // valor `i`.
     let mut doc = Document::new(img.clone());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let real = doc.apply(pon_color(id, i as u8, color));
     prop_assert_eq!(real, Ok(vieja[i] != color));
     let despues = imagen_de(&doc);
@@ -1997,7 +1997,7 @@ fn prop_rotar(
     let cambia = len >= 2 && k != 0 && nueva != vieja;
 
     let mut doc = Document::new(img.clone());
-    let id = doc.main_image();
+    let id = ImageId::from_raw(0);
     let antes = estado(&doc);
     let real = doc.apply(rota(id, start_u8, len_u16, steps));
     prop_assert_eq!(
