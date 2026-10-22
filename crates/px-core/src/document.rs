@@ -131,6 +131,18 @@ impl Layer {
     }
 }
 
+/// Una capa para `Document::from_layers`: sus propiedades y la imagen de su celda (`None` =
+/// celda vacía). No lleva ids: los reparte el documento.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayerSpec {
+    pub name: String,
+    pub visible: bool,
+    pub opacity: u8,
+    pub blend: BlendMode,
+    pub locked: bool,
+    pub image: Option<Image>,
+}
+
 /// Id reservado de la plantilla del lienzo; ninguna celda lo recibe nunca.
 const TEMPLATE: ImageId = ImageId(u32::MAX);
 
@@ -578,6 +590,123 @@ impl Document {
             next_image: 1,
             cells_limit: Document::DEFAULT_CELLS_LIMIT,
         }
+    }
+
+    /// Documento con las capas dadas (de abajo arriba), sin historia: ids `LayerId(i)` e
+    /// `ImageId(i)` por posición, `state_id` 0 (specs/hito-3-aseprite.md, `C-02`). Es el camino de
+    /// entrada de los lectores de formatos con capas y **valida todas las invariantes** antes de
+    /// construir nada: de 1 a `MAX_LAYERS` capas, nombres de hasta `MAX_LAYER_NAME_BYTES` bytes,
+    /// toda celda con imagen del ancho, alto, modo y paleta del lienzo, indexado con opacidad 255 y
+    /// mezcla `Normal`, celdas vacías solo si el modo tiene valor transparente, y celdas con
+    /// píxeles dentro de `DEFAULT_CELLS_LIMIT`.
+    ///
+    /// `palette` es `Some` (y no vacía) solo en indexado. Un lienzo que no puede existir (ancho o
+    /// alto cero, o demasiado grande) y una paleta que no corresponde al modo dan
+    /// `CelMismatch { layer: 0 }`: el lienzo se valida contra la primera capa.
+    pub fn from_layers(
+        width: u32,
+        height: u32,
+        mode: Mode,
+        palette: Option<Palette>,
+        layers: Vec<LayerSpec>,
+    ) -> Result<Document, DocumentError> {
+        if layers.is_empty() {
+            return Err(DocumentError::NoLayers);
+        }
+        if layers.len() > Document::MAX_LAYERS {
+            return Err(DocumentError::TooManyLayers {
+                limit: Document::MAX_LAYERS,
+            });
+        }
+        let canvas_error = DocumentError::CelMismatch { layer: 0 };
+        let cel_bytes = Image::byte_len(width, height, mode).map_err(|_| canvas_error.clone())?;
+        let template = match (mode, &palette) {
+            (Mode::Indexed, Some(palette)) if !palette.is_empty() => {
+                Image::filled_indexed(1, 1, palette.clone(), 0)
+            }
+            (Mode::Indexed, _) | (_, Some(_)) => return Err(canvas_error),
+            (mode, None) => Image::new(1, 1, mode),
+        }
+        .map_err(|_| DocumentError::CelMismatch { layer: 0 })?;
+        let transparent = match mode {
+            Mode::Rgba | Mode::GrayAlpha => true,
+            Mode::Indexed => palette
+                .as_ref()
+                .is_some_and(|palette| palette.transparent_index().is_some()),
+            Mode::Gray => false,
+        };
+        let mut built = Vec::new();
+        built
+            .try_reserve_exact(layers.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let mut materialized = 0usize;
+        for (i, spec) in layers.into_iter().enumerate() {
+            if spec.name.len() > Document::MAX_LAYER_NAME_BYTES {
+                return Err(DocumentError::LayerName {
+                    len: spec.name.len(),
+                    limit: Document::MAX_LAYER_NAME_BYTES,
+                });
+            }
+            if mode == Mode::Indexed {
+                if spec.opacity != 255 {
+                    return Err(DocumentError::IndexedOpacity);
+                }
+                if spec.blend != BlendMode::Normal {
+                    return Err(DocumentError::IndexedBlend);
+                }
+            }
+            match &spec.image {
+                Some(image) => {
+                    if image.width() != width
+                        || image.height() != height
+                        || image.mode() != mode
+                        || image.palette() != palette.as_ref()
+                    {
+                        return Err(DocumentError::CelMismatch { layer: i });
+                    }
+                    materialized = materialized.saturating_add(cel_bytes);
+                    if materialized > Document::DEFAULT_CELLS_LIMIT {
+                        return Err(DocumentError::CelsTooLarge {
+                            needed: materialized,
+                            limit: Document::DEFAULT_CELLS_LIMIT,
+                        });
+                    }
+                }
+                None if !transparent => return Err(DocumentError::NoTransparency { mode }),
+                None => {}
+            }
+            let id = u32::try_from(i).map_err(|_| DocumentError::TooManyLayers {
+                limit: Document::MAX_LAYERS,
+            })?;
+            built.push(Layer {
+                id: LayerId(id),
+                name: spec.name,
+                visible: spec.visible,
+                opacity: spec.opacity,
+                blend: spec.blend,
+                locked: spec.locked,
+                cel: ImageId(id),
+                image: spec.image,
+            });
+        }
+        let count = built.len() as u32;
+        Ok(Document {
+            canvas: Canvas {
+                width,
+                height,
+                template,
+            },
+            layers: built,
+            undo: VecDeque::new(),
+            redo: Vec::new(),
+            undo_bytes: 0,
+            limit: Document::DEFAULT_HISTORY_LIMIT,
+            current_id: 0,
+            next_id: 1,
+            next_layer: count,
+            next_image: count,
+            cells_limit: Document::DEFAULT_CELLS_LIMIT,
+        })
     }
 
     /// Identificador opaco del estado actual del documento (specs/hito-2-abrir-guardar.md).
@@ -2171,6 +2300,14 @@ pub enum DocumentError {
         needed: usize,
         limit: usize,
     },
+    /// `Document::from_layers` sin ninguna capa.
+    NoLayers,
+    /// `Document::from_layers`: la imagen de la capa `layer` no tiene el ancho, alto, modo o paleta
+    /// del lienzo; con `layer: 0` también el lienzo mismo (tamaño imposible o paleta que no
+    /// corresponde al modo).
+    CelMismatch {
+        layer: usize,
+    },
     /// Falló un comando de edición de la paleta.
     PaletteEdit(PaletteEditError),
     /// La conversión de modo de `ConvertMode` falló.
@@ -2263,6 +2400,11 @@ impl fmt::Display for DocumentError {
             DocumentError::CelsTooLarge { needed, limit } => write!(
                 f,
                 "las celdas ocuparían {needed} bytes y el límite es {limit}"
+            ),
+            DocumentError::NoLayers => write!(f, "un documento necesita al menos una capa"),
+            DocumentError::CelMismatch { layer } => write!(
+                f,
+                "la celda de la capa {layer} (o el lienzo) no encaja: ancho, alto, modo o paleta distintos"
             ),
             DocumentError::PaletteEdit(source) => {
                 write!(f, "no se pudo editar la paleta: {source}")

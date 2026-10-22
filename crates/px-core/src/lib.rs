@@ -13,8 +13,8 @@ pub use convert::{
     LUMA_WEIGHTS, analyze_cels, convert_cels, convert_image, luma, target_byte_len,
 };
 pub use document::{
-    BlendMode, Command, Document, DocumentError, ImageId, Layer, LayerId, MergePlan, PixelEdit,
-    Span,
+    BlendMode, Command, Document, DocumentError, ImageId, Layer, LayerId, LayerSpec, MergePlan,
+    PixelEdit, Span,
 };
 pub use hsl::Hsl;
 pub use image::{Image, ImageError, Mode, Pixel};
