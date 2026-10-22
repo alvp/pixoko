@@ -802,6 +802,8 @@ pub fn describe_converted(target: Mode, analysis: Option<&Analysis>) -> String {
 }
 
 #[cfg(test)]
+mod all_tests;
+#[cfg(test)]
 mod dialog_tests;
 #[cfg(test)]
 mod tests;

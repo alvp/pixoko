@@ -26,7 +26,7 @@ use std::path::Path;
 
 use px_core::{BlendMode, Command, Document, Image, Mode, Pixel, PixelEdit, Rgba};
 use px_formats::read_png;
-use px_raster::{compose, composite_pixel};
+use px_raster::{compose, composite_pixel, flatten_command, merge_down_command};
 
 /// Techo del error, en niveles de canal, de la fórmula EMPÍRICA del paso 4b contra los PNG del
 /// corpus, dentro de su dominio (fondo ya compuesto translúcido, `αs > 0` y modo distinto de
@@ -442,10 +442,16 @@ fn compuesto_y_png(caso: &Caso) -> (Image, Image) {
 /// Falla con el nombre del caso y el primer píxel distinto.
 fn exige_igual_al_png(caso: &Caso) {
     let (compuesto, png) = compuesto_y_png(caso);
+    exige_igual_imagen(caso, &compuesto, &png);
+}
+
+/// Como [`exige_igual_al_png`] con la imagen ya calculada (la composición, o lo que dejan las
+/// operaciones de la unidad 3.5).
+fn exige_igual_imagen(caso: &Caso, compuesto: &Image, png: &Image) {
     let (mut distintos, mut primero) = (0usize, None);
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let (nuestro, esperado) = (pixel_de(&compuesto, x, y), pixel_de(&png, x, y));
+            let (nuestro, esperado) = (pixel_de(compuesto, x, y), pixel_de(png, x, y));
             if nuestro != esperado {
                 distintos += 1;
                 primero.get_or_insert((x, y, nuestro, esperado));
@@ -535,6 +541,17 @@ struct Informe {
 /// mucho `TOLERANCIA_EMPIRICA`.
 fn evalua(caso: &Caso, grupo: impl Fn(u32, u32) -> usize, grupos: usize) -> Informe {
     let (compuesto, png) = compuesto_y_png(caso);
+    evalua_imagen(caso, &compuesto, &png, grupo, grupos)
+}
+
+/// Como [`evalua`] con la imagen ya calculada.
+fn evalua_imagen(
+    caso: &Caso,
+    compuesto: &Image,
+    png: &Image,
+    grupo: impl Fn(u32, u32) -> usize,
+    grupos: usize,
+) -> Informe {
     let mut informe = Informe {
         max_error: vec![0; grupos],
         en_dominio: vec![0; grupos],
@@ -542,7 +559,7 @@ fn evalua(caso: &Caso, grupo: impl Fn(u32, u32) -> usize, grupos: usize) -> Info
     };
     for y in 0..png.height() {
         for x in 0..png.width() {
-            let (nuestro, esperado) = (pixel_de(&compuesto, x, y), pixel_de(&png, x, y));
+            let (nuestro, esperado) = (pixel_de(compuesto, x, y), pixel_de(png, x, y));
             let dentro = en_dominio(caso, x, y);
             let mut error_pixel = 0;
             let mut motivo = None;
@@ -609,9 +626,19 @@ fn exige_techo_y_suelo(caso: &str, que: &str, maximo: i32) {
 
 #[test]
 fn fila_11_fondo_translucido_dominio_de_la_formula_empirica() {
+    fila_11_con(|caso| compuesto_y_png(caso).0);
+}
+
+/// El cuerpo de la fila 11 con la imagen que `produce` da para cada caso (la composición, en 3.2;
+/// la celda que deja `Aplanar`, en 3.5).
+fn fila_11_con(produce: impl Fn(&Caso) -> Image) {
+    let evalua = |caso: &Caso, grupo: &dyn Fn(u32, u32) -> usize, grupos: usize| {
+        let imagen = produce(caso);
+        evalua_imagen(caso, &imagen, &lee_png(&caso.nombre), grupo, grupos)
+    };
     // `capas-alfa-fondo`: dos translúcidos a la vez con Normal, que no es del dominio: todo con
     // tolerancia 0.
-    let informe = evalua(&capas_alfa_fondo(), |_, _| 0, 1);
+    let informe = evalua(&capas_alfa_fondo(), &|_, _| 0, 1);
     exige_sin_fallo(&informe);
     assert_eq!(
         informe.en_dominio,
@@ -623,7 +650,7 @@ fn fila_11_fondo_translucido_dominio_de_la_formula_empirica() {
     // (abajo). La tira Normal (la primera) está fuera del dominio: tolerancia 0. Cada una de las
     // otras siete es del dominio entera (8 columnas × 16 filas) y su error máximo está en [1, 2].
     let tiras = ocho_modos("mezcla-ocho-fondo-translucido", 255, 255, 100, 150);
-    let informe = evalua(&tiras, |x, _| (x / 8) as usize, 8);
+    let informe = evalua(&tiras, &|x, _| (x / 8) as usize, 8);
     exige_sin_fallo(&informe);
     assert_eq!(informe.en_dominio[0], 0, "la tira Normal no es del dominio");
     assert_eq!(informe.max_error[0], 0);
@@ -646,9 +673,88 @@ fn fila_11_fondo_translucido_dominio_de_la_formula_empirica() {
         ("mezcla-alfa-rejilla-multiplicar", BlendMode::Multiply, 255),
         ("mezcla-alfa-rejilla-superponer", BlendMode::Overlay, 128),
     ] {
-        let informe = evalua(&rejilla(nombre, modo, opacidad), |_, _| 0, 1);
+        let informe = evalua(&rejilla(nombre, modo, opacidad), &|_, _| 0, 1);
         exige_sin_fallo(&informe);
         assert_eq!(informe.en_dominio, [84 * 9], "{nombre}: 84 celdas de 3 × 3");
         exige_techo_y_suelo(nombre, "rejilla", informe.max_error[0]);
+    }
+}
+
+// ---------------------------------------------------------------------------------------
+// Fila 8 de la unidad 3.5 (specs/hito-3-combinar.md): aplanar y combinar abajo contra los PNG.
+// ---------------------------------------------------------------------------------------
+
+/// Aplana el documento del caso con `flatten_command`: comprueba que queda una sola capa y que
+/// su celda es la composición de antes, byte a byte, y devuelve esa celda.
+fn aplana(caso: &Caso) -> Image {
+    let nombre = &caso.nombre;
+    let mut doc = documento(caso);
+    let antes = compose(&doc).unwrap_or_else(|e| panic!("{nombre}: compose: {e:?}"));
+    let orden = flatten_command(&doc).unwrap_or_else(|e| panic!("{nombre}: aplanar: {e:?}"));
+    assert_eq!(doc.apply(orden), Ok(true), "{nombre}: aplicar el aplanado");
+    assert_eq!(doc.layers().len(), 1, "{nombre}: queda una sola capa");
+    let celda = doc
+        .image(doc.layers()[0].cel())
+        .unwrap_or_else(|| panic!("{nombre}: la celda aplanada tiene imagen"))
+        .clone();
+    assert_eq!(
+        celda, antes,
+        "{nombre}: la celda es la composición de antes"
+    );
+    assert_eq!(
+        compose(&doc).expect("compose tras aplanar"),
+        antes,
+        "{nombre}: componer tras aplanar da lo mismo que antes"
+    );
+    celda
+}
+
+/// Los casos de las filas 9 y 10 de 3.2 (tolerancia 0).
+fn casos_exactos() -> Vec<Caso> {
+    let mut casos: Vec<Caso> = MODOS
+        .iter()
+        .map(|(nombre, modo)| matriz(nombre, *modo))
+        .collect();
+    casos.extend([
+        ocho_modos("mezcla-ocho-opacidad", 128, 255, 255, 255),
+        ocho_modos("mezcla-ocho-alfa", 255, 200, 77, 255),
+        capas_opacidad(),
+        capas_alfa_origen(),
+        fondo_con_opacidad(),
+    ]);
+    casos
+}
+
+#[test]
+fn fila_08_aplanar_los_17_casos_de_3_2_da_la_composicion_y_cumple_sus_tolerancias() {
+    // Filas 9 y 10 de 3.2: tolerancia 0 contra el PNG.
+    for caso in &casos_exactos() {
+        let celda = aplana(caso);
+        exige_igual_imagen(caso, &celda, &lee_png(&caso.nombre));
+    }
+    // Fila 11 de 3.2: tolerancia 0 fuera del dominio empírico y techo 2 dentro (suelo 1).
+    fila_11_con(aplana);
+}
+
+#[test]
+fn fila_08_combinar_abajo_en_las_ocho_matrices_a_tolerancia_0() {
+    for (nombre, modo) in MODOS {
+        let caso = matriz(nombre, modo);
+        let mut doc = documento(&caso);
+        let antes = compose(&doc).expect("compose");
+        let arriba = doc.layers()[1].id();
+        let orden = merge_down_command(&doc, arriba)
+            .unwrap_or_else(|e| panic!("{nombre}: combinar abajo: {e:?}"));
+        assert_eq!(doc.apply(orden), Ok(true), "{nombre}");
+        assert_eq!(doc.layers().len(), 1, "{nombre}");
+        let celda = doc
+            .image(doc.layers()[0].cel())
+            .expect("celda combinada")
+            .clone();
+        assert_eq!(
+            celda, antes,
+            "{nombre}: la matriz de dos capas se combina sin pérdida"
+        );
+        exige_igual_imagen(&caso, &celda, &lee_png(nombre));
     }
 }

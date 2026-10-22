@@ -1014,6 +1014,8 @@ mod layer_ops_tests;
 #[cfg(test)]
 mod layers_tests;
 #[cfg(test)]
+mod merge_tests;
+#[cfg(test)]
 mod new_image_tests;
 #[cfg(test)]
 mod ops_tests;
