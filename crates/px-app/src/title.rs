@@ -963,10 +963,10 @@ mod tool_field_tests {
                 );
             }
         }
-        // Guarda de texto: `main.rs` no construye el literal `TitleInfo { layers: None, .. }` por otro camino
+        // Guarda de texto: `lib.rs` (el cableado de la app) no construye el literal `TitleInfo { layers: None, .. }` por otro camino
         // que `app_title_info`. Es frágil a propósito (mira el texto fuente, no el
         // comportamiento): si falla, hay que mirar por qué antes de tocar la prueba.
-        assert!(!include_str!("main.rs").contains("TitleInfo { layers: None,"));
+        assert!(!include_str!("lib.rs").contains("TitleInfo { layers: None,"));
     }
 
     // -----------------------------------------------------------------------------------------

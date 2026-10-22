@@ -11,6 +11,7 @@
   Para ver su comportamiento, ejecuta el programa y guarda la salida en golden/.
   `.claude/hooks/guard.sh` bloquea las búsquedas por nombre de esos programas: no se esquiva.
 - Toda dependencia nueva pasa `cargo deny check` y se anota en docs/DEPENDENCIES.md.
+- Idioma: el código, los identificadores, los comentarios y los nombres de pruebas nuevos van en inglés (p. ej. `row_03_…`); los textos que ve el usuario, en español (ficheros `*_es.rs`). Las specs y `docs/` siguen en español (`specs/limpieza-1.md`).
 - No toques px-core ni px-raster sin mi aprobación expresa.
 - No hagas capturas de pantalla del escritorio (ni de la ventana ni de nada que se vea en pantalla).
   La prueba manual la hago yo.
