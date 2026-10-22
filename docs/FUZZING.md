@@ -51,3 +51,17 @@ cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml chec
 ```
 
 Las dos primeras compilan con la toolchain estable. Las dependencias del fuzzer y su excepción de licencia (NCSA, solo para `libfuzzer-sys`, en `fuzz/deny.toml` desde 2026-10-20, con la misma lista de licencias que el `deny.toml` de la raíz y ninguna otra) están en `docs/DEPENDENCIES.md`. Sin `--config fuzz/deny.toml`, el `cargo deny` del fuzzer falla por NCSA.
+
+## `read_aseprite` (unidad 3.8)
+
+El objetivo `read_aseprite` (`fuzz/fuzz_targets/read_aseprite.rs`, spec en `specs/hito-3-aseprite.md`) llama a `read_aseprite` con límites pequeños (2²⁴ píxeles, 256 MiB de celdas) y, si lee, escribe el documento con `write_aseprite`, lo vuelve a leer y exige el mismo contenido de píxeles (`same_content`: una celda vacía y una toda transparente son iguales).
+
+```
+cargo +nightly fuzz run read_aseprite fuzz/corpus/read_aseprite golden/aseprite -- \
+  -rss_limit_mb=4096 -timeout=10 -create_missing_dirs=1
+```
+
+- Semillas: los 29 `.aseprite` de `golden/aseprite` (el directorio también trae PNG y README, que solo cuentan como entradas inválidas). Añade `-max_total_time=60` para una pasada corta.
+- Misma regla de limpieza: `git status golden/` debe quedar sin cambios al terminar.
+- Una pasada de 60 s al cerrar la unidad: 520 652 ejecuciones, sin fallos. No es puerta del CI.
+- `cargo deny --manifest-path fuzz/Cargo.toml --locked --config fuzz/deny.toml check` repite `advisories ok, bans ok, licenses ok, sources ok` (la lista de licencias de `fuzz/deny.toml` no cambia).

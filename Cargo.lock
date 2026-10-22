@@ -1881,6 +1881,7 @@ dependencies = [
 name = "px-formats"
 version = "0.0.0"
 dependencies = [
+ "miniz_oxide 0.8.9",
  "png",
  "proptest",
  "px-core",

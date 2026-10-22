@@ -20,5 +20,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "read_aseprite"
+path = "fuzz_targets/read_aseprite.rs"
+test = false
+doc = false
+bench = false
+
 # Fuera del workspace raíz (specs/hito-1-fuzz.md): el CI en estable no lo compila.
 [workspace]

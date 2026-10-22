@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9f14f5e9bd52e6f55b22db60693711cc0645846b00676bf7675b5bc78bb69097 # shrinks to doc = Document { layers: [Layer { id: LayerId(0), name: "ñ", visible: false, opacity: 0, blend: Normal, locked: false, cel: ImageId(0), image: Some(Image { width: 1, height: 1, mode: Rgba, data: [0, 0, 0, 0], palette: None }) }], canvas: Canvas { width: 1, height: 1, template: Image { width: 1, height: 1, mode: Rgba, data: [0, 0, 0, 0], palette: None } }, undo: [], redo: [], undo_bytes: 0, limit: 67108864, current_id: 0, next_id: 1, next_layer: 1, next_image: 1, cells_limit: 2147483648 }

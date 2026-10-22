@@ -8,6 +8,7 @@ Registro de lo que se incorpora al proyecto. Las dependencias de Cargo deben pas
 | --- | --- | --- | --- | --- |
 | [`proptest`](https://crates.io/crates/proptest) | 1.12.0 | MIT OR Apache-2.0 | dev-dependency de `px-app`, `px-core`, `px-formats`, `px-golden` y `px-raster` | Pruebas de propiedades (ida y vuelta, ausencia de pánicos) |
 | [`png`](https://crates.io/crates/png) | 0.18.1 | MIT OR Apache-2.0 | dependencia de `px-formats` (y, a través de ella, de `px-app` desde la unidad 15) | Leer y escribir PNG (`specs/hito-1-png.md`; abrir y guardar en la app, `specs/hito-2-abrir-guardar.md`). Sin features: no tiene features por defecto y no se activan `zlib-rs`, `unstable` ni `benchmarks` |
+| [`miniz_oxide`](https://crates.io/crates/miniz_oxide) | 0.8.9 | MIT OR Zlib OR Apache-2.0 | dependencia directa de `px-formats` (unidad 3.8, 2026-10-22) | Zlib de las celdas de `.aseprite`: `decompress_to_vec_zlib_with_limit` (descompresión con tope igual al tamaño esperado) y `compress_to_vec_zlib` (nivel 6) (`specs/hito-3-aseprite.md`, D10). Es la versión que ya usa `png`: no añade ninguna crate a `Cargo.lock`. Sin features. `cargo deny check`: `advisories ok, bans ok, licenses ok, sources ok` |
 | [`eframe`](https://crates.io/crates/eframe) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-app` | Ventana, bucle de eventos y renderizador OpenGL (`specs/hito-2-ventana.md`). `default-features = false`; features `glow` y, solo en Linux, `x11` y `wayland`. No se activan `wgpu`, `accesskit`, `persistence`, `clipboard`, `links`, `system_fonts` ni `default_fonts` |
 | [`egui`](https://crates.io/crates/egui) | 0.37.0 | MIT OR Apache-2.0 | dependencia de `px-ui` | Lienzo de `px-ui` y pruebas del lienzo sin ventana. `default-features = false`; la misma versión que usa `eframe`, fijada con `=` en las dos |
 | [`rfd`](https://crates.io/crates/rfd) | 0.17.2 | MIT | dependencia de `px-app` | Diálogos nativos de abrir y guardar, no bloqueantes (`specs/hito-2-dialogos-archivo.md`). `default-features = false`; en Linux, features `xdg-portal` y `wayland`; en Windows y macOS, ninguna. **Usa `unsafe`** (ver «Diálogos de archivo: `rfd`») |
@@ -34,7 +35,7 @@ Nota sobre `r-efi 6.0.0` (transitivo, solo UEFI; no se compila en Linux, Windows
 Notas:
 
 - `adler2` se ofrece como `0BSD OR MIT OR Apache-2.0`. `0BSD` no está en la lista de `deny.toml`, pero es una disyunción: `cargo deny` la acepta por la rama MIT, y es bajo MIT (o Apache-2.0) como se usa.
-- `miniz_oxide` aparece **duplicada** (0.8.9 la pide `png` y 0.9.1 `flate2`). `cargo deny` da solo un aviso (`duplicate`), que no hace fallar el check; no hay nada que hacer salvo volver a mirarlo al actualizar `png`.
+- `miniz_oxide` aparece **duplicada** (0.8.9 la pide `png` y, desde la unidad 3.8, también `px-formats` directamente; 0.9.1 la pide `flate2`). `cargo deny` da solo un aviso (`duplicate`), que no hace fallar el check; no hay nada que hacer salvo volver a mirarlo al actualizar `png`.
 - `zlib-rs` 0.6.8 (Zlib, que está en la lista) figura solo en `Cargo.lock`, por la feature opcional `zlib-rs` de `flate2`; no se compila.
 
 ### Fuzzing (`fuzz/`, fuera del workspace)
