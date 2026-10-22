@@ -4,9 +4,9 @@
 
 use px_ui::edit_layout::{min_window_height_pt, min_window_width_pt};
 
-/// Variable de entorno solo para pruebas: `PIXOKO_SIN_MINIMO=1` desactiva el mínimo, de alto y de
+/// Variable de entorno solo para pruebas: `PIXOKO_NO_MIN_SIZE=1` desactiva el mínimo, de alto y de
 /// ancho (para probar el desplazamiento del panel sin un gestor de ventanas en mosaico).
-pub const ENV_NO_MIN: &str = "PIXOKO_SIN_MINIMO";
+pub const ENV_NO_MIN: &str = "PIXOKO_NO_MIN_SIZE";
 
 /// El mínimo está activo salvo con el valor `1` de [`ENV_NO_MIN`].
 pub fn min_enabled(value: Option<&str>) -> bool {

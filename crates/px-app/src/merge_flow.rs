@@ -104,13 +104,13 @@ pub fn flatten_gate(hidden: usize, confirm: &mut Confirm, now: f64) -> bool {
 
 /// El aviso al armar Aplanar con ocultas con píxeles.
 pub fn flatten_warning(hidden: usize) -> String {
-    let capas = if hidden == 1 {
+    let layers = if hidden == 1 {
         "1 capa oculta con píxeles".to_string()
     } else {
         format!("{hidden} capas ocultas con píxeles")
     };
     format!(
-        "Aplanar descarta {capas}: repite la orden en {:.0} s",
+        "Aplanar descarta {layers}: repite la orden en {:.0} s",
         crate::confirm::CONFIRM_SECS
     )
 }

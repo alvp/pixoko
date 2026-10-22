@@ -143,7 +143,7 @@ struct App {
     dialogs: Dialogs,
     /// Fichero del argumento de la línea de comandos, pendiente de abrir en el primer fotograma.
     cli_path: Option<PathBuf>,
-    /// El tamaño mínimo (alto y ancho) de la ventana está activo (`PIXOKO_SIN_MINIMO=1` lo desactiva).
+    /// El tamaño mínimo (alto y ancho) de la ventana está activo (`PIXOKO_NO_MIN_SIZE=1` lo desactiva).
     min_enabled: bool,
     /// Último mínimo enviado a la ventana, para enviar solo cuando cambia.
     min_sent: Option<[f32; 2]>,
@@ -173,7 +173,7 @@ struct App {
     startup_notice: Option<String>,
     /// El elemento enfocado del diálogo modal.
     modal_focus: Option<FocusTarget>,
-    /// Abrir el diálogo de prueba en el primer fotograma (`PIXOKO_DIALOGO_PRUEBA=1`).
+    /// Abrir el diálogo de prueba en el primer fotograma (`PIXOKO_TEST_DIALOG=1`).
     demo_pending: bool,
     /// Con el diálogo de nueva imagen abierto: su traslado de fondo y si el descarte de los
     /// cambios sin guardar ya se confirmó (specs/hito-2-nueva-imagen.md, D6 y D8).
@@ -200,7 +200,7 @@ impl App {
         canvas.set_gestures(gestures.clone());
         // Las teclas de zoom las trata la capa de acciones, con sus propios bloqueos.
         canvas.set_view_keys(false);
-        // `PIXOKO_DAMERO_MALLA=1`: el damero con una malla de casillas en vez de la textura repetida.
+        // `PIXOKO_CHECKER_MESH=1`: el damero con una malla de casillas en vez de la textura repetida.
         canvas.set_checker_mesh(mesh_fallback_enabled(
             std::env::var(ENV_MESH).ok().as_deref(),
         ));

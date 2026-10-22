@@ -35,8 +35,8 @@ fn demo_color(x: u32, y: u32) -> Rgba {
     Rgba::new(r as u8, g as u8, b, alpha)
 }
 
-/// Variable de entorno que abre el diálogo de prueba al arrancar (`PIXOKO_DIALOGO_PRUEBA=1`).
-pub const ENV_DEMO_DIALOG: &str = "PIXOKO_DIALOGO_PRUEBA";
+/// Variable de entorno que abre el diálogo de prueba al arrancar (`PIXOKO_TEST_DIALOG=1`).
+pub const ENV_DEMO_DIALOG: &str = "PIXOKO_TEST_DIALOG";
 
 /// Si la variable pide el diálogo de prueba: solo el valor `1`.
 pub fn demo_dialog_enabled(value: Option<&str>) -> bool {

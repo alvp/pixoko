@@ -1,5 +1,5 @@
 //! Tests de `window_min` (specs/hito-2-panel-ventana-baja.md, fila 1 en su parte de `px-app`):
-//! `min_enabled` (la variable de entorno `PIXOKO_SIN_MINIMO`, solo para pruebas) y
+//! `min_enabled` (la variable de entorno `PIXOKO_NO_MIN_SIZE`, solo para pruebas) y
 //! `min_inner_size` (alto y ancho). Sin ventana: son funciones puras. La parte de `px-ui`
 //! (`min_panel_height_px`, `min_window_height_pt`, `min_window_width_pt`) está en `crates/px-ui/tests/edit_layout.rs`.
 //!
@@ -39,7 +39,7 @@ fn fila_1_min_enabled_sin_variable_o_con_cualquier_otro_valor_es_verdadero() {
         "on",
         "un",
         "\n",
-        "PIXOKO_SIN_MINIMO",
+        "PIXOKO_NO_MIN_SIZE",
     ] {
         assert!(min_enabled(Some(valor)), "{valor:?} deja el mínimo activo");
     }
@@ -97,7 +97,7 @@ fn fila_1_ningun_minimo_pasa_del_65_por_ciento_de_720_de_alto_ni_de_la_mitad_de_
 
 #[test]
 fn fila_1_min_inner_size_con_la_variable_de_entorno_combina_las_dos_funciones() {
-    // `PIXOKO_SIN_MINIMO=1` desactiva el mínimo; cualquier otro valor, o sin variable, no.
+    // `PIXOKO_NO_MIN_SIZE=1` desactiva el mínimo; cualquier otro valor, o sin variable, no.
     for ppp in PPPS {
         assert_eq!(
             min_inner_size(ppp, min_enabled(Some("1"))),

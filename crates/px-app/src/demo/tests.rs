@@ -1,5 +1,5 @@
 //! Pruebas de la fila 12 de specs/hito-2-dialogos-modales.md que tocan a `px-app`: el diálogo de
-//! prueba (`PIXOKO_DIALOGO_PRUEBA=1`), es decir `demo_form() -> FormSpec` y
+//! prueba (`PIXOKO_TEST_DIALOG=1`), es decir `demo_form() -> FormSpec` y
 //! `demo_notice(&Reaction) -> String`. En ROJO hasta la implementación: ninguna de las dos existe.
 //!
 //! - `demo_form`: `validate()` correcto y los cinco tipos de campo (dos numéricos, opciones —cuatro
