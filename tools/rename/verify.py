@@ -299,9 +299,10 @@ def check(base, now):
         for k, x in v:
             if k != "id":
                 continue
-            y = R.id_target(x, f) or R.id_target(x, nf)
-            if y:
-                union(x, y)
+            for path_ in (f, nf):
+                y = R.id_target(x, path_)
+                if y:
+                    union(x, y)
             if x in R.MODS:
                 union(x, R.MODS[x])
         canon = lambda k, x: (k, find(x) if k == "id" else norm_literal(x) if k == "s" else x)
