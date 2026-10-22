@@ -12,6 +12,7 @@
   `.claude/hooks/guard.sh` bloquea las búsquedas por nombre de esos programas: no se esquiva.
 - Toda dependencia nueva pasa `cargo deny check` y se anota en docs/DEPENDENCIES.md.
 - Idioma: el código, los identificadores, los comentarios y los nombres de pruebas nuevos van en inglés (p. ej. `row_03_…`); los textos que ve el usuario, en español (ficheros `*_es.rs`). Las specs y `docs/` siguen en español (`specs/limpieza-1.md`).
+  Si se toca un fichero por otra razón, se traducen sus comentarios y mensajes de aserción en ese mismo commit; la traducción en bloque (L3b) es una unidad opcional (`specs/limpieza-1.md`).
 - No toques px-core ni px-raster sin mi aprobación expresa.
 - No hagas capturas de pantalla del escritorio (ni de la ventana ni de nada que se vea en pantalla).
   La prueba manual la hago yo.

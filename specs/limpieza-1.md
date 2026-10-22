@@ -259,3 +259,24 @@ Método de L1: mapa y script con léxico de Rust, con la lista previa de nombres
 **Hallazgo.** Los 91 identificadores que quedan son todos de código de pruebas y son restos de L2: en L2 dejé sin traducir las palabras de una o dos letras (`de`, `en`, `y`, `si`, `va`…) dentro de nombres cortos (`rgba_de`, `pixel_en`, `lee`, `UnColor`…) por ser ambiguas con el inglés. Producción no tiene ninguno. Se traducen en L3b, crate a crate, con el mismo mapa y las mismas verificaciones.
 
 **Siguiente (L3b, una sesión por crate cuando lo decidas):** comentarios, mensajes de aserción y esos identificadores. Los textos que ve el usuario y los literales de las pruebas que los comprueban no se tocan.
+
+## Cierre de L3a y L3b opcional (2026-10-22)
+
+**Hecho tras el visto bueno a L3a:**
+- Los 91 identificadores de pruebas que dejó L2 (palabras de una o dos letras dentro de nombres cortos: `rgba_de`→`rgba_of`, `pixel_en`→`pixel_at`, `lee`→`read_bytes`/`load_text`, `UnColor`→`OneColor`, `va`/`vb`, `ya`…) en inglés, un commit por crate y con el mismo mapa (`tools/rename/l3ids.tsv` y `map-l2-applied.tsv`; `l3ids.py` aplica un crate). Donde el nombre natural chocaba (`read`, `from`, `source`) el detector de colisiones lo paró y se eligió otro. Restos de identificadores: **0**.
+- Los mensajes de aserción de las pruebas en `px-raster` (93) y `px-golden` (65): solo el argumento de mensaje de `assert*!`/`prop_assert*!`/`panic!`/`unreachable!`/`todo!`, en código de pruebas. Ni valores esperados ni literales de producción (P2 sin cambios) ni `ci.rs` (sus 12 mensajes quedan: son tokens). `expect(..)` no entra. `tools/rename/l3msgs.py` extrae y aplica; `verify.py` (P4) compara los mensajes solo por sus huecos `{…}` (con el identificador alfa-renombrado, en cualquier orden): un mensaje que cambie de huecos falla.
+
+**Restos tras esa tarea** (`tools/rename/spanish_left.py`; los mensajes incluyen `expect(..)` y texto de producción que no son de L3b):
+
+| crate | identificadores | líneas de comentario | mensajes |
+|---|---|---|---|
+| px-raster | 0 | 600 | 40 |
+| px-golden | 0 | 416 | 37 |
+| px-formats | 0 | 744 | 85 |
+| px-core | 0 | 1 751 | 245 |
+| px-app | 0 | 3 947 | 1 394 |
+| px-ui | 0 | 7 235 | 2 037 |
+| fuzz, `deny.toml` raíz y `px-render/src/lib.rs` | 0 | 4 | 7 |
+| **total** | **0** | **14 697** | **3 845** |
+
+**L3b: unidad opcional, no se hace ahora.** Traducir los comentarios y los mensajes de aserción que quedan, **un crate por sesión y en este orden: px-raster, px-golden, px-formats, px-core, px-app, px-ui**, con las mismas verificaciones (P1 a P4 y P3b). Política mientras tanto (CLAUDE.md): lo nuevo va en inglés y, si se toca un fichero por otra razón, se traducen sus comentarios en ese commit. Para medir el avance: `python3 tools/rename/spanish_left.py`.

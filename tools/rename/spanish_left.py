@@ -9,7 +9,7 @@
   figura en ENGLISH_OK. Cuenta nombres distintos por crate y, entre paréntesis, apariciones.
 - comentarios: líneas de comentario (`//`, `///`, `//!`, `/* */` en .rs y `#` en Cargo.toml/deny.toml) que parecen
   español: llevan una letra propia del español (á é í ó ú ñ ü ¿ ¡) o palabras vacías españolas (ver SP_STRONG, SP_WEAK).
-- mensajes: cadenas que son el mensaje de `assert*!`, `debug_assert*!`, `panic!`, `unreachable!`, `todo!`, `expect(..)`
+- mensajes: cadenas que son el mensaje de `assert*!`, `debug_assert*!`, `prop_assert*!`, `panic!`, `unreachable!`, `todo!`, `expect(..)`
   y `unwrap_or_else(|| panic!..)` y parecen español, en código de pruebas o de producción. Los textos que ve el
   usuario (`*_es.rs`, etiquetas de la interfaz) no cuentan: no son mensajes de aserción.
 La heurística es la misma en todas las ejecuciones: sirve para ver el avance, no para demostrar nada.
@@ -21,6 +21,7 @@ import pathlib
 import re
 import sys
 
+from msgpos import MACROS
 from regions import ROOT, rs_files
 from rslex import ident_name, lex
 from vocab import KW, split_words
@@ -31,10 +32,7 @@ SP_STRONG = set("el la los las del que con para por una sin como cuando pero tam
 SP_WEAK = set("de se es un lo en al su si y no".split())
 # palabras que están en los diccionarios pero valen en inglés (o son el sufijo de idioma `_es` de los textos visibles)
 ENGLISH_OK = set("a o y no es la lo le os describe modulo normal actual error color texto cargo".split())
-ASSERT_MACROS = {
-    "assert": 1, "assert_eq": 2, "assert_ne": 2, "debug_assert": 1, "debug_assert_eq": 2, "debug_assert_ne": 2,
-    "panic": 0, "unreachable": 0, "todo": 0, "unimplemented": 0,
-}
+ASSERT_MACROS = MACROS
 
 
 def spanish_words() -> set[str]:
