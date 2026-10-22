@@ -23,6 +23,7 @@ pub mod help;
 pub mod help_texts;
 mod help_texts_es;
 mod help_texts_layers_es;
+mod help_texts_merge_es;
 pub mod icon_button;
 pub mod icons;
 pub mod key_events;

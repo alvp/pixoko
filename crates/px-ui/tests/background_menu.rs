@@ -245,6 +245,7 @@ fn fila_12_menu_items_son_las_11_entradas_de_la_17_nueva_imagen_de_la_19_y_conve
             ("Abrir…", AppAction::Open),
             ("Guardar", AppAction::Save),
             ("Guardar como…", AppAction::SaveAs),
+            ("Exportar PNG aplanado…", AppAction::ExportFlat),
             ("Salir", AppAction::Quit),
         ]
     );

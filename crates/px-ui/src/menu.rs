@@ -56,6 +56,7 @@ pub const MENUS: [Menu; 6] = [
             item("Abrir…", AppAction::Open),
             item("Guardar", AppAction::Save),
             item("Guardar como…", AppAction::SaveAs),
+            item("Exportar PNG aplanado…", AppAction::ExportFlat),
             MenuItem {
                 label: "Salir",
                 action: AppAction::Quit,
@@ -86,6 +87,9 @@ pub const MENUS: [Menu; 6] = [
             item("Quitar", AppAction::RemoveLayer),
             item("Subir", AppAction::LayerUp),
             item("Bajar", AppAction::LayerDown),
+            item("Combinar abajo", AppAction::MergeLayerDown),
+            item("Combinar visibles", AppAction::MergeVisibleLayers),
+            item("Aplanar", AppAction::FlattenLayers),
             item("Renombrar", AppAction::RenameLayer),
             item("Propiedades", AppAction::LayerProperties),
             item("Mostrar panel", AppAction::ToggleLayerPanel),

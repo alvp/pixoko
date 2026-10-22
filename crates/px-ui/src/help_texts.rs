@@ -8,6 +8,7 @@ use std::sync::LazyLock;
 
 use crate::help_texts_es::{HELP_ES, UI_ES};
 use crate::help_texts_layers_es::HELP_LAYERS_ES;
+use crate::help_texts_merge_es::HELP_MERGE_ES;
 use crate::tool::Tool;
 
 /// El texto de ayuda de una acción.
@@ -67,12 +68,13 @@ pub struct UiStrings {
     pub f1_reserved: &'static str,
 }
 
-/// La tabla de textos de ayuda (hoy en español: 22 entradas y las 8 de capas, en este orden).
+/// La tabla de textos de ayuda (hoy en español: 22 entradas, las 8 de capas y las 3 de combinar, en este orden).
 pub fn help_table() -> &'static [HelpEntry] {
     static TABLE: LazyLock<Vec<HelpEntry>> = LazyLock::new(|| {
         HELP_ES
             .iter()
             .chain(HELP_LAYERS_ES.iter())
+            .chain(HELP_MERGE_ES.iter())
             .copied()
             .collect()
     });
@@ -123,6 +125,9 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::LayerDown => "layer.down",
         AppAction::RenameLayer => "layer.rename",
         AppAction::LayerProperties => "layer.properties",
+        AppAction::MergeLayerDown => "layer.merge-down",
+        AppAction::MergeVisibleLayers => "layer.merge-visible",
+        AppAction::FlattenLayers => "layer.flatten",
         _ => return None,
     })
 }
@@ -160,6 +165,9 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "layer.down" => AppAction::LayerDown,
         "layer.rename" => AppAction::RenameLayer,
         "layer.properties" => AppAction::LayerProperties,
+        "layer.merge-down" => AppAction::MergeLayerDown,
+        "layer.merge-visible" => AppAction::MergeVisibleLayers,
+        "layer.flatten" => AppAction::FlattenLayers,
         _ => return None,
     })
 }

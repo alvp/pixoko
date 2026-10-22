@@ -72,6 +72,14 @@ pub enum AppAction {
     RenameLayer,
     /// `Capa → Propiedades`: lleva el foco a las opciones de la capa en el panel.
     LayerProperties,
+    /// `Capa → Combinar abajo`: une la activa con la de debajo (specs/hito-3-combinar.md).
+    MergeLayerDown,
+    /// `Capa → Combinar visibles`: une todas las visibles en la visible más baja.
+    MergeVisibleLayers,
+    /// `Capa → Aplanar`: una sola capa con lo que se ve; las ocultas se quitan.
+    FlattenLayers,
+    /// `Archivo → Exportar PNG aplanado…`: guarda lo que se ve sin tocar el estado del documento.
+    ExportFlat,
 }
 
 impl AppAction {
@@ -249,6 +257,8 @@ pub fn layer_enabled(action: AppAction, nav: &LayerNav) -> bool {
         AppAction::LayerUp => nav.active_pos + 1 < nav.count,
         AppAction::LayerDown => nav.active_pos > 0,
         AppAction::NewLayer | AppAction::DuplicateLayer => nav.can_add,
+        AppAction::MergeLayerDown => nav.active_pos > 0,
+        AppAction::MergeVisibleLayers | AppAction::FlattenLayers => nav.count > 1,
         _ => true,
     }
 }
