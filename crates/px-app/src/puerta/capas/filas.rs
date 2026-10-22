@@ -18,11 +18,13 @@ use super::{
     Trabajo3, comprobar_golden_aseprite, fuera_de_golden_aseprite, golden_aseprite,
     igual_salvo_rgb_con_alfa_0, inicial,
 };
+use crate::convert_mode::WAIT_FRAMES;
 use crate::dialogs::{DialogKind, Outcome, SaveRoute, proposed_save_name};
 use crate::puerta::comun::sha256::sha256_hex;
 use crate::puerta::comun::{
     comparar_instantaneas, dialogos, nombres_en, sesion_vacia, sin_temporales,
 };
+use crate::save_wait::{StartSave, aseprite_pixels, save_pixels, start_save};
 use crate::session::with_flatten_notice;
 
 // ---------------------------------------------------------------------------------------
@@ -340,6 +342,69 @@ fn fila_09_los_29_por_la_sesion_se_abren_se_guardan_y_se_reabren() {
     let nombres = t.nombres();
     sin_temporales(&nombres);
     assert_eq!(nombres.len(), 29, "una copia por caso y nada más");
+}
+
+// ---------------------------------------------------------------------------------------
+// Fila 10 (condición 6): «Guardando…» al guardar un `.aseprite` grande.
+// ---------------------------------------------------------------------------------------
+
+/// Un documento de `lado` × `lado` con una capa por elemento de `visibles` (`Some` sin imagen no
+/// existe: las vacías son `None`).
+fn documento_de_celdas(lado: u32, capas: &[(bool, bool)]) -> px_core::Document {
+    use px_core::{BlendMode, Image, LayerSpec, Mode, Pixel, Rgba};
+    let specs = capas
+        .iter()
+        .enumerate()
+        .map(|(i, &(visible, con_imagen))| LayerSpec {
+            name: format!("capa {i}"),
+            visible,
+            opacity: 255,
+            blend: BlendMode::Normal,
+            locked: false,
+            image: con_imagen.then(|| {
+                Image::filled(lado, lado, Pixel::Rgba(Rgba::new(i as u8, 2, 3, 255)))
+                    .expect("imagen")
+            }),
+        })
+        .collect();
+    px_core::Document::from_layers(lado, lado, Mode::Rgba, None, specs).expect("documento")
+}
+
+#[test]
+fn fila_10_un_aseprite_grande_pide_guardando_y_espera_los_fotogramas_de_siempre() {
+    // 4 capas con imagen de 2048² son exactamente 2²⁴ píxeles de celda: se guarda ya; con 5, no.
+    let cuatro = documento_de_celdas(2048, &[(true, true); 4]);
+    assert_eq!(aseprite_pixels(&cuatro), 1 << 24);
+    assert_eq!(start_save(save_pixels(&cuatro, true)), StartSave::Now);
+    let cinco = documento_de_celdas(2048, &[(true, true); 5]);
+    assert_eq!(aseprite_pixels(&cinco), 5 * 2048 * 2048);
+    let StartSave::Later(mut espera) = start_save(save_pixels(&cinco, true)) else {
+        panic!("5 capas de 2048² pasan de 2²⁴ píxeles: debía esperar");
+    };
+    // La misma secuencia que «Guardando…» de un PNG: ni un fotograma antes ni después.
+    for fotograma in 1..WAIT_FRAMES {
+        assert!(!espera.tick(), "el fotograma {fotograma} aún no guarda");
+    }
+    assert!(
+        espera.tick(),
+        "guarda exactamente en el fotograma {WAIT_FRAMES}"
+    );
+    assert!(!espera.tick(), "y no vuelve a guardar");
+    // Las celdas vacías no se escriben y no cuentan; las ocultas sí (el `.aseprite` las guarda),
+    // y un PNG solo compone las visibles.
+    let mezcla = documento_de_celdas(
+        2048,
+        &[
+            (true, true),
+            (false, true),
+            (false, true),
+            (true, false),
+            (true, true),
+        ],
+    );
+    assert_eq!(aseprite_pixels(&mezcla), 4 * 2048 * 2048);
+    assert_eq!(save_pixels(&mezcla, true), 4 * 2048 * 2048);
+    assert_eq!(save_pixels(&mezcla, false), 2 * 2048 * 2048);
 }
 
 // ---------------------------------------------------------------------------------------

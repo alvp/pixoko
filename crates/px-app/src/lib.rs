@@ -93,7 +93,7 @@ use crate::new_image::{
     open_new_image, spec_from_values, sync_form,
 };
 use crate::save_wait::{
-    EXPORTING_NOTICE, PendingSave, SAVING_NOTICE, StartSave, compose_pixels, start_save,
+    EXPORTING_NOTICE, PendingSave, SAVING_NOTICE, StartSave, save_pixels, start_save,
 };
 use crate::session::{
     LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for, saved_notice,
@@ -466,7 +466,12 @@ impl App {
     /// Guarda ya, o con muchos píxeles por componer dice «Guardando…» y guarda dos fotogramas
     /// después, con la entrada bloqueada mientras tanto.
     fn request_save(&mut self, ctx: &egui::Context, job: SaveJob) {
-        match start_save(compose_pixels(&self.session.document)) {
+        let aseprite = match &job {
+            SaveJob::Chosen(path) => is_aseprite_path(path),
+            SaveJob::File { .. } => self.session.path().is_some_and(is_aseprite_path),
+            SaveJob::Export(_) => false,
+        };
+        match start_save(save_pixels(&self.session.document, aseprite)) {
             StartSave::Now => self.run_save(ctx, job),
             StartSave::Later(wait) => {
                 let notice = match job {

@@ -2,6 +2,10 @@
 //! componer más de 2²⁴ píxeles de capa visible congela la ventana unos instantes, así que la
 //! barra de estado dice «Guardando…» y el guardado espera `WAIT_FRAMES` fotogramas (el mismo
 //! mecanismo que `Convirtiendo…`). La barra de progreso es un pulido del hito 8.
+//!
+//! Un `.aseprite` no compone nada, pero comprime cada celda (`specs/hito-3-puerta.md`, condición
+//! 6): con el mismo umbral de 2²⁴ píxeles de celda, el peor caso medido (ruido, que no se
+//! comprime) tarda unos 1,8 s; ver `aseprite_pixels`.
 
 use px_core::Document;
 use px_ui::source::identity_cell;
@@ -29,6 +33,30 @@ pub fn compose_pixels(doc: &Document) -> u64 {
         .filter(|layer| layer.visible() && doc.image(layer.cel()).is_some())
         .count() as u64;
     u64::from(doc.width()) * u64::from(doc.height()) * visible
+}
+
+/// Píxeles de celda que hay que comprimir al guardar un `.aseprite`: ancho × alto × capas con
+/// imagen (las vacías no se escriben). Medido en release (`puerta::capas::grande`): 4 capas de
+/// 8192² RGBA de ruido (268 millones de píxeles, sin comprimir) tardan 29,5 s, unos 0,11 µs por
+/// píxel; con 2²⁴ píxeles, unos 1,8 s. Con contenido que comprime (rayas y rellenos) las mismas 4
+/// capas tardan 1,4 s.
+pub fn aseprite_pixels(doc: &Document) -> u64 {
+    let cells = doc
+        .layers()
+        .iter()
+        .filter(|layer| doc.image(layer.cel()).is_some())
+        .count() as u64;
+    u64::from(doc.width()) * u64::from(doc.height()) * cells
+}
+
+/// Los píxeles que deciden si hay que avisar antes de guardar: los de celda a comprimir si el
+/// destino es un `.aseprite` y los de capa visible a componer si es un PNG.
+pub fn save_pixels(doc: &Document, aseprite: bool) -> u64 {
+    if aseprite {
+        aseprite_pixels(doc)
+    } else {
+        compose_pixels(doc)
+    }
 }
 
 /// Guardar ya, o esperar `WAIT_FRAMES` fotogramas para que se vea el aviso.
