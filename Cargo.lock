@@ -1861,6 +1861,7 @@ dependencies = [
  "proptest",
  "px-core",
  "px-formats",
+ "px-raster",
  "px-ui",
  "rfd",
 ]

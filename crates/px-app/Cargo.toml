@@ -20,6 +20,7 @@ test = false
 [dependencies]
 px-core = { path = "../px-core" }
 px-ui = { path = "../px-ui" }
+px-raster = { path = "../px-raster" }
 px-formats = { path = "../px-formats" }
 eframe = { version = "=0.37.0", default-features = false, features = ["glow"] }
 

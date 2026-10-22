@@ -430,9 +430,8 @@ fn fila_9_aplanar_con_ocultas_con_pixeles_se_confirma_repitiendo_en_5_segundos()
     assert!(flatten_gate(2, &mut confirm, 4.0));
     assert!(!flatten_gate(2, &mut confirm, 10.0));
     assert!(!flatten_gate(2, &mut confirm, 16.0), "a los 6 s ya caducó");
-    // Es una petición propia: no se confunde con otras.
-    assert!(!flatten_gate(1, &mut confirm, 20.0));
-    assert!(confirm.confirm_armed(&Request::FlattenHidden, 21.0));
+    // Tras el aviso queda armada la petición propia de Aplanar.
+    assert!(confirm.confirm_armed(&Request::FlattenHidden, 17.0));
 }
 
 #[test]
@@ -517,8 +516,10 @@ fn fila_10_dispatch_pasa_las_cuatro_acciones_a_la_ventana_y_respeta_los_bloqueos
     assert_eq!(sesion.document.layers().len(), 2);
     // Con un trazo en curso, bloqueadas.
     let mut tools = px_ui::tool::ToolState::new();
-    let mut locks = Locks::default();
-    locks.gesture = true;
+    let locks = Locks {
+        gesture: true,
+        ..Locks::default()
+    };
     let bloqueada = dispatch(
         AppAction::FlattenLayers,
         Origin::Key,

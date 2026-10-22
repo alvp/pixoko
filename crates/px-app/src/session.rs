@@ -25,6 +25,7 @@ use px_ui::source::flatten;
 use px_ui::tool::Tool;
 use px_ui::view::Size;
 
+use self::merge_ops::MergeNote;
 use crate::dialogs::with_png_extension;
 use crate::files::{
     FileError, MAX_FILE_BYTES, aux_cause, copy_path, describe_open_aux, describe_report,
@@ -135,6 +136,9 @@ pub struct Session {
     log: ChangeLog,
     /// Bloques tocados desde la última vez que el lienzo los tomó; `None`: nada anotado.
     dirty: Option<BlockSet>,
+    /// Qué capa estaba activa antes y después de cada combinación reciente: deshacer y rehacer
+    /// la devuelven (specs/hito-3-combinar.md, D2).
+    merge_notes: Vec<MergeNote>,
 }
 
 impl Session {
@@ -163,6 +167,7 @@ impl Session {
             conversion: None,
             log: ChangeLog::new(),
             dirty: None,
+            merge_notes: Vec::new(),
         }
     }
 
@@ -248,11 +253,6 @@ impl Session {
             (false, true) => Some(LOCKED_LAYER_NOTICE),
             (false, false) => None,
         }
-    }
-
-    /// Por qué no se puede convertir el modo ahora: con varias capas hace falta `ConvertAll`.
-    pub fn convert_refusal(&self) -> Option<&'static str> {
-        (self.document.layers().len() > 1).then_some(CONVERT_LAYERS_NOTICE)
     }
 
     /// Alguna celda (no solo la activa) usa la entrada `index`: quitarla pide el destino.
@@ -544,6 +544,7 @@ impl Session {
         // El rango no sobrevive a deshacer ni a rehacer.
         self.ops.clear_range();
         self.follow_entering_layer(layers_before);
+        self.follow_merge_notes();
         self.normalize();
         self.reveal_if_choice_changed(before);
     }
@@ -875,6 +876,7 @@ impl Session {
         self.mem_seen = self.document.materialized_bytes();
         self.log.clear();
         self.dirty = None;
+        self.merge_notes.clear();
         self.saved_id = self.document.state_id();
         self.path = path;
     }
@@ -942,10 +944,6 @@ pub const HIDDEN_LAYER_NOTICE: &str = "la capa activa está oculta";
 pub const LOCKED_LAYER_NOTICE: &str = "la capa activa está bloqueada";
 pub const HIDDEN_AND_LOCKED_NOTICE: &str = "la capa activa está oculta y bloqueada";
 
-/// Por qué no se convierte el modo con varias capas (`ConvertAll` es de la unidad 3.5).
-pub const CONVERT_LAYERS_NOTICE: &str =
-    "no se puede convertir el modo con varias capas: deja una sola o espera a la unidad 3.5";
-
 /// Añade al aviso de guardado que con varias capas se guarda aplanado (y cuántas ocultas no
 /// entran). Con una capa, el texto tal cual.
 pub fn with_flatten_notice(text: String, document: &Document) -> String {
@@ -1008,6 +1006,7 @@ mod dialog_tests;
 mod edit_tests;
 mod layer_ops;
 pub use layer_ops::*;
+mod merge_ops;
 
 #[cfg(test)]
 mod layer_ops_tests;

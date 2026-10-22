@@ -30,7 +30,7 @@ pub struct LayerReport {
 }
 
 impl LayerReport {
-    fn from_result(result: Result<bool, DocumentError>) -> LayerReport {
+    pub(super) fn from_result(result: Result<bool, DocumentError>) -> LayerReport {
         match result {
             Ok(changed) => LayerReport {
                 changed,
@@ -43,7 +43,7 @@ impl LayerReport {
         }
     }
 
-    fn refused(notice: &str, offer_convert: bool) -> LayerReport {
+    pub(super) fn refused(notice: &str, offer_convert: bool) -> LayerReport {
         LayerReport {
             changed: false,
             notice: Some(notice.to_string()),

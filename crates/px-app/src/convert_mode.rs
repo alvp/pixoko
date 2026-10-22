@@ -5,10 +5,10 @@
 //! ventana.
 
 use px_core::{
-    Allowed, Conversion, ConversionReport, ConvertError, Image, Mode, Rgba, convert_image,
-    target_byte_len,
+    Allowed, BlendMode, CelsAnalysis, Conversion, ConversionReport, ConvertError, Document, Image,
+    Mode, Rgba, analyze_cels, convert_image, target_byte_len,
 };
-use px_ui::actions::Locks;
+use px_ui::actions::{AppAction, Locks};
 use px_ui::color_edit::parse_hex;
 use px_ui::dialog::{
     Dialog, DialogKind, FOOTER_COLUMNS, FieldId, FieldKind, FieldSpec, FormSpec, MISSING_PREFIX,
@@ -30,6 +30,8 @@ pub const FIELD_LUMA_GRAY_ALPHA: FieldId = "luma_gris_alfa";
 pub const FIELD_LUMA_GRAY: FieldId = "luma_gris";
 pub const FIELD_ALPHA: FieldId = "alfa_gris";
 pub const FIELD_ALPHA_HEX: FieldId = "fondo_hex";
+/// El botón `Aplanar` que ofrece el motivo «con varias capas: aplana antes» (3.5, condición (a)).
+pub const FIELD_FLATTEN: FieldId = "aplanar";
 
 /// Los modos en el orden de las opciones del destino.
 const MODES: [Mode; 4] = [Mode::Indexed, Mode::Rgba, Mode::GrayAlpha, Mode::Gray];
@@ -173,6 +175,7 @@ fn check_values(values: &Values) -> Option<String> {
 }
 
 /// Abre el diálogo de convertir desde `from`; hasta el primer informe, `Aceptar` queda atenuado.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn open_convert_mode(modal: &mut Modal, from: Mode, locks: Locks) -> bool {
     if !modal.open(DialogKind::ConvertMode, convert_form(from), locks) {
         return false;
@@ -185,9 +188,52 @@ pub fn open_convert_mode(modal: &mut Modal, from: Mode, locks: Locks) -> bool {
 
 /// Como [`open_convert_mode`] con `target` ya elegido como modo de destino (si es uno de los
 /// destinos de `from`).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn open_convert_mode_to(modal: &mut Modal, from: Mode, target: Mode, locks: Locks) -> bool {
+    open_convert_mode_layers(modal, from, 1, Some(target), locks)
+}
+
+/// El formulario de convertir `layers` capas desde `from`: el de siempre y, con varias, un botón
+/// `Aplanar` visible solo con el destino Gris (que con varias capas no existe: el motivo ofrece
+/// aplanar antes).
+pub fn convert_form_layers(from: Mode, layers: usize) -> FormSpec {
     let mut spec = convert_form(from);
-    if let Some(index) = targets(from).iter().position(|mode| *mode == target)
+    if layers > 1
+        && let Some(gray) = targets(from).iter().position(|mode| *mode == Mode::Gray)
+    {
+        spec.fields.push(FieldSpec {
+            id: FIELD_FLATTEN,
+            label: "Capas",
+            kind: FieldKind::Button {
+                text: "Aplanar".to_string(),
+                aside: None,
+            },
+            shown_when: Some(ShowWhen {
+                field: FIELD_TARGET,
+                choice: gray,
+            }),
+        });
+    }
+    spec
+}
+
+/// La acción que lanza el botón de un campo del diálogo de convertir, si lo es de una acción.
+pub fn flatten_offer(field: FieldId) -> Option<AppAction> {
+    (field == FIELD_FLATTEN).then_some(AppAction::FlattenLayers)
+}
+
+/// Abre el diálogo de convertir `layers` capas desde `from`, con `target` ya elegido si se da (y
+/// es uno de los destinos de `from`).
+pub fn open_convert_mode_layers(
+    modal: &mut Modal,
+    from: Mode,
+    layers: usize,
+    target: Option<Mode>,
+    locks: Locks,
+) -> bool {
+    let mut spec = convert_form_layers(from, layers);
+    if let Some(target) = target
+        && let Some(index) = targets(from).iter().position(|mode| *mode == target)
         && let Some(field) = spec.fields.iter_mut().find(|f| f.id == FIELD_TARGET)
         && let FieldKind::Choice { default, .. } = &mut field.kind
     {
@@ -219,6 +265,38 @@ pub enum Analysis {
     TooManyColors,
     /// La imagen convertida no cabe.
     TooLarge,
+}
+
+/// Por qué un documento con varias capas no puede convertirse a un modo, antes de mirar los
+/// píxeles (specs/hito-3-combinar.md, D8 y condición (a)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LayerBlock {
+    /// Destino Gris con varias capas: el gris sin alfa no admite capas (se ofrece aplanar antes).
+    MultiLayerGray,
+    /// Destino indexado con capas de opacidad distinta de 255 o mezcla distinta de Normal.
+    LayerProps,
+}
+
+impl LayerBlock {
+    /// El motivo de `Aceptar` atenuado (≤ 37 caracteres).
+    pub fn reason(self) -> &'static str {
+        match self {
+            LayerBlock::MultiLayerGray => "con varias capas: aplana antes",
+            LayerBlock::LayerProps => "hay capas con opacidad o mezcla",
+        }
+    }
+
+    /// La explicación del informe.
+    fn explanation(self) -> &'static str {
+        match self {
+            LayerBlock::MultiLayerGray => {
+                "El gris sin alfa no admite varias capas: aplana antes (botón Aplanar) o elige otro modo."
+            }
+            LayerBlock::LayerProps => {
+                "El indexado no tiene opacidad ni mezcla: pon las capas a 255 y Normal, o aplana."
+            }
+        }
+    }
 }
 
 /// De un resultado de `convert_image` a un `Analysis`. Pura: permite probar `TooLarge` sin reservar
@@ -483,6 +561,7 @@ pub fn history_warning_for_bytes(pixel_bytes: u64, history: History) -> Option<S
 }
 
 /// Como [`history_warning_for_bytes`], con los bytes de píxeles de `image`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn history_warning(image: &Image, history: History) -> Option<String> {
     let bytes = Image::byte_len(image.width(), image.height(), image.mode())
         .map_or(u64::MAX, |bytes| bytes as u64);
@@ -501,6 +580,35 @@ pub fn report_text(
     perms: &Permissions,
     active: Option<Rgba>,
     image: &Image,
+    history: History,
+) -> String {
+    let bytes = Image::byte_len(image.width(), image.height(), image.mode())
+        .map_or(u64::MAX, |bytes| bytes as u64);
+    report_body(analysis, size, perms, active, bytes, history)
+}
+
+/// Como [`report_text`] para `layers` capas: lleva la línea «Capas: N (se convierten todas)», las
+/// pérdidas son las sumadas de todas las celdas y el aviso de historia mide `pixel_bytes`, la
+/// suma de las imágenes que guardará el paso.
+pub fn report_text_all(
+    analysis: Option<&Analysis>,
+    layers: usize,
+    size: (u32, u32),
+    perms: &Permissions,
+    active: Option<Rgba>,
+    pixel_bytes: u64,
+    history: History,
+) -> String {
+    let body = report_body(analysis, size, perms, active, pixel_bytes, history);
+    format!("Capas: {layers} (se convierten todas)\n{body}")
+}
+
+fn report_body(
+    analysis: Option<&Analysis>,
+    size: (u32, u32),
+    perms: &Permissions,
+    active: Option<Rgba>,
+    pixel_bytes: u64,
     history: History,
 ) -> String {
     let mut lines: Vec<String> = Vec::new();
@@ -551,7 +659,7 @@ pub fn report_text(
         lines.push(format!("aviso: más de {WARN_PIXELS} px; puede tardar"));
     }
     if matches!(analysis, Some(Analysis::Exact { .. } | Analysis::Lossy(_)))
-        && let Some(warning) = history_warning(image, history)
+        && let Some(warning) = history_warning_for_bytes(pixel_bytes, history)
     {
         lines.push(warning);
     }
@@ -799,6 +907,176 @@ pub fn describe_converted(target: Mode, analysis: Option<&Analysis>) -> String {
         }
     }
     text
+}
+
+// ---------------------------------------------------------------------------------------------
+// Varias capas (specs/hito-3-combinar.md, D8): `ConvertAll`
+// ---------------------------------------------------------------------------------------------
+
+/// De un resultado de `analyze_cels` a un `Analysis`. Pura: permite probar sin imágenes grandes.
+pub fn classify_cels(result: Result<CelsAnalysis, ConvertError>) -> Analysis {
+    match result {
+        Ok(analysis) => Analysis::Exact {
+            palette: analysis.palette.map(|palette| PaletteInfo {
+                colors: palette.len(),
+                transparent: palette.transparent_index().is_some(),
+            }),
+        },
+        Err(ConvertError::LossNotAllowed { report }) => Analysis::Lossy(report),
+        Err(ConvertError::TooManyColors { .. }) => Analysis::TooManyColors,
+        Err(ConvertError::TooLarge { .. }) => Analysis::TooLarge,
+    }
+}
+
+/// Por qué `doc` no puede convertirse a `target` por sus capas (antes de mirar los píxeles).
+pub fn layer_block(doc: &Document, target: Mode) -> Option<LayerBlock> {
+    let layers = doc.layers();
+    if target == Mode::Gray && layers.len() > 1 {
+        return Some(LayerBlock::MultiLayerGray);
+    }
+    (target == Mode::Indexed
+        && layers
+            .iter()
+            .any(|layer| layer.opacity() != 255 || layer.blend() != BlendMode::Normal))
+    .then_some(LayerBlock::LayerProps)
+}
+
+/// El informe de convertir **todas** las capas de `doc` a `target`, sin tocar nada: las pérdidas
+/// sumadas de todas las celdas y, a indexado, la paleta común. Solo si [`layer_block`] no lo
+/// impide.
+pub fn analyze_document(doc: &Document, target: Mode) -> Analysis {
+    let layers = doc.layers();
+    let cels: Vec<Option<&Image>> = layers.iter().map(|layer| doc.image(layer.cel())).collect();
+    classify_cels(analyze_cels(
+        &cels,
+        (doc.width(), doc.height()),
+        doc.mode(),
+        target,
+        Allowed::NOTHING,
+    ))
+}
+
+/// Píxeles de las celdas con imagen de `doc`: lo que cuesta calcular el informe y convertir.
+pub fn convert_pixels(doc: &Document) -> u64 {
+    let cells = doc
+        .layers()
+        .iter()
+        .filter(|layer| doc.image(layer.cel()).is_some())
+        .count() as u64;
+    u64::from(doc.width()) * u64::from(doc.height()) * cells
+}
+
+/// Bytes de píxeles de las celdas con imagen de `doc`: lo que guardará el paso de historia.
+pub fn convert_bytes(doc: &Document) -> u64 {
+    doc.materialized_bytes() as u64
+}
+
+/// Quien calcula el informe de un documento con capas (el real, o uno que cuenta las llamadas en
+/// las pruebas).
+pub trait DocAnalyzer {
+    fn analyze(&mut self, doc: &Document, target: Mode) -> Analysis;
+}
+
+/// El analizador real: `analyze_cels` sobre todas las celdas.
+pub struct SystemDocAnalyzer;
+
+impl DocAnalyzer for SystemDocAnalyzer {
+    fn analyze(&mut self, doc: &Document, target: Mode) -> Analysis {
+        analyze_document(doc, target)
+    }
+}
+
+/// Como [`sync_convert`] para un documento con varias capas (o con la celda activa vacía): el
+/// informe se calcula sobre todas las celdas, solo al cambiar de destino y en dos tiempos si la
+/// suma de sus píxeles pasa de `SYNC_PIXELS`.
+pub fn sync_convert_all(
+    dialog: &mut Dialog,
+    sync: &mut ConvertSync,
+    doc: &Document,
+    history: History,
+    analyzer: &mut dyn DocAnalyzer,
+) -> bool {
+    let Some(target) = dialog
+        .chosen(FIELD_TARGET)
+        .and_then(|option| targets(sync.from).get(option).copied())
+    else {
+        return false;
+    };
+    let state_id = doc.state_id();
+    if sync.state_id != state_id {
+        sync.state_id = state_id;
+        sync.shown = None;
+        sync.waiting = None;
+    }
+    // Con varias capas hay destinos que no existen: no hay informe que calcular, solo el motivo.
+    let block = layer_block(doc, target);
+    if block.is_some() {
+        sync.shown = None;
+        sync.waiting = None;
+    } else if !matches!(&sync.shown, Some((shown, _)) if *shown == target) {
+        let ready = if convert_pixels(doc) <= SYNC_PIXELS {
+            true
+        } else {
+            match &mut sync.waiting {
+                Some((waiting, left)) if *waiting == target => {
+                    *left = left.saturating_sub(1);
+                    *left == 0
+                }
+                _ => {
+                    sync.waiting = Some((target, WAIT_FRAMES));
+                    false
+                }
+            }
+        };
+        if ready {
+            sync.shown = Some((target, analyzer.analyze(doc, target)));
+            sync.waiting = None;
+        } else {
+            sync.shown = None;
+        }
+    }
+    let analysis = sync.shown.as_ref().map(|(_, analysis)| analysis);
+    let perms = read_permissions(dialog, target);
+    let layers = doc.layers().len();
+    let report = match block {
+        Some(block) => format!(
+            "Capas: {layers} (se convierten todas)\n{}",
+            block.explanation()
+        ),
+        None => report_text_all(
+            analysis,
+            layers,
+            (doc.width(), doc.height()),
+            &perms,
+            sync.active,
+            convert_bytes(doc),
+            history,
+        ),
+    };
+    let reason = match block {
+        Some(block) => Some(block.reason().to_string()),
+        None => block_reason(analysis, &perms, sync.active),
+    };
+    let mut changed = sync.waiting.is_some();
+    if current_report(dialog) != Some(report.as_str()) {
+        changed |= dialog.set_report(FIELD_REPORT, report);
+    }
+    if dialog.block() != reason.as_deref() {
+        dialog.set_block(reason);
+        changed = true;
+    }
+    let summary = analysis.and_then(|analysis| {
+        let problem = !dialog.problems().is_empty();
+        let missing = pending(analysis, &perms, sync.active, problem);
+        (problem && missing.len() >= 2)
+            .then(|| missing_text(&missing))
+            .flatten()
+    });
+    if dialog.summary() != summary.as_deref() {
+        dialog.set_summary(summary);
+        changed = true;
+    }
+    changed
 }
 
 #[cfg(test)]

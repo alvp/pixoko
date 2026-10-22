@@ -11,6 +11,9 @@ use crate::convert_mode::WAIT_FRAMES;
 /// El aviso mientras se espera para guardar un documento grande.
 pub const SAVING_NOTICE: &str = "Guardando…";
 
+/// El aviso mientras se espera para exportar el PNG aplanado de un documento grande.
+pub const EXPORTING_NOTICE: &str = "Exportando…";
+
 /// Por encima de estos píxeles de capa visible a componer, el guardado va en dos tiempos: 2²⁴.
 pub const SAVE_SYNC_PIXELS: u64 = 1 << 24;
 

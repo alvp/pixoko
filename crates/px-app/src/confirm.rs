@@ -22,6 +22,9 @@ pub enum Request {
     /// `Nueva capa` o `Duplicar` en una imagen en gris, repetida en 5 s: abre `Convertir modo…`
     /// con «Gris con alfa» elegido (specs/hito-3-capas-interfaz.md, decisión 13).
     LayersToGrayAlpha,
+    /// `Aplanar` con capas ocultas con píxeles, repetido en 5 s: las quita
+    /// (specs/hito-3-combinar.md, D4).
+    FlattenHidden,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

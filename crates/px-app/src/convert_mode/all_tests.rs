@@ -6,7 +6,8 @@
 //! existía no cambian):
 //! - `FIELD_FLATTEN`, `convert_form_layers(from, layers)`, `open_convert_mode_layers(modal, from,
 //!   layers, target, locks)`, `flatten_offer(field) -> Option<AppAction>`.
-//! - `Analysis::{MultiLayerGray, LayerProps}` y `analyze_document(&Document, Mode) -> Analysis`.
+//! - `LayerBlock::{MultiLayerGray, LayerProps}` con `reason()`, `layer_block(&Document, Mode)` y
+//!   `analyze_document(&Document, Mode) -> Analysis` (solo si no hay bloqueo de capas).
 //! - `report_text_all(analysis, layers, size, perms, active, pixel_bytes, history)`.
 //! - `DocAnalyzer` (`analyze(&mut self, &Document, Mode) -> Analysis`) y `sync_convert_all(dialog,
 //!   sync, doc, history, analyzer) -> bool`.
@@ -164,7 +165,11 @@ fn fila_12_analiza_todas_las_capas_y_suma_las_perdidas() {
         analyze_document(&doc, Mode::Rgba),
         Analysis::Exact { palette: None }
     );
-    assert_eq!(analyze_document(&doc, Mode::Gray), Analysis::MultiLayerGray);
+    assert_eq!(
+        layer_block(&doc, Mode::Gray),
+        Some(LayerBlock::MultiLayerGray)
+    );
+    assert_eq!(layer_block(&doc, Mode::Rgba), None);
     // A indexado: una paleta común con el transparente en el 0 (siempre con varias capas) más el
     // gris, el rojo y el azul.
     assert_eq!(
@@ -187,7 +192,10 @@ fn fila_12_indexado_con_opacidad_o_mezcla_o_con_demasiados_colores_no_vale() {
         opacity: 128,
     })
     .expect("opacidad");
-    assert_eq!(analyze_document(&doc, Mode::Indexed), Analysis::LayerProps);
+    assert_eq!(
+        layer_block(&doc, Mode::Indexed),
+        Some(LayerBlock::LayerProps)
+    );
     doc.apply(Command::SetLayerOpacity {
         layer: b,
         opacity: 255,
@@ -198,7 +206,10 @@ fn fila_12_indexado_con_opacidad_o_mezcla_o_con_demasiados_colores_no_vale() {
         blend: BlendMode::Multiply,
     })
     .expect("mezcla");
-    assert_eq!(analyze_document(&doc, Mode::Indexed), Analysis::LayerProps);
+    assert_eq!(
+        layer_block(&doc, Mode::Indexed),
+        Some(LayerBlock::LayerProps)
+    );
     doc.apply(Command::SetLayerBlend {
         layer: b,
         blend: BlendMode::Normal,
@@ -234,20 +245,13 @@ fn fila_12_indexado_con_opacidad_o_mezcla_o_con_demasiados_colores_no_vale() {
 
 #[test]
 fn fila_12_los_motivos_son_cortos_y_el_de_gris_ofrece_aplanar() {
-    let perms = Permissions {
-        luma: false,
-        alpha: AlphaChoice::Keep,
-    };
-    let gris = block_reason(Some(&Analysis::MultiLayerGray), &perms, NINGUNO).expect("motivo");
+    let gris = LayerBlock::MultiLayerGray.reason();
     assert_eq!(gris, "con varias capas: aplana antes");
-    let capas = block_reason(Some(&Analysis::LayerProps), &perms, NINGUNO).expect("motivo");
+    let capas = LayerBlock::LayerProps.reason();
     assert_eq!(capas, "hay capas con opacidad o mezcla");
-    for motivo in [&gris, &capas] {
+    for motivo in [gris, capas] {
         assert!(motivo.chars().count() <= 37, "{motivo}");
     }
-    // Ninguno de los dos tiene requisitos que cubrir con permisos.
-    assert!(pending(&Analysis::MultiLayerGray, &perms, NINGUNO, false).is_empty());
-    assert!(pending(&Analysis::LayerProps, &perms, NINGUNO, false).is_empty());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -397,7 +401,7 @@ fn fila_12_gris_con_varias_capas_bloquea_aceptar_y_el_boton_aplanar_se_ve() {
         }
     );
     // Volver a otro destino lo esconde.
-    m.elige_destino(Mode::Rgba);
+    m.elige_destino(Mode::GrayAlpha);
     m.sincroniza();
     assert!(!dialogo(&m.modal).is_shown(FIELD_FLATTEN));
 }

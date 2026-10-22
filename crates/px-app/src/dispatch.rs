@@ -14,6 +14,7 @@ use px_ui::tool::{ToolAction, ToolState};
 use px_ui::view::ViewOp;
 
 use crate::keys::select_tool;
+use crate::merge_flow::MergeKind;
 use crate::session::{LayerReport, Session};
 
 /// Lo que dejó una acción despachada.
@@ -53,6 +54,11 @@ pub enum Dispatched {
     /// `Nueva capa` o `Duplicar` en gris: el aviso ofrece pasar a gris con alfa; repetir la orden en
     /// 5 s abre `Convertir modo…` (la regla de la repetición la lleva `App`).
     OfferGrayAlpha { notice: String, action: AppAction },
+    /// Combinar abajo, combinar visibles o aplanar: la ejecuta `App` (reglas de rechazo, espera de
+    /// «Combinando…» / «Aplanando…» y confirmación de Aplanar).
+    Merge(MergeKind),
+    /// `Archivo → Exportar PNG aplanado…`: la ejecuta `App` (diálogo y escritura).
+    ExportFlat,
 }
 
 /// Lo que se le pide al panel de capas.
@@ -137,6 +143,10 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::RemoveLayer => layer_done(action, session.remove_layer()),
         AppAction::LayerUp => layer_done(action, session.move_layer(1)),
         AppAction::LayerDown => layer_done(action, session.move_layer(-1)),
+        AppAction::MergeLayerDown => Dispatched::Merge(MergeKind::Down),
+        AppAction::MergeVisibleLayers => Dispatched::Merge(MergeKind::Visible),
+        AppAction::FlattenLayers => Dispatched::Merge(MergeKind::Flatten),
+        AppAction::ExportFlat => Dispatched::ExportFlat,
         AppAction::SelectTool(tool) => {
             let image = Some(session.document.canvas_image());
             Dispatched::Done {

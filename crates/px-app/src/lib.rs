@@ -17,6 +17,7 @@ mod files;
 mod icons;
 mod keys;
 mod licenses;
+mod merge_flow;
 mod new_image;
 #[cfg(test)]
 mod puerta;
@@ -68,8 +69,9 @@ use crate::confirm::{
 };
 use crate::convert_mode::{
     Analysis, CONVERTING_NOTICE, ConvertModeError, ConvertSync, History, PendingConvert, Plan,
-    Start, SystemAnalyzer, convert_memory_notice, describe_converted, open_convert_mode,
-    open_convert_mode_to, plan_from_values, reserve_for_convert, start_convert, sync_convert,
+    Start, SystemAnalyzer, SystemDocAnalyzer, convert_memory_notice, convert_pixels,
+    describe_converted, flatten_offer, open_convert_mode_layers, plan_from_values,
+    reserve_for_convert, start_convert, sync_convert, sync_convert_all,
 };
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
 use crate::dialogs::{
@@ -81,11 +83,17 @@ use crate::dropper_once::DropperOnce;
 use crate::files::{file_label, parse_args, pick_dropped};
 use crate::keys::select_tool;
 use crate::licenses::wants_licenses;
+use crate::merge_flow::{
+    MergeKind, PendingMerge, StartMerge, flatten_gate, flatten_warning, merge_pixels, start_merge,
+    wait_notice,
+};
 use crate::new_image::{
     FormSync, NewImageError, SystemAlloc, build_new_image, describe_new, memory_notice,
     open_new_image, spec_from_values, sync_form,
 };
-use crate::save_wait::{PendingSave, SAVING_NOTICE, StartSave, compose_pixels, start_save};
+use crate::save_wait::{
+    EXPORTING_NOTICE, PendingSave, SAVING_NOTICE, StartSave, compose_pixels, start_save,
+};
 use crate::session::{
     LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for,
     with_flatten_notice,
@@ -110,6 +118,8 @@ enum SaveJob {
     File { as_copy: bool },
     /// La ruta elegida en el diálogo.
     Chosen(PathBuf),
+    /// `Exportar PNG aplanado…` en la ruta elegida (no cambia el estado del documento).
+    Export(PathBuf),
 }
 
 struct App {
@@ -174,6 +184,10 @@ struct App {
     pending_convert: Option<PendingConversion>,
     /// Un guardado que compone mucho y espera su fotograma: la entrada está bloqueada.
     pending_save: Option<(SaveJob, PendingSave)>,
+    /// Combinar o aplanar un documento grande que espera su fotograma: la entrada está bloqueada.
+    pending_merge: Option<PendingMerge>,
+    /// El diálogo de guardar que está abierto es el de `Exportar PNG aplanado…`.
+    exporting: bool,
     /// Los colores del trazo pendiente (solo se calculan los píxeles nuevos de cada fotograma).
     overlay: OverlayCache,
     /// Reserva de los búferes de las baldosas (cargar y regenerar); las pruebas la sustituyen por
@@ -231,6 +245,8 @@ impl App {
             convert: None,
             pending_convert: None,
             pending_save: None,
+            pending_merge: None,
+            exporting: false,
             overlay: OverlayCache::default(),
             tile_alloc: Box::new(SystemTileAlloc),
         }
@@ -346,8 +362,15 @@ impl App {
             || self.session.busy()
             || self.dialogs.pending()
             || self.modal.is_open()
-            || self.pending_convert.is_some()
+            || self.waiting()
+    }
+
+    /// Una conversión, un guardado o una combinación esperan su fotograma: la entrada está
+    /// bloqueada.
+    fn waiting(&self) -> bool {
+        self.pending_convert.is_some()
             || self.pending_save.is_some()
+            || self.pending_merge.is_some()
     }
 
     /// El cuentagotas del indicador de color es de un solo uso: al soltar su primer gesto vuelve la
@@ -380,9 +403,7 @@ impl App {
         if self.busy() {
             let text = ignored_file_notice(
                 self.dialogs.pending(),
-                self.modal.is_open()
-                    || self.pending_convert.is_some()
-                    || self.pending_save.is_some(),
+                self.modal.is_open() || self.waiting(),
             );
             self.notify(ctx, text.to_string());
             return;
@@ -448,8 +469,12 @@ impl App {
         match start_save(compose_pixels(&self.session.document)) {
             StartSave::Now => self.run_save(ctx, job),
             StartSave::Later(wait) => {
+                let notice = match job {
+                    SaveJob::Export(_) => EXPORTING_NOTICE,
+                    SaveJob::File { .. } | SaveJob::Chosen(_) => SAVING_NOTICE,
+                };
                 self.pending_save = Some((job, wait));
-                self.notify(ctx, SAVING_NOTICE.to_string());
+                self.notify(ctx, notice.to_string());
                 ctx.request_repaint();
             }
         }
@@ -478,6 +503,14 @@ impl App {
                     self.dialogs.remember_dir(&saved.path);
                     let text = describe_saved_dialog(&saved);
                     self.notify(ctx, with_flatten_notice(text, &self.session.document));
+                }
+                Err(error) => self.notify(ctx, error.to_string()),
+            },
+            SaveJob::Export(path) => match self.session.export_flat(&path) {
+                Ok(saved) => {
+                    self.dialogs.remember_dir(&saved.path);
+                    let text = self.session.describe_exported(&saved);
+                    self.notify(ctx, text);
                 }
                 Err(error) => self.notify(ctx, error.to_string()),
             },
@@ -538,6 +571,34 @@ impl App {
         self.begin_dialog(ctx, frame, kind, false);
     }
 
+    /// `Archivo → Exportar PNG aplanado…`: el diálogo de guardar con el nombre
+    /// `<nombre>-aplanado.png` (o `sin-titulo-aplanado.png`) junto al fichero del documento.
+    fn begin_export_dialog(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let proposed = match self.session.path() {
+            Some(path) => {
+                let stem = path
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or("sin-titulo");
+                path.with_file_name(format!("{stem}-aplanado.png"))
+            }
+            None => PathBuf::from("sin-titulo-aplanado.png"),
+        };
+        let now = ctx.input(|i| i.time);
+        if self.dialogs.begin(
+            DialogKind::SaveAs,
+            false,
+            Some(&proposed),
+            false,
+            now,
+            Some(frame),
+        ) {
+            self.confirm.clear();
+            self.exporting = true;
+            ctx.request_repaint();
+        }
+    }
+
     fn begin_dialog(
         &mut self,
         ctx: &egui::Context,
@@ -553,6 +614,7 @@ impl App {
             .begin(kind, discard, path.as_deref(), converted, now, Some(frame))
         {
             self.confirm.clear();
+            self.exporting = false;
             // El futuro empieza a ejecutarse al consultarlo: un fotograma ya.
             ctx.request_repaint();
         }
@@ -560,8 +622,18 @@ impl App {
 
     /// Resultado de un diálogo: abre o guarda la ruta elegida, o avisa de que no hay diálogo.
     fn finish_dialog(&mut self, ctx: &egui::Context, finished: Finished) {
+        // El diálogo de exportar es un `SaveAs` con otro nombre propuesto: escribe el aplanado y
+        // no tiene la segunda pulsación de guardar.
+        let exporting = std::mem::take(&mut self.exporting) && finished.kind == DialogKind::SaveAs;
         match finished.outcome {
             Outcome::Cancelled => self.confirm.clear(),
+            Outcome::Unavailable if exporting => {
+                self.notify(
+                    ctx,
+                    "no hay diálogo de archivos: no se puede exportar".to_string(),
+                );
+            }
+            Outcome::Chosen(path) if exporting => self.request_save(ctx, SaveJob::Export(path)),
             Outcome::Unavailable => {
                 self.notify(ctx, unavailable_notice(finished.kind));
                 if let Some(request) = fallback_request(finished.kind) {
@@ -587,6 +659,8 @@ impl App {
         self.dialogs.abandon();
         self.pending_convert = None;
         self.pending_save = None;
+        self.pending_merge = None;
+        self.exporting = false;
         let now = ctx.input(|i| i.time);
         // Un diálogo modal se abandona sin aplicar nada, como uno de archivo, también con una
         // captura de atajo armada; después, la regla de cierre por repetición.
@@ -608,9 +682,7 @@ impl App {
             dialog: self.dialogs.pending(),
             text_focus: ctx.text_edit_focused(),
             removal: self.session.ops.removal().is_some(),
-            modal: self.modal.is_open()
-                || self.pending_convert.is_some()
-                || self.pending_save.is_some(),
+            modal: self.modal.is_open() || self.waiting(),
         }
     }
 
@@ -707,6 +779,8 @@ impl App {
                     Confirmation::Armed => self.notify(ctx, notice),
                 }
             }
+            Dispatched::Merge(kind) => self.begin_merge(ctx, kind),
+            Dispatched::ExportFlat => self.begin_export_dialog(ctx, frame),
             Dispatched::Licenses(true) => {
                 let locks = self.locks(ctx);
                 if self.modal.open(
@@ -754,6 +828,55 @@ impl App {
                     self.modal_focus = None;
                 }
             }
+        }
+    }
+
+    /// Combinar abajo, combinar visibles o aplanar: los rechazos de D4, la confirmación de Aplanar
+    /// con ocultas con píxeles y, con mucho que componer, «Combinando…» / «Aplanando…» dos
+    /// fotogramas antes de empezar.
+    fn begin_merge(&mut self, ctx: &egui::Context, kind: MergeKind) {
+        if let Some(reason) = self.session.merge_refusal(kind) {
+            self.notify(ctx, reason.to_string());
+            return;
+        }
+        if kind == MergeKind::Flatten {
+            let hidden = self.session.flatten_hidden_with_pixels();
+            let now = ctx.input(|i| i.time);
+            if !flatten_gate(hidden, &mut self.confirm, now) {
+                self.notify(ctx, flatten_warning(hidden));
+                return;
+            }
+        }
+        let pixels = merge_pixels(&self.session.document, kind, self.session.active_layer());
+        match start_merge(kind, pixels) {
+            StartMerge::Now => self.run_merge(ctx, kind),
+            StartMerge::Later(wait) => {
+                self.pending_merge = Some(wait);
+                self.notify(ctx, wait_notice(kind).to_string());
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    /// Cuenta un fotograma de una combinación en espera y la ejecuta en el que toca.
+    fn advance_merge(&mut self, ctx: &egui::Context) {
+        let Some(wait) = &mut self.pending_merge else {
+            return;
+        };
+        let kind = wait.kind();
+        if wait.tick() {
+            self.pending_merge = None;
+            self.run_merge(ctx, kind);
+        } else {
+            ctx.request_repaint();
+        }
+    }
+
+    fn run_merge(&mut self, ctx: &egui::Context, kind: MergeKind) {
+        let report = self.session.merge(kind);
+        self.finish::<std::convert::Infallible>(ctx, Ok(report.changed));
+        if let Some(text) = report.notice {
+            self.notify(ctx, text);
         }
     }
 
@@ -819,26 +942,31 @@ impl App {
         self.notify(ctx, text);
     }
 
+    /// Convertir el modo toca todas las capas (`ConvertAll`): hay varias, o la celda activa está
+    /// vacía y `ConvertMode` no tendría imagen que convertir.
+    fn converts_all(&self) -> bool {
+        self.session.document.layers().len() > 1
+            || self
+                .session
+                .document
+                .image(self.session.active_cel())
+                .is_none()
+    }
+
     /// `Imagen → Convertir modo…`: abre el diálogo con el modo y el color activo de ahora.
     fn begin_convert_mode(&mut self, ctx: &egui::Context, target: Option<Mode>) {
-        if let Some(reason) = self.session.convert_refusal() {
-            self.notify(ctx, reason.to_string());
-            return;
-        }
-        let Some(image) = self.session.document.image(self.session.active_cel()) else {
-            return;
-        };
+        // El modo y la paleta son los del lienzo (con varias capas, o con la celda activa vacía, no
+        // hay otra imagen de la que leerlos).
+        let image = self.session.document.canvas_image();
         let from = image.mode();
+        let layers = self.session.document.layers().len();
         let active = self
             .session
             .active_pixel()
             .and_then(|pixel| pixel_rgba(image, pixel));
         let state_id = self.session.document.state_id();
         let locks = self.locks(ctx);
-        let opened = match target {
-            Some(target) => open_convert_mode_to(&mut self.modal, from, target, locks),
-            None => open_convert_mode(&mut self.modal, from, locks),
-        };
+        let opened = open_convert_mode_layers(&mut self.modal, from, layers, target, locks);
         if opened {
             self.modal_focus = None;
             self.convert = Some(ConvertSync::new(from, state_id, active));
@@ -917,11 +1045,13 @@ impl App {
         let Some(sync) = self.convert.take() else {
             return;
         };
-        let Some(image) = self.session.document.image(self.session.active_cel()) else {
-            return;
+        let doc = &self.session.document;
+        let from = doc.mode();
+        let pixels = if self.converts_all() {
+            convert_pixels(doc)
+        } else {
+            u64::from(doc.width()) * u64::from(doc.height())
         };
-        let from = image.mode();
-        let pixels = u64::from(image.width()) * u64::from(image.height());
         let Some(plan) = plan_from_values(values, from, sync.active()) else {
             return;
         };
@@ -964,20 +1094,31 @@ impl App {
     /// Reserva la memoria que hará falta y convierte como un paso de la historia; con un fallo,
     /// aviso de 5 s y todo queda como estaba.
     fn run_convert(&mut self, ctx: &egui::Context, plan: Plan, analysis: Option<&Analysis>) {
-        let Some(image) = self.session.document.image(self.session.active_cel()) else {
-            return;
-        };
-        let (width, height) = (image.width(), image.height());
-        if let Err(ConvertModeError::Memory { bytes }) =
-            reserve_for_convert(image, plan.target, &mut SystemAlloc)
-        {
-            self.notify(
-                ctx,
-                convert_memory_notice(width, height, plan.target, bytes),
-            );
-            return;
+        let all = self.converts_all();
+        let (width, height) = (
+            self.session.document.width(),
+            self.session.document.height(),
+        );
+        if !all {
+            let Some(image) = self.session.document.image(self.session.active_cel()) else {
+                return;
+            };
+            if let Err(ConvertModeError::Memory { bytes }) =
+                reserve_for_convert(image, plan.target, &mut SystemAlloc)
+            {
+                self.notify(
+                    ctx,
+                    convert_memory_notice(width, height, plan.target, bytes),
+                );
+                return;
+            }
         }
-        match self.session.convert_mode(plan.target, plan.allowed) {
+        let result = if all {
+            self.session.convert_all(plan.target, plan.allowed)
+        } else {
+            self.session.convert_mode(plan.target, plan.allowed)
+        };
+        match result {
             Ok(changed) => {
                 if changed && !self.refresh_now(ctx) {
                     // No hay memoria para regenerar las baldosas: el documento manda, así que se
@@ -1105,16 +1246,42 @@ impl App {
         {
             ctx.request_repaint();
         }
+        // El botón `Aplanar` del motivo «con varias capas: aplana antes»: cierra el diálogo y lanza
+        // la acción (con su confirmación si hay ocultas con píxeles).
         if kind == ModalKind::ConvertMode
-            && let Some(sync) = &mut self.convert
-            && let Some(image) = self.session.document.image(self.session.active_cel())
+            && let Reaction::Pressed { field, .. } = &reaction
+            && flatten_offer(field).is_some()
         {
+            self.modal.abandon();
+            self.modal_focus = None;
+            self.convert = None;
+            self.begin_merge(ctx, MergeKind::Flatten);
+            return;
+        }
+        if kind == ModalKind::ConvertMode && self.convert.is_some() {
+            let doc = &self.session.document;
             let history = History {
-                limit: self.session.document.history_limit(),
-                used: self.session.document.history_bytes(),
+                limit: doc.history_limit(),
+                used: doc.history_bytes(),
             };
-            let state_id = self.session.document.state_id();
-            if sync_convert(dialog, sync, image, state_id, history, &mut SystemAnalyzer) {
+            let all = doc.layers().len() > 1 || doc.image(self.session.active_cel()).is_none();
+            let changed = match &mut self.convert {
+                Some(sync) if all => {
+                    sync_convert_all(dialog, sync, doc, history, &mut SystemDocAnalyzer)
+                }
+                Some(sync) => doc.image(self.session.active_cel()).is_some_and(|image| {
+                    sync_convert(
+                        dialog,
+                        sync,
+                        image,
+                        doc.state_id(),
+                        history,
+                        &mut SystemAnalyzer,
+                    )
+                }),
+                None => false,
+            };
+            if changed {
                 ctx.request_repaint();
             }
         }
@@ -1162,6 +1329,7 @@ impl eframe::App for App {
         self.handle_capture(&ctx);
         self.advance_convert(&ctx);
         self.advance_save(&ctx);
+        self.advance_merge(&ctx);
         // Las acciones del fotograma, en este orden: menú, columna y atajos.
         let mut actions: Vec<(AppAction, Origin)> = Vec::new();
         let state = self.ui_state(&ctx);
@@ -1207,8 +1375,7 @@ impl eframe::App for App {
         let enabled = !(self.session.busy()
             || self.dialogs.pending()
             || self.modal.is_open()
-            || self.pending_convert.is_some()
-            || self.pending_save.is_some());
+            || self.waiting());
         self.session.view.icons = self.icons.set;
         let panel = {
             // La celda activa si tiene imagen (la quita de una entrada pregunta si la usa); si
@@ -1294,10 +1461,7 @@ impl eframe::App for App {
                 (screen.width() * ppp).round() as i64,
                 (screen.height() * ppp).round() as i64,
             );
-            let responsive = !(self.dialogs.pending()
-                || self.modal.is_open()
-                || self.pending_convert.is_some()
-                || self.pending_save.is_some());
+            let responsive = !(self.dialogs.pending() || self.modal.is_open() || self.waiting());
             show_layer_panel(
                 &ctx,
                 &PanelView {
