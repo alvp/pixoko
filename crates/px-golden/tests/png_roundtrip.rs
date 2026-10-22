@@ -96,9 +96,9 @@ fn normalized(img: &Image) -> Image {
 /// «Exacto»: `write_png` y `read_png` dan `Ok`, informe vacío e imagen igual a
 /// `normalized(img)`. Devuelve la imagen leída para aserciones adicionales.
 fn checks_exact(img: &Image, label: &str) -> Image {
-    let bytes = write_png(img).unwrap_or_else(|e| panic!("{label}: write_png falló: {e}"));
-    let r = read_png(&bytes).unwrap_or_else(|e| panic!("{label}: read_png falló: {e}"));
-    assert!(r.is_exact(), "{label}: informe no vacío: {:?}", r.report);
+    let bytes = write_png(img).unwrap_or_else(|e| panic!("{label}: write_png failed: {e}"));
+    let r = read_png(&bytes).unwrap_or_else(|e| panic!("{label}: read_png failed: {e}"));
+    assert!(r.is_exact(), "{label}: non-empty report: {:?}", r.report);
     assert!(r.report.is_empty(), "{label}");
     assert_eq!(r.image, normalized(img), "{label}");
     r.image
@@ -156,7 +156,7 @@ fn pixel_of_pattern(mode: Mode, k: usize) -> Pixel {
             gray: b(37, 11),
             alpha: b(53, 7),
         },
-        Mode::Indexed => unreachable!("el indexado necesita paleta"),
+        Mode::Indexed => unreachable!("the indexed mode needs a palette"),
     }
 }
 
@@ -628,7 +628,7 @@ fn row_10_truncated_corrupt_files_or_with_garbage() {
         let mut broken = valid.clone();
         broken[pos] ^= 0xFF;
         let r = read_png(&broken);
-        assert!(es_decode(&r), "CRC erróneo en {name_2}: {r:?}");
+        assert!(es_decode(&r), "wrong CRC in {name_2}: {r:?}");
     }
 
     // Un byte de más tras IEND.

@@ -194,7 +194,7 @@ fn row_01_flatten_and_merge_visible_give_the_composition_and_the_png() {
         assert!(failures.is_empty(), "{name_2}:\n{}", failures.join("\n"));
         assert_eq!(
             without_order, OF_A_LAYER,
-            "{name_2}: solo los casos de una capa dan NothingToMerge"
+            "{name_2}: only the one-layer cases give NothingToMerge"
         );
     }
 }
@@ -551,7 +551,7 @@ fn with_one_pixel_changed(png: &Image) -> (Image, (u32, u32)) {
             }
         }
     }
-    panic!("el PNG no tiene ningún píxel con alfa > 0");
+    panic!("the PNG has no pixel with alpha > 0");
 }
 
 #[test]
@@ -636,7 +636,7 @@ fn row_04_c_a_changed_field_of_the_written_file_makes_the_structure_fail() {
         };
         assert!(
             error.contains(field),
-            "cambiar un byte en {pan} debía dar «{field}» y da: {error}"
+            "changing a byte in {pan} should give «{field}» and gives: {error}"
         );
     }
 }
@@ -816,7 +816,7 @@ proptest! {
             match (a, b) {
                 (None, None) => {}
                 (Some(a), Some(b)) => fail(equal_except_rgb_with_alpha_0(&a, &b))?,
-                (a, b) => prop_assert!(false, "una orden da {} y la otra {}", a.is_some(), b.is_some()),
+                (a, b) => prop_assert!(false, "one command gives {} and the other {}", a.is_some(), b.is_some()),
             }
             // Escribir lo aplanado y reabrirlo es lo mismo que aplanar lo reabierto.
             let mut plane = doc.clone();

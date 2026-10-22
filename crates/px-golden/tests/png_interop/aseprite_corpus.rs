@@ -334,7 +334,7 @@ fn aseprite_row_2_each_defect_gives_an_error_with_its_message() {
     ];
     for (description, files, fragment) in cases {
         match verify(&files) {
-            Ok(_) => panic!("{description}: debía dar error"),
+            Ok(_) => panic!("{description}: should have given an error"),
             Err(e) => assert!(
                 e.contains(fragment),
                 "{description}: {e:?} no contiene {fragment:?}"
@@ -350,11 +350,11 @@ fn aseprite_row_3_each_golden_aseprite_has_its_png_and_its_sha256() {
     match verify(&files) {
         Ok(cases) => {
             if let Err(e) = compare_with_list(&cases, &CASES) {
-                panic!("golden/aseprite no tiene los 29 casos de la spec: {e}");
+                panic!("golden/aseprite does not have the 29 cases of the spec: {e}");
             }
             println!("golden/aseprite: {} casos comprobados", cases.len());
         }
-        Err(e) => panic!("corpus de golden/aseprite con problemas:\n{e}"),
+        Err(e) => panic!("golden/aseprite corpus with problems:\n{e}"),
     }
 }
 

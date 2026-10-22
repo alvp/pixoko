@@ -223,7 +223,7 @@ fn names_in(dir: &Path) -> Vec<String> {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) if e.kind() == ErrorKind::NotFound => return Vec::new(),
-        Err(e) => panic!("no se pudo leer el directorio {}: {e}", dir.display()),
+        Err(e) => panic!("could not read the directory {}: {e}", dir.display()),
     };
     let mut names: Vec<String> = entries
         .map(|e| e.expect("entrada de directorio ilegible"))
@@ -250,8 +250,7 @@ fn reads_folder(dir: &Path) -> Vec<File> {
                 Vec::new()
             } else {
                 let path = dir.join(&name_2);
-                fs::read(&path)
-                    .unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()))
+                fs::read(&path).unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()))
             };
             File { name_2, bytes }
         })
@@ -271,7 +270,7 @@ fn row_13_each_golden_png_has_the_hash_of_its_sha256() {
                 println!("{name_2}: omitido del hash (16 bits)");
             }
         }
-        Err(problems) => panic!("el corpus de golden/png no pasa:\n{problems}"),
+        Err(problems) => panic!("the golden/png corpus does not pass:\n{problems}"),
     }
 }
 
@@ -347,10 +346,10 @@ fn png_of_16_bits() -> Vec<u8> {
 /// Error esperado: el texto debe contener todos los fragmentos.
 fn assert_err_with(r: Result<Summary, String>, fragments: &[&str]) {
     match r {
-        Ok(_) => panic!("se esperaba Err con {fragments:?} y fue Ok"),
+        Ok(_) => panic!("Err with {fragments:?} was expected and it was Ok"),
         Err(msg) => {
             for f in fragments {
-                assert!(msg.contains(f), "falta {f:?} en el mensaje:\n{msg}");
+                assert!(msg.contains(f), "{f:?} is missing from the message:\n{msg}");
             }
         }
     }
@@ -452,7 +451,7 @@ fn row_14_malformed_hash() {
     for (name_2, content) in cases {
         let r = verify_corpus(&with_content("gris.png.sha256", content));
         match r {
-            Ok(_) => panic!("{name_2}: se esperaba Err y fue Ok"),
+            Ok(_) => panic!("{name_2}: Err was expected and it was Ok"),
             Err(msg) => {
                 assert!(msg.contains("gris.png.sha256"), "{name_2}: {msg}");
                 assert!(msg.contains("hash mal formado"), "{name_2}: {msg}");
@@ -481,7 +480,7 @@ fn row_14_the_sha256_is_read_trimming_ends_and_with_upper_or_lower_case() {
     for (name_2, content) in valid {
         let corpus = with_content("gris.png.sha256", content.into_bytes());
         if let Err(e) = verify_corpus(&corpus) {
-            panic!("{name_2}: se esperaba Ok y fue Err:\n{e}");
+            panic!("{name_2}: Ok was expected and it was Err:\n{e}");
         }
     }
 }
@@ -604,7 +603,7 @@ fn row_15_sha256_with_the_standard_vectors_and_the_padding_boundaries() {
 fn row_16_gitattributes_covers_golden_with_binary_and_the_readme_goes_after() {
     let path = root_of_the_repo().join(".gitattributes");
     let text = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()));
+        .unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()));
     // Líneas con regla: patrón y atributos (sin comentarios ni líneas en blanco).
     let rules: Vec<(&str, Vec<&str>)> = text
         .lines()
@@ -624,14 +623,15 @@ fn row_16_gitattributes_covers_golden_with_binary_and_the_readme_goes_after() {
     let for_md = rules.iter().position(|(p, _)| *p == "golden/**/*.md");
 
     let with_binary = with_binary.unwrap_or_else(|| {
-        panic!(".gitattributes: ninguna línea cubre `golden/` con `binary`:\n{text}")
+        panic!(".gitattributes: no line covers `golden/` with `binary`:\n{text}")
     });
-    let for_md = for_md
-        .unwrap_or_else(|| panic!(".gitattributes: falta la línea de `golden/**/*.md`:\n{text}"));
+    let for_md = for_md.unwrap_or_else(|| {
+        panic!(".gitattributes: the line for `golden/**/*.md` is missing:\n{text}")
+    });
     assert!(
         for_md > with_binary,
-        ".gitattributes: la línea de `golden/**/*.md` (regla {for_md}) debe ir después de la \
-         de `binary` (regla {with_binary}), porque gana la última que casa:\n{text}"
+        ".gitattributes: the line for `golden/**/*.md` (rule {for_md}) must come after the one \
+         for `binary` (rule {with_binary}), because the last matching one wins:\n{text}"
     );
 }
 
@@ -644,22 +644,22 @@ fn row_16_the_readme_names_each_png_and_says_mit() {
         .collect();
     assert!(
         !pngs.is_empty(),
-        "{} no contiene ningún PNG: el README no puede comprobarse en vacío",
+        "{} contains no PNG: the README cannot be checked on an empty set",
         dir.display()
     );
     let path = dir.join("README.md");
     let readme = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()));
+        .unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()));
     let without_name: Vec<&String> = pngs
         .iter()
         .filter(|n| !readme.contains(n.as_str()))
         .collect();
     assert!(
         without_name.is_empty(),
-        "el README no nombra {without_name:?}"
+        "the README does not name {without_name:?}"
     );
     assert!(
         readme.contains("MIT"),
-        "el README no menciona la licencia MIT"
+        "the README does not mention the MIT license"
     );
 }

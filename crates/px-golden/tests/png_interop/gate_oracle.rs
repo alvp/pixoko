@@ -245,12 +245,15 @@ fn real() -> Vec<(String, Vec<u8>, String)> {
 #[test]
 fn row_11_the_sha256_of_the_reread_is_the_models_in_the_four_real_ones() {
     let real = real();
-    assert_eq!(real.len(), 4, "golden/png/ debía tener 4 PNG reales");
+    assert_eq!(real.len(), 4, "golden/png/ should have 4 real PNGs");
     for (name_2, bytes, hash) in &real {
         let read = read_png(bytes).unwrap_or_else(|e| panic!("{name_2}: read_png: {e}"));
         // El punto de partida es la RGBA que dice el .sha256.
         let initial = sha256_hex(&bytes_rgba(&read.image));
-        assert_eq!(&initial, hash, "{name_2}: la lectura no es la del .sha256");
+        assert_eq!(
+            &initial, hash,
+            "{name_2}: the read is not the one of the .sha256"
+        );
 
         let model = Model::from(&read.image);
         let mut document = Document::new(read.image);
@@ -258,7 +261,7 @@ fn row_11_the_sha256_of_the_reread_is_the_models_in_the_four_real_ones() {
         let expected = sha256_hex(&model.rgba());
         assert_ne!(
             expected, initial,
-            "{name_2}: las ediciones no cambiaron nada: la prueba estaría vacía"
+            "{name_2}: the edits changed nothing: the test would be empty"
         );
 
         // El documento editado es el modelo.
@@ -268,17 +271,17 @@ fn row_11_the_sha256_of_the_reread_is_the_models_in_the_four_real_ones() {
         assert_eq!(
             sha256_hex(&bytes_rgba(edited)),
             expected,
-            "{name_2}: el documento editado no es el modelo"
+            "{name_2}: the edited document is not the model"
         );
 
         // `write_png`, `read_png` y el SHA-256 de la RGBA expandida de la relectura.
         let written = write_png(edited).unwrap_or_else(|e| panic!("{name_2}: write_png: {e}"));
         let reread = read_png(&written).unwrap_or_else(|e| panic!("{name_2}: relectura: {e}"));
-        assert!(reread.is_exact(), "{name_2}: la relectura se convirtió");
+        assert!(reread.is_exact(), "{name_2}: the reread was converted");
         assert_eq!(
             sha256_hex(&bytes_rgba(&reread.image)),
             expected,
-            "{name_2}: la relectura no es el modelo"
+            "{name_2}: the reread is not the model"
         );
     }
 }
@@ -305,7 +308,7 @@ fn row_11_control_a_model_with_one_pixel_changed_gives_another_sha256() {
                 assert_ne!(
                     sha256_hex(&view),
                     read_sha,
-                    "{name_2}: el modelo con el píxel {pixel} (canal {channel}) cambiado dio el mismo SHA-256"
+                    "{name_2}: the model with the pixel {pixel} (channel {channel}) changed gave the same SHA-256"
                 );
             }
         }
@@ -339,7 +342,7 @@ fn row_11_control_a_model_with_one_pixel_changed_gives_another_sha256() {
         assert_ne!(
             sha256_hex(&other_2.rgba()),
             read_sha,
-            "{name_2}: el modelo con una celda cambiada dio el mismo SHA-256"
+            "{name_2}: the model with a changed cel gave the same SHA-256"
         );
     }
 }

@@ -32,7 +32,7 @@ pub(super) fn golden(name_2: &str) -> Vec<u8> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../golden/aseprite")
         .join(name_2);
-    fs::read(&path).unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()))
+    fs::read(&path).unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()))
 }
 
 /// El documento de un caso, leído con los límites por defecto.
@@ -58,7 +58,7 @@ pub(super) fn rgba_of(image_2: &Image, x: u32, y: u32) -> Rgba {
         Ok(Pixel::Indexed(i)) => image_2
             .palette()
             .and_then(|p| p.resolved(i).ok())
-            .unwrap_or_else(|| panic!("índice {i} sin entrada en la paleta")),
+            .unwrap_or_else(|| panic!("index {i} without an entry in the palette")),
         other_2 => panic!("se esperaba RGBA o indexado, hay {other_2:?}"),
     }
 }
@@ -194,7 +194,7 @@ fn row_03_the_29_aseprite_compose_the_same_as_their_png() {
         .collect();
     assert!(
         failures.is_empty(),
-        "{} casos no componen como su PNG:\n{}",
+        "{} cases do not compose like their PNG:\n{}",
         failures.len(),
         failures.join("\n")
     );
@@ -215,7 +215,7 @@ fn requires_cels(case: &str, expected_2: &[Expected]) {
     assert_eq!(
         doc.layers().len(),
         expected_2.len(),
-        "{case}: número de capas"
+        "{case}: number of layers"
     );
     for &(i, rect, visible) in expected_2 {
         let layer_2 = &doc.layers()[i];
@@ -223,13 +223,13 @@ fn requires_cels(case: &str, expected_2: &[Expected]) {
         let Some([x0, y0, x1, y1]) = rect else {
             assert!(
                 doc.image(layer_2.cel()).is_none(),
-                "{name_2}: del todo fuera ⇒ celda vacía"
+                "{name_2}: entirely outside ⇒ empty cel"
             );
             continue;
         };
         let image_2 = doc
             .image(layer_2.cel())
-            .unwrap_or_else(|| panic!("{name_2}: debía tener celda"));
+            .unwrap_or_else(|| panic!("{name_2}: should have a cel"));
         assert_eq!(
             (image_2.width(), image_2.height()),
             (doc.width(), doc.height()),
@@ -248,7 +248,7 @@ fn requires_cels(case: &str, expected_2: &[Expected]) {
                 let pixel = image_2.get_pixel(x, y).expect("píxel dentro");
                 let inside = (x0..x1).contains(&x) && (y0..y1).contains(&y);
                 if !inside {
-                    assert_eq!(pixel, fill, "{name_2}: ({x}, {y}) fuera del recorte");
+                    assert_eq!(pixel, fill, "{name_2}: ({x}, {y}) outside the crop");
                 } else if pixel != fill && rgba_of(image_2, x, y).a != 0 {
                     visible_read += 1;
                 }
@@ -256,7 +256,7 @@ fn requires_cels(case: &str, expected_2: &[Expected]) {
         }
         assert_eq!(
             visible_read, visible,
-            "{name_2}: píxeles visibles del recorte"
+            "{name_2}: visible pixels of the crop"
         );
     }
 }

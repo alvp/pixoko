@@ -44,7 +44,7 @@ fn crates_dir() -> PathBuf {
 fn crate_dirs() -> Vec<String> {
     let dir = crates_dir();
     let mut names: Vec<String> = fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("no se pudo leer el directorio {}: {e}", dir.display()))
+        .unwrap_or_else(|e| panic!("could not read the directory {}: {e}", dir.display()))
         .map(|entry| entry.expect("entrada de directorio ilegible"))
         .filter(|entry| entry.path().is_dir())
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
@@ -139,7 +139,7 @@ impl Manifest {
 fn read_manifest(crate_name: &str) -> Manifest {
     let path = crates_dir().join(crate_name).join("Cargo.toml");
     let text = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()));
+        .unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()));
     Manifest::parse(&text)
 }
 
@@ -207,7 +207,7 @@ fn px_render_declares_its_own_lints_with_unsafe_deny() {
 fn every_external_dependency_is_documented() {
     let path = workspace_root().join("docs/DEPENDENCIES.md");
     let documented = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()));
+        .unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()));
     let mut failures = Vec::new();
     for name in EXPECTED_CRATES {
         let manifest = read_manifest(name);

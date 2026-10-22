@@ -390,7 +390,7 @@ fn document(case: &Case) -> Document {
             name: format!("capa {i}"),
             at: i,
         };
-        assert_eq!(doc.apply(cmd), Ok(true), "{name_2}: añadir la capa {i}");
+        assert_eq!(doc.apply(cmd), Ok(true), "{name_2}: add layer {i}");
     }
     for (i, layer_2) in case.layers.iter().enumerate() {
         let (id, cel) = (doc.layers()[i].id(), doc.layers()[i].cel());
@@ -409,28 +409,28 @@ fn document(case: &Case) -> Document {
             .collect();
         if !pixels.is_empty() {
             let cmd = Command::SetPixels { image: cel, pixels };
-            assert!(doc.apply(cmd).is_ok(), "{name_2}: escribir la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "{name_2}: write layer {i}");
         }
         if layer_2.opacity_2 != 255 {
             let cmd = Command::SetLayerOpacity {
                 layer: id,
                 opacity: layer_2.opacity_2,
             };
-            assert!(doc.apply(cmd).is_ok(), "{name_2}: opacidad de la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "{name_2}: opacity of layer {i}");
         }
         if layer_2.mode != BlendMode::Normal {
             let cmd = Command::SetLayerBlend {
                 layer: id,
                 blend: layer_2.mode,
             };
-            assert!(doc.apply(cmd).is_ok(), "{name_2}: modo de la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "{name_2}: mode of layer {i}");
         }
         if !layer_2.visible {
             let cmd = Command::SetLayerVisible {
                 layer: id,
                 visible: false,
             };
-            assert!(doc.apply(cmd).is_ok(), "{name_2}: ocultar la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "{name_2}: hide layer {i}");
         }
     }
     doc
@@ -442,7 +442,7 @@ fn read_golden_png(name_2: &str) -> Image {
         .join("../../golden/aseprite")
         .join(format!("{name_2}.png"));
     let bytes =
-        fs::read(&path).unwrap_or_else(|e| panic!("no se pudo leer {}: {e}", path.display()));
+        fs::read(&path).unwrap_or_else(|e| panic!("could not read {}: {e}", path.display()));
     let read = read_png(&bytes).unwrap_or_else(|e| panic!("{name_2}.png: read_png dio error: {e}"));
     assert_eq!(read.image.mode(), Mode::Rgba, "{name_2}.png debe ser RGBA");
     read.image
@@ -463,7 +463,7 @@ fn composite_and_png(case: &Case) -> (Image, Image) {
     assert_eq!(
         (composite.width(), composite.height(), composite.mode()),
         (png.width(), png.height(), Mode::Rgba),
-        "{name_2}: tamaño o modo de la composición distinto del PNG"
+        "{name_2}: size or mode of the composition differs from the PNG"
     );
     (composite, png)
 }
@@ -490,8 +490,8 @@ fn requires_equal_image(case: &Case, composite: &Image, png: &Image) {
     }
     if let Some((x, y, our, expected)) = first {
         panic!(
-            "{}: {different} píxeles distintos del PNG; el primero, ({x}, {y}): \
-             compose da {our:?} y el PNG {expected:?}",
+            "{}: {different} pixels differ from the PNG; the first, ({x}, {y}): \
+             compose gives {our:?} and the PNG {expected:?}",
             case.name_2
         );
     }
@@ -642,12 +642,12 @@ fn requires_without_failure(report: &Report) {
 fn requires_ceiling_and_floor(case: &str, that: &str, maximum: i32) {
     assert!(
         maximum != 0,
-        "{case} ({that}): el error máximo dentro del dominio es 0: la exención es innecesaria: \
-         usa tolerancia 0 en este caso"
+        "{case} ({that}): the maximum error inside the domain is 0: the exemption is unnecessary: \
+         use tolerance 0 in this case"
     );
     assert!(
         maximum <= TOLERANCE_EMPIRICAL,
-        "{case} ({that}): el error máximo dentro del dominio es {maximum}, más que el techo \
+        "{case} ({that}): the maximum error inside the domain is {maximum}, more than the ceiling \
          {TOLERANCE_EMPIRICAL}"
     );
 }
@@ -677,7 +677,7 @@ fn row_11_with(produce: impl Fn(&Case) -> Image) {
     assert_eq!(
         report.in_domain,
         [0],
-        "layers-alpha-background: Normal no es del dominio"
+        "layers-alpha-background: Normal is not in the domain"
     );
 
     // `blend-eight-background-translucent`: fondo con alfa 150 y origen con 255 (arriba) y 100
@@ -686,12 +686,15 @@ fn row_11_with(produce: impl Fn(&Case) -> Image) {
     let strips = eight_modes("blend-eight-background-translucent", 255, 255, 100, 150);
     let report = evaluates(&strips, &|x, _| (x / 8) as usize, 8);
     requires_without_failure(&report);
-    assert_eq!(report.in_domain[0], 0, "la tira Normal no es del dominio");
+    assert_eq!(
+        report.in_domain[0], 0,
+        "the Normal strip is not in the domain"
+    );
     assert_eq!(report.max_error[0], 0);
     for (k, (name_mode, _)) in MODES.iter().enumerate().skip(1) {
         assert_eq!(
             report.in_domain[k], 128,
-            "la tira {name_mode} es del dominio entera"
+            "the {name_mode} strip is entirely in the domain"
         );
         requires_ceiling_and_floor(
             "blend-eight-background-translucent",
@@ -725,20 +728,20 @@ fn flattens(case: &Case) -> Image {
     let mut doc = document(case);
     let before = compose(&doc).unwrap_or_else(|e| panic!("{name_2}: compose: {e:?}"));
     let order = flatten_command(&doc).unwrap_or_else(|e| panic!("{name_2}: aplanar: {e:?}"));
-    assert_eq!(doc.apply(order), Ok(true), "{name_2}: aplicar el aplanado");
-    assert_eq!(doc.layers().len(), 1, "{name_2}: queda una sola capa");
+    assert_eq!(doc.apply(order), Ok(true), "{name_2}: apply the flatten");
+    assert_eq!(doc.layers().len(), 1, "{name_2}: a single layer remains");
     let cel_2 = doc
         .image(doc.layers()[0].cel())
-        .unwrap_or_else(|| panic!("{name_2}: la celda aplanada tiene imagen"))
+        .unwrap_or_else(|| panic!("{name_2}: the flattened cel has an image"))
         .clone();
     assert_eq!(
         cel_2, before,
-        "{name_2}: la celda es la composición de antes"
+        "{name_2}: the cel is the earlier composition"
     );
     assert_eq!(
         compose(&doc).expect("compose tras aplanar"),
         before,
-        "{name_2}: componer tras aplanar da lo mismo que antes"
+        "{name_2}: composing after flattening gives the same as before"
     );
     cel_2
 }
@@ -787,7 +790,7 @@ fn row_08_merge_down_in_the_eight_matrices_at_tolerance_0() {
             .clone();
         assert_eq!(
             cel_2, before,
-            "{name_2}: la matriz de dos capas se combina sin pérdida"
+            "{name_2}: the two-layer matrix merges without loss"
         );
         requires_equal_image(&case, &cel_2, &read_golden_png(&case.name_2));
     }
