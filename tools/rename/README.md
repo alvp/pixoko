@@ -18,3 +18,6 @@ Etapa L2 (identificadores de pruebas): `glossary-l2.tsv` (palabras), `overrides-
 `overrides-l2-auto.tsv` (colisiones resueltas), `map-l2-applied.tsv` (viejo → nuevo por crate, ya aplicado);
 `l2gen.py`, `l2collide.py`, `l2resolve.py`, `l2batch.py`, `l2finish.py`, `l2review.py`, `l2left.py` y `l2nonen.py`
 son las herramientas (se usaron en ese orden, un crate cada vez).
+
+Etapa L3a: `spanish_left.py` cuenta los restos de español por crate (identificadores, comentarios y mensajes de
+aserción; `--list ids|comments|messages --crate X` los enumera). `ViewOp::Actual` y `ZoomActual` están en `map-l2-applied.tsv`.

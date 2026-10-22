@@ -237,3 +237,25 @@ Método de L1: mapa y script con léxico de Rust, con la lista previa de nombres
 - Rarezas conocidas del método: `to_*` que no toman `&self` (clippy lo vigila: `al_nivel` pasó a `go_to_level`), `Box`/`None` y otros nombres del preludio (prefijo `Test`).
 
 **Pasa a L3** (comentarios): 18 263 líneas, `ci.rs` (24 líneas, con tu aprobación), `fuzz/` y los `Cargo.toml`/`deny.toml` de `fuzz/` y `px-render`; las menciones de nombres viejos que quedan en comentarios y entre comillas invertidas se actualizan con el mapa.
+
+## Estado de la etapa L3a (2026-10-22)
+
+**Hecho, en commits separados** (workspace en verde; P1 a P4 y P3b en verde tras el último): (1) los 24 comentarios de `crates/px-golden/tests/ci.rs` en inglés, sin un token más (P4 lo comprueba sobre los 288 ficheros, `ALLOWED_ACTIONS` y `EXPECTED_COMMANDS` incluidos); (2) los comentarios de `fuzz/` (dos objetivos, `Cargo.toml` y `deny.toml`) y de `crates/px-render/Cargo.toml`; (3) los únicos identificadores de producción con español: `ViewOp::Actual` → `ActualSize` y `AppAction::ZoomActual` (y `Icon::ZoomActual`, `HelpTarget::ZoomActual`) → `ZoomActualSize`, en `px-ui` y `px-app` (92 usos y 8 menciones entre comillas invertidas); (4) `tools/rename/spanish_left.py`, que cuenta los restos por crate (`--list ids|comments|messages [--crate X]`).
+
+**Restos al cierre de L3a** (heurística del script; sirve para ver el avance):
+
+| crate | identificadores (usos) | líneas de comentario | mensajes de aserción |
+|---|---|---|---|
+| px-app | 14 (112) | 3 947 | 1 343 |
+| px-core | 8 (128) | 1 751 | 194 |
+| px-formats | 10 (138) | 744 | 80 |
+| px-golden | 11 (74) | 416 | 101 |
+| px-raster | 11 (88) | 600 | 111 |
+| px-ui | 37 (359) | 7 235 | 1 904 |
+| fuzz | 0 | 0 | 7 |
+| `deny.toml` raíz / px-render (`lib.rs`) | 0 | 3 / 1 | 0 |
+| **total** | **91 (899)** | **14 697** | **3 740** |
+
+**Hallazgo.** Los 91 identificadores que quedan son todos de código de pruebas y son restos de L2: en L2 dejé sin traducir las palabras de una o dos letras (`de`, `en`, `y`, `si`, `va`…) dentro de nombres cortos (`rgba_de`, `pixel_en`, `lee`, `UnColor`…) por ser ambiguas con el inglés. Producción no tiene ninguno. Se traducen en L3b, crate a crate, con el mismo mapa y las mismas verificaciones.
+
+**Siguiente (L3b, una sesión por crate cuando lo decidas):** comentarios, mensajes de aserción y esos identificadores. Los textos que ve el usuario y los literales de las pruebas que los comprueban no se tocan.
