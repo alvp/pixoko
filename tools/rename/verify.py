@@ -27,6 +27,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import rename as R  # solo el mapa y la lista de ficheros
+from msgpos import message_indices
 from regions import ROOT, classify
 
 CACHE = pathlib.Path.home() / ".cache" / "pixoko-l1"
@@ -307,9 +308,20 @@ def check(base, now):
                     union(x, y)
             if x in R.MODS:
                 union(x, R.MODS[x])
-        canon = lambda k, x: (k, find(x) if k == "id" else norm_literal(x) if k == "s" else x)
-        mapped_v = [canon(k, x) for k, x in v]
-        mapped_w = [canon(k, x) for k, x in w]
+        def hole_canon(h):
+            """`{ident:spec}` con el identificador en su clase de equivalencia (el mapa lo renombra)."""
+            m = re.fullmatch(r"\{([A-Za-z_]\w*)(.*)\}", h, re.S)
+            return "{" + find(m.group(1)) + m.group(2) + "}" if m else h
+        def message_canon(x):
+            """Mensaje de una aserción (L3): solo importan sus huecos `{…}`, en cualquier orden; el texto es libre."""
+            s = x.replace("{{", "").replace("}}", "")
+            return "<msg>" + "".join(sorted(hole_canon(h) for h in re.findall(r"\{[^{}]*\}", s)))
+        def canon_seq(seq):
+            msgs = set(message_indices(seq))
+            return [(k, message_canon(x)) if i in msgs else (k, find(x) if k == "id" else norm_literal(x) if k == "s" else x)
+                    for i, (k, x) in enumerate(seq)]
+        mapped_v = canon_seq(v)
+        mapped_w = canon_seq(w)
         def tidy(seq):
             """Sin las comas finales que rustfmt añade o quita al reajustar líneas."""
             out = []
