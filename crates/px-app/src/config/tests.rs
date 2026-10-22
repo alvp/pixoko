@@ -1,8 +1,8 @@
-//! Tests de `config` (specs/interfaz-ayuda.md, unidad I.5, fila 11 y condición 3 del visto bueno):
-//! carpeta de configuración por sistema, lectura y escritura atómica de `atajos.txt` y copia
-//! `atajos.txt.bak`. En ROJO hasta la lógica: `config` no existe todavía.
+//! Tests of `config` (specs/interfaz-ayuda.md, unit I.5, row 11 and condition 3 of the sign-off):
+//! per-system configuration folder, atomic read and write of `atajos.txt` and the
+//! `atajos.txt.bak` copy.
 //!
-//! Cada test usa su propia carpeta en `target/` (en disco, no en `/tmp`), borrada al terminar.
+//! Each test uses its own folder under `target/` (on disk, not in `/tmp`), deleted at the end.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -76,38 +76,40 @@ fn without_files_temporary(dir: &Path) {
         let name_2 = input.unwrap().file_name().to_string_lossy().into_owned();
         assert!(
             !name_2.contains("pixoko-tmp"),
-            "temporal sin borrar: {name_2}"
+            "temporary file not deleted: {name_2}"
         );
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Carpeta de configuración
+// Configuration folder
 // ---------------------------------------------------------------------------------------------
 
 #[test]
 fn row_11_the_configuration_folder_per_system() {
-    // Linux: XDG_CONFIG_HOME si es absoluta y no vacía; si no, $HOME/.config.
+    // `config_dir` asks the host whether XDG_CONFIG_HOME is absolute, and `join` uses the host
+    // separator: the absolute path and the expected values are built per host so the Linux rows
+    // also hold when the suite runs on Windows ("/cfg" has no drive letter there).
+    const ABSOLUTE: &str = if cfg!(windows) { "C:\\cfg" } else { "/cfg" };
+    let home_config = PathBuf::from("/home/a").join(".config");
+    // Linux: XDG_CONFIG_HOME if absolute and non-empty; otherwise $HOME/.config.
     let linux = |vars| config_dir(Platform::Linux, &environment(vars));
     assert_eq!(
-        linux(&[("XDG_CONFIG_HOME", "/cfg"), ("HOME", "/home/a")]),
-        Some(PathBuf::from("/cfg"))
+        linux(&[("XDG_CONFIG_HOME", ABSOLUTE), ("HOME", "/home/a")]),
+        Some(PathBuf::from(ABSOLUTE))
     );
     assert_eq!(
-        linux(&[("XDG_CONFIG_HOME", "relativa"), ("HOME", "/home/a")]),
-        Some(PathBuf::from("/home/a/.config")),
-        "una ruta relativa se ignora"
+        linux(&[("XDG_CONFIG_HOME", "relative"), ("HOME", "/home/a")]),
+        Some(home_config.clone()),
+        "a relative path is ignored"
     );
     assert_eq!(
         linux(&[("XDG_CONFIG_HOME", ""), ("HOME", "/home/a")]),
-        Some(PathBuf::from("/home/a/.config")),
-        "vacía se ignora"
+        Some(home_config.clone()),
+        "an empty one is ignored"
     );
-    assert_eq!(
-        linux(&[("HOME", "/home/a")]),
-        Some(PathBuf::from("/home/a/.config"))
-    );
-    assert_eq!(linux(&[]), None, "sin HOME no hay carpeta");
+    assert_eq!(linux(&[("HOME", "/home/a")]), Some(home_config.clone()));
+    assert_eq!(linux(&[]), None, "without HOME there is no folder");
     assert_eq!(linux(&[("HOME", "")]), None);
     // Windows: APPDATA.
     let windows = |vars| config_dir(Platform::Windows, &environment(vars));
@@ -120,19 +122,23 @@ fn row_11_the_configuration_folder_per_system() {
     let mac = |vars| config_dir(Platform::Mac, &environment(vars));
     assert_eq!(
         mac(&[("HOME", "/Users/a")]),
-        Some(PathBuf::from("/Users/a/Library/Application Support"))
+        Some(
+            PathBuf::from("/Users/a")
+                .join("Library")
+                .join("Application Support")
+        )
     );
     assert_eq!(mac(&[]), None);
-    // El fichero cuelga de `pixoko/atajos.txt`.
+    // The file hangs from `pixoko/atajos.txt`.
     assert_eq!(
         shortcuts_path(Platform::Linux, &environment(&[("HOME", "/home/a")])),
-        Some(PathBuf::from("/home/a/.config/pixoko/atajos.txt"))
+        Some(home_config.join("pixoko").join("atajos.txt"))
     );
     assert_eq!(shortcuts_path(Platform::Linux, &environment(&[])), None);
 }
 
 // ---------------------------------------------------------------------------------------------
-// Lectura y escritura
+// Reading and writing
 // ---------------------------------------------------------------------------------------------
 
 #[test]
@@ -140,12 +146,12 @@ fn row_11_save_creates_the_folder_writes_atomically_and_reads_back_the_same() {
     let dir = Folder::new();
     let path_2 = dir.path_2().join("pixoko").join("atajos.txt");
     let mut store = ShortcutStore::new(Some(path_2.clone()));
-    // Sin fichero: la tabla por defecto, sin aviso.
+    // No file: the default table, without a warning.
     let loaded = store.load(&default());
     assert_eq!(loaded.keymap, default());
     assert!(loaded.fatal.is_none());
     let table = pencil_with_x();
-    store.save(&table, &default(), false).expect("guarda");
+    store.save(&table, &default(), false).expect("saves");
     assert!(path_2.is_file());
     without_files_temporary(path_2.parent().unwrap());
     assert_eq!(
@@ -154,9 +160,9 @@ fn row_11_save_creates_the_folder_writes_atomically_and_reads_back_the_same() {
     );
     let mut other = ShortcutStore::new(Some(path_2.clone()));
     assert_eq!(other.load(&default()).keymap, table);
-    // Nada ignorado: sin copia `.bak`.
+    // Nothing ignored: no `.bak` copy.
     assert!(!path_2.with_file_name("atajos.txt.bak").exists());
-    // Sobrescribir otra vez tampoco la crea.
+    // Overwriting again does not create it either.
     store.save(&default(), &default(), false).unwrap();
     assert!(!path_2.with_file_name("atajos.txt.bak").exists());
     without_files_temporary(path_2.parent().unwrap());
@@ -169,7 +175,7 @@ fn condition_3_if_the_read_ignored_something_the_first_write_copies_the_original
     let bak = dir.path_2().join("atajos.txt.bak");
     let original = "pixoko-atajos 1\ntool.pencil 1 x\nlinea mala\n";
     fs::write(&path_2, original).unwrap();
-    // Un `.bak` anterior se sustituye.
+    // A previous `.bak` is replaced.
     fs::write(&bak, "viejo").unwrap();
     let mut store = ShortcutStore::new(Some(path_2.clone()));
     let loaded = store.load(&default());
@@ -177,16 +183,16 @@ fn condition_3_if_the_read_ignored_something_the_first_write_copies_the_original
     assert_eq!(
         fs::read_to_string(&path_2).unwrap(),
         original,
-        "leer no toca el fichero"
+        "reading does not touch the file"
     );
     store.save(&pencil_with_x(), &default(), false).unwrap();
     assert_eq!(
         fs::read_to_string(&bak).unwrap(),
         original,
-        "copia de lo que había"
+        "copy of what was there"
     );
     assert_ne!(fs::read_to_string(&path_2).unwrap(), original);
-    // Solo la primera escritura de la sesión: una segunda no vuelve a copiar.
+    // Only the first write of the session: a second one does not copy again.
     fs::write(&bak, "marca").unwrap();
     store.save(&default(), &default(), false).unwrap();
     assert_eq!(fs::read_to_string(&bak).unwrap(), "marca");
@@ -204,7 +210,7 @@ fn condition_3_an_unreadable_file_is_ignored_and_its_copy_precedes_the_write() {
     assert_eq!(
         fs::read(&path_2).unwrap(),
         [0xff, 0xfe, 0x80],
-        "sin borrar ni tocar"
+        "neither deleted nor touched"
     );
     store.save(&pencil_with_x(), &default(), false).unwrap();
     assert_eq!(fs::read(&bak).unwrap(), [0xff, 0xfe, 0x80]);
@@ -226,13 +232,13 @@ fn condition_3_reset_all_always_copies_and_leaves_only_the_header() {
     assert_eq!(
         fs::read_to_string(&bak).unwrap(),
         saved,
-        "sustituye cualquier .bak"
+        "replaces any .bak"
     );
     assert_eq!(
         fs::read_to_string(&path_2).unwrap(),
         to_text(&default(), &default())
     );
-    // Sin fichero previo, restablecer escribe la cabecera y no falla por no haber qué copiar.
+    // With no previous file, resetting writes the header and does not fail for having nothing to copy.
     let other = Folder::new();
     let new = other.path_2().join("a").join("atajos.txt");
     let mut t2 = ShortcutStore::new(Some(new.clone()));
@@ -249,7 +255,7 @@ fn row_11_failures_are_errors_and_without_a_folder_it_is_not_saved() {
         Err(SaveError::NoDirectory)
     ));
     assert_eq!(without.load(&default()).keymap, default());
-    // El destino es un directorio.
+    // The destination is a directory.
     let dir = Folder::new();
     let path_2 = dir.path_2().join("atajos.txt");
     fs::create_dir_all(&path_2).unwrap();
@@ -260,7 +266,7 @@ fn row_11_failures_are_errors_and_without_a_folder_it_is_not_saved() {
     ));
     assert!(path_2.is_dir());
     without_files_temporary(dir.path_2());
-    // La carpeta padre es un fichero.
+    // The parent folder is a file.
     let file = dir.path_2().join("fichero");
     fs::write(&file, "x").unwrap();
     let mut t = ShortcutStore::new(Some(file.join("atajos.txt")));
