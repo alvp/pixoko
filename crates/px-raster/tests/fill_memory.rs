@@ -70,7 +70,7 @@ fn comb_indexed() -> Image {
 fn spans_of(command: &Command) -> usize {
     match command {
         Command::FillSpans { spans, .. } => spans.len(),
-        other => panic!("se esperaba FillSpans, salió {other:?}"),
+        other => panic!("FillSpans was expected, got {other:?}"),
     }
 }
 
@@ -99,14 +99,14 @@ fn row_12_indexed_comb_8192() {
                 limit: Document::MAX_FILL_SPANS
             })
         ),
-        "se esperaba FillTooFragmented con el tope real, salió {result:?}"
+        "FillTooFragmented with the real cap was expected, got {result:?}"
     );
     assert!(
         growth < 256 * MIB,
-        "VmHWM creció {} MiB (el límite es 256)",
+        "VmHWM grew {} MiB (the limit is 256)",
         growth / MIB
     );
-    assert!(time < Duration::from_secs(30), "tardó {time:?}");
+    assert!(time < Duration::from_secs(30), "took {time:?}");
 }
 
 /// Fila 14, comprobaciones comunes: relleno de toda la imagen con 8192 tramos, `apply`, `undo` y
@@ -127,9 +127,9 @@ fn fills_the_whole_image(
     let t_fill = t0.elapsed();
     let command = match command {
         Ok(Some(c)) => c,
-        other => panic!("{label}: se esperaba Ok(Some(..)), salió {other:?}"),
+        other => panic!("{label}: Ok(Some(..)) was expected, got {other:?}"),
     };
-    assert_eq!(spans_of(&command), 8192, "{label}: un tramo por fila");
+    assert_eq!(spans_of(&command), 8192, "{label}: one span per row");
 
     let t1 = Instant::now();
     assert_eq!(doc.apply(command), Ok(true), "{label}: apply");
@@ -137,7 +137,7 @@ fn fills_the_whole_image(
     assert_eq!(
         doc.image(id).unwrap().bytes(),
         fills.bytes(),
-        "{label}: la imagen rellena"
+        "{label}: the image is filled"
     );
 
     let t2 = Instant::now();
@@ -146,7 +146,7 @@ fn fills_the_whole_image(
     assert_eq!(
         doc.image(id).unwrap().bytes(),
         original.bytes(),
-        "{label}: undo restaura los bytes"
+        "{label}: undo restores the bytes"
     );
 
     let t3 = Instant::now();
@@ -166,7 +166,7 @@ fn fills_the_whole_image(
         base / MIB,
         growth / MIB
     );
-    assert!(total < Duration::from_secs(60), "{label}: tardó {total:?}");
+    assert!(total < Duration::from_secs(60), "{label}: took {total:?}");
     growth
 }
 
@@ -191,7 +191,7 @@ fn row_14_uniform_indexed_8192() {
     let growth = fills_the_whole_image(doc, &original, &fills, Pixel::Indexed(1), "indexado");
     assert!(
         growth < 128 * MIB,
-        "VmHWM creció {} MiB (el límite es 128)",
+        "VmHWM grew {} MiB (the limit is 128)",
         growth / MIB
     );
 }

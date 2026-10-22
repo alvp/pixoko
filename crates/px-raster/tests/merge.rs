@@ -121,12 +121,12 @@ fn builds(template: Image, layers: &[Layer2]) -> Document {
             name: format!("C{i}"),
             at: i,
         };
-        assert_eq!(doc.apply(cmd), Ok(true), "añadir la capa {i}");
+        assert_eq!(doc.apply(cmd), Ok(true), "add layer {i}");
     }
     for (i, layer_2) in layers.iter().enumerate() {
         let (id, cel) = (doc.layers()[i].id(), doc.layers()[i].cel());
         if let Some(pixels_2) = &layer_2.cel_2 {
-            assert_eq!(pixels_2.len(), (w * h) as usize, "píxeles de la capa {i}");
+            assert_eq!(pixels_2.len(), (w * h) as usize, "pixels of layer {i}");
             let pixels = pixels_2
                 .iter()
                 .enumerate()
@@ -144,28 +144,28 @@ fn builds(template: Image, layers: &[Layer2]) -> Document {
                 layer: id,
                 opacity: layer_2.opacity_2,
             };
-            assert!(doc.apply(cmd).is_ok(), "opacidad de la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "opacity of layer {i}");
         }
         if layer_2.mode != BlendMode::Normal {
             let cmd = Command::SetLayerBlend {
                 layer: id,
                 blend: layer_2.mode,
             };
-            assert!(doc.apply(cmd).is_ok(), "modo de la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "mode of layer {i}");
         }
         if !layer_2.visible {
             let cmd = Command::SetLayerVisible {
                 layer: id,
                 visible: false,
             };
-            assert!(doc.apply(cmd).is_ok(), "ocultar la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "hide layer {i}");
         }
         if layer_2.locked {
             let cmd = Command::SetLayerLocked {
                 layer: id,
                 locked: true,
             };
-            assert!(doc.apply(cmd).is_ok(), "bloquear la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "lock layer {i}");
         }
     }
     doc
@@ -199,7 +199,7 @@ fn doc_indexed(w: u32, h: u32, t: Option<u8>, layers: &[Layer2]) -> Document {
 
 /// Los píxeles de una imagen RGBA, fila a fila.
 fn rgba_of(img: &Image) -> Vec<Rgba> {
-    assert_eq!(img.mode(), Mode::Rgba, "se esperaba una imagen RGBA");
+    assert_eq!(img.mode(), Mode::Rgba, "an RGBA image was expected");
     pixels_of(img)
         .into_iter()
         .map(|p| match p {
@@ -294,7 +294,7 @@ fn fusion(cmd: &Command) -> Fusion {
 /// Aplica `cmd` sobre una copia del documento y la devuelve (un solo paso).
 fn applied(doc: &Document, cmd: Command) -> Document {
     let mut copy = doc.clone();
-    assert_eq!(copy.apply(cmd), Ok(true), "aplicar el comando de combinar");
+    assert_eq!(copy.apply(cmd), Ok(true), "apply the merge command");
     assert_ne!(copy.state_id(), doc.state_id(), "estado nuevo");
     copy
 }
@@ -423,7 +423,7 @@ fn row_05_c_indexed_and_gray_with_alpha() {
     assert_eq!(
         output.palette(),
         doc.palette(),
-        "la paleta es la del lienzo"
+        "the palette is the canvas one"
     );
     // La oculta incluida cuenta; la vacía no aporta.
     assert_eq!(indices_of(&layers_of(&doc, &[l0, l1, empty])), [1, 4, 3, 0]);
@@ -630,7 +630,7 @@ fn row_06_a_the_ten_pixels_of_aseprite() {
             let tolerance = i32::from(in_domain);
             assert_eq!(
                 obtained.a, aseprite.a,
-                "{} píxel {k}: el alfa debe coincidir ({obtained:?} frente a {aseprite:?})",
+                "{} pixel {k}: the alpha must match ({obtained:?} versus {aseprite:?})",
                 v.name
             );
             for (channel, o, a) in [
@@ -641,12 +641,12 @@ fn row_06_a_the_ten_pixels_of_aseprite() {
                 let dif = (i32::from(o) - i32::from(a)).abs();
                 assert!(
                     dif <= 2,
-                    "{} píxel {k}, canal {channel}: {o} frente a {a} (nunca más de 2)",
+                    "{} pixel {k}, channel {channel}: {o} versus {a} (never more than 2)",
                     v.name
                 );
                 assert!(
                     dif <= tolerance,
-                    "{} píxel {k}, canal {channel}: {o} frente a {a}; dominio empírico: {in_domain}",
+                    "{} pixel {k}, channel {channel}: {o} versus {a}; empirical domain: {in_domain}",
                     v.name
                 );
             }
@@ -769,8 +769,12 @@ fn checks_abcd(doc: &Document) {
     assert_eq!(f.image.as_ref(), Some(&before));
     assert_eq!(f.based_on, doc.state_id());
     let after = applied(doc, cmd);
-    assert_eq!(ids(&after), [a, b], "quedan A y la oculta B");
-    assert_eq!(after.layer(b), doc.layer(b), "la oculta no cambia");
+    assert_eq!(ids(&after), [a, b], "A and the hidden B remain");
+    assert_eq!(
+        after.layer(b),
+        doc.layer(b),
+        "the hidden one does not change"
+    );
     assert_eq!(after.layers().len(), 2);
     assert_eq!(after.image(after.layers()[0].cel()), Some(&before));
     assert_eq!(compose_2(&after), before);
@@ -1083,12 +1087,12 @@ fn checks_composition(g: &DocGen, flatten: bool) -> Result<(), TestCaseError> {
     let cmd = match cmd {
         Err(e) => {
             prop_assert_eq!(e, MergeError::NothingToMerge);
-            prop_assert!(nothing_that_do, "`NothingToMerge` sin motivo");
+            prop_assert!(nothing_that_do, "`NothingToMerge` without a reason");
             return Ok(());
         }
         Ok(cmd) => cmd,
     };
-    prop_assert!(!nothing_that_do, "había que dar `NothingToMerge`");
+    prop_assert!(!nothing_that_do, "`NothingToMerge` had to be given");
 
     let f = fusion(&cmd);
     prop_assert_eq!(f.target, visible[0]);
@@ -1194,7 +1198,7 @@ fn a_rgba(p: Pixel) -> Rgba {
     match p {
         Pixel::Rgba(color) => color,
         Pixel::GrayAlpha { gray, alpha } => Rgba::new(gray, gray, gray, alpha),
-        other => panic!("el modelo no conoce {other:?}"),
+        other => panic!("the model does not know {other:?}"),
     }
 }
 
@@ -1282,7 +1286,7 @@ fn checks_model(g: &DocGen, k: usize) -> Result<(), TestCaseError> {
             prop_assert_eq!(
                 obtained,
                 model(&before_doc, k, x, y),
-                "píxel ({}, {}) de la combinación de las capas {} y {}",
+                "pixel ({}, {}) of the merge of layers {} and {}",
                 x,
                 y,
                 k,
@@ -1346,21 +1350,18 @@ fn checks_undo(g: &DocGen, operation: u8, k: usize) -> Result<(), TestCaseError>
         prop_assert_eq!(doc.image(original.cel()), before.image(original.cel()));
         prop_assert!(
             ret == original,
-            "la capa quitada {:?} no vuelve igual",
+            "the removed layer {:?} does not come back the same",
             original.id()
         );
     }
     prop_assert_eq!(doc.layer(f.target), Some(&goal_before));
     prop_assert!(
         doc == before,
-        "tras deshacer el documento no es el de antes"
+        "after undo the document is not the earlier one"
     );
 
     prop_assert_eq!(doc.redo(), Ok(()));
     prop_assert_eq!(doc.state_id(), after.state_id());
-    prop_assert!(
-        doc == after,
-        "tras rehacer el documento no es el de después"
-    );
+    prop_assert!(doc == after, "after redo the document is not the later one");
     Ok(())
 }

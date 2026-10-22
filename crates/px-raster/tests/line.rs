@@ -113,7 +113,7 @@ impl Model {
     /// Píxel `i`, con `0 <= i <= n`.
     fn pixel(&self, i: u64) -> Point {
         let i = i128::from(i);
-        assert!(i <= self.n, "índice {i} fuera de 0..={}", self.n);
+        assert!(i <= self.n, "index {i} outside 0..={}", self.n);
         let (x, y) = if self.n == 0 {
             (self.ax, self.ay)
         } else if self.axis_x() {
@@ -135,7 +135,7 @@ impl Model {
 
     /// Todos los píxeles; solo para segmentos pequeños.
     fn all(&self) -> Vec<Point> {
-        assert!(self.n <= 1000, "segmento demasiado largo para listarlo");
+        assert!(self.n <= 1000, "segment too long to list");
         (0..self.len()).map(|i| self.pixel(i)).collect()
     }
 }
@@ -559,7 +559,7 @@ fn draw_line_in_the_four_modes() {
         assert_eq!(draw_line(&mut doc, id, (0, 1), (3, 1), pixel), Ok(true));
         for x in 0..4 {
             assert_eq!(pixel_at(&doc, x, 1), pixel, "{pixel:?} en x = {x}");
-            assert_ne!(pixel_at(&doc, x, 0), pixel, "{pixel:?} en y = 0");
+            assert_ne!(pixel_at(&doc, x, 0), pixel, "{pixel:?} at y = 0");
         }
         assert_eq!(doc.undo(), Ok(()));
         assert_ne!(pixel_at(&doc, 0, 1), pixel);

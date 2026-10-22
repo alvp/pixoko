@@ -79,7 +79,7 @@ fn image_matrix(rows: &[&str]) -> Image {
         match rows[width_usize(y)].as_bytes()[width_usize(x)] {
             b'A' => pixel_a(),
             b'B' => pixel_b(),
-            other => panic!("carácter {other} no válido en la matriz"),
+            other => panic!("invalid character {other} in the matrix"),
         }
     })
 }
@@ -135,7 +135,11 @@ fn checks_region(doc: &Document, seed: (i32, i32), spans: &[Span]) {
         command(id, spans, pixel_c()),
         "semilla {seed:?}"
     );
-    assert_eq!(snapshot(doc), before, "fill_command no toca el documento");
+    assert_eq!(
+        snapshot(doc),
+        before,
+        "fill_command does not touch the document"
+    );
 
     let mut expected = doc.image(id).unwrap().clone();
     for s in spans {
@@ -150,7 +154,7 @@ fn checks_region(doc: &Document, seed: (i32, i32), spans: &[Span]) {
     );
     assert_eq!(copy.image(id), Some(&expected), "semilla {seed:?}");
     assert_eq!(copy.undo(), Ok(()));
-    assert_eq!(copy.image(id), doc.image(id), "undo restaura la imagen");
+    assert_eq!(copy.image(id), doc.image(id), "undo restores the image");
 }
 
 /// Comprueba que `fill_command` y `flood_fill` dan `Err(error)` y que el documento no cambia.
@@ -603,7 +607,7 @@ impl Large {
                 assert_eq!(spans.len(), width_usize(l), "(a): L tramos");
                 assert!(
                     spans.iter().copied().eq((0..l).map(|y| sp(y, 0, l))),
-                    "(a): un tramo sp(y, 0, L) por fila"
+                    "(a): one span sp(y, 0, L) per row"
                 );
             }
             Large::Board => {
@@ -627,7 +631,7 @@ impl Large {
                         .iter()
                         .copied()
                         .eq(std::iter::once(sp(0, 0, l)).chain(rest)),
-                    "(c): la secuencia completa"
+                    "(c): the whole sequence"
                 );
             }
         }
@@ -664,7 +668,7 @@ fn test_large(case: Large, l: u32) {
     let t_fill = t0.elapsed();
     let command = match result {
         Ok(Some(c)) => c,
-        other => panic!("{case:?} L={l}: se esperaba Some(..), salió {other:?}"),
+        other => panic!("{case:?} L={l}: Some(..) was expected, got {other:?}"),
     };
     let number_of_spans = match &command {
         Command::FillSpans {
@@ -677,11 +681,11 @@ fn test_large(case: Large, l: u32) {
             case.checks_spans(l, spans);
             spans.len()
         }
-        other => panic!("{case:?} L={l}: se esperaba FillSpans, salió {other:?}"),
+        other => panic!("{case:?} L={l}: FillSpans was expected, got {other:?}"),
     };
     assert!(
         doc.image(id) == Some(&original),
-        "fill_command no debe tocar la imagen"
+        "fill_command must not touch the image"
     );
 
     let t1 = Instant::now();
@@ -690,7 +694,7 @@ fn test_large(case: Large, l: u32) {
     assert_eq!(applied, Ok(true), "{case:?} L={l}: apply");
     assert!(
         doc.image(id) == Some(&fills),
-        "{case:?} L={l}: la imagen rellena"
+        "{case:?} L={l}: the image is filled"
     );
 
     let t2 = Instant::now();
@@ -698,7 +702,7 @@ fn test_large(case: Large, l: u32) {
     let t_undo = t2.elapsed();
     assert!(
         doc.image(id) == Some(&original),
-        "{case:?} L={l}: undo restaura la imagen"
+        "{case:?} L={l}: undo restores the image"
     );
 
     let t3 = Instant::now();
@@ -706,7 +710,7 @@ fn test_large(case: Large, l: u32) {
     let t_redo = t3.elapsed();
     assert!(
         doc.image(id) == Some(&fills),
-        "{case:?} L={l}: redo la rellena"
+        "{case:?} L={l}: redo fills it again"
     );
 
     let total = start.elapsed();
@@ -718,7 +722,7 @@ fn test_large(case: Large, l: u32) {
     );
     assert!(
         t_fill < LIMIT && t_apply < LIMIT && total < LIMIT,
-        "{case:?} L={l}: pasa de {LIMIT:?} (coste cuadrático)"
+        "{case:?} L={l}: exceeds {LIMIT:?} (quadratic cost)"
     );
 }
 
@@ -1015,7 +1019,7 @@ fn checks_shape(img: &Image, value: Pixel, spans: &[Span]) -> Result<(), TestCas
     let cap = width_usize(h) * width_usize(w.div_ceil(2));
     prop_assert!(spans.len() <= cap, "{} tramos > {}", spans.len(), cap);
     for s in spans {
-        prop_assert!(s.x_start < s.x_end, "tramo vacío {:?}", s);
+        prop_assert!(s.x_start < s.x_end, "empty span {:?}", s);
         prop_assert!(s.y < h && s.x_end <= w, "{:?} fuera de {}x{}", s, w, h);
         // Máximo: el píxel de la izquierda y el de la derecha, si existen, no valen lo de la semilla.
         if s.x_start > 0 {
@@ -1032,18 +1036,13 @@ fn checks_shape(img: &Image, value: Pixel, spans: &[Span]) -> Result<(), TestCas
         let (a, b) = (par[0], par[1]);
         prop_assert!(
             (a.y, a.x_start) < (b.y, b.x_start),
-            "no están estrictamente ordenados: {:?} y {:?}",
+            "not strictly ordered: {:?} and {:?}",
             a,
             b
         );
         if a.y == b.y {
             // Sin solapes y fusionados: queda al menos un píxel distinto entre los dos.
-            prop_assert!(
-                a.x_end < b.x_start,
-                "{:?} y {:?} se tocan o se solapan",
-                a,
-                b
-            );
+            prop_assert!(a.x_end < b.x_start, "{:?} and {:?} touch or overlap", a, b);
         }
     }
     Ok(())
@@ -1064,12 +1063,12 @@ proptest! {
         let result = fill_command(&doc, id, x, y, case.pixel);
         let changes = case.pixel != value;
         match spans_of(result, id, case.pixel)? {
-            None => prop_assert!(!changes, "Ok(None) con un píxel distinto del de la semilla"),
+            None => prop_assert!(!changes, "Ok(None) with a pixel different from the seed one"),
             Some(spans) => {
-                prop_assert!(changes, "Some(..) con un píxel igual al de la semilla");
+                prop_assert!(changes, "Some(..) with a pixel equal to the seed one");
                 let list = pixels_of(&spans);
                 let set: BTreeSet<(u32, u32)> = list.iter().copied().collect();
-                prop_assert_eq!(list.len(), set.len(), "píxeles repetidos en los tramos");
+                prop_assert_eq!(list.len(), set.len(), "repeated pixels in the spans");
                 prop_assert_eq!(&set, &region);
             }
         }
@@ -1209,7 +1208,7 @@ proptest! {
         if let Some(e) = error_of_apply(&img, pixel) {
             prop_assert!(
                 matches!(&e, DocumentError::Pixel { pixel: 0, .. }),
-                "apply debería dar Pixel {{ pixel: 0, .. }}, dio {:?}", e
+                "apply should give Pixel {{ pixel: 0, .. }}, gave {:?}", e
             );
             prop_assert_eq!(c, Err(e.clone()));
             prop_assert_eq!(f, Err(e));
@@ -1231,7 +1230,7 @@ proptest! {
         }
         prop_assert!(
             matches!(c, Ok(Some(Command::FillSpans { .. }))),
-            "se esperaba Some(FillSpans), salió {:?}", c
+            "Some(FillSpans) was expected, got {:?}", c
         );
         prop_assert_eq!(f, Ok(true));
         prop_assert_eq!(doc.image(id).unwrap().get_pixel(ux, uy), Ok(pixel));
@@ -1289,11 +1288,7 @@ mod limits {
             }
         }
         let img = Image::from_bytes(w, h, Mode::Rgba, data).unwrap();
-        assert_eq!(
-            img.get_pixel(0, 0),
-            Ok(pixel_a()),
-            "el orden de los bytes es RGBA"
-        );
+        assert_eq!(img.get_pixel(0, 0), Ok(pixel_a()), "the byte order is RGBA");
         assert_eq!(img.get_pixel(1, 0), Ok(pixel_a()));
         img
     }
@@ -1307,7 +1302,7 @@ mod limits {
     fn spans_of_the(result: Result<Option<Command>, DocumentError>) -> Vec<Span> {
         match result {
             Ok(Some(Command::FillSpans { spans, .. })) => spans,
-            other => panic!("se esperaba Ok(Some(FillSpans)), salió {other:?}"),
+            other => panic!("Ok(Some(FillSpans)) was expected, got {other:?}"),
         }
     }
 
@@ -1318,20 +1313,24 @@ mod limits {
         assert_eq!(doc.apply(command), Ok(true));
         assert!(
             doc.history_bytes() <= Document::DEFAULT_HISTORY_LIMIT,
-            "el paso ocupa {} bytes y el límite por defecto es {}",
+            "the step takes {} bytes and the default limit is {}",
             doc.history_bytes(),
             Document::DEFAULT_HISTORY_LIMIT
         );
         if cycle {
             let fills = doc.image(id).unwrap().clone();
-            assert!(fills != original, "el relleno cambia la imagen");
+            assert!(fills != original, "the fill changes the image");
             assert_eq!(fills.get_pixel(0, 0), Ok(pixel_c()));
             assert_eq!(fills.get_pixel(1, 0), Ok(pixel_c()));
-            assert_eq!(fills.get_pixel(1, 1), Ok(pixel_b()), "la pared no cambia");
+            assert_eq!(
+                fills.get_pixel(1, 1),
+                Ok(pixel_b()),
+                "the wall does not change"
+            );
             assert_eq!(doc.undo(), Ok(()));
-            assert!(doc.image(id) == Some(&original), "undo restaura la imagen");
+            assert!(doc.image(id) == Some(&original), "undo restores the image");
             assert_eq!(doc.redo(), Ok(()));
-            assert!(doc.image(id) == Some(&fills), "redo la rellena");
+            assert!(doc.image(id) == Some(&fills), "redo fills it again");
         }
     }
 
@@ -1353,7 +1352,7 @@ mod limits {
         assert_eq!(
             fill_command_with_limit(&doc, id, 0, 0, pixel_c(), 7),
             command(id, &expected_2_2, pixel_c()),
-            "7 tramos con tope 7"
+            "7 spans with cap 7"
         );
         assert_eq!(
             fill_command_with_limit(&doc, id, 4, 2, pixel_c(), 7),
@@ -1417,7 +1416,7 @@ mod limits {
         let result = fill_command_with_limit(&doc, id, 0, 0, Pixel::Indexed(0), 0);
         assert!(
             matches!(result, Err(DocumentError::Pixel { pixel: 0, .. })),
-            "salió {result:?}"
+            "got {result:?}"
         );
         assert_eq!(
             fill_command_with_limit(&doc, id, -1, 0, pixel_c(), 0),
@@ -1436,7 +1435,7 @@ mod limits {
             fill_command_with_limit(&doc, id, 0, 0, pixel_c(), 0),
             Err(too_much(0))
         );
-        assert_eq!(snapshot(&doc), before, "ninguna llamada toca el documento");
+        assert_eq!(snapshot(&doc), before, "no call touches the document");
     }
 
     // Fila 4.
@@ -1472,13 +1471,13 @@ mod limits {
                     limit: Document::MAX_FILL_SPANS
                 })
             ),
-            "salió {result:?}"
+            "got {result:?}"
         );
-        assert!(doc.image(id) == Some(&image_2), "la imagen no cambia");
+        assert!(doc.image(id) == Some(&image_2), "the image does not change");
         assert_eq!(doc.can_undo(), undo);
-        assert_eq!(doc.can_redo(), redo, "la pila de rehacer sigue viva");
+        assert_eq!(doc.can_redo(), redo, "the redo stack is still alive");
         assert_eq!(doc.history_bytes(), bytes);
-        assert_eq!(doc.state_id(), state, "no se llamó a apply");
+        assert_eq!(doc.state_id(), state, "apply was not called");
     }
 
     // Fila 5.
@@ -1490,7 +1489,7 @@ mod limits {
         assert_eq!(
             fill_command(&doc, id, 0, 0, pixel_c()),
             Err(too_much(CAP)),
-            "el error lleva el tope real"
+            "the error carries the real cap"
         );
     }
 
@@ -1624,7 +1623,7 @@ mod limits {
             if let Some(e) = error_of_apply(&img, pixel) {
                 prop_assert!(
                     matches!(&e, DocumentError::Pixel { pixel: 0, .. }),
-                    "apply debería dar Pixel {{ pixel: 0, .. }}, dio {:?}", e
+                    "apply should give Pixel {{ pixel: 0, .. }}, gave {:?}", e
                 );
                 prop_assert_eq!(c, Err(e));
                 return Ok(());
@@ -1644,7 +1643,7 @@ mod limits {
             } else {
                 prop_assert!(
                     matches!(c, Ok(Some(Command::FillSpans { .. }))),
-                    "se esperaba Some(FillSpans), salió {:?}", c
+                    "Some(FillSpans) was expected, got {:?}", c
                 );
             }
         }

@@ -54,7 +54,7 @@ mod model {
             BlendMode::Lighten => 255 * cb.max(cs),
             BlendMode::Add => 255 * (cb + cs).min(255),
             BlendMode::Difference => 255 * (cb - cs).abs(),
-            other => panic!("el modelo no conoce el modo {other:?}"),
+            other => panic!("the model does not know the mode {other:?}"),
         }
     }
 
@@ -212,12 +212,12 @@ fn builds(template: Image, layers: &[Layer2]) -> Document {
             name: format!("C{i}"),
             at: i,
         };
-        assert_eq!(doc.apply(cmd), Ok(true), "añadir la capa {i}");
+        assert_eq!(doc.apply(cmd), Ok(true), "add layer {i}");
     }
     for (i, layer_2) in layers.iter().enumerate() {
         let (id, cel) = (doc.layers()[i].id(), doc.layers()[i].cel());
         if let Some(pixels_2) = &layer_2.cel_2 {
-            assert_eq!(pixels_2.len(), (w * h) as usize, "píxeles de la capa {i}");
+            assert_eq!(pixels_2.len(), (w * h) as usize, "pixels of layer {i}");
             let pixels = pixels_2
                 .iter()
                 .enumerate()
@@ -235,21 +235,21 @@ fn builds(template: Image, layers: &[Layer2]) -> Document {
                 layer: id,
                 opacity: layer_2.opacity_2,
             };
-            assert!(doc.apply(cmd).is_ok(), "opacidad de la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "opacity of layer {i}");
         }
         if layer_2.mode != BlendMode::Normal {
             let cmd = Command::SetLayerBlend {
                 layer: id,
                 blend: layer_2.mode,
             };
-            assert!(doc.apply(cmd).is_ok(), "modo de la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "mode of layer {i}");
         }
         if !layer_2.visible {
             let cmd = Command::SetLayerVisible {
                 layer: id,
                 visible: false,
             };
-            assert!(doc.apply(cmd).is_ok(), "ocultar la capa {i}");
+            assert!(doc.apply(cmd).is_ok(), "hide layer {i}");
         }
     }
     doc
@@ -283,7 +283,7 @@ fn idx(values: &[u8]) -> Vec<Pixel> {
 
 /// Los píxeles de una imagen RGBA, fila a fila.
 fn rgba_of(img: &Image) -> Vec<Rgba> {
-    assert_eq!(img.mode(), Mode::Rgba, "se esperaba una imagen RGBA");
+    assert_eq!(img.mode(), Mode::Rgba, "an RGBA image was expected");
     (0..img.height())
         .flat_map(|y| (0..img.width()).map(move |x| (x, y)))
         .map(|(x, y)| match img.get_pixel(x, y).expect("píxel dentro") {
@@ -360,14 +360,14 @@ fn row_01_identities_and_borders() {
         assert_eq!(
             composite_pixel(T, c(232, 198, 52, 0), 255, mode),
             c(232, 198, 52, 0),
-            "fondo vacío, αs = 0, {mode:?}"
+            "empty background, αs = 0, {mode:?}"
         );
         // Un origen exactamente `(0, 0, 0, 0)` es «nada» (como una celda vacía): no pisa el RGB
         // de un fondo con alfa 0.
         assert_eq!(
             composite_pixel(c(255, 255, 255, 0), T, 255, mode),
             c(255, 255, 255, 0),
-            "origen (0, 0, 0, 0) sobre fondo con alfa 0 y RGB, {mode:?}"
+            "source (0, 0, 0, 0) over a background with alpha 0 and RGB, {mode:?}"
         );
     }
 
@@ -523,7 +523,7 @@ fn sweep(alphas_background: &[u8], alphas_source: &[u8], colors: &[u8]) {
                             composite_pixel(c(cb, cb, cb, ab), c(cs, cs, cs, a_s), 255, mode);
                         assert!(
                             model::alpha_meets(output.a, abi, so),
-                            "{mode:?}: αb {ab}, αs {a_s}: el alfa de salida {} está a más de 0,5 del real",
+                            "{mode:?}: αb {ab}, αs {a_s}: the output alpha {} is more than 0.5 away from the real one",
                             output.a
                         );
                         let expected =
@@ -531,13 +531,13 @@ fn sweep(alphas_background: &[u8], alphas_source: &[u8], colors: &[u8]) {
                         // Grises: los tres canales iguales (los modos son separables).
                         assert!(
                             output.r == output.g && output.g == output.b,
-                            "{mode:?}: αb {ab}, αs {a_s}, Cb {cb}, Cs {cs}: los canales de un gris \
-                             difieren: {output:?}"
+                            "{mode:?}: αb {ab}, αs {a_s}, Cb {cb}, Cs {cs}: the channels of a gray \
+                             differ: {output:?}"
                         );
                         assert!(
                             model::meets(output.r, expected, (TOLERANCE_EMPIRICAL, 1)),
-                            "{mode:?}: αb {ab}, αs {a_s}, Cb {cb}, Cs {cs}: el canal da {} y el \
-                             modelo {}/{} (tolerancia {TOLERANCE_EMPIRICAL})",
+                            "{mode:?}: αb {ab}, αs {a_s}, Cb {cb}, Cs {cs}: the channel gives {} and the \
+                             model {}/{} (tolerance {TOLERANCE_EMPIRICAL})",
                             output.r,
                             expected.0,
                             expected.1
@@ -760,11 +760,11 @@ fn row_06_grays_with_and_without_alpha() {
                 gray: rgb.r,
                 alpha: rgb.a
             },
-            "píxel {k}: el RGBA equivalente es {rgb:?}"
+            "pixel {k}: the equivalent RGBA is {rgb:?}"
         );
         assert!(
             rgb.r == rgb.g && rgb.g == rgb.b,
-            "el RGBA equivalente es gris"
+            "the equivalent RGBA is gray"
         );
     }
 
@@ -831,7 +831,7 @@ fn row_07_indexed_the_highest_visible_non_transparent_layer_wins() {
     assert_eq!(
         output.palette(),
         three.palette(),
-        "la paleta es la del lienzo"
+        "the palette is the canvas one"
     );
     assert_eq!((output.width(), output.height()), (4, 1));
 
@@ -1137,7 +1137,7 @@ fn document(g: &DocGen) -> Document {
             image: doc.layers()[0].cel(),
             index: None,
         };
-        assert!(doc.apply(cmd).is_ok(), "quitar el índice transparente");
+        assert!(doc.apply(cmd).is_ok(), "remove the transparent index");
     }
     doc
 }
@@ -1193,7 +1193,7 @@ proptest! {
                     prop_assert_eq!(
                         img.get_pixel(xx, yy).expect("píxel dentro"),
                         expected,
-                        "píxel ({}, {}): `compose` no es el plegado de `composite_pixel`", xx, yy
+                        "pixel ({}, {}): `compose` is not the fold of `composite_pixel`", xx, yy
                     );
                 }
             }
@@ -1236,10 +1236,10 @@ proptest! {
         // Invariantes exactas.
         prop_assert!(i128::from(output.a) >= a_s && output.a >= back.a, "αr ≥ αs y αr ≥ αb");
         if back.a == 255 {
-            prop_assert_eq!(output.a, 255, "con fondo opaco, αr = 255");
+            prop_assert_eq!(output.a, 255, "with an opaque background, αr = 255");
         }
         if mode == BlendMode::Normal && a_s == 255 {
-            prop_assert_eq!(output, Rgba::new(src.r, src.g, src.b, 255), "Normal opaco da el origen");
+            prop_assert_eq!(output, Rgba::new(src.r, src.g, src.b, 255), "opaque Normal gives the source");
         }
 
         // αr: a ≤ 0,5 del real.
@@ -1257,7 +1257,7 @@ proptest! {
             let real = model::result(mode, cb, cs, ab, a_s, alpha_real);
             prop_assert!(
                 model::meets(cr, real, tol_real),
-                "{:?} {}: Cr = {} y el modelo (αr real) {}/{} (tolerancia {:?})",
+                "{:?} {}: Cr = {} and the model (real αr) {}/{} (tolerance {:?})",
                 mode, channel, cr, real.0, real.1, tol_real
             );
             // Con el αr entero: ≤ TOLERANCIA_EMPIRICA dentro del dominio de 4b (ver
@@ -1265,7 +1265,7 @@ proptest! {
             let integer = model::result(mode, cb, cs, ab, a_s, (i128::from(output.a), 1));
             prop_assert!(
                 model::meets(cr, integer, tol_whole),
-                "{:?} {}: Cr = {} y el modelo (αr entero) {}/{} (tolerancia {:?})",
+                "{:?} {}: Cr = {} and the model (integer αr) {}/{} (tolerance {:?})",
                 mode, channel, cr, integer.0, integer.1, tol_whole
             );
         }
@@ -1349,7 +1349,7 @@ proptest! {
             && u64::from(ry) + u64::from(rh) <= u64::from(g.h);
         match &part {
             Ok(img) => {
-                prop_assert!(!empty_2 && fits, "`compose_rect` dio Ok con {:?}", r);
+                prop_assert!(!empty_2 && fits, "`compose_rect` gave Ok with {:?}", r);
                 prop_assert_eq!((img.width(), img.height(), img.mode()), (rw, rh, doc.mode()));
             }
             Err(ComposeError::EmptyRect) => prop_assert!(empty_2),
