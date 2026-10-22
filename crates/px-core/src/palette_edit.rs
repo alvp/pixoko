@@ -93,7 +93,7 @@ pub(crate) enum PaletteStep {
     },
     /// Entrada añadida al final.
     Append { color: Rgba },
-    /// Permutación `adelante[antiguo] = nuevo` (`move` y `permute`).
+    /// Permutación `adelante[old] = new` (`move` y `permute`).
     Reorder { forward: Vec<u8> },
     /// Entrada quitada: su color, el índice transparente de antes y, por cada imagen que usaba
     /// la entrada, los píxeles que la usaban.

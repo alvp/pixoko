@@ -41,7 +41,7 @@ impl LayerId {
 }
 
 /// Modo de mezcla de una capa con lo que hay debajo (D07). Los ocho modos separables de la
-/// composición de `px-raster` (`compose`); las fórmulas están en `specs/hito-3-mezcla.md`.
+/// composición de `px-raster` (`compose`); las fórmulas están en `specs/hito-3-blend_2.md`.
 ///
 /// Sin discriminantes explícitos y sin conversión a número: nada serializa el valor de Rust (los
 /// códigos de un fichero se mapean con una tabla propia del formato). `#[non_exhaustive]`: el
@@ -103,7 +103,7 @@ impl Layer {
     }
 
     /// Opacidad de 0 (transparente) a 255 (opaca); escala el alfa de la capa al componerla (fórmulas
-    /// en `specs/hito-3-mezcla.md`). En indexado siempre es 255.
+    /// en `specs/hito-3-blend_2.md`). En indexado siempre es 255.
     pub fn opacity(&self) -> u8 {
         self.opacity
     }
@@ -206,11 +206,11 @@ pub enum Command {
         allowed: Allowed,
     },
     /// Añade una capa visible, de opacidad 255 y con la celda vacía en la posición `at`
-    /// (`0..=capas`; 0 es el fondo y `capas`, encima de todas). Solo como comando suelto.
+    /// (`0..=layers_2`; 0 es el fondo y `layers_2`, encima de todas). Solo como comando suelto.
     AddLayer { name: String, at: usize },
     /// Quita la capa con su celda. No se puede quitar la única. Solo como comando suelto.
     RemoveLayer { layer: LayerId },
-    /// Mueve la capa a la posición `to` (`0..capas`, la posición final). Solo como comando
+    /// Mueve la capa a la posición `to` (`0..layers_2`, la posición final). Solo como comando
     /// suelto.
     MoveLayer { layer: LayerId, to: usize },
     /// Cambia el nombre de la capa (hasta `Document::MAX_LAYER_NAME_BYTES` bytes). Solo como
@@ -257,7 +257,7 @@ pub enum Command {
     /// `Vec::remove` más `Vec::insert`. Píxeles e índice transparente se remapean: la imagen
     /// no cambia. Equivale a la `PermutePalette` correspondiente.
     MovePaletteEntry { image: ImageId, from: u8, to: u8 },
-    /// Reordena la paleta: `order[nuevo] = antiguo`. Debe ser una permutación de las entradas.
+    /// Reordena la paleta: `order[new] = old`. Debe ser una permutación de las entradas.
     /// Píxeles e índice transparente se remapean: la imagen no cambia.
     PermutePalette { image: ImageId, order: Vec<u8> },
     /// Añade una entrada al final de la paleta.

@@ -12,7 +12,7 @@ fn assert_palette_traits<T: Clone + Debug + Default + PartialEq + Eq>() {}
 fn assert_error_traits<T: Debug + Clone + PartialEq + Eq + Display + std::error::Error>() {}
 
 #[test]
-fn traits_derivados() {
+fn traits_derived() {
     assert_palette_traits::<Palette>();
     assert_error_traits::<PaletteError>();
 }
@@ -36,22 +36,22 @@ fn c2() -> Rgba {
     Rgba::new(70, 80, 90, 255)
 }
 
-fn paleta(colores: &[Rgba]) -> Palette {
-    Palette::from_colors(colores.iter().copied()).unwrap()
+fn palette_2(colors_2: &[Rgba]) -> Palette {
+    Palette::from_colors(colors_2.iter().copied()).unwrap()
 }
 
-fn paleta_de(n: usize) -> Palette {
+fn palette_of(n: usize) -> Palette {
     Palette::from_colors((0..n).map(|i| Rgba::new(i as u8, 255 - i as u8, 7, 255))).unwrap()
 }
 
-fn fuera_de_rango(index: u8, len: usize) -> PaletteError {
+fn out_of_range(index: u8, len: usize) -> PaletteError {
     PaletteError::IndexOutOfRange { index, len }
 }
 
 // Una prueba por fila de la tabla de casos límite.
 
 #[test]
-fn new_y_default_son_vacias() {
+fn new_and_default_are_empty() {
     for p in [Palette::new(), Palette::default()] {
         assert_eq!(p.len(), 0);
         assert!(p.is_empty());
@@ -61,20 +61,20 @@ fn new_y_default_son_vacias() {
 }
 
 #[test]
-fn from_colors_con_0_1_y_256() {
+fn from_colors_with_0_1_and_256() {
     for n in [0usize, 1, 256] {
-        let entrada: Vec<Rgba> = (0..n).map(|i| Rgba::new(i as u8, 1, 2, 255)).collect();
-        let p = Palette::from_colors(entrada.iter().copied()).unwrap();
+        let input: Vec<Rgba> = (0..n).map(|i| Rgba::new(i as u8, 1, 2, 255)).collect();
+        let p = Palette::from_colors(input.iter().copied()).unwrap();
         assert_eq!(p.len(), n);
         assert_eq!(p.is_empty(), n == 0);
-        assert_eq!(p.colors(), entrada.as_slice());
+        assert_eq!(p.colors(), input.as_slice());
     }
     let p = Palette::from_colors((0..=255u8).map(|i| Rgba::opaque(i, i, i))).unwrap();
     assert_eq!(p.len(), 256);
 }
 
 #[test]
-fn from_colors_con_257_e_infinito() {
+fn from_colors_with_257_and_infinite() {
     let r = Palette::from_colors((0..=256usize).map(|i| Rgba::opaque(i as u8, 0, 0)));
     assert_eq!(r, Err(PaletteError::TooManyColors));
 
@@ -83,56 +83,56 @@ fn from_colors_con_257_e_infinito() {
 }
 
 #[test]
-fn from_colors_no_lee_mas_de_257_elementos() {
-    let mut leidos = 0usize;
-    let r = Palette::from_colors(std::iter::repeat(c0()).inspect(|_| leidos += 1));
+fn from_colors_does_not_read_more_than_257_elements() {
+    let mut read = 0usize;
+    let r = Palette::from_colors(std::iter::repeat(c0()).inspect(|_| read += 1));
     assert_eq!(r, Err(PaletteError::TooManyColors));
-    assert!(leidos <= 257, "leyó {leidos} elementos");
+    assert!(read <= 257, "leyó {read} elementos");
 }
 
 #[test]
-fn duplicados_se_conservan_e_independientes() {
-    let mut p = paleta(&[c0(), c0(), c0()]);
+fn duplicates_are_kept_and_independent() {
+    let mut p = palette_2(&[c0(), c0(), c0()]);
     assert_eq!(p.colors(), &[c0(), c0(), c0()]);
     assert_eq!(p.set(0, c2()), Ok(()));
     assert_eq!(p.colors(), &[c2(), c0(), c0()]);
 }
 
 #[test]
-fn alfa_y_rgb_intactos() {
-    let p = paleta(&[Rgba::new(1, 2, 3, 0), Rgba::new(1, 2, 3, 128)]);
+fn alpha_and_rgb_intact() {
+    let p = palette_2(&[Rgba::new(1, 2, 3, 0), Rgba::new(1, 2, 3, 128)]);
     assert_eq!(p.get(0), Ok(Rgba::new(1, 2, 3, 0)));
     assert_eq!(p.get(1), Ok(Rgba::new(1, 2, 3, 128)));
 }
 
 #[test]
-fn get_en_rango_y_ultimo_indice() {
-    assert_eq!(paleta(&[c0(), c1()]).get(1), Ok(c1()));
-    let p = paleta_de(256);
+fn get_in_range_and_last_index() {
+    assert_eq!(palette_2(&[c0(), c1()]).get(1), Ok(c1()));
+    let p = palette_of(256);
     assert_eq!(p.get(255), Ok(p.colors()[255]));
 }
 
 #[test]
-fn get_fuera_de_rango() {
-    let p = paleta(&[c0(), c1()]);
-    assert_eq!(p.get(2), Err(fuera_de_rango(2, 2)));
-    assert_eq!(p.get(255), Err(fuera_de_rango(255, 2)));
-    assert_eq!(Palette::new().get(0), Err(fuera_de_rango(0, 0)));
+fn get_out_of_range() {
+    let p = palette_2(&[c0(), c1()]);
+    assert_eq!(p.get(2), Err(out_of_range(2, 2)));
+    assert_eq!(p.get(255), Err(out_of_range(255, 2)));
+    assert_eq!(Palette::new().get(0), Err(out_of_range(0, 0)));
 }
 
 #[test]
-fn push_devuelve_el_indice_nuevo() {
-    let mut vacia = Palette::new();
-    assert_eq!(vacia.push(c0()), Ok(0));
+fn push_returns_the_new_index() {
+    let mut empty = Palette::new();
+    assert_eq!(empty.push(c0()), Ok(0));
 
-    let mut p = paleta(&[c0()]);
+    let mut p = palette_2(&[c0()]);
     assert_eq!(p.push(c1()), Ok(1));
     assert_eq!(p.colors(), &[c0(), c1()]);
 }
 
 #[test]
-fn push_con_255_y_con_256() {
-    let mut p = paleta_de(255);
+fn push_with_255_and_with_256() {
+    let mut p = palette_of(255);
     assert_eq!(p.push(c0()), Ok(255));
     assert_eq!(p.len(), 256);
 
@@ -142,50 +142,50 @@ fn push_con_255_y_con_256() {
 }
 
 #[test]
-fn set_sustituye_o_falla_sin_cambios() {
-    let mut p = paleta(&[c0(), c1()]);
+fn set_replaces_or_fails_without_changes() {
+    let mut p = palette_2(&[c0(), c1()]);
     assert_eq!(p.set(1, c2()), Ok(()));
     assert_eq!(p.colors(), &[c0(), c2()]);
 
     let antes = p.clone();
-    assert_eq!(p.set(2, c2()), Err(fuera_de_rango(2, 2)));
+    assert_eq!(p.set(2, c2()), Err(out_of_range(2, 2)));
     assert_eq!(p, antes);
 }
 
 #[test]
-fn set_transparent_index_valido() {
-    let mut p = paleta(&[c0(), c1()]);
+fn set_transparent_index_valid() {
+    let mut p = palette_2(&[c0(), c1()]);
     assert_eq!(p.set_transparent_index(Some(1)), Ok(()));
     assert_eq!(p.transparent_index(), Some(1));
 }
 
 #[test]
-fn set_transparent_index_fuera_de_rango_conserva_el_anterior() {
-    let mut p = paleta(&[c0(), c1()]);
-    assert_eq!(p.set_transparent_index(Some(2)), Err(fuera_de_rango(2, 2)));
+fn set_transparent_index_out_of_range_keeps_the_previous() {
+    let mut p = palette_2(&[c0(), c1()]);
+    assert_eq!(p.set_transparent_index(Some(2)), Err(out_of_range(2, 2)));
     assert_eq!(p.transparent_index(), None);
 
     p.set_transparent_index(Some(0)).unwrap();
     let antes = p.clone();
-    assert_eq!(p.set_transparent_index(Some(2)), Err(fuera_de_rango(2, 2)));
+    assert_eq!(p.set_transparent_index(Some(2)), Err(out_of_range(2, 2)));
     assert_eq!(p.transparent_index(), Some(0));
     assert_eq!(p, antes);
 
-    let mut vacia = Palette::new();
+    let mut empty = Palette::new();
     assert_eq!(
-        vacia.set_transparent_index(Some(0)),
-        Err(fuera_de_rango(0, 0))
+        empty.set_transparent_index(Some(0)),
+        Err(out_of_range(0, 0))
     );
-    assert_eq!(vacia.transparent_index(), None);
+    assert_eq!(empty.transparent_index(), None);
 }
 
 #[test]
-fn set_transparent_index_none_siempre_funciona() {
-    let mut vacia = Palette::new();
-    assert_eq!(vacia.set_transparent_index(None), Ok(()));
-    assert_eq!(vacia.transparent_index(), None);
+fn set_transparent_index_none_always_works() {
+    let mut empty = Palette::new();
+    assert_eq!(empty.set_transparent_index(None), Ok(()));
+    assert_eq!(empty.transparent_index(), None);
 
-    let mut p = paleta(&[c0(), c1()]);
+    let mut p = palette_2(&[c0(), c1()]);
     p.set_transparent_index(Some(1)).unwrap();
     assert_eq!(p.set_transparent_index(None), Ok(()));
     assert_eq!(p.transparent_index(), None);
@@ -195,8 +195,8 @@ fn set_transparent_index_none_siempre_funciona() {
 }
 
 #[test]
-fn resolved_aplica_el_indice_transparente() {
-    let mut p = paleta(&[Rgba::new(9, 8, 7, 255), c1()]);
+fn resolved_applies_the_transparent_index() {
+    let mut p = palette_2(&[Rgba::new(9, 8, 7, 255), c1()]);
     p.set_transparent_index(Some(0)).unwrap();
     assert_eq!(p.resolved(0), Ok(Rgba::new(9, 8, 7, 0)));
     assert_eq!(p.get(0), Ok(Rgba::new(9, 8, 7, 255)));
@@ -204,18 +204,18 @@ fn resolved_aplica_el_indice_transparente() {
 }
 
 #[test]
-fn resolved_no_toca_alfa_cero_y_falla_fuera_de_rango() {
-    let p = paleta(&[Rgba::new(9, 8, 7, 0)]);
+fn resolved_does_not_touch_alpha_zero_and_fails_out_of_range() {
+    let p = palette_2(&[Rgba::new(9, 8, 7, 0)]);
     assert_eq!(p.resolved(0), Ok(Rgba::new(9, 8, 7, 0)));
     for i in [1u8, 2, 255] {
-        assert_eq!(p.resolved(i), Err(fuera_de_rango(i, 1)));
+        assert_eq!(p.resolved(i), Err(out_of_range(i, 1)));
     }
-    assert_eq!(Palette::new().resolved(0), Err(fuera_de_rango(0, 0)));
+    assert_eq!(Palette::new().resolved(0), Err(out_of_range(0, 0)));
 }
 
 #[test]
-fn push_y_set_no_cambian_el_indice_transparente() {
-    let mut p = paleta(&[c0(), c1()]);
+fn push_and_set_do_not_change_the_transparent_index() {
+    let mut p = palette_2(&[c0(), c1()]);
     p.set_transparent_index(Some(0)).unwrap();
 
     assert_eq!(p.push(c2()), Ok(2));
@@ -228,7 +228,7 @@ fn push_y_set_no_cambian_el_indice_transparente() {
 
 // Estrategias.
 
-fn color_cualquiera() -> impl Strategy<Value = Rgba> {
+fn color_any() -> impl Strategy<Value = Rgba> {
     (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>())
         .prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a))
 }
@@ -236,17 +236,17 @@ fn color_cualquiera() -> impl Strategy<Value = Rgba> {
 // Mezcla colores arbitrarios con un conjunto de tres para forzar duplicados.
 fn color() -> impl Strategy<Value = Rgba> {
     prop_oneof![
-        color_cualquiera(),
+        color_any(),
         prop::sample::select(vec![c0(), c1(), Rgba::new(10, 20, 30, 0)]),
     ]
 }
 
-fn colores(tamano: RangeInclusive<usize>) -> impl Strategy<Value = Vec<Rgba>> {
-    prop::collection::vec(color(), tamano)
+fn colors_2(size: RangeInclusive<usize>) -> impl Strategy<Value = Vec<Rgba>> {
+    prop::collection::vec(color(), size)
 }
 
 // Índices cercanos al inicio (casi siempre válidos) o cualesquiera.
-fn indice() -> impl Strategy<Value = u8> {
+fn index() -> impl Strategy<Value = u8> {
     prop_oneof![3 => 0u8..8, 1 => any::<u8>()]
 }
 
@@ -254,18 +254,18 @@ fn indice() -> impl Strategy<Value = u8> {
 enum Op {
     Push(Rgba),
     Set(u8, Rgba),
-    Transparente(Option<u8>),
+    Transparent(Option<u8>),
 }
 
-fn operacion() -> impl Strategy<Value = Op> {
+fn operation() -> impl Strategy<Value = Op> {
     prop_oneof![
         3 => color().prop_map(Op::Push),
-        2 => (indice(), color()).prop_map(|(i, c)| Op::Set(i, c)),
-        2 => prop::option::of(indice()).prop_map(Op::Transparente),
+        2 => (index(), color()).prop_map(|(i, c)| Op::Set(i, c)),
+        2 => prop::option::of(index()).prop_map(Op::Transparent),
     ]
 }
 
-fn aplica(p: &mut Palette, op: &Op) -> Result<(), TestCaseError> {
+fn applies(p: &mut Palette, op: &Op) -> Result<(), TestCaseError> {
     let antes = p.clone();
     let len_antes = antes.len();
     match *op {
@@ -289,7 +289,7 @@ fn aplica(p: &mut Palette, op: &Op) -> Result<(), TestCaseError> {
             }
             Err(_) => prop_assert_eq!(&*p, &antes),
         },
-        Op::Transparente(t) => match p.set_transparent_index(t) {
+        Op::Transparent(t) => match p.set_transparent_index(t) {
             Ok(()) => {
                 prop_assert_eq!(p.colors(), antes.colors());
                 prop_assert_eq!(p.transparent_index(), t);
@@ -308,7 +308,7 @@ fn aplica(p: &mut Palette, op: &Op) -> Result<(), TestCaseError> {
 
 proptest! {
     #[test]
-    fn construccion_hasta_256(v in colores(0..=256)) {
+    fn construction_until_256(v in colors_2(0..=256)) {
         let p = Palette::from_colors(v.iter().copied()).unwrap();
         prop_assert_eq!(p.len(), v.len());
         prop_assert_eq!(p.colors(), v.as_slice());
@@ -318,7 +318,7 @@ proptest! {
     }
 
     #[test]
-    fn construccion_con_mas_de_256_falla(v in colores(257..=400)) {
+    fn construction_with_more_than_256_fails(v in colors_2(257..=400)) {
         prop_assert_eq!(
             Palette::from_colors(v),
             Err(PaletteError::TooManyColors)
@@ -326,13 +326,13 @@ proptest! {
     }
 
     #[test]
-    fn get_y_resolved_acotados(
-        v in colores(0..=256),
-        transparente in prop::option::of(any::<u8>()),
+    fn get_and_resolved_bounded(
+        v in colors_2(0..=256),
+        transparent in prop::option::of(any::<u8>()),
         index: u8,
     ) {
         let mut p = Palette::from_colors(v).unwrap();
-        let _ = p.set_transparent_index(transparente);
+        let _ = p.set_transparent_index(transparent);
         let len = p.len();
         let get = p.get(index);
         let resolved = p.resolved(index);
@@ -340,14 +340,14 @@ proptest! {
             prop_assert!(get.is_ok());
             prop_assert!(resolved.is_ok());
         } else {
-            let esperado = PaletteError::IndexOutOfRange { index, len };
-            prop_assert_eq!(get, Err(esperado.clone()));
-            prop_assert_eq!(resolved, Err(esperado));
+            let expected = PaletteError::IndexOutOfRange { index, len };
+            prop_assert_eq!(get, Err(expected.clone()));
+            prop_assert_eq!(resolved, Err(expected));
         }
     }
 
     #[test]
-    fn push_hasta_llenar(v in colores(0..=300)) {
+    fn push_until_fill(v in colors_2(0..=300)) {
         let mut p = Palette::new();
         for (k, c) in v.iter().enumerate() {
             let antes = p.clone();
@@ -365,19 +365,19 @@ proptest! {
 
     #[test]
     fn set_es_local(
-        v in colores(0..=256),
-        transparente in prop::option::of(any::<u8>()),
+        v in colors_2(0..=256),
+        transparent in prop::option::of(any::<u8>()),
         index: u8,
-        nuevo in color(),
+        new in color(),
     ) {
         let mut p = Palette::from_colors(v).unwrap();
-        let _ = p.set_transparent_index(transparente);
+        let _ = p.set_transparent_index(transparent);
         let antes = p.clone();
         let len = p.len();
-        let r = p.set(index, nuevo);
+        let r = p.set(index, new);
         if (index as usize) < len {
             prop_assert_eq!(r, Ok(()));
-            prop_assert_eq!(p.get(index), Ok(nuevo));
+            prop_assert_eq!(p.get(index), Ok(new));
             prop_assert_eq!(p.len(), len);
             prop_assert_eq!(p.transparent_index(), antes.transparent_index());
             for k in (0..len).filter(|&k| k != index as usize) {
@@ -390,13 +390,13 @@ proptest! {
     }
 
     #[test]
-    fn indice_transparente_y_resolved(
-        v in colores(0..=256),
-        previo in prop::option::of(any::<u8>()),
+    fn index_transparent_and_resolved(
+        v in colors_2(0..=256),
+        previous in prop::option::of(any::<u8>()),
         index: u8,
     ) {
         let mut p = Palette::from_colors(v).unwrap();
-        let _ = p.set_transparent_index(previo);
+        let _ = p.set_transparent_index(previous);
         let antes = p.clone();
         let len = p.len();
 
@@ -412,12 +412,12 @@ proptest! {
 
         let t = p.transparent_index();
         for i in 0..len {
-            let guardado = p.get(i as u8).unwrap();
-            let efectivo = p.resolved(i as u8).unwrap();
+            let saved = p.get(i as u8).unwrap();
+            let effective = p.resolved(i as u8).unwrap();
             if t == Some(i as u8) {
-                prop_assert_eq!(efectivo, Rgba::new(guardado.r, guardado.g, guardado.b, 0));
+                prop_assert_eq!(effective, Rgba::new(saved.r, saved.g, saved.b, 0));
             } else {
-                prop_assert_eq!(efectivo, guardado);
+                prop_assert_eq!(effective, saved);
             }
         }
 
@@ -429,10 +429,10 @@ proptest! {
     }
 
     #[test]
-    fn secuencias_aleatorias(ops in prop::collection::vec(operacion(), 0..=60)) {
+    fn sequences_random(ops in prop::collection::vec(operation(), 0..=60)) {
         let mut p = Palette::new();
         for op in &ops {
-            aplica(&mut p, op)?;
+            applies(&mut p, op)?;
         }
     }
 }

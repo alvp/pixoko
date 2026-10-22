@@ -10,7 +10,7 @@ use px_core::{Hsl, Rgba};
 fn assert_hsl_traits<T: Copy + Clone + Debug + PartialEq + Default>() {}
 
 #[test]
-fn traits_derivados() {
+fn traits_derived() {
     assert_hsl_traits::<Hsl>();
 }
 
@@ -19,30 +19,30 @@ fn traits_derivados() {
 /// Tolerancia de las comparaciones de `f32` (salvo las marcadas «exacto»).
 const TOL: f32 = 1e-4;
 
-fn cerca(a: f32, b: f32, tol: f32) -> bool {
+fn near(a: f32, b: f32, tol: f32) -> bool {
     (a - b).abs() <= tol
 }
 
-fn assert_cerca(real: f32, esperado: f32, que: &str) {
+fn assert_near(real: f32, expected: f32, that: &str) {
     assert!(
-        cerca(real, esperado, TOL),
-        "{que}: se esperaba {esperado}, salió {real}"
+        near(real, expected, TOL),
+        "{that}: se esperaba {expected}, salió {real}"
     );
 }
 
 /// Comprueba `h`, `s` y `l` de un `Hsl` con la tolerancia por defecto.
 fn assert_hsl(hsl: Hsl, h: f32, s: f32, l: f32) {
-    assert_cerca(hsl.h(), h, "h");
-    assert_cerca(hsl.s(), s, "s");
-    assert_cerca(hsl.l(), l, "l");
+    assert_near(hsl.h(), h, "h");
+    assert_near(hsl.s(), s, "s");
+    assert_near(hsl.l(), l, "l");
 }
 
-fn opaco(r: u8, g: u8, b: u8) -> Rgba {
+fn opaque(r: u8, g: u8, b: u8) -> Rgba {
     Rgba::new(r, g, b, 255)
 }
 
 /// Distancia circular entre dos ángulos en grados.
-fn distancia_circular(a: f32, b: f32) -> f32 {
+fn distance_circular(a: f32, b: f32) -> f32 {
     let d = (a - b).abs() % 360.0;
     d.min(360.0 - d)
 }
@@ -57,61 +57,61 @@ fn default_es_negro() {
 }
 
 #[test]
-fn matiz_se_normaliza() {
+fn hue_normalizes() {
     // 360 equivale a 0 (exacto).
     assert_eq!(Hsl::new(360.0, 1.0, 0.5).h(), 0.0);
-    assert_cerca(Hsl::new(-60.0, 1.0, 0.5).h(), 300.0, "h de -60");
-    assert_cerca(Hsl::new(720.5, 1.0, 0.5).h(), 0.5, "h de 720.5");
+    assert_near(Hsl::new(-60.0, 1.0, 0.5).h(), 300.0, "h de -60");
+    assert_near(Hsl::new(720.5, 1.0, 0.5).h(), 0.5, "h de 720.5");
 }
 
 #[test]
-fn matiz_no_finito_pasa_a_cero() {
+fn non_finite_hue_goes_to_zero() {
     assert_eq!(Hsl::new(f32::NAN, 1.0, 0.5).h(), 0.0);
     assert_eq!(Hsl::new(f32::INFINITY, 1.0, 0.5).h(), 0.0);
     assert_eq!(Hsl::new(f32::NEG_INFINITY, 1.0, 0.5).h(), 0.0);
 }
 
 #[test]
-fn matiz_negativo_diminuto_nunca_es_360() {
+fn tiny_negative_hue_is_never_360() {
     assert_eq!(Hsl::new(-1e-9, 1.0, 0.5).h(), 0.0);
 }
 
 #[test]
-fn saturacion_y_luminosidad_se_recortan() {
+fn saturation_and_lightness_are_clamped() {
     let a = Hsl::new(0.0, 2.0, -3.0);
-    assert_cerca(a.s(), 1.0, "s de 2");
-    assert_cerca(a.l(), 0.0, "l de -3");
+    assert_near(a.s(), 1.0, "s de 2");
+    assert_near(a.l(), 0.0, "l de -3");
 
     let b = Hsl::new(0.0, f32::NAN, f32::NAN);
-    assert_cerca(b.s(), 0.0, "s de NaN");
-    assert_cerca(b.l(), 0.0, "l de NaN");
+    assert_near(b.s(), 0.0, "s de NaN");
+    assert_near(b.l(), 0.0, "l de NaN");
 
     let c = Hsl::new(0.0, f32::INFINITY, f32::NEG_INFINITY);
-    assert_cerca(c.s(), 1.0, "s de +inf");
-    assert_cerca(c.l(), 0.0, "l de -inf");
+    assert_near(c.s(), 1.0, "s de +inf");
+    assert_near(c.l(), 0.0, "l de -inf");
 }
 
 #[test]
-fn from_rgba_primarios_y_secundarios() {
-    let casos = [
-        (opaco(255, 0, 0), 0.0),
-        (opaco(255, 255, 0), 60.0),
-        (opaco(0, 255, 0), 120.0),
-        (opaco(0, 255, 255), 180.0),
-        (opaco(0, 0, 255), 240.0),
-        (opaco(255, 0, 255), 300.0),
+fn from_rgba_primaries_and_secondaries() {
+    let cases = [
+        (opaque(255, 0, 0), 0.0),
+        (opaque(255, 255, 0), 60.0),
+        (opaque(0, 255, 0), 120.0),
+        (opaque(0, 255, 255), 180.0),
+        (opaque(0, 0, 255), 240.0),
+        (opaque(255, 0, 255), 300.0),
     ];
-    for (color, h) in casos {
+    for (color, h) in cases {
         assert_hsl(Hsl::from_rgba(color), h, 1.0, 0.5);
     }
 }
 
 #[test]
-fn from_rgba_negro_blanco_y_gris_medio() {
-    assert_hsl(Hsl::from_rgba(opaco(0, 0, 0)), 0.0, 0.0, 0.0);
-    assert_hsl(Hsl::from_rgba(opaco(255, 255, 255)), 0.0, 0.0, 1.0);
+fn from_rgba_black_white_and_mid_gray() {
+    assert_hsl(Hsl::from_rgba(opaque(0, 0, 0)), 0.0, 0.0, 0.0);
+    assert_hsl(Hsl::from_rgba(opaque(255, 255, 255)), 0.0, 0.0, 1.0);
     assert_hsl(
-        Hsl::from_rgba(opaco(128, 128, 128)),
+        Hsl::from_rgba(opaque(128, 128, 128)),
         0.0,
         0.0,
         128.0 / 255.0,
@@ -119,10 +119,10 @@ fn from_rgba_negro_blanco_y_gris_medio() {
 }
 
 #[test]
-fn from_rgba_casi_gris_tiene_saturacion_maxima() {
-    assert_hsl(Hsl::from_rgba(opaco(1, 0, 0)), 0.0, 1.0, 1.0 / 510.0);
+fn from_rgba_almost_gray_has_maximum_saturation() {
+    assert_hsl(Hsl::from_rgba(opaque(1, 0, 0)), 0.0, 1.0, 1.0 / 510.0);
     assert_hsl(
-        Hsl::from_rgba(opaco(255, 254, 254)),
+        Hsl::from_rgba(opaque(255, 254, 254)),
         0.0,
         1.0,
         509.0 / 510.0,
@@ -130,77 +130,77 @@ fn from_rgba_casi_gris_tiene_saturacion_maxima() {
 }
 
 #[test]
-fn from_rgba_naranja() {
+fn from_rgba_orange() {
     // h = 60 * 128/255 ≈ 30.1176.
-    assert_hsl(Hsl::from_rgba(opaco(255, 128, 0)), 30.1176, 1.0, 0.5);
+    assert_hsl(Hsl::from_rgba(opaque(255, 128, 0)), 30.1176, 1.0, 0.5);
 }
 
 #[test]
-fn from_rgba_empates_de_maximo() {
+fn from_rgba_maximum_ties() {
     // Orden de prueba r, g, b.
-    assert_cerca(
-        Hsl::from_rgba(opaco(255, 255, 0)).h(),
+    assert_near(
+        Hsl::from_rgba(opaque(255, 255, 0)).h(),
         60.0,
         "h de (255,255,0)",
     );
-    assert_cerca(
-        Hsl::from_rgba(opaco(0, 255, 255)).h(),
+    assert_near(
+        Hsl::from_rgba(opaque(0, 255, 255)).h(),
         180.0,
         "h de (0,255,255)",
     );
-    assert_cerca(
-        Hsl::from_rgba(opaco(255, 0, 255)).h(),
+    assert_near(
+        Hsl::from_rgba(opaque(255, 0, 255)).h(),
         300.0,
         "h de (255,0,255)",
     );
 }
 
 #[test]
-fn to_rgba_seis_matices_basicos() {
-    let casos = [
-        (0.0, opaco(255, 0, 0)),
-        (60.0, opaco(255, 255, 0)),
-        (120.0, opaco(0, 255, 0)),
-        (180.0, opaco(0, 255, 255)),
-        (240.0, opaco(0, 0, 255)),
-        (300.0, opaco(255, 0, 255)),
+fn to_rgba_six_basic_hues() {
+    let cases = [
+        (0.0, opaque(255, 0, 0)),
+        (60.0, opaque(255, 255, 0)),
+        (120.0, opaque(0, 255, 0)),
+        (180.0, opaque(0, 255, 255)),
+        (240.0, opaque(0, 0, 255)),
+        (300.0, opaque(255, 0, 255)),
     ];
-    for (h, esperado) in casos {
-        assert_eq!(Hsl::new(h, 1.0, 0.5).to_rgba(255), esperado, "h = {h}");
+    for (h, expected) in cases {
+        assert_eq!(Hsl::new(h, 1.0, 0.5).to_rgba(255), expected, "h = {h}");
     }
 }
 
 #[test]
-fn to_rgba_media_unidad_redondea_hacia_arriba() {
+fn to_rgba_half_a_unit_rounds_up() {
     // 127.5 redondea a 128 (la mitad se aleja de cero).
-    assert_eq!(Hsl::new(30.0, 1.0, 0.5).to_rgba(255), opaco(255, 128, 0));
+    assert_eq!(Hsl::new(30.0, 1.0, 0.5).to_rgba(255), opaque(255, 128, 0));
 }
 
 #[test]
-fn to_rgba_saturacion_cero_es_gris_para_cualquier_matiz() {
+fn to_rgba_saturation_zero_is_gray_for_any_hue() {
     for h in [0.0, 90.0, 359.9] {
         assert_eq!(
             Hsl::new(h, 0.0, 0.5).to_rgba(255),
-            opaco(128, 128, 128),
+            opaque(128, 128, 128),
             "h = {h}"
         );
     }
 }
 
 #[test]
-fn to_rgba_luminosidad_0_y_1_dan_negro_y_blanco() {
-    let matices = [0.0, 45.0, 90.0, 180.0, 270.0, 359.9, -30.0, f32::NAN];
+fn to_rgba_lightness_0_and_1_give_black_and_white() {
+    let shades = [0.0, 45.0, 90.0, 180.0, 270.0, 359.9, -30.0, f32::NAN];
     let saturaciones = [0.0, 0.3, 0.5, 1.0];
-    for h in matices {
+    for h in shades {
         for s in saturaciones {
             assert_eq!(
                 Hsl::new(h, s, 0.0).to_rgba(255),
-                opaco(0, 0, 0),
+                opaque(0, 0, 0),
                 "h = {h}, s = {s}"
             );
             assert_eq!(
                 Hsl::new(h, s, 1.0).to_rgba(255),
-                opaco(255, 255, 255),
+                opaque(255, 255, 255),
                 "h = {h}, s = {s}"
             );
         }
@@ -208,7 +208,7 @@ fn to_rgba_luminosidad_0_y_1_dan_negro_y_blanco() {
 }
 
 #[test]
-fn from_rgba_ignora_el_alfa() {
+fn from_rgba_ignores_alpha() {
     assert_eq!(
         Hsl::from_rgba(Rgba::new(10, 20, 30, 0)),
         Hsl::from_rgba(Rgba::new(10, 20, 30, 255))
@@ -216,37 +216,37 @@ fn from_rgba_ignora_el_alfa() {
 }
 
 #[test]
-fn to_rgba_copia_el_alfa_y_conserva_el_rgb() {
+fn to_rgba_copies_the_alpha_and_keeps_the_rgb() {
     let hsl = Hsl::new(210.0, 0.5, 0.4);
-    let transparente = hsl.to_rgba(0);
-    let parcial = hsl.to_rgba(77);
-    assert_eq!(transparente.a, 0);
-    assert_eq!(parcial.a, 77);
+    let transparent = hsl.to_rgba(0);
+    let partial = hsl.to_rgba(77);
+    assert_eq!(transparent.a, 0);
+    assert_eq!(partial.a, 77);
     assert_eq!(
-        (transparente.r, transparente.g, transparente.b),
-        (parcial.r, parcial.g, parcial.b)
+        (transparent.r, transparent.g, transparent.b),
+        (partial.r, partial.g, partial.b)
     );
 }
 
 #[test]
-fn ida_y_vuelta_de_un_conjunto_fijo() {
-    let mut colores = Vec::new();
+fn round_trip_of_a_fixed_set() {
+    let mut colors_2 = Vec::new();
     // Las 8 esquinas del cubo RGB.
     for r in [0u8, 255] {
         for g in [0u8, 255] {
             for b in [0u8, 255] {
-                colores.push((r, g, b));
+                colors_2.push((r, g, b));
             }
         }
     }
-    colores.extend([
+    colors_2.extend([
         (1, 0, 0),
         (0, 1, 0),
         (0, 0, 1),
         (254, 255, 255),
         (127, 128, 129),
     ]);
-    for (r, g, b) in colores {
+    for (r, g, b) in colors_2 {
         for a in [255u8, 0] {
             let c = Rgba::new(r, g, b, a);
             assert_eq!(Hsl::from_rgba(c).to_rgba(c.a), c);
@@ -259,41 +259,41 @@ fn ida_y_vuelta_de_un_conjunto_fijo() {
 /// Recorre los colores dados y comprueba `from_rgba(c).to_rgba(c.a) == c`.
 /// El alfa se deriva del color para comprobar de paso que se copia tal cual.
 /// Si hay fallos, el pánico lista los primeros y cuántos son.
-fn comprobar_ida_y_vuelta(colores: impl Iterator<Item = (u8, u8, u8)>) {
-    const MAX_MOSTRADOS: usize = 10;
+fn check_round_trip(colors_2: impl Iterator<Item = (u8, u8, u8)>) {
+    const MAX_SHOWN: usize = 10;
     let mut total = 0usize;
-    let mut primeros = Vec::new();
-    for (r, g, b) in colores {
+    let mut first = Vec::new();
+    for (r, g, b) in colors_2 {
         let c = Rgba::new(r, g, b, r ^ g ^ b);
-        let vuelta = Hsl::from_rgba(c).to_rgba(c.a);
-        if vuelta != c {
+        let ret = Hsl::from_rgba(c).to_rgba(c.a);
+        if ret != c {
             total += 1;
-            if primeros.len() < MAX_MOSTRADOS {
-                primeros.push((c, vuelta));
+            if first.len() < MAX_SHOWN {
+                first.push((c, ret));
             }
         }
     }
     assert!(
         total == 0,
-        "{total} colores no hacen la ida y vuelta exacta; los primeros (original, vuelta): {primeros:?}"
+        "{total} colores no hacen la ida y vuelta exacta; los primeros (original, vuelta): {first:?}"
     );
 }
 
 /// Los 2^24 colores RGB.
-fn todos_los_rgb() -> impl Iterator<Item = (u8, u8, u8)> {
+fn all_the_rgb() -> impl Iterator<Item = (u8, u8, u8)> {
     (0..=255u8).flat_map(|r| (0..=255u8).flat_map(move |g| (0..=255u8).map(move |b| (r, g, b))))
 }
 
 #[test]
-fn ida_y_vuelta_exhaustiva_todos_los_rgb() {
-    comprobar_ida_y_vuelta(todos_los_rgb());
+fn exhaustive_round_trip_all_rgb() {
+    check_round_trip(all_the_rgb());
 }
 
 // Propiedades.
 
 /// `f32` arbitrario, con más peso en los casos delicados: NaN, ±∞,
 /// subnormales, negativos diminutos y los extremos.
-fn f32_cualquiera() -> impl Strategy<Value = f32> {
+fn f_32_any() -> impl Strategy<Value = f32> {
     prop_oneof![
         6 => proptest::num::f32::ANY,
         1 => Just(f32::NAN),
@@ -307,19 +307,19 @@ fn f32_cualquiera() -> impl Strategy<Value = f32> {
 }
 
 /// `Hsl` construido con `new` a partir de tres `f32` arbitrarios.
-fn hsl_cualquiera() -> impl Strategy<Value = Hsl> {
-    (f32_cualquiera(), f32_cualquiera(), f32_cualquiera()).prop_map(|(h, s, l)| Hsl::new(h, s, l))
+fn hsl_any() -> impl Strategy<Value = Hsl> {
+    (f_32_any(), f_32_any(), f_32_any()).prop_map(|(h, s, l)| Hsl::new(h, s, l))
 }
 
 /// Canal sesgado hacia valores que producen empates y empalmes de sector.
-fn canal_sesgado() -> impl Strategy<Value = u8> {
+fn channel_biased() -> impl Strategy<Value = u8> {
     prop_oneof![
         1 => any::<u8>(),
         1 => proptest::sample::select(vec![0u8, 1, 127, 128, 254, 255]),
     ]
 }
 
-fn comprobar_invariante(x: Hsl) -> Result<(), TestCaseError> {
+fn check_invariant(x: Hsl) -> Result<(), TestCaseError> {
     prop_assert!(x.h().is_finite() && x.s().is_finite() && x.l().is_finite());
     prop_assert!((0.0..360.0).contains(&x.h()), "h = {}", x.h());
     prop_assert!((0.0..=1.0).contains(&x.s()), "s = {}", x.s());
@@ -327,109 +327,109 @@ fn comprobar_invariante(x: Hsl) -> Result<(), TestCaseError> {
     Ok(())
 }
 
-fn es_gris(c: Rgba) -> bool {
+fn is_gray(c: Rgba) -> bool {
     c.r == c.g && c.g == c.b
 }
 
 proptest! {
     // 1. Rangos.
     #[test]
-    fn from_rgba_respeta_los_rangos(r: u8, g: u8, b: u8, a: u8) {
-        comprobar_invariante(Hsl::from_rgba(Rgba::new(r, g, b, a)))?;
+    fn from_rgba_respects_the_ranges(r: u8, g: u8, b: u8, a: u8) {
+        check_invariant(Hsl::from_rgba(Rgba::new(r, g, b, a)))?;
     }
 
     #[test]
-    fn new_respeta_los_rangos_y_no_hace_panic(
-        h in f32_cualquiera(),
-        s in f32_cualquiera(),
-        l in f32_cualquiera(),
+    fn new_respects_the_ranges_and_does_not_panic(
+        h in f_32_any(),
+        s in f_32_any(),
+        l in f_32_any(),
     ) {
         let x = Hsl::new(h, s, l);
-        comprobar_invariante(x)?;
+        check_invariant(x)?;
         // Tampoco hace pánico al convertir de vuelta.
         let _ = x.to_rgba(255);
     }
 
     // 2. Normalización.
     #[test]
-    fn new_es_idempotente(
-        h in f32_cualquiera(),
-        s in f32_cualquiera(),
-        l in f32_cualquiera(),
+    fn new_is_idempotent(
+        h in f_32_any(),
+        s in f_32_any(),
+        l in f_32_any(),
     ) {
         let x = Hsl::new(h, s, l);
         prop_assert_eq!(Hsl::new(x.h(), x.s(), x.l()), x);
     }
 
     #[test]
-    fn new_equivale_a_sumar_vueltas_enteras(
+    fn new_is_equivalent_to_adding_whole_turns(
         h in -1000i32..=1000,
         k in -3i32..=3,
         s in 0.0f32..=1.0,
         l in 0.0f32..=1.0,
     ) {
         let h0 = h as f32;
-        let desplazado = h0 + 360.0 * k as f32;
-        prop_assert_eq!(Hsl::new(desplazado, s, l), Hsl::new(h0, s, l));
+        let shifted = h0 + 360.0 * k as f32;
+        prop_assert_eq!(Hsl::new(shifted, s, l), Hsl::new(h0, s, l));
     }
 
     // 3. Ida y vuelta.
     #[test]
-    fn ida_y_vuelta_exacta(r: u8, g: u8, b: u8, a: u8) {
+    fn round_trip_exact(r: u8, g: u8, b: u8, a: u8) {
         let c = Rgba::new(r, g, b, a);
         prop_assert_eq!(Hsl::from_rgba(c).to_rgba(c.a), c);
     }
 
     // 4. Rotación de canales: (r, g, b) -> (b, r, g) suma 120 grados.
     #[test]
-    fn rotar_canales_suma_120_grados(
-        r in canal_sesgado(),
-        g in canal_sesgado(),
-        b in canal_sesgado(),
+    fn rotating_channels_adds_120_degrees(
+        r in channel_biased(),
+        g in channel_biased(),
+        b in channel_biased(),
         a: u8,
     ) {
         let c = Rgba::new(r, g, b, a);
-        prop_assume!(!es_gris(c));
-        let rotado = Rgba::new(c.b, c.r, c.g, c.a);
-        let (h0, h1) = (Hsl::from_rgba(c), Hsl::from_rgba(rotado));
+        prop_assume!(!is_gray(c));
+        let rotated = Rgba::new(c.b, c.r, c.g, c.a);
+        let (h0, h1) = (Hsl::from_rgba(c), Hsl::from_rgba(rotated));
         // Exacto: salen de los mismos `max` y `min`.
         prop_assert_eq!(h1.s(), h0.s());
         prop_assert_eq!(h1.l(), h0.l());
-        let esperado = (h0.h() + 120.0) % 360.0;
-        let d = distancia_circular(h1.h(), esperado);
-        prop_assert!(d < 1e-3, "h = {}, rotado = {}, esperado = {}", h0.h(), h1.h(), esperado);
+        let expected = (h0.h() + 120.0) % 360.0;
+        let d = distance_circular(h1.h(), expected);
+        prop_assert!(d < 1e-3, "h = {}, rotado = {}, esperado = {}", h0.h(), h1.h(), expected);
     }
 
     // 5. Grises.
     #[test]
-    fn los_grises_no_tienen_matiz_ni_saturacion(v: u8, a: u8) {
+    fn grays_have_no_hue_or_saturation(v: u8, a: u8) {
         let hsl = Hsl::from_rgba(Rgba::new(v, v, v, a));
         prop_assert_eq!(hsl.h(), 0.0);
         prop_assert_eq!(hsl.s(), 0.0);
-        prop_assert!(cerca(hsl.l(), v as f32 / 255.0, 1e-6), "l = {}", hsl.l());
+        prop_assert!(near(hsl.l(), v as f32 / 255.0, 1e-6), "l = {}", hsl.l());
     }
 
     // 6. Alfa.
     #[test]
-    fn to_rgba_copia_el_alfa_y_el_rgb_no_depende_de_el(x in hsl_cualquiera(), alpha: u8) {
+    fn to_rgba_copies_the_alpha_and_the_rgb_does_not_depend_on_it(x in hsl_any(), alpha: u8) {
         let c = x.to_rgba(alpha);
         prop_assert_eq!(c.a, alpha);
-        let referencia = x.to_rgba(255);
-        prop_assert_eq!((c.r, c.g, c.b), (referencia.r, referencia.g, referencia.b));
+        let reference = x.to_rgba(255);
+        prop_assert_eq!((c.r, c.g, c.b), (reference.r, reference.g, reference.b));
     }
 
     // 7. Cromáticos.
     #[test]
-    fn los_cromaticos_tienen_saturacion_y_no_son_grises(
-        r in canal_sesgado(),
-        g in canal_sesgado(),
-        b in canal_sesgado(),
+    fn chromatic_colors_have_saturation_and_are_not_grays(
+        r in channel_biased(),
+        g in channel_biased(),
+        b in channel_biased(),
         a: u8,
     ) {
         let c = Rgba::new(r, g, b, a);
-        prop_assume!(!es_gris(c));
+        prop_assume!(!is_gray(c));
         let hsl = Hsl::from_rgba(c);
         prop_assert!(hsl.s() > 0.0, "s = {}", hsl.s());
-        prop_assert!(!es_gris(hsl.to_rgba(c.a)), "{:?} da un gris", hsl);
+        prop_assert!(!is_gray(hsl.to_rgba(c.a)), "{:?} da un gris", hsl);
     }
 }

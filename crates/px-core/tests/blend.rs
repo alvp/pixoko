@@ -32,71 +32,71 @@ fn doc_d() -> Document {
     Document::new(img)
 }
 
-fn doc_indexado() -> Document {
-    let mut paleta = Palette::from_colors([
+fn doc_indexed() -> Document {
+    let mut palette_2 = Palette::from_colors([
         Rgba::new(255, 0, 0, 255),
         Rgba::new(0, 255, 0, 255),
         Rgba::new(0, 0, 255, 255),
     ])
     .expect("paleta");
-    paleta
+    palette_2
         .set_transparent_index(Some(0))
         .expect("índice transparente");
-    Document::new(Image::new_indexed(4, 3, paleta).expect("imagen indexada"))
+    Document::new(Image::new_indexed(4, 3, palette_2).expect("imagen indexada"))
 }
 
-fn mezcla(layer: LayerId, blend: BlendMode) -> Command {
+fn blend_2(layer: LayerId, blend: BlendMode) -> Command {
     Command::SetLayerBlend { layer, blend }
 }
 
-fn anade(doc: &mut Document, nombre: &str, at: usize) -> LayerId {
+fn adds(doc: &mut Document, name_2: &str, at: usize) -> LayerId {
     let cmd = Command::AddLayer {
-        name: nombre.to_string(),
+        name: name_2.to_string(),
         at,
     };
-    assert_eq!(doc.apply(cmd), Ok(true), "añadir {nombre}");
+    assert_eq!(doc.apply(cmd), Ok(true), "añadir {name_2}");
     doc.layers()[at].id()
 }
 
-fn modo_de(doc: &Document, capa: LayerId) -> BlendMode {
-    doc.layer(capa).expect("la capa existe").blend()
+fn mode_of(doc: &Document, layer: LayerId) -> BlendMode {
+    doc.layer(layer).expect("la capa existe").blend()
 }
 
 /// Todo lo observable que un comando fallido o sin cambios no puede tocar.
-struct Foto {
+struct Snapshot {
     doc: Document,
-    puede_deshacer: bool,
-    puede_rehacer: bool,
-    historia: usize,
-    estado: u64,
+    can_undo_2: bool,
+    can_redo_2: bool,
+    history: usize,
+    state: u64,
 }
 
-impl Foto {
-    fn de(doc: &Document) -> Foto {
-        Foto {
+impl Snapshot {
+    fn de(doc: &Document) -> Snapshot {
+        Snapshot {
             doc: doc.clone(),
-            puede_deshacer: doc.can_undo(),
-            puede_rehacer: doc.can_redo(),
-            historia: doc.history_bytes(),
-            estado: doc.state_id(),
+            can_undo_2: doc.can_undo(),
+            can_redo_2: doc.can_redo(),
+            history: doc.history_bytes(),
+            state: doc.state_id(),
         }
     }
 
-    fn assert_igual(&self, doc: &Document, contexto: &str) {
-        assert_eq!(*doc, self.doc, "{contexto}: el documento cambió");
-        assert_eq!(doc.can_undo(), self.puede_deshacer, "{contexto}: can_undo");
-        assert_eq!(doc.can_redo(), self.puede_rehacer, "{contexto}: can_redo");
-        assert_eq!(doc.history_bytes(), self.historia, "{contexto}: history");
-        assert_eq!(doc.state_id(), self.estado, "{contexto}: state_id");
+    fn assert_equal(&self, doc: &Document, context: &str) {
+        assert_eq!(*doc, self.doc, "{context}: el documento cambió");
+        assert_eq!(doc.can_undo(), self.can_undo_2, "{context}: can_undo");
+        assert_eq!(doc.can_redo(), self.can_redo_2, "{context}: can_redo");
+        assert_eq!(doc.history_bytes(), self.history, "{context}: history");
+        assert_eq!(doc.state_id(), self.state, "{context}: state_id");
     }
 }
 
 /// Aplica `cmd`, comprueba el resultado y que nada observable cambió.
-fn sin_efecto(doc: &mut Document, cmd: Command, esperado: Result<bool, DocumentError>) {
-    let foto = Foto::de(doc);
-    let contexto = format!("{cmd:?}");
-    assert_eq!(doc.apply(cmd), esperado, "{contexto}");
-    foto.assert_igual(doc, &contexto);
+fn without_effect(doc: &mut Document, cmd: Command, expected: Result<bool, DocumentError>) {
+    let snapshot = Snapshot::de(doc);
+    let context = format!("{cmd:?}");
+    assert_eq!(doc.apply(cmd), expected, "{context}");
+    snapshot.assert_equal(doc, &context);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -104,14 +104,14 @@ fn sin_efecto(doc: &mut Document, cmd: Command, esperado: Result<bool, DocumentE
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn p01_blend_mode_valores_defecto_y_mensaje() {
+fn p01_blend_mode_values_default_and_message() {
     // `Default` es Normal y `ALL` lleva los ocho, sin repetir y con Normal el primero.
     assert_eq!(BlendMode::default(), BlendMode::Normal);
     assert_eq!(BlendMode::ALL.len(), 8);
     assert_eq!(BlendMode::ALL[0], BlendMode::Normal);
-    let distintos: HashSet<BlendMode> = BlendMode::ALL.into_iter().collect();
-    assert_eq!(distintos.len(), 8, "los ocho modos son distintos entre sí");
-    for modo in [
+    let different: HashSet<BlendMode> = BlendMode::ALL.into_iter().collect();
+    assert_eq!(different.len(), 8, "los ocho modos son distintos entre sí");
+    for mode_2 in [
         BlendMode::Normal,
         BlendMode::Multiply,
         BlendMode::Screen,
@@ -121,23 +121,23 @@ fn p01_blend_mode_valores_defecto_y_mensaje() {
         BlendMode::Add,
         BlendMode::Difference,
     ] {
-        assert!(BlendMode::ALL.contains(&modo), "{modo:?} está en ALL");
+        assert!(BlendMode::ALL.contains(&mode_2), "{mode_2:?} está en ALL");
         // `Debug` y `Clone`/`Copy`.
-        let copia = modo;
-        assert_eq!(copia, modo);
-        assert!(!format!("{modo:?}").is_empty());
+        let copy = mode_2;
+        assert_eq!(copy, mode_2);
+        assert!(!format!("{mode_2:?}").is_empty());
     }
 
     // Toda capa nueva (la del documento y las de `AddLayer`) es Normal.
     let mut d = doc_d();
-    let b = anade(&mut d, "B", 1);
+    let b = adds(&mut d, "B", 1);
     assert_eq!(d.layers()[0].blend(), BlendMode::Normal);
-    assert_eq!(modo_de(&d, b), BlendMode::Normal);
+    assert_eq!(mode_of(&d, b), BlendMode::Normal);
 
     // `IndexedBlend` tiene un mensaje en español, distinto del de `IndexedOpacity`.
-    let mensaje = DocumentError::IndexedBlend.to_string();
-    assert!(!mensaje.is_empty());
-    assert_ne!(mensaje, DocumentError::IndexedOpacity.to_string());
+    let message = DocumentError::IndexedBlend.to_string();
+    assert!(!message.is_empty());
+    assert_ne!(message, DocumentError::IndexedOpacity.to_string());
     let _: &dyn Error = &DocumentError::IndexedBlend;
 }
 
@@ -146,189 +146,193 @@ fn p01_blend_mode_valores_defecto_y_mensaje() {
 // ---------------------------------------------------------------------------------------
 
 #[test]
-fn fila_12_a_cambio_de_modo_es_un_solo_paso() {
+fn row_12_a_mode_change_is_one_step() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
-    let estado = d.state_id();
+    let state = d.state_id();
 
-    assert_eq!(d.apply(mezcla(a, BlendMode::Multiply)), Ok(true));
-    assert_eq!(modo_de(&d, a), BlendMode::Multiply);
-    assert_ne!(d.state_id(), estado);
+    assert_eq!(d.apply(blend_2(a, BlendMode::Multiply)), Ok(true));
+    assert_eq!(mode_of(&d, a), BlendMode::Multiply);
+    assert_ne!(d.state_id(), state);
     assert!(d.can_undo());
 
     // Un solo paso: tras deshacer una vez no queda nada que deshacer.
     d.undo().expect("deshacer");
-    assert_eq!(modo_de(&d, a), BlendMode::Normal);
+    assert_eq!(mode_of(&d, a), BlendMode::Normal);
     assert!(!d.can_undo(), "el cambio de modo es un único paso");
     assert!(d.can_redo());
 }
 
 #[test]
-fn fila_12_b_mismo_modo_es_ok_false_sin_paso() {
+fn row_12_b_same_mode_is_ok_false_without_a_step() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
 
     // Normal sobre una capa Normal.
-    sin_efecto(&mut d, mezcla(a, BlendMode::Normal), Ok(false));
+    without_effect(&mut d, blend_2(a, BlendMode::Normal), Ok(false));
     assert!(!d.can_undo());
 
     // Y el mismo valor tras un cambio.
-    assert_eq!(d.apply(mezcla(a, BlendMode::Screen)), Ok(true));
-    sin_efecto(&mut d, mezcla(a, BlendMode::Screen), Ok(false));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Screen)), Ok(true));
+    without_effect(&mut d, blend_2(a, BlendMode::Screen), Ok(false));
     d.undo().expect("deshacer");
-    assert_eq!(modo_de(&d, a), BlendMode::Normal);
+    assert_eq!(mode_of(&d, a), BlendMode::Normal);
     assert!(!d.can_undo(), "el segundo Screen no dejó paso");
 }
 
 #[test]
-fn fila_12_c_capa_desconocida() {
+fn row_12_c_unknown_layer() {
     let mut d = doc_d();
-    let falsa = LayerId::from_raw(999);
-    sin_efecto(
+    let false_value = LayerId::from_raw(999);
+    without_effect(
         &mut d,
-        mezcla(falsa, BlendMode::Multiply),
-        Err(DocumentError::UnknownLayer(falsa)),
+        blend_2(false_value, BlendMode::Multiply),
+        Err(DocumentError::UnknownLayer(false_value)),
     );
 
     // También en indexado: `UnknownLayer` va antes que `IndexedBlend`.
-    let mut indexado = doc_indexado();
-    sin_efecto(
-        &mut indexado,
-        mezcla(falsa, BlendMode::Multiply),
-        Err(DocumentError::UnknownLayer(falsa)),
+    let mut indexed = doc_indexed();
+    without_effect(
+        &mut indexed,
+        blend_2(false_value, BlendMode::Multiply),
+        Err(DocumentError::UnknownLayer(false_value)),
     );
 }
 
 #[test]
-fn fila_12_d_en_indexado_solo_vale_normal() {
-    let mut d = doc_indexado();
+fn row_12_d_in_indexed_only_normal_is_valid() {
+    let mut d = doc_indexed();
     let a = d.layers()[0].id();
 
-    for modo in BlendMode::ALL {
-        if modo == BlendMode::Normal {
+    for mode_2 in BlendMode::ALL {
+        if mode_2 == BlendMode::Normal {
             continue;
         }
-        sin_efecto(&mut d, mezcla(a, modo), Err(DocumentError::IndexedBlend));
+        without_effect(&mut d, blend_2(a, mode_2), Err(DocumentError::IndexedBlend));
     }
-    sin_efecto(&mut d, mezcla(a, BlendMode::Normal), Ok(false));
-    assert_eq!(modo_de(&d, a), BlendMode::Normal);
+    without_effect(&mut d, blend_2(a, BlendMode::Normal), Ok(false));
+    assert_eq!(mode_of(&d, a), BlendMode::Normal);
 }
 
 #[test]
-fn fila_12_e_convertir_a_indexado_con_una_capa_multiplicar_falla_intacto() {
+fn row_12_e_converting_to_indexed_with_a_multiply_layer_fails_intact() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
     let cel = d.layers()[0].cel();
-    let convertir = Command::ConvertMode {
+    let convert = Command::ConvertMode {
         image: cel,
         target: Mode::Indexed,
         allowed: Allowed::NOTHING,
     };
 
-    assert_eq!(d.apply(mezcla(a, BlendMode::Multiply)), Ok(true));
-    sin_efecto(&mut d, convertir.clone(), Err(DocumentError::IndexedBlend));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Multiply)), Ok(true));
+    without_effect(&mut d, convert.clone(), Err(DocumentError::IndexedBlend));
     assert_eq!(d.mode(), Mode::Rgba);
     assert_eq!(d.palette(), None);
-    assert_eq!(modo_de(&d, a), BlendMode::Multiply);
+    assert_eq!(mode_of(&d, a), BlendMode::Multiply);
 
     // Con la capa otra vez en Normal, la misma conversión sí se hace (el modo era el motivo).
-    assert_eq!(d.apply(mezcla(a, BlendMode::Normal)), Ok(true));
-    assert_eq!(d.apply(convertir), Ok(true));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Normal)), Ok(true));
+    assert_eq!(d.apply(convert), Ok(true));
     assert_eq!(d.mode(), Mode::Indexed);
 }
 
 #[test]
-fn fila_12_f_deshacer_y_rehacer_son_exactos() {
+fn row_12_f_undo_and_redo_are_exact() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
     let s0 = d.state_id();
     let d0 = d.clone();
 
-    assert_eq!(d.apply(mezcla(a, BlendMode::Multiply)), Ok(true));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Multiply)), Ok(true));
     let s1 = d.state_id();
     let d1 = d.clone();
-    assert_eq!(d.apply(mezcla(a, BlendMode::Difference)), Ok(true));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Difference)), Ok(true));
     let s2 = d.state_id();
     let d2 = d.clone();
 
     d.undo().expect("deshacer 1");
-    assert_eq!(modo_de(&d, a), BlendMode::Multiply);
+    assert_eq!(mode_of(&d, a), BlendMode::Multiply);
     assert_eq!((d.state_id(), &d), (s1, &d1));
     d.undo().expect("deshacer 2");
-    assert_eq!(modo_de(&d, a), BlendMode::Normal);
+    assert_eq!(mode_of(&d, a), BlendMode::Normal);
     assert_eq!((d.state_id(), &d), (s0, &d0));
     assert!(!d.can_undo());
 
     d.redo().expect("rehacer 1");
-    assert_eq!(modo_de(&d, a), BlendMode::Multiply);
+    assert_eq!(mode_of(&d, a), BlendMode::Multiply);
     assert_eq!((d.state_id(), &d), (s1, &d1));
     d.redo().expect("rehacer 2");
-    assert_eq!(modo_de(&d, a), BlendMode::Difference);
+    assert_eq!(mode_of(&d, a), BlendMode::Difference);
     assert_eq!((d.state_id(), &d), (s2, &d2));
     assert!(!d.can_redo());
 }
 
 #[test]
-fn fila_12_g_la_igualdad_distingue_el_modo() {
+fn row_12_g_equality_distinguishes_the_mode() {
     let d = doc_d();
     let a = d.layers()[0].id();
-    let mut otro = d.clone();
-    assert_eq!(d, otro);
+    let mut other = d.clone();
+    assert_eq!(d, other);
 
-    assert_eq!(otro.apply(mezcla(a, BlendMode::Add)), Ok(true));
+    assert_eq!(other.apply(blend_2(a, BlendMode::Add)), Ok(true));
     assert_ne!(
-        d, otro,
+        d, other,
         "dos documentos con distinto modo de capa no son iguales"
     );
-    assert_ne!(d.layer(a), otro.layer(a), "`Layer` también compara el modo");
+    assert_ne!(
+        d.layer(a),
+        other.layer(a),
+        "`Layer` también compara el modo"
+    );
 
     // Dos modos distintos entre sí tampoco.
-    let mut tercero = d.clone();
-    assert_eq!(tercero.apply(mezcla(a, BlendMode::Lighten)), Ok(true));
-    assert_ne!(otro, tercero);
+    let mut third = d.clone();
+    assert_eq!(third.apply(blend_2(a, BlendMode::Lighten)), Ok(true));
+    assert_ne!(other, third);
 
     // Deshacer devuelve la igualdad.
-    otro.undo().expect("deshacer");
-    assert_eq!(d, otro);
+    other.undo().expect("deshacer");
+    assert_eq!(d, other);
 }
 
 #[test]
-fn fila_12_h_state_id_nuevo_solo_con_ok_true_y_nunca_reutilizado() {
+fn row_12_h_new_state_id_only_with_ok_true_and_never_reused() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
     let s0 = d.state_id();
 
-    // Sin cambios y con error: el mismo identificador (lo comprueba `sin_efecto`).
-    sin_efecto(&mut d, mezcla(a, BlendMode::Normal), Ok(false));
-    sin_efecto(
+    // Sin cambios y con error: el mismo identificador (lo comprueba `without_effect`).
+    without_effect(&mut d, blend_2(a, BlendMode::Normal), Ok(false));
+    without_effect(
         &mut d,
-        mezcla(LayerId::from_raw(999), BlendMode::Add),
+        blend_2(LayerId::from_raw(999), BlendMode::Add),
         Err(DocumentError::UnknownLayer(LayerId::from_raw(999))),
     );
     assert_eq!(d.state_id(), s0);
 
     // Con cambio: uno nuevo; deshacer vuelve al anterior y un cambio distinto no reutiliza el
     // del paso deshecho.
-    assert_eq!(d.apply(mezcla(a, BlendMode::Multiply)), Ok(true));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Multiply)), Ok(true));
     let s1 = d.state_id();
     assert_ne!(s1, s0);
     d.undo().expect("deshacer");
     assert_eq!(d.state_id(), s0);
-    assert_eq!(d.apply(mezcla(a, BlendMode::Screen)), Ok(true));
+    assert_eq!(d.apply(blend_2(a, BlendMode::Screen)), Ok(true));
     let s2 = d.state_id();
     assert_ne!(s2, s0);
     assert_ne!(s2, s1, "un identificador de estado nunca se reutiliza");
 }
 
 #[test]
-fn fila_12_i_dentro_de_un_lote_es_not_batchable() {
+fn row_12_i_inside_a_batch_it_is_not_batchable() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
     let cel = d.layers()[0].cel();
 
-    sin_efecto(
+    without_effect(
         &mut d,
-        Command::Batch(vec![mezcla(a, BlendMode::Multiply)]),
+        Command::Batch(vec![blend_2(a, BlendMode::Multiply)]),
         Err(DocumentError::InBatch {
             index: 0,
             source: Box::new(DocumentError::NotBatchable),
@@ -336,7 +340,7 @@ fn fila_12_i_dentro_de_un_lote_es_not_batchable() {
     );
 
     // Detrás de una escritura válida, que se revierte con el resto del lote.
-    let escritura = Command::SetPixels {
+    let writing = Command::SetPixels {
         image: cel,
         pixels: vec![PixelEdit {
             x: 3,
@@ -344,29 +348,29 @@ fn fila_12_i_dentro_de_un_lote_es_not_batchable() {
             pixel: Pixel::Rgba(C2),
         }],
     };
-    sin_efecto(
+    without_effect(
         &mut d,
-        Command::Batch(vec![escritura, mezcla(a, BlendMode::Multiply)]),
+        Command::Batch(vec![writing, blend_2(a, BlendMode::Multiply)]),
         Err(DocumentError::InBatch {
             index: 1,
             source: Box::new(DocumentError::NotBatchable),
         }),
     );
-    assert_eq!(modo_de(&d, a), BlendMode::Normal);
+    assert_eq!(mode_of(&d, a), BlendMode::Normal);
 }
 
 #[test]
-fn fila_12_j_el_modo_es_por_capa_y_sobrevive_a_mover_la_capa() {
+fn row_12_j_the_mode_is_per_layer_and_survives_moving_the_layer() {
     // Una prueba corta de que `SetLayerBlend` toca solo su capa y que el modo viaja con ella.
     let mut d = doc_d();
     let a = d.layers()[0].id();
-    let b = anade(&mut d, "B", 1);
-    assert_eq!(d.apply(mezcla(b, BlendMode::Overlay)), Ok(true));
-    assert_eq!(modo_de(&d, a), BlendMode::Normal);
-    assert_eq!(modo_de(&d, b), BlendMode::Overlay);
+    let b = adds(&mut d, "B", 1);
+    assert_eq!(d.apply(blend_2(b, BlendMode::Overlay)), Ok(true));
+    assert_eq!(mode_of(&d, a), BlendMode::Normal);
+    assert_eq!(mode_of(&d, b), BlendMode::Overlay);
 
     assert_eq!(d.apply(Command::MoveLayer { layer: b, to: 0 }), Ok(true));
-    assert_eq!(modo_de(&d, b), BlendMode::Overlay);
+    assert_eq!(mode_of(&d, b), BlendMode::Overlay);
     assert_eq!(d.layers()[0].id(), b);
     assert_eq!(d.layers()[0].blend(), BlendMode::Overlay);
 }

@@ -28,11 +28,11 @@ const L_Y_A: Allowed = Allowed {
     drop_alpha: Some([255, 255, 255]),
 };
 
-const TODOS: [Mode; 4] = [Mode::Rgba, Mode::GrayAlpha, Mode::Gray, Mode::Indexed];
+const ALL_2: [Mode; 4] = [Mode::Rgba, Mode::GrayAlpha, Mode::Gray, Mode::Indexed];
 
 // Construcción de imágenes, documentos y comandos.
 
-fn informe(color_lost: u64, alpha_lost: u64) -> ConversionReport {
+fn report_2(color_lost: u64, alpha_lost: u64) -> ConversionReport {
     ConversionReport {
         color_lost,
         alpha_lost,
@@ -53,7 +53,7 @@ fn rgba_img(width: u32, height: u32, pixels: &[(u8, u8, u8, u8)]) -> Image {
     img
 }
 
-fn gris_img(width: u32, height: u32, pixels: &[u8]) -> Image {
+fn gray_img(width: u32, height: u32, pixels: &[u8]) -> Image {
     assert_eq!(pixels.len(), (width * height) as usize);
     let mut img = Image::new(width, height, Mode::Gray).unwrap();
     for (i, &g) in pixels.iter().enumerate() {
@@ -68,11 +68,11 @@ fn doc_d() -> Document {
     Document::new(rgba_img(2, 1, &[(255, 0, 0, 255), (0, 0, 255, 255)]))
 }
 
-fn imagen_de(doc: &Document) -> &Image {
+fn image_of(doc: &Document) -> &Image {
     doc.image(ImageId::from_raw(0)).unwrap()
 }
 
-fn convertir(image: ImageId, target: Mode, allowed: Allowed) -> Command {
+fn convert_2(image: ImageId, target: Mode, allowed: Allowed) -> Command {
     Command::ConvertMode {
         image,
         target,
@@ -87,17 +87,17 @@ fn set(image: ImageId, x: u32, y: u32, pixel: Pixel) -> Command {
     }
 }
 
-fn fallo_convert(e: ConvertError) -> DocumentError {
+fn failure_convert(e: ConvertError) -> DocumentError {
     DocumentError::Convert(e)
 }
 
-fn perdida(color: u64, alfa: u64) -> DocumentError {
-    fallo_convert(ConvertError::LossNotAllowed {
-        report: informe(color, alfa),
+fn lost(color: u64, alpha: u64) -> DocumentError {
+    failure_convert(ConvertError::LossNotAllowed {
+        report: report_2(color, alpha),
     })
 }
 
-fn en_lote(index: usize, source: DocumentError) -> DocumentError {
+fn in_batch(index: usize, source: DocumentError) -> DocumentError {
     DocumentError::InBatch {
         index,
         source: Box::new(source),
@@ -105,23 +105,23 @@ fn en_lote(index: usize, source: DocumentError) -> DocumentError {
 }
 
 /// Cota para que un `undo`/`redo` defectuoso que nunca falla no cuelgue los tests.
-const TOPE_PASOS: usize = 100_000;
+const CAP_STEPS: usize = 100_000;
 
 /// Número de `undo()` que admite el documento (se cuenta en una copia).
-fn pasos_deshacibles(doc: &Document) -> usize {
-    let mut copia = doc.clone();
+fn steps_undoable(doc: &Document) -> usize {
+    let mut copy = doc.clone();
     let mut n = 0;
-    while n < TOPE_PASOS && copia.undo().is_ok() {
+    while n < CAP_STEPS && copy.undo().is_ok() {
         n += 1;
     }
     n
 }
 
 /// Número de `redo()` que admite el documento (se cuenta en una copia).
-fn pasos_rehacibles(doc: &Document) -> usize {
-    let mut copia = doc.clone();
+fn steps_redoable(doc: &Document) -> usize {
+    let mut copy = doc.clone();
     let mut n = 0;
-    while n < TOPE_PASOS && copia.redo().is_ok() {
+    while n < CAP_STEPS && copy.redo().is_ok() {
         n += 1;
     }
     n
@@ -129,35 +129,35 @@ fn pasos_rehacibles(doc: &Document) -> usize {
 
 /// Todo lo observable de un documento, para comprobar que una operación no tocó nada.
 #[derive(Debug, PartialEq, Eq)]
-struct Estado {
+struct State {
     doc: Document,
     can_undo: bool,
     can_redo: bool,
     bytes: usize,
     state_id: u64,
-    limite: usize,
-    deshacibles: usize,
-    rehacibles: usize,
+    limit: usize,
+    undoable: usize,
+    redoable: usize,
 }
 
-fn estado(doc: &Document) -> Estado {
-    Estado {
+fn state(doc: &Document) -> State {
+    State {
         doc: doc.clone(),
         can_undo: doc.can_undo(),
         can_redo: doc.can_redo(),
         bytes: doc.history_bytes(),
         state_id: doc.state_id(),
-        limite: doc.history_limit(),
-        deshacibles: pasos_deshacibles(doc),
-        rehacibles: pasos_rehacibles(doc),
+        limit: doc.history_limit(),
+        undoable: steps_undoable(doc),
+        redoable: steps_redoable(doc),
     }
 }
 
-/// `apply(cmd)` da exactamente `esperado` y no toca nada observable.
-fn rechaza(doc: &mut Document, cmd: Command, esperado: DocumentError) {
-    let antes = estado(doc);
-    assert_eq!(doc.apply(cmd.clone()), Err(esperado), "{cmd:?}");
-    assert_eq!(estado(doc), antes, "{cmd:?}");
+/// `apply(cmd)` da exactamente `expected` y no toca nada observable.
+fn rejects(doc: &mut Document, cmd: Command, expected: DocumentError) {
+    let antes = state(doc);
+    assert_eq!(doc.apply(cmd.clone()), Err(expected), "{cmd:?}");
+    assert_eq!(state(doc), antes, "{cmd:?}");
 }
 
 /// Bytes de píxeles de una imagen, según `Image::byte_len`.
@@ -168,114 +168,114 @@ fn bytes_de(img: &Image) -> usize {
 // Tipos nuevos de la API.
 
 #[test]
-fn errores_nuevos_del_documento() {
-    let convert = perdida(2, 0);
+fn errors_new_of_the_document() {
+    let convert = lost(2, 0);
     assert!(!convert.to_string().is_empty());
     assert!(!DocumentError::NotBatchable.to_string().is_empty());
     assert!(convert.source().is_some(), "Convert lleva su causa");
     assert_ne!(convert, DocumentError::NotBatchable);
-    assert_ne!(convert, perdida(1, 0));
+    assert_ne!(convert, lost(1, 0));
     assert!(
-        !en_lote(1, DocumentError::NotBatchable)
+        !in_batch(1, DocumentError::NotBatchable)
             .to_string()
             .is_empty()
     );
 
-    let cmd = convertir(ImageId::from_raw(0), Mode::Gray, N);
+    let cmd = convert_2(ImageId::from_raw(0), Mode::Gray, N);
     assert_eq!(cmd, cmd.clone());
-    assert_ne!(cmd, convertir(ImageId::from_raw(0), Mode::Gray, L));
-    assert_ne!(cmd, convertir(ImageId::from_raw(0), Mode::Rgba, N));
-    assert_ne!(cmd, convertir(ImageId::from_raw(1), Mode::Gray, N));
+    assert_ne!(cmd, convert_2(ImageId::from_raw(0), Mode::Gray, L));
+    assert_ne!(cmd, convert_2(ImageId::from_raw(0), Mode::Rgba, N));
+    assert_ne!(cmd, convert_2(ImageId::from_raw(1), Mode::Gray, N));
 }
 
 // Una prueba por fila de la tabla de casos límite.
 
 #[test]
-fn fila_13_convertir_y_deshacer() {
+fn row_13_convert_and_undo() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let original = imagen_de(&doc).clone();
+    let original = image_of(&doc).clone();
 
     // Sin permiso: error y nada cambia.
-    rechaza(&mut doc, convertir(id, Mode::Gray, N), perdida(2, 0));
-    assert_eq!(imagen_de(&doc), &original);
+    rejects(&mut doc, convert_2(id, Mode::Gray, N), lost(2, 0));
+    assert_eq!(image_of(&doc), &original);
     assert!(!doc.can_undo());
     assert!(!doc.can_redo());
     assert_eq!(doc.history_bytes(), 0);
 
     // Con `luma`: un paso nuevo.
     let id_antes = doc.state_id();
-    assert_eq!(doc.apply(convertir(id, Mode::Gray, L)), Ok(true));
+    assert_eq!(doc.apply(convert_2(id, Mode::Gray, L)), Ok(true));
     assert_ne!(doc.state_id(), id_antes);
-    assert_eq!(imagen_de(&doc).mode(), Mode::Gray);
-    assert_eq!(imagen_de(&doc), &gris_img(2, 1, &[54, 19]));
+    assert_eq!(image_of(&doc).mode(), Mode::Gray);
+    assert_eq!(image_of(&doc), &gray_img(2, 1, &[54, 19]));
     assert!(doc.can_undo());
     assert!(!doc.can_redo());
-    assert_eq!(pasos_deshacibles(&doc), 1);
-    let convertido = doc.clone();
+    assert_eq!(steps_undoable(&doc), 1);
+    let converted = doc.clone();
 
     // `undo` deja una imagen igual a la original, en su modo.
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc).mode(), Mode::Rgba);
-    assert_eq!(imagen_de(&doc), &original);
+    assert_eq!(image_of(&doc).mode(), Mode::Rgba);
+    assert_eq!(image_of(&doc), &original);
     assert!(!doc.can_undo());
     assert!(doc.can_redo());
 
     // `redo` deja la Gray otra vez.
     assert_eq!(doc.redo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &gris_img(2, 1, &[54, 19]));
-    assert_eq!(doc, convertido);
+    assert_eq!(image_of(&doc), &gray_img(2, 1, &[54, 19]));
+    assert_eq!(doc, converted);
     assert!(doc.can_undo());
     assert!(!doc.can_redo());
 }
 
 #[test]
-fn fila_14_errores_del_documento_dejan_todo_intacto() {
+fn row_14_document_errors_leave_everything_intact() {
     // Pérdida no permitida.
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    rechaza(&mut doc, convertir(id, Mode::Gray, N), perdida(2, 0));
+    rejects(&mut doc, convert_2(id, Mode::Gray, N), lost(2, 0));
 
     // Imagen desconocida: el id 99.
-    let desconocida = ImageId::from_raw(99);
-    rechaza(
+    let unknown = ImageId::from_raw(99);
+    rejects(
         &mut doc,
-        convertir(desconocida, Mode::Indexed, N),
-        DocumentError::UnknownImage(desconocida),
+        convert_2(unknown, Mode::Indexed, N),
+        DocumentError::UnknownImage(unknown),
     );
-    rechaza(
+    rejects(
         &mut doc,
-        convertir(desconocida, Mode::Rgba, L_Y_A),
-        DocumentError::UnknownImage(desconocida),
+        convert_2(unknown, Mode::Rgba, L_Y_A),
+        DocumentError::UnknownImage(unknown),
     );
 
     // Una imagen de 257 colores a `Indexed`.
-    let colores: Vec<(u8, u8, u8, u8)> = (0..257usize)
+    let colors_2: Vec<(u8, u8, u8, u8)> = (0..257usize)
         .map(|i| ((i % 256) as u8, (i / 256) as u8, 0, 255))
         .collect();
-    let mut grande = Document::new(rgba_img(257, 1, &colores));
-    let id_grande = ImageId::from_raw(0);
-    rechaza(
-        &mut grande,
-        convertir(id_grande, Mode::Indexed, N),
-        fallo_convert(ConvertError::TooManyColors { at_least: 257 }),
+    let mut large = Document::new(rgba_img(257, 1, &colors_2));
+    let id_large = ImageId::from_raw(0);
+    rejects(
+        &mut large,
+        convert_2(id_large, Mode::Indexed, N),
+        failure_convert(ConvertError::TooManyColors { at_least: 257 }),
     );
     // Con todos los permisos tampoco: no hay cuantización.
-    rechaza(
-        &mut grande,
-        convertir(id_grande, Mode::Indexed, L_Y_A),
-        fallo_convert(ConvertError::TooManyColors { at_least: 257 }),
+    rejects(
+        &mut large,
+        convert_2(id_large, Mode::Indexed, L_Y_A),
+        failure_convert(ConvertError::TooManyColors { at_least: 257 }),
     );
 
     // `ConvertMode` dentro de un `Batch`: el `SetPixels` anterior se revierte.
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let lote = Command::Batch(vec![
+    let batch = Command::Batch(vec![
         set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
-        convertir(id, Mode::Gray, L),
+        convert_2(id, Mode::Gray, L),
     ]);
-    rechaza(&mut doc, lote, en_lote(1, DocumentError::NotBatchable));
-    assert_eq!(imagen_de(&doc).mode(), Mode::Rgba);
+    rejects(&mut doc, batch, in_batch(1, DocumentError::NotBatchable));
+    assert_eq!(image_of(&doc).mode(), Mode::Rgba);
     assert!(!doc.can_undo());
     assert_eq!(doc.history_bytes(), 0);
 
@@ -286,68 +286,68 @@ fn fila_14_errores_del_documento_dejan_todo_intacto() {
     );
     assert_eq!(doc.undo(), Ok(()));
     assert!(doc.can_redo());
-    let lote = Command::Batch(vec![
+    let batch = Command::Batch(vec![
         set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
         set(id, 1, 0, Pixel::Rgba(Rgba::new(4, 5, 6, 255))),
-        convertir(id, Mode::Gray, L_Y_A),
+        convert_2(id, Mode::Gray, L_Y_A),
     ]);
-    rechaza(&mut doc, lote, en_lote(2, DocumentError::NotBatchable));
+    rejects(&mut doc, batch, in_batch(2, DocumentError::NotBatchable));
     assert!(doc.can_redo());
 }
 
 /// `apply(cmd)` falla con `InBatch { index, source }` donde `source` cumple `es`, y no toca
 /// nada observable.
-fn rechaza_en_lote(
+fn rejects_in_batch(
     doc: &mut Document,
     cmd: Command,
     index: usize,
     es: impl Fn(&DocumentError) -> bool,
 ) {
-    let antes = estado(doc);
+    let antes = state(doc);
     match doc.apply(cmd.clone()) {
         Err(DocumentError::InBatch { index: i, source }) => {
             assert_eq!(i, index, "índice del comando que falló en {cmd:?}");
             assert!(es(&source), "error inesperado {source:?} en {cmd:?}");
         }
-        otro => panic!("se esperaba InBatch en {cmd:?} y salió {otro:?}"),
+        other => panic!("se esperaba InBatch en {cmd:?} y salió {other:?}"),
     }
-    assert_eq!(estado(doc), antes, "{cmd:?}");
+    assert_eq!(state(doc), antes, "{cmd:?}");
 }
 
 #[test]
-fn fila_20_not_batchable_gana_a_unknown_image_y_el_primer_error_gana() {
+fn row_20_not_batchable_beats_unknown_image_and_the_first_error_wins() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
-    let desconocida = ImageId::from_raw(99);
-    let fuera = |image: ImageId| set(image, 5, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255)));
+    let unknown = ImageId::from_raw(99);
+    let outside = |image: ImageId| set(image, 5, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255)));
     let es_not_batchable = |e: &DocumentError| *e == DocumentError::NotBatchable;
 
     // Solo un `ConvertMode` sobre una imagen que no existe: no es `UnknownImage`.
-    let lote = Command::Batch(vec![convertir(desconocida, Mode::Gray, N)]);
-    rechaza_en_lote(&mut doc, lote, 0, es_not_batchable);
+    let batch = Command::Batch(vec![convert_2(unknown, Mode::Gray, N)]);
+    rejects_in_batch(&mut doc, batch, 0, es_not_batchable);
 
     // Con un `SetPixels` válido antes: el índice es el del `ConvertMode`, y el `SetPixels` se
     // revierte. El modo de destino y los permisos no importan.
     for (target, allowed) in [(Mode::Rgba, L_Y_A), (Mode::Indexed, N), (Mode::Gray, L)] {
-        let lote = Command::Batch(vec![
+        let batch = Command::Batch(vec![
             set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
-            convertir(desconocida, target, allowed),
+            convert_2(unknown, target, allowed),
         ]);
-        rechaza_en_lote(&mut doc, lote, 1, es_not_batchable);
+        rejects_in_batch(&mut doc, batch, 1, es_not_batchable);
         assert_eq!(
-            imagen_de(&doc).get_pixel(0, 0),
+            image_of(&doc).get_pixel(0, 0),
             Ok(Pixel::Rgba(Rgba::new(255, 0, 0, 255)))
         );
     }
 
     // Gana el primer error del lote: un `SetPixels` fuera del lienzo antes del `ConvertMode`...
-    let lote = Command::Batch(vec![fuera(id), convertir(desconocida, Mode::Gray, L)]);
-    rechaza_en_lote(&mut doc, lote, 0, |e| {
+    let batch = Command::Batch(vec![outside(id), convert_2(unknown, Mode::Gray, L)]);
+    rejects_in_batch(&mut doc, batch, 0, |e| {
         matches!(e, DocumentError::Pixel { .. })
     });
     // ...y el `ConvertMode` primero, aunque después haya otro fallo.
-    let lote = Command::Batch(vec![convertir(desconocida, Mode::Gray, L), fuera(id)]);
-    rechaza_en_lote(&mut doc, lote, 0, es_not_batchable);
+    let batch = Command::Batch(vec![convert_2(unknown, Mode::Gray, L), outside(id)]);
+    rejects_in_batch(&mut doc, batch, 0, es_not_batchable);
 
     // Con historia previa y pila de rehacer, tampoco cambia nada.
     assert_eq!(
@@ -356,83 +356,83 @@ fn fila_20_not_batchable_gana_a_unknown_image_y_el_primer_error_gana() {
     );
     assert_eq!(doc.undo(), Ok(()));
     assert!(doc.can_redo());
-    let lote = Command::Batch(vec![
+    let batch = Command::Batch(vec![
         set(id, 0, 0, Pixel::Rgba(Rgba::new(1, 2, 3, 255))),
-        convertir(desconocida, Mode::Gray, N),
+        convert_2(unknown, Mode::Gray, N),
     ]);
-    rechaza_en_lote(&mut doc, lote, 1, es_not_batchable);
+    rejects_in_batch(&mut doc, batch, 1, es_not_batchable);
     assert!(doc.can_redo());
 }
 
 #[test]
-fn fila_15_con_limite_cero_el_paso_grande_se_conserva() {
+fn row_15_with_limit_zero_the_big_step_is_kept() {
     let mut doc = Document::new(Image::new(4, 4, Mode::Rgba).unwrap());
     let id = ImageId::from_raw(0);
-    let rgba_inicial = imagen_de(&doc).clone();
+    let rgba_initial = image_of(&doc).clone();
     doc.set_history_limit(0);
 
-    assert_eq!(doc.apply(convertir(id, Mode::Gray, L_Y_A)), Ok(true));
+    assert_eq!(doc.apply(convert_2(id, Mode::Gray, L_Y_A)), Ok(true));
     // 64 bytes de píxeles de la imagen vieja, más una cota de 2048 para cabecera y paleta.
     let bytes = doc.history_bytes();
     assert!((64..=2112).contains(&bytes), "history_bytes() = {bytes}");
     assert_eq!(
-        pasos_deshacibles(&doc),
+        steps_undoable(&doc),
         1,
         "un paso mayor que el límite no se descarta"
     );
-    assert_eq!(imagen_de(&doc).mode(), Mode::Gray);
-    let tras_conversion = imagen_de(&doc).clone();
+    assert_eq!(image_of(&doc).mode(), Mode::Gray);
+    let after_conversion = image_of(&doc).clone();
 
     // Un `SetPixels` válido sobre la imagen Gray.
     assert_eq!(doc.apply(set(id, 0, 0, Pixel::Gray(7))), Ok(true));
-    assert_eq!(imagen_de(&doc).get_pixel(0, 0), Ok(Pixel::Gray(7)));
-    let final_ = imagen_de(&doc).clone();
-    assert_ne!(final_, tras_conversion);
+    assert_eq!(image_of(&doc).get_pixel(0, 0), Ok(Pixel::Gray(7)));
+    let final_ = image_of(&doc).clone();
+    assert_ne!(final_, after_conversion);
 
     // Solo queda el último paso: un único `undo`, que deja la Gray de la conversión.
-    assert_eq!(pasos_deshacibles(&doc), 1);
+    assert_eq!(steps_undoable(&doc), 1);
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &tras_conversion);
+    assert_eq!(image_of(&doc), &after_conversion);
     assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-    assert_eq!(imagen_de(&doc), &tras_conversion);
+    assert_eq!(image_of(&doc), &after_conversion);
 
     // Y un `redo` que repite el estado final.
     assert_eq!(doc.redo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &final_);
+    assert_eq!(image_of(&doc), &final_);
     assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-    assert_ne!(imagen_de(&doc), &rgba_inicial);
+    assert_ne!(image_of(&doc), &rgba_initial);
 }
 
 #[test]
-fn fila_15_con_el_limite_por_defecto_se_deshace_todo() {
+fn row_15_with_the_default_limit_everything_can_be_undone() {
     let mut doc = Document::new(Image::new(4, 4, Mode::Rgba).unwrap());
     let id = ImageId::from_raw(0);
-    let rgba_inicial = imagen_de(&doc).clone();
+    let rgba_initial = image_of(&doc).clone();
 
-    assert_eq!(doc.apply(convertir(id, Mode::Gray, L_Y_A)), Ok(true));
+    assert_eq!(doc.apply(convert_2(id, Mode::Gray, L_Y_A)), Ok(true));
     let bytes = doc.history_bytes();
     assert!((64..=2112).contains(&bytes), "history_bytes() = {bytes}");
-    let tras_conversion = imagen_de(&doc).clone();
+    let after_conversion = image_of(&doc).clone();
     assert_eq!(doc.apply(set(id, 0, 0, Pixel::Gray(7))), Ok(true));
-    let final_ = imagen_de(&doc).clone();
-    assert_eq!(pasos_deshacibles(&doc), 2);
+    let final_ = image_of(&doc).clone();
+    assert_eq!(steps_undoable(&doc), 2);
 
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &tras_conversion);
+    assert_eq!(image_of(&doc), &after_conversion);
     assert_eq!(doc.undo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &rgba_inicial);
-    assert_eq!(imagen_de(&doc).mode(), Mode::Rgba);
+    assert_eq!(image_of(&doc), &rgba_initial);
+    assert_eq!(image_of(&doc).mode(), Mode::Rgba);
     assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
 
     assert_eq!(doc.redo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &tras_conversion);
+    assert_eq!(image_of(&doc), &after_conversion);
     assert_eq!(doc.redo(), Ok(()));
-    assert_eq!(imagen_de(&doc), &final_);
+    assert_eq!(image_of(&doc), &final_);
     assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
 }
 
 #[test]
-fn fila_19_convertir_al_modo_actual_no_es_un_paso() {
+fn row_19_converting_to_the_current_mode_is_not_a_step() {
     let mut doc = doc_d();
     let id = ImageId::from_raw(0);
     assert_eq!(
@@ -441,10 +441,10 @@ fn fila_19_convertir_al_modo_actual_no_es_un_paso() {
     );
     assert_eq!(doc.undo(), Ok(()));
     assert!(doc.can_redo());
-    let antes = estado(&doc);
+    let antes = state(&doc);
 
     // Con cualquier `allowed`, incluso con permisos de más: no se llama a `convert_image`.
-    let permisos = [
+    let permissions = [
         N,
         L,
         L_Y_A,
@@ -453,13 +453,13 @@ fn fila_19_convertir_al_modo_actual_no_es_un_paso() {
             drop_alpha: Some([3, 4, 5]),
         },
     ];
-    for allowed in permisos {
+    for allowed in permissions {
         assert_eq!(
-            doc.apply(convertir(id, Mode::Rgba, allowed)),
+            doc.apply(convert_2(id, Mode::Rgba, allowed)),
             Ok(false),
             "{allowed:?}"
         );
-        assert_eq!(estado(&doc), antes, "{allowed:?}");
+        assert_eq!(state(&doc), antes, "{allowed:?}");
         assert!(doc.can_redo(), "no borra la pila de rehacer");
         assert_eq!(doc.state_id(), antes.state_id);
         assert_eq!(doc.history_bytes(), antes.bytes);
@@ -468,25 +468,25 @@ fn fila_19_convertir_al_modo_actual_no_es_un_paso() {
     // Lo que había por rehacer sigue ahí.
     assert_eq!(doc.redo(), Ok(()));
     assert_eq!(
-        imagen_de(&doc).get_pixel(0, 0),
+        image_of(&doc).get_pixel(0, 0),
         Ok(Pixel::Rgba(Rgba::new(1, 2, 3, 255)))
     );
 }
 
 // Estrategias.
 
-fn modo() -> impl Strategy<Value = Mode> {
-    prop::sample::select(TODOS.to_vec())
+fn mode_2() -> impl Strategy<Value = Mode> {
+    prop::sample::select(ALL_2.to_vec())
 }
 
-const CANALES: [u8; 5] = [0, 1, 127, 128, 255];
+const CHANNELS: [u8; 5] = [0, 1, 127, 128, 255];
 
 fn canal() -> impl Strategy<Value = u8> {
-    prop_oneof![any::<u8>(), prop::sample::select(CANALES.to_vec())]
+    prop_oneof![any::<u8>(), prop::sample::select(CHANNELS.to_vec())]
 }
 
-fn pequeno() -> impl Strategy<Value = u8> {
-    prop::sample::select(CANALES.to_vec())
+fn small() -> impl Strategy<Value = u8> {
+    prop::sample::select(CHANNELS.to_vec())
 }
 
 /// Colores uniformes, del conjunto pequeño y grises con alfa de un conjunto pequeño.
@@ -494,8 +494,8 @@ fn color() -> impl Strategy<Value = Rgba> {
     prop_oneof![
         (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>())
             .prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a)),
-        (pequeno(), pequeno(), pequeno(), pequeno()).prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a)),
-        (canal(), pequeno()).prop_map(|(v, a)| Rgba::new(v, v, v, a)),
+        (small(), small(), small(), small()).prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a)),
+        (canal(), small()).prop_map(|(v, a)| Rgba::new(v, v, v, a)),
     ]
 }
 
@@ -505,29 +505,29 @@ fn dims() -> impl Strategy<Value = (u32, u32)> {
 
 /// Imagen de hasta 6 x 6 en cualquier modo; la indexada lleva una paleta de 1 a 8 entradas
 /// y a veces un índice transparente.
-fn imagen_6() -> impl Strategy<Value = Image> {
+fn image_6() -> impl Strategy<Value = Image> {
     (
-        modo(),
+        mode_2(),
         dims(),
         prop::collection::vec(color(), 36),
         prop::collection::vec(color(), 1..=8),
         prop::option::of(any::<u8>()),
         prop::collection::vec(any::<u8>(), 36),
     )
-        .prop_map(|(mode, (w, h), colores, paleta, t, idx)| {
+        .prop_map(|(mode, (w, h), colors_2, palette_2, t, idx)| {
             let n = (w * h) as usize;
             let en = |i: usize| (i as u32 % w, i as u32 / w);
             let mut img = match mode {
                 Mode::Indexed => {
-                    let mut p = Palette::from_colors(paleta.iter().copied()).unwrap();
-                    p.set_transparent_index(t.map(|t| (t as usize % paleta.len()) as u8))
+                    let mut p = Palette::from_colors(palette_2.iter().copied()).unwrap();
+                    p.set_transparent_index(t.map(|t| (t as usize % palette_2.len()) as u8))
                         .unwrap();
                     Image::new_indexed(w, h, p).unwrap()
                 }
                 _ => Image::new(w, h, mode).unwrap(),
             };
             for i in 0..n {
-                let c = colores[i];
+                let c = colors_2[i];
                 let pixel = match mode {
                     Mode::Rgba => Pixel::Rgba(c),
                     Mode::GrayAlpha => Pixel::GrayAlpha {
@@ -535,7 +535,7 @@ fn imagen_6() -> impl Strategy<Value = Image> {
                         alpha: c.a,
                     },
                     Mode::Gray => Pixel::Gray(c.g),
-                    Mode::Indexed => Pixel::Indexed((idx[i] as usize % paleta.len()) as u8),
+                    Mode::Indexed => Pixel::Indexed((idx[i] as usize % palette_2.len()) as u8),
                 };
                 let (px, py) = en(i);
                 img.set_pixel(px, py, pixel).unwrap();
@@ -544,7 +544,7 @@ fn imagen_6() -> impl Strategy<Value = Image> {
         })
 }
 
-fn permisos() -> impl Strategy<Value = Allowed> {
+fn permissions() -> impl Strategy<Value = Allowed> {
     (
         prop_oneof![2 => Just(true), 1 => Just(false)],
         prop_oneof![
@@ -556,14 +556,14 @@ fn permisos() -> impl Strategy<Value = Allowed> {
 }
 
 /// Permisos para conversiones que no fallan por pérdida.
-fn todos_los_permisos() -> impl Strategy<Value = Allowed> {
+fn all_the_permissions() -> impl Strategy<Value = Allowed> {
     (canal(), canal(), canal()).prop_map(|(r, g, b)| Allowed {
         luma: true,
         drop_alpha: Some([r, g, b]),
     })
 }
 
-fn alfa_de(v: u8) -> u8 {
+fn alpha_of(v: u8) -> u8 {
     match v % 4 {
         0 => 0,
         1 => 128,
@@ -575,32 +575,32 @@ fn alfa_de(v: u8) -> u8 {
 /// En `Indexed`, `v` se reduce módulo la longitud de la paleta (`len`).
 fn pixel_de(mode: Mode, len: usize, v: u8) -> Pixel {
     match mode {
-        Mode::Rgba if v.is_multiple_of(2) => Pixel::Rgba(Rgba::new(v, v, v, alfa_de(v))),
-        Mode::Rgba => Pixel::Rgba(Rgba::new(v, v ^ 0x55, v.wrapping_mul(3), alfa_de(v))),
+        Mode::Rgba if v.is_multiple_of(2) => Pixel::Rgba(Rgba::new(v, v, v, alpha_of(v))),
+        Mode::Rgba => Pixel::Rgba(Rgba::new(v, v ^ 0x55, v.wrapping_mul(3), alpha_of(v))),
         Mode::GrayAlpha => Pixel::GrayAlpha {
             gray: v,
-            alpha: alfa_de(v),
+            alpha: alpha_of(v),
         },
         Mode::Gray => Pixel::Gray(v),
         Mode::Indexed => Pixel::Indexed((usize::from(v) % len.max(1)) as u8),
     }
 }
 
-fn otro_modo(mode: Mode) -> Mode {
-    let i = TODOS.iter().position(|&m| m == mode).unwrap();
-    TODOS[(i + 1) % TODOS.len()]
+fn other_mode(mode: Mode) -> Mode {
+    let i = ALL_2.iter().position(|&m| m == mode).unwrap();
+    ALL_2[(i + 1) % ALL_2.len()]
 }
 
-fn longitud_de_paleta(img: &Image) -> usize {
+fn length_of_palette(img: &Image) -> usize {
     img.palette().map_or(0, Palette::len)
 }
 
-/// Un píxel válido (o inválido, si `malo`) para la imagen actual.
-fn pixel_para(img: &Image, v: u8, malo: bool) -> Pixel {
-    if malo {
-        pixel_de(otro_modo(img.mode()), 8, v)
+/// Un píxel válido (o inválido, si `bad`) para la imagen actual.
+fn pixel_para(img: &Image, v: u8, bad: bool) -> Pixel {
+    if bad {
+        pixel_de(other_mode(img.mode()), 8, v)
     } else {
-        pixel_de(img.mode(), longitud_de_paleta(img), v)
+        pixel_de(img.mode(), length_of_palette(img), v)
     }
 }
 
@@ -610,19 +610,19 @@ fn pixel_para(img: &Image, v: u8, malo: bool) -> Pixel {
 enum Op {
     Set {
         edits: Vec<(u32, u32, u8)>,
-        malo: bool,
+        bad: bool,
     },
     Fill {
         y: u32,
         x0: u32,
         x1: u32,
         v: u8,
-        malo: bool,
+        bad: bool,
     },
     Convert {
         target: Mode,
         allowed: Allowed,
-        desconocida: Option<u32>,
+        unknown: Option<u32>,
     },
     Undo,
     Redo,
@@ -631,135 +631,135 @@ enum Op {
 fn op() -> impl Strategy<Value = Op> {
     prop_oneof![
         2 => (prop::collection::vec((0u32..8, 0u32..8, 0u8..8), 1..=3), prop_oneof![5 => Just(false), 1 => Just(true)])
-            .prop_map(|(edits, malo)| Op::Set { edits, malo }),
+            .prop_map(|(edits, bad)| Op::Set { edits, bad }),
         2 => (0u32..8, 0u32..8, 0u32..8, 0u8..8, prop_oneof![5 => Just(false), 1 => Just(true)])
-            .prop_map(|(y, x0, x1, v, malo)| Op::Fill { y, x0, x1, v, malo }),
-        5 => (modo(), permisos(), prop_oneof![9 => Just(None), 1 => (1u32..5).prop_map(Some)])
-            .prop_map(|(target, allowed, desconocida)| Op::Convert { target, allowed, desconocida }),
+            .prop_map(|(y, x0, x1, v, bad)| Op::Fill { y, x0, x1, v, bad }),
+        5 => (mode_2(), permissions(), prop_oneof![9 => Just(None), 1 => (1u32..5).prop_map(Some)])
+            .prop_map(|(target, allowed, unknown)| Op::Convert { target, allowed, unknown }),
         2 => Just(Op::Undo),
         2 => Just(Op::Redo),
     ]
 }
 
 /// Lo que el modelo espera de un `SetPixels` o un `FillSpans`.
-enum Previsto {
+enum Expected {
     Error,
-    SinCambio,
-    Nuevo(Image),
+    WithoutChange,
+    New(Image),
 }
 
-fn modelo_set(img: &Image, pixels: &[PixelEdit]) -> Previsto {
-    let mut trabajo = img.clone();
-    let mut cambio = false;
+fn model_set(img: &Image, pixels: &[PixelEdit]) -> Expected {
+    let mut work = img.clone();
+    let mut change = false;
     for e in pixels {
-        let antes = trabajo.get_pixel(e.x, e.y);
-        if trabajo.set_pixel(e.x, e.y, e.pixel).is_err() {
-            return Previsto::Error;
+        let antes = work.get_pixel(e.x, e.y);
+        if work.set_pixel(e.x, e.y, e.pixel).is_err() {
+            return Expected::Error;
         }
-        cambio |= antes != Ok(e.pixel);
+        change |= antes != Ok(e.pixel);
     }
-    if cambio {
-        Previsto::Nuevo(trabajo)
+    if change {
+        Expected::New(work)
     } else {
-        Previsto::SinCambio
+        Expected::WithoutChange
     }
 }
 
-fn modelo_fill(img: &Image, span: Span, pixel: Pixel) -> Previsto {
+fn model_fill(img: &Image, span: Span, pixel: Pixel) -> Expected {
     if img.check_pixel(pixel).is_err()
         || span.x_start >= span.x_end
         || span.y >= img.height()
         || span.x_end > img.width()
     {
-        return Previsto::Error;
+        return Expected::Error;
     }
-    let mut trabajo = img.clone();
-    let mut cambio = false;
+    let mut work = img.clone();
+    let mut change = false;
     for x in span.x_start..span.x_end {
-        if trabajo.get_pixel(x, span.y) != Ok(pixel) {
-            trabajo.set_pixel(x, span.y, pixel).unwrap();
-            cambio = true;
+        if work.get_pixel(x, span.y) != Ok(pixel) {
+            work.set_pixel(x, span.y, pixel).unwrap();
+            change = true;
         }
     }
-    if cambio {
-        Previsto::Nuevo(trabajo)
+    if change {
+        Expected::New(work)
     } else {
-        Previsto::SinCambio
+        Expected::WithoutChange
     }
 }
 
 /// Ejecuta `ops` sobre un documento y sobre el modelo (instantáneas de la imagen y un
 /// cursor) y los compara tras cada operación.
-fn ejecuta_modelo(inicial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
-    let mut doc = Document::new(inicial.clone());
+fn runs_model(initial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
+    let mut doc = Document::new(initial.clone());
     let id = ImageId::from_raw(0);
-    let mut instantes = vec![inicial];
+    let mut instants = vec![initial];
     let mut cursor = 0usize;
 
     for op in ops {
-        let actual = instantes[cursor].clone();
-        let antes = estado(&doc);
+        let actual = instants[cursor].clone();
+        let antes = state(&doc);
         match op {
-            Op::Set { edits, malo } => {
+            Op::Set { edits, bad } => {
                 let pixels: Vec<PixelEdit> = edits
                     .iter()
                     .map(|&(x, y, v)| PixelEdit {
                         x,
                         y,
-                        pixel: pixel_para(&actual, v, *malo),
+                        pixel: pixel_para(&actual, v, *bad),
                     })
                     .collect();
-                let previsto = modelo_set(&actual, &pixels);
+                let expected_2 = model_set(&actual, &pixels);
                 let real = doc.apply(Command::SetPixels { image: id, pixels });
-                aplica_previsto(real, previsto, &mut instantes, &mut cursor, &doc, &antes)?;
+                applies_expected(real, expected_2, &mut instants, &mut cursor, &doc, &antes)?;
             }
-            Op::Fill { y, x0, x1, v, malo } => {
+            Op::Fill { y, x0, x1, v, bad } => {
                 let span = Span {
                     y: *y,
                     x_start: *x0,
                     x_end: *x1,
                 };
-                let pixel = pixel_para(&actual, *v, *malo);
-                let previsto = modelo_fill(&actual, span, pixel);
+                let pixel = pixel_para(&actual, *v, *bad);
+                let expected_2 = model_fill(&actual, span, pixel);
                 let real = doc.apply(Command::FillSpans {
                     image: id,
                     spans: vec![span],
                     pixel,
                 });
-                aplica_previsto(real, previsto, &mut instantes, &mut cursor, &doc, &antes)?;
+                applies_expected(real, expected_2, &mut instants, &mut cursor, &doc, &antes)?;
             }
             Op::Convert {
                 target,
                 allowed,
-                desconocida,
+                unknown,
             } => {
-                let objetivo = desconocida.map_or(id, ImageId::from_raw);
-                let real = doc.apply(convertir(objetivo, *target, *allowed));
-                if desconocida.is_some() {
-                    prop_assert_eq!(real, Err(DocumentError::UnknownImage(objetivo)));
-                    prop_assert_eq!(estado(&doc), antes);
+                let goal = unknown.map_or(id, ImageId::from_raw);
+                let real = doc.apply(convert_2(goal, *target, *allowed));
+                if unknown.is_some() {
+                    prop_assert_eq!(real, Err(DocumentError::UnknownImage(goal)));
+                    prop_assert_eq!(state(&doc), antes);
                 } else if *target == actual.mode() {
                     // Convertir al modo actual no es un paso.
                     prop_assert_eq!(real, Ok(false));
-                    prop_assert_eq!(estado(&doc), antes);
+                    prop_assert_eq!(state(&doc), antes);
                 } else {
                     match convert_image(&actual, *target, *allowed) {
                         Ok(conversion) => {
                             prop_assert_eq!(real, Ok(true));
                             prop_assert_ne!(doc.state_id(), antes.state_id);
-                            instantes.truncate(cursor + 1);
-                            instantes.push(conversion.image);
+                            instants.truncate(cursor + 1);
+                            instants.push(conversion.image);
                             cursor += 1;
                             // `undo` deja la imagen anterior y `redo` la convertida.
-                            let mut copia = doc.clone();
-                            prop_assert_eq!(copia.undo(), Ok(()));
-                            prop_assert_eq!(copia.image(id), Some(&actual));
-                            prop_assert_eq!(copia.redo(), Ok(()));
-                            prop_assert_eq!(copia.image(id), Some(&instantes[cursor]));
+                            let mut copy = doc.clone();
+                            prop_assert_eq!(copy.undo(), Ok(()));
+                            prop_assert_eq!(copy.image(id), Some(&actual));
+                            prop_assert_eq!(copy.redo(), Ok(()));
+                            prop_assert_eq!(copy.image(id), Some(&instants[cursor]));
                         }
                         Err(e) => {
                             prop_assert_eq!(real, Err(DocumentError::Convert(e)));
-                            prop_assert_eq!(estado(&doc), antes);
+                            prop_assert_eq!(state(&doc), antes);
                         }
                     }
                 }
@@ -770,60 +770,60 @@ fn ejecuta_modelo(inicial: Image, ops: &[Op]) -> Result<(), TestCaseError> {
                     cursor -= 1;
                 } else {
                     prop_assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
-                    prop_assert_eq!(estado(&doc), antes);
+                    prop_assert_eq!(state(&doc), antes);
                 }
             }
             Op::Redo => {
-                if cursor + 1 < instantes.len() {
+                if cursor + 1 < instants.len() {
                     prop_assert_eq!(doc.redo(), Ok(()));
                     cursor += 1;
                 } else {
                     prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
-                    prop_assert_eq!(estado(&doc), antes);
+                    prop_assert_eq!(state(&doc), antes);
                 }
             }
         }
         // El documento es la instantánea del cursor, con el modo y la paleta.
-        prop_assert_eq!(doc.image(id), Some(&instantes[cursor]));
+        prop_assert_eq!(doc.image(id), Some(&instants[cursor]));
         prop_assert_eq!(
             doc.image(id).map(Image::mode),
-            Some(instantes[cursor].mode())
+            Some(instants[cursor].mode())
         );
         prop_assert_eq!(
             doc.image(id).and_then(Image::palette),
-            instantes[cursor].palette()
+            instants[cursor].palette()
         );
         prop_assert_eq!(doc.can_undo(), cursor > 0);
-        prop_assert_eq!(doc.can_redo(), cursor + 1 < instantes.len());
-        prop_assert_eq!(pasos_deshacibles(&doc), cursor);
-        prop_assert_eq!(pasos_rehacibles(&doc), instantes.len() - 1 - cursor);
+        prop_assert_eq!(doc.can_redo(), cursor + 1 < instants.len());
+        prop_assert_eq!(steps_undoable(&doc), cursor);
+        prop_assert_eq!(steps_redoable(&doc), instants.len() - 1 - cursor);
     }
     Ok(())
 }
 
 /// Compara el resultado de un `SetPixels` o `FillSpans` con lo previsto y actualiza el modelo.
-fn aplica_previsto(
+fn applies_expected(
     real: Result<bool, DocumentError>,
-    previsto: Previsto,
-    instantes: &mut Vec<Image>,
+    expected_2: Expected,
+    instants: &mut Vec<Image>,
     cursor: &mut usize,
     doc: &Document,
-    antes: &Estado,
+    antes: &State,
 ) -> Result<(), TestCaseError> {
-    match previsto {
-        Previsto::Nuevo(nueva) => {
+    match expected_2 {
+        Expected::New(new) => {
             prop_assert_eq!(real, Ok(true));
-            instantes.truncate(*cursor + 1);
-            instantes.push(nueva);
+            instants.truncate(*cursor + 1);
+            instants.push(new);
             *cursor += 1;
         }
-        Previsto::SinCambio => {
+        Expected::WithoutChange => {
             prop_assert_eq!(real, Ok(false));
-            prop_assert_eq!(&estado(doc), antes);
+            prop_assert_eq!(&state(doc), antes);
         }
-        Previsto::Error => {
+        Expected::Error => {
             prop_assert!(real.is_err(), "se esperaba un error y dio {:?}", real);
-            prop_assert_eq!(&estado(doc), antes);
+            prop_assert_eq!(&state(doc), antes);
         }
     }
     Ok(())
@@ -831,90 +831,90 @@ fn aplica_previsto(
 
 // Propiedad 6.
 
-/// Documento con una imagen y algo de historia: unos `SetPixels` válidos y, según `deshacer`,
+/// Documento con una imagen y algo de historia: unos `SetPixels` válidos y, según `undo`,
 /// un `undo` que deja un paso por rehacer.
-fn documento_con_historia(img: Image, sets: &[(u32, u32, u8)], deshacer: bool) -> Document {
+fn document_with_history(img: Image, sets: &[(u32, u32, u8)], undo: bool) -> Document {
     let mut doc = Document::new(img);
     let id = ImageId::from_raw(0);
     for &(x, y, v) in sets {
-        let img = imagen_de(&doc);
-        let pixel = pixel_de(img.mode(), longitud_de_paleta(img), v);
+        let img = image_of(&doc);
+        let pixel = pixel_de(img.mode(), length_of_palette(img), v);
         let (x, y) = (x % img.width(), y % img.height());
         let _ = doc.apply(set(id, x, y, pixel));
     }
-    if deshacer {
+    if undo {
         let _ = doc.undo();
     }
     doc
 }
 
 #[derive(Clone, Debug)]
-enum Forma {
+enum Shape {
     /// `ConvertMode` sobre la imagen principal.
-    Suelto,
+    Loose,
     /// `ConvertMode` con un identificador que no existe.
-    Desconocida(u32),
+    Unknown(u32),
     /// `Batch` con `n` `SetPixels` válidos seguidos de `ConvertMode`.
-    EnLote(usize),
+    InBatch(usize),
 }
 
-fn forma_de_comando() -> impl Strategy<Value = Forma> {
+fn shape_of_command() -> impl Strategy<Value = Shape> {
     prop_oneof![
-        4 => Just(Forma::Suelto),
-        1 => (1u32..5).prop_map(Forma::Desconocida),
-        2 => (0usize..=2).prop_map(Forma::EnLote),
+        4 => Just(Shape::Loose),
+        1 => (1u32..5).prop_map(Shape::Unknown),
+        2 => (0usize..=2).prop_map(Shape::InBatch),
     ]
 }
 
-fn prop_atomicidad(
+fn prop_atomicity(
     img: Image,
     sets: Vec<(u32, u32, u8)>,
-    deshacer: bool,
-    forma: &Forma,
+    undo: bool,
+    shape: &Shape,
     target: Mode,
     allowed: Allowed,
 ) -> Result<(), TestCaseError> {
-    let mut doc = documento_con_historia(img, &sets, deshacer);
+    let mut doc = document_with_history(img, &sets, undo);
     let id = ImageId::from_raw(0);
-    let antes = estado(&doc);
-    let actual = imagen_de(&doc).clone();
+    let antes = state(&doc);
+    let actual = image_of(&doc).clone();
 
-    match forma {
-        Forma::Desconocida(raw) => {
-            let objetivo = ImageId::from_raw(*raw);
+    match shape {
+        Shape::Unknown(raw) => {
+            let goal = ImageId::from_raw(*raw);
             prop_assert_eq!(
-                doc.apply(convertir(objetivo, target, allowed)),
-                Err(DocumentError::UnknownImage(objetivo))
+                doc.apply(convert_2(goal, target, allowed)),
+                Err(DocumentError::UnknownImage(goal))
             );
-            prop_assert_eq!(estado(&doc), antes);
+            prop_assert_eq!(state(&doc), antes);
         }
-        Forma::EnLote(n) => {
-            let mut comandos: Vec<Command> = (0..*n)
+        Shape::InBatch(n) => {
+            let mut commands: Vec<Command> = (0..*n)
                 .map(|i| {
-                    let pixel = pixel_de(actual.mode(), longitud_de_paleta(&actual), i as u8 + 2);
+                    let pixel = pixel_de(actual.mode(), length_of_palette(&actual), i as u8 + 2);
                     set(id, 0, 0, pixel)
                 })
                 .collect();
-            comandos.push(convertir(id, target, allowed));
+            commands.push(convert_2(id, target, allowed));
             prop_assert_eq!(
-                doc.apply(Command::Batch(comandos)),
-                Err(en_lote(*n, DocumentError::NotBatchable))
+                doc.apply(Command::Batch(commands)),
+                Err(in_batch(*n, DocumentError::NotBatchable))
             );
-            prop_assert_eq!(estado(&doc), antes);
+            prop_assert_eq!(state(&doc), antes);
         }
-        Forma::Suelto => match doc.apply(convertir(id, target, allowed)) {
+        Shape::Loose => match doc.apply(convert_2(id, target, allowed)) {
             Err(_) | Ok(false) => {
-                prop_assert_eq!(estado(&doc), antes);
+                prop_assert_eq!(state(&doc), antes);
             }
             Ok(true) => {
                 // Coste del paso: los bytes de píxeles de la imagen anterior, más una cota
                 // para cabecera y paleta.
                 let anterior = bytes_de(&actual);
-                let crecimiento = doc.history_bytes() - antes.bytes;
+                let growth = doc.history_bytes() - antes.bytes;
                 prop_assert!(
-                    (anterior..=anterior + 2048).contains(&crecimiento),
+                    (anterior..=anterior + 2048).contains(&growth),
                     "el paso cuesta {} y los píxeles anteriores son {}",
-                    crecimiento,
+                    growth,
                     anterior
                 );
                 prop_assert!(doc.can_undo());
@@ -922,50 +922,50 @@ fn prop_atomicidad(
                 prop_assert_ne!(doc.state_id(), antes.state_id);
 
                 // `undo` baja el coste al de antes y `redo` lo vuelve a subir.
-                let tras_apply = doc.history_bytes();
-                let mut copia = doc.clone();
-                prop_assert_eq!(copia.undo(), Ok(()));
-                prop_assert_eq!(copia.history_bytes(), antes.bytes);
-                prop_assert_eq!(copia.image(id), Some(&actual));
-                prop_assert_eq!(copia.redo(), Ok(()));
-                prop_assert_eq!(copia.history_bytes(), tras_apply);
-                prop_assert_eq!(copia.image(id), doc.image(id));
+                let after_apply = doc.history_bytes();
+                let mut copy = doc.clone();
+                prop_assert_eq!(copy.undo(), Ok(()));
+                prop_assert_eq!(copy.history_bytes(), antes.bytes);
+                prop_assert_eq!(copy.image(id), Some(&actual));
+                prop_assert_eq!(copy.redo(), Ok(()));
+                prop_assert_eq!(copy.history_bytes(), after_apply);
+                prop_assert_eq!(copy.image(id), doc.image(id));
             }
         },
     }
     Ok(())
 }
 
-fn prop_limite(img: Image, limite: usize, ops: &[(Mode, Allowed)]) -> Result<(), TestCaseError> {
+fn prop_limit(img: Image, limit: usize, ops: &[(Mode, Allowed)]) -> Result<(), TestCaseError> {
     let mut doc = Document::new(img);
-    doc.set_history_limit(limite);
+    doc.set_history_limit(limit);
     let id = ImageId::from_raw(0);
-    let mut hubo_paso = false;
+    let mut was_step = false;
 
     for &(target, allowed) in ops {
-        let actual = imagen_de(&doc).clone();
-        let antes = estado(&doc);
-        match doc.apply(convertir(id, target, allowed)) {
+        let actual = image_of(&doc).clone();
+        let antes = state(&doc);
+        match doc.apply(convert_2(id, target, allowed)) {
             Ok(true) => {
-                hubo_paso = true;
+                was_step = true;
                 // El último paso nunca se descarta: se puede deshacer y deja la anterior.
-                let mut copia = doc.clone();
-                prop_assert_eq!(copia.undo(), Ok(()));
-                prop_assert_eq!(copia.image(id), Some(&actual));
+                let mut copy = doc.clone();
+                prop_assert_eq!(copy.undo(), Ok(()));
+                prop_assert_eq!(copy.image(id), Some(&actual));
             }
-            Ok(false) | Err(_) => prop_assert_eq!(estado(&doc), antes),
+            Ok(false) | Err(_) => prop_assert_eq!(state(&doc), antes),
         }
-        let conservados = pasos_deshacibles(&doc);
+        let kept = steps_undoable(&doc);
         prop_assert!(
-            doc.history_bytes() <= limite || conservados <= 1,
+            doc.history_bytes() <= limit || kept <= 1,
             "history_bytes = {} > límite {} con {} pasos",
             doc.history_bytes(),
-            limite,
-            conservados
+            limit,
+            kept
         );
-        prop_assert_eq!(doc.history_limit(), limite);
-        if hubo_paso {
-            prop_assert!(conservados >= 1, "el último paso siempre se conserva");
+        prop_assert_eq!(doc.history_limit(), limit);
+        if was_step {
+            prop_assert!(kept >= 1, "el último paso siempre se conserva");
             prop_assert!(doc.can_undo());
         }
     }
@@ -976,35 +976,35 @@ proptest! {
     // Propiedad 5: `ConvertMode`, `SetPixels`, `FillSpans`, `undo` y `redo` contra un modelo
     // de instantáneas.
     #[test]
-    fn convert_mode_y_undo_contra_un_modelo(
-        img in imagen_6(),
+    fn convert_mode_and_undo_against_a_model(
+        img in image_6(),
         ops in prop::collection::vec(op(), 0..=20),
     ) {
-        ejecuta_modelo(img, &ops)?;
+        runs_model(img, &ops)?;
     }
 
     // Propiedad 6, primera parte: atomicidad y coste (también en un `Batch` y con ids
     // desconocidos).
     #[test]
-    fn atomicidad_y_coste_de_convert_mode(
-        img in imagen_6(),
+    fn atomicity_and_cost_of_convert_mode(
+        img in image_6(),
         sets in prop::collection::vec((any::<u32>(), any::<u32>(), 0u8..8), 0..=3),
-        deshacer in any::<bool>(),
-        forma in forma_de_comando(),
-        target in modo(),
-        allowed in permisos(),
+        undo in any::<bool>(),
+        shape in shape_of_command(),
+        target in mode_2(),
+        allowed in permissions(),
     ) {
-        prop_atomicidad(img, sets, deshacer, &forma, target, allowed)?;
+        prop_atomicity(img, sets, undo, &shape, target, allowed)?;
     }
 
     // Propiedad 6, segunda parte: con un límite de 0 a 2000 bytes, `history_bytes() <= límite`
     // o solo queda un paso, y el último paso nunca se descarta.
     #[test]
-    fn limite_de_la_historia_con_convert_mode(
-        img in imagen_6(),
-        limite in 0usize..=2000,
-        ops in prop::collection::vec((modo(), todos_los_permisos()), 1..=8),
+    fn history_limit_with_convert_mode(
+        img in image_6(),
+        limit in 0usize..=2000,
+        ops in prop::collection::vec((mode_2(), all_the_permissions()), 1..=8),
     ) {
-        prop_limite(img, limite, &ops)?;
+        prop_limit(img, limit, &ops)?;
     }
 }

@@ -202,7 +202,7 @@ impl Image {
         self.palette.as_mut().is_some_and(Palette::reserve_one)
     }
 
-    /// Reordena la paleta con la tabla `adelante[antiguo] = nuevo` y remapea los píxeles y el
+    /// Reordena la paleta con la tabla `adelante[old] = new` y remapea los píxeles y el
     /// índice transparente a la vez: ningún color resuelto cambia.
     pub(crate) fn reorder_palette(&mut self, forward: &[u8]) -> bool {
         let Some(palette) = self.palette.as_mut() else {
