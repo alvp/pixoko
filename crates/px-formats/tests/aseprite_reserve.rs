@@ -9,6 +9,15 @@
 //! se rellena con un valor distinto de cero) lo sube **48 MiB o más**, para demostrar que el
 //! instrumento mide.
 //!
+//! Regla de 1032× por celda (specs/hito-3-aseprite.md, «Límites del lector»): un flujo zlib
+//! **válido** de 128 MiB de ceros (unos 130 KB) en una celda que declara 512 MiB. La razón
+//! declarada (unos 4000×) pasa de lo que DEFLATE puede dar (1032×), así que el lector responde
+//! `CelData` **antes de descomprimir**; sin la regla, la descompresión con tope también acabaría
+//! en `CelData`, pero después de producir 128 MiB. Por eso lo que distingue las dos rutas es el
+//! pico de RSS (menos de 32 MiB), y el control, la misma celda declarada con su tamaño real
+//! (128 MiB), que se descomprime de verdad y sube el pico 64 MiB o más. Quitar la regla de
+//! `read.rs` hace fallar esta prueba.
+//!
 //! Si `/proc/self/clear_refs` no se puede escribir (algunos contenedores), la prueba se omite con un
 //! aviso en stderr, salvo que la variable de entorno `CI` esté definida: entonces falla.
 //!
@@ -76,6 +85,23 @@ fn celda_falsa(ancho: u16, alto: u16) -> Vec<u8> {
     .bytes()
 }
 
+/// Un lienzo de 8 × 8 con una capa y una celda que declara `ancho × alto` píxeles RGBA con el flujo
+/// zlib `flujo` (que puede ser válido y descomprimirse a mucho más de lo que cabría en el fichero).
+fn celda_con_flujo(ancho: u16, alto: u16, flujo: Vec<u8>) -> Vec<u8> {
+    let celda = Celda {
+        ancho,
+        alto,
+        comprimido: Some(flujo),
+        ..Celda::nueva(0, 0, 0, 1, 1, vec![0])
+    };
+    Fichero::rgba(
+        8,
+        8,
+        vec![perfil_srgb(), Capa::nueva("a").chunk(), celda.chunk()],
+    )
+    .bytes()
+}
+
 fn es_cel_data(r: &Result<px_formats::AsepriteRead, AsepriteError>) -> bool {
     matches!(r, Err(AsepriteError::CelData { .. }))
 }
@@ -99,7 +125,14 @@ fn fila_09_bombas_se_rechazan_antes_de_reservar_y_el_control_mide() {
     // (nombre, fichero falso, ¿el error esperado?): celdas de 65 535², de 8192² y un lienzo de
     // 65 535² con la capa y nada más.
     let lienzo_enorme = Fichero::rgba(65_535, 65_535, vec![Capa::nueva("a").chunk()]).bytes();
-    let casos: [(&str, Vec<u8>, bool); 3] = [
+    // Un flujo zlib válido de 128 MiB de ceros; el búfer se suelta antes de medir.
+    let flujo = zlib(&vec![0u8; (128 * MIB) as usize]);
+    assert!(
+        flujo.len() as u64 * 1032 < 512 * MIB,
+        "el flujo de ceros ({} bytes) debe quedar muy por debajo de 512 MiB / 1032",
+        flujo.len()
+    );
+    let casos: [(&str, Vec<u8>, bool); 4] = [
         (
             "celda de 65535x65535 con 9 bytes de zlib",
             celda_falsa(65_535, 65_535),
@@ -111,6 +144,11 @@ fn fila_09_bombas_se_rechazan_antes_de_reservar_y_el_control_mide() {
             true,
         ),
         ("lienzo de 65535x65535", lienzo_enorme, false),
+        (
+            "celda de 512 MiB declarada con un flujo válido de 128 MiB de ceros (razón > 1032)",
+            celda_con_flujo(8192, 16_384, flujo.clone()),
+            true,
+        ),
     ];
     let mut fallos = Vec::new();
     for (nombre, bytes, es_celda) in &casos {
@@ -155,6 +193,19 @@ fn fila_09_bombas_se_rechazan_antes_de_reservar_y_el_control_mide() {
     assert!(
         subida >= 48 * MIB,
         "el instrumento no mide: el control subió solo {} MiB (se esperaban 48 o más)",
+        subida / MIB
+    );
+    drop(r);
+
+    // Control de la regla de 1032×: el mismo flujo en una celda que declara su tamaño real
+    // (128 MiB, razón por debajo de 1032) se descomprime de verdad: es `Ok` (todo ceros, la celda
+    // queda vacía) y el pico sube, lo que prueba que la descompresión se vería en la medida.
+    let real = celda_con_flujo(8192, 4096, flujo);
+    let (r, subida) = mide(|| read_aseprite(&real, &limites));
+    assert!(r.is_ok(), "el control debe ser Ok: {:?}", r.as_ref().err());
+    assert!(
+        subida >= 64 * MIB,
+        "el instrumento no ve la descompresión: el control subió solo {} MiB (se esperaban 64 o más)",
         subida / MIB
     );
     drop(r);
