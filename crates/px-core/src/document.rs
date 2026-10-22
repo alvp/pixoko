@@ -602,7 +602,7 @@ impl Document {
     ///
     /// `palette` es `Some` (y no vacía) solo en indexado. Un lienzo que no puede existir (ancho o
     /// alto cero, o demasiado grande) y una paleta que no corresponde al modo dan
-    /// `CelMismatch { layer: 0 }`: el lienzo se valida contra la primera capa.
+    /// `InvalidCanvas`.
     pub fn from_layers(
         width: u32,
         height: u32,
@@ -618,16 +618,16 @@ impl Document {
                 limit: Document::MAX_LAYERS,
             });
         }
-        let canvas_error = DocumentError::CelMismatch { layer: 0 };
-        let cel_bytes = Image::byte_len(width, height, mode).map_err(|_| canvas_error.clone())?;
+        let cel_bytes =
+            Image::byte_len(width, height, mode).map_err(|_| DocumentError::InvalidCanvas)?;
         let template = match (mode, &palette) {
             (Mode::Indexed, Some(palette)) if !palette.is_empty() => {
                 Image::filled_indexed(1, 1, palette.clone(), 0)
             }
-            (Mode::Indexed, _) | (_, Some(_)) => return Err(canvas_error),
+            (Mode::Indexed, _) | (_, Some(_)) => return Err(DocumentError::InvalidCanvas),
             (mode, None) => Image::new(1, 1, mode),
         }
-        .map_err(|_| DocumentError::CelMismatch { layer: 0 })?;
+        .map_err(|_| DocumentError::InvalidCanvas)?;
         let transparent = match mode {
             Mode::Rgba | Mode::GrayAlpha => true,
             Mode::Indexed => palette
@@ -2302,9 +2302,11 @@ pub enum DocumentError {
     },
     /// `Document::from_layers` sin ninguna capa.
     NoLayers,
+    /// `Document::from_layers`: el lienzo no puede existir (ancho o alto cero, más de
+    /// `Image::MAX_BYTES`, o una paleta que no corresponde al modo).
+    InvalidCanvas,
     /// `Document::from_layers`: la imagen de la capa `layer` no tiene el ancho, alto, modo o paleta
-    /// del lienzo; con `layer: 0` también el lienzo mismo (tamaño imposible o paleta que no
-    /// corresponde al modo).
+    /// del lienzo.
     CelMismatch {
         layer: usize,
     },
@@ -2402,9 +2404,13 @@ impl fmt::Display for DocumentError {
                 "las celdas ocuparían {needed} bytes y el límite es {limit}"
             ),
             DocumentError::NoLayers => write!(f, "un documento necesita al menos una capa"),
+            DocumentError::InvalidCanvas => write!(
+                f,
+                "el lienzo no puede existir: tamaño imposible o paleta que no corresponde al modo"
+            ),
             DocumentError::CelMismatch { layer } => write!(
                 f,
-                "la celda de la capa {layer} (o el lienzo) no encaja: ancho, alto, modo o paleta distintos"
+                "la celda de la capa {layer} no encaja: ancho, alto, modo o paleta distintos"
             ),
             DocumentError::PaletteEdit(source) => {
                 write!(f, "no se pudo editar la paleta: {source}")
