@@ -348,7 +348,7 @@ fn fila_01_a_documento_nuevo_tiene_una_capa() {
     assert_eq!(a.id(), LayerId::from_raw(0));
     assert!(a.visible());
     assert_eq!(a.opacity(), 255);
-    assert_eq!(a.cel(), d.main_image());
+    assert_eq!(a.cel(), ImageId::from_raw(0));
     assert_eq!(d.image(a.cel()), Some(&img));
     assert_eq!(d.layer(a.id()), Some(a));
     assert_eq!(d.layer(LayerId::from_raw(1)), None);
@@ -380,7 +380,7 @@ fn fila_01_b_el_lienzo_indexado_toma_la_paleta_de_la_imagen() {
     assert_eq!(d.materialized_bytes(), 12);
     assert_eq!(d.worst_case_bytes(), 12);
     assert_eq!(d.layers()[0].name(), "Capa 1");
-    assert_eq!(d.image(d.main_image()), Some(&img));
+    assert_eq!(d.image(ImageId::from_raw(0)), Some(&img));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -391,7 +391,7 @@ fn fila_01_b_el_lienzo_indexado_toma_la_paleta_de_la_imagen() {
 fn fila_02_anadir_capas_en_posiciones_y_deshacer_rehacer() {
     let mut d = doc_d();
     let original = d.clone();
-    let mut celdas_vistas = vec![d.main_image()];
+    let mut celdas_vistas = vec![ImageId::from_raw(0)];
     let mut capas = vec![d.layers().to_vec()];
     let mut documentos = vec![d.clone()];
 
@@ -568,7 +568,7 @@ fn fila_03_e_escribir_fuera_del_lienzo_no_deja_celda_a_medias() {
 fn fila_04_a_quitar_una_capa_con_imagen_y_deshacer_devuelve_lo_mismo() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
-    let ca = d.main_image();
+    let ca = ImageId::from_raw(0);
     assert_eq!(d.apply(pone(ca, 1, 1, C1)), Ok(true));
     anade(&mut d, "B", 1);
 
@@ -1280,7 +1280,7 @@ fn fila_09_c_a_indexado_con_opacidad_distinta_de_255_no_se_convierte() {
 fn fila_10_a_un_lote_que_materializa_es_un_solo_paso() {
     let mut d = doc_d();
     let b = anade(&mut d, "B", 1);
-    let (ca, cb) = (d.main_image(), celda(&d, b));
+    let (ca, cb) = (ImageId::from_raw(0), celda(&d, b));
     let antes = d.clone();
     let estado = d.state_id();
 
@@ -1300,7 +1300,7 @@ fn fila_10_a_un_lote_que_materializa_es_un_solo_paso() {
 fn fila_10_b_los_comandos_de_capa_no_van_en_un_lote() {
     let mut d = doc_d();
     let a = d.layers()[0].id();
-    let ca = d.main_image();
+    let ca = ImageId::from_raw(0);
     anade(&mut d, "B", 1);
 
     for comando in seis_comandos(a) {
@@ -1324,7 +1324,7 @@ fn fila_10_b_los_comandos_de_capa_no_van_en_un_lote() {
 fn fila_10_c_un_lote_que_falla_no_deja_celdas_materializadas() {
     let mut d = doc_d();
     let b = anade(&mut d, "B", 1);
-    let (ca, cb) = (d.main_image(), celda(&d, b));
+    let (ca, cb) = (ImageId::from_raw(0), celda(&d, b));
 
     let lote = Command::Batch(vec![fila0(cb, 4, C1), pone(ca, 9, 9, C2)]);
     let foto = Foto::de(&d);
@@ -2905,7 +2905,7 @@ mod duplicar_y_bloquear {
     #[test]
     fn fila_01_b_capa_desconocida_y_en_un_lote_no_cambian_nada() {
         let (mut d, b) = base();
-        let ca = d.main_image();
+        let ca = ImageId::from_raw(0);
         let falsa = LayerId::from_raw(999);
         sin_efecto(
             &mut d,
@@ -3200,7 +3200,7 @@ mod duplicar_y_bloquear {
 
         // Dentro de un lote: NotBatchable, también detrás de una escritura que se revierte.
         let (mut d, [_a, b, _c]) = tres_capas();
-        let ca = d.main_image();
+        let ca = ImageId::from_raw(0);
         sin_efecto(
             &mut d,
             Command::Batch(vec![duplica(b, "copia")]),
@@ -3285,7 +3285,7 @@ mod duplicar_y_bloquear {
         let mut d = Document::new(Image::new(4, 3, Mode::Gray).expect("gris"));
         let a = d.layers()[0].id();
         assert_eq!(
-            d.apply(pone_px(d.main_image(), 1, 1, Pixel::Gray(77))),
+            d.apply(pone_px(ImageId::from_raw(0), 1, 1, Pixel::Gray(77))),
             Ok(true)
         );
         assert!(
@@ -4121,8 +4121,7 @@ mod from_layers {
             None,
             vec![simple("a", Some(img_rgba(3, 3)))],
         )
-        .err()
-        .expect("la celda no encaja");
+        .expect_err("la celda no encaja");
         assert_eq!(celda, DocumentError::CelMismatch { layer: 0 });
         assert_ne!(
             DocumentError::InvalidCanvas.to_string(),
