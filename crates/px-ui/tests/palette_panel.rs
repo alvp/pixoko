@@ -175,7 +175,11 @@ impl Banco {
                 |ui| palette_panel::show(ui, image, choice, scroll, enabled),
                 |ui| {
                     let rect_lienzo = ui.available_rect_before_wrap();
-                    let entradas = canvas.interact_ordered(ui);
+                    let entradas = canvas
+                        .interact_roles(ui)
+                        .into_iter()
+                        .map(|(input, _)| input)
+                        .collect::<Vec<_>>();
                     let info = canvas.paint(ui);
                     (rect_lienzo, entradas, info)
                 },

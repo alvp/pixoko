@@ -50,8 +50,6 @@ fn imagen_indexada() -> Image {
 struct Banco {
     ctx: Context,
     canvas: Canvas,
-    /// `interact_ordered` (con `Escape`) o `interact` (sin `Escape`).
-    ordenado: bool,
 }
 
 struct Fotograma {
@@ -61,11 +59,10 @@ struct Fotograma {
 }
 
 impl Banco {
-    fn nuevo(ordenado: bool) -> Banco {
+    fn nuevo() -> Banco {
         Banco {
             ctx: Context::default(),
             canvas: Canvas::new(),
-            ordenado,
         }
     }
 
@@ -79,20 +76,15 @@ impl Banco {
         };
         let mut resultado = None;
         let canvas = &mut self.canvas;
-        let ordenado = self.ordenado;
         let output = self.ctx.run_ui(input, |ui| {
             if let Some(antes) = antes {
                 antes(ui);
             }
-            let eventos = if ordenado {
-                canvas.interact_ordered(ui)
-            } else {
-                canvas
-                    .interact(ui)
-                    .into_iter()
-                    .map(CanvasInput::Stroke)
-                    .collect()
-            };
+            let eventos = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some((eventos, info));
         });
@@ -186,9 +178,7 @@ fn solo_trazo(entradas: &[CanvasInput]) -> Vec<CanvasEvent> {
 /// herramienta que reciben los eventos.
 struct Sesion {
     banco: Banco,
-    /// Un segundo lienzo que recibe los mismos fotogramas pero con `interact`: no emite `Escape`.
-    paralelo: Banco,
-    /// Lo que dio `interact` en el último fotograma.
+    /// Los eventos de trazo (sin `Escape`) del último fotograma.
     ultimo_interact: Vec<CanvasEvent>,
     rect: Rect,
     zoom: i64,
@@ -205,12 +195,9 @@ struct Sesion {
 
 impl Sesion {
     fn nueva(image: Image, herramienta: Tool, slot: u8) -> Sesion {
-        let mut banco = Banco::nuevo(true);
+        let mut banco = Banco::nuevo();
         banco.canvas.set_image(&image);
         let f = banco.paso(vec![]);
-        let mut paralelo = Banco::nuevo(false);
-        paralelo.canvas.set_image(&image);
-        paralelo.paso(vec![]);
         let rect = f.info.image_rect.expect("hay imagen");
         let zoom = f.info.zoom.scale(1);
         assert_eq!(zoom, 12, "800×600 con 64×48 da zoom ×12");
@@ -220,7 +207,6 @@ impl Sesion {
         tool.apply_action(ToolAction::Select(herramienta));
         Sesion {
             banco,
-            paralelo,
             ultimo_interact: Vec::new(),
             rect,
             zoom,
@@ -253,31 +239,17 @@ impl Sesion {
 
     /// Ejecuta un fotograma y devuelve los eventos de este fotograma.
     fn paso(&mut self, events: Vec<Event>) -> Vec<CanvasInput> {
-        let g = self.paralelo.paso(events.clone());
         let f = self.banco.paso(events);
-        self.comparar_con_interact(&f.eventos, &g.eventos);
+        self.ultimo_interact = solo_trazo(&f.eventos);
         self.alimentar(&f.eventos);
         f.eventos
     }
 
-    /// `interact` da lo mismo que `interact_ordered` sin los `Escape`, en todos los fotogramas.
-    fn comparar_con_interact(&mut self, ordenados: &[CanvasInput], de_interact: &[CanvasInput]) {
-        self.ultimo_interact = solo_trazo(de_interact);
-        assert_eq!(
-            de_interact.len(),
-            self.ultimo_interact.len(),
-            "interact no emite Escape"
-        );
-        assert_eq!(solo_trazo(ordenados), self.ultimo_interact);
-    }
-
     /// Como `paso`, pero con una función que corre dentro del fotograma antes de `interact`.
     fn paso_con(&mut self, events: Vec<Event>, antes: fn(&mut Ui)) -> Vec<CanvasInput> {
-        let mut g = self.paralelo.fotograma(events.clone(), Some(antes));
-        g.output.textures_delta.clear();
         let mut f = self.banco.fotograma(events, Some(antes));
         f.output.textures_delta.clear();
-        self.comparar_con_interact(&f.eventos, &g.eventos);
+        self.ultimo_interact = solo_trazo(&f.eventos);
         self.alimentar(&f.eventos);
         f.eventos
     }

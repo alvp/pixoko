@@ -429,7 +429,11 @@ impl Banco {
                     .show(ui.ctx(), |ui| ui.button("Guardar"));
                 boton_rect = respuesta.inner.rect;
             }
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some((info, entradas));
         });

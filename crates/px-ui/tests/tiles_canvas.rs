@@ -293,7 +293,11 @@ impl Banco {
         let doc = &mut self.doc;
         let log = &mut self.log;
         let mut salida = self.ctx.run_ui(entrada, |ui| {
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             if let Some(fase) = fase.take() {
                 fase(ui.ctx(), canvas, doc, log);
             }

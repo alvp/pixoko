@@ -7,7 +7,7 @@ use egui::{
     RawInput, Rect, TextureFilter, TextureId, TexturesDelta, TouchPhase, Vec2, pos2, vec2,
 };
 use px_core::{Image, Mode, Pixel, Rgba};
-use px_ui::canvas::{Canvas, CanvasError, CanvasInfo};
+use px_ui::canvas::{Canvas, CanvasError, CanvasInfo, CanvasInput};
 use px_ui::view::Zoom;
 
 mod common;
@@ -537,7 +537,15 @@ fn interactua(banco: &mut Banco, events: Vec<Event>) -> Vec<CanvasEvent> {
     };
     let mut eventos = Vec::new();
     let mut salida = banco.ctx.run_ui(input, |ui| {
-        eventos = banco.canvas.interact(ui);
+        eventos = banco
+            .canvas
+            .interact_roles(ui)
+            .into_iter()
+            .filter_map(|(input, _)| match input {
+                CanvasInput::Stroke(event) => Some(event),
+                CanvasInput::Escape => None,
+            })
+            .collect();
     });
     salida.textures_delta.clear();
     eventos

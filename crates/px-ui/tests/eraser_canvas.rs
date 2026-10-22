@@ -201,7 +201,12 @@ impl Banco {
         let mut resultado = None;
         let output = ctx.run_ui(input, |ui| {
             let mut cambio = false;
-            for entrada in canvas.interact_ordered(ui) {
+            for entrada in canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>()
+            {
                 cambio |= tool
                     .canvas_input_with(doc, *id, None, entrada)
                     .expect("el borrador no falla");

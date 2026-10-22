@@ -654,7 +654,11 @@ impl Banco {
         let canvas = &mut self.canvas;
         let documento = &self.documento;
         let mut salida = self.ctx.run_ui(entrada, |ui| {
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             canvas.set_overlay(ui.ctx(), documento, overlay);
             canvas
                 .sync(ui.ctx(), documento)

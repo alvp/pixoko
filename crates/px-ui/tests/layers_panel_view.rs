@@ -118,7 +118,11 @@ impl Banco {
                 estado,
                 ventana,
             );
-            lienzo = canvas.interact_ordered(ui);
+            lienzo = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             canvas.sync(ui.ctx(), &DocSource(doc)).expect("sync");
             canvas.paint(ui);
         });

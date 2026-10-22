@@ -110,7 +110,14 @@ impl Banco {
             if let Some(antes) = antes {
                 antes(ui);
             }
-            let eventos = canvas.interact(ui);
+            let eventos: Vec<CanvasEvent> = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .filter_map(|(input, _)| match input {
+                    CanvasInput::Stroke(event) => Some(event),
+                    CanvasInput::Escape => None,
+                })
+                .collect();
             canvas.set_overlay(ui.ctx(), imagen, &overlay);
             canvas.sync(ui.ctx(), imagen).expect("sync");
             let info = canvas.paint(ui);
@@ -629,14 +636,14 @@ fn fila_15_soltar_espacio_a_mitad_de_un_desplazamiento_no_empieza_a_dibujar() {
 }
 
 #[test]
-fn los_botones_que_no_son_ni_izquierdo_ni_central_no_hacen_nada() {
+fn los_botones_extra_no_hacen_nada() {
     let mut s = Sesion::nueva();
     let antes = s.rect_actual();
     let inicio = pos2(400.0, 300.0);
     s.paso(vec![mover(inicio)]);
-    s.paso(vec![boton(inicio, PointerButton::Secondary, true)]);
+    s.paso(vec![boton(inicio, PointerButton::Extra1, true)]);
     let fin = arrastrar(&mut s, inicio);
-    s.paso(vec![boton(fin, PointerButton::Secondary, false)]);
+    s.paso(vec![boton(fin, PointerButton::Extra1, false)]);
     assert_eq!(s.eventos, NADA);
     assert_eq!(s.rect_actual(), antes);
 }

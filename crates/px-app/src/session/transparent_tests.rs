@@ -872,7 +872,7 @@ fn frame_uploads(app: &mut App, ctx: &Context) -> Vec<([usize; 2], Vec<u8>)> {
         ..RawInput::default()
     };
     let mut output = ctx.run_ui(input, |ui| {
-        app.canvas.interact_ordered(ui);
+        app.canvas.interact_roles(ui);
         let id = app.session.document.main_image();
         let image = app.session.document.image(id).expect("imagen");
         let _ = app.canvas.sync(ui.ctx(), image);

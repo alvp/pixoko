@@ -1,8 +1,8 @@
 //! Unidad I.2a, fila 2 (specs/interfaz-dos-colores.md): `Canvas::interact_roles` en el banco de
 //! egui sin ventana. El botón que **empieza** el gesto da su rol (izquierdo: primer plano;
 //! derecho: fondo) a todos los eventos del trazo; el central desplaza; el derecho no desplaza; un
-//! segundo botón con un gesto en curso se ignora; `interact` e `interact_ordered` siguen sin
-//! emitir nada con el botón derecho (decisión 2).
+//! segundo botón con un gesto en curso se ignora (decisión 2; `interact` e `interact_ordered`,
+//! que no emitían nada con el derecho, se retiraron en la unidad L1).
 //!
 //! El banco es el de `tests/palette_panel.rs`, reducido al lienzo: 800×600 con una imagen de
 //! 64×48 da zoom ×12 y los centros de los píxeles son enteros.
@@ -60,18 +60,6 @@ impl Banco {
         });
         salida.textures_delta.clear();
         resultado.expect("el lienzo se dibuja")
-    }
-
-    /// Un fotograma con `interact` (la vía antigua, que ignora el botón derecho).
-    fn paso_interact(&mut self, events: Vec<Event>) -> Vec<CanvasEvent> {
-        let mut resultado = Vec::new();
-        let canvas = &mut self.canvas;
-        let mut salida = self.ctx.run_ui(Banco::entrada(events), |ui| {
-            resultado = canvas.interact(ui);
-            canvas.paint(ui);
-        });
-        salida.textures_delta.clear();
-        resultado
     }
 
     /// Centro del píxel `(x, y)` (zoom ×12).
@@ -285,29 +273,4 @@ fn fila_2_un_soltar_perdido_del_derecho_termina_el_trazo_con_el_fondo() {
     banco.paso_roles(vec![boton(p0, PointerButton::Secondary, true)], None);
     let (entradas, _) = banco.paso_roles(vec![], Some(perder_el_boton));
     assert_eq!(entradas, [(fin(), Role::Background)]);
-}
-
-#[test]
-fn fila_2_interact_e_interact_ordered_siguen_sin_emitir_nada_con_el_derecho() {
-    let mut banco = Banco::nuevo();
-    let (p0, p1) = (banco.pos(10, 5), banco.pos(12, 5));
-    let mut todo = Vec::new();
-    for events in [
-        vec![Event::PointerMoved(p0)],
-        vec![boton(p0, PointerButton::Secondary, true)],
-        vec![Event::PointerMoved(p1)],
-        vec![boton(p1, PointerButton::Secondary, false)],
-    ] {
-        todo.extend(banco.paso_interact(events));
-    }
-    assert_eq!(todo, []);
-    // Con el izquierdo, la vía antigua sigue emitiendo.
-    let mut izquierdo = Vec::new();
-    for events in [
-        vec![boton(p0, PointerButton::Primary, true)],
-        vec![boton(p1, PointerButton::Primary, false)],
-    ] {
-        izquierdo.extend(banco.paso_interact(events));
-    }
-    assert!(izquierdo.contains(&CanvasEvent::StrokeBegin((10, 5))));
 }

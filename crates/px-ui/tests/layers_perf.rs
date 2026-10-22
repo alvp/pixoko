@@ -46,7 +46,7 @@ fn fotograma(ctx: &Context, canvas: &mut Canvas, f: impl FnOnce(&Context, &mut C
     };
     let mut f = Some(f);
     let mut salida = ctx.run_ui(entrada, |ui| {
-        canvas.interact_ordered(ui);
+        canvas.interact_roles(ui);
         if let Some(f) = f.take() {
             f(ui.ctx(), canvas);
         }

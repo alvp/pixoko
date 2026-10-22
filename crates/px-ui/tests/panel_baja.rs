@@ -393,7 +393,11 @@ impl Banco {
                 },
                 |ui| {
                     let rect_lienzo = ui.available_rect_before_wrap();
-                    let _ = canvas.interact_ordered(ui);
+                    let _ = canvas
+                        .interact_roles(ui)
+                        .into_iter()
+                        .map(|(input, _)| input)
+                        .collect::<Vec<_>>();
                     let _ = canvas.paint(ui);
                     rect_lienzo
                 },

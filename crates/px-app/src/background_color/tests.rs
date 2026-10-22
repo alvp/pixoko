@@ -1662,7 +1662,7 @@ fn fotograma_del_lienzo(
         ..RawInput::default()
     };
     let mut salida = ctx.run_ui(entrada, |ui| {
-        canvas.interact(ui);
+        canvas.interact_roles(ui);
         canvas.set_overlay(ui.ctx(), documento, overlay);
         canvas.sync(ui.ctx(), documento).expect("sync");
         canvas.paint(ui);

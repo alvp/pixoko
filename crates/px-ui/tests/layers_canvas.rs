@@ -82,7 +82,7 @@ impl Banco {
         let log = &mut self.log;
         let ids: BTreeSet<TextureId> = canvas.texture_ids().into_iter().collect();
         let mut salida = self.ctx.run_ui(entrada, |ui| {
-            canvas.interact_ordered(ui);
+            canvas.interact_roles(ui);
             if let Some(fase) = fase.take() {
                 fase(ui.ctx(), canvas, doc, log);
             }

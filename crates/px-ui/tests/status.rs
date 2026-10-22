@@ -93,7 +93,11 @@ impl Banco {
             apply_scale(ui.ctx());
             show(ui, texto, aviso);
             let rect_lienzo = ui.available_rect_before_wrap();
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some(Fotograma {
                 rect_lienzo,

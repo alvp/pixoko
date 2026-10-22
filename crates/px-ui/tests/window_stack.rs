@@ -232,7 +232,11 @@ impl Banco {
                 ui, image, *choice, scroll, view, enabled, slots, editor,
             );
             let r4 = ui.available_rect_before_wrap();
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             let rects = Rects {
                 menu: Rect::from_min_max(r0.min, Pos2::new(r0.max.x, r1.min.y)),
@@ -519,7 +523,11 @@ impl Referencia {
         let mut resultado = None;
         let canvas = &mut self.canvas;
         fotograma(&self.ctx, self.pantalla, events, |ui| {
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some((info, entradas));
         });

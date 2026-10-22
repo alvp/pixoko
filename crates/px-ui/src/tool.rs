@@ -429,7 +429,7 @@ impl ToolState {
     }
 
     /// Como [`ToolState::canvas_event`], para la entrada ordenada de
-    /// `Canvas::interact_ordered`: `Escape` equivale a `Cancel` (y da `Ok(false)`).
+    /// `Canvas::interact_roles`: `Escape` equivale a `Cancel` (y da `Ok(false)`).
     pub fn canvas_input(
         &mut self,
         doc: &mut Document,

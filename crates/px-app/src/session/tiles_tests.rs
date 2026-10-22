@@ -860,7 +860,7 @@ fn fotograma(app: &mut App, ctx: &Context) -> CanvasInfo {
     };
     let mut info = None;
     let mut salida = ctx.run_ui(entrada, |ui| {
-        app.canvas.interact_ordered(ui);
+        app.canvas.interact_roles(ui);
         let id = app.session.document.main_image();
         let imagen = app.session.document.image(id).expect("imagen");
         let _ = app.canvas.sync(ui.ctx(), imagen);

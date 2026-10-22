@@ -118,7 +118,11 @@ impl Banco {
                 clic = respuesta.inner.clicked();
                 boton_rect = respuesta.inner.rect;
             }
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some(Paso {
                 entradas,
@@ -435,7 +439,11 @@ impl BancoConMenu {
         let estado = &self.estado;
         let formas = fotograma(&self.ctx, PANTALLA, events, |ui| {
             let accion = show_menu(ui, estado, Platform::Linux);
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some((accion, entradas, info));
         });

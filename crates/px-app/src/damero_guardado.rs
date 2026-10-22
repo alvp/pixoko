@@ -25,7 +25,7 @@
 //!   textura vuelve a ser el documento.
 //!
 //! Unidad 14a-2: la superposición ya no entra por `paint` sino por `Canvas::set_overlay`, llamado
-//! tras `interact` y antes de `sync` y `paint`; es parte de la textura y no hay formas extra.
+//! tras `interact_roles` y antes de `sync` y `paint`; es parte de la textura y no hay formas extra.
 //!
 //! Suposición sobre «Piezas»: el fondo y el camino se eligen con `Canvas::set_background` y
 //! `Canvas::set_checker_mesh`.
@@ -163,7 +163,7 @@ struct Subidas {
     parciales: usize,
 }
 
-/// Un fotograma sin ventana, en el orden de la app: `interact` → `set_overlay` → `sync` → `paint`
+/// Un fotograma sin ventana, en el orden de la app: `interact_roles` → `set_overlay` → `sync` → `paint`
 /// (con `overlay` vacío, `set_overlay` es `clear_overlay`). Aplica los deltas de texturas a
 /// `texturas` y devuelve lo subido a la textura de la imagen.
 fn fotograma(
@@ -178,7 +178,7 @@ fn fotograma(
         ..RawInput::default()
     };
     let mut output = ctx.run_ui(input, |ui| {
-        canvas.interact(ui);
+        canvas.interact_roles(ui);
         canvas.set_overlay(ui.ctx(), documento, overlay);
         canvas.sync(ui.ctx(), documento).expect("sync");
         canvas.paint(ui);

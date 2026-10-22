@@ -296,7 +296,7 @@ impl Banco {
         let canvas = &mut self.canvas;
         let imagen = &self.imagen;
         let mut salida = self.ctx.run_ui(entrada, |ui| {
-            canvas.interact_ordered(ui);
+            canvas.interact_roles(ui);
             canvas.set_overlay(ui.ctx(), imagen, overlay);
             canvas
                 .sync(ui.ctx(), imagen)

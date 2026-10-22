@@ -510,7 +510,11 @@ impl Banco {
                     }
                 },
                 |ui| {
-                    let _ = canvas.interact_ordered(ui);
+                    let _ = canvas
+                        .interact_roles(ui)
+                        .into_iter()
+                        .map(|(input, _)| input)
+                        .collect::<Vec<_>>();
                     let _ = canvas.paint(ui);
                 },
             );

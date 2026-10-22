@@ -322,7 +322,11 @@ impl Banco {
         let mut resultado = None;
         let canvas = &mut self.canvas;
         fotograma(&self.ctx, PANTALLA, events, |ui| {
-            let entradas = canvas.interact_ordered(ui);
+            let entradas = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>();
             let info = canvas.paint(ui);
             resultado = Some((info, entradas));
         });

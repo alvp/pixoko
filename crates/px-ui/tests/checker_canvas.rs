@@ -58,7 +58,7 @@ use egui::{
 use proptest::prelude::*;
 use px_core::{Document, Image, Mode, Palette, Pixel, Rgba};
 use px_ui::background::CanvasBackground;
-use px_ui::canvas::{BACKGROUND, Canvas, CanvasError, CanvasEvent, CanvasInfo};
+use px_ui::canvas::{BACKGROUND, Canvas, CanvasError, CanvasEvent, CanvasInfo, CanvasInput};
 use px_ui::checker::{CheckerQuad, Shade, cells, clip, quad, shade_at, texels};
 use px_ui::palette_grid::{CHECK_A, CHECK_B};
 use px_ui::text::text_scale;
@@ -730,7 +730,14 @@ impl Banco {
     ) -> Salida {
         let documento = self.documento.clone();
         self.corre_con(events, max, |canvas, ui| {
-            let trazo = canvas.interact(ui);
+            let trazo: Vec<CanvasEvent> = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .filter_map(|(input, _)| match input {
+                    CanvasInput::Stroke(event) => Some(event),
+                    CanvasInput::Escape => None,
+                })
+                .collect();
             canvas.set_overlay(ui.ctx(), &documento, overlay);
             // Sin imagen cargada (o con error) no hay nada que sincronizar.
             if canvas.texture_id().is_some() {
@@ -745,7 +752,17 @@ impl Banco {
 
     /// Solo `interact`: sin pintar.
     fn solo_interact(&mut self, events: Vec<Event>) -> Salida {
-        self.corre_con(events, None, |canvas, ui| (canvas.interact(ui), None))
+        self.corre_con(events, None, |canvas, ui| {
+            let trazo: Vec<CanvasEvent> = canvas
+                .interact_roles(ui)
+                .into_iter()
+                .filter_map(|(input, _)| match input {
+                    CanvasInput::Stroke(event) => Some(event),
+                    CanvasInput::Escape => None,
+                })
+                .collect();
+            (trazo, None)
+        })
     }
 
     /// Tamaño del lienzo en píxeles físicos.
@@ -2161,7 +2178,12 @@ impl Trazo {
         let id = doc.main_image();
         self.banco.corre_con(events, None, |canvas, ui| {
             let mut cambio = false;
-            for entrada in canvas.interact_ordered(ui) {
+            for entrada in canvas
+                .interact_roles(ui)
+                .into_iter()
+                .map(|(input, _)| input)
+                .collect::<Vec<_>>()
+            {
                 cambio |= tool
                     .canvas_input_with(doc, id, None, entrada)
                     .expect("el borrador no falla");

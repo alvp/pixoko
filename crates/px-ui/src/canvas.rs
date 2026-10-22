@@ -101,7 +101,7 @@ enum Gesture {
     Draw { role: Role, button: PointerButton },
 }
 
-/// Lo que `interact` calcula para que `paint` lo dibuje.
+/// Lo que `interact_roles` calcula para que `paint` lo dibuje.
 #[derive(Clone, Copy)]
 struct Frame {
     rect: Rect,
@@ -151,7 +151,7 @@ pub struct Canvas {
     previewing: Option<(u8, Rgba)>,
     preview_uploads: u32,
     /// Operaciones de zoom pedidas desde fuera (menú, columna, atajos), que se aplican en el
-    /// siguiente `interact`, cuando se conoce el tamaño del lienzo.
+    /// siguiente `interact_roles`, cuando se conoce el tamaño del lienzo.
     requested: Vec<ViewOp>,
     /// Las teclas `+`, `=`, `-` y `Home` ya no las trata el lienzo (las trata la capa de acciones).
     view_keys_off: bool,
@@ -191,7 +191,7 @@ impl Canvas {
     }
 
     /// Cambia la imagen mostrada (compatibilidad: clona la imagen). Las baldosas se construyen en
-    /// el siguiente `interact` y la vista vuelve al ajuste. La app usa [`Canvas::load`].
+    /// el siguiente `interact_roles` y la vista vuelve al ajuste. La app usa [`Canvas::load`].
     pub fn set_image(&mut self, image: &Image) {
         self.set_owned_image(image.clone());
     }
@@ -220,7 +220,7 @@ impl Canvas {
     /// Carga `image` como la imagen del lienzo: crea **todas** las baldosas desde las filas y
     /// solo instala si salen todas. Con un error (`TooLarge`, `OutOfMemory`) el lienzo anterior
     /// queda intacto y no queda ninguna textura nueva viva. La vista vuelve al ajuste en el
-    /// siguiente `interact`.
+    /// siguiente `interact_roles`.
     pub fn load(
         &mut self,
         ctx: &Context,
@@ -285,7 +285,7 @@ impl Canvas {
         Ok(())
     }
 
-    /// Pide una operación de zoom: se aplica en el siguiente [`Canvas::interact`], también a mitad
+    /// Pide una operación de zoom: se aplica en el siguiente [`Canvas::interact_roles`], también a mitad
     /// de un trazo (el trazo sigue y sus siguientes puntos usan la vista nueva).
     pub fn request_view(&mut self, op: ViewOp) {
         self.requested.push(op);
@@ -431,7 +431,7 @@ impl Canvas {
         Ok(())
     }
 
-    /// La baldosa `index` corta el lienzo del último `interact` (todas, si aún no hubo uno).
+    /// La baldosa `index` corta el lienzo del último `interact_roles` (todas, si aún no hubo uno).
     fn tile_visible(&self, index: usize) -> bool {
         match (&self.tiling, self.view, self.frame) {
             (Some(tiling), Some(view), Some(frame)) => tiling.visible(index, &view, frame.viewport),
@@ -668,59 +668,40 @@ impl Canvas {
         self.tiles.iter().map(|tile| tile.texture.id()).collect()
     }
 
-    /// Dibuja el lienzo en todo el espacio libre de `ui` y procesa sus entradas: [`interact`]
+    /// Dibuja el lienzo en todo el espacio libre de `ui` y procesa sus entradas: [`interact_roles`]
     /// y [`paint`] seguidos, sin los eventos de trazo.
     ///
     /// Rueda o pellizco: un paso de zoom por evento, anclado al cursor. Arrastre con el botón
     /// central, o con espacio y el izquierdo: desplazamiento. `Home`: ajuste. `+` y `-`: zoom
     /// en el centro.
     ///
-    /// [`interact`]: Canvas::interact
+    /// [`interact_roles`]: Canvas::interact_roles
     /// [`paint`]: Canvas::paint
     pub fn show(&mut self, ui: &mut Ui) -> CanvasInfo {
-        self.interact(ui);
+        self.interact_roles(ui);
         self.paint(ui)
     }
 
     /// Primera mitad de [`Canvas::show`]: sube la textura si falta, reserva el espacio, procesa
-    /// las entradas (zoom, desplazamiento y el gesto del lápiz) y devuelve los eventos de trazo
-    /// del fotograma, en orden. Debe ir antes de [`Canvas::paint`] en el mismo fotograma.
+    /// las entradas (zoom, desplazamiento y el gesto de dibujo) y devuelve los eventos de trazo
+    /// del fotograma, en orden, con `CanvasInput::Escape` (tecla `Escape` sin modificadores) **en
+    /// su sitio** entre ellos, para que quien dibuja respete el orden de los eventos de egui.
+    /// Debe ir antes de [`Canvas::paint`] en el mismo fotograma.
     ///
     /// El gesto se decide al pulsar: botón central, o izquierdo con espacio abajo, desplaza;
     /// izquierdo sin espacio dibuja (solo si la pulsación cae dentro del lienzo). Un segundo
     /// botón durante el gesto se ignora. El trazo sigue aunque el puntero salga del lienzo o de
     /// la ventana y termina al soltar, al perder el foco o si egui ya no ve el botón pulsado.
-    pub fn interact(&mut self, ui: &mut Ui) -> Vec<CanvasEvent> {
-        self.interact_ordered(ui)
-            .into_iter()
-            .filter_map(|input| match input {
-                CanvasInput::Stroke(event) => Some(event),
-                CanvasInput::Escape => None,
-            })
-            .collect()
-    }
-
-    /// Como [`Canvas::interact`], pero además emite `CanvasInput::Escape` (tecla `Escape` sin
-    /// modificadores) **en su sitio** entre los eventos de trazo del fotograma, para que quien
-    /// dibuja respete el orden de los eventos de egui. `interact` es esto sin los `Escape`.
-    pub fn interact_ordered(&mut self, ui: &mut Ui) -> Vec<CanvasInput> {
-        self.interact_inner(ui, false)
-            .into_iter()
-            .map(|(input, _)| input)
-            .collect()
-    }
-
-    /// Como [`Canvas::interact_ordered`], pero el botón derecho también dibuja: cada entrada lleva
-    /// el rol del botón que **empezó** el gesto (izquierdo: `Foreground`; derecho: `Background`),
-    /// igual para sus `Move` y su `End`. El central desplaza y el derecho no (specs/interfaz-dos-
-    /// colores.md, decisión 2). `Escape` lleva el rol del gesto en curso o `Foreground`.
+    ///
+    /// El botón derecho también dibuja: cada entrada lleva el rol del botón que **empezó** el
+    /// gesto (izquierdo: `Foreground`; derecho: `Background`), igual para sus `Move` y su `End`. El
+    /// central desplaza y el derecho no (specs/interfaz-dos-colores.md, decisión 2). `Escape`
+    /// lleva el rol del gesto en curso o `Foreground`.
     pub fn interact_roles(&mut self, ui: &mut Ui) -> Vec<(CanvasInput, Role)> {
-        self.interact_inner(ui, true)
+        self.interact_inner(ui)
     }
 
-    // TODO(hito 8): retirar `interact` e `interact_ordered` cuando los llamadores migren a
-    // `interact_roles`.
-    fn interact_inner(&mut self, ui: &mut Ui, secondary: bool) -> Vec<(CanvasInput, Role)> {
+    fn interact_inner(&mut self, ui: &mut Ui) -> Vec<(CanvasInput, Role)> {
         self.upload_if_pending(ui);
 
         let rect = ui.available_rect_before_wrap();
@@ -867,7 +848,6 @@ impl Canvas {
                         space: space_down,
                     };
                     self.gesture = match self.gestures.resolve(&pointing, true, platform) {
-                        Some(GestureAction::Draw(Role::Background)) if !secondary => Gesture::None,
                         Some(GestureAction::Draw(role)) => Gesture::Draw {
                             role,
                             button: *button,
@@ -976,7 +956,7 @@ impl Canvas {
     /// Cada uno es un rectángulo de `zoom × zoom` píxeles físicos; con alfa menor que 255 va
     /// sobre el fondo y no sobre la imagen, porque el resultado reemplaza el píxel.
     ///
-    /// Si no hubo `interact` antes en el fotograma, no pinta nada.
+    /// Si no hubo `interact_roles` antes en el fotograma, no pinta nada.
     pub fn paint(&mut self, ui: &mut Ui) -> CanvasInfo {
         let Some(frame) = self.frame else {
             return CanvasInfo {
