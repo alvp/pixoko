@@ -63,7 +63,7 @@ fn targets_2(from: Mode) -> [Mode; 3] {
     [v[0], v[1], v[2]]
 }
 
-fn rgba_de(pixels: &[Rgba]) -> Image {
+fn rgba_of(pixels: &[Rgba]) -> Image {
     let mut image = Image::new(pixels.len() as u32, 1, Mode::Rgba).expect("imagen RGBA");
     for (x, p) in pixels.iter().enumerate() {
         image
@@ -118,7 +118,7 @@ fn indexed_of(colors: &[Rgba], transparent: Option<u8>, pixels: &[u8]) -> Image 
 /// 2 transparente; la RGBA tiene color (3 píxeles) y alfa (2 píxeles) que perder al pasar a gris.
 fn image_of(mode: Mode) -> Image {
     match mode {
-        Mode::Rgba => rgba_de(&[
+        Mode::Rgba => rgba_of(&[
             Rgba::opaque(255, 0, 0),
             Rgba::new(0, 255, 0, 128),
             Rgba::opaque(7, 7, 7),
@@ -323,7 +323,7 @@ fn row_7_a_indexed_slot_3_becomes_entry_min_2_and_len_minus_1() {
         ),
         (
             "RGBA de 1 color",
-            rgba_de(&[Rgba::opaque(1, 2, 3), Rgba::opaque(1, 2, 3)]),
+            rgba_of(&[Rgba::opaque(1, 2, 3), Rgba::opaque(1, 2, 3)]),
             ColorChoice::Entry(0),
         ),
     ] {
@@ -557,7 +557,7 @@ fn rgba_of_257_colors() -> Image {
         .map(|i| Rgba::opaque((i % 256) as u8, (i / 256) as u8, 0))
         .collect();
     colors.push(Rgba::TRANSPARENT);
-    rgba_de(&colors)
+    rgba_of(&colors)
 }
 
 /// Sesión con historia (3 ediciones) y elección no inicial.
@@ -782,7 +782,7 @@ fn row_8_the_out_of_memory_notice_says_the_size_the_mode_and_the_mib() {
 #[test]
 fn row_8_the_success_notice_says_the_mode_and_only_the_losses_greater_than_zero() {
     // Tres rojos a gris con alfa: pierde el color en 3 píxeles (el ejemplo de la spec).
-    let reds = rgba_de(&[Rgba::opaque(255, 0, 0); 3]);
+    let reds = rgba_of(&[Rgba::opaque(255, 0, 0); 3]);
     let analysis_2 = analyze(&reds, Mode::GrayAlpha);
     assert_eq!(
         describe_converted(Mode::GrayAlpha, Some(&analysis_2)),
@@ -1141,7 +1141,7 @@ fn strategy_of_seed() -> impl Strategy<Value = Seed> {
         )
 }
 
-fn rgba_de_indices(v: &[usize; 4]) -> Rgba {
+fn rgba_of_indices(v: &[usize; 4]) -> Rgba {
     Rgba::new(VALUES[v[0]], VALUES[v[1]], VALUES[v[2]], VALUES[v[3]])
 }
 
@@ -1151,7 +1151,7 @@ fn image_of_seed(s: &Seed) -> Image {
     let mode = TEST_MODES[s.mode_2];
     let mut image = match mode {
         Mode::Indexed => {
-            let colors: Vec<Rgba> = s.colors.iter().take(s.n).map(rgba_de_indices).collect();
+            let colors: Vec<Rgba> = s.colors.iter().take(s.n).map(rgba_of_indices).collect();
             let mut palette = Palette::from_colors(colors).expect("paleta");
             if s.transparent < s.n {
                 palette
@@ -1165,7 +1165,7 @@ fn image_of_seed(s: &Seed) -> Image {
     for (i, v) in s.pixels_2.iter().take(total).enumerate() {
         let (x, y) = (i as u32 % w, i as u32 / w);
         let pixel = match mode {
-            Mode::Rgba => Pixel::Rgba(rgba_de_indices(v)),
+            Mode::Rgba => Pixel::Rgba(rgba_of_indices(v)),
             Mode::Gray => Pixel::Gray(VALUES[v[0]]),
             Mode::GrayAlpha => Pixel::GrayAlpha {
                 gray: VALUES[v[0]],
@@ -1202,7 +1202,7 @@ fn op() -> impl Strategy<Value = Op> {
     ]
 }
 
-fn allowed_de(luma: bool, background_2: usize) -> Allowed {
+fn allowed_of(luma: bool, background_2: usize) -> Allowed {
     Allowed {
         luma,
         drop_alpha: match background_2 {
@@ -1250,7 +1250,7 @@ proptest! {
                     } else {
                         targets_2(actual.mode())[*target_2]
                     };
-                    let allowed = allowed_de(*luma, *background_2);
+                    let allowed = allowed_of(*luma, *background_2);
                     let result = session.convert_mode(target, allowed);
                     if target == actual.mode() {
                         prop_assert_eq!(result, Ok(false), "{}", context);

@@ -23,7 +23,7 @@ fn read_2_2(icon: Icon) -> Vec<u8> {
 }
 
 /// Los píxeles RGBA de un PNG, por filas, como lo hace la carga.
-fn rgba_de(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
+fn rgba_of(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
     let png = read_png(bytes).expect("PNG legible");
     let (w, h) = (png.image.width(), png.image.height());
     (w, h, to_rgba8(&png.image))
@@ -37,7 +37,7 @@ fn row_1_the_14_pngs_are_16x16_with_alpha_0_or_255_white_neither_empty_nor_full_
         let name_2 = icon.file_stem();
         // Lo incrustado es lo que hay en el disco.
         assert_eq!(embedded(icon), bytes.as_slice(), "{name_2}: include_bytes");
-        let (w, h, rgba) = rgba_de(&bytes);
+        let (w, h, rgba) = rgba_of(&bytes);
         assert_eq!((w, h), (16, 16), "{name_2}");
         let mut opaque = 0;
         let mut mask = Vec::new();
@@ -216,7 +216,7 @@ fn row_2_a_corrupt_png_or_of_another_size_gives_a_clear_error_and_not_a_panic() 
 /// El mismo dibujo que `icon`, guardado como lo haría Pixoko en modo indexado: dos entradas, la 0
 /// transparente y la 1 de `ink`, con la 0 marcada como transparente.
 fn in_indexed(icon: Icon, ink: Rgba) -> Vec<u8> {
-    let (_, _, rgba) = rgba_de(&read_2_2(icon));
+    let (_, _, rgba) = rgba_of(&read_2_2(icon));
     let mut palette =
         Palette::from_colors([Rgba::new(0, 0, 0, 0), ink]).expect("paleta de dos entradas");
     palette

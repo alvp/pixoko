@@ -179,19 +179,19 @@ fn walk(ctx: &str, image_2: Image, layers_2: &Layers, colors: [ColorChoice; 5]) 
             "lápiz 1",
             Tool::Pencil,
             colors[0],
-            pixel_de(layers_2.pencil[0].0),
+            pixel_of(layers_2.pencil[0].0),
         ),
         (
             "lápiz 2",
             Tool::Pencil,
             colors[1],
-            pixel_de(layers_2.pencil[1].0),
+            pixel_of(layers_2.pencil[1].0),
         ),
         (
             "lápiz 3",
             Tool::Pencil,
             colors[2],
-            pixel_de(layers_2.pencil[2].0),
+            pixel_of(layers_2.pencil[2].0),
         ),
         (
             "línea",
@@ -264,7 +264,7 @@ fn walk(ctx: &str, image_2: Image, layers_2: &Layers, colors: [ColorChoice; 5]) 
 }
 
 /// Un lápiz de un solo píxel: pulsar y soltar en esa posición.
-fn pixel_de((x, y): (usize, usize)) -> Vec<CanvasEvent> {
+fn pixel_of((x, y): (usize, usize)) -> Vec<CanvasEvent> {
     vec![
         CanvasEvent::StrokeBegin((x as i32, y as i32)),
         CanvasEvent::StrokeEnd,

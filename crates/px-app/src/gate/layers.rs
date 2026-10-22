@@ -169,7 +169,7 @@ impl Drop for Work3 {
 }
 
 /// El píxel como RGBA resuelto (los indexados, por su paleta).
-pub fn rgba_de(image_2: &Image, x: u32, y: u32) -> Rgba {
+pub fn rgba_of(image_2: &Image, x: u32, y: u32) -> Rgba {
     match image_2.get_pixel(x, y).expect("píxel dentro") {
         Pixel::Rgba(c) => c,
         Pixel::Indexed(i) => image_2
@@ -189,7 +189,7 @@ pub fn equal_except_rgb_with_alpha_0(a: &Image, b: &Image) -> Result<(), String>
     }
     for y in 0..a.height() {
         for x in 0..a.width() {
-            let (pa, pb) = (rgba_de(a, x, y), rgba_de(b, x, y));
+            let (pa, pb) = (rgba_of(a, x, y), rgba_of(b, x, y));
             if pa.a != pb.a {
                 return Err(format!("píxel ({x}, {y}): alfa {} y {}", pa.a, pb.a));
             }

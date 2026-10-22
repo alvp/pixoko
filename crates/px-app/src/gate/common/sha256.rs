@@ -96,7 +96,7 @@ pub fn sha256_hex(data: &[u8]) -> String {
 ///
 /// Los tres primeros y el de 1 000 000 de `a` son los de FIPS 180-4 / NIST. Los de `n` bytes
 /// `a` se calcularon con `sha256sum` del sistema (`head -c N /dev/zero | tr '\0' a |
-/// sha256sum`); 55, 56 y 64 son las fronteras del fill (55 cabe en un block, 56 obliga a
+/// sha256sum`); 55, 56 y 64 son las fronteras del fill (55 cabe at un block, 56 obliga a
 /// un segundo y 64 es un bloque justo).
 pub fn vectors() -> Vec<(String, Vec<u8>, &'static str)> {
     let aes = |n: usize| vec![b'a'; n];

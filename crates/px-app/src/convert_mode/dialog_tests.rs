@@ -76,14 +76,14 @@ enum Window {
 
 const WINDOWS: [Window; 2] = [Window::Minimum, Window::Large];
 
-fn n_de(ppp: f32) -> i64 {
+fn n_of(ppp: f32) -> i64 {
     i64::from(text_scale(ppp))
 }
 
 fn screen(ppp: f32, window: Window) -> Vec2 {
     match window {
         Window::Minimum => {
-            let n = n_de(ppp) as f32;
+            let n = n_of(ppp) as f32;
             vec2(468.0 * n / ppp, 333.0 * n / ppp)
         }
         Window::Large => vec2(960.0, 720.0),
@@ -93,7 +93,7 @@ fn screen(ppp: f32, window: Window) -> Vec2 {
 /// El tamaño de la ventana en píxeles físicos.
 fn pixels_2(ppp: f32, window: Window) -> (i64, i64) {
     match window {
-        Window::Minimum => (468 * n_de(ppp), 333 * n_de(ppp)),
+        Window::Minimum => (468 * n_of(ppp), 333 * n_of(ppp)),
         Window::Large => (
             (960.0 * f64::from(ppp)).round() as i64,
             (720.0 * f64::from(ppp)).round() as i64,
@@ -124,7 +124,7 @@ fn in_the_set(text_2: &str) -> bool {
 
 // --- Imágenes del banco (con las pérdidas que dice cada comentario) ---
 
-fn rgba_de(pixels: &[Rgba]) -> Image {
+fn rgba_of(pixels: &[Rgba]) -> Image {
     let mut image = Image::new(pixels.len() as u32, 1, Mode::Rgba).expect("imagen RGBA");
     for (x, p) in pixels.iter().enumerate() {
         image
@@ -144,7 +144,7 @@ fn rgba_de(pixels: &[Rgba]) -> Image {
 /// - Gris (`[0,127,255]`): exacta a los tres.
 fn image_of_bench(mode: Mode) -> Image {
     match mode {
-        Mode::Rgba => rgba_de(&[
+        Mode::Rgba => rgba_of(&[
             Rgba::opaque(255, 0, 0),
             Rgba::new(0, 255, 0, 128),
             Rgba::opaque(7, 7, 7),
@@ -194,7 +194,7 @@ fn rgba_of_257_colors() -> Image {
         .map(|i| Rgba::opaque((i % 256) as u8, (i / 256) as u8, 0))
         .collect();
     colors.push(Rgba::TRANSPARENT);
-    rgba_de(&colors)
+    rgba_of(&colors)
 }
 
 /// El color activo por defecto del banco: opaco.
@@ -673,7 +673,7 @@ impl Bench {
     }
 
     /// El `Id` de egui de un campo (el que se enfoca al darle el foco).
-    fn id_de(field_2: &'static str) -> Id {
+    fn id_of(field_2: &'static str) -> Id {
         Id::unique(("pixoko-dialog", field_2))
     }
 
@@ -686,7 +686,7 @@ impl Bench {
         let d = self.dialog();
         dialog_layout(
             pixels_2(self.ppp, self.window),
-            n_de(self.ppp) as u32,
+            n_of(self.ppp) as u32,
             d.content_h_u(),
             d.is_fill(),
             d.spec().cancel.is_some(),
@@ -694,7 +694,7 @@ impl Bench {
     }
 
     fn u(&self) -> f32 {
-        n_de(self.ppp) as f32 / self.ppp
+        n_of(self.ppp) as f32 / self.ppp
     }
 
     fn accept_disabled(&self) -> bool {
@@ -1650,7 +1650,7 @@ fn put_gray(b: &mut Bench, background_2: usize) {
 /// Mueve el puntero al relleno izquierdo del cuerpo (`x = 3 u`) y da `notches` de rueda hacia abajo.
 fn wheel_over_the_body(b: &mut Bench, notches: usize) {
     let layout = b.layout();
-    let n = n_de(b.ppp);
+    let n = n_of(b.ppp);
     let pos = pos2(
         (layout.body.x + 3 * n) as f32 / b.ppp,
         (layout.body.y + layout.body.height / 2) as f32 / b.ppp,
@@ -1664,7 +1664,7 @@ fn wheel_over_the_body(b: &mut Bench, notches: usize) {
 }
 
 /// La `y` (en puntos) del texto pintado exacto, aunque quede recortado.
-fn y_de(b: &Bench, searched: &str) -> Option<f32> {
+fn y_of(b: &Bench, searched: &str) -> Option<f32> {
     b.last_2_2.shapes.iter().find_map(|f| match f {
         Shape2::Text(t) if t.text_2.trim() == searched => Some(t.pos.y),
         _ => None,
@@ -1772,7 +1772,7 @@ fn row_11_with_the_seven_line_report_the_body_measures_316_352_296_and_332_u() {
         );
         for ppp in PPPS {
             // A la mínima, el cuerpo mide 252 u y se desplaza lo que falta; a 960 × 720, nada.
-            let n = n_de(ppp) as u32;
+            let n = n_of(ppp) as u32;
             let minimum = dialog_layout(pixels_2(ppp, Window::Minimum), n, expected_2, false, true);
             assert_eq!(minimum.max_scroll_u, expected_2 - 252, "{from:?} ppp {ppp}");
             let large = dialog_layout(pixels_2(ppp, Window::Large), n, expected_2, false, true);
@@ -1815,19 +1815,19 @@ fn row_11_at_the_minimum_the_wheel_scrolls_the_body_and_title_footer_and_buttons
             let maximum = b.layout().max_scroll_u;
             assert!(maximum > 0, "{context}");
             let fixed_2 = ["Convertir modo", "Aceptar", "Cancelar"];
-            let before_fixed: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
-            let label_before = y_de(&b, "Modo de destino").expect("Modo de destino");
+            let before_fixed: Vec<Option<f32>> = fixed_2.iter().map(|t| y_of(&b, t)).collect();
+            let label_before = y_of(&b, "Modo de destino").expect("Modo de destino");
             assert_eq!(b.dialog().scroll_u(), 0, "{context}");
 
             wheel_over_the_body(&mut b, 2);
             assert_eq!(b.dialog().scroll_u(), maximum, "{context}: hasta el final");
-            let shifted = label_before - y_de(&b, "Modo de destino").expect("Modo de destino");
+            let shifted = label_before - y_of(&b, "Modo de destino").expect("Modo de destino");
             assert!(
                 (shifted - maximum as f32 * b.u()).abs() <= 0.1,
                 "{context}: el cuerpo se movió {shifted} pt y debía {}",
                 maximum as f32 * b.u()
             );
-            let after_fixed: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
+            let after_fixed: Vec<Option<f32>> = fixed_2.iter().map(|t| y_of(&b, t)).collect();
             assert_eq!(
                 after_fixed, before_fixed,
                 "{context}: título, pie y botones fijos"
@@ -1877,7 +1877,7 @@ fn row_11_at_the_minimum_tab_brings_into_view_the_hexadecimal_that_was_outside()
         assert!(b.last_2_2.exact("Cancelar").is_some());
         assert_eq!(
             b.focus_of_egui(),
-            Some(Bench::id_de("fondo_hex")),
+            Some(Bench::id_of("fondo_hex")),
             "ppp {ppp}"
         );
     }
@@ -1892,10 +1892,10 @@ fn row_11_at_960_by_720_the_form_does_not_scroll_in_any_state() {
             let context = format!("ppp {ppp} {from:?} alfa {background_2}");
             assert_eq!(b.layout().max_scroll_u, 0, "{context}");
             let fixed_2 = ["Convertir modo", "Modo de destino", "Aceptar", "Cancelar"];
-            let before: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
+            let before: Vec<Option<f32>> = fixed_2.iter().map(|t| y_of(&b, t)).collect();
             wheel_over_the_body(&mut b, 3);
             assert_eq!(b.dialog().scroll_u(), 0, "{context}");
-            let after_2: Vec<Option<f32>> = fixed_2.iter().map(|t| y_de(&b, t)).collect();
+            let after_2: Vec<Option<f32>> = fixed_2.iter().map(|t| y_of(&b, t)).collect();
             assert_eq!(after_2, before, "{context}: nada se mueve");
         }
     }
@@ -2351,7 +2351,7 @@ fn checks_footer(b: &Bench, reason_2: &str, ctx: &str) {
     assert_eq!(t.text_2.trim(), expected_2, "{ctx}");
 
     let layout = b.layout();
-    let n = n_de(b.ppp);
+    let n = n_of(b.ppp);
     assert_eq!(
         layout.reason.width,
         308 * n,

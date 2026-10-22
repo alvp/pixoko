@@ -492,7 +492,7 @@ pub fn iccp() -> Vec<u8> {
     piece(b"iCCP", &data)
 }
 
-/// `(width, height, profundidad, kind de color)` del IHDR.
+/// `(width, height, profundidad, kind from_index color)` del IHDR.
 pub fn ihdr(bytes: &[u8]) -> (u32, u32, u8, u8) {
     let width = u32::from_be_bytes(bytes[16..20].try_into().expect("ancho"));
     let height = u32::from_be_bytes(bytes[20..24].try_into().expect("alto"));
@@ -564,7 +564,7 @@ pub enum TestStep {
         steps_2: i32,
     },
     Move {
-        de: u8,
+        from_index: u8,
         a: u8,
     },
     /// Añade una copia del color resuelto de la entrada activa.
@@ -982,14 +982,14 @@ impl Model {
                 }
                 per_cel(self.palette != original)
             }
-            TestStep::Move { de, a } => {
-                let (de, a) = (usize::from(*de), usize::from(*a));
-                if de == a {
+            TestStep::Move { from_index, a } => {
+                let (from_index, a) = (usize::from(*from_index), usize::from(*a));
+                if from_index == a {
                     return Effect::default();
                 }
                 // `order[new_2] = old`, como quitar e insertar.
                 let mut order: Vec<usize> = (0..self.palette.len()).collect();
-                let moved = order.remove(de);
+                let moved = order.remove(from_index);
                 order.insert(a, moved);
                 let mut forward = vec![0u8; order.len()];
                 for (new_2, &old) in order.iter().enumerate() {
@@ -1482,8 +1482,14 @@ impl World {
                 ),
                 false,
             ),
-            TestStep::Move { de, a } => (
-                self.operation(PaletteOp::Move { from: *de, to: *a }, 0),
+            TestStep::Move { from_index, a } => (
+                self.operation(
+                    PaletteOp::Move {
+                        from: *from_index,
+                        to: *a,
+                    },
+                    0,
+                ),
                 false,
             ),
             TestStep::Add { active_2 } => (self.operation(PaletteOp::Add, *active_2), false),
@@ -1723,7 +1729,7 @@ pub fn script_palette(m: &Model) -> Vec<TestStep> {
     ];
     if length >= 2 {
         steps_2.push(TestStep::Move {
-            de: 0,
+            from_index: 0,
             a: (length - 1) as u8,
         });
     }

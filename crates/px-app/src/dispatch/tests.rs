@@ -2280,7 +2280,7 @@ fn worlds_without_removes() -> Vec<(&'static str, World)> {
     ]
 }
 
-fn command_de(platform: Platform) -> Modifiers {
+fn command_of(platform: Platform) -> Modifiers {
     if platform == Platform::Mac {
         Modifiers {
             mac_cmd: true,
@@ -2341,7 +2341,7 @@ fn row_9_menu_button_and_shortcut_give_the_same_action_and_the_same_dispatched()
 
     for platform in PLATFORMS_OF_19 {
         // El atajo: `command`+`N`.
-        let shortcut = action_for_shortcut(Key::N, command_de(platform), platform);
+        let shortcut = action_for_shortcut(Key::N, command_of(platform), platform);
         assert_eq!(shortcut, Some(AppAction::NewImage), "{platform:?}");
 
         let mut per_menu = World::standard();
@@ -2611,7 +2611,7 @@ fn row_9_quit_with_the_dialog_open_abandons_it_and_follows_the_close_rule() {
 // - El zoom no cambia.
 //
 // Suposición: `Dispatched::ConvertMode` es una variante sin datos. `open_convert_mode(modal, from,
-// locks)` es la de «Piezas».
+// locks)` es la from_index «Piezas».
 
 use crate::convert_mode::open_convert_mode;
 

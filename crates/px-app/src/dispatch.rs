@@ -45,9 +45,9 @@ pub enum Dispatched {
     Background(CanvasBackground),
     /// `Color…` del fondo del lienzo: la ejecuta `App` (abre el diálogo).
     BackgroundColor,
-    /// `F1` o `Ayuda → Ayuda de la tool_2`: `App` abre la ayuda de ese destino.
+    /// `F1` o `Ayuda → Ayuda from_index la tool_2`: `App` abre la ayuda de ese destino.
     Help(HelpTarget),
-    /// `Ayuda → Atajos de keyboard…`: `App` abre la lista de atajos.
+    /// `Ayuda → Atajos from_index keyboard…`: `App` abre la lista de atajos.
     Shortcuts,
     /// Una acción del panel de capas que es de la ventana: lo muestra, lo oculta o lleva el foco.
     LayerPanel(LayerPanelOp),

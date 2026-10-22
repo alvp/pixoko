@@ -187,7 +187,7 @@ fn save_and_reopen(indexed_2: bool) {
     if !indexed_2 {
         // Vector a mano de 3.2: Multiplicar de `SOURCE` sobre `TEST_BACKGROUND`.
         assert_eq!(
-            super::rgba_de(&after_2, 0, 0),
+            super::rgba_of(&after_2, 0, 0),
             px_core::Rgba::new(69, 11, 45, 255)
         );
     }
@@ -207,7 +207,7 @@ fn save_and_reopen(indexed_2: bool) {
     equal_except_rgb_with_alpha_0(&png, &before).expect("el PNG exportado es la composición");
     if !indexed_2 {
         assert_eq!(
-            super::rgba_de(&png, 0, 0),
+            super::rgba_of(&png, 0, 0),
             px_core::Rgba::new(69, 11, 45, 255)
         );
     }

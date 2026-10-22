@@ -229,7 +229,7 @@ fn checks_report(text_2: &str) {
 
 // --- Imágenes (las de la spec 9, «Casos límite») ---
 
-fn rgba_de(pixels: &[Rgba]) -> Image {
+fn rgba_of(pixels: &[Rgba]) -> Image {
     let mut image = Image::new(pixels.len() as u32, 1, Mode::Rgba).expect("imagen RGBA");
     for (x, p) in pixels.iter().enumerate() {
         image
@@ -292,7 +292,7 @@ fn gray_alpha_row_2() -> Image {
 
 /// Fila 7: Rgba 5×1.
 fn rgba_row_7() -> Image {
-    rgba_de(&[
+    rgba_of(&[
         Rgba::opaque(5, 5, 5),
         Rgba::new(9, 9, 9, 0),
         Rgba::opaque(5, 5, 5),
@@ -307,7 +307,7 @@ fn rgba_257_colors() -> Image {
         .map(|i| Rgba::opaque((i % 256) as u8, (i / 256) as u8, 0))
         .collect();
     colors.push(Rgba::TRANSPARENT);
-    rgba_de(&colors)
+    rgba_of(&colors)
 }
 
 /// Fila 11 de la 9: paleta `[(10,10,10), (200,0,0), (5,5,5)]`, transparente el índice 2.
@@ -324,13 +324,13 @@ fn indexed_row_11(pixels: &[u8]) -> Image {
 }
 
 fn three_reds() -> Image {
-    rgba_de(&[Rgba::opaque(255, 0, 0); 3])
+    rgba_of(&[Rgba::opaque(255, 0, 0); 3])
 }
 
 /// Una imagen cualquiera, pequeña, de cada modo.
 fn image_of_mode(mode: Mode) -> Image {
     match mode {
-        Mode::Rgba => rgba_de(&[
+        Mode::Rgba => rgba_of(&[
             Rgba::opaque(255, 0, 0),
             Rgba::new(0, 255, 0, 128),
             Rgba::opaque(7, 7, 7),
@@ -822,7 +822,7 @@ fn row_2_three_reds_to_gray_loses_the_color_in_three_pixels() {
 
 #[test]
 fn row_2_semitransparent_red_to_gray_loses_color_and_alpha_in_one_pixel() {
-    let image = rgba_de(&[Rgba::new(255, 0, 0, 128)]);
+    let image = rgba_of(&[Rgba::new(255, 0, 0, 128)]);
     assert_eq!(analyze(&image, Mode::Gray), lost(1, 1));
 }
 
@@ -948,7 +948,7 @@ fn row_2_analyze_does_not_touch_the_document() {
 fn row_2_the_report_does_not_depend_on_the_permissions_with_nothing_it_comes_out_whole() {
     // `LossNotAllowed` lleva los dos contadores completos: con cualquier `Allowed` el informe de
     // `analyze` es el mismo (analyze usa siempre NOTHING).
-    let image = rgba_de(&[
+    let image = rgba_of(&[
         Rgba::opaque(255, 0, 0),
         Rgba::new(0, 255, 0, 128),
         Rgba::new(1, 2, 3, 0),
@@ -3064,7 +3064,7 @@ fn strategy_of_seed() -> impl Strategy<Value = Seed> {
         )
 }
 
-fn rgba_de_indices(v: &[usize; 4]) -> Rgba {
+fn rgba_of_indices(v: &[usize; 4]) -> Rgba {
     Rgba::new(VALUES[v[0]], VALUES[v[1]], VALUES[v[2]], VALUES[v[3]])
 }
 
@@ -3074,7 +3074,7 @@ fn image_of_seed(s: &Seed) -> Image {
     let mode = TEST_MODES[s.mode_2];
     let mut image = match mode {
         Mode::Indexed => {
-            let colors: Vec<Rgba> = s.colors.iter().take(s.n).map(rgba_de_indices).collect();
+            let colors: Vec<Rgba> = s.colors.iter().take(s.n).map(rgba_of_indices).collect();
             let mut palette = Palette::from_colors(colors).expect("paleta");
             if s.transparent < s.n {
                 palette
@@ -3088,7 +3088,7 @@ fn image_of_seed(s: &Seed) -> Image {
     for (i, v) in s.pixels_2.iter().take(total).enumerate() {
         let (x, y) = (i as u32 % w, i as u32 / w);
         let pixel = match mode {
-            Mode::Rgba => Pixel::Rgba(rgba_de_indices(v)),
+            Mode::Rgba => Pixel::Rgba(rgba_of_indices(v)),
             Mode::Gray => Pixel::Gray(VALUES[v[0]]),
             Mode::GrayAlpha => Pixel::GrayAlpha {
                 gray: VALUES[v[0]],
@@ -4377,13 +4377,13 @@ fn row_4_20b_value_problem_adds_only_the_value_at_the_end_and_the_impossible_one
         false,
     );
     assert_eq!(without, vec![Missing::Luma]);
-    let ya = pending(
+    let already = pending(
         &lossy,
         &permissions(true, 1, TEST_RED),
         Some(ACTIVE_OPAQUE),
         true,
     );
-    assert_eq!(ya, vec![Missing::Value]);
+    assert_eq!(already, vec![Missing::Value]);
     for impossible in [Analysis::TooManyColors, Analysis::TooLarge] {
         for vp in [false, true] {
             assert_eq!(

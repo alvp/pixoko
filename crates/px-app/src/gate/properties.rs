@@ -31,11 +31,11 @@ use crate::session::{Saved, Session};
 use super::common::*;
 
 /// Casos de una propiedad: los de la spec, o menos si `PROPTEST_CASES` los baja.
-fn cases(de_la_spec: u32) -> u32 {
+fn cases(from_spec: u32) -> u32 {
     std::env::var("PROPTEST_CASES")
         .ok()
         .and_then(|value| value.parse::<u32>().ok())
-        .map_or(de_la_spec, |requested| requested.min(de_la_spec))
+        .map_or(from_spec, |requested| requested.min(from_spec))
 }
 
 /// Un gesto o una operación en bruto: un tipo y seis números.
@@ -200,7 +200,7 @@ fn action(m: &Model, kind: u8, v: &[u16; 6], with_save: bool) -> TestAction {
         }
         6 => line(),
         7 if indexed => TestStep::Move {
-            de: (usize::from(v[0]) % long_palette) as u8,
+            from_index: (usize::from(v[0]) % long_palette) as u8,
             a: (usize::from(v[1]) % long_palette) as u8,
         },
         7 => fill(),
@@ -416,8 +416,8 @@ proptest! {
         let source = real_2().remove(real);
         let mut mutated = source.bytes.clone();
         for (position, xor) in &changes_2 {
-            let en = position % mutated.len();
-            mutated[en] ^= xor;
+            let at = position % mutated.len();
+            mutated[at] ^= xor;
         }
         let path_mutated = t.write("mutado.png", &mutated);
 

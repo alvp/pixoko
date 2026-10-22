@@ -9633,3 +9633,17 @@ id	error_de	error_of	crates/px-core/
 id	pixel_de	pixel_of	crates/px-core/
 id	pixel_en	pixel_at	crates/px-core/
 id	rgba_de	rgba_of	crates/px-core/
+id	allowed_de	allowed_of	crates/px-app/
+id	color_en	color_in	crates/px-app/
+id	command_de	command_of	crates/px-app/
+id	de	from_index	crates/px-app/
+id	de_la_spec	from_spec	crates/px-app/
+id	en	at	crates/px-app/
+id	id_de	id_of	crates/px-app/
+id	n_de	n_of	crates/px-app/
+id	pixel_de	pixel_of	crates/px-app/
+id	rgba_de	rgba_of	crates/px-app/
+id	rgba_de_indices	rgba_of_indices	crates/px-app/
+id	spec_de	spec_of	crates/px-app/
+id	y_de	y_of	crates/px-app/
+id	ya	already	crates/px-app/

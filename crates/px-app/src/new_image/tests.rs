@@ -224,7 +224,7 @@ fn put_background(d: &mut Dialog, mode: Mode, background_2: Background) {
     }
 }
 
-fn spec_de(d: &Dialog) -> Option<NewImageSpec> {
+fn spec_of(d: &Dialog) -> Option<NewImageSpec> {
     spec_from_values(&d.values()?)
 }
 
@@ -700,7 +700,7 @@ fn row_3_the_form_has_a_background_group_per_mode_with_the_options_of_the_table(
     );
 
     // Cada grupo se ve solo con su modo y cada hexadecimal solo con «Color…» (y con su modo).
-    for (background_2, mode_2, color_id, color_en) in [
+    for (background_2, mode_2, color_id, color_in) in [
         ("fondo_indexado", 0, None, 0),
         ("fondo_rgba", 1, Some("color_rgba"), 3),
         ("fondo_gris_alfa", 2, Some("color_gris_alfa"), 3),
@@ -721,7 +721,7 @@ fn row_3_the_form_has_a_background_group_per_mode_with_the_options_of_the_table(
                 field_2(color_id).shown_when,
                 Some(ShowWhen {
                     field: background_2,
-                    choice: color_en
+                    choice: color_in
                 }),
                 "{color_id}"
             );
@@ -758,7 +758,7 @@ fn row_3_spec_from_values_reads_the_mode_group_with_each_valid_background() {
         for background_2 in backgrounds_valid(mode) {
             let mut d = dialog(8192);
             put_background(&mut d, mode, background_2);
-            let spec = spec_de(&d)
+            let spec = spec_of(&d)
                 .unwrap_or_else(|| panic!("{mode:?} {background_2:?}: spec_from_values dio None"));
             assert_eq!(
                 fields(&spec),
@@ -774,7 +774,7 @@ fn row_3_spec_from_values_reads_width_and_height() {
     let mut d = dialog(8192);
     number(&mut d, "ancho", "5");
     number(&mut d, "alto", "3");
-    let spec = spec_de(&d).expect("spec");
+    let spec = spec_of(&d).expect("spec");
     assert_eq!(fields(&spec), (5, 3, Mode::Indexed, TRANSPARENT));
 }
 
@@ -789,23 +789,23 @@ fn row_3_spec_from_values_does_not_read_the_hidden_groups_and_they_keep_their_va
     // RGBA con Negro; luego Gris con su grupo por defecto (Blanco); luego Indexado.
     put_background(&mut d, Mode::Rgba, TEST_BLACK);
     assert_eq!(
-        fields(&spec_de(&d).expect("rgba")),
+        fields(&spec_of(&d).expect("rgba")),
         (64, 64, Mode::Rgba, TEST_BLACK)
     );
     chooses(&mut d, "modo", index_of_mode(Mode::Gray));
     assert_eq!(
-        fields(&spec_de(&d).expect("gris")),
+        fields(&spec_of(&d).expect("gris")),
         (64, 64, Mode::Gray, WHITE),
         "no lee el Negro oculto de RGBA"
     );
     chooses(&mut d, "modo", index_of_mode(Mode::Indexed));
     assert_eq!(
-        fields(&spec_de(&d).expect("indexado")),
+        fields(&spec_of(&d).expect("indexado")),
         (64, 64, Mode::Indexed, TRANSPARENT)
     );
     chooses(&mut d, "modo", index_of_mode(Mode::Rgba));
     assert_eq!(
-        fields(&spec_de(&d).expect("rgba otra vez")),
+        fields(&spec_of(&d).expect("rgba otra vez")),
         (64, 64, Mode::Rgba, TEST_BLACK),
         "el grupo oculto conservaba su elección"
     );
@@ -828,7 +828,7 @@ fn row_3_in_gray_a_non_gray_color_or_with_alpha_gives_the_hex_notice_reason_and_
         let reason = d.reason().expect("hay motivo");
         assert!(reason.starts_with("Color: "), "{reason}");
         assert!(reason.chars().count() <= 37, "{reason}");
-        assert!(spec_de(&d).is_none());
+        assert!(spec_of(&d).is_none());
     }
 }
 
@@ -1182,7 +1182,7 @@ fn row_4_sync_form_applies_the_table_when_changing_mode_and_warns_in_the_report(
                 }
                 let (mut d, mut sync) = dialog_synchronized(from, background_2);
                 assert_eq!(
-                    fields(&spec_de(&d).expect("antes")),
+                    fields(&spec_of(&d).expect("antes")),
                     (64, 64, from, background_2),
                     "{name_2}: partida en {from:?}"
                 );
@@ -1199,7 +1199,7 @@ fn row_4_sync_form_applies_the_table_when_changing_mode_and_warns_in_the_report(
                         index: index_of_mode(to),
                     },
                 );
-                let spec = spec_de(&d)
+                let spec = spec_of(&d)
                     .unwrap_or_else(|| panic!("{name_2}: {from:?} → {to:?}: sin valores válidos"));
                 let (background_expected, notice) = match box_value {
                     Equal => (background_2, None),
@@ -1676,7 +1676,7 @@ fn row_6_the_size_notice_does_not_prevent_creating() {
     number(&mut d, "ancho", "4097");
     number(&mut d, "alto", "4096");
     assert!(d.is_valid(), "{:?}", d.reason());
-    let spec = spec_de(&d).expect("se puede crear");
+    let spec = spec_of(&d).expect("se puede crear");
     assert_eq!((spec.width, spec.height), (4097, 4096));
     assert_eq!(size_error(spec.width, spec.height, spec.mode), None);
     // Y el formulario lo acepta con `Crear` (Accept).
@@ -2943,7 +2943,7 @@ fn checks_translation(
         "{ctx}: el formulario sale válido; {:?}",
         d.reason()
     );
-    let spec = spec_de(d).unwrap_or_else(|| panic!("{ctx}: sin valores válidos"));
+    let spec = spec_of(d).unwrap_or_else(|| panic!("{ctx}: sin valores válidos"));
     assert_eq!(fields(&spec), (64, 64, to, background_2), "{ctx}");
     // El hexadecimal del modo viejo no se ve.
     if let Some(old) = id_color(from) {
@@ -3465,7 +3465,7 @@ fn row_a1_a_hidden_invalid_text_does_not_warn() {
                 );
                 assert!(!text_of_the_report(&d).contains(NOT_VALID), "{ctx}");
                 assert_eq!(
-                    fields(&spec_de(&d).expect("válido")),
+                    fields(&spec_of(&d).expect("válido")),
                     (64, 64, to, expected_2),
                     "{ctx}"
                 );
@@ -3496,7 +3496,7 @@ fn row_a1_the_transfers_of_valid_values_of_d1b_stay_the_same_and_without_the_new
                     "{ctx}"
                 );
                 assert_eq!(
-                    fields(&spec_de(&d).expect("válido")),
+                    fields(&spec_of(&d).expect("válido")),
                     (64, 64, to, background_expected),
                     "{ctx}"
                 );

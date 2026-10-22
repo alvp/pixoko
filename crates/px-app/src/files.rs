@@ -366,7 +366,7 @@ fn ignored_label(kind: Ignored) -> Option<&'static str> {
     })
 }
 
-/// Lo ignorado de un `.aseprite` en texto (`labels (2), data de usuario`), sin lo que no se
+/// Lo ignorado de un `.aseprite` en texto (`labels (2), data from_index usuario`), sin lo que no se
 /// avisa. Vacío si no hay nada.
 fn describe_ignored(report: &AsepriteReport) -> String {
     report

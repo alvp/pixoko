@@ -17,7 +17,7 @@
 //!   `Dialogs::new` solo guardan estado) y `App` tiene los campos `session`, `canvas`, `notice` y
 //!   `tile_alloc: Box<dyn TileAlloc>`.
 //! - `open_file(&ctx, &path, ignored, from_cli, confirmed)`, `finish_new_image(&ctx, &values,
-//!   discard)` y `run_convert(&ctx, plan, analysis)` son los de `main.rs` (with `analysis: Option<&Analysis>`).
+//!   discard)` y `run_convert(&ctx, plan, analysis)` son los from_index `main.rs` (with `analysis: Option<&Analysis>`).
 //! - Los `Values` de «Nueva imagen» salen de `Dialog::new(NewImage, new_image_form(..)).values()`
 //!   (64×64 indexado por defecto) y el `Plan` es el de `convert_mode` (sus campos son públicos).
 //! - El fotograma de la app (`eframe::App::ui`) no se puede ejecutar sin `eframe::Frame`: el banco

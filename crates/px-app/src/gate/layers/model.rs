@@ -310,7 +310,7 @@ impl Stack {
         expand(image_2)
     }
 
-    fn pixel_de(&self, c: Cel4) -> Pixel {
+    fn pixel_of(&self, c: Cel4) -> Pixel {
         match self.mode_2 {
             Mode::Indexed => Pixel::Indexed(c[0]),
             _ => Pixel::Rgba(Rgba::new(c[0], c[1], c[2], c[3])),
@@ -319,7 +319,7 @@ impl Stack {
 
     /// El píxel de sesión de un color del modelo (para las herramientas).
     pub fn pixel(&self, c: Cel4) -> Pixel {
-        self.pixel_de(c)
+        self.pixel_of(c)
     }
 
     fn inside(&self, (x, y): (i32, i32)) -> bool {
@@ -582,7 +582,9 @@ impl Stack {
                 self.palette = None;
                 CHANGES
             }
-            (de, a) => panic!("el modelo no convierte {de:?} a {a:?} por su cuenta"),
+            (from_index, a) => {
+                panic!("el modelo no convierte {from_index:?} a {a:?} por su cuenta")
+            }
         }
     }
 

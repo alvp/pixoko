@@ -46,7 +46,7 @@ px-core	rgba_de	rgba_of
 px-app	allowed_de	allowed_of
 px-app	color_en	color_in
 px-app	command_de	command_of
-px-app	de	from
+px-app	de	from_index
 px-app	de_la_spec	from_spec
 px-app	en	at
 px-app	id_de	id_of
