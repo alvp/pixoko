@@ -1,7 +1,7 @@
 //! Unit C1 (specs/ui-composition.md), egui bench without a window (the one of `panel_roles.rs`,
 //! copied, with the time of each frame for the tooltips): rows 5 and 6 (the focus when opening and
 //! `Escape` last in the chain), 11 and 12 (the icon row with the editor open and closed, and the
-//! palette operations), 13 (the tooltip of a swatch), 15 (mark of the edited role, tooltips of the
+//! palette operations), 13 (a swatch has no tooltip), 15 (mark of the edited role, tooltips of the
 //! indicator and `F1`) and properties 3 and 4.
 
 use std::cell::Cell;
@@ -24,7 +24,7 @@ use px_ui::help::{HelpTarget, help_target_in_indicator};
 use px_ui::help_texts::help_entry;
 use px_ui::palette_grid::{
     CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, IND_BORDER_EDIT_U, IND_BORDER_U, PITCH_U, PanelView,
-    Scroll, indicator_rects, ring_rects,
+    Scroll, indicator_rects, ring_rects, total_rows,
 };
 use px_ui::palette_ops::{PaletteOp, PaletteOps};
 use px_ui::palette_panel::{INDICATOR_TIP, Indicator, PanelOutput, Roles, panel_info, show_roles};
@@ -61,6 +61,8 @@ struct Bench {
     roles: Roles,
     enabled: bool,
     time: Cell<Option<f64>>,
+    /// Height of the screen (and of the panel) in points.
+    height: f32,
 }
 
 struct Frame {
@@ -84,6 +86,7 @@ impl Bench {
             roles,
             enabled: true,
             time: Cell::new(None),
+            height: SCREEN.y,
         };
         for _ in 0..2 {
             bench.frame(vec![]);
@@ -105,7 +108,7 @@ impl Bench {
             t + 0.1
         });
         RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, SCREEN)),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(SCREEN.x, self.height))),
             events,
             time,
             ..RawInput::default()
@@ -191,7 +194,7 @@ impl Bench {
     }
 
     fn layout(&self) -> px_ui::edit_layout::PanelLayout {
-        let height = (SCREEN.y * self.ppp()).round() as i64;
+        let height = (self.height * self.ppp()).round() as i64;
         let n = self.n() as u32;
         if self.view.editor_open {
             panel_layout(self.image.mode(), height, n, 0)
@@ -200,13 +203,16 @@ impl Bench {
         }
     }
 
+    /// Top edge of the icon row: under the grid when it is short, anchored when it is tall.
+    fn icons_top(&self) -> i64 {
+        let rows = total_rows(self.image.palette().map_or(0, |p| p.len()));
+        self.layout().icon_row_top_px(rows, self.n() as u32)
+    }
+
     fn button_center(&self, button: PaletteButton) -> (i64, i64) {
         let (x, y, w, h) = button_rect_u(self.image.mode(), button).expect("button");
         let n = self.n();
-        (
-            (x + w / 2) * n,
-            self.layout().icons_top_px + (y + h / 2) * n,
-        )
+        ((x + w / 2) * n, self.icons_top() + (y + h / 2) * n)
     }
 
     fn swatch_center(&self, index: usize) -> (i64, i64) {
@@ -428,7 +434,7 @@ fn image_with_unused_entries() -> Image {
 }
 
 #[test]
-fn row_11_the_icon_row_does_not_move_when_the_editor_opens_or_closes() {
+fn row_11_a_short_grid_keeps_the_icon_row_right_under_it_with_the_editor_open_or_closed() {
     for ppp in [1.0f32, 2.0] {
         let mut bench = Bench::new(
             ppp,
@@ -440,14 +446,40 @@ fn row_11_the_icon_row_does_not_move_when_the_editor_opens_or_closes() {
             ),
         );
         bench.view.editor_open = false;
-        let closed = bench.layout();
+        let closed = bench.icons_top();
         bench.view.editor_open = true;
-        let open = bench.layout();
-        // Closed it is at the bottom of the panel; open it sits right above the editor.
-        assert!(closed.icons_top_px > open.icons_top_px, "ppp {ppp}");
-        assert_eq!(open.top_px - open.icons_top_px, 28 * bench.n());
-        let height = (SCREEN.y * ppp).round() as i64;
-        assert_eq!(closed.icons_top_px + 28 * bench.n(), height);
+        let open = bench.icons_top();
+        // Five entries are one row: the row hangs at 49 + 14 = 63 u whether the editor is open or not.
+        assert_eq!(closed, 63 * bench.n(), "ppp {ppp}");
+        assert_eq!(open, closed, "ppp {ppp}");
+    }
+}
+
+#[test]
+fn row_11_a_tall_grid_anchors_the_icon_row_to_the_bottom_or_right_above_the_editor() {
+    for ppp in [1.0f32, 2.0] {
+        let mut bench = Bench::new(
+            ppp,
+            indexed(256),
+            roles(
+                ColorChoice::Entry(3),
+                ColorChoice::Entry(1),
+                Role::Foreground,
+            ),
+        );
+        // 290 u: lower than the 301 u the 16 rows and the icon row need, and above the 277 u block.
+        bench.height = 290.0;
+        let height = (bench.height * ppp).round() as i64;
+        let n = bench.n();
+        bench.view.editor_open = false;
+        let closed = bench.icons_top();
+        bench.view.editor_open = true;
+        let open = bench.icons_top();
+        // The 16 rows of the grid do not fit: closed, the row closes the panel; open, it sits right
+        // above the editor.
+        assert_eq!(closed + 28 * n, height, "ppp {ppp}");
+        assert!(open < closed, "ppp {ppp}");
+        assert_eq!(bench.layout().top_px - open, 28 * n, "ppp {ppp}");
     }
 }
 
@@ -544,7 +576,7 @@ fn row_12_dragging_a_swatch_moves_it_with_the_editor_closed() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Row 13: the tooltip of a swatch
+// Row 13: a swatch has no tooltip (the status line keeps its text)
 // ---------------------------------------------------------------------------------------------
 
 fn tooltip_texts(bench: &mut Bench, point: (i64, i64)) -> Vec<String> {
@@ -560,7 +592,7 @@ fn tooltip_texts(bench: &mut Bench, point: (i64, i64)) -> Vec<String> {
 }
 
 #[test]
-fn row_13_the_tooltip_has_the_two_lines_the_panel_used_to_paint_and_only_over_a_swatch() {
+fn row_13_a_swatch_has_no_tooltip_and_the_status_line_keeps_its_text() {
     let r = roles(
         ColorChoice::Entry(7),
         ColorChoice::Entry(9),
@@ -570,25 +602,24 @@ fn row_13_the_tooltip_has_the_two_lines_the_panel_used_to_paint_and_only_over_a_
     let over = bench.swatch_center(3);
     let shown = tooltip_texts(&mut bench, over);
     let info = panel_info(&bench.ctx);
-    for line in &info.lines {
-        assert!(shown.contains(line), "missing {line:?} in {shown:?}");
-    }
+    // The text is still there for the status line (index, hex and flags) ...
     assert!(info.lines[0].starts_with("índice 3 "), "{:?}", info.lines);
-    // Over the gap between two swatches, nothing; and nothing fixed in the panel either.
-    let gap = (
-        (GRID_X_U + CELL_U) * bench.n() + bench.n(),
-        (GRID_Y_U + 3) * bench.n(),
-    );
-    let shown = tooltip_texts(&mut bench, gap);
     assert!(
-        !shown.iter().any(|t| t.starts_with("índice ")),
-        "tooltip over a gap: {shown:?}"
+        info.status_hint
+            .as_deref()
+            .is_some_and(|hint| hint.starts_with(&info.lines[0])),
+        "{:?}",
+        info.status_hint
     );
-    // No fixed text of the old header (the chosen swatch is not described in the panel).
+    // ... but nothing is shown next to the pointer: no line of the swatch, and nothing fixed in
+    // the panel either (the chosen swatch is not described there).
+    for line in info.lines.iter().filter(|line| !line.is_empty()) {
+        assert!(!shown.contains(line), "tooltip over a swatch: {shown:?}");
+    }
     assert!(
         !shown
             .iter()
-            .any(|t| t == "frente" || t.starts_with("índice 7")),
+            .any(|t| t.starts_with("índice ") || t == "frente"),
         "{shown:?}"
     );
 }

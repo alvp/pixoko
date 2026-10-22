@@ -476,7 +476,11 @@ impl Bench {
             n: self.n(),
             mode: self.image.mode(),
             top_px: self.layout().top_px,
-            icons_top_px: self.layout().icons_top_px,
+            // The icon row hangs under a short grid and is anchored below a tall one.
+            icons_top_px: self.layout().icon_row_top_px(
+                palette_grid::total_rows(px_ui::color::cell_count(&self.image)),
+                self.n() as u32,
+            ),
         }
     }
 

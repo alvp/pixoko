@@ -266,10 +266,31 @@ pub struct PanelLayout {
     /// Top edge of the editor from the panel's, in physical pixels (may be negative). With the
     /// editor closed it is the bottom edge of the icon row.
     pub top_px: i64,
-    /// Top edge of the icon row from the panel's, in physical pixels (equal to `top_px` in the modes
-    /// without icons).
+    /// Lowest position of the top edge of the icon row from the panel's, in physical pixels: right
+    /// above the editor (or the bottom edge) when the grid fills the space (equal to `top_px` in
+    /// the modes without icons). With a shorter grid the row hangs higher: see
+    /// [`PanelLayout::icon_row_top_px`].
     pub icons_top_px: i64,
     pub visible_rows: usize,
+}
+
+impl PanelLayout {
+    /// Top edge of the icon row for a grid of `grid_rows` rows, in physical pixels: the smaller of
+    /// the bottom edge of the grid and the bottom edge of the space (the panel, or the top of the
+    /// editor when it is open) minus the height of the row. A short grid leaves the row right under
+    /// it; a grid taller than the space leaves it anchored to the bottom of the space. When the
+    /// panel scrolls as a whole the row is where the block puts it.
+    pub fn icon_row_top_px(&self, grid_rows: usize, n: u32) -> i64 {
+        if self.scrolling {
+            return self.icons_top_px;
+        }
+        let grid_bottom = i64::try_from(grid_rows)
+            .unwrap_or(i64::MAX)
+            .saturating_mul(PITCH_U)
+            .saturating_add(GRID_Y_U)
+            .saturating_mul(scale(n));
+        grid_bottom.min(self.icons_top_px)
+    }
 }
 
 /// Split of a panel of `panel_h_px` with the editor of the mode open. With enough height, the editor

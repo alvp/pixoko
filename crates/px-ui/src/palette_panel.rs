@@ -415,6 +415,8 @@ fn show_panel(
             let count = cell_count(image);
             let total = total_rows(count);
             let visible = placed.visible_rows;
+            // The icon row hangs under a short grid and is anchored below a tall one.
+            let icons_top_px = placed.icon_row_top_px(total, n);
             scroll.clamp(total, visible);
             let changed = view.reveal || view.last_visible.is_some_and(|last| last != visible);
             if changed && let Some(cell) = cell_of_choice(image, choice) {
@@ -432,7 +434,7 @@ fn show_panel(
                 n: layout.n,
                 panel_min: rect.min,
                 panel_rect: rect,
-                top_px: placed.icons_top_px,
+                top_px: icons_top_px,
                 mode,
             };
             let phys = |p: Pos2| ((p.x * ppp).round() as i64, (p.y * ppp).round() as i64);
@@ -718,7 +720,7 @@ fn show_panel(
             if ops_on {
                 let removal = ops.as_deref().and_then(|o| o.removal());
                 let icons_geo = Geometry {
-                    top_px: placed.icons_top_px,
+                    top_px: icons_top_px,
                     ..pre_geometry
                 };
                 show_icon_row(
@@ -801,8 +803,8 @@ fn show_panel(
                 );
             });
 
-            // Tooltips: the swatch under the cursor (unless something is being dragged or removed)
-            // and each rectangle of the indicator.
+            // Tooltip of each rectangle of the indicator (the swatches have none: their text goes
+            // to the status line only).
             let font = FontId::new(font_size_points(ppp), FontFamily::Proportional);
             let tip = |ui: &mut Ui, lines: &[&str]| {
                 for (i, line) in lines.iter().enumerate().filter(|(_, l)| !l.is_empty()) {
@@ -817,23 +819,6 @@ fn show_panel(
                     );
                 }
             };
-            let calm = marks.drag_text.is_none() && removal_text.is_none() && !busy_editing;
-            if hover.is_some() && calm {
-                let pitch = PITCH_U * i64::from(n);
-                let cells = layout
-                    .grid_rect(ScreenRect {
-                        x: 0,
-                        y: 0,
-                        width: COLUMNS as i64 * pitch,
-                        height: visible as i64 * pitch,
-                    })
-                    .intersect(rect);
-                if cells.is_positive() {
-                    let response =
-                        ui.interact(cells, ui.unique_id().with("swatch-tooltip"), Sense::hover());
-                    response.on_hover_ui(|ui| tip(ui, &[&info[0], &info[1]]));
-                }
-            }
             if roles.background.is_some() {
                 // One area over both rectangles; the pointer says which one (the small one wins
                 // where they overlap, as for the clicks).

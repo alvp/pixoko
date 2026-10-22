@@ -154,6 +154,81 @@ fn row_3_open_the_editor_is_anchored_below_the_icon_row_and_both_take_space_from
 }
 
 #[test]
+fn row_3_the_icon_row_hangs_from_a_short_grid_and_is_anchored_below_a_tall_one() {
+    // One formula: the smaller of the bottom of the grid and the bottom of the space minus the row.
+    for n in [1u32, 2, 3] {
+        let k = i64::from(n);
+        let icons = ICON_ROW_H_U * k;
+        for (entries, rows) in [
+            (0usize, 0usize),
+            (2, 1),
+            (16, 1),
+            (32, 2),
+            (128, 8),
+            (256, 16),
+        ] {
+            for height in [277 * k, 301 * k, 400 * k, 700 * k, 2000 * k] {
+                for open in [false, true] {
+                    let layout = if open {
+                        panel_layout(Mode::Indexed, height, n, 0)
+                    } else {
+                        panel_layout_closed(Mode::Indexed, height, n, 0)
+                    };
+                    let space_bottom = if open {
+                        height - editor_height_u(Mode::Indexed) * k
+                    } else {
+                        height
+                    };
+                    let grid_bottom = (GRID_Y_U + rows as i64 * PITCH_U) * k;
+                    let expected = grid_bottom.min(space_bottom - icons);
+                    assert_eq!(
+                        layout.icon_row_top_px(rows, n),
+                        expected,
+                        "entries {entries} n={n} h={height} open={open}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn row_3_the_icon_row_examples_in_u() {
+    let k = 2i64;
+    let n = k as u32;
+    // 16 entries, one row: right under the grid (49 + 14 = 63 u) closed or open.
+    assert_eq!(
+        panel_layout_closed(Mode::Indexed, 700 * k, n, 0).icon_row_top_px(1, n),
+        63 * k
+    );
+    assert_eq!(
+        panel_layout(Mode::Indexed, 700 * k, n, 0).icon_row_top_px(1, n),
+        63 * k
+    );
+    // 256 entries closed in a 250 u panel: the grid is taller than the space, so the row is
+    // anchored to the bottom (250 − 28 = 222 u); in a 301 u panel the grid (49 + 224 = 273 u) is
+    // exactly the space above the row.
+    assert_eq!(
+        panel_layout_closed(Mode::Indexed, 250 * k, n, 0).icon_row_top_px(16, n),
+        222 * k
+    );
+    assert_eq!(
+        panel_layout_closed(Mode::Indexed, 301 * k, n, 0).icon_row_top_px(16, n),
+        273 * k
+    );
+    // Open, 256 entries in a 400 u panel: the editor (186 u) is anchored below and the row sits
+    // right above it (400 − 186 − 28 = 186 u).
+    assert_eq!(
+        panel_layout(Mode::Indexed, 400 * k, n, 0).icon_row_top_px(16, n),
+        186 * k
+    );
+    // Panel scrolling as a whole: the row is where the block puts it.
+    let scrolling = panel_layout(Mode::Indexed, 200 * k, n, 0);
+    assert!(scrolling.scrolling);
+    assert_eq!(scrolling.icon_row_top_px(16, n), scrolling.icons_top_px);
+}
+
+#[test]
 fn row_3_the_indexed_block_measures_277_u_open_and_91_u_closed_and_scrolls_below_it() {
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
@@ -330,6 +405,40 @@ proptest! {
         prop_assert!((min_window_height_pt(ppp) - formula).abs() < 0.01);
         prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
         prop_assert!(min_window_width_pt(ppp) <= 683.0);
+    }
+
+    #[test]
+    fn property_5_the_icon_row_never_overlaps_the_visible_grid_or_the_editor_or_leaves_the_panel(
+        ppp in prop::sample::select(PPPS.to_vec()),
+        entries in prop::sample::select(vec![2usize, 16, 32, 128, 256]),
+        open in any::<bool>(),
+        extra in 0i64..=900,
+    ) {
+        let n = text_scale(ppp);
+        let k = i64::from(n);
+        let height = min_panel_height_px(n) + extra;
+        let layout = if open {
+            panel_layout(Mode::Indexed, height, n, 0)
+        } else {
+            panel_layout_closed(Mode::Indexed, height, n, 0)
+        };
+        prop_assert!(!layout.scrolling);
+        let rows = entries.div_ceil(16);
+        let top = layout.icon_row_top_px(rows, n);
+        let icons = ICON_ROW_H_U * k;
+        let editor_top = if open { layout.top_px } else { height };
+        let shown = rows.min(layout.visible_rows) as i64;
+        prop_assert_eq!(top % k, 0);
+        // Below the visible grid, above the editor, inside the panel.
+        prop_assert!(top >= (GRID_Y_U + shown * PITCH_U) * k, "overlaps the grid");
+        prop_assert!(top + icons <= editor_top, "overlaps the editor");
+        prop_assert!(top >= 0 && top + icons <= height, "outside the panel");
+        // Hanging from a short grid, anchored when the grid is taller than the space.
+        if rows <= layout.visible_rows {
+            prop_assert_eq!(top, (GRID_Y_U + rows as i64 * PITCH_U) * k);
+        } else {
+            prop_assert_eq!(top, layout.icons_top_px);
+        }
     }
 
     #[test]
