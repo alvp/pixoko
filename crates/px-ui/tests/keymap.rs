@@ -64,7 +64,7 @@ use px_ui::view::Zoom;
 mod common;
 use common::toolbox::{center_u, toolbox_with};
 use common::zones::toolbox_single;
-use common::{Painted, button_2, context, in_points, modifiers_2, move_pointer, n_de, painted};
+use common::{Painted, button_2, context, in_points, modifiers_2, move_pointer, n_of, painted};
 
 const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 const TEST_TOOLS: [Tool; 5] = [
@@ -1327,7 +1327,7 @@ impl BenchUi {
         platform: Platform,
     ) -> Vec<AppAction> {
         self.column_in_rest(km, platform);
-        let n = n_de(self.ppp);
+        let n = n_of(self.ppp);
         // Botones de 24 × 24 u en una rejilla de cuatro columnas (specs/interfaz-iconos.md).
         let toolbox_x = toolbox_single(
             (

@@ -133,7 +133,7 @@ fn fraction_of(zoom: Zoom) -> Fraction {
     ladder()[index_2]
 }
 
-fn hash_de(zoom: Zoom) -> u64 {
+fn hash_of(zoom: Zoom) -> u64 {
     let mut h = DefaultHasher::new();
     zoom.hash(&mut h);
     h.finish()
@@ -351,7 +351,7 @@ fn row_a1_display_order_eq_and_hash_are_consistent() {
     ];
     for (a, b) in pairs {
         assert_eq!(a, b);
-        assert_eq!(hash_de(a), hash_de(b), "{a}");
+        assert_eq!(hash_of(a), hash_of(b), "{a}");
     }
 }
 

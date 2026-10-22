@@ -66,7 +66,7 @@ pub struct DialogLayout {
 
 /// Coloca el diálogo, centrado, en una ventana de `window_px` píxeles físicos. `content_h_u` es el
 /// alto del contenido del cuerpo (`Dialog::content_h_u`); con `fill`, el natural. El ancho es
-/// `min(330, width_2 de la window en u − 16)` y el alto `min(65 + content, height_2 en u − 16)`: cabe
+/// `min(330, width_2 de la window at u − 16)` y el alto `min(65 + content, height_2 at u − 16)`: cabe
 /// siempre y, si el contenido no cabe, se desplaza solo el cuerpo.
 pub fn dialog_layout(
     window_px: (i64, i64),

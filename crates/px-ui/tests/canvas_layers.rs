@@ -28,7 +28,7 @@ use px_ui::tool::{Tool, ToolState};
 use px_ui::view::{ViewOp, Zoom};
 
 mod common;
-use common::{PPPS, button_2, context, frame, in_points, move_pointer, n_de, wheel_line};
+use common::{PPPS, button_2, context, frame, in_points, move_pointer, n_of, wheel_line};
 
 const TEST_SCREEN: Vec2 = vec2(800.0, 600.0);
 const POS_OF_THE_AREA: Pos2 = pos2(300.0, 200.0);
@@ -464,7 +464,7 @@ impl BenchWithMenu {
 
     /// Abre `Archivo` con un clic en su título (a 4 u del borde, con 61 u de ancho).
     fn opens_file(&mut self) {
-        let n = n_de(self.ppp);
+        let n = n_of(self.ppp);
         let title = in_points(self.ppp, (4 + 61 / 2) * n, 8 * n);
         self.click(title);
         self.step(vec![]);
@@ -496,7 +496,7 @@ fn row_9b_with_the_real_menu_open_a_click_on_save_does_not_draw_and_gives_save()
         bench.opens_file();
         let save = bench.center_of_save();
         // La entrada cae sobre el lienzo (el menú no ocupa más que su barra).
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         assert!(save.y * ppp > (16 * n) as f32, "ppp {ppp}: {save:?}");
 
         let steps_2 = bench.click(save);

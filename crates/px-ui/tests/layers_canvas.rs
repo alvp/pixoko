@@ -29,7 +29,7 @@ use common::context;
 use common::textures::Textures;
 
 mod tiles_support;
-use tiles_support::{B, expected_2, image_of, model_full, model_of_pixels, pixel_de};
+use tiles_support::{B, expected_2, image_of, model_full, model_of_pixels, pixel_of};
 
 const WIDTH: u32 = 130;
 const HEIGHT: u32 = 70;
@@ -181,7 +181,7 @@ impl Bench {
 }
 
 /// Píxeles de las baldosas de 64 que cubren los bloques de `model` (recortados a la imagen).
-fn area_de(model: &BTreeSet<(u32, u32)>) -> usize {
+fn area_of(model: &BTreeSet<(u32, u32)>) -> usize {
     model
         .iter()
         .map(|&(bx, by)| {
@@ -379,7 +379,7 @@ fn row_8_a_stroke_undo_and_redo_upload_only_the_blocks_of_the_stroke() {
     // 40 píxeles en la fila 10 desde x = 50: cruzan los bloques (0, 0) y (1, 0).
     let command = stroke_2(cel_b, 50, 10, 40, RED);
     let points: Vec<(u32, u32)> = (50..90).map(|x| (x, 10)).collect();
-    let expected_uploaded = area_de(&model_of_pixels(&points, WIDTH, HEIGHT));
+    let expected_uploaded = area_of(&model_of_pixels(&points, WIDTH, HEIGHT));
     assert!(
         expected_uploaded < (WIDTH * HEIGHT) as usize,
         "la prueba necesita un trazo parcial"
@@ -398,7 +398,7 @@ fn row_8_a_stroke_undo_and_redo_upload_only_the_blocks_of_the_stroke() {
 #[test]
 fn row_8_add_and_rename_do_not_dirty_and_the_other_layer_commands_dirty_everything() {
     let mut bench = Bench::new_2(three_layer_doc());
-    let all = area_de(&model_full(WIDTH, HEIGHT));
+    let all = area_of(&model_full(WIDTH, HEIGHT));
     assert_eq!(all, (WIDTH * HEIGHT) as usize);
     let layer_2 = bench.doc.layers()[1].id();
     let (r, uploaded) = bench.applies(Command::AddLayer {
@@ -606,7 +606,7 @@ proptest! {
                         .map(|j| PixelEdit {
                             x: (j * 13 + u32::from(content)) % WIDTH,
                             y: (j * 7) % HEIGHT,
-                            pixel: pixel_de(mode_2, j + u32::from(opacity_2), 8),
+                            pixel: pixel_of(mode_2, j + u32::from(opacity_2), 8),
                         })
                         .collect(),
                 });
@@ -621,7 +621,7 @@ proptest! {
         for (n, &(kind, a, b, c, d)) in steps_2.iter().enumerate() {
             let layers = bench.doc.layers().len();
             let layer_2 = bench.doc.layers()[a as usize % layers].clone();
-            let pixel = pixel_de(mode_2, d, 8);
+            let pixel = pixel_of(mode_2, d, 8);
             let (uploaded, exact) = match kind {
                 0..=3 => {
                     let pixels: Vec<PixelEdit> = (0..1 + b % 25)
@@ -632,7 +632,7 @@ proptest! {
                         })
                         .collect();
                     let points: Vec<(u32, u32)> = pixels.iter().map(|e| (e.x, e.y)).collect();
-                    let expected_2 = area_de(&model_of_pixels(&points, WIDTH, HEIGHT));
+                    let expected_2 = area_of(&model_of_pixels(&points, WIDTH, HEIGHT));
                     let (r, uploaded) = bench.applies(Command::SetPixels { image: layer_2.cel(), pixels });
                     (uploaded, (r == Ok(true)).then_some(expected_2).or(Some(0)))
                 }
@@ -642,7 +642,7 @@ proptest! {
                     let spans = vec![Span { y, x_start: x0, x_end: x0 + 1 + d % (WIDTH - x0) }];
                     let points: Vec<(u32, u32)> =
                         (spans[0].x_start..spans[0].x_end).map(|x| (x, y)).collect();
-                    let expected_2 = area_de(&model_of_pixels(&points, WIDTH, HEIGHT));
+                    let expected_2 = area_of(&model_of_pixels(&points, WIDTH, HEIGHT));
                     let (r, uploaded) = bench.applies(Command::FillSpans { image: layer_2.cel(), spans, pixel });
                     (uploaded, (r == Ok(true)).then_some(expected_2).or(Some(0)))
                 }
@@ -764,7 +764,7 @@ proptest! {
                         .map(|j| PixelEdit {
                             x: (j * 13 + u32::from(content)) % WIDTH,
                             y: (j * 7) % HEIGHT,
-                            pixel: pixel_de(mode_2, j + u32::from(opacity_2), 8),
+                            pixel: pixel_of(mode_2, j + u32::from(opacity_2), 8),
                         })
                         .collect(),
                 });
@@ -783,7 +783,7 @@ proptest! {
                 .map(|j| PixelEdit {
                     x: a.wrapping_add(j.wrapping_mul(11)) % WIDTH,
                     y: b.wrapping_add(j.wrapping_mul(5)) % HEIGHT,
-                    pixel: pixel_de(mode_2, c.wrapping_add(j), 8),
+                    pixel: pixel_of(mode_2, c.wrapping_add(j), 8),
                 })
                 .collect()
         };

@@ -286,7 +286,7 @@ mod alpha_0 {
     }
 
     #[test]
-    fn info_flags_alpha0_de_la_spec() {
+    fn info_flags_alpha0_of_the_spec() {
         assert_eq!(info_flags_alpha0(false, false, false, false, false), "");
         assert_eq!(
             info_flags_alpha0(false, false, false, true, false),

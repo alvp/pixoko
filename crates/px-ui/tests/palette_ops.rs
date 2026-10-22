@@ -555,8 +555,8 @@ fn row_5_the_transparent_has_no_default_target() {
     let p5 = image_p_5(Some(3));
     assert_eq!(default_destination(p5.palette().unwrap(), 3), None);
     // En 0 y en la última también.
-    let en_0 = palette(&[RED, GREEN, BLUE], Some(0));
-    assert_eq!(default_destination(&en_0, 0), None);
+    let at_0 = palette(&[RED, GREEN, BLUE], Some(0));
+    assert_eq!(default_destination(&at_0, 0), None);
     let in_the_last = palette(&[RED, GREEN, BLUE], Some(2));
     assert_eq!(default_destination(&in_the_last, 2), None);
 }
@@ -2219,9 +2219,9 @@ fn model_drop_index(
     let total = count.div_ceil(COLUMNS);
     let with_swatches = visible_2.min(total.saturating_sub(first)) as i128;
     let step = 14 * n;
-    let en_x = x >= -2 * n && x < COLUMNS as i128 * step - 2 * n;
-    let en_y = y >= -2 * n && y < with_swatches * step - 2 * n;
-    if !(en_x && en_y) || count == 0 {
+    let in_x = x >= -2 * n && x < COLUMNS as i128 * step - 2 * n;
+    let in_y = y >= -2 * n && y < with_swatches * step - 2 * n;
+    if !(in_x && in_y) || count == 0 {
         return None;
     }
     let column = (x + 2 * n).div_euclid(step);
@@ -2584,7 +2584,7 @@ proptest! {
         let Some(op) = operation_valid(length_2, kind, a, b, steps_2) else {
             return Ok(());
         };
-        let color_de = |id: u32| {
+        let color_of = |id: u32| {
             if id == NEW {
                 Rgba::new(0, 0, 0, 1)
             } else {
@@ -2592,11 +2592,11 @@ proptest! {
             }
         };
         let ids: Vec<u32> = (0..length_2 as u32).collect();
-        let colors_2: Vec<Rgba> = ids.iter().map(|&id| color_de(id)).collect();
+        let colors_2: Vec<Rgba> = ids.iter().map(|&id| color_of(id)).collect();
         let mut doc = Document::new(image_with(&colors_2, None, &[0]));
         let id = ImageId::from_raw(0);
         let command = match op {
-            PaletteOp::Add => Command::AddPaletteEntry { image: id, color: color_de(NEW) },
+            PaletteOp::Add => Command::AddPaletteEntry { image: id, color: color_of(NEW) },
             PaletteOp::Remove { index, into } => {
                 Command::RemovePaletteEntry { image: id, index, into }
             }
@@ -2612,7 +2612,7 @@ proptest! {
         doc.apply(command).expect("operación válida");
         let expected_2: Vec<Rgba> = model_apply(&op, &ids)
             .into_iter()
-            .map(color_de)
+            .map(color_of)
             .collect();
         prop_assert_eq!(colors_of(&doc, id), expected_2, "{:?}", op);
     }

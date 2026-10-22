@@ -11,7 +11,7 @@ use px_ui::canvas::{Canvas, CanvasError, CanvasInfo, CanvasInput};
 use px_ui::view::Zoom;
 
 mod common;
-use common::textures::{Textures, texel_de};
+use common::textures::{Textures, texel_of};
 
 const SCREEN: Vec2 = vec2(800.0, 600.0);
 
@@ -335,7 +335,7 @@ fn texel_of_the_wide_one(x: u32, y: u32) -> Color32 {
         .iter()
         .find(|(p, _)| *p == (x, y))
         .map_or(Rgba::new(0, 0, 0, 0), |(_, c)| *c);
-    texel_de(color.r, color.g, color.b, color.a)
+    texel_of(color.r, color.g, color.b, color.a)
 }
 
 /// Las dos baldosas de la imagen ancha: la primera es `texture_id()`, y la textura compuesta de
@@ -372,7 +372,7 @@ fn checks_the_two_tiles(bench: &Bench, label_2: &str) {
 
 /// El píxel de imagen bajo el píxel físico `dx` (desde el borde izquierdo de la imagen) y la
 /// primera fila de pantalla de la imagen, con el puntero ahí (a `ppp` 1: un punto = un píxel).
-fn hover_en(bench: &mut Bench, rect: Rect, dx: f32) -> Option<(u32, u32)> {
+fn hover_at(bench: &mut Bench, rect: Rect, dx: f32) -> Option<(u32, u32)> {
     // +0,25 y no +0,5: `interact` redondea a píxeles físicos y 0,5 sube al siguiente.
     let pos = pos2(rect.min.x + dx + 0.25, rect.min.y + 0.25);
     let mut f = bench.frame(vec![Event::PointerMoved(pos)], Some(1024));
@@ -396,9 +396,9 @@ fn an_image_wider_than_the_maximum_texture_opens_and_is_painted_in_two_tiles() {
     // 1025 píxeles a ×1), el píxel de pantalla `s` es el píxel de imagen `2·s`: el 511 está en la
     // primera baldosa (x = 1022) y el 512 en la segunda (x = 1024).
     assert_eq!(f.info.zoom.to_string(), "×1/2");
-    assert_eq!(hover_en(&mut bench, rect, 10.0), Some((20, 0)));
-    assert_eq!(hover_en(&mut bench, rect, 511.0), Some((1022, 0)));
-    assert_eq!(hover_en(&mut bench, rect, 512.0), Some((1024, 0)));
+    assert_eq!(hover_at(&mut bench, rect, 10.0), Some((20, 0)));
+    assert_eq!(hover_at(&mut bench, rect, 511.0), Some((1022, 0)));
+    assert_eq!(hover_at(&mut bench, rect, 512.0), Some((1024, 0)));
 
     // Un fotograma posterior sigue pintándola y sin fallar: con rueda y `Home` no hay error, la
     // imagen y las baldosas son las mismas y no se vuelve a subir nada.

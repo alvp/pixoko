@@ -92,7 +92,7 @@ fn center_of_the_pixel(v: &View, x: u32, y: u32) -> (i64, i64) {
 // Zoom por las teclas nuevas frente al de antes
 // ---------------------------------------------------------------------------------------------
 
-fn press_de(key: KeyId, command: bool) -> Press {
+fn press_of(key: KeyId, command: bool) -> Press {
     Press {
         key: Some(key),
         command,
@@ -103,7 +103,7 @@ fn press_de(key: KeyId, command: bool) -> Press {
     }
 }
 
-fn op_de(action: AppAction) -> ViewOp {
+fn op_of(action: AppAction) -> ViewOp {
     match action {
         AppAction::ZoomIn => ViewOp::ZoomIn,
         AppAction::ZoomOut => ViewOp::ZoomOut,
@@ -138,14 +138,14 @@ fn row_6_greater_minus_and_plus_equals_minus_give_zoom_in_and_zoom_out_as_before
             ('-', ViewOp::ZoomOut),
         ] {
             let action = km
-                .action_for(&press_de(KeyId::Char(key_2), false), platform)
+                .action_for(&press_of(KeyId::Char(key_2), false), platform)
                 .unwrap_or_else(|| panic!("`{key_2}` no da acción en {platform:?}"));
-            assert_eq!(op_de(action), expected, "`{key_2}` en {platform:?}");
+            assert_eq!(op_of(action), expected, "`{key_2}` en {platform:?}");
         }
-        let fit = km.action_for(&press_de(KeyId::Home, false), platform);
-        assert_eq!(fit.map(op_de), Some(ViewOp::Fit), "{platform:?}");
-        let actual = km.action_for(&press_de(KeyId::Char('1'), true), platform);
-        assert_eq!(actual.map(op_de), Some(ViewOp::ActualSize), "{platform:?}");
+        let fit = km.action_for(&press_of(KeyId::Home, false), platform);
+        assert_eq!(fit.map(op_of), Some(ViewOp::Fit), "{platform:?}");
+        let actual = km.action_for(&press_of(KeyId::Char('1'), true), platform);
+        assert_eq!(actual.map(op_of), Some(ViewOp::ActualSize), "{platform:?}");
     }
 }
 
@@ -164,9 +164,9 @@ fn row_6_the_zoom_keys_applied_to_the_view_give_the_same_as_the_previous_model()
     for (name_2, before) in views() {
         for (key, command) in keys {
             let action = km
-                .action_for(&press_de(key, command), Platform::Linux)
+                .action_for(&press_of(key, command), Platform::Linux)
                 .expect("la tecla da una acción");
-            let op = op_de(action);
+            let op = op_of(action);
             let mut after_2 = before;
             after_2.apply_op(op, CANVAS, IMAGE);
             assert_eq!(after_2, model(before, op), "{name_2}: {key:?}");
@@ -174,10 +174,10 @@ fn row_6_the_zoom_keys_applied_to_the_view_give_the_same_as_the_previous_model()
         // `>`, `+` y `=` son la misma operación: el mismo resultado.
         let per = |key_2: char| {
             let action = km
-                .action_for(&press_de(KeyId::Char(key_2), false), Platform::Linux)
+                .action_for(&press_of(KeyId::Char(key_2), false), Platform::Linux)
                 .expect("acción");
             let mut v = before;
-            v.apply_op(op_de(action), CANVAS, IMAGE);
+            v.apply_op(op_of(action), CANVAS, IMAGE);
             v
         };
         assert_eq!(per('>'), per('+'), "{name_2}");
@@ -192,10 +192,10 @@ fn row_6_greater_zooms_in_one_level_and_smaller_zooms_out_one_level() {
     for (name_2, before) in views() {
         let applies = |key_2: char| {
             let action = km
-                .action_for(&press_de(KeyId::Char(key_2), false), Platform::Linux)
+                .action_for(&press_of(KeyId::Char(key_2), false), Platform::Linux)
                 .expect("acción");
             let mut v = before;
-            v.apply_op(op_de(action), CANVAS, IMAGE);
+            v.apply_op(op_of(action), CANVAS, IMAGE);
             v
         };
         assert_eq!(

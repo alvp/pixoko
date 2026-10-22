@@ -471,13 +471,13 @@ fn row_6_the_small_one_is_painted_after_the_large_one_and_with_its_colors() {
         Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a)
     };
     let all_2 = rectangles(&f.shapes_2);
-    let pos_de = |rect: Rect, fill: Color32| {
+    let pos_of = |rect: Rect, fill: Color32| {
         all_2
             .iter()
             .position(|(r, c)| *r == rect && *c == fill)
             .unwrap_or_else(|| panic!("no se pinta {rect:?} {fill:?}"))
     };
-    let p_bg = pos_de(a_rect(bg), color(3));
-    let p_fg = pos_de(a_rect(fg), color(2));
+    let p_bg = pos_of(a_rect(bg), color(3));
+    let p_fg = pos_of(a_rect(fg), color(2));
     assert!(p_fg > p_bg, "el pequeño va encima");
 }

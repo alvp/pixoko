@@ -29,7 +29,7 @@ fn length(width: u32, height: u32) -> usize {
 
 /// Pixel de modo `mode` distinto para cada `k` (hasta 256 valores distintos en cada canal);
 /// el indexado usa `k % n` con una paleta de `n` entradas.
-fn pixel_de(mode: Mode, k: usize, n: usize) -> Pixel {
+fn pixel_of(mode: Mode, k: usize, n: usize) -> Pixel {
     let k8 = k as u8;
     match mode {
         Mode::Rgba => Pixel::Rgba(Rgba::new(
@@ -60,7 +60,7 @@ fn palette_of(n: usize) -> Palette {
     .unwrap()
 }
 
-/// Imagen de cualquier modo con el píxel `(x, y)` igual a `pixel_de(mode, y * width + x, n)`.
+/// Imagen de cualquier modo con el píxel `(x, y)` igual a `pixel_of(mode, y * width + x, n)`.
 fn fills(mode: Mode, width: u32, height: u32, n: usize) -> Image {
     let mut image_2 = match mode {
         Mode::Indexed => Image::new_indexed(width, height, palette_of(n)).unwrap(),
@@ -69,7 +69,7 @@ fn fills(mode: Mode, width: u32, height: u32, n: usize) -> Image {
     for y in 0..height {
         for x in 0..width {
             let k = y as usize * width as usize + x as usize;
-            image_2.set_pixel(x, y, pixel_de(mode, k, n)).unwrap();
+            image_2.set_pixel(x, y, pixel_of(mode, k, n)).unwrap();
         }
     }
     image_2
@@ -450,7 +450,7 @@ fn the_top_row_goes_first_in_all_the_modes() {
     // bytes son los segundos de la salida, no los de la fila de abajo.
     for mode in TEST_ALL {
         let mut image_2 = fills(mode, 2, 2, 4);
-        let mark = pixel_de(mode, 200, 4);
+        let mark = pixel_of(mode, 200, 4);
         image_2.set_pixel(1, 0, mark).unwrap();
         let bytes = to_rgba8(&image_2);
         assert_eq!(bytes.len(), 16, "{mode:?}");

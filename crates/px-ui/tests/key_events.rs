@@ -99,7 +99,7 @@ const CMD: Modifiers = Modifiers {
     command: true,
 };
 /// El `Ctrl` de macOS: no es `command`.
-const CTRL_DE_MAC: Modifiers = Modifiers {
+const CTRL_ON_MAC: Modifiers = Modifiers {
     alt: false,
     ctrl: true,
     shift: false,
@@ -701,12 +701,12 @@ fn row_4_ctrl_alt_and_a_letter_is_not_the_shortcut() {
 
 #[test]
 fn row_4_the_macos_ctrl_is_other_ctrl_and_cancels_the_letters() {
-    let p = presses(&[key_2(Key::Z, CTRL_DE_MAC)]);
+    let p = presses(&[key_2(Key::Z, CTRL_ON_MAC)]);
     assert_eq!(p.len(), 1);
     assert!(!p[0].command && p[0].other_ctrl, "{:?}", p[0]);
-    assert_actions("Ctrl de macOS + Z", &[key_2(Key::Z, CTRL_DE_MAC)], &[None]);
+    assert_actions("Ctrl de macOS + Z", &[key_2(Key::Z, CTRL_ON_MAC)], &[None]);
     // Con texto de una letra, también: `Ctrl` suelto + `d` no es el lápiz.
-    let with_text = [key_2(Key::D, CTRL_DE_MAC), text_2("d")];
+    let with_text = [key_2(Key::D, CTRL_ON_MAC), text_2("d")];
     let p = presses(&with_text);
     assert!(p[0].other_ctrl);
     assert_actions("Ctrl de macOS + d", &with_text, &[None]);
@@ -719,7 +719,7 @@ fn row_4_named_keys_always_count_by_the_key_and_with_any_modifier() {
         Modifiers::SHIFT,
         Modifiers::ALT,
         Modifiers::SHIFT | Modifiers::ALT,
-        CTRL_DE_MAC,
+        CTRL_ON_MAC,
     ] {
         assert_actions(
             "Inicio",
@@ -768,7 +768,7 @@ fn row_4_the_modifiers_pass_to_the_fields_of_the_press() {
     assert_eq!(p, vec![press(Some(KeyId::Home), false, true, true, false)]);
     let p = presses(&[key_2(Key::Home, CTRL)]);
     assert_eq!(p, vec![press(Some(KeyId::Home), true, false, false, false)]);
-    let p = presses(&[key_2(Key::Home, CTRL_DE_MAC)]);
+    let p = presses(&[key_2(Key::Home, CTRL_ON_MAC)]);
     assert_eq!(p, vec![press(Some(KeyId::Home), false, false, false, true)]);
 }
 

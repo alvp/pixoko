@@ -33,7 +33,7 @@ use px_ui::status::ADVANCE_PX;
 
 mod common;
 use common::{
-    PPPS, Painted, button_2, context, frame, key_2, move_pointer, n_de, painted, wheel_line,
+    PPPS, Painted, button_2, context, frame, key_2, move_pointer, n_of, painted, wheel_line,
 };
 
 /// `docs/THIRD-PARTY.md`, el texto que muestra el panel.
@@ -497,7 +497,7 @@ fn row_11_the_panel_paints_the_text_wrapped_to_the_columns_that_fit() {
         THIRD_PARTY
     );
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let mut bench = Bench::new_2(ppp, &text_2);
         let painted = bench.rest_2_2();
         // Columnas que caben como mucho: el ancho entero del lienzo entre el avance del texto.
@@ -579,7 +579,7 @@ mod row_12 {
         licenses_form(THIRD_PARTY)
     }
 
-    fn locks_de(bits: u8) -> Locks {
+    fn locks_of(bits: u8) -> Locks {
         Locks {
             gesture: bits & 1 != 0,
             stroke: false,
@@ -646,14 +646,14 @@ mod row_12 {
             let mut modal = Modal::default();
             assert!(!modal.is_open());
             assert_eq!(modal.kind(), None);
-            let opens = modal.open(DialogKind::Licenses, spec_valid(), locks_de(bits));
-            assert_eq!(opens, bits == 0, "bloqueos {:?}", locks_de(bits));
-            assert_eq!(modal.is_open(), bits == 0, "bloqueos {:?}", locks_de(bits));
+            let opens = modal.open(DialogKind::Licenses, spec_valid(), locks_of(bits));
+            assert_eq!(opens, bits == 0, "bloqueos {:?}", locks_of(bits));
+            assert_eq!(modal.is_open(), bits == 0, "bloqueos {:?}", locks_of(bits));
             assert_eq!(
                 modal.kind(),
                 (bits == 0).then_some(DialogKind::Licenses),
                 "bloqueos {:?}",
-                locks_de(bits)
+                locks_of(bits)
             );
         }
     }
@@ -783,7 +783,7 @@ mod row_12 {
 
         /// La ventana mínima real: `468n × 333n` píxeles, en puntos.
         fn screen(&self) -> Vec2 {
-            let n = n_de(self.ppp);
+            let n = n_of(self.ppp);
             vec2((468 * n) as f32 / self.ppp, (333 * n) as f32 / self.ppp)
         }
 

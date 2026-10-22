@@ -989,10 +989,10 @@ fn refresh_keeps_the_view_and_brings_the_texture_up_to_date() {
     assert!(delta.is_whole(), "se regenera la textura completa");
     let ImageData::Color(color) = &delta.image;
     assert_eq!(color.size, [WIDTH as usize, HEIGHT as usize]);
-    let en = |x: usize, y: usize| color.pixels[y * WIDTH as usize + x];
-    assert_eq!(en(5, 5), Color32::from_rgb(0, 255, 0), "el píxel nuevo");
-    assert_eq!(en(0, 0), Color32::from_rgb(255, 0, 0), "el resto sigue");
-    assert_eq!(en(63, 47), Color32::from_rgb(0, 0, 255));
+    let at = |x: usize, y: usize| color.pixels[y * WIDTH as usize + x];
+    assert_eq!(at(5, 5), Color32::from_rgb(0, 255, 0), "el píxel nuevo");
+    assert_eq!(at(0, 0), Color32::from_rgb(255, 0, 0), "el resto sigue");
+    assert_eq!(at(63, 47), Color32::from_rgb(0, 0, 255));
     f.output.textures_delta.clear();
     assert_eq!(
         bench.texture_2().texels,

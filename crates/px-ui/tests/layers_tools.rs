@@ -116,7 +116,7 @@ fn gesture_2(
     Ok(result | tools.canvas_event_with(doc, cel, pixel, CanvasEvent::StrokeEnd)?)
 }
 
-fn pixel_de(doc: &Document, cel: ImageId, x: u32, y: u32) -> Pixel {
+fn pixel_of(doc: &Document, cel: ImageId, x: u32, y: u32) -> Pixel {
     doc.image(cel)
         .expect("la celda tiene imagen")
         .get_pixel(x, y)
@@ -164,9 +164,9 @@ fn row_3_the_line_over_an_empty_cel_is_a_clipped_setpixels_without_materializing
         } else {
             rgba(Rgba::TRANSPARENT)
         };
-        assert_eq!(pixel_de(&doc, cel, x, 1), expected_2, "x = {x}");
+        assert_eq!(pixel_of(&doc, cel, x, 1), expected_2, "x = {x}");
     }
-    assert_eq!(pixel_de(&doc, cel, 0, 0), rgba(Rgba::TRANSPARENT));
+    assert_eq!(pixel_of(&doc, cel, 0, 0), rgba(Rgba::TRANSPARENT));
     let changes_2 = tools.take_changes();
     assert_eq!(changes_2.len(), 1, "un solo paso anotado");
     assert!(
@@ -195,7 +195,7 @@ fn row_3_the_fill_over_an_empty_cel_covers_the_canvas_with_one_span_per_row() {
     assert!(change);
     for y in 0..5 {
         for x in 0..9 {
-            assert_eq!(pixel_de(&doc, cel, x, y), rgba(RED), "({x}, {y})");
+            assert_eq!(pixel_of(&doc, cel, x, y), rgba(RED), "({x}, {y})");
         }
     }
     let changes_2 = tools.take_changes();
@@ -259,7 +259,7 @@ fn row_3_in_indexed_the_fill_of_an_empty_cel_uses_the_transparent_index_as_the_s
     )
     .expect("relleno");
     assert!(change);
-    assert_eq!(pixel_de(&doc, cel, 5, 3), Pixel::Indexed(2));
+    assert_eq!(pixel_of(&doc, cel, 5, 3), Pixel::Indexed(2));
 }
 
 #[test]
@@ -280,8 +280,8 @@ fn row_3_the_fill_over_a_cel_with_pixels_is_the_usual_one() {
     )
     .expect("relleno");
     assert_eq!(
-        pixel_de(&doc, cel_a, 5, 5),
-        pixel_de(&expected_2, cel_a, 5, 5)
+        pixel_of(&doc, cel_a, 5, 5),
+        pixel_of(&expected_2, cel_a, 5, 5)
     );
     assert_eq!(doc.image(cel_a), expected_2.image(cel_a));
 }
@@ -357,10 +357,10 @@ fn row_4_the_eraser_only_touches_the_active_layer_and_lets_what_is_below_show() 
     )
     .expect("borrador");
     assert!(change);
-    assert_eq!(pixel_de(&doc, cel_b, 1, 1), rgba(Rgba::TRANSPARENT));
-    assert_eq!(pixel_de(&doc, cel_b, 2, 1), rgba(Rgba::TRANSPARENT));
+    assert_eq!(pixel_of(&doc, cel_b, 1, 1), rgba(Rgba::TRANSPARENT));
+    assert_eq!(pixel_of(&doc, cel_b, 2, 1), rgba(Rgba::TRANSPARENT));
     assert_eq!(
-        pixel_de(&doc, cel_b, 3, 1),
+        pixel_of(&doc, cel_b, 3, 1),
         rgba(RED),
         "fuera del trazo no se toca"
     );
@@ -379,7 +379,7 @@ fn row_4_in_indexed_the_eraser_writes_the_transparent_index_of_the_canvas() {
     paints(&mut doc, cel_b, &[(1, 1)], Pixel::Indexed(3));
     let mut tools = ToolState::new();
     gesture_2(&mut tools, &mut doc, cel_b, None, Tool::Eraser, &[(1, 1)]).expect("borrador");
-    assert_eq!(pixel_de(&doc, cel_b, 1, 1), Pixel::Indexed(7));
+    assert_eq!(pixel_of(&doc, cel_b, 1, 1), Pixel::Indexed(7));
 }
 
 #[test]
@@ -873,7 +873,7 @@ fn seed_of_layers() -> impl Strategy<Value = (u8, Layers, u8, TestStroke)> {
 
 /// Un píxel del modo `mode_2` según `k` (con alfas 0, 1, 128 y 255; índices dentro de la paleta).
 fn pixel_for(mode_2: Mode, k: u32) -> Pixel {
-    tiles_support::pixel_de(mode_2, k, palette().len())
+    tiles_support::pixel_of(mode_2, k, palette().len())
 }
 
 proptest! {

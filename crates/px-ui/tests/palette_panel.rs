@@ -1213,7 +1213,7 @@ fn show_without_events_chooses_nothing() {
 // `show`: la rueda
 // ---------------------------------------------------------------------------------------------
 
-/// Casos `(ppp, height_2 de screen en pt)` con muchas filas y poca altura.
+/// Casos `(ppp, height_2 de screen at pt)` con muchas filas y poca altura.
 const SCREENS_LOW: [(f32, f32); 2] = [(1.0, 200.0), (2.0, 150.0)];
 
 fn rows_visible(bench: &Bench) -> (usize, usize) {

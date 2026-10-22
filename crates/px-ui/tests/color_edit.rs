@@ -132,28 +132,31 @@ fn in_the_set(text_2: &str) -> bool {
 #[test]
 fn row_1_target_over_the_indexed_one_f() {
     let f = image_f();
-    let de = |choice| EditTarget::of(&f, choice);
-    assert_eq!(de(ColorChoice::Entry(1)), Some(EditTarget::Entry(1)));
+    let target_of = |choice| EditTarget::of(&f, choice);
+    assert_eq!(target_of(ColorChoice::Entry(1)), Some(EditTarget::Entry(1)));
     // `Slot(n)` vale como la entrada n − 1.
-    assert_eq!(de(ColorChoice::Slot(3)), Some(EditTarget::Entry(2)));
-    assert_eq!(de(ColorChoice::Entry(4)), None);
-    assert_eq!(de(ColorChoice::Slot(5)), None);
-    assert_eq!(de(ColorChoice::Slot(0)), None);
-    assert_eq!(de(ColorChoice::Slot(10)), None);
-    assert_eq!(de(ColorChoice::Entry(255)), None);
-    assert_eq!(de(ColorChoice::Entry(3)), Some(EditTarget::Entry(3)));
+    assert_eq!(target_of(ColorChoice::Slot(3)), Some(EditTarget::Entry(2)));
+    assert_eq!(target_of(ColorChoice::Entry(4)), None);
+    assert_eq!(target_of(ColorChoice::Slot(5)), None);
+    assert_eq!(target_of(ColorChoice::Slot(0)), None);
+    assert_eq!(target_of(ColorChoice::Slot(10)), None);
+    assert_eq!(target_of(ColorChoice::Entry(255)), None);
+    assert_eq!(target_of(ColorChoice::Entry(3)), Some(EditTarget::Entry(3)));
 }
 
 #[test]
 fn row_1_target_over_rgba() {
     let image_2 = image_mode(Mode::Rgba);
-    let de = |choice| EditTarget::of(&image_2, choice);
-    assert_eq!(de(ColorChoice::Slot(3)), Some(EditTarget::Slot(3)));
-    assert_eq!(de(ColorChoice::Slot(0)), None);
-    assert_eq!(de(ColorChoice::Slot(10)), None);
-    assert_eq!(de(ColorChoice::Entry(0)), None);
+    let target_of = |choice| EditTarget::of(&image_2, choice);
+    assert_eq!(target_of(ColorChoice::Slot(3)), Some(EditTarget::Slot(3)));
+    assert_eq!(target_of(ColorChoice::Slot(0)), None);
+    assert_eq!(target_of(ColorChoice::Slot(10)), None);
+    assert_eq!(target_of(ColorChoice::Entry(0)), None);
     for slot in 1..=9 {
-        assert_eq!(de(ColorChoice::Slot(slot)), Some(EditTarget::Slot(slot)));
+        assert_eq!(
+            target_of(ColorChoice::Slot(slot)),
+            Some(EditTarget::Slot(slot))
+        );
     }
 }
 

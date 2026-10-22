@@ -36,7 +36,7 @@ const ALTOS_PT: [f32; 5] = [341.0, 272.8, 454.67, 341.0, 341.0];
 const WIDTHS_PT: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
 const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
-fn n_de(ppp: f32) -> i64 {
+fn n_of(ppp: f32) -> i64 {
     i64::from(text_scale(ppp))
 }
 
@@ -117,7 +117,7 @@ fn row_7_the_250_u_content_fits_in_the_305_u_of_the_minimum_panel() {
     assert_eq!(80 + 24 + 4 + 138 + 4, TOOLBAR_CONTENT_H_U);
     assert_eq!(TOOLBAR_CONTENT_H_U, 250);
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         assert!(TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32));
         assert_eq!(
             min_panel_height_px(n as u32) - TOOLBAR_CONTENT_H_U * n,
@@ -279,7 +279,7 @@ fn checks(window: (i64, i64), n: u32) {
 
 /// Ventana por defecto (960 × 720 pt) y mínima, en píxeles físicos, a `ppp`.
 fn windows(ppp: f32) -> [(i64, i64); 2] {
-    let n = n_de(ppp);
+    let n = n_of(ppp);
     let minimum = (
         min_window_width_u() * n,
         i64::from(bar_height_px(n as u32)) + MENU_H_U * n + min_panel_height_px(n as u32),
@@ -311,7 +311,7 @@ fn row_7_the_canvas_origin_is_0_16n() {
 #[test]
 fn row_7_the_column_and_the_panel_take_the_height_of_the_central_strip() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for window in windows(ppp) {
             let layout = window_layout(window, n as u32);
             assert_eq!(layout.toolbar.height, window.1 - 36 * n);
@@ -372,7 +372,7 @@ fn row_8_the_height_does_not_pass_65_percent_of_720_and_the_width_does_not_pass_
 #[test]
 fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_column_panel_and_128_u() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let height_2 = (i64::from(bar_height_px(n as u32))
             + MENU_H_U * n
             + min_panel_height_px(n as u32)) as f32
@@ -395,7 +395,7 @@ fn row_8_the_minimum_canvas_measures_128n_by_305n_pixels() {
         PPPS.iter()
             .zip([(128, 305), (128, 305), (256, 610), (256, 610), (384, 915)])
     {
-        let n = n_de(*ppp);
+        let n = n_of(*ppp);
         let minimum = windows(*ppp)[1];
         let layout = window_layout(minimum, n as u32);
         assert_eq!(
@@ -439,7 +439,7 @@ fn ppp_of_the_step(i: u32) -> f32 {
 fn property_3_the_minimums_follow_the_formula_and_meet_the_two_rules_at_all_ppp() {
     for i in 0..=60 {
         let ppp = ppp_of_the_step(i);
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let height_2 = ((20 + MENU_H_U + 305) * n) as f32 / ppp;
         let width_2 = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
         assert!(
@@ -499,7 +499,7 @@ mod toolbox_right {
     #[test]
     fn row_1_the_order_is_canvas_panel_and_toolbox_on_the_right_edge() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             for window in windows(ppp) {
                 let l = window_layout(window, n as u32);
                 assert_eq!(l.canvas.x, 0, "ppp {ppp}");
@@ -522,7 +522,7 @@ mod toolbox_right {
             assert!(near_pt(min_window_width_pt(*ppp), width_2), "ppp {ppp}");
             assert!(min_window_height_pt(*ppp) <= HEIGHT_MAX_PT, "ppp {ppp}");
             assert!(min_window_width_pt(*ppp) <= WIDTH_MAX_PT, "ppp {ppp}");
-            let n = n_de(*ppp);
+            let n = n_of(*ppp);
             assert!(
                 TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32),
                 "ppp {ppp}: la caja no cabe en el panel mínimo"
@@ -695,7 +695,7 @@ mod icons {
         }
         // Todo es entero y múltiplo de `n` desde la esquina de la caja, a las cinco escalas.
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             for (i, p) in pieces.iter().enumerate() {
                 for u in [p.0, p.1, p.2, p.3] {
                     let physical = (u * n) as f32 / ppp * ppp;
@@ -721,7 +721,7 @@ mod icons {
             );
             assert!(min_window_height_pt(*ppp) <= 468.0 + 0.01, "alto con {ppp}");
             assert!(min_window_width_pt(*ppp) <= 683.0, "ancho con {ppp}");
-            let n = n_de(*ppp);
+            let n = n_of(*ppp);
             assert_eq!(block_height_px(Mode::Indexed, n as u32), 305 * n);
             assert_eq!(min_panel_height_px(n as u32), 305 * n);
             // La caja de hoy cabe con holgura (55 u)…

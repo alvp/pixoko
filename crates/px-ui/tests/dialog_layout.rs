@@ -23,7 +23,7 @@
 //!   Option<ScreenRect>, max_scroll_u: i64 }`, with `Clone, Debug, PartialEq`.
 //! - Los tamaños en `u` salen de dividir los píxeles de la ventana entre `n` **con división
 //!   entera** (`⌊px / n⌋`): ancho `min(330, ⌊width_2/n⌋ − 16)`, alto `min(65 + content, ⌊height_2/n⌋ −
-//!   16)`; la posición es `(ventana − diálogo).div_euclid(2)` en píxeles.
+//!   16)`; la posición es `(ventana − diálogo).div_euclid(2)` at píxeles.
 //! - Título, cuerpo y pie ocupan el ancho entero del diálogo. El motivo está en `x = 8n` del
 //!   diálogo (el relleno) y `y = 5n` del pie (1 de línea + 4); los botones, en `y = 21n` del pie
 //!   (1 + 4 + 14 + 2) y pegados a la derecha con un relleno de `8n`: `Cancel` el último y
@@ -105,7 +105,7 @@ const CONTENTS: [Content; 3] = [
     },
 ];
 
-fn k_de(n: u32) -> i64 {
+fn k_of(n: u32) -> i64 {
     i64::from(n)
 }
 
@@ -116,7 +116,7 @@ fn ppp_of_the_step(i: u32) -> f32 {
 
 /// La ventana mínima de `ppp` calculada con la fórmula (`468n × 333n`).
 fn minimum(ppp: f32) -> (i64, i64) {
-    let k = k_de(text_scale(ppp));
+    let k = k_of(text_scale(ppp));
     (468 * k, 333 * k)
 }
 
@@ -155,7 +155,7 @@ fn checks_geometry(
     content: Content,
     has_cancel: bool,
 ) -> Result<DialogLayout, TestCaseError> {
-    let k = k_de(n);
+    let k = k_of(n);
     let (w, h) = window;
     let l = designs(window, n, content, has_cancel);
 
@@ -340,7 +340,7 @@ fn row_7_the_minimum_window_meets_the_geometry_with_all_the_contents_and_with_an
 fn row_7_with_228_u_it_fits_without_scrolling_and_is_centered_vertically() {
     for (ppp, window) in MINIMUM {
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         for has_cancel in [true, false] {
             let l = designs(window, n, CONTENTS[0], has_cancel);
             let label_2 = format!("ppp {ppp}, cancelar {has_cancel}");
@@ -358,7 +358,7 @@ fn row_7_with_228_u_it_fits_without_scrolling_and_is_centered_vertically() {
 fn row_7_with_5000_u_the_height_is_the_maximum_and_the_body_measures_252n() {
     for (ppp, window) in MINIMUM {
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         for has_cancel in [true, false] {
             let l = designs(window, n, CONTENTS[1], has_cancel);
             let label_2 = format!("ppp {ppp}, cancelar {has_cancel}");
@@ -378,7 +378,7 @@ fn row_7_with_5000_u_the_height_is_the_maximum_and_the_body_measures_252n() {
 fn row_7_with_fill_at_the_minimum_window_there_are_16_rows_and_it_does_not_scroll() {
     for (ppp, window) in MINIMUM {
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         for has_cancel in [true, false] {
             let l = designs(window, n, CONTENTS[2], has_cancel);
             let label_2 = format!("ppp {ppp}, cancelar {has_cancel}");
@@ -400,7 +400,7 @@ fn row_7_the_dialog_measures_the_same_in_u_at_the_five_scales_of_the_minimum_win
         let reference = designs(minimum(1.0), 1, content, true);
         for (ppp, window) in MINIMUM {
             let n = text_scale(ppp);
-            let k = k_de(n);
+            let k = k_of(n);
             let l = designs(window, n, content, true);
             assert_eq!(l.dialog.width / k, reference.dialog.width, "{ppp}");
             assert_eq!(l.dialog.height / k, reference.dialog.height, "{ppp}");
@@ -415,7 +415,7 @@ fn row_7_the_dialog_measures_the_same_in_u_at_the_five_scales_of_the_minimum_win
 fn row_7_the_height_is_min_65_plus_content_and_317_at_the_minimum() {
     for (ppp, window) in MINIMUM {
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         for content_u in [0, 1, 100, 227, 228, 251, 252, 253, 300, 1000, 5000, 10_000] {
             let l = dialog_layout(window, n, content_u, false, true);
             assert_eq!(
@@ -506,7 +506,7 @@ fn row_7_960_by_720_pt_in_pixels_is_the_rounded_product() {
 fn row_7_at_960_by_720_pt_the_height_follows_65_plus_the_content_capped_at_the_window() {
     for ppp in PPPS {
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         let window = window_960x720(ppp);
         let height_max_u = window.1.div_euclid(k) - 16;
         for has_cancel in [true, false] {
@@ -868,7 +868,7 @@ fn row_8_licenses_with_fill_takes_its_natural_content_and_at_the_minimum_gives_1
     assert_eq!(dialog.content_h_u(), FILL_U);
     for (ppp, window) in MINIMUM {
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         let l = dialog_layout(
             window,
             n,
@@ -1042,7 +1042,7 @@ proptest! {
     ) {
         let ppp = ppp_of_the_step(step);
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         let content = Content { name_2: "minima", height_u: content_u, fill: false };
         let l = checks_geometry(minimum(ppp), n, content, has_cancel)?;
         prop_assert_eq!(l.dialog.width, 330 * k);
@@ -1067,7 +1067,7 @@ proptest! {
     ) {
         let ppp = ppp_of_the_step(step);
         let n = text_scale(ppp);
-        let k = k_de(n);
+        let k = k_of(n);
         let (width_2, height_2) = minimum(ppp);
         let window = (width_2 + extra_width, height_2 + extra_height);
         let l = dialog_layout(window, n, content_u, false, has_cancel);

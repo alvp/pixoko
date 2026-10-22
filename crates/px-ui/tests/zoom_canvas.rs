@@ -62,7 +62,7 @@ mod common;
 use common::toolbox::toolbox_2;
 use common::zones::toolbox_single;
 use common::{
-    PPPS, button_2, context, frame, in_points, key_2, move_pointer, n_de, painted,
+    PPPS, button_2, context, frame, in_points, key_2, move_pointer, n_of, painted,
     tolerance_of_egui, wheel_line,
 };
 
@@ -260,7 +260,7 @@ impl Seen {
         a: 0.0,
     };
 
-    fn de_color(c: Color32) -> Seen {
+    fn of_color(c: Color32) -> Seen {
         Seen {
             r: f32::from(c.r()) / 255.0,
             g: f32::from(c.g()) / 255.0,
@@ -319,7 +319,7 @@ fn background_in(
 /// Un color con alfa directo por encima de un fondo opaco.
 fn composes(background_2: Color32, color: Rgba) -> Seen {
     let above = Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
-    Seen::de_color(background_2).below_of(Seen::de_color(above))
+    Seen::of_color(background_2).below_of(Seen::of_color(above))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -351,7 +351,7 @@ fn texel_of_the_checker(u: f64, v: f64) -> Seen {
     let tx = ((u * 2.0).floor() as i64).rem_euclid(2);
     let ty = ((v * 2.0).floor() as i64).rem_euclid(2);
     let c = if (tx + ty) % 2 == 0 { CHECK_A } else { CHECK_B };
-    Seen::de_color(gray_2(c))
+    Seen::of_color(gray_2(c))
 }
 
 struct Buffer {
@@ -361,7 +361,7 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn en(&self, x: i64, y: i64) -> Seen {
+    fn at(&self, x: i64, y: i64) -> Seen {
         assert!(
             x >= 0 && y >= 0 && (x as usize) < self.width_2 && (y as usize) < self.height_2,
             "({x}, {y}) fuera del búfer de {}×{}",
@@ -420,7 +420,7 @@ fn rasterizes(
             if area.abs() < 1e-12 {
                 continue;
             }
-            let tints = v.map(|v| Seen::de_color(v.color));
+            let tints = v.map(|v| Seen::of_color(v.color));
             let plane =
                 !is_image && !is_checker && v[0].color == v[1].color && v[1].color == v[2].color;
             let edges = [(p[0], p[1]), (p[1], p[2]), (p[2], p[0])];
@@ -482,7 +482,7 @@ fn rasterizes(
                                     .min(tex.width_2 - 1);
                                 let ty = ((t * tex.height_2 as f64).floor().max(0.0) as usize)
                                     .min(tex.height_2 - 1);
-                                Seen::de_color(tex.texels[ty * tex.width_2 + tx])
+                                Seen::of_color(tex.texels[ty * tex.width_2 + tx])
                             } else {
                                 texel_of_the_checker(u, t)
                             };
@@ -1532,7 +1532,7 @@ fn column_with(ctx: &Context, label_2: &str) -> common::Painted {
 fn row_a8_zoom_1_2_zoom_1_64_and_zoom_x12_fit_in_the_column_at_the_five_scales() {
     let levels = [level(5), Zoom::MIN, Zoom::from_int(12).expect("×12")];
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         // La fuente real, con `MissingGlyphPolicy::Panic`: un glifo ausente (`×`) sería un pánico.
         let ctx = context(ppp);
         for zoom in levels {
@@ -1648,9 +1648,9 @@ fn compares_with_the_oracle(
                     color,
                 )
             } else {
-                Seen::de_color(BACKGROUND)
+                Seen::of_color(BACKGROUND)
             };
-            let seen = buffer.en(px, py);
+            let seen = buffer.at(px, py);
             if !seen.near(expected_2, TOLERANCE) {
                 failures.notes(|| {
                     format!(

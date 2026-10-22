@@ -541,12 +541,12 @@ proptest! {
     fn property_2_accumulator(
         threshold in prop::sample::select(vec![WHEEL_STEP, PINCH_STEP_LN]),
         amounts in prop::collection::vec(-3.0f32..3.0, 0..40),
-        reset_en in prop::option::of(0usize..40),
+        reset_at in prop::option::of(0usize..40),
     ) {
         let mut a = StepAccumulator::new(threshold);
         let mut rest_2 = 0.0f32;
         for (i, &c) in amounts.iter().enumerate() {
-            if reset_en == Some(i) {
+            if reset_at == Some(i) {
                 a.reset();
                 rest_2 = 0.0;
                 prop_assert_eq!(a.remainder(), 0.0);

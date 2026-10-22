@@ -24,7 +24,7 @@
 //!
 //! Suposiciones sobre las firmas de «Piezas» (derives no listados): `Dialog`, `Values`, `Reaction`
 //! y `Event`: `Clone + Debug + PartialEq`; `FocusTarget`: `Clone + Copy + Debug + PartialEq + Eq`.
-//! `dialog_layout` no tiene los tipos exactos en la spec: se llama **solo** desde `layout_de` (un único
+//! `dialog_layout` no tiene los tipos exactos en la spec: se llama **solo** desde `layout_of` (un único
 //! punto que ajustar) como `dialog_layout((width_px, alto_px): (i64, i64), n: u32, content_h_u: i64,
 //! fill: bool, has_cancel: bool)`, with `DialogLayout { dialog, title, body, footer, reason, accept:
 //! ScreenRect, cancel: Option<ScreenRect>, max_scroll_u: i64 }`.
@@ -67,7 +67,7 @@ mod dialog_forms;
 
 use common::{
     PPPS, TestFill, Text, button_2, context, frame, in_points, key_2, modifiers_command,
-    move_pointer, n_de, tolerance_of_egui, wheel_line,
+    move_pointer, n_of, tolerance_of_egui, wheel_line,
 };
 use dialog_forms::{all_kinds, huge, open};
 
@@ -261,7 +261,7 @@ enum Window {
 fn measures(ppp: f32, window: Window) -> ((i64, i64), Vec2) {
     match window {
         Window::Minimum => {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             let (w, h) = (468 * n, 333 * n);
             ((w, h), vec2(w as f32 / ppp, h as f32 / ppp))
         }
@@ -291,7 +291,7 @@ struct Rects {
 }
 
 /// El único sitio donde se llama a `dialog_layout` (ver la cabecera para los tipos supuestos).
-fn layout_de(
+fn layout_of(
     window_px: (i64, i64),
     n: i64,
     content_u: i64,
@@ -502,7 +502,7 @@ impl Bench {
     }
 
     fn n(&self) -> i64 {
-        n_de(self.ppp)
+        n_of(self.ppp)
     }
 
     /// Una unidad `u` en puntos.
@@ -511,7 +511,7 @@ impl Bench {
     }
 
     fn rects(&self) -> Rects {
-        layout_de(
+        layout_of(
             measures(self.ppp, self.window).0,
             self.n(),
             self.dialog.content_h_u(),
@@ -685,7 +685,7 @@ fn is_disabled(t: &Text) -> bool {
             .any(|x| x.color == TEXT_DISABLED || x.color.a() < 255)
 }
 
-fn en_warning(t: &Text) -> bool {
+fn in_warning(t: &Text) -> bool {
     !t.spans_2.is_empty() && t.spans_2.iter().all(|x| x.color == WARNING)
 }
 
@@ -1074,7 +1074,7 @@ fn row_9_with_errors_and_the_hexadecimal_the_marks_and_the_errors_are_painted_an
     // Que la prueba de arriba no sea vacua en lo importante: en estos estados hay marcas de
     // opción y casilla, errores en `WARNING` y el hexadecimal.
     for ppp in PPPS {
-        let u = n_de(ppp) as f32 / ppp;
+        let u = n_of(ppp) as f32 / ppp;
         let mut bench = Bench::ready(ppp, Window::Minimum, open(form()));
         prepares(&mut bench, "opciones_y_casilla");
         let p = bench.rest_2_2();
@@ -1093,7 +1093,7 @@ fn row_9_with_errors_and_the_hexadecimal_the_marks_and_the_errors_are_painted_an
         let reason = bench.dialog.reason().expect("hay un motivo");
         let footer = format!("{ERROR_PREFIX}{reason}");
         let t = text_of(&p, &footer);
-        assert!(en_warning(t), "ppp {ppp}: el motivo del pie va en WARNING");
+        assert!(in_warning(t), "ppp {ppp}: el motivo del pie va en WARNING");
         assert!(
             report_of(&p)
                 .pairs
@@ -1111,7 +1111,7 @@ fn row_9_the_focus_ring_of_each_element_is_painted_and_exceeds_3_to_1() {
     for ppp in PPPS {
         for window in WINDOWS {
             for scenario in ["defecto", "hex_pendiente_valido", "vacio_y_no_digito"] {
-                let u = n_de(ppp) as f32 / ppp;
+                let u = n_of(ppp) as f32 / ppp;
                 let mut bench = Bench::new_2(ppp, window, open(form()));
                 bench.rest_2_2();
                 prepares(&mut bench, scenario);
@@ -1355,7 +1355,7 @@ fn row_10_click_on_minus_and_plus_changes_the_text_and_does_not_pass_the_limit()
 #[test]
 fn row_10_click_on_an_option_marks_it_and_leaves_a_single_one_marked() {
     for ppp in PPPS {
-        let u = n_de(ppp) as f32 / ppp;
+        let u = n_of(ppp) as f32 / ppp;
         let dialog = open(form());
         let options_2 = options_of(&dialog, "modo");
         let mut bench = Bench::ready(ppp, Window::Minimum, dialog);
@@ -1390,7 +1390,7 @@ fn row_10_click_on_an_option_marks_it_and_leaves_a_single_one_marked() {
 #[test]
 fn row_10_click_on_the_box_toggles_it_and_paints_its_mark() {
     for ppp in PPPS {
-        let u = n_de(ppp) as f32 / ppp;
+        let u = n_of(ppp) as f32 / ppp;
         let mut bench = Bench::ready(ppp, Window::Minimum, open(form()));
         for expected_2 in [true, false, true] {
             let p = bench.rest_2_2();
@@ -1442,7 +1442,7 @@ fn row_10_typing_in_the_numeric_shows_the_inline_error_with_prefix_and_disables_
                 Some(reason_2) => {
                     let in_line = format!("{ERROR_PREFIX}{reason_2}");
                     let t = text_of(&p, &in_line);
-                    assert!(en_warning(t), "ppp {ppp}: {in_line:?} va en WARNING");
+                    assert!(in_warning(t), "ppp {ppp}: {in_line:?} va en WARNING");
                     // El motivo del pie: `error: Ancho: reason_2`.
                     let footer = format!("{ERROR_PREFIX}Ancho: {reason_2}");
                     assert_eq!(
@@ -1451,7 +1451,7 @@ fn row_10_typing_in_the_numeric_shows_the_inline_error_with_prefix_and_disables_
                         "ppp {ppp}"
                     );
                     let t = text_of(&p, &footer);
-                    assert!(en_warning(t), "ppp {ppp}: {footer:?} va en WARNING");
+                    assert!(in_warning(t), "ppp {ppp}: {footer:?} va en WARNING");
                     assert!(
                         accept_disabled(&p, &bench.dialog),
                         "ppp {ppp}: {typed:?}: Aceptar deshabilitado"
@@ -1625,7 +1625,7 @@ fn row_10_the_reason_of_the_cross_check_is_also_visible() {
         let reason_2 = bench.dialog.reason().expect("el check falla");
         assert_eq!(reason_2, "demasiado grande");
         let t = text_of(&p, &format!("{ERROR_PREFIX}{reason_2}"));
-        assert!(en_warning(t), "ppp {ppp}");
+        assert!(in_warning(t), "ppp {ppp}");
         assert!(accept_disabled(&p, &bench.dialog), "ppp {ppp}");
     }
 }
@@ -1680,7 +1680,7 @@ fn row_10_the_hexadecimal_shows_its_error_inline_and_live() {
             panic!("ppp {ppp}: `zz` no es un color");
         };
         let t = text_of(&p, &format!("{ERROR_PREFIX}{reason_2}"));
-        assert!(en_warning(t), "ppp {ppp}: error en línea del hexadecimal");
+        assert!(in_warning(t), "ppp {ppp}: error en línea del hexadecimal");
         assert!(accept_disabled(&p, &bench.dialog), "ppp {ppp}");
         // Uno válido, aún sin confirmar: sin error y `Accept` habilitado.
         let p = bench.writes("#12f");
@@ -2565,16 +2565,16 @@ fn row_11_a_ppp_and_window_change_repositions_without_losing_values_or_focus() {
         (Window::Large, Window::Minimum),
     ];
     for (before, after_2) in changes_2 {
-        for (va, vd) in windows {
-            let mut bench = with_state(before, va);
+        for (window_before, window_after) in windows {
+            let mut bench = with_state(before, window_before);
             let saved = state_2(&bench.dialog);
             let focus = bench.focus;
             assert!(focus.is_some());
             bench.reactions.clear();
 
-            bench.changes(after_2, vd);
+            bench.changes(after_2, window_after);
             bench.rest_2_2();
-            let location = format!("{before} → {after_2}, {va:?} → {vd:?}");
+            let location = format!("{before} → {after_2}, {window_before:?} → {window_after:?}");
             assert_eq!(
                 state_2(&bench.dialog),
                 saved,

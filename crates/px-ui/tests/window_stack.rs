@@ -53,7 +53,7 @@ mod common;
 use common::toolbox::{center_u, toolbox_2};
 use common::{
     PPPS, Painted, button_2, context, frame, in_points, is_physical_integer_in_egui, move_pointer,
-    n_de, painted, tolerance_of_egui, wheel_points,
+    n_of, painted, tolerance_of_egui, wheel_points,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -99,7 +99,7 @@ fn windows(ppp: f32) -> [(i64, i64); 2] {
 
 /// Ventana cuyo panel mide `panel_h_px` de alto (menú y barra de estado aparte).
 fn window_with_panel(ppp: f32, panel_h_px: i64) -> (i64, i64) {
-    let n = n_de(ppp);
+    let n = n_of(ppp);
     (
         (960.0 * ppp).round() as i64,
         panel_h_px + (MENU_H_U + 20) * n,
@@ -183,7 +183,7 @@ impl Bench {
     }
 
     fn n(&self) -> i64 {
-        n_de(self.ppp)
+        n_of(self.ppp)
     }
 
     fn screen(&self) -> egui::Vec2 {
@@ -357,7 +357,7 @@ fn row_7_the_canvas_origin_of_the_bench_is_0_16n() {
 #[test]
 fn row_7_the_column_buttons_hit_in_their_place_inside_the_stack() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for window in windows(ppp) {
             let mut bench = Bench::new_2(ppp, window, indexed());
             let toolbox_2 = window_layout(window, n as u32).toolbar;
@@ -385,7 +385,7 @@ fn title<'a>(f: &'a TestFrame, ppp: f32, n: i64, name_2: &str) -> &'a common::Te
 #[test]
 fn row_7_the_menu_paints_its_five_titles_inside_its_bar_and_they_fit_in_the_minimum_width() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let mut bench = Bench::new_2(ppp, windows(ppp)[1], indexed());
         let f = bench.rest_2_2();
         for name_2 in ["Archivo", "Editar", "Imagen", "Ver", "Ayuda"] {
@@ -419,7 +419,7 @@ fn row_7_the_menu_paints_its_five_titles_inside_its_bar_and_they_fit_in_the_mini
 #[test]
 fn row_7_the_view_dropdown_measures_208_u_with_rows_of_16_u() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let mut bench = Bench::new_2(ppp, windows(ppp)[0], indexed());
         let f = bench.rest_2_2();
         let center = title(&f, ppp, n, "Ver").rect().center();
@@ -768,14 +768,14 @@ fn row_9_fit_centers_the_image_in_the_canvas_rectangle_and_not_in_the_window() {
 const PANEL_HEIGHTS_U: [i64; 3] = [200, 100, 305];
 
 fn bench_with_panel_of(ppp: f32, panel_u: i64) -> Bench {
-    let n = n_de(ppp);
+    let n = n_of(ppp);
     Bench::new_2(ppp, window_with_panel(ppp, panel_u * n), indexed())
 }
 
 #[test]
 fn row_10_only_the_wheel_over_the_panel_moves_offset_px() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for panel_u in [200, 100] {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
@@ -824,7 +824,7 @@ fn row_10_only_the_wheel_over_the_panel_moves_offset_px() {
 #[test]
 fn row_10_the_column_and_the_menu_do_not_scroll_with_any_offset_px() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for panel_u in PANEL_HEIGHTS_U {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
@@ -933,7 +933,7 @@ fn row_10_the_column_and_the_menu_are_painted_clipped_to_their_rectangle() {
 #[test]
 fn row_10_the_column_buttons_hit_in_their_place_with_the_low_panel() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for panel_u in PANEL_HEIGHTS_U {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             // Con el panel desplazado a un extremo la columna sigue en su sitio.
@@ -980,7 +980,7 @@ fn row_10_the_column_buttons_hit_in_their_place_with_the_low_panel() {
 #[test]
 fn row_10_a_click_on_an_editor_slider_hits_it_with_the_panel_in_the_stack() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for panel_u in [200, 305] {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
@@ -1018,7 +1018,7 @@ fn row_10_a_click_on_an_editor_slider_hits_it_with_the_panel_in_the_stack() {
 #[test]
 fn row_10_the_editor_continues_without_a_notice_in_the_bar_with_the_low_panel() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for panel_u in PANEL_HEIGHTS_U {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
@@ -1047,7 +1047,7 @@ fn row_10_the_editor_continues_without_a_notice_in_the_bar_with_the_low_panel() 
 fn row_10_with_height_equal_to_or_greater_than_the_block_the_scroll_goes_back_to_0_in_the_same_frame()
  {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let mut bench = bench_with_panel_of(ppp, 200);
         let layout = window_layout(bench.window_px, n as u32);
         bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
@@ -1072,7 +1072,7 @@ fn row_10_with_height_equal_to_or_greater_than_the_block_the_scroll_goes_back_to
 #[test]
 fn row_10_lowering_and_raising_the_window_does_not_move_the_column_or_the_menu() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let mut bench = bench_with_panel_of(ppp, 305);
         let height_2 = bench.rest_2_2();
         let reference = column_and_menu_texts(&height_2, ppp);
@@ -1225,7 +1225,7 @@ mod toolbox_right {
     fn row_1_with_odd_window_widths_no_area_falls_in_the_middle_of_a_pixel_or_leaves_the_text_blurry()
      {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             let minimum = windows(ppp)[1];
             for extra in 0..=17 {
                 let window = (minimum.0 + extra, minimum.1 + 2 * extra);
@@ -1341,7 +1341,7 @@ mod toolbox_right {
     #[test]
     fn row_9_the_wheel_over_the_toolbox_does_neither_zoom_nor_scroll_the_panel() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             for panel_u in [200, 100, 305] {
                 let mut bench = bench_with_panel_of(ppp, panel_u);
                 let layout = window_layout(bench.window_px, n as u32);
@@ -1380,7 +1380,7 @@ mod toolbox_right {
     #[test]
     fn row_9_with_305_u_the_panel_does_not_scroll() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             let mut bench = bench_with_panel_of(ppp, 305);
             let layout = window_layout(bench.window_px, n as u32);
             assert!(!panel_layout(Mode::Indexed, bench.panel_h_px(), n as u32, 0).scrolling);
@@ -1394,7 +1394,7 @@ mod toolbox_right {
     #[test]
     fn row_9_the_options_box_is_clipped_to_the_toolbox_with_the_low_panel() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             for panel_u in [100, 200, 305] {
                 let mut bench = bench_with_panel_of(ppp, panel_u);
                 let before = bench.rest_2_2();
@@ -1445,7 +1445,7 @@ mod toolbox_right {
     #[test]
     fn row_9_the_right_click_hits_in_its_place_inside_the_stack() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             let window = windows(ppp)[0];
             let layout = window_layout(window, n as u32);
             let mut bench = Bench::new_2(ppp, window, indexed());
@@ -1477,7 +1477,7 @@ mod toolbox_right {
     #[test]
     fn row_10_the_panel_paints_its_left_line_the_right_one_and_everything_inside_its_rectangle() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             for window in windows(ppp) {
                 let mut bench = Bench::new_2(ppp, window, indexed());
                 let f = bench.rest_2_2();

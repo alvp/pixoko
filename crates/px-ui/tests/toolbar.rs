@@ -38,7 +38,7 @@ use common::icons::IconsOfTest;
 use common::toolbox::center_u;
 use common::zones::toolbox_single;
 use common::{
-    PPPS, Painted, button_2, context, frame, in_points, move_pointer, n_de, painted,
+    PPPS, Painted, button_2, context, frame, in_points, move_pointer, n_of, painted,
     tolerance_of_egui,
 };
 
@@ -91,7 +91,7 @@ impl Bench {
     }
 
     fn n(&self) -> i64 {
-        n_de(self.ppp)
+        n_of(self.ppp)
     }
 
     /// `x` de la columna en píxeles físicos (pegada al borde derecho de la pantalla del banco).
@@ -252,7 +252,7 @@ fn row_7_the_center_of_each_zoom_button_gives_its_action_at_the_five_scales() {
 #[test]
 fn row_7_the_first_and_the_last_physical_coordinate_of_each_button_hit() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
         let boxes_2: Vec<(usize, AppAction)> = TOOL_BUTTONS
             .iter()
@@ -284,7 +284,7 @@ fn row_7_the_first_and_the_last_physical_coordinate_of_each_button_hit() {
 #[test]
 fn row_7_the_zoom_level_and_what_is_far_from_the_buttons_hit_nothing() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
         let center_x = bench.x0() + center_u(1).0 * n;
         // El nivel de zoom (y = 62 a 76): a 9 u de la última fila de herramientas y a 4 u de la
@@ -306,7 +306,7 @@ fn row_7_the_zoom_level_and_what_is_far_from_the_buttons_hit_nothing() {
 #[test]
 fn row_7_everything_painted_falls_inside_the_column_and_its_buttons() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let p = ppp;
         let bench = Bench::new_2(ppp, state_2(Tool::Line, x5(), Locks::default()));
         let painted = bench.rest_2_2();
@@ -338,7 +338,7 @@ fn row_7_everything_painted_falls_inside_the_column_and_its_buttons() {
 #[test]
 fn the_active_one_sinks_with_face_surface_0_and_accent_icon_on_its_button() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         for (i, tool) in TEST_TOOLS.iter().enumerate() {
             let bench = Bench::new_2(ppp, state_2(*tool, x5(), Locks::default()));
             let painted = bench.rest_2_2();
@@ -433,7 +433,7 @@ fn the_nine_icons_are_painted_and_no_button_label() {
 #[test]
 fn the_zoom_level_is_a_14_u_text_at_y_62() {
     for ppp in PPPS {
-        let n = n_de(ppp);
+        let n = n_of(ppp);
         let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
         let painted = bench.rest_2_2();
         let text_2 = painted.text_with("×5").unwrap_or_else(|| {
@@ -634,7 +634,7 @@ mod toolbox_right {
         }
 
         fn n(&self) -> i64 {
-            n_de(self.ppp)
+            n_of(self.ppp)
         }
 
         /// `x` de la caja en píxeles físicos (pegada al borde derecho de la pantalla del banco).
@@ -1133,25 +1133,25 @@ mod toolbox_right {
 
     #[test]
     fn row_6_it_is_enabled_by_the_effective_action_at_the_ends_of_the_ladder() {
-        let en_max = state_2(Tool::Pencil, Some(Zoom::MAX), Locks::default());
-        let en_min = state_2(Tool::Pencil, Some(Zoom::MIN), Locks::default());
+        let at_max = state_2(Tool::Pencil, Some(Zoom::MAX), Locks::default());
+        let at_min = state_2(Tool::Pencil, Some(Zoom::MIN), Locks::default());
         // En ×64 el botón `Acercar` está atenuado para el izquierdo y el derecho aleja.
-        assert!(!px_ui::actions::enabled(AppAction::ZoomIn, &en_max));
+        assert!(!px_ui::actions::enabled(AppAction::ZoomIn, &at_max));
         assert_eq!(
-            secondary_outcome(per_label("Acercar"), &en_max),
+            secondary_outcome(per_label("Acercar"), &at_max),
             SecondaryOutcome::Action(AppAction::ZoomOut)
         );
         assert_eq!(
-            secondary_outcome(per_label("Alejar"), &en_max),
+            secondary_outcome(per_label("Alejar"), &at_max),
             SecondaryOutcome::Nothing
         );
         // En 1/64, al revés.
         assert_eq!(
-            secondary_outcome(per_label("Alejar"), &en_min),
+            secondary_outcome(per_label("Alejar"), &at_min),
             SecondaryOutcome::Action(AppAction::ZoomIn)
         );
         assert_eq!(
-            secondary_outcome(per_label("Acercar"), &en_min),
+            secondary_outcome(per_label("Acercar"), &at_min),
             SecondaryOutcome::Nothing
         );
         // Sin imagen, nada.
@@ -1301,7 +1301,7 @@ mod toolbox_right {
     #[test]
     fn row_7_the_hover_shows_the_tooltip_with_the_pixel_font_and_without_hover_there_is_none() {
         for ppp in PPPS {
-            let n = n_de(ppp);
+            let n = n_of(ppp);
             for (i, (label, text_2)) in expected_tooltips("Ctrl").iter().enumerate() {
                 let mut toolbox_2 =
                     Toolbox::new(ppp, state_2(Tool::Pencil, x5(), Locks::default()));

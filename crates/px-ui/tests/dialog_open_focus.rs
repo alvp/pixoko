@@ -33,7 +33,7 @@ mod common;
 #[path = "common/dialog_forms.rs"]
 mod dialog_forms;
 
-use common::{PPPS, button_2, context, frame, key_2, move_pointer, n_de, painted};
+use common::{PPPS, button_2, context, frame, key_2, move_pointer, n_of, painted};
 use dialog_forms::all_kinds;
 
 /// La ventana mínima real de la escala (`468n × 333n` px) o 960 × 720 pt.
@@ -48,7 +48,7 @@ const WINDOWS: [Window; 2] = [Window::Minimum, Window::Large];
 fn screen(ppp: f32, window: Window) -> Vec2 {
     match window {
         Window::Minimum => {
-            let n = n_de(ppp) as f32;
+            let n = n_of(ppp) as f32;
             vec2(468.0 * n / ppp, 333.0 * n / ppp)
         }
         Window::Large => vec2(960.0, 720.0),

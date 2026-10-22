@@ -108,7 +108,7 @@ impl Seen {
         }
     }
 
-    fn de_color(c: Color32) -> Seen {
+    fn of_color(c: Color32) -> Seen {
         Seen {
             r: f32::from(c.r()) / 255.0,
             g: f32::from(c.g()) / 255.0,
@@ -149,7 +149,7 @@ fn texel_of_the_checker(u: f32, v: f32) -> Seen {
     } else {
         CHECK_B
     };
-    Seen::de_color(Color32::from_rgb(c.r, c.g, c.b))
+    Seen::of_color(Color32::from_rgb(c.r, c.g, c.b))
 }
 
 /// Color que se ve en el punto `p` (puntos de egui) al pintar `primitives` en orden. Las mallas
@@ -180,7 +180,7 @@ fn rasterizes(
                 &mesh.vertices[triangle[2] as usize],
             ];
             if let Some(w) = barycentric(p, v[0].pos, v[1].pos, v[2].pos) {
-                let c = v.map(|v| Seen::de_color(v.color));
+                let c = v.map(|v| Seen::of_color(v.color));
                 let mut blend_2 = Seen {
                     r: w[0] * c[0].r + w[1] * c[1].r + w[2] * c[2].r,
                     g: w[0] * c[0].g + w[1] * c[1].g + w[2] * c[2].g,
@@ -194,7 +194,7 @@ fn rasterizes(
                         let texel = textures_2
                             .samples(mesh.texture_id, f64::from(u), f64::from(t))
                             .expect("la baldosa tiene su textura aplicada");
-                        Seen::de_color(texel)
+                        Seen::of_color(texel)
                     } else {
                         texel_of_the_checker(u, t)
                     };
@@ -226,9 +226,9 @@ fn tone_of_the_checker(px: i64, py: i64, source_2: (i64, i64), cell: i64) -> Col
 /// (alfa menor que 255: el píxel se sustituye), con `checker_2` el tono del damero en ese píxel físico.
 fn expected_2(color: Rgba, checker_2: Color32) -> Seen {
     let base = if color.a == 255 {
-        Seen::de_color(BLUE)
+        Seen::of_color(BLUE)
     } else {
-        Seen::de_color(checker_2)
+        Seen::of_color(checker_2)
     };
     let a = f32::from(color.a) / 255.0;
     let over = Seen {
@@ -577,7 +577,7 @@ fn the_non_pending_pixels_look_blue_at_any_scale_and_zoom() {
             );
             let seen = rasterizes(&primitives, &bench.textures_2, &tiles_2, checker_2, center);
             assert!(
-                seen.near(Seen::de_color(BLUE), 0.02),
+                seen.near(Seen::of_color(BLUE), 0.02),
                 "ppp {ppp} ×{zoom}: {seen:?}"
             );
         }

@@ -21,7 +21,7 @@ fn default() -> Keymap {
     Keymap::default_scheme()
 }
 
-fn lee(text_2: &str) -> Loaded {
+fn load_text(text_2: &str) -> Loaded {
     parse(text_2.as_bytes(), &default())
 }
 
@@ -120,7 +120,7 @@ fn row_9_the_default_table_gives_only_the_header() {
         .collect();
     assert_eq!(useful, ["pixoko-atajos 1"], "{text_2}");
     assert_eq!(text_2.lines().next(), Some("pixoko-atajos 1"));
-    let loaded = lee(&text_2);
+    let loaded = load_text(&text_2);
     assert_eq!(loaded.keymap, default());
     assert_eq!((loaded.ignored_lines, loaded.dropped_rows), (0, 0));
     assert!(loaded.fatal.is_none() && loaded.conflicted.is_empty());
@@ -151,13 +151,13 @@ fn row_9_only_what_differs_is_written_compacted_and_in_order() {
         ],
         "{text_2}"
     );
-    assert_eq!(lee(&text_2).keymap, t, "ida y vuelta exacta");
+    assert_eq!(load_text(&text_2).keymap, t, "ida y vuelta exacta");
 }
 
 #[test]
 fn row_9_the_grammar_of_the_shortcuts() {
     let valid = |shortcut_2: &str| {
-        let l = lee(&format!("pixoko-atajos 1\ntool.pencil 1 {shortcut_2}\n"));
+        let l = load_text(&format!("pixoko-atajos 1\ntool.pencil 1 {shortcut_2}\n"));
         (l.ignored_lines, slots_of(&l.keymap, pencil()).slots)
     };
     assert_eq!(valid("x"), (0, vec![chord('x')]));
@@ -214,7 +214,7 @@ fn row_9_the_grammar_of_the_shortcuts() {
         "",
         "none none",
     ] {
-        let l = lee(&format!("pixoko-atajos 1\ntool.pencil 1 {bad}\n"));
+        let l = load_text(&format!("pixoko-atajos 1\ntool.pencil 1 {bad}\n"));
         if bad == "shift+x " {
             // El espacio final se recorta: es `shift+x`, válida.
             assert_eq!(l.ignored_lines, 0);
@@ -224,7 +224,7 @@ fn row_9_the_grammar_of_the_shortcuts() {
         assert_eq!(l.keymap, default(), "{bad:?}");
     }
     // Tabuladores, CRLF, comentarios y líneas vacías valen.
-    let l = lee("pixoko-atajos 1\r\n# nota\r\n\r\ntool.pencil\t1\tx\r\n");
+    let l = load_text("pixoko-atajos 1\r\n# nota\r\n\r\ntool.pencil\t1\tx\r\n");
     assert_eq!(
         (l.ignored_lines, slots_of(&l.keymap, pencil()).slots),
         (0, vec![chord('x')])
@@ -244,7 +244,7 @@ fn row_10_the_fatal_cases_give_the_default_table_and_its_notice() {
         load_notice(&unreadable).as_deref(),
         Some("atajos: fichero ilegible, se usan los de fábrica")
     );
-    let version = lee("pixoko-atajos 2\ntool.pencil 1 x\n");
+    let version = load_text("pixoko-atajos 2\ntool.pencil 1 x\n");
     assert_eq!(version.fatal, Some(Fatal::Version));
     assert_eq!(version.keymap, default());
     assert_eq!(
@@ -252,8 +252,8 @@ fn row_10_the_fatal_cases_give_the_default_table_and_its_notice() {
         Some("atajos: versión desconocida, se usan los de fábrica")
     );
     // Sin cabecera: se ignora entero.
-    assert!(lee("tool.pencil 1 x\n").fatal.is_some());
-    assert!(lee("").fatal.is_some());
+    assert!(load_text("tool.pencil 1 x\n").fatal.is_some());
+    assert!(load_text("").fatal.is_some());
     // Demasiado grande y demasiadas líneas.
     let large = vec![b'#'; MAX_BYTES + 1];
     assert_eq!(parse(&large, &default()).fatal, Some(Fatal::TooBig));
@@ -261,7 +261,7 @@ fn row_10_the_fatal_cases_give_the_default_table_and_its_notice() {
     for _ in 0..=MAX_LINES {
         many.push_str("tool.pencil 1 x\n");
     }
-    assert_eq!(lee(&many).fatal, Some(Fatal::TooBig));
+    assert_eq!(load_text(&many).fatal, Some(Fatal::TooBig));
     for l in [&unreadable, &version] {
         assert!(load_notice(l).unwrap().chars().count() <= 60);
     }
@@ -269,7 +269,8 @@ fn row_10_the_fatal_cases_give_the_default_table_and_its_notice() {
 
 #[test]
 fn row_10_bad_lines_are_ignored_and_good_ones_are_applied() {
-    let l = lee("pixoko-atajos 1\n\
+    let l = load_text(
+        "pixoko-atajos 1\n\
         tool.pencil 1 x\n\
         file.save 1 g\n\
         no.existe 1 g\n\
@@ -278,7 +279,8 @@ fn row_10_bad_lines_are_ignored_and_good_ones_are_applied() {
         tool.line 1 ??\n\
         tool.fill 1 w\n\
         tool.fill 2 e\n\
-        tool.fill 2 r\n");
+        tool.fill 2 r\n",
+    );
     // Ignoradas: acción fija, clave desconocida, casilla 0, atajo mal formado y la segunda línea de
     // la casilla 2 de Relleno (gana la primera); la casilla 3 de Línea no existe pero es válida
     // (vacía un extra que no hay) y no cuenta como mala.
@@ -299,7 +301,7 @@ fn row_10_bad_lines_are_ignored_and_good_ones_are_applied() {
 fn row_10_a_hand_made_clash_the_first_row_wins_and_it_is_counted() {
     // Lápiz con `f` (la de Relleno): en la tabla el Lápiz va antes, gana el Lápiz y a Relleno se le
     // quita; las dos son del usuario si Relleno también se escribe.
-    let l = lee("pixoko-atajos 1\ntool.pencil 1 f\ntool.fill 1 f\n");
+    let l = load_text("pixoko-atajos 1\ntool.pencil 1 f\ntool.fill 1 f\n");
     assert!(l.keymap.conflicts().is_empty());
     assert_eq!(slots_of(&l.keymap, pencil()).slots, vec![chord('f')]);
     assert_eq!(
@@ -312,13 +314,14 @@ fn row_10_a_hand_made_clash_the_first_row_wins_and_it_is_counted() {
     let notice = load_notice(&l).unwrap();
     assert_eq!(notice, "atajos: 1 repetidos");
     assert!(notice.chars().count() <= 60);
-    let the_two =
-        lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\ntool.fill 1 q\ntool.fill 2 q\n");
+    let the_two = load_text(
+        "pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\ntool.fill 1 q\ntool.fill 2 q\n",
+    );
     // La misma tecla dos veces en una acción: queda una.
     assert_eq!(slots_of(&the_two.keymap, fill()).slots, vec![chord('q')]);
     assert!(the_two.keymap.conflicts().is_empty());
     assert_eq!(
-        load_notice(&lee("pixoko-atajos 1\ntool.fill 9 x\n")).as_deref(),
+        load_notice(&load_text("pixoko-atajos 1\ntool.fill 9 x\n")).as_deref(),
         Some("atajos: 1 línea ignorada")
     );
 }
@@ -482,7 +485,7 @@ fn property_1b_round_trip_with_all_the_combinations_of_the_table() {
 /// tabla válida de verdad).
 #[test]
 fn what_was_read_works_as_a_table() {
-    let l = lee("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\n");
+    let l = load_text("pixoko-atajos 1\ntool.pencil 1 x\ntool.line 1 y\n");
     for (c, expected_2) in [
         ('x', Some(pencil())),
         ('y', Some(line())),

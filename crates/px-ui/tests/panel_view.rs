@@ -387,8 +387,8 @@ proptest! {
         prop_assert!(after_2.first_row <= row_2 && row_2 < after_2.first_row + visible);
         prop_assert!(after_2.first_row <= max);
         // Mínimo movimiento: si ya se veía, no se mueve; si no, la distancia es la justa.
-        let ya_visible = before.first_row <= row_2 && row_2 < before.first_row + visible;
-        if ya_visible {
+        let already_visible = before.first_row <= row_2 && row_2 < before.first_row + visible;
+        if already_visible {
             prop_assert_eq!(after_2, before);
         } else if row_2 < before.first_row {
             prop_assert_eq!(after_2.first_row, row_2);

@@ -108,6 +108,6 @@ impl Textures {
 
 /// Texels que `egui` guarda para un píxel RGBA no premultiplicado: el oráculo de la unidad 14a
 /// (`Color32::from_rgba_unmultiplied`).
-pub fn texel_de(r: u8, g: u8, b: u8, a: u8) -> Color32 {
+pub fn texel_of(r: u8, g: u8, b: u8, a: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(r, g, b, a)
 }

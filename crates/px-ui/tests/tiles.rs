@@ -113,7 +113,7 @@ fn short_the_canvas(r: ScreenRect, viewport: Size) -> bool {
     x1 > x0 && y1 > y0
 }
 
-fn rect_de(t: &Tiling, i: usize) -> TileRect {
+fn rect_of(t: &Tiling, i: usize) -> TileRect {
     t.rect(i)
 }
 
@@ -217,13 +217,13 @@ fn row_b1_number_of_tiles_and_clip_at_the_edge() {
                 width: (w - x).min(side as u32),
                 height: (h - y).min(side as u32),
             };
-            assert_eq!(rect_de(&t, i), expected_2, "{label_2}: baldosa {i}");
+            assert_eq!(rect_of(&t, i), expected_2, "{label_2}: baldosa {i}");
         }
     }
     // Los casos que el texto de la spec nombra.
     let t = Tiling::new(Size::new(1025, 2), 1024);
     assert_eq!(
-        rect_de(&t, 0),
+        rect_of(&t, 0),
         TileRect {
             x: 0,
             y: 0,
@@ -232,7 +232,7 @@ fn row_b1_number_of_tiles_and_clip_at_the_edge() {
         }
     );
     assert_eq!(
-        rect_de(&t, 1),
+        rect_of(&t, 1),
         TileRect {
             x: 1024,
             y: 0,
@@ -241,15 +241,15 @@ fn row_b1_number_of_tiles_and_clip_at_the_edge() {
         }
     );
     let t = Tiling::new(Size::new(6000, 6000), 2048);
-    assert_eq!(rect_de(&t, 8).width, 6000 - 2 * 2048);
-    assert_eq!(rect_de(&t, 8).height, 6000 - 2 * 2048);
+    assert_eq!(rect_of(&t, 8).width, 6000 - 2 * 2048);
+    assert_eq!(rect_of(&t, 8).height, 6000 - 2 * 2048);
 }
 
 #[test]
 fn row_b1_the_tiles_cover_the_image_without_overlaps_or_gaps() {
     for ((w, h), side, _) in CASES_B_1 {
         let t = Tiling::new(Size::new(w, h), side);
-        let rects: Vec<TileRect> = (0..number(&t)).map(|i| rect_de(&t, i)).collect();
+        let rects: Vec<TileRect> = (0..number(&t)).map(|i| rect_of(&t, i)).collect();
         let area: u64 = rects
             .iter()
             .map(|r| u64::from(r.width) * u64::from(r.height))
@@ -300,7 +300,7 @@ fn row_b1_screen_rect_covers_exactly_image_rect_without_overlaps_or_gaps() {
                 for (i, p) in screens.iter().enumerate() {
                     assert_eq!(
                         *p,
-                        screen_expected(&v, z, rect_de(&t, i)),
+                        screen_expected(&v, z, rect_of(&t, i)),
                         "{label_2}: baldosa {i}"
                     );
                 }
@@ -362,7 +362,7 @@ fn row_b1_at_1_k_the_quad_goes_from_a_k_to_the_ceiling_of_b_k_from_the_origin() 
         let v = view(Size::new(800, 600), image_2, z, (400, 300));
         let (ox, oy) = v.origin();
         for i in 0..number(&t) {
-            let r = rect_de(&t, i);
+            let r = rect_of(&t, i);
             let p = screen_of(&t, i, &v);
             assert_eq!(p.x, ox + i64::from(r.x / k), "K={k} baldosa {i}");
             assert_eq!(p.y, oy + i64::from(r.y / k), "K={k} baldosa {i}");
@@ -424,7 +424,7 @@ fn row_b1_at_1_k_the_center_of_each_screen_pixel_samples_the_texel_s_by_k_minus_
             let v = view(viewport, image_2, z, (450, 350));
             let (ox, oy) = v.origin();
             for i in 0..number(&t) {
-                let r = rect_de(&t, i);
+                let r = rect_of(&t, i);
                 let p = screen_of(&t, i, &v);
                 let [u0, v0, u1, v1] = t.uv(i, &v);
                 let label_2 = format!("{w}×{h} T={side} 1/{k} baldosa {i}");
@@ -1222,7 +1222,7 @@ proptest! {
         // salvo la última, que mide lo que queda.
         let mut x_expected = 0u32;
         for c in 0..cols {
-            let r = rect_de(&t, c);
+            let r = rect_of(&t, c);
             prop_assert_eq!(r.x, x_expected);
             prop_assert!(r.width >= 1 && r.width as usize <= side);
             if c + 1 < cols {
@@ -1233,7 +1233,7 @@ proptest! {
         prop_assert_eq!(x_expected, width_2);
         let mut y_expected = 0u32;
         for f in 0..rows {
-            let r = rect_de(&t, f * cols);
+            let r = rect_of(&t, f * cols);
             prop_assert_eq!(r.y, y_expected);
             prop_assert!(r.height >= 1 && r.height as usize <= side);
             if f + 1 < rows {
@@ -1247,8 +1247,8 @@ proptest! {
         for m in &swatches {
             let i = *m as usize % (cols * rows);
             let (col, row) = (i % cols, i / cols);
-            let (c, f) = (rect_de(&t, col), rect_de(&t, row * cols));
-            prop_assert_eq!(rect_de(&t, i), rect(c.x, f.y, c.width, f.height));
+            let (c, f) = (rect_of(&t, col), rect_of(&t, row * cols));
+            prop_assert_eq!(rect_of(&t, i), rect(c.x, f.y, c.width, f.height));
         }
 
         // Pantalla: a cualquier zoom y origen entero.
@@ -1261,7 +1261,7 @@ proptest! {
         for c in 0..cols {
             let p = screen_of(&t, c, &v);
             prop_assert_eq!(p.x, x_screen);
-            prop_assert_eq!(p, screen_expected(&v, z, rect_de(&t, c)));
+            prop_assert_eq!(p, screen_expected(&v, z, rect_of(&t, c)));
             prop_assert!(p.width >= 0);
             x_screen += p.width;
         }

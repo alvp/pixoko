@@ -35,7 +35,7 @@ pub const ALPHAS: [u8; 4] = [0, 1, 128, 255];
 // ---------------------------------------------------------------------------------------------
 
 /// Un color RGBA distinto según `k`, con los cuatro alfas por turno.
-pub fn rgba_de(k: u32) -> Rgba {
+pub fn rgba_of(k: u32) -> Rgba {
     Rgba::new(
         (k.wrapping_mul(37) % 256) as u8,
         (k.wrapping_mul(91) % 256) as u8,
@@ -66,9 +66,9 @@ pub fn palette() -> Palette {
 }
 
 /// Un píxel válido del modo, distinto según `k`.
-pub fn pixel_de(mode_2: Mode, k: u32, entries: usize) -> Pixel {
+pub fn pixel_of(mode_2: Mode, k: u32, entries: usize) -> Pixel {
     match mode_2 {
-        Mode::Rgba => Pixel::Rgba(rgba_de(k)),
+        Mode::Rgba => Pixel::Rgba(rgba_of(k)),
         Mode::Indexed => Pixel::Indexed((k as usize % entries.max(1)) as u8),
         Mode::Gray => Pixel::Gray((k.wrapping_mul(29) % 256) as u8),
         Mode::GrayAlpha => Pixel::GrayAlpha {
@@ -84,7 +84,7 @@ pub fn pixel_de(mode_2: Mode, k: u32, entries: usize) -> Pixel {
 pub fn image_of(mode_2: Mode, width_2: u32, height_2: u32, cel: u32) -> Image {
     let cel = cel.max(1);
     let entries = palette().len();
-    let value = |x: u32, y: u32| pixel_de(mode_2, x / cel + 3 * (y / cel), entries);
+    let value = |x: u32, y: u32| pixel_of(mode_2, x / cel + 3 * (y / cel), entries);
     let mut image_2 = match mode_2 {
         Mode::Indexed => Image::new_indexed(width_2, height_2, palette()).expect("imagen indexada"),
         _ => Image::new(width_2, height_2, mode_2).expect("imagen"),
@@ -267,7 +267,7 @@ pub fn step_of(doc: &Document, seed: Seed) -> Step {
     let mode_2 = image_2.mode();
     let entries = image_2.palette().map_or(0, |p| p.len());
     let indexed = mode_2 == Mode::Indexed;
-    let pixel = |k: u32| pixel_de(mode_2, k, entries);
+    let pixel = |k: u32| pixel_of(mode_2, k, entries);
     let points = |n: u32| -> Vec<PixelEdit> {
         (0..n)
             .map(|i| PixelEdit {
@@ -344,7 +344,7 @@ pub fn step_of(doc: &Document, seed: Seed) -> Step {
         6 => with(Command::SetPaletteColor {
             image: id,
             index: (a as usize % entries) as u8,
-            color: rgba_de(b),
+            color: rgba_of(b),
         }),
         7 => with(Command::MovePaletteEntry {
             image: id,
@@ -360,7 +360,7 @@ pub fn step_of(doc: &Document, seed: Seed) -> Step {
         }
         9 => with(Command::AddPaletteEntry {
             image: id,
-            color: rgba_de(b),
+            color: rgba_of(b),
         }),
         10 if entries < 2 => Step::Nothing,
         10 => {

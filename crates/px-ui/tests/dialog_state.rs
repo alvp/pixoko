@@ -2255,9 +2255,9 @@ fn row_12_e1_what_is_hidden_by_transitivity_does_not_count_in_validity_values_or
 
 #[test]
 fn row_12_e1_a_chain_of_four_levels_is_hidden_whole_with_the_first_control() {
-    const SI_NO: &[&str] = &["No", "Si"];
+    const YES_NO: &[&str] = &["No", "Si"];
     let choice_2 = |default| FieldKind::Choice {
-        options: SI_NO,
+        options: YES_NO,
         default,
     };
     let spec = spec_with(vec![

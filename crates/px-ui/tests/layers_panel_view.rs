@@ -26,7 +26,7 @@ use px_ui::layers_panel_view::{PanelEvent, PanelView, show_layer_panel};
 use px_ui::source::DocSource;
 
 mod common;
-use common::{PPPS, button_2, context, in_points, move_pointer, n_de, wheel_line};
+use common::{PPPS, button_2, context, in_points, move_pointer, n_of, wheel_line};
 
 const WIDTH_PT: f32 = 900.0;
 const HEIGHT_PT: f32 = 600.0;
@@ -76,7 +76,7 @@ impl Bench {
         let mut bench = Bench {
             ctx,
             ppp,
-            n: n_de(ppp) as u32,
+            n: n_of(ppp) as u32,
             window: (
                 (WIDTH_PT * ppp).round() as i64,
                 (HEIGHT_PT * ppp).round() as i64,

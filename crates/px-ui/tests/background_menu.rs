@@ -106,7 +106,7 @@ fn all_the_actions() -> Vec<AppAction> {
     v
 }
 
-fn el_menu(title: &str) -> &'static Menu {
+fn menu_titled(title: &str) -> &'static Menu {
     MENUS
         .iter()
         .find(|m| m.title == title)
@@ -145,7 +145,7 @@ fn row_12_the_types_are_plain() {
 
 #[test]
 fn row_12_view_keeps_its_4_entries() {
-    let see = el_menu("Ver");
+    let see = menu_titled("Ver");
     assert_eq!(
         labels_and_actions(see.items),
         [
@@ -159,7 +159,7 @@ fn row_12_view_keeps_its_4_entries() {
 
 #[test]
 fn row_12_view_gains_a_canvas_background_submenu_with_the_five_options_in_order() {
-    let see = el_menu("Ver");
+    let see = menu_titled("Ver");
     assert_eq!(see.submenus.len(), 1, "un solo submenú");
     let background_2 = &see.submenus[0];
     assert_eq!(background_2.label, "Fondo del lienzo");
@@ -195,7 +195,7 @@ fn row_12_the_rest_of_the_menus_have_no_submenus_and_there_are_five_in_order() {
         ["Archivo", "Editar", "Imagen", "Capa", "Ver", "Ayuda"]
     );
     for title in ["Archivo", "Editar", "Imagen", "Capa", "Ayuda"] {
-        assert!(el_menu(title).submenus.is_empty(), "{title}");
+        assert!(menu_titled(title).submenus.is_empty(), "{title}");
     }
 }
 
@@ -239,7 +239,7 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         assert!(!actions.contains(&action_2(b)));
     }
     // Los rótulos y los separadores de la 17, como estaban.
-    let file = el_menu("Archivo");
+    let file = menu_titled("Archivo");
     assert_eq!(
         labels_and_actions(file.items),
         [
@@ -252,7 +252,7 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         ]
     );
     assert_eq!(
-        labels_and_actions(el_menu("Editar").items),
+        labels_and_actions(menu_titled("Editar").items),
         [
             ("Deshacer", AppAction::Undo),
             ("Rehacer", AppAction::Redo),
@@ -260,11 +260,11 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         ]
     );
     assert_eq!(
-        labels_and_actions(el_menu("Imagen").items),
+        labels_and_actions(menu_titled("Imagen").items),
         [("Convertir modo…", AppAction::ConvertMode)]
     );
     assert_eq!(
-        labels_and_actions(el_menu("Ayuda").items),
+        labels_and_actions(menu_titled("Ayuda").items),
         [
             (
                 "Ayuda de la herramienta",
@@ -278,7 +278,7 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
 
 #[test]
 fn row_12_the_four_actions_of_the_submenu_are_different_and_are_not_in_items() {
-    let see = el_menu("Ver");
+    let see = menu_titled("Ver");
     let actions: Vec<AppAction> = see.submenus[0].items.iter().map(|i| i.action).collect();
     // Las cuatro fijas y, al final, `Color…` (unidad 19b).
     let mut expected_2 = the_four().to_vec();
@@ -308,7 +308,7 @@ fn row_12_background_checked_is_true_only_for_the_active_background_action() {
 
 #[test]
 fn row_12_with_each_active_background_there_is_exactly_one_mark_in_the_submenu() {
-    let see = el_menu("Ver");
+    let see = menu_titled("Ver");
     for active_2_2 in BACKGROUNDS {
         let marked_2: Vec<&str> = see.submenus[0]
             .items
@@ -381,7 +381,7 @@ fn row_12_no_key_with_any_modifier_gives_a_background_action() {
 
 /// Los rótulos nuevos: el del submenú y los de sus cuatro entradas.
 fn labels_new() -> Vec<&'static str> {
-    let background_2 = &el_menu("Ver").submenus[0];
+    let background_2 = &menu_titled("Ver").submenus[0];
     let mut v = vec![background_2.label];
     v.extend(background_2.items.iter().map(|i| i.label));
     v
@@ -714,7 +714,7 @@ const ACTIVE: [CanvasBackground; 6] = [
 ];
 
 fn the_background_submenu() -> &'static Submenu {
-    &el_menu("Ver").submenus[0]
+    &menu_titled("Ver").submenus[0]
 }
 
 /// La acción cuya entrada lleva la marca con `active_2_2`.
@@ -754,7 +754,7 @@ fn row_2_canvas_background_has_five_entries_and_the_fifth_is_color_without_a_sep
     assert!(last.label.ends_with('…'));
     assert!(!last.label.contains('?'));
     // `Ver` conserva sus cuatro entradas y no gana ninguna: la nueva está solo en el submenú.
-    assert_eq!(el_menu("Ver").items.len(), 4);
+    assert_eq!(menu_titled("Ver").items.len(), 4);
     for menu in MENUS.iter() {
         assert!(
             menu.items
@@ -1075,7 +1075,7 @@ impl BenchOfTheMenu {
         self.index_of(searched).map(|i| &self.shapes_2[i])
     }
 
-    fn rect_de(&self, searched: &str) -> Rect {
+    fn rect_of(&self, searched: &str) -> Rect {
         match self.text_2(searched) {
             Some(Shape2::Text { rect, .. }) => *rect,
             _ => panic!(
@@ -1092,7 +1092,7 @@ impl BenchOfTheMenu {
     }
 
     fn center_of(&self, searched: &str) -> Pos2 {
-        self.rect_de(searched).center()
+        self.rect_of(searched).center()
     }
 
     /// La fila donde está el texto `searched` (el último relleno anterior que lo contiene, aunque
@@ -1165,8 +1165,8 @@ fn row_2_the_value_is_painted_only_with_a_custom_color_and_to_the_right_of_color
             let active_2_2 = CanvasBackground::Custom(c);
             assert_eq!(background_value_text(active_2_2).as_deref(), Some(text_2));
             let bench = BenchOfTheMenu::open_2_2(ppp, active_2_2, without_locks());
-            let value = bench.rect_de(text_2);
-            let label_2 = bench.rect_de("Color…");
+            let value = bench.rect_of(text_2);
+            let label_2 = bench.rect_of("Color…");
             // A la derecha de la etiqueta y en la misma fila.
             assert!(
                 value.min.x >= label_2.max.x - 0.01,
@@ -1552,7 +1552,7 @@ mod contrast_of_the_menu {
                 .map(|i| mark(background_2, i))
                 .collect()
         } else {
-            let menu = el_menu(scene.menu);
+            let menu = menu_titled(scene.menu);
             let mut v: Vec<String> = menu.items.iter().map(|i| i.label.to_string()).collect();
             v.extend(menu.submenus.iter().map(|s| s.label.to_string()));
             v
@@ -1561,11 +1561,11 @@ mod contrast_of_the_menu {
 
     /// La acción de una fila a partir de su rótulo pintado (con o sin marca).
     fn action_of_label(text_2: &str) -> Option<AppAction> {
-        let de_menu = MENUS
+        let menu_item = MENUS
             .iter()
             .flat_map(|m| m.items.iter())
             .find(|i| i.label == text_2);
-        if let Some(i) = de_menu {
+        if let Some(i) = menu_item {
             return Some(i.action);
         }
         let without_mark = text_2
@@ -2099,7 +2099,7 @@ mod contrast_of_the_menu {
                         platform,
                         scene,
                     );
-                    for item in el_menu(title).items {
+                    for item in menu_titled(title).items {
                         let Some(shortcut_2) = shortcut_for(item.action, platform) else {
                             continue;
                         };
@@ -2406,10 +2406,11 @@ mod contrast_of_the_menu {
                                     AppAction::CanvasBackground(_) | AppAction::BackgroundColor,
                                 ) => Some(submenu_width_u(the_background_submenu()) as f32),
                                 Some(_) => {
-                                    Some(popup_width_u(el_menu(scene.menu), Platform::Linux) as f32)
+                                    Some(popup_width_u(menu_titled(scene.menu), Platform::Linux)
+                                        as f32)
                                 }
                                 None if m.text_2 == "Fondo del lienzo" => {
-                                    Some(popup_width_u(el_menu("Ver"), Platform::Linux) as f32)
+                                    Some(popup_width_u(menu_titled("Ver"), Platform::Linux) as f32)
                                 }
                                 None => None,
                             }

@@ -33,7 +33,7 @@ pub fn near(a: f32, b: f32) -> bool {
 }
 
 /// `n = text_scale(ppp)` como `i64`.
-pub fn n_de(ppp: f32) -> i64 {
+pub fn n_of(ppp: f32) -> i64 {
     i64::from(text_scale(ppp))
 }
 

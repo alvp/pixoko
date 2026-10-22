@@ -19,10 +19,10 @@ use px_ui::theme::{TEXT, visuals};
 use px_ui::tool::Tool;
 
 mod common;
-use common::{PPPS, button_2, context, frame, key_2, move_pointer, n_de, painted};
+use common::{PPPS, button_2, context, frame, key_2, move_pointer, n_of, painted};
 
 fn screen(ppp: f32) -> Vec2 {
-    let n = n_de(ppp);
+    let n = n_of(ppp);
     vec2(468.0 * n as f32 / ppp, 341.0 * n as f32 / ppp)
 }
 

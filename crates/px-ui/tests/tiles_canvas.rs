@@ -74,7 +74,7 @@ use common::{PPPS, button_2, button_of_2, context, key_2, move_pointer};
 mod tiles_support;
 use tiles_support::{
     B, Model, Seed, Step, TEST_MODES, clip_2, deleted, expected_2, image_of, model_full,
-    model_of_pixels, pixel_de, runs_expected, seed, step_of, texel,
+    model_of_pixels, pixel_of, runs_expected, seed, step_of, texel,
 };
 
 /// Pantalla de los bancos, en puntos (a ppp 1, en píxeles físicos).
@@ -111,7 +111,7 @@ struct Uploads {
 }
 
 impl Uploads {
-    fn de(delta: &egui::TexturesDelta) -> Uploads {
+    fn of(delta: &egui::TexturesDelta) -> Uploads {
         let mut deltas: HashMap<TextureId, Vec<Delta>> = HashMap::new();
         for (id, list) in &delta.set {
             for d in list {
@@ -308,7 +308,7 @@ impl Bench {
             let info = canvas.paint(ui);
             captured = Some((info, entries, sync));
         });
-        let uploads = Uploads::de(&output_2.textures_delta);
+        let uploads = Uploads::of(&output_2.textures_delta);
         if self.saves {
             self.textures_2.applies(&output_2.textures_delta);
         }
@@ -411,7 +411,7 @@ impl Bench {
         self.canvas.tile_count()
     }
 
-    fn rect_de(&self, i: usize) -> TileRect {
+    fn rect_of(&self, i: usize) -> TileRect {
         self.canvas.tile_rect(i)
     }
 
@@ -441,7 +441,7 @@ impl Bench {
         let vp = self.viewport();
         (0..self.tiles_2())
             .map(|i| {
-                let r = self.rect_de(i);
+                let r = self.rect_of(i);
                 let x0 = (ox + zoom.extent(i64::from(r.x))).max(0);
                 let x1 = (ox + zoom.extent(i64::from(r.x + r.width))).min(i64::from(vp.width));
                 let y0 = (oy + zoom.extent(i64::from(r.y))).max(0);
@@ -482,7 +482,7 @@ impl Bench {
         let width_2 = self.image_2().width() as usize;
         let mut failures = Vec::new();
         for i in 0..self.tiles_2() {
-            let r = self.rect_de(i);
+            let r = self.rect_of(i);
             let actual = self.content(i);
             if must[i] {
                 let size_2 = [r.width as usize, r.height as usize];
@@ -618,7 +618,7 @@ fn strip(x0: u32, y: u32, n: u32, color: Rgba) -> Vec<(u32, u32, Rgba)> {
 fn sizes_of_tiles(bench: &Bench) -> Vec<[usize; 2]> {
     (0..bench.tiles_2())
         .map(|i| {
-            let r = bench.rect_de(i);
+            let r = bench.rect_of(i);
             [r.width as usize, r.height as usize]
         })
         .collect()
@@ -725,8 +725,8 @@ fn row_b5_with_an_allocator_that_fails_at_tile_4_the_previous_canvas_stays_intac
     assert_eq!(bench.contents(), contents);
     let failures = bench.discrepancies(&expected_2(&previous), &vec![true; ids.len()], None);
     assert!(failures.is_empty(), "{failures:?}");
-    let en_gpu: HashSet<TextureId> = bench.textures_2.ids().collect();
-    for id in &en_gpu {
+    let in_gpu: HashSet<TextureId> = bench.textures_2.ids().collect();
+    for id in &in_gpu {
         assert!(
             ids.contains(id)
                 || Some(*id) == bench.canvas.checker_texture_id()
@@ -949,7 +949,7 @@ fn operations_b_6(bench: &mut Bench, label_2: &str) {
     let (w, h) = (bench.image_2().width(), bench.image_2().height());
     let id = ImageId::from_raw(0);
     let entries = bench.image_2().palette().map_or(1, |p| p.len());
-    let pixel = |k: u32| pixel_de(mode_2, k, entries);
+    let pixel = |k: u32| pixel_of(mode_2, k, entries);
 
     // Línea.
     let line = line_command(
@@ -1152,7 +1152,7 @@ fn checks_uploads(bench: &Bench, output_2: &TestOutput, dirty: &Model, label_2: 
         let mut real = output_2.uploads.of_texture(*id);
         real.sort();
         let expected_2 = if visible_2[i] {
-            deltas_expected(dirty, bench.rect_de(i))
+            deltas_expected(dirty, bench.rect_of(i))
         } else {
             Vec::new()
         };
@@ -1162,7 +1162,7 @@ fn checks_uploads(bench: &Bench, output_2: &TestOutput, dirty: &Model, label_2: 
             visible_2[i]
         );
         // Ningún delta fuera de su textura.
-        let r = bench.rect_de(i);
+        let r = bench.rect_of(i);
         for d in &real {
             let [px, py] = d.pos.unwrap_or([0, 0]);
             assert!(
@@ -1401,7 +1401,7 @@ fn row_b7_a_whole_image_operation_with_everything_visible_uploads_each_tile_once
     let output_2 = bench.runs(vec![], |_, canvas, _, _| canvas.invalidate_all());
     checks_uploads(&bench, &output_2, &full, "invalidate_all");
     for (i, id) in ids.iter().enumerate() {
-        let r = bench.rect_de(i);
+        let r = bench.rect_of(i);
         assert_eq!(
             output_2.uploads.of_texture(*id),
             vec![Delta {
@@ -1492,7 +1492,7 @@ impl Seen {
         a: 0.0,
     };
 
-    fn de_color(c: Color32) -> Seen {
+    fn of_color(c: Color32) -> Seen {
         Seen {
             r: f32::from(c.r()) / 255.0,
             g: f32::from(c.g()) / 255.0,
@@ -1536,7 +1536,7 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn en(&self, x: i64, y: i64) -> Seen {
+    fn at(&self, x: i64, y: i64) -> Seen {
         self.pixels_2[y as usize * self.width_2 + x as usize]
     }
 }
@@ -1608,7 +1608,7 @@ fn rasterizes(
                 .min(cy1.ceil())
                 .min(height_2 as f64)
                 .max(0.0) as usize;
-            let tints = v.map(|v| Seen::de_color(v.color));
+            let tints = v.map(|v| Seen::of_color(v.color));
             for py in y0..y1 {
                 for px in x0..x1 {
                     let s = (px as f64 + 0.5 + DESPLAZO_X, py as f64 + 0.5 + DESPLAZO_Y);
@@ -1639,7 +1639,7 @@ fn rasterizes(
                         } else {
                             textures_2.samples(id, u, t).expect("una baldosa")
                         };
-                        Seen::de_color(texel).per(tint)
+                        Seen::of_color(texel).per(tint)
                     };
                     let target_2 = &mut pixels_2[py * width_2 + px];
                     *target_2 = target_2.below_of(color);
@@ -1751,7 +1751,7 @@ fn background_in(
 
 /// Un color con alfa directo por encima de un fondo opaco.
 fn composes(background_2: Color32, color: Rgba) -> Seen {
-    Seen::de_color(background_2).below_of(Seen::de_color(texel(color)))
+    Seen::of_color(background_2).below_of(Seen::of_color(texel(color)))
 }
 
 /// Geometría de lo pintado, en píxeles físicos, y el zoom como fracción.
@@ -1764,7 +1764,7 @@ struct Geom {
 }
 
 impl Geom {
-    fn de(bench: &Bench, level: usize) -> Geom {
+    fn of(bench: &Bench, level: usize) -> Geom {
         let (num, den) = if level < 6 {
             (1, 1i128 << (6 - level))
         } else {
@@ -1798,7 +1798,7 @@ fn seen_expected(
 ) -> Seen {
     let (sx, sy) = (px - g.source_2.0, py - g.source_2.1);
     if sx < 0 || sy < 0 || sx >= g.extent(image_2.width()) || sy >= g.extent(image_2.height()) {
-        return Seen::de_color(BACKGROUND);
+        return Seen::of_color(BACKGROUND);
     }
     let ix = (i128::from(sx) * g.den / g.num) as u32;
     let iy = (i128::from(sy) * g.den / g.num) as u32;
@@ -1862,7 +1862,7 @@ fn compares_b_8(
     for py in 0..buffer.height_2 as i64 {
         for px in 0..buffer.width_2 as i64 {
             let expected_2 = seen_expected(g, image_2, &bytes, pending_2, background_2, px, py);
-            let seen = buffer.en(px, py);
+            let seen = buffer.at(px, py);
             if !seen.near(expected_2, TOL) {
                 total += 1;
                 if failures.len() < 4 {
@@ -1931,7 +1931,7 @@ fn checks_b_8(ctx: &Context, ppp: f32, level: usize, background_2: CanvasBackgro
         });
     }
     assert_eq!(output_2.sync, Ok(()), "{label_2}");
-    let g = Geom::de(&bench, level);
+    let g = Geom::of(&bench, level);
     let primitives = bench.primitives(&output_2);
     without_zero_area_shapes(
         &output_2.shapes_2,
@@ -1968,7 +1968,7 @@ fn checks_b_8(ctx: &Context, ppp: f32, level: usize, background_2: CanvasBackgro
         canvas.clear_overlay();
     });
     let output_2 = bench.rest_2_2();
-    let g = Geom::de(&bench, level);
+    let g = Geom::of(&bench, level);
     let primitives = bench.primitives(&output_2);
     without_zero_area_shapes(
         &output_2.shapes_2,
@@ -2051,7 +2051,7 @@ fn row_b8_the_eraser_shows_the_chosen_background_and_the_erased_color_is_the_sam
         let output_2 = bench.runs(vec![], move |ctx, canvas, doc, _| {
             canvas.set_overlay(ctx, doc.image(ImageId::from_raw(0)).expect("imagen"), &pend);
         });
-        let g = Geom::de(&bench, N_X3);
+        let g = Geom::of(&bench, N_X3);
         let before = raster(&bench, &output_2);
         // Lo borrado se ve exactamente como el fondo.
         for &(x, y, _) in &deleted_2 {
@@ -2067,9 +2067,9 @@ fn row_b8_the_eraser_shows_the_chosen_background_and_the_erased_color_is_the_sam
                 continue;
             }
             let expected_2 =
-                Seen::de_color(background_in(background_2, px, py, g.source_2, g.cell));
+                Seen::of_color(background_in(background_2, px, py, g.source_2, g.cell));
             assert!(
-                before.en(px, py).near(expected_2, TOL),
+                before.at(px, py).near(expected_2, TOL),
                 "{background_2:?} malla {mesh}: ({x}, {y}) no deja ver el fondo"
             );
         }
@@ -2138,7 +2138,7 @@ fn blocks_uploaded(bench: &Bench, output_2: &TestOutput) -> Model {
     for (i, id) in bench.ids().iter().enumerate() {
         m.extend(blocks_covered(
             &output_2.uploads.of_texture(*id),
-            bench.rect_de(i),
+            bench.rect_of(i),
         ));
     }
     m
@@ -2513,7 +2513,7 @@ fn row_b10_a_pan_half_way_builds_the_tile_that_appears_already_with_the_preview(
     previews(&mut bench, 2, YELLOW);
     assert_eq!(bench.canvas.preview_uploads(), 1);
     // La baldosa 2 sigue como estaba.
-    let doc_tile2 = clip_2(&expected_2(&doc), 300, bench.rect_de(2));
+    let doc_tile2 = clip_2(&expected_2(&doc), 300, bench.rect_of(2));
     assert_eq!(bench.content(2).texels, doc_tile2);
     // Se desplaza con la vista previa activa (la app repite `preview_entry` en cada fotograma).
     let mut sum = Uploads::default();
@@ -2561,7 +2561,7 @@ fn row_b10_the_transparent_entry_keeps_alpha_0_in_the_preview() {
     assert!(failures.is_empty(), "{failures:?}");
     let mut seen_2 = 0;
     for i in [0usize, 1] {
-        let r = bench.rect_de(i);
+        let r = bench.rect_of(i);
         let texels = bench.content(i).texels;
         for y in 0..r.height {
             for x in 0..r.width {
@@ -2716,7 +2716,7 @@ fn without_repeated(points: &[(u32, u32, Pixel)]) -> Vec<(u32, u32, Pixel)> {
     v
 }
 
-fn en_rgba(image_2: &Image, pending_2: &[(u32, u32, Pixel)]) -> Vec<(u32, u32, Rgba)> {
+fn in_rgba(image_2: &Image, pending_2: &[(u32, u32, Pixel)]) -> Vec<(u32, u32, Rgba)> {
     pending_2
         .iter()
         .map(|&(x, y, p)| (x, y, pixel_rgba(image_2, p).expect("píxel del modo")))
@@ -2764,12 +2764,12 @@ proptest! {
                 (
                     a % width_2,
                     b % height_2,
-                    value_of_the_gesture.unwrap_or_else(|| pixel_de(image_2.mode(), k, entries)),
+                    value_of_the_gesture.unwrap_or_else(|| pixel_of(image_2.mode(), k, entries)),
                 )
             })
             .collect();
         let pixel_line =
-            value_of_the_gesture.unwrap_or_else(|| pixel_de(image_2.mode(), raw_2_2[0].2 % 97, entries));
+            value_of_the_gesture.unwrap_or_else(|| pixel_of(image_2.mode(), raw_2_2[0].2 % 97, entries));
         let n = points.len();
         // Fotograma `f` (de 1 a `frames`): el lápiz tiene el prefijo de `until(f)` puntos y la
         // línea va del primero al punto `end(f)`.
@@ -2790,7 +2790,7 @@ proptest! {
             } else {
                 without_repeated(&points[..until(f)])
             };
-            let rgba = en_rgba(&image_2, &pending_2);
+            let rgba = in_rgba(&image_2, &pending_2);
             let output_2 = frame_with_overlay(&mut bench, rgba.clone());
             prop_assert_eq!(output_2.sync, Ok(()));
             let visible_2 = bench.visible_2();
@@ -2832,7 +2832,7 @@ proptest! {
                     pixels: vec![PixelEdit {
                         x: width_2,
                         y: 0,
-                        pixel: pixel_de(image_2.mode(), 1, entries),
+                        pixel: pixel_of(image_2.mode(), 1, entries),
                     }],
                 };
                 bench.runs(vec![], move |_, canvas, doc, log| {

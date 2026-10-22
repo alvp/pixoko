@@ -301,7 +301,7 @@ impl TestFrame {
             .color
     }
 
-    fn color_de(&self, searched: &str) -> Color32 {
+    fn color_of(&self, searched: &str) -> Color32 {
         self.text_painted(searched)
             .unwrap_or_else(|| panic!("no se pinta {searched:?}"))
             .color
@@ -1529,11 +1529,11 @@ fn row_5_the_transparent_has_no_target_and_confirming_warns_until_one_is_chosen(
         assert!(f.paints("quitar 3: pulsa un destino"), "ppp {ppp}");
         assert!(f.paints("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
         assert_eq!(
-            f.color_de("Confirmar"),
+            f.color_of("Confirmar"),
             TEXT_DISABLED,
             "ppp {ppp}: desactivado"
         );
-        assert_eq!(f.color_de("Cancelar"), TEXT, "ppp {ppp}");
+        assert_eq!(f.color_of("Cancelar"), TEXT, "ppp {ppp}");
         assert!(!there_is_ring(&f, &bench, 4, 2, RING_DEST), "ppp {ppp}");
 
         // Confirmar sin destino: aviso, ningún op y la quita sigue.
@@ -1550,7 +1550,7 @@ fn row_5_the_transparent_has_no_target_and_confirming_warns_until_one_is_chosen(
         let f = bench.click_swatch(4);
         assert!(f.paints("quitar 3; destino 4"), "ppp {ppp}");
         assert!(f.paints("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
-        assert_eq!(f.color_de("Confirmar"), TEXT, "ppp {ppp}: activo");
+        assert_eq!(f.color_of("Confirmar"), TEXT, "ppp {ppp}: activo");
         assert!(there_is_ring(&f, &bench, 4, 2, RING_DEST), "ppp {ppp}");
         let f = bench.click_button(PaletteButton::Confirm);
         assert_eq!(
@@ -2299,10 +2299,10 @@ fn row_10_the_commit_of_the_field_arrives_before_the_operation_of_the_button() {
     );
     assert_eq!(bench.operations(), vec![PaletteOp::Add]);
     let of_the_commit = bench.history.iter().position(|o| o.commit.is_some());
-    let de_la_op = bench.history.iter().position(|o| o.op.is_some());
+    let op_index = bench.history.iter().position(|o| o.op.is_some());
     assert!(
-        of_the_commit <= de_la_op,
-        "el commit ({of_the_commit:?}) llega antes que la op ({de_la_op:?})"
+        of_the_commit <= op_index,
+        "el commit ({of_the_commit:?}) llega antes que la op ({op_index:?})"
     );
     assert!(!bench.editor.has_pending(), "no queda texto");
     assert!(bench.notices().is_empty());
@@ -2600,7 +2600,7 @@ mod set_transparent {
         image_with(&[RED, ALPHA_0, BLUE, TEST_BLACK], mark, &[0, 1, 2, 3])
     }
 
-    fn op_de(index: Option<u8>) -> Option<PaletteOp> {
+    fn op_of(index: Option<u8>) -> Option<PaletteOp> {
         Some(PaletteOp::SetTransparent { index })
     }
 
@@ -2710,7 +2710,7 @@ mod set_transparent {
                 "{context}"
             );
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(Some(1)), "{context}");
+            assert_eq!(f.output_2.op, op_of(Some(1)), "{context}");
         }
     }
 
@@ -2735,7 +2735,7 @@ mod set_transparent {
                 let f = bench.click(x, top + y);
                 let context = format!("ppp {ppp}, ({x}, {y})");
                 if inside {
-                    assert_eq!(f.output_2.op, op_de(Some(2)), "{context}");
+                    assert_eq!(f.output_2.op, op_of(Some(2)), "{context}");
                 } else {
                     assert_eq!(f.output_2.op, None, "{context}");
                 }
@@ -2768,7 +2768,7 @@ mod set_transparent {
             checks_button(&f, &bench, SET, &format!("ppp {ppp}"));
             checks_inside_the_panel(&f, bench.rect_panel(), &format!("ppp {ppp}"));
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(Some(1)), "ppp {ppp}");
+            assert_eq!(f.output_2.op, op_of(Some(1)), "ppp {ppp}");
         }
     }
 
@@ -2782,7 +2782,7 @@ mod set_transparent {
             assert_eq!(
                 f.output_2,
                 PanelOutput {
-                    op: op_de(Some(2)),
+                    op: op_of(Some(2)),
                     ..PanelOutput::default()
                 },
                 "ppp {ppp}"
@@ -2819,7 +2819,7 @@ mod set_transparent {
             let f = bench.click_button(PaletteButton::Transparent);
             assert_eq!(
                 f.output_2.op,
-                op_de(None),
+                op_of(None),
                 "{context}: la activa es la marcada"
             );
             bench.applies(Command::SetTransparentIndex {
@@ -2850,7 +2850,7 @@ mod set_transparent {
                 ColorChoice::Entry(3),
             );
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(Some(3)), "ppp {ppp}");
+            assert_eq!(f.output_2.op, op_of(Some(3)), "ppp {ppp}");
         }
     }
 
@@ -2971,13 +2971,13 @@ mod set_transparent {
             checks_button(&f, &bench, SET, &context);
             assert!(f.paints("activa"), "{context}");
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(Some(255)), "{context}");
+            assert_eq!(f.output_2.op, op_of(Some(255)), "{context}");
             bench.choice = ColorChoice::Entry(254);
             let f = bench.rest_2_2();
             checks_button(&f, &bench, REMOVE, &context);
             assert!(f.paints("activa · transparente"), "{context}");
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(None), "{context}");
+            assert_eq!(f.output_2.op, op_of(None), "{context}");
         }
     }
 
@@ -3032,7 +3032,7 @@ mod set_transparent {
         for ppp in PPPS {
             let mut bench = Bench::new_2(ppp, SCREEN_HIGH, image_a_input(), ColorChoice::Entry(0));
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(Some(0)), "ppp {ppp}");
+            assert_eq!(f.output_2.op, op_of(Some(0)), "ppp {ppp}");
             assert_eq!(f.output_2.notice, None, "ppp {ppp}");
 
             let mut bench = Bench::new_2(
@@ -3042,7 +3042,7 @@ mod set_transparent {
                 ColorChoice::Entry(255),
             );
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, op_de(Some(255)), "ppp {ppp}");
+            assert_eq!(f.output_2.op, op_of(Some(255)), "ppp {ppp}");
             assert_eq!(f.output_2.notice, None, "ppp {ppp}");
         }
     }
@@ -3129,10 +3129,10 @@ mod set_transparent {
             vec![PaletteOp::SetTransparent { index: Some(1) }]
         );
         let of_the_commit = bench.history.iter().position(|o| o.commit.is_some());
-        let de_la_op = bench.history.iter().position(|o| o.op.is_some());
+        let op_index = bench.history.iter().position(|o| o.op.is_some());
         assert!(
-            of_the_commit.is_some() && of_the_commit <= de_la_op,
-            "el commit ({of_the_commit:?}) llega antes que la op ({de_la_op:?})"
+            of_the_commit.is_some() && of_the_commit <= op_index,
+            "el commit ({of_the_commit:?}) llega antes que la op ({op_index:?})"
         );
         assert!(!bench.editor.has_pending(), "no queda texto");
         assert!(bench.notices().is_empty());
@@ -3155,7 +3155,7 @@ mod set_transparent {
                 color: Rgba::opaque(255, 0, 255)
             })
         );
-        assert_eq!(f.output_2.op, op_de(Some(1)));
+        assert_eq!(f.output_2.op, op_of(Some(1)));
         assert!(!bench.editor.has_pending(), "no queda texto");
     }
 

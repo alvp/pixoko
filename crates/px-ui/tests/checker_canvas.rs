@@ -117,7 +117,7 @@ impl Seen {
         a: 0.0,
     };
 
-    fn de_color(c: Color32) -> Seen {
+    fn of_color(c: Color32) -> Seen {
         Seen {
             r: f32::from(c.r()) / 255.0,
             g: f32::from(c.g()) / 255.0,
@@ -190,7 +190,7 @@ fn background_in(
 /// Un color con alfa directo por encima de un fondo opaco: lo que se ve.
 fn composes(background_2: Color32, color: Rgba) -> Seen {
     let above = Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a);
-    Seen::de_color(background_2).below_of(Seen::de_color(above))
+    Seen::of_color(background_2).below_of(Seen::of_color(above))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -312,7 +312,7 @@ fn texel_of_the_checker(u: f64, v: f64) -> Seen {
     let tx = ((u * 2.0).floor() as i64).rem_euclid(2);
     let ty = ((v * 2.0).floor() as i64).rem_euclid(2);
     let c = if (tx + ty) % 2 == 0 { CHECK_A } else { CHECK_B };
-    Seen::de_color(gray_2(c))
+    Seen::of_color(gray_2(c))
 }
 
 /// Búfer de lo que se ve, de `width_2 × height_2` píxeles físicos.
@@ -323,7 +323,7 @@ struct Buffer {
 }
 
 impl Buffer {
-    fn en(&self, x: i64, y: i64) -> Seen {
+    fn at(&self, x: i64, y: i64) -> Seen {
         assert!(
             x >= 0 && y >= 0 && (x as usize) < self.width_2 && (y as usize) < self.height_2,
             "({x}, {y}) fuera del búfer de {}×{}",
@@ -383,7 +383,7 @@ fn rasterizes(
             if area.abs() < 1e-12 {
                 continue;
             }
-            let tints = v.map(|v| Seen::de_color(v.color));
+            let tints = v.map(|v| Seen::of_color(v.color));
             let plane =
                 !is_image && !is_checker && v[0].color == v[1].color && v[1].color == v[2].color;
             let edges = [(p[0], p[1]), (p[1], p[2]), (p[2], p[0])];
@@ -446,7 +446,7 @@ fn rasterizes(
                                     .textures_2
                                     .samples(mesh.texture_id, u, t)
                                     .expect("la baldosa tiene contenido");
-                                Seen::de_color(texel)
+                                Seen::of_color(texel)
                             } else {
                                 texel_of_the_checker(u, t)
                             };
@@ -966,9 +966,9 @@ fn failures(
                     color,
                 )
             } else {
-                Seen::de_color(BACKGROUND)
+                Seen::of_color(BACKGROUND)
             };
-            let seen = scene.buffer.en(px, py);
+            let seen = scene.buffer.at(px, py);
             if !seen.near(expected_2, TOLERANCE) {
                 failures.notes(|| {
                     format!(
@@ -1282,9 +1282,9 @@ fn row_5_scene(ppp: f32, zoom: u32, mesh: bool) -> (Bench, Scene) {
     for py in g.source_2.1..g.source_2.1 + g.height_2 {
         for px in g.source_2.0..g.source_2.0 + g.width_2 {
             let expected_2 = shade_at(px, py, g.source_2, g.cell).color();
-            let seen = scene.buffer.en(px, py);
+            let seen = scene.buffer.at(px, py);
             assert!(
-                seen.near(Seen::de_color(gray_2(expected_2)), TOLERANCE),
+                seen.near(Seen::of_color(gray_2(expected_2)), TOLERANCE),
                 "{label_2}: ({px}, {py}) se ve {seen:?} y `shade_at` da {expected_2:?}"
             );
         }
@@ -1322,8 +1322,8 @@ fn row_5_after_dragging(ppp: f32, zoom: u32, offsets: &[(i64, i64)], mesh: bool)
         without_failures(&f, &label_2);
         for ry in 0..g0.height_2 {
             for rx in 0..g0.width_2 {
-                let before_ = before.buffer.en(g0.source_2.0 + rx, g0.source_2.1 + ry);
-                let after_ = after_2.buffer.en(g1.source_2.0 + rx, g1.source_2.1 + ry);
+                let before_ = before.buffer.at(g0.source_2.0 + rx, g0.source_2.1 + ry);
+                let after_ = after_2.buffer.at(g1.source_2.0 + rx, g1.source_2.1 + ry);
                 assert!(
                     before_.near(after_, TOLERANCE),
                     "{label_2}: el píxel ({rx}, {ry}) relativo a la esquina era {before_:?} y ahora es {after_:?}"
@@ -1739,8 +1739,8 @@ fn row_7_at_x1_the_pixels_are_seen_as_1x1_physical_pixel_at_any_scale() {
         // Y los 24 píxeles pendientes no se ven como la imagen azul que hay debajo.
         for &(x, y, color) in &overlay {
             let b = scene.geom.block(x, y);
-            let seen = scene.buffer.en(b.x, b.y);
-            let blue = Seen::de_color(Color32::from_rgb(0, 0, 255));
+            let seen = scene.buffer.at(b.x, b.y);
+            let blue = Seen::of_color(Color32::from_rgb(0, 0, 255));
             if color.a < 255 {
                 assert!(!seen.near(blue, TOLERANCE), "({x}, {y}) con {color:?}");
             }
@@ -1776,12 +1776,12 @@ fn row_7_with_only_opaque_pixels_there_are_no_shapes_in_the_overlay_and_they_loo
         let f = failures(&scene, &bench.image_2, &overlay, CanvasBackground::Checker);
         without_failures(&f, &format!("ppp {ppp} opacos"));
         // Cada píxel pendiente se ve rojo opaco, sin el damero.
-        let red = Seen::de_color(gray_2(RED));
+        let red = Seen::of_color(gray_2(RED));
         for &(x, y, _) in &overlay {
             let b = scene.geom.block(x, y);
             for py in b.y..b.y + b.height {
                 for px in b.x..b.x + b.width {
-                    let seen = scene.buffer.en(px, py);
+                    let seen = scene.buffer.at(px, py);
                     assert!(seen.near(red, TOLERANCE), "({px}, {py}) se ve {seen:?}");
                 }
             }
@@ -1799,7 +1799,7 @@ fn stroke_of_the_eraser(ppp: f32, background_2: CanvasBackground, mesh: bool) {
     let text_image = bench.canvas.texture_id().expect("textura de la imagen");
     let checker_before = bench.canvas.checker_texture_id();
     let pixels_2 = the_twenty();
-    let overlay_de = |n: usize| -> Vec<TestPending> {
+    let overlay_of = |n: usize| -> Vec<TestPending> {
         pixels_2[..n]
             .iter()
             .map(|&(x, y)| (x, y, TRANSPARENT))
@@ -1807,13 +1807,13 @@ fn stroke_of_the_eraser(ppp: f32, background_2: CanvasBackground, mesh: bool) {
     };
     // Cada fotograma añade un píxel: la textura lo lleva transparente y no hay formas nuevas.
     for n in 1..=20 {
-        let overlay = overlay_de(n);
+        let overlay = overlay_of(n);
         let output_2 = bench.runs(vec![], &overlay);
         checks_base(&bench, &output_2, background_2, mesh, &label_2);
         checks_texture(&bench, &overlay, &format!("{label_2}: {n} píxeles"));
     }
     // Varios fotogramas más con los veinte, sin cambios: no hay nada nuevo que subir.
-    let overlay = overlay_de(20);
+    let overlay = overlay_of(20);
     for _ in 0..3 {
         let output_2 = bench.runs(vec![], &overlay);
         assert!(output_2.uploads.is_empty());
@@ -1854,8 +1854,8 @@ fn stroke_of_the_eraser(ppp: f32, background_2: CanvasBackground, mesh: bool) {
         let b = a.block(x, y);
         for py in b.y..b.y + b.height {
             for px in b.x..b.x + b.width {
-                let before = with_overlay.buffer.en(px, py);
-                let after_2 = after_release.buffer.en(px, py);
+                let before = with_overlay.buffer.at(px, py);
+                let after_2 = after_release.buffer.at(px, py);
                 assert!(
                     before.near(after_2, TOLERANCE),
                     "{label_2}: el píxel físico ({px}, {py}) de ({x}, {y}) se veía {before:?} con la superposición y {after_2:?} tras soltar"
@@ -1986,8 +1986,8 @@ fn row_8_with_the_view_at_the_extreme_the_quad_is_only_the_visible_strip_and_loo
                         assert!(
                             scene
                                 .buffer
-                                .en(px, py)
-                                .near(Seen::de_color(expected_2), TOLERANCE),
+                                .at(px, py)
+                                .near(Seen::of_color(expected_2), TOLERANCE),
                             "{label_2}: ({px}, {py})"
                         );
                     }
@@ -2791,7 +2791,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(24))]
 
     /// Cada píxel físico del rectángulo de la imagen se ve igual que
-    /// `composición(background_2 en ese píxel, píxel de la image_2 o de la superposición)` y el resto del
+    /// `composición(background_2 at ese píxel, píxel de la image_2 o de la superposición)` y el resto del
     /// lienzo, `BACKGROUND`: con uno de los cuatro fondos, con la textura o con el respaldo por
     /// malla, a cualquiera de las cinco escalas, a ×1, ×2 o ×3 y con la vista desplazada.
     #[test]
@@ -2906,7 +2906,7 @@ fn checks_alpha_swatches(
             background_in(background_2, px, py, g.source_2, g.cell),
             color,
         );
-        let seen = scene.buffer.en(px, py);
+        let seen = scene.buffer.at(px, py);
         assert!(
             seen.near(expected_2, TOLERANCE),
             "alfa {alpha}: el píxel ({px}, {py}) se ve {seen:?} y debía verse {expected_2:?}"
@@ -2967,7 +2967,7 @@ fn row_6_custom_color_with_the_mesh_fallback_looks_the_same_as_with_the_texture(
                 for py in 0..a.buffer.height_2 as i64 {
                     for px in 0..a.buffer.width_2 as i64 {
                         assert!(
-                            a.buffer.en(px, py).near(b.buffer.en(px, py), TOLERANCE),
+                            a.buffer.at(px, py).near(b.buffer.at(px, py), TOLERANCE),
                             "{label_2}: el píxel ({px}, {py}) cambia con el respaldo por malla"
                         );
                     }
@@ -3008,8 +3008,8 @@ fn row_6_after_dragging(
         );
         for ry in 0..g0.height_2 {
             for rx in 0..g0.width_2 {
-                let before_ = before.buffer.en(g0.source_2.0 + rx, g0.source_2.1 + ry);
-                let after_ = after_2.buffer.en(g1.source_2.0 + rx, g1.source_2.1 + ry);
+                let before_ = before.buffer.at(g0.source_2.0 + rx, g0.source_2.1 + ry);
+                let after_ = after_2.buffer.at(g1.source_2.0 + rx, g1.source_2.1 + ry);
                 assert!(
                     before_.near(after_, TOLERANCE),
                     "{label_2}: el píxel ({rx}, {ry}) relativo a la esquina era {before_:?} y ahora es {after_:?}"
@@ -3071,9 +3071,9 @@ fn failures_zoomed_out(
                     color,
                 )
             } else {
-                Seen::de_color(BACKGROUND)
+                Seen::of_color(BACKGROUND)
             };
-            let seen = scene.buffer.en(px, py);
+            let seen = scene.buffer.at(px, py);
             if !seen.near(expected_2, TOLERANCE) {
                 failures.notes(|| {
                     format!(
@@ -3158,9 +3158,9 @@ fn row_7_custom_color_at_x1_the_translucent_pixels_are_seen_mixed_with_the_color
             without_failures(&f, &format!("ppp {ppp} ×1 {background_2:?}"));
             for &(x, y, color) in &overlay {
                 let b = scene.geom.block(x, y);
-                let seen = scene.buffer.en(b.x, b.y);
+                let seen = scene.buffer.at(b.x, b.y);
                 let expected_2 = match color.a {
-                    0 => Seen::de_color(gray_2(c)),
+                    0 => Seen::of_color(gray_2(c)),
                     _ => composes(gray_2(c), color),
                 };
                 assert!(
@@ -3305,8 +3305,8 @@ fn row_7_custom_color_preview_entry_is_seen_over_the_color_the_same_as_after_end
                             }
                             assert!(
                                 view.buffer
-                                    .en(px, py)
-                                    .near(after.buffer.en(px, py), TOLERANCE),
+                                    .at(px, py)
+                                    .near(after.buffer.at(px, py), TOLERANCE),
                                 "{label_2}: el píxel ({px}, {py}) de otra entrada cambió con la vista previa de {color:?}"
                             );
                         }
