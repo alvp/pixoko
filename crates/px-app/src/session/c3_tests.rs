@@ -365,8 +365,12 @@ fn row_07_the_text_says_how_many_pixels_are_reassigned_and_fits_in_66_columns() 
         resize_prompt(&p(200, Some(3), 1, None)),
         "recortar a 200; destino 3 · 1 píxel pasa a la 3"
     );
-    // The destination that is the kept transparent warns.
-    assert!(resize_prompt(&p(10, Some(2), 5, Some(2))).contains("aviso: destino transparente"));
+    // The destination that is the kept transparent warns (abbreviated if the whole does not fit).
+    let warned = resize_prompt(&p(10, Some(2), 5, Some(2)));
+    assert!(
+        warned.contains("aviso: ") && warned.contains("transp"),
+        "{warned}"
+    );
     // Everything fits in the status bar of the minimum window at the five scales, with the
     // longest numbers, and keeps the length, the pixels, the destination and the warning.
     for ppp in [1.0f32, 1.25, 1.5, 2.0, 3.0] {
@@ -449,7 +453,11 @@ fn row_08_with_pixels_the_warning_is_that_they_become_opaque_and_a_destination_i
     session.request_resize(5).expect("resize");
     let pending = session.ops.resize_pending().expect("pending");
     assert!(pending.pixels > 0 && pending.needs_destination());
-    assert!(resize_prompt(&pending).contains("aviso: sus píxeles quedan opacos"));
+    let prompt = resize_prompt(&pending);
+    assert!(
+        prompt.contains("aviso: ") && prompt.contains("opacos"),
+        "{prompt}"
+    );
     // Confirm without a destination does nothing.
     assert!(matches!(
         session.confirm_resize(),

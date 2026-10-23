@@ -17,11 +17,13 @@ use px_ui::color::{
 };
 use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
 use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
+use px_ui::edit_layout::PaletteButton;
 use px_ui::palette_grid::{PanelView, Scroll};
 use px_ui::palette_ops::{
-    Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, choice_after, default_destination,
-    entry_after, entry_fate, summary, transparent_summary, uses_entry,
+    Fate, NOTHING_TO_ROTATE_NOTICE, PaletteOp, PaletteOps, blocked_reason, choice_after,
+    default_destination, entry_after, entry_fate, summary, transparent_summary, uses_entry,
 };
+use px_ui::palette_resize::{PendingResize, reassigned_pixels};
 use px_ui::pick::{Picked, pick_notice};
 use px_ui::source::flatten;
 use px_ui::tool::Tool;
@@ -50,6 +52,20 @@ pub struct Saved {
 pub struct PaletteOutcome {
     pub changed: bool,
     pub notice: Option<String>,
+}
+
+/// Lo que pasa al soltar el asa o aceptar el tamaño de la paleta (specs/ui-palette-handle.md).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ResizeOutcome {
+    /// La misma longitud: no hay nada que hacer.
+    Unchanged,
+    /// Se aplicó ya, como un paso.
+    Applied(PaletteOutcome),
+    /// Queda pendiente de destino y de `Confirmar` (el panel lo pinta).
+    Pending,
+    /// Se pierde la transparente con varias capas: `App` abre el diálogo y, si se acepta, llama a
+    /// [`Session::apply_resize`] con estos valores. Nada cambió.
+    ConfirmLoss { len: u16, into: Option<u8> },
 }
 
 /// Resultado de aplicar lo que eligió el cuentagotas: el aviso de 5 s, si lo hay (un color con
@@ -575,6 +591,135 @@ impl Session {
         std::mem::take(&mut self.removal_cancelled)
     }
 
+    /// Un recorte pendiente se canceló porque el documento cambió: se dice una sola vez.
+    pub fn take_resize_cancelled(&mut self) -> bool {
+        self.ops.take_resize_cancelled()
+    }
+
+    /// Soltar el asa (o aceptar el tamaño de la paleta) en `len` entradas: estira ya, recorta ya si
+    /// ningún píxel de ninguna capa usa lo que sobra, deja el recorte pendiente de destino y de
+    /// `Confirmar` si alguno lo usa (o si cae la transparente con una sola capa), o pide confirmar
+    /// la pérdida de la transparente con varias capas.
+    pub fn request_resize(&mut self, len: u16) -> Result<ResizeOutcome, DocumentError> {
+        let Some(palette) = self.document.palette() else {
+            return Ok(ResizeOutcome::Unchanged);
+        };
+        let (old, new) = (palette.len(), usize::from(len));
+        let transparent = palette.transparent_index();
+        if new == 0 || new == old {
+            return Ok(ResizeOutcome::Unchanged);
+        }
+        if new > old {
+            return self.apply_resize(len, None).map(ResizeOutcome::Applied);
+        }
+        let pixels = self.pixels_cut_by(new);
+        let loses = transparent.is_some_and(|t| usize::from(t) >= new);
+        let several = self.document.layers().len() > 1;
+        match (pixels, loses) {
+            (0, false) => self.apply_resize(len, None).map(ResizeOutcome::Applied),
+            (0, true) if several => Ok(ResizeOutcome::ConfirmLoss { len, into: None }),
+            _ => {
+                self.ops.begin_resize(PendingResize {
+                    len,
+                    into: None,
+                    pixels,
+                    transparent,
+                });
+                Ok(ResizeOutcome::Pending)
+            }
+        }
+    }
+
+    /// `Confirmar` del recorte pendiente. Sin destino, sigue pendiente; con varias capas y la
+    /// transparente fuera, pide confirmar la pérdida (y el recorte pendiente se cancela: si se
+    /// rechaza, el documento queda como estaba).
+    pub fn confirm_resize(&mut self) -> Result<ResizeOutcome, DocumentError> {
+        let Some(pending) = self.ops.resize_pending() else {
+            return Ok(ResizeOutcome::Unchanged);
+        };
+        if pending.needs_destination() {
+            return Ok(ResizeOutcome::Pending);
+        }
+        if pending.loses_transparent() && self.document.layers().len() > 1 {
+            self.ops.cancel_resize();
+            return Ok(ResizeOutcome::ConfirmLoss {
+                len: pending.len,
+                into: pending.into,
+            });
+        }
+        self.apply_resize(pending.len, pending.into)
+            .map(ResizeOutcome::Applied)
+    }
+
+    /// Fija la longitud de la paleta ya decidida, como **un** paso.
+    pub fn apply_resize(
+        &mut self,
+        len: u16,
+        into: Option<u8>,
+    ) -> Result<PaletteOutcome, DocumentError> {
+        self.apply_palette_op(PaletteOp::Resize { len, into }, false)
+    }
+
+    /// Píxeles de todas las celdas de todas las capas que usan una entrada de `len` en adelante.
+    fn pixels_cut_by(&self, len: usize) -> u64 {
+        reassigned_pixels(
+            self.document
+                .layers()
+                .iter()
+                .filter_map(|layer| self.document.image(layer.cel())),
+            len,
+        )
+    }
+
+    /// `Imagen → Añadir entrada`: lo mismo que hacía el icono (copia el color elegido al final).
+    /// Fuera de las indexadas no hace nada; con 256 entradas, avisa.
+    pub fn menu_add_entry(&mut self) -> Result<PaletteOutcome, DocumentError> {
+        let Some(len) = self.document.palette().map(|palette| palette.len()) else {
+            return Ok(PaletteOutcome {
+                changed: false,
+                notice: None,
+            });
+        };
+        if let Some(reason) = blocked_reason(PaletteButton::Add, len, false) {
+            return Ok(PaletteOutcome {
+                changed: false,
+                notice: Some(reason.to_string()),
+            });
+        }
+        self.apply_palette_op(PaletteOp::Add, false)
+    }
+
+    /// `Imagen → Quitar entrada`: lo mismo que hacía el icono. Si algún píxel de alguna capa usa la
+    /// entrada elegida, la quita queda pendiente de destino.
+    pub fn menu_remove_entry(&mut self) -> Result<PaletteOutcome, DocumentError> {
+        let nothing = PaletteOutcome {
+            changed: false,
+            notice: None,
+        };
+        let (Some(palette), Some(active)) = (self.document.palette(), self.active_entry()) else {
+            return Ok(nothing);
+        };
+        if let Some(reason) = blocked_reason(PaletteButton::Remove, palette.len(), false) {
+            return Ok(PaletteOutcome {
+                changed: false,
+                notice: Some(reason.to_string()),
+            });
+        }
+        let default = default_destination(palette, active);
+        if self.removal_needs_destination(active) {
+            self.ops.begin_removal(active, default);
+            return Ok(nothing);
+        }
+        let into = default.unwrap_or(u8::from(active == 0));
+        self.apply_palette_op(
+            PaletteOp::Remove {
+                index: active,
+                into,
+            },
+            true,
+        )
+    }
+
     /// Aplica una edición de la paleta como **un** paso: construye el comando, fija la
     /// selección, resuelve el texto pendiente del campo hexadecimal y cierra la quita pendiente.
     /// `unused`: ningún píxel usaba la entrada quitada (solo para el resumen).
@@ -593,6 +738,11 @@ impl Session {
             let was_transparent = match (op, palette) {
                 (PaletteOp::Remove { index, .. }, Some(palette)) => {
                     palette.transparent_index() == Some(index)
+                }
+                (PaletteOp::Resize { len, .. } | PaletteOp::ResizeTo { len }, Some(palette)) => {
+                    palette
+                        .transparent_index()
+                        .is_some_and(|t| u16::from(t) >= len)
                 }
                 _ => false,
             };
@@ -622,6 +772,16 @@ impl Session {
                 PaletteOp::SetTransparent { index } => {
                     Command::SetTransparentIndex { image: id, index }
                 }
+                PaletteOp::Resize { len, into } => Command::ResizePalette {
+                    image: id,
+                    len,
+                    into,
+                },
+                PaletteOp::ResizeTo { len } => Command::ResizePalette {
+                    image: id,
+                    len,
+                    into: None,
+                },
             };
             (old_len, was_transparent, previous, command)
         };
@@ -629,6 +789,13 @@ impl Session {
             (op, self.ops.removal()),
             (PaletteOp::Remove { index, .. }, Some(removal)) if removal.index == index
         );
+        // Un recorte reasigna píxeles si alguna celda usa lo que se quita (se cuenta antes).
+        let moved = match op {
+            PaletteOp::Resize { len, .. } | PaletteOp::ResizeTo { len } => {
+                self.pixels_cut_by(usize::from(len)) > 0
+            }
+            _ => false,
+        };
         let size = self.image_size();
         let blocks = dirty_of(&command, size);
         if !self.document.apply(command)? {
@@ -661,12 +828,24 @@ impl Session {
             .filter(|_| self.editor.discard_pending())
             .map(stale_notice);
 
-        // Selección y estado de las operaciones. Rotar y fijar o quitar la transparente no mueven
-        // la selección ni borran el rango (specs/hito-2-fijar-transparente.md, decisión 4).
-        if !matches!(
+        // Un recorte propio ya no está pendiente (sin avisar).
+        if matches!(op, PaletteOp::Resize { .. } | PaletteOp::ResizeTo { .. }) {
+            self.ops.cancel_resize();
+        }
+
+        // Selección y estado de las operaciones. Rotar, fijar o quitar la transparente y estirar
+        // la paleta no mueven la selección ni borran el rango (specs/hito-2-fijar-transparente.md,
+        // decisión 4; specs/ui-palette-handle.md, decisión 5).
+        let stretching = matches!(
             op,
-            PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. }
-        ) {
+            PaletteOp::Resize { len, .. } | PaletteOp::ResizeTo { len } if usize::from(len) > old_len
+        );
+        if !stretching
+            && !matches!(
+                op,
+                PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. }
+            )
+        {
             let after = ColorChoice::Entry(choice_after(&op, active, old_len));
             // El otro color sigue a su entrada si se mueve o se desplaza (`entry_after`).
             let other = match self.editing {
@@ -697,6 +876,11 @@ impl Session {
             }
         }
         self.normalize();
+        // Para un recorte, `unused` es «ningún píxel cambió de índice».
+        let unused = match op {
+            PaletteOp::Resize { .. } | PaletteOp::ResizeTo { .. } => !moved,
+            _ => unused,
+        };
         let text = match op {
             PaletteOp::SetTransparent { index } => transparent_summary(index, active, previous),
             _ => summary(&op, active, old_len, was_transparent, unused),
@@ -923,7 +1107,11 @@ impl Session {
         self.view = PanelView::default();
         self.discarded_text = self.editor.has_pending();
         self.removal_cancelled |= self.ops.removal().is_some();
+        let resize_lost = self.ops.resize_pending().is_some() || self.ops.take_resize_cancelled();
         self.ops.reset();
+        if resize_lost {
+            self.ops.flag_resize_cancelled();
+        }
         self.editor.reset();
         self.document = document;
         // Un `.aseprite` con varias capas se abre con la de arriba activa; un documento de una

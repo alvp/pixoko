@@ -15,7 +15,8 @@ use px_ui::view::ViewOp;
 
 use crate::keys::select_tool;
 use crate::merge_flow::MergeKind;
-use crate::session::{LayerReport, Session};
+use crate::session::{LayerReport, PaletteOutcome, Session};
+use px_core::DocumentError;
 
 /// What a dispatched action left.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,6 +46,8 @@ pub enum Dispatched {
     Background(CanvasBackground),
     /// `Color…` of the canvas background: `App` runs it (opens the dialog).
     BackgroundColor,
+    /// `Image → Palette size…`: `App` opens the dialog with the current length.
+    PaletteSize,
     /// `F1` or `Help → Tool help`: `App` opens the help of that target.
     Help(HelpTarget),
     /// `Help → Keyboard shortcuts…`: `App` opens the list of shortcuts.
@@ -85,6 +88,20 @@ fn layer_done(action: AppAction, report: LayerReport) -> Dispatched {
         (_, notice) => Dispatched::Done {
             refresh: report.changed,
             notice,
+        },
+    }
+}
+
+/// The result of a palette action of the `Imagen` menu: the refresh and the notice, or the error.
+fn palette_done(result: Result<PaletteOutcome, DocumentError>) -> Dispatched {
+    match result {
+        Ok(outcome) => Dispatched::Done {
+            refresh: outcome.changed,
+            notice: outcome.notice,
+        },
+        Err(error) => Dispatched::Done {
+            refresh: false,
+            notice: Some(error.to_string()),
         },
     }
 }
@@ -177,6 +194,10 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
             session.cycle_background(-1);
             done(false)
         }
+        AppAction::AddPaletteEntry => palette_done(session.menu_add_entry()),
+        AppAction::RemovePaletteEntry => palette_done(session.menu_remove_entry()),
+        AppAction::PaletteSize if session.document.palette().is_none() => done(false),
+        AppAction::PaletteSize => Dispatched::PaletteSize,
         AppAction::ClearPage => match session.clear_page() {
             Ok(changed) => done(changed),
             Err(error) => Dispatched::Done {

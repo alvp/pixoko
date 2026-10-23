@@ -21,6 +21,7 @@ mod keys;
 mod licenses;
 mod merge_flow;
 mod new_image;
+mod palette_size;
 mod save_wait;
 mod session;
 mod shortcuts_flow;
@@ -34,7 +35,7 @@ use std::time::Duration;
 use crate::background_color::{background_from_values, open_background_color};
 use eframe::egui;
 use px_core::{Document, DocumentError, Mode};
-use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState};
+use px_ui::actions::{AppAction, Locks, Origin, PaletteNav, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInput};
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::chrome::COLUMN_DEFAULT_COLS;
@@ -59,7 +60,7 @@ use px_ui::menu::show_menu_full;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::options::{OptionsWindow, options_row_count};
 use px_ui::options_view::{OptionsEvent, OptionsView, show_options_window};
-use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
+use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE, RESIZE_CANCELLED_NOTICE};
 use px_ui::palette_panel::{Indicator, Roles};
 use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
@@ -98,11 +99,13 @@ use crate::new_image::{
     FormSync, NewImageError, SystemAlloc, build_new_image, describe_new, memory_notice,
     open_new_image, spec_from_values, sync_form,
 };
+use crate::palette_size::{length_from_values, open_palette_size, open_transparent_loss};
 use crate::save_wait::{
     EXPORTING_NOTICE, PendingSave, SAVING_NOTICE, StartSave, save_pixels, start_save,
 };
 use crate::session::{
-    LayerReport, Session, describe_saved, describe_saved_dialog, dropper_source_for, saved_notice,
+    LayerReport, ResizeOutcome, Session, describe_saved, describe_saved_dialog, dropper_source_for,
+    saved_notice,
 };
 use crate::shortcuts_flow::{Flow, FlowOutcome, Strip};
 use crate::title::{
@@ -147,6 +150,8 @@ struct App {
     notice: Option<Notice>,
     /// What the palette panel asked the status line to show in the last frame.
     panel_hint: Option<String>,
+    /// El recorte que espera la respuesta del diálogo de la transparente (longitud y destino).
+    transparent_loss: Option<(u16, Option<u8>)>,
     /// Confirmación por repetición al abrir o cerrar con cambios sin guardar.
     confirm: Confirm,
     /// Diálogos de archivo (specs/hito-2-dialogos-archivo.md).
@@ -271,6 +276,7 @@ impl App {
             dropper_once: DropperOnce::new(),
             notice: None,
             panel_hint: None,
+            transparent_loss: None,
             confirm: Confirm::new(),
             dialogs: Dialogs::new(
                 Box::new(RfdPicker::new()),
@@ -367,6 +373,10 @@ impl App {
                 if let Some(target) =
                     help_target_in_indicator_cols(point, window, n, self.shown_cols)
                 {
+                    return target;
+                }
+                // El asa, la barra de color y el campo bajo la rejilla.
+                if let Some(target) = px_ui::palette_panel::panel_info(ctx).help {
                     return target;
                 }
                 help_target_at_cols(point, window, n, self.shown_cols)
@@ -526,6 +536,9 @@ impl App {
         }
         if self.session.take_removal_cancelled() {
             text = format!("{REMOVAL_CANCELLED_NOTICE} · {text}");
+        }
+        if self.session.take_resize_cancelled() {
+            text = format!("{RESIZE_CANCELLED_NOTICE} · {text}");
         }
         self.notify(ctx, text);
     }
@@ -761,7 +774,7 @@ impl App {
             stroke: self.tools.busy() && !self.session.busy(),
             dialog: self.dialogs.pending(),
             text_focus: ctx.text_edit_focused(),
-            removal: self.session.ops.removal().is_some(),
+            removal: self.session.ops.confirming(),
             modal: self.modal.is_open() || self.waiting(),
         }
     }
@@ -874,6 +887,17 @@ impl App {
             // Solo cierra el diálogo de Licencias, nunca otro.
             Dispatched::Licenses(false) => {
                 self.modal.close_kind(ModalKind::Licenses);
+            }
+            Dispatched::PaletteSize => {
+                let locks = self.locks(ctx);
+                let len = self
+                    .session
+                    .document
+                    .palette()
+                    .map_or(1, |palette| palette.len());
+                if open_palette_size(&mut self.modal, len, locks) {
+                    self.modal_focus = None;
+                }
             }
             Dispatched::BackgroundColor => {
                 let locks = self.locks(ctx);
@@ -1018,6 +1042,9 @@ impl App {
         }
         if self.session.take_removal_cancelled() {
             text = format!("{REMOVAL_CANCELLED_NOTICE} · {text}");
+        }
+        if self.session.take_resize_cancelled() {
+            text = format!("{RESIZE_CANCELLED_NOTICE} · {text}");
         }
         self.notify(ctx, text);
     }
@@ -1236,6 +1263,32 @@ impl App {
         }
     }
 
+    /// Lo que sigue a pedir un cambio de la longitud de la paleta: avisa, refresca o abre el
+    /// diálogo de la transparente que se pierde.
+    fn after_resize(
+        &mut self,
+        ctx: &egui::Context,
+        result: Result<ResizeOutcome, px_core::DocumentError>,
+    ) {
+        match result {
+            Ok(ResizeOutcome::Applied(outcome)) => {
+                self.finish::<std::convert::Infallible>(ctx, Ok(outcome.changed));
+                if let Some(text) = outcome.notice {
+                    self.notify(ctx, text);
+                }
+            }
+            Ok(ResizeOutcome::ConfirmLoss { len, into }) => {
+                let locks = self.locks(ctx);
+                if open_transparent_loss(&mut self.modal, locks) {
+                    self.transparent_loss = Some((len, into));
+                    self.modal_focus = None;
+                }
+            }
+            Ok(ResizeOutcome::Pending | ResizeOutcome::Unchanged) => {}
+            Err(error) => self.notify(ctx, error.to_string()),
+        }
+    }
+
     /// Aplica una edición de la paleta pedida por el panel y avisa del resultado.
     fn apply_palette_op(&mut self, ctx: &egui::Context, op: PaletteOp, unused: bool) {
         match self.session.apply_palette_op(op, unused) {
@@ -1389,6 +1442,28 @@ impl App {
             self.canvas.set_background(background);
             ctx.request_repaint();
         }
+        if kind == ModalKind::PaletteSize
+            && let Reaction::Accepted(values) = &reaction
+            && let Some(len) = length_from_values(values)
+        {
+            // Aceptar es soltar el asa en esa longitud.
+            let result = self.session.request_resize(len);
+            self.after_resize(ctx, result);
+        }
+        if kind == ModalKind::TransparentLoss {
+            let asked = self.transparent_loss.take();
+            if let (Reaction::Accepted(_), Some((len, into))) = (&reaction, asked) {
+                match self.session.apply_resize(len, into) {
+                    Ok(outcome) => {
+                        self.finish::<std::convert::Infallible>(ctx, Ok(outcome.changed));
+                        if let Some(text) = outcome.notice {
+                            self.notify(ctx, text);
+                        }
+                    }
+                    Err(error) => self.notify(ctx, error.to_string()),
+                }
+            }
+        }
         if kind == ModalKind::NewImage {
             let discard = self.new_image.take().is_some_and(|(_, discard)| discard);
             if let Reaction::Accepted(values) = &reaction {
@@ -1420,6 +1495,9 @@ impl eframe::App for App {
             self.canvas.background(),
             &self.keymap,
             &self.session.layer_nav(),
+            &PaletteNav {
+                indexed: self.session.document.palette().is_some(),
+            },
         ) {
             actions.push((action, Origin::Menu));
         }
@@ -1427,6 +1505,9 @@ impl eframe::App for App {
         self.session.normalize();
         if self.session.take_removal_cancelled() {
             self.notify(&ctx, REMOVAL_CANCELLED_NOTICE.to_string());
+        }
+        if self.session.take_resize_cancelled() {
+            self.notify(&ctx, RESIZE_CANCELLED_NOTICE.to_string());
         }
         self.session.sync_editor();
         // El panel sigue vivo con un trazo en curso (el color se puede cambiar: afecta al trazo
@@ -1530,10 +1611,22 @@ impl eframe::App for App {
                     }
                     _ => false,
                 };
-                if used_elsewhere && let PaletteOp::Remove { index, .. } = op {
-                    self.session.begin_removal_for(index);
-                } else {
-                    self.apply_palette_op(&ctx, op, panel.op_unused);
+                match op {
+                    // Soltar el asa: la sesión decide si estira, recorta, deja pendiente o pide
+                    // confirmar la pérdida de la transparente.
+                    PaletteOp::ResizeTo { len } => {
+                        let result = self.session.request_resize(len);
+                        self.after_resize(&ctx, result);
+                    }
+                    // `Confirmar` del recorte pendiente.
+                    PaletteOp::Resize { .. } => {
+                        let result = self.session.confirm_resize();
+                        self.after_resize(&ctx, result);
+                    }
+                    PaletteOp::Remove { index, .. } if used_elsewhere => {
+                        self.session.begin_removal_for(index);
+                    }
+                    _ => self.apply_palette_op(&ctx, op, panel.op_unused),
                 }
             }
         }
