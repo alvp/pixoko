@@ -71,7 +71,7 @@ pub fn embedded(icon: Icon) -> &'static [u8] {
         Icon::Duplicate => include_bytes!("../../../assets/icons/duplicar.png"),
         Icon::Up => include_bytes!("../../../assets/icons/subir.png"),
         Icon::Down => include_bytes!("../../../assets/icons/bajar.png"),
-        Icon::Swap => include_bytes!("../../../assets/icons/intercambiar.png"),
+        Icon::Swap => include_bytes!("../../../assets/icons/swap.png"),
     }
 }
 

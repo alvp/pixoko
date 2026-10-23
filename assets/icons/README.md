@@ -36,7 +36,7 @@ ninguno.
 | `candado.png`, `candado-abierto.png` | candado cerrado; candado con el arco levantado | candado de cada capa del panel de capas |
 | `duplicar.png` | dos cuadrados desplazados, el de delante tapa al de detrás | botón Duplicar del panel de capas |
 | `subir.png`, `bajar.png` | flecha hacia arriba; flecha hacia abajo | botones Subir y Bajar del panel de capas |
-| `intercambiar.png` | dos flechas horizontales opuestas, la de arriba hacia la derecha y la de abajo hacia la izquierda | botón de intercambiar primer plano y fondo, junto a las dos barras de color |
+| `swap.png` | dos flechas horizontales opuestas, la de arriba hacia la derecha y la de abajo hacia la izquierda | botón de intercambiar primer plano y fondo, junto a las dos barras de color |
 
 ## Reservado
 

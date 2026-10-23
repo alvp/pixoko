@@ -99,7 +99,7 @@ impl Icon {
             Icon::Duplicate => "duplicar",
             Icon::Up => "subir",
             Icon::Down => "bajar",
-            Icon::Swap => "intercambiar",
+            Icon::Swap => "swap",
         }
     }
 }

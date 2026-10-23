@@ -110,7 +110,7 @@ fn row_1_there_is_one_file_per_icon_none_extra_and_the_readme_says_original_mit_
             "duplicar",
             "subir",
             "bajar",
-            "intercambiar",
+            "swap",
         ]
     );
     let readme = std::fs::read_to_string(folder().join("README.md")).expect("README.md");
