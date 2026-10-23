@@ -1,16 +1,16 @@
-//! Geometría del menú y de la caja de herramientas, sin tipos de egui
-//! (specs/hito-2-menu-herramientas.md, «Geometría»; specs/interfaz-caja-derecha.md: la caja y el
-//! panel van a la derecha del lienzo y la caja lleva el recuadro de opciones).
+//! Geometría del menú, la columna única y la caja de herramientas, sin tipos de egui
+//! (specs/hito-2-menu-herramientas.md, «Geometría»; specs/ui-single-column.md: una sola columna a
+//! la derecha del lienzo, con la caja arriba y la paleta debajo, de ancho ajustable).
 //!
 //! Las medidas son enteros de «píxeles de interfaz» `u` (`n = text_scale(ppp)` píxeles físicos
 //! cada una), igual que el panel de paletas y el editor de color.
 //!
-//! La caja es una rejilla de botones de icono de 24 × 24 u en cuatro columnas con 1 u de hueco
-//! (specs/interfaz-iconos.md): `4·24 + 3·1 = 99 u`, el ancho que tenía el botón de texto, así que
-//! ni la caja (107 u) ni el recuadro de opciones (99 u) ni los mínimos de ancho cambian.
+//! La columna mide `W(k) = 14·k + 9` u con `k` columnas de muestras de paleta (4 u de margen, `14k`
+//! de rejilla, 5 u de pista y línea). La caja es una rejilla de botones de icono de 24 × 24 u con 1 u
+//! de hueco, de `c(k) = ⌊(14k + 2)/25⌋` por fila; con `r` filas de herramientas mide `25r + 58` u
+//! y la paleta empieza en `head = 25r + 59` u.
 
 use crate::icon_button::{BUTTON_U, GAP_U, PITCH_U};
-use crate::palette_grid::PANEL_WIDTH_U;
 use crate::status::bar_height_px;
 use crate::view::ScreenRect;
 
@@ -21,70 +21,128 @@ pub const MENU_H_U: i64 = 16;
 pub const TOOLBAR_MARGIN_U: i64 = 4;
 /// Margen del texto del nivel de zoom respecto del botón, en `u`.
 pub const BUTTON_PAD_U: i64 = 4;
-/// Columnas de la rejilla de botones de la caja.
-pub const TOOLBOX_COLUMNS: i64 = 4;
-/// Filas de herramientas y casillas que dan (8: cinco herramientas y sitio para el pincel del
-/// hito 4, sin casilla vacía visible).
-pub const TOOL_ROWS: i64 = 2;
-pub const TOOL_SLOTS: usize = (TOOLBOX_COLUMNS * TOOL_ROWS) as usize;
 /// Botones de la caja: cinco herramientas y cuatro de zoom.
 pub const TOOLBOX_BUTTONS: usize = 9;
-/// `y` de la primera fila de herramientas (`4 + 25·row_2`; la última termina en 53).
+/// `y` de la primera fila de herramientas.
 pub const TOOLS_Y_U: i64 = TOOLBAR_MARGIN_U;
-/// `y` del separador de 1 u entre las herramientas y el zoom: 4 u bajo la última fila.
-pub const TOOLBAR_SEPARATOR_Y_U: i64 = TOOLS_Y_U + TOOL_ROWS * PITCH_U - GAP_U + 4;
-/// `y` del texto del nivel de zoom (14 u de alto): 4 u bajo el separador.
-pub const ZOOM_LABEL_Y_U: i64 = TOOLBAR_SEPARATOR_Y_U + 1 + 4;
-/// `y` de la fila de botones de zoom: 4 u bajo el texto (termina en 104).
-pub const ZOOM_Y_U: i64 = ZOOM_LABEL_Y_U + 14 + 4;
-/// Recuadro fijo de opciones de la herramienta activa, en `u` desde la esquina de la caja: 4 u bajo
-/// la fila de zoom (termina en 104), del ancho de la rejilla de botones, con borde de 1 u (2 u con el
-/// foco) y relleno; su alto no cambia con la herramienta ni con la ventana.
-pub const OPTIONS_X_U: i64 = TOOLBAR_MARGIN_U;
-pub const OPTIONS_Y_U: i64 = ZOOM_Y_U + BUTTON_U + 4;
-pub const OPTIONS_W_U: i64 = 99;
-pub const OPTIONS_H_U: i64 = 138;
-/// Grosor del borde del recuadro, sin y con el foco.
-pub const OPTIONS_BORDER_U: i64 = 1;
-pub const OPTIONS_FOCUS_BORDER_U: i64 = 2;
-/// Título (nombre de la herramienta) y línea del atajo, de 14 u, con 4 u de margen en el recuadro.
-pub const OPTIONS_TITLE_X_U: i64 = OPTIONS_X_U + 4;
-pub const OPTIONS_TITLE_Y_U: i64 = OPTIONS_Y_U + 4;
-pub const OPTIONS_KEY_Y_U: i64 = OPTIONS_TITLE_Y_U + 14;
-/// Cuerpo: 13 columnas de 7 u por 7 filas de 14 u. Con más filas de las que caben, se desplaza por
-/// filas enteras.
-pub const OPTIONS_ROW_H_U: i64 = 14;
-pub const OPTIONS_BODY_ROWS: i64 = 7;
-pub const OPTIONS_BODY_X_U: i64 = OPTIONS_TITLE_X_U;
-pub const OPTIONS_BODY_Y_U: i64 = OPTIONS_KEY_Y_U + 14 + 4;
-pub const OPTIONS_BODY_W_U: i64 = OPTIONS_W_U - 8;
-pub const OPTIONS_BODY_H_U: i64 = OPTIONS_BODY_ROWS * OPTIONS_ROW_H_U;
-/// Alto del contenido de la caja: el recuadro de opciones y un margen inferior de 4 u (250 u). Cabe
-/// en el panel mínimo (305 u) con 55 u de holgura: una prueba lo guarda, y con cinco filas de
-/// herramientas (17 a 20) dejaría de caber (hito 4).
-pub const TOOLBAR_CONTENT_H_U: i64 = OPTIONS_Y_U + OPTIONS_H_U + 4;
+
+/// Columnas de muestras mínimas, por defecto y las que necesita el editor de color (233 u).
+pub const COLUMN_MIN_COLS: i64 = 8;
+pub const COLUMN_DEFAULT_COLS: i64 = 16;
+pub const COLUMN_EDITOR_COLS: i64 = 16;
+/// Zona de arrastre del borde izquierdo de la columna, dentro de ella, en `u`.
+pub const COLUMN_GRIP_U: i64 = 4;
+/// Ancho de la barra de menús: la suma de sus seis títulos (`chars·7 + 12` u cada uno).
+pub const MENU_BAR_W_U: i64 = 289;
 
 /// Rótulos de los botones de herramienta (sin la letra del atajo), en el orden de la columna.
 pub const TOOL_LABELS: [&str; 5] = ["Lápiz", "Línea", "Relleno", "Cuentagotas", "Borrador"];
 
-/// Ancho de la rejilla de botones de la columna, en `u`: las columnas, sus botones y los huecos
-/// entre ellos (99 u).
-pub fn toolbar_button_width_u() -> i64 {
-    TOOLBOX_COLUMNS * BUTTON_U + (TOOLBOX_COLUMNS - 1) * GAP_U
+fn scale(n: u32) -> i64 {
+    i64::from(n.max(1))
 }
 
-/// Esquina `(x, y)` de la casilla `slot` de la rejilla de herramientas, en `u` desde la esquina de
-/// la caja.
-pub fn tool_slot_u(slot: usize) -> (i64, i64) {
-    let slot = slot as i64;
-    (
-        TOOLBAR_MARGIN_U + PITCH_U * (slot % TOOLBOX_COLUMNS),
-        TOOLS_Y_U + PITCH_U * (slot / TOOLBOX_COLUMNS),
-    )
+/// Ancho de la columna con `cols` columnas de muestras, en `u`: `14·cols + 9`.
+pub fn column_width_u(cols: i64) -> i64 {
+    14 * cols + 9
 }
 
-/// Rectángulo `(x, y, width_2, height_2)` del botón `index` de la caja, en `u` desde su esquina: del 0 al
-/// 4 las herramientas (casillas 0 a 4) y del 5 al 8 el zoom (una fila).
+/// Mayor número de columnas de muestras que deja a una ventana de `window_w_px` píxeles físicos su
+/// lienzo mínimo (128 u): `max(8, ⌊(w − 137·n)/(14·n)⌋)`.
+pub fn max_cols(window_w_px: i64, n: u32) -> i64 {
+    let n = scale(n);
+    ((window_w_px - 137 * n).div_euclid(14 * n)).max(COLUMN_MIN_COLS)
+}
+
+/// Las columnas con que se pinta la columna: lo elegido (`wanted`) recortado a `[8, max_cols]`. Lo
+/// elegido no se toca: al ensanchar la ventana vuelve el ancho elegido. Es la única función que
+/// recorta.
+pub fn column_cols(window_w_px: i64, n: u32, wanted: i64) -> i64 {
+    wanted.clamp(COLUMN_MIN_COLS, max_cols(window_w_px, n))
+}
+
+/// Lo elegido, ensanchado a las columnas que necesita el editor de color mientras esté abierto o haya
+/// una quita pendiente (`wide`).
+pub fn wide_cols(wanted: i64, wide: bool) -> i64 {
+    if wide {
+        wanted.max(COLUMN_EDITOR_COLS)
+    } else {
+        wanted
+    }
+}
+
+/// Botones de 24 u con 1 u de hueco que caben en una fila de una columna de `cols` columnas, con 4 u
+/// de margen a cada lado: `⌊(14·cols + 2)/25⌋`.
+pub fn columns_per_row(cols: i64) -> i64 {
+    ((14 * cols + 2) / (BUTTON_U + GAP_U)).max(1)
+}
+
+/// Filas de herramientas que ocupan `tools` botones con `cols` columnas.
+pub fn tool_rows(tools: usize, cols: i64) -> i64 {
+    let per_row = columns_per_row(cols);
+    ((tools as i64 + per_row - 1) / per_row).max(1)
+}
+
+/// Rectángulo `(x, y, ancho, alto)` del botón `index` de la caja, en `u` desde su esquina: los
+/// primeros `tools` son las herramientas, en filas de `c(k)`, y los cuatro siguientes el zoom, en
+/// una sola fila debajo.
+///
+/// # Panics
+/// Si `index` es `tools + 4` o más.
+pub fn toolbox_button_rect_u_at(index: usize, tools: usize, cols: i64) -> (i64, i64, i64, i64) {
+    assert!(index < tools + 4, "la caja tiene {} botones", tools + 4);
+    let (x, y) = if index < tools {
+        let per_row = columns_per_row(cols);
+        let i = index as i64;
+        (
+            TOOLBAR_MARGIN_U + PITCH_U * (i % per_row),
+            TOOLS_Y_U + PITCH_U * (i / per_row),
+        )
+    } else {
+        (
+            TOOLBAR_MARGIN_U + PITCH_U * (index - tools) as i64,
+            zoom_row_y_u(tools, cols),
+        )
+    };
+    (x, y, BUTTON_U, BUTTON_U)
+}
+
+/// `y` del separador de 1 u entre las herramientas y el zoom: `25r + 7`.
+pub fn toolbox_separator_y_u(tools: usize, cols: i64) -> i64 {
+    PITCH_U * tool_rows(tools, cols) + 7
+}
+
+/// `y` del texto del nivel de zoom (14 u de alto): `25r + 12`.
+pub fn zoom_label_y_u(tools: usize, cols: i64) -> i64 {
+    PITCH_U * tool_rows(tools, cols) + 12
+}
+
+/// `y` de la fila de botones de zoom: `25r + 30`.
+pub fn zoom_row_y_u(tools: usize, cols: i64) -> i64 {
+    PITCH_U * tool_rows(tools, cols) + 30
+}
+
+/// Alto de la caja, con su margen inferior de 4 u: `25r + 58`.
+pub fn toolbox_height_u(tools: usize, cols: i64) -> i64 {
+    PITCH_U * tool_rows(tools, cols) + 58
+}
+
+/// Dónde empieza la paleta, bajo un separador de 1 u: `25r + 59`.
+pub fn head_u(tools: usize, cols: i64) -> i64 {
+    toolbox_height_u(tools, cols) + 1
+}
+
+/// El botón de la caja bajo un punto en píxeles físicos, relativo a la esquina de la caja, con
+/// `tools` herramientas y `cols` columnas.
+pub fn toolbox_hit_at(x_px: i64, y_px: i64, n: u32, tools: usize, cols: i64) -> Option<usize> {
+    let n = scale(n);
+    (0..tools + 4).find(|&index| {
+        let (x, y, w, h) = toolbox_button_rect_u_at(index, tools, cols);
+        x_px >= x * n && x_px < (x + w) * n && y_px >= y * n && y_px < (y + h) * n
+    })
+}
+
+/// Rectángulo del botón `index` de la caja de hoy (cinco herramientas y 16 columnas).
 ///
 /// # Panics
 /// Si `index` es 9 o más.
@@ -93,32 +151,17 @@ pub fn toolbox_button_rect_u(index: usize) -> (i64, i64, i64, i64) {
         index < TOOLBOX_BUTTONS,
         "la caja tiene {TOOLBOX_BUTTONS} botones"
     );
-    let (x, y) = if index < TOOL_LABELS.len() {
-        tool_slot_u(index)
-    } else {
-        (
-            TOOLBAR_MARGIN_U + PITCH_U * (index - TOOL_LABELS.len()) as i64,
-            ZOOM_Y_U,
-        )
-    };
-    (x, y, BUTTON_U, BUTTON_U)
+    toolbox_button_rect_u_at(index, TOOL_LABELS.len(), COLUMN_DEFAULT_COLS)
 }
 
-/// El botón de la caja bajo un punto en píxeles físicos, relativo a la esquina de la caja.
+/// El botón de la caja de hoy bajo un punto en píxeles físicos, relativo a la esquina de la caja.
 pub fn toolbox_hit(x_px: i64, y_px: i64, n: u32) -> Option<usize> {
-    let n = scale(n);
-    (0..TOOLBOX_BUTTONS).find(|&index| {
-        let (x, y, w, h) = toolbox_button_rect_u(index);
-        x_px >= x * n && x_px < (x + w) * n && y_px >= y * n && y_px < (y + h) * n
-    })
+    toolbox_hit_at(x_px, y_px, n, TOOL_LABELS.len(), COLUMN_DEFAULT_COLS)
 }
 
-/// Ancho de la columna de herramientas, en `u`: el botón más un margen a cada lado.
-pub fn toolbar_width_u() -> i64 {
-    2 * TOOLBAR_MARGIN_U + toolbar_button_width_u()
-}
-
-/// Rectángulos de las cinco piezas de la ventana, en píxeles físicos enteros.
+/// Rectángulos de las cinco piezas de la ventana, en píxeles físicos enteros. `toolbar` y `panel`
+/// son las dos partes apiladas de la columna única: la caja arriba y la paleta debajo, con el mismo
+/// `x` y el mismo ancho.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowLayout {
     pub menu: ScreenRect,
@@ -128,29 +171,31 @@ pub struct WindowLayout {
     pub status: ScreenRect,
 }
 
-fn scale(n: u32) -> i64 {
-    i64::from(n.max(1))
-}
-
 /// Origen del lienzo en la ventana, en píxeles físicos: en el borde izquierdo, bajo el menú (la
-/// caja y el panel van a su derecha).
+/// columna va a su derecha).
 pub fn canvas_origin_px(n: u32) -> (i64, i64) {
     (0, MENU_H_U * scale(n))
 }
 
-/// Reparte una ventana de `window_px` píxeles físicos: menú arriba y barra de estado abajo (todo el
-/// ancho) y, en la franja central, de izquierda a derecha, el lienzo (el resto), el panel de paletas
-/// y la caja de herramientas en el borde derecho. Es la **única** función que conoce ese orden. Los cinco
-/// rectángulos recubren la ventana sin huecos ni solapes (con una ventana menor que el mínimo, los
-/// tamaños no negativos se recortan a lo que queda).
+/// Como [`window_layout_cols`] con las 16 columnas de hoy (233 u).
 pub fn window_layout(window_px: (i64, i64), n: u32) -> WindowLayout {
+    window_layout_cols(window_px, n, COLUMN_DEFAULT_COLS)
+}
+
+/// Reparte una ventana de `window_px` píxeles físicos: menú arriba y barra de estado abajo (todo el
+/// ancho) y, en la franja central, el lienzo (el resto) y la columna única en el borde derecho, de
+/// `column_cols(wanted)` columnas, con la caja arriba y la paleta debajo. Es la **única** función
+/// que conoce ese orden. Los cinco rectángulos recubren la ventana sin huecos ni solapes (con una
+/// ventana menor que el mínimo, los tamaños no negativos se recortan a lo que queda).
+pub fn window_layout_cols(window_px: (i64, i64), n: u32, wanted: i64) -> WindowLayout {
     let k = scale(n);
     let (w, h) = window_px;
     let menu_h = MENU_H_U * k;
     let bar_h = i64::from(bar_height_px(n));
     let band = (h - menu_h - bar_h).max(0);
-    let toolbar_w = toolbar_width_u() * k;
-    let panel_w = PANEL_WIDTH_U * k;
+    let cols = column_cols(w, n, wanted);
+    let column_w = (column_width_u(cols) * k).min(w.max(0));
+    let head = (head_u(TOOL_LABELS.len(), cols) * k).min(band);
     let rect = |x, y, width, height| ScreenRect {
         x,
         y,
@@ -159,9 +204,9 @@ pub fn window_layout(window_px: (i64, i64), n: u32) -> WindowLayout {
     };
     WindowLayout {
         menu: rect(0, 0, w, menu_h),
-        toolbar: rect(w - toolbar_w, menu_h, toolbar_w, band),
-        panel: rect(w - toolbar_w - panel_w, menu_h, panel_w, band),
-        canvas: rect(0, menu_h, w - toolbar_w - panel_w, band),
+        toolbar: rect(w - column_w, menu_h, column_w, head),
+        panel: rect(w - column_w, menu_h + head, column_w, band - head),
+        canvas: rect(0, menu_h, w - column_w, band),
         status: rect(0, h - bar_h, w, bar_h),
     }
 }

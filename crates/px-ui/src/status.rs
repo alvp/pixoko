@@ -65,6 +65,7 @@ pub fn show(ui: &mut Ui, text: &str, is_notice: bool) {
     let color = if is_notice { WARNING } else { TEXT };
     Panel::bottom("estado")
         .exact_size(height)
+        .resizable(false)
         .show_separator_line(false)
         .frame(Frame::new().fill(SURFACE_1))
         .show(ui, |ui| {

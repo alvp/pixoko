@@ -9,6 +9,7 @@ use px_core::{Document, LayerId};
 
 use crate::actions::LayerNav;
 use crate::chrome::window_layout;
+use crate::float_window;
 use crate::view::ScreenRect;
 
 /// Ancho y alto del panel, en `u`.
@@ -218,31 +219,14 @@ pub fn hit(x_px: i64, y_px: i64, n: u32) -> Option<PanelHit> {
 
 /// La franja central de la ventana (entre el menú y la barra de estado), en píxeles físicos.
 pub fn band(window_px: (i64, i64), n: u32) -> ScreenRect {
-    let layout = window_layout(window_px, n);
-    ScreenRect {
-        x: 0,
-        y: layout.menu.height,
-        width: window_px.0.max(0),
-        height: (layout.status.y - layout.menu.height).max(0),
-    }
+    float_window::band(window_px, n)
 }
 
 /// Dónde cae el panel si su esquina está en `pos_u` (`u` desde la esquina de la franja central): la
 /// posición se recorta para que quepa entero en la ventana y se alinea a la rejilla de `u`. Con una
 /// ventana menor que el panel se ancla arriba a la izquierda.
 pub fn place(pos_u: (i64, i64), window_px: (i64, i64), n: u32) -> ScreenRect {
-    let k = i64::from(n.max(1));
-    let band = band(window_px, n);
-    let max_x = ((band.width - PANEL_W_U * k) / k).max(0);
-    let max_y = ((band.height - PANEL_H_U * k) / k).max(0);
-    let x_u = pos_u.0.clamp(0, max_x);
-    let y_u = pos_u.1.clamp(0, max_y);
-    ScreenRect {
-        x: x_u * k,
-        y: band.y + y_u * k,
-        width: PANEL_W_U * k,
-        height: PANEL_H_U * k,
-    }
+    float_window::place(pos_u, (PANEL_W_U, PANEL_H_U), window_px, n)
 }
 
 /// La posición inicial: pegado a la derecha del lienzo con 8 u de margen y 8 u bajo el menú.
@@ -298,18 +282,17 @@ impl PanelState {
     pub fn rect(&mut self, window_px: (i64, i64), n: u32) -> ScreenRect {
         let pos = self.pos_u.unwrap_or_else(|| default_pos_u(window_px, n));
         let rect = place(pos, window_px, n);
-        let k = i64::from(n.max(1));
-        self.pos_u = Some((rect.x / k, (rect.y - band(window_px, n).y) / k));
+        self.pos_u = Some(float_window::pos_of(rect, window_px, n));
         rect
     }
 
     /// Mueve el panel `dx_px`, `dy_px` píxeles físicos (a pasos de `u`: se redondea).
     pub fn drag(&mut self, dx_px: i64, dy_px: i64, n: u32) {
-        let k = n.max(1) as f64;
-        let (x, y) = self.pos_u.unwrap_or((0, 0));
-        self.pos_u = Some((
-            x + (dx_px as f64 / k).round() as i64,
-            y + (dy_px as f64 / k).round() as i64,
+        self.pos_u = Some(float_window::dragged(
+            self.pos_u.unwrap_or((0, 0)),
+            dx_px,
+            dy_px,
+            n,
         ));
     }
 

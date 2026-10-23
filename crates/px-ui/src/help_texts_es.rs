@@ -207,6 +207,7 @@ pub(crate) const UI_ES: UiStrings = UiStrings {
     fixed_single_prefix: "Atajo (fijo): ",
     left_click: "Clic izquierdo: ",
     right_click: "Clic derecho: ",
+    tool_button_right_click: "Clic derecho en su botón: abre sus opciones",
     options_prefix: "Opciones: ",
     capture_prompt: "pulsa el nuevo atajo (Esc cancela)",
     armed: "pulsa una tecla…",

@@ -278,6 +278,7 @@ pub fn show_menu_full(
     };
     Panel::top("menu")
         .exact_size(MENU_H_U as f32 * u)
+        .resizable(false)
         .show_separator_line(false)
         .frame(Frame::new().fill(SURFACE_1))
         .show(ui, |ui| {

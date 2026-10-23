@@ -7,11 +7,12 @@
 
 use px_core::Mode;
 
-use crate::chrome::{MENU_H_U, toolbar_width_u};
+use crate::chrome::{COLUMN_MIN_COLS, MENU_BAR_W_U, MENU_H_U, column_width_u};
 use crate::color_edit::{Control, controls};
+use crate::dialog_layout::{DIALOG_W_U, MARGIN_U};
 use crate::icon_button::{BUTTON_U, GAP_U};
 use crate::icons::Icon;
-use crate::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, visible_rows_reserved};
+use crate::palette_grid::{GRID_Y_U, PITCH_U, TEXT_WIDTH_U, visible_rows_reserved};
 use crate::status::bar_height_px;
 use crate::text::text_scale;
 
@@ -238,10 +239,27 @@ pub fn min_window_height_pt(ppp: f32) -> f32 {
     physical as f32 / ppp
 }
 
-/// Minimum width of the window in interface pixels: the toolbox column, the panel and the
-/// minimum canvas.
+/// Columns of the status bar that the minimum window keeps (66, each 7 u wide) and the padding of
+/// the bar at each side (3 u).
+const STATUS_BAR_COLUMNS: i64 = 66;
+const STATUS_ADVANCE_U: i64 = 7;
+const STATUS_PADDING_U: i64 = 3;
+
+/// The four terms of the minimum width of the window, in interface pixels: the narrowest column
+/// plus the minimum canvas, the menu bar and its margin, the dialog with its two margins and the 66
+/// columns of the status bar. The window is as wide as the widest of them.
+pub fn min_width_terms_u() -> [i64; 4] {
+    [
+        column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U,
+        MENU_BAR_W_U + 4,
+        DIALOG_W_U + 2 * MARGIN_U,
+        STATUS_BAR_COLUMNS * STATUS_ADVANCE_U + 2 * STATUS_PADDING_U,
+    ]
+}
+
+/// Minimum width of the window in interface pixels: the widest of [`min_width_terms_u`] (468).
 pub fn min_window_width_u() -> i64 {
-    toolbar_width_u() + PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
+    min_width_terms_u().into_iter().max().unwrap_or(0)
 }
 
 /// Minimum width of the window in logical pixels (egui points).
@@ -281,6 +299,12 @@ impl PanelLayout {
     /// it; a grid taller than the space leaves it anchored to the bottom of the space. When the
     /// panel scrolls as a whole the row is where the block puts it.
     pub fn icon_row_top_px(&self, grid_rows: usize, n: u32) -> i64 {
+        self.icon_row_top_px_at(grid_rows, n, 0)
+    }
+
+    /// Like [`PanelLayout::icon_row_top_px`] for a palette that starts `head_px` physical pixels
+    /// below the top of the column (the toolbox is above it).
+    pub fn icon_row_top_px_at(&self, grid_rows: usize, n: u32, head_px: i64) -> i64 {
         if self.scrolling {
             return self.icons_top_px;
         }
@@ -288,7 +312,8 @@ impl PanelLayout {
             .unwrap_or(i64::MAX)
             .saturating_mul(PITCH_U)
             .saturating_add(GRID_Y_U)
-            .saturating_mul(scale(n));
+            .saturating_mul(scale(n))
+            .saturating_add(head_px);
         grid_bottom.min(self.icons_top_px)
     }
 }
@@ -308,21 +333,40 @@ pub fn panel_layout_closed(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64) 
 }
 
 fn layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64, editor_open: bool) -> PanelLayout {
+    column_layout(mode, panel_h_px, n, offset_px, 0, editor_open)
+}
+
+/// Split of the column of `column_h_px` with the toolbox of `head_px` on top and the palette (band ·
+/// grid · icon row · editor, the editor open or not) under it. The block is the toolbox and the
+/// palette: with enough height the palette is anchored to the bottom as in [`panel_layout`] and the
+/// grid takes the rest; with less, the whole block, the toolbox included, scrolls `offset_px`
+/// (clamped to what fits) and the grid shows one row. All the positions are in physical pixels from
+/// the top of the **column**. With `head_px = 0` it is [`panel_layout`] (or [`panel_layout_closed`]).
+pub fn column_layout(
+    mode: Mode,
+    column_h_px: i64,
+    n: u32,
+    offset_px: i64,
+    head_px: i64,
+    editor_open: bool,
+) -> PanelLayout {
     let n = scale(n);
+    let head = head_px.max(0);
     let editor = if editor_open {
         editor_height_u(mode) * n
     } else {
         0
     };
     let icons = icons_height_u(mode) * n;
-    let block = if editor_open {
-        block_height_px(mode, n as u32)
-    } else {
-        block_height_closed_px(mode, n as u32)
-    };
-    if panel_h_px >= block {
-        let top = panel_h_px.saturating_sub(editor + icons).div_euclid(n) * n;
-        // The editor (or the bottom edge) closes the panel; the icon row sits right above it.
+    let block = head
+        + if editor_open {
+            block_height_px(mode, n as u32)
+        } else {
+            block_height_closed_px(mode, n as u32)
+        };
+    if column_h_px >= block {
+        let top = column_h_px.saturating_sub(editor + icons).div_euclid(n) * n;
+        // The editor (or the bottom edge) closes the column; the icon row sits right above it.
         let editor_top = top + icons;
         return PanelLayout {
             scrolling: false,
@@ -330,12 +374,12 @@ fn layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64, editor_open: bool
             max_offset_px: 0,
             top_px: editor_top,
             icons_top_px: top,
-            visible_rows: visible_rows_reserved(panel_h_px, panel_h_px - top, n as u32),
+            visible_rows: visible_rows_reserved(column_h_px - head, column_h_px - top, n as u32),
         };
     }
-    let max = block.saturating_sub(panel_h_px).div_euclid(n) * n;
+    let max = block.saturating_sub(column_h_px).div_euclid(n) * n;
     let offset = offset_px.clamp(0, max).div_euclid(n) * n;
-    let icons_top = (GRID_Y_U + PITCH_U) * n - offset;
+    let icons_top = head + (GRID_Y_U + PITCH_U) * n - offset;
     PanelLayout {
         scrolling: true,
         offset_px: offset,
@@ -345,6 +389,7 @@ fn layout(mode: Mode, panel_h_px: i64, n: u32, offset_px: i64, editor_open: bool
         visible_rows: 1,
     }
 }
+
 pub fn control_row_u(mode: Mode, control: Control) -> Option<i64> {
     let idx = controls(mode).iter().position(|c| *c == control)?;
     let mut y = FIRST_ROW_Y_U;

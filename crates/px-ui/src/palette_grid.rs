@@ -13,7 +13,7 @@ use crate::icons::IconSet;
 
 use crate::view::ScreenRect;
 
-/// Swatches per row.
+/// Swatches per row by default (the width of the column is chosen by the user, 8 or more).
 pub const COLUMNS: usize = 16;
 /// Side of a swatch.
 pub const CELL_U: i64 = 12;
@@ -23,7 +23,8 @@ pub const GAP_U: i64 = 2;
 pub const PITCH_U: i64 = CELL_U + GAP_U;
 /// Side of a checker square (four per swatch).
 pub const CHECK_U: i64 = 6;
-/// Width of the panel: 4 of margin, 16 steps, 2 of gap, 2 of track and 1 of line.
+/// Width of the panel with the default 16 columns: 4 of margin, 16 steps, 2 of gap, 2 of track and
+/// 1 of line. With `k` columns it is [`panel_width_u`].
 pub const PANEL_WIDTH_U: i64 = 233;
 /// Origin of the grid in the panel: under the indicator band, a 1 u separator and 4 u of gap
 /// for the rings.
@@ -81,6 +82,26 @@ const MAX_ROWS: i64 = 16;
 
 fn scale(n: u32) -> i64 {
     i64::from(n.max(1))
+}
+
+/// Width of the panel (the column) with `cols` columns of swatches, in `u`: `14·cols + 9`.
+pub fn panel_width_u(cols: i64) -> i64 {
+    14 * cols + 9
+}
+
+/// `x` of the track of the scroll indicator, in `u`: 3 u from the right edge of the panel.
+pub fn track_x_u(cols: i64) -> i64 {
+    panel_width_u(cols) - 3
+}
+
+/// `x` of the right line of the panel (1 u), in `u`: its last column.
+pub fn right_line_x_u(cols: i64) -> i64 {
+    panel_width_u(cols) - 1
+}
+
+/// Usable width of the texts of the panel, in `u`: 4 u of margin on each side.
+pub fn text_width_u(cols: i64) -> i64 {
+    panel_width_u(cols) - 8
 }
 
 /// All the coordinates, `x` and `y`, in `u` from the corner of the panel, that the layout uses:
@@ -145,9 +166,14 @@ pub fn edges_u() -> Vec<i64> {
     edges
 }
 
-/// Rows taken by `count` swatches.
+/// Rows taken by `count` swatches in the default 16 columns.
 pub fn total_rows(count: usize) -> usize {
-    count.div_ceil(COLUMNS)
+    total_rows_cols(count, COLUMNS)
+}
+
+/// Rows taken by `count` swatches in `columns` columns.
+pub fn total_rows_cols(count: usize, columns: usize) -> usize {
+    count.div_ceil(columns.max(1))
 }
 
 /// Whole rows that fit in a panel of `panel_h_px` physical pixels of height:
@@ -177,15 +203,29 @@ pub fn max_first_row(total: usize, visible: usize) -> usize {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Grid {
     n: i64,
+    columns: usize,
     count: usize,
     visible_rows: usize,
     first_row: usize,
 }
 
 impl Grid {
+    /// The grid of the default 16 columns.
     pub fn new(n: u32, count: usize, visible_rows: usize, first_row: usize) -> Grid {
+        Grid::with_columns(n, COLUMNS, count, visible_rows, first_row)
+    }
+
+    /// The grid of `columns` columns (the column of the window is as wide as the user chose).
+    pub fn with_columns(
+        n: u32,
+        columns: usize,
+        count: usize,
+        visible_rows: usize,
+        first_row: usize,
+    ) -> Grid {
         Grid {
             n: scale(n),
+            columns: columns.max(1),
             count,
             visible_rows,
             first_row,
@@ -197,7 +237,7 @@ impl Grid {
         if index >= self.count {
             return None;
         }
-        let (row, col) = (index / COLUMNS, index % COLUMNS);
+        let (row, col) = (index / self.columns, index % self.columns);
         let shown = row.checked_sub(self.first_row)?;
         if shown >= self.visible_rows {
             return None;
@@ -223,14 +263,14 @@ impl Grid {
         }
         let col = usize::try_from(x / pitch).ok()?;
         let shown = usize::try_from(y / pitch).ok()?;
-        let rows_left = total_rows(self.count).saturating_sub(self.first_row);
-        if col >= COLUMNS || shown >= self.visible_rows.min(rows_left) {
+        let rows_left = total_rows_cols(self.count, self.columns).saturating_sub(self.first_row);
+        if col >= self.columns || shown >= self.visible_rows.min(rows_left) {
             return None;
         }
         let index = self
             .first_row
             .checked_add(shown)?
-            .checked_mul(COLUMNS)?
+            .checked_mul(self.columns)?
             .checked_add(col)?;
         Some(index.min(self.count.checked_sub(1)?))
     }
@@ -247,13 +287,13 @@ impl Grid {
         }
         let col = usize::try_from(x / pitch).ok()?;
         let shown = usize::try_from(y / pitch).ok()?;
-        if col >= COLUMNS || shown >= self.visible_rows {
+        if col >= self.columns || shown >= self.visible_rows {
             return None;
         }
         let index = self
             .first_row
             .checked_add(shown)?
-            .checked_mul(COLUMNS)?
+            .checked_mul(self.columns)?
             .checked_add(col)?;
         (index < self.count).then_some(index)
     }
@@ -346,6 +386,10 @@ pub struct PanelView {
     /// The color editor is open. `true` by default (the panel as it was before the editor became
     /// on demand); the app drives it from `Session::editor_open` (specs/ui-composition.md).
     pub editor_open: bool,
+    /// The state of `editor_open` in the previous frame, to know when it opens or closes.
+    pub last_editor_open: bool,
+    /// The scroll before the editor opened, brought back when it closes.
+    pub saved_offset_px: Option<i64>,
 }
 
 impl Default for PanelView {
@@ -357,11 +401,32 @@ impl Default for PanelView {
             reveal: false,
             icons: IconSet::default(),
             editor_open: true,
+            last_editor_open: true,
+            saved_offset_px: None,
         }
     }
 }
 
 impl PanelView {
+    /// Follows the opening and the closing of the editor (`open`) in the scroll of the whole block:
+    /// opening takes it to `max_open_px`, the maximum of the open block, so the editor is in sight;
+    /// closing brings back the value it had before opening. Called once per frame; it does nothing
+    /// while `open` does not change.
+    pub fn sync_editor(&mut self, open: bool, max_open_px: i64) {
+        if open == self.last_editor_open {
+            return;
+        }
+        self.last_editor_open = open;
+        if open {
+            self.saved_offset_px = Some(self.offset_px);
+            self.offset_px = max_open_px.max(0);
+            self.rest_px = 0;
+        } else if let Some(saved) = self.saved_offset_px.take() {
+            self.offset_px = saved;
+            self.rest_px = 0;
+        }
+    }
+
     /// Scrolls `delta_px` (positive: further down) in steps of `n`, keeping the rest, and clamps to
     /// `0..=max_offset_px` (with the rest at 0 when clamping and at the maximum; at 0 it accumulates,
     /// so that jumps of less than `n` come from the top).

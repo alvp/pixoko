@@ -22,15 +22,14 @@ use crate::color_editor::{
     self, ButtonsView, Extras, Geometry, hex_field_id, is_escape, show_icon_row,
 };
 use crate::edit_layout::{
-    PaletteButton, PanelLayout, block_height_closed_px, block_height_px, button_hit, panel_layout,
-    panel_layout_closed,
+    PaletteButton, PanelLayout, block_height_closed_px, block_height_px, button_hit, column_layout,
 };
 use crate::palette_grid::{
     COLUMNS, GRID_X_U, GRID_Y_U, Grid, IND_BORDER_EDIT_U, IND_BORDER_U, INDICATOR_H_U,
-    PANEL_WIDTH_U, PITCH_U, PanelView, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_BACKGROUND_ARM_U,
-    RING_BACKGROUND_U, RING_DEST_U, RING_HOVER_U, RING_RANGE_U, SEPARATOR_Y_U, Scroll,
-    TEXT_WIDTH_U, TRACK_W_U, TRACK_X_U, block_parts, corner_rects, drop_mark_rect, indicator_hit,
-    indicator_rects, panel_thumb, ring_rects, swatch_parts, thumb, total_rows,
+    PANEL_WIDTH_U, PITCH_U, PanelView, RING_ACTIVE_U, RING_BACKGROUND_ARM_U, RING_BACKGROUND_U,
+    RING_DEST_U, RING_HOVER_U, RING_RANGE_U, SEPARATOR_Y_U, Scroll, TRACK_W_U, block_parts,
+    corner_rects, drop_mark_rect, indicator_hit, indicator_rects, panel_thumb, panel_width_u,
+    right_line_x_u, ring_rects, swatch_parts, text_width_u, thumb, total_rows_cols, track_x_u,
     visible_rows_reserved,
 };
 use crate::palette_ops::{
@@ -59,9 +58,11 @@ struct Layout {
     n: u32,
     /// The panel, in points.
     rect: Rect,
-    /// Top-left corner of the block of the panel, in points: the panel's minus the
-    /// scroll of the whole panel when it does not fit.
+    /// Top-left corner of the block of the panel, in points: the panel's, under the toolbox (`head`)
+    /// and minus the scroll of the whole block when it does not fit.
     min: Pos2,
+    /// Columns of swatches of the grid.
+    cols: i64,
 }
 
 impl Layout {
@@ -123,6 +124,10 @@ pub struct PanelOutput {
     pub indicator: Option<Indicator>,
     /// `Esc` with nothing else claiming it: the app closes the color editor.
     pub close_editor: bool,
+    /// `Esc` that nothing in the palette claimed (not a text field, a swatch drag, a pending removal
+    /// nor a disabled panel), whether the editor is open or not: the app uses it to close first the
+    /// window of options and then the editor (specs/ui-single-column.md, decision 9).
+    pub escape_free: bool,
 }
 
 /// What the panel says about the swatch under the pointer (specs/ui-composition.md, decision 7),
@@ -170,13 +175,22 @@ pub struct Roles {
 /// What `show_panel` needs from the colors: the background is `None` in the old entry points (which
 /// do not paint the ring of the background nor say `foreground`/`background`).
 #[derive(Clone, Copy)]
-struct PanelRoles {
-    foreground: ColorChoice,
-    background: Option<ColorChoice>,
-    editing: Role,
+pub(crate) struct PanelRoles {
+    pub(crate) foreground: ColorChoice,
+    pub(crate) background: Option<ColorChoice>,
+    pub(crate) editing: Role,
 }
 
 impl PanelRoles {
+    /// The roles of the column (the two colors and which one the editor edits).
+    pub(crate) fn of(roles: Roles) -> PanelRoles {
+        PanelRoles {
+            foreground: roles.foreground,
+            background: Some(roles.background),
+            editing: roles.editing,
+        }
+    }
+
     fn legacy(choice: ColorChoice) -> PanelRoles {
         PanelRoles {
             foreground: choice,
@@ -186,7 +200,7 @@ impl PanelRoles {
     }
 
     /// The choice the editor edits and on which the palette buttons act.
-    fn edited(&self) -> ColorChoice {
+    pub(crate) fn edited(&self) -> ColorChoice {
         match (self.editing, self.background) {
             (Role::Background, Some(background)) => background,
             _ => self.foreground,
@@ -342,8 +356,8 @@ fn show_panel(
     view: &mut PanelView,
     enabled: bool,
     slots: &SlotColors,
-    mut editor: Option<&mut ColorEditor>,
-    mut ops: Option<&mut PaletteOps>,
+    editor: Option<&mut ColorEditor>,
+    ops: Option<&mut PaletteOps>,
 ) -> PanelOutput {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
@@ -356,13 +370,56 @@ fn show_panel(
         .frame(Frame::new().fill(SURFACE_1))
         .show(ui, |ui| {
             let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+            let place = Placement {
+                rect,
+                head_px: 0,
+                cols: COLUMNS as i64,
+            };
+            panel_body(
+                ui, &place, image, roles, scroll, view, enabled, slots, editor, ops,
+            )
+        })
+        .inner
+}
+
+/// Where the body of the panel is painted: the rectangle of the **column** (the panel is the part
+/// under the toolbox), how many physical pixels the toolbox takes at the top (`head_px`, 0 when the
+/// panel is alone) and the columns of swatches of the grid.
+pub(crate) struct Placement {
+    pub rect: Rect,
+    pub head_px: i64,
+    pub cols: i64,
+}
+
+/// The body of the panel: events, layout and painting, in `place.rect`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn panel_body(
+    ui: &mut Ui,
+    place: &Placement,
+    image: &Image,
+    roles: PanelRoles,
+    scroll: &mut Scroll,
+    view: &mut PanelView,
+    enabled: bool,
+    slots: &SlotColors,
+    mut editor: Option<&mut ColorEditor>,
+    mut ops: Option<&mut PaletteOps>,
+) -> PanelOutput {
+    let ctx = ui.ctx().clone();
+    let ppp = ctx.pixels_per_point();
+    let rect = place.rect;
+    let (head_px, cols) = (place.head_px, place.cols);
+    let panel_cols = usize::try_from(cols).unwrap_or(COLUMNS).max(1);
+    {
+        {
             let height_px = (rect.height() * ppp).round() as i64;
             let n = text_scale(ppp);
             let mut layout = Layout {
                 ppp,
                 n,
                 rect,
-                min: rect.min,
+                min: rect.min + vec2(0.0, head_px as f32 / ppp),
+                cols,
             };
             let mode = image.mode();
             let choice = roles.foreground;
@@ -384,7 +441,7 @@ fn show_panel(
             // bottom, icons right above) or the closed one (icons at the bottom); both may scroll
             // the whole panel. Without one (the old entry points) the grid takes all the height.
             let has_editor = editor.is_some();
-            let place = |offset_px: i64| {
+            let slot = |offset_px: i64| {
                 if !has_editor {
                     PanelLayout {
                         scrolling: false,
@@ -392,35 +449,47 @@ fn show_panel(
                         max_offset_px: 0,
                         top_px: height_px,
                         icons_top_px: height_px,
-                        visible_rows: visible_rows_reserved(height_px, 0, n),
+                        visible_rows: visible_rows_reserved(height_px - head_px, 0, n),
                     }
-                } else if shown_target.is_some() {
-                    panel_layout(mode, height_px, n, offset_px)
                 } else {
-                    panel_layout_closed(mode, height_px, n, offset_px)
+                    column_layout(
+                        mode,
+                        height_px,
+                        n,
+                        offset_px,
+                        head_px,
+                        shown_target.is_some(),
+                    )
                 }
             };
-            let block_px = if shown_target.is_some() || !has_editor {
-                block_height_px(mode, n)
-            } else {
-                block_height_closed_px(mode, n)
-            };
-            let mut placed = place(view.offset_px);
+            let block_px = head_px
+                + if shown_target.is_some() || !has_editor {
+                    block_height_px(mode, n)
+                } else {
+                    block_height_closed_px(mode, n)
+                };
+            // Opening the editor takes the scroll of the block to the maximum of the open block (the
+            // editor in sight); closing it brings back the value it had before.
+            if has_editor {
+                let open_max = column_layout(mode, height_px, n, 0, head_px, true).max_offset_px;
+                view.sync_editor(shown_target.is_some(), open_max);
+            }
+            let mut placed = slot(view.offset_px);
             view.offset_px = placed.offset_px;
             if !placed.scrolling {
                 view.rest_px = 0;
             }
-            layout.min = rect.min - vec2(0.0, placed.offset_px as f32 / ppp);
+            layout.min = rect.min + vec2(0.0, (head_px - placed.offset_px) as f32 / ppp);
             let mut output = PanelOutput::default();
             let count = cell_count(image);
-            let total = total_rows(count);
+            let total = total_rows_cols(count, panel_cols);
             let visible = placed.visible_rows;
             // The icon row hangs under a short grid and is anchored below a tall one.
-            let icons_top_px = placed.icon_row_top_px(total, n);
+            let icons_top_px = placed.icon_row_top_px_at(total, n, head_px);
             scroll.clamp(total, visible);
             let changed = view.reveal || view.last_visible.is_some_and(|last| last != visible);
             if changed && let Some(cell) = cell_of_choice(image, choice) {
-                scroll.reveal(cell / COLUMNS, total, visible);
+                scroll.reveal(cell / panel_cols, total, visible);
             }
             view.reveal = false;
             view.last_visible = Some(visible);
@@ -442,6 +511,8 @@ fn show_panel(
             let pointer = ui
                 .input(|i| i.pointer.hover_pos())
                 .filter(|p| rect.contains(*p));
+            // The part of the column under the toolbox: what the grid and the tooltips see.
+            let pointer_in_panel = pointer.filter(|p| p.y >= layout.min.y);
             let events = ui.input(|i| i.events.clone());
             let mut picked = None;
             for event in &events {
@@ -451,7 +522,14 @@ fn show_panel(
                         delta,
                         modifiers,
                         ..
-                    } if !modifiers.command && delta.y != 0.0 && pointer.is_some() => {
+                    } if !modifiers.command
+                        && delta.y != 0.0
+                        && (if placed.scrolling {
+                            pointer.is_some()
+                        } else {
+                            pointer_in_panel.is_some()
+                        }) =>
+                    {
                         let pitch_px = (PITCH_U * i64::from(layout.n)) as f32;
                         let down = -delta.y;
                         let page = if placed.scrolling {
@@ -483,7 +561,7 @@ fn show_panel(
                         && {
                             let (bx, by) = layout.band_px(*pos);
                             (0..INDICATOR_H_U * i64::from(layout.n)).contains(&by)
-                                && (0..PANEL_WIDTH_U * i64::from(layout.n)).contains(&bx)
+                                && (0..panel_width_u(cols) * i64::from(layout.n)).contains(&bx)
                         } =>
                     {
                         let (bx, by) = layout.band_px(*pos);
@@ -515,7 +593,13 @@ fn show_panel(
                         && rect.contains(*pos)
                         && ops.as_deref().is_none_or(|ops| ops.removal().is_none()) =>
                     {
-                        let grid = Grid::new(layout.n, count, visible, scroll.first_row);
+                        let grid = Grid::with_columns(
+                            layout.n,
+                            panel_cols,
+                            count,
+                            visible,
+                            scroll.first_row,
+                        );
                         let (x, y) = layout.grid_px(*pos);
                         if let Some(cell) = grid.index_at(x, y) {
                             output.background = choice_for_cell(image, cell);
@@ -545,7 +629,13 @@ fn show_panel(
                                 continue;
                             }
                         }
-                        let grid = Grid::new(layout.n, count, visible, scroll.first_row);
+                        let grid = Grid::with_columns(
+                            layout.n,
+                            panel_cols,
+                            count,
+                            visible,
+                            scroll.first_row,
+                        );
                         let (x, y) = layout.grid_px(*pos);
                         if let Some(cell) = grid.index_at(x, y) {
                             let cell_u8 = u8::try_from(cell).ok();
@@ -609,9 +699,13 @@ fn show_panel(
                                 claimed = true;
                             }
                         }
-                        // Last in the chain: nothing else claimed `Escape`, so it closes the editor.
-                        if !claimed && enabled && !busy_editing && shown_target.is_some() {
-                            output.close_editor = true;
+                        // Last in the chain: nothing in the palette claimed `Escape`. It is free for the
+                        // app (the window of options first) and, if the editor is open, it closes it.
+                        if !claimed && enabled && !busy_editing {
+                            output.escape_free = true;
+                            if shown_target.is_some() {
+                                output.close_editor = true;
+                            }
                         }
                     }
                     _ => {}
@@ -647,9 +741,9 @@ fn show_panel(
                     ctx.request_repaint();
                 }
             }
-            placed = place(view.offset_px);
+            placed = slot(view.offset_px);
             view.offset_px = placed.offset_px;
-            layout.min = rect.min - vec2(0.0, placed.offset_px as f32 / ppp);
+            layout.min = rect.min + vec2(0.0, (head_px - placed.offset_px) as f32 / ppp);
 
             let mut preview = None;
             if let Some(editor) = editor.as_mut() {
@@ -740,8 +834,8 @@ fn show_panel(
                 );
             }
 
-            let grid = Grid::new(layout.n, count, visible, scroll.first_row);
-            let hover = pointer.and_then(|p| {
+            let grid = Grid::with_columns(layout.n, panel_cols, count, visible, scroll.first_row);
+            let hover = pointer_in_panel.and_then(|p| {
                 let (x, y) = layout.grid_px(p);
                 grid.index_at(x, y)
             });
@@ -765,7 +859,7 @@ fn show_panel(
                 .background
                 .and_then(|choice| cell_of_choice(image, choice));
             let info = swatch_info(
-                image, slots, &roles, hover, active, background, &marks, ppp, n,
+                image, slots, &roles, hover, active, background, &marks, ppp, n, cols,
             );
             let removal_text = ops
                 .as_deref()
@@ -846,8 +940,8 @@ fn show_panel(
                 }
             }
             output
-        })
-        .inner
+        }
+    }
 }
 
 /// Tooltip text of the indicator rectangles (second line).
@@ -866,6 +960,7 @@ fn swatch_info(
     marks: &Marks,
     ppp: f32,
     n: u32,
+    swatch_cols: i64,
 ) -> [String; 2] {
     if let Some(lines) = &marks.drag_text {
         return lines.clone();
@@ -874,7 +969,7 @@ fn swatch_info(
     let line1 = shown
         .and_then(|cell| cell_label_with(image, cell, slots))
         .unwrap_or_default();
-    let cols = columns((TEXT_WIDTH_U * i64::from(n)) as f32, ppp);
+    let cols = columns((text_width_u(swatch_cols) * i64::from(n)) as f32, ppp);
     let line2 = shown
         .map(|cell| {
             if roles.background.is_some() {
@@ -930,18 +1025,20 @@ fn paint(
 
     // Lines: under the band and on the right.
     painter.rect_filled(
-        layout.u_rect(0, SEPARATOR_Y_U, PANEL_WIDTH_U, 1),
+        layout.u_rect(0, SEPARATOR_Y_U, panel_width_u(layout.cols), 1),
         0.0,
         SURFACE_3,
     );
-    // Two 1 u lines: the left one separates the panel from the canvas and the right one, from the
-    // toolbox (the left one falls in the 4 u margin of the grid).
-    for x_u in [0, RIGHT_LINE_X_U] {
+    // Two 1 u lines over the part of the column that is the panel (under the toolbox): the left one
+    // separates it from the canvas (it falls in the 4 u margin of the grid) and the right one is the
+    // last column of the panel.
+    let top = layout.min.y.max(layout.rect.min.y);
+    for x_u in [0, right_line_x_u(layout.cols)] {
         let line = layout.u_rect(x_u, 0, 1, 0);
         painter.rect_filled(
             Rect::from_min_size(
-                Pos2::new(line.min.x, layout.rect.min.y),
-                vec2(line.width(), layout.rect.height()),
+                Pos2::new(line.min.x, top),
+                vec2(line.width(), (layout.rect.max.y - top).max(0.0)),
             ),
             0.0,
             SURFACE_3,
@@ -1051,7 +1148,7 @@ fn paint(
     // otherwise, those of the grid.
     if let Some(bar) = panel_bar {
         if let Some((y, height)) = bar {
-            let x = layout.u_rect(TRACK_X_U, 0, 0, 0).min.x;
+            let x = layout.u_rect(track_x_u(layout.cols), 0, 0, 0).min.x;
             let width = TRACK_W_U as f32 * ui_unit(ppp);
             let top = layout.rect.min.y;
             painter.rect_filled(
@@ -1071,11 +1168,13 @@ fn paint(
     } else if let Some((y, height)) = thumb(scroll.first_row, visible, total, n) {
         let track_h = visible as i64 * PITCH_U;
         painter.rect_filled(
-            layout.u_rect(TRACK_X_U, GRID_Y_U, TRACK_W_U, track_h),
+            layout.u_rect(track_x_u(layout.cols), GRID_Y_U, TRACK_W_U, track_h),
             0.0,
             SURFACE_2,
         );
-        let top = layout.u_rect(TRACK_X_U, GRID_Y_U, TRACK_W_U, 0).min;
+        let top = layout
+            .u_rect(track_x_u(layout.cols), GRID_Y_U, TRACK_W_U, 0)
+            .min;
         let bar = Rect::from_min_size(
             top + vec2(0.0, y as f32 / ppp),
             vec2(TRACK_W_U as f32 * ui_unit(ppp), height as f32 / ppp),
@@ -1180,7 +1279,8 @@ fn drop_target(
     first_row: usize,
     pos: Pos2,
 ) -> Option<u8> {
-    let grid = Grid::new(layout.n, count, visible, first_row);
+    let columns = usize::try_from(layout.cols).unwrap_or(COLUMNS).max(1);
+    let grid = Grid::with_columns(layout.n, columns, count, visible, first_row);
     let (x, y) = layout.grid_px(pos);
     grid.drop_index(x, y)
         .and_then(|index| u8::try_from(index).ok())

@@ -55,6 +55,8 @@ pub struct UiStrings {
     pub fixed_single_prefix: &'static str,
     pub left_click: &'static str,
     pub right_click: &'static str,
+    /// The line that the help of a tool adds: what the right click on its button does.
+    pub tool_button_right_click: &'static str,
     pub options_prefix: &'static str,
     pub capture_prompt: &'static str,
     pub armed: &'static str,

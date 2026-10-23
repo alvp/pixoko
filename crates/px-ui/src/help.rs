@@ -2,7 +2,9 @@
 //! egui: the target of `F1`, the forms of the help, of the list and of the confirmation.
 
 use crate::actions::{AppAction, Platform};
-use crate::chrome::{TOOLBOX_BUTTONS, toolbox_hit, window_layout};
+use crate::chrome::{
+    COLUMN_DEFAULT_COLS, TOOL_LABELS, TOOLBOX_BUTTONS, toolbox_hit_at, window_layout_cols,
+};
 use crate::dialog::{Dialog, FieldId, FieldKind, FieldSpec, FormSpec, Rows};
 use crate::help_texts::{
     HelpEntry, action_of_key, help_entry, help_key, help_table, is_editable, ui,
@@ -142,20 +144,56 @@ pub fn help_target_in_indicator(
     window_px: (i64, i64),
     n: u32,
 ) -> Option<HelpTarget> {
-    let panel = window_layout(window_px, n).panel;
+    help_target_in_indicator_cols(point_px, window_px, n, COLUMN_DEFAULT_COLS)
+}
+
+/// Like [`help_target_in_indicator`] with the column of `wanted` columns of swatches (the width that
+/// was chosen; the window cuts it).
+pub fn help_target_in_indicator_cols(
+    point_px: (i64, i64),
+    window_px: (i64, i64),
+    n: u32,
+    wanted: i64,
+) -> Option<HelpTarget> {
+    let panel = window_layout_cols(window_px, n, wanted).panel;
     crate::palette_grid::indicator_hit(point_px.0 - panel.x, point_px.1 - panel.y, n)
         .map(|_| HelpTarget::Indicator)
+}
+
+/// The target of `F1` with the pointer at `point_px` if it falls inside the window of options, which is
+/// at `window` (its rectangle in this window of the app): the help of the active tool. `None` outside.
+pub fn help_target_in_options(
+    point_px: (i64, i64),
+    window: crate::view::ScreenRect,
+) -> Option<HelpTarget> {
+    let inside = point_px.0 >= window.x
+        && point_px.0 < window.x + window.width
+        && point_px.1 >= window.y
+        && point_px.1 < window.y + window.height;
+    inside.then_some(HelpTarget::Active)
 }
 
 /// The target of `F1` with the pointer at `point_px` (physical pixels of the window): the toolbox
 /// button below, also dimmed; anywhere else, the active tool.
 pub fn help_target_at(point_px: (i64, i64), window_px: (i64, i64), n: u32) -> HelpTarget {
-    let toolbar = window_layout(window_px, n).toolbar;
+    help_target_at_cols(point_px, window_px, n, COLUMN_DEFAULT_COLS)
+}
+
+/// Like [`help_target_at`] with the column of `wanted` columns of swatches.
+pub fn help_target_at_cols(
+    point_px: (i64, i64),
+    window_px: (i64, i64),
+    n: u32,
+    wanted: i64,
+) -> HelpTarget {
+    let layout = window_layout_cols(window_px, n, wanted);
+    let toolbar = layout.toolbar;
+    let cols = crate::chrome::column_cols(window_px.0, n, wanted);
     let (x, y) = (point_px.0 - toolbar.x, point_px.1 - toolbar.y);
     if x < 0 || y < 0 || x >= toolbar.width || y >= toolbar.height {
         return HelpTarget::Active;
     }
-    toolbox_hit(x, y, n)
+    toolbox_hit_at(x, y, n, TOOL_LABELS.len(), cols)
         .and_then(help_target_for_button)
         .unwrap_or(HelpTarget::Active)
 }
@@ -174,6 +212,9 @@ fn zone_text(entry: &HelpEntry, action: AppAction, keymap: &Keymap, platform: Pl
     }
     if let Some(right) = entry.mouse_right {
         mouse.push(format!("{}{right}", strings.right_click));
+    }
+    if matches!(action, AppAction::SelectTool(_)) {
+        mouse.push(strings.tool_button_right_click.to_string());
     }
     if !mouse.is_empty() {
         blocks.push(mouse.join("\n"));
