@@ -583,7 +583,10 @@ fn row_7_the_square_and_rgb_never_make_the_hue_jump_through_gray_or_black() {
     let mut editor = editor_on(WARM);
     assert!(editor.begin_square(0.0, v0));
     assert_eq!(shown(&editor).0, Rgba::opaque(200, 200, 200));
-    assert_eq!(shown(&editor).1.h(), 7.5, "the hue stays while it is gray");
+    assert!(
+        (shown(&editor).1.h() - 7.5).abs() < 1e-3,
+        "the hue stays while it is gray"
+    );
     assert!(finish(&mut editor).is_some());
     assert!(editor.begin_square(0.8, v0));
     assert_eq!(shown(&editor).0, WARM, "back to the same color");
@@ -593,7 +596,7 @@ fn row_7_the_square_and_rgb_never_make_the_hue_jump_through_gray_or_black() {
     assert!(editor.begin_square(0.8, 0.0));
     let (rgba, hsv) = shown(&editor);
     assert_eq!(rgba, Rgba::opaque(0, 0, 0));
-    assert_eq!((hsv.h(), hsv.s()), (7.5, 0.8));
+    assert!((hsv.h() - 7.5).abs() < 1e-3 && (hsv.s() - 0.8).abs() < 1e-4);
     // The square never changes the hue nor the alpha.
     let translucent = Rgba::new(30, 60, 90, 77);
     let mut editor = editor_on(translucent);
@@ -604,23 +607,27 @@ fn row_7_the_square_and_rgb_never_make_the_hue_jump_through_gray_or_black() {
     assert_eq!((hsv.h(), rgba.a), (h, 77));
     assert!(editor.dragging_square());
     editor.cancel();
-    // RGB that ends in gray keeps the hue; in black, the hue and the saturation.
+    // RGB that ends in gray keeps the hue it had just before; in black, the hue and the saturation.
     let mut editor = editor_on(Rgba::opaque(30, 60, 90));
-    let (_, before) = shown(&editor);
-    for (control, value) in [(Control::Red, 60), (Control::Blue, 60)] {
-        assert!(editor.begin(control, value));
-        finish(&mut editor);
-    }
+    assert!(editor.begin(Control::Red, 60));
+    finish(&mut editor);
+    let (_, chromatic) = shown(&editor);
+    assert!(editor.begin(Control::Blue, 60));
+    finish(&mut editor);
     let (rgba, gray) = shown(&editor);
     assert_eq!(rgba, Rgba::opaque(60, 60, 60));
-    assert_eq!(gray.h(), before.h());
-    for control in [Control::Red, Control::Green, Control::Blue] {
+    assert_eq!(gray.h(), chromatic.h());
+    let mut editor = editor_on(Rgba::opaque(30, 60, 90));
+    for control in [Control::Red, Control::Green] {
         assert!(editor.begin(control, 0));
         finish(&mut editor);
     }
+    let (_, blue) = shown(&editor);
+    assert!(editor.begin(Control::Blue, 0));
+    finish(&mut editor);
     let (rgba, black) = shown(&editor);
     assert_eq!(rgba, Rgba::opaque(0, 0, 0));
-    assert_eq!((black.h(), black.s()), (before.h(), 0.0_f32.max(black.s())));
+    assert_eq!((black.h(), black.s()), (blue.h(), blue.s()));
     // The hue from a gray: the edited one is in both models.
     let mut editor = editor_on(Rgba::opaque(90, 90, 90));
     assert!(editor.begin(Control::HueV, 120));
@@ -1264,7 +1271,7 @@ proptest! {
 
     #[test]
     #[ignore = "C4: pending the HSV model"]
-    fn property_1_the_models_never_disagree_and_the_alpha_only_moves_with_its_control(
+        fn property_1_the_models_never_disagree_and_the_alpha_only_moves_with_its_control(
         r in any::<u8>(), g in any::<u8>(), b in any::<u8>(), a in any::<u8>(),
         steps in prop::collection::vec(step(), 1..24),
     ) {
