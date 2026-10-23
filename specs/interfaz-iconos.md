@@ -1,5 +1,7 @@
 # Interfaz · Unidad I.4: iconos propios en la caja, el zoom y el editor de paleta
 
+**Actualización de la unidad C2 (2026-10-23), que prevalece:** la rejilla de la caja deja de ser de cuatro columnas fijas: son `c(k) = ⌊(14k+2)/25⌋` botones por fila según el ancho de la columna (nueve por fila a 16 columnas, con las cinco herramientas en una fila y el zoom debajo); el recuadro de opciones de 138 u desaparece y la regla de capacidad es que 20 herramientas a 8 columnas (cinco filas) caben en la ventana mínima. ([`ui-single-column.md`](ui-single-column.md))
+
 Estado: **aprobada** (2026-10-21; decisiones 1 a 9 como están, con los matices del visto bueno del final de la página, que **prevalecen sobre cualquier otra frase de ella**). Cambios previstos: `px-ui` y `px-app`, más `assets/icons/` (14 PNG y su `README.md`). **No se toca `px-core` ni `px-raster`.** Sin dependencias nuevas (el decodificador es `px-formats`, que `px-app` ya usa) ni `unsafe`; `docs/DEPENDENCIES.md` no cambia; sin `license-auditor` (ni dependencias ni cambios en `px-core`, `px-formats` o `px-raster`).
 
 **Actualización de la unidad C1 (2026-10-22), que prevalece:** el criterio del alto es el **60 %** de 720 pt (432), no el 65 %; el editor de indexadas mide 186 u (214 − 28) porque la fila de cinco iconos (28 u) va bajo la rejilla; el bloque mide 277 u y la ventana mínima 313 u. El panel mínimo de 277 u aloja **tres** filas de herramientas (12; 275 u), no cuatro: con 13 a 16 el recuadro de opciones de 138 u no cabe y lo decide el hito 4. ([`ui-composition.md`](ui-composition.md))

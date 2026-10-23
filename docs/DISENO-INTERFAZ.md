@@ -15,7 +15,7 @@ Regla de uso del manual: es una referencia privada, guardada fuera del repositor
 
 ## Disposición de la pantalla
 
-La página ocupa la izquierda y todos los controles van a la derecha, en dos columnas, como en el programa de referencia.
+La página ocupa la izquierda y todos los controles van a la derecha, en una sola columna de ancho ajustable (C2), como en el programa de referencia.
 
 &#91;embedded content: disposición de la pantalla · lienzo, paleta y caja de herramientas\]
 
@@ -25,9 +25,11 @@ El indicador de color y el panel de opciones son las dos piezas nuevas; el resto
 | --- | --- | --- |
 | Arriba | Barra de menús, siempre visible (el original la muestra con el botón derecho sobre la barra de título) | Existe, con 5 menús |
 | Izquierda | La página o lienzo, con zoom y desplazamiento | Existe |
-| Derecha, junto al lienzo | Panel de la paleta: el indicador de color grande arriba, la rejilla compacta, la fila de iconos de la paleta y, a demanda, el editor de color | Hecho (I.2a, I.3, C1): a la derecha del lienzo, con una línea fina a cada lado; el editor sale con `p` o con el clic derecho en el indicador |
-| Derecha, en el borde | Caja de herramientas: herramientas, botones de zoom y, debajo, el panel de opciones de la herramienta activa | Hecho (I.3 e I.4): en el borde derecho, una rejilla de iconos de 24 u en cuatro columnas y un recuadro fijo de opciones de 99 × 138 u (hoy: nombre, atajo y `sin opciones`) |
+| Derecha, junto al lienzo | Panel de la paleta, bajo la caja: el indicador de color grande arriba, la rejilla compacta, la fila de iconos de la paleta y, a demanda, el editor de color | Hecho (I.2a, I.3, C1, C2): parte de la columna única; el editor sale con `p` o con el clic derecho en el indicador |
+| Derecha, en el borde | Caja de herramientas, arriba de la columna: herramientas y botones de zoom; las opciones de la herramienta activa van en una ventana flotante | Hecho (I.3, I.4, C2): una rejilla de iconos de 24 u en filas de `c(k)` botones; el clic derecho en una herramienta la elige y abre o cierra su ventana de opciones (224 × (104 + 18·f) u: nombre, atajo, `sin opciones` y ayuda breve) |
 | Abajo | Barra de estado con herramienta, coordenadas, color y avisos | Existe |
+
+**Hecho en C2 (23 de octubre de 2026):** una sola columna en el borde derecho (caja · indicador · rejilla · iconos · editor) de ancho ajustable arrastrando su borde izquierdo (zona de 4 u, pasos de una columna de muestras de 14 u: `W(k) = 14k + 9`, de 8 columnas a lo que deje 128 u al lienzo; 16 = 233 u por defecto; la columna cede antes que el lienzo y vuelve al ancho elegido al ensanchar la ventana). Los botones de la caja se reparten en filas de `c(k) = ⌊(14k+2)/25⌋`. Con el editor abierto o una quita pendiente la columna es de al menos 16 columnas (el editor mide 233 u). El recuadro de opciones desaparece: el clic derecho en una herramienta la elige y abre o cierra una **ventana flotante** no modal, una sola, con posición única y desplazamiento por herramienta; `Esc` la cierra antes que el editor. Con la ventana baja el bloque entero (caja incluida) se desplaza con la rueda; al abrir el editor el desplazamiento va al máximo y al cerrarlo vuelve al anterior. Menú y barra de estado dejan de tener cursor de redimensionar. Las ventanas mínimas no cambian (313 u de alto, 468 u de ancho: el ancho lo fijan ahora las 66 columnas de la barra de estado, no la columna). Spec: `specs/ui-single-column.md`. **Mejora futura anotada:** el editor de color como ventana flotante.
 
 **Hecho en C1 (22 de octubre de 2026):** el editor de color deja de estar siempre abierto (`p`, o clic derecho en el indicador; se cierra con `Esc`, con `p`, con un segundo clic derecho en el rectángulo que edita o al cambiar de documento) y la rejilla gana su espacio; el indicador son dos rectángulos de 40 × 24 y 64 × 32 u en una banda de 44 u (el borde del rol que edita el editor mide 2 u `ACCENT`); la rejilla es compacta (muestras de 12 u, huecos de 2 u, paso de 14 u); la información de la muestra sale en la barra de estado (la rejilla no tiene tooltip; el indicador sí); las cinco operaciones de paleta viven en una fila de iconos justo bajo la rejilla (anclada al fondo si la rejilla es más alta que el espacio; 28 u, con el editor abierto y cerrado). El bloque mide 277 u y la ventana mínima baja de 341 a **313 u** (417,33 pt a `ppp` 1,5), el suelo que pone el panel de capas flotante; el criterio del alto pasa del 65 % al **60 %** de 720 pt (432). El ancho mínimo (468 u) no cambia. Spec: `specs/ui-composition.md`.
 
@@ -35,7 +37,7 @@ El indicador de color y el panel de opciones son las dos piezas nuevas; el resto
 
 Tres puntos que condicionan la geometría:
 
-- **Iconos.** Hecho en I.4 (21 de octubre de 2026): las herramientas, el zoom y el editor de la paleta usan 14 iconos propios de 16 × 16 (`assets/icons/`) sobre botones de 24 u con relieve; una rejilla de cuatro columnas dejaba sitio a 16 herramientas en el alto mínimo (con C1, el panel mínimo de 277 u aloja **12**, tres filas; con 13 o más el recuadro de opciones de 138 u ya no cabe y lo decide el hito 4). Spec: `specs/interfaz-iconos.md`.
+- **Iconos.** Hecho en I.4 (21 de octubre de 2026): las herramientas, el zoom y el editor de la paleta usan 14 iconos propios de 16 × 16 (`assets/icons/`) sobre botones de 24 u con relieve; una rejilla de cuatro columnas dejaba sitio a 16 herramientas en el alto mínimo (con C1 y C2, la ventana mínima aloja hasta **20** herramientas a 8 columnas, cinco filas, sin recuadro de opciones: la ventana de opciones flota). Spec: `specs/interfaz-iconos.md`.
 - **Panel de opciones.** Su altura se reserva siempre, también cuando la herramienta no tiene opciones, para que la caja no salte al cambiar de herramienta.
 - **Ocultar paneles.** F10 oculta la caja y la barra, y F9 solo la barra, como en el original. Es una mejora posterior; la barra de menús y la de estado se quedan siempre.
 
@@ -187,7 +189,7 @@ Ventajas del panel fijo: la paleta no se oculta nunca, las opciones se ven mient
 | Simetría | Tipo (punto, mosaico, cíclica, espejo), orden y colocación del centro | 4 |
 | Lupa y zoom | Nivel de zoom | 2 (ya hecho con los botones de zoom) |
 
-Hoy el lápiz, la línea, el relleno, el cuentagotas y el borrador no tienen opciones: el recuadro (I.3) enseña el nombre, el atajo de la tabla y `sin opciones`, y se llena con cada herramienta nueva (su cuerpo, de 7 filas de 13 columnas, se desplaza por filas). Cada fila de la tabla es una spec con su propio visto bueno. Las opciones del hito 4 deben caber en esas 13 columnas o ensanchar la caja (hasta 44 u más a `ppp` 1,5 sin pasar de 683 pt, con su propia spec); el menú del pincel es una ventana aparte, no este recuadro.
+Hoy el lápiz, la línea, el relleno, el cuentagotas y el borrador no tienen opciones: la ventana de opciones (C2) enseña el nombre, el atajo de la tabla, `sin opciones` y una ayuda breve, y se llena con cada herramienta nueva (su cuerpo, de hasta 8 filas de 18 u, se desplaza por filas y se recuerda por herramienta). Cada fila de la tabla es una spec con su propio visto bueno. Las opciones del hito 4 caben en esa ventana de 224 u de ancho; el menú del pincel es una ventana aparte.
 
 ## Qué se descarta
 
