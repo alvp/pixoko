@@ -25,7 +25,7 @@ El indicador de color y el panel de opciones son las dos piezas nuevas; el resto
 | --- | --- | --- |
 | Arriba | Barra de menús, siempre visible (el original la muestra con el botón derecho sobre la barra de título) | Existe, con 5 menús |
 | Izquierda | La página o lienzo, con zoom y desplazamiento | Existe |
-| Derecha, junto al lienzo | Panel de la paleta, bajo la caja: el indicador de color grande arriba, la rejilla compacta con el asa, la barra de color, el campo hexadecimal, la fila de iconos de la paleta y, a demanda, el editor de color (solo separador y deslizadores) | Hecho (I.2a, I.3, C1, C2, C3): parte de la columna única; el editor sale con `p` o con el clic derecho en el indicador |
+| Derecha, junto al lienzo | Panel de la paleta, bajo la caja: la rejilla compacta con el asa, las dos barras de color (primer plano y fondo) con el botón de intercambio, el campo hexadecimal, la fila de iconos de la paleta y, a demanda, el editor de color (cuadrado de saturación y brillo, barras de tono y alfa, selector RGB / HSL / HSV y cuatro deslizadores) | Hecho (I.2a, I.3, C1 a C4): parte de la columna única; el editor sale con `p` o con el clic derecho en una barra; el indicador de C1 desaparece en C4 |
 | Derecha, en el borde | Caja de herramientas, arriba de la columna: herramientas y botones de zoom; las opciones de la herramienta activa van en una ventana flotante | Hecho (I.3, I.4, C2): una rejilla de iconos de 24 u en filas de `c(k)` botones; el clic derecho en una herramienta la elige y abre o cierra su ventana de opciones (224 × (104 + 18·f) u: nombre, atajo, `sin opciones` y ayuda breve) |
 | Abajo | Barra de estado con herramienta, coordenadas, color y avisos | Existe |
 
