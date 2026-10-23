@@ -302,6 +302,25 @@ impl Grid {
         u16::try_from(index.clamp(1, 256)).ok()
     }
 
+    /// Like [`Grid::len_at`] for a drag that is alive: a point outside the zone asks for the
+    /// length of the nearest cell (the column and the row are clamped to the zone). `None` only if
+    /// the zone has no visible row.
+    pub fn len_nearest(&self, x: i64, y: i64) -> Option<u16> {
+        let half = DROP_HALF_GAP_U * self.n;
+        let pitch = PITCH_U * self.n;
+        let rows_left = total_rows_cols(self.count, self.columns).saturating_sub(self.first_row);
+        let rows = self.visible_rows.min(rows_left);
+        if rows == 0 {
+            return None;
+        }
+        let col = (x.saturating_add(half).div_euclid(pitch)).clamp(0, self.columns as i64 - 1);
+        let shown = (y.saturating_add(half).div_euclid(pitch)).clamp(0, rows as i64 - 1);
+        let index = (self.first_row + usize::try_from(shown).ok()?)
+            .checked_mul(self.columns)?
+            .checked_add(usize::try_from(col).ok()?)?;
+        u16::try_from(index.clamp(1, 256)).ok()
+    }
+
     /// Swatch under the point `(x, y)`, or `None` in a gap, outside the grid, in a row
     /// that is not seen or without a swatch.
     pub fn index_at(&self, x: i64, y: i64) -> Option<usize> {

@@ -18,6 +18,9 @@ pub const AUTOSCROLL_MS: u64 = 120;
 /// Columns of the status bar a text of this module has to fit in (the minimum window).
 pub const STATUS_COLUMNS: usize = 66;
 
+/// What the status line says while the handle is held at the longest palette.
+pub const MAX_ENTRIES_HINT: &str = texts::MAX_ENTRIES_HINT;
+
 /// What the status line says over the handle.
 pub const HANDLE_HINT: &str = texts::HANDLE_HINT;
 

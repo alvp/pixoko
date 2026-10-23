@@ -37,8 +37,8 @@ use crate::palette_ops::{
     removal_prompt, removal_warning, rotation_range, transparent_toggle, uses_entry,
 };
 use crate::palette_resize::{
-    HANDLE_HINT, HandleEnd, PendingResize, dimmed, drag_status, drag_zone_cells, handle_bars,
-    handle_index, resize_prompt,
+    HANDLE_HINT, HandleEnd, MAX_ENTRIES_HINT, MAX_LEN, PendingResize, dimmed, drag_status,
+    drag_zone_cells, handle_bars, handle_index, resize_prompt,
 };
 use crate::status::columns;
 use crate::text::{font_size_points, printable, text_scale, ui_unit};
@@ -999,7 +999,11 @@ pub(crate) fn panel_body(
                 }
             };
             let status_hint = if let Some(len) = preview_len {
-                Some(drag_status(count, len))
+                Some(if len >= MAX_LEN {
+                    MAX_ENTRIES_HINT.to_string()
+                } else {
+                    drag_status(count, len)
+                })
             } else if marks.drag_text.is_some() {
                 Some(joined(&info))
             } else if let Some(lines) = &removal_text {
@@ -1544,51 +1548,60 @@ fn handle_view(
 
 /// Cells of the grid for the hit test of the handle at this moment: while the handle is pressed the
 /// zone is the one of its preview; otherwise the one of the frame.
-fn zone_cells(cells: usize, count: usize, ops: &PaletteOps, columns: usize) -> usize {
+///
+/// Gives the zone and, inside it, the cells the preview already occupies (the zone without its one
+/// extra row): a pointer that leaves the zone asks for a cell of the occupied rows, so that
+/// holding it outside does not open a new row each frame.
+fn zone_cells(cells: usize, count: usize, ops: &PaletteOps, columns: usize) -> (usize, usize) {
     match ops.handle_state() {
         Some(handle) => {
             let preview = handle.preview_len();
-            drag_zone_cells(preview, columns)
-                .max(total_rows_cols(count.max(preview) + 1, columns) * columns)
+            let occupied = total_rows_cols(count.max(preview) + 1, columns) * columns;
+            (drag_zone_cells(preview, columns).max(occupied), occupied)
         }
-        None => cells,
+        None => (cells, cells),
     }
 }
 
-/// The new length that the handle asks for under an egui point: the cell under it, in the zone.
+/// The new length that the handle asks for under an egui point: the cell under it or, outside the
+/// zone, the nearest one (the drag stays alive wherever the pointer goes).
 fn handle_target(
     layout: &Layout,
-    cells: usize,
+    (zone, occupied): (usize, usize),
     visible: usize,
     first_row: usize,
     pos: Pos2,
 ) -> Option<u16> {
     let columns = usize::try_from(layout.cols).unwrap_or(COLUMNS).max(1);
-    let grid = Grid::with_columns(layout.n, columns, cells, visible, first_row);
     let (x, y) = layout.grid_px(pos);
-    grid.len_at(x, y)
+    Grid::with_columns(layout.n, columns, zone, visible, first_row)
+        .len_at(x, y)
+        .or_else(|| {
+            Grid::with_columns(layout.n, columns, occupied, visible, first_row).len_nearest(x, y)
+        })
 }
 
-/// `-1` if the pointer is in the first half row of the zone, `1` in the last half row and `0`
-/// elsewhere (and outside the columns of the grid): where the rows scroll on their own.
+/// `-1` if the pointer is in the first half row of the zone or above it, `1` in the last half row
+/// or below it and `0` elsewhere: where the rows scroll on their own.
 fn autoscroll_band(
     layout: &Layout,
-    cells: usize,
+    (cells, _): (usize, usize),
     visible: usize,
     first_row: usize,
     pos: Pos2,
 ) -> i32 {
     let columns = usize::try_from(layout.cols).unwrap_or(COLUMNS).max(1);
     let n = i64::from(layout.n);
-    let (x, y) = layout.grid_px(pos);
+    let (_, y) = layout.grid_px(pos);
     let rows_left = total_rows_cols(cells, columns).saturating_sub(first_row);
     let shown = i64::try_from(visible.min(rows_left)).unwrap_or(0);
     let half = PITCH_U * n / 2;
-    if x < 0 || x >= i64::try_from(columns).unwrap_or(0) * PITCH_U * n || shown == 0 {
+    // Only the height counts: held above the zone or below it, the rows keep scrolling.
+    if shown == 0 {
         0
-    } else if (0..half).contains(&y) {
+    } else if y < half {
         -1
-    } else if (shown * PITCH_U * n - half..shown * PITCH_U * n).contains(&y) {
+    } else if y >= shown * PITCH_U * n - half {
         1
     } else {
         0

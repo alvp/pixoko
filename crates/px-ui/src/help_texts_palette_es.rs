@@ -55,6 +55,7 @@ pub(crate) const MENU_PALETTE_SIZE: &str = "Tamaño de la paleta…";
 
 // Status bar.
 pub(crate) const HANDLE_HINT: &str = "asa de la paleta: arrastra para añadir o quitar colores";
+pub(crate) const MAX_ENTRIES_HINT: &str = "máximo 256 entradas en una imagen indexada";
 pub(crate) const WARN_LOSES_TRANSPARENT: &str = "aviso: se pierde la transparente";
 pub(crate) const WARN_PIXELS_OPAQUE: &str = "aviso: sus píxeles quedan opacos";
 pub(crate) const WARN_DESTINATION_TRANSPARENT: &str = "aviso: destino transparente";
