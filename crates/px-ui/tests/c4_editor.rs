@@ -537,7 +537,6 @@ fn finish(editor: &mut ColorEditor) -> Option<Commit> {
 }
 
 #[test]
-#[ignore = "C4: pending the HSV model"]
 fn row_7_hsv_converts_the_corners_of_the_cube_and_a_sample_and_normalizes() {
     for (color, h, s, v) in [
         (Rgba::opaque(0, 0, 0), 0.0, 0.0, 0.0),
@@ -576,7 +575,6 @@ fn row_7_hsv_converts_the_corners_of_the_cube_and_a_sample_and_normalizes() {
 }
 
 #[test]
-#[ignore = "C4: pending the HSV model"]
 fn row_7_the_square_and_rgb_never_make_the_hue_jump_through_gray_or_black() {
     let (_, v0) = (0, 200.0f32 / 255.0);
     // The square: saturation to 0 and back.
@@ -645,7 +643,6 @@ fn row_7_the_square_and_rgb_never_make_the_hue_jump_through_gray_or_black() {
 }
 
 #[test]
-#[ignore = "C4: pending the HSV model"]
 fn row_7_the_auxiliary_is_recomputed_only_when_the_target_or_the_stored_color_change_outside() {
     // After its own confirmation the model is not derived again: the gray keeps its hue.
     let mut editor = editor_on(Rgba::opaque(30, 60, 90));
@@ -1270,7 +1267,6 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    #[ignore = "C4: pending the HSV model"]
         fn property_1_the_models_never_disagree_and_the_alpha_only_moves_with_its_control(
         r in any::<u8>(), g in any::<u8>(), b in any::<u8>(), a in any::<u8>(),
         steps in prop::collection::vec(step(), 1..24),
