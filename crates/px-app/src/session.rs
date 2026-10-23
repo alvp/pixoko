@@ -1112,6 +1112,8 @@ mod aux_tests;
 #[cfg(test)]
 mod c1_tests;
 #[cfg(test)]
+mod c2_tests;
+#[cfg(test)]
 mod color_cycle_tests;
 #[cfg(test)]
 mod convert_tests;
