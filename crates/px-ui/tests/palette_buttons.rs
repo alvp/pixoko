@@ -794,6 +794,7 @@ impl Bench {
         self.history.iter().all(|o| {
             *o == PanelOutput {
                 close_editor: o.close_editor,
+                escape_free: o.escape_free,
                 ..PanelOutput::default()
             }
         })
@@ -2556,7 +2557,8 @@ fn row_14_d_escape_with_a_slider_in_progress_cancels_only_the_slider() {
 }
 
 /// (e) Nothing in progress: `Escape` does not touch the range, the history or the choice and does
-/// not warn; the only thing it does (C1) is to ask to close the color editor, last in the chain.
+/// not warn; the only thing it does (C1) is to ask to close the color editor, last in the chain
+/// (and, from C2, to say that the palette left the `Escape` free for the app).
 #[test]
 fn row_14_e_escape_with_nothing_in_progress_only_asks_to_close_the_editor() {
     for ppp in PPPS {
@@ -2569,6 +2571,7 @@ fn row_14_e_escape_with_nothing_in_progress_only_asks_to_close_the_editor() {
             f.output_2,
             PanelOutput {
                 close_editor: true,
+                escape_free: true,
                 ..PanelOutput::default()
             },
             "ppp {ppp}"

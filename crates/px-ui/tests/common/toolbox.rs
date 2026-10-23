@@ -2,9 +2,10 @@
 //! decisión 13): sustituye a los envoltorios `show_toolbar` y `show_toolbar_with`, ya retirados. La
 //! caja se pinta sin iconos (un `IconSet` vacío): lo que se prueba aquí es dónde golpea cada botón.
 //!
-//! También da el centro de cada uno de los nueve botones en `u` desde la esquina de la caja, escrito
-//! con literales de la spec (casilla `i` en `(4 + 25·(i mod 4), 4 + 25·(i div 4))` de 24 × 24 u; el
-//! zoom, una fila en y = 80), independiente de `chrome`.
+//! También da el centro de cada uno de los nueve botones en `u` desde la esquina de la caja con las
+//! 16 columnas de hoy, escrito con literales de la spec (specs/ui-single-column.md: las cinco
+//! herramientas en una fila en y = 4, casilla `i` en `x = 4 + 25·i` de 24 × 24 u; el zoom, una fila
+//! en y = 55), independiente de `chrome`.
 
 #![allow(dead_code)]
 
@@ -12,7 +13,6 @@ use egui::Ui;
 use px_ui::actions::{AppAction, Platform, UiState};
 use px_ui::icons::IconSet;
 use px_ui::keymap::{Keymap, default_keymap};
-use px_ui::options::OptionsState;
 use px_ui::toolbar::{ToolboxView, show_toolbox};
 
 /// Pinta la caja con la tabla de teclas dada y devuelve la acción del botón pulsado.
@@ -26,7 +26,6 @@ pub fn toolbox_with(
     let view = ToolboxView {
         state,
         zoom_label,
-        options: &OptionsState::default(),
         icons: &IconSet::default(),
     };
     show_toolbox(ui, &view, keymap, platform).action
@@ -40,9 +39,9 @@ pub fn toolbox_2(ui: &mut Ui, state: &UiState, zoom_label: &str) -> Option<AppAc
 /// Centro `(x_u, y_u)` del botón `i` de la caja: 0 a 4 las herramientas, 5 a 8 el zoom.
 pub fn center_u(i: usize) -> (i64, i64) {
     let (column, y) = if i < 5 {
-        ((i % 4) as i64, 4 + 25 * (i / 4) as i64)
+        (i as i64, 4)
     } else {
-        ((i - 5) as i64, 80)
+        ((i - 5) as i64, 55)
     };
     (4 + 25 * column + 12, y + 12)
 }

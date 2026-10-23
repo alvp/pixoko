@@ -32,7 +32,7 @@
 //! - Los píxeles pendientes de A9 son, por cada `K`, las celdas `K×K` de la rejilla (filas 1 y 2 y
 //!   hasta 12 columnas) rellenas **enteras**: solo la esquina de cada celda se debe ver.
 //! - El rótulo de la columna (A8) cabe si su texto pintado es entero (sin recorte) y termina dentro
-//!   del botón (`TOOLBAR_MARGIN_U + toolbar_button_width_u()` `u` desde el borde de la columna).
+//!   de la columna (`column_width_u(16) - TOOLBAR_MARGIN_U` `u` desde su borde izquierdo).
 //! - El título de la ventana y la barra de estado son de `px-app` (usan `Zoom::to_string`): aquí solo
 //!   se comprueba que `zoom_label` es `Zoom {Display}`.
 
@@ -50,7 +50,7 @@ use px_ui::actions::{AppAction, Locks, Origin, UiState, enabled, is_blocked};
 use px_ui::background::{CanvasBackground, Fill, background_fill};
 use px_ui::canvas::{BACKGROUND, Canvas, CanvasEvent, CanvasInfo, CanvasInput};
 use px_ui::checker::shade_at;
-use px_ui::chrome::{TOOLBAR_MARGIN_U, toolbar_button_width_u};
+use px_ui::chrome::{COLUMN_DEFAULT_COLS, TOOLBAR_MARGIN_U, column_width_u};
 use px_ui::palette_grid::{CHECK_A, CHECK_B};
 use px_ui::stroke::Stroke;
 use px_ui::text::text_scale;
@@ -1554,10 +1554,11 @@ fn row_a8_zoom_1_2_zoom_1_64_and_zoom_x12_fit_in_the_column_at_the_five_scales()
                 n as u32,
             )
             .x;
-            let limit = (toolbox_x + (TOOLBAR_MARGIN_U + toolbar_button_width_u()) * n) as f32;
+            let limit =
+                (toolbox_x + (column_width_u(COLUMN_DEFAULT_COLS) - TOOLBAR_MARGIN_U) * n) as f32;
             assert!(
                 text_2.rect().max.x * ppp <= limit + tolerance_of_egui(ppp),
-                "ppp {ppp}: `{label_2}` termina en {} px y el botón acaba en {limit}",
+                "ppp {ppp}: `{label_2}` termina en {} px y la rejilla de la caja acaba en {limit}",
                 text_2.rect().max.x * ppp
             );
             assert!(
@@ -1566,7 +1567,7 @@ fn row_a8_zoom_1_2_zoom_1_64_and_zoom_x12_fit_in_the_column_at_the_five_scales()
                 text_2.rect(),
                 text_2.clip
             );
-            // 10 caracteres como mucho: 70 u de avance caben en los 99 u del botón.
+            // 10 caracteres como mucho: 70 u de avance caben en los 225 u de la rejilla.
             assert!(label_2.chars().count() <= 10);
         }
     }

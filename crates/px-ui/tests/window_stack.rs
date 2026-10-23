@@ -1,13 +1,14 @@
-//! Tests de la pila de la ventana con sus piezas reales: menú, columna, panel de paletas, barra de
-//! estado y lienzo (specs/hito-2-menu-herramientas.md, «Casos» filas 7, 9 y 10 en su parte de
-//! banco de egui, y propiedad 4).
+//! Tests de la pila de la ventana con sus piezas reales: menú, columna única (caja de herramientas
+//! y panel de paletas), barra de estado y lienzo (specs/hito-2-menu-herramientas.md, «Casos» filas
+//! 7, 9 y 10 en su parte de banco de egui, y propiedad 4; C2, specs/ui-single-column.md).
 //!
-//! El banco es el de `tests/panel_baja.rs` con las dos piezas nuevas: un `egui::Context` ejecuta
-//! fotogramas con `RawInput` sintético, sin GPU ni pantalla. En cada fotograma, como hace la app:
-//! `show_menu` (arriba), `status::show` (abajo), `show_toolbar`, `palette_panel::show_editing_view`
-//! y el lienzo (`interact_ordered` y `paint`). Los rectángulos de cada pieza salen de la diferencia
-//! de `ui.available_rect_before_wrap()` antes y después de pintarla (la caja y el panel están a la
-//! derecha: se llama primero la caja y lo que queda disponible se encoge por su borde derecho).
+//! El banco es el de `tests/panel_baja.rs` con la columna: un `egui::Context` ejecuta fotogramas con
+//! `RawInput` sintético, sin GPU ni pantalla. En cada fotograma, como hace la app: `show_menu`
+//! (arriba), `status::show` (abajo), `column::show_column` y el lienzo (`interact_ordered` y
+//! `paint`). Los rectángulos de cada pieza salen de la diferencia de
+//! `ui.available_rect_before_wrap()` antes y después de pintarla (la columna está a la derecha y lo
+//! que queda disponible se encoge por su borde derecho). La caja y la paleta son las dos partes
+//! apiladas de esa columna: `window_layout` da el rectángulo de cada una.
 //!
 //! - Fila 7: los rectángulos del banco son los de `chrome::window_layout`, enteros en píxeles
 //!   físicos (error de `f32` ≤ 0,001), a las cinco escalas y en la ventana por defecto (960 × 720 pt)
@@ -17,40 +18,48 @@
 //!   en un lienzo con origen (0,0) y el puntero desplazado, en la primera y la última coordenada
 //!   física de cada píxel de la imagen, en las cuatro esquinas del lienzo y un píxel fuera; y
 //!   `Ajustar` centra la imagen en **ese** rectángulo (no en la ventana).
-//! - Fila 10 (respaldo B con la columna): con el panel de `200·n`, `100·n` y `305·n` de alto, la
-//!   rueda solo mueve el panel; la columna y el menú no se desplazan y se pintan recortados a su
-//!   rectángulo; los botones de la columna y los deslizadores golpean en su sitio; sin avisos en la
-//!   barra; con alto ≥ bloque el desplazamiento vuelve a 0 en el mismo fotograma.
+//! - Fila 10 (respaldo B con la columna): con la columna de `200·n`, `100·n` y `361·n` de alto, la
+//!   rueda sobre la caja o la paleta mueve el bloque entero y el menú, la barra y el lienzo no lo
+//!   mueven; el menú no se desplaza y se pinta recortado a su rectángulo; los botones de la caja y
+//!   los deslizadores golpean en su sitio (con el bloque desplazado, donde lo pone el
+//!   desplazamiento); sin avisos en la barra; con alto ≥ bloque el desplazamiento vuelve a 0 en el
+//!   mismo fotograma.
 //! - Propiedad 4: conversión pantalla-imagen con el origen del lienzo desplazado (pura).
 //!
-//! Supuestos (la spec no los fija): `show_menu` crea su propio panel superior y `show_toolbar` el
-//! suyo a la derecha, como `status::show` y `palette_panel::show` crean los suyos; los títulos del
-//! menú se pintan con el texto del título a `x = (4 + 6)·u` y `y = 1·u` del borde del menú.
+//! Supuestos (la spec no los fija): `show_menu` crea su propio panel superior y `show_column` el
+//! suyo a la derecha, como `status::show` crea el suyo; los títulos del menú se pintan con el texto
+//! del título a `x = (4 + 6)·u` y `y = 1·u` del borde del menú.
 
 use egui::{Context, Event, Pos2, Rect, vec2};
 use proptest::prelude::*;
 use px_core::{Image, Mode, Palette, Rgba};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInfo, CanvasInput};
-use px_ui::chrome::{MENU_H_U, canvas_origin_px, window_layout};
+use px_ui::chrome::{
+    COLUMN_DEFAULT_COLS, MENU_H_U, WindowLayout, canvas_origin_px, column_cols, head_u,
+    window_layout,
+};
 use px_ui::color::{ColorChoice, SlotColors};
 use px_ui::color_edit::{ColorEditor, Control, EditTarget, slider_x};
+use px_ui::column::{ColumnOutput, ColumnView, show_column};
 use px_ui::edit_layout::{
-    ROW_H_U, TRACK_W_U, TRACK_X_U, block_height_px, control_row_u, min_window_height_pt,
-    min_window_width_pt, min_window_width_u, panel_layout,
+    ROW_H_U, TRACK_W_U, TRACK_X_U, block_height_px, column_layout, control_row_u,
+    min_window_height_pt, min_window_width_pt, min_window_width_u,
 };
+use px_ui::icons::IconSet;
 use px_ui::keymap::default_keymap;
 use px_ui::menu::show_menu;
 use px_ui::palette_grid::{PanelView, Scroll};
-use px_ui::palette_panel::{self, PanelOutput};
+use px_ui::palette_ops::PaletteOps;
+use px_ui::palette_panel::{PanelOutput, Roles};
 use px_ui::status;
 use px_ui::text::{apply_scale, text_scale};
 use px_ui::tool::Tool;
-use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
+use px_ui::toolbar::{TOOL_BUTTONS, ToolboxView, ZOOM_BUTTONS};
 use px_ui::view::{MIN_VISIBLE, Size, View, ViewOp, Zoom};
 
 mod common;
-use common::toolbox::{center_u, toolbox_2};
+use common::toolbox::center_u;
 use common::{
     PPPS, Painted, button_2, context, frame, in_points, is_physical_integer_in_egui, move_pointer,
     n_of, painted, tolerance_of_egui, wheel_points,
@@ -120,13 +129,13 @@ fn ui_state() -> UiState {
 // Banco de la pila completa
 // ---------------------------------------------------------------------------------------------
 
-/// Rectángulos de las cinco piezas en un fotograma, en puntos.
+/// Rectángulos de las cuatro piezas en un fotograma, en puntos (la columna es la caja y la paleta
+/// apiladas: `column_rect` da el mismo rectángulo desde `window_layout`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Rects {
     menu: Rect,
     state_2: Rect,
     column: Rect,
-    panel: Rect,
     canvas_2: Rect,
 }
 
@@ -147,6 +156,9 @@ struct Bench {
     canvas: Canvas,
     scroll: Scroll,
     view: PanelView,
+    ops: PaletteOps,
+    /// Columnas de muestras elegidas (16: el valor por defecto).
+    wanted_cols: i64,
     image: Image,
     choice: ColorChoice,
     slots: SlotColors,
@@ -167,6 +179,8 @@ impl Bench {
             canvas,
             scroll: Scroll::default(),
             view: PanelView::default(),
+            ops: PaletteOps::default(),
+            wanted_cols: COLUMN_DEFAULT_COLS,
             choice: ColorChoice::Entry(1),
             slots: SlotColors::defaults(image.mode()),
             image,
@@ -211,6 +225,8 @@ impl Bench {
             canvas,
             scroll,
             view,
+            ops,
+            wanted_cols,
             image,
             choice,
             slots,
@@ -226,12 +242,32 @@ impl Bench {
             let r1 = ui.available_rect_before_wrap();
             status::show(ui, "lápiz · color 1 #000000", false);
             let r2 = ui.available_rect_before_wrap();
-            let column = toolbox_2(ui, state_2, "×5");
-            let r3 = ui.available_rect_before_wrap();
-            let panel = palette_panel::show_editing_view(
-                ui, image, *choice, scroll, view, enabled, slots, editor,
+            let ColumnOutput { toolbox, panel, .. } = show_column(
+                ui,
+                &ColumnView {
+                    toolbox: ToolboxView {
+                        state: state_2,
+                        zoom_label: ZOOM_LABEL,
+                        icons: &IconSet::default(),
+                    },
+                    image,
+                    roles: Roles {
+                        foreground: *choice,
+                        background: *choice,
+                        editing: px_ui::color::Role::Foreground,
+                    },
+                    slots,
+                    enabled,
+                    cols: *wanted_cols,
+                },
+                default_keymap(),
+                Platform::Linux,
+                scroll,
+                view,
+                editor,
+                ops,
             );
-            let r4 = ui.available_rect_before_wrap();
+            let r3 = ui.available_rect_before_wrap();
             let entries = canvas
                 .interact_roles(ui)
                 .into_iter()
@@ -242,10 +278,9 @@ impl Bench {
                 menu: Rect::from_min_max(r0.min, Pos2::new(r0.max.x, r1.min.y)),
                 state_2: Rect::from_min_max(Pos2::new(r1.min.x, r2.max.y), r1.max),
                 column: Rect::from_min_max(Pos2::new(r3.max.x, r2.min.y), r2.max),
-                panel: Rect::from_min_max(Pos2::new(r4.max.x, r3.min.y), r3.max),
-                canvas_2: r4,
+                canvas_2: r3,
             };
-            result = Some((rects, entries, info, panel, menu, column));
+            result = Some((rects, entries, info, panel, menu, toolbox.action));
         });
         let (rects, entries, info, panel, menu, column) = result.expect("se dibuja");
         self.history.push(panel.clone());
@@ -307,6 +342,22 @@ fn expected_2(rect: px_ui::view::ScreenRect) -> [i64; 4] {
     [rect.x, rect.y, rect.x + rect.width, rect.y + rect.height]
 }
 
+/// La columna entera (la caja y la paleta apiladas) según `window_layout`.
+fn column_rect(layout: &WindowLayout) -> px_ui::view::ScreenRect {
+    px_ui::view::ScreenRect {
+        height: layout.toolbar.height + layout.panel.height,
+        ..layout.toolbar
+    }
+}
+
+/// Alto de la caja (`head`) en píxeles físicos con la ventana de `window_px_w` de ancho.
+fn head_px(window_px_w: i64, n: i64) -> i64 {
+    head_u(
+        TOOL_BUTTONS.len(),
+        column_cols(window_px_w, n as u32, COLUMN_DEFAULT_COLS),
+    ) * n
+}
+
 // ---------------------------------------------------------------------------------------------
 // Fila 7: la geometría del banco
 // ---------------------------------------------------------------------------------------------
@@ -322,8 +373,7 @@ fn row_7_the_bench_rectangles_are_those_of_window_layout_and_integers() {
             let pieces = [
                 ("menu", f.rects.menu, layout.menu),
                 ("estado", f.rects.state_2, layout.status),
-                ("columna", f.rects.column, layout.toolbar),
-                ("panel", f.rects.panel, layout.panel),
+                ("columna", f.rects.column, column_rect(&layout)),
                 ("lienzo", f.rects.canvas_2, layout.canvas),
             ];
             for (name_2, measured, expected_2_2) in pieces {
@@ -764,34 +814,42 @@ fn row_9_fit_centers_the_image_in_the_canvas_rectangle_and_not_in_the_window() {
 // Fila 10: respaldo B con la columna
 // ---------------------------------------------------------------------------------------------
 
-/// Los tres altos de la fila 10, en `u`.
-const PANEL_HEIGHTS_U: [i64; 3] = [200, 100, 305];
+/// Los tres altos de la fila 10, en `u` (el bloque entero mide `head + 277` = 361 u con el editor
+/// abierto y 5 herramientas a 16 columnas).
+const PANEL_HEIGHTS_U: [i64; 3] = [200, 100, 361];
 
 fn bench_with_panel_of(ppp: f32, panel_u: i64) -> Bench {
     let n = n_of(ppp);
     Bench::new_2(ppp, window_with_panel(ppp, panel_u * n), indexed())
 }
 
+/// La columna de `bench` se desplaza como un bloque (el editor está abierto).
+fn scrolls(bench: &Bench) -> bool {
+    let n = bench.n();
+    column_layout(
+        Mode::Indexed,
+        bench.panel_h_px(),
+        n as u32,
+        0,
+        head_px(bench.window_px.0, n),
+        true,
+    )
+    .scrolling
+}
+
 #[test]
-fn row_10_only_the_wheel_over_the_panel_moves_offset_px() {
+fn row_10_the_wheel_over_the_toolbox_or_the_palette_moves_offset_px_and_the_rest_does_not() {
     for ppp in PPPS {
         let n = n_of(ppp);
         for panel_u in [200, 100] {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
             assert!(
-                panel_layout(Mode::Indexed, bench.panel_h_px(), n as u32, 0).scrolling,
-                "ppp {ppp} panel {panel_u} u: el panel debería desplazarse"
+                scrolls(&bench),
+                "ppp {ppp} panel {panel_u} u: el bloque debería desplazarse"
             );
             assert_eq!(bench.view.offset_px, 0);
 
-            // Sobre la columna: nada.
-            let (cx, cy) = (layout.toolbar.x + 2 * n, layout.toolbar.y + 10 * n);
-            bench.wheel_in(cx, cy, 10 * n);
-            assert_eq!(
-                bench.view.offset_px, 0,
-                "ppp {ppp} panel {panel_u} u: la columna no desplaza"
-            );
             // Sobre el menú: nada.
             bench.wheel_in(100 * n, 4 * n, 10 * n);
             assert_eq!(
@@ -808,44 +866,72 @@ fn row_10_only_the_wheel_over_the_panel_moves_offset_px() {
             bench.wheel_in(layout.canvas.x + 20 * n, layout.canvas.y + 20 * n, 10 * n);
             assert_eq!(
                 bench.view.offset_px, 0,
-                "ppp {ppp} panel {panel_u} u: el lienzo no desplaza el panel"
+                "ppp {ppp} panel {panel_u} u: el lienzo no desplaza el bloque"
             );
-            // Sobre el panel: sí.
-            bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
+            // Sobre la caja: sí (el bloque es la columna entera).
+            bench.wheel_in(layout.toolbar.x + 2 * n, layout.toolbar.y + 10 * n, 10 * n);
             assert_eq!(
                 bench.view.offset_px,
                 10 * n,
-                "ppp {ppp} panel {panel_u} u: la rueda sobre el panel desplaza"
+                "ppp {ppp} panel {panel_u} u: la rueda sobre la caja desplaza el bloque"
+            );
+            // Sobre la paleta: sí, a continuación.
+            bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
+            assert_eq!(
+                bench.view.offset_px,
+                20 * n,
+                "ppp {ppp} panel {panel_u} u: la rueda sobre la paleta desplaza el bloque"
             );
         }
     }
 }
 
 #[test]
-fn row_10_the_column_and_the_menu_do_not_scroll_with_any_offset_px() {
+fn row_10_the_menu_does_not_scroll_with_any_offset_px_and_the_toolbox_goes_up_with_the_block() {
     for ppp in PPPS {
         let n = n_of(ppp);
         for panel_u in PANEL_HEIGHTS_U {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
             let before = bench.rest_2_2();
-            let texts_before: Vec<(String, [i64; 2])> = column_and_menu_texts(&before, ppp);
+            let menu_before = column_and_menu_texts(&before, ppp, true);
+            let zoom_before = zoom_text_y(&before, ppp);
             bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 15 * n);
             let after_2 = bench.rest_2_2();
-            if panel_u < 305 {
-                assert_eq!(bench.view.offset_px, 15 * n, "ppp {ppp} panel {panel_u} u");
-            }
+            let scrolled = if scrolls(&bench) { 15 * n } else { 0 };
+            assert_eq!(
+                bench.view.offset_px, scrolled,
+                "ppp {ppp} panel {panel_u} u"
+            );
             // Mismos rectángulos con cualquier offset.
             assert_eq!(before.rects, after_2.rects, "ppp {ppp} panel {panel_u} u");
-            // Mismos textos en los mismos sitios.
+            // El menú, en el mismo sitio; el nivel de zoom de la caja sube lo que baja el offset.
             assert_eq!(
-                texts_before,
-                column_and_menu_texts(&after_2, ppp),
-                "ppp {ppp} panel {panel_u} u: la columna o el menú se movieron"
+                menu_before,
+                column_and_menu_texts(&after_2, ppp, true),
+                "ppp {ppp} panel {panel_u} u: el menú se movió"
+            );
+            assert_eq!(
+                zoom_text_y(&after_2, ppp),
+                zoom_before - scrolled,
+                "ppp {ppp} panel {panel_u} u: la caja no sube con el bloque"
             );
         }
     }
 }
+
+/// `y`, en píxeles físicos, del texto del nivel de zoom de la caja.
+fn zoom_text_y(f: &TestFrame, ppp: f32) -> i64 {
+    f.painted
+        .texts
+        .iter()
+        .find(|t| t.text_2.trim() == ZOOM_LABEL)
+        .map(|t| (t.pos.y * ppp).round() as i64)
+        .expect("el nivel de zoom se pinta")
+}
+
+/// The level of zoom that the bench gives to the toolbox.
+const ZOOM_LABEL: &str = "×5";
 
 const TITLES: [&str; 4] = ["Archivo", "Editar", "Ver", "Ayuda"];
 
@@ -855,7 +941,7 @@ fn is_column_text(text_2: &common::Text, column: Rect) -> bool {
     let t = text_2.text_2.trim();
     TOOL_BUTTONS.iter().any(|b| t == b.label)
         || ZOOM_BUTTONS.iter().any(|b| t == b.label)
-        || t.starts_with("Zoom ")
+        || t == ZOOM_LABEL
         || (TOOL_BUTTONS.iter().any(|b| {
             default_keymap()
                 .shown_text(b.action, px_ui::actions::Platform::Linux)
@@ -867,15 +953,15 @@ fn is_menu_title(text_2: &str) -> bool {
     TITLES.contains(&text_2.trim())
 }
 
-/// Textos pintados de la columna o el menú (por su contenido: lo que el panel desplaza hacia arriba
-/// por debajo del menú tiene la misma posición pero otro recorte), con su posición en píxeles
-/// físicos, en orden.
-fn column_and_menu_texts(f: &TestFrame, ppp: f32) -> Vec<(String, [i64; 2])> {
+/// Textos pintados del menú (y de la caja si `menu_only` es falso; por su contenido: lo que el
+/// bloque desplaza hacia arriba por debajo del menú tiene la misma posición pero otro recorte), con
+/// su posición en píxeles físicos, en orden.
+fn column_and_menu_texts(f: &TestFrame, ppp: f32, menu_only: bool) -> Vec<(String, [i64; 2])> {
     let mut v: Vec<(String, [i64; 2])> = f
         .painted
         .texts
         .iter()
-        .filter(|t| is_menu_title(&t.text_2) || is_column_text(t, f.rects.column))
+        .filter(|t| is_menu_title(&t.text_2) || (!menu_only && is_column_text(t, f.rects.column)))
         .map(|t| {
             (
                 t.text_2.clone(),
@@ -931,47 +1017,37 @@ fn row_10_the_column_and_the_menu_are_painted_clipped_to_their_rectangle() {
 }
 
 #[test]
-fn row_10_the_column_buttons_hit_in_their_place_with_the_low_panel() {
+fn row_10_the_toolbox_buttons_hit_where_the_scroll_puts_them_with_the_low_panel() {
     for ppp in PPPS {
         let n = n_of(ppp);
         for panel_u in PANEL_HEIGHTS_U {
             let mut bench = bench_with_panel_of(ppp, panel_u);
-            // Con el panel desplazado a un extremo la columna sigue en su sitio.
+            // Con el bloque desplazado, la caja sube con él: cada botón golpea donde lo deja el
+            // desplazamiento (y los que salen por arriba de la columna no golpean).
             let layout = window_layout(bench.window_px, n as u32);
             bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 20 * n);
-            for (i, button) in TOOL_BUTTONS.iter().enumerate() {
+            let offset = bench.view.offset_px;
+            for (i, button) in TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).enumerate() {
                 let (cx, cy) = center_u(i);
-                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
+                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n - offset);
                 let actions: Vec<_> = bench.click(x, y).iter().filter_map(|f| f.column).collect();
-                assert_eq!(
-                    actions,
-                    vec![button.action],
-                    "ppp {ppp} panel {panel_u} u: {}",
-                    button.label
-                );
-            }
-            for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
-                let (cx, cy) = center_u(TOOL_BUTTONS.len() + i);
-                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
-                let actions: Vec<_> = bench.click(x, y).iter().filter_map(|f| f.column).collect();
-                // La fila de zoom (y = 80 a 104 u) cabe en 200 u y en 305 u y, con 100 u, su centro
-                // (y = 92 u) sigue dentro de la columna recortada.
-                assert_eq!(
-                    actions,
-                    vec![button.action],
-                    "ppp {ppp} panel {panel_u} u: {}",
-                    button.label
-                );
-            }
-            // Con un panel de 60 u la fila de zoom queda fuera de la columna recortada y no golpea
-            // nada.
-            let mut under = bench_with_panel_of(ppp, 60);
-            let layout = window_layout(under.window_px, n as u32);
-            for (i, button) in ZOOM_BUTTONS.iter().enumerate() {
-                let (cx, cy) = center_u(TOOL_BUTTONS.len() + i);
-                let (x, y) = (layout.toolbar.x + cx * n, (16 + cy) * n);
-                let actions: Vec<_> = under.click(x, y).iter().filter_map(|f| f.column).collect();
-                assert!(actions.is_empty(), "ppp {ppp} panel 60 u: {}", button.label);
+                // Egui also gives the click to a widget a few points away: the ones that are
+                // clearly above the column are the only ones that must not hit.
+                let margin = (8.0 * ppp) as i64;
+                if y >= layout.toolbar.y {
+                    assert_eq!(
+                        actions,
+                        vec![button.action],
+                        "ppp {ppp} panel {panel_u} u: {}",
+                        button.label
+                    );
+                } else if y + margin < layout.toolbar.y {
+                    assert!(
+                        actions.is_empty(),
+                        "ppp {ppp} panel {panel_u} u: {} sale por arriba",
+                        button.label
+                    );
+                }
             }
         }
     }
@@ -981,21 +1057,23 @@ fn row_10_the_column_buttons_hit_in_their_place_with_the_low_panel() {
 fn row_10_a_click_on_an_editor_slider_hits_it_with_the_panel_in_the_stack() {
     for ppp in PPPS {
         let n = n_of(ppp);
-        for panel_u in [200, 305] {
+        for panel_u in [200, 361] {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
             if panel_u == 200 {
                 bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
                 assert_eq!(bench.view.offset_px, 10 * n);
             }
-            let placed = panel_layout(
+            let placed = column_layout(
                 Mode::Indexed,
                 bench.panel_h_px(),
                 n as u32,
                 bench.view.offset_px,
+                head_px(bench.window_px.0, n),
+                true,
             );
             let row_2 = control_row_u(Mode::Indexed, Control::Red).expect("hay deslizador rojo");
-            let y = layout.panel.y + placed.top_px + row_2 * n + ROW_H_U * n / 2;
+            let y = layout.toolbar.y + placed.top_px + row_2 * n + ROW_H_U * n / 2;
             let x_hint = layout.panel.x + TRACK_X_U * n;
             let x = x_hint + slider_x(128, TRACK_W_U * n, Control::Red.max());
             bench.moves(x, y);
@@ -1052,7 +1130,7 @@ fn row_10_with_height_equal_to_or_greater_than_the_block_the_scroll_goes_back_to
         let layout = window_layout(bench.window_px, n as u32);
         bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
         assert_eq!(bench.view.offset_px, 10 * n, "ppp {ppp}");
-        let block = block_height_px(Mode::Indexed, n as u32);
+        let block = head_px(bench.window_px.0, n) + block_height_px(Mode::Indexed, n as u32);
         bench.height_of_panel(block);
         let f = bench.rest_2_2();
         assert_eq!(
@@ -1062,27 +1140,27 @@ fn row_10_with_height_equal_to_or_greater_than_the_block_the_scroll_goes_back_to
         // Y la pila sigue siendo la de `window_layout` con la ventana nueva.
         let new_2 = window_layout(bench.window_px, n as u32);
         assert_eq!(
-            borders_physical(f.rects.panel, ppp),
-            Some(expected_2(new_2.panel)),
+            borders_physical(f.rects.column, ppp),
+            Some(expected_2(column_rect(&new_2))),
             "ppp {ppp}"
         );
     }
 }
 
 #[test]
-fn row_10_lowering_and_raising_the_window_does_not_move_the_column_or_the_menu() {
+fn row_10_lowering_and_raising_the_window_does_not_move_the_toolbox_or_the_menu() {
     for ppp in PPPS {
         let n = n_of(ppp);
-        let mut bench = bench_with_panel_of(ppp, 305);
+        let mut bench = bench_with_panel_of(ppp, 361);
         let height_2 = bench.rest_2_2();
-        let reference = column_and_menu_texts(&height_2, ppp);
-        for panel_u in [200, 100, 305, 150, 305] {
+        let reference = column_and_menu_texts(&height_2, ppp, false);
+        for panel_u in [200, 100, 361, 150, 361] {
             bench.height_of_panel(panel_u * n);
             bench.rest_2_2();
             let f = bench.rest_2_2();
-            // La columna y el menú empiezan siempre arriba a la izquierda: sus textos no cambian
+            // La caja y el menú empiezan siempre arriba (sin desplazar): sus textos no cambian
             // de sitio salvo los que se recortan por abajo; los que se ven quedan donde estaban.
-            let now = column_and_menu_texts(&f, ppp);
+            let now = column_and_menu_texts(&f, ppp, false);
             for text_2 in now {
                 assert!(
                     reference.contains(&text_2),
@@ -1194,8 +1272,7 @@ proptest! {
 mod toolbox_right {
     use super::*;
     use egui::PointerButton;
-    use px_ui::chrome::{OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U};
-    use px_ui::palette_grid::RIGHT_LINE_X_U;
+    use px_ui::palette_grid::right_line_x_u;
     use px_ui::theme::SURFACE_3;
 
     use super::common::{button_of_2, wheel_line};
@@ -1235,8 +1312,7 @@ mod toolbox_right {
                 let pieces = [
                     ("menu", f.rects.menu, layout.menu),
                     ("estado", f.rects.state_2, layout.status),
-                    ("columna", f.rects.column, layout.toolbar),
-                    ("panel", f.rects.panel, layout.panel),
+                    ("columna", f.rects.column, column_rect(&layout)),
                     ("lienzo", f.rects.canvas_2, layout.canvas),
                 ];
                 for (name_2, measured, expected_2_2) in pieces {
@@ -1336,13 +1412,14 @@ mod toolbox_right {
         }
     }
 
-    /// Fila 9: la rueda sobre la caja (botones y cuerpo del recuadro) no hace zoom ni desplaza el
-    /// panel, con el respaldo B y con el alto del bloque (305 u).
+    /// Fila 9: la rueda sobre la caja no hace zoom; desplaza el bloque entero solo si desborda
+    /// (200 u y 100 u) y con el alto del bloque (361 u) no desplaza nada.
     #[test]
-    fn row_9_the_wheel_over_the_toolbox_does_neither_zoom_nor_scroll_the_panel() {
+    fn row_9_the_wheel_over_the_toolbox_does_not_zoom_and_scrolls_the_block_only_when_it_overflows()
+    {
         for ppp in PPPS {
             let n = n_of(ppp);
-            for panel_u in [200, 100, 305] {
+            for panel_u in [200, 100, 361] {
                 let mut bench = bench_with_panel_of(ppp, panel_u);
                 let layout = window_layout(bench.window_px, n as u32);
                 let zoom_before = bench.rest_2_2().info.zoom;
@@ -1353,91 +1430,51 @@ mod toolbox_right {
                         layout.toolbar.y + 10 * n,
                     ),
                     (
-                        "el cuerpo de opciones",
-                        layout.toolbar.x + (OPTIONS_BODY_X_U + 10) * n,
-                        layout.toolbar.y + (OPTIONS_BODY_Y_U + 10) * n,
+                        "el nivel de zoom",
+                        layout.toolbar.x + 10 * n,
+                        layout.toolbar.y + 40 * n,
                     ),
                 ] {
+                    let before = bench.view.offset_px;
                     bench.moves(x, y);
                     bench.frame(vec![wheel_line(false)]);
                     bench.frame(vec![wheel_line(true)]);
                     bench.wheel_in(x, y, 10 * n);
-                    assert_eq!(
-                        bench.view.offset_px, 0,
-                        "ppp {ppp} panel {panel_u} u: {name_2}"
-                    );
+                    if scrolls(&bench) {
+                        assert!(
+                            bench.view.offset_px >= before,
+                            "ppp {ppp} panel {panel_u} u: {name_2}"
+                        );
+                    } else {
+                        assert_eq!(
+                            bench.view.offset_px, 0,
+                            "ppp {ppp} panel {panel_u} u: {name_2}"
+                        );
+                    }
                     assert_eq!(
                         bench.rest_2_2().info.zoom,
                         zoom_before,
                         "ppp {ppp} panel {panel_u} u: {name_2} no hace zoom"
                     );
                 }
-            }
-        }
-    }
-
-    /// Fila 9: con el alto del bloque (305 u) el panel no se desplaza ni con la rueda encima.
-    #[test]
-    fn row_9_with_305_u_the_panel_does_not_scroll() {
-        for ppp in PPPS {
-            let n = n_of(ppp);
-            let mut bench = bench_with_panel_of(ppp, 305);
-            let layout = window_layout(bench.window_px, n as u32);
-            assert!(!panel_layout(Mode::Indexed, bench.panel_h_px(), n as u32, 0).scrolling);
-            bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
-            assert_eq!(bench.view.offset_px, 0, "ppp {ppp}");
-        }
-    }
-
-    /// Fila 9: todo lo pintado en la caja (también el recuadro de opciones) se recorta a la caja
-    /// aunque la ventana sea más baja que su contenido, y no se mueve con el panel.
-    #[test]
-    fn row_9_the_options_box_is_clipped_to_the_toolbox_with_the_low_panel() {
-        for ppp in PPPS {
-            let n = n_of(ppp);
-            for panel_u in [100, 200, 305] {
-                let mut bench = bench_with_panel_of(ppp, panel_u);
-                let before = bench.rest_2_2();
-                let layout = window_layout(bench.window_px, n as u32);
-                bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 20 * n);
-                let f = bench.rest_2_2();
-                let column = f.rects.column.expand(TOL_PT);
-                let in_the_toolbox = |p: &Painted| {
-                    p.texts
-                        .iter()
-                        .filter(|t| t.pos.x >= f.rects.column.min.x - TOL_PT)
-                        .map(|t| {
-                            (
-                                t.text_2.clone(),
-                                (t.pos.x * ppp).round() as i64,
-                                (t.pos.y * ppp).round() as i64,
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                };
-                let mut now = in_the_toolbox(&f.painted);
-                let mut before_t = in_the_toolbox(&before.painted);
-                now.sort();
-                before_t.sort();
-                assert_eq!(
-                    now, before_t,
-                    "ppp {ppp} panel {panel_u} u: la caja se movió"
-                );
-                assert!(!now.is_empty(), "ppp {ppp} panel {panel_u} u");
-                for t in f
-                    .painted
-                    .texts
-                    .iter()
-                    .filter(|t| t.pos.x >= f.rects.column.min.x - TOL_PT)
-                {
-                    assert!(
-                        column.contains_rect(t.clip),
-                        "ppp {ppp} panel {panel_u} u: {:?} se pinta fuera de la caja: {:?}",
-                        t.text_2,
-                        t.clip
-                    );
+                // Con el bloque desbordado, la rueda sobre la caja lo desplaza.
+                if scrolls(&bench) {
+                    assert!(bench.view.offset_px > 0, "ppp {ppp} panel {panel_u} u");
                 }
             }
+        }
+    }
+
+    /// Fila 9: con el alto del bloque (361 u) el bloque no se desplaza ni con la rueda encima.
+    #[test]
+    fn row_9_with_361_u_the_block_does_not_scroll() {
+        for ppp in PPPS {
+            let n = n_of(ppp);
+            let mut bench = bench_with_panel_of(ppp, 361);
+            let layout = window_layout(bench.window_px, n as u32);
+            assert!(!scrolls(&bench));
+            bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
+            assert_eq!(bench.view.offset_px, 0, "ppp {ppp}");
         }
     }
 
@@ -1472,8 +1509,8 @@ mod toolbox_right {
         }
     }
 
-    /// Fila 10: línea de 1 u nueva en el borde izquierdo del panel, la de la derecha como hoy, y
-    /// todo lo que pintan el panel y la caja cae dentro de sus rectángulos.
+    /// Fila 10: línea de 1 u en el borde izquierdo de la paleta, la de la derecha en `W(k) − 1`, y
+    /// todo lo que pintan la paleta y la caja cae dentro de la columna.
     #[test]
     fn row_10_the_panel_paints_its_left_line_the_right_one_and_everything_inside_its_rectangle() {
         for ppp in PPPS {
@@ -1483,6 +1520,7 @@ mod toolbox_right {
                 let f = bench.rest_2_2();
                 let layout = window_layout(window, n as u32);
                 let panel = layout.panel;
+                let cols = column_cols(window.0, n as u32, COLUMN_DEFAULT_COLS);
                 let line = |x: i64| {
                     f.painted.fills.iter().any(|r| {
                         r.fill == SURFACE_3
@@ -1496,7 +1534,7 @@ mod toolbox_right {
                 };
                 assert!(line(panel.x), "ppp {ppp} {window:?}: línea izquierda");
                 assert!(
-                    line(panel.x + RIGHT_LINE_X_U * n),
+                    line(panel.x + right_line_x_u(cols) * n),
                     "ppp {ppp} {window:?}: línea derecha"
                 );
                 // Todo lo pintado a la derecha del lienzo cae dentro del panel y la caja.
@@ -1504,17 +1542,18 @@ mod toolbox_right {
                     .union(rect_in_points(layout.toolbar, ppp))
                     .expand(TOL_PT);
                 // Solo la franja central: el menú y la barra de estado ocupan todo el ancho.
+                let column = column_rect(&layout);
                 let band = |min_y: f32, max_y: f32| {
-                    min_y * ppp >= panel.y as f32 - 0.5
-                        && max_y * ppp <= (panel.y + panel.height) as f32 + 0.5
+                    min_y * ppp >= column.y as f32 - 0.5
+                        && max_y * ppp <= (column.y + column.height) as f32 + 0.5
                 };
                 for r in f.painted.fills.iter().filter(|r| {
-                    r.rect.center().x * ppp > panel.x as f32 && band(r.rect.min.y, r.rect.max.y)
+                    r.rect.center().x * ppp > column.x as f32 && band(r.rect.min.y, r.rect.max.y)
                 }) {
                     assert!(union.contains_rect(r.rect), "ppp {ppp}: {:?} fuera", r.rect);
                 }
                 for t in f.painted.texts.iter().filter(|t| {
-                    t.rect().center().x * ppp > panel.x as f32 && band(t.pos.y, t.rect().max.y)
+                    t.rect().center().x * ppp > column.x as f32 && band(t.pos.y, t.rect().max.y)
                 }) {
                     assert!(union.contains_rect(t.clip), "ppp {ppp}: {:?}", t.text_2);
                 }

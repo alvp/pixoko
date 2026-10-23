@@ -273,6 +273,11 @@ fn row_2_the_title_is_the_name_and_the_active_target_is_that_of_the_tool() {
     let text_2 = text_of_the_area(&pencil);
     assert!(text_2.contains("Clic izquierdo: "), "{text_2}");
     assert!(text_2.contains("Clic derecho: "), "{text_2}");
+    // C2: la ayuda de una herramienta dice también qué hace el clic derecho en su botón.
+    assert!(
+        text_2.contains("Clic derecho en su botón: abre sus opciones"),
+        "{text_2}"
+    );
     let fit_2 = help_form(HelpTarget::ZoomFit, Tool::Pencil, &table, Platform::Linux);
     let text_2 = text_of_the_area(&fit_2);
     assert!(

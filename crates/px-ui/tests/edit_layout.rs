@@ -18,7 +18,7 @@
 
 use proptest::prelude::*;
 use px_core::Mode;
-use px_ui::chrome::{MENU_H_U, toolbar_width_u};
+use px_ui::chrome::{COLUMN_MIN_COLS, MENU_H_U, column_cols, column_width_u};
 use px_ui::color_edit::{Control, controls};
 use px_ui::edit_layout::{
     BLOCK_GAP_U, BUTTON_COL_GAP_U, BUTTON_FULL_W_U, BUTTON_H_U, BUTTON_HALF_W_U, BUTTON_ROWS,
@@ -27,8 +27,9 @@ use px_ui::edit_layout::{
     MIN_CANVAS_WIDTH_U, NOTICE_LINES, PaletteButton, PanelLayout, ROW_H_U, SEPARATOR_Y_U,
     THUMB_H_U, THUMB_W_U, TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_W_U, VALUE_X_U, block_height_px,
     button_hit, button_rect_u, buttons_height_u, control_row_u, edges_u, editor_height_u,
-    editor_height_u_max, field_y_u, icons_height_u, min_panel_height_px, min_window_height_pt,
-    min_window_width_pt, min_window_width_u, notice_y_u, panel_layout, slider_hit,
+    editor_height_u_max, field_y_u, icons_height_u, min_panel_height_px, min_width_terms_u,
+    min_window_height_pt, min_window_width_pt, min_window_width_u, notice_y_u, panel_layout,
+    slider_hit,
 };
 use px_ui::palette_grid::{GRID_Y_U, PANEL_WIDTH_U, PITCH_U, visible_rows, visible_rows_reserved};
 use px_ui::status::bar_height_px;
@@ -330,17 +331,20 @@ fn row_1_the_minimum_does_not_pass_60_percent_of_720_and_leaves_one_row_with_the
     assert!(greater <= 432.0, "el mayor de los cinco mide {greater} pt");
 }
 
-// Fila 1b: ancho mínimo (columna de herramientas, ancho del panel y 128 u de lienzo).
+// Fila 1b: ancho mínimo (el mayor de la columna mínima más 128 u de lienzo, la barra de menús, el
+// diálogo con sus márgenes y las 66 columnas de la barra de estado; C2).
 
 #[test]
-fn row_1b_min_window_width_u_is_the_column_plus_the_panel_plus_128() {
+fn row_1b_min_window_width_u_is_the_widest_of_the_column_the_menu_bar_the_dialog_and_the_status_bar()
+ {
     assert_eq!(MIN_CANVAS_WIDTH_U, 128);
     assert_eq!(PANEL_WIDTH_U, 233);
-    assert_eq!(toolbar_width_u(), 107);
+    assert_eq!(column_width_u(COLUMN_MIN_COLS), 121);
     assert_eq!(min_window_width_u(), 468);
+    assert_eq!(min_width_terms_u(), [249, 293, 346, 468]);
     assert_eq!(
-        min_window_width_u(),
-        toolbar_width_u() + PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
+        min_width_terms_u().into_iter().max(),
+        Some(min_window_width_u())
     );
 }
 
@@ -371,17 +375,16 @@ fn row_1b_min_window_width_pt_at_the_five_ppp() {
 #[test]
 fn row_1b_the_minimum_width_leaves_128_u_of_canvas_and_fits_in_half_of_1366() {
     for ppp in PPPS {
-        let n = text_scale(ppp) as f32;
+        let n = text_scale(ppp);
         let minimum_2 = min_window_width_pt(ppp);
-        let panel = PANEL_WIDTH_U as f32 * n / ppp;
-        let column = toolbar_width_u() as f32 * n / ppp;
+        // A 468 u caben las 16 columnas elegidas y el lienzo mide 235 u.
+        let window_px = (minimum_2 * ppp).round() as i64;
+        let cols = column_cols(window_px, n, 16);
+        assert_eq!(cols, 16, "ppp {ppp}");
+        let column = column_width_u(cols) as f32 * n as f32 / ppp;
         assert!(
-            minimum_2 > panel + column,
-            "ppp {ppp}: {minimum_2} pt no deja lienzo"
-        );
-        assert!(
-            (minimum_2 - column - panel - MIN_CANVAS_WIDTH_U as f32 * n / ppp).abs() <= 0.001,
-            "ppp {ppp}: el lienzo mínimo no mide 128 u"
+            (minimum_2 - column) * ppp >= (MIN_CANVAS_WIDTH_U * i64::from(n)) as f32 - 0.001,
+            "ppp {ppp}: el lienzo mínimo baja de 128 u"
         );
         assert!(minimum_2 <= 683.0, "ppp {ppp}: {minimum_2} pt");
     }

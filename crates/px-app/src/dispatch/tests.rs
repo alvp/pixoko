@@ -3476,9 +3476,9 @@ mod toolbox_right {
         for button in &TOOL_BUTTONS {
             let mut right = World::standard();
             let state_2 = right.ui_state(Zoom::from_int(5), Locks::default());
-            let SecondaryOutcome::SelectAndFocus(action) = secondary_outcome(button, &state_2)
+            let SecondaryOutcome::SelectAndToggle(action) = secondary_outcome(button, &state_2)
             else {
-                panic!("{}: el clic derecho elige y da el foco", button.label);
+                panic!("{}: el clic derecho elige y abre la ventana", button.label);
             };
             let mut left = World::standard();
             let d = right.dispatches(action, Origin::Button);
@@ -3570,7 +3570,7 @@ mod toolbox_right {
                 let button_2 = TOOL_BUTTONS.iter().chain(ZOOM_BUTTONS.iter()).nth(index_2).expect("hay nueve botones");
                 match secondary_outcome(button_2, &state_2) {
                     SecondaryOutcome::Nothing => {}
-                    SecondaryOutcome::Action(a) | SecondaryOutcome::SelectAndFocus(a) => {
+                    SecondaryOutcome::Action(a) | SecondaryOutcome::SelectAndToggle(a) => {
                         let d = m.dispatches_with(a, Origin::Button, locks);
                         if !matches!(a, AppAction::SelectTool(_)) {
                             prop_assert!(matches!(d, Dispatched::View(_)), "{a:?}: {d:?}");

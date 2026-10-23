@@ -4,11 +4,11 @@
 
 use proptest::prelude::*;
 use px_core::Mode;
-use px_ui::chrome::{MENU_H_U, TOOLBAR_CONTENT_H_U, window_layout};
+use px_ui::chrome::{COLUMN_DEFAULT_COLS, MENU_H_U, column_cols, head_u, window_layout};
 use px_ui::edit_layout::{
     ICON_ROW_H_U, PaletteButton, block_height_closed_px, block_height_px, button_hit,
-    button_rect_u, editor_height_u, icons_height_u, min_panel_height_px, min_window_height_pt,
-    min_window_width_pt, panel_layout, panel_layout_closed,
+    button_rect_u, column_layout, editor_height_u, icons_height_u, min_panel_height_px,
+    min_window_height_pt, min_window_width_pt, panel_layout, panel_layout_closed,
 };
 use px_ui::layers_panel::PANEL_H_U as LAYERS_PANEL_H_U;
 use px_ui::palette_grid::{
@@ -293,7 +293,8 @@ fn row_4_the_minimum_panel_is_the_open_block_the_layers_panel_and_the_toolbox_al
         let k = i64::from(n);
         let minimum = min_panel_height_px(n);
         assert_eq!(minimum, 277 * k);
-        // The open block of every mode, the layers panel (277 u) and the toolbox (250 u) fit.
+        // The open block of every mode, the layers panel (277 u) and the toolbox (20 tools at 8
+        // columns: `head` 184 u, plus the closed palette block of 91 u) fit.
         for mode in MODES {
             assert!(block_height_px(mode, n) <= minimum, "{mode:?}");
         }
@@ -302,7 +303,7 @@ fn row_4_the_minimum_panel_is_the_open_block_the_layers_panel_and_the_toolbox_al
             "the layers panel does not fit"
         );
         assert!(
-            TOOLBAR_CONTENT_H_U * k <= minimum,
+            head_u(20, 8) * k + block_height_closed_px(Mode::Indexed, n) <= minimum,
             "the toolbox does not fit"
         );
         // Closed is never taller than open, and the minimum does not depend on the editor.
@@ -324,6 +325,7 @@ fn row_16_at_the_minimum_window_the_five_zones_tile_it_and_the_layers_panel_and_
         let height = min_window_height_pt(ppp) * ppp;
         let window = (width.round() as i64, height.round() as i64);
         let layout = window_layout(window, n as u32);
+        let cols = column_cols(window.0, n as u32, COLUMN_DEFAULT_COLS);
         assert_eq!(
             layout.canvas.height,
             window.1 - (MENU_H_U * n) - i64::from(bar_height_px(n as u32)),
@@ -333,18 +335,43 @@ fn row_16_at_the_minimum_window_the_five_zones_tile_it_and_the_layers_panel_and_
             layout.canvas.height >= LAYERS_PANEL_H_U * n,
             "ppp {ppp}: layers panel"
         );
-        assert!(
-            layout.toolbar.height >= TOOLBAR_CONTENT_H_U * n,
+        assert_eq!(
+            layout.toolbar.height,
+            head_u(5, cols) * n,
             "ppp {ppp}: toolbox"
         );
         assert_eq!(
-            layout.panel.height,
+            layout.toolbar.height + layout.panel.height,
             277 * n,
-            "ppp {ppp}: panel at the minimum"
+            "ppp {ppp}: column at the minimum"
         );
-        // Open and closed, the open block fits in the panel without scrolling.
-        assert!(!panel_layout(Mode::Indexed, layout.panel.height, n as u32, 0).scrolling);
-        assert!(!panel_layout_closed(Mode::Indexed, layout.panel.height, n as u32, 0).scrolling);
+        // Closed, the block fits in the panel under the toolbox without scrolling; open it does not
+        // (the toolbox and the open block are taller than the minimum: the block scrolls as a whole).
+        assert!(
+            !column_layout(
+                Mode::Indexed,
+                277 * n,
+                n as u32,
+                0,
+                layout.toolbar.height,
+                false
+            )
+            .scrolling
+        );
+        assert!(
+            column_layout(
+                Mode::Indexed,
+                277 * n,
+                n as u32,
+                0,
+                layout.toolbar.height,
+                true
+            )
+            .scrolling
+        );
+        // With no toolbox it is the panel of before.
+        assert!(!panel_layout(Mode::Indexed, 277 * n, n as u32, 0).scrolling);
+        assert!(!panel_layout_closed(Mode::Indexed, 277 * n, n as u32, 0).scrolling);
         // Zones: tiling without gaps or overlaps.
         let zones = [
             layout.menu,

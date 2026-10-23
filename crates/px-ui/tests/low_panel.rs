@@ -1180,7 +1180,7 @@ fn row_6_with_height_200n_there_is_no_low_window_notice_and_the_editor_paints_it
             for _ in 0..3 {
                 let f = bench.rest_2_2();
                 // `PanelOutput` only has `choice`, `commit`, `notice`, `op`, `op_unused`,
-                // `background`, `indicator` and `close_editor`: if it gets
+                // `background`, `indicator`, `close_editor` and `escape_free` (C2): if it gets
                 // `editor_hidden` (or another field) this destructuring stops compiling.
                 let PanelOutput {
                     choice,
@@ -1191,11 +1191,12 @@ fn row_6_with_height_200n_there_is_no_low_window_notice_and_the_editor_paints_it
                     background,
                     indicator,
                     close_editor,
+                    escape_free,
                 } = f.output_2.clone();
                 assert_eq!((choice, commit, notice), (None, None, None));
                 assert_eq!((op, op_unused), (None, false));
                 assert_eq!((background, indicator), (None, None));
-                assert!(!close_editor);
+                assert!(!close_editor && !escape_free);
                 assert!(
                     f.paints("editar índice 1"),
                     "ppp {ppp}, alto {height_2}: el editor pinta su cabecera"

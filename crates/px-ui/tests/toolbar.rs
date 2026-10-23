@@ -3,31 +3,32 @@
 //! aritmética pura en `chrome.rs`).
 //!
 //! Banco de egui sin ventana (`Context::run_ui` con `RawInput` sintético): `show_toolbox` se pinta
-//! sola en una ventana vacía, así que la columna queda pegada al borde derecho (`common::zones::toolbox_single`). Se comprueba a las cinco
+//! sola en una ventana vacía, así que la caja queda pegada al borde derecho (`common::zones::toolbox_single`,
+//! con las 16 columnas de hoy: la columna única de verdad está en `window_stack.rs`). Se comprueba a las cinco
 //! escalas (`ppp` 1,0, 1,25, 1,5, 2,0 y 3,0), en píxeles físicos:
 //!
 //! - las tablas `TOOL_BUTTONS` y `ZOOM_BUTTONS`;
-//! - los 9 botones golpean en su sitio: casillas de 24 × 24 u en una rejilla de cuatro columnas
-//!   (specs/interfaz-iconos.md; primera y última coordenada física de cada botón dentro); el
-//!   nivel de zoom y lo que queda fuera de la columna no golpean nada;
+//! - los 9 botones golpean en su sitio: casillas de 24 × 24 u en una rejilla de `c(k)` botones por
+//!   fila (specs/ui-single-column.md; con 16 columnas, nueve: una sola fila de herramientas; primera
+//!   y última coordenada física de cada botón dentro); el nivel de zoom y lo que queda fuera de la
+//!   caja no golpean nada;
 //! - el activo se hunde (cara `SURFACE_0`, icono `ACCENT`; contraste ≥ 4,5 con `contrast_ratio`),
 //!   los demás llevan el icono en `TEXT`, y los deshabilitados se atenúan y no responden (con las
 //!   reglas de bloqueo del zoom: gesto, quita y campo de texto no lo apagan);
-//! - el nivel de zoom es un texto de 14 u en `y = 62`.
+//! - el nivel de zoom es un texto de 14 u en `y = 37`.
 //!
 //! Las posiciones pintadas se comparan con la tolerancia del redondeo de egui
 //! (`common::tolerance_of_egui`: 1/32 pt, porque `Panel` y `allocate_rect` redondean a múltiplos pares de 1/32 pt).
 //!
 //! Supuestos sobre lo que la spec no fija (cualquier otro reparto cambiaría esta página):
 //! - `show_toolbox` crea su propio panel a la derecha de `ui` (como `status::show` y
-//!   `palette_panel::show`), de `toolbar_width_u()·n` píxeles de ancho;
+//!   `palette_panel::show`), de `column_width_u(16)·n` píxeles de ancho;
 //! - el rótulo de zoom que recibe es el texto del nivel (`×12`, `1/8`, `—`) con o sin el prefijo
 //!   `Zoom `: el banco solo exige que el texto pintado lo contenga.
 
 use egui::{Context, Event, Vec2, vec2};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
 use px_ui::keymap::{Keymap, default_keymap};
-use px_ui::options::OptionsState;
 use px_ui::theme::{ACCENT, SURFACE_0, TEXT, TEXT_DIM, TEXT_DISABLED, contrast_ratio};
 use px_ui::tool::Tool;
 use px_ui::toolbar::{TOOL_BUTTONS, ToolboxView, ZOOM_BUTTONS, show_toolbox};
@@ -50,8 +51,8 @@ const TEST_TOOLS: [Tool; 5] = [
     Tool::Eraser,
 ];
 const TEST_SCREEN: Vec2 = vec2(400.0, 600.0);
-/// Ancho de la columna, en `u`, y lado de un botón (casilla de 24 × 24 u).
-const COLUMN_U: i64 = 107;
+/// Ancho de la caja con 16 columnas, en `u`, y lado de un botón (casilla de 24 × 24 u).
+const COLUMN_U: i64 = 233;
 const TEST_BUTTON_U: i64 = 24;
 const TEST_MARGIN_U: i64 = 4;
 
@@ -113,7 +114,6 @@ impl Bench {
             let view = ToolboxView {
                 state: &self.state_2,
                 zoom_label: self.label_2,
-                options: &OptionsState::default(),
                 icons: &self.icons_2.set,
             };
             action_2 = show_toolbox(ui, &view, default_keymap(), Platform::Linux).action;
@@ -287,10 +287,10 @@ fn row_7_the_zoom_level_and_what_is_far_from_the_buttons_hit_nothing() {
         let n = n_of(ppp);
         let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
         let center_x = bench.x0() + center_u(1).0 * n;
-        // El nivel de zoom (y = 62 a 76): a 9 u de la última fila de herramientas y a 4 u de la
-        // de zoom; se pulsa a 16 u y 11 u de ellas, fuera del radio de interacción de egui.
+        // El nivel de zoom (y = 37 a 51): a 9 u de la fila de herramientas y a 4 u de la de zoom;
+        // se pulsa a 16 u y 11 u de ellas, fuera del radio de interacción de egui.
         assert!(
-            bench.click(center_x, 69 * n).is_empty(),
+            bench.click(center_x, 44 * n).is_empty(),
             "ppp {ppp}: el nivel de zoom no es un botón"
         );
         // Fuera de la columna (a 40 u de su borde, en el lado del lienzo) no hay nada.
@@ -431,7 +431,7 @@ fn the_nine_icons_are_painted_and_no_button_label() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn the_zoom_level_is_a_14_u_text_at_y_62() {
+fn the_zoom_level_is_a_14_u_text_at_y_37() {
     for ppp in PPPS {
         let n = n_of(ppp);
         let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
@@ -443,10 +443,10 @@ fn the_zoom_level_is_a_14_u_text_at_y_62() {
             )
         });
         assert!(
-            (text_2.pos.y * ppp - (62 * n) as f32).abs() <= tolerance_of_egui(ppp),
+            (text_2.pos.y * ppp - (37 * n) as f32).abs() <= tolerance_of_egui(ppp),
             "ppp {ppp}: el nivel empieza en y = {} px y no en {}",
             text_2.pos.y * ppp,
-            62 * n
+            37 * n
         );
         assert!(
             (text_2.size_2.y * ppp - (14 * n) as f32).abs() <= 0.05,
@@ -578,26 +578,21 @@ fn a_disabled_button_is_painted_dimmed() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Unidad I.3 (specs/interfaz-caja-derecha.md): recuadro de opciones, clic derecho y tooltips
+// Unidad I.3 (specs/interfaz-caja-derecha.md) y C2 (specs/ui-single-column.md): ventana de opciones,
+// clic derecho y tooltips
 // ---------------------------------------------------------------------------------------------
 
 mod toolbox_right {
     use super::*;
-    use egui::{Color32, PointerButton, RawInput, Rect};
+    use egui::{PointerButton, RawInput, Rect};
     use proptest::prelude::*;
     use px_ui::actions::{Origin, is_blocked};
-    use px_ui::chrome::{
-        OPTIONS_BODY_ROWS, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U, OPTIONS_BORDER_U,
-        OPTIONS_FOCUS_BORDER_U, OPTIONS_H_U, OPTIONS_KEY_Y_U, OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U,
-        OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U,
-    };
     use px_ui::keymap::{KeyId, default_keymap};
     use px_ui::options::{
-        NO_OPTIONS, OptionsState, key_line, options_max_scroll, options_row_count,
+        NO_OPTIONS, OptionsWindow, key_line, options_max_scroll, options_row_count,
     };
-    use px_ui::palette_grid::ring_rects;
+    use px_ui::options_view::{OptionsView, show_options_window};
     use px_ui::text::INTERFACE_CHARSET;
-    use px_ui::theme::{SURFACE_1, SURFACE_3};
     use px_ui::toolbar::{
         SecondaryOutcome, ToolboxOutput, ToolboxView, secondary_outcome, show_toolbox, tooltip_text,
     };
@@ -612,7 +607,6 @@ mod toolbox_right {
         ctx: Context,
         ppp: f32,
         state_2: UiState,
-        options_2: OptionsState,
         keymap: Keymap,
         time_2: f64,
         icons_2: IconsOfTest,
@@ -626,7 +620,6 @@ mod toolbox_right {
                 ctx,
                 ppp,
                 state_2,
-                options_2: OptionsState::default(),
                 keymap: default_keymap().clone(),
                 time_2: 0.0,
                 icons_2,
@@ -662,7 +655,6 @@ mod toolbox_right {
                 let view = ToolboxView {
                     state: &self.state_2,
                     zoom_label: "×5",
-                    options: &self.options_2,
                     icons: &self.icons_2.set,
                 };
                 output_2 = Some(show_toolbox(ui, &view, &self.keymap, LINUX));
@@ -705,53 +697,6 @@ mod toolbox_right {
             let (cx, cy) = center_u(5 + i as usize);
             (self.x0() + cx * n, cy * n)
         }
-
-        /// Rectángulo del recuadro de opciones en píxeles físicos.
-        fn box_value_2(&self) -> ScreenRect {
-            let n = self.n();
-            ScreenRect {
-                x: self.x0() + OPTIONS_X_U * n,
-                y: OPTIONS_Y_U * n,
-                width: OPTIONS_W_U * n,
-                height: OPTIONS_H_U * n,
-            }
-        }
-    }
-
-    fn near_rect(real: Rect, ppp: f32, expected_2: ScreenRect) -> bool {
-        let tol = tolerance_of_egui(ppp);
-        let r = [
-            real.min.x * ppp,
-            real.min.y * ppp,
-            real.max.x * ppp,
-            real.max.y * ppp,
-        ];
-        let e = [
-            expected_2.x,
-            expected_2.y,
-            expected_2.x + expected_2.width,
-            expected_2.y + expected_2.height,
-        ];
-        r.iter().zip(e).all(|(a, b)| (a - b as f32).abs() <= tol)
-    }
-
-    fn there_is_fill(p: &Painted, ppp: f32, color: Color32, expected_2: ScreenRect) -> bool {
-        p.fills
-            .iter()
-            .any(|r| r.fill == color && near_rect(r.rect, ppp, expected_2))
-    }
-
-    /// Borde de `thickness` px por dentro de `toolbox`: las cuatro franjas de un anillo sobre el interior.
-    fn border(toolbox_2: ScreenRect, thickness: i64) -> [ScreenRect; 4] {
-        ring_rects(
-            ScreenRect {
-                x: toolbox_2.x + thickness,
-                y: toolbox_2.y + thickness,
-                width: toolbox_2.width - 2 * thickness,
-                height: toolbox_2.height - 2 * thickness,
-            },
-            thickness,
-        )
     }
 
     /// El texto pintado cuya esquina cae en `(x_px, y_px)`.
@@ -766,8 +711,8 @@ mod toolbox_right {
         outputs.iter().filter_map(|s| s.action).collect()
     }
 
-    fn focus(outputs: &[ToolboxOutput]) -> bool {
-        outputs.iter().any(|s| s.focus_options)
+    fn toggles(outputs: &[ToolboxOutput]) -> bool {
+        outputs.iter().any(|s| s.toggle_options)
     }
 
     fn per_label(label: &str) -> &'static px_ui::toolbar::Button {
@@ -779,42 +724,97 @@ mod toolbox_right {
     }
 
     // -----------------------------------------------------------------------------------------
-    // Fila 3: el recuadro se pinta donde dice la spec
+    // La ventana de opciones: contenido (specs/ui-single-column.md, decisión 11)
     // -----------------------------------------------------------------------------------------
 
-    #[test]
-    fn row_3_the_box_is_painted_with_fill_and_border_of_1_u_at_the_five_scales() {
-        for ppp in PPPS {
-            let mut toolbox_2 = Toolbox::new(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
-            let p = toolbox_2.rest_2_2();
-            let n = toolbox_2.n();
-            let box_value_2 = toolbox_2.box_value_2();
-            assert!(
-                there_is_fill(&p, ppp, SURFACE_0, box_value_2),
-                "ppp {ppp}: falta el relleno del recuadro {box_value_2:?}"
-            );
-            for band in border(box_value_2, OPTIONS_BORDER_U * n) {
-                assert!(
-                    there_is_fill(&p, ppp, SURFACE_3, band),
-                    "ppp {ppp}: falta una franja del borde de 1 u: {band:?}"
-                );
+    /// Banco de la ventana de opciones sola (`show_options_window`) en la pantalla del banco, con
+    /// 16 columnas elegidas.
+    struct WindowBench {
+        ctx: Context,
+        ppp: f32,
+        tool: Tool,
+        rows: usize,
+        keymap: Keymap,
+        state: OptionsWindow,
+        time_2: f64,
+    }
+
+    impl WindowBench {
+        fn new(ppp: f32, tool: Tool, rows: usize) -> WindowBench {
+            let state = OptionsWindow {
+                open: true,
+                ..OptionsWindow::default()
+            };
+            WindowBench {
+                ctx: context(ppp),
+                ppp,
+                tool,
+                rows,
+                keymap: default_keymap().clone(),
+                state,
+                time_2: 0.0,
             }
-            // Sin el foco no hay borde de 2 u en `ACCENT`.
-            for band in border(box_value_2, OPTIONS_FOCUS_BORDER_U * n) {
-                assert!(
-                    !there_is_fill(&p, ppp, ACCENT, band),
-                    "ppp {ppp}: el borde de foco no debería pintarse"
-                );
-            }
+        }
+
+        fn n(&self) -> i64 {
+            n_of(self.ppp)
+        }
+
+        fn window_px(&self) -> (i64, i64) {
+            (
+                (TEST_SCREEN.x * self.ppp).round() as i64,
+                (TEST_SCREEN.y * self.ppp).round() as i64,
+            )
+        }
+
+        /// Rectángulo de la ventana en píxeles físicos.
+        fn rect(&mut self) -> ScreenRect {
+            self.state
+                .rect(self.rows, self.window_px(), self.n() as u32, 16)
+        }
+
+        /// Punto `(x_u, y_u)` de la ventana, en píxeles físicos.
+        fn at(&mut self, x_u: i64, y_u: i64) -> (i64, i64) {
+            let (n, rect) = (self.n(), self.rect());
+            (rect.x + x_u * n, rect.y + y_u * n)
+        }
+
+        fn frame(&mut self, events: Vec<Event>) -> Painted {
+            self.time_2 += 0.1;
+            let input_2 = RawInput {
+                screen_rect: Some(Rect::from_min_size(egui::Pos2::ZERO, TEST_SCREEN)),
+                events,
+                time: Some(self.time_2),
+                ..RawInput::default()
+            };
+            let window_px = self.window_px();
+            let view = OptionsView {
+                tool: self.tool,
+                rows: self.rows,
+                keymap: &self.keymap,
+                platform: LINUX,
+                enabled: true,
+            };
+            let state = &mut self.state;
+            let mut outside = self.ctx.run_ui(input_2, |ui| {
+                show_options_window(ui.ctx(), &view, state, window_px, 16);
+            });
+            outside.textures_delta.clear();
+            painted(&std::mem::take(&mut outside.shapes))
+        }
+
+        fn rest_2_2(&mut self) -> Painted {
+            self.frame(vec![]);
+            self.frame(vec![])
         }
     }
 
     // -----------------------------------------------------------------------------------------
-    // Fila 4: qué trae el panel hoy y cómo se prepara
+    // Fila 4: qué trae la ventana hoy y cómo se prepara
     // -----------------------------------------------------------------------------------------
 
     #[test]
-    fn row_4_each_tool_paints_its_name_its_shortcut_and_no_options_in_a_fixed_box() {
+    fn row_4_each_tool_paints_its_name_its_shortcut_and_no_options_in_the_window() {
         let expected_2 = [
             (Tool::Pencil, "Lápiz", "tecla d"),
             (Tool::Line, "Línea", "tecla v"),
@@ -824,29 +824,24 @@ mod toolbox_right {
         ];
         for ppp in PPPS {
             for (tool, name_2, shortcut_2) in expected_2 {
-                let mut toolbox_2 = Toolbox::new(ppp, state_2(tool, x5(), Locks::default()));
-                let p = toolbox_2.rest_2_2();
-                let n = toolbox_2.n();
-                let x = toolbox_2.x0() + OPTIONS_TITLE_X_U * n;
-                let title = text_in(&p, ppp, x, OPTIONS_TITLE_Y_U * n)
+                let mut window = WindowBench::new(ppp, tool, 0);
+                let p = window.rest_2_2();
+                // Nombre en la barra de título, línea del atajo y cuerpo (`sin opciones`).
+                let (x, y) = window.at(5, 2);
+                let title = text_in(&p, ppp, x, y)
                     .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta el título"));
                 assert_eq!(title.text_2, name_2, "ppp {ppp}");
-                let line = text_in(&p, ppp, x, OPTIONS_KEY_Y_U * n)
+                let (x, y) = window.at(5, 21);
+                let line = text_in(&p, ppp, x, y)
                     .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta la línea del atajo"));
                 assert_eq!(line.text_2, shortcut_2, "ppp {ppp}");
                 assert_eq!(line.color(), TEXT_DIM, "ppp {ppp}");
-                let body = text_in(
-                    &p,
-                    ppp,
-                    toolbox_2.x0() + OPTIONS_BODY_X_U * n,
-                    OPTIONS_BODY_Y_U * n,
-                )
-                .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta `sin opciones`"));
+                let (x, y) = window.at(5, 39);
+                let body = text_in(&p, ppp, x, y)
+                    .unwrap_or_else(|| panic!("ppp {ppp} {tool:?}: falta `sin opciones`"));
                 assert_eq!(body.text_2, NO_OPTIONS, "ppp {ppp}");
                 assert_eq!(NO_OPTIONS, "sin opciones");
                 assert_eq!(body.color(), TEXT_DIM, "ppp {ppp}");
-                // El recuadro es el mismo con cualquier herramienta.
-                assert!(there_is_fill(&p, ppp, SURFACE_0, toolbox_2.box_value_2()));
             }
         }
     }
@@ -879,12 +874,12 @@ mod toolbox_right {
             .collect();
         let other = Keymap::new(rows_2);
         assert_eq!(key_line(Tool::Pencil, &other, LINUX), "tecla x");
-        // Sin fila en la tabla, la herramienta sigue diciendo `without key_2`.
+        // Sin fila en la tabla, la herramienta sigue diciendo `sin tecla`.
         let empty = Keymap::new(vec![]);
         assert_eq!(key_line(Tool::Eraser, &empty, LINUX), "sin tecla");
-        let mut toolbox_2 = Toolbox::new(1.0, state_2(Tool::Pencil, x5(), Locks::default()));
-        toolbox_2.keymap = other;
-        let p = toolbox_2.rest_2_2();
+        let mut window = WindowBench::new(1.0, Tool::Pencil, 0);
+        window.keymap = other;
+        let p = window.rest_2_2();
         assert!(p.paints("tecla x"));
     }
 
@@ -893,51 +888,54 @@ mod toolbox_right {
         for tool in TEST_TOOLS {
             assert_eq!(options_row_count(tool), 0, "{tool:?}");
         }
-        assert_eq!(OPTIONS_BODY_ROWS, 7);
-        for (rows_2, maximum_2) in [(0, 0), (7, 0), (8, 1), (30, 23)] {
+        for (rows_2, maximum_2) in [(0, 0), (8, 0), (9, 1), (30, 22)] {
             assert_eq!(options_max_scroll(rows_2), maximum_2, "{rows_2} filas");
         }
-        let mut state_2 = OptionsState::default();
-        assert_eq!((state_2.focused, state_2.scroll_rows), (false, 0));
-        state_2.scroll_by(3, 0);
+        let mut state_2 = OptionsWindow::default();
+        assert_eq!((state_2.open, state_2.scroll_of(Tool::Pencil)), (false, 0));
+        state_2.scroll_by(Tool::Pencil, 3, 0);
         assert_eq!(
-            state_2.scroll_rows, 0,
+            state_2.scroll_of(Tool::Pencil),
+            0,
             "sin filas no hay nada que desplazar"
         );
-        state_2.scroll_by(5, 30);
-        assert_eq!(state_2.scroll_rows, 5);
-        state_2.scroll_by(100, 30);
-        assert_eq!(state_2.scroll_rows, 23, "se recorta a `filas − 7`");
-        state_2.scroll_by(-100, 30);
-        assert_eq!(state_2.scroll_rows, 0);
-        // Cambiar de herramienta lo devuelve a 0.
-        state_2.scroll_by(4, 30);
-        state_2.sync_tool(Tool::Line);
-        assert_eq!(state_2.scroll_rows, 0);
+        state_2.scroll_by(Tool::Pencil, 5, 30);
+        assert_eq!(state_2.scroll_of(Tool::Pencil), 5);
+        state_2.scroll_by(Tool::Pencil, 100, 30);
+        assert_eq!(
+            state_2.scroll_of(Tool::Pencil),
+            22,
+            "se recorta a `filas − 8`"
+        );
+        state_2.scroll_by(Tool::Pencil, -100, 30);
+        assert_eq!(state_2.scroll_of(Tool::Pencil), 0);
+        // Cada herramienta recuerda su propio desplazamiento.
+        state_2.scroll_by(Tool::Pencil, 4, 30);
+        state_2.scroll_by(Tool::Line, 2, 30);
+        assert_eq!(state_2.scroll_of(Tool::Pencil), 4);
+        assert_eq!(state_2.scroll_of(Tool::Line), 2);
+        assert_eq!(state_2.scroll_of(Tool::Fill), 0);
     }
 
     #[test]
-    fn row_4_the_wheel_over_the_body_asks_to_scroll_rows_and_elsewhere_it_does_not() {
+    fn row_4_the_wheel_over_the_body_scrolls_rows_and_elsewhere_it_does_not() {
         for ppp in PPPS {
-            let mut toolbox_2 = Toolbox::new(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
-            let n = toolbox_2.n();
-            let body = (
-                toolbox_2.x0() + (OPTIONS_BODY_X_U + 10) * n,
-                (OPTIONS_BODY_Y_U + 10) * n,
-            );
-            toolbox_2.rest_2_2();
-            toolbox_2.frame(vec![move_pointer(in_points(ppp, body.0, body.1))]);
-            let (_, output_2) = toolbox_2.frame(vec![wheel_line(false)]);
+            let mut window = WindowBench::new(ppp, Tool::Pencil, 30);
+            window.rest_2_2();
+            let body = window.at(5 + 10, 39 + 10);
+            window.frame(vec![move_pointer(in_points(ppp, body.0, body.1))]);
+            window.frame(vec![wheel_line(false)]);
             assert_eq!(
-                output_2.options_scroll_rows, 3,
+                window.state.scroll_of(Tool::Pencil),
+                3,
                 "ppp {ppp}: una muesca = 3 filas"
             );
-            assert_eq!(output_2.action, None);
-            let (x, y) = toolbox_2.center_of_tool(0);
-            toolbox_2.frame(vec![move_pointer(in_points(ppp, x, y))]);
-            let (_, output_2) = toolbox_2.frame(vec![wheel_line(false)]);
+            let title = window.at(60, 6);
+            window.frame(vec![move_pointer(in_points(ppp, title.0, title.1))]);
+            window.frame(vec![wheel_line(false)]);
             assert_eq!(
-                output_2.options_scroll_rows, 0,
+                window.state.scroll_of(Tool::Pencil),
+                3,
                 "ppp {ppp}: fuera del cuerpo"
             );
         }
@@ -948,7 +946,7 @@ mod toolbox_right {
     // -----------------------------------------------------------------------------------------
 
     #[test]
-    fn row_5_the_right_click_chooses_the_tool_and_gives_the_focus_at_the_five_scales() {
+    fn row_5_the_right_click_chooses_the_tool_and_asks_to_toggle_the_window_at_the_five_scales() {
         for ppp in PPPS {
             for (i, button) in TOOL_BUTTONS.iter().enumerate() {
                 // Con cualquier herramienta activa, también con la propia.
@@ -963,10 +961,10 @@ mod toolbox_right {
                         "ppp {ppp}: {} con {active_2:?}",
                         button.label
                     );
-                    assert!(focus(&outputs), "ppp {ppp}: {} da el foco", button.label);
                     assert!(
-                        outputs.iter().any(|s| s.pressed_outside_options),
-                        "ppp {ppp}: el clic cae fuera del recuadro"
+                        toggles(&outputs),
+                        "ppp {ppp}: {} abre o cierra la ventana",
+                        button.label
                     );
                 }
             }
@@ -974,7 +972,7 @@ mod toolbox_right {
     }
 
     #[test]
-    fn row_5_blocked_there_is_neither_tool_nor_focus_and_the_removal_does_not_block() {
+    fn row_5_blocked_there_is_neither_tool_nor_window_and_the_removal_does_not_block() {
         type Put = fn(&mut Locks);
         let locks_2: [(&str, Put); 4] = [
             ("gesto", |l| l.gesture = true),
@@ -991,7 +989,7 @@ mod toolbox_right {
                     let (x, y) = toolbox_2.center_of_tool(i);
                     let outputs = toolbox_2.click(PointerButton::Secondary, x, y);
                     assert!(actions(&outputs).is_empty(), "ppp {ppp}: {name_2}");
-                    assert!(!focus(&outputs), "ppp {ppp}: {name_2}");
+                    assert!(!toggles(&outputs), "ppp {ppp}: {name_2}");
                 }
             }
             let with_removes = Locks {
@@ -1002,98 +1000,24 @@ mod toolbox_right {
             let (x, y) = toolbox_2.center_of_tool(1);
             let outputs = toolbox_2.click(PointerButton::Secondary, x, y);
             assert_eq!(actions(&outputs), vec![AppAction::SelectTool(Tool::Line)]);
-            assert!(focus(&outputs));
+            assert!(toggles(&outputs));
         }
     }
 
     #[test]
-    fn row_5_the_left_click_does_not_give_focus_and_the_middle_one_does_nothing() {
+    fn row_5_the_left_click_does_not_toggle_the_window_and_the_middle_one_does_nothing() {
         for ppp in PPPS {
             let mut toolbox_2 = Toolbox::new(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
             let (x, y) = toolbox_2.center_of_tool(2);
             let left_2 = toolbox_2.click(PointerButton::Primary, x, y);
             assert_eq!(actions(&left_2), vec![AppAction::SelectTool(Tool::Fill)]);
-            assert!(!focus(&left_2), "ppp {ppp}");
+            assert!(!toggles(&left_2), "ppp {ppp}");
             let central = toolbox_2.click(PointerButton::Middle, x, y);
             assert!(
-                actions(&central).is_empty() && !focus(&central),
+                actions(&central).is_empty() && !toggles(&central),
                 "ppp {ppp}"
             );
         }
-    }
-
-    #[test]
-    fn row_5_a_press_inside_the_box_is_not_outside_and_anywhere_else_it_is() {
-        for ppp in PPPS {
-            let mut toolbox_2 = Toolbox::new(ppp, state_2(Tool::Pencil, x5(), Locks::default()));
-            let n = toolbox_2.n();
-            let inside = (
-                toolbox_2.x0() + (OPTIONS_BODY_X_U + 20) * n,
-                (OPTIONS_BODY_Y_U + 20) * n,
-            );
-            for button_2 in [PointerButton::Primary, PointerButton::Secondary] {
-                let s = toolbox_2.click(button_2, inside.0, inside.1);
-                assert!(
-                    s.iter().all(|s| !s.pressed_outside_options),
-                    "ppp {ppp}: dentro del recuadro"
-                );
-                // Fuera de la caja (hacia el lienzo) y sobre un botón de la propia caja.
-                let s = toolbox_2.click(button_2, toolbox_2.x0() - 40 * n, 50 * n);
-                assert!(
-                    s.iter().any(|s| s.pressed_outside_options),
-                    "ppp {ppp}: fuera"
-                );
-                let (x, y) = toolbox_2.center_of_zoom(3);
-                let s = toolbox_2.click(button_2, x, y);
-                assert!(
-                    s.iter().any(|s| s.pressed_outside_options),
-                    "ppp {ppp}: un botón no es el recuadro"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn row_5_the_focus_is_painted_with_a_2_u_accent_border_with_contrast_3_to_1() {
-        // Sobre el fondo de la caja.
-        assert!(contrast_ratio(ACCENT, SURFACE_1) >= 3.0);
-        for ppp in PPPS {
-            let mut toolbox_2 = Toolbox::new(ppp, state_2(Tool::Line, x5(), Locks::default()));
-            toolbox_2.options_2.focus();
-            let p = toolbox_2.rest_2_2();
-            let n = toolbox_2.n();
-            for band in border(toolbox_2.box_value_2(), OPTIONS_FOCUS_BORDER_U * n) {
-                assert!(
-                    there_is_fill(&p, ppp, ACCENT, band),
-                    "ppp {ppp}: falta una franja del foco: {band:?}"
-                );
-            }
-            // El borde de 1 u desaparece: no depende solo del color, cambia el grosor.
-            for band in border(toolbox_2.box_value_2(), OPTIONS_BORDER_U * n) {
-                assert!(!there_is_fill(&p, ppp, SURFACE_3, band), "ppp {ppp}");
-            }
-        }
-    }
-
-    #[test]
-    fn row_5_the_focus_is_lost_with_a_press_outside_another_tool_or_a_dialog() {
-        let mut e = OptionsState::default();
-        e.focus();
-        assert!(e.focused);
-        e.sync_tool(Tool::Pencil);
-        assert!(e.focused, "la misma herramienta no lo quita");
-        e.sync_tool(Tool::Line);
-        assert!(!e.focused, "otra herramienta por otra vía lo quita");
-        e.focus();
-        e.press_outside();
-        assert!(!e.focused);
-        e.focus();
-        e.blur();
-        assert!(!e.focused, "abrir un diálogo lo quita");
-        // El orden del fotograma: pulsación fuera y luego el foco del clic derecho que la causó.
-        e.press_outside();
-        e.focus();
-        assert!(e.focused);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1126,7 +1050,7 @@ mod toolbox_right {
         for button in &TOOL_BUTTONS {
             assert_eq!(
                 secondary_outcome(button, &state_2),
-                SecondaryOutcome::SelectAndFocus(button.action)
+                SecondaryOutcome::SelectAndToggle(button.action)
             );
         }
     }
@@ -1211,7 +1135,7 @@ mod toolbox_right {
                 let (x, y) = toolbox_2.center_of_zoom(i as i64);
                 let outputs = toolbox_2.click(PointerButton::Secondary, x, y);
                 assert_eq!(actions(&outputs), expected_2, "ppp {ppp}: {}", button.label);
-                assert!(!focus(&outputs), "ppp {ppp}: el zoom no da foco");
+                assert!(!toggles(&outputs), "ppp {ppp}: el zoom no abre la ventana");
                 // En ×64 el derecho de `Acercar` aleja aunque el izquierdo esté atenuado.
                 if button.label == "Acercar" {
                     let mut toolbox_2 = Toolbox::new(
@@ -1370,25 +1294,6 @@ mod toolbox_right {
     // Propiedad 3: el clic secundario sigue la tabla
     // -----------------------------------------------------------------------------------------
 
-    #[derive(Clone, Copy, Debug)]
-    enum Ev {
-        RightClickOnTool { allowed: bool },
-        PressOutside,
-        ChangeOfTool,
-        TestDialog,
-        PressInside,
-    }
-
-    fn event() -> impl Strategy<Value = Ev> {
-        prop_oneof![
-            any::<bool>().prop_map(|allowed| Ev::RightClickOnTool { allowed }),
-            Just(Ev::PressOutside),
-            Just(Ev::ChangeOfTool),
-            Just(Ev::TestDialog),
-            Just(Ev::PressInside),
-        ]
-    }
-
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(256))]
 
@@ -1424,7 +1329,7 @@ mod toolbox_right {
                         if is_blocked(action_2, locks, Origin::Button) || !there_is_step {
                             SecondaryOutcome::Nothing
                         } else if matches!(action_2, AppAction::SelectTool(_)) {
-                            SecondaryOutcome::SelectAndFocus(action_2)
+                            SecondaryOutcome::SelectAndToggle(action_2)
                         } else {
                             SecondaryOutcome::Action(action_2)
                         }
@@ -1434,42 +1339,6 @@ mod toolbox_right {
             }
         }
 
-        #[test]
-        fn property_3_the_focus_only_lasts_after_an_allowed_right_click(
-            events_2 in prop::collection::vec(event(), 0..24),
-        ) {
-            let mut e = OptionsState::default();
-            let mut tool_2 = Tool::Pencil;
-            let mut before;
-            for ev in events_2 {
-                before = e.focused;
-                match ev {
-                    Ev::RightClickOnTool { allowed } => {
-                        // Orden del fotograma: primero la pulsación fuera, luego el foco.
-                        e.press_outside();
-                        if allowed {
-                            e.focus();
-                        }
-                        prop_assert_eq!(e.focused, allowed);
-                    }
-                    Ev::PressOutside => {
-                        e.press_outside();
-                        prop_assert!(!e.focused);
-                    }
-                    Ev::ChangeOfTool => {
-                        tool_2 = if tool_2 == Tool::Line { Tool::Fill } else { Tool::Line };
-                        e.sync_tool(tool_2);
-                        prop_assert!(!e.focused);
-                    }
-                    Ev::TestDialog => {
-                        e.blur();
-                        prop_assert!(!e.focused);
-                    }
-                    Ev::PressInside => prop_assert_eq!(e.focused, before),
-                }
-                prop_assert!(e.scroll_rows <= options_max_scroll(options_row_count(tool_2)));
-            }
-        }
     }
 }
 
@@ -1684,7 +1553,6 @@ mod icons {
             let view = ToolboxView {
                 state: &bench.state_2,
                 zoom_label: bench.label_2,
-                options: &OptionsState::default(),
                 icons: &bench.icons_2.set,
             };
             show_toolbox(ui, &view, default_keymap(), Platform::Linux);

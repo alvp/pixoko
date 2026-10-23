@@ -1,13 +1,14 @@
 //! Puntos y rectángulos de las zonas de la ventana sin escribir de qué lado está cada una
 //! (specs/interfaz-caja-derecha.md, «Cómo no romper 50 pruebas con el próximo cambio de lado»).
 //!
-//! `window_layout` es la única fuente del reparto; aquí solo se deduce, **comparando `x`** con la del
-//! lienzo, dónde queda una zona cuando un banco monta **solo** esa pieza (el panel o la caja, sin
-//! las demás): pegada al borde de su lado de la ventana.
+//! Dónde queda una zona cuando un banco monta **solo** esa pieza (el panel o la caja, sin las
+//! demás, con las 16 columnas de hoy): pegada al borde derecho de la ventana. El reparto de la
+//! columna única de verdad lo prueba `window_stack.rs` con `chrome::window_layout`.
 
 #![allow(dead_code)]
 
-use px_ui::chrome::{WindowLayout, window_layout};
+use px_ui::chrome::{COLUMN_DEFAULT_COLS, MENU_H_U, column_width_u, head_u};
+use px_ui::status::bar_height_px;
 use px_ui::view::ScreenRect;
 
 /// Punto `(x_u, y_u)` de una zona, en píxeles físicos, medido desde su esquina.
@@ -15,30 +16,35 @@ pub fn in_zone(zone: ScreenRect, x_u: i64, y_u: i64, n: i64) -> (i64, i64) {
     (zone.x + x_u * n, zone.y + y_u * n)
 }
 
-/// La zona pegada al borde de su lado de una ventana de `window_px` en la que solo se monta ella.
-fn pasted_to_the_border(
-    zone: ScreenRect,
-    layout: &WindowLayout,
-    window_px: (i64, i64),
-) -> ScreenRect {
-    let x = if zone.x > layout.canvas.x {
-        window_px.0 - zone.width
-    } else {
-        0
-    };
-    ScreenRect { x, ..zone }
+/// El alto de la franja central de una ventana de `window_px` (entre el menú y la barra de estado).
+fn band_of(window_px: (i64, i64), n: u32) -> i64 {
+    (window_px.1 - MENU_H_U * i64::from(n) - i64::from(bar_height_px(n))).max(0)
 }
 
-/// El panel de paletas en un banco que no monta la caja de herramientas.
+/// El panel de paletas en un banco que no monta la caja de herramientas: de 16 columnas (233 u),
+/// pegado al borde derecho y de todo el alto de la franja central.
 pub fn panel_only(window_px: (i64, i64), n: u32) -> ScreenRect {
-    let layout = window_layout(window_px, n);
-    pasted_to_the_border(layout.panel, &layout, window_px)
+    let k = i64::from(n);
+    let width = column_width_u(COLUMN_DEFAULT_COLS) * k;
+    ScreenRect {
+        x: window_px.0 - width,
+        y: MENU_H_U * k,
+        width,
+        height: band_of(window_px, n),
+    }
 }
 
-/// La caja de herramientas en un banco que no monta el panel.
+/// La caja de herramientas en un banco que no monta el panel: de 16 columnas (233 u), pegada al
+/// borde derecho, de `head` de alto (o menos, si la franja es más baja).
 pub fn toolbox_single(window_px: (i64, i64), n: u32) -> ScreenRect {
-    let layout = window_layout(window_px, n);
-    pasted_to_the_border(layout.toolbar, &layout, window_px)
+    let k = i64::from(n);
+    let width = column_width_u(COLUMN_DEFAULT_COLS) * k;
+    ScreenRect {
+        x: window_px.0 - width,
+        y: MENU_H_U * k,
+        width,
+        height: (head_u(5, COLUMN_DEFAULT_COLS) * k).min(band_of(window_px, n)),
+    }
 }
 
 /// Monta un panel de paletas (`panel`) y, en lo que queda, el resto del banco (`rest_2`: el lienzo)

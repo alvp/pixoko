@@ -84,7 +84,7 @@ fn row_3_the_pointer_over_a_button_gives_the_target_and_outside_them_the_active_
                 );
             }
         }
-        // En un hueco entre botones, un píxel fuera, el recuadro de opciones, el lienzo, el panel,
+        // En un hueco entre botones, un píxel fuera, bajo la caja (la paleta), el lienzo, el panel,
         // el menú, la barra de estado y fuera de la ventana: la activa.
         let (x0, y0, w0, h0) = toolbox_button_rect_u(0);
         let outside = [

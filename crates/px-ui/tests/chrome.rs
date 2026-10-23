@@ -1,27 +1,32 @@
 //! Tests de la geometría de la ventana `px_ui::chrome` y de los mínimos de ventana
-//! (specs/hito-2-menu-herramientas.md, «Casos» filas 7 y 8 y propiedad 3). Sin tipos de egui:
-//! `chrome` es aritmética entera.
+//! (specs/hito-2-menu-herramientas.md, «Casos» filas 7 y 8 y propiedad 3; C2,
+//! specs/ui-single-column.md: una sola columna de ancho ajustable). Sin tipos de egui: `chrome`
+//! es aritmética entera.
 //!
-//! - Fila 7 (parte pura): `toolbar_width_u() = 107 = 2·4 + 99` con 99 = `4·24 + 3·1` (la rejilla de
-//!   iconos de 4 columnas, specs/interfaz-iconos.md); los 9 botones caben en la
-//!   columna sin tocar el borde y no se solapan; el contenido (250 u) cabe en 277 u; el menú entero
-//!   y el desplegable más ancho (208 u) caben en el ancho mínimo; los cinco rectángulos de
-//!   `window_layout` recubren la ventana sin huecos ni solapes, a las cinco escalas y en la ventana
-//!   por defecto y en la mínima. El banco de egui con la pila real está en `window_stack.rs`.
-//! - Fila 8: `min_window_height_pt`, `min_window_width_u` y `min_window_width_pt` a las cinco
-//!   escalas y con `ppp` inválido; `min_inner_size` es de `px-app` (`window_min/tests.rs`).
+//! - Fila 7 (parte pura): el ancho de la columna es `W(k) = 14·k + 9` (la rejilla de la paleta, con
+//!   `k` columnas de muestras); los 9 botones caben en la columna sin tocar el borde y no se
+//!   solapan; 20 herramientas a 8 columnas caben en 277 u; el menú entero y el desplegable más
+//!   ancho (208 u) caben en el ancho mínimo; los cinco rectángulos de `window_layout` recubren la
+//!   ventana sin huecos ni solapes, a las cinco escalas y en la ventana por defecto y en la
+//!   mínima. El banco de egui con la pila real está en `window_stack.rs`.
+//! - Fila 8: `min_window_height_pt`, `min_window_width_u` (el mayor de cuatro términos: la columna
+//!   mínima y el lienzo mínimo, la barra de menús, el diálogo y las 66 columnas de la barra de
+//!   estado) y `min_window_width_pt` a las cinco escalas y con `ppp` inválido; `min_inner_size` es
+//!   de `px-app` (`window_min/tests.rs`).
 //! - Propiedad 3: geometría entera y recubrimiento con `ppp` de 1,0 a 4,0 en pasos de 0,05.
 
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use px_ui::actions::Platform;
 use px_ui::chrome::{
-    MENU_H_U, TOOL_LABELS, TOOLBAR_CONTENT_H_U, TOOLBOX_COLUMNS, WindowLayout, canvas_origin_px,
-    toolbar_button_width_u, toolbar_width_u, window_layout,
+    COLUMN_DEFAULT_COLS, COLUMN_MIN_COLS, MENU_BAR_W_U, MENU_H_U, TOOL_LABELS, WindowLayout,
+    canvas_origin_px, column_cols, column_width_u, head_u, tool_rows, window_layout,
+    window_layout_cols,
 };
+use px_ui::dialog_layout::{DIALOG_W_U, MARGIN_U};
 use px_ui::edit_layout::{
-    MIN_CANVAS_WIDTH_U, min_panel_height_px, min_window_height_pt, min_window_width_pt,
-    min_window_width_u,
+    MIN_CANVAS_WIDTH_U, block_height_closed_px, min_panel_height_px, min_width_terms_u,
+    min_window_height_pt, min_window_width_pt, min_window_width_u,
 };
 use px_ui::icon_button::{BUTTON_U, GAP_U};
 use px_ui::menu::{MENUS, shortcut_for, shortcut_text};
@@ -44,6 +49,11 @@ fn near_pt(a: f32, b: f32) -> bool {
     (a - b).abs() <= 0.01
 }
 
+/// Herramientas de hoy.
+fn tools() -> usize {
+    TOOL_LABELS.len()
+}
+
 // ---------------------------------------------------------------------------------------------
 // Fila 7: constantes y columna
 // ---------------------------------------------------------------------------------------------
@@ -51,9 +61,8 @@ fn near_pt(a: f32, b: f32) -> bool {
 #[test]
 fn row_7_the_constants_are_worth_what_the_spec_says() {
     assert_eq!(MENU_H_U, 16);
-    assert_eq!(TOOLBAR_CONTENT_H_U, 250);
-    assert_eq!(toolbar_width_u(), 107);
-    assert_eq!(toolbar_button_width_u(), 99);
+    assert_eq!(column_width_u(COLUMN_DEFAULT_COLS), 233);
+    assert_eq!(head_u(tools(), COLUMN_DEFAULT_COLS), 84);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(bar_height_px(1), 20);
     assert_eq!(min_panel_height_px(1), 277);
@@ -61,12 +70,17 @@ fn row_7_the_constants_are_worth_what_the_spec_says() {
 
 #[test]
 fn row_7_the_column_width_is_derived_from_the_icon_grid() {
-    assert_eq!(TOOLBOX_COLUMNS, 4);
-    let button_2 = TOOLBOX_COLUMNS * BUTTON_U + (TOOLBOX_COLUMNS - 1) * GAP_U;
-    assert_eq!(button_2, 99);
-    assert_eq!(toolbar_button_width_u(), button_2);
-    assert_eq!(toolbar_width_u(), 2 * 4 + button_2);
-    assert_eq!(toolbar_width_u(), 107);
+    // 4 u de margen, 14 u por columna de muestras, 3 u de pista y 1 u de línea, con un hueco de 1 u.
+    assert_eq!((COLUMN_MIN_COLS, COLUMN_DEFAULT_COLS), (8, 16));
+    for cols in COLUMN_MIN_COLS..=64 {
+        assert_eq!(column_width_u(cols), 4 + 14 * cols + 5, "k = {cols}");
+    }
+    assert_eq!(column_width_u(8), 121);
+    assert_eq!(column_width_u(14), 205);
+    assert_eq!(column_width_u(16), 233);
+    // Nueve botones de 24 u con un hueco de 1 u llenan justo las 16 columnas de muestras.
+    assert_eq!(9 * BUTTON_U + 8 * GAP_U, 16 * 14);
+    assert_eq!(column_width_u(16) - 8, 9 * BUTTON_U + 8 * GAP_U + 1);
 }
 
 #[test]
@@ -81,47 +95,74 @@ fn row_7_tool_labels_are_the_labels_of_tool_buttons_without_the_letter() {
 
 #[test]
 fn row_7_the_nine_buttons_fit_in_the_column_without_touching_the_edge_and_do_not_overlap() {
-    // Herramientas: dos filas de botones de 24 u en y = 4 y 29 (hueco de 1 u); zoom: una fila en
-    // y = 80.
-    let height_2 = 24;
-    let tools: Vec<(i64, i64)> = (0..2).map(|i| (4 + 25 * i, height_2)).collect();
-    let zoom: Vec<(i64, i64)> = vec![(80, height_2)];
-    assert_eq!(tools.last().map(|(y, h)| y + h), Some(53));
-    assert_eq!(zoom.last().map(|(y, h)| y + h), Some(104));
-    let separator = (57, 1);
-    let level = (62, 14);
-
-    let mut all_2: Vec<(i64, i64)> = tools.clone();
-    all_2.push(separator);
-    all_2.push(level);
-    all_2.extend(zoom.iter().copied());
-    for pair in all_2.windows(2) {
-        let (a, b) = (pair[0], pair[1]);
-        assert!(a.0 + a.1 <= b.0, "{a:?} se solapa con {b:?}");
-    }
-    // Margen de 4 u a cada lado: 4 + 99 + 4 = 107, sin tocar el borde.
-    let x0 = 4;
-    let width_2 = toolbar_button_width_u();
-    assert!(x0 > 0);
-    assert!(x0 + width_2 < toolbar_width_u());
-    assert_eq!(x0 + width_2 + 4, toolbar_width_u());
-    // Dos filas seguidas de un mismo grupo dejan 1 u entre ellas.
-    for pair in tools.windows(2).chain(zoom.windows(2)) {
-        assert_eq!(pair[1].0 - (pair[0].0 + pair[0].1), 1);
+    use px_ui::chrome::toolbox_button_rect_u_at;
+    // Escrito con los literales de la spec: `c(k) = ⌊(14k + 2)/25⌋` botones por fila; con
+    // `r = ⌈5/c⌉` filas, el separador en `25r + 7`, el texto del zoom en `25r + 12` y la fila de zoom
+    // en `25r + 30`; la caja mide `25r + 58`.
+    for cols in COLUMN_MIN_COLS..=24 {
+        let per_row = (14 * cols + 2) / 25;
+        let rows = (5 + per_row - 1) / per_row;
+        let width_2 = 14 * cols + 9;
+        let mut pieces: Vec<(i64, i64, i64, i64)> = (0..5)
+            .map(|i| (4 + 25 * (i % per_row), 4 + 25 * (i / per_row), 24, 24))
+            .collect();
+        pieces.extend((0..4).map(|i| (4 + 25 * i, 25 * rows + 30, 24, 24)));
+        for (i, expected_2) in pieces.iter().enumerate() {
+            assert_eq!(
+                toolbox_button_rect_u_at(i, 5, cols),
+                *expected_2,
+                "k = {cols}, botón {i}"
+            );
+        }
+        let separator = (4, 25 * rows + 7, width_2 - 8, 1);
+        let level = (8, 25 * rows + 12, width_2 - 16, 14);
+        pieces.push(separator);
+        pieces.push(level);
+        assert_eq!(25 * rows + 58, head_u(5, cols) - 1, "k = {cols}");
+        for (i, a) in pieces.iter().enumerate() {
+            // Margen de 4 u a cada lado y 4 u bajo la fila de zoom: sin tocar el borde.
+            assert!(
+                a.0 >= 4 && a.0 + a.2 <= width_2 - 4,
+                "k = {cols}, pieza {i}: {a:?}"
+            );
+            assert!(
+                a.1 >= 4 && a.1 + a.3 <= 25 * rows + 54,
+                "k = {cols}, pieza {i}: {a:?}"
+            );
+            for b in pieces.iter().skip(i + 1) {
+                let overlap =
+                    a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3;
+                assert!(!overlap, "k = {cols}: {a:?} se solapa con {b:?}");
+            }
+        }
+        // Dos botones seguidos de un mismo grupo dejan 1 u entre ellos.
+        for i in 0..3 {
+            let a = toolbox_button_rect_u_at(5 + i, 5, cols);
+            let b = toolbox_button_rect_u_at(5 + i + 1, 5, cols);
+            assert_eq!(b.0 - (a.0 + a.2), 1, "k = {cols}");
+        }
     }
 }
 
 #[test]
-fn row_7_the_250_u_content_fits_in_the_277_u_of_the_minimum_panel() {
-    // Fila de zoom (termina en 104), 4 u, el recuadro de opciones de 138 u y 4 u de margen.
-    assert_eq!(80 + 24 + 4 + 138 + 4, TOOLBAR_CONTENT_H_U);
-    assert_eq!(TOOLBAR_CONTENT_H_U, 250);
+fn row_7_20_tools_at_8_columns_fit_in_the_277_u_of_the_minimum_panel() {
+    // 20 herramientas a 8 columnas (`c = 4`) son 5 filas: la caja mide `25·5 + 59 = 184` u y el
+    // bloque cerrado de la paleta indexada (banda, una fila de rejilla e iconos), 91 u.
+    assert_eq!(tool_rows(20, 8), 5);
+    assert_eq!(head_u(20, 8), 184);
+    assert_eq!(head_u(20, 8) + 91, 275);
     for ppp in PPPS {
         let n = n_of(ppp);
-        assert!(TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32));
-        assert_eq!(
-            min_panel_height_px(n as u32) - TOOLBAR_CONTENT_H_U * n,
-            27 * n
+        let closed = block_height_closed_px(px_core::Mode::Indexed, n as u32);
+        assert_eq!(closed, 91 * n, "ppp {ppp}");
+        assert!(
+            head_u(20, 8) * n + closed <= min_panel_height_px(n as u32),
+            "ppp {ppp}: 20 herramientas a 8 columnas no caben"
+        );
+        // Con 21 la regla falla en voz alta (seis filas), en vez de recortar.
+        assert!(
+            head_u(21, 8) * n + closed > min_panel_height_px(n as u32),
+            "ppp {ppp}: 21 herramientas a 8 columnas"
         );
     }
 }
@@ -155,6 +196,7 @@ fn row_7_the_menu_titles_add_249_u_and_fit_with_their_margin_in_the_minimum_widt
     assert_eq!(widths, [61, 54, 54, 40, 33, 47]);
     let total: i64 = widths.iter().sum();
     assert_eq!(total, 289);
+    assert_eq!(MENU_BAR_W_U, total);
     assert!(4 + total < min_window_width_u());
 }
 
@@ -214,43 +256,33 @@ fn five(layout: &WindowLayout) -> [(&'static str, ScreenRect); 5] {
     ]
 }
 
-/// Invariantes de `window_layout` con la ventana de `window` píxeles físicos y la escala `n`.
-fn checks_layout(window: (i64, i64), n: u32) -> Result<(), TestCaseError> {
+/// Invariantes de `window_layout_cols` con la ventana de `window` píxeles físicos, la escala `n` y
+/// `wanted` columnas elegidas.
+fn checks_layout_cols(window: (i64, i64), n: u32, wanted: i64) -> Result<(), TestCaseError> {
     let k = i64::from(n);
     let (w, h) = window;
-    let layout = window_layout(window, n);
+    let layout = window_layout_cols(window, n, wanted);
     let band = h - (MENU_H_U + 20) * k;
-    // Medidas de la spec: menú de 16·n, barra de 20·n, columna de 107·n y panel de 233·n, a la derecha del lienzo.
+    let cols = column_cols(w, n, wanted);
+    let column_w = column_width_u(cols) * k;
+    let head = (head_u(tools(), cols) * k).min(band);
+    // Medidas de la spec: menú de 16·n, barra de 20·n y una sola columna de `W(k)·n` a la derecha
+    // del lienzo, con la caja arriba y la paleta debajo, del mismo `x` y del mismo ancho.
     prop_assert_eq!(layout.menu, rect(0, 0, w, MENU_H_U * k));
     prop_assert_eq!(layout.status, rect(0, h - 20 * k, w, 20 * k));
     prop_assert_eq!(
         layout.toolbar,
-        rect(
-            w - toolbar_width_u() * k,
-            MENU_H_U * k,
-            toolbar_width_u() * k,
-            band
-        )
+        rect(w - column_w, MENU_H_U * k, column_w, head)
     );
     prop_assert_eq!(
         layout.panel,
-        rect(
-            w - (toolbar_width_u() + PANEL_WIDTH_U) * k,
-            MENU_H_U * k,
-            PANEL_WIDTH_U * k,
-            band
-        )
+        rect(w - column_w, MENU_H_U * k + head, column_w, band - head)
     );
-    // El lienzo es lo que queda tras quitar menú, columna, panel y barra.
-    prop_assert_eq!(
-        layout.canvas,
-        rect(
-            0,
-            MENU_H_U * k,
-            w - (toolbar_width_u() + PANEL_WIDTH_U) * k,
-            band
-        )
-    );
+    // El lienzo es lo que queda tras quitar menú, columna y barra, y nunca baja de su mínimo.
+    prop_assert_eq!(layout.canvas, rect(0, MENU_H_U * k, w - column_w, band));
+    if w >= (column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U) * k {
+        prop_assert!(layout.canvas.width >= MIN_CANVAS_WIDTH_U * k);
+    }
     prop_assert_eq!(canvas_origin_px(n), (0, 16 * k));
     prop_assert_eq!(canvas_origin_px(n), (layout.canvas.x, layout.canvas.y));
 
@@ -269,6 +301,15 @@ fn checks_layout(window: (i64, i64), n: u32) -> Result<(), TestCaseError> {
         }
     }
     Ok(())
+}
+
+/// Invariantes de `window_layout` (16 columnas elegidas).
+fn checks_layout(window: (i64, i64), n: u32) -> Result<(), TestCaseError> {
+    prop_assert_eq!(
+        window_layout(window, n),
+        window_layout_cols(window, n, COLUMN_DEFAULT_COLS)
+    );
+    checks_layout_cols(window, n, COLUMN_DEFAULT_COLS)
 }
 
 fn checks(window: (i64, i64), n: u32) {
@@ -314,10 +355,15 @@ fn row_7_the_column_and_the_panel_take_the_height_of_the_central_strip() {
         let n = n_of(ppp);
         for window in windows(ppp) {
             let layout = window_layout(window, n as u32);
-            assert_eq!(layout.toolbar.height, window.1 - 36 * n);
-            assert_eq!(layout.panel.height, layout.toolbar.height);
-            assert_eq!(layout.canvas.height, layout.toolbar.height);
-            assert!(layout.toolbar.height >= TOOLBAR_CONTENT_H_U * n);
+            let cols = column_cols(window.0, n as u32, COLUMN_DEFAULT_COLS);
+            // La caja y la paleta, apiladas, suman el alto de la franja central.
+            assert_eq!(layout.toolbar.height, head_u(tools(), cols) * n);
+            assert_eq!(layout.toolbar.y + layout.toolbar.height, layout.panel.y);
+            assert_eq!(
+                layout.toolbar.height + layout.panel.height,
+                window.1 - 36 * n
+            );
+            assert_eq!(layout.canvas.height, window.1 - 36 * n);
         }
     }
 }
@@ -340,10 +386,6 @@ fn row_8_minimum_height_at_the_five_scales() {
 #[test]
 fn row_8_minimum_width_in_u_and_in_pt_at_the_five_scales() {
     assert_eq!(min_window_width_u(), 468);
-    assert_eq!(
-        min_window_width_u(),
-        toolbar_width_u() + PANEL_WIDTH_U + MIN_CANVAS_WIDTH_U
-    );
     for (ppp, expected_2) in PPPS.iter().zip(WIDTHS_PT) {
         let real = min_window_width_pt(*ppp);
         assert!(
@@ -351,6 +393,32 @@ fn row_8_minimum_width_in_u_and_in_pt_at_the_five_scales() {
             "ppp {ppp}: {real} y no {expected_2}"
         );
     }
+}
+
+#[test]
+fn row_8_minimum_width_term_the_minimum_column_and_the_minimum_canvas() {
+    assert_eq!(column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U, 249);
+    assert!(min_window_width_u() >= 249);
+}
+
+#[test]
+fn row_8_minimum_width_term_the_menu_bar_and_its_margin() {
+    assert_eq!(MENU_BAR_W_U + 4, 293);
+    assert!(min_window_width_u() >= 293);
+}
+
+#[test]
+fn row_8_minimum_width_term_the_dialog_and_its_two_margins() {
+    assert_eq!(DIALOG_W_U + 2 * MARGIN_U, 346);
+    assert!(min_window_width_u() >= 346);
+}
+
+#[test]
+fn row_8_minimum_width_term_the_status_bar_keeps_its_66_columns() {
+    // 66 columnas de 7 u y el relleno de 3 u a cada lado (la barra de estado de siempre).
+    assert_eq!(66 * i64::from(ADVANCE_PX) + 2 * 3, 468);
+    assert_eq!(min_window_width_u(), 468);
+    assert_eq!(min_width_terms_u(), [249, 293, 346, 468]);
 }
 
 #[test]
@@ -370,7 +438,7 @@ fn row_8_the_height_does_not_pass_60_percent_of_720_and_the_width_does_not_pass_
 }
 
 #[test]
-fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_column_panel_and_128_u() {
+fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_the_widest_term() {
     for ppp in PPPS {
         let n = n_of(ppp);
         let height_2 = (i64::from(bar_height_px(n as u32))
@@ -381,7 +449,7 @@ fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_column_pan
             near_pt(min_window_height_pt(ppp), height_2),
             "alto con {ppp}"
         );
-        let width_2 = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
+        let width_2 = (468 * n) as f32 / ppp;
         assert!(
             near_pt(min_window_width_pt(ppp), width_2),
             "ancho con {ppp}"
@@ -390,10 +458,11 @@ fn row_8_the_height_is_bar_plus_menu_plus_minimum_panel_and_the_width_column_pan
 }
 
 #[test]
-fn row_8_the_minimum_canvas_measures_128n_by_277n_pixels() {
+fn row_8_the_minimum_canvas_measures_235n_by_277n_pixels() {
+    // A 468 u caben las 16 columnas elegidas (233 u) y el lienzo queda en 235 u.
     for (ppp, expected_2) in
         PPPS.iter()
-            .zip([(128, 277), (128, 277), (256, 554), (256, 554), (384, 831)])
+            .zip([(235, 277), (235, 277), (470, 554), (470, 554), (705, 831)])
     {
         let n = n_of(*ppp);
         let minimum = windows(*ppp)[1];
@@ -405,8 +474,9 @@ fn row_8_the_minimum_canvas_measures_128n_by_277n_pixels() {
         );
         assert_eq!(
             (layout.canvas.width, layout.canvas.height),
-            (128 * n, 277 * n)
+            (235 * n, 277 * n)
         );
+        assert!(layout.canvas.width >= MIN_CANVAS_WIDTH_U * n);
     }
 }
 
@@ -441,7 +511,7 @@ fn property_3_the_minimums_follow_the_formula_and_meet_the_two_rules_at_all_ppp(
         let ppp = ppp_of_the_step(i);
         let n = n_of(ppp);
         let height_2 = ((20 + MENU_H_U + 277) * n) as f32 / ppp;
-        let width_2 = ((toolbar_width_u() + PANEL_WIDTH_U + 128) * n) as f32 / ppp;
+        let width_2 = (468 * n) as f32 / ppp;
         assert!(
             near_pt(min_window_height_pt(ppp), height_2),
             "alto con {ppp}"
@@ -481,42 +551,37 @@ proptest! {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Unidad I.3 (specs/interfaz-caja-derecha.md): orden de las zonas, mínimos y geometría de la caja
+// Unidad I.3 (specs/interfaz-caja-derecha.md): orden de las zonas y mínimos
 // ---------------------------------------------------------------------------------------------
 
 mod toolbox_right {
     use super::*;
-    use px_ui::chrome::{
-        OPTIONS_BODY_H_U, OPTIONS_BODY_ROWS, OPTIONS_BODY_W_U, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U,
-        OPTIONS_BORDER_U, OPTIONS_FOCUS_BORDER_U, OPTIONS_H_U, OPTIONS_KEY_Y_U, OPTIONS_ROW_H_U,
-        OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U, OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U, ZOOM_Y_U,
-    };
 
     const HEIGHT_MAX_PT: f32 = 432.0;
     const WIDTH_MAX_PT: f32 = 683.0;
 
-    /// Fila 1: **la única prueba que conoce el orden de las zonas** (lienzo, panel, caja).
+    /// Fila 1: **la única prueba que conoce el orden de las zonas** (lienzo, columna).
     #[test]
-    fn row_1_the_order_is_canvas_panel_and_toolbox_on_the_right_edge() {
+    fn row_1_the_order_is_canvas_and_column_on_the_right_edge() {
         for ppp in PPPS {
             let n = n_of(ppp);
             for window in windows(ppp) {
                 let l = window_layout(window, n as u32);
+                let cols = column_cols(window.0, n as u32, COLUMN_DEFAULT_COLS);
                 assert_eq!(l.canvas.x, 0, "ppp {ppp}");
                 assert_eq!(l.canvas.x + l.canvas.width, l.panel.x, "ppp {ppp}");
-                assert_eq!(l.panel.x + l.panel.width, l.toolbar.x, "ppp {ppp}");
-                assert_eq!(l.toolbar.x + l.toolbar.width, window.0, "ppp {ppp}");
-                assert_eq!(l.panel.width, 233 * n);
-                assert_eq!(l.toolbar.width, 107 * n);
+                assert_eq!(l.panel.x, l.toolbar.x, "ppp {ppp}");
+                assert_eq!(l.panel.width, l.toolbar.width, "ppp {ppp}");
+                assert_eq!(l.panel.x + l.panel.width, window.0, "ppp {ppp}");
+                assert_eq!(l.panel.width, column_width_u(cols) * n);
                 assert_eq!(canvas_origin_px(n as u32), (0, 16 * n));
             }
         }
     }
 
-    /// Fila 2: el alto mínimo baja (I.4), el ancho no cambia y los dos techos se cumplen; el
-    /// contenido de la caja cabe.
+    /// Fila 2: el alto y el ancho mínimos no cambian y los dos techos se cumplen; la caja cabe.
     #[test]
-    fn row_2_the_minimum_height_goes_down_the_width_does_not_and_they_meet_the_ceilings() {
+    fn row_2_the_minimums_do_not_change_and_they_meet_the_ceilings() {
         for ((ppp, height_2), width_2) in PPPS.iter().zip(ALTOS_PT).zip(WIDTHS_PT) {
             assert!(near_pt(min_window_height_pt(*ppp), height_2), "ppp {ppp}");
             assert!(near_pt(min_window_width_pt(*ppp), width_2), "ppp {ppp}");
@@ -524,7 +589,7 @@ mod toolbox_right {
             assert!(min_window_width_pt(*ppp) <= WIDTH_MAX_PT, "ppp {ppp}");
             let n = n_of(*ppp);
             assert!(
-                TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32),
+                head_u(20, 8) * n + 91 * n <= min_panel_height_px(n as u32),
                 "ppp {ppp}: la caja no cabe en el panel mínimo"
             );
         }
@@ -535,50 +600,12 @@ mod toolbox_right {
         assert_eq!(min_window_width_u(), 468);
     }
 
-    /// Fila 3: las constantes y las relaciones del recuadro de opciones.
-    #[test]
-    fn row_3_the_options_box_has_the_geometry_of_the_spec() {
-        assert_eq!(
-            (OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U),
-            (4, 108, 99, 138)
-        );
-        assert_eq!(OPTIONS_W_U, toolbar_button_width_u());
-        assert_eq!((OPTIONS_BORDER_U, OPTIONS_FOCUS_BORDER_U), (1, 2));
-        assert_eq!((OPTIONS_TITLE_X_U, OPTIONS_TITLE_Y_U), (8, 112));
-        assert_eq!(OPTIONS_KEY_Y_U, 126);
-        assert_eq!(
-            (OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U, OPTIONS_BODY_W_U),
-            (8, 144, 91)
-        );
-        assert_eq!(OPTIONS_BODY_ROWS, 7);
-        assert_eq!(OPTIONS_ROW_H_U, 14);
-        assert_eq!(OPTIONS_BODY_H_U, 7 * 14);
-        // 4 u bajo la fila de zoom (termina en 104) y 4 u de margen inferior.
-        assert_eq!(OPTIONS_Y_U, ZOOM_Y_U + 24 + 4);
-        assert_eq!(OPTIONS_Y_U + OPTIONS_H_U + 4, TOOLBAR_CONTENT_H_U);
-        // Dentro del recuadro: margen de 4 u (borde y relleno) en los cuatro lados.
-        assert_eq!(OPTIONS_TITLE_X_U, OPTIONS_X_U + 4);
-        assert_eq!(OPTIONS_TITLE_Y_U, OPTIONS_Y_U + 4);
-        assert_eq!(OPTIONS_KEY_Y_U, OPTIONS_TITLE_Y_U + 14);
-        assert_eq!(OPTIONS_BODY_Y_U, OPTIONS_KEY_Y_U + 14 + 4);
-        assert_eq!(
-            OPTIONS_BODY_X_U + OPTIONS_BODY_W_U + 4,
-            OPTIONS_X_U + OPTIONS_W_U
-        );
-        assert_eq!(
-            OPTIONS_BODY_Y_U + OPTIONS_BODY_H_U + 4,
-            OPTIONS_Y_U + OPTIONS_H_U
-        );
-        // Las 13 columnas de 7 u del cuerpo.
-        assert_eq!(OPTIONS_BODY_W_U, 13 * 7);
-    }
-
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(256))]
 
         /// Propiedad 1: reparto entero, adyacente y recubridor con cualquier ancho (también impar).
         #[test]
-        fn property_1_the_split_with_the_toolbox_on_the_right_is_integer_adjacent_and_fits(
+        fn property_1_the_split_with_the_column_on_the_right_is_integer_adjacent_and_fits(
             step in 0u32..=60,
             extra_w in 0i64..=700,
             extra_h in 0i64..=500,
@@ -594,11 +621,11 @@ mod toolbox_right {
             checks_layout(window, n)?;
             let l = window_layout(window, n);
             prop_assert_eq!(l.toolbar.x + l.toolbar.width, window.0);
-            prop_assert_eq!(l.panel.x + l.panel.width, l.toolbar.x);
+            prop_assert_eq!(l.panel.x + l.panel.width, window.0);
+            prop_assert_eq!(l.panel.x, l.toolbar.x);
             prop_assert_eq!(l.canvas.x, 0);
             prop_assert_eq!(l.canvas.x + l.canvas.width, l.panel.x);
             prop_assert_eq!(canvas_origin_px(n), (0, 16 * k));
-            prop_assert!(l.toolbar.height >= TOOLBAR_CONTENT_H_U * k);
             // Alto y ancho mínimos: la fórmula y los dos techos.
             let height_2 = (i64::from(bar_height_px(n)) + MENU_H_U * k + min_panel_height_px(n)) as f32 / ppp;
             prop_assert!((min_window_height_pt(ppp) - height_2).abs() <= 0.01);
@@ -618,10 +645,8 @@ mod icons {
     use super::*;
     use px_core::Mode;
     use px_ui::chrome::{
-        OPTIONS_BODY_ROWS, OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U, OPTIONS_H_U, OPTIONS_KEY_Y_U,
-        OPTIONS_TITLE_Y_U, OPTIONS_W_U, OPTIONS_X_U, OPTIONS_Y_U, TOOL_ROWS, TOOL_SLOTS,
-        TOOLBAR_SEPARATOR_Y_U, TOOLS_Y_U, ZOOM_LABEL_Y_U, ZOOM_Y_U, tool_slot_u,
-        toolbox_button_rect_u, toolbox_hit,
+        TOOLS_Y_U, toolbox_button_rect_u, toolbox_button_rect_u_at, toolbox_height_u, toolbox_hit,
+        toolbox_hit_at, toolbox_separator_y_u, zoom_label_y_u, zoom_row_y_u,
     };
     use px_ui::edit_layout::block_height_px;
 
@@ -632,84 +657,79 @@ mod icons {
     }
 
     /// Los nueve botones escritos con los literales de la spec: casillas de 24 × 24 u con un hueco
-    /// de 1 u (herramientas en las casillas 0 a 4; zoom en una fila en y = 80).
-    fn buttons_of_the_spec() -> Vec<RectU> {
-        let tools = (0..5).map(|i| (4 + 25 * (i % 4), 4 + 25 * (i / 4), 24, 24));
-        let zoom = (0..4).map(|i| (4 + 25 * i, 80, 24, 24));
+    /// de 1 u, `c(k) = ⌊(14k + 2)/25⌋` por fila (herramientas) y el zoom en una fila debajo.
+    fn buttons_of_the_spec(cols: i64) -> Vec<RectU> {
+        let per_row = (14 * cols + 2) / 25;
+        let rows = (5 + per_row - 1) / per_row;
+        let tools = (0..5).map(|i| (4 + 25 * (i % per_row), 4 + 25 * (i / per_row), 24, 24));
+        let zoom = (0..4).map(|i| (4 + 25 * i, 25 * rows + 30, 24, 24));
         tools.chain(zoom).collect()
     }
 
     #[test]
     fn row_3_the_toolbox_has_the_geometry_of_the_icon_grid() {
-        assert_eq!((TOOLBOX_COLUMNS, TOOL_ROWS, TOOL_SLOTS), (4, 2, 8));
         assert_eq!((BUTTON_U, GAP_U), (24, 1));
-        for slot in 0..TOOL_SLOTS {
-            let slot = slot as i64;
-            assert_eq!(
-                tool_slot_u(slot as usize),
-                (4 + 25 * (slot % 4), 4 + 25 * (slot / 4)),
-                "casilla {slot}"
-            );
-        }
-        let expected_2_2 = buttons_of_the_spec();
-        for (i, expected_2) in expected_2_2.iter().enumerate() {
-            assert_eq!(toolbox_button_rect_u(i), *expected_2, "botón {i}");
-        }
         assert_eq!(TOOLS_Y_U, 4);
-        assert_eq!(TOOLBAR_SEPARATOR_Y_U, 57);
-        assert_eq!(ZOOM_LABEL_Y_U, 62);
-        assert_eq!(ZOOM_Y_U, 80);
-        // El recuadro de opciones: el mismo de I.3 en y = 108.
-        assert_eq!(
-            (OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U),
-            (4, 108, 99, 138)
-        );
-        assert_eq!((OPTIONS_TITLE_Y_U, OPTIONS_KEY_Y_U), (112, 126));
-        assert_eq!(
-            (OPTIONS_BODY_X_U, OPTIONS_BODY_Y_U, OPTIONS_BODY_ROWS),
-            (8, 144, 7)
-        );
-        assert_eq!(TOOLBAR_CONTENT_H_U, 108 + 138 + 4);
-        assert_eq!(TOOLBAR_CONTENT_H_U, 250);
-        assert_eq!(toolbar_button_width_u(), 99);
-        assert_eq!(toolbar_width_u(), 107);
-        // Capacidad para el pincel del hito 4: 5 herramientas y el pincel caben en las casillas.
-        assert!(TOOL_SLOTS > TOOL_BUTTONS.len());
-        // Ninguna pieza se solapa ni toca el borde de la caja (4 u de margen a cada lado).
-        let mut pieces = expected_2_2;
-        pieces.push((4, 57, 99, 1)); // separador
-        pieces.push((8, 62, 91, 14)); // texto del zoom
-        pieces.push((OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U));
-        for (i, a) in pieces.iter().enumerate() {
-            assert!(a.0 >= 4 && a.0 + a.2 <= 107 - 4, "pieza {i}: {a:?}");
-            assert!(
-                a.1 >= 4 && a.1 + a.3 <= TOOLBAR_CONTENT_H_U - 4,
-                "pieza {i}: {a:?}"
-            );
-            for (j, b) in pieces.iter().enumerate().skip(i + 1) {
-                assert!(
-                    !overlap(*a, *b),
-                    "las piezas {i} y {j} se solapan: {a:?} {b:?}"
+        // La tabla de la spec: 5 herramientas con k = 16 (9 por fila, 1 fila), 14 (7 por fila, 1
+        // fila) y 8 (4 por fila, 2 filas): separador, texto del zoom, fila de zoom, alto y `head`.
+        for (cols, rows, separator, label, zoom, height) in [
+            (16, 1, 32, 37, 55, 83),
+            (14, 1, 32, 37, 55, 83),
+            (8, 2, 57, 62, 80, 108),
+        ] {
+            assert_eq!(tool_rows(5, cols), rows, "k = {cols}");
+            assert_eq!(toolbox_separator_y_u(5, cols), separator, "k = {cols}");
+            assert_eq!(zoom_label_y_u(5, cols), label, "k = {cols}");
+            assert_eq!(zoom_row_y_u(5, cols), zoom, "k = {cols}");
+            assert_eq!(toolbox_height_u(5, cols), height, "k = {cols}");
+            assert_eq!(head_u(5, cols), height + 1, "k = {cols}");
+            for (i, expected_2) in buttons_of_the_spec(cols).iter().enumerate() {
+                assert_eq!(
+                    toolbox_button_rect_u_at(i, 5, cols),
+                    *expected_2,
+                    "k = {cols}, botón {i}"
                 );
             }
+        }
+        // 12 y 20 herramientas (hito 4): el zoom sigue en una sola fila bajo las herramientas.
+        for (tools, cols, rows) in [
+            (12, 16, 2),
+            (12, 8, 3),
+            (20, 16, 3),
+            (20, 14, 3),
+            (20, 8, 5),
+        ] {
+            assert_eq!(tool_rows(tools, cols), rows, "{tools} a {cols}");
+            assert_eq!(head_u(tools, cols), 25 * rows + 59, "{tools} a {cols}");
+            let zoom_y = zoom_row_y_u(tools, cols);
+            for i in 0..4 {
+                let (x, y, w, h) = toolbox_button_rect_u_at(tools + i, tools, cols);
+                assert_eq!((x, y, w, h), (4 + 25 * i as i64, zoom_y, 24, 24));
+            }
+        }
+        // Los botones de hoy con el ancho por defecto son los de `toolbox_button_rect_u`.
+        for (i, expected_2) in buttons_of_the_spec(16).iter().enumerate() {
+            assert_eq!(toolbox_button_rect_u(i), *expected_2, "botón {i}");
         }
         // Todo es entero y múltiplo de `n` desde la esquina de la caja, a las cinco escalas.
         for ppp in PPPS {
             let n = n_of(ppp);
-            for (i, p) in pieces.iter().enumerate() {
-                for u in [p.0, p.1, p.2, p.3] {
-                    let physical = (u * n) as f32 / ppp * ppp;
-                    assert!(
-                        (physical - physical.round()).abs() <= 0.001,
-                        "ppp {ppp}, pieza {i}"
-                    );
+            for cols in [8, 14, 16] {
+                for (i, p) in buttons_of_the_spec(cols).iter().enumerate() {
+                    for u in [p.0, p.1, p.2, p.3] {
+                        let physical = (u * n) as f32 / ppp * ppp;
+                        assert!(
+                            (physical - physical.round()).abs() <= 0.001,
+                            "ppp {ppp}, k = {cols}, botón {i}"
+                        );
+                    }
                 }
             }
         }
     }
 
     #[test]
-    fn row_5_the_minimums_and_the_toolbox_height_rule_with_three_and_with_four_rows() {
+    fn row_5_the_minimums_and_the_toolbox_capacity_with_20_tools_at_8_columns() {
         for ((ppp, height_2), width_2) in PPPS.iter().zip(ALTOS_PT).zip(WIDTHS_PT) {
             assert!(
                 near_pt(min_window_height_pt(*ppp), height_2),
@@ -724,22 +744,19 @@ mod icons {
             let n = n_of(*ppp);
             assert_eq!(block_height_px(Mode::Indexed, n as u32), 277 * n);
             assert_eq!(min_panel_height_px(n as u32), 277 * n);
-            // Today's toolbox fits with room to spare (27 u)…
-            assert!(
-                TOOLBAR_CONTENT_H_U * n <= min_panel_height_px(n as u32),
+            // Las 5 herramientas de hoy caben a cualquier ancho con holgura…
+            for cols in [8, 14, 16] {
+                assert!(
+                    head_u(5, cols) * n + 91 * n <= min_panel_height_px(n as u32),
+                    "ppp {ppp}, k = {cols}"
+                );
+            }
+            // …y 20 a 8 columnas (cinco filas) caben en la ventana mínima, con 2 u de sobra.
+            assert_eq!(tool_rows(20, 8), 5);
+            assert_eq!(
+                min_panel_height_px(n as u32) - (head_u(20, 8) + 91) * n,
+                2 * n,
                 "ppp {ppp}"
-            );
-            // …with 3 rows of tools (12) it still fits, with 4 rows (13 to 16) the rule fails:
-            // what the 138 u box guards until milestone 4 decides (C1 lowered the minimum panel from
-            // 305 u, which held 4 rows, to 277 u).
-            let with_rows = |rows_2: i64| (TOOLBAR_CONTENT_H_U + (rows_2 - TOOL_ROWS) * 25) * n;
-            assert!(
-                with_rows(3) <= min_panel_height_px(n as u32),
-                "ppp {ppp}: 3 filas"
-            );
-            assert!(
-                with_rows(4) > min_panel_height_px(n as u32),
-                "ppp {ppp}: 4 filas"
             );
         }
         for invalid in [f32::NAN, f32::INFINITY, 0.0, -1.0] {
@@ -769,12 +786,12 @@ mod icons {
             let window = (minimum.0 + extra_w, minimum.1 + extra_h);
             checks_layout(window, n)?;
             let l = window_layout(window, n);
-            // Cada botón, el separador, el texto del zoom y el recuadro caben en la caja y no se
-            // solapan; el contenido cabe en el alto de la caja.
-            let mut pieces: Vec<RectU> = (0..9).map(toolbox_button_rect_u).collect();
-            pieces.push((4, 57, 99, 1));
-            pieces.push((8, 62, 91, 14));
-            pieces.push((OPTIONS_X_U, OPTIONS_Y_U, OPTIONS_W_U, OPTIONS_H_U));
+            let cols = column_cols(window.0, n, COLUMN_DEFAULT_COLS);
+            // Cada botón, el separador y el texto del zoom caben en la caja y no se solapan.
+            let mut pieces: Vec<RectU> =
+                (0..9).map(|i| toolbox_button_rect_u_at(i, 5, cols)).collect();
+            pieces.push((4, toolbox_separator_y_u(5, cols), column_width_u(cols) - 8, 1));
+            pieces.push((8, zoom_label_y_u(5, cols), column_width_u(cols) - 16, 14));
             for (i, a) in pieces.iter().enumerate() {
                 prop_assert!(a.0 >= 0 && (a.0 + a.2) * k <= l.toolbar.width);
                 prop_assert!((a.1 + a.3) * k <= l.toolbar.height);
@@ -782,8 +799,7 @@ mod icons {
                     prop_assert!(!overlap(*a, *b));
                 }
             }
-            prop_assert!(TOOLBAR_CONTENT_H_U * k <= l.toolbar.height);
-            prop_assert!(block_height_px(Mode::Indexed, n) <= l.panel.height);
+            prop_assert!(block_height_px(Mode::Indexed, n) <= l.panel.height + l.toolbar.height);
             let height_2 = ((20 + MENU_H_U + 277) * k) as f32 / ppp;
             prop_assert!((min_window_height_pt(ppp) - height_2).abs() <= 0.01);
             prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
@@ -797,15 +813,19 @@ mod icons {
         #[test]
         fn property_3_toolbox_hit_gives_the_button_of_its_rectangle_and_nothing_in_the_gaps(
             n in 1u32..=8,
+            cols in 8i64..=24,
             x in -60i64..=1000,
             y in -60i64..=2200,
         ) {
             let k = i64::from(n);
-            let rects = buttons_of_the_spec();
+            let rects = buttons_of_the_spec(cols);
             let expected_2 = rects
                 .iter()
                 .position(|r| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k);
-            prop_assert_eq!(toolbox_hit(x, y, n), expected_2);
+            prop_assert_eq!(toolbox_hit_at(x, y, n, 5, cols), expected_2);
+            if cols == 16 {
+                prop_assert_eq!(toolbox_hit(x, y, n), expected_2);
+            }
         }
     }
 }
