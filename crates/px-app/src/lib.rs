@@ -37,13 +37,18 @@ use px_core::{Document, DocumentError, Mode};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInput};
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
+use px_ui::chrome::COLUMN_DEFAULT_COLS;
 use px_ui::color::choice_label_with;
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
+use px_ui::column::{ColumnView, show_column};
 use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
 use px_ui::gestures::GestureMap;
-use px_ui::help::{HelpTarget, help_target_at, help_target_in_indicator, help_target_in_panel};
+use px_ui::help::{
+    HelpTarget, help_target_at_cols, help_target_in_indicator_cols, help_target_in_options,
+    help_target_in_panel,
+};
 use px_ui::key_events::{help_pressed, presses};
 use px_ui::keymap::Keymap;
 use px_ui::keymap_file::{Loaded, load_notice};
@@ -52,16 +57,17 @@ use px_ui::layers_panel_view::{PanelEvent, PanelView, show_layer_panel};
 use px_ui::licenses_view::licenses_form;
 use px_ui::menu::show_menu_full;
 use px_ui::notice::{NOTICE_SECS, Notice};
-use px_ui::options::{OptionsState, options_row_count};
+use px_ui::options::{OptionsWindow, options_row_count};
+use px_ui::options_view::{OptionsEvent, OptionsView, show_options_window};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE};
-use px_ui::palette_panel::{Indicator, Roles, show_roles};
+use px_ui::palette_panel::{Indicator, Roles};
 use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::source::{DocSource, OverlayCache, flatten};
 use px_ui::texture::pixel_rgba;
 use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
-use px_ui::toolbar::{ToolboxView, show_toolbox, zoom_label};
+use px_ui::toolbar::{ToolboxOutput, ToolboxView, zoom_label};
 
 use crate::config::{SaveError, ShortcutStore, shortcuts_path};
 use crate::confirm::{
@@ -159,8 +165,15 @@ struct App {
     /// Los gestos del ratón y del trackpad: el lienzo y `pointer_actions` leen esta tabla (el hito 8
     /// la hará configurable; hoy es el esquema por defecto).
     gestures: GestureMap,
-    /// Foco y desplazamiento del recuadro de opciones de la caja (I.3).
-    options: OptionsState,
+    /// La ventana flotante de opciones de la herramienta activa (C2): abierta o cerrada, su posición
+    /// (una sola, de todas las herramientas) y el desplazamiento de cada una; no es del documento.
+    options: OptionsWindow,
+    /// Columnas de muestras que eligió el usuario arrastrando el borde de la columna (C2); se
+    /// recuerda en la sesión (el hito 8 lo guardará).
+    column_cols: i64,
+    /// Columnas con que se pintó la columna en el último fotograma (la ventana la recorta y el
+    /// editor la ensancha): de ahí salen la ayuda `F1` y la posición de la ventana de opciones.
+    shown_cols: i64,
     /// Las texturas de los iconos propios (I.4); vacío hasta que `main` las carga.
     icons: icons::Icons,
     /// El panel de capas flotante (3.4): abierto o cerrado, posición y lista; no es del documento.
@@ -195,6 +208,42 @@ struct App {
     /// Reserva de los búferes de las baldosas (cargar y regenerar); las pruebas la sustituyen por
     /// una que falla.
     tile_alloc: Box<dyn TileAlloc>,
+}
+
+/// Lo que cierra una pulsación de `Esc` que la paleta dejó libre (specs/ui-single-column.md,
+/// decisión 9): un eslabón por pulsación y la ventana de opciones antes que el editor. Los eslabones
+/// de antes (campo de texto, gesto o deslizador, arrastre de muestra, quita pendiente) los reclama la
+/// propia paleta y entonces `free` es falso. El panel de capas no se cierra con `Esc`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EscapeStep {
+    Nothing,
+    CloseOptions,
+    CloseEditor,
+}
+
+/// El eslabón de la cadena de `Esc` que toca cerrar, dado si la paleta lo dejó libre y qué está
+/// abierto. Con nada abierto `Esc` sigue siendo del lienzo.
+fn escape_step(free: bool, options_open: bool, editor_open: bool) -> EscapeStep {
+    if !free {
+        EscapeStep::Nothing
+    } else if options_open {
+        EscapeStep::CloseOptions
+    } else if editor_open {
+        EscapeStep::CloseEditor
+    } else {
+        EscapeStep::Nothing
+    }
+}
+
+/// Lo que hace la salida de la caja con la ventana de opciones: un clic derecho permitido en una
+/// herramienta (`toggle_options`, con `SelectTool` de ella) la abre o la cierra según la herramienta
+/// que estaba activa antes del clic (`active_before`). Elegir la herramienta es de `dispatch`.
+fn apply_toolbox_toggle(window: &mut OptionsWindow, toolbox: &ToolboxOutput, active_before: Tool) {
+    if toolbox.toggle_options
+        && let Some(AppAction::SelectTool(clicked)) = toolbox.action
+    {
+        window.right_click(active_before, clicked);
+    }
 }
 
 impl App {
@@ -234,7 +283,9 @@ impl App {
             platform: Platform::current(),
             keymap: Keymap::default_scheme(),
             gestures,
-            options: OptionsState::default(),
+            options: OptionsWindow::default(),
+            column_cols: COLUMN_DEFAULT_COLS,
+            shown_cols: COLUMN_DEFAULT_COLS,
             icons: icons::Icons::empty(),
             layers: PanelState::default(),
             modal: Modal::Closed,
@@ -298,10 +349,27 @@ impl App {
                 {
                     return target;
                 }
-                if let Some(target) = help_target_in_indicator(point, window, n) {
+                // La ventana de opciones flota sobre la columna y el lienzo: la ayuda es la de la
+                // herramienta activa.
+                if self.options.open
+                    && let Some(target) = help_target_in_options(
+                        point,
+                        self.options.current_rect(
+                            options_row_count(self.tools.tool()),
+                            window,
+                            n,
+                            self.column_cols,
+                        ),
+                    )
+                {
                     return target;
                 }
-                help_target_at(point, window, n)
+                if let Some(target) =
+                    help_target_in_indicator_cols(point, window, n, self.shown_cols)
+                {
+                    return target;
+                }
+                help_target_at_cols(point, window, n, self.shown_cols)
             }
             None => HelpTarget::Active,
         }
@@ -1356,27 +1424,6 @@ impl eframe::App for App {
             actions.push((action, Origin::Menu));
         }
         px_ui::status::show(ui, &self.status.0, self.status.1);
-        // La caja va primero a la derecha y el panel de paletas se apila a su izquierda.
-        let level = zoom_label(state.zoom);
-        let toolbox = show_toolbox(
-            ui,
-            &ToolboxView {
-                state: &state,
-                zoom_label: &level,
-                options: &self.options,
-                icons: &self.icons.set,
-            },
-            &self.keymap,
-            self.platform,
-        );
-        if toolbox.pressed_outside_options {
-            self.options.press_outside();
-        }
-        self.options
-            .scroll_by(toolbox.options_scroll_rows, options_row_count(state.tool));
-        if let Some(action) = toolbox.action {
-            actions.push((action, Origin::Button));
-        }
         self.session.normalize();
         if self.session.take_removal_cancelled() {
             self.notify(&ctx, REMOVAL_CANCELLED_NOTICE.to_string());
@@ -1390,7 +1437,9 @@ impl eframe::App for App {
             || self.waiting());
         self.session.view.icons = self.icons.set;
         self.session.view.editor_open = self.session.editor_open;
-        let panel = {
+        // La columna única (C2): la caja arriba y la paleta debajo, en el borde derecho.
+        let level = zoom_label(state.zoom);
+        let column = {
             // La celda activa si tiene imagen (la quita de una entrada pregunta si la usa); si
             // está vacía, el lienzo da el modo y la paleta.
             let image = self
@@ -1403,18 +1452,38 @@ impl eframe::App for App {
                 background: self.session.background,
                 editing: self.session.editing,
             };
-            Some(show_roles(
+            show_column(
                 ui,
-                image,
-                roles,
+                &ColumnView {
+                    toolbox: ToolboxView {
+                        state: &state,
+                        zoom_label: &level,
+                        icons: &self.icons.set,
+                    },
+                    image,
+                    roles,
+                    slots: self.session.slots.get(image.mode()),
+                    enabled,
+                    cols: self.column_cols,
+                },
+                &self.keymap,
+                self.platform,
                 &mut self.session.scroll,
                 &mut self.session.view,
-                enabled,
-                self.session.slots.get(image.mode()),
                 &mut self.session.editor,
                 &mut self.session.ops,
-            ))
+            )
         };
+        self.shown_cols = column.cols;
+        if let Some(cols) = column.resized {
+            self.column_cols = cols;
+            ctx.request_repaint();
+        }
+        if let Some(action) = column.toolbox.action {
+            actions.push((action, Origin::Button));
+        }
+        apply_toolbox_toggle(&mut self.options, &column.toolbox, state.tool);
+        let panel = Some(column.panel);
         if let Some(panel) = panel {
             if let Some(choice) = panel.choice {
                 self.session.choice = choice;
@@ -1422,8 +1491,11 @@ impl eframe::App for App {
             if let Some(choice) = panel.background {
                 self.session.background = choice;
             }
-            if panel.close_editor {
-                self.session.close_editor();
+            // La cadena de `Esc`: la ventana de opciones antes que el editor.
+            match escape_step(panel.escape_free, self.options.open, panel.close_editor) {
+                EscapeStep::CloseOptions => self.options.close(),
+                EscapeStep::CloseEditor => self.session.close_editor(),
+                EscapeStep::Nothing => {}
             }
             self.panel_hint = px_ui::palette_panel::panel_info(&ctx).status_hint;
             match panel.indicator {
@@ -1463,6 +1535,36 @@ impl eframe::App for App {
                 } else {
                     self.apply_palette_op(&ctx, op, panel.op_unused);
                 }
+            }
+        }
+        // La ventana de opciones de la herramienta activa (C2): flota como el panel de capas, no es
+        // modal y con un diálogo, una conversión o un guardado en espera no responde a nada.
+        let options_events = {
+            let screen = ctx.content_rect();
+            let ppp = ctx.pixels_per_point();
+            let window_px = (
+                (screen.width() * ppp).round() as i64,
+                (screen.height() * ppp).round() as i64,
+            );
+            let tool = self.tools.tool();
+            let responsive = !(self.dialogs.pending() || self.modal.is_open() || self.waiting());
+            show_options_window(
+                &ctx,
+                &OptionsView {
+                    tool,
+                    rows: options_row_count(tool),
+                    keymap: &self.keymap,
+                    platform: self.platform,
+                    enabled: responsive,
+                },
+                &mut self.options,
+                window_px,
+                self.column_cols,
+            )
+        };
+        for event in options_events {
+            match event {
+                OptionsEvent::Close => self.options.close(),
             }
         }
         // El panel de capas (3.4): flota sobre el lienzo y se muestra antes que él para que egui lo
@@ -1570,16 +1672,6 @@ impl eframe::App for App {
         if let Some(text) = self.session.memory_crossing_notice() {
             self.notify(&ctx, text);
         }
-        // Foco del recuadro de opciones: otra herramienta por cualquier vía lo quita; el clic
-        // derecho permitido en una herramienta lo da (después), salvo con un diálogo abierto.
-        self.options.sync_tool(self.tools.tool());
-        if toolbox.focus_options {
-            self.options.focus();
-        }
-        if self.dialogs.pending() || self.modal.is_open() {
-            self.options.blur();
-        }
-
         // Vista previa del color que se está editando y superposición del trazo: ambas viven en
         // las texturas del lienzo y vuelven al documento al soltar o cancelar. Después, `sync`
         // sube lo que cambió en el documento (solo las baldosas visibles).
