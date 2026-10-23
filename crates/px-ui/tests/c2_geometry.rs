@@ -2,7 +2,7 @@
 //! toolbox, vertical split and minimums, `window_layout` and canvas origin) and property 1 (integer
 //! geometry without overlaps of the column). No egui.
 //!
-//! The numbers come from the spec, written as literals: `W(k) = 14·k + 9`; `k_max(w) = max(8,
+//! The numbers come from the spec, written as literals: `W(k) = 14·k + 9`; `k_max(w) = max(10,
 //! ⌊(w − 137·n)/(14·n)⌋)`; `c(k) = ⌊(14k + 2)/25⌋` buttons per row; with `r` rows of tools, the
 //! toolbox measures `25r + 58` u and the palette starts at `head = 25r + 59`. The editor, which
 //! needs 233 u, widens the column to 16 columns while it is open or a removal is pending
@@ -18,9 +18,10 @@ use px_ui::chrome::{
     zoom_row_y_u,
 };
 use px_ui::edit_layout::{
-    MIN_CANVAS_WIDTH_U, block_height_closed_px, block_height_px, column_layout, editor_height_u,
-    icons_height_u, min_panel_height_px, min_width_terms_u, min_window_height_pt,
-    min_window_width_pt, min_window_width_u, panel_layout, panel_layout_closed,
+    MIN_CANVAS_WIDTH_U, PaletteButton, block_height_closed_px, block_height_px, button_rect_u,
+    column_layout, editor_height_u, icons_height_u, min_panel_height_px, min_width_terms_u,
+    min_window_height_pt, min_window_width_pt, min_window_width_u, panel_layout,
+    panel_layout_closed,
 };
 use px_ui::layers_panel::PANEL_H_U as LAYERS_PANEL_H_U;
 use px_ui::palette_grid::{
@@ -50,38 +51,38 @@ fn ppp_of_the_step(i: u32) -> f32 {
 fn row_1_the_widths_the_maximum_and_the_clamp_of_the_column() {
     assert_eq!(
         (COLUMN_MIN_COLS, COLUMN_DEFAULT_COLS, COLUMN_EDITOR_COLS),
-        (8, 16, 16)
+        (10, 16, 16)
     );
     assert_eq!(
-        (column_width_u(8), column_width_u(14), column_width_u(16)),
-        (121, 205, 233)
+        (column_width_u(10), column_width_u(14), column_width_u(16)),
+        (149, 205, 233)
     );
     assert_eq!(panel_width_u(16), 233);
     for n in 1..=8u32 {
         let k = i64::from(n);
-        // `k_max(346 u) = 14`, `k_max(361 u) = 16`, `k_max(468 u) = 23`; 249 u leaves just 8.
+        // `k_max(346 u) = 14`, `k_max(361 u) = 16`, `k_max(468 u) = 23`; 277 u leaves just 10.
         assert_eq!(max_cols(346 * k, n), 14, "n = {n}");
         assert_eq!(max_cols(361 * k, n), 16, "n = {n}");
         assert_eq!(max_cols(468 * k, n), 23, "n = {n}");
-        assert_eq!(max_cols(249 * k, n), 8, "n = {n}");
+        assert_eq!(max_cols(277 * k, n), 10, "n = {n}");
         // A window narrower than the floor (only with `PIXOKO_NO_MIN_SIZE`) does not panic.
         for w in [-5, 0, 1, 100 * k] {
-            assert_eq!(max_cols(w, n), 8, "n = {n}, w = {w}");
-            assert_eq!(column_cols(w, n, 40), 8);
+            assert_eq!(max_cols(w, n), 10, "n = {n}, w = {w}");
+            assert_eq!(column_cols(w, n, 40), 10);
         }
     }
     // The clamp, window width pixel by pixel (also odd) and `wanted` from 1 to 64: the canvas
-    // never gets less than 128 u (for windows of at least 249 u) and the column yields first.
+    // never gets less than 128 u (for windows of at least 277 u) and the column yields first.
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
-        for w in (249 * k)..=(900 * k) {
+        for w in (277 * k)..=(900 * k) {
             let k_max = max_cols(w, n);
-            assert!((8..=64).contains(&k_max));
+            assert!((10..=64).contains(&k_max));
             for wanted in 1..=64 {
                 let cols = column_cols(w, n, wanted);
                 assert_eq!(
                     cols,
-                    wanted.clamp(8, k_max),
+                    wanted.clamp(10, k_max),
                     "n = {n}, w = {w}, wanted = {wanted}"
                 );
                 assert!(w - column_width_u(cols) * k >= MIN_CANVAS_WIDTH_U * k);
@@ -95,15 +96,15 @@ fn row_1_what_was_chosen_is_not_touched_when_the_window_narrows_and_comes_back_w
     let n = 2;
     let wanted = 20;
     let mut seen = Vec::new();
-    for w_u in [900, 600, 468, 400, 346, 300, 249, 300, 400, 600, 900] {
+    for w_u in [900, 600, 468, 400, 346, 300, 277, 300, 400, 600, 900] {
         seen.push(column_cols(w_u * i64::from(n), n, wanted));
     }
-    assert_eq!(seen, [20, 20, 20, 18, 14, 11, 8, 11, 18, 20, 20]);
+    assert_eq!(seen, [20, 20, 20, 18, 14, 11, 10, 11, 18, 20, 20]);
     // With the editor open or a removal pending the column is at least 16 columns.
     assert_eq!(wide_cols(8, true), 16);
     assert_eq!(wide_cols(12, true), 16);
     assert_eq!(wide_cols(20, true), 20);
-    assert_eq!(wide_cols(8, false), 8);
+    assert_eq!(wide_cols(10, false), 10);
     // At the minimum window of 468 u there is always room for 16 columns.
     for n in 1..=8u32 {
         let k = i64::from(n);
@@ -207,6 +208,52 @@ fn row_2_the_toolbox_grid_with_5_12_and_20_tools_and_k_from_8_to_24() {
     }
 }
 
+#[test]
+fn extra_the_minimum_column_is_the_narrowest_where_the_whole_icon_row_fits() {
+    // The icon row ends at 4 + 24 + 1 + 24 + 8 + 24 + 1 + 24 + 8 + 24 = 142 u and keeps the same
+    // 4 u margin at the right as at the left.
+    let icons = [
+        PaletteButton::Add,
+        PaletteButton::Remove,
+        PaletteButton::RotateLeft,
+        PaletteButton::RotateRight,
+        PaletteButton::Transparent,
+    ];
+    let right_edge = |buttons: &[PaletteButton]| {
+        buttons
+            .iter()
+            .map(|b| {
+                let (x, _, w, _) = button_rect_u(Mode::Indexed, *b).expect("indexed has buttons");
+                x + w
+            })
+            .max()
+            .expect("some button")
+    };
+    assert_eq!(right_edge(&icons), 142);
+    let fits = |cols: i64, right: i64| right + 4 <= column_width_u(cols);
+    // The minimum column is the narrowest that holds the whole row, and 9 columns (135 u) do not.
+    assert_eq!(COLUMN_MIN_COLS, 10);
+    assert!(fits(COLUMN_MIN_COLS, 142));
+    assert!(!fits(COLUMN_MIN_COLS - 1, 142));
+    assert_eq!(column_width_u(COLUMN_MIN_COLS - 1), 135);
+    for cols in COLUMN_MIN_COLS..=64 {
+        assert!(fits(cols, 142), "k = {cols}");
+        // Five tools of 24 u with gaps are no wider than the row of icons.
+        for tools in [5usize, 12, 20] {
+            for i in 0..tools + 4 {
+                let (x, _, w, _) = toolbox_button_rect_u_at(i, tools, cols);
+                assert!(fits(cols, x + w), "{tools} tools, k = {cols}, button {i}");
+            }
+        }
+    }
+    // The text buttons of a pending removal never meet the narrow column: it is widened to 16.
+    let text = right_edge(&[PaletteButton::Confirm, PaletteButton::Cancel]);
+    assert_eq!(text, 229);
+    for wanted in 1..=64 {
+        assert!(fits(wide_cols(wanted.max(COLUMN_MIN_COLS), true), text));
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Row 3: vertical split and minimums
 // ---------------------------------------------------------------------------------------------
@@ -235,16 +282,18 @@ fn row_3_the_grid_rows_seen_at_the_minimum_closed_and_the_capacity_rule() {
         (12, 8, 134),
         (20, 16, 134),
         (20, 14, 134),
+        (20, 10, 159),
         (20, 8, 184),
     ] {
         assert_eq!(head_u(tools, cols), head, "{tools} tools, k = {cols}");
     }
-    // The capacity rule: 20 tools at 8 columns (5 rows) fit the minimum window, 21 do not. It fails
-    // aloud; it does not clip.
-    assert_eq!(tool_rows(20, 8), 5);
-    assert_eq!(head_u(20, 8), 184);
-    assert!(head_u(20, 8) <= 277 - 91);
-    assert!(head_u(21, 8) > 277 - 91);
+    // The capacity rule: 20 tools at the minimum column (10 columns, 5 per row, 4 rows) fit the
+    // minimum window, 26 do not. It fails aloud; it does not clip.
+    assert_eq!(tool_rows(20, COLUMN_MIN_COLS), 4);
+    assert_eq!(head_u(20, COLUMN_MIN_COLS), 159);
+    assert!(head_u(20, COLUMN_MIN_COLS) <= 277 - 91);
+    assert!(head_u(25, COLUMN_MIN_COLS) <= 277 - 91);
+    assert!(head_u(26, COLUMN_MIN_COLS) > 277 - 91);
     // The layers panel (277 u) and the options window (at most 248 u) fit the minimum.
     for n in 1..=3u32 {
         assert!(LAYERS_PANEL_H_U * i64::from(n) <= min_panel_height_px(n));
@@ -258,7 +307,7 @@ fn row_3_the_open_block_scrolls_as_a_whole_with_a_low_window_and_head_zero_is_th
         let n = n_of(ppp) as u32;
         let k = i64::from(n);
         for tools in [5usize, 12, 20] {
-            for cols in [16, 14, 8] {
+            for cols in [16, 14, COLUMN_MIN_COLS] {
                 let head = head_u(tools, cols) * k;
                 for mode in MODES {
                     let open_block = head + block_height_px(mode, n);
@@ -363,7 +412,7 @@ fn row_3_the_minimum_window_at_the_five_scales_and_with_an_invalid_ppp() {
         column_and_canvas,
         column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U
     );
-    assert_eq!(column_and_canvas, 249);
+    assert_eq!(column_and_canvas, 277);
     assert_eq!(menu, 4 + 289);
     assert_eq!(dialog, 330 + 2 * 8);
     assert_eq!(status, 66 * 7 + 2 * 3);
@@ -466,7 +515,7 @@ proptest! {
         );
         let band = window.1 - (MENU_H_U + 20) * k;
         let cols = column_cols(window.0, n, wanted);
-        prop_assert_eq!(cols, wanted.clamp(8, max_cols(window.0, n)));
+        prop_assert_eq!(cols, wanted.clamp(COLUMN_MIN_COLS, max_cols(window.0, n)));
         let width = column_width_u(cols) * k;
         // The canvas is at least 128·n wide and the column is `W(clamp(wanted))·n`.
         prop_assert!(window.0 - width >= MIN_CANVAS_WIDTH_U * k);

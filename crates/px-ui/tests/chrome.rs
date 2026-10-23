@@ -5,7 +5,7 @@
 //!
 //! - Fila 7 (parte pura): el ancho de la columna es `W(k) = 14·k + 9` (la rejilla de la paleta, con
 //!   `k` columnas de muestras); los 9 botones caben en la columna sin tocar el borde y no se
-//!   solapan; 20 herramientas a 8 columnas caben en 277 u; el menú entero y el desplegable más
+//!   solapan; 20 herramientas al mínimo (10 columnas) caben en 277 u; el menú entero y el desplegable más
 //!   ancho (208 u) caben en el ancho mínimo; los cinco rectángulos de `window_layout` recubren la
 //!   ventana sin huecos ni solapes, a las cinco escalas y en la ventana por defecto y en la
 //!   mínima. El banco de egui con la pila real está en `window_stack.rs`.
@@ -20,8 +20,8 @@ use proptest::test_runner::TestCaseError;
 use px_ui::actions::Platform;
 use px_ui::chrome::{
     COLUMN_DEFAULT_COLS, COLUMN_MIN_COLS, MENU_BAR_W_U, MENU_H_U, TOOL_LABELS, WindowLayout,
-    canvas_origin_px, column_cols, column_width_u, head_u, tool_rows, window_layout,
-    window_layout_cols,
+    canvas_origin_px, column_cols, column_width_u, columns_per_row, head_u, tool_rows,
+    window_layout, window_layout_cols,
 };
 use px_ui::dialog_layout::{DIALOG_W_U, MARGIN_U};
 use px_ui::edit_layout::{
@@ -71,11 +71,11 @@ fn row_7_the_constants_are_worth_what_the_spec_says() {
 #[test]
 fn row_7_the_column_width_is_derived_from_the_icon_grid() {
     // 4 u de margen, 14 u por columna de muestras, 3 u de pista y 1 u de línea, con un hueco de 1 u.
-    assert_eq!((COLUMN_MIN_COLS, COLUMN_DEFAULT_COLS), (8, 16));
+    assert_eq!((COLUMN_MIN_COLS, COLUMN_DEFAULT_COLS), (10, 16));
     for cols in COLUMN_MIN_COLS..=64 {
         assert_eq!(column_width_u(cols), 4 + 14 * cols + 5, "k = {cols}");
     }
-    assert_eq!(column_width_u(8), 121);
+    assert_eq!(column_width_u(10), 149);
     assert_eq!(column_width_u(14), 205);
     assert_eq!(column_width_u(16), 233);
     // Nueve botones de 24 u con un hueco de 1 u llenan justo las 16 columnas de muestras.
@@ -145,24 +145,25 @@ fn row_7_the_nine_buttons_fit_in_the_column_without_touching_the_edge_and_do_not
 }
 
 #[test]
-fn row_7_20_tools_at_8_columns_fit_in_the_277_u_of_the_minimum_panel() {
-    // 20 herramientas a 8 columnas (`c = 4`) son 5 filas: la caja mide `25·5 + 59 = 184` u y el
-    // bloque cerrado de la paleta indexada (banda, una fila de rejilla e iconos), 91 u.
-    assert_eq!(tool_rows(20, 8), 5);
-    assert_eq!(head_u(20, 8), 184);
-    assert_eq!(head_u(20, 8) + 91, 275);
+fn row_7_20_tools_at_the_minimum_column_fit_in_the_277_u_of_the_minimum_panel() {
+    // 20 herramientas al mínimo (10 columnas, `c = 5`) son 4 filas: la caja mide `25·4 + 59 = 159` u
+    // y el bloque cerrado de la paleta indexada (banda, una fila de rejilla e iconos), 91 u.
+    assert_eq!(columns_per_row(COLUMN_MIN_COLS), 5);
+    assert_eq!(tool_rows(20, COLUMN_MIN_COLS), 4);
+    assert_eq!(head_u(20, COLUMN_MIN_COLS), 159);
+    assert_eq!(head_u(20, COLUMN_MIN_COLS) + 91, 250);
     for ppp in PPPS {
         let n = n_of(ppp);
         let closed = block_height_closed_px(px_core::Mode::Indexed, n as u32);
         assert_eq!(closed, 91 * n, "ppp {ppp}");
         assert!(
-            head_u(20, 8) * n + closed <= min_panel_height_px(n as u32),
-            "ppp {ppp}: 20 herramientas a 8 columnas no caben"
+            head_u(20, COLUMN_MIN_COLS) * n + closed <= min_panel_height_px(n as u32),
+            "ppp {ppp}: 20 herramientas al mínimo no caben"
         );
-        // Con 21 la regla falla en voz alta (seis filas), en vez de recortar.
+        // Con 26 (seis filas) la regla falla en voz alta, en vez de recortar.
         assert!(
-            head_u(21, 8) * n + closed > min_panel_height_px(n as u32),
-            "ppp {ppp}: 21 herramientas a 8 columnas"
+            head_u(26, COLUMN_MIN_COLS) * n + closed > min_panel_height_px(n as u32),
+            "ppp {ppp}: 26 herramientas al mínimo"
         );
     }
 }
@@ -397,8 +398,8 @@ fn row_8_minimum_width_in_u_and_in_pt_at_the_five_scales() {
 
 #[test]
 fn row_8_minimum_width_term_the_minimum_column_and_the_minimum_canvas() {
-    assert_eq!(column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U, 249);
-    assert!(min_window_width_u() >= 249);
+    assert_eq!(column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U, 277);
+    assert!(min_window_width_u() >= 277);
 }
 
 #[test]
@@ -418,7 +419,7 @@ fn row_8_minimum_width_term_the_status_bar_keeps_its_66_columns() {
     // 66 columnas de 7 u y el relleno de 3 u a cada lado (la barra de estado de siempre).
     assert_eq!(66 * i64::from(ADVANCE_PX) + 2 * 3, 468);
     assert_eq!(min_window_width_u(), 468);
-    assert_eq!(min_width_terms_u(), [249, 293, 346, 468]);
+    assert_eq!(min_width_terms_u(), [277, 293, 346, 468]);
 }
 
 #[test]
@@ -714,7 +715,7 @@ mod icons {
         // Todo es entero y múltiplo de `n` desde la esquina de la caja, a las cinco escalas.
         for ppp in PPPS {
             let n = n_of(ppp);
-            for cols in [8, 14, 16] {
+            for cols in [COLUMN_MIN_COLS, 14, 16] {
                 for (i, p) in buttons_of_the_spec(cols).iter().enumerate() {
                     for u in [p.0, p.1, p.2, p.3] {
                         let physical = (u * n) as f32 / ppp * ppp;
@@ -745,17 +746,17 @@ mod icons {
             assert_eq!(block_height_px(Mode::Indexed, n as u32), 277 * n);
             assert_eq!(min_panel_height_px(n as u32), 277 * n);
             // Las 5 herramientas de hoy caben a cualquier ancho con holgura…
-            for cols in [8, 14, 16] {
+            for cols in [COLUMN_MIN_COLS, 14, 16] {
                 assert!(
                     head_u(5, cols) * n + 91 * n <= min_panel_height_px(n as u32),
                     "ppp {ppp}, k = {cols}"
                 );
             }
-            // …y 20 a 8 columnas (cinco filas) caben en la ventana mínima, con 2 u de sobra.
-            assert_eq!(tool_rows(20, 8), 5);
+            // …y 20 al mínimo (diez columnas, cuatro filas) caben en la ventana mínima, con 27 u de sobra.
+            assert_eq!(tool_rows(20, COLUMN_MIN_COLS), 4);
             assert_eq!(
-                min_panel_height_px(n as u32) - (head_u(20, 8) + 91) * n,
-                2 * n,
+                min_panel_height_px(n as u32) - (head_u(20, COLUMN_MIN_COLS) + 91) * n,
+                27 * n,
                 "ppp {ppp}"
             );
         }

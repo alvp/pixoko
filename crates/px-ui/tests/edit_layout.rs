@@ -339,9 +339,9 @@ fn row_1b_min_window_width_u_is_the_widest_of_the_column_the_menu_bar_the_dialog
  {
     assert_eq!(MIN_CANVAS_WIDTH_U, 128);
     assert_eq!(PANEL_WIDTH_U, 233);
-    assert_eq!(column_width_u(COLUMN_MIN_COLS), 121);
+    assert_eq!(column_width_u(COLUMN_MIN_COLS), 149);
     assert_eq!(min_window_width_u(), 468);
-    assert_eq!(min_width_terms_u(), [249, 293, 346, 468]);
+    assert_eq!(min_width_terms_u(), [277, 293, 346, 468]);
     assert_eq!(
         min_width_terms_u().into_iter().max(),
         Some(min_window_width_u())

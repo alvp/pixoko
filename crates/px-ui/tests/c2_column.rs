@@ -15,7 +15,7 @@ use px_core::{Image, Palette, Rgba};
 use px_ui::actions::{AppAction, Locks, Platform, UiState};
 use px_ui::canvas::Canvas;
 use px_ui::chrome::{
-    COLUMN_GRIP_U, MENU_H_U, column_cols, column_width_u, head_u, max_cols,
+    COLUMN_GRIP_U, COLUMN_MIN_COLS, MENU_H_U, column_cols, column_width_u, head_u, max_cols,
     toolbox_button_rect_u_at, window_layout_cols,
 };
 use px_ui::color::{ColorChoice, Role, SlotColors};
@@ -35,7 +35,7 @@ use px_ui::toolbar::ToolboxView;
 use px_ui::view::Zoom;
 
 mod common;
-use common::{Painted, context, in_points, painted};
+use common::{Painted, TestFill, context, in_points, painted};
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
 /// Tolerance, in physical pixels, of a text respect of a multiple of `n` from the corner of the
@@ -315,7 +315,7 @@ fn row_5_the_width_follows_k0_plus_the_rounded_steps_of_14_u_and_is_clamped() {
         let n = n_of(ppp);
         let window = Bench::default_window(ppp);
         let k_max = max_cols(window.0, n as u32);
-        for k0 in [8, 12, 16] {
+        for k0 in [10, 12, 16] {
             for steps in -12i64..=30 {
                 // The pointer travels `steps` columns to the left, plus 3 n that must round away.
                 let mut bench = Bench::new(ppp, window, k0);
@@ -325,7 +325,7 @@ fn row_5_the_width_follows_k0_plus_the_rounded_steps_of_14_u_and_is_clamped() {
                 bench.release(target, bench.mid_y());
                 assert_eq!(
                     bench.wanted,
-                    (k0 + steps).clamp(8, k_max),
+                    (k0 + steps).clamp(COLUMN_MIN_COLS, k_max),
                     "ppp {ppp}, k0 {k0}, {steps} steps"
                 );
             }
@@ -348,22 +348,22 @@ fn row_5_the_column_is_whole_pixels_and_the_two_grids_are_laid_out_again_with_wh
     let window = Bench::default_window(ppp);
     let mut bench = Bench::new(ppp, window, 16);
     let x = bench.column_x();
-    bench.drag(x, x + 8 * 14 * n + 3 * n);
-    let f = bench.release(x + 8 * 14 * n, bench.mid_y());
-    assert!(f.out.resized.is_none() || bench.wanted == 8);
-    assert_eq!(bench.wanted, 8);
-    // A frame later the column measures exactly `W(8)·n` pixels and the canvas the rest.
-    assert_eq!(bench.column_width_px(), column_width_u(8) * n);
+    bench.drag(x, x + 6 * 14 * n + 3 * n);
+    let f = bench.release(x + 6 * 14 * n, bench.mid_y());
+    assert!(f.out.resized.is_none() || bench.wanted == COLUMN_MIN_COLS);
+    assert_eq!(bench.wanted, COLUMN_MIN_COLS);
+    // A frame later the column measures exactly `W(10)·n` pixels and the canvas the rest.
+    assert_eq!(bench.column_width_px(), column_width_u(10) * n);
     let f = bench.frame(vec![]);
     assert_eq!(
         (f.canvas.width() * ppp).round() as i64,
-        window.0 - column_width_u(8) * n
+        window.0 - column_width_u(10) * n
     );
-    // The toolbox: at 8 columns 4 buttons fit a row, so the Eraser (the fifth tool) is on the
-    // second row; clicking its center chooses it.
-    let (bx, by, bw, bh) = toolbox_button_rect_u_at(4, 5, 8);
-    assert_eq!((bx, by), (4, 29));
-    let col_x = window.0 - column_width_u(8) * n;
+    // The toolbox: at 10 columns 5 buttons fit a row, so the Eraser (the fifth tool) is the last
+    // of the first row; clicking its center chooses it.
+    let (bx, by, bw, bh) = toolbox_button_rect_u_at(4, 5, 10);
+    assert_eq!((bx, by), (104, 4));
+    let col_x = window.0 - column_width_u(10) * n;
     let (cx, cy) = (col_x + (bx + bw / 2) * n, (MENU_H_U + by + bh / 2) * n);
     bench.move_to(cx, cy);
     bench.press(cx, cy);
@@ -372,8 +372,8 @@ fn row_5_the_column_is_whole_pixels_and_the_two_grids_are_laid_out_again_with_wh
         released.out.toolbox.action,
         Some(AppAction::SelectTool(Tool::Eraser))
     );
-    // The palette: the grid has 8 swatches per row; swatch 9 is the second one of the second row.
-    let head = head_u(5, 8);
+    // The palette: the grid has 10 swatches per row; swatch 11 is the second one of the second row.
+    let head = head_u(5, 10);
     let (sx, sy) = (
         col_x + (4 + 14 + 6) * n,
         (MENU_H_U + head + 49 + 14 + 6) * n,
@@ -381,7 +381,7 @@ fn row_5_the_column_is_whole_pixels_and_the_two_grids_are_laid_out_again_with_wh
     bench.move_to(sx, sy);
     let pressed = bench.press(sx, sy);
     bench.release(sx, sy);
-    assert_eq!(pressed.out.panel.choice, Some(ColorChoice::Entry(9)));
+    assert_eq!(pressed.out.panel.choice, Some(ColorChoice::Entry(11)));
 }
 
 #[test]
@@ -448,7 +448,7 @@ fn row_5_escape_in_the_middle_of_the_drag_goes_back_to_k0_and_the_next_press_dra
 }
 
 #[test]
-fn row_5_at_the_minimum_window_the_column_can_be_narrowed_to_8_and_widened_to_the_maximum() {
+fn row_5_at_the_minimum_window_the_column_can_be_narrowed_to_10_and_widened_to_the_maximum() {
     for ppp in [1.0f32, 1.5] {
         let n = n_of(ppp);
         let window = (min_window_width_u() * n, 400 * n);
@@ -458,7 +458,7 @@ fn row_5_at_the_minimum_window_the_column_can_be_narrowed_to_8_and_widened_to_th
         let x = bench.column_x();
         bench.drag(x, x + 40 * 14 * n);
         bench.release(x + 40 * 14 * n, bench.mid_y());
-        assert_eq!(bench.wanted, 8, "ppp {ppp}");
+        assert_eq!(bench.wanted, COLUMN_MIN_COLS, "ppp {ppp}");
         let mut bench = Bench::new(ppp, window, 16);
         let x = bench.column_x();
         bench.drag(x, x - 40 * 14 * n);
@@ -478,8 +478,8 @@ fn extra_with_the_editor_open_or_a_removal_pending_the_column_is_at_least_16_col
             Bench::default_window(ppp),
             (min_window_width_u() * n, 420 * n),
         ] {
-            let mut bench = Bench::new(ppp, window, 8);
-            assert_eq!(bench.column_width_px(), column_width_u(8) * n, "cerrado");
+            let mut bench = Bench::new(ppp, window, 10);
+            assert_eq!(bench.column_width_px(), column_width_u(10) * n, "cerrado");
             // The editor opens: the column widens to 16 columns without touching what was chosen.
             bench.view.editor_open = true;
             bench.frame(vec![]);
@@ -488,13 +488,13 @@ fn extra_with_the_editor_open_or_a_removal_pending_the_column_is_at_least_16_col
                 column_width_u(16) * n,
                 "editor abierto"
             );
-            assert_eq!(bench.wanted, 8);
+            assert_eq!(bench.wanted, 10);
             // And it closes: back to the chosen width.
             bench.view.editor_open = false;
             bench.frame(vec![]);
             assert_eq!(
                 bench.column_width_px(),
-                column_width_u(8) * n,
+                column_width_u(10) * n,
                 "cerrado otra vez"
             );
             // A pending removal widens it too.
@@ -507,7 +507,7 @@ fn extra_with_the_editor_open_or_a_removal_pending_the_column_is_at_least_16_col
             );
             bench.ops.cancel_removal();
             bench.frame(vec![]);
-            assert_eq!(bench.column_width_px(), column_width_u(8) * n);
+            assert_eq!(bench.column_width_px(), column_width_u(10) * n);
             // A wider choice is left alone.
             let mut wide = Bench::new(ppp, window, 20);
             wide.view.editor_open = true;
@@ -533,12 +533,12 @@ fn row_6_the_resize_cursor_is_only_in_the_zone_of_the_column_and_nowhere_else() 
         let n = n_of(ppp);
         for (name, window) in [
             ("grande", Bench::default_window(ppp)),
-            // 249 u: `k_max = 8`, so there is no other width to go to.
-            ("estrecha", (249 * n, 400 * n)),
+            // 277 u: `k_max = 10`, so there is no other width to go to.
+            ("estrecha", (277 * n, 400 * n)),
         ] {
             let mut bench = Bench::new(ppp, window, 16);
             let k_max = max_cols(window.0, n as u32);
-            let may = k_max >= 9;
+            let may = k_max > COLUMN_MIN_COLS;
             let column_x = bench.column_x();
             let band_top = MENU_H_U * n;
             let band_bottom = window.1 - 20 * n;
@@ -608,9 +608,9 @@ fn row_6_with_a_dialog_or_a_modal_there_is_neither_cursor_nor_drag_and_the_drag_
 fn row_6_no_edge_has_the_cursor_unless_the_drag_changes_the_width() {
     let ppp = 1.0;
     let n = n_of(ppp);
-    // On a window where nothing can change (`k_max = 8`) the cursor does not appear and a drag in
+    // On a window where nothing can change (`k_max = 10`) the cursor does not appear and a drag in
     // either direction leaves the width as it was.
-    let window = (249 * n, 400 * n);
+    let window = (277 * n, 400 * n);
     let mut bench = Bench::new(ppp, window, 16);
     let x = bench.column_x() + n;
     let y = bench.mid_y();
@@ -618,7 +618,7 @@ fn row_6_no_edge_has_the_cursor_unless_the_drag_changes_the_width() {
     for target in [x - 6 * 14 * n, x + 6 * 14 * n] {
         bench.drag(x, target);
         bench.release(target, y);
-        assert_eq!(column_cols(window.0, n as u32, bench.wanted), 8);
+        assert_eq!(column_cols(window.0, n as u32, bench.wanted), 10);
     }
     // Where the cursor shows, a drag in at least one direction changes the width.
     let window = Bench::default_window(ppp);
@@ -769,7 +769,7 @@ fn dragged_k(k0: i64, travel_px: i64, n: i64, k_max: i64) -> Option<i64> {
         return None;
     }
     let steps = (travel_px as f64 / step as f64).round() as i64;
-    Some((k0 + steps).clamp(8, k_max))
+    Some((k0 + steps).clamp(COLUMN_MIN_COLS, k_max))
 }
 
 proptest! {
@@ -779,7 +779,7 @@ proptest! {
     fn property_2_k_stays_in_range_the_drag_is_quantized_reversible_and_the_cursor_is_exact(
         ppp in prop::sample::select(vec![1.0f32, 1.5, 2.0]),
         extra_w in 0i64..=900,
-        k0 in 8i64..=30,
+        k0 in COLUMN_MIN_COLS..=30,
         enabled in prop::bool::weighted(0.9),
         steps in prop::collection::vec(step(), 1..14),
     ) {
@@ -858,7 +858,7 @@ proptest! {
                         && pos.1 < band_top + band;
                     prop_assert_eq!(
                         frame.cursor == CursorIcon::ResizeHorizontal,
-                        in_zone && enabled && k_max >= 9,
+                        in_zone && enabled && k_max > COLUMN_MIN_COLS,
                         "pointer {:?}, column at {}",
                         pos,
                         column_x
@@ -880,10 +880,59 @@ fn continue_check(
     frame: &Frame,
 ) -> Result<(), TestCaseError> {
     let cols = column_cols(window.0, n as u32, bench.wanted);
-    prop_assert!((8..=k_max.max(8)).contains(&cols));
+    prop_assert!((COLUMN_MIN_COLS..=k_max.max(COLUMN_MIN_COLS)).contains(&cols));
     let layout = window_layout_cols(window, n as u32, bench.wanted);
     prop_assert_eq!(layout.panel.width, column_width_u(cols) * n);
     prop_assert!(layout.canvas.width >= 128 * n);
     let _ = frame;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------------------------
+// Extra property: no row of icons or buttons is clipped at any allowed width
+// ---------------------------------------------------------------------------------------------
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// At any width the user can choose (and any the window allows), with the editor open or closed
+    /// and with a removal pending or not, every 24 u button of the column is painted whole: the nine
+    /// buttons of the toolbox and the five icons of the palette (or the two text buttons of a
+    /// pending removal) lie inside the column and inside their own clip rectangle.
+    #[test]
+    fn extra_property_no_row_of_icons_or_buttons_is_clipped_or_loses_a_button(
+        ppp in prop::sample::select(PPPS.to_vec()),
+        extra_w in 0i64..=900,
+        wanted in 1i64..=40,
+        editor_open in any::<bool>(),
+        removal in any::<bool>(),
+    ) {
+        let n = n_of(ppp);
+        let window = (min_window_width_u() * n + extra_w, 430 * n);
+        let mut bench = Bench::new(ppp, window, wanted);
+        bench.view.editor_open = editor_open;
+        if removal {
+            bench.ops.begin_removal(3, Some(0));
+        }
+        bench.frame(vec![]);
+        let f = bench.frame(vec![]);
+        let side = (24 * n) as f32 / ppp;
+        let text_side = (110 * n) as f32 / ppp;
+        let tol = 0.05;
+        let wide = |r: &egui::Rect, w: f32| {
+            (r.width() - w).abs() < tol && (r.height() - side).abs() < tol
+        };
+        let inside = |fill: &TestFill| {
+            f.column.expand(tol).contains_rect(fill.rect) && fill.clip.expand(tol).contains_rect(fill.rect)
+        };
+        let squares: Vec<_> = f.painted.fills.iter().filter(|x| wide(&x.rect, side)).collect();
+        let halves: Vec<_> = f.painted.fills.iter().filter(|x| wide(&x.rect, text_side)).collect();
+        // Nine toolbox buttons, plus five icons (or the two text buttons of the removal).
+        let (expected_squares, expected_halves) = if removal { (9, 2) } else { (14, 0) };
+        prop_assert_eq!(squares.len(), expected_squares, "botones de 24 u");
+        prop_assert_eq!(halves.len(), expected_halves, "botones de texto");
+        for fill in squares.into_iter().chain(halves) {
+            prop_assert!(inside(fill), "recortado: {:?} en la columna {:?}", fill, f.column);
+        }
+    }
 }
