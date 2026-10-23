@@ -9,7 +9,7 @@
 
 use egui::{Event, Key, Modifiers, PointerButton, Rect, pos2, vec2};
 use proptest::prelude::*;
-use px_core::{Image, Mode, Palette, Rgba};
+use px_core::{Command, Image, ImageId, Mode, Palette, Rgba};
 use px_ui::color::{ColorChoice, Role};
 use px_ui::color_block::{
     Arrow, BarHit, Piece, SELECTOR_X_U, SELECTOR_Y_U, SQUARE_X_U, SQUARE_Y_U, alpha_mesh,
@@ -128,7 +128,6 @@ fn release(key: Key) -> Event {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the two bars"]
 fn row_2_the_bar_the_field_writes_to_has_the_2_u_accent_border_also_with_the_editor_closed() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
@@ -164,7 +163,6 @@ fn row_2_the_bar_the_field_writes_to_has_the_2_u_accent_border_also_with_the_edi
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the two bars"]
 fn row_3_each_bar_says_what_it_paints_and_paints_the_resolved_color() {
     for ppp in PPPS {
         let n = text_scale(ppp);
@@ -233,7 +231,6 @@ fn row_3_each_bar_says_what_it_paints_and_paints_the_resolved_color() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the two bars"]
 fn row_4_the_left_click_asks_for_the_dropper_the_right_one_for_the_editor_and_the_button_swaps() {
     for ppp in PPPS {
         let n = text_scale(ppp);
@@ -294,16 +291,19 @@ fn row_4_the_left_click_asks_for_the_dropper_the_right_one_for_the_editor_and_th
             assert_eq!(bench.click(at).output.bar_click, None);
             bench.gesture_drawing = false;
             if open {
-                assert!(bench.editor.begin(Control::Red, 10));
+                // A slider drag in progress (the button is held down): the bars do not answer.
+                let slider = in_editor(&bench, 100, 138 + 7);
+                bench.presses(slider);
+                assert!(bench.editor.dragging());
                 assert_eq!(bench.click(at).output.bar_click, None);
-                bench.editor.cancel();
+                bench.escape();
+                bench.releases(slider);
             }
         }
     }
 }
 
 #[test]
-#[ignore = "C4: pending the two bars"]
 fn row_4_the_right_click_asks_for_the_focus_of_the_field_unless_it_closes_the_editor() {
     let n = text_scale(1.0);
     let bar = |role| bar_cell_rect(role, PANEL_COLS, n);
@@ -346,7 +346,6 @@ fn row_4_the_right_click_asks_for_the_focus_of_the_field_unless_it_closes_the_ed
 }
 
 #[test]
-#[ignore = "C4: pending the two bars"]
 fn row_4_the_tooltips_have_two_lines_and_f1_opens_the_right_help() {
     let n = text_scale(1.0);
     let tip = "clic: cuentagotas; clic derecho: editar este color";
@@ -686,7 +685,6 @@ fn s_v_at(bench: &Bench, dx: i64, dy: i64) -> (f32, f32) {
 }
 
 #[test]
-#[ignore = "C4: pending the square"]
 fn row_8_the_pointer_maps_to_saturation_and_brightness_and_one_drag_is_one_step() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
@@ -739,7 +737,6 @@ fn row_8_the_pointer_maps_to_saturation_and_brightness_and_one_drag_is_one_step(
 }
 
 #[test]
-#[ignore = "C4: pending the square"]
 fn row_8_escape_and_losing_the_window_focus_restore_everything() {
     for cancel in [Key::Escape, Key::F24] {
         let mut bench = open_bench(1.0, palette_image(), ColorChoice::Entry(0));
@@ -765,7 +762,6 @@ fn row_8_escape_and_losing_the_window_focus_restore_everything() {
 }
 
 #[test]
-#[ignore = "C4: pending the square"]
 fn row_8_the_texture_is_the_oracle_texel_by_texel_and_is_uploaded_only_when_the_hue_changes() {
     for hue in [0u32, 120, 211] {
         for y in 0..112u32 {
@@ -801,7 +797,7 @@ fn row_8_the_texture_is_the_oracle_texel_by_texel_and_is_uploaded_only_when_the_
     bench.moves(editor_px(&bench, x, hue.y + 21));
     bench.moves(editor_px(&bench, x, hue.y + 60));
     let shown = bench.editor.shown_hsv().unwrap().h().round() as u32 % 360;
-    assert_eq!(shown, bar_value_at(Piece::HueBar, hue.y + 60 - hue.y, 1));
+    assert_eq!(shown, bar_value_at(Piece::HueBar, hue.y + 60, 1));
     assert_eq!(
         sv_uploads(&bench.ctx),
         base + 3,
@@ -814,7 +810,6 @@ fn row_8_the_texture_is_the_oracle_texel_by_texel_and_is_uploaded_only_when_the_
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the bars"]
 fn row_9_the_bars_map_the_pointer_and_a_drag_is_one_step() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
@@ -855,7 +850,12 @@ fn row_9_the_bars_map_the_pointer_and_a_drag_is_one_step() {
             Some(expected),
             "ppp {ppp}"
         );
-        bench.editor.sync(Some((EditTarget::Entry(0), expected)));
+        bench.applies(Command::SetPaletteColor {
+            image: ImageId::from_raw(0),
+            index: 0,
+            color: expected,
+        });
+        bench.rest();
         // Alpha: only the alpha changes.
         let at = |y| (alpha.x + alpha.width / 2, top + y);
         bench.presses(at(alpha.y + len / 2));
@@ -878,7 +878,6 @@ fn row_9_the_bars_map_the_pointer_and_a_drag_is_one_step() {
 }
 
 #[test]
-#[ignore = "C4: pending the bars"]
 fn row_9_the_meshes_have_the_vertices_of_the_spec_and_the_marks_follow_the_model() {
     let hues = hue_mesh();
     let expected = [
@@ -947,52 +946,59 @@ fn focus(bench: &mut Bench, piece: Piece) -> (i64, i64) {
     at
 }
 
+/// The color the square gives after moving the shown saturation and brightness by whole percents.
+fn square_oracle(bench: &Bench, ds: i32, dv: i32) -> Rgba {
+    let hsv = bench.editor.shown_hsv().unwrap();
+    let pct = |x: f32, d: i32| ((x * 100.0).round() as i32 + d).clamp(0, 100) as f32 / 100.0;
+    Hsv::new(hsv.h(), pct(hsv.s(), ds), pct(hsv.v(), dv)).to_rgba(255)
+}
+
+/// Applies what the panel asked for to the document of the bench and rests a frame.
+fn apply(bench: &mut Bench, commit: Commit) {
+    let EditTarget::Entry(index) = commit.target else {
+        panic!("an indexed image");
+    };
+    bench.applies(Command::SetPaletteColor {
+        image: ImageId::from_raw(0),
+        index,
+        color: commit.color,
+    });
+    bench.rest();
+    bench.history.clear();
+}
+
 #[test]
-#[ignore = "C4: pending the keyboard"]
 fn row_10_the_arrows_of_the_square_move_one_or_ten_and_press_to_release_is_one_step() {
     let mut bench = open_bench(1.0, palette_image(), ColorChoice::Entry(3));
     focus(&mut bench, Piece::Square);
-    let hsv = bench.editor.shown_hsv().unwrap();
-    let (s, v) = (
-        (hsv.s() * 100.0).round() as u32,
-        (hsv.v() * 100.0).round() as u32,
-    );
-    let color_of =
-        |s: u32, v: u32| Hsv::new(hsv.h(), s as f32 / 100.0, v as f32 / 100.0).to_rgba(255);
-    // Right: saturation +1; with Shift, +10; up: brightness +1.
+    // Right: saturation +1; up: brightness +1.
+    let expected = square_oracle(&bench, 1, 0);
     bench.frame(vec![press(Key::ArrowRight, Modifiers::NONE, false)]);
     assert!(bench.editor.dragging_square());
-    assert_eq!(bench.editor.shown().unwrap().0, color_of(s + 1, v));
+    assert_eq!(bench.editor.shown().unwrap().0, expected);
     assert!(
         bench.commits().is_empty(),
         "nothing until the key is released"
     );
     let f = bench.frame(vec![release(Key::ArrowRight)]);
-    assert_eq!(f.output.commit.map(|c| c.color), Some(color_of(s + 1, v)));
-    bench
-        .editor
-        .sync(Some((EditTarget::Entry(3), color_of(s + 1, v))));
+    assert_eq!(f.output.commit.map(|c| c.color), Some(expected));
+    apply(&mut bench, f.output.commit.unwrap());
     // Held: the repeats are the same step.
+    let expected = square_oracle(&bench, 0, 4);
     bench.frame(vec![press(Key::ArrowUp, Modifiers::NONE, false)]);
     for _ in 0..3 {
         bench.frame(vec![press(Key::ArrowUp, Modifiers::NONE, true)]);
     }
     let held = bench.frame(vec![release(Key::ArrowUp)]);
-    assert_eq!(
-        held.output.commit.map(|c| c.color),
-        Some(color_of(s + 1, v + 4))
-    );
-    bench
-        .editor
-        .sync(Some((EditTarget::Entry(3), color_of(s + 1, v + 4))));
-    // Shift multiplies by ten, left and down go the other way, and the ends are clamped.
-    let shift = Modifiers::SHIFT;
-    bench.frame(vec![press(Key::ArrowLeft, shift, false)]);
+    assert_eq!(held.output.commit.map(|c| c.color), Some(expected));
+    assert_eq!(bench.commits().len(), 1, "one step for the whole press");
+    apply(&mut bench, held.output.commit.unwrap());
+    // Shift multiplies by ten and left goes the other way.
+    let expected = square_oracle(&bench, -10, 0);
+    bench.frame(vec![press(Key::ArrowLeft, Modifiers::SHIFT, false)]);
     let f = bench.frame(vec![release(Key::ArrowLeft)]);
-    assert_eq!(
-        f.output.commit.map(|c| c.color),
-        Some(color_of(s + 1 - 10, v + 4))
-    );
+    assert_eq!(f.output.commit.map(|c| c.color), Some(expected));
+    // The ends are clamped.
     assert_eq!(square_key(100, 50, Arrow::Right, false), (100, 50));
     assert_eq!(square_key(0, 50, Arrow::Left, true), (0, 50));
     assert_eq!(square_key(50, 95, Arrow::Up, true), (50, 100));
@@ -1000,7 +1006,6 @@ fn row_10_the_arrows_of_the_square_move_one_or_ten_and_press_to_release_is_one_s
 }
 
 #[test]
-#[ignore = "C4: pending the keyboard"]
 fn row_10_the_bars_take_the_arrows_escape_cancels_and_nothing_moves_without_focus_or_enabled() {
     assert_eq!(bar_key(Piece::HueBar, 10, Arrow::Up, false), 9);
     assert_eq!(bar_key(Piece::HueBar, 10, Arrow::Down, false), 11);
@@ -1038,7 +1043,6 @@ fn row_10_the_bars_take_the_arrows_escape_cancels_and_nothing_moves_without_focu
 }
 
 #[test]
-#[ignore = "C4: pending the keyboard"]
 fn row_10_the_arrows_keep_the_focus_and_the_view_and_tab_goes_through_the_pieces() {
     let mut bench = open_bench(1.0, palette_image(), ColorChoice::Entry(3));
     focus(&mut bench, Piece::Square);
@@ -1084,7 +1088,6 @@ fn row_10_the_arrows_keep_the_focus_and_the_view_and_tab_goes_through_the_pieces
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the selector"]
 fn row_11_the_selector_picks_one_model_and_the_sliders_follow_it() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
@@ -1137,7 +1140,6 @@ fn row_11_the_selector_picks_one_model_and_the_sliders_follow_it() {
 }
 
 #[test]
-#[ignore = "C4: pending the selector"]
 fn row_11_a_slider_of_each_model_moves_the_square_and_the_bars_and_the_gray_modes_have_none() {
     let mut bench = open_bench(1.0, palette_image(), ColorChoice::Entry(0));
     let option = selector_rect(2, 1);
@@ -1178,7 +1180,6 @@ fn row_11_a_slider_of_each_model_moves_the_square_and_the_bars_and_the_gray_mode
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the two bars"]
 fn row_12_nothing_is_painted_outside_the_panel_and_the_swap_button_fits_at_the_five_scales() {
     for ppp in PPPS {
         let n = text_scale(ppp);
@@ -1203,7 +1204,12 @@ fn row_12_nothing_is_painted_outside_the_panel_and_the_swap_button_fits_at_the_f
                     vec2((233 * k) as f32 / ppp, bench.panel_h_px() as f32 / ppp),
                 )
                 .expand(0.05);
-                for (rect, _) in &f.fills {
+                // The canvas (to the right) and the status bar (below) are painted by the bench too.
+                for (rect, _) in f
+                    .fills
+                    .iter()
+                    .filter(|(r, _)| r.min.x < panel.max.x - 0.5 && r.min.y < panel.max.y - 0.5)
+                {
                     assert!(
                         panel.contains_rect(*rect) || !rect.is_positive(),
                         "ppp {ppp}, {mode:?}, open {open}: {rect:?}"

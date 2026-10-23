@@ -79,7 +79,7 @@ fn row_5_the_editor_starts_closed_and_p_toggles_it_keeping_the_role() {
 fn row_5_a_right_click_on_a_rectangle_opens_the_editor_on_that_role() {
     for role in [Role::Foreground, Role::Background] {
         let mut world = World::new();
-        world.session.indicator_right_click(role);
+        world.session.bar_right_click(role);
         assert!(world.session.editor_open, "{role:?}");
         assert_eq!(world.session.editing, role);
     }
@@ -147,7 +147,7 @@ fn row_5_p_is_blocked_by_a_modal_a_dialog_and_a_focused_text_field_and_not_by_a_
 #[test]
 fn row_6_escape_closes_the_editor_and_the_role_goes_back_to_the_foreground() {
     let mut world = World::new();
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     // The panel asks to close (`PanelOutput::close_editor`) and the app calls this.
     world.session.close_editor();
     assert!(!world.session.editor_open);
@@ -157,7 +157,7 @@ fn row_6_escape_closes_the_editor_and_the_role_goes_back_to_the_foreground() {
 #[test]
 fn row_7_p_closes_an_open_editor_and_the_role_goes_back_to_the_foreground() {
     let mut world = World::new();
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     world.press_p();
     assert!(!world.session.editor_open);
     assert_eq!(world.session.editing, Role::Foreground);
@@ -166,16 +166,16 @@ fn row_7_p_closes_an_open_editor_and_the_role_goes_back_to_the_foreground() {
 #[test]
 fn row_8_a_second_right_click_on_the_edited_rectangle_closes_and_on_the_other_switches() {
     let mut world = World::new();
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     // The other rectangle: the editor stays open and edits that role.
-    world.session.indicator_right_click(Role::Foreground);
+    world.session.bar_right_click(Role::Foreground);
     assert!(world.session.editor_open);
     assert_eq!(world.session.editing, Role::Foreground);
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     assert!(world.session.editor_open);
     assert_eq!(world.session.editing, Role::Background);
     // The same one: closes.
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     assert!(!world.session.editor_open);
     assert_eq!(world.session.editing, Role::Foreground);
 }
@@ -184,7 +184,7 @@ fn row_8_a_second_right_click_on_the_edited_rectangle_closes_and_on_the_other_sw
 fn row_9_changing_document_closes_the_editor_and_converting_only_when_nothing_is_left_to_edit() {
     // A new document (what `open` and `Nueva imagen…` end up doing).
     let mut world = World::new();
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     world.session.replace_document(
         Document::new(indexed_image()),
         ColorChoice::Entry(0),
@@ -216,7 +216,7 @@ fn row_9_changing_document_closes_the_editor_and_converting_only_when_nothing_is
 #[test]
 fn row_10_choosing_a_tool_a_swatch_or_a_color_key_does_not_close_the_editor() {
     let mut world = World::new();
-    world.session.indicator_right_click(Role::Background);
+    world.session.bar_right_click(Role::Background);
     for action in [
         AppAction::SelectTool(Tool::Line),
         AppAction::SelectTool(Tool::Dropper),
@@ -359,7 +359,7 @@ proptest! {
                     }
                 }
                 Step::RightClick(clicked) => {
-                    world.session.indicator_right_click(clicked);
+                    world.session.bar_right_click(clicked);
                     if open && role == clicked {
                         (open, role) = (false, Role::Foreground);
                     } else {

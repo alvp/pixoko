@@ -18,7 +18,7 @@ const fn entry(key: &'static str, name: &'static str, description: &'static str)
     }
 }
 
-/// The 5 entries (after the one of the color editor): the handle and the bar, which are not actions
+/// The 5 entries (after the two of the color block): the handle and the bars, which are not actions
 /// (`F1` over them reaches them), and the three actions of the `Imagen` menu.
 pub(crate) const HELP_PALETTE_ES: [HelpEntry; 5] = [
     entry(
@@ -28,8 +28,8 @@ pub(crate) const HELP_PALETTE_ES: [HelpEntry; 5] = [
     ),
     entry(
         "color.bar",
-        "Barra de color",
-        "Muestra el color que se edita y su número. Debajo, escribe un color en hexadecimal (3, 4, 6 u 8 dígitos) y pulsa Intro. Clic derecho en el indicador cambia entre primer plano y fondo.",
+        "Barras de color",
+        "Arriba, el primer plano; debajo, el fondo. Clic: cuentagotas de un solo uso para ese color. Clic derecho: abre el editor con ese color; otro clic derecho en la misma barra lo cierra. El borde grueso marca el color que edita el campo hexadecimal (3, 4, 6 u 8 dígitos; Intro confirma).",
     ),
     entry(
         "palette.add_entry",

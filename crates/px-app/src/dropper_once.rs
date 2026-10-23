@@ -33,16 +33,15 @@ impl DropperOnce {
     }
 
     /// The role of the bar that armed the dropper, while that use lasts.
-    #[allow(dead_code)] // C4: wired in the logic commit
+    #[cfg(test)]
     pub fn role(&self) -> Option<Role> {
         self.role
     }
 
     /// The role that receives the chosen color: the bar's if a use is armed and, if not, the one of
     /// the button that was pressed.
-    #[allow(dead_code)] // C4: wired in the logic commit
-    pub fn role_for(&self, _button: Role) -> Role {
-        todo!("C4: role_for")
+    pub fn role_for(&self, button: Role) -> Role {
+        self.role.unwrap_or(button)
     }
 
     /// Olvida el retorno pendiente.

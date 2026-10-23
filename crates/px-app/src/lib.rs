@@ -39,17 +39,14 @@ use px_ui::actions::{AppAction, Locks, Origin, PaletteNav, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInput};
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::chrome::COLUMN_DEFAULT_COLS;
-use px_ui::color::{Role, choice_label_with};
+use px_ui::color::choice_label_with;
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::column::{ColumnView, show_column};
 use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
 use px_ui::dialog_keys::FocusTarget;
 use px_ui::dialog_view::show_dialog;
 use px_ui::gestures::GestureMap;
-use px_ui::help::{
-    HelpTarget, help_target_at_cols, help_target_in_indicator_cols, help_target_in_options,
-    help_target_in_panel,
-};
+use px_ui::help::{HelpTarget, help_target_at_cols, help_target_in_options, help_target_in_panel};
 use px_ui::key_events::{help_pressed, presses};
 use px_ui::keymap::Keymap;
 use px_ui::keymap_file::{Loaded, load_notice};
@@ -61,7 +58,7 @@ use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::options::{OptionsWindow, options_row_count};
 use px_ui::options_view::{OptionsEvent, OptionsView, show_options_window};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE, RESIZE_CANCELLED_NOTICE};
-use px_ui::palette_panel::{Indicator, Roles};
+use px_ui::palette_panel::{BarClick, Roles};
 use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::source::{DocSource, OverlayCache, flatten};
@@ -370,12 +367,7 @@ impl App {
                 {
                     return target;
                 }
-                if let Some(target) =
-                    help_target_in_indicator_cols(point, window, n, self.shown_cols)
-                {
-                    return target;
-                }
-                // The handle, the color bar and the field under the grid.
+                // The handle, the bars, the swap button, the field and the open editor.
                 if let Some(target) = px_ui::palette_panel::panel_info(ctx).help {
                     return target;
                 }
@@ -1579,8 +1571,13 @@ impl eframe::App for App {
                 EscapeStep::Nothing => {}
             }
             self.panel_hint = px_ui::palette_panel::panel_info(&ctx).status_hint;
-            match panel.indicator {
-                Some(Indicator::Dropper) => {
+            // The model of the sliders is chosen in the panel and lasts the session.
+            if self.session.view.slider_mode != self.session.slider_mode {
+                let mode = self.session.view.slider_mode;
+                self.session.set_slider_mode(mode);
+            }
+            match panel.bar_click {
+                Some(BarClick::Dropper(role)) => {
                     let before = self.tools.tool();
                     self.apply_action(
                         &ctx,
@@ -1589,10 +1586,13 @@ impl eframe::App for App {
                         Origin::Button,
                     );
                     if before != Tool::Dropper && self.tools.tool() == Tool::Dropper {
-                        self.dropper_once.arm(before, Role::Foreground);
+                        self.dropper_once.arm(before, role);
                     }
                 }
-                Some(Indicator::FocusEditor(role)) => self.session.indicator_right_click(role),
+                Some(BarClick::FocusEditor(role)) => self.session.bar_right_click(role),
+                Some(BarClick::Swap) => {
+                    self.apply_action(&ctx, frame, AppAction::SwapColors, Origin::Button);
+                }
                 None => {}
             }
             if let Some(commit) = panel.commit {
@@ -1731,6 +1731,8 @@ impl eframe::App for App {
                 let shift = ctx.input(|i| i.modifiers.shift);
                 self.tools.set_dropper_source(dropper_source_for(shift));
             }
+            // The one-use dropper started from a bar gives its color to the role of that bar.
+            let role = self.dropper_once.role_for(role);
             let pixel = self.session.pixel_of(role);
             let result = self
                 .tools

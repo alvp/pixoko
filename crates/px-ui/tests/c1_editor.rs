@@ -17,17 +17,18 @@ use px_ui::color::{
     ColorChoice, Role, RoleFlags, SlotColors, cell_label_with, info_flags_roles,
     is_alpha0_cell_with, is_transparent_cell_with,
 };
+use px_ui::color_block::{bar_cell_rect, bar_fill_rect};
+use px_ui::color_block_es::BAR_TIP;
 use px_ui::color_edit::{ColorEditor, Control, EditTarget};
 use px_ui::color_editor::hex_field_id;
 use px_ui::edit_layout::{PaletteButton, button_rect_u, panel_layout, panel_layout_closed};
-use px_ui::help::{HelpTarget, help_target_in_indicator};
+use px_ui::help::HelpTarget;
 use px_ui::help_texts::help_entry;
 use px_ui::palette_grid::{
-    CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, IND_BORDER_EDIT_U, IND_BORDER_U, PITCH_U, PanelView,
-    Scroll, indicator_rects, ring_rects, total_rows,
+    CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PITCH_U, PanelView, Scroll, ring_rects, total_rows,
 };
 use px_ui::palette_ops::{PaletteOp, PaletteOps};
-use px_ui::palette_panel::{INDICATOR_TIP, Indicator, PanelOutput, Roles, panel_info, show_roles};
+use px_ui::palette_panel::{BarClick, PanelOutput, Roles, panel_info, show_roles};
 use px_ui::status::columns;
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::{ACCENT, SURFACE_3};
@@ -238,6 +239,22 @@ fn rect_center(r: &ScreenRect) -> (i64, i64) {
     (r.x + r.width / 2, r.y + r.height / 2)
 }
 
+/// Center of the click zone of the bar of `role`, in physical pixels from the corner of the panel.
+fn bar_center(bench: &Bench, role: Role) -> (i64, i64) {
+    let (x, y) = rect_center(&bar_cell_rect(role, COLUMNS as i64, bench.n() as u32));
+    (x, bench.icons_top() + y)
+}
+
+/// The ring of `thickness` physical pixels around the fill of the bar of `role`, in points (the
+/// bench runs at ppp 1).
+fn bar_border(bench: &Bench, role: Role, thickness: i64) -> Vec<Rect> {
+    let fill = bar_fill_rect(role, COLUMNS as i64, bench.n() as u32);
+    border_of(fill, thickness)
+        .into_iter()
+        .map(|r| r.translate(vec2(0.0, bench.icons_top() as f32)))
+        .collect()
+}
+
 fn rect_fills(shapes: &[ClippedShape]) -> Vec<(Rect, Color32)> {
     fn rec(shape: &Shape, out: &mut Vec<(Rect, Color32)>) {
         match shape {
@@ -290,12 +307,9 @@ fn row_5_a_right_click_that_switches_the_role_takes_the_focus_to_the_hex_field()
             Role::Foreground,
         ),
     );
-    let (_, bg) = indicator_rects(1);
-    let out = bench.click(rect_center(&bg), PointerButton::Secondary);
-    assert_eq!(
-        out.indicator,
-        Some(Indicator::FocusEditor(Role::Background))
-    );
+    let at = bar_center(&bench, Role::Background);
+    let out = bench.click(at, PointerButton::Secondary);
+    assert_eq!(out.bar_click, Some(BarClick::FocusEditor(Role::Background)));
     bench.rest();
     bench.rest();
     assert_eq!(bench.ctx.memory(|m| m.focused()), Some(hex_field_id()));
@@ -312,13 +326,10 @@ fn row_5_the_right_click_that_closes_does_not_ask_for_the_focus() {
             Role::Foreground,
         ),
     );
-    let (fg, _) = indicator_rects(1);
-    // The edited rectangle: the app closes the editor, so the field must not take the focus.
-    let out = bench.click(rect_center(&fg), PointerButton::Secondary);
-    assert_eq!(
-        out.indicator,
-        Some(Indicator::FocusEditor(Role::Foreground))
-    );
+    // The edited bar: the app closes the editor, so the field must not take the focus.
+    let at = bar_center(&bench, Role::Foreground);
+    let out = bench.click(at, PointerButton::Secondary);
+    assert_eq!(out.bar_click, Some(BarClick::FocusEditor(Role::Foreground)));
     bench.rest();
     bench.rest();
     assert_ne!(bench.ctx.memory(|m| m.focused()), Some(hex_field_id()));
@@ -337,12 +348,9 @@ fn row_5_with_the_editor_closed_the_right_click_asks_to_open_and_the_focus_follo
     );
     bench.view.editor_open = false;
     bench.rest();
-    let (fg, _) = indicator_rects(1);
-    let out = bench.click(rect_center(&fg), PointerButton::Secondary);
-    assert_eq!(
-        out.indicator,
-        Some(Indicator::FocusEditor(Role::Foreground))
-    );
+    let at = bar_center(&bench, Role::Foreground);
+    let out = bench.click(at, PointerButton::Secondary);
+    assert_eq!(out.bar_click, Some(BarClick::FocusEditor(Role::Foreground)));
     // The app opens the editor; the field takes the focus in a frame without pointer.
     bench.view.editor_open = true;
     bench.rest();
@@ -450,8 +458,8 @@ fn row_11_a_short_grid_keeps_the_icon_row_right_under_it_with_the_editor_open_or
         let closed = bench.icons_top();
         bench.view.editor_open = true;
         let open = bench.icons_top();
-        // Five entries are one row: the row hangs at 49 + 14 = 63 u whether the editor is open or not.
-        assert_eq!(closed, 63 * bench.n(), "ppp {ppp}");
+        // Five entries are one row: the row hangs at 4 + 14 = 18 u whether the editor is open or not.
+        assert_eq!(closed, 18 * bench.n(), "ppp {ppp}");
         assert_eq!(open, closed, "ppp {ppp}");
     }
 }
@@ -468,9 +476,9 @@ fn row_11_a_tall_grid_anchors_the_icon_row_to_the_bottom_or_right_above_the_edit
                 Role::Foreground,
             ),
         );
-        // 290 u: lower than the 351 u the 17 rows (256 entries and the handle) and the tail need,
-        // and above the 241 u block.
-        bench.height = 290.0;
+        // 320 u: lower than the 330 u the 17 rows (256 entries and the handle) and the tail need,
+        // and above the 308 u block.
+        bench.height = 320.0;
         let height = (bench.height * ppp).round() as i64;
         let n = bench.n();
         bench.view.editor_open = false;
@@ -479,9 +487,9 @@ fn row_11_a_tall_grid_anchors_the_icon_row_to_the_bottom_or_right_above_the_edit
         let open = bench.icons_top();
         // The 16 rows of the grid do not fit: closed, the row closes the panel; open, it sits right
         // above the editor.
-        assert_eq!(closed + 64 * n, height, "ppp {ppp}");
+        assert_eq!(closed + 88 * n, height, "ppp {ppp}");
         assert!(open < closed, "ppp {ppp}");
-        assert_eq!(bench.layout().top_px - open, 64 * n, "ppp {ppp}");
+        assert_eq!(bench.layout().top_px - open, 88 * n, "ppp {ppp}");
     }
 }
 
@@ -704,19 +712,21 @@ fn border_of(rect: ScreenRect, thickness: i64) -> Vec<Rect> {
 }
 
 #[test]
-fn row_15_the_edited_rectangle_gets_a_2_u_accent_border_and_the_other_a_1_u_dim_one() {
-    let (fg, bg) = indicator_rects(1);
-    for (editing, edited, other) in [(Role::Foreground, fg, bg), (Role::Background, bg, fg)] {
+fn row_15_the_edited_bar_gets_a_2_u_accent_border_and_the_other_a_1_u_dim_one() {
+    for (editing, other) in [
+        (Role::Foreground, Role::Background),
+        (Role::Background, Role::Foreground),
+    ] {
         let r = roles(ColorChoice::Entry(3), ColorChoice::Entry(5), editing);
         let mut bench = Bench::new(1.0, indexed(16), r);
         let fills = rect_fills(&bench.rest().shapes);
-        for rect in border_of(edited, IND_BORDER_EDIT_U) {
+        for rect in bar_border(&bench, editing, 2) {
             assert!(
                 fills.contains(&(rect, ACCENT)),
                 "{editing:?}: missing the accent border {rect:?}"
             );
         }
-        for rect in border_of(other, IND_BORDER_U) {
+        for rect in bar_border(&bench, other, 1) {
             assert!(
                 fills.contains(&(rect, SURFACE_3)),
                 "{editing:?}: missing the dim border {rect:?}"
@@ -726,8 +736,8 @@ fn row_15_the_edited_rectangle_gets_a_2_u_accent_border_and_the_other_a_1_u_dim_
 }
 
 #[test]
-fn row_15_with_the_editor_closed_no_rectangle_has_the_accent_border() {
-    let (fg, bg) = indicator_rects(1);
+fn row_15_with_the_editor_closed_the_foreground_bar_has_the_accent_border() {
+    // C4: the hexadecimal field is always seen, so the border says which role it writes to.
     let r = roles(
         ColorChoice::Entry(3),
         ColorChoice::Entry(5),
@@ -736,69 +746,65 @@ fn row_15_with_the_editor_closed_no_rectangle_has_the_accent_border() {
     let mut bench = Bench::new(1.0, indexed(16), r);
     bench.view.editor_open = false;
     let fills = rect_fills(&bench.rest().shapes);
-    for rect in [fg, bg] {
-        for border in border_of(rect, IND_BORDER_EDIT_U) {
-            assert!(!fills.contains(&(border, ACCENT)), "{border:?}");
-        }
-        for border in border_of(rect, IND_BORDER_U) {
-            assert!(fills.contains(&(border, SURFACE_3)), "{border:?}");
-        }
+    for border in bar_border(&bench, Role::Foreground, 2) {
+        assert!(fills.contains(&(border, ACCENT)), "{border:?}");
+    }
+    for border in bar_border(&bench, Role::Background, 1) {
+        assert!(fills.contains(&(border, SURFACE_3)), "{border:?}");
+    }
+    for border in bar_border(&bench, Role::Background, 2) {
+        assert!(!fills.contains(&(border, ACCENT)), "{border:?}");
     }
 }
 
 #[test]
-fn row_15_each_rectangle_has_its_two_line_tooltip() {
-    let (fg, bg) = indicator_rects(1);
+fn row_15_each_bar_has_its_two_line_tooltip() {
     let r = roles(
         ColorChoice::Entry(3),
         ColorChoice::Entry(5),
         Role::Foreground,
     );
-    for (rect, name) in [(fg, "Primer plano"), (bg, "Fondo")] {
+    for (role, name) in [
+        (Role::Foreground, "Primer plano"),
+        (Role::Background, "Fondo"),
+    ] {
         let mut bench = Bench::new(1.0, indexed(16), r);
-        // The visible part of the big one, away from the small one.
-        let point = if name == "Fondo" {
-            (rect.x + rect.width - 2, rect.y + rect.height - 2)
-        } else {
-            rect_center(&rect)
-        };
+        let point = bar_center(&bench, role);
         let shown = tooltip_texts(&mut bench, point);
         assert!(shown.iter().any(|t| t == name), "{name}: {shown:?}");
-        assert!(
-            shown.iter().any(|t| t == INDICATOR_TIP),
-            "{name}: {shown:?}"
-        );
+        assert!(shown.iter().any(|t| t == BAR_TIP), "{name}: {shown:?}");
     }
     assert_eq!(
-        INDICATOR_TIP,
+        BAR_TIP,
         "clic: cuentagotas; clic derecho: editar este color"
     );
 }
 
 #[test]
-fn row_15_f1_over_the_indicator_opens_the_help_of_the_color_editor() {
-    let (fg, bg) = indicator_rects(1);
-    // The panel is in a window of 1200 x 1000: its corner is `window_layout`'s.
-    let window = (1200i64, 1000i64);
-    let panel = px_ui::chrome::window_layout(window, 1).panel;
-    for rect in [fg, bg] {
-        let (x, y) = rect_center(&rect);
+fn row_15_f1_over_a_bar_opens_the_help_of_the_color_bars() {
+    let r = roles(
+        ColorChoice::Entry(3),
+        ColorChoice::Entry(5),
+        Role::Foreground,
+    );
+    for role in [Role::Foreground, Role::Background] {
+        let mut bench = Bench::new(1.0, indexed(16), r);
+        let point = bar_center(&bench, role);
+        bench.move_to(point);
+        bench.rest();
         assert_eq!(
-            help_target_in_indicator((panel.x + x, panel.y + y), window, 1),
-            Some(HelpTarget::Indicator)
+            px_ui::palette_panel::panel_info(&bench.ctx).help,
+            Some(HelpTarget::ColorBar),
+            "{role:?}"
         );
     }
     assert_eq!(
-        help_target_in_indicator((panel.x + 2, panel.y + 40), window, 1),
-        None
-    );
-    assert_eq!(
-        HelpTarget::Indicator.action(Tool::Pencil),
+        HelpTarget::ColorBar.action(Tool::Pencil),
         px_ui::actions::AppAction::ToggleColorEditor
     );
-    let entry = help_entry("color.editor").expect("the entry exists");
-    assert_eq!(entry.name, "Editor de color");
-    for needle in ["clic derecho", "Esc", "cuentagotas", "documento", " p "] {
+    let entry = help_entry("color.bar").expect("the entry exists");
+    assert_eq!(entry.name, "Barras de color");
+    for needle in ["clic derecho", "cuentagotas", "hexadecimal", "primer plano"] {
         assert!(
             entry.description.contains(needle),
             "the help does not say {needle:?}: {}",
@@ -809,7 +815,6 @@ fn row_15_f1_over_the_indicator_opens_the_help_of_the_color_editor() {
 
 #[test]
 fn row_15_a_disabled_panel_neither_opens_nor_picks() {
-    let (fg, _) = indicator_rects(1);
     let r = roles(
         ColorChoice::Entry(3),
         ColorChoice::Entry(5),
@@ -817,9 +822,10 @@ fn row_15_a_disabled_panel_neither_opens_nor_picks() {
     );
     let mut bench = Bench::new(1.0, indexed(16), r);
     bench.enabled = false;
+    let at = bar_center(&bench, Role::Foreground);
     for button in [PointerButton::Primary, PointerButton::Secondary] {
-        let out = bench.click(rect_center(&fg), button);
-        assert_eq!(out.indicator, None, "{button:?}");
+        let out = bench.click(at, button);
+        assert_eq!(out.bar_click, None, "{button:?}");
     }
 }
 

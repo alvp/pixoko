@@ -196,7 +196,7 @@ fn row_2_the_toolbox_grid_with_5_12_and_20_tools_and_k_from_8_to_24() {
         for cols in [8, 14, 16] {
             let head = head_u(tools, cols);
             let n = 2;
-            let height = (head + 127 + 60) * n;
+            let height = (head + 106 + 60) * n;
             let layout = column_layout(Mode::Indexed, height, n as u32, 0, head * n, false);
             assert!(layout.tail_top_px >= (head + GRID_Y_U + PITCH_U) * n);
             assert_eq!(
@@ -257,14 +257,14 @@ fn extra_the_minimum_column_holds_the_whole_icon_row() {
 
 #[test]
 fn row_3_the_grid_rows_seen_at_the_minimum_closed_and_the_capacity_rule() {
-    // Indexed, closed, column of 286 u: the grid shows 6, 4, 2 and 1 rows with `head` of 84, 109,
+    // Indexed, closed, column of 277 u: the grid shows 7, 5, 3 and 1 rows with `head` of 84, 109,
     // 134 and 159 u.
     for ppp in PPPS {
         let n = n_of(ppp) as u32;
         let k = i64::from(n);
-        assert_eq!(min_panel_height_px(n), 286 * k);
-        for (head, rows) in [(84, 6), (109, 4), (134, 2), (159, 1)] {
-            let layout = column_layout(Mode::Indexed, 286 * k, n, 0, head * k, false);
+        assert_eq!(min_panel_height_px(n), 277 * k);
+        for (head, rows) in [(84, 7), (109, 5), (134, 3), (159, 1)] {
+            let layout = column_layout(Mode::Indexed, 277 * k, n, 0, head * k, false);
             assert!(!layout.scrolling, "head {head}");
             assert_eq!(layout.visible_rows, rows, "ppp {ppp}, head {head}");
         }
@@ -288,9 +288,9 @@ fn row_3_the_grid_rows_seen_at_the_minimum_closed_and_the_capacity_rule() {
     // minimum window, 26 do not. It fails aloud; it does not clip.
     assert_eq!(tool_rows(20, COLUMN_MIN_COLS), 4);
     assert_eq!(head_u(20, COLUMN_MIN_COLS), 159);
-    assert!(head_u(20, COLUMN_MIN_COLS) <= 286 - 127);
-    assert_eq!(head_u(20, COLUMN_MIN_COLS), 286 - 127, "0 u to spare");
-    assert!(head_u(21, COLUMN_MIN_COLS) > 286 - 127);
+    assert!(head_u(20, COLUMN_MIN_COLS) <= 277 - 106);
+    assert_eq!(277 - 106 - head_u(20, COLUMN_MIN_COLS), 12, "12 u to spare");
+    assert!(head_u(21, COLUMN_MIN_COLS) > 277 - 106);
     // The layers panel (277 u) and the options window (at most 248 u) fit the minimum.
     for n in 1..=3u32 {
         assert!(LAYERS_PANEL_H_U * i64::from(n) <= min_panel_height_px(n));
@@ -388,7 +388,7 @@ fn row_3_opening_the_editor_scrolls_to_the_maximum_and_closing_it_brings_the_pre
 fn row_3_the_minimum_window_at_the_five_scales_and_with_an_invalid_ppp() {
     for ((ppp, height), width) in PPPS
         .into_iter()
-        .zip([322.0f32, 257.6, 429.33, 322.0, 322.0])
+        .zip([313.0f32, 250.4, 417.33, 313.0, 313.0])
         .zip([468.0f32, 374.4, 624.0, 468.0, 468.0])
     {
         assert!(
@@ -400,7 +400,7 @@ fn row_3_the_minimum_window_at_the_five_scales_and_with_an_invalid_ppp() {
         assert!(min_window_width_pt(ppp) <= 683.0, "ppp {ppp}");
     }
     for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -2.0] {
-        assert!((min_window_height_pt(invalid) - 322.0).abs() < 0.01);
+        assert!((min_window_height_pt(invalid) - 313.0).abs() < 0.01);
         assert!((min_window_width_pt(invalid) - 468.0).abs() < 0.01);
     }
     // Each term of the width by itself, and the width is the widest of them.
@@ -572,7 +572,7 @@ proptest! {
         }
 
         // The minimums follow the formulas and meet the ceilings.
-        let height_2 = ((20 + MENU_H_U + 286) * k) as f32 / ppp;
+        let height_2 = ((20 + MENU_H_U + 277) * k) as f32 / ppp;
         prop_assert!((min_window_height_pt(ppp) - height_2).abs() < 0.01);
         prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
         let width_2 = (min_window_width_u() * k) as f32 / ppp;

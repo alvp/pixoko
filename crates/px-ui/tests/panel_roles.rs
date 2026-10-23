@@ -13,14 +13,16 @@ use egui::{
 };
 use px_core::{Image, Palette, Rgba};
 use px_ui::color::{ColorChoice, Role, SlotColors};
+use px_ui::color_block::bar_cell_rect;
 use px_ui::color_edit::{ColorEditor, EditTarget};
 use px_ui::color_editor::hex_field_id;
+use px_ui::edit_layout::panel_layout;
 use px_ui::palette_grid::{
-    CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PITCH_U, PanelView, Scroll, corner_rects, indicator_rects,
-    ring_rects,
+    CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PITCH_U, PanelView, Scroll, corner_rects, ring_rects,
+    total_rows,
 };
 use px_ui::palette_ops::PaletteOps;
-use px_ui::palette_panel::{Indicator, PanelOutput, Roles, panel_info, show_roles};
+use px_ui::palette_panel::{BarClick, PanelOutput, Roles, panel_info, show_roles};
 use px_ui::text::{apply_scale, install_fonts, text_scale};
 use px_ui::theme::{RING_ACTIVE, RING_BACKGROUND};
 use px_ui::view::ScreenRect;
@@ -357,51 +359,69 @@ fn row_5_line_2_says_foreground_and_background_for_the_swatch_of_the_two() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fila 6: indicador
+// Fila 6: las dos barras (antes, el indicador)
 // ---------------------------------------------------------------------------------------------
 
 fn center(r: &ScreenRect) -> (i64, i64) {
     (r.x + r.width / 2, r.y + r.height / 2)
 }
 
+/// The click zone of the bar of `role` of an indexed image of `entries` entries, in physical pixels
+/// from the corner of the panel (the editor open, the default of `PanelView`).
+fn bar_cell(bench: &Bench, entries: usize, role: Role) -> ScreenRect {
+    let n = bench.n();
+    let ppp = bench.ctx.pixels_per_point();
+    let height = (TEST_SCREEN.y * ppp).round() as i64;
+    let layout = panel_layout(px_core::Mode::Indexed, height, n as u32, 0);
+    let tail = layout.tail_top_for(total_rows(entries + 1), n as u32);
+    let cell = bar_cell_rect(role, COLUMNS as i64, n as u32);
+    ScreenRect {
+        y: cell.y + tail,
+        ..cell
+    }
+}
+
 #[test]
-fn row_6_left_click_on_the_indicator_asks_for_the_dropper_in_the_two_rectangles() {
+fn row_6_left_click_on_a_bar_asks_for_the_dropper_of_its_role() {
     let image = indexed(16);
     for ppp in [1.0, 2.0, 3.0] {
         let mut bench = Bench::new_2(ppp);
-        let n = bench.n();
-        let (fg, bg) = indicator_rects(n as u32);
         let r = roles(ColorChoice::Entry(2), ColorChoice::Entry(3));
-        for point in [center(&fg), (bg.x + bg.width - 1, bg.y + bg.height - 1)] {
-            let output_2 = bench.click(&image, r, true, PointerButton::Primary, point);
-            assert_eq!(output_2.indicator, Some(Indicator::Dropper), "ppp {ppp}");
-            assert_eq!(output_2.choice, None);
+        for role in [Role::Foreground, Role::Background] {
+            let cell = bar_cell(&bench, 16, role);
+            for point in [
+                center(&cell),
+                (cell.x, cell.y),
+                (cell.x + cell.width - 1, cell.y + cell.height - 1),
+            ] {
+                let output_2 = bench.click(&image, r, true, PointerButton::Primary, point);
+                assert_eq!(
+                    output_2.bar_click,
+                    Some(BarClick::Dropper(role)),
+                    "ppp {ppp}"
+                );
+                assert_eq!(output_2.choice, None);
+            }
         }
     }
 }
 
 #[test]
-fn row_6_right_click_asks_to_edit_the_role_of_the_pressed_rectangle_and_the_focus_goes_to_the_field()
- {
+fn row_6_right_click_asks_to_edit_the_role_of_the_pressed_bar_and_the_focus_goes_to_the_field() {
     let image = indexed(16);
     let mut bench = Bench::new_2(1.0);
-    let (fg, bg) = indicator_rects(1);
     let r = roles(ColorChoice::Entry(2), ColorChoice::Entry(3));
+    let fg = bar_cell(&bench, 16, Role::Foreground);
+    let bg = bar_cell(&bench, 16, Role::Background);
     let output_2 = bench.click(&image, r, true, PointerButton::Secondary, center(&fg));
     assert_eq!(
-        output_2.indicator,
-        Some(Indicator::FocusEditor(Role::Foreground))
+        output_2.bar_click,
+        Some(BarClick::FocusEditor(Role::Foreground))
     );
-    let output_2 = bench.click(
-        &image,
-        r,
-        true,
-        PointerButton::Secondary,
-        (bg.x + bg.width - 1, bg.y + bg.height - 1),
-    );
+    let output_2 = bench.click(&image, r, true, PointerButton::Secondary, center(&bg));
     assert_eq!(
-        output_2.indicator,
-        Some(Indicator::FocusEditor(Role::Background))
+        output_2.bar_click,
+        Some(BarClick::FocusEditor(Role::Background))
     );
     // El foco está en el campo hexadecimal del editor.
     bench.frame(&image, r, true, vec![]);
@@ -409,57 +429,33 @@ fn row_6_right_click_asks_to_edit_the_role_of_the_pressed_rectangle_and_the_focu
 }
 
 #[test]
-fn row_6_a_click_in_the_gap_of_the_band_or_outside_does_nothing_and_enabled_false_neither() {
+fn row_6_a_click_in_the_gap_before_the_button_or_outside_does_nothing_and_enabled_false_neither() {
     let image = indexed(16);
     let mut bench = Bench::new_2(1.0);
-    let (fg, bg) = indicator_rects(1);
     let r = roles(ColorChoice::Entry(2), ColorChoice::Entry(3));
-    let corner_empty = (bg.x + bg.width - 1, fg.y);
+    let fg = bar_cell(&bench, 16, Role::Foreground);
+    // The 2 u gap between the cells and the swap button.
+    let gap = (fg.x + fg.width + 1, fg.y + fg.height / 2);
     for button in [PointerButton::Primary, PointerButton::Secondary] {
-        let output_2 = bench.click(&image, r, true, button, corner_empty);
-        assert_eq!(output_2.indicator, None, "{button:?}");
+        let output_2 = bench.click(&image, r, true, button, gap);
+        assert_eq!(output_2.bar_click, None, "{button:?}");
         let output_2 = bench.click(&image, r, false, button, center(&fg));
-        assert_eq!(output_2.indicator, None, "{button:?} deshabilitado");
+        assert_eq!(output_2.bar_click, None, "{button:?} deshabilitado");
     }
 }
 
 #[test]
-fn row_6_right_click_on_a_rectangle_asks_to_edit_that_role_also_with_the_editor_open() {
+fn row_6_right_click_on_a_bar_asks_to_edit_that_role_also_with_the_editor_open() {
     let image = indexed(16);
     let mut bench = Bench::new_2(1.0);
-    let (fg, bg) = indicator_rects(1);
     let r = roles(ColorChoice::Entry(2), ColorChoice::Entry(3));
-    // The editor is open (the default of `PanelView`): the click on the other rectangle switches the
+    // The editor is open (the default of `PanelView`): the click on the other bar switches the
     // role and the click on the edited one is the one that closes it; the panel reports both the
     // same way and the app decides.
-    for (role, rect) in [(Role::Background, bg), (Role::Foreground, fg)] {
-        let point = (rect.x + rect.width - 1, rect.y + rect.height - 1);
+    for role in [Role::Background, Role::Foreground] {
+        let point = center(&bar_cell(&bench, 16, role));
         let output_2 = bench.click(&image, r, true, PointerButton::Secondary, point);
-        assert_eq!(output_2.indicator, Some(Indicator::FocusEditor(role)));
+        assert_eq!(output_2.bar_click, Some(BarClick::FocusEditor(role)));
         assert_eq!(output_2.choice, None);
     }
-}
-
-#[test]
-fn row_6_the_small_one_is_painted_after_the_large_one_and_with_its_colors() {
-    let image = indexed(16);
-    let mut bench = Bench::new_2(1.0);
-    let r = roles(ColorChoice::Entry(2), ColorChoice::Entry(3));
-    let f = bench.frame(&image, r, true, vec![]);
-    let (fg, bg) = indicator_rects(1);
-    let palette = image.palette().expect("paleta");
-    let color = |i: u8| {
-        let c = palette.resolved(i).expect("entrada");
-        Color32::from_rgba_unmultiplied(c.r, c.g, c.b, c.a)
-    };
-    let all_2 = rectangles(&f.shapes_2);
-    let pos_of = |rect: Rect, fill: Color32| {
-        all_2
-            .iter()
-            .position(|(r, c)| *r == rect && *c == fill)
-            .unwrap_or_else(|| panic!("no se pinta {rect:?} {fill:?}"))
-    };
-    let p_bg = pos_of(a_rect(bg), color(3));
-    let p_fg = pos_of(a_rect(fg), color(2));
-    assert!(p_fg > p_bg, "el pequeño va encima");
 }

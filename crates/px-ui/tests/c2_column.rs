@@ -374,10 +374,7 @@ fn row_5_the_column_is_whole_pixels_and_the_two_grids_are_laid_out_again_with_wh
     );
     // The palette: the grid has 10 swatches per row; swatch 11 is the second one of the second row.
     let head = head_u(5, 10);
-    let (sx, sy) = (
-        col_x + (4 + 14 + 6) * n,
-        (MENU_H_U + head + 49 + 14 + 6) * n,
-    );
+    let (sx, sy) = (col_x + (4 + 14 + 6) * n, (MENU_H_U + head + 4 + 14 + 6) * n);
     bench.move_to(sx, sy);
     let pressed = bench.press(sx, sy);
     bench.release(sx, sy);
@@ -394,7 +391,7 @@ fn row_5_a_drag_never_changes_the_document_the_history_or_the_color() {
     for f in &frames {
         assert!(f.out.panel.choice.is_none() && f.out.panel.background.is_none());
         assert!(f.out.panel.commit.is_none() && f.out.panel.op.is_none());
-        assert!(f.out.panel.indicator.is_none() && f.out.toolbox.action.is_none());
+        assert!(f.out.panel.bar_click.is_none() && f.out.toolbox.action.is_none());
     }
     let f = bench.release(x - 5 * 14 * n, bench.mid_y());
     assert!(f.out.panel.choice.is_none() && f.out.panel.op.is_none());
@@ -897,7 +894,7 @@ proptest! {
 
     /// At any width the user can choose (and any the window allows), with the editor open or closed
     /// and with a removal pending or not, every 24 u button of the column is painted whole: the nine
-    /// buttons of the toolbox and the four icons of the palette (or the two text buttons of a
+    /// buttons of the toolbox the swap button and the four icons of the palette (or the two text buttons of a
     /// pending removal) lie inside the column and inside their own clip rectangle.
     #[test]
     fn extra_property_no_row_of_icons_or_buttons_is_clipped_or_loses_a_button(
@@ -927,8 +924,9 @@ proptest! {
         };
         let squares: Vec<_> = f.painted.fills.iter().filter(|x| wide(&x.rect, side)).collect();
         let halves: Vec<_> = f.painted.fills.iter().filter(|x| wide(&x.rect, text_side)).collect();
-        // Nine toolbox buttons, plus four icons (or the two text buttons of the removal).
-        let (expected_squares, expected_halves) = if removal { (9, 2) } else { (13, 0) };
+        // Nine toolbox buttons and the swap button of the bars (C4), plus four icons (or the two
+        // text buttons of the removal).
+        let (expected_squares, expected_halves) = if removal { (10, 2) } else { (14, 0) };
         prop_assert_eq!(squares.len(), expected_squares, "botones de 24 u");
         prop_assert_eq!(halves.len(), expected_halves, "botones de texto");
         for fill in squares.into_iter().chain(halves) {

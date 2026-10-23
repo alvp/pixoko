@@ -12,6 +12,7 @@ pub mod chrome;
 pub mod color;
 pub mod color_bar;
 pub mod color_block;
+pub mod color_block_es;
 pub mod color_edit;
 pub mod color_editor;
 pub mod color_hsv;

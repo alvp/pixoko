@@ -122,7 +122,6 @@ pub struct Session {
     pub editing: Role,
     /// Model of the numeric sliders of the editor (specs/ui-color-block.md, decision 15). Lasts the
     /// session; it is not saved to disk.
-    #[allow(dead_code)] // C4: wired in the logic commit
     pub slider_mode: SliderMode,
     /// The color editor is open (specs/ui-composition.md). It starts closed; `p`, `Esc`, a second
     /// right click on the edited rectangle of the indicator and changing document toggle it.
@@ -958,8 +957,7 @@ impl Session {
         }
     }
 
-    /// Right click on the bar of `role` (or, until C4 lands, on its indicator rectangle): opens
-    /// the editor on it, switches to it if the editor is open on the other role, closes the editor
+    /// Right click on the bar of `role`: opens the editor on it, switches to it if the editor is open on the other role, closes the editor
     /// if it is open on this one.
     pub fn bar_right_click(&mut self, role: Role) {
         if self.editor_open && self.editing == role {
@@ -969,23 +967,18 @@ impl Session {
         }
     }
 
-    /// Right click on the rectangle of `role` in the indicator: the same as [`Session::bar_right_click`].
-    pub fn indicator_right_click(&mut self, role: Role) {
-        self.bar_right_click(role);
-    }
-
     /// `Editar → Intercambiar colores`: swaps the foreground and the background. Session state:
     /// no history step; `editing` and the editor stay as they are and the editor shows the new
     /// stored color of its role at the next `sync_editor`.
     pub fn swap_colors(&mut self) {
-        todo!("C4: swap_colors")
+        std::mem::swap(&mut self.choice, &mut self.background);
     }
 
     /// Chooses the model of the numeric sliders; the session remembers it (opening a document,
     /// closing the editor and converting the mode do not reset it).
-    #[allow(dead_code)] // C4: wired in the logic commit
-    pub fn set_slider_mode(&mut self, _mode: SliderMode) {
-        todo!("C4: set_slider_mode")
+    pub fn set_slider_mode(&mut self, mode: SliderMode) {
+        self.slider_mode = mode;
+        self.view.slider_mode = mode;
     }
 
     /// Aplica un color del editor: `SetPaletteColor` en indexadas (`Ok(true)` si el documento
@@ -1129,7 +1122,11 @@ impl Session {
             }
         }
         self.scroll = Scroll::default();
-        self.view = PanelView::default();
+        // The model of the sliders lasts the session: the new view starts with it.
+        self.view = PanelView {
+            slider_mode: self.slider_mode,
+            ..PanelView::default()
+        };
         self.discarded_text = self.editor.has_pending();
         self.removal_cancelled |= self.ops.removal().is_some();
         let resize_lost = self.ops.resize_pending().is_some() || self.ops.take_resize_cancelled();

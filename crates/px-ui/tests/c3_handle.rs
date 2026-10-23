@@ -328,7 +328,7 @@ fn row_5_leaving_the_grid_keeps_the_drag_on_the_nearest_cell() {
 
 #[test]
 fn row_5_dragging_past_the_maximum_and_out_of_the_grid_applies_256_and_keeps_the_view() {
-    let mut bench = Bench::with_panel_height(1.0, 400, indexed(250), ColorChoice::Entry(3));
+    let mut bench = Bench::with_panel_height(1.0, 462, indexed(250), ColorChoice::Entry(3));
     bench.scroll.first_row = 5;
     bench.rest();
     assert!(bench.scroll.first_row > 0, "the view is scrolled down");
@@ -373,7 +373,7 @@ fn row_5_dragging_past_the_maximum_and_out_of_the_grid_applies_256_and_keeps_the
 
 #[test]
 fn row_5_at_the_maximum_the_status_line_says_so_while_it_lasts() {
-    let mut bench = Bench::with_panel_height(1.0, 400, indexed(250), ColorChoice::Entry(3));
+    let mut bench = Bench::with_panel_height(1.0, 462, indexed(250), ColorChoice::Entry(3));
     bench.scroll.first_row = 5;
     bench.rest();
     let handle = bench.handle_center();
@@ -392,7 +392,7 @@ fn row_5_at_the_maximum_the_status_line_says_so_while_it_lasts() {
 
 #[test]
 fn row_5_escape_still_cancels_a_drag_that_is_outside_the_grid() {
-    let mut bench = Bench::with_panel_height(1.0, 400, indexed(250), ColorChoice::Entry(3));
+    let mut bench = Bench::with_panel_height(1.0, 462, indexed(250), ColorChoice::Entry(3));
     bench.scroll.first_row = 5;
     bench.rest();
     let handle = bench.handle_center();
@@ -545,8 +545,8 @@ fn row_5_the_cursor_is_grab_over_the_handle_and_grabbing_while_dragging() {
 
 #[test]
 fn row_5_the_wheel_scrolls_the_rows_during_the_drag_and_the_zone_follows() {
-    let mut bench = Bench::with_panel_height(1.0, 241, indexed(40), ColorChoice::Entry(3));
-    // Block-height panel: one visible row. Drag the handle (cell 40, row 2) toward the row above.
+    let mut bench = Bench::with_panel_height(1.0, 308, indexed(40), ColorChoice::Entry(3));
+    // Panel at the height of the open block (308 u): one visible row. Drag the handle (cell 40, row 2) toward the row above.
     bench.scroll.first_row = 2;
     bench.rest();
     let handle = bench.handle_center();
@@ -751,7 +751,7 @@ proptest! {
         entries in 1usize..=256,
         steps in proptest::collection::vec(step_strategy(), 0..14),
     ) {
-        let mut bench = Bench::with_panel_height(1.0, 400, indexed(entries), ColorChoice::Entry(0));
+        let mut bench = Bench::with_panel_height(1.0, 462, indexed(entries), ColorChoice::Entry(0));
         // Bring the row of the handle into sight (the panel shows 12 rows).
         bench.scroll.first_row = (entries / 16).saturating_sub(4);
         bench.rest();

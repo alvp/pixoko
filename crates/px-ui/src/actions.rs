@@ -154,6 +154,7 @@ impl AppAction {
                 | AppAction::ColorPrev
                 | AppAction::BackgroundNext
                 | AppAction::BackgroundPrev
+                | AppAction::SwapColors
         )
     }
 }

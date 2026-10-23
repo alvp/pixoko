@@ -72,8 +72,8 @@ pub struct UiStrings {
     pub f1_reserved: &'static str,
 }
 
-/// The table of help texts (today in Spanish: 22 entries, the 8 of layers, the 3 of merge, the one
-/// of the color editor and the 5 of the palette panel, in this order).
+/// The table of help texts (today in Spanish: 22 entries, the 8 of layers, the 3 of merge, the 2 of
+/// the color block and the 5 of the palette panel, in this order).
 pub fn help_table() -> &'static [HelpEntry] {
     static TABLE: LazyLock<Vec<HelpEntry>> = LazyLock::new(|| {
         HELP_ES
@@ -126,6 +126,7 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::Quit => "file.quit",
         AppAction::ToggleLayerPanel => "layer.panel",
         AppAction::ToggleColorEditor => "color.editor",
+        AppAction::SwapColors => "color.swap",
         AppAction::NewLayer => "layer.new",
         AppAction::DuplicateLayer => "layer.duplicate",
         AppAction::RemoveLayer => "layer.remove",
@@ -170,6 +171,7 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "file.quit" => AppAction::Quit,
         "layer.panel" => AppAction::ToggleLayerPanel,
         "color.editor" => AppAction::ToggleColorEditor,
+        "color.swap" => AppAction::SwapColors,
         "layer.new" => AppAction::NewLayer,
         "layer.duplicate" => AppAction::DuplicateLayer,
         "layer.remove" => AppAction::RemoveLayer,

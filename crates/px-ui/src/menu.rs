@@ -9,6 +9,7 @@ use crate::actions::{
 };
 use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
+use crate::color_block_es::MENU_SWAP;
 use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
 use crate::help::HelpTarget;
 use crate::help_texts_palette_es::{MENU_ADD_ENTRY, MENU_PALETTE_SIZE, MENU_REMOVE_ENTRY};
@@ -73,6 +74,7 @@ pub const MENUS: [Menu; 6] = [
             item("Deshacer", AppAction::Undo),
             item("Rehacer", AppAction::Redo),
             item("Borrar página", AppAction::ClearPage),
+            item(MENU_SWAP, AppAction::SwapColors),
         ],
         submenus: &[],
     },

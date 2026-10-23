@@ -8,7 +8,6 @@
 
 use px_core::Rgba;
 
-use crate::color::Role;
 use crate::color_edit::SliderMode;
 use crate::icons::IconSet;
 
@@ -27,32 +26,13 @@ pub const CHECK_U: i64 = 6;
 /// Width of the panel with the default 16 columns: 4 of margin, 16 steps, 2 of gap, 2 of track and
 /// 1 of line. With `k` columns it is [`panel_width_u`].
 pub const PANEL_WIDTH_U: i64 = 233;
-/// Origin of the grid in the panel: under the indicator band, a 1 u separator and 4 u of gap
-/// for the rings.
+/// Origin of the grid in the panel: 4 u of margin on the left and 4 u of gap on top, where the
+/// rings of the swatches fit (specs/ui-color-block.md: the indicator band is gone).
 pub const GRID_X_U: i64 = 4;
-pub const GRID_Y_U: i64 = INDICATOR_H_U + 1 + 4;
-/// Band of the color indicator, above the grid (specs/ui-composition.md, decision 4): 4 of
-/// margin, 36 of indicator and 4 of margin. Everything else in the panel hangs from it.
-pub const INDICATOR_H_U: i64 = 44;
-/// Small rectangle of the indicator (foreground) and large one (background, under the small one):
-/// origin and size, from the corner of the panel.
-pub const IND_FG_X_U: i64 = 4;
-pub const IND_FG_Y_U: i64 = 4;
-pub const IND_FG_W_U: i64 = 40;
-pub const IND_FG_H_U: i64 = 24;
-pub const IND_BG_X_U: i64 = 20;
-pub const IND_BG_Y_U: i64 = 8;
-pub const IND_BG_W_U: i64 = 64;
-pub const IND_BG_H_U: i64 = 32;
-/// 1 u border (`SURFACE_3`) around each rectangle of the indicator; the one of the role the
-/// open editor edits measures 2 u and is `ACCENT`.
-pub const IND_BORDER_U: i64 = 1;
-pub const IND_BORDER_EDIT_U: i64 = 2;
+pub const GRID_Y_U: i64 = 4;
 /// Text of the editors: origin and usable width.
 pub const TEXT_X_U: i64 = 4;
 pub const TEXT_WIDTH_U: i64 = 225;
-/// 1 u strip between the band and the grid.
-pub const SEPARATOR_Y_U: i64 = INDICATOR_H_U;
 /// Track of the scroll indicator.
 pub const TRACK_X_U: i64 = 230;
 pub const TRACK_W_U: i64 = 2;
@@ -106,7 +86,7 @@ pub fn text_width_u(cols: i64) -> i64 {
 }
 
 /// All the coordinates, `x` and `y`, in `u` from the corner of the panel, that the layout uses:
-/// panel edges, texts, separator, track and line, and the edges of each swatch (with its checker
+/// panel edges, texts, track and line, and the edges of each swatch (with its checker
 /// and its rings) of a 256-entry palette.
 pub fn edges_u() -> Vec<i64> {
     let mut edges = vec![
@@ -114,37 +94,10 @@ pub fn edges_u() -> Vec<i64> {
         PANEL_WIDTH_U,
         TEXT_X_U,
         TEXT_X_U + TEXT_WIDTH_U,
-        SEPARATOR_Y_U,
-        SEPARATOR_Y_U + 1,
         TRACK_X_U,
         TRACK_X_U + TRACK_W_U,
         RIGHT_LINE_X_U,
         RIGHT_LINE_X_U + 1,
-        INDICATOR_H_U,
-        IND_FG_X_U - IND_BORDER_U,
-        IND_FG_X_U,
-        IND_FG_X_U + IND_FG_W_U,
-        IND_FG_X_U + IND_FG_W_U + IND_BORDER_U,
-        IND_FG_X_U - IND_BORDER_EDIT_U,
-        IND_FG_X_U + IND_FG_W_U + IND_BORDER_EDIT_U,
-        IND_FG_Y_U - IND_BORDER_U,
-        IND_FG_Y_U - IND_BORDER_EDIT_U,
-        IND_FG_Y_U,
-        IND_FG_Y_U + IND_FG_H_U,
-        IND_FG_Y_U + IND_FG_H_U + IND_BORDER_U,
-        IND_FG_Y_U + IND_FG_H_U + IND_BORDER_EDIT_U,
-        IND_BG_X_U - IND_BORDER_U,
-        IND_BG_X_U - IND_BORDER_EDIT_U,
-        IND_BG_X_U,
-        IND_BG_X_U + IND_BG_W_U,
-        IND_BG_X_U + IND_BG_W_U + IND_BORDER_U,
-        IND_BG_X_U + IND_BG_W_U + IND_BORDER_EDIT_U,
-        IND_BG_Y_U - IND_BORDER_U,
-        IND_BG_Y_U - IND_BORDER_EDIT_U,
-        IND_BG_Y_U,
-        IND_BG_Y_U + IND_BG_H_U,
-        IND_BG_Y_U + IND_BG_H_U + IND_BORDER_U,
-        IND_BG_Y_U + IND_BG_H_U + IND_BORDER_EDIT_U,
     ];
     for step in 0..MAX_ROWS {
         for origin in [GRID_X_U, GRID_Y_U] {
@@ -577,37 +530,6 @@ pub fn drop_mark_rect(cell: ScreenRect, after: bool, n: u32) -> ScreenRect {
         DROP_MARK_W_U * n,
         PITCH_U * n,
     )
-}
-
-fn indicator_rect(x: i64, y: i64, width: i64, height: i64, n: u32) -> ScreenRect {
-    let k = scale(n);
-    rect(x * k, y * k, width * k, height * k)
-}
-
-/// The two rectangles of the indicator in physical pixels from the corner of the panel:
-/// `(foreground, background)`. The small one is painted on top of the large one.
-pub fn indicator_rects(n: u32) -> (ScreenRect, ScreenRect) {
-    (
-        indicator_rect(IND_FG_X_U, IND_FG_Y_U, IND_FG_W_U, IND_FG_H_U, n),
-        indicator_rect(IND_BG_X_U, IND_BG_Y_U, IND_BG_W_U, IND_BG_H_U, n),
-    )
-}
-
-fn contains(r: &ScreenRect, x: i64, y: i64) -> bool {
-    x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
-}
-
-/// Role of the indicator rectangle under `(x, y)` (pixels from the corner of the panel): where they
-/// overlap the small one wins; the empty corners of the box that contains them belong to nobody.
-pub fn indicator_hit(x: i64, y: i64, n: u32) -> Option<Role> {
-    let (fg, bg) = indicator_rects(n);
-    if contains(&fg, x, y) {
-        Some(Role::Foreground)
-    } else if contains(&bg, x, y) {
-        Some(Role::Background)
-    } else {
-        None
-    }
 }
 
 /// Parts of a rectangle of `width × height` pixels with color `color`, in painting order and

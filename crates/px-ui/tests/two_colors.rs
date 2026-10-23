@@ -7,15 +7,12 @@ use egui::Color32;
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use px_ui::actions::{AppAction, Locks, Origin, Platform, is_blocked};
 use px_ui::color::{
-    ColorChoice, Role, RoleFlags, default_background, info_flags_roles, pixel_for_choice,
+    ColorChoice, RoleFlags, default_background, info_flags_roles, pixel_for_choice,
 };
 use px_ui::edit_layout::{block_height_px, min_window_height_pt, min_window_width_pt};
 use px_ui::keymap::{Binding, Conflict, KeyId, Keymap, Platforms, Press};
 use px_ui::menu::{MENUS, popup_width_u, shortcut_for, shortcut_text};
-use px_ui::palette_grid::{
-    self, CELL_U, GAP_U, GRID_X_U, GRID_Y_U, INDICATOR_H_U, SEPARATOR_Y_U, corner_rects,
-    indicator_hit, indicator_rects, ring_rects,
-};
+use px_ui::palette_grid::{CELL_U, GAP_U, corner_rects, ring_rects};
 use px_ui::text::text_scale;
 use px_ui::theme::{RING_ACTIVE, RING_BACKGROUND, SURFACE_1, contrast_ratio};
 use px_ui::view::ScreenRect;
@@ -356,61 +353,6 @@ fn row_5_with_the_same_swatch_the_foreground_one_goes_inside_and_the_background_
 }
 
 // ---------------------------------------------------------------------------------------------
-// Fila 6: geometría del indicador
-// ---------------------------------------------------------------------------------------------
-
-#[test]
-fn row_6_the_band_measures_44_u_and_the_rest_of_the_panel_hangs_from_it() {
-    assert_eq!(INDICATOR_H_U, 44);
-    assert_eq!(SEPARATOR_Y_U, INDICATOR_H_U);
-    assert_eq!(GRID_Y_U, INDICATOR_H_U + 5);
-    assert_eq!(GRID_Y_U, 49);
-}
-
-#[test]
-fn row_6_the_small_foreground_40_by_24_goes_on_top_of_the_large_background_64_by_32() {
-    for n in 1..=3i64 {
-        let (fg, bg) = indicator_rects(n as u32);
-        assert_eq!((fg.width, fg.height), (40 * n, 24 * n));
-        assert_eq!((bg.width, bg.height), (64 * n, 32 * n));
-        assert!(overlap_2(&fg, &bg), "se superponen");
-        // El conjunto cabe en la banda con su margen de 4 u y su borde de 1 u.
-        for r in [fg, bg] {
-            assert!(r.x >= 4 * n && r.y >= 4 * n);
-            assert!(r.x + r.width <= (px_ui_panel_width() - 4) * n);
-            assert!(r.y + r.height <= (INDICATOR_H_U - 4) * n);
-        }
-    }
-}
-
-fn px_ui_panel_width() -> i64 {
-    palette_grid::PANEL_WIDTH_U
-}
-
-#[test]
-fn row_6_indicator_hit_distinguishes_foreground_background_and_gaps() {
-    for n in 1..=3i64 {
-        let (fg, bg) = indicator_rects(n as u32);
-        let center = |r: &ScreenRect| (r.x + r.width / 2, r.y + r.height / 2);
-        let (x, y) = center(&fg);
-        assert_eq!(indicator_hit(x, y, n as u32), Some(Role::Foreground));
-        // Donde se superponen manda el pequeño.
-        let (x, y) = (bg.x + 1, bg.y + 1);
-        assert_eq!(indicator_hit(x, y, n as u32), Some(Role::Foreground));
-        // La parte visible del grande.
-        let (x, y) = (bg.x + bg.width - 1, bg.y + bg.height - 1);
-        assert_eq!(indicator_hit(x, y, n as u32), Some(Role::Background));
-        // Las esquinas vacías de la caja que contiene a los dos.
-        assert_eq!(indicator_hit(bg.x + bg.width - 1, fg.y, n as u32), None);
-        assert_eq!(indicator_hit(fg.x, bg.y + bg.height - 1, n as u32), None);
-        // Fuera de la banda y los bordes exactos.
-        assert_eq!(indicator_hit(-1, 0, n as u32), None);
-        assert_eq!(indicator_hit(fg.x - 1, fg.y, n as u32), None);
-        assert_eq!(indicator_hit(0, INDICATOR_H_U * n, n as u32), None);
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
 // Fila 7: teclas y menú
 // ---------------------------------------------------------------------------------------------
 
@@ -607,7 +549,7 @@ fn ppp_multiples_of_0_05() -> impl Iterator<Item = f32> {
 
 #[test]
 fn property_3_window_minimums_at_the_five_ppp_and_the_60_percent_criterion() {
-    for (ppp, height_2) in PPPS.into_iter().zip([322.0, 257.6, 429.33, 322.0, 322.0]) {
+    for (ppp, height_2) in PPPS.into_iter().zip([313.0, 250.4, 417.33, 313.0, 313.0]) {
         assert!(
             (min_window_height_pt(ppp) - height_2).abs() < 0.01,
             "alto con {ppp}: {}",
@@ -623,38 +565,16 @@ fn property_3_window_minimums_at_the_five_ppp_and_the_60_percent_criterion() {
 }
 
 #[test]
-fn property_3_the_indexed_block_measures_241_n_and_the_minimum_height_follows_the_formula() {
+fn property_3_the_indexed_block_measures_308_n_and_the_minimum_height_follows_the_formula() {
     for ppp in ppp_multiples_of_0_05() {
         let n = i64::from(text_scale(ppp));
-        assert_eq!(block_height_px(Mode::Indexed, n as u32), 241 * n);
-        let height_2 = ((20 + 16 + 286) * n) as f32 / ppp;
+        assert_eq!(block_height_px(Mode::Indexed, n as u32), 308 * n);
+        let height_2 = ((20 + 16 + 277) * n) as f32 / ppp;
         assert!(
             (min_window_height_pt(ppp) - height_2).abs() < 0.01,
             "ppp {ppp}"
         );
         assert!(min_window_height_pt(ppp) <= 432.0 + 0.01, "alto con {ppp}");
         assert!(min_window_width_pt(ppp) <= 683.0, "ancho con {ppp}");
-    }
-}
-
-#[test]
-fn property_3_each_indicator_measure_is_an_integer_of_pixels_multiple_of_n() {
-    for ppp in ppp_multiples_of_0_05() {
-        let n = text_scale(ppp);
-        let k = i64::from(n);
-        let (fg, bg) = indicator_rects(n);
-        for r in [fg, bg] {
-            for v in [r.x, r.y, r.width, r.height] {
-                assert_eq!(v % k, 0, "{r:?} con n = {n}");
-            }
-        }
-    }
-}
-
-#[test]
-fn property_3_the_edges_of_the_mockup_include_those_of_the_band() {
-    let edges = palette_grid::edges_u();
-    for v in [0, INDICATOR_H_U, SEPARATOR_Y_U, GRID_Y_U, GRID_X_U] {
-        assert!(edges.contains(&v), "falta {v}");
     }
 }

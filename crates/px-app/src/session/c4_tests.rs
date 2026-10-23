@@ -83,7 +83,6 @@ fn pick(session: &mut Session, once: &DropperOnce, button: Role, index: u8) {
 }
 
 #[test]
-#[ignore = "C4: pending the role of the one-use dropper"]
 fn row_5_the_color_goes_to_the_role_of_the_bar_with_either_button_and_nothing_else_changes() {
     for (bar, other) in [
         (Role::Background, Role::Foreground),
@@ -128,7 +127,6 @@ fn row_5_the_color_goes_to_the_role_of_the_bar_with_either_button_and_nothing_el
 }
 
 #[test]
-#[ignore = "C4: pending the role of the one-use dropper"]
 fn row_5_choosing_another_tool_cancels_it_and_with_i_the_button_decides() {
     let mut once = DropperOnce::new();
     once.arm(Tool::Pencil, Role::Background);
@@ -197,7 +195,6 @@ fn row_6_a_commit_to_the_edited_role_is_one_step_in_indexed_and_none_in_slots() 
 // ---------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the swap action"]
 fn the_swap_action_swaps_the_two_colors_without_history_and_the_editor_follows() {
     let mut session = session();
     session.bar_right_click(Role::Background);
@@ -263,7 +260,6 @@ fn the_swap_action_swaps_the_two_colors_without_history_and_the_editor_follows()
 }
 
 #[test]
-#[ignore = "C4: pending the memory of the model of the sliders"]
 fn the_model_of_the_sliders_lasts_the_session() {
     let mut session = session();
     assert_eq!(session.slider_mode, SliderMode::Rgb, "RGB by default");
@@ -342,7 +338,6 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    #[ignore = "C4: pending the square and the bars"]
     fn property_4_a_gesture_is_one_step_and_the_document_is_intact_while_it_lasts(
         gestures in prop::collection::vec(gesture(), 1..16),
     ) {

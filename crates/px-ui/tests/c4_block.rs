@@ -51,7 +51,6 @@ fn rect_u(r: (i64, i64, i64, i64), n: i64) -> ScreenRect {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the geometry of the color block"]
 fn row_1_the_tail_the_editor_and_the_blocks_measure_what_the_table_says() {
     assert_eq!(GRID_Y_U, 4);
     assert_eq!((FIELD_Y_U, FIELD_W_U, FIELD_H_U), (42, 69, 18));
@@ -81,7 +80,6 @@ fn row_1_the_tail_the_editor_and_the_blocks_measure_what_the_table_says() {
 }
 
 #[test]
-#[ignore = "C4: pending the geometry of the color block"]
 fn row_1_the_minimum_window_and_the_rows_of_the_grid_seen_in_it() {
     for (ppp, height) in PPPS
         .into_iter()
@@ -121,7 +119,6 @@ fn row_1_the_minimum_window_and_the_rows_of_the_grid_seen_in_it() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the geometry of the color block"]
 fn row_2_the_cells_and_fills_are_whole_and_the_click_falls_in_the_cell_without_dead_gaps() {
     assert!(contrast_ratio(ACCENT, SURFACE_1) >= 3.0, "the 2 u border");
     for cols in [COLUMN_MIN_COLS, 16, 23] {
@@ -197,7 +194,6 @@ fn text_width_px(text: &str, ppp: f32) -> f32 {
 }
 
 #[test]
-#[ignore = "C4: pending the geometry of the color block"]
 fn row_3_the_longest_text_fits_in_the_fill_of_the_bar_at_the_minimum_column_and_the_five_scales() {
     for ppp in PPPS {
         let n = text_scale(ppp);
@@ -218,7 +214,6 @@ fn row_3_the_longest_text_fits_in_the_fill_of_the_bar_at_the_minimum_column_and_
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the geometry of the color block"]
 fn the_square_the_two_bars_and_the_selector_fit_the_column_of_the_open_editor() {
     assert_eq!(wide_cols(COLUMN_MIN_COLS, true), COLUMN_EDITOR_COLS);
     assert_eq!(column_width_u(COLUMN_EDITOR_COLS), 233);
@@ -258,7 +253,6 @@ fn the_square_the_two_bars_and_the_selector_fit_the_column_of_the_open_editor() 
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "C4: pending the geometry of the color block"]
 fn row_12_the_bars_the_field_and_the_icons_do_not_overlap_in_any_column_width() {
     for cols in [COLUMN_MIN_COLS, 16, 23] {
         let width = panel_width_u(cols);
@@ -307,7 +301,6 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    #[ignore = "C4: pending the geometry of the color block"]
     fn property_2_every_measure_is_whole_fits_the_column_and_does_not_overlap(
         step in 0u32..=60,
         mode in prop::sample::select(MODES.to_vec()),
@@ -321,7 +314,14 @@ proptest! {
         let k = i64::from(n);
         let cols = COLUMN_MIN_COLS + extra_cols;
         let width = column_width_u(cols);
-        let height = min_panel_height_px(n) + extra_h;
+        // With the editor open the block is taller than the minimum panel: it only stops scrolling
+        // from its own height.
+        let base = if open {
+            block_height_px(mode, n)
+        } else {
+            min_panel_height_px(n)
+        };
+        let height = base + extra_h;
         let layout = if open {
             panel_layout(mode, height, n, 0)
         } else {
@@ -403,7 +403,6 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
     #[test]
-    #[ignore = "C4: pending the new texts of the bars"]
     fn property_3_the_text_of_the_bar_is_the_one_of_the_decision_and_has_contrast(
         r in any::<u8>(), g in any::<u8>(), b in any::<u8>(), a in any::<u8>(),
         index in any::<u8>(),
