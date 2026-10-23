@@ -33,10 +33,10 @@ pub enum PaletteEditError {
         len: u16,
         palette_len: usize,
     },
-    /// `ResizePalette` con una longitud de 0 o de más de 256.
+    /// `ResizePalette` with a length of 0 or more than 256.
     BadLength { len: u16 },
-    /// `ResizePalette` que recorta con algún píxel de alguna celda usando una entrada que sobra y
-    /// sin `into`.
+    /// `ResizePalette` that cuts with some pixel of some cell using an entry that is left over and
+    /// without `into`.
     NoDestination,
 }
 
@@ -120,12 +120,12 @@ pub(crate) enum PaletteStep {
     },
     /// Rotación de `len` entradas desde `start`, `k` posiciones hacia índices mayores.
     Rotate { start: u8, len: u16, k: u16 },
-    /// La paleta crece `count` entradas negras opacas (`ResizePalette` hacia arriba).
+    /// The palette grows by `count` opaque black entries (`ResizePalette` upwards).
     Grow { count: u16 },
-    /// La paleta se recorta a `len` entradas (`ResizePalette` hacia abajo): los píxeles `>= len`
-    /// pasan a `into`. Guarda lo que hace falta para deshacer: los colores quitados, el índice
-    /// transparente anterior y, por cada celda con píxeles afectados, qué píxeles eran y su
-    /// índice anterior.
+    /// The palette is cut to `len` entries (`ResizePalette` downwards): the pixels `>= len`
+    /// move to `into`. It keeps what undoing needs: the removed colors, the previous
+    /// transparent index and, for each cell with affected pixels, which pixels they were and their
+    /// previous index.
     Shrink {
         len: u8,
         into: u8,
@@ -135,8 +135,8 @@ pub(crate) enum PaletteStep {
     },
 }
 
-/// Lo que deshacer un recorte necesita de una celda: una máscara de los píxeles afectados (un
-/// bit por píxel) y, en orden, el índice que tenía cada uno.
+/// What undoing a cut needs from a cell: a mask of the affected pixels (one
+/// bit per pixel) and, in order, the index each one had.
 #[derive(Clone, Debug)]
 pub(crate) struct CellUndo {
     mask: Vec<u64>,
@@ -144,7 +144,7 @@ pub(crate) struct CellUndo {
 }
 
 impl PaletteStep {
-    /// Cuántas entradas agranda la paleta deshacer el paso (huecos que hay que reservar antes).
+    /// How many entries undoing the step grows the palette by (slots to reserve beforehand).
     pub(crate) fn growth_on_undo(&self) -> usize {
         match self {
             PaletteStep::Remove { .. } => 1,
@@ -153,7 +153,7 @@ impl PaletteStep {
         }
     }
 
-    /// Cuántas entradas agranda la paleta aplicar o rehacer el paso.
+    /// How many entries applying or redoing the step grows the palette by.
     pub(crate) fn growth_on_redo(&self) -> usize {
         match self {
             PaletteStep::Append { .. } => 1,
@@ -263,7 +263,7 @@ impl PaletteStep {
             }
             PaletteStep::Grow { count } => {
                 let len = image.palette().map_or(0, Palette::len);
-                // Los píxeles no cambiaron al crecer: ninguno usa las entradas que se quitan.
+                // The pixels did not change on growing: none uses the entries that are removed.
                 image.truncate_palette(len.saturating_sub(usize::from(*count)).max(1), 0);
             }
             PaletteStep::Shrink {
@@ -397,7 +397,7 @@ pub(crate) fn check(image: &Image, command: &Command) -> Result<bool, PaletteEdi
             if new_len == len {
                 return Ok(false);
             }
-            // Recortando, el destino tiene que existir en la paleta nueva.
+            // When cutting, the target must exist in the new palette.
             if new_len < len
                 && let Some(into) = into
             {
@@ -544,10 +544,10 @@ pub(crate) fn build(
     }
 }
 
-/// Construye el paso de un recorte a `new_len` entradas (menos que la paleta actual). Todo se
-/// reserva aquí: los colores quitados y, por cada celda con píxeles afectados, su máscara y sus
-/// índices anteriores. `NoDestination` si una celda del documento (no la plantilla interna) tiene
-/// píxeles que sobran y no hay `into`.
+/// Builds the step of a cut to `new_len` entries (fewer than the current palette). Everything is
+/// reserved here: the removed colors and, for each cell with affected pixels, its mask and its
+/// previous indices. `NoDestination` if a cell of the document (not the internal template) has
+/// pixels left over and there is no `into`.
 fn build_shrink(
     images: &[(ImageId, &Image)],
     palette: &Palette,
@@ -564,7 +564,7 @@ fn build_shrink(
         if count == 0 {
             continue;
         }
-        // La primera es la plantilla interna del lienzo: sin destino, sus píxeles pasan a 0.
+        // The first is the internal template of the canvas: without a target its pixels go to 0.
         if into.is_none() && index > 0 {
             return Err(no_destination());
         }

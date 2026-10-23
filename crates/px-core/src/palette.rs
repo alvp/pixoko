@@ -125,12 +125,12 @@ impl Palette {
         best.map(|(_, index)| index)
     }
 
-    /// Hace sitio para `count` entradas más sin asignar después; `false` si no hay memoria.
+    /// Makes room for `count` more entries without allocating later; `false` if there is no memory.
     pub(crate) fn reserve(&mut self, count: usize) -> bool {
         self.colors.try_reserve(count).is_ok()
     }
 
-    /// Añade al final `count` entradas del color `color`. `false`, sin tocar nada, si no caben.
+    /// Appends `count` entries of color `color`. `false`, touching nothing, if they do not fit.
     pub(crate) fn extend(&mut self, count: usize, color: Rgba) -> bool {
         if self.colors.len().saturating_add(count) > Palette::MAX_COLORS {
             return false;
@@ -139,8 +139,8 @@ impl Palette {
         true
     }
 
-    /// Recorta la paleta a `len` entradas (como mucho su longitud). Si el índice transparente era
-    /// `len` o más, deja de haberlo.
+    /// Cuts the palette to `len` entries (at most its length). If the transparent index was
+    /// `len` or more, there is none any more.
     pub(crate) fn truncate(&mut self, len: usize) {
         self.colors.truncate(len);
         if self
@@ -151,8 +151,8 @@ impl Palette {
         }
     }
 
-    /// Deshace `truncate`: devuelve al final los colores `removed` y fija el índice transparente
-    /// tal cual se da. `false`, sin tocar nada, si no caben o el índice no existiría después.
+    /// Undoes `truncate`: gives back at the end the colors `removed` and sets the transparent index
+    /// as given. `false`, touching nothing, if they do not fit or the index would not exist after.
     pub(crate) fn restore(&mut self, removed: &[Rgba], transparent: Option<u8>) -> bool {
         let len = self.colors.len() + removed.len();
         if len > Palette::MAX_COLORS || transparent.is_some_and(|t| usize::from(t) >= len) {

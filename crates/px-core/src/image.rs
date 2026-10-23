@@ -197,24 +197,24 @@ impl Image {
         palette.pop().is_some()
     }
 
-    /// Hace sitio para `count` entradas de paleta más sin asignar después.
+    /// Makes room for `count` more palette entries without allocating later.
     pub(crate) fn reserve_palette_slots(&mut self, count: usize) -> bool {
         self.palette
             .as_mut()
             .is_some_and(|palette| palette.reserve(count))
     }
 
-    /// Añade al final `count` entradas negras opacas. Los píxeles y el índice transparente no
-    /// cambian.
+    /// Appends `count` opaque black entries. The pixels and the transparent index do not
+    /// change.
     pub(crate) fn extend_palette(&mut self, count: usize) -> bool {
         self.palette
             .as_mut()
             .is_some_and(|palette| palette.extend(count, Rgba::opaque(0, 0, 0)))
     }
 
-    /// Recorta la paleta a `len` entradas (de 1 a la longitud actual): todo píxel `>= len` pasa a
-    /// `into` (que tiene que ser `< len`) y el índice transparente, si cae fuera, se quita. Con
-    /// argumentos inválidos devuelve `false` sin tocar nada.
+    /// Cuts the palette to `len` entries (from 1 to the current length): every pixel `>= len` moves to
+    /// `into` (which must be `< len`) and the transparent index, if it falls outside, is dropped. With
+    /// invalid arguments it returns `false` and touches nothing.
     pub(crate) fn truncate_palette(&mut self, len: usize, into: u8) -> bool {
         let Some(palette) = self.palette.as_mut() else {
             return false;
@@ -231,9 +231,9 @@ impl Image {
         true
     }
 
-    /// Deshace `truncate_palette`: devuelve los colores `removed`, fija el índice transparente
-    /// anterior y vuelve los píxeles marcados en `mask` (un bit por píxel) a los valores de
-    /// `previous`, en orden. `mask` y `previous` vacíos: ningún píxel cambió.
+    /// Undoes `truncate_palette`: gives back the colors `removed`, sets the previous transparent
+    /// index and returns the pixels marked in `mask` (one bit per pixel) to the values of
+    /// `previous`, in order. Empty `mask` and `previous`: no pixel changed.
     pub(crate) fn restore_truncated_palette(
         &mut self,
         removed: &[Rgba],
@@ -264,7 +264,7 @@ impl Image {
         true
     }
 
-    /// Número de píxeles con un valor `>= len`.
+    /// Number of pixels with a value `>= len`.
     pub(crate) fn count_pixels_from(&self, len: usize) -> usize {
         self.data
             .iter()
@@ -272,9 +272,9 @@ impl Image {
             .count()
     }
 
-    /// Marca en `mask` (un bit por píxel, el bit 0 de la palabra 0 es el primero) los píxeles con
-    /// un valor `>= len` y copia sus valores, en orden, en `previous`. `false` si no hay sitio en
-    /// `mask`; `previous` tiene que tener capacidad para todos (no reserva).
+    /// Marks in `mask` (one bit per pixel, bit 0 of word 0 is the first) the pixels with
+    /// a value `>= len` and copies their values, in order, into `previous`. `false` if there is no room in
+    /// `mask`; `previous` must have capacity for all of them (it does not reserve).
     pub(crate) fn fill_mask_from(
         &self,
         len: usize,

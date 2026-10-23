@@ -150,7 +150,7 @@ struct App {
     notice: Option<Notice>,
     /// What the palette panel asked the status line to show in the last frame.
     panel_hint: Option<String>,
-    /// El recorte que espera la respuesta del diálogo de la transparente (longitud y destino).
+    /// The cut that waits for the answer of the dialog of the transparent entry (length and target).
     transparent_loss: Option<(u16, Option<u8>)>,
     /// Confirmación por repetición al abrir o cerrar con cambios sin guardar.
     confirm: Confirm,
@@ -375,7 +375,7 @@ impl App {
                 {
                     return target;
                 }
-                // El asa, la barra de color y el campo bajo la rejilla.
+                // The handle, the color bar and the field under the grid.
                 if let Some(target) = px_ui::palette_panel::panel_info(ctx).help {
                     return target;
                 }
@@ -1263,8 +1263,8 @@ impl App {
         }
     }
 
-    /// Lo que sigue a pedir un cambio de la longitud de la paleta: avisa, refresca o abre el
-    /// diálogo de la transparente que se pierde.
+    /// What follows asking for a change of the palette length: notice, refresh or the dialog of
+    /// the transparent entry that would be lost.
     fn after_resize(
         &mut self,
         ctx: &egui::Context,
@@ -1446,7 +1446,7 @@ impl App {
             && let Reaction::Accepted(values) = &reaction
             && let Some(len) = length_from_values(values)
         {
-            // Aceptar es soltar el asa en esa longitud.
+            // Accepting is dropping the handle at that length.
             let result = self.session.request_resize(len);
             self.after_resize(ctx, result);
         }
@@ -1612,13 +1612,13 @@ impl eframe::App for App {
                     _ => false,
                 };
                 match op {
-                    // Soltar el asa: la sesión decide si estira, recorta, deja pendiente o pide
-                    // confirmar la pérdida de la transparente.
+                    // Dropping the handle: the session decides whether to stretch, cut, leave it pending or ask
+                    // to confirm the loss of the transparent entry.
                     PaletteOp::ResizeTo { len } => {
                         let result = self.session.request_resize(len);
                         self.after_resize(&ctx, result);
                     }
-                    // `Confirmar` del recorte pendiente.
+                    // `Confirmar` of the pending cut.
                     PaletteOp::Resize { .. } => {
                         let result = self.session.confirm_resize();
                         self.after_resize(&ctx, result);

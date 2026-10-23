@@ -265,11 +265,11 @@ pub enum Command {
     /// Quita la entrada `index`; los píxeles que la usan pasan a `into` (los dos, índices
     /// antes de quitar). Si `index` era el índice transparente, deja de haberlo.
     RemovePaletteEntry { image: ImageId, index: u8, into: u8 },
-    /// Cambia la longitud de la paleta del documento (la del lienzo y la de todas las celdas con
-    /// imagen) en un solo paso, `len` en `1..=256` (specs/ui-palette-handle.md). Crecer añade
-    /// entradas negras opacas al final (píxeles e índice transparente no cambian, `into` se
-    /// ignora); recortar quita las de `len` en adelante, pasa a `into` todo píxel que las usaba y
-    /// quita el índice transparente si caía fuera. Con la misma longitud no cambia nada.
+    /// Changes the length of the palette of the document (the canvas's and that of every cell with an
+    /// image) in a single step, `len` in `1..=256` (specs/ui-palette-handle.md). Growing appends
+    /// opaque black entries at the end (pixels and transparent index do not change, `into` is
+    /// ignored); cutting removes those from `len` on, moves to `into` every pixel that used them and
+    /// drops the transparent index if it fell outside. With the same length nothing changes.
     ResizePalette {
         image: ImageId,
         len: u16,
@@ -1652,7 +1652,7 @@ impl Document {
         Ok(true)
     }
 
-    /// Hace sitio en la paleta del lienzo y en la de cada celda con imagen para `count` entradas más
+    /// Makes room in the canvas palette and in that of every cell with an image for `count` more entries
     /// (`OutOfMemory` si no hay). Lo ya reservado se queda: no estorba.
     fn reserve_palette_slots(&mut self, count: usize) -> Result<(), DocumentError> {
         let reserved = self.canvas.template.reserve_palette_slots(count)

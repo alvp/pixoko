@@ -1,9 +1,9 @@
-//! Los textos de la unidad C3 (specs/ui-palette-handle.md, condición 12), en un fichero aparte para
-//! revisarlos: palabras propias, solo datos, preparados para traducir en el hito 8. Son la ayuda
-//! del asa, de la barra de color y de las tres acciones de `Imagen → …` de la paleta, las
-//! etiquetas del menú, los avisos, los textos de la barra de estado y los diálogos de tamaño y de
-//! la transparente. Todo dentro de `INTERFACE_CHARSET`; la ayuda con nombre <= 20 caracteres y
-//! descripción <= 8 líneas de 42 columnas (lo comprueba una prueba).
+//! The texts of unit C3 (specs/ui-palette-handle.md, condition 12), in a file of their own to be
+//! reviewed: own words, data only, ready to translate in milestone 8. They are the help of the
+//! handle, of the color bar and of the three `Imagen → …` palette actions, the menu labels,
+//! the notices, the texts of the status bar and the dialogs of the size and of the transparent
+//! entry. Everything inside `INTERFACE_CHARSET`; the help with name <= 20 characters and
+//! description <= 8 lines of 42 columns (a test checks it).
 
 use crate::help_texts::HelpEntry;
 
@@ -18,8 +18,8 @@ const fn entry(key: &'static str, name: &'static str, description: &'static str)
     }
 }
 
-/// Las 5 entradas (van detrás de la del editor de color): el asa y la barra, que no son acciones
-/// (se llega con `F1` sobre ellas), y las tres acciones del menú `Imagen`.
+/// The 5 entries (after the one of the color editor): the handle and the bar, which are not actions
+/// (`F1` over them reaches them), and the three actions of the `Imagen` menu.
 pub(crate) const HELP_PALETTE_ES: [HelpEntry; 5] = [
     entry(
         "palette.handle",
@@ -48,28 +48,28 @@ pub(crate) const HELP_PALETTE_ES: [HelpEntry; 5] = [
     ),
 ];
 
-// Menú `Imagen`.
+// `Imagen` menu.
 pub(crate) const MENU_ADD_ENTRY: &str = "Añadir entrada";
 pub(crate) const MENU_REMOVE_ENTRY: &str = "Quitar entrada";
 pub(crate) const MENU_PALETTE_SIZE: &str = "Tamaño de la paleta…";
 
-// Barra de estado.
+// Status bar.
 pub(crate) const HANDLE_HINT: &str = "asa de la paleta: arrastra para añadir o quitar colores";
 pub(crate) const WARN_LOSES_TRANSPARENT: &str = "aviso: se pierde la transparente";
 pub(crate) const WARN_PIXELS_OPAQUE: &str = "aviso: sus píxeles quedan opacos";
 pub(crate) const WARN_DESTINATION_TRANSPARENT: &str = "aviso: destino transparente";
-/// Las formas cortas, para cuando el texto entero no cabe en las 66 columnas.
+/// The short forms, for when the whole text does not fit in 66 columns.
 pub(crate) const WARN_PIXELS_OPAQUE_SHORT: &str = "aviso: píxeles opacos";
 pub(crate) const WARN_DESTINATION_TRANSPARENT_SHORT: &str = "aviso: dest. transp.";
-/// Aviso de 5 s al cancelarse un recorte pendiente porque el documento cambió.
+/// 5 s notice when a pending cut is cancelled because the document changed.
 pub const RESIZE_CANCELLED: &str = "recorte cancelado: el documento cambió";
 
-/// El diálogo del tamaño de la paleta: título, botón, rótulo del campo.
+/// The palette size dialog: title, button, label of the field.
 pub const PALETTE_SIZE_TITLE: &str = "Tamaño de la paleta";
 pub const PALETTE_SIZE_ACCEPT: &str = "Aceptar";
 pub const PALETTE_SIZE_CANCEL: &str = "Cancelar";
 pub const PALETTE_SIZE_LABEL: &str = "Colores";
 
-/// El diálogo de la transparente que se pierde con varias capas.
+/// The dialog of the transparent entry that is lost with several layers.
 pub const TRANSPARENT_LOSS_TITLE: &str = "Quitar la transparente";
 pub const TRANSPARENT_LOSS_TEXT: &str = "la entrada transparente se elimina; con varias capas no podrás añadir capas ni pintar en celdas vacías hasta fijar otra";

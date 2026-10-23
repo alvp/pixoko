@@ -15,7 +15,7 @@ use crate::theme::NOTICE_PREFIX;
 pub const REMOVAL_CANCELLED_NOTICE: &str = "quitar cancelado: el documento cambió";
 /// Aviso de 5 s al rotar una paleta o un rango de una sola entrada.
 pub const NOTHING_TO_ROTATE_NOTICE: &str = "nada que rotar: una sola entrada";
-/// Aviso de 5 s al cancelarse un recorte pendiente porque el documento cambió.
+/// 5 s notice when a pending cut is cancelled because the document changed.
 pub const RESIZE_CANCELLED_NOTICE: &str = RESIZE_CANCELLED;
 
 /// Una edición de la paleta pedida desde el panel.
@@ -39,13 +39,13 @@ pub enum PaletteOp {
     SetTransparent {
         index: Option<u8>,
     },
-    /// Soltar el asa en una longitud distinta: la sesión decide si estira, recorta ya, deja el
-    /// recorte pendiente o pide confirmar la pérdida de la transparente.
+    /// Dropping the handle at a different length: the session decides whether to stretch, cut at once,
+    /// leave the cut pending or ask to confirm the loss of the transparent entry.
     ResizeTo {
         len: u16,
     },
-    /// Cambia la longitud de la paleta ya decidida (`Confirmar` del recorte pendiente, o el
-    /// diálogo aceptado): `into` es el destino de los píxeles de lo que se recorta.
+    /// Changes the palette length, already decided (`Confirmar` of the pending cut, or the accepted
+    /// dialog): `into` is the target of the pixels of what is cut.
     Resize {
         len: u16,
         into: Option<u8>,
@@ -119,7 +119,7 @@ pub fn choice_after(op: &PaletteOp, active: u8, old_len: usize) -> u8 {
     }
 }
 
-/// La entrada `entry` tras fijar la paleta en `len` entradas: la misma, o la última si cae fuera.
+/// The entry `entry` after setting the palette to `len` entries: the same, or the last if it falls outside.
 fn resized(entry: u8, len: u16) -> u8 {
     let last = len.saturating_sub(1);
     u8::try_from(u16::from(entry).min(last)).unwrap_or(u8::MAX)
@@ -446,8 +446,8 @@ pub struct Removal {
     pub into: Option<u8>,
 }
 
-/// Estado del panel entre fotogramas para estas operaciones: arrastre de muestra, arrastre del
-/// asa, quita pendiente, recorte pendiente y rango.
+/// State of the panel between frames for these operations: swatch drag, handle drag, pending
+/// removal, pending cut and range.
 #[derive(Debug, Default)]
 pub struct PaletteOps {
     drag: Option<MoveDrag>,
@@ -493,7 +493,7 @@ impl PaletteOps {
         stale
     }
 
-    /// Un arrastre del asa, solo armado o ya en marcha.
+    /// A drag of the handle, only armed or already under way.
     pub fn handle_state(&self) -> Option<&HandleDrag> {
         self.handle.as_ref()
     }
@@ -502,12 +502,12 @@ impl PaletteOps {
         self.handle.as_mut()
     }
 
-    /// Pulsar el asa de una paleta de `len` entradas.
+    /// Pressing the handle of a palette of `len` entries.
     pub fn begin_handle(&mut self, len: usize, at: (i64, i64)) {
         self.handle = Some(HandleDrag::press(len, at));
     }
 
-    /// Termina el arrastre del asa (soltar) y dice cómo acabó.
+    /// Ends the drag of the handle (release) and says how it ended.
     pub fn end_handle(&mut self) -> Option<HandleEnd> {
         self.handle.take().map(HandleDrag::release)
     }
@@ -516,18 +516,18 @@ impl PaletteOps {
         self.handle = None;
     }
 
-    /// El recorte pendiente de destino y de `Confirmar`, si lo hay.
+    /// The cut pending a target and `Confirmar`, if there is one.
     pub fn resize_pending(&self) -> Option<PendingResize> {
         self.resize.map(|(pending, _)| pending)
     }
 
-    /// Deja pendiente un recorte, atado al estado del documento de la última `sync`.
+    /// Leaves a cut pending, tied to the state of the document of the last `sync`.
     pub fn begin_resize(&mut self, pending: PendingResize) {
         self.resize = Some((pending, self.doc_state));
     }
 
-    /// Elige el destino del recorte pendiente. `false` sin recorte o con una muestra que se
-    /// recorta (la que sobra no responde).
+    /// Chooses the target of the pending cut. `false` without a cut or with a swatch that is
+    /// cut off (the ones left over do not answer).
     pub fn set_resize_destination(&mut self, cell: u8) -> bool {
         match &mut self.resize {
             Some((pending, _)) if u16::from(cell) < pending.len => {
@@ -538,22 +538,22 @@ impl PaletteOps {
         }
     }
 
-    /// Cancela el recorte pendiente sin avisar (`Cancelar`, `Esc` o al aplicarlo).
+    /// Cancels the pending cut without a notice (`Cancelar`, `Esc` or on applying it).
     pub fn cancel_resize(&mut self) {
         self.resize = None;
     }
 
-    /// Un recorte pendiente se canceló por un cambio del documento: se dice una sola vez.
+    /// A pending cut was cancelled by a change of the document: said only once.
     pub fn take_resize_cancelled(&mut self) -> bool {
         std::mem::take(&mut self.resize_cancelled)
     }
 
-    /// Deja anotado que se canceló un recorte pendiente (al cambiar de documento).
+    /// Notes that a pending cut was cancelled (on changing document).
     pub fn flag_resize_cancelled(&mut self) {
         self.resize_cancelled = true;
     }
 
-    /// Hay una quita o un recorte pendientes de `Confirmar`.
+    /// There is a removal or a cut pending `Confirmar`.
     pub fn confirming(&self) -> bool {
         self.removal.is_some() || self.resize.is_some()
     }
@@ -617,8 +617,8 @@ impl PaletteOps {
         self.removal = None;
     }
 
-    /// Hay un arrastre de verdad (pasó el umbral), de una muestra o del asa; el botón solo
-    /// armado no cuenta.
+    /// There is a real drag (past the threshold), of a swatch or of the handle; the button only
+    /// armed does not count.
     pub fn busy(&self) -> bool {
         self.drag.as_ref().is_some_and(MoveDrag::dragging)
             || self.handle.as_ref().is_some_and(HandleDrag::dragging)
