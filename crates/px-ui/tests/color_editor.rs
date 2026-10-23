@@ -1426,9 +1426,11 @@ fn slider_pressing_on_the_track_sets_the_value_moving_changes_it_and_releasing_g
             f.there_is_fill(Color32::from_rgb(255, 255, 0)),
             "ppp {ppp}: la muestra se pinta en amarillo"
         );
+        // The bar under the grid keeps showing the stored color (the green) while the preview
+        // is in the swatch.
         assert!(
-            !f.there_is_fill(Color32::from_rgb(0, 255, 0)),
-            "ppp {ppp}: ya no se pinta el verde guardado"
+            f.there_is_fill(Color32::from_rgb(0, 255, 0)),
+            "ppp {ppp}: la barra sigue con el verde guardado"
         );
 
         // Soltar da un commit, una sola vez.

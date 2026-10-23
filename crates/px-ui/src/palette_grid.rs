@@ -275,6 +275,33 @@ impl Grid {
         Some(index.min(self.count.checked_sub(1)?))
     }
 
+    /// New length of the palette that the point `(x, y)` asks for when the handle is dragged: the
+    /// index of the cell under it (the cell of the handle is the one after the last entry),
+    /// clamped to `1..=256`. Like [`Grid::drop_index`] each cell captures its whole step (half a
+    /// gap on each side), but the zone is **every visible row of the grid** (`count` cells, with
+    /// or without a swatch in them) and the index is not clamped to the last cell. Outside the
+    /// zone, `None`.
+    pub fn len_at(&self, x: i64, y: i64) -> Option<u16> {
+        let half = DROP_HALF_GAP_U * self.n;
+        let pitch = PITCH_U * self.n;
+        let (x, y) = (x.checked_add(half)?, y.checked_add(half)?);
+        if x < 0 || y < 0 {
+            return None;
+        }
+        let col = usize::try_from(x / pitch).ok()?;
+        let shown = usize::try_from(y / pitch).ok()?;
+        let rows_left = total_rows_cols(self.count, self.columns).saturating_sub(self.first_row);
+        if col >= self.columns || shown >= self.visible_rows.min(rows_left) {
+            return None;
+        }
+        let index = self
+            .first_row
+            .checked_add(shown)?
+            .checked_mul(self.columns)?
+            .checked_add(col)?;
+        u16::try_from(index.clamp(1, 256)).ok()
+    }
+
     /// Swatch under the point `(x, y)`, or `None` in a gap, outside the grid, in a row
     /// that is not seen or without a swatch.
     pub fn index_at(&self, x: i64, y: i64) -> Option<usize> {

@@ -184,7 +184,7 @@ fn the_sliders_start_at_y_4_and_nothing_goes_before_or_after_them() {
     let expected_2 = [
         (Mode::Indexed, 96),
         (Mode::Rgba, 96),
-        (Mode::GrayAlpha, 18),
+        (Mode::GrayAlpha, 22),
         (Mode::Gray, 4),
     ];
     for (mode_2, last_2) in expected_2 {
@@ -1322,7 +1322,7 @@ fn the_button_edges_fall_on_whole_physical_pixels() {
 // botón `Transparent` es el último icono (el cuarto desde C3); las cifras de alturas, ventana y
 // `panel_layout` están en las pruebas adaptadas de arriba.
 
-const BUTTONS_U_21: [PaletteButton; 7] = ALL_THE_BUTTONS;
+const BUTTONS_U_21: [PaletteButton; 6] = ALL_THE_BUTTONS;
 
 #[test]
 fn row_1_u21_the_icon_row_ends_the_64_u_tail_and_leaves_the_editor_at_114() {

@@ -82,6 +82,12 @@ pub enum AppAction {
     FlattenLayers,
     /// `File → Export flattened PNG…`: saves what is seen without touching the state of the document.
     ExportFlat,
+    /// `Imagen → Añadir entrada`: copies the chosen color to the end of the palette (no default key).
+    AddPaletteEntry,
+    /// `Imagen → Quitar entrada`: removes the chosen entry (no default key).
+    RemovePaletteEntry,
+    /// `Imagen → Tamaño de la paleta…`: opens a dialog with the exact length (no default key).
+    PaletteSize,
 }
 
 impl AppAction {
@@ -109,6 +115,16 @@ impl AppAction {
                 | AppAction::BackgroundColor
                 | AppAction::ShowHelp(_)
                 | AppAction::ShowShortcuts
+                | AppAction::PaletteSize
+        )
+    }
+
+    /// The actions of the `Imagen` menu that edit the palette (C3): they are blocked like any
+    /// change of the document and also with a pending removal or resize.
+    pub fn changes_palette(self) -> bool {
+        matches!(
+            self,
+            AppAction::AddPaletteEntry | AppAction::RemovePaletteEntry | AppAction::PaletteSize
         )
     }
 
@@ -225,7 +241,7 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && action.opens_dialog()
+    locks.removal && (action.opens_dialog() || action.changes_palette())
 }
 
 /// Whether a modal dialog can be opened: neither a gesture in progress, nor a pending removal, nor a file dialog,
@@ -267,6 +283,25 @@ pub fn layer_enabled(action: AppAction, nav: &LayerNav) -> bool {
         AppAction::MergeVisibleLayers | AppAction::FlattenLayers => nav.count > 1,
         _ => true,
     }
+}
+
+/// What the menu needs to know about the image to enable the palette actions (it is not part of
+/// [`UiState`]: the app passes it to `show_menu_full`). The default leaves everything enabled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PaletteNav {
+    /// The image is indexed: the only mode with a palette to edit.
+    pub indexed: bool,
+}
+
+impl Default for PaletteNav {
+    fn default() -> PaletteNav {
+        PaletteNav { indexed: true }
+    }
+}
+
+/// Whether the palette action is enabled for this image; what is not a palette action always is.
+pub fn palette_enabled(action: AppAction, nav: &PaletteNav) -> bool {
+    !action.changes_palette() || nav.indexed
 }
 
 /// What the interface needs to know to enable or disable the menu and the column.

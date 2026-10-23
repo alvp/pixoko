@@ -1086,9 +1086,9 @@ fn row_10_enabled_of_convert_mode_is_disabled_with_each_of_the_five_locks() {
 }
 
 #[test]
-fn row_10_the_image_dropdown_measures_131_u_and_the_view_one_208_the_widest() {
+fn row_10_the_image_dropdown_measures_166_u_and_the_view_one_208_the_widest() {
     for platform in PLATFORMS {
-        assert_eq!(popup_width_u(&menu_image(), platform), 131, "{platform:?}");
+        assert_eq!(popup_width_u(&menu_image(), platform), 166, "{platform:?}");
         let see = MENUS.iter().find(|m| m.title == "Ver").expect("Ver");
         assert_eq!(popup_width_u(see, platform), 208, "{platform:?}");
         assert!(

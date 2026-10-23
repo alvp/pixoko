@@ -1,30 +1,31 @@
-//! Geometry of the color editor, without egui types (specs/hito-2-editar-color.md), and of the row of
-//! palette icons (specs/ui-composition.md).
+//! Geometry of the color editor, without egui types (specs/hito-2-editar-color.md), of the tail under
+//! the grid (color bar, hexadecimal field and row of palette icons; specs/ui-palette-handle.md) and
+//! of the minimums of the window.
 //!
 //! The measures are constants in "interface pixels" `u` (`n = text_scale(ppp)` physical pixels
-//! each) from the top-left corner of the editor, which starts at `top_px` (anchored to the bottom of
-//! the panel). The functions work in physical pixels with `n`.
+//! each). The editor (separator and sliders) is measured from its top-left corner, which starts at
+//! `top_px` (anchored to the bottom of the panel); the bar, the field and the icons, from the top
+//! edge of the tail (`tail_top_px`), which hangs under the grid. The functions work in physical
+//! pixels with `n`.
 
 use px_core::Mode;
 
-use crate::chrome::{COLUMN_MIN_COLS, MENU_BAR_W_U, MENU_H_U, column_width_u};
+use crate::chrome::{COLUMN_MIN_COLS, MENU_BAR_W_U, MENU_H_U, column_width_u, head_u};
 use crate::color_edit::{Control, controls};
 use crate::dialog_layout::{DIALOG_W_U, MARGIN_U};
 use crate::icon_button::{BUTTON_U, GAP_U};
 use crate::icons::Icon;
+use crate::layers_panel::PANEL_H_U as LAYERS_PANEL_H_U;
 use crate::palette_grid::{GRID_Y_U, PITCH_U, TEXT_WIDTH_U, visible_rows_reserved};
 use crate::status::bar_height_px;
 use crate::text::text_scale;
 
 /// 1 u strip at the top of the editor.
 pub const SEPARATOR_Y_U: i64 = 0;
-/// Header: origin of the text.
-pub const HEADER_X_U: i64 = 4;
-pub const HEADER_Y_U: i64 = 4;
 /// Height of a row of text and of a slider.
 pub const ROW_H_U: i64 = 14;
-/// First row of sliders.
-pub const FIRST_ROW_Y_U: i64 = 22;
+/// First row of sliders: the editor has no header, only the separator above them.
+pub const FIRST_ROW_Y_U: i64 = 4;
 /// Gap between groups of sliders (RGB | HSL | A).
 pub const GROUP_GAP_U: i64 = 4;
 /// Inside a row: letter, track, thumb, value and active zone.
@@ -40,27 +41,33 @@ pub const VALUE_W_U: i64 = 21;
 /// Active zone of the row: from `HIT_X0_U` (included) to `HIT_X1_U` (excluded).
 pub const HIT_X0_U: i64 = 13;
 pub const HIT_X1_U: i64 = 201;
-/// Hexadecimal field.
+/// The color bar, from the top edge of the tail: 4 u from the left, the width of the text area and
+/// 16 u high.
+pub const BAR_X_U: i64 = 4;
+pub const BAR_Y_U: i64 = 0;
+pub const BAR_H_U: i64 = 16;
+/// Hexadecimal field, from the top edge of the tail (2 u under the bar).
 pub const FIELD_X_U: i64 = 4;
+pub const FIELD_Y_U: i64 = BAR_Y_U + BAR_H_U + 2;
 pub const FIELD_W_U: i64 = 69;
 pub const FIELD_H_U: i64 = 18;
 pub const FIELD_PAD_U: i64 = 3;
-/// Gap between blocks (controls, field and notice) and bottom margin.
+/// Bottom margin of the editor.
 pub const BLOCK_GAP_U: i64 = 4;
 /// Minimum width of the canvas in the window, in interface pixels
 /// (specs/hito-2-panel-ventana-baja.md).
 pub const MIN_CANVAS_WIDTH_U: i64 = 128;
-/// Lines of the notice.
-pub const NOTICE_LINES: i64 = 2;
 /// Buttons of the palette (indexed only; specs/interfaz-iconos.md, specs/ui-composition.md): a row
-/// of five 24 u icons (1 u gap inside a group and 8 u between groups: add and remove | rotate to one
-/// side and the other | transparent) or, with a pending removal, `Confirmar` and `Cancel` as text in
-/// their place (two 110 u buttons and a 5 u gap). Rows, height, origin, width of the two text
-/// buttons and gap between them, margin of the text inside the button and gap between groups of icons.
+/// of four 24 u icons (1 u gap inside a group and 8 u between groups: remove | rotate to one side
+/// and the other | transparent) or, with a pending removal or resize, `Confirmar` and `Cancel` as
+/// text in their place (two 110 u buttons and a 5 u gap). Rows, height, origin, width of the two
+/// text buttons and gap between them, margin of the text inside the button and gap between groups
+/// of icons.
 pub const BUTTON_ROWS: i64 = 1;
-/// The icon row sits under the grid, outside the editor (so it is visible with the editor closed):
-/// a 2 u gap above the buttons and 2 u below them.
+/// The icon row sits under the field, outside the editor (so it is visible with the editor closed):
+/// a 2 u gap above the buttons (after the field) and 2 u below them.
 pub const ICON_ROW_PAD_U: i64 = 2;
+pub const ICON_ROW_Y_U: i64 = FIELD_Y_U + FIELD_H_U + ICON_ROW_PAD_U;
 pub const ICON_ROW_H_U: i64 = BUTTON_ROWS * BUTTON_U + 2 * ICON_ROW_PAD_U;
 pub const BUTTON_H_U: i64 = BUTTON_U;
 pub const BUTTON_X_U: i64 = 4;
@@ -78,19 +85,24 @@ pub const TEXT_BUTTON_TEXT_Y_U: i64 = 1;
 /// Image modes: the height of the editor depends on them.
 const MODES: [Mode; 4] = [Mode::Rgba, Mode::Indexed, Mode::Gray, Mode::GrayAlpha];
 
-/// Height of the editor of the mode, in `u`: up to the end of the notice plus the bottom margin.
-/// It is the **only** place where it is worked out (specs/hito-2-panel-ventana-baja.md):
-/// everything else hangs from it.
+/// Height of the editor of the mode, in `u`: the separator, the sliders and the bottom margin. It
+/// is the **only** place where it is worked out (specs/hito-2-panel-ventana-baja.md): everything
+/// else hangs from it.
 pub fn editor_height_u(mode: Mode) -> i64 {
-    notice_y_u(mode) + NOTICE_LINES * ROW_H_U + BLOCK_GAP_U
+    let last_row = controls(mode)
+        .last()
+        .and_then(|last| control_row_u(mode, *last))
+        .unwrap_or(FIRST_ROW_Y_U);
+    last_row + ROW_H_U + BLOCK_GAP_U
 }
 
-/// Height of the icon row of the mode under the grid, in `u`: 0 if the mode has none.
-pub fn icons_height_u(mode: Mode) -> i64 {
+/// Height of the tail under the grid, in `u`: the bar and the field in every mode and, in indexed
+/// images, the icon row (64 u; 38 u in the others).
+pub fn tail_height_u(mode: Mode) -> i64 {
     if mode == Mode::Indexed {
-        ICON_ROW_H_U
+        ICON_ROW_Y_U + BUTTON_ROWS * BUTTON_U + ICON_ROW_PAD_U
     } else {
-        0
+        FIELD_Y_U + FIELD_H_U + ICON_ROW_PAD_U
     }
 }
 
@@ -104,7 +116,8 @@ pub fn buttons_height_u(mode: Mode) -> i64 {
 }
 
 /// Buttons of the palette. `Confirm` and `Cancel` (text) replace the whole icon row while there is
-/// a pending removal.
+/// a pending removal or resize. `Add` names the add operation (for `blocked_reason` and the menu
+/// action `Imagen → Añadir entrada`): since C3 it is not in the row.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaletteButton {
     Add,
@@ -129,20 +142,21 @@ pub fn palette_icon(button: PaletteButton) -> Option<Icon> {
     }
 }
 
-/// Rectangle `(x, y, width, height)` of the button in `u` from the top-left corner of the icon row.
-/// `None` in the modes without buttons.
+/// Rectangle `(x, y, width, height)` of the button in `u` from the top-left corner of the tail
+/// (the icons are at y = 38). `None` in the modes without buttons and for `Add`, which is not in
+/// the row.
 pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64, i64)> {
     if buttons_height_u(mode) == 0 {
         return None;
     }
-    let top = ICON_ROW_PAD_U;
-    let remove_x = BUTTON_X_U + BUTTON_U + GAP_U;
+    let top = ICON_ROW_Y_U;
+    let remove_x = BUTTON_X_U;
     let rotate_left_x = remove_x + BUTTON_U + ICON_GROUP_GAP_U;
     let rotate_right_x = rotate_left_x + BUTTON_U + GAP_U;
     let transparent_x = rotate_right_x + BUTTON_U + ICON_GROUP_GAP_U;
     let icon = |x| (x, top, BUTTON_U, BUTTON_H_U);
     Some(match button {
-        PaletteButton::Add => icon(BUTTON_X_U),
+        PaletteButton::Add => return None,
         PaletteButton::Remove => icon(remove_x),
         PaletteButton::RotateLeft => icon(rotate_left_x),
         PaletteButton::RotateRight => icon(rotate_right_x),
@@ -157,8 +171,9 @@ pub fn button_rect_u(mode: Mode, button: PaletteButton) -> Option<(i64, i64, i64
     })
 }
 
-/// Button under a point in physical pixels, relative to the top-left corner of the icon row.
-/// `removing`: there is a pending removal (only `Confirm` and `Cancel` hit; the icons are not seen).
+/// Button under a point in physical pixels, relative to the top-left corner of the tail.
+/// `removing`: there is a pending removal or resize (only `Confirm` and `Cancel` hit; the icons are
+/// not seen).
 pub fn button_hit(
     mode: Mode,
     removing: bool,
@@ -171,7 +186,6 @@ pub fn button_hit(
         &[PaletteButton::Confirm, PaletteButton::Cancel]
     } else {
         &[
-            PaletteButton::Add,
             PaletteButton::Remove,
             PaletteButton::RotateLeft,
             PaletteButton::RotateRight,
@@ -194,36 +208,36 @@ pub fn editor_height_u_max() -> i64 {
         .unwrap_or(0)
 }
 
-/// The tallest icon row plus editor among the modes, in `u`: what the minimum panel holds below the
-/// first grid row with the editor open.
-fn open_tail_u_max() -> i64 {
-    MODES
-        .iter()
-        .map(|mode| icons_height_u(*mode) + editor_height_u(*mode))
-        .max()
-        .unwrap_or(0)
-}
+/// Tools the toolbox must hold at the minimum column in the minimum window (specs/ui-single-column.md,
+/// capacity rule): 20 tools take four rows at 10 columns.
+pub const TOOLBOX_CAPACITY: usize = 20;
 
 fn scale(n: u32) -> i64 {
     i64::from(n.max(1))
 }
 
-/// Height of the block `[band · one grid row · icons · editor]` of the mode with the editor open,
+/// Height of the block `[band · one grid row · tail · editor]` of the mode with the editor open,
 /// in physical pixels: the height of the panel from which there is no scrolling.
 pub fn block_height_px(mode: Mode, n: u32) -> i64 {
-    (GRID_Y_U + PITCH_U + icons_height_u(mode) + editor_height_u(mode)) * scale(n)
+    (GRID_Y_U + PITCH_U + tail_height_u(mode) + editor_height_u(mode)) * scale(n)
 }
 
-/// Like [`block_height_px`] with the editor closed: `[band · one grid row · icons]`.
+/// Like [`block_height_px`] with the editor closed: `[band · one grid row · tail]`.
 pub fn block_height_closed_px(mode: Mode, n: u32) -> i64 {
-    (GRID_Y_U + PITCH_U + icons_height_u(mode)) * scale(n)
+    (GRID_Y_U + PITCH_U + tail_height_u(mode)) * scale(n)
 }
 
-/// Minimum height of the panel, in physical pixels, for any mode (with the editor open, which is
-/// the largest: closed it needs less, and the floor is set by the layers panel, 277 u, which this
-/// number equals).
+/// Minimum height of the panel (the column under the menu), in physical pixels: the larger of the
+/// layers panel and the capacity of the toolbox (`TOOLBOX_CAPACITY` tools at the minimum column
+/// plus the closed block of the tallest palette). The open block of every mode is lower.
 pub fn min_panel_height_px(n: u32) -> i64 {
-    (GRID_Y_U + PITCH_U + open_tail_u_max()) * scale(n)
+    let closed = MODES
+        .iter()
+        .map(|mode| GRID_Y_U + PITCH_U + tail_height_u(*mode))
+        .max()
+        .unwrap_or(0);
+    let toolbox = head_u(TOOLBOX_CAPACITY, COLUMN_MIN_COLS) + closed;
+    toolbox.max(LAYERS_PANEL_H_U) * scale(n)
 }
 
 /// Minimum height of the window in logical pixels (egui points): the menu, the status bar and
@@ -287,8 +301,8 @@ pub struct PanelLayout {
     /// Lowest position of the top edge of the icon row from the panel's, in physical pixels: right
     /// above the editor (or the bottom edge) when the grid fills the space (equal to `top_px` in
     /// the modes without icons). With a shorter grid the row hangs higher: see
-    /// [`PanelLayout::icon_row_top_px`].
-    pub icons_top_px: i64,
+    /// [`PanelLayout::tail_top_for`].
+    pub tail_top_px: i64,
     pub visible_rows: usize,
 }
 
@@ -298,15 +312,15 @@ impl PanelLayout {
     /// editor when it is open) minus the height of the row. A short grid leaves the row right under
     /// it; a grid taller than the space leaves it anchored to the bottom of the space. When the
     /// panel scrolls as a whole the row is where the block puts it.
-    pub fn icon_row_top_px(&self, grid_rows: usize, n: u32) -> i64 {
-        self.icon_row_top_px_at(grid_rows, n, 0)
+    pub fn tail_top_for(&self, grid_rows: usize, n: u32) -> i64 {
+        self.tail_top_for_at(grid_rows, n, 0)
     }
 
-    /// Like [`PanelLayout::icon_row_top_px`] for a palette that starts `head_px` physical pixels
+    /// Like [`PanelLayout::tail_top_for`] for a palette that starts `head_px` physical pixels
     /// below the top of the column (the toolbox is above it).
-    pub fn icon_row_top_px_at(&self, grid_rows: usize, n: u32, head_px: i64) -> i64 {
+    pub fn tail_top_for_at(&self, grid_rows: usize, n: u32, head_px: i64) -> i64 {
         if self.scrolling {
-            return self.icons_top_px;
+            return self.tail_top_px;
         }
         let grid_bottom = i64::try_from(grid_rows)
             .unwrap_or(i64::MAX)
@@ -314,7 +328,7 @@ impl PanelLayout {
             .saturating_add(GRID_Y_U)
             .saturating_mul(scale(n))
             .saturating_add(head_px);
-        grid_bottom.min(self.icons_top_px)
+        grid_bottom.min(self.tail_top_px)
     }
 }
 
@@ -357,7 +371,7 @@ pub fn column_layout(
     } else {
         0
     };
-    let icons = icons_height_u(mode) * n;
+    let icons = tail_height_u(mode) * n;
     let block = head
         + if editor_open {
             block_height_px(mode, n as u32)
@@ -373,19 +387,19 @@ pub fn column_layout(
             offset_px: 0,
             max_offset_px: 0,
             top_px: editor_top,
-            icons_top_px: top,
+            tail_top_px: top,
             visible_rows: visible_rows_reserved(column_h_px - head, column_h_px - top, n as u32),
         };
     }
     let max = block.saturating_sub(column_h_px).div_euclid(n) * n;
     let offset = offset_px.clamp(0, max).div_euclid(n) * n;
-    let icons_top = head + (GRID_Y_U + PITCH_U) * n - offset;
+    let tail_top = head + (GRID_Y_U + PITCH_U) * n - offset;
     PanelLayout {
         scrolling: true,
         offset_px: offset,
         max_offset_px: max,
-        top_px: icons_top + icons,
-        icons_top_px: icons_top,
+        top_px: tail_top + icons,
+        tail_top_px: tail_top,
         visible_rows: 1,
     }
 }
@@ -416,34 +430,22 @@ pub fn slider_hit(mode: Mode, x_px: i64, y_px: i64, n: u32) -> Option<Control> {
         control_row_u(mode, *c).is_some_and(|r| y_px >= r * n && y_px < (r + ROW_H_U) * n)
     })
 }
-pub fn field_y_u(mode: Mode) -> i64 {
-    let last_row = controls(mode)
-        .last()
-        .and_then(|last| control_row_u(mode, *last))
-        .unwrap_or(FIRST_ROW_Y_U);
-    last_row + ROW_H_U + BLOCK_GAP_U
-}
-pub fn notice_y_u(mode: Mode) -> i64 {
-    field_y_u(mode) + FIELD_H_U + BLOCK_GAP_U
-}
 pub fn edges_u(mode: Mode) -> Vec<i64> {
     let mut e = vec![
         0,
         1,
-        HEADER_X_U,
-        HEADER_Y_U,
-        HEADER_Y_U + ROW_H_U,
+        BAR_X_U,
+        BAR_Y_U,
+        BAR_Y_U + BAR_H_U,
         TRACK_X_U,
         TRACK_X_U + TRACK_W_U,
         VALUE_X_U,
         VALUE_X_U + VALUE_W_U,
         FIELD_X_U,
         FIELD_X_U + FIELD_W_U,
-        field_y_u(mode),
-        field_y_u(mode) + FIELD_H_U,
-        notice_y_u(mode),
-        notice_y_u(mode) + ROW_H_U,
-        notice_y_u(mode) + 2 * ROW_H_U,
+        FIELD_Y_U,
+        FIELD_Y_U + FIELD_H_U,
+        tail_height_u(mode),
         editor_height_u(mode),
     ];
     for row in controls(mode)
@@ -453,7 +455,6 @@ pub fn edges_u(mode: Mode) -> Vec<i64> {
         e.extend([row, row + ROW_H_U, row + 5, row + 9, row + 1, row + 13]);
     }
     for button in [
-        PaletteButton::Add,
         PaletteButton::Remove,
         PaletteButton::Confirm,
         PaletteButton::Cancel,

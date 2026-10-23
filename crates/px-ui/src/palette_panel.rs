@@ -5,8 +5,8 @@
 //! egui points (`u` = `ui_unit(ppp)` points = `n` physical pixels) and the events are read.
 
 use egui::{
-    Color32, Event, FontFamily, FontId, Frame, Label, MouseWheelUnit, Panel, PointerButton, Pos2,
-    Rect, RichText, Sense, Ui, vec2,
+    Color32, CursorIcon, Event, FontFamily, FontId, Frame, Label, MouseWheelUnit, Panel,
+    PointerButton, Pos2, Rect, RichText, Sense, Ui, vec2,
 };
 use px_core::{Image, Mode, Rgba};
 
@@ -18,12 +18,12 @@ use crate::color::{
 use crate::color_edit::{
     ColorEditor, Commit, EditTarget, HexOutcome, Resolved, hex_notice, stale_notice,
 };
-use crate::color_editor::{
-    self, ButtonsView, Extras, Geometry, hex_field_id, is_escape, show_icon_row,
-};
+use crate::color_editor::{self, ButtonsView, Geometry, hex_field_id, is_escape, show_icon_row};
 use crate::edit_layout::{
-    PaletteButton, PanelLayout, block_height_closed_px, block_height_px, button_hit, column_layout,
+    FIELD_H_U, FIELD_Y_U, PaletteButton, PanelLayout, block_height_closed_px, block_height_px,
+    button_hit, column_layout,
 };
+use crate::help::HelpTarget;
 use crate::palette_grid::{
     COLUMNS, GRID_X_U, GRID_Y_U, Grid, IND_BORDER_EDIT_U, IND_BORDER_U, INDICATOR_H_U,
     PANEL_WIDTH_U, PITCH_U, PanelView, RING_ACTIVE_U, RING_BACKGROUND_ARM_U, RING_BACKGROUND_U,
@@ -36,11 +36,15 @@ use crate::palette_ops::{
     DragEnd, PaletteOp, PaletteOps, blocked_reason, default_destination, drag_labels,
     removal_prompt, removal_warning, rotation_range, transparent_toggle, uses_entry,
 };
+use crate::palette_resize::{
+    HANDLE_HINT, HandleEnd, PendingResize, dimmed, drag_status, drag_zone_cells, handle_bars,
+    handle_index, resize_prompt,
+};
 use crate::status::columns;
 use crate::text::{font_size_points, printable, text_scale, ui_unit};
 use crate::theme::{
     ACCENT, DROP_MARK, RING_ACTIVE, RING_BACKGROUND, RING_DEST, RING_HOVER, RING_RANGE, SURFACE_1,
-    SURFACE_2, SURFACE_3, TEXT, TEXT_DIM,
+    SURFACE_2, SURFACE_3, TEXT, TEXT_DIM, TEXT_DISABLED,
 };
 use crate::view::ScreenRect;
 
@@ -139,9 +143,13 @@ pub struct PanelInfo {
     /// none, the chosen one; while a swatch is dragged, what is being moved. They are the
     /// tooltip's two lines.
     pub lines: [String; 2],
-    /// The text the status line shows instead of its usual one, by priority: a swatch drag, a
-    /// pending removal, the swatch under the cursor. `None`: the usual line.
+    /// The text the status line shows instead of its usual one, by priority: a drag of the handle
+    /// or of a swatch, a pending removal or resize, the handle or the swatch under the cursor.
+    /// `None`: the usual line.
     pub status_hint: Option<String>,
+    /// What `F1` asks help about with the pointer where it is: the handle, or the bar and the
+    /// field. `None` elsewhere in the panel.
+    pub help: Option<HelpTarget>,
 }
 
 fn panel_info_id() -> egui::Id {
@@ -448,7 +456,7 @@ pub(crate) fn panel_body(
                         offset_px: 0,
                         max_offset_px: 0,
                         top_px: height_px,
-                        icons_top_px: height_px,
+                        tail_top_px: height_px,
                         visible_rows: visible_rows_reserved(height_px - head_px, 0, n),
                     }
                 } else {
@@ -482,10 +490,16 @@ pub(crate) fn panel_body(
             layout.min = rect.min + vec2(0.0, (head_px - placed.offset_px) as f32 / ppp);
             let mut output = PanelOutput::default();
             let count = cell_count(image);
-            let total = total_rows_cols(count, panel_cols);
+            // The handle: the cell after the last entry of an indexed image (wherever the preview
+            // or the pending cut puts it), only where the panel keeps the state to drag it.
+            let handle_on = ops.is_some() && handle_index(image).is_some();
+            let HandleView {
+                handle_pos, cells, ..
+            } = handle_view(handle_on, count, panel_cols, ops.as_deref());
+            let total = total_rows_cols(cells, panel_cols);
             let visible = placed.visible_rows;
             // The icon row hangs under a short grid and is anchored below a tall one.
-            let icons_top_px = placed.icon_row_top_px_at(total, n, head_px);
+            let tail_top_px = placed.tail_top_for_at(total, n, head_px);
             scroll.clamp(total, visible);
             let changed = view.reveal || view.last_visible.is_some_and(|last| last != visible);
             if changed && let Some(cell) = cell_of_choice(image, choice) {
@@ -503,8 +517,9 @@ pub(crate) fn panel_body(
                 n: layout.n,
                 panel_min: rect.min,
                 panel_rect: rect,
-                top_px: icons_top_px,
+                top_px: tail_top_px,
                 mode,
+                cols,
             };
             let phys = |p: Pos2| ((p.x * ppp).round() as i64, (p.y * ppp).round() as i64);
 
@@ -612,7 +627,7 @@ pub(crate) fn panel_body(
                         modifiers,
                     } if enabled && !busy_editing && rect.contains(*pos) => {
                         if ops_on {
-                            let removing = ops.as_deref().is_some_and(|o| o.removal().is_some());
+                            let removing = ops.as_deref().is_some_and(|o| o.confirming());
                             let (rx, ry) = pre_geometry.rel_px(*pos);
                             if let Some(button) = button_hit(mode, removing, rx, ry, layout.n) {
                                 // Pressing a button is leaving the field: its pending text is
@@ -637,6 +652,24 @@ pub(crate) fn panel_body(
                             scroll.first_row,
                         );
                         let (x, y) = layout.grid_px(*pos);
+                        // Pressing the handle arms its drag (it does not choose anything).
+                        if handle_on
+                            && handle_pos == Some(count)
+                            && let Some(ops) = ops.as_deref_mut()
+                            && !ops.confirming()
+                            && Grid::with_columns(
+                                layout.n,
+                                panel_cols,
+                                cells,
+                                visible,
+                                scroll.first_row,
+                            )
+                            .index_at(x, y)
+                                == Some(count)
+                        {
+                            ops.begin_handle(count, phys(*pos));
+                            continue;
+                        }
                         if let Some(cell) = grid.index_at(x, y) {
                             let cell_u8 = u8::try_from(cell).ok();
                             match (ops.as_deref_mut(), cell_u8) {
@@ -644,6 +677,10 @@ pub(crate) fn panel_body(
                                     if ops.removal().is_some() {
                                         // With a pending removal, pressing is choosing the destination.
                                         ops.set_destination(cell_u8, count);
+                                    } else if ops.resize_pending().is_some() {
+                                        // With a pending cut, the destination is a swatch that is
+                                        // kept; the ones that are cut off do not answer.
+                                        ops.set_resize_destination(cell_u8);
                                     } else if modifiers.shift {
                                         // `Shift` + click: sets the range, without choosing or dragging.
                                         ops.set_range_end(cell_u8);
@@ -664,6 +701,11 @@ pub(crate) fn panel_body(
                             if let Some(drag) = ops.drag() {
                                 drag.update(phys(*pos), layout.n, target);
                             }
+                            let zone = zone_cells(cells, count, ops, panel_cols);
+                            let len = handle_target(&layout, zone, visible, first_row, *pos);
+                            if let Some(handle) = ops.handle() {
+                                handle.update(phys(*pos), layout.n, len);
+                            }
                         }
                     }
                     Event::PointerButton {
@@ -679,11 +721,18 @@ pub(crate) fn panel_body(
                                 drag.update(phys(*pos), layout.n, target);
                             }
                             finish_drag(ops, &mut output);
+                            let zone = zone_cells(cells, count, ops, panel_cols);
+                            let len = handle_target(&layout, zone, visible, first_row, *pos);
+                            if let Some(handle) = ops.handle() {
+                                handle.update(phys(*pos), layout.n, len);
+                            }
+                            finish_handle(ops, &mut output);
                         }
                     }
                     Event::WindowFocused(false) => {
                         if let Some(ops) = ops.as_deref_mut() {
                             ops.cancel_drag();
+                            ops.cancel_handle();
                         }
                     }
                     event if is_escape(event) && !text_focused => {
@@ -691,11 +740,15 @@ pub(crate) fn panel_body(
                         // slider (they do not get here), the swatch drag, the pending removal and, last, closing the editor.
                         let mut claimed = false;
                         if let Some(ops) = ops.as_deref_mut() {
-                            if ops.drag_state().is_some() {
+                            if ops.drag_state().is_some() || ops.handle_state().is_some() {
                                 ops.cancel_drag();
+                                ops.cancel_handle();
                                 claimed = true;
                             } else if ops.removal().is_some() && enabled && !busy_editing {
                                 ops.cancel_removal();
+                                claimed = true;
+                            } else if ops.resize_pending().is_some() && enabled && !busy_editing {
+                                ops.cancel_resize();
                                 claimed = true;
                             }
                         }
@@ -727,6 +780,33 @@ pub(crate) fn panel_body(
                     finish_drag(ops, &mut output);
                 }
             }
+            if let Some(ops) = ops.as_deref_mut()
+                && ops.handle_state().is_some()
+            {
+                // The same for the handle, plus the scroll of the rows on its own when the pointer
+                // is held in the first or the last half row of the zone.
+                if let Some(pos) = ui.input(|i| i.pointer.latest_pos()) {
+                    let zone = zone_cells(cells, count, ops, panel_cols);
+                    let band = autoscroll_band(&layout, zone, visible, scroll.first_row, pos);
+                    let dt_ms = (ui.input(|i| i.stable_dt) * 1000.0).round() as u64;
+                    let rows = ops.handle().map_or(0, |h| h.autoscroll(dt_ms, band));
+                    if rows != 0 {
+                        let pitch_px = PITCH_U * i64::from(layout.n);
+                        scroll.by(i64::from(rows) * pitch_px, layout.n, total, visible);
+                    }
+                    if band != 0 {
+                        ctx.request_repaint();
+                    }
+                    let first_row = scroll.first_row;
+                    let len = handle_target(&layout, zone, visible, first_row, pos);
+                    if let Some(handle) = ops.handle() {
+                        handle.update(phys(pos), layout.n, len);
+                    }
+                }
+                if !primary_down {
+                    finish_handle(ops, &mut output);
+                }
+            }
             output.choice = picked;
             let pending: bool = ctx
                 .data(|d| d.get_temp(hex_focus_pending()))
@@ -745,55 +825,66 @@ pub(crate) fn panel_body(
             view.offset_px = placed.offset_px;
             layout.min = rect.min + vec2(0.0, (head_px - placed.offset_px) as f32 / ppp);
 
+            // What the events of this frame did to the handle (the preview, a cut that was
+            // asked for) is what is painted now.
+            let HandleView {
+                preview_len,
+                pending_resize,
+                handle_pos,
+                cells,
+            } = handle_view(handle_on, count, panel_cols, ops.as_deref());
+            let total = total_rows_cols(cells, panel_cols);
+
+            // The tail under the grid, where it falls now (after the wheel of this frame).
+            let paint_tail_top_px = placed.tail_top_for_at(total, n, head_px);
+            let tail_geo = Geometry {
+                ppp,
+                n: layout.n,
+                panel_min: rect.min,
+                panel_rect: rect,
+                top_px: paint_tail_top_px,
+                mode,
+                cols,
+            };
             let mut preview = None;
             if let Some(editor) = editor.as_mut() {
-                match shown_target {
+                match target {
                     Some(target) => {
-                        let geometry = Geometry {
-                            ppp,
-                            n: layout.n,
-                            panel_min: rect.min,
-                            panel_rect: rect,
-                            top_px: placed.top_px,
-                            mode,
-                        };
-                        output.commit = color_editor::interact(
-                            &events,
-                            &geometry,
-                            editor,
-                            enabled,
-                            primary_down,
-                        )
-                        .or(output.commit);
-                        preview = editor.preview();
+                        // The bar and the field are always seen (the editor open or closed).
                         let transparent = matches!(target, EditTarget::Entry(index)
                             if image.palette().and_then(|p| p.transparent_index()) == Some(index));
-                        let removal = ops.as_deref().and_then(|o| o.removal());
-                        let extras = Extras {
-                            prompt: removal.map(|r| {
-                                let warn = image
-                                    .palette()
-                                    .and_then(|p| removal_warning(p, r.index, r.into));
-                                removal_prompt(r.index, r.into, warn)
-                            }),
-                        };
-                        let shown = color_editor::show(
+                        let shown = color_editor::show_tail(
                             ui,
-                            &geometry,
+                            &tail_geo,
                             editor,
                             target,
                             transparent,
                             &events,
                             &stored,
-                            &extras,
                         );
                         output.commit = shown.commit.or(output.commit);
                         output.notice = shown.notice.or(output.notice.take());
+                        if shown_target.is_some() {
+                            let geometry = Geometry {
+                                top_px: placed.top_px,
+                                ..tail_geo
+                            };
+                            output.commit = color_editor::interact(
+                                &events,
+                                &geometry,
+                                editor,
+                                enabled,
+                                primary_down,
+                            )
+                            .or(output.commit);
+                            preview = editor.preview();
+                            color_editor::show(ui, &geometry, editor);
+                        }
                     }
                     None => {
-                        // The field disappears (editor closed or nothing to edit): its pending
-                        // text is resolved as when it loses the focus (egui does not tell about a
-                        // field that is no longer painted).
+                        // The field disappears (nothing to edit): its pending text is resolved as
+                        // when it loses the focus (egui does not tell about a field that is no
+                        // longer painted).
                         match editor.confirm_hex_checked(mode, true, stored) {
                             Resolved::Done(HexOutcome::Commit(commit)) => {
                                 output.commit = Some(commit);
@@ -813,17 +904,14 @@ pub(crate) fn panel_body(
 
             if ops_on {
                 let removal = ops.as_deref().and_then(|o| o.removal());
-                let icons_geo = Geometry {
-                    top_px: icons_top_px,
-                    ..pre_geometry
-                };
                 show_icon_row(
                     ui,
-                    &icons_geo,
+                    &tail_geo,
                     ButtonsView {
-                        removing: removal.is_some(),
+                        removing: ops.as_deref().is_some_and(|o| o.confirming()),
                         len: count,
-                        has_destination: removal.is_some_and(|r| r.into.is_some()),
+                        has_destination: removal.is_some_and(|r| r.into.is_some())
+                            || pending_resize.is_some_and(|p| !p.needs_destination()),
                         transparent_active: matches!(
                             (image.palette(), active_entry),
                             (Some(palette), Some(active))
@@ -835,21 +923,53 @@ pub(crate) fn panel_body(
             }
 
             let grid = Grid::with_columns(layout.n, panel_cols, count, visible, scroll.first_row);
+            let zone_grid =
+                Grid::with_columns(layout.n, panel_cols, cells, visible, scroll.first_row);
             let hover = pointer_in_panel.and_then(|p| {
                 let (x, y) = layout.grid_px(p);
                 grid.index_at(x, y)
             });
+            // The pointer is over the handle (or dragging it): grab cursor and its hint.
+            let dragging_handle = preview_len.is_some();
+            let over_handle = enabled
+                && !busy_editing
+                && handle_pos.is_some()
+                && pointer_in_panel.is_some_and(|p| {
+                    let (x, y) = layout.grid_px(p);
+                    zone_grid.index_at(x, y) == handle_pos
+                })
+                && ops
+                    .as_deref()
+                    .is_some_and(|o| !o.confirming() || dragging_handle);
+            if dragging_handle {
+                ctx.set_cursor_icon(CursorIcon::Grabbing);
+            } else if over_handle {
+                ctx.set_cursor_icon(CursorIcon::Grab);
+            }
             let panel_bar = placed
                 .scrolling
                 .then(|| panel_thumb(placed.offset_px, height_px, block_px, n));
             if let Some(ops) = ops.as_deref_mut() {
                 ops.set_text_focus(ctx.text_edit_focused());
             }
-            let marks = Marks::new(ops.as_deref(), active_entry, ops_on);
+            let mut marks = Marks::new(ops.as_deref(), active_entry, ops_on);
+            if let Some(pos) = handle_pos {
+                if dragging_handle {
+                    marks.dimmed = (pos < count).then_some((pos, count));
+                    marks.added = (pos > count).then_some((count, pos));
+                } else if let Some(pending) = pending_resize {
+                    marks.dimmed = Some((usize::from(pending.len), count));
+                }
+                marks.handle = Some(HandleMark {
+                    cell: pos,
+                    hot: dragging_handle || over_handle,
+                    inert: pending_resize.is_some(),
+                });
+            }
             let edit_mark = shown_target.map(|_| roles.editing);
             paint(
-                ui, &layout, image, slots, roles, &grid, hover, preview, scroll, total, visible,
-                panel_bar, &marks, edit_mark,
+                ui, &layout, image, slots, roles, &zone_grid, hover, preview, scroll, total,
+                visible, panel_bar, &marks, edit_mark,
             );
 
             // The information of the swatch: what the two fixed lines used to paint now goes to
@@ -878,12 +998,33 @@ pub(crate) fn panel_body(
                     format!("{} · {}", lines[0], lines[1])
                 }
             };
-            let status_hint = if marks.drag_text.is_some() {
+            let status_hint = if let Some(len) = preview_len {
+                Some(drag_status(count, len))
+            } else if marks.drag_text.is_some() {
                 Some(joined(&info))
             } else if let Some(lines) = &removal_text {
                 Some(joined(lines))
+            } else if let Some(pending) = pending_resize {
+                Some(resize_prompt(&pending))
+            } else if over_handle {
+                Some(HANDLE_HINT.to_string())
             } else if hover.is_some() {
                 Some(joined(&info))
+            } else {
+                None
+            };
+            // `F1` over the handle or over the bar and the field opens their help.
+            let over_bar = target.is_some()
+                && editor.is_some()
+                && pointer.is_some_and(|p| {
+                    let (x, y) = tail_geo.rel_px(p);
+                    (0..panel_width_u(cols) * i64::from(layout.n)).contains(&x)
+                        && (0..(FIELD_Y_U + FIELD_H_U) * i64::from(layout.n)).contains(&y)
+                });
+            let help = if over_handle || dragging_handle {
+                Some(HelpTarget::PaletteHandle)
+            } else if over_bar {
+                Some(HelpTarget::ColorBar)
             } else {
                 None
             };
@@ -893,6 +1034,7 @@ pub(crate) fn panel_body(
                     PanelInfo {
                         lines: info.clone(),
                         status_hint,
+                        help,
                     },
                 );
             });
@@ -1063,6 +1205,9 @@ fn paint(
             continue;
         };
         let mut color = cell_color_with(image, index, slots).unwrap_or(Rgba::TRANSPARENT);
+        if marks.is_dimmed(index) {
+            color = dimmed(color);
+        }
         if let Some((target, provisional)) = preview
             && edited_cell(target) == index
         {
@@ -1081,6 +1226,26 @@ fn paint(
                 ..part
             };
             painter.rect_filled(layout.grid_rect(part), 0.0, to_color32(tone));
+        }
+    }
+
+    // The entries that dragging the handle past the last one would add: opaque black with a 1 u ring.
+    if let Some((from, to)) = marks.added {
+        for index in from..to {
+            let Some(cell) = grid.cell_rect(index) else {
+                continue;
+            };
+            for (part, tone) in swatch_parts(n, Rgba::opaque(0, 0, 0)) {
+                let part = ScreenRect {
+                    x: cell.x + part.x,
+                    y: cell.y + part.y,
+                    ..part
+                };
+                painter.rect_filled(layout.grid_rect(part), 0.0, to_color32(tone));
+            }
+            for ring in ring_rects(cell, RING_RANGE_U * n_px) {
+                painter.rect_filled(layout.grid_rect(ring), 0.0, RING_RANGE);
+            }
         }
     }
 
@@ -1134,6 +1299,29 @@ fn paint(
     if let Some(rect) = marks.dest.and_then(|cell| grid.cell_rect(cell)) {
         for ring in ring_rects(rect, RING_DEST_U * n_px) {
             painter.rect_filled(layout.grid_rect(ring), 0.0, RING_DEST);
+        }
+    }
+    // The handle: two bars on a face with a 1 u border, over the entry it falls on, if any.
+    if let Some(mark) = &marks.handle
+        && let Some(cell) = grid.cell_rect(mark.cell)
+    {
+        let (face, bars) = if mark.inert {
+            (SURFACE_1, TEXT_DISABLED)
+        } else if mark.hot {
+            (SURFACE_3, ACCENT)
+        } else {
+            (SURFACE_2, TEXT_DIM)
+        };
+        painter.rect_filled(layout.grid_rect(cell), 0.0, SURFACE_3);
+        let inner = ScreenRect {
+            x: cell.x + n_px,
+            y: cell.y + n_px,
+            width: cell.width - 2 * n_px,
+            height: cell.height - 2 * n_px,
+        };
+        painter.rect_filled(layout.grid_rect(inner), 0.0, face);
+        for bar in handle_bars(cell, n) {
+            painter.rect_filled(layout.grid_rect(bar), 0.0, bars);
         }
     }
     // Bar of the destination of a drag.
@@ -1244,6 +1432,23 @@ struct Marks {
     drop: Option<(usize, usize)>,
     /// Lines of information while dragging.
     drag_text: Option<[String; 2]>,
+    /// Entries `[from, to)` painted dimmed: the ones a drag of the handle or a pending cut would
+    /// cut.
+    dimmed: Option<(usize, usize)>,
+    /// New entries `[from, to)` that the handle dragged past the last entry would add.
+    added: Option<(usize, usize)>,
+    /// The handle, if the image has one.
+    handle: Option<HandleMark>,
+}
+
+/// How the handle is painted.
+#[derive(Clone, Copy, Debug)]
+struct HandleMark {
+    cell: usize,
+    /// The pointer is over it or dragging it.
+    hot: bool,
+    /// A cut is pending: it neither answers nor changes.
+    inert: bool,
 }
 
 impl Marks {
@@ -1257,12 +1462,22 @@ impl Marks {
         let drag = ops.drag_state().filter(|drag| drag.dragging());
         Marks {
             range,
-            dest: ops.removal().and_then(|r| r.into).map(usize::from),
+            dest: ops
+                .removal()
+                .and_then(|r| r.into)
+                .or_else(|| ops.resize_pending().and_then(|r| r.into))
+                .map(usize::from),
             drop: drag
                 .and_then(|d| d.preview())
                 .map(|(from, to)| (usize::from(from), usize::from(to))),
             drag_text: drag.map(|d| drag_labels(d.from(), d.target())),
+            ..Marks::default()
         }
+    }
+
+    fn is_dimmed(&self, cell: usize) -> bool {
+        self.dimmed
+            .is_some_and(|(from, to)| (from..to).contains(&cell))
     }
 
     fn in_range(&self, cell: usize) -> bool {
@@ -1284,6 +1499,107 @@ fn drop_target(
     let (x, y) = layout.grid_px(pos);
     grid.drop_index(x, y)
         .and_then(|index| u8::try_from(index).ok())
+}
+
+/// How the handle looks in the state of `ops`: where it is, the length it previews while it is
+/// dragged, the cut that is pending, and the cells the grid needs for them.
+struct HandleView {
+    preview_len: Option<usize>,
+    pending_resize: Option<PendingResize>,
+    handle_pos: Option<usize>,
+    cells: usize,
+}
+
+fn handle_view(
+    handle_on: bool,
+    count: usize,
+    columns: usize,
+    ops: Option<&PaletteOps>,
+) -> HandleView {
+    let preview_len = ops
+        .and_then(|o| o.handle_state())
+        .filter(|h| h.dragging())
+        .map(|h| h.preview_len());
+    let pending_resize = ops.and_then(|o| o.resize_pending());
+    let handle_pos = handle_on.then(|| match (pending_resize, preview_len) {
+        (Some(pending), _) => usize::from(pending.len),
+        (None, Some(len)) => len,
+        (None, None) => count,
+    });
+    // Cells of the grid: with the handle dragged, the zone has one row more than the preview
+    // occupies; otherwise the entries and the handle.
+    let cells = match (handle_on, preview_len) {
+        (false, _) => count,
+        (true, Some(preview)) => drag_zone_cells(preview, columns)
+            .max(total_rows_cols(count.max(preview) + 1, columns) * columns),
+        (true, None) => count.max(handle_pos.map_or(0, |pos| pos + 1)),
+    };
+    HandleView {
+        preview_len,
+        pending_resize,
+        handle_pos,
+        cells,
+    }
+}
+
+/// Cells of the grid for the hit test of the handle at this moment: while the handle is pressed the
+/// zone is the one of its preview; otherwise the one of the frame.
+fn zone_cells(cells: usize, count: usize, ops: &PaletteOps, columns: usize) -> usize {
+    match ops.handle_state() {
+        Some(handle) => {
+            let preview = handle.preview_len();
+            drag_zone_cells(preview, columns)
+                .max(total_rows_cols(count.max(preview) + 1, columns) * columns)
+        }
+        None => cells,
+    }
+}
+
+/// The new length that the handle asks for under an egui point: the cell under it, in the zone.
+fn handle_target(
+    layout: &Layout,
+    cells: usize,
+    visible: usize,
+    first_row: usize,
+    pos: Pos2,
+) -> Option<u16> {
+    let columns = usize::try_from(layout.cols).unwrap_or(COLUMNS).max(1);
+    let grid = Grid::with_columns(layout.n, columns, cells, visible, first_row);
+    let (x, y) = layout.grid_px(pos);
+    grid.len_at(x, y)
+}
+
+/// `-1` if the pointer is in the first half row of the zone, `1` in the last half row and `0`
+/// elsewhere (and outside the columns of the grid): where the rows scroll on their own.
+fn autoscroll_band(
+    layout: &Layout,
+    cells: usize,
+    visible: usize,
+    first_row: usize,
+    pos: Pos2,
+) -> i32 {
+    let columns = usize::try_from(layout.cols).unwrap_or(COLUMNS).max(1);
+    let n = i64::from(layout.n);
+    let (x, y) = layout.grid_px(pos);
+    let rows_left = total_rows_cols(cells, columns).saturating_sub(first_row);
+    let shown = i64::try_from(visible.min(rows_left)).unwrap_or(0);
+    let half = PITCH_U * n / 2;
+    if x < 0 || x >= i64::try_from(columns).unwrap_or(0) * PITCH_U * n || shown == 0 {
+        0
+    } else if (0..half).contains(&y) {
+        -1
+    } else if (shown * PITCH_U * n - half..shown * PITCH_U * n).contains(&y) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Ends the drag of the handle: releasing over a cell that asks for another length asks for it.
+fn finish_handle(ops: &mut PaletteOps, output: &mut PanelOutput) {
+    if let Some(HandleEnd::Resize { len }) = ops.end_handle() {
+        output.op = Some(PaletteOp::ResizeTo { len });
+    }
 }
 
 /// Resolves the pending text of the hexadecimal field as when it loses the focus.
@@ -1321,10 +1637,12 @@ fn press_button(
     output: &mut PanelOutput,
 ) {
     let removal = ops.removal();
+    let resize = ops.resize_pending();
     if let Some(reason) = blocked_reason(
         button,
         count,
-        removal.is_some_and(|removal| removal.into.is_some()),
+        removal.is_some_and(|removal| removal.into.is_some())
+            || resize.is_some_and(|pending| !pending.needs_destination()),
     ) {
         output.notice = Some(reason.to_string());
         return;
@@ -1356,9 +1674,19 @@ fn press_button(
                     into,
                 });
                 ops.cancel_removal();
+            } else if let Some(pending) = resize {
+                // The session applies it and closes the pending cut (it may still ask to confirm
+                // the loss of the transparent entry).
+                output.op = Some(PaletteOp::Resize {
+                    len: pending.len,
+                    into: pending.into,
+                });
             }
         }
-        PaletteButton::Cancel => ops.cancel_removal(),
+        PaletteButton::Cancel => {
+            ops.cancel_removal();
+            ops.cancel_resize();
+        }
         PaletteButton::Transparent => {
             if let Some(palette) = image.palette() {
                 output.op = Some(PaletteOp::SetTransparent {

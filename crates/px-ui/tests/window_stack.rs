@@ -1061,8 +1061,9 @@ fn row_10_a_click_on_an_editor_slider_hits_it_with_the_panel_in_the_stack() {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
             if panel_u == 200 {
-                bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);
-                assert_eq!(bench.view.offset_px, 10 * n);
+                // The tail (64 u) sits above the editor: scroll until the sliders are in sight.
+                bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 40 * n);
+                assert_eq!(bench.view.offset_px, 40 * n);
             }
             let placed = column_layout(
                 Mode::Indexed,

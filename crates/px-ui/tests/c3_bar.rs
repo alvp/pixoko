@@ -265,7 +265,7 @@ fn row_10_an_invalid_text_warns_in_the_status_bar_and_the_border_turns_to_warnin
     let mut bench = Bench::new(1.0, SCREEN_HIGH, indexed(8), ColorChoice::Entry(3));
     bench.view.editor_open = false;
     focus_field(&mut bench);
-    write(&mut bench, "zz");
+    write(&mut bench, "zzz");
     bench.history.clear();
     let f = bench.key(Key::Enter);
     assert_eq!(f.output.commit, None);

@@ -37,6 +37,10 @@ pub enum HelpTarget {
     Layer(LayerHelp),
     /// One of the two rectangles of the color indicator (`F1` with the pointer over it).
     Indicator,
+    /// The handle of the palette (`F1` with the pointer over it; C3).
+    PaletteHandle,
+    /// The color bar and the hexadecimal field under the grid (`F1` over them; C3).
+    ColorBar,
 }
 
 /// The control of the layers panel help is asked about: one per layer action.
@@ -79,7 +83,19 @@ pub fn layer_help_for(hit: PanelHit) -> LayerHelp {
 }
 
 impl HelpTarget {
-    /// The action of this target; `Active` is the one of the `active` tool.
+    /// The key of the help text of this target (`Active` is the one of the `active` tool). The
+    /// handle and the bar have their own entries, which belong to no action.
+    pub fn help_key(self, active: Tool) -> &'static str {
+        match self {
+            HelpTarget::PaletteHandle => "palette.handle",
+            HelpTarget::ColorBar => "color.bar",
+            other => help_key(other.action(active))
+                .expect("toda herramienta, botón de zoom y control tienen ayuda"),
+        }
+    }
+
+    /// The action of this target; `Active` is the one of the `active` tool. The handle and the bar
+    /// are not actions: they give the nearest one, and their text comes from [`HelpTarget::help_key`].
     pub fn action(self, active: Tool) -> AppAction {
         match self {
             HelpTarget::Active => AppAction::SelectTool(active),
@@ -88,7 +104,8 @@ impl HelpTarget {
             HelpTarget::ZoomOut => AppAction::ZoomOut,
             HelpTarget::ZoomFit => AppAction::ZoomFit,
             HelpTarget::ZoomActualSize => AppAction::ZoomActualSize,
-            HelpTarget::Indicator => AppAction::ToggleColorEditor,
+            HelpTarget::Indicator | HelpTarget::ColorBar => AppAction::ToggleColorEditor,
+            HelpTarget::PaletteHandle => AppAction::PaletteSize,
             HelpTarget::Layer(help) => match help {
                 LayerHelp::Panel => AppAction::ToggleLayerPanel,
                 LayerHelp::New => AppAction::NewLayer,
@@ -267,17 +284,22 @@ fn zone_text(entry: &HelpEntry, action: AppAction, keymap: &Keymap, platform: Pl
 pub fn help_form_for(key: &str, keymap: &Keymap, platform: Platform) -> Option<FormSpec> {
     let strings = ui();
     let entry = help_entry(key)?;
-    let action = action_of_key(key)?;
+    let action = action_of_key(key);
+    let text = match action {
+        Some(action) => zone_text(entry, action, keymap, platform),
+        // The handle and the bar belong to no action: no shortcuts to tell.
+        None => entry.description.to_string(),
+    };
     let mut fields = vec![FieldSpec {
         id: HELP_ZONE,
         label: "",
         kind: FieldKind::ReadOnly {
-            text: zone_text(entry, action, keymap, platform),
+            text,
             rows: Rows::Fixed(9),
         },
         shown_when: None,
     }];
-    if is_editable(action) {
+    if let Some(action) = action.filter(|action| is_editable(*action)) {
         let slots = slots_of(keymap, action).slots;
         for (id, label, index) in [
             (HELP_PRIMARY, strings.primary, 0usize),
@@ -312,9 +334,7 @@ pub fn help_form(
     keymap: &Keymap,
     platform: Platform,
 ) -> FormSpec {
-    let key = help_key(target.action(active))
-        .expect("toda herramienta y todo botón de zoom tienen ayuda");
-    help_form_for(key, keymap, platform).expect("la clave existe")
+    help_form_for(target.help_key(active), keymap, platform).expect("la clave existe")
 }
 
 /// The line of the list for an action: `{name:<20}{shortcuts}` (44 columns at most), with the

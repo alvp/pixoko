@@ -45,7 +45,7 @@ fn stack(count: usize, active_pos: usize) -> LayerNav {
 
 #[test]
 fn row_10_the_three_layer_actions_have_a_key_valid_text_and_are_editable() {
-    assert_eq!(help_table().len(), 34);
+    assert_eq!(help_table().len(), 39);
     for (action_2, key) in ACTIONS_OF_LAYER {
         assert_eq!(help_key(action_2), Some(key));
         assert_eq!(action_of_key(key), Some(action_2));

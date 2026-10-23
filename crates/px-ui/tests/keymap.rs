@@ -1160,7 +1160,7 @@ fn row_5_the_dropdown_widths_do_not_change() {
             ("Archivo", true) => 194,
             ("Editar", false) => 124,
             ("Editar", true) => 152,
-            ("Imagen", _) => 131,
+            ("Imagen", _) => 166,
             ("Capa", _) => 145,
             ("Ver", _) => 208,
             ("Ayuda", _) => 201,

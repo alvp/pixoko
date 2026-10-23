@@ -1,33 +1,35 @@
-//! Color editor inside the palette panel: sliders, hexadecimal field and notices
-//! (specs/hito-2-editar-color.md). The logic lives in [`crate::color_edit`] and the geometry in
+//! Color editor inside the palette panel: the sliders (specs/hito-2-editar-color.md), and the tail
+//! under the grid: the color bar, the hexadecimal field and the icon row (specs/ui-palette-handle.md).
+//! The logic lives in [`crate::color_edit`] and [`crate::color_bar`] and the geometry in
 //! [`crate::edit_layout`]; here they are only translated to egui.
 //!
 //! Everything falls on whole physical pixels: the measures are `u` (`n` physical pixels) from `top_px`,
 //! which is a multiple of `n`, and the positions inside a track come from `slider_x`.
 
 use egui::{
-    Align2, Event, FontFamily, FontId, Frame, Id, Key, Label, Margin, PointerButton, Pos2, Rect,
-    RichText, Role, Sense, Stroke, StrokeKind, TextEdit, Ui, WidgetInfo, vec2,
+    Align2, Color32, Event, FontFamily, FontId, Frame, Id, Key, Label, Margin, PointerButton, Pos2,
+    Rect, RichText, Role, Sense, Stroke, StrokeKind, TextEdit, Ui, WidgetInfo, vec2,
 };
 use px_core::{Mode, Rgba};
 
+use crate::color_bar::{BarInk, bar_ink, bar_label};
 use crate::color_edit::{
     ColorEditor, Commit, EditTarget, HexOutcome, Resolved, control_value, controls, hex_notice,
     hex_text, slider_value_at, slider_x, stale_notice, value_text,
 };
 use crate::edit_layout::{
-    BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U, FIELD_X_U, HEADER_X_U,
-    HEADER_Y_U, LABEL_X_U, PaletteButton, ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U, TRACK_H_U,
-    TRACK_W_U, TRACK_X_U, VALUE_X_U, button_rect_u, control_row_u, field_y_u, notice_y_u,
-    palette_icon, slider_hit,
+    BAR_H_U, BAR_X_U, BAR_Y_U, BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_PAD_U, FIELD_W_U,
+    FIELD_X_U, FIELD_Y_U, LABEL_X_U, PaletteButton, ROW_H_U, SEPARATOR_Y_U, THUMB_H_U, THUMB_W_U,
+    TRACK_H_U, TRACK_W_U, TRACK_X_U, VALUE_X_U, button_rect_u, control_row_u, palette_icon,
+    slider_hit,
 };
 use crate::icon_button::{look, paint_icon, paint_text};
 use crate::icons::IconSet;
-use crate::palette_grid::{PANEL_WIDTH_U, TEXT_WIDTH_U};
+use crate::palette_grid::{TEXT_WIDTH_U, block_parts, panel_width_u, text_width_u};
 use crate::palette_ops::{blocked_reason, palette_button_tooltip};
 use crate::status::{bar_text, columns};
 use crate::text::{font_size_points, printable, ui_unit};
-use crate::theme::{ACCENT, NOTICE_PREFIX, SURFACE_0, SURFACE_3, TEXT, TEXT_DIM, WARNING};
+use crate::theme::{ACCENT, SURFACE_0, SURFACE_3, TEXT, TEXT_DIM, WARNING};
 
 /// Where the editor is: scale, corner of the panel and `top_px` from its top edge (negative
 /// if the panel scrolled). What is painted and the clicks are limited to `panel_rect`.
@@ -39,6 +41,8 @@ pub(crate) struct Geometry {
     pub panel_rect: Rect,
     pub top_px: i64,
     pub mode: Mode,
+    /// Columns of swatches of the column: the width of the bar.
+    pub cols: i64,
 }
 
 impl Geometry {
@@ -51,12 +55,12 @@ impl Geometry {
         px as f32 / self.ppp
     }
 
-    /// Corner of the editor, in points.
+    /// Corner of what is painted (the editor or the tail), in points.
     fn origin(&self) -> Pos2 {
         self.panel_min + vec2(0.0, self.pt(self.top_px))
     }
 
-    /// Rectangle in `u` from the corner of the editor, in points.
+    /// Rectangle in `u` from the corner of the editor or the tail, in points.
     fn rect_u(&self, x: i64, y: i64, width: i64, height: i64) -> Rect {
         let n = self.n_px();
         Rect::from_min_size(
@@ -65,7 +69,7 @@ impl Geometry {
         )
     }
 
-    /// An egui point, in physical pixels from the corner of the editor.
+    /// An egui point, in physical pixels from the corner of the editor or the tail.
     pub(crate) fn rel_px(&self, pos: Pos2) -> (i64, i64) {
         (
             ((pos.x - self.panel_min.x) * self.ppp).round() as i64,
@@ -169,42 +173,23 @@ pub(crate) struct ButtonsView {
     pub icons: IconSet,
 }
 
-/// What the editor paints besides the sliders and the field.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct Extras {
-    /// The two lines of a pending removal, instead of the notice of the editor.
-    pub prompt: Option<[String; 2]>,
-}
-
-/// What the editor asked for in a frame.
+/// What the tail asked for in a frame.
 #[derive(Debug, Default)]
 pub(crate) struct Output {
     pub commit: Option<Commit>,
-    /// 5 s notice for the status bar.
+    /// 5 s notice for the status bar (an invalid hexadecimal).
     pub notice: Option<String>,
 }
 
-/// Paints the editor and attends the hexadecimal field. `transparent`: the target is the
-/// transparent entry of the palette.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn show(
-    ui: &mut Ui,
-    geo: &Geometry,
-    editor: &mut ColorEditor,
-    target: EditTarget,
-    transparent: bool,
-    events: &[Event],
-    stored: &dyn Fn(EditTarget) -> Option<Rgba>,
-    extras: &Extras,
-) -> Output {
-    let mut output = Output::default();
+/// Paints the editor: the separator and the sliders. It has no header, no field and no notices:
+/// the bar, the field and the warnings are in the tail under the grid ([`show_tail`]).
+pub(crate) fn show(ui: &mut Ui, geo: &Geometry, editor: &ColorEditor) {
     let Some((rgba, hsl)) = editor.shown() else {
-        return output;
+        return;
     };
     let ctx = ui.ctx().clone();
     let mode = geo.mode;
     let n = geo.n_px();
-    let u = ui_unit(geo.ppp);
     let cols = columns((TEXT_WIDTH_U * n) as f32, geo.ppp);
     let font = FontId::new(font_size_points(geo.ppp), FontFamily::Proportional);
     let painter = ui.painter_at(geo.panel_rect);
@@ -220,11 +205,10 @@ pub(crate) fn show(
     };
 
     painter.rect_filled(
-        geo.rect_u(0, SEPARATOR_Y_U, PANEL_WIDTH_U, 1),
+        geo.rect_u(0, SEPARATOR_Y_U, panel_width_u(geo.cols), 1),
         0.0,
         SURFACE_3,
     );
-    text(HEADER_X_U, HEADER_Y_U, &target.header(mode), TEXT);
 
     for &control in controls(mode) {
         let Some(row) = control_row_u(mode, control) else {
@@ -251,22 +235,85 @@ pub(crate) fn show(
         painter.rect_filled(thumb, 0.0, ACCENT);
         text(VALUE_X_U, row, &value_text(value), TEXT);
     }
+}
+
+fn to_color32(color: Rgba) -> Color32 {
+    Color32::from_rgba_unmultiplied(color.r, color.g, color.b, color.a)
+}
+
+/// Paints the color bar and the hexadecimal field under the grid (`geo.top_px` is the top edge of
+/// the tail) and attends the field. `transparent`: the target is the transparent entry of the
+/// palette. `stored`: the stored color of a target, which is what the bar shows.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn show_tail(
+    ui: &mut Ui,
+    geo: &Geometry,
+    editor: &mut ColorEditor,
+    target: EditTarget,
+    transparent: bool,
+    events: &[Event],
+    stored: &dyn Fn(EditTarget) -> Option<Rgba>,
+) -> Output {
+    let mut output = Output::default();
+    let Some((rgba, _)) = editor.shown() else {
+        return output;
+    };
+    let ctx = ui.ctx().clone();
+    let mode = geo.mode;
+    let n = geo.n_px();
+    let u = ui_unit(geo.ppp);
+    let font = FontId::new(font_size_points(geo.ppp), FontFamily::Proportional);
+    let painter = ui.painter_at(geo.panel_rect);
+
+    // The color bar: the stored color of what is edited and its text.
+    let bar_columns = columns((text_width_u(geo.cols) * n) as f32, geo.ppp);
+    let bar = geo.rect_u(BAR_X_U, BAR_Y_U, text_width_u(geo.cols), BAR_H_U);
+    let color = stored(target).unwrap_or(rgba);
+    let ink: BarInk = bar_ink(color);
+    for (part, tone) in block_parts(text_width_u(geo.cols) * n, BAR_H_U * n, 4 * n, color) {
+        let rect = Rect::from_min_size(
+            bar.min + vec2(geo.pt(part.x), geo.pt(part.y)),
+            vec2(geo.pt(part.width), geo.pt(part.height)),
+        );
+        painter.rect_filled(rect, 0.0, to_color32(tone));
+    }
+    let label = bar_text(&ctx, &bar_label(target, transparent), false, bar_columns);
+    let text_origin = geo
+        .rect_u(BAR_X_U + 3, BAR_Y_U + (BAR_H_U - ROW_H_U) / 2, 0, ROW_H_U)
+        .min;
+    if ink.boxed {
+        // With alpha the text goes in an opaque box over the checker.
+        let width = label.chars().count() as i64 * 7 + 2;
+        painter.rect_filled(
+            geo.rect_u(BAR_X_U + 2, BAR_Y_U + 1, width, BAR_H_U - 2),
+            0.0,
+            ink.behind,
+        );
+    }
+    painter.text(text_origin, Align2::LEFT_TOP, label, font.clone(), ink.text);
 
     // Hexadecimal field: background and border are ours; the `TextEdit` goes inside without a frame,
     // because the margins of egui are whole points and do not fall on whole physical pixels at 1.5×.
     let id = hex_field_id();
-    let field_y = field_y_u(mode);
     let focused = ui.memory(|memory| memory.has_focus(id));
+    let invalid = editor.hex_error().is_some();
+    let (edge, edge_u) = if invalid {
+        (WARNING, 2.0)
+    } else if focused {
+        (ACCENT, 1.0)
+    } else {
+        (SURFACE_3, 1.0)
+    };
     painter.rect(
-        geo.rect_u(FIELD_X_U, field_y, FIELD_W_U, FIELD_H_U),
+        geo.rect_u(FIELD_X_U, FIELD_Y_U, FIELD_W_U, FIELD_H_U),
         0.0,
         SURFACE_0,
-        Stroke::new(u, if focused { ACCENT } else { SURFACE_3 }),
+        Stroke::new(u * edge_u, edge),
         StrokeKind::Inside,
     );
     let inner = geo.rect_u(
         FIELD_X_U + FIELD_PAD_U,
-        field_y + (FIELD_H_U - ROW_H_U) / 2,
+        FIELD_Y_U + (FIELD_H_U - ROW_H_U) / 2,
         FIELD_W_U - 2 * FIELD_PAD_U,
         ROW_H_U,
     );
@@ -294,8 +341,10 @@ pub(crate) fn show(
             match editor.confirm_hex_checked(mode, !enter, stored) {
                 Resolved::Done(outcome) => match outcome {
                     HexOutcome::Commit(commit) => output.commit = Some(commit),
-                    HexOutcome::Invalid(_) if enter => response.request_focus(),
                     HexOutcome::Invalid(error) => {
+                        if enter {
+                            response.request_focus();
+                        }
                         output.notice = Some(hex_notice(&error).to_string());
                     }
                     HexOutcome::Nothing | HexOutcome::Unchanged => {}
@@ -304,20 +353,6 @@ pub(crate) fn show(
             }
         }
     }
-
-    // Two-line notice, or the lines of the pending removal.
-    let notice = notice_y_u(mode);
-    if let Some([first, second]) = &extras.prompt {
-        text(HEADER_X_U, notice, first, TEXT);
-        let warning = second.starts_with(NOTICE_PREFIX);
-        let color = if warning { WARNING } else { TEXT_DIM };
-        text(HEADER_X_U, notice + ROW_H_U, second, color);
-    } else {
-        let [first, second] = editor.notice(transparent);
-        text(HEADER_X_U, notice, &first, WARNING);
-        text(HEADER_X_U, notice + ROW_H_U, &second, WARNING);
-    }
-
     output
 }
 
@@ -334,7 +369,6 @@ pub(crate) fn show_icon_row(ui: &mut Ui, geo: &Geometry, view: ButtonsView) {
         &[PaletteButton::Confirm, PaletteButton::Cancel]
     } else {
         &[
-            PaletteButton::Add,
             PaletteButton::Remove,
             PaletteButton::RotateLeft,
             PaletteButton::RotateRight,

@@ -91,7 +91,7 @@ pub fn show_column(
     // The editor is open when the app opened it and there is something to edit.
     let editor_shown =
         panel_view.editor_open && EditTarget::of(view.image, roles.edited()).is_some();
-    let wide = editor_shown || ops.removal().is_some();
+    let wide = editor_shown || ops.confirming();
     let cols = column_cols(window_w_px, n, wide_cols(view.cols, wide));
     let k_max = max_cols(window_w_px, n);
     let tools = TOOL_LABELS.len();

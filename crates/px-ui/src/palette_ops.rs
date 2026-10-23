@@ -6,13 +6,17 @@
 use px_core::{Image, Palette};
 
 use crate::edit_layout::PaletteButton;
+use crate::help_texts_palette_es::RESIZE_CANCELLED;
 use crate::palette_grid::DRAG_START_U;
+use crate::palette_resize::{HandleDrag, HandleEnd, PendingResize, resize_summary};
 use crate::theme::NOTICE_PREFIX;
 
 /// Aviso de 5 s al cancelarse una quita pendiente porque el documento cambió.
 pub const REMOVAL_CANCELLED_NOTICE: &str = "quitar cancelado: el documento cambió";
 /// Aviso de 5 s al rotar una paleta o un rango de una sola entrada.
 pub const NOTHING_TO_ROTATE_NOTICE: &str = "nada que rotar: una sola entrada";
+/// Aviso de 5 s al cancelarse un recorte pendiente porque el documento cambió.
+pub const RESIZE_CANCELLED_NOTICE: &str = RESIZE_CANCELLED;
 
 /// Una edición de la paleta pedida desde el panel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +39,17 @@ pub enum PaletteOp {
     SetTransparent {
         index: Option<u8>,
     },
+    /// Soltar el asa en una longitud distinta: la sesión decide si estira, recorta ya, deja el
+    /// recorte pendiente o pide confirmar la pérdida de la transparente.
+    ResizeTo {
+        len: u16,
+    },
+    /// Cambia la longitud de la paleta ya decidida (`Confirmar` del recorte pendiente, o el
+    /// diálogo aceptado): `into` es el destino de los píxeles de lo que se recorta.
+    Resize {
+        len: u16,
+        into: Option<u8>,
+    },
 }
 
 /// Qué le pasa a una entrada (por su índice) con una operación.
@@ -53,7 +68,16 @@ pub enum Fate {
 /// Destino de la entrada `entry` tras `op` (para el texto pendiente del campo hexadecimal).
 pub fn entry_fate(op: &PaletteOp, entry: u8) -> Fate {
     match *op {
-        PaletteOp::Add | PaletteOp::SetTransparent { .. } => Fate::Same,
+        PaletteOp::Add | PaletteOp::SetTransparent { .. } | PaletteOp::ResizeTo { .. } => {
+            Fate::Same
+        }
+        PaletteOp::Resize { len, .. } => {
+            if usize::from(entry) >= usize::from(len) {
+                Fate::Gone
+            } else {
+                Fate::Same
+            }
+        }
         PaletteOp::Move { from, to } => {
             if from != to && (from.min(to)..=from.max(to)).contains(&entry) {
                 Fate::Moved
@@ -88,8 +112,17 @@ pub fn choice_after(op: &PaletteOp, active: u8, old_len: usize) -> u8 {
             u8::try_from(usize::from(index).min(last)).unwrap_or(u8::MAX)
         }
         PaletteOp::Move { to, .. } => to,
-        PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. } => active,
+        PaletteOp::Rotate { .. }
+        | PaletteOp::SetTransparent { .. }
+        | PaletteOp::ResizeTo { .. } => active,
+        PaletteOp::Resize { len, .. } => resized(active, len),
     }
+}
+
+/// La entrada `entry` tras fijar la paleta en `len` entradas: la misma, o la última si cae fuera.
+fn resized(entry: u8, len: u16) -> u8 {
+    let last = len.saturating_sub(1);
+    u8::try_from(u16::from(entry).min(last)).unwrap_or(u8::MAX)
 }
 
 /// Dónde queda una entrada (la del fondo) tras una operación de paleta: sigue a su entrada si se
@@ -97,7 +130,11 @@ pub fn choice_after(op: &PaletteOp, active: u8, old_len: usize) -> u8 {
 /// `Add`, `Rotate` ni `SetTransparent`.
 pub fn entry_after(op: &PaletteOp, entry: u8, old_len: usize) -> u8 {
     match *op {
-        PaletteOp::Add | PaletteOp::Rotate { .. } | PaletteOp::SetTransparent { .. } => entry,
+        PaletteOp::Add
+        | PaletteOp::Rotate { .. }
+        | PaletteOp::SetTransparent { .. }
+        | PaletteOp::ResizeTo { .. } => entry,
+        PaletteOp::Resize { len, .. } => resized(entry, len),
         PaletteOp::Remove { index, .. } => {
             let last = u8::try_from(old_len.saturating_sub(2)).unwrap_or(u8::MAX);
             match entry.cmp(&index) {
@@ -280,6 +317,13 @@ pub fn summary(
         }
         PaletteOp::Move { from, to } => format!("entrada {from} movida a la posición {to}"),
         PaletteOp::SetTransparent { index } => transparent_summary(index, active, None),
+        PaletteOp::ResizeTo { len } | PaletteOp::Resize { len, .. } => {
+            let into = match op {
+                PaletteOp::Resize { into, .. } => *into,
+                _ => None,
+            };
+            resize_summary(old_len, usize::from(len), into, !unused, was_transparent)
+        }
         PaletteOp::Rotate { start, len, steps } => {
             let way = if steps > 0 { "derecha" } else { "izquierda" };
             if start == 0 && usize::from(len) == old_len {
@@ -402,11 +446,15 @@ pub struct Removal {
     pub into: Option<u8>,
 }
 
-/// Estado del panel entre fotogramas para estas operaciones: arrastre, quita pendiente y rango.
+/// Estado del panel entre fotogramas para estas operaciones: arrastre de muestra, arrastre del
+/// asa, quita pendiente, recorte pendiente y rango.
 #[derive(Debug, Default)]
 pub struct PaletteOps {
     drag: Option<MoveDrag>,
+    handle: Option<HandleDrag>,
     removal: Option<(Removal, u64)>,
+    resize: Option<(PendingResize, u64)>,
+    resize_cancelled: bool,
     range_end: Option<u8>,
     doc_state: u64,
     text_focus: bool,
@@ -431,7 +479,78 @@ impl PaletteOps {
         if stale {
             self.removal = None;
         }
+        let resize_stale = self.resize.is_some_and(|(pending, state)| {
+            state != doc_state
+                || usize::from(pending.len) >= len
+                || pending
+                    .into
+                    .is_some_and(|into| u16::from(into) >= pending.len)
+        });
+        if resize_stale {
+            self.resize = None;
+            self.resize_cancelled = true;
+        }
         stale
+    }
+
+    /// Un arrastre del asa, solo armado o ya en marcha.
+    pub fn handle_state(&self) -> Option<&HandleDrag> {
+        self.handle.as_ref()
+    }
+
+    pub fn handle(&mut self) -> Option<&mut HandleDrag> {
+        self.handle.as_mut()
+    }
+
+    /// Pulsar el asa de una paleta de `len` entradas.
+    pub fn begin_handle(&mut self, len: usize, at: (i64, i64)) {
+        self.handle = Some(HandleDrag::press(len, at));
+    }
+
+    /// Termina el arrastre del asa (soltar) y dice cómo acabó.
+    pub fn end_handle(&mut self) -> Option<HandleEnd> {
+        self.handle.take().map(HandleDrag::release)
+    }
+
+    pub fn cancel_handle(&mut self) {
+        self.handle = None;
+    }
+
+    /// El recorte pendiente de destino y de `Confirmar`, si lo hay.
+    pub fn resize_pending(&self) -> Option<PendingResize> {
+        self.resize.map(|(pending, _)| pending)
+    }
+
+    /// Deja pendiente un recorte, atado al estado del documento de la última `sync`.
+    pub fn begin_resize(&mut self, pending: PendingResize) {
+        self.resize = Some((pending, self.doc_state));
+    }
+
+    /// Elige el destino del recorte pendiente. `false` sin recorte o con una muestra que se
+    /// recorta (la que sobra no responde).
+    pub fn set_resize_destination(&mut self, cell: u8) -> bool {
+        match &mut self.resize {
+            Some((pending, _)) if u16::from(cell) < pending.len => {
+                pending.into = Some(cell);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Cancela el recorte pendiente sin avisar (`Cancelar`, `Esc` o al aplicarlo).
+    pub fn cancel_resize(&mut self) {
+        self.resize = None;
+    }
+
+    /// Un recorte pendiente se canceló por un cambio del documento: se dice una sola vez.
+    pub fn take_resize_cancelled(&mut self) -> bool {
+        std::mem::take(&mut self.resize_cancelled)
+    }
+
+    /// Hay una quita o un recorte pendientes de `Confirmar`.
+    pub fn confirming(&self) -> bool {
+        self.removal.is_some() || self.resize.is_some()
     }
 
     pub fn begin_drag(&mut self, from: u8, at: (i64, i64)) {
@@ -493,9 +612,11 @@ impl PaletteOps {
         self.removal = None;
     }
 
-    /// Hay un arrastre de verdad (pasó el umbral); el botón solo armado no cuenta.
+    /// Hay un arrastre de verdad (pasó el umbral), de una muestra o del asa; el botón solo
+    /// armado no cuenta.
     pub fn busy(&self) -> bool {
         self.drag.as_ref().is_some_and(MoveDrag::dragging)
+            || self.handle.as_ref().is_some_and(HandleDrag::dragging)
     }
 
     /// Había un campo de texto enfocado al terminar el fotograma anterior. egui le quita el foco

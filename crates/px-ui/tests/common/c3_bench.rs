@@ -21,7 +21,7 @@ use px_ui::color_edit::{ColorEditor, EditTarget};
 use px_ui::edit_layout::{PanelLayout, panel_layout, panel_layout_closed};
 use px_ui::icons::IconSet;
 use px_ui::palette_grid::{
-    self, CELL_U, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, PanelView, ring_rects, total_rows,
+    self, CELL_U, GRID_X_U, GRID_Y_U, PITCH_U, PanelView, ring_rects, total_rows,
 };
 use px_ui::palette_ops::PaletteOps;
 use px_ui::palette_panel::{PanelInfo, PanelOutput, Roles, panel_info, show_roles};
@@ -244,7 +244,8 @@ impl Bench {
 
     /// Top edge of the tail (bar, field, icon row) from the top of the panel, in physical pixels.
     pub fn tail_top(&self) -> i64 {
-        let cells = self.image.palette().map_or(0, |p| p.len() + 1);
+        let cells =
+            px_ui::color::cell_count(&self.image) + usize::from(self.image.palette().is_some());
         self.layout()
             .tail_top_for(total_rows(cells), self.n() as u32)
     }

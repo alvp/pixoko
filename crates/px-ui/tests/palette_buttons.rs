@@ -1340,8 +1340,8 @@ fn row_2_show_editing_view_without_ops_paints_the_buttons_but_without_state() {
         let f = bench.click_button(PaletteButton::Transparent);
         assert_eq!(
             f.output_2.op,
-            Some(PaletteOp::SetTransparent { index: Some(3) }),
-            "ppp {ppp}"
+            Some(PaletteOp::SetTransparent { index: Some(0) }),
+            "ppp {ppp}: the entry 0 is the chosen one after the drag"
         );
     }
 }
@@ -3235,13 +3235,18 @@ mod set_transparent {
             );
             bench.history.clear();
 
-            // Donde estaba el icono ahora está `Cancel`: cancela la quita y no pide ninguna op.
+            // El icono estaba en 93 a 117 u de la cola; con la quita pendiente ahí cae `Confirmar`
+            // (4 a 114 u): no pide la op del icono, pide la quita con su destino.
             let f = bench.click_button(PaletteButton::Transparent);
-            assert_eq!(f.output_2.op, None, "ppp {ppp}: no golpea");
+            assert_eq!(
+                f.output_2.op,
+                Some(PaletteOp::Remove { index: 3, into: 0 }),
+                "ppp {ppp}: no golpea el icono; cae `Confirmar`"
+            );
             assert_eq!(f.output_2.notice, None, "ppp {ppp}");
             assert!(
                 bench.ops.removal().is_none(),
-                "ppp {ppp}: `Cancelar` cancela"
+                "ppp {ppp}: `Confirmar` cierra la quita"
             );
             assert_eq!(bench.choice, ColorChoice::Entry(3), "ppp {ppp}");
             assert_eq!(bench.ops.range_end(), Some(4), "ppp {ppp}: rango intacto");
@@ -3664,7 +3669,7 @@ mod icons_editor {
         use egui::Role;
         use egui::output::OutputEvent;
         for (button, expected_2) in [
-            (PaletteButton::Remove, "Quitar entrada"),
+            (PaletteButton::RotateLeft, "Rotar a la izquierda"),
             (PaletteButton::RotateRight, "Rotar a la derecha"),
             (PaletteButton::Transparent, "Fijar transparente"),
         ] {

@@ -328,6 +328,10 @@ pub enum DialogKind {
     ShortcutEditor,
     /// La confirmación de `Reset all`.
     ResetShortcuts,
+    /// `Imagen → Tamaño de la paleta…` (specs/ui-palette-handle.md).
+    PaletteSize,
+    /// La pérdida de la entrada transparente con varias capas (specs/ui-palette-handle.md).
+    TransparentLoss,
 }
 
 /// Lo que le pasa a un diálogo abierto.

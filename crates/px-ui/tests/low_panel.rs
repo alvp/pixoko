@@ -354,7 +354,10 @@ impl Bench {
             mode: self.image.mode(),
             top_px: self.layout().top_px,
             tail_top_px: self.layout().tail_top_for(
-                total_rows(self.image.palette().map_or(0, |p| p.len() + 1)),
+                total_rows(
+                    px_ui::color::cell_count(&self.image)
+                        + usize::from(self.image.palette().is_some()),
+                ),
                 self.n() as u32,
             ),
         }

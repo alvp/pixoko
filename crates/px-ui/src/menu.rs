@@ -4,11 +4,14 @@
 use egui::containers::menu::{MenuBar, MenuConfig, menu_style};
 use egui::{Button, Frame, Panel, Sense, Style, Ui, vec2};
 
-use crate::actions::{AppAction, LayerNav, Platform, UiState, enabled, layer_enabled};
+use crate::actions::{
+    AppAction, LayerNav, PaletteNav, Platform, UiState, enabled, layer_enabled, palette_enabled,
+};
 use crate::background::{CanvasBackground, background_value_text};
 use crate::chrome::MENU_H_U;
 use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
 use crate::help::HelpTarget;
+use crate::help_texts_palette_es::{MENU_ADD_ENTRY, MENU_PALETTE_SIZE, MENU_REMOVE_ENTRY};
 use crate::keymap::{Chord, Keymap, default_keymap};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
@@ -75,7 +78,12 @@ pub const MENUS: [Menu; 6] = [
     },
     Menu {
         title: "Imagen",
-        items: &[item("Convertir modo…", AppAction::ConvertMode)],
+        items: &[
+            item("Convertir modo…", AppAction::ConvertMode),
+            item(MENU_ADD_ENTRY, AppAction::AddPaletteEntry),
+            item(MENU_REMOVE_ENTRY, AppAction::RemovePaletteEntry),
+            item(MENU_PALETTE_SIZE, AppAction::PaletteSize),
+        ],
         submenus: &[],
     },
     Menu {
@@ -248,11 +256,13 @@ pub fn show_menu_in(
         background,
         keymap,
         &LayerNav::default(),
+        &PaletteNav::default(),
     )
 }
 
 /// Like [`show_menu_in`] with the layer stack, which dims `Remove`, `Up`, `Down`, `New layer` and
-/// `Duplicate` when they cannot be done (the app passes its own).
+/// `Duplicate` when they cannot be done, and the image, which dims the palette actions outside
+/// indexed images (the app passes its own).
 pub fn show_menu_full(
     ui: &mut Ui,
     state: &UiState,
@@ -260,6 +270,7 @@ pub fn show_menu_full(
     background: CanvasBackground,
     keymap: &Keymap,
     layers: &LayerNav,
+    palette: &PaletteNav,
 ) -> Option<AppAction> {
     let ctx = ui.ctx().clone();
     let ppp = ctx.pixels_per_point();
@@ -303,7 +314,7 @@ pub fn show_menu_full(
                                 if menu_entry(
                                     ui,
                                     &ctx,
-                                    (state, layers),
+                                    (state, layers, palette),
                                     (keymap, platform),
                                     item,
                                     width,
@@ -337,13 +348,15 @@ pub fn show_menu_full(
 fn menu_entry(
     ui: &mut Ui,
     ctx: &egui::Context,
-    (state, layers): (&UiState, &LayerNav),
+    (state, layers, palette): (&UiState, &LayerNav, &PaletteNav),
     (keymap, platform): (&Keymap, Platform),
     item: &MenuItem,
     width: f32,
     u: f32,
 ) -> bool {
-    let on = enabled(item.action, state) && layer_enabled(item.action, layers);
+    let on = enabled(item.action, state)
+        && layer_enabled(item.action, layers)
+        && palette_enabled(item.action, palette);
     let label = printable(ctx, item.label);
     let shortcut = shortcut_in(keymap, item.action, platform)
         .map(|s| shortcut_text(s, platform))

@@ -661,6 +661,9 @@ proptest! {
         steps in proptest::collection::vec(step_strategy(), 0..14),
     ) {
         let mut bench = Bench::with_panel_height(1.0, 400, indexed(entries), ColorChoice::Entry(0));
+        // Bring the row of the handle into sight (the panel shows 12 rows).
+        bench.scroll.first_row = (entries / 16).saturating_sub(4);
+        bench.rest();
         let before = bench.image.clone();
         let range = bench.ops.range_end();
         let mut pointer = bench.handle_center();

@@ -517,6 +517,13 @@ impl ColorEditor {
         Resolved::Done(self.confirm_hex(mode, blur))
     }
 
+    /// El texto pendiente del campo es inválido (tras Intro): el campo avisa con su borde.
+    pub fn hex_error(&self) -> Option<&HexError> {
+        self.pending
+            .as_ref()
+            .and_then(|pending| pending.error.as_ref())
+    }
+
     /// `Escape` en el campo: borra lo pendiente, sin aviso.
     pub fn escape_hex(&mut self) {
         self.pending = None;
