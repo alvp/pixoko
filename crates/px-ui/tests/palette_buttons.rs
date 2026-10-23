@@ -31,8 +31,9 @@ use px_ui::canvas::Canvas;
 use px_ui::color::{ColorChoice, SlotColors, cell_count, initial_choice};
 use px_ui::color_edit::{ColorEditor, Commit, Control, EditTarget, slider_x};
 use px_ui::edit_layout::{
-    BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_W_U, FIELD_X_U, PaletteButton, PanelLayout,
-    ROW_H_U, TRACK_W_U, TRACK_X_U, button_rect_u, control_row_u, field_y_u, panel_layout,
+    BUTTON_TEXT_X_U, BUTTON_TEXT_Y_U, FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, PaletteButton,
+    PanelLayout, ROW_H_U, TRACK_W_U, TRACK_X_U, block_height_px, button_rect_u, control_row_u,
+    panel_layout,
 };
 use px_ui::icons::{Icon, IconSet};
 use px_ui::palette_grid::{
@@ -283,6 +284,15 @@ impl TestFrame {
         self.info.lines.iter().any(|line| line.contains(searched))
     }
 
+    /// The text of the status line contains `searched`: a pending removal is said there (the
+    /// editor no longer paints its two lines since C3).
+    fn hint_has(&self, searched: &str) -> bool {
+        self.info
+            .status_hint
+            .as_deref()
+            .is_some_and(|hint| hint.contains(searched))
+    }
+
     fn paints(&self, searched: &str) -> bool {
         self.texts.iter().any(|t| t.text_2 == searched)
     }
@@ -325,8 +335,8 @@ struct Geo {
     n: i64,
     mode: Mode,
     top_px: i64,
-    /// Top edge of the icon row (the buttons) from the top edge of the panel.
-    icons_top_px: i64,
+    /// Top edge of the tail (bar, field and icon row) from the top edge of the panel.
+    tail_top_px: i64,
 }
 
 impl Geo {
@@ -344,7 +354,7 @@ impl Geo {
     fn field_2(&self) -> (i64, i64) {
         (
             FIELD_X_U * self.n + FIELD_W_U * self.n / 2,
-            self.top_px + field_y_u(self.mode) * self.n + FIELD_H_U * self.n / 2,
+            self.tail_top_px + FIELD_Y_U * self.n + FIELD_H_U * self.n / 2,
         )
     }
 }
@@ -476,9 +486,10 @@ impl Bench {
             n: self.n(),
             mode: self.image.mode(),
             top_px: self.layout().top_px,
-            // The icon row hangs under a short grid and is anchored below a tall one.
-            icons_top_px: self.layout().icon_row_top_px(
-                palette_grid::total_rows(px_ui::color::cell_count(&self.image)),
+            // The tail hangs under a short grid and is anchored below a tall one; the grid holds
+            // the entries and the handle.
+            tail_top_px: self.layout().tail_top_for(
+                palette_grid::total_rows(px_ui::color::cell_count(&self.image) + 1),
                 self.n() as u32,
             ),
         }
@@ -644,14 +655,14 @@ impl Bench {
     fn center_of_button(&self, button: PaletteButton) -> (i64, i64) {
         let (x, y, w, h) = rect_button_u(button);
         let n = self.n();
-        ((x + w / 2) * n, self.geo().icons_top_px + (y + h / 2) * n)
+        ((x + w / 2) * n, self.geo().tail_top_px + (y + h / 2) * n)
     }
 
     /// Rectángulo del botón, en puntos.
     fn rect_of_button(&self, button: PaletteButton) -> Rect {
         let (x, y, w, h) = rect_button_u(button);
         let (n, ppp) = (self.n(), self.ppp());
-        let top = self.geo().icons_top_px;
+        let top = self.geo().tail_top_px;
         Rect::from_min_size(
             pos2((x * n) as f32 / ppp, (top + y * n) as f32 / ppp),
             vec2((w * n) as f32 / ppp, (h * n) as f32 / ppp),
@@ -896,8 +907,7 @@ const TEST_LABELS: [(PaletteButton, &str); 2] = [
 ];
 
 /// Los botones de icono de la fila de la paleta.
-const ICONS_OF_BUTTON: [(PaletteButton, Icon); 5] = [
-    (PaletteButton::Add, Icon::Add),
+const ICONS_OF_BUTTON: [(PaletteButton, Icon); 4] = [
     (PaletteButton::Remove, Icon::Remove),
     (PaletteButton::RotateLeft, Icon::RotateLeft),
     (PaletteButton::RotateRight, Icon::RotateRight),
@@ -910,7 +920,7 @@ const ICONS_OF_BUTTON: [(PaletteButton, Icon); 5] = [
 /// su rótulo en `(6, 5)` dentro del botón y la misma cara. Los demás, no.
 fn checks_buttons(f: &TestFrame, bench: &Bench, visible_2: &[PaletteButton], context: &str) {
     let (ppp, n) = (bench.ppp(), bench.n());
-    let top = bench.geo().icons_top_px;
+    let top = bench.geo().tail_top_px;
     let icons_2 = bench.icons_2.set;
     for (button, icon) in ICONS_OF_BUTTON {
         // `Transparent` lo comprueba `checks_button` (su estado depende de la entrada).
@@ -970,8 +980,7 @@ fn checks_buttons(f: &TestFrame, bench: &Bench, visible_2: &[PaletteButton], con
     }
 }
 
-const NORMAL: [PaletteButton; 4] = [
-    PaletteButton::Add,
+const NORMAL: [PaletteButton; 3] = [
     PaletteButton::Remove,
     PaletteButton::RotateLeft,
     PaletteButton::RotateRight,
@@ -991,7 +1000,9 @@ fn row_2_the_buttons_are_painted_with_their_icons_in_their_place_at_the_five_ppp
         let f = bench.rest_2_2();
         let context = format!("ppp {ppp}");
         checks_buttons(&f, &bench, &NORMAL, &context);
-        // Dentro del panel, y con los cuatro botones cabiendo (sin desplazamiento).
+        // Sin `Añadir` (C3): el icono ya no está en la fila.
+        assert!(!f.paints_icon(&bench.icons_2.set, Icon::Add), "{context}");
+        // Dentro del panel, y con los botones cabiendo (sin desplazamiento).
         assert!(!bench.layout().scrolling, "{context}");
         let panel = bench.rect_panel();
         for button in NORMAL {
@@ -1033,22 +1044,18 @@ fn row_2_with_the_panel_scrolled_the_buttons_are_painted_and_pressed_with_y_minu
         assert!(bench.layout().scrolling, "ppp {ppp}: el panel se desplaza");
         let (x, y) = bench.over_the_text();
         let max = bench.max_offset();
-        assert!(max >= 77 * n, "ppp {ppp}: there is room to scroll ({max})");
-        for offset in [28 * n, 70 * n] {
+        assert!(max >= 41 * n, "ppp {ppp}: there is room to scroll ({max})");
+        for offset in [14 * n, 20 * n] {
             bench.wheel_in(x, y, -100_000 * n);
             bench.wheel(offset);
             assert_eq!(bench.view.offset_px, offset, "ppp {ppp}");
             let context = format!("ppp {ppp}, offset {offset}");
             let f = bench.rest_2_2();
-            assert_eq!(bench.geo().top_px, 91 * n - offset, "{context}");
-            // With 70·n the buttons peek 5·n above the panel: they are painted (egui does not
-            // discard shapes) and clipped to the panel, which the next line checks.
+            assert_eq!(bench.geo().top_px, 127 * n - offset, "{context}");
             checks_buttons(&f, &bench, &NORMAL, &context);
             checks_inside_the_panel(&f, bench.rect_panel(), &context);
 
             // Pulsar donde está ahora cada botón.
-            let f = bench.click_button(PaletteButton::Add);
-            assert_eq!(f.output_2.op, Some(PaletteOp::Add), "{context}");
             let f = bench.click_button(PaletteButton::RotateRight);
             assert_eq!(
                 f.output_2.op,
@@ -1069,15 +1076,15 @@ fn row_2_with_the_panel_scrolled_the_buttons_are_painted_and_pressed_with_y_minu
                 }),
                 "{context}"
             );
-            // Donde estaría `Añadir` sin desplazar no hay nada.
-            let (x_a, _) = bench.center_of_button(PaletteButton::Add);
-            let without_pan = (49 + 14 + 2 + 8) * n;
+            // Justo bajo la fila (donde estaría sin desplazar) no hay nada.
+            let (x_a, _) = bench.center_of_button(PaletteButton::Remove);
+            let without_pan = bench.geo().tail_top_px + 63 * n;
             if without_pan < bench.panel_h_px() {
                 let f = bench.click(x_a, without_pan);
                 assert_eq!(f.output_2.op, None, "{context}");
             }
         }
-        assert_eq!(bench.view.offset_px, 70 * n);
+        assert_eq!(bench.view.offset_px, 20 * n);
         assert!(bench.notices().is_empty(), "ppp {ppp}");
     }
 }
@@ -1086,14 +1093,14 @@ fn row_2_with_the_panel_scrolled_the_buttons_are_painted_and_pressed_with_y_minu
 fn row_2_what_falls_outside_the_panel_is_not_hit_with_the_panel_scrolled() {
     for ppp in PPPS {
         let n = (ppp + 0.5).floor().max(1.0) as i64;
-        let mut bench = Bench::with_panel_height(ppp, 200 * n, image_f(), ColorChoice::Entry(1));
-        // With 70·n of scroll, `Añadir` goes from −5·n to 19·n and the panel starts at 0.
+        let mut bench = Bench::with_panel_height(ppp, 100 * n, image_f(), ColorChoice::Entry(1));
+        // With 106·n of scroll, the icon row goes from −5·n to 19·n and the panel starts at 0.
         let (x, y) = bench.over_the_text();
-        bench.wheel_in(x, y, 70 * n);
-        assert_eq!(bench.view.offset_px, 70 * n, "ppp {ppp}");
-        let (x, _) = bench.center_of_button(PaletteButton::Add);
+        bench.wheel_in(x, y, 106 * n);
+        assert_eq!(bench.view.offset_px, 106 * n, "ppp {ppp}");
+        let (x, _) = bench.center_of_button(PaletteButton::RotateRight);
         assert_eq!(bench.geo().top_px, 21 * n);
-        assert_eq!(bench.geo().icons_top_px, -7 * n);
+        assert_eq!(bench.geo().tail_top_px, -43 * n);
 
         // Above the panel (over the menu), though inside the rectangle of the button.
         let f = bench.click(x, -n);
@@ -1103,7 +1110,11 @@ fn row_2_what_falls_outside_the_panel_is_not_hit_with_the_panel_scrolled() {
         let f = bench.click(x, n);
         assert_eq!(
             f.output_2.op,
-            Some(PaletteOp::Add),
+            Some(PaletteOp::Rotate {
+                start: 0,
+                len: 4,
+                steps: 1
+            }),
             "ppp {ppp}: dentro del panel"
         );
     }
@@ -1164,7 +1175,6 @@ fn row_2_in_rgba_gray_and_grayalpha_there_are_no_buttons_or_icons_or_button_text
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Effect {
-    Add,
     Remove,
     Left,
     Right,
@@ -1173,7 +1183,6 @@ enum Effect {
 
 fn effect(bench: &Bench, f: &TestFrame) -> Effect {
     match f.output_2.op {
-        Some(PaletteOp::Add) => Effect::Add,
         Some(PaletteOp::Rotate { steps, .. }) if steps < 0 => Effect::Left,
         Some(PaletteOp::Rotate { .. }) => Effect::Right,
         Some(other_2) => panic!("operación inesperada {other_2:?}"),
@@ -1182,20 +1191,21 @@ fn effect(bench: &Bench, f: &TestFrame) -> Effect {
     }
 }
 
-/// Los puntos de la fila 2 de la spec, en píxeles desde la esquina del editor (`n` = escala).
+/// Los puntos de la fila 2 de la spec, en píxeles desde la esquina de la cola bajo la rejilla
+/// (`n` = escala): la fila de iconos empieza en y = 38 u.
 fn mockup_points(n: i64) -> [(i64, i64, Effect); 11] {
     [
-        (4 * n, 2 * n, Effect::Add),
-        (28 * n - 1, 2 * n, Effect::Add),
-        (28 * n, 2 * n, Effect::Nothing),
-        (29 * n, 2 * n, Effect::Remove),
-        (53 * n - 1, 26 * n - 1, Effect::Remove),
-        (60 * n, 14 * n, Effect::Nothing),
-        (61 * n, 2 * n, Effect::Left),
-        (86 * n, 14 * n, Effect::Right),
-        (110 * n, 14 * n, Effect::Nothing),
-        (4 * n, 26 * n, Effect::Nothing),
-        (229 * n, 14 * n, Effect::Nothing),
+        (4 * n, 38 * n, Effect::Remove),
+        (28 * n - 1, 38 * n, Effect::Remove),
+        (28 * n, 38 * n, Effect::Nothing),
+        (36 * n, 38 * n, Effect::Left),
+        (60 * n - 1, 62 * n - 1, Effect::Left),
+        (60 * n, 50 * n, Effect::Nothing),
+        (61 * n, 38 * n, Effect::Right),
+        (85 * n - 1, 50 * n, Effect::Right),
+        (92 * n, 50 * n, Effect::Nothing),
+        (4 * n, 62 * n, Effect::Nothing),
+        (229 * n, 50 * n, Effect::Nothing),
     ]
 }
 
@@ -1204,7 +1214,7 @@ fn row_2_pressing_where_the_mockup_says_at_the_five_ppp() {
     for ppp in PPPS {
         let mut bench = bench_f(ppp, 1);
         let n = bench.n();
-        let top = bench.geo().icons_top_px;
+        let top = bench.geo().tail_top_px;
         for (x, y, expected_2) in mockup_points(n) {
             let f = bench.click(x, top + y);
             assert_eq!(
@@ -1224,10 +1234,10 @@ fn row_2_with_a_pending_removal_row_1_is_confirm_and_cancel_at_their_points() {
     for ppp in PPPS {
         let mut bench = bench_p_5(ppp, 3);
         let n = bench.n();
-        let top = bench.geo().icons_top_px;
+        let top = bench.geo().tail_top_px;
         // El hueco de 5 u no pulsa nada.
         bench.click_button(PaletteButton::Remove);
-        let f = bench.click(114 * n, top + 2 * n);
+        let f = bench.click(114 * n, top + 38 * n);
         assert_eq!(f.output_2.op, None, "ppp {ppp}");
         assert_eq!(
             bench.ops.removal(),
@@ -1236,12 +1246,12 @@ fn row_2_with_a_pending_removal_row_1_is_confirm_and_cancel_at_their_points() {
                 into: Some(0)
             })
         );
-        // (119n, 186n) es Cancelar.
-        bench.click(119 * n, top + 2 * n);
+        // (119n, 38n de la cola) es Cancelar.
+        bench.click(119 * n, top + 38 * n);
         assert_eq!(bench.ops.removal(), None, "ppp {ppp}: Cancelar");
-        // (4n, 186n) es Confirmar.
+        // (4n, 38n de la cola) es Confirmar.
         bench.click_button(PaletteButton::Remove);
-        let f = bench.click(4 * n, top + 2 * n);
+        let f = bench.click(4 * n, top + 38 * n);
         assert_eq!(
             f.output_2.op,
             Some(PaletteOp::Remove { index: 3, into: 0 }),
@@ -1250,7 +1260,7 @@ fn row_2_with_a_pending_removal_row_1_is_confirm_and_cancel_at_their_points() {
         // Los iconos no golpean con la quita pendiente (decisión 8): donde estaba el de rotar a la
         // derecha cae `Confirmar`.
         bench.click_button(PaletteButton::Remove);
-        let f = bench.click(98 * n, top + 14 * n);
+        let f = bench.click(70 * n, top + 50 * n);
         assert_eq!(
             f.output_2.op,
             Some(PaletteOp::Remove { index: 3, into: 0 }),
@@ -1292,7 +1302,7 @@ fn row_2_everything_painted_with_buttons_and_states_stays_inside_the_panel() {
         let (x, y) = bench.over_the_text();
         bench.moves(x, y);
         let max = bench.max_offset();
-        for goal in [0, n, 84 * n, max] {
+        for goal in [0, n, 30 * n, max] {
             bench.wheel(-100_000 * n);
             bench.wheel(goal);
             let context = format!("ppp {ppp}, offset {}", bench.view.offset_px);
@@ -1327,61 +1337,39 @@ fn row_2_show_editing_view_without_ops_paints_the_buttons_but_without_state() {
         assert!(!bench.ops.busy(), "ppp {ppp}");
         // Los botones que no necesitan estado siguen dando su operación.
         bench.without_ops = true;
-        let f = bench.click_button(PaletteButton::Add);
-        assert_eq!(f.output_2.op, Some(PaletteOp::Add), "ppp {ppp}");
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Fila 3: Añadir
-// ---------------------------------------------------------------------------------------------
-
-#[test]
-fn row_3_pressing_add_gives_op_add_and_nothing_else() {
-    for ppp in PPPS {
-        let mut bench = bench_f(ppp, 1);
-        let f = bench.click_button(PaletteButton::Add);
+        let f = bench.click_button(PaletteButton::Transparent);
         assert_eq!(
-            f.output_2,
-            PanelOutput {
-                op: Some(PaletteOp::Add),
-                ..PanelOutput::default()
-            },
+            f.output_2.op,
+            Some(PaletteOp::SetTransparent { index: Some(3) }),
             "ppp {ppp}"
         );
-        bench.rest_2_2();
-        bench.rest_2_2();
-        assert_eq!(
-            bench.operations(),
-            vec![PaletteOp::Add],
-            "ppp {ppp}: una sola vez"
-        );
-        assert!(bench.ops.removal().is_none());
-        assert!(bench.notices().is_empty());
-        assert!(bench.choices().is_empty());
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Fila 3: Añadir ya no es un icono (C3): la acción es `Imagen → Añadir entrada`, con la misma
+// `PaletteOp::Add` y el mismo aviso (sus pruebas están en `px-app`, fila 12 de la spec de C3)
+// ---------------------------------------------------------------------------------------------
+
 #[test]
-fn row_3_with_256_entries_add_gives_the_notice_and_no_op() {
+fn row_3_with_256_entries_the_other_icons_stay_enabled_and_there_is_no_add_icon() {
     for ppp in PPPS {
         let mut bench = Bench::new_2(ppp, SCREEN_HIGH, image_indexed_256(), ColorChoice::Entry(5));
         let f = bench.rest_2_2();
-        assert_eq!(
-            bench.ink(&f, Icon::Add),
-            TEXT_DISABLED,
-            "ppp {ppp}: atenuado"
-        );
+        assert!(!f.paints_icon(&bench.icons_2.set, Icon::Add), "ppp {ppp}");
         assert_eq!(bench.ink(&f, Icon::Remove), TEXT, "ppp {ppp}");
         assert_eq!(bench.ink(&f, Icon::RotateLeft), TEXT);
-        let f = bench.click_button(PaletteButton::Add);
-        assert_eq!(f.output_2.op, None, "ppp {ppp}");
+        let f = bench.click_button(PaletteButton::RotateLeft);
         assert_eq!(
-            f.output_2.notice.as_deref(),
-            Some("paleta llena: 256 entradas"),
+            f.output_2.op,
+            Some(PaletteOp::Rotate {
+                start: 0,
+                len: 256,
+                steps: -1
+            }),
             "ppp {ppp}"
         );
-        assert!(bench.operations().is_empty());
+        assert!(bench.notices().is_empty());
     }
 }
 
@@ -1423,8 +1411,10 @@ fn row_4_removing_a_used_one_leaves_the_removal_pending_with_the_notice_lines() 
             "ppp {ppp}"
         );
         let f = bench.rest_2_2();
-        assert!(f.paints("quitar 3; destino 0"), "ppp {ppp}");
-        assert!(f.paints("elige otra muestra o confirma"), "ppp {ppp}");
+        assert!(f.hint_has("quitar 3; destino 0"), "ppp {ppp}");
+        assert!(f.hint_has("elige otra muestra o confirma"), "ppp {ppp}");
+        // The editor no longer paints the two lines (C3): the status line says them.
+        assert!(!f.paints("quitar 3; destino 0"), "ppp {ppp}");
         // La quitada lleva el anillo activo (2 u) y el destino el anillo de aviso (2 u).
         assert!(there_is_ring(&f, &bench, 3, 2, ACCENT), "ppp {ppp}: activo");
         assert!(
@@ -1454,7 +1444,7 @@ fn row_4_pressing_another_swatch_changes_the_target_and_not_the_selection() {
             }),
             "ppp {ppp}"
         );
-        assert!(f.paints("quitar 3; destino 2"), "ppp {ppp}");
+        assert!(f.hint_has("quitar 3; destino 2"), "ppp {ppp}");
         assert!(there_is_ring(&f, &bench, 2, 2, RING_DEST), "ppp {ppp}");
         assert!(!there_is_ring(&f, &bench, 0, 2, RING_DEST), "ppp {ppp}");
         assert_eq!(bench.choice, ColorChoice::Entry(3));
@@ -1557,8 +1547,8 @@ fn row_5_the_transparent_has_no_target_and_confirming_warns_until_one_is_chosen(
             "ppp {ppp}"
         );
         let f = bench.rest_2_2();
-        assert!(f.paints("quitar 3: pulsa un destino"), "ppp {ppp}");
-        assert!(f.paints("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
+        assert!(f.hint_has("quitar 3: pulsa un destino"), "ppp {ppp}");
+        assert!(f.hint_has("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
         assert_eq!(
             f.color_of("Confirmar"),
             TEXT_DISABLED,
@@ -1579,8 +1569,8 @@ fn row_5_the_transparent_has_no_target_and_confirming_warns_until_one_is_chosen(
 
         // Elegir el 4 activa Confirmar.
         let f = bench.click_swatch(4);
-        assert!(f.paints("quitar 3; destino 4"), "ppp {ppp}");
-        assert!(f.paints("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
+        assert!(f.hint_has("quitar 3; destino 4"), "ppp {ppp}");
+        assert!(f.hint_has("aviso: sus píxeles quedan opacos"), "ppp {ppp}");
         assert_eq!(f.color_of("Confirmar"), TEXT, "ppp {ppp}: activo");
         assert!(there_is_ring(&f, &bench, 4, 2, RING_DEST), "ppp {ppp}");
         let f = bench.click_button(PaletteButton::Confirm);
@@ -1605,13 +1595,13 @@ fn row_5_with_the_transparent_as_target_the_transparent_target_notice_is_painted
         );
         bench.click_button(PaletteButton::Remove);
         let f = bench.click_swatch(1);
-        assert!(f.paints("quitar 3; destino 1"), "ppp {ppp}");
-        assert!(f.paints("aviso: destino transparente"), "ppp {ppp}");
-        assert!(!f.paints("elige otra muestra o confirma"), "ppp {ppp}");
+        assert!(f.hint_has("quitar 3; destino 1"), "ppp {ppp}");
+        assert!(f.hint_has("aviso: destino transparente"), "ppp {ppp}");
+        assert!(!f.hint_has("elige otra muestra o confirma"), "ppp {ppp}");
         // Con otro destino vuelve la ayuda.
         let f = bench.click_swatch(2);
-        assert!(f.paints("elige otra muestra o confirma"), "ppp {ppp}");
-        assert!(!f.paints_something_with("aviso:"), "ppp {ppp}");
+        assert!(f.hint_has("elige otra muestra o confirma"), "ppp {ppp}");
+        assert!(!f.hint_has("aviso:"), "ppp {ppp}");
     }
 }
 
@@ -1625,7 +1615,7 @@ fn row_5_with_one_entry_remove_warns_and_leaves_nothing_pending() {
             TEXT_DISABLED,
             "ppp {ppp}: atenuado"
         );
-        assert_eq!(bench.ink(&f, Icon::Add), TEXT, "ppp {ppp}");
+        assert_eq!(bench.ink(&f, Icon::RotateLeft), TEXT, "ppp {ppp}");
         assert_eq!(
             bench.ink(&f, Icon::RotateRight),
             TEXT,
@@ -1639,9 +1629,17 @@ fn row_5_with_one_entry_remove_warns_and_leaves_nothing_pending() {
             "ppp {ppp}"
         );
         assert!(bench.ops.removal().is_none(), "ppp {ppp}");
-        // Añadir sí se puede.
-        let f = bench.click_button(PaletteButton::Add);
-        assert_eq!(f.output_2.op, Some(PaletteOp::Add), "ppp {ppp}");
+        // Rotar sí se puede (aunque no haga nada).
+        let f = bench.click_button(PaletteButton::RotateRight);
+        assert_eq!(
+            f.output_2.op,
+            Some(PaletteOp::Rotate {
+                start: 0,
+                len: 1,
+                steps: 1
+            }),
+            "ppp {ppp}"
+        );
     }
 }
 
@@ -2132,8 +2130,8 @@ fn row_9_with_enabled_false_neither_buttons_nor_swatches_nor_shift_click_do_anyt
     for ppp in PPPS {
         let images: [(&str, Image, u8, PaletteButton); 3] = [
             ("F", image_f(), 1, PaletteButton::Remove),
-            // Con 256 entradas, `Añadir` avisaría si estuviera activo.
-            ("256", image_indexed_256(), 5, PaletteButton::Add),
+            // Con 256 entradas, ningún icono avisa.
+            ("256", image_indexed_256(), 5, PaletteButton::RotateLeft),
             // Con una sola entrada, `Remove` avisaría.
             ("1", image_a_input(), 0, PaletteButton::Remove),
         ];
@@ -2292,7 +2290,7 @@ fn row_9_with_a_focused_field_escape_does_not_cancel_the_pending_removal() {
 #[test]
 fn row_10_with_the_click_on_a_frame_the_commit_and_the_operation_come_out_together() {
     let mut bench = bench_with_pending(image_f(), ColorChoice::Entry(1), "#ff00ff");
-    let (x, y) = bench.center_of_button(PaletteButton::Add);
+    let (x, y) = bench.center_of_button(PaletteButton::RotateRight);
     bench.moves(x, y);
     let pos = in_points(bench.ppp(), x, y);
     let f = bench.frame(vec![
@@ -2306,7 +2304,14 @@ fn row_10_with_the_click_on_a_frame_the_commit_and_the_operation_come_out_togeth
             color: Rgba::opaque(255, 0, 255)
         })
     );
-    assert_eq!(f.output_2.op, Some(PaletteOp::Add));
+    assert_eq!(
+        f.output_2.op,
+        Some(PaletteOp::Rotate {
+            start: 0,
+            len: 4,
+            steps: 1
+        })
+    );
     assert!(!bench.editor.has_pending(), "no queda texto");
     assert!(bench.notices().is_empty());
 }
@@ -2318,7 +2323,7 @@ fn row_10_with_the_click_on_a_frame_the_commit_and_the_operation_come_out_togeth
 #[test]
 fn row_10_the_commit_of_the_field_arrives_before_the_operation_of_the_button() {
     let mut bench = bench_with_pending(image_f(), ColorChoice::Entry(1), "#ff00ff");
-    bench.click_button(PaletteButton::Add);
+    bench.click_button(PaletteButton::RotateRight);
     bench.rest_2_2();
     bench.rest_2_2();
     assert_eq!(
@@ -2328,7 +2333,14 @@ fn row_10_the_commit_of_the_field_arrives_before_the_operation_of_the_button() {
             color: Rgba::opaque(255, 0, 255)
         }]
     );
-    assert_eq!(bench.operations(), vec![PaletteOp::Add]);
+    assert_eq!(
+        bench.operations(),
+        vec![PaletteOp::Rotate {
+            start: 0,
+            len: 4,
+            steps: 1
+        }]
+    );
     let of_the_commit = bench.history.iter().position(|o| o.commit.is_some());
     let op_index = bench.history.iter().position(|o| o.op.is_some());
     assert!(
@@ -2603,7 +2615,7 @@ fn a_document_change_cancels_the_pending_removal_and_the_buttons_come_back() {
         assert_eq!(bench.cancellations, 1, "ppp {ppp}: `sync` avisa una vez");
         assert!(bench.ops.removal().is_none(), "ppp {ppp}");
         checks_buttons(&f, &bench, &NORMAL, &format!("ppp {ppp}"));
-        assert!(!f.paints_something_with("quitar 3"), "ppp {ppp}");
+        assert!(!f.hint_has("quitar 3"), "ppp {ppp}");
         bench.rest_2_2();
         assert_eq!(bench.cancellations, 1, "ppp {ppp}: no se repite");
 
@@ -2628,7 +2640,6 @@ fn a_document_change_cancels_the_pending_removal_and_the_buttons_come_back() {
 mod set_transparent {
     use super::*;
     use px_core::ImageId;
-    use px_ui::edit_layout::min_panel_height_px;
     use px_ui::text::{INTERFACE_CHARSET, fit_text};
 
     const SET: &str = "Fijar transparente";
@@ -2650,7 +2661,7 @@ mod set_transparent {
     /// normal (cara `SURFACE_2` o `SURFACE_3`, icono `TEXT`). El rótulo mismo es del tooltip.
     fn checks_button(f: &TestFrame, bench: &Bench, label: &str, context: &str) {
         let (ppp, n) = (bench.ppp(), bench.n());
-        let top = bench.geo().icons_top_px;
+        let top = bench.geo().tail_top_px;
         let (x, y, _, _) = rect_button_u(PaletteButton::Transparent);
         let pressed = label == REMOVE;
         let mesh = f
@@ -2725,18 +2736,18 @@ mod set_transparent {
     }
 
     #[test]
-    fn row_2_with_the_panel_at_its_minimum_height_the_button_fits_without_scrolling() {
+    fn row_2_with_the_panel_at_the_height_of_the_open_block_the_button_fits_without_scrolling() {
         for ppp in PPPS {
             let n = i64::from(text_scale(ppp));
             let mut bench = Bench::with_panel_height(
                 ppp,
-                min_panel_height_px(n as u32),
+                block_height_px(Mode::Indexed, n as u32),
                 image_f(),
                 ColorChoice::Entry(1),
             );
             let context = format!("ppp {ppp}");
             assert!(!bench.layout().scrolling, "{context}");
-            assert_eq!(bench.panel_h_px(), 277 * n, "{context}");
+            assert_eq!(bench.panel_h_px(), 241 * n, "{context}");
             let f = bench.rest_2_2();
             checks_button(&f, &bench, SET, &context);
             checks_buttons(&f, &bench, &NORMAL, &context);
@@ -2758,17 +2769,17 @@ mod set_transparent {
         for ppp in PPPS {
             let mut bench = bench_f(ppp, 2);
             let n = bench.n();
-            let top = bench.geo().icons_top_px;
+            let top = bench.geo().tail_top_px;
             // Dentro: la esquina y el último píxel físico; fuera: izquierda, derecha, 1 u sobre
             // el botón y bajo él.
             for (x, y, inside) in [
-                (118 * n, 2 * n, true),
-                (142 * n - 1, 26 * n - 1, true),
-                (130 * n, 14 * n, true),
-                (117 * n, 14 * n, false),
-                (142 * n, 14 * n, false),
-                (130 * n, 185 * n, false),
-                (130 * n, 26 * n, false),
+                (93 * n, 38 * n, true),
+                (117 * n - 1, 62 * n - 1, true),
+                (105 * n, 50 * n, true),
+                (92 * n, 50 * n, false),
+                (117 * n, 50 * n, false),
+                (105 * n, 185 * n, false),
+                (105 * n, 62 * n, false),
             ] {
                 bench.history.clear();
                 let f = bench.click(x, top + y);
@@ -2782,8 +2793,15 @@ mod set_transparent {
                 assert_eq!(bench.choices(), vec![], "{context}");
             }
             // Y las filas 1 a 3 siguen en sus puntos.
-            let f = bench.click(4 * n, top + 2 * n);
-            assert_eq!(f.output_2.op, Some(PaletteOp::Add));
+            let f = bench.click(36 * n, top + 38 * n);
+            assert_eq!(
+                f.output_2.op,
+                Some(PaletteOp::Rotate {
+                    start: 0,
+                    len: 4,
+                    steps: -1
+                })
+            );
         }
     }
 
@@ -3488,7 +3506,6 @@ mod icons_editor {
             let mut bench = bench_f(ppp, 1);
             let f = bench.rest_2_2();
             for button in [
-                PaletteButton::Add,
                 PaletteButton::Remove,
                 PaletteButton::RotateLeft,
                 PaletteButton::RotateRight,
@@ -3502,17 +3519,10 @@ mod icons_editor {
                     &format!("{context} {button:?}"),
                 );
             }
-            // Con 256 entradas, `Añadir` está desactivado; con una sola, `Remove`.
+            // Con 256 entradas todos los de la fila siguen activos; con una sola, `Remove` no.
             let mut bench =
                 Bench::new_2(ppp, SCREEN_HIGH, image_indexed_256(), ColorChoice::Entry(5));
             let f = bench.rest_2_2();
-            checks(
-                &f,
-                &bench,
-                PaletteButton::Add,
-                &look(false, false, false),
-                &context,
-            );
             checks(
                 &f,
                 &bench,
@@ -3571,25 +3581,22 @@ mod icons_editor {
             checks(
                 &f,
                 &bench,
-                PaletteButton::Add,
+                PaletteButton::Remove,
                 &look(false, true, false),
                 &format!("ppp {ppp}"),
             );
             // Un botón desactivado con el ratón encima sigue con la cara normal.
-            let mut bench =
-                Bench::new_2(ppp, SCREEN_HIGH, image_indexed_256(), ColorChoice::Entry(5));
-            let (x, y) = bench.center_of_button(PaletteButton::Add);
+            let mut bench = Bench::new_2(ppp, SCREEN_HIGH, image_a_input(), ColorChoice::Entry(0));
+            let (x, y) = bench.center_of_button(PaletteButton::Remove);
             bench.moves(x, y);
             let f = bench.rest_2_2();
             checks(
                 &f,
                 &bench,
-                PaletteButton::Add,
+                PaletteButton::Remove,
                 &look(false, false, true),
                 &format!("ppp {ppp}"),
             );
-            // Con un gesto en curso todo se ve normal (los controles no responden).
-            assert!(f.paints_icon(&bench.icons_2.set, Icon::Add));
         }
     }
 
@@ -3620,7 +3627,6 @@ mod icons_editor {
      {
         for ppp in [1.0, 1.5, 2.0] {
             for (button, expected_2) in [
-                (PaletteButton::Add, "Añadir entrada"),
                 (PaletteButton::Remove, "Quitar entrada"),
                 (PaletteButton::RotateLeft, "Rotar a la izquierda"),
                 (PaletteButton::RotateRight, "Rotar a la derecha"),
@@ -3658,7 +3664,7 @@ mod icons_editor {
         use egui::Role;
         use egui::output::OutputEvent;
         for (button, expected_2) in [
-            (PaletteButton::Add, "Añadir entrada"),
+            (PaletteButton::Remove, "Quitar entrada"),
             (PaletteButton::RotateRight, "Rotar a la derecha"),
             (PaletteButton::Transparent, "Fijar transparente"),
         ] {
@@ -3714,12 +3720,10 @@ mod icons_editor {
     }
 
     #[test]
-    fn row_9_the_five_icons_give_the_same_as_before_and_the_disabled_ones_warn() {
+    fn row_9_the_four_icons_give_the_same_as_before_and_the_disabled_one_warns() {
         use PaletteOp::*;
         for ppp in PPPS {
             let mut bench = bench_f(ppp, 1);
-            let f = bench.click_button(PaletteButton::Add);
-            assert_eq!(f.output_2.op, Some(Add), "ppp {ppp}");
             let f = bench.click_button(PaletteButton::RotateLeft);
             assert_eq!(
                 f.output_2.op,
@@ -3751,14 +3755,7 @@ mod icons_editor {
             assert!(bench.ops.removal().is_some(), "ppp {ppp}");
             let f = bench.rest_2_2();
             checks_buttons(&f, &bench, &WITH_REMOVES, &format!("ppp {ppp}"));
-            // Desactivados: 256 entradas y una sola entrada avisan, sin op.
-            let mut bench =
-                Bench::new_2(ppp, SCREEN_HIGH, image_indexed_256(), ColorChoice::Entry(5));
-            let f = bench.click_button(PaletteButton::Add);
-            assert_eq!(
-                (f.output_2.op, f.output_2.notice.as_deref()),
-                (None, Some("paleta llena: 256 entradas"))
-            );
+            // Desactivado: una sola entrada avisa, sin op (`Añadir` con 256 es del menú).
             let mut bench = Bench::new_2(ppp, SCREEN_HIGH, image_a_input(), ColorChoice::Entry(0));
             let f = bench.click_button(PaletteButton::Remove);
             assert_eq!(f.output_2.op, None);

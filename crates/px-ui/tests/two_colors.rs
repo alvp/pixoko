@@ -607,7 +607,7 @@ fn ppp_multiples_of_0_05() -> impl Iterator<Item = f32> {
 
 #[test]
 fn property_3_window_minimums_at_the_five_ppp_and_the_60_percent_criterion() {
-    for (ppp, height_2) in PPPS.into_iter().zip([313.0, 250.4, 417.33, 313.0, 313.0]) {
+    for (ppp, height_2) in PPPS.into_iter().zip([322.0, 257.6, 429.33, 322.0, 322.0]) {
         assert!(
             (min_window_height_pt(ppp) - height_2).abs() < 0.01,
             "alto con {ppp}: {}",
@@ -623,11 +623,11 @@ fn property_3_window_minimums_at_the_five_ppp_and_the_60_percent_criterion() {
 }
 
 #[test]
-fn property_3_the_indexed_block_measures_277_n_and_the_minimum_height_follows_the_formula() {
+fn property_3_the_indexed_block_measures_241_n_and_the_minimum_height_follows_the_formula() {
     for ppp in ppp_multiples_of_0_05() {
         let n = i64::from(text_scale(ppp));
-        assert_eq!(block_height_px(Mode::Indexed, n as u32), 277 * n);
-        let height_2 = ((20 + 16 + 277) * n) as f32 / ppp;
+        assert_eq!(block_height_px(Mode::Indexed, n as u32), 241 * n);
+        let height_2 = ((20 + 16 + 286) * n) as f32 / ppp;
         assert!(
             (min_window_height_pt(ppp) - height_2).abs() < 0.01,
             "ppp {ppp}"

@@ -4,11 +4,13 @@
 
 use proptest::prelude::*;
 use px_core::Mode;
-use px_ui::chrome::{COLUMN_DEFAULT_COLS, MENU_H_U, column_cols, head_u, window_layout};
+use px_ui::chrome::{
+    COLUMN_DEFAULT_COLS, COLUMN_MIN_COLS, MENU_H_U, column_cols, head_u, window_layout,
+};
 use px_ui::edit_layout::{
-    ICON_ROW_H_U, PaletteButton, block_height_closed_px, block_height_px, button_hit,
-    button_rect_u, column_layout, editor_height_u, icons_height_u, min_panel_height_px,
-    min_window_height_pt, min_window_width_pt, panel_layout, panel_layout_closed,
+    PaletteButton, block_height_closed_px, block_height_px, button_hit, button_rect_u,
+    column_layout, editor_height_u, min_panel_height_px, min_window_height_pt, min_window_width_pt,
+    panel_layout, panel_layout_closed, tail_height_u,
 };
 use px_ui::layers_panel::PANEL_H_U as LAYERS_PANEL_H_U;
 use px_ui::palette_grid::{
@@ -115,12 +117,12 @@ fn row_3_closed_the_icon_row_is_anchored_to_the_bottom_and_the_grid_takes_the_re
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
         for mode in MODES {
-            let icons = icons_height_u(mode) * k;
+            let icons = tail_height_u(mode) * k;
             for height in [300 * k, 450 * k, 700 * k, 2000 * k] {
                 let layout = panel_layout_closed(mode, height, n, 0);
                 assert!(!layout.scrolling);
-                assert_eq!(layout.icons_top_px, height - icons, "{mode:?} n={n}");
-                assert_eq!(layout.top_px, layout.icons_top_px + icons);
+                assert_eq!(layout.tail_top_px, height - icons, "{mode:?} n={n}");
+                assert_eq!(layout.top_px, layout.tail_top_px + icons);
                 let rows = (height - icons - GRID_Y_U * k) / (PITCH_U * k);
                 assert_eq!(
                     layout.visible_rows as i64, rows,
@@ -136,12 +138,12 @@ fn row_3_open_the_editor_is_anchored_below_the_icon_row_and_both_take_space_from
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
         for mode in MODES {
-            let (icons, editor) = (icons_height_u(mode) * k, editor_height_u(mode) * k);
+            let (icons, editor) = (tail_height_u(mode) * k, editor_height_u(mode) * k);
             for height in [400 * k, 700 * k, 2000 * k] {
                 let open = panel_layout(mode, height, n, 0);
                 let closed = panel_layout_closed(mode, height, n, 0);
                 assert_eq!(open.top_px, height - editor, "{mode:?} n={n}");
-                assert_eq!(open.icons_top_px, open.top_px - icons);
+                assert_eq!(open.tail_top_px, open.top_px - icons);
                 // Opening costs the grid exactly the editor's height, in whole rows.
                 assert!(open.visible_rows <= closed.visible_rows);
                 assert_eq!(
@@ -158,7 +160,7 @@ fn row_3_the_icon_row_hangs_from_a_short_grid_and_is_anchored_below_a_tall_one()
     // One formula: the smaller of the bottom of the grid and the bottom of the space minus the row.
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
-        let icons = ICON_ROW_H_U * k;
+        let icons = tail_height_u(Mode::Indexed) * k;
         for (entries, rows) in [
             (0usize, 0usize),
             (2, 1),
@@ -182,7 +184,7 @@ fn row_3_the_icon_row_hangs_from_a_short_grid_and_is_anchored_below_a_tall_one()
                     let grid_bottom = (GRID_Y_U + rows as i64 * PITCH_U) * k;
                     let expected = grid_bottom.min(space_bottom - icons);
                     assert_eq!(
-                        layout.icon_row_top_px(rows, n),
+                        layout.tail_top_for(rows, n),
                         expected,
                         "entries {entries} n={n} h={height} open={open}"
                     );
@@ -198,55 +200,55 @@ fn row_3_the_icon_row_examples_in_u() {
     let n = k as u32;
     // 16 entries, one row: right under the grid (49 + 14 = 63 u) closed or open.
     assert_eq!(
-        panel_layout_closed(Mode::Indexed, 700 * k, n, 0).icon_row_top_px(1, n),
+        panel_layout_closed(Mode::Indexed, 700 * k, n, 0).tail_top_for(1, n),
         63 * k
     );
     assert_eq!(
-        panel_layout(Mode::Indexed, 700 * k, n, 0).icon_row_top_px(1, n),
+        panel_layout(Mode::Indexed, 700 * k, n, 0).tail_top_for(1, n),
         63 * k
     );
-    // 256 entries closed in a 250 u panel: the grid is taller than the space, so the row is
-    // anchored to the bottom (250 − 28 = 222 u); in a 301 u panel the grid (49 + 224 = 273 u) is
-    // exactly the space above the row.
+    // 256 entries closed in a 250 u panel: the grid is taller than the space, so the tail is
+    // anchored to the bottom (250 − 64 = 186 u); in a 337 u panel the grid (49 + 224 = 273 u) is
+    // exactly the space above the tail.
     assert_eq!(
-        panel_layout_closed(Mode::Indexed, 250 * k, n, 0).icon_row_top_px(16, n),
-        222 * k
+        panel_layout_closed(Mode::Indexed, 250 * k, n, 0).tail_top_for(16, n),
+        186 * k
     );
     assert_eq!(
-        panel_layout_closed(Mode::Indexed, 301 * k, n, 0).icon_row_top_px(16, n),
+        panel_layout_closed(Mode::Indexed, 337 * k, n, 0).tail_top_for(16, n),
         273 * k
     );
-    // Open, 256 entries in a 400 u panel: the editor (186 u) is anchored below and the row sits
-    // right above it (400 − 186 − 28 = 186 u).
+    // Open, 256 entries in a 400 u panel: the editor (114 u) is anchored below and the tail sits
+    // right above it (400 − 114 − 64 = 222 u).
     assert_eq!(
-        panel_layout(Mode::Indexed, 400 * k, n, 0).icon_row_top_px(16, n),
-        186 * k
+        panel_layout(Mode::Indexed, 400 * k, n, 0).tail_top_for(16, n),
+        222 * k
     );
     // Panel scrolling as a whole: the row is where the block puts it.
     let scrolling = panel_layout(Mode::Indexed, 200 * k, n, 0);
     assert!(scrolling.scrolling);
-    assert_eq!(scrolling.icon_row_top_px(16, n), scrolling.icons_top_px);
+    assert_eq!(scrolling.tail_top_for(16, n), scrolling.tail_top_px);
 }
 
 #[test]
-fn row_3_the_indexed_block_measures_277_u_open_and_91_u_closed_and_scrolls_below_it() {
+fn row_3_the_indexed_block_measures_241_u_open_and_127_u_closed_and_scrolls_below_it() {
     for n in [1u32, 2, 3] {
         let k = i64::from(n);
-        assert_eq!(block_height_px(Mode::Indexed, n), 277 * k);
-        assert_eq!(block_height_closed_px(Mode::Indexed, n), 91 * k);
-        assert!(!panel_layout(Mode::Indexed, 277 * k, n, 0).scrolling);
-        assert!(panel_layout(Mode::Indexed, 277 * k - 1, n, 0).scrolling);
-        assert!(!panel_layout_closed(Mode::Indexed, 91 * k, n, 0).scrolling);
-        assert!(panel_layout_closed(Mode::Indexed, 91 * k - 1, n, 0).scrolling);
-        // At the open minimum the grid shows one row; closed at the minimum panel, fourteen.
-        assert_eq!(panel_layout(Mode::Indexed, 277 * k, n, 0).visible_rows, 1);
+        assert_eq!(block_height_px(Mode::Indexed, n), 241 * k);
+        assert_eq!(block_height_closed_px(Mode::Indexed, n), 127 * k);
+        assert!(!panel_layout(Mode::Indexed, 241 * k, n, 0).scrolling);
+        assert!(panel_layout(Mode::Indexed, 241 * k - 1, n, 0).scrolling);
+        assert!(!panel_layout_closed(Mode::Indexed, 127 * k, n, 0).scrolling);
+        assert!(panel_layout_closed(Mode::Indexed, 127 * k - 1, n, 0).scrolling);
+        // At the open block the grid shows one row; closed at 277 u, eleven.
+        assert_eq!(panel_layout(Mode::Indexed, 241 * k, n, 0).visible_rows, 1);
         assert_eq!(
             panel_layout_closed(Mode::Indexed, 277 * k, n, 0).visible_rows,
-            14
+            11
         );
-        // The 256 swatches (16 rows) fit entirely in a 301 u panel.
+        // The 256 swatches (16 rows) fit entirely in a 337 u panel.
         assert_eq!(
-            panel_layout_closed(Mode::Indexed, 301 * k, n, 0).visible_rows,
+            panel_layout_closed(Mode::Indexed, 337 * k, n, 0).visible_rows,
             16
         );
     }
@@ -267,8 +269,8 @@ fn row_3_heights_far_out_of_range_do_not_overflow() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn row_4_the_minimums_are_313_u_of_height_and_468_u_of_width_and_meet_the_criteria() {
-    let heights = [313.0f32, 250.4, 417.33, 313.0, 313.0];
+fn row_4_the_minimums_are_322_u_of_height_and_468_u_of_width_and_meet_the_criteria() {
+    let heights = [322.0f32, 257.6, 429.33, 322.0, 322.0];
     let widths = [468.0f32, 374.4, 624.0, 468.0, 468.0];
     for ((ppp, height), width) in PPPS.into_iter().zip(heights).zip(widths) {
         assert!(
@@ -283,7 +285,7 @@ fn row_4_the_minimums_are_313_u_of_height_and_468_u_of_width_and_meet_the_criter
         assert!(min_window_width_pt(ppp) <= 683.0, "ppp {ppp}");
     }
     for invalid in [f32::NAN, f32::INFINITY, 0.0, -2.0] {
-        assert!((min_window_height_pt(invalid) - 313.0).abs() < 0.01);
+        assert!((min_window_height_pt(invalid) - 322.0).abs() < 0.01);
     }
 }
 
@@ -292,9 +294,9 @@ fn row_4_the_minimum_panel_is_the_open_block_the_layers_panel_and_the_toolbox_al
     for n in [1u32, 2, 3, 8] {
         let k = i64::from(n);
         let minimum = min_panel_height_px(n);
-        assert_eq!(minimum, 277 * k);
-        // The open block of every mode, the layers panel (277 u) and the toolbox (20 tools at 8
-        // columns: `head` 184 u, plus the closed palette block of 91 u) fit.
+        assert_eq!(minimum, 286 * k);
+        // The open block of every mode, the layers panel (277 u) and the toolbox (20 tools at the
+        // minimum column: `head` 159 u, plus the closed palette block of 127 u) fit.
         for mode in MODES {
             assert!(block_height_px(mode, n) <= minimum, "{mode:?}");
         }
@@ -303,7 +305,7 @@ fn row_4_the_minimum_panel_is_the_open_block_the_layers_panel_and_the_toolbox_al
             "the layers panel does not fit"
         );
         assert!(
-            head_u(20, 8) * k + block_height_closed_px(Mode::Indexed, n) <= minimum,
+            head_u(20, COLUMN_MIN_COLS) * k + block_height_closed_px(Mode::Indexed, n) <= minimum,
             "the toolbox does not fit"
         );
         // Closed is never taller than open, and the minimum does not depend on the editor.
@@ -342,7 +344,7 @@ fn row_16_at_the_minimum_window_the_five_zones_tile_it_and_the_layers_panel_and_
         );
         assert_eq!(
             layout.toolbar.height + layout.panel.height,
-            277 * n,
+            286 * n,
             "ppp {ppp}: column at the minimum"
         );
         // Closed, the block fits in the panel under the toolbox without scrolling; open it does not
@@ -350,7 +352,7 @@ fn row_16_at_the_minimum_window_the_five_zones_tile_it_and_the_layers_panel_and_
         assert!(
             !column_layout(
                 Mode::Indexed,
-                277 * n,
+                286 * n,
                 n as u32,
                 0,
                 layout.toolbar.height,
@@ -361,7 +363,7 @@ fn row_16_at_the_minimum_window_the_five_zones_tile_it_and_the_layers_panel_and_
         assert!(
             column_layout(
                 Mode::Indexed,
-                277 * n,
+                286 * n,
                 n as u32,
                 0,
                 layout.toolbar.height,
@@ -370,8 +372,8 @@ fn row_16_at_the_minimum_window_the_five_zones_tile_it_and_the_layers_panel_and_
             .scrolling
         );
         // With no toolbox it is the panel of before.
-        assert!(!panel_layout(Mode::Indexed, 277 * n, n as u32, 0).scrolling);
-        assert!(!panel_layout_closed(Mode::Indexed, 277 * n, n as u32, 0).scrolling);
+        assert!(!panel_layout(Mode::Indexed, 286 * n, n as u32, 0).scrolling);
+        assert!(!panel_layout_closed(Mode::Indexed, 286 * n, n as u32, 0).scrolling);
         // Zones: tiling without gaps or overlaps.
         let zones = [
             layout.menu,
@@ -413,22 +415,22 @@ proptest! {
             panel_layout_closed(mode, height, n, 0)
         };
         prop_assert!(!layout.scrolling);
-        for v in [layout.top_px, layout.icons_top_px] {
+        for v in [layout.top_px, layout.tail_top_px] {
             prop_assert_eq!(v % k, 0);
         }
         // [band · grid · icons · editor] in order, no overlap, and they add up to the panel.
-        let icons = icons_height_u(mode) * k;
+        let icons = tail_height_u(mode) * k;
         let editor = if open { editor_height_u(mode) * k } else { 0 };
         let grid_top = GRID_Y_U * k;
         let grid_bottom = grid_top + layout.visible_rows as i64 * PITCH_U * k;
-        prop_assert!(grid_bottom <= layout.icons_top_px);
-        prop_assert_eq!(layout.top_px, layout.icons_top_px + icons);
+        prop_assert!(grid_bottom <= layout.tail_top_px);
+        prop_assert_eq!(layout.top_px, layout.tail_top_px + icons);
         prop_assert!(layout.top_px + editor <= height);
         prop_assert!(height - (layout.top_px + editor) < k, "pinned to the bottom");
         // What is left over between the grid and the icon row is less than one grid row.
-        prop_assert!(layout.icons_top_px - grid_bottom < PITCH_U * k, "less than a row left over");
+        prop_assert!(layout.tail_top_px - grid_bottom < PITCH_U * k, "less than a row left over");
         // The minimums follow the formula and meet the ceilings.
-        let formula = ((20 + MENU_H_U + 277) * k) as f32 / ppp;
+        let formula = ((20 + MENU_H_U + 286) * k) as f32 / ppp;
         prop_assert!((min_window_height_pt(ppp) - formula).abs() < 0.01);
         prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
         prop_assert!(min_window_width_pt(ppp) <= 683.0);
@@ -451,8 +453,8 @@ proptest! {
         };
         prop_assert!(!layout.scrolling);
         let rows = entries.div_ceil(16);
-        let top = layout.icon_row_top_px(rows, n);
-        let icons = ICON_ROW_H_U * k;
+        let top = layout.tail_top_for(rows, n);
+        let icons = tail_height_u(Mode::Indexed) * k;
         let editor_top = if open { layout.top_px } else { height };
         let shown = rows.min(layout.visible_rows) as i64;
         prop_assert_eq!(top % k, 0);
@@ -464,7 +466,7 @@ proptest! {
         if rows <= layout.visible_rows {
             prop_assert_eq!(top, (GRID_Y_U + rows as i64 * PITCH_U) * k);
         } else {
-            prop_assert_eq!(top, layout.icons_top_px);
+            prop_assert_eq!(top, layout.tail_top_px);
         }
     }
 
@@ -473,7 +475,7 @@ proptest! {
         n in 1u32..=8,
         removing in any::<bool>(),
         x in -30i64..=260,
-        y in -10i64..=40,
+        y in -10i64..=70,
         fx in 0i64..8,
         fy in 0i64..8,
     ) {
@@ -485,7 +487,6 @@ proptest! {
             &[PaletteButton::Confirm, PaletteButton::Cancel]
         } else {
             &[
-                PaletteButton::Add,
                 PaletteButton::Remove,
                 PaletteButton::RotateLeft,
                 PaletteButton::RotateRight,
@@ -497,8 +498,8 @@ proptest! {
             px >= bx * k && px < (bx + bw) * k && py >= by * k && py < (by + bh) * k
         });
         prop_assert_eq!(hit, oracle);
-        // Nothing hits outside the 28 u row.
-        if py < 0 || py >= ICON_ROW_H_U * k {
+        // Nothing hits outside the icon row (y from 38 to 62 u of the tail).
+        if py < 38 * k || py >= (tail_height_u(Mode::Indexed) - 2) * k {
             prop_assert_eq!(hit, None);
         }
         // The modes without a row never hit.

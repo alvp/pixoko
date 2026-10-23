@@ -19,9 +19,8 @@ use px_ui::chrome::{
 };
 use px_ui::edit_layout::{
     MIN_CANVAS_WIDTH_U, PaletteButton, block_height_closed_px, block_height_px, button_rect_u,
-    column_layout, editor_height_u, icons_height_u, min_panel_height_px, min_width_terms_u,
-    min_window_height_pt, min_window_width_pt, min_window_width_u, panel_layout,
-    panel_layout_closed,
+    column_layout, editor_height_u, min_panel_height_px, min_width_terms_u, min_window_height_pt,
+    min_window_width_pt, min_window_width_u, panel_layout, panel_layout_closed, tail_height_u,
 };
 use px_ui::layers_panel::PANEL_H_U as LAYERS_PANEL_H_U;
 use px_ui::palette_grid::{
@@ -197,23 +196,23 @@ fn row_2_the_toolbox_grid_with_5_12_and_20_tools_and_k_from_8_to_24() {
         for cols in [8, 14, 16] {
             let head = head_u(tools, cols);
             let n = 2;
-            let height = (head + 91 + 60) * n;
+            let height = (head + 127 + 60) * n;
             let layout = column_layout(Mode::Indexed, height, n as u32, 0, head * n, false);
-            assert!(layout.icons_top_px >= (head + GRID_Y_U + PITCH_U) * n);
+            assert!(layout.tail_top_px >= (head + GRID_Y_U + PITCH_U) * n);
             assert_eq!(
                 layout.top_px,
-                layout.icons_top_px + icons_height_u(Mode::Indexed) * n
+                layout.tail_top_px + tail_height_u(Mode::Indexed) * n
             );
         }
     }
 }
 
 #[test]
-fn extra_the_minimum_column_is_the_narrowest_where_the_whole_icon_row_fits() {
-    // The icon row ends at 4 + 24 + 1 + 24 + 8 + 24 + 1 + 24 + 8 + 24 = 142 u and keeps the same
-    // 4 u margin at the right as at the left.
+fn extra_the_minimum_column_holds_the_whole_icon_row() {
+    // The icon row (four icons since C3) ends at 4 + 24 + 8 + 24 + 1 + 24 + 8 + 24 = 117 u and
+    // keeps the same 4 u margin at the right as at the left. Since C3 the row no longer sets the
+    // minimum column (it was 142 u); the minimum stays at 10 columns (decision 10 of C3).
     let icons = [
-        PaletteButton::Add,
         PaletteButton::Remove,
         PaletteButton::RotateLeft,
         PaletteButton::RotateRight,
@@ -229,15 +228,13 @@ fn extra_the_minimum_column_is_the_narrowest_where_the_whole_icon_row_fits() {
             .max()
             .expect("some button")
     };
-    assert_eq!(right_edge(&icons), 142);
+    assert_eq!(right_edge(&icons), 117);
     let fits = |cols: i64, right: i64| right + 4 <= column_width_u(cols);
-    // The minimum column is the narrowest that holds the whole row, and 9 columns (135 u) do not.
     assert_eq!(COLUMN_MIN_COLS, 10);
-    assert!(fits(COLUMN_MIN_COLS, 142));
-    assert!(!fits(COLUMN_MIN_COLS - 1, 142));
-    assert_eq!(column_width_u(COLUMN_MIN_COLS - 1), 135);
+    assert_eq!(column_width_u(COLUMN_MIN_COLS), 149);
+    assert!(fits(COLUMN_MIN_COLS, 117));
     for cols in COLUMN_MIN_COLS..=64 {
-        assert!(fits(cols, 142), "k = {cols}");
+        assert!(fits(cols, 117), "k = {cols}");
         // Five tools of 24 u with gaps are no wider than the row of icons.
         for tools in [5usize, 12, 20] {
             for i in 0..tools + 4 {
@@ -260,14 +257,14 @@ fn extra_the_minimum_column_is_the_narrowest_where_the_whole_icon_row_fits() {
 
 #[test]
 fn row_3_the_grid_rows_seen_at_the_minimum_closed_and_the_capacity_rule() {
-    // Indexed, closed, column of 277 u: the grid shows 8, 6, 4, 2 and 1 rows with `head` of 84, 109,
-    // 134, 159 and 184 u.
+    // Indexed, closed, column of 286 u: the grid shows 6, 4, 2 and 1 rows with `head` of 84, 109,
+    // 134 and 159 u.
     for ppp in PPPS {
         let n = n_of(ppp) as u32;
         let k = i64::from(n);
-        assert_eq!(min_panel_height_px(n), 277 * k);
-        for (head, rows) in [(84, 8), (109, 6), (134, 4), (159, 2), (184, 1)] {
-            let layout = column_layout(Mode::Indexed, 277 * k, n, 0, head * k, false);
+        assert_eq!(min_panel_height_px(n), 286 * k);
+        for (head, rows) in [(84, 6), (109, 4), (134, 2), (159, 1)] {
+            let layout = column_layout(Mode::Indexed, 286 * k, n, 0, head * k, false);
             assert!(!layout.scrolling, "head {head}");
             assert_eq!(layout.visible_rows, rows, "ppp {ppp}, head {head}");
         }
@@ -291,9 +288,9 @@ fn row_3_the_grid_rows_seen_at_the_minimum_closed_and_the_capacity_rule() {
     // minimum window, 26 do not. It fails aloud; it does not clip.
     assert_eq!(tool_rows(20, COLUMN_MIN_COLS), 4);
     assert_eq!(head_u(20, COLUMN_MIN_COLS), 159);
-    assert!(head_u(20, COLUMN_MIN_COLS) <= 277 - 91);
-    assert!(head_u(25, COLUMN_MIN_COLS) <= 277 - 91);
-    assert!(head_u(26, COLUMN_MIN_COLS) > 277 - 91);
+    assert!(head_u(20, COLUMN_MIN_COLS) <= 286 - 127);
+    assert_eq!(head_u(20, COLUMN_MIN_COLS), 286 - 127, "0 u to spare");
+    assert!(head_u(21, COLUMN_MIN_COLS) > 286 - 127);
     // The layers panel (277 u) and the options window (at most 248 u) fit the minimum.
     for n in 1..=3u32 {
         assert!(LAYERS_PANEL_H_U * i64::from(n) <= min_panel_height_px(n));
@@ -325,7 +322,7 @@ fn row_3_the_open_block_scrolls_as_a_whole_with_a_low_window_and_head_zero_is_th
                         // Everything hangs from the column's top: the icon row is under the first
                         // grid row of the palette, which starts at `head`, and moves up with the scroll.
                         assert_eq!(
-                            layout.icons_top_px,
+                            layout.tail_top_px,
                             head + (GRID_Y_U + PITCH_U) * k - layout.offset_px
                         );
                     }
@@ -391,7 +388,7 @@ fn row_3_opening_the_editor_scrolls_to_the_maximum_and_closing_it_brings_the_pre
 fn row_3_the_minimum_window_at_the_five_scales_and_with_an_invalid_ppp() {
     for ((ppp, height), width) in PPPS
         .into_iter()
-        .zip([313.0f32, 250.4, 417.33, 313.0, 313.0])
+        .zip([322.0f32, 257.6, 429.33, 322.0, 322.0])
         .zip([468.0f32, 374.4, 624.0, 468.0, 468.0])
     {
         assert!(
@@ -403,7 +400,7 @@ fn row_3_the_minimum_window_at_the_five_scales_and_with_an_invalid_ppp() {
         assert!(min_window_width_pt(ppp) <= 683.0, "ppp {ppp}");
     }
     for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -2.0] {
-        assert!((min_window_height_pt(invalid) - 313.0).abs() < 0.01);
+        assert!((min_window_height_pt(invalid) - 322.0).abs() < 0.01);
         assert!((min_window_width_pt(invalid) - 468.0).abs() < 0.01);
     }
     // Each term of the width by itself, and the width is the widest of them.
@@ -532,9 +529,9 @@ proptest! {
             head + block_height_closed_px(mode, n)
         };
         let placed = column_layout(mode, band, n, 0, head, open);
-        let icons = icons_height_u(mode) * k;
+        let icons = tail_height_u(mode) * k;
         let editor = if open { editor_height_u(mode) * k } else { 0 };
-        for v in [placed.top_px, placed.icons_top_px, placed.offset_px, placed.max_offset_px] {
+        for v in [placed.top_px, placed.tail_top_px, placed.offset_px, placed.max_offset_px] {
             prop_assert_eq!(v % k, 0);
         }
         if band >= block {
@@ -542,8 +539,8 @@ proptest! {
             let grid_top = head + GRID_Y_U * k;
             let grid_bottom = grid_top + placed.visible_rows as i64 * PITCH_U * k;
             prop_assert!(head <= grid_top);
-            prop_assert!(grid_bottom <= placed.icons_top_px);
-            prop_assert_eq!(placed.top_px, placed.icons_top_px + icons);
+            prop_assert!(grid_bottom <= placed.tail_top_px);
+            prop_assert_eq!(placed.top_px, placed.tail_top_px + icons);
             prop_assert!(placed.top_px + editor <= band);
             prop_assert!(band - (placed.top_px + editor) < k, "anclado abajo");
         } else {
@@ -575,7 +572,7 @@ proptest! {
         }
 
         // The minimums follow the formulas and meet the ceilings.
-        let height_2 = ((20 + MENU_H_U + 277) * k) as f32 / ppp;
+        let height_2 = ((20 + MENU_H_U + 286) * k) as f32 / ppp;
         prop_assert!((min_window_height_pt(ppp) - height_2).abs() < 0.01);
         prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
         let width_2 = (min_window_width_u() * k) as f32 / ppp;

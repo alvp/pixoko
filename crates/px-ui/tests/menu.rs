@@ -101,7 +101,15 @@ fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
                 ("Borrar página", AppAction::ClearPage),
             ],
         ),
-        ("Imagen", vec![("Convertir modo…", AppAction::ConvertMode)]),
+        (
+            "Imagen",
+            vec![
+                ("Convertir modo…", AppAction::ConvertMode),
+                ("Añadir entrada", AppAction::AddPaletteEntry),
+                ("Quitar entrada", AppAction::RemovePaletteEntry),
+                ("Tamaño de la paleta…", AppAction::PaletteSize),
+            ],
+        ),
         (
             "Capa",
             vec![
@@ -163,9 +171,9 @@ fn row_1_the_separator_goes_only_before_quit() {
 }
 
 #[test]
-fn row_1_there_are_twenty_nine_entries_and_no_action_repeats() {
+fn row_1_there_are_thirty_two_entries_and_no_action_repeats() {
     let actions: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
-    assert_eq!(actions.len(), 29);
+    assert_eq!(actions.len(), 32);
     for (i, a) in actions.iter().enumerate() {
         assert!(
             !actions[i + 1..].contains(a),
@@ -182,6 +190,12 @@ fn row_1_there_are_twenty_nine_entries_and_no_action_repeats() {
     // `Borrar página` (I.2a) cierra `Editar`, antes de `TestImage`.
     expected_2.push(AppAction::ClearPage);
     expected_2.push(AppAction::ConvertMode);
+    // The three palette actions of C3 follow `Convertir modo…`.
+    expected_2.extend([
+        AppAction::AddPaletteEntry,
+        AppAction::RemovePaletteEntry,
+        AppAction::PaletteSize,
+    ]);
     expected_2.extend([
         AppAction::NewLayer,
         AppAction::DuplicateLayer,
@@ -227,7 +241,7 @@ fn texts_of_shortcut(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn some(texts: [Option<&str>; 29]) -> Vec<Option<String>> {
+fn some(texts: [Option<&str>; 32]) -> Vec<Option<String>> {
     texts.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -245,6 +259,9 @@ fn row_1_shortcuts_on_linux() {
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             Some("K"),
+            None,
+            None,
+            None,
             None,
             Some(";"),
             None,
@@ -284,6 +301,9 @@ fn row_1_shortcuts_on_windows_are_those_of_linux_except_quit_which_has_none() {
             Some("Ctrl+Y"),
             Some("K"),
             None,
+            None,
+            None,
+            None,
             Some(";"),
             None,
             None,
@@ -322,6 +342,9 @@ fn row_1_shortcuts_on_mac_use_cmd_redo_is_cmd_shift_z_and_quit_has_none() {
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
             Some("K"),
+            None,
+            None,
+            None,
             None,
             Some(";"),
             None,
@@ -923,7 +946,7 @@ fn menu_image() -> Menu {
 }
 
 #[test]
-fn row_10_image_is_the_third_menu_between_edit_and_view_with_a_single_entry() {
+fn row_10_image_is_the_third_menu_between_edit_and_view_with_convert_and_three_palette_entries() {
     let titles: Vec<&str> = MENUS.iter().map(title).collect();
     assert_eq!(titles.iter().position(|t| *t == "Imagen"), Some(2));
     assert_eq!(titles[1], "Editar");
@@ -931,7 +954,11 @@ fn row_10_image_is_the_third_menu_between_edit_and_view_with_a_single_entry() {
     assert_eq!(titles[4], "Ver");
 
     let image_2 = menu_image();
-    assert_eq!(image_2.items.len(), 1, "una sola entrada");
+    assert_eq!(
+        image_2.items.len(),
+        4,
+        "convertir y las tres de la paleta (C3)"
+    );
     let input_2 = image_2.items[0];
     assert_eq!(input_2.label, "Convertir modo…");
     assert_eq!(input_2.action, AppAction::ConvertMode);

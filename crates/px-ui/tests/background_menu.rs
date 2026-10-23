@@ -216,6 +216,12 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
     // `Borrar página` (I.2a) cierra `Editar`, antes de `TestImage`.
     expected_2.push(AppAction::ClearPage);
     expected_2.push(AppAction::ConvertMode);
+    // The three palette actions of C3 follow `Convertir modo…`.
+    expected_2.extend([
+        AppAction::AddPaletteEntry,
+        AppAction::RemovePaletteEntry,
+        AppAction::PaletteSize,
+    ]);
     expected_2.extend([
         AppAction::NewLayer,
         AppAction::DuplicateLayer,
@@ -264,7 +270,12 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
     );
     assert_eq!(
         labels_and_actions(menu_titled("Imagen").items),
-        [("Convertir modo…", AppAction::ConvertMode)]
+        [
+            ("Convertir modo…", AppAction::ConvertMode),
+            ("Añadir entrada", AppAction::AddPaletteEntry),
+            ("Quitar entrada", AppAction::RemovePaletteEntry),
+            ("Tamaño de la paleta…", AppAction::PaletteSize),
+        ]
     );
     assert_eq!(
         labels_and_actions(menu_titled("Ayuda").items),

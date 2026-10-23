@@ -897,7 +897,7 @@ proptest! {
 
     /// At any width the user can choose (and any the window allows), with the editor open or closed
     /// and with a removal pending or not, every 24 u button of the column is painted whole: the nine
-    /// buttons of the toolbox and the five icons of the palette (or the two text buttons of a
+    /// buttons of the toolbox and the four icons of the palette (or the two text buttons of a
     /// pending removal) lie inside the column and inside their own clip rectangle.
     #[test]
     fn extra_property_no_row_of_icons_or_buttons_is_clipped_or_loses_a_button(
@@ -927,8 +927,8 @@ proptest! {
         };
         let squares: Vec<_> = f.painted.fills.iter().filter(|x| wide(&x.rect, side)).collect();
         let halves: Vec<_> = f.painted.fills.iter().filter(|x| wide(&x.rect, text_side)).collect();
-        // Nine toolbox buttons, plus five icons (or the two text buttons of the removal).
-        let (expected_squares, expected_halves) = if removal { (9, 2) } else { (14, 0) };
+        // Nine toolbox buttons, plus four icons (or the two text buttons of the removal).
+        let (expected_squares, expected_halves) = if removal { (9, 2) } else { (13, 0) };
         prop_assert_eq!(squares.len(), expected_squares, "botones de 24 u");
         prop_assert_eq!(halves.len(), expected_halves, "botones de texto");
         for fill in squares.into_iter().chain(halves) {

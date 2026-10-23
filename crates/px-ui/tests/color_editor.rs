@@ -48,22 +48,23 @@ use egui::{
 use px_core::{Image, Mode, Palette, Pixel, Rgba};
 use px_ui::canvas::{Canvas, CanvasInfo, CanvasInput};
 use px_ui::color::{ColorChoice, SlotColors};
+use px_ui::color_bar::bar_label;
 use px_ui::color_edit::{
     ColorEditor, Commit, Control, EditTarget, HexOutcome, control_value, controls, hex_notice,
     hex_text, slider_value_at, slider_x,
 };
 use px_ui::edit_layout::{
-    FIELD_H_U, FIELD_W_U, FIELD_X_U, HEADER_X_U, HEADER_Y_U, HIT_X0_U, HIT_X1_U, ROW_H_U,
-    TRACK_W_U, TRACK_X_U, control_row_u, field_y_u, panel_layout, slider_hit,
+    FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, FIRST_ROW_Y_U, HIT_X0_U, HIT_X1_U, LABEL_X_U,
+    ROW_H_U, TRACK_W_U, TRACK_X_U, control_row_u, panel_layout, slider_hit,
 };
 use px_ui::palette_grid::{
-    self, CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U,
+    self, CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, total_rows,
 };
 use px_ui::palette_panel::{self, PanelOutput};
 use px_ui::shortcuts::gate_keys;
 use px_ui::status::{bar_height_px, columns};
 use px_ui::text::{INTERFACE_CHARSET, apply_scale, install_fonts, text_scale};
-use px_ui::theme::SURFACE_0;
+use px_ui::theme::{SURFACE_0, WARNING};
 use px_ui::view::Zoom;
 
 #[path = "common/zones.rs"]
@@ -206,14 +207,27 @@ struct Painted {
     width_px: f32,
 }
 
-fn collects(shape: &Shape, ppp: f32, texts: &mut Vec<Painted>, rects: &mut Vec<(Rect, Color32)>) {
+/// What the frame painted, besides the texts: the fills of the rectangles and their strokes (color
+/// and width in points), which is how the border of the hexadecimal field is told.
+#[derive(Default)]
+struct Rects {
+    fills: Vec<(Rect, Color32)>,
+    strokes: Vec<(Rect, Color32, f32)>,
+}
+
+fn collects(shape: &Shape, ppp: f32, texts: &mut Vec<Painted>, rects: &mut Rects) {
     match shape {
         Shape::Text(t) => texts.push(Painted {
             text_2: t.galley.text().to_owned(),
             pos: t.pos,
             width_px: t.galley.size().x * ppp,
         }),
-        Shape::Rect(r) => rects.push((r.rect, r.fill)),
+        Shape::Rect(r) => {
+            rects.fills.push((r.rect, r.fill));
+            if r.stroke.width > 0.0 {
+                rects.strokes.push((r.rect, r.stroke.color, r.stroke.width));
+            }
+        }
         Shape::Vec(shapes_2) => {
             for shape_2 in shapes_2 {
                 collects(shape_2, ppp, texts, rects);
@@ -251,6 +265,7 @@ struct TestFrame {
     output_2: PanelOutput,
     texts: Vec<Painted>,
     rects: Vec<(Rect, Color32)>,
+    strokes: Vec<(Rect, Color32, f32)>,
     /// `text_edit_focused()` justo antes y justo después del fotograma.
     wants_before: bool,
     wants_after: bool,
@@ -275,6 +290,11 @@ impl TestFrame {
     fn there_is_fill(&self, color: Color32) -> bool {
         self.rects.iter().any(|(_, fill)| *fill == color)
     }
+
+    /// The border of the hexadecimal field is `WARNING` (an invalid text is still in the field).
+    fn warning_border(&self) -> bool {
+        self.strokes.iter().any(|(_, color, _)| *color == WARNING)
+    }
 }
 
 /// Medidas del editor a la escala del banco, en píxeles físicos.
@@ -284,6 +304,8 @@ struct Geo {
     n: i64,
     mode: Mode,
     top_px: i64,
+    /// Top edge of the tail under the grid (bar, field, icon row), where the field lives.
+    tail_top_px: i64,
 }
 
 impl Geo {
@@ -316,7 +338,7 @@ impl Geo {
     fn field_2(&self) -> (i64, i64) {
         (
             FIELD_X_U * self.n + FIELD_W_U * self.n / 2,
-            self.top_px + field_y_u(self.mode) * self.n + FIELD_H_U * self.n / 2,
+            self.tail_top_px + FIELD_Y_U * self.n + FIELD_H_U * self.n / 2,
         )
     }
 }
@@ -396,11 +418,13 @@ impl Bench {
         let n = self.n();
         let layout = panel_layout(mode, self.panel_h_px(), n as u32, 0);
         assert!(!layout.scrolling, "el bloque cabe sin desplazar");
+        let rows = total_rows(self.image.palette().map_or(0, |p| p.len() + 1));
         Geo {
             ppp: self.ppp(),
             n,
             mode,
             top_px: layout.top_px,
+            tail_top_px: layout.tail_top_for(rows, n as u32),
         }
     }
 
@@ -456,7 +480,7 @@ impl Bench {
         output_2.textures_delta.clear();
         let shapes_2: Vec<ClippedShape> = std::mem::take(&mut output_2.shapes);
         let (rect_canvas, entries, info, panel) = result.expect("el lienzo se dibuja");
-        let (mut texts, mut rects) = (Vec::new(), Vec::new());
+        let (mut texts, mut rects) = (Vec::new(), Rects::default());
         for clipped in &shapes_2 {
             collects(&clipped.shape, ppp, &mut texts, &mut rects);
         }
@@ -467,7 +491,8 @@ impl Bench {
             info,
             output_2: panel,
             texts,
-            rects,
+            rects: rects.fills,
+            strokes: rects.strokes,
             wants_before,
             wants_after: self.ctx.text_edit_focused(),
         }
@@ -629,25 +654,12 @@ fn checks_that_fits(f: &TestFrame, ppp: f32, context: &str) {
 }
 
 #[test]
-fn row_02_the_headers_are_those_of_the_spec() {
-    assert_eq!(
-        EditTarget::Entry(12).header(Mode::Indexed),
-        "editar índice 12"
-    );
-    assert_eq!(EditTarget::Slot(3).header(Mode::Rgba), "editar color 3");
-    assert_eq!(
-        EditTarget::Slot(4).header(Mode::Gray),
-        "editar color 4 gris"
-    );
-}
-
-#[test]
-fn row_02_the_transparent_notice_is_two_lines_and_the_first_27_columns() {
-    let editor = ColorEditor::default();
-    let [first, second] = editor.notice(true);
-    assert_eq!(first, "aviso: entrada transparente");
-    assert_eq!(first.chars().count(), 27);
-    assert_eq!(second, "se guarda con alfa 0");
+fn row_02_the_headers_are_the_text_of_the_color_bar() {
+    // The header of the editor became the text of the bar under the grid (C3).
+    assert_eq!(bar_label(EditTarget::Entry(12), false), "Idx-12");
+    assert_eq!(bar_label(EditTarget::Slot(3), false), "Col-3");
+    assert_eq!(bar_label(EditTarget::Slot(4), false), "Col-4");
+    assert_eq!(bar_label(EditTarget::Entry(3), true), "Idx-3 transp.");
 }
 
 #[test]
@@ -661,13 +673,16 @@ fn row_02_the_longest_texts_are_laid_out_with_panic_and_fit_at_all_ppp() {
                 let target_2 = EditTarget::of(&image, choice).expect("destino válido");
                 let base = target_2.stored(&image, &bench.slots).expect("guardado");
 
-                // En reposo: la cabecera y el color del campo, todo dentro de las columnas.
+                // En reposo: el texto de la barra y el color del campo, todo dentro de las columnas.
+                let transparent = image.palette().is_some_and(|p| {
+                    p.transparent_index().map(EditTarget::Entry) == Some(target_2)
+                });
                 let f = bench.rest_2_2();
                 checks_that_fits(&f, ppp, &context);
                 assert!(
-                    f.paints(&target_2.header(mode)),
-                    "{context}: falta la cabecera {:?}",
-                    target_2.header(mode)
+                    f.paints(&bar_label(target_2, transparent)),
+                    "{context}: falta el texto de la barra {:?}",
+                    bar_label(target_2, transparent)
                 );
                 assert!(
                     f.paints(&hex_text(base)),
@@ -675,22 +690,8 @@ fn row_02_the_longest_texts_are_laid_out_with_panic_and_fit_at_all_ppp() {
                     hex_text(base)
                 );
 
-                // La transparente: el aviso de dos líneas.
-                let transparent = image.palette().is_some_and(|p| {
-                    p.transparent_index().map(EditTarget::Entry) == Some(target_2)
-                });
-                if transparent {
-                    assert!(
-                        f.paints("aviso: entrada transparente"),
-                        "{context}: primera línea del aviso"
-                    );
-                    assert!(
-                        f.paints("se guarda con alfa 0"),
-                        "{context}: segunda línea del aviso"
-                    );
-                }
-
-                // Cada aviso del hexadecimal inválido (el de una línea, `notice: ` + motivo).
+                // Cada hexadecimal inválido: el motivo cabe en la barra de estado (32 columnas con
+                // `aviso: `) y el borde del campo pasa a `WARNING`; el editor no pinta ningún aviso.
                 for written in TEXTS_INVALID {
                     bench.editor.type_hex(target_2, base, written.to_owned());
                     let HexOutcome::Invalid(error) = bench.editor.confirm_hex(mode, false) else {
@@ -700,8 +701,9 @@ fn row_02_the_longest_texts_are_laid_out_with_panic_and_fit_at_all_ppp() {
                     let f = bench.rest_2_2();
                     let context = format!("{context}, {written:?} → {error:?}");
                     checks_that_fits(&f, ppp, &context);
+                    assert!(f.warning_border(), "{context}: falta el borde de aviso");
                     let line = format!("aviso: {}", hex_notice(&error));
-                    assert!(f.paints(&line), "{context}: falta la línea {line:?}");
+                    assert!(!f.paints(&line), "{context}: el editor no pinta el aviso");
                     assert!(line.chars().count() <= 32, "{context}: {line:?} no cabe");
                     bench.editor.escape_hex();
                 }
@@ -721,7 +723,7 @@ fn row_02_the_longest_header_and_the_three_digit_value_fit() {
             ColorChoice::Entry(255),
         );
         let f = bench.rest_2_2();
-        assert!(f.paints("editar índice 255"), "ppp {ppp}");
+        assert!(f.paints("Idx-255"), "ppp {ppp}");
         checks_that_fits(&f, ppp, &format!("ppp {ppp}"));
     }
 }
@@ -731,7 +733,7 @@ fn row_02_the_longest_header_and_the_three_digit_value_fit() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn row_13b_the_transparent_shows_the_stored_one_and_the_two_line_notice() {
+fn row_13b_the_transparent_shows_the_stored_one_and_the_transp_mark_in_the_bar() {
     // [R, G, (0,0,255,255)] con transparente Some(2) y la 2 elegida.
     let mut palette = Palette::from_colors([RED, GREEN, BLUE]).expect("paleta");
     palette.set_transparent_index(Some(2)).expect("existe");
@@ -743,8 +745,8 @@ fn row_13b_the_transparent_shows_the_stored_one_and_the_two_line_notice() {
         !f.paints("#0000ff00"),
         "el campo no muestra el resuelto (con alfa 0)"
     );
-    assert!(f.paints("aviso: entrada transparente"));
-    assert!(f.paints("se guarda con alfa 0"));
+    assert!(f.paints("Idx-2 transp."), "la barra lo dice");
+    assert!(!f.paints_something_with("se guarda con alfa 0"));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -758,19 +760,20 @@ fn the_editor_anchors_to_the_bottom_and_does_not_move_with_the_number_of_entries
         let mut few = bench_f(ppp, 1);
         let mut many = Bench::new_2(ppp, SCREEN_HIGH, image_indexed_256(), ColorChoice::Entry(1));
         let geo = few.geo();
+        // Without a header the editor starts with the first slider (the label «R», C3).
         let expected_2 = (
-            (HEADER_X_U * n) as f32,
-            (geo.top_px + HEADER_Y_U * n) as f32,
+            (LABEL_X_U * n) as f32,
+            (geo.top_px + FIRST_ROW_Y_U * n) as f32,
         );
         for (name_2, bench) in [("4 entradas", &mut few), ("256 entradas", &mut many)] {
             let f = bench.rest_2_2();
-            let header = f
-                .text_painted("editar índice 1")
-                .unwrap_or_else(|| panic!("ppp {ppp}, {name_2}: sin cabecera"));
-            let (x, y) = (header.pos.x * ppp, header.pos.y * ppp);
+            let label = f
+                .text_painted("R")
+                .unwrap_or_else(|| panic!("ppp {ppp}, {name_2}: sin el primer deslizador"));
+            let (x, y) = (label.pos.x * ppp, label.pos.y * ppp);
             assert!(
                 (x - expected_2.0).abs() <= 0.05 && (y - expected_2.1).abs() <= 0.05,
-                "ppp {ppp}, {name_2}: cabecera en ({x}, {y}) px y se esperaba {expected_2:?}"
+                "ppp {ppp}, {name_2}: «R» en ({x}, {y}) px y se esperaba {expected_2:?}"
             );
         }
     }
@@ -786,7 +789,7 @@ fn the_hexadecimal_field_is_painted_where_edit_layout_says_with_the_background_s
         let expected_2 = Rect::from_min_size(
             pos2(
                 (FIELD_X_U * n) as f32 / ppp,
-                (geo.top_px + field_y_u(geo.mode) * n) as f32 / ppp,
+                (geo.tail_top_px + FIELD_Y_U * n) as f32 / ppp,
             ),
             vec2((FIELD_W_U * n) as f32 / ppp, (FIELD_H_U * n) as f32 / ppp),
         );
@@ -1042,8 +1045,9 @@ fn row_11_enter_with_invalid_keeps_the_focus_the_text_and_the_editor_notice() {
     let f = bench.frame(vec![key_2(Key::Enter)]);
     assert_eq!(f.output_2.commit, None);
     assert_eq!(
-        f.output_2.notice, None,
-        "con Intro el aviso es del editor, no de la barra"
+        f.output_2.notice.as_deref(),
+        Some(REASON_DIGIT),
+        "con Intro el motivo va a la barra de estado (C3: el editor ya no tiene avisos)"
     );
     let f = bench.rest_2_2();
     assert!(
@@ -1056,8 +1060,12 @@ fn row_11_enter_with_invalid_keeps_the_focus_the_text_and_the_editor_notice() {
         "y el texto escrito"
     );
     assert!(
-        f.paints(&format!("aviso: {REASON_DIGIT}")),
-        "el editor muestra el aviso"
+        f.warning_border(),
+        "mientras el texto inválido sigue, el borde avisa"
+    );
+    assert!(
+        !f.paints_something_with(REASON_DIGIT),
+        "el editor no pinta avisos"
     );
     assert_eq!(bench.image, before, "el documento no cambia");
     assert!(bench.commits().is_empty());
@@ -1066,10 +1074,7 @@ fn row_11_enter_with_invalid_keeps_the_focus_the_text_and_the_editor_notice() {
     bench.frame(vec![text_2("q")]);
     let f = bench.rest_2_2();
     assert_eq!(bench.editor.hex_display(), Some("zzzq".to_owned()));
-    assert!(
-        !f.paints_something_with(REASON_DIGIT),
-        "al teclear el aviso del editor se va"
-    );
+    assert!(!f.warning_border(), "al teclear el borde de aviso se va");
     assert!(bench.wants_keyboard());
 }
 
@@ -1167,18 +1172,18 @@ fn row_11_escape_reverts_the_text_without_a_notice_or_step() {
 }
 
 #[test]
-fn row_11_escape_after_an_invalid_enter_removes_the_editor_notice() {
+fn row_11_escape_after_an_invalid_enter_removes_the_warning_border() {
     let mut bench = bench_f(1.0, 2);
     bench.focuses_field();
     bench.writes("zzz");
     bench.frame(vec![key_2(Key::Enter)]);
     let f = bench.rest_2_2();
-    assert!(f.paints_something_with(REASON_DIGIT));
+    assert!(f.warning_border());
     bench.history.clear();
 
     bench.frame(vec![key_2(Key::Escape)]);
     let f = bench.rest_2_2();
-    assert!(!f.paints_something_with(REASON_DIGIT));
+    assert!(!f.warning_border());
     assert!(bench.notices().is_empty());
     assert!(bench.commits().is_empty());
     assert_eq!(bench.editor.hex_display(), None);
@@ -1363,8 +1368,8 @@ fn without_a_target_there_is_no_editor_or_commit_even_if_the_panel_is_low() {
             assert!(bench.actual().is_none(), "{choice:?} no tiene destino");
             let f = bench.rest_2_2();
             assert!(
-                !f.paints_something_with("editar"),
-                "{choice:?}, alto {height_2}: sin destino no hay editor"
+                !f.paints_something_with("Idx-") && !f.paints_something_with("Col-"),
+                "{choice:?}, alto {height_2}: sin destino no hay barra ni editor"
             );
             assert_eq!(f.output_2.commit, None);
             assert_eq!(f.output_2.notice, None);

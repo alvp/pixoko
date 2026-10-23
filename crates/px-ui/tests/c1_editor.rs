@@ -205,8 +205,9 @@ impl Bench {
 
     /// Top edge of the icon row: under the grid when it is short, anchored when it is tall.
     fn icons_top(&self) -> i64 {
-        let rows = total_rows(self.image.palette().map_or(0, |p| p.len()));
-        self.layout().icon_row_top_px(rows, self.n() as u32)
+        // The grid holds the entries and the handle (C3).
+        let rows = total_rows(self.image.palette().map_or(0, |p| p.len() + 1));
+        self.layout().tail_top_for(rows, self.n() as u32)
     }
 
     fn button_center(&self, button: PaletteButton) -> (i64, i64) {
@@ -467,7 +468,8 @@ fn row_11_a_tall_grid_anchors_the_icon_row_to_the_bottom_or_right_above_the_edit
                 Role::Foreground,
             ),
         );
-        // 290 u: lower than the 301 u the 16 rows and the icon row need, and above the 277 u block.
+        // 290 u: lower than the 351 u the 17 rows (256 entries and the handle) and the tail need,
+        // and above the 241 u block.
         bench.height = 290.0;
         let height = (bench.height * ppp).round() as i64;
         let n = bench.n();
@@ -477,9 +479,9 @@ fn row_11_a_tall_grid_anchors_the_icon_row_to_the_bottom_or_right_above_the_edit
         let open = bench.icons_top();
         // The 16 rows of the grid do not fit: closed, the row closes the panel; open, it sits right
         // above the editor.
-        assert_eq!(closed + 28 * n, height, "ppp {ppp}");
+        assert_eq!(closed + 64 * n, height, "ppp {ppp}");
         assert!(open < closed, "ppp {ppp}");
-        assert_eq!(bench.layout().top_px - open, 28 * n, "ppp {ppp}");
+        assert_eq!(bench.layout().top_px - open, 64 * n, "ppp {ppp}");
     }
 }
 
@@ -495,15 +497,6 @@ fn row_12_every_palette_operation_works_with_the_editor_closed_and_open_and_acts
             let r = roles(ColorChoice::Entry(3), ColorChoice::Entry(1), editing);
             let edited = if editing == Role::Foreground { 3 } else { 1 };
             let context = format!("open {open}, {editing:?}");
-
-            let mut bench = Bench::new(1.0, image_with_unused_entries(), r);
-            bench.view.editor_open = open;
-            bench.rest();
-            let out = bench.click(
-                bench.button_center(PaletteButton::Add),
-                PointerButton::Primary,
-            );
-            assert_eq!(out.op, Some(PaletteOp::Add), "{context}");
 
             let mut bench = Bench::new(1.0, image_with_unused_entries(), r);
             bench.view.editor_open = open;

@@ -45,7 +45,7 @@ const TARGETS_OF_BUTTON: [HelpTarget; 9] = [
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.
-const KEYS: [&str; 34] = [
+const KEYS: [&str; 39] = [
     "tool.pencil",
     "tool.line",
     "tool.fill",
@@ -80,7 +80,17 @@ const KEYS: [&str; 34] = [
     "layer.merge-visible",
     "layer.flatten",
     "color.editor",
+    // C3: the handle and the bar of the palette panel (no action: `F1` over them) and the three
+    // palette actions of the `Imagen` menu.
+    "palette.handle",
+    "color.bar",
+    "palette.add_entry",
+    "palette.remove_entry",
+    "palette.size",
 ];
+
+/// The two entries of the palette panel that belong to no action.
+const NO_ACTION_KEYS: [&str; 2] = ["palette.handle", "color.bar"];
 
 /// Las acciones de la tabla por defecto (22 distintas).
 fn table_actions() -> Vec<AppAction> {
@@ -139,9 +149,9 @@ fn press(c: char) -> Press {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn row_1_the_table_has_34_entries_with_unique_keys_and_limits() {
+fn row_1_the_table_has_39_entries_with_unique_keys_and_limits() {
     let table = help_table();
-    assert_eq!(table.len(), 34);
+    assert_eq!(table.len(), 39);
     let keys: Vec<&str> = table.iter().map(|e| e.key).collect();
     assert_eq!(keys, KEYS, "claves estables y en el orden del anexo");
     for (i, e) in table.iter().enumerate() {
@@ -187,6 +197,10 @@ fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() 
     }
     // Las inversas: cada clave de la tabla de ayuda da una acción que da esa clave.
     for e in help_table() {
+        if NO_ACTION_KEYS.contains(&e.key) {
+            assert_eq!(action_of_key(e.key), None, "{}", e.key);
+            continue;
+        }
         let action = action_of_key(e.key).expect(e.key);
         assert_eq!(help_key(action), Some(e.key));
     }
@@ -194,9 +208,9 @@ fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() 
     // Editables: 17 de 22; las cinco de archivo son fijas.
     let editable = help_table()
         .iter()
-        .filter(|e| is_editable(action_of_key(e.key).unwrap()))
+        .filter(|e| action_of_key(e.key).is_some_and(is_editable))
         .count();
-    assert_eq!(editable, 29);
+    assert_eq!(editable, 32);
     for key in [
         "file.new",
         "file.open",
@@ -451,13 +465,13 @@ proptest! {
         let platform = PLATFORMS[platform_2];
         let table = table_reachable(&steps_2, platform);
         for e in help_table() {
-            let action = action_of_key(e.key).unwrap();
+            let editable = action_of_key(e.key).is_some_and(is_editable);
             let spec = help_form_for(e.key, &table, platform).unwrap();
             prop_assert!(spec.validate().is_ok());
             for line in wrap_text(&text_of_the_area(&spec), ZONE_COLS) {
                 prop_assert!(line.chars().count() <= ZONE_COLS);
             }
-            if is_editable(action) {
+            if let Some(action) = action_of_key(e.key).filter(|a| editable && is_editable(*a)) {
                 let boxes_2 = slots_of(&table, action).slots;
                 for (field_2, i) in [(HELP_PRIMARY, 0usize), (HELP_SECONDARY, 1usize)] {
                     let expected_2 = boxes_2
