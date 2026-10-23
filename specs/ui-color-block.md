@@ -150,3 +150,11 @@ Un commit por paso: (1) esta spec con su fila del INDEX; (2) adaptación de prue
 8. Con el foco en el cuadrado o una barra (clic o `Tab`): las flechas mueven 1 y con `Mayús` 10; mantener la flecha es un solo `Ctrl+Z`; las flechas no cambian el foco ni la vista.
 9. Gris y gris con alfa: sin cuadrado, barras ni selector.
 10. Ventana mínima a tu `ppp` (alto 313 u = 417,33 pt a 1,5): con 5 herramientas se ven 7 filas de rejilla; con el editor abierto el bloque se desplaza. `F1` sobre una barra y sobre el cuadrado (revisa los dos textos). `ppp` 1,0, 1,5 y 2,0: bordes nítidos y nada se sale del panel.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+- **Icono:** el fichero es `assets/icons/swap.png` (variante `Icon::Swap`, nombre `swap`), no `intercambiar.png`; dibuja dos flechas horizontales opuestas (la de arriba hacia la derecha, la de abajo hacia la izquierda), no diagonales. Hay 22 iconos.
+- **Acción nueva:** `AppAction::SwapColors` (`Editar → Intercambiar colores`, justo después de `Borrar página`), sin tecla por defecto, con ayuda propia `color.swap`: las entradas de ayuda son 40.
+- **Textos:** `color_block_es.rs`, `color.bar`, `color.editor` y `color.swap` están copiados en [`ui-color-block-textos.md`](ui-color-block-textos.md) para su revisión.
+- **Ventana mínima:** 313 u de alto (313, 250,4, 417,33, 313 y 313 pt), como en la tabla de geometría; `window_min/tests.rs` y la lista del menú (`menu.rs`) se adaptaron en consecuencia.
+- Notas de actualización de C4 añadidas en `ui-composition.md`, `ui-palette-handle.md`, `interfaz-dos-colores.md`, `hito-2-editar-color.md`, `docs/DISENO-INTERFAZ.md` y `docs/PLAN-RESUMEN.md`.

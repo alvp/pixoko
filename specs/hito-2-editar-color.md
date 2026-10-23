@@ -4,6 +4,8 @@ Estado: **aprobada** (2026-10-18; decisiones 1, 2, 5, 6, 7, 8, 9 y 12 con los ca
 
 **Actualización de la unidad C1 (2026-10-22), que prevalece:** el editor sale a demanda (clic derecho en el indicador de color o la tecla `p`) y se cierra con `Esc`, con `p`, con un segundo clic derecho en el rectángulo editado o al cambiar de documento; elegir una herramienta o una muestra no lo cierra. La fila de iconos de la paleta sale del editor (el de indexadas mide 186 u, como el de RGBA) y va bajo la rejilla, visible con el editor abierto y cerrado. ([`ui-composition.md`](ui-composition.md))
 
+**Actualización de C4 (2026-10-23), que prevalece:** el editor tiene cuatro deslizadores (`R G B A`, `H S L A` o `H S V A`) según un selector RGB / HSL / HSV que se recuerda en la sesión, además del cuadrado de saturación y brillo y las barras de tono y alfa (`specs/ui-color-block.md`).
+
 Referencias: `SetPaletteColor` (`Ok(false)` con el mismo color; `Ok(true)` también sobre la transparente), `Remove` y avisos: `specs/hito-2-paleta-editar.md`. `Hsl` y la nota «Para el panel de paletas»: `specs/hito-2-hsl.md`. Texto, `columns`, `NOTICE_PREFIX`, `INTERFACE_CHARSET`, escala `n` y `u`: `specs/hito-2-texto.md` (11a). Panel, `ColorChoice`, geometría en píxeles físicos enteros, `Session.choice` y reinicio al abrir: `specs/hito-2-panel-paletas.md` (11b). Gesto en curso, `Escape`, `busy` y textura: `specs/hito-2-lapiz-deshacer.md` §3 y §6 y `specs/hito-2-linea-relleno-app.md` §1 y §2. Ranuras 1 a 9 y sus colores: `specs/hito-2-lapiz-deshacer.md` §4.
 
 ## Objetivo

@@ -1,10 +1,12 @@
-//! The color bar under the grid (specs/ui-palette-handle.md, decision 8), without egui types: the
-//! text it shows and the ink of that text. The bar is painted with the **stored** color of what the
-//! editor edits and says which entry or slot it is.
+//! The color bars under the grid (specs/ui-palette-handle.md, decision 8; two of them since C4,
+//! specs/ui-color-block.md), without egui types: the text each one shows and the ink of that text.
+//! A bar is painted with the color of its swatch (the resolved one) and says which entry or slot
+//! it is, or `transparente` when what it paints is entirely transparent.
 
 use egui::Color32;
 use px_core::Rgba;
 
+use crate::color_block_es::TRANSPARENT;
 use crate::color_edit::EditTarget;
 use crate::theme::{SURFACE_0, TEXT, contrast_ratio};
 
@@ -12,16 +14,17 @@ const BLACK: Color32 = Color32::from_rgb(0, 0, 0);
 const WHITE: Color32 = Color32::from_rgb(255, 255, 255);
 
 /// The text of the bar: `Idx-10` for an entry (counted from 0, like the rest of the panel),
-/// `Idx-3 transp.` for the transparent one and `Col-3` for a slot.
+/// `Col-3` for a slot and `transparente` instead of them when what the bar paints is entirely
+/// transparent (the transparent entry of an indexed image, or a slot with alpha 0).
 pub fn bar_label(target: EditTarget, transparent: bool) -> String {
     match target {
-        EditTarget::Entry(index) if transparent => format!("Idx-{index} transp."),
+        _ if transparent => TRANSPARENT.to_string(),
         EditTarget::Entry(index) => format!("Idx-{index}"),
         EditTarget::Slot(slot) => format!("Col-{slot}"),
     }
 }
 
-/// The ink of the text of the bar for a stored color: what is behind the text and the color of the
+/// The ink of the text of the bar for the color it paints: what is behind the text and the color of the
 /// text. An opaque color is the background of the text and the text is black or white, the one
 /// with more contrast (at least 4,58:1 for any opaque color). With alpha under 255 the bar carries
 /// the checker of the swatches and the text goes in an opaque box of `SURFACE_0` with `TEXT`.

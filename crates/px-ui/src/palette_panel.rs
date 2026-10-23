@@ -5,8 +5,8 @@
 //! egui points (`u` = `ui_unit(ppp)` points = `n` physical pixels) and the events are read.
 
 use egui::{
-    Color32, CursorIcon, Event, FontFamily, FontId, Frame, Label, MouseWheelUnit, Panel,
-    PointerButton, Pos2, Rect, RichText, Sense, Ui, vec2,
+    Color32, CursorIcon, Event, Frame, MouseWheelUnit, Panel, PointerButton, Pos2, Rect, Sense, Ui,
+    vec2,
 };
 use px_core::{Image, Mode, Rgba};
 
@@ -15,21 +15,23 @@ use crate::color::{
     cell_of_choice, choice_for_cell, info_flags_alpha0, info_flags_roles, is_alpha0_cell_with,
     is_transparent_cell_with,
 };
+use crate::color_block::{BarHit, bar_hit};
 use crate::color_edit::{
     ColorEditor, Commit, EditTarget, HexOutcome, Resolved, hex_notice, stale_notice,
 };
-use crate::color_editor::{self, ButtonsView, Geometry, hex_field_id, is_escape, show_icon_row};
+use crate::color_editor::{
+    self, BarsView, ButtonsView, Geometry, hex_field_id, is_escape, show_icon_row, swap_icon,
+};
 use crate::edit_layout::{
     FIELD_H_U, FIELD_Y_U, PaletteButton, PanelLayout, block_height_closed_px, block_height_px,
-    button_hit, column_layout,
+    button_hit, column_layout, editor_height_u,
 };
 use crate::help::HelpTarget;
 use crate::palette_grid::{
-    COLUMNS, GRID_X_U, GRID_Y_U, Grid, IND_BORDER_EDIT_U, IND_BORDER_U, INDICATOR_H_U,
-    PANEL_WIDTH_U, PITCH_U, PanelView, RING_ACTIVE_U, RING_BACKGROUND_ARM_U, RING_BACKGROUND_U,
-    RING_DEST_U, RING_HOVER_U, RING_RANGE_U, SEPARATOR_Y_U, Scroll, TRACK_W_U, block_parts,
-    corner_rects, drop_mark_rect, indicator_hit, indicator_rects, panel_thumb, panel_width_u,
-    right_line_x_u, ring_rects, swatch_parts, text_width_u, thumb, total_rows_cols, track_x_u,
+    COLUMNS, GRID_X_U, GRID_Y_U, Grid, PANEL_WIDTH_U, PITCH_U, PanelView, RING_ACTIVE_U,
+    RING_BACKGROUND_ARM_U, RING_BACKGROUND_U, RING_DEST_U, RING_HOVER_U, RING_RANGE_U, Scroll,
+    TRACK_W_U, corner_rects, drop_mark_rect, panel_thumb, panel_width_u, right_line_x_u,
+    ring_rects, swatch_parts, text_width_u, thumb, total_rows_cols, track_x_u,
     visible_rows_reserved,
 };
 use crate::palette_ops::{
@@ -41,14 +43,14 @@ use crate::palette_resize::{
     drag_zone_cells, handle_bars, handle_index, resize_prompt,
 };
 use crate::status::columns;
-use crate::text::{font_size_points, printable, text_scale, ui_unit};
+use crate::text::{text_scale, ui_unit};
 use crate::theme::{
     ACCENT, DROP_MARK, RING_ACTIVE, RING_BACKGROUND, RING_DEST, RING_HOVER, RING_RANGE, SURFACE_1,
-    SURFACE_2, SURFACE_3, TEXT, TEXT_DIM, TEXT_DISABLED,
+    SURFACE_2, SURFACE_3, TEXT_DIM, TEXT_DISABLED,
 };
 use crate::view::ScreenRect;
 
-/// Temporary mark of "take the focus to the hexadecimal field" (right click on the indicator).
+/// Temporary mark of "take the focus to the hexadecimal field" (right click on a color bar).
 fn hex_focus_pending() -> egui::Id {
     egui::Id::unique("pixoko-hex-focus-pending")
 }
@@ -90,15 +92,6 @@ impl Layout {
         )
     }
 
-    /// An egui point over the panel, in physical pixels from the corner of the block of the panel
-    /// (where the indicator band starts).
-    fn band_px(&self, p: Pos2) -> (i64, i64) {
-        (
-            ((p.x - self.min.x) * self.ppp).round() as i64,
-            ((p.y - self.min.y) * self.ppp).round() as i64,
-        )
-    }
-
     /// A rectangle in `u` from the corner of the panel, in egui points.
     fn u_rect(&self, x: i64, y: i64, width: i64, height: i64) -> Rect {
         let u = ui_unit(self.ppp);
@@ -124,8 +117,8 @@ pub struct PanelOutput {
     pub op_unused: bool,
     /// Choice asked for by a right click on a swatch: the background color.
     pub background: Option<ColorChoice>,
-    /// What a click on the color indicator asked for.
-    pub indicator: Option<Indicator>,
+    /// What a click on one of the two bars or on the swap button asked for (C4).
+    pub bar_click: Option<BarClick>,
     /// `Esc` with nothing else claiming it: the app closes the color editor.
     pub close_editor: bool,
     /// `Esc` that nothing in the palette claimed (not a text field, a swatch drag, a pending removal
@@ -162,14 +155,14 @@ pub fn panel_info(ctx: &egui::Context) -> PanelInfo {
         .unwrap_or_default()
 }
 
-/// What a click on the color indicator asks for (specs/interfaz-dos-colores.md, decision 5).
+/// What a click on the bars under the grid asks for (specs/ui-color-block.md, decision 6): the
+/// one-use dropper for the color of the bar, the editor on it (or closing it), or swapping the
+/// foreground and the background.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Indicator {
-    /// Left click: activate the dropper.
-    Dropper,
-    /// Right click: the app opens the color editor on this role's color, switches to it if the
-    /// editor is open on the other role, or closes it if it is open on this role.
+pub enum BarClick {
+    Dropper(Role),
     FocusEditor(Role),
+    Swap,
 }
 
 /// The two colors and which one the editor edits.
@@ -520,6 +513,7 @@ pub(crate) fn panel_body(
                 top_px: tail_top_px,
                 mode,
                 cols,
+                slider_mode: view.slider_mode,
             };
             let phys = |p: Pos2| ((p.x * ppp).round() as i64, (p.y * ppp).round() as i64);
 
@@ -570,31 +564,37 @@ pub(crate) fn panel_body(
                         pressed: true,
                         ..
                     } if roles.background.is_some()
+                        && editor.is_some()
                         && enabled
                         && !busy_editing
                         && rect.contains(*pos)
                         && {
-                            let (bx, by) = layout.band_px(*pos);
-                            (0..INDICATOR_H_U * i64::from(layout.n)).contains(&by)
-                                && (0..panel_width_u(cols) * i64::from(layout.n)).contains(&bx)
+                            let (bx, by) = pre_geometry.rel_px(*pos);
+                            bar_hit(cols, bx, by, layout.n).is_some()
                         } =>
                     {
-                        let (bx, by) = layout.band_px(*pos);
-                        if let Some(role) = indicator_hit(bx, by, layout.n) {
-                            output.indicator = Some(if *button == PointerButton::Primary {
-                                Indicator::Dropper
-                            } else {
-                                // A second right click on the rectangle being edited closes the
-                                // editor: nothing to focus then.
+                        let (bx, by) = pre_geometry.rel_px(*pos);
+                        let primary = *button == PointerButton::Primary;
+                        match bar_hit(cols, bx, by, layout.n) {
+                            Some(BarHit::Swap) if primary => {
+                                output.bar_click = Some(BarClick::Swap);
+                            }
+                            Some(BarHit::Bar(role)) if primary => {
+                                output.bar_click = Some(BarClick::Dropper(role));
+                            }
+                            Some(BarHit::Bar(role)) => {
+                                // A second right click on the bar being edited closes the editor:
+                                // nothing to focus then.
                                 let closing = view.editor_open && roles.editing == role;
-                                if editor.is_some() && !closing {
+                                if !closing {
                                     // The focus is requested in a frame without pointer: a click
                                     // takes the focus away from any widget that is not hovered.
                                     ctx.data_mut(|d| d.insert_temp(hex_focus_pending(), true));
                                     ctx.request_repaint();
                                 }
-                                Indicator::FocusEditor(role)
-                            });
+                                output.bar_click = Some(BarClick::FocusEditor(role));
+                            }
+                            _ => {}
                         }
                     }
                     Event::PointerButton {
@@ -845,38 +845,47 @@ pub(crate) fn panel_body(
                 top_px: paint_tail_top_px,
                 mode,
                 cols,
+                slider_mode: view.slider_mode,
             };
             let mut preview = None;
             if let Some(editor) = editor.as_mut() {
+                // The two bars (and the swap button) are always seen, the editor open or closed.
+                color_editor::show_bars(
+                    ui,
+                    &tail_geo,
+                    &BarsView {
+                        image,
+                        slots,
+                        foreground: roles.foreground,
+                        background: roles.background,
+                        editing: roles.editing,
+                        swap_icon: swap_icon(&view.icons),
+                        enabled,
+                    },
+                );
                 match target {
                     Some(target) => {
-                        // The bar and the field are always seen (the editor open or closed).
-                        let transparent = matches!(target, EditTarget::Entry(index)
-                            if image.palette().and_then(|p| p.transparent_index()) == Some(index));
+                        // The hexadecimal field too.
                         let shown = color_editor::show_tail(
-                            ui,
-                            &tail_geo,
-                            editor,
-                            target,
-                            transparent,
-                            &events,
-                            &stored,
+                            ui, &tail_geo, editor, target, &events, &stored,
                         );
                         output.commit = shown.commit.or(output.commit);
                         output.notice = shown.notice.or(output.notice.take());
                         if shown_target.is_some() {
-                            let geometry = Geometry {
+                            let mut geometry = Geometry {
                                 top_px: placed.top_px,
                                 ..tail_geo
                             };
                             output.commit = color_editor::interact(
+                                &ctx,
                                 &events,
                                 &geometry,
                                 editor,
                                 enabled,
-                                primary_down,
+                                &mut view.slider_mode,
                             )
                             .or(output.commit);
+                            geometry.slider_mode = view.slider_mode;
                             preview = editor.preview();
                             color_editor::show(ui, &geometry, editor);
                         }
@@ -966,10 +975,9 @@ pub(crate) fn panel_body(
                     inert: pending_resize.is_some(),
                 });
             }
-            let edit_mark = shown_target.map(|_| roles.editing);
             paint(
                 ui, &layout, image, slots, roles, &zone_grid, hover, preview, scroll, total,
-                visible, panel_bar, &marks, edit_mark,
+                visible, panel_bar, &marks,
             );
 
             // The information of the swatch: what the two fixed lines used to paint now goes to
@@ -1017,18 +1025,44 @@ pub(crate) fn panel_body(
             } else {
                 None
             };
-            // `F1` over the handle or over the bar and the field opens their help.
+            // `F1` over the handle, the swap button, the bars and the field, or the open editor
+            // opens their help.
+            let width_px = panel_width_u(cols) * i64::from(layout.n);
+            let in_tail = |p: Pos2| {
+                let (x, y) = tail_geo.rel_px(p);
+                (x, y)
+            };
+            let over_swap = roles.background.is_some()
+                && editor.is_some()
+                && pointer.is_some_and(|p| {
+                    let (x, y) = in_tail(p);
+                    bar_hit(cols, x, y, n) == Some(BarHit::Swap)
+                });
             let over_bar = target.is_some()
                 && editor.is_some()
                 && pointer.is_some_and(|p| {
-                    let (x, y) = tail_geo.rel_px(p);
-                    (0..panel_width_u(cols) * i64::from(layout.n)).contains(&x)
+                    let (x, y) = in_tail(p);
+                    (0..width_px).contains(&x)
                         && (0..(FIELD_Y_U + FIELD_H_U) * i64::from(layout.n)).contains(&y)
+                });
+            let over_editor = shown_target.is_some()
+                && pointer.is_some_and(|p| {
+                    let geometry = Geometry {
+                        top_px: placed.top_px,
+                        ..tail_geo
+                    };
+                    let (x, y) = geometry.rel_px(p);
+                    (0..width_px).contains(&x)
+                        && (0..editor_height_u(mode) * i64::from(layout.n)).contains(&y)
                 });
             let help = if over_handle || dragging_handle {
                 Some(HelpTarget::PaletteHandle)
+            } else if over_swap {
+                Some(HelpTarget::SwapColors)
             } else if over_bar {
                 Some(HelpTarget::ColorBar)
+            } else if over_editor {
+                Some(HelpTarget::ColorEditor)
             } else {
                 None
             };
@@ -1042,56 +1076,10 @@ pub(crate) fn panel_body(
                     },
                 );
             });
-
-            // Tooltip of each rectangle of the indicator (the swatches have none: their text goes
-            // to the status line only).
-            let font = FontId::new(font_size_points(ppp), FontFamily::Proportional);
-            let tip = |ui: &mut Ui, lines: &[&str]| {
-                for (i, line) in lines.iter().enumerate().filter(|(_, l)| !l.is_empty()) {
-                    let tone = if i == 0 { TEXT } else { TEXT_DIM };
-                    ui.add(
-                        Label::new(
-                            RichText::new(printable(&ctx, line))
-                                .font(font.clone())
-                                .color(tone),
-                        )
-                        .extend(),
-                    );
-                }
-            };
-            if roles.background.is_some() {
-                // One area over both rectangles; the pointer says which one (the small one wins
-                // where they overlap, as for the clicks).
-                let (fg, bg) = indicator_rects(n);
-                let area = panel_rect_of(&layout, fg)
-                    .union(panel_rect_of(&layout, bg))
-                    .intersect(rect);
-                let over = pointer.and_then(|p| {
-                    let (x, y) = layout.band_px(p);
-                    indicator_hit(x, y, n)
-                });
-                if area.is_positive()
-                    && let Some(role) = over
-                {
-                    let name = match role {
-                        Role::Foreground => "Primer plano",
-                        Role::Background => "Fondo",
-                    };
-                    let response = ui.interact(
-                        area,
-                        ui.unique_id().with("indicator-tooltip"),
-                        Sense::hover(),
-                    );
-                    response.on_hover_ui(|ui| tip(ui, &[name, INDICATOR_TIP]));
-                }
-            }
             output
         }
     }
 }
-
-/// Tooltip text of the indicator rectangles (second line).
-pub const INDICATOR_TIP: &str = "clic: cuentagotas; clic derecho: editar este color";
 
 /// What the two fixed lines of the panel said: the swatch under the cursor or, if none, the chosen
 /// one; while a swatch is dragged, what is being moved.
@@ -1159,7 +1147,6 @@ fn paint(
     visible: usize,
     panel_bar: Option<Option<(i64, i64)>>,
     marks: &Marks,
-    edit_mark: Option<Role>,
 ) {
     let (n, ppp) = (layout.n, layout.ppp);
     let n_px = i64::from(n);
@@ -1169,12 +1156,6 @@ fn paint(
         .background
         .and_then(|choice| cell_of_choice(image, choice));
 
-    // Lines: under the band and on the right.
-    painter.rect_filled(
-        layout.u_rect(0, SEPARATOR_Y_U, panel_width_u(layout.cols), 1),
-        0.0,
-        SURFACE_3,
-    );
     // Two 1 u lines over the part of the column that is the panel (under the toolbox): the left one
     // separates it from the canvas (it falls in the 4 u margin of the grid) and the right one is the
     // last column of the panel.
@@ -1188,18 +1169,6 @@ fn paint(
             ),
             0.0,
             SURFACE_3,
-        );
-    }
-
-    if let Some(background_choice) = roles.background {
-        paint_band(
-            &painter,
-            layout,
-            image,
-            slots,
-            roles,
-            background_choice,
-            edit_mark,
         );
     }
 
@@ -1372,56 +1341,6 @@ fn paint(
             vec2(TRACK_W_U as f32 * ui_unit(ppp), height as f32 / ppp),
         );
         painter.rect_filled(bar, 0.0, TEXT_DIM);
-    }
-}
-
-/// Rectangle of a [`ScreenRect`] given from the panel's corner, in egui points.
-fn panel_rect_of(layout: &Layout, r: ScreenRect) -> Rect {
-    Rect::from_min_size(
-        layout.min + vec2(r.x as f32 / layout.ppp, r.y as f32 / layout.ppp),
-        vec2(r.width as f32 / layout.ppp, r.height as f32 / layout.ppp),
-    )
-}
-
-/// The top band: the color indicator (the small one, the foreground, on top of the large one, the
-/// background). `edit_mark` is the role the open editor edits: its border is 2 u of `ACCENT`
-/// instead of 1 u of `SURFACE_3`.
-fn paint_band(
-    painter: &egui::Painter,
-    layout: &Layout,
-    image: &Image,
-    slots: &SlotColors,
-    roles: PanelRoles,
-    background: ColorChoice,
-    edit_mark: Option<Role>,
-) {
-    let n = i64::from(layout.n);
-    let color_of = |choice: ColorChoice| {
-        cell_of_choice(image, choice)
-            .and_then(|cell| cell_color_with(image, cell, slots))
-            .unwrap_or(Rgba::TRANSPARENT)
-    };
-    let (fg, bg) = indicator_rects(layout.n);
-    for (role, rect, choice) in [
-        (Role::Background, bg, background),
-        (Role::Foreground, fg, roles.foreground),
-    ] {
-        let (thickness, tone) = if edit_mark == Some(role) {
-            (IND_BORDER_EDIT_U, ACCENT)
-        } else {
-            (IND_BORDER_U, SURFACE_3)
-        };
-        for border in ring_rects(rect, thickness * n) {
-            painter.rect_filled(panel_rect_of(layout, border), 0.0, tone);
-        }
-        for (part, tone) in block_parts(rect.width, rect.height, 5 * n, color_of(choice)) {
-            let part = ScreenRect {
-                x: rect.x + part.x,
-                y: rect.y + part.y,
-                ..part
-            };
-            painter.rect_filled(panel_rect_of(layout, part), 0.0, to_color32(tone));
-        }
     }
 }
 

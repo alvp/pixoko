@@ -160,6 +160,10 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
                 notice: None,
             }
         }
+        AppAction::SwapColors => {
+            session.swap_colors();
+            done(false)
+        }
         AppAction::RenameLayer => Dispatched::LayerPanel(LayerPanelOp::FocusName),
         AppAction::LayerProperties => Dispatched::LayerPanel(LayerPanelOp::ShowProperties),
         AppAction::NewLayer => layer_done(action, session.new_layer()),

@@ -14,8 +14,8 @@ pub const ICON_PX: i64 = 16;
 /// Nombre y fichero reservados para el pincel (hito 4); no es un `Icon` ni tiene PNG todavía.
 pub const RESERVED_BRUSH_STEM: &str = "pincel";
 
-/// Los 21 iconos: cinco herramientas, cuatro botones de zoom, cinco del editor de paleta y siete
-/// del panel de capas.
+/// Los 22 iconos: cinco herramientas, cuatro botones de zoom, cinco del editor de paleta, siete
+/// del panel de capas y el de intercambiar colores.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Icon {
     Pencil,
@@ -39,11 +39,13 @@ pub enum Icon {
     Duplicate,
     Up,
     Down,
+    /// Swap the foreground and the background (the button next to the two color bars; C4).
+    Swap,
 }
 
 impl Icon {
     /// Todos, en el orden de la spec.
-    pub const ALL: [Icon; 21] = [
+    pub const ALL: [Icon; 22] = [
         Icon::Pencil,
         Icon::Line,
         Icon::Fill,
@@ -65,6 +67,7 @@ impl Icon {
         Icon::Duplicate,
         Icon::Up,
         Icon::Down,
+        Icon::Swap,
     ];
 
     /// Posición en [`Icon::ALL`].
@@ -96,6 +99,7 @@ impl Icon {
             Icon::Duplicate => "duplicar",
             Icon::Up => "subir",
             Icon::Down => "bajar",
+            Icon::Swap => "swap",
         }
     }
 }
@@ -104,13 +108,13 @@ impl Icon {
 /// `px-app` al arrancar y las texturas las mantiene vivas quien las creó.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct IconSet {
-    textures: [Option<TextureId>; 21],
+    textures: [Option<TextureId>; 22],
 }
 
 impl IconSet {
     /// Un conjunto con la textura que da `texture` para cada icono.
     pub fn new(mut texture: impl FnMut(Icon) -> TextureId) -> IconSet {
-        let mut textures = [None; 21];
+        let mut textures = [None; 22];
         for icon in Icon::ALL {
             textures[icon.index()] = Some(texture(icon));
         }

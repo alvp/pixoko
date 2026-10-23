@@ -50,12 +50,12 @@ use px_ui::canvas::{Canvas, CanvasInfo, CanvasInput};
 use px_ui::color::{ColorChoice, SlotColors};
 use px_ui::color_bar::bar_label;
 use px_ui::color_edit::{
-    ColorEditor, Commit, Control, EditTarget, HexOutcome, control_value, controls, hex_notice,
-    hex_text, slider_value_at, slider_x,
+    ColorEditor, Commit, Control, EditTarget, HexOutcome, SliderMode, control_value, controls,
+    hex_notice, hex_text, slider_value_at, slider_x, visible_controls,
 };
 use px_ui::edit_layout::{
-    FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, FIRST_ROW_Y_U, HIT_X0_U, HIT_X1_U, LABEL_X_U,
-    ROW_H_U, TRACK_W_U, TRACK_X_U, control_row_u, panel_layout, slider_hit,
+    FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, HIT_X0_U, HIT_X1_U, LABEL_X_U, ROW_H_U, TRACK_W_U,
+    TRACK_X_U, control_row_u, panel_layout, slider_hit,
 };
 use px_ui::palette_grid::{
     self, CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, TEXT_WIDTH_U, total_rows,
@@ -659,7 +659,7 @@ fn row_02_the_headers_are_the_text_of_the_color_bar() {
     assert_eq!(bar_label(EditTarget::Entry(12), false), "Idx-12");
     assert_eq!(bar_label(EditTarget::Slot(3), false), "Col-3");
     assert_eq!(bar_label(EditTarget::Slot(4), false), "Col-4");
-    assert_eq!(bar_label(EditTarget::Entry(3), true), "Idx-3 transp.");
+    assert_eq!(bar_label(EditTarget::Entry(3), true), "transparente");
 }
 
 #[test]
@@ -674,9 +674,11 @@ fn row_02_the_longest_texts_are_laid_out_with_panic_and_fit_at_all_ppp() {
                 let base = target_2.stored(&image, &bench.slots).expect("guardado");
 
                 // En reposo: el texto de la barra y el color del campo, todo dentro de las columnas.
+                // C4 (decision 5): the transparent entry and a slot with alpha 0 say `transparente`.
                 let transparent = image.palette().is_some_and(|p| {
                     p.transparent_index().map(EditTarget::Entry) == Some(target_2)
-                });
+                }) || (matches!(mode, Mode::Rgba | Mode::GrayAlpha)
+                    && base.a == 0);
                 let f = bench.rest_2_2();
                 checks_that_fits(&f, ppp, &context);
                 assert!(
@@ -745,7 +747,7 @@ fn row_13b_the_transparent_shows_the_stored_one_and_the_transp_mark_in_the_bar()
         !f.paints("#0000ff00"),
         "el campo no muestra el resuelto (con alfa 0)"
     );
-    assert!(f.paints("Idx-2 transp."), "la barra lo dice");
+    assert!(f.paints("transparente"), "la barra lo dice");
     assert!(!f.paints_something_with("se guarda con alfa 0"));
 }
 
@@ -760,11 +762,10 @@ fn the_editor_anchors_to_the_bottom_and_does_not_move_with_the_number_of_entries
         let mut few = bench_f(ppp, 1);
         let mut many = Bench::new_2(ppp, SCREEN_HIGH, image_indexed_256(), ColorChoice::Entry(1));
         let geo = few.geo();
-        // Without a header the editor starts with the first slider (the label «R», C3).
-        let expected_2 = (
-            (LABEL_X_U * n) as f32,
-            (geo.top_px + FIRST_ROW_Y_U * n) as f32,
-        );
+        // Without a header the editor starts with the square; the first slider (the label «R») is
+        // at the first row of indexed images (C4).
+        let first_row = control_row_u(Mode::Indexed, Control::Red).expect("fila");
+        let expected_2 = ((LABEL_X_U * n) as f32, (geo.top_px + first_row * n) as f32);
         for (name_2, bench) in [("4 entradas", &mut few), ("256 entradas", &mut many)] {
             let f = bench.rest_2_2();
             let label = f
@@ -1621,7 +1622,7 @@ fn active_area_of_the_row_from_x_13u_included_to_201u_excluded_and_without_the_g
             let x = border_u * geo.n + delta;
             let y = geo.y_row(Control::Red);
             assert_eq!(
-                slider_hit(geo.mode, x, y - geo.top_px, geo.n as u32).is_some(),
+                slider_hit(geo.mode, SliderMode::Rgb, x, y - geo.top_px, geo.n as u32).is_some(),
                 value_expected.is_some(),
                 "ppp {ppp}, {name_2}: edit_layout::slider_hit"
             );
@@ -1648,7 +1649,10 @@ fn active_area_of_the_row_from_x_13u_included_to_201u_excluded_and_without_the_g
     let row_blue = control_row_u(geo.mode, Control::Blue).expect("tiene B");
     let y = geo.top_px + (row_blue + ROW_H_U) * geo.n;
     let x = geo.x_of_value(100, Control::Blue.max());
-    assert_eq!(slider_hit(geo.mode, x, y - geo.top_px, geo.n as u32), None);
+    assert_eq!(
+        slider_hit(geo.mode, SliderMode::Rgb, x, y - geo.top_px, geo.n as u32),
+        None
+    );
     bench.moves(x, y);
     bench.presses_2(x, y);
     assert!(
@@ -1659,8 +1663,8 @@ fn active_area_of_the_row_from_x_13u_included_to_201u_excluded_and_without_the_g
 
 #[test]
 fn each_row_drags_its_control() {
-    // Indexadas: R G B | H S L | A; cada fila empieza el arrastre de su propio control.
-    for control in controls(Mode::Indexed).to_vec() {
+    // Indexadas, con el selector en RGB: R G B | A; cada fila empieza el arrastre de su control.
+    for control in visible_controls(Mode::Indexed, SliderMode::Rgb).to_vec() {
         let mut bench = bench_f(1.0, 1);
         let geo = bench.geo();
         let y = geo.y_row(control);

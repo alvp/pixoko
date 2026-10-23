@@ -215,6 +215,7 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
     expected_2.extend(&TABLE_ACTIONS[3..6]);
     // `Borrar página` (I.2a) cierra `Editar`, antes de `TestImage`.
     expected_2.push(AppAction::ClearPage);
+    expected_2.push(AppAction::SwapColors);
     expected_2.push(AppAction::ConvertMode);
     // The three palette actions of C3 follow `Convertir modo…`.
     expected_2.extend([
@@ -266,6 +267,7 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
             ("Deshacer", AppAction::Undo),
             ("Rehacer", AppAction::Redo),
             ("Borrar página", AppAction::ClearPage),
+            ("Intercambiar colores", AppAction::SwapColors),
         ]
     );
     assert_eq!(

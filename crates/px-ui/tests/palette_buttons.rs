@@ -1044,14 +1044,14 @@ fn row_2_with_the_panel_scrolled_the_buttons_are_painted_and_pressed_with_y_minu
         assert!(bench.layout().scrolling, "ppp {ppp}: el panel se desplaza");
         let (x, y) = bench.over_the_text();
         let max = bench.max_offset();
-        assert!(max >= 41 * n, "ppp {ppp}: there is room to scroll ({max})");
+        assert!(max >= 108 * n, "ppp {ppp}: there is room to scroll ({max})");
         for offset in [14 * n, 20 * n] {
             bench.wheel_in(x, y, -100_000 * n);
             bench.wheel(offset);
             assert_eq!(bench.view.offset_px, offset, "ppp {ppp}");
             let context = format!("ppp {ppp}, offset {offset}");
             let f = bench.rest_2_2();
-            assert_eq!(bench.geo().top_px, 127 * n - offset, "{context}");
+            assert_eq!(bench.geo().top_px, 106 * n - offset, "{context}");
             checks_buttons(&f, &bench, &NORMAL, &context);
             checks_inside_the_panel(&f, bench.rect_panel(), &context);
 
@@ -1078,7 +1078,7 @@ fn row_2_with_the_panel_scrolled_the_buttons_are_painted_and_pressed_with_y_minu
             );
             // Justo bajo la fila (donde estaría sin desplazar) no hay nada.
             let (x_a, _) = bench.center_of_button(PaletteButton::Remove);
-            let without_pan = bench.geo().tail_top_px + 63 * n;
+            let without_pan = bench.geo().tail_top_px + 87 * n;
             if without_pan < bench.panel_h_px() {
                 let f = bench.click(x_a, without_pan);
                 assert_eq!(f.output_2.op, None, "{context}");
@@ -1094,13 +1094,13 @@ fn row_2_what_falls_outside_the_panel_is_not_hit_with_the_panel_scrolled() {
     for ppp in PPPS {
         let n = (ppp + 0.5).floor().max(1.0) as i64;
         let mut bench = Bench::with_panel_height(ppp, 100 * n, image_f(), ColorChoice::Entry(1));
-        // With 106·n of scroll, the icon row goes from −5·n to 19·n and the panel starts at 0.
+        // With 88·n of scroll, the icon row goes from −8·n to 16·n and the panel starts at 0.
         let (x, y) = bench.over_the_text();
-        bench.wheel_in(x, y, 106 * n);
-        assert_eq!(bench.view.offset_px, 106 * n, "ppp {ppp}");
+        bench.wheel_in(x, y, 88 * n);
+        assert_eq!(bench.view.offset_px, 88 * n, "ppp {ppp}");
         let (x, _) = bench.center_of_button(PaletteButton::RotateRight);
-        assert_eq!(bench.geo().top_px, 21 * n);
-        assert_eq!(bench.geo().tail_top_px, -43 * n);
+        assert_eq!(bench.geo().top_px, 18 * n);
+        assert_eq!(bench.geo().tail_top_px, -70 * n);
 
         // Above the panel (over the menu), though inside the rectangle of the button.
         let f = bench.click(x, -n);
@@ -1192,20 +1192,20 @@ fn effect(bench: &Bench, f: &TestFrame) -> Effect {
 }
 
 /// Los puntos de la fila 2 de la spec, en píxeles desde la esquina de la cola bajo la rejilla
-/// (`n` = escala): la fila de iconos empieza en y = 38 u.
+/// (`n` = escala): la fila de iconos empieza en y = 62 u.
 fn mockup_points(n: i64) -> [(i64, i64, Effect); 11] {
     [
-        (4 * n, 38 * n, Effect::Remove),
-        (28 * n - 1, 38 * n, Effect::Remove),
-        (28 * n, 38 * n, Effect::Nothing),
-        (36 * n, 38 * n, Effect::Left),
-        (60 * n - 1, 62 * n - 1, Effect::Left),
-        (60 * n, 50 * n, Effect::Nothing),
-        (61 * n, 38 * n, Effect::Right),
-        (85 * n - 1, 50 * n, Effect::Right),
-        (92 * n, 50 * n, Effect::Nothing),
-        (4 * n, 62 * n, Effect::Nothing),
-        (229 * n, 50 * n, Effect::Nothing),
+        (4 * n, 62 * n, Effect::Remove),
+        (28 * n - 1, 62 * n, Effect::Remove),
+        (28 * n, 62 * n, Effect::Nothing),
+        (36 * n, 62 * n, Effect::Left),
+        (60 * n - 1, 86 * n - 1, Effect::Left),
+        (60 * n, 74 * n, Effect::Nothing),
+        (61 * n, 62 * n, Effect::Right),
+        (85 * n - 1, 74 * n, Effect::Right),
+        (92 * n, 74 * n, Effect::Nothing),
+        (4 * n, 86 * n, Effect::Nothing),
+        (229 * n, 74 * n, Effect::Nothing),
     ]
 }
 
@@ -1237,7 +1237,7 @@ fn row_2_with_a_pending_removal_row_1_is_confirm_and_cancel_at_their_points() {
         let top = bench.geo().tail_top_px;
         // El hueco de 5 u no pulsa nada.
         bench.click_button(PaletteButton::Remove);
-        let f = bench.click(114 * n, top + 38 * n);
+        let f = bench.click(114 * n, top + 62 * n);
         assert_eq!(f.output_2.op, None, "ppp {ppp}");
         assert_eq!(
             bench.ops.removal(),
@@ -1246,12 +1246,12 @@ fn row_2_with_a_pending_removal_row_1_is_confirm_and_cancel_at_their_points() {
                 into: Some(0)
             })
         );
-        // (119n, 38n de la cola) es Cancelar.
-        bench.click(119 * n, top + 38 * n);
+        // (119n, 62n de la cola) es Cancelar.
+        bench.click(119 * n, top + 62 * n);
         assert_eq!(bench.ops.removal(), None, "ppp {ppp}: Cancelar");
-        // (4n, 38n de la cola) es Confirmar.
+        // (4n, 62n de la cola) es Confirmar.
         bench.click_button(PaletteButton::Remove);
-        let f = bench.click(4 * n, top + 38 * n);
+        let f = bench.click(4 * n, top + 62 * n);
         assert_eq!(
             f.output_2.op,
             Some(PaletteOp::Remove { index: 3, into: 0 }),
@@ -1260,7 +1260,7 @@ fn row_2_with_a_pending_removal_row_1_is_confirm_and_cancel_at_their_points() {
         // Los iconos no golpean con la quita pendiente (decisión 8): donde estaba el de rotar a la
         // derecha cae `Confirmar`.
         bench.click_button(PaletteButton::Remove);
-        let f = bench.click(70 * n, top + 50 * n);
+        let f = bench.click(70 * n, top + 74 * n);
         assert_eq!(
             f.output_2.op,
             Some(PaletteOp::Remove { index: 3, into: 0 }),
@@ -1974,14 +1974,14 @@ fn row_7_releasing_on_the_same_one_outside_the_grid_or_outside_the_panel_does_no
         // Puntos de suelta, en píxeles: (descripción, x, y) con el bloque sin desplazar.
         let right_of_the_grid = (228 * n_ppp, (GRID_Y_U + 5) * n_ppp);
         let below_the_last_row = (10 * n_ppp, (GRID_Y_U + 30) * n_ppp);
-        let over_the_text = (10 * n_ppp, 10 * n_ppp);
+        let over_the_field = (10 * n_ppp, 65 * n_ppp);
         let over_the_canvas = (400 * n_ppp, (GRID_Y_U + 5) * n_ppp);
         let x_negative = (-5, (GRID_Y_U + 5) * n_ppp);
         let cases = [
             ("la misma", None),
             ("a la derecha de la rejilla", Some(right_of_the_grid)),
             ("debajo de la última fila", Some(below_the_last_row)),
-            ("sobre el texto", Some(over_the_text)),
+            ("sobre el campo hexadecimal", Some(over_the_field)),
             ("sobre el lienzo", Some(over_the_canvas)),
             ("fuera de la ventana por la izquierda", Some(x_negative)),
         ];
@@ -2747,7 +2747,7 @@ mod set_transparent {
             );
             let context = format!("ppp {ppp}");
             assert!(!bench.layout().scrolling, "{context}");
-            assert_eq!(bench.panel_h_px(), 241 * n, "{context}");
+            assert_eq!(bench.panel_h_px(), 308 * n, "{context}");
             let f = bench.rest_2_2();
             checks_button(&f, &bench, SET, &context);
             checks_buttons(&f, &bench, &NORMAL, &context);
@@ -2773,13 +2773,13 @@ mod set_transparent {
             // Dentro: la esquina y el último píxel físico; fuera: izquierda, derecha, 1 u sobre
             // el botón y bajo él.
             for (x, y, inside) in [
-                (93 * n, 38 * n, true),
-                (117 * n - 1, 62 * n - 1, true),
-                (105 * n, 50 * n, true),
-                (92 * n, 50 * n, false),
-                (117 * n, 50 * n, false),
+                (93 * n, 62 * n, true),
+                (117 * n - 1, 86 * n - 1, true),
+                (105 * n, 74 * n, true),
+                (92 * n, 74 * n, false),
+                (117 * n, 74 * n, false),
                 (105 * n, 185 * n, false),
-                (105 * n, 62 * n, false),
+                (105 * n, 86 * n, false),
             ] {
                 bench.history.clear();
                 let f = bench.click(x, top + y);
@@ -2793,7 +2793,7 @@ mod set_transparent {
                 assert_eq!(bench.choices(), vec![], "{context}");
             }
             // Y las filas 1 a 3 siguen en sus puntos.
-            let f = bench.click(36 * n, top + 38 * n);
+            let f = bench.click(36 * n, top + 62 * n);
             assert_eq!(
                 f.output_2.op,
                 Some(PaletteOp::Rotate {
@@ -2809,10 +2809,12 @@ mod set_transparent {
     fn row_2_with_the_panel_scrolled_the_button_is_pressed_with_y_minus_offset() {
         for ppp in PPPS {
             let n = i64::from(text_scale(ppp));
+            // 300·n: el bloque (308·n) desplaza y, con el máximo desplazamiento, la fila de iconos
+            // sigue a la vista (el editor mide 202·n y queda anclado abajo).
             let mut bench =
-                Bench::with_panel_height(ppp, 200 * n, image_f(), ColorChoice::Entry(1));
+                Bench::with_panel_height(ppp, 300 * n, image_f(), ColorChoice::Entry(1));
             assert!(bench.layout().scrolling, "ppp {ppp}");
-            // Sin desplazar el botón queda por debajo del panel: no se golpea.
+            // Fuera del panel (por debajo) no se golpea nada.
             let (x, _) = bench.center_of_button(PaletteButton::Transparent);
             let f = bench.click(x, (55 + 248) * n);
             assert_eq!(f.output_2.op, None, "ppp {ppp}: fuera del panel");

@@ -800,7 +800,6 @@ fn property_3_the_edges_include_the_borders_of_the_panel_and_the_grid() {
         PANEL_WIDTH_U,
         GRID_X_U,
         GRID_Y_U,
-        palette_grid::SEPARATOR_Y_U,
         palette_grid::TRACK_X_U,
         palette_grid::RIGHT_LINE_X_U,
         GRID_X_U + CELL_U,
@@ -1027,13 +1026,8 @@ fn show_clicks_in_gaps_and_outside_the_grid_do_not_choose() {
             ),
             // Margen izquierdo, antes de la rejilla.
             ("margen izquierdo", (GRID_X_U * n / 2) as f32, cy),
-            // Above the grid: on the separator and inside the indicator band.
-            (
-                "separador",
-                cx,
-                (palette_grid::SEPARATOR_Y_U * n) as f32 + 0.5,
-            ),
-            ("banda", cx, (palette_grid::INDICATOR_H_U * n / 2) as f32),
+            // Above the grid: the 4 u margin where the rings fit.
+            ("margen superior", cx, (GRID_Y_U * n / 2) as f32),
             // A la derecha de la última columna, dentro del panel.
             (
                 "derecha de la rejilla",
@@ -1095,17 +1089,17 @@ fn show_a_click_on_a_swatch_that_does_not_exist_does_not_choose() {
 
 #[test]
 fn show_a_row_that_is_not_seen_is_not_chosen() {
-    // A 146 pt screen at ppp 1: the panel is 126 px and only 5 rows are seen (the 44 u band and
-    // the 5 u of separator and gap of C1 take 49 of them).
+    // A 105 pt screen at ppp 1: the panel is 85 px and only 5 rows are seen (the 4 u gap above the
+    // grid takes 4 of them).
     let image = image_indexed(256);
-    let mut bench = Bench::with_image(1.0, vec2(800.0, 146.0), &image);
+    let mut bench = Bench::with_image(1.0, vec2(800.0, 105.0), &image);
     let n = bench.n();
-    let panel_h_px = 146 - i64::from(bar_height_px(n));
+    let panel_h_px = 105 - i64::from(bar_height_px(n));
     assert_eq!(palette_grid::visible_rows(panel_h_px, n), 5);
     let choice = ColorChoice::Entry(5);
     bench.rest_2_2(&image);
 
-    // Row 5 (the sixth) starts inside the panel (at 119 px) but is not seen.
+    // Row 5 (the sixth) starts inside the panel (at 74 px) but is not seen.
     let (x, y) = swatch_center_px(n, 5 * COLUMNS, 0);
     assert!(y < panel_h_px as f32, "la fila oculta cae dentro del panel");
     let (pressed_2, _) = click(

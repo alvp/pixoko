@@ -39,8 +39,8 @@ use px_ui::color_edit::{
     slider_x, stale_notice,
 };
 use px_ui::edit_layout::{
-    FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, FIRST_ROW_Y_U, PanelLayout, ROW_H_U, TRACK_W_U,
-    TRACK_X_U, block_height_px, control_row_u, editor_height_u, panel_layout,
+    COLOR_FIRST_ROW_Y_U, FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, PanelLayout, ROW_H_U,
+    TRACK_W_U, TRACK_X_U, block_height_px, control_row_u, editor_height_u, panel_layout,
 };
 use px_ui::palette_grid::{
     self, CELL_U, COLUMNS, GRID_X_U, GRID_Y_U, PANEL_WIDTH_U, PITCH_U, PanelView, panel_thumb,
@@ -674,18 +674,21 @@ fn checks_bar(f: &TestFrame, bench: &Bench, context: &str) {
 fn row_3_the_editor_is_always_seen_and_the_grid_has_one_row() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for height_2 in [241 * n, 240 * n, 200 * n, 100 * n] {
+        for height_2 in [308 * n, 307 * n, 200 * n, 100 * n] {
             let context = format!("ppp {ppp}, alto {height_2}");
             let mut bench =
                 Bench::with_panel_height(ppp, height_2, image_indexed_256(), ColorChoice::Entry(5));
             let f = bench.rest_2_2();
             let geo = bench.geo();
-            assert_eq!(geo.top_px, 127 * n, "{context}: top_px con offset 0");
+            assert_eq!(geo.top_px, 106 * n, "{context}: top_px con offset 0");
             // El editor se pinta, en su sitio.
             let label = first_slider_label(&f)
                 .unwrap_or_else(|| panic!("{context}: sin el primer deslizador"));
             assert!(
-                near(label.pos.y * ppp, (geo.top_px + FIRST_ROW_Y_U * n) as f32),
+                near(
+                    label.pos.y * ppp,
+                    (geo.top_px + COLOR_FIRST_ROW_Y_U * n) as f32
+                ),
                 "{context}: primer deslizador en y = {}",
                 label.pos.y * ppp
             );
@@ -705,16 +708,16 @@ fn row_3_the_editor_is_always_seen_and_the_grid_has_one_row() {
 }
 
 #[test]
-fn row_3_from_241n_to_240n_the_editor_and_the_grid_do_not_jump() {
+fn row_3_from_308n_to_307n_the_editor_and_the_grid_do_not_jump() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
         let mut bench =
-            Bench::with_panel_height(ppp, 241 * n, image_indexed_256(), ColorChoice::Entry(5));
+            Bench::with_panel_height(ppp, 308 * n, image_indexed_256(), ColorChoice::Entry(5));
         let before = bench.rest_2_2();
         let header_before = first_slider_label(&before).expect("primer deslizador").pos;
         assert!(!bench.layout().scrolling);
 
-        bench.height_of_panel(240 * n);
+        bench.height_of_panel(307 * n);
         let after_2 = bench.rest_2_2();
         assert!(bench.layout().scrolling, "ppp {ppp}: 240n desplaza");
         assert_eq!(bench.view.offset_px, 0);
@@ -731,7 +734,7 @@ fn row_3_from_241n_to_240n_the_editor_and_the_grid_do_not_jump() {
 fn row_3_with_maximum_offset_the_editor_stays_anchored_to_the_bottom() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for height_2 in [240 * n, 200 * n, 100 * n] {
+        for height_2 in [307 * n, 200 * n, 100 * n] {
             let mut bench =
                 Bench::with_panel_height(ppp, height_2, image_indexed_256(), ColorChoice::Entry(5));
             let (x, y) = bench.over_the_editor();
@@ -793,7 +796,7 @@ fn row_4_offset_px_is_always_a_multiple_of_n_and_is_clipped_to_zero_and_to_the_m
         let mut bench =
             Bench::with_panel_height(ppp, 200 * n, image_indexed_256(), ColorChoice::Entry(5));
         let max = bench.max_offset();
-        assert_eq!(max, 41 * n);
+        assert_eq!(max, 108 * n);
         let (x, y) = bench.over_the_text();
         bench.moves(x, y);
         // Subir con el desplazamiento a 0: se queda en 0.
@@ -852,7 +855,8 @@ fn row_4_the_wheel_outside_the_panel_does_not_move_the_panel() {
 fn row_4_with_a_drag_in_progress_the_wheel_does_not_move_the_panel() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = Bench::with_panel_height(ppp, 200 * n, image_f(), ColorChoice::Entry(1));
+        // 270·n: el panel desplaza (el bloque mide 308·n) y la fila de R (251·n) queda dentro.
+        let mut bench = Bench::with_panel_height(ppp, 270 * n, image_f(), ColorChoice::Entry(1));
         let geo = bench.geo();
         let y = geo.y_row(Control::Red);
         let x = geo.x_of_value(128, Control::Red.max());
@@ -883,24 +887,24 @@ fn row_4_when_enlarging_up_to_the_block_offset_px_is_0_in_the_same_frame() {
             Bench::with_panel_height(ppp, 200 * n, image_indexed_256(), ColorChoice::Entry(5));
         let (x, y) = bench.over_the_text();
         bench.wheel_in(x, y, 100_000 * n);
-        assert_eq!(bench.view.offset_px, 41 * n);
+        assert_eq!(bench.view.offset_px, 108 * n);
 
         // Agrandar un poco: el máximo baja y el desplazamiento se recorta en el mismo fotograma.
         bench.height_of_panel(220 * n);
         bench.rest_2_2();
-        assert_eq!(bench.view.offset_px, 21 * n, "ppp {ppp}: 220n");
-        assert_eq!(bench.max_offset(), 21 * n);
+        assert_eq!(bench.view.offset_px, 88 * n, "ppp {ppp}: 220n");
+        assert_eq!(bench.max_offset(), 88 * n);
 
         // Hasta el bloque: 0 en el mismo fotograma, sin pista y con el editor en su sitio.
-        bench.height_of_panel(241 * n);
+        bench.height_of_panel(308 * n);
         let f = bench.rest_2_2();
-        assert_eq!(bench.view.offset_px, 0, "ppp {ppp}: 241n");
+        assert_eq!(bench.view.offset_px, 0, "ppp {ppp}: 308n");
         assert!(!bench.layout().scrolling);
-        checks_bar(&f, &bench, &format!("ppp {ppp}, 241n"));
+        checks_bar(&f, &bench, &format!("ppp {ppp}, 308n"));
         let label = first_slider_label(&f).expect("primer deslizador");
         assert!(near(
             label.pos.y * ppp,
-            (127 * n + FIRST_ROW_Y_U * n) as f32
+            (106 * n + COLOR_FIRST_ROW_Y_U * n) as f32
         ));
 
         // Y mucho más alto: el diseño normal, sin desplazamiento posible.
@@ -917,9 +921,9 @@ fn row_4_the_bar_is_only_painted_with_scroll_and_the_grid_does_not_paint_its_own
         let n = i64::from(text_scale(ppp));
         for (height_2, pans) in [
             (700 * n, false),
-            (280 * n, false),
-            (241 * n, false),
-            (240 * n, true),
+            (330 * n, false),
+            (308 * n, false),
+            (307 * n, true),
             (200 * n, true),
             (100 * n, true),
         ] {
@@ -955,12 +959,13 @@ fn row_4_the_bar_is_only_painted_with_scroll_and_the_grid_does_not_paint_its_own
 fn row_5_a_click_on_a_slider_finds_the_control_with_y_minus_offset() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = Bench::with_panel_height(ppp, 200 * n, image_f(), ColorChoice::Entry(1));
+        // 270·n: la fila de R (244·n a 258·n con el panel sin desplazar) se ve con 20·n de desplazamiento.
+        let mut bench = Bench::with_panel_height(ppp, 270 * n, image_f(), ColorChoice::Entry(1));
         let (x, y) = bench.over_the_text();
         bench.wheel_in(x, y, 20 * n);
         assert_eq!(bench.view.offset_px, 20 * n);
         let geo = bench.geo();
-        assert_eq!(geo.top_px, 107 * n);
+        assert_eq!(geo.top_px, 86 * n);
 
         // El centro de la fila de R, ya desplazada, es R.
         let y_red = geo.y_row(Control::Red);
@@ -988,7 +993,7 @@ fn row_5_a_click_on_a_slider_finds_the_control_with_y_minus_offset() {
         );
 
         // El sitio donde estaría R sin desplazar (y = 138·n) es ahora la fila de G.
-        let y_without_pan = (127 + FIRST_ROW_Y_U + ROW_H_U / 2) * n;
+        let y_without_pan = (106 + COLOR_FIRST_ROW_Y_U + ROW_H_U / 2) * n;
         bench.moves(x_a, y_without_pan);
         bench.presses_2(x_a, y_without_pan);
         assert_eq!(
@@ -1008,7 +1013,7 @@ fn row_5_a_click_on_the_field_with_offset_gives_it_the_focus() {
         let (x, y) = bench.over_the_text();
         bench.wheel_in(x, y, 36 * n);
         assert_eq!(bench.view.offset_px, 36 * n);
-        // El campo está en la parte visible (y = 63·n − 36·n + 18·n + 9·n = 54·n < 200·n).
+        // El campo está en la parte visible (y = 18·n − 36·n + 42·n + 9·n = 33·n < 200·n).
         let (x, y) = bench.geo().field_2();
         assert!(y < bench.panel_h_px());
         bench.click(x, y);
@@ -1032,14 +1037,14 @@ fn row_5_a_click_on_the_field_with_offset_gives_it_the_focus() {
 fn row_5_outside_the_panel_rectangle_nothing_is_hit() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // Panel de 150·n y sin desplazar: la fila de B (159..173·n) queda por debajo del panel,
-        // bajo la barra de estado (150..170·n), y la de G (145..159·n) asoma por arriba.
-        let mut bench = Bench::with_panel_height(ppp, 150 * n, image_f(), ColorChoice::Entry(1));
+        // Panel de 266·n y sin desplazar: la fila de B (272..286·n) queda por debajo del panel,
+        // bajo la barra de estado (266..286·n), y la de G (258..272·n) asoma por arriba.
+        let mut bench = Bench::with_panel_height(ppp, 266 * n, image_f(), ColorChoice::Entry(1));
         let geo = bench.geo();
-        assert_eq!(geo.top_px, 127 * n);
+        assert_eq!(geo.top_px, 106 * n);
         let x = geo.x_of_value(128, 255);
         let y_blue = geo.y_row(Control::Blue);
-        assert!(y_blue >= 150 * n, "B está fuera del panel");
+        assert!(y_blue >= 266 * n, "B está fuera del panel");
         bench.moves(x, y_blue);
         bench.presses_2(x, y_blue);
         assert!(
@@ -1049,8 +1054,8 @@ fn row_5_outside_the_panel_rectangle_nothing_is_hit() {
         bench.releases(x, y_blue);
         assert!(bench.commits().is_empty());
 
-        // Contraste: la fila de G, dentro del panel (145..150·n, y = 147·n), sí.
-        let y_green = 147 * n;
+        // Contraste: la fila de G, dentro del panel (258..266·n, y = 262·n), sí.
+        let y_green = 262 * n;
         bench.moves(x, y_green);
         bench.presses_2(x, y_green);
         assert_eq!(bench.editor.dragging_control(), Some(Control::Green));
@@ -1062,21 +1067,21 @@ fn row_5_outside_the_panel_rectangle_nothing_is_hit() {
 fn row_5_a_click_on_the_part_of_the_field_that_falls_outside_the_panel_does_not_focus_it() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // 84·n sin desplazar: el campo va de 81 a 99·n y el panel acaba en 84·n. Egui acepta
+        // 66·n sin desplazar: el campo va de 60 a 78·n y el panel acaba en 66·n. Egui acepta
         // clics hasta 5 puntos fuera de un widget (`interact_radius`): se pulsa a más de eso (en
-        // 94·n), sobre la barra de estado.
-        let mut bench = Bench::with_panel_height(ppp, 84 * n, image_f(), ColorChoice::Entry(1));
+        // 76·n), sobre la barra de estado.
+        let mut bench = Bench::with_panel_height(ppp, 66 * n, image_f(), ColorChoice::Entry(1));
         let geo = bench.geo();
-        assert_eq!(geo.top_px, 127 * n);
+        assert_eq!(geo.top_px, 106 * n);
         let (x, _) = geo.field_2();
-        bench.click(x, 94 * n);
+        bench.click(x, 76 * n);
         bench.rest_2_2();
         assert!(
             !bench.wants_keyboard(),
             "ppp {ppp}: la parte del campo bajo el panel no recibe el clic"
         );
-        // La parte de dentro (y = 82·n, de 81 a 84·n) sí.
-        bench.click(x, 82 * n);
+        // La parte de dentro (y = 63·n, de 60 a 66·n) sí.
+        bench.click(x, 63 * n);
         bench.rest_2_2();
         assert!(bench.wants_keyboard(), "ppp {ppp}: la de dentro sí");
     }
@@ -1086,7 +1091,7 @@ fn row_5_a_click_on_the_part_of_the_field_that_falls_outside_the_panel_does_not_
 fn row_5_everything_painted_stays_inside_the_panel_rectangle() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        for height_2 in [300 * n, 241 * n, 240 * n, 200 * n, 100 * n] {
+        for height_2 in [330 * n, 308 * n, 307 * n, 200 * n, 100 * n] {
             let mut bench =
                 Bench::with_panel_height(ppp, height_2, image_indexed_256(), ColorChoice::Entry(5));
             let panel = bench.rect_panel();
@@ -1149,7 +1154,7 @@ fn row_5_lowering_the_window_does_not_cancel_a_drag() {
         assert!(provisional.is_some());
 
         // La ventana baja hasta el bloque, por debajo (se desplaza) y hasta el mínimo.
-        for height_2 in [241 * n, 240 * n, 200 * n, 100 * n] {
+        for height_2 in [308 * n, 307 * n, 200 * n, 100 * n] {
             bench.height_of_panel(height_2);
             let f = bench.rest_2_2();
             assert!(
@@ -1186,7 +1191,7 @@ fn row_5_lowering_the_window_does_not_cancel_a_drag() {
 fn row_6_neither_when_lowering_nor_when_raising_the_window_are_there_notices() {
     let ppp = 1.0;
     let mut bench = bench_f(ppp, 1);
-    for height_2 in [300, 241, 240, 100, 241, 700] {
+    for height_2 in [330, 308, 307, 100, 308, 700] {
         bench.height_of_panel(height_2);
         let f = bench.rest_2_2();
         assert_eq!(f.output_2.notice, None, "alto {height_2}");
@@ -1533,11 +1538,11 @@ fn shrinking_and_enlarging_the_window_does_not_lose_the_pending_text() {
         bench.history.clear();
         for height_2 in [
             300 * n,
-            241 * n,
+            308 * n,
             200 * n,
             100 * n,
             200 * n,
-            241 * n,
+            308 * n,
             500 * n,
         ] {
             bench.height_of_panel(height_2);
@@ -1595,8 +1600,8 @@ fn bench_256(ppp: f32, panel_h_px: i64, input_2: u8, warm_up: bool) -> Bench {
 fn row_11_the_first_frame_does_not_show_the_chosen_one() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        // 400·n: 12 filas visibles de 17 y la elegida (200 → fila 12) fuera de la vista.
-        let mut bench = bench_256(ppp, 400 * n, 200, false);
+        // 467·n (400·n de antes, más lo que ocupan ahora la cola y el editor): 12 filas visibles de 17 y la elegida (200 → fila 12) fuera de la vista.
+        let mut bench = bench_256(ppp, 467 * n, 200, false);
         assert_eq!(bench.view, PanelView::default());
         bench.rest_2_2();
         assert_eq!(bench.view.last_visible, Some(12), "ppp {ppp}");
@@ -1618,12 +1623,12 @@ fn row_11_the_first_frame_does_not_show_the_chosen_one() {
 fn row_11_changing_the_number_of_visible_rows_shows_the_chosen_one_with_the_minimum_movement() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, 400 * n, 200, true);
+        let mut bench = bench_256(ppp, 467 * n, 200, true);
         assert_eq!(bench.scroll.first_row, 0);
         assert_eq!(bench.view.last_visible, Some(12));
 
-        // 300·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
-        bench.height_of_panel(300 * n);
+        // 367·n: 5 filas visibles. La fila 12 pasa a ser la última visible (primera = 8).
+        bench.height_of_panel(367 * n);
         bench.rest_2_2();
         assert_eq!(bench.view.last_visible, Some(5), "ppp {ppp}");
         assert_eq!(bench.scroll.first_row, 8, "ppp {ppp}: el mínimo movimiento");
@@ -1634,7 +1639,7 @@ fn row_11_changing_the_number_of_visible_rows_shows_the_chosen_one_with_the_mini
         assert_eq!(bench.scroll.first_row, 8);
 
         // Agrandar: 12 filas visibles; la elegida sigue a la vista.
-        bench.height_of_panel(400 * n);
+        bench.height_of_panel(467 * n);
         bench.rest_2_2();
         assert_eq!(bench.view.last_visible, Some(12));
         assert!(chosen_visible(&bench, 12), "ppp {ppp}");
@@ -1667,7 +1672,7 @@ fn row_11_when_lowering_to_the_fallback_the_chosen_one_stays_in_view() {
 fn row_11_view_reveal_shows_the_chosen_one_and_the_panel_turns_it_off() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, 400 * n, 200, true);
+        let mut bench = bench_256(ppp, 467 * n, 200, true);
         assert_eq!(bench.scroll.first_row, 0);
         // Como las teclas 1 a 9, deshacer o rehacer: la sesión lo pone y el panel lo apaga.
         bench.view.reveal = true;
@@ -1712,7 +1717,7 @@ fn row_11_view_reveal_with_a_choice_without_a_swatch_moves_nothing_and_turns_off
 #[test]
 fn row_11_view_reveal_in_the_first_frame_does_show_the_chosen_one() {
     let n = 1;
-    let mut bench = bench_256(1.0, 400 * n, 200, false);
+    let mut bench = bench_256(1.0, 467 * n, 200, false);
     bench.view.reveal = true;
     bench.rest_2_2();
     assert!(!bench.view.reveal);
@@ -1723,7 +1728,7 @@ fn row_11_view_reveal_in_the_first_frame_does_show_the_chosen_one() {
 fn row_11_the_wheel_does_not_show_the_chosen_one() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, 300 * n, 0, true);
+        let mut bench = bench_256(ppp, 367 * n, 0, true);
         assert_eq!(bench.view.last_visible, Some(5));
         let (x, y) = center_of_swatch(n, 0, 0);
         bench.moves(x, y);
@@ -1744,7 +1749,7 @@ fn row_11_the_wheel_does_not_show_the_chosen_one() {
 fn row_11_a_click_on_a_swatch_does_not_show_the_chosen_one() {
     for ppp in PPPS {
         let n = i64::from(text_scale(ppp));
-        let mut bench = bench_256(ppp, 320 * n, 0, true);
+        let mut bench = bench_256(ppp, 387 * n, 0, true);
         let (x, y) = center_of_swatch(n, 0, 0);
         bench.moves(x, y);
         bench.wheel(3 * PITCH_U * n);
@@ -1780,7 +1785,7 @@ fn row_11_a_click_on_a_swatch_does_not_show_the_chosen_one() {
 fn row_11_dragging_a_slider_does_not_show_the_chosen_one() {
     let ppp = 1.0;
     let n = 1;
-    let mut bench = bench_256(ppp, 400 * n, 0, true);
+    let mut bench = bench_256(ppp, 467 * n, 0, true);
     let (x, y) = center_of_swatch(n, 0, 0);
     bench.moves(x, y);
     bench.wheel(3 * PITCH_U * n);

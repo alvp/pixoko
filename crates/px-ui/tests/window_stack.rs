@@ -18,7 +18,7 @@
 //!   en un lienzo con origen (0,0) y el puntero desplazado, en la primera y la última coordenada
 //!   física de cada píxel de la imagen, en las cuatro esquinas del lienzo y un píxel fuera; y
 //!   `Ajustar` centra la imagen en **ese** rectángulo (no en la ventana).
-//! - Fila 10 (respaldo B con la columna): con la columna de `200·n`, `100·n` y `325·n` de alto, la
+//! - Fila 10 (respaldo B con la columna): con la columna de `200·n`, `100·n` y `392·n` de alto, la
 //!   rueda sobre la caja o la paleta mueve el bloque entero y el menú, la barra y el lienzo no lo
 //!   mueven; el menú no se desplaza y se pinta recortado a su rectángulo; los botones de la caja y
 //!   los deslizadores golpean en su sitio (con el bloque desplazado, donde lo pone el
@@ -814,9 +814,9 @@ fn row_9_fit_centers_the_image_in_the_canvas_rectangle_and_not_in_the_window() {
 // Fila 10: respaldo B con la columna
 // ---------------------------------------------------------------------------------------------
 
-/// Los tres altos de la fila 10, en `u` (el bloque entero mide `head + 241` = 325 u con el editor
+/// Los tres altos de la fila 10, en `u` (el bloque entero mide `head + 308` = 392 u con el editor
 /// abierto y 5 herramientas a 16 columnas).
-const PANEL_HEIGHTS_U: [i64; 3] = [200, 100, 325];
+const PANEL_HEIGHTS_U: [i64; 3] = [200, 100, 392];
 
 fn bench_with_panel_of(ppp: f32, panel_u: i64) -> Bench {
     let n = n_of(ppp);
@@ -1057,13 +1057,13 @@ fn row_10_the_toolbox_buttons_hit_where_the_scroll_puts_them_with_the_low_panel(
 fn row_10_a_click_on_an_editor_slider_hits_it_with_the_panel_in_the_stack() {
     for ppp in PPPS {
         let n = n_of(ppp);
-        for panel_u in [200, 325] {
+        for panel_u in [200, 392] {
             let mut bench = bench_with_panel_of(ppp, panel_u);
             let layout = window_layout(bench.window_px, n as u32);
             if panel_u == 200 {
-                // The tail (64 u) sits above the editor: scroll until the sliders are in sight.
-                bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 40 * n);
-                assert_eq!(bench.view.offset_px, 40 * n);
+                // The tail (88 u) sits above the editor: scroll until the sliders are in sight.
+                bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 160 * n);
+                assert_eq!(bench.view.offset_px, 160 * n);
             }
             let placed = column_layout(
                 Mode::Indexed,
@@ -1152,10 +1152,10 @@ fn row_10_with_height_equal_to_or_greater_than_the_block_the_scroll_goes_back_to
 fn row_10_lowering_and_raising_the_window_does_not_move_the_toolbox_or_the_menu() {
     for ppp in PPPS {
         let n = n_of(ppp);
-        let mut bench = bench_with_panel_of(ppp, 325);
+        let mut bench = bench_with_panel_of(ppp, 392);
         let height_2 = bench.rest_2_2();
         let reference = column_and_menu_texts(&height_2, ppp, false);
-        for panel_u in [200, 100, 325, 150, 325] {
+        for panel_u in [200, 100, 392, 150, 392] {
             bench.height_of_panel(panel_u * n);
             bench.rest_2_2();
             let f = bench.rest_2_2();
@@ -1414,13 +1414,13 @@ mod toolbox_right {
     }
 
     /// Fila 9: la rueda sobre la caja no hace zoom; desplaza el bloque entero solo si desborda
-    /// (200 u y 100 u) y con el alto del bloque (325 u) no desplaza nada.
+    /// (200 u y 100 u) y con el alto del bloque (392 u) no desplaza nada.
     #[test]
     fn row_9_the_wheel_over_the_toolbox_does_not_zoom_and_scrolls_the_block_only_when_it_overflows()
     {
         for ppp in PPPS {
             let n = n_of(ppp);
-            for panel_u in [200, 100, 325] {
+            for panel_u in [200, 100, 392] {
                 let mut bench = bench_with_panel_of(ppp, panel_u);
                 let layout = window_layout(bench.window_px, n as u32);
                 let zoom_before = bench.rest_2_2().info.zoom;
@@ -1466,12 +1466,12 @@ mod toolbox_right {
         }
     }
 
-    /// Fila 9: con el alto del bloque (325 u) el bloque no se desplaza ni con la rueda encima.
+    /// Fila 9: con el alto del bloque (392 u) el bloque no se desplaza ni con la rueda encima.
     #[test]
-    fn row_9_with_325_u_the_block_does_not_scroll() {
+    fn row_9_with_392_u_the_block_does_not_scroll() {
         for ppp in PPPS {
             let n = n_of(ppp);
-            let mut bench = bench_with_panel_of(ppp, 325);
+            let mut bench = bench_with_panel_of(ppp, 392);
             let layout = window_layout(bench.window_px, n as u32);
             assert!(!scrolls(&bench));
             bench.wheel_in(layout.panel.x + 10 * n, layout.panel.y + 10 * n, 10 * n);

@@ -9,6 +9,8 @@
 
 #![allow(dead_code)]
 
+use std::cell::Cell;
+
 use egui::epaint::{ClippedShape, Shape};
 use egui::{
     Color32, Context, CursorIcon, Event, Key, MissingGlyphPolicy, Modifiers, MouseWheelSource,
@@ -75,8 +77,15 @@ fn collects(
     texts: &mut Vec<Painted>,
     fills: &mut Vec<(Rect, Color32)>,
     strokes: &mut Vec<(Rect, Color32, f32)>,
+    meshes: &mut Vec<Vec<(Pos2, Color32)>>,
 ) {
     match shape {
+        Shape::Mesh(mesh) => meshes.push(
+            mesh.vertices
+                .iter()
+                .map(|vertex| (vertex.pos, vertex.color))
+                .collect(),
+        ),
         Shape::Text(t) => texts.push(Painted {
             text: t.galley.text().to_owned(),
             pos: t.pos,
@@ -90,7 +99,7 @@ fn collects(
         }
         Shape::Vec(shapes) => {
             for shape in shapes {
-                collects(shape, texts, fills, strokes);
+                collects(shape, texts, fills, strokes, meshes);
             }
         }
         _ => {}
@@ -104,6 +113,8 @@ pub struct Frame {
     pub texts: Vec<Painted>,
     pub fills: Vec<(Rect, Color32)>,
     pub strokes: Vec<(Rect, Color32, f32)>,
+    /// The vertices (position and color) of every mesh painted, one list per mesh.
+    pub meshes: Vec<Vec<(Pos2, Color32)>>,
     pub cursor: CursorIcon,
     pub shapes: Vec<ClippedShape>,
 }
@@ -155,6 +166,8 @@ pub struct Bench {
     /// A drawing gesture is in progress (`enabled` false).
     pub gesture_drawing: bool,
     pub history: Vec<PanelOutput>,
+    /// Time of the next frame, in seconds (`None`: egui gets none); the tooltips need it.
+    pub time: Cell<Option<f64>>,
 }
 
 impl Bench {
@@ -185,6 +198,7 @@ impl Bench {
             doc_state: 0,
             gesture_drawing: false,
             history: Vec::new(),
+            time: Cell::new(None),
         };
         for _ in 0..2 {
             let out = bench.ctx.run_ui(bench.input(vec![]), |ui| {
@@ -214,9 +228,14 @@ impl Bench {
     }
 
     fn input(&self, events: Vec<Event>) -> RawInput {
+        let time = self.time.get().map(|t| {
+            self.time.set(Some(t + 0.1));
+            t + 0.1
+        });
         RawInput {
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, self.screen)),
             events,
+            time,
             ..RawInput::default()
         }
     }
@@ -301,9 +320,16 @@ impl Bench {
         let cursor = output.platform_output.cursor_icon;
         let shapes: Vec<ClippedShape> = std::mem::take(&mut output.shapes);
         let panel = result.expect("the panel is painted");
-        let (mut texts, mut fills, mut strokes) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut texts, mut fills, mut strokes, mut meshes) =
+            (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for clipped in &shapes {
-            collects(&clipped.shape, &mut texts, &mut fills, &mut strokes);
+            collects(
+                &clipped.shape,
+                &mut texts,
+                &mut fills,
+                &mut strokes,
+                &mut meshes,
+            );
         }
         if let Some(choice) = panel.choice {
             self.foreground = choice;
@@ -315,6 +341,7 @@ impl Bench {
             texts,
             fills,
             strokes,
+            meshes,
             cursor,
             shapes,
         }
@@ -384,6 +411,19 @@ impl Bench {
             repeat: false,
             modifiers: Modifiers::NONE,
         }])
+    }
+
+    /// The texts of a frame after the pointer rested on `at` for a while (the tooltip is among them).
+    pub fn tooltip_texts(&mut self, at: (i64, i64)) -> Vec<String> {
+        if self.time.get().is_none() {
+            self.time.set(Some(1.0));
+        }
+        self.moves(at);
+        let mut frame = self.rest();
+        for _ in 0..8 {
+            frame = self.rest();
+        }
+        frame.texts.into_iter().map(|t| t.text).collect()
     }
 
     pub fn escape(&mut self) -> Frame {

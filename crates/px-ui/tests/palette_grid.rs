@@ -16,9 +16,9 @@ use proptest::prelude::*;
 use px_core::{Image, Palette, Pixel, Rgba};
 use px_ui::palette_grid::{
     CELL_U, CHECK_A, CHECK_B, CHECK_U, COLUMNS, GAP_U, GRID_X_U, GRID_Y_U, Grid, PANEL_WIDTH_U,
-    PITCH_U, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, SEPARATOR_Y_U, Scroll, TEXT_WIDTH_U,
-    TEXT_X_U, TRACK_W_U, TRACK_X_U, edges_u, max_first_row, ring_rects, swatch_parts, thumb,
-    total_rows, visible_rows,
+    PITCH_U, RIGHT_LINE_X_U, RING_ACTIVE_U, RING_HOVER_U, Scroll, TEXT_WIDTH_U, TEXT_X_U,
+    TRACK_W_U, TRACK_X_U, edges_u, max_first_row, ring_rects, swatch_parts, thumb, total_rows,
+    visible_rows,
 };
 use px_ui::texture::pixel_rgba;
 use px_ui::theme::{self, contrast_ratio};
@@ -50,10 +50,9 @@ fn the_constants_are_worth_what_the_spec_says() {
     assert_eq!(CHECK_U, 6);
     assert_eq!(PANEL_WIDTH_U, 233);
     assert_eq!(GRID_X_U, 4);
-    assert_eq!(GRID_Y_U, 49);
+    assert_eq!(GRID_Y_U, 4);
     assert_eq!(TEXT_X_U, 4);
     assert_eq!(TEXT_WIDTH_U, 225);
-    assert_eq!(SEPARATOR_Y_U, 44);
     assert_eq!(TRACK_X_U, 230);
     assert_eq!(TRACK_W_U, 2);
     assert_eq!(RIGHT_LINE_X_U, 232);
@@ -91,7 +90,6 @@ fn edges_u_contains_the_edges_of_the_mockup() {
         ("PANEL_WIDTH_U", PANEL_WIDTH_U),
         ("GRID_X_U", GRID_X_U),
         ("GRID_Y_U", GRID_Y_U),
-        ("SEPARATOR_Y_U", SEPARATOR_Y_U),
     ] {
         assert!(
             borders.contains(&expected_2),
@@ -99,7 +97,7 @@ fn edges_u_contains_the_edges_of_the_mockup() {
         );
     }
     // Y con los valores literales de la spec.
-    for expected_2 in [233, 4, 77, 72] {
+    for expected_2 in [233, 4, 74, 72] {
         assert!(borders.contains(&expected_2), "falta {expected_2}");
     }
 }
@@ -293,12 +291,12 @@ fn row_3_visible_rows() {
     let n1 = [
         (0, 0usize),
         (-5, 0),
-        (62, 0),
-        (63, 1),
-        (76, 1),
-        (77, 2),
-        (272, 15),
-        (273, 16),
+        (17, 0),
+        (18, 1),
+        (31, 1),
+        (32, 2),
+        (227, 15),
+        (228, 16),
     ];
     for (height_2, expected_2) in n1 {
         assert_eq!(
@@ -307,14 +305,14 @@ fn row_3_visible_rows() {
             "n=1, alto {height_2}"
         );
     }
-    for (height_2, expected_2) in [(125, 0usize), (126, 1)] {
+    for (height_2, expected_2) in [(35, 0usize), (36, 1)] {
         assert_eq!(
             visible_rows(height_2, 2),
             expected_2,
             "n=2, alto {height_2}"
         );
     }
-    for (height_2, expected_2) in [(188, 0usize), (189, 1)] {
+    for (height_2, expected_2) in [(53, 0usize), (54, 1)] {
         assert_eq!(
             visible_rows(height_2, 3),
             expected_2,

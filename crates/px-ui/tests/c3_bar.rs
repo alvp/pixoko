@@ -9,14 +9,16 @@ use px_core::{Image, Mode, Palette, Rgba};
 use px_ui::chrome::{COLUMN_MIN_COLS, MENU_H_U, column_width_u, head_u};
 use px_ui::color::{ColorChoice, Role};
 use px_ui::color_bar::{bar_ink, bar_label};
+use px_ui::color_block::{bar_cell_rect, bar_fill_rect, swap_rect};
 use px_ui::color_edit::{Commit, EditTarget, hex_text};
 use px_ui::edit_layout::{
-    BAR_H_U, BAR_X_U, BAR_Y_U, FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, PaletteButton,
-    button_rect_u, editor_height_u, min_panel_height_px, min_window_height_pt, min_window_width_pt,
-    panel_layout, panel_layout_closed, tail_height_u,
+    FIELD_H_U, FIELD_W_U, FIELD_X_U, FIELD_Y_U, PaletteButton, block_height_px, button_rect_u,
+    editor_height_u, min_panel_height_px, min_window_height_pt, min_window_width_pt, panel_layout,
+    panel_layout_closed, tail_height_u,
 };
 use px_ui::help::HelpTarget;
-use px_ui::palette_grid::{CHECK_A, CHECK_B, GRID_Y_U, PITCH_U, text_width_u, total_rows_cols};
+use px_ui::palette_grid::{CHECK_A, CHECK_B, GRID_Y_U, PITCH_U, total_rows_cols};
+use px_ui::palette_panel::BarClick;
 use px_ui::text::{INTERFACE_CHARSET, text_scale};
 use px_ui::theme::{SURFACE_0, TEXT, WARNING, contrast_ratio};
 
@@ -41,16 +43,23 @@ fn image_of(mode: Mode) -> Image {
     Image::new(8, 4, mode).expect("image")
 }
 
-/// The bar, in points: from the top of the tail, 4 u from the left, 16 u high, the width of the text
-/// area of the column.
-fn bar_rect(bench: &Bench) -> egui::Rect {
+/// The fill of the bar of `role`, in points (C4: two bars of 16 u over a 20 u cell, 115 u wide at
+/// the minimum column and as wide as the column minus 34 u in general).
+fn role_bar_rect(bench: &Bench, role: Role) -> egui::Rect {
     let (n, ppp) = (bench.n(), bench.ppp());
-    let top = bench.tail_top() + BAR_Y_U * n;
-    let width = text_width_u(16) * n;
+    let fill = bar_fill_rect(role, 16, n as u32);
     egui::Rect::from_min_size(
-        egui::pos2((BAR_X_U * n) as f32 / ppp, top as f32 / ppp),
-        egui::vec2(width as f32 / ppp, (BAR_H_U * n) as f32 / ppp),
+        egui::pos2(
+            fill.x as f32 / ppp,
+            (bench.tail_top() + fill.y) as f32 / ppp,
+        ),
+        egui::vec2(fill.width as f32 / ppp, fill.height as f32 / ppp),
     )
+}
+
+/// The fill of the foreground bar.
+fn bar_rect(bench: &Bench) -> egui::Rect {
+    role_bar_rect(bench, Role::Foreground)
 }
 
 fn field_center(bench: &Bench) -> (i64, i64) {
@@ -81,7 +90,7 @@ fn row_10_the_text_of_the_bar_is_idx_n_col_n_and_idx_n_transp() {
     assert_eq!(bar_label(EditTarget::Entry(0), false), "Idx-0");
     assert_eq!(bar_label(EditTarget::Entry(10), false), "Idx-10");
     assert_eq!(bar_label(EditTarget::Entry(255), false), "Idx-255");
-    assert_eq!(bar_label(EditTarget::Entry(3), true), "Idx-3 transp.");
+    assert_eq!(bar_label(EditTarget::Entry(3), true), "transparente");
     assert_eq!(bar_label(EditTarget::Slot(3), false), "Col-3");
     for ppp in PPPS {
         // Every mode that has a target paints its text, in the charset and in one line.
@@ -107,39 +116,66 @@ fn row_10_the_text_of_the_bar_is_idx_n_col_n_and_idx_n_transp() {
 }
 
 #[test]
-fn row_10_the_bar_says_transp_for_the_transparent_entry() {
+fn row_10_the_bar_says_transparente_for_the_transparent_entry() {
     let mut palette = Palette::from_colors([Rgba::opaque(1, 2, 3), Rgba::opaque(4, 5, 6)]).unwrap();
     palette.set_transparent_index(Some(1)).unwrap();
     let image = Image::new_indexed(2, 2, palette).unwrap();
     let mut bench = Bench::new(1.0, SCREEN_HIGH, image, ColorChoice::Entry(1));
     let f = bench.rest();
-    assert!(f.paints("Idx-1 transp."));
-    // The bar paints the stored color, not the resolved one (alpha 0).
-    assert!(f.there_is_fill(bar_rect(&bench), color32(Rgba::opaque(4, 5, 6))));
+    assert!(f.paints("transparente"));
+    // C4: the bar paints the color of its swatch (the resolved one, alpha 0): the checker and
+    // not the stored color.
+    assert!(!f.there_is_fill(bar_rect(&bench), color32(Rgba::opaque(4, 5, 6))));
+    assert!(
+        f.fills
+            .iter()
+            .any(|(r, c)| *c == color32(CHECK_A) && bar_rect(&bench).contains_rect(r.expand(0.05)))
+    );
 }
 
 #[test]
-fn row_10_the_bar_is_painted_with_the_stored_color_of_what_the_editor_edits() {
+fn row_10_each_bar_is_painted_with_the_color_of_its_role_whatever_the_editor_edits() {
     for ppp in PPPS {
         let mut bench = Bench::new(ppp, SCREEN_HIGH, indexed(8), ColorChoice::Entry(3));
         bench.background = ColorChoice::Entry(5);
         let stored = |bench: &Bench, i: u8| bench.image.palette().unwrap().get(i).unwrap();
-        // Foreground (the editor closed): the entry 3.
+        // The editor closed: the top bar is the foreground (the entry 3) and the one under it the
+        // background (the entry 5).
         let f = bench.rest();
         assert!(
-            f.there_is_fill(bar_rect(&bench), color32(stored(&bench, 3))),
+            f.there_is_fill(
+                role_bar_rect(&bench, Role::Foreground),
+                color32(stored(&bench, 3))
+            ),
             "ppp {ppp}"
         );
-        assert!(f.paints("Idx-3"));
-        // The editor open on the background: the entry 5 and its text.
+        assert!(
+            f.there_is_fill(
+                role_bar_rect(&bench, Role::Background),
+                color32(stored(&bench, 5))
+            ),
+            "ppp {ppp}"
+        );
+        assert!(f.paints("Idx-3") && f.paints("Idx-5"));
+        // The editor open on the background: the same two bars (only the border moves).
         bench.editing = Role::Background;
         bench.view.editor_open = true;
         let f = bench.rest();
         assert!(
-            f.there_is_fill(bar_rect(&bench), color32(stored(&bench, 5))),
+            f.there_is_fill(
+                role_bar_rect(&bench, Role::Foreground),
+                color32(stored(&bench, 3))
+            ),
             "ppp {ppp}"
         );
-        assert!(f.paints("Idx-5") && !f.paints("Idx-3"));
+        assert!(
+            f.there_is_fill(
+                role_bar_rect(&bench, Role::Background),
+                color32(stored(&bench, 5))
+            ),
+            "ppp {ppp}"
+        );
+        assert!(f.paints("Idx-5") && f.paints("Idx-3"));
     }
 }
 
@@ -200,13 +236,21 @@ fn row_12_f1_over_the_bar_or_the_field_opens_the_help_of_the_bar() {
 }
 
 #[test]
-fn row_10_a_click_on_the_bar_does_nothing() {
+fn row_10_a_left_click_on_the_bar_asks_for_the_dropper_and_a_right_one_for_the_editor() {
     let mut bench = Bench::new(1.0, SCREEN_HIGH, indexed(8), ColorChoice::Entry(3));
     let rect = bar_rect(&bench);
     let at = ((rect.center().x) as i64, (rect.center().y) as i64);
     let f = bench.click(at);
-    assert_eq!(f.output, Default::default());
-    assert!(bench.history_is_empty());
+    assert_eq!(
+        f.output.bar_click,
+        Some(BarClick::Dropper(Role::Foreground))
+    );
+    assert_eq!(f.output.commit, None);
+    let f = bench.right_click(at);
+    assert_eq!(
+        f.output.bar_click,
+        Some(BarClick::FocusEditor(Role::Foreground))
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -333,8 +377,8 @@ fn row_10_the_open_editor_paints_neither_header_nor_field_nor_notice_lines() {
             1,
             "one field, not two"
         );
-        // The sliders are still there: the letters R G B H S L A.
-        for label in ["R", "G", "B", "H", "S", "L", "A"] {
+        // The sliders are still there (C4: the four of the RGB model): the letters R G B A.
+        for label in ["R", "G", "B", "A"] {
             assert!(f.paints(label), "ppp {ppp}: slider {label}");
         }
     }
@@ -385,22 +429,24 @@ fn row_11_the_tail_hangs_from_a_short_grid_and_is_anchored_below_a_tall_one() {
 }
 
 #[test]
-fn row_11_the_minimums_are_322_u_by_468_u_and_the_closed_block_fits_with_nothing_to_spare() {
+fn row_11_the_minimums_are_313_u_by_468_u_and_the_closed_block_fits_with_12_u_to_spare() {
     for (i, ppp) in PPPS.iter().enumerate() {
         let n = i64::from(text_scale(*ppp));
-        let height = [322.0f32, 257.6, 429.33, 322.0, 322.0][i];
+        let height = [313.0f32, 250.4, 417.33, 313.0, 313.0][i];
         assert!(
             (min_window_height_pt(*ppp) - height).abs() < 0.01,
             "ppp {ppp}"
         );
         assert!(min_window_height_pt(*ppp) <= 432.0);
         assert!((min_window_width_pt(*ppp) * ppp - (468 * n) as f32).abs() < 0.01);
-        assert_eq!(min_panel_height_px(n as u32), 286 * n);
-        // 20 tools at the minimum column plus the closed block: exactly the minimum panel.
-        assert_eq!(head_u(20, COLUMN_MIN_COLS) + 127, 286);
+        assert_eq!(min_panel_height_px(n as u32), 277 * n);
+        // 20 tools at the minimum column plus the closed block: 12 u under the minimum panel (the
+        // layers panel sets the floor again).
+        assert_eq!(head_u(20, COLUMN_MIN_COLS) + 106, 265);
+        assert_eq!(277 - (head_u(20, COLUMN_MIN_COLS) + 106), 12);
     }
     for invalid in [f32::NAN, 0.0, -1.0, f32::INFINITY] {
-        assert!((min_window_height_pt(invalid) - 322.0).abs() < 0.01);
+        assert!((min_window_height_pt(invalid) - 313.0).abs() < 0.01);
     }
 }
 
@@ -454,7 +500,14 @@ proptest! {
         let k = i64::from(n);
         let cols = COLUMN_MIN_COLS + extra_cols;
         let width = column_width_u(cols);
-        let height = min_panel_height_px(n) + extra_h;
+        // With the editor open the block is taller than the minimum panel (C4): it stops
+        // scrolling from its own height.
+        let base = if open {
+            block_height_px(mode, n)
+        } else {
+            min_panel_height_px(n)
+        };
+        let height = base + extra_h;
         let layout = if open {
             panel_layout(mode, height, n, 0)
         } else {
@@ -473,8 +526,15 @@ proptest! {
         prop_assert!(tail >= grid_bottom, "the tail does not overlap the visible grid");
         prop_assert!(tail + tail_height_u(mode) * k <= space_bottom, "and ends before the editor");
         // Pieces in u from the top of the tail: whole, inside the column and disjoint.
+        let cell = |role| {
+            let r = bar_cell_rect(role, cols, 1);
+            (r.x, r.y, r.width, r.height)
+        };
+        let swap = swap_rect(cols, 1);
         let mut pieces = vec![
-            (BAR_X_U, BAR_Y_U, text_width_u(cols), BAR_H_U),
+            cell(Role::Foreground),
+            cell(Role::Background),
+            (swap.x, swap.y, swap.width, swap.height),
             (FIELD_X_U, FIELD_Y_U, FIELD_W_U, FIELD_H_U),
         ];
         for button in [PaletteButton::Remove, PaletteButton::RotateLeft, PaletteButton::RotateRight, PaletteButton::Transparent] {
@@ -483,7 +543,7 @@ proptest! {
             }
         }
         for (i, a) in pieces.iter().enumerate() {
-            prop_assert!(a.0 >= 0 && a.0 + a.2 + 4 <= width, "inside the column");
+            prop_assert!(a.0 >= 0 && a.0 + a.2 + 2 <= width, "inside the column");
             prop_assert!(a.1 + a.3 <= tail_height_u(mode));
             for b in &pieces[i + 1..] {
                 let overlap = a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3;
@@ -500,7 +560,7 @@ proptest! {
             prop_assert_eq!(total_rows_cols(257, 16), 17);
         }
         // The minimums follow the formula and meet the ceilings.
-        let h = ((20 + MENU_H_U + 286) * k) as f32 / ppp;
+        let h = ((20 + MENU_H_U + 277) * k) as f32 / ppp;
         prop_assert!((min_window_height_pt(ppp) - h).abs() < 0.01);
         prop_assert!(min_window_height_pt(ppp) <= 432.0 + 0.01);
         let w = (468 * k) as f32 / ppp;

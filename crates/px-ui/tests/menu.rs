@@ -99,6 +99,7 @@ fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
                 ("Deshacer", AppAction::Undo),
                 ("Rehacer", AppAction::Redo),
                 ("Borrar página", AppAction::ClearPage),
+                ("Intercambiar colores", AppAction::SwapColors),
             ],
         ),
         (
@@ -171,9 +172,9 @@ fn row_1_the_separator_goes_only_before_quit() {
 }
 
 #[test]
-fn row_1_there_are_thirty_two_entries_and_no_action_repeats() {
+fn row_1_there_are_thirty_three_entries_and_no_action_repeats() {
     let actions: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
-    assert_eq!(actions.len(), 32);
+    assert_eq!(actions.len(), 33);
     for (i, a) in actions.iter().enumerate() {
         assert!(
             !actions[i + 1..].contains(a),
@@ -189,6 +190,8 @@ fn row_1_there_are_thirty_two_entries_and_no_action_repeats() {
     expected_2.extend(&TABLE_ACTIONS[3..6]);
     // `Borrar página` (I.2a) cierra `Editar`, antes de `TestImage`.
     expected_2.push(AppAction::ClearPage);
+    // `Intercambiar colores` (C4) follows `Borrar página`, still in `Editar`.
+    expected_2.push(AppAction::SwapColors);
     expected_2.push(AppAction::ConvertMode);
     // The three palette actions of C3 follow `Convertir modo…`.
     expected_2.extend([
@@ -241,7 +244,7 @@ fn texts_of_shortcut(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn some(texts: [Option<&str>; 32]) -> Vec<Option<String>> {
+fn some(texts: [Option<&str>; 33]) -> Vec<Option<String>> {
     texts.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -259,6 +262,7 @@ fn row_1_shortcuts_on_linux() {
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             Some("K"),
+            None,
             None,
             None,
             None,
@@ -304,6 +308,7 @@ fn row_1_shortcuts_on_windows_are_those_of_linux_except_quit_which_has_none() {
             None,
             None,
             None,
+            None,
             Some(";"),
             None,
             None,
@@ -342,6 +347,7 @@ fn row_1_shortcuts_on_mac_use_cmd_redo_is_cmd_shift_z_and_quit_has_none() {
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
             Some("K"),
+            None,
             None,
             None,
             None,

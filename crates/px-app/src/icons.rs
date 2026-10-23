@@ -1,4 +1,4 @@
-//! Los 21 iconos propios de la interfaz (specs/interfaz-iconos.md): PNG de 16 × 16 incrustados con
+//! Los 22 iconos propios de la interfaz (specs/interfaz-iconos.md): PNG de 16 × 16 incrustados con
 //! `include_bytes!`, decodificados una vez al arrancar con `px-formats` y subidos como texturas de
 //! vecino más cercano. `px-ui` los pinta tintados y a escala entera (`IconSet`).
 //!
@@ -71,6 +71,7 @@ pub fn embedded(icon: Icon) -> &'static [u8] {
         Icon::Duplicate => include_bytes!("../../../assets/icons/duplicar.png"),
         Icon::Up => include_bytes!("../../../assets/icons/subir.png"),
         Icon::Down => include_bytes!("../../../assets/icons/bajar.png"),
+        Icon::Swap => include_bytes!("../../../assets/icons/swap.png"),
     }
 }
 
@@ -114,7 +115,7 @@ impl Icons {
     }
 }
 
-/// Carga los 21 iconos incrustados.
+/// Carga los 22 iconos incrustados.
 pub fn load(ctx: &egui::Context) -> Result<Icons, IconError> {
     load_with(ctx, &|icon| embedded(icon).to_vec())
 }

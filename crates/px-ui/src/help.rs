@@ -35,12 +35,14 @@ pub enum HelpTarget {
     ZoomActualSize,
     /// A control of the layers panel (`F1` with the pointer over it).
     Layer(LayerHelp),
-    /// One of the two rectangles of the color indicator (`F1` with the pointer over it).
-    Indicator,
     /// The handle of the palette (`F1` with the pointer over it; C3).
     PaletteHandle,
     /// The color bar and the hexadecimal field under the grid (`F1` over them; C3).
     ColorBar,
+    /// The square, the bars and the sliders of the open color editor (`F1` over them; C4).
+    ColorEditor,
+    /// The swap button next to the two bars (`F1` over it; C4).
+    SwapColors,
 }
 
 /// The control of the layers panel help is asked about: one per layer action.
@@ -89,6 +91,8 @@ impl HelpTarget {
         match self {
             HelpTarget::PaletteHandle => "palette.handle",
             HelpTarget::ColorBar => "color.bar",
+            HelpTarget::ColorEditor => "color.editor",
+            HelpTarget::SwapColors => "color.swap",
             other => help_key(other.action(active))
                 .expect("toda herramienta, botón de zoom y control tienen ayuda"),
         }
@@ -104,7 +108,8 @@ impl HelpTarget {
             HelpTarget::ZoomOut => AppAction::ZoomOut,
             HelpTarget::ZoomFit => AppAction::ZoomFit,
             HelpTarget::ZoomActualSize => AppAction::ZoomActualSize,
-            HelpTarget::Indicator | HelpTarget::ColorBar => AppAction::ToggleColorEditor,
+            HelpTarget::ColorBar | HelpTarget::ColorEditor => AppAction::ToggleColorEditor,
+            HelpTarget::SwapColors => AppAction::SwapColors,
             HelpTarget::PaletteHandle => AppAction::PaletteSize,
             HelpTarget::Layer(help) => match help {
                 LayerHelp::Panel => AppAction::ToggleLayerPanel,
@@ -152,29 +157,6 @@ pub fn help_target_in_panel(
 ) -> Option<HelpTarget> {
     crate::layers_panel::hit(point_px.0 - panel.x, point_px.1 - panel.y, n)
         .map(|hit| HelpTarget::Layer(layer_help_for(hit)))
-}
-
-/// The target of `F1` with the pointer at `point_px` (physical window pixels) if it falls on one of
-/// the rectangles of the color indicator. `None` elsewhere.
-pub fn help_target_in_indicator(
-    point_px: (i64, i64),
-    window_px: (i64, i64),
-    n: u32,
-) -> Option<HelpTarget> {
-    help_target_in_indicator_cols(point_px, window_px, n, COLUMN_DEFAULT_COLS)
-}
-
-/// Like [`help_target_in_indicator`] with the column of `wanted` columns of swatches (the width that
-/// was chosen; the window cuts it).
-pub fn help_target_in_indicator_cols(
-    point_px: (i64, i64),
-    window_px: (i64, i64),
-    n: u32,
-    wanted: i64,
-) -> Option<HelpTarget> {
-    let panel = window_layout_cols(window_px, n, wanted).panel;
-    crate::palette_grid::indicator_hit(point_px.0 - panel.x, point_px.1 - panel.y, n)
-        .map(|_| HelpTarget::Indicator)
 }
 
 /// The target of `F1` with the pointer at `point_px` if it falls inside the window of options, which is

@@ -1,6 +1,6 @@
 # Iconos de Pixoko
 
-Los 21 iconos de la interfaz son **originales de Pixoko**, **dibujados nuevos** para este proyecto y
+Los 22 iconos de la interfaz son **originales de Pixoko**, **dibujados nuevos** para este proyecto y
 se distribuyen bajo la **licencia MIT** del proyecto, como el resto del repositorio. No proceden de
 ningún otro programa, tema ni biblioteca de iconos y no se han copiado, traducido ni calcado de
 ninguno.
@@ -17,7 +17,7 @@ ninguno.
   pueden retocar con Pixoko: vale cualquier PNG que `px-formats` lea (RGBA, indexado con
   transparencia o gris con alfa); solo cuenta el alfa y el color del retoque da igual.
 
-## Los 21 iconos
+## Los 22 iconos
 
 | Fichero | Motivo | Dónde |
 | --- | --- | --- |
@@ -36,10 +36,11 @@ ninguno.
 | `candado.png`, `candado-abierto.png` | candado cerrado; candado con el arco levantado | candado de cada capa del panel de capas |
 | `duplicar.png` | dos cuadrados desplazados, el de delante tapa al de detrás | botón Duplicar del panel de capas |
 | `subir.png`, `bajar.png` | flecha hacia arriba; flecha hacia abajo | botones Subir y Bajar del panel de capas |
+| `swap.png` | dos flechas horizontales opuestas, la de arriba hacia la derecha y la de abajo hacia la izquierda | botón de intercambiar primer plano y fondo, junto a las dos barras de color |
 
 ## Reservado
 
 `pincel.png` (el icono único de pincel del hito 4, que mostrará el pincel activo) está **reservado y
 sin dibujar**: no hay fichero ni `Icon::Brush` todavía. La prueba de `px-app` exige que en esta
-carpeta no haya más ficheros que los 21 de arriba y este `README.md`, así que al dibujarlo hay que
+carpeta no haya más ficheros que los 22 de arriba y este `README.md`, así que al dibujarlo hay que
 darlo de alta en `px-ui::icons`.

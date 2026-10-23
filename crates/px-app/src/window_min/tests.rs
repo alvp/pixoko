@@ -3,7 +3,7 @@
 //! `min_inner_size` (alto y ancho). Sin ventana: son funciones puras. La parte de `px-ui`
 //! (`min_panel_height_px`, `min_window_height_pt`, `min_window_width_pt`) está en `crates/px-ui/tests/edit_layout.rs`.
 //!
-//! Los números esperados salen de la spec (C3): 322, 257,6, 429,33, 322 y 322 puntos de alto a `ppp`
+//! Los números esperados salen de la spec (C4): 313, 250,4, 417,33, 313 y 313 puntos de alto a `ppp`
 //! 1,0, 1,25, 1,5, 2,0 y 3,0 (±0,01); el ancho mínimo es 468, 374,4, 624,0, 468 y 468 puntos (fila 1b,
 //! C2: el mayor de la columna mínima más 128 u de lienzo, la barra de menús, el diálogo y las 66
 //! columnas de la barra de estado, que son 468 u); el mayor alto no pasa de 468,0 (el 65 % de
@@ -12,7 +12,7 @@
 use super::*;
 
 const PPPS: [f32; 5] = [1.0, 1.25, 1.5, 2.0, 3.0];
-const ALTOS: [f32; 5] = [322.0, 257.6, 429.33, 322.0, 322.0];
+const ALTOS: [f32; 5] = [313.0, 250.4, 417.33, 313.0, 313.0];
 const WIDTHS: [f32; 5] = [468.0, 374.4, 624.0, 468.0, 468.0];
 
 // `min_enabled`.

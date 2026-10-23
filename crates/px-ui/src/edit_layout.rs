@@ -11,7 +11,11 @@
 use px_core::Mode;
 
 use crate::chrome::{COLUMN_MIN_COLS, MENU_BAR_W_U, MENU_H_U, column_width_u, head_u};
-use crate::color_edit::{Control, controls};
+use crate::color_block::{
+    ALPHA_BAR_X_U, BARS_H_U, HUE_BAR_X_U, SELECTOR_H_U, SELECTOR_W_U, SELECTOR_X_U, SELECTOR_Y_U,
+    SQUARE_SIDE_U, SQUARE_X_U, SQUARE_Y_U, VBAR_W_U,
+};
+use crate::color_edit::{Control, SliderMode, controls, visible_controls};
 use crate::dialog_layout::{DIALOG_W_U, MARGIN_U};
 use crate::icon_button::{BUTTON_U, GAP_U};
 use crate::icons::Icon;
@@ -24,9 +28,11 @@ use crate::text::text_scale;
 pub const SEPARATOR_Y_U: i64 = 0;
 /// Height of a row of text and of a slider.
 pub const ROW_H_U: i64 = 14;
-/// First row of sliders: the editor has no header, only the separator above them.
+/// First row of sliders of the gray modes: the editor has no header, only the separator above them.
 pub const FIRST_ROW_Y_U: i64 = 4;
-/// Gap between groups of sliders (RGB | HSL | A).
+/// First row of sliders of indexed and RGBA images: under the square (or the bars) and the selector.
+pub const COLOR_FIRST_ROW_Y_U: i64 = SELECTOR_Y_U + SELECTOR_H_U + 4;
+/// Gap between the three sliders of a model and the alpha one.
 pub const GROUP_GAP_U: i64 = 4;
 /// Inside a row: letter, track, thumb, value and active zone.
 pub const LABEL_X_U: i64 = 4;
@@ -41,14 +47,9 @@ pub const VALUE_W_U: i64 = 21;
 /// Active zone of the row: from `HIT_X0_U` (included) to `HIT_X1_U` (excluded).
 pub const HIT_X0_U: i64 = 13;
 pub const HIT_X1_U: i64 = 201;
-/// The color bar, from the top edge of the tail: 4 u from the left, the width of the text area and
-/// 16 u high.
-pub const BAR_X_U: i64 = 4;
-pub const BAR_Y_U: i64 = 0;
-pub const BAR_H_U: i64 = 16;
-/// Hexadecimal field, from the top edge of the tail (2 u under the bar).
+/// Hexadecimal field, from the top edge of the tail: 2 u under the two bars (40 u, specs/ui-color-block.md).
 pub const FIELD_X_U: i64 = 4;
-pub const FIELD_Y_U: i64 = BAR_Y_U + BAR_H_U + 2;
+pub const FIELD_Y_U: i64 = BARS_H_U + 2;
 pub const FIELD_W_U: i64 = 69;
 pub const FIELD_H_U: i64 = 18;
 pub const FIELD_PAD_U: i64 = 3;
@@ -404,55 +405,91 @@ pub fn column_layout(
     }
 }
 
+/// Row (`y`, in `u` from the corner of the editor) of the slider of `control`, if the mode has it.
+/// Indexed and RGBA images show three sliders of the chosen model and then the alpha one, whatever
+/// the model: the three controls of a position (`R`, `H` and `H` of HSV; `G`, `S`, `S`; `B`, `L`,
+/// `V`) share its row. The gray modes keep their rows from 4 u.
 pub fn control_row_u(mode: Mode, control: Control) -> Option<i64> {
+    if matches!(mode, Mode::Rgba | Mode::Indexed) {
+        let position = match control {
+            Control::Red | Control::Hue | Control::HueV => 0,
+            Control::Green | Control::Saturation | Control::SaturationV => 1,
+            Control::Blue | Control::Lightness | Control::Value => 2,
+            Control::Alpha => 3,
+            Control::Gray => return None,
+        };
+        let gap = if position == 3 { GROUP_GAP_U } else { 0 };
+        return Some(COLOR_FIRST_ROW_Y_U + position * ROW_H_U + gap);
+    }
     let idx = controls(mode).iter().position(|c| *c == control)?;
     let mut y = FIRST_ROW_Y_U;
     for (i, c) in controls(mode).iter().enumerate().take(idx + 1) {
         if i > 0 {
             let prev = controls(mode)[i - 1];
-            let gap = matches!(
-                (prev, *c),
-                (Control::Blue, Control::Hue)
-                    | (Control::Lightness, Control::Alpha)
-                    | (Control::Gray, Control::Alpha)
-            );
+            let gap = matches!((prev, *c), (Control::Gray, Control::Alpha));
             y += ROW_H_U + if gap { GROUP_GAP_U } else { 0 };
         }
     }
     Some(y)
 }
-pub fn slider_hit(mode: Mode, x_px: i64, y_px: i64, n: u32) -> Option<Control> {
+
+/// Slider under a point in physical pixels from the corner of the editor, among the ones the
+/// selector shows (`slider_mode`).
+pub fn slider_hit(
+    mode: Mode,
+    slider_mode: SliderMode,
+    x_px: i64,
+    y_px: i64,
+    n: u32,
+) -> Option<Control> {
     let n = i64::from(n.max(1));
     if x_px < HIT_X0_U * n || x_px >= HIT_X1_U * n {
         return None;
     }
-    controls(mode).iter().copied().find(|c| {
-        control_row_u(mode, *c).is_some_and(|r| y_px >= r * n && y_px < (r + ROW_H_U) * n)
-    })
+    visible_controls(mode, slider_mode)
+        .iter()
+        .copied()
+        .find(|c| {
+            control_row_u(mode, *c).is_some_and(|r| y_px >= r * n && y_px < (r + ROW_H_U) * n)
+        })
 }
+
 pub fn edges_u(mode: Mode) -> Vec<i64> {
     let mut e = vec![
         0,
         1,
-        BAR_X_U,
-        BAR_Y_U,
-        BAR_Y_U + BAR_H_U,
-        TRACK_X_U,
-        TRACK_X_U + TRACK_W_U,
-        VALUE_X_U,
-        VALUE_X_U + VALUE_W_U,
         FIELD_X_U,
         FIELD_X_U + FIELD_W_U,
         FIELD_Y_U,
         FIELD_Y_U + FIELD_H_U,
+        TRACK_X_U,
+        TRACK_X_U + TRACK_W_U,
+        VALUE_X_U,
+        VALUE_X_U + VALUE_W_U,
         tail_height_u(mode),
         editor_height_u(mode),
     ];
-    for row in controls(mode)
-        .iter()
-        .filter_map(|c| control_row_u(mode, *c))
-    {
-        e.extend([row, row + ROW_H_U, row + 5, row + 9, row + 1, row + 13]);
+    if matches!(mode, Mode::Rgba | Mode::Indexed) {
+        for x in [SQUARE_X_U, HUE_BAR_X_U, ALPHA_BAR_X_U] {
+            e.push(x);
+        }
+        e.extend([
+            SQUARE_X_U + SQUARE_SIDE_U,
+            HUE_BAR_X_U + VBAR_W_U,
+            ALPHA_BAR_X_U + VBAR_W_U,
+            SQUARE_Y_U,
+            SQUARE_Y_U + SQUARE_SIDE_U,
+            SELECTOR_Y_U,
+            SELECTOR_Y_U + SELECTOR_H_U,
+        ]);
+        for x in SELECTOR_X_U {
+            e.extend([x, x + SELECTOR_W_U]);
+        }
+    }
+    for control in controls(mode) {
+        if let Some(row) = control_row_u(mode, *control) {
+            e.extend([row, row + ROW_H_U, row + 5, row + 9, row + 1, row + 13]);
+        }
     }
     for button in [
         PaletteButton::Remove,
