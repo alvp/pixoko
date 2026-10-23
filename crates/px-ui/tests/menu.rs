@@ -190,6 +190,8 @@ fn row_1_there_are_thirty_three_entries_and_no_action_repeats() {
     expected_2.extend(&TABLE_ACTIONS[3..6]);
     // `Borrar página` (I.2a) cierra `Editar`, antes de `TestImage`.
     expected_2.push(AppAction::ClearPage);
+    // `Intercambiar colores` (C4) follows `Borrar página`, still in `Editar`.
+    expected_2.push(AppAction::SwapColors);
     expected_2.push(AppAction::ConvertMode);
     // The three palette actions of C3 follow `Convertir modo…`.
     expected_2.extend([

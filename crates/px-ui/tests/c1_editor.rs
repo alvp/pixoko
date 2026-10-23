@@ -2,7 +2,7 @@
 //! copied, with the time of each frame for the tooltips): rows 5 and 6 (the focus when opening and
 //! `Escape` last in the chain), 11 and 12 (the icon row with the editor open and closed, and the
 //! palette operations), 13 (a swatch has no tooltip), 15 (mark of the edited role, tooltips of the
-//! indicator and `F1`) and properties 3 and 4.
+//! bars and `F1`) and properties 3 and 4.
 
 use std::cell::Cell;
 
@@ -701,7 +701,7 @@ fn row_14_the_panel_asks_the_status_line_for_a_drag_then_a_removal_then_the_swat
 }
 
 // ---------------------------------------------------------------------------------------------
-// Row 15: mark of the edited role, tooltips of the indicator and F1
+// Row 15: mark of the edited role, tooltips of the bars and F1
 // ---------------------------------------------------------------------------------------------
 
 fn border_of(rect: ScreenRect, thickness: i64) -> Vec<Rect> {
