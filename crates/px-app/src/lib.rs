@@ -39,7 +39,7 @@ use px_ui::actions::{AppAction, Locks, Origin, PaletteNav, Platform, UiState};
 use px_ui::canvas::{Canvas, CanvasEvent, CanvasInput};
 use px_ui::checker::{ENV_MESH, mesh_fallback_enabled};
 use px_ui::chrome::COLUMN_DEFAULT_COLS;
-use px_ui::color::choice_label_with;
+use px_ui::color::{Role, choice_label_with};
 use px_ui::color_edit::{DOCUMENT_CHANGED_NOTICE, EditTarget};
 use px_ui::column::{ColumnView, show_column};
 use px_ui::dialog::{DialogKind as ModalKind, Modal, Reaction};
@@ -1589,7 +1589,7 @@ impl eframe::App for App {
                         Origin::Button,
                     );
                     if before != Tool::Dropper && self.tools.tool() == Tool::Dropper {
-                        self.dropper_once.arm(before);
+                        self.dropper_once.arm(before, Role::Foreground);
                     }
                 }
                 Some(Indicator::FocusEditor(role)) => self.session.indicator_right_click(role),

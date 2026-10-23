@@ -15,7 +15,7 @@ use px_ui::color::{
     ColorChoice, Role, SlotBank, SlotColors, cell_count, cell_of_choice, choice_for_cell,
     clamp_choice, default_background, initial_choice, pixel_for_choice_with,
 };
-use px_ui::color_edit::{ColorEditor, Commit, EditTarget, StaleReason, stale_notice};
+use px_ui::color_edit::{ColorEditor, Commit, EditTarget, SliderMode, StaleReason, stale_notice};
 use px_ui::dirty::{BlockSet, Change, ChangeLog, dirty_of};
 use px_ui::edit_layout::PaletteButton;
 use px_ui::palette_grid::{PanelView, Scroll};
@@ -120,6 +120,10 @@ pub struct Session {
     pub background: ColorChoice,
     /// Qué color edita el editor de color y sobre cuál actúan los botones de la paleta.
     pub editing: Role,
+    /// Model of the numeric sliders of the editor (specs/ui-color-block.md, decision 15). Lasts the
+    /// session; it is not saved to disk.
+    #[allow(dead_code)] // C4: wired in the logic commit
+    pub slider_mode: SliderMode,
     /// The color editor is open (specs/ui-composition.md). It starts closed; `p`, `Esc`, a second
     /// right click on the edited rectangle of the indicator and changing document toggle it.
     pub editor_open: bool,
@@ -178,6 +182,7 @@ impl Session {
             choice,
             background,
             editing: Role::Foreground,
+            slider_mode: SliderMode::Rgb,
             editor_open: false,
             scroll: Scroll::default(),
             view: PanelView::default(),
@@ -953,14 +958,34 @@ impl Session {
         }
     }
 
-    /// Right click on the rectangle of `role` in the indicator: opens the editor on it, switches to
-    /// it if the editor is open on the other role, closes the editor if it is open on this one.
-    pub fn indicator_right_click(&mut self, role: Role) {
+    /// Right click on the bar of `role` (or, until C4 lands, on its indicator rectangle): opens
+    /// the editor on it, switches to it if the editor is open on the other role, closes the editor
+    /// if it is open on this one.
+    pub fn bar_right_click(&mut self, role: Role) {
         if self.editor_open && self.editing == role {
             self.close_editor();
         } else {
             self.open_editor(role);
         }
+    }
+
+    /// Right click on the rectangle of `role` in the indicator: the same as [`Session::bar_right_click`].
+    pub fn indicator_right_click(&mut self, role: Role) {
+        self.bar_right_click(role);
+    }
+
+    /// `Editar → Intercambiar colores`: swaps the foreground and the background. Session state:
+    /// no history step; `editing` and the editor stay as they are and the editor shows the new
+    /// stored color of its role at the next `sync_editor`.
+    pub fn swap_colors(&mut self) {
+        todo!("C4: swap_colors")
+    }
+
+    /// Chooses the model of the numeric sliders; the session remembers it (opening a document,
+    /// closing the editor and converting the mode do not reset it).
+    #[allow(dead_code)] // C4: wired in the logic commit
+    pub fn set_slider_mode(&mut self, _mode: SliderMode) {
+        todo!("C4: set_slider_mode")
     }
 
     /// Aplica un color del editor: `SetPaletteColor` en indexadas (`Ok(true)` si el documento
@@ -1303,6 +1328,8 @@ mod c1_tests;
 mod c2_tests;
 #[cfg(test)]
 mod c3_tests;
+#[cfg(test)]
+mod c4_tests;
 #[cfg(test)]
 mod color_cycle_tests;
 #[cfg(test)]

@@ -2,6 +2,7 @@
 //! bueno 6): el clic en el indicador lo elige, y al soltar su primer gesto vuelve la herramienta
 //! anterior. Elegir otra herramienta antes del gesto lo cancela. Lógica pura, sin ventana.
 
+use px_ui::color::Role;
 use px_ui::tool::Tool;
 
 /// Estado del cuentagotas de un solo uso.
@@ -11,6 +12,9 @@ pub struct DropperOnce {
     previous: Option<Tool>,
     /// El primer gesto del cuentagotas ya empezó.
     started: bool,
+    /// The role of the bar that was pressed (specs/ui-color-block.md, decision 7): while this use
+    /// lasts, the chosen color goes to that role with either button.
+    role: Option<Role>,
 }
 
 impl DropperOnce {
@@ -18,13 +22,27 @@ impl DropperOnce {
         DropperOnce::default()
     }
 
-    /// Se pulsó el indicador con `current` como herramienta activa. Con el cuentagotas ya elegido
-    /// no se pierde la anterior que hubiera (y si no había, se queda donde está).
-    pub fn arm(&mut self, current: Tool) {
+    /// The bar of `role` was pressed with `current` as the active tool. With the dropper already
+    /// chosen the previous tool, if any, is not lost (and if there was none, it stays where it is).
+    pub fn arm(&mut self, current: Tool, role: Role) {
         if current != Tool::Dropper {
             self.previous = Some(current);
         }
         self.started = false;
+        self.role = Some(role);
+    }
+
+    /// The role of the bar that armed the dropper, while that use lasts.
+    #[allow(dead_code)] // C4: wired in the logic commit
+    pub fn role(&self) -> Option<Role> {
+        self.role
+    }
+
+    /// The role that receives the chosen color: the bar's if a use is armed and, if not, the one of
+    /// the button that was pressed.
+    #[allow(dead_code)] // C4: wired in the logic commit
+    pub fn role_for(&self, _button: Role) -> Role {
+        todo!("C4: role_for")
     }
 
     /// Olvida el retorno pendiente.

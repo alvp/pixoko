@@ -4,6 +4,7 @@
 use px_core::{Hsl, Image, Mode, Rgba};
 
 use crate::color::{ColorChoice, SlotColors};
+use crate::color_hsv::Hsv;
 use crate::theme::NOTICE_PREFIX;
 
 /// Qué se edita: una entrada de la paleta (indexadas) o una ranura (los demás modos).
@@ -69,6 +70,27 @@ pub enum Control {
     Lightness,
     Alpha,
     Gray,
+    /// Hue, saturation and value of the HSV model (C4); `Hue`, `Saturation` and `Lightness` stay
+    /// the ones of HSL.
+    HueV,
+    SaturationV,
+    Value,
+}
+
+/// Which model the numeric sliders of indexed and RGBA images show (specs/ui-color-block.md,
+/// decision 15). It is remembered in the session, not saved to disk.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SliderMode {
+    #[default]
+    Rgb,
+    Hsl,
+    Hsv,
+}
+
+/// The sliders that are seen with the selector in `slider_mode`: `R G B A`, `H S L A` or `H S V A`
+/// (indexed and RGBA); `G A` and `G` in the gray modes, which have no selector.
+pub fn visible_controls(_mode: Mode, _slider_mode: SliderMode) -> &'static [Control] {
+    todo!("C4: visible_controls")
 }
 
 /// Deslizadores de un modo, de arriba abajo: `R G B H S L A` (indexadas y RGBA), `G A`
@@ -94,13 +116,16 @@ impl Control {
             Control::Lightness => 'L',
             Control::Alpha => 'A',
             Control::Gray => 'G',
+            Control::HueV => 'H',
+            Control::SaturationV => 'S',
+            Control::Value => 'V',
         }
     }
     /// Valor máximo: 255, 359 (matiz) o 100 (saturación y luminosidad).
     pub fn max(self) -> u32 {
         match self {
-            Control::Hue => 359,
-            Control::Saturation | Control::Lightness => 100,
+            Control::Hue | Control::HueV => 359,
+            Control::Saturation | Control::Lightness | Control::SaturationV | Control::Value => 100,
             _ => 255,
         }
     }
@@ -116,6 +141,20 @@ pub fn control_value(rgba: Rgba, hsl: Hsl, control: Control) -> u32 {
         Control::Hue => (hsl.h().round() as u32) % 360,
         Control::Saturation => (100.0 * hsl.s()).round() as u32,
         Control::Lightness => (100.0 * hsl.l()).round() as u32,
+        Control::HueV | Control::SaturationV | Control::Value => {
+            let hsv = Hsv::from_rgba(rgba);
+            control_value_hsv(hsv, control)
+        }
+    }
+}
+
+/// Valor entero que muestra un control del modelo HSV para ese `Hsv`.
+pub fn control_value_hsv(hsv: Hsv, control: Control) -> u32 {
+    match control {
+        Control::HueV => (hsv.h().round() as u32) % 360,
+        Control::SaturationV => (100.0_f32 * hsv.s()).round() as u32,
+        Control::Value => (100.0_f32 * hsv.v()).round() as u32,
+        _ => 0,
     }
 }
 
@@ -196,7 +235,20 @@ pub fn apply_control(base: (Rgba, Hsl), control: Control, value: u32) -> (Rgba, 
             let h = Hsl::new(hsl.h(), hsl.s(), v as f32 / 100.0);
             (h.to_rgba(rgba.a), h)
         }
+        Control::HueV | Control::SaturationV | Control::Value => {
+            unreachable!("the HSV controls go through `apply_control_aux`")
+        }
     }
+}
+
+/// Like [`apply_control`] with the HSV model next to the other two (decision 10 and 11): the three
+/// are brought up to date together and `hsv.to_rgba(a) == rgba == hsl.to_rgba(a)` holds.
+pub fn apply_control_aux(
+    _base: (Rgba, Hsl, Hsv),
+    _control: Control,
+    _value: u32,
+) -> (Rgba, Hsl, Hsv) {
+    todo!("C4: apply_control_aux")
 }
 
 /// Por qué no vale un hexadecimal.
@@ -416,6 +468,28 @@ impl ColorEditor {
 
     pub fn dragging(&self) -> bool {
         self.drag.is_some()
+    }
+
+    /// Starts a drag in the saturation and brightness square with the values under the pointer
+    /// (`s` and `v` in `[0, 1]`). `false` without a target or with another drag in progress.
+    pub fn begin_square(&mut self, _s: f32, _v: f32) -> bool {
+        todo!("C4: begin_square")
+    }
+
+    /// New saturation and brightness of the square drag; the provisional color comes from the one
+    /// at the start.
+    pub fn drag_square(&mut self, _s: f32, _v: f32) {
+        todo!("C4: drag_square")
+    }
+
+    /// The drag in progress is the one of the square.
+    pub fn dragging_square(&self) -> bool {
+        todo!("C4: dragging_square")
+    }
+
+    /// The `Hsv` the pieces show: the provisional one or the stored one. `None` without a target.
+    pub fn shown_hsv(&self) -> Option<Hsv> {
+        todo!("C4: shown_hsv")
     }
 
     /// Control que se está arrastrando.

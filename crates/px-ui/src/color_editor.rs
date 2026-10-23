@@ -90,6 +90,18 @@ pub(crate) fn is_escape(event: &Event) -> bool {
     )
 }
 
+/// Identifier of the widget of a piece of the editor (the square or one of the two bars), which
+/// takes the keyboard focus (specs/ui-color-block.md, decision 18).
+pub fn piece_id(_piece: crate::color_block::Piece) -> Id {
+    todo!("C4: piece_id")
+}
+
+/// How many times the texture of the saturation and brightness square has been uploaded to `ctx`
+/// (a counter for the tests, like `Canvas::preview_uploads`).
+pub fn sv_uploads(_ctx: &egui::Context) -> u32 {
+    todo!("C4: sv_uploads")
+}
+
 /// Identifier of the hexadecimal field (the same every frame).
 pub fn hex_field_id() -> Id {
     Id::unique("pixoko-campo-hex")

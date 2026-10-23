@@ -126,6 +126,8 @@ pub struct PanelOutput {
     pub background: Option<ColorChoice>,
     /// What a click on the color indicator asked for.
     pub indicator: Option<Indicator>,
+    /// What a click on one of the two bars or on the swap button asked for (C4).
+    pub bar_click: Option<BarClick>,
     /// `Esc` with nothing else claiming it: the app closes the color editor.
     pub close_editor: bool,
     /// `Esc` that nothing in the palette claimed (not a text field, a swatch drag, a pending removal
@@ -170,6 +172,16 @@ pub enum Indicator {
     /// Right click: the app opens the color editor on this role's color, switches to it if the
     /// editor is open on the other role, or closes it if it is open on this role.
     FocusEditor(Role),
+}
+
+/// What a click on the bars under the grid asks for (specs/ui-color-block.md, decision 6): the
+/// one-use dropper for the color of the bar, the editor on it (or closing it), or swapping the
+/// foreground and the background.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BarClick {
+    Dropper(Role),
+    FocusEditor(Role),
+    Swap,
 }
 
 /// The two colors and which one the editor edits.

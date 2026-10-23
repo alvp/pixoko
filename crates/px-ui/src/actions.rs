@@ -82,6 +82,9 @@ pub enum AppAction {
     FlattenLayers,
     /// `File → Export flattened PNG…`: saves what is seen without touching the state of the document.
     ExportFlat,
+    /// `Editar → Intercambiar colores`: swaps the foreground and the background (specs/ui-color-block.md);
+    /// session state, no shortcut by default.
+    SwapColors,
     /// `Imagen → Añadir entrada`: copies the chosen color to the end of the palette (no default key).
     AddPaletteEntry,
     /// `Imagen → Quitar entrada`: removes the chosen entry (no default key).

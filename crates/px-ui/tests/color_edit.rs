@@ -1560,6 +1560,10 @@ fn check_control(
             prop_assert_eq!(hsl.h(), hsl0.h());
             prop_assert_eq!(hsl.s(), hsl0.s());
         }
+        // Los controles HSV de C4 van por `apply_control_aux`, no por `apply_control`.
+        Control::HueV | Control::SaturationV | Control::Value => {
+            unreachable!("el oráculo solo recibe los ocho controles de 11c")
+        }
     }
     // El `Hsl` siempre es coherente con el `Rgba`.
     prop_assert_eq!(hsl.to_rgba(new_2.a), new_2);

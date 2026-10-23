@@ -41,6 +41,10 @@ pub enum HelpTarget {
     PaletteHandle,
     /// The color bar and the hexadecimal field under the grid (`F1` over them; C3).
     ColorBar,
+    /// The square, the bars and the sliders of the open color editor (`F1` over them; C4).
+    ColorEditor,
+    /// The swap button next to the two bars (`F1` over it; C4).
+    SwapColors,
 }
 
 /// The control of the layers panel help is asked about: one per layer action.
@@ -89,6 +93,8 @@ impl HelpTarget {
         match self {
             HelpTarget::PaletteHandle => "palette.handle",
             HelpTarget::ColorBar => "color.bar",
+            HelpTarget::ColorEditor => "color.editor",
+            HelpTarget::SwapColors => "color.swap",
             other => help_key(other.action(active))
                 .expect("toda herramienta, botón de zoom y control tienen ayuda"),
         }
@@ -104,7 +110,10 @@ impl HelpTarget {
             HelpTarget::ZoomOut => AppAction::ZoomOut,
             HelpTarget::ZoomFit => AppAction::ZoomFit,
             HelpTarget::ZoomActualSize => AppAction::ZoomActualSize,
-            HelpTarget::Indicator | HelpTarget::ColorBar => AppAction::ToggleColorEditor,
+            HelpTarget::Indicator | HelpTarget::ColorBar | HelpTarget::ColorEditor => {
+                AppAction::ToggleColorEditor
+            }
+            HelpTarget::SwapColors => AppAction::SwapColors,
             HelpTarget::PaletteHandle => AppAction::PaletteSize,
             HelpTarget::Layer(help) => match help {
                 LayerHelp::Panel => AppAction::ToggleLayerPanel,

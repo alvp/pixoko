@@ -9,6 +9,7 @@
 use px_core::Rgba;
 
 use crate::color::Role;
+use crate::color_edit::SliderMode;
 use crate::icons::IconSet;
 
 use crate::view::ScreenRect;
@@ -436,6 +437,9 @@ pub struct PanelView {
     pub last_editor_open: bool,
     /// The scroll before the editor opened, brought back when it closes.
     pub saved_offset_px: Option<i64>,
+    /// Which model the numeric sliders of the open editor show (specs/ui-color-block.md,
+    /// decision 15); the app keeps it in the session.
+    pub slider_mode: SliderMode,
 }
 
 impl Default for PanelView {
@@ -449,6 +453,7 @@ impl Default for PanelView {
             editor_open: true,
             last_editor_open: true,
             saved_offset_px: None,
+            slider_mode: SliderMode::Rgb,
         }
     }
 }
