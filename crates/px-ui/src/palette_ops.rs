@@ -548,6 +548,11 @@ impl PaletteOps {
         std::mem::take(&mut self.resize_cancelled)
     }
 
+    /// Deja anotado que se canceló un recorte pendiente (al cambiar de documento).
+    pub fn flag_resize_cancelled(&mut self) {
+        self.resize_cancelled = true;
+    }
+
     /// Hay una quita o un recorte pendientes de `Confirmar`.
     pub fn confirming(&self) -> bool {
         self.removal.is_some() || self.resize.is_some()
