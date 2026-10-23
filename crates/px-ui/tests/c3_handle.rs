@@ -8,15 +8,15 @@
 
 use egui::{Color32, CursorIcon, Event};
 use proptest::prelude::*;
-use px_core::{Image, Mode, Rgba};
+use px_core::{Command, Image, ImageId, Mode, Rgba};
 use px_ui::color::ColorChoice;
 use px_ui::edit_layout::{BUTTON_H_U, ICON_ROW_Y_U, PaletteButton, button_rect_u};
 use px_ui::help::HelpTarget;
 use px_ui::palette_grid::{CELL_U, Grid, PITCH_U, total_rows_cols};
 use px_ui::palette_ops::PaletteOp;
 use px_ui::palette_resize::{
-    HANDLE_HINT, HandleDrag, HandleEnd, MAX_LEN, PendingResize, autoscroll_rows, dimmed,
-    drag_status, drag_zone_cells, handle_bars, handle_index, resize_prompt,
+    HANDLE_HINT, HandleDrag, HandleEnd, MAX_ENTRIES_HINT, MAX_LEN, PendingResize, autoscroll_rows,
+    dimmed, drag_status, drag_zone_cells, handle_bars, handle_index, resize_prompt,
 };
 use px_ui::theme::{ACCENT, RING_DEST, SURFACE_1, SURFACE_2, SURFACE_3, TEXT_DIM, contrast_ratio};
 use px_ui::view::ScreenRect;
@@ -298,25 +298,116 @@ fn row_5_cutting_dims_the_entries_and_stretching_again_without_releasing_restore
 }
 
 #[test]
-fn row_5_leaving_the_zone_restores_the_original_and_releasing_there_asks_for_nothing() {
+fn row_5_leaving_the_grid_keeps_the_drag_on_the_nearest_cell() {
     let mut bench = bench8(1.0);
     let handle = bench.handle_center();
     bench.moves(handle);
     bench.presses(handle);
     bench.moves(bench.cell_center(12));
-    // Below the grid (the tail is not part of the zone): no destination.
-    let f = bench.moves((20, 300));
+    // Below the grid (the tail is not part of the zone): the last row of the zone, column of the
+    // pointer. The drag does not drop back to the original length.
+    let f = bench.moves((bench.cell_center(5).0, 300));
+    assert!(bench.ops.busy());
+    let len = bench
+        .ops
+        .handle_state()
+        .map(HandleDrag::preview_len)
+        .expect("dragging");
+    assert_eq!(len % 16, 5, "the column of the pointer: {len}");
+    assert!((1..=MAX_LEN).contains(&len));
+    assert_eq!(f.cursor, CursorIcon::Grabbing);
+    // To the right of everything (over the canvas): the last column.
+    bench.moves((700, bench.cell_center(5).1));
     assert_eq!(
         bench.ops.handle_state().map(HandleDrag::preview_len),
-        Some(8)
+        Some(15)
     );
-    for index in 8..12 {
-        assert!(!bench.cell_is(&f, index, BLACK), "no preview left");
-    }
-    let f = bench.releases((20, 300));
+    let f = bench.releases((700, bench.cell_center(5).1));
+    assert_eq!(f.output.op, Some(PaletteOp::ResizeTo { len: 15 }));
+}
+
+#[test]
+fn row_5_dragging_past_the_maximum_and_out_of_the_grid_applies_256_and_keeps_the_view() {
+    let mut bench = Bench::with_panel_height(1.0, 400, indexed(250), ColorChoice::Entry(3));
+    bench.scroll.first_row = 5;
+    bench.rest();
+    assert!(bench.scroll.first_row > 0, "the view is scrolled down");
+    let handle = bench.handle_center();
+    bench.moves(handle);
+    bench.presses(handle);
+    // The zone has one row more while dragging: the wheel brings the last row into sight.
+    bench.moves(bench.cell_center(255));
+    bench.wheel(PITCH_U);
+    let first_row = bench.scroll.first_row;
+    assert_eq!(first_row, 5, "17 rows, 12 of them visible");
+    // Past the maximum: cell 270 is in the zone but the palette cannot have 270 entries.
+    bench.moves(bench.cell_center(270));
+    assert_eq!(
+        bench.ops.handle_state().map(HandleDrag::preview_len),
+        Some(256)
+    );
+    // Out of the grid, over the canvas: the drag goes on, still 256, and the view stays.
+    bench.moves((700, 300));
+    assert!(bench.ops.busy(), "the drag is alive");
+    assert_eq!(
+        bench.ops.handle_state().map(HandleDrag::preview_len),
+        Some(256)
+    );
+    assert_eq!(bench.scroll.first_row, first_row, "the view does not jump");
+    // Releasing there applies the clamped length, once; the view stays after the change.
+    let f = bench.releases((700, 300));
+    assert_eq!(f.output.op, Some(PaletteOp::ResizeTo { len: 256 }));
+    bench.applies(Command::ResizePalette {
+        image: ImageId::from_raw(0),
+        len: 256,
+        into: None,
+    });
+    bench.rest();
+    bench.rest();
+    assert_eq!(
+        bench.scroll.first_row, first_row,
+        "the view is not reset on release"
+    );
+    assert!(bench.ops_asked().len() == 1);
+}
+
+#[test]
+fn row_5_at_the_maximum_the_status_line_says_so_while_it_lasts() {
+    let mut bench = Bench::with_panel_height(1.0, 400, indexed(250), ColorChoice::Entry(3));
+    bench.scroll.first_row = 5;
+    bench.rest();
+    let handle = bench.handle_center();
+    bench.moves(handle);
+    bench.presses(handle);
+    bench.moves(bench.cell_center(255));
+    bench.wheel(PITCH_U);
+    let f = bench.moves(bench.cell_center(270));
+    assert_eq!(f.hint(), Some(MAX_ENTRIES_HINT));
+    let f = bench.moves((700, 300));
+    assert_eq!(f.hint(), Some(MAX_ENTRIES_HINT), "also out of the grid");
+    // Back under the maximum the usual text comes back.
+    let f = bench.moves(bench.cell_center(255));
+    assert_eq!(f.hint(), Some(drag_status(250, 255).as_str()));
+}
+
+#[test]
+fn row_5_escape_still_cancels_a_drag_that_is_outside_the_grid() {
+    let mut bench = Bench::with_panel_height(1.0, 400, indexed(250), ColorChoice::Entry(3));
+    bench.scroll.first_row = 5;
+    bench.rest();
+    let handle = bench.handle_center();
+    bench.moves(handle);
+    bench.presses(handle);
+    bench.moves(bench.cell_center(255));
+    bench.wheel(PITCH_U);
+    bench.moves(bench.cell_center(270));
+    bench.moves((700, 300));
+    assert!(bench.ops.busy());
+    bench.escape();
+    assert!(bench.ops.handle_state().is_none());
+    let f = bench.releases((700, 300));
     assert_eq!(f.output.op, None);
     assert!(bench.ops_asked().is_empty());
-    assert!(!bench.ops.busy());
 }
 
 #[test]
