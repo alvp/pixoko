@@ -53,3 +53,13 @@
 - Spec: una sola corrección posterior, al final.
 - Informe final: máximo 20 líneas (commits, desvíos de la spec, riesgos, prueba manual en 10 pasos).
 - Tareas cortas (un commit, solo pruebas o documentación): sin subagentes, cargo check y cargo test del crate, un cierre completo antes del commit, proptest con 500 casos como máximo.
+
+## Presupuesto (obligatorio en toda sesión)
+- Trabajo por TAREAS cortas. Tope de 60 llamadas a herramientas por tarea; al llegar, commit WIP, informe de 10 líneas y PARAR. No empezar otra tarea sin orden.
+- Nunca repetir una orden que ya dio resultado. Salidas siempre recortadas: cargo check ... 2>&1 | head -40; cargo test -p CRATE -q 2>&1 | grep -E 'FAILED|test result' | head -40. El workspace completo SOLO en el cierre y lo lanza el usuario.
+- Leer por rangos (no ficheros enteros de más de 300 líneas). No releer lo ya leído.
+- Si el mismo error persiste tras 3 intentos, PARAR e informar con el error exacto; no probar caminos nuevos.
+- Si hay más de 40 errores de compilación, arreglar los 10 primeros, commit WIP e informar.
+- Sin subagentes (test-writer, license-auditor) salvo orden expresa. Sin monitores ni bucles automáticos.
+- Sin modos sin freno (bypass) ni comandos destructivos sin permiso.
+- Si el contexto pasa de 150 k, PARAR y pedir sesión nueva con texto de reanudación.
