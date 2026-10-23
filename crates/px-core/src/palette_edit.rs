@@ -33,6 +33,11 @@ pub enum PaletteEditError {
         len: u16,
         palette_len: usize,
     },
+    /// `ResizePalette` con una longitud de 0 o de más de 256.
+    BadLength { len: u16 },
+    /// `ResizePalette` que recorta con algún píxel de alguna celda usando una entrada que sobra y
+    /// sin `into`.
+    NoDestination,
 }
 
 impl fmt::Display for PaletteEditError {
@@ -67,6 +72,15 @@ impl fmt::Display for PaletteEditError {
             } => write!(
                 f,
                 "el rango de {len} colores desde el {start} se sale de una paleta de {palette_len} colores"
+            ),
+            PaletteEditError::BadLength { len } => write!(
+                f,
+                "la paleta no puede tener {len} colores: de 1 a {}",
+                Palette::MAX_COLORS
+            ),
+            PaletteEditError::NoDestination => write!(
+                f,
+                "hay píxeles que usan colores que se quitan y no se dijo adónde pasan"
             ),
         }
     }
@@ -106,17 +120,46 @@ pub(crate) enum PaletteStep {
     },
     /// Rotación de `len` entradas desde `start`, `k` posiciones hacia índices mayores.
     Rotate { start: u8, len: u16, k: u16 },
+    /// La paleta crece `count` entradas negras opacas (`ResizePalette` hacia arriba).
+    Grow { count: u16 },
+    /// La paleta se recorta a `len` entradas (`ResizePalette` hacia abajo): los píxeles `>= len`
+    /// pasan a `into`. Guarda lo que hace falta para deshacer: los colores quitados, el índice
+    /// transparente anterior y, por cada celda con píxeles afectados, qué píxeles eran y su
+    /// índice anterior.
+    Shrink {
+        len: u8,
+        into: u8,
+        removed: Vec<Rgba>,
+        transparent: Option<u8>,
+        cells: Vec<(ImageId, CellUndo)>,
+    },
+}
+
+/// Lo que deshacer un recorte necesita de una celda: una máscara de los píxeles afectados (un
+/// bit por píxel) y, en orden, el índice que tenía cada uno.
+#[derive(Clone, Debug)]
+pub(crate) struct CellUndo {
+    mask: Vec<u64>,
+    previous: Vec<u8>,
 }
 
 impl PaletteStep {
-    /// `true` si deshacer el paso agranda la paleta (hace falta un hueco en su `Vec`).
-    pub(crate) fn grows_on_undo(&self) -> bool {
-        matches!(self, PaletteStep::Remove { .. })
+    /// Cuántas entradas agranda la paleta deshacer el paso (huecos que hay que reservar antes).
+    pub(crate) fn growth_on_undo(&self) -> usize {
+        match self {
+            PaletteStep::Remove { .. } => 1,
+            PaletteStep::Shrink { removed, .. } => removed.len(),
+            _ => 0,
+        }
     }
 
-    /// `true` si aplicar o rehacer el paso agranda la paleta.
-    pub(crate) fn grows_on_redo(&self) -> bool {
-        matches!(self, PaletteStep::Append { .. })
+    /// Cuántas entradas agranda la paleta aplicar o rehacer el paso.
+    pub(crate) fn growth_on_redo(&self) -> usize {
+        match self {
+            PaletteStep::Append { .. } => 1,
+            PaletteStep::Grow { count } => usize::from(*count),
+            _ => 0,
+        }
     }
 
     /// Memoria del paso: su tamaño más lo que reserva en el montón (capacidad real).
@@ -128,6 +171,19 @@ impl PaletteStep {
                 .saturating_mul(size_of::<(ImageId, Vec<u64>)>())
                 .saturating_add(masks.iter().fold(0usize, |total, (_, mask)| {
                     total.saturating_add(mask.capacity().saturating_mul(size_of::<u64>()))
+                })),
+            PaletteStep::Shrink { removed, cells, .. } => removed
+                .capacity()
+                .saturating_mul(size_of::<Rgba>())
+                .saturating_add(
+                    cells
+                        .capacity()
+                        .saturating_mul(size_of::<(ImageId, CellUndo)>()),
+                )
+                .saturating_add(cells.iter().fold(0usize, |total, (_, cell)| {
+                    total
+                        .saturating_add(cell.mask.capacity().saturating_mul(size_of::<u64>()))
+                        .saturating_add(cell.previous.capacity())
                 })),
             _ => 0,
         };
@@ -154,6 +210,12 @@ impl PaletteStep {
             }
             PaletteStep::Rotate { start, len, k } => {
                 image.rotate_palette_range(*start, *len, *k, true);
+            }
+            PaletteStep::Grow { count } => {
+                image.extend_palette(usize::from(*count));
+            }
+            PaletteStep::Shrink { len, into, .. } => {
+                image.truncate_palette(usize::from(*len), *into);
             }
         }
     }
@@ -199,6 +261,25 @@ impl PaletteStep {
             PaletteStep::Rotate { start, len, k } => {
                 image.rotate_palette_range(*start, *len, *k, false);
             }
+            PaletteStep::Grow { count } => {
+                let len = image.palette().map_or(0, Palette::len);
+                // Los píxeles no cambiaron al crecer: ninguno usa las entradas que se quitan.
+                image.truncate_palette(len.saturating_sub(usize::from(*count)).max(1), 0);
+            }
+            PaletteStep::Shrink {
+                removed,
+                transparent,
+                cells,
+                ..
+            } => {
+                let (mask, previous): (&[u64], &[u8]) = cells
+                    .iter()
+                    .find(|(cell, _)| *cell == id)
+                    .map_or((&[], &[]), |(_, cell)| {
+                        (cell.mask.as_slice(), cell.previous.as_slice())
+                    });
+                image.restore_truncated_palette(removed, *transparent, mask, previous);
+            }
         }
     }
 }
@@ -212,7 +293,8 @@ pub(crate) fn command_image(command: &Command) -> Option<ImageId> {
         | Command::AddPaletteEntry { image, .. }
         | Command::RemovePaletteEntry { image, .. }
         | Command::SetTransparentIndex { image, .. }
-        | Command::RotateColors { image, .. } => Some(*image),
+        | Command::RotateColors { image, .. }
+        | Command::ResizePalette { image, .. } => Some(*image),
         _ => None,
     }
 }
@@ -302,6 +384,24 @@ pub(crate) fn check(image: &Image, command: &Command) -> Result<bool, PaletteEdi
             }
             if index == into {
                 return Err(PaletteEditError::RemoveIntoSelf { index: *index });
+            }
+            Ok(true)
+        }
+        Command::ResizePalette {
+            len: new_len, into, ..
+        } => {
+            if *new_len == 0 || usize::from(*new_len) > Palette::MAX_COLORS {
+                return Err(PaletteEditError::BadLength { len: *new_len });
+            }
+            let new_len = usize::from(*new_len);
+            if new_len == len {
+                return Ok(false);
+            }
+            // Recortando, el destino tiene que existir en la paleta nueva.
+            if new_len < len
+                && let Some(into) = into
+            {
+                check_index(*into, new_len)?;
             }
             Ok(true)
         }
@@ -430,8 +530,83 @@ pub(crate) fn build(
             len: *span,
             k: rotation(*steps, *span),
         }),
+        Command::ResizePalette {
+            len: new_len, into, ..
+        } => {
+            let new_len = usize::from(*new_len);
+            if new_len > len {
+                let count = u16::try_from(new_len - len).map_err(|_| invalid())?;
+                return Ok(PaletteStep::Grow { count });
+            }
+            build_shrink(images, palette, new_len, *into)
+        }
         _ => Err(invalid()),
     }
+}
+
+/// Construye el paso de un recorte a `new_len` entradas (menos que la paleta actual). Todo se
+/// reserva aquí: los colores quitados y, por cada celda con píxeles afectados, su máscara y sus
+/// índices anteriores. `NoDestination` si una celda del documento (no la plantilla interna) tiene
+/// píxeles que sobran y no hay `into`.
+fn build_shrink(
+    images: &[(ImageId, &Image)],
+    palette: &Palette,
+    new_len: usize,
+    into: Option<u8>,
+) -> Result<PaletteStep, DocumentError> {
+    let no_destination = || DocumentError::PaletteEdit(PaletteEditError::NoDestination);
+    let mut affected: Vec<(ImageId, &Image, usize)> = Vec::new();
+    affected
+        .try_reserve_exact(images.len())
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    for (index, (target, image)) in images.iter().enumerate() {
+        let count = image.count_pixels_from(new_len);
+        if count == 0 {
+            continue;
+        }
+        // La primera es la plantilla interna del lienzo: sin destino, sus píxeles pasan a 0.
+        if into.is_none() && index > 0 {
+            return Err(no_destination());
+        }
+        affected.push((*target, *image, count));
+    }
+    let mut removed: Vec<Rgba> = Vec::new();
+    let tail = palette.colors().get(new_len..).ok_or_else(|| {
+        DocumentError::PaletteEdit(PaletteEditError::BadLength {
+            len: u16::try_from(new_len).unwrap_or(u16::MAX),
+        })
+    })?;
+    removed
+        .try_reserve_exact(tail.len())
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    removed.extend_from_slice(tail);
+    let mut cells: Vec<(ImageId, CellUndo)> = Vec::new();
+    cells
+        .try_reserve_exact(affected.len())
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    for (target, image, count) in affected {
+        let pixels = usize::try_from(image.width())
+            .ok()
+            .and_then(|w| w.checked_mul(usize::try_from(image.height()).ok()?))
+            .ok_or(DocumentError::OutOfMemory)?;
+        let mut mask: Vec<u64> = Vec::new();
+        mask.try_reserve_exact(pixels.div_ceil(64))
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        mask.resize(pixels.div_ceil(64), 0);
+        let mut previous: Vec<u8> = Vec::new();
+        previous
+            .try_reserve_exact(count)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        image.fill_mask_from(new_len, &mut mask, &mut previous);
+        cells.push((target, CellUndo { mask, previous }));
+    }
+    Ok(PaletteStep::Shrink {
+        len: u8::try_from(new_len).map_err(|_| DocumentError::OutOfMemory)?,
+        into: into.unwrap_or(0),
+        removed,
+        transparent: palette.transparent_index(),
+        cells,
+    })
 }
 
 /// Copia `source` en un `Vec` de capacidad exacta; `OutOfMemory` si no se puede reservar.

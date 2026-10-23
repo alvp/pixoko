@@ -265,6 +265,16 @@ pub enum Command {
     /// Quita la entrada `index`; los píxeles que la usan pasan a `into` (los dos, índices
     /// antes de quitar). Si `index` era el índice transparente, deja de haberlo.
     RemovePaletteEntry { image: ImageId, index: u8, into: u8 },
+    /// Cambia la longitud de la paleta del documento (la del lienzo y la de todas las celdas con
+    /// imagen) en un solo paso, `len` en `1..=256` (specs/ui-palette-handle.md). Crecer añade
+    /// entradas negras opacas al final (píxeles e índice transparente no cambian, `into` se
+    /// ignora); recortar quita las de `len` en adelante, pasa a `into` todo píxel que las usaba y
+    /// quita el índice transparente si caía fuera. Con la misma longitud no cambia nada.
+    ResizePalette {
+        image: ImageId,
+        len: u16,
+        into: Option<u8>,
+    },
     /// Fija o quita el índice transparente.
     SetTransparentIndex { image: ImageId, index: Option<u8> },
     /// Rota `steps` posiciones (con signo, hacia índices mayores si es positivo) los colores
@@ -1290,8 +1300,8 @@ impl Document {
             );
             palette_edit::build(&images, command)?
         };
-        if step.grows_on_redo() {
-            self.reserve_palette_slots()?;
+        if step.growth_on_redo() > 0 {
+            self.reserve_palette_slots(step.growth_on_redo())?;
         }
         self.run_palette_step(&step, false);
         self.commit(Step {
@@ -1642,15 +1652,15 @@ impl Document {
         Ok(true)
     }
 
-    /// Hace sitio en la paleta del lienzo y en la de cada celda con imagen para una entrada más
+    /// Hace sitio en la paleta del lienzo y en la de cada celda con imagen para `count` entradas más
     /// (`OutOfMemory` si no hay). Lo ya reservado se queda: no estorba.
-    fn reserve_palette_slots(&mut self) -> Result<(), DocumentError> {
-        let reserved = self.canvas.template.reserve_palette_slot()
+    fn reserve_palette_slots(&mut self, count: usize) -> Result<(), DocumentError> {
+        let reserved = self.canvas.template.reserve_palette_slots(count)
             && self
                 .layers
                 .iter_mut()
                 .filter_map(|layer| layer.image.as_mut())
-                .all(Image::reserve_palette_slot);
+                .all(|image| image.reserve_palette_slots(count));
         if reserved {
             Ok(())
         } else {
@@ -1666,17 +1676,17 @@ impl Document {
         } else {
             self.redo.last()
         };
-        let grows = step
+        let growth = step
             .and_then(|step| step.palette.as_ref())
-            .is_some_and(|palette| {
+            .map_or(0, |palette| {
                 if undoing {
-                    palette.grows_on_undo()
+                    palette.growth_on_undo()
                 } else {
-                    palette.grows_on_redo()
+                    palette.growth_on_redo()
                 }
             });
-        if grows {
-            self.reserve_palette_slots()
+        if growth > 0 {
+            self.reserve_palette_slots(growth)
         } else {
             Ok(())
         }

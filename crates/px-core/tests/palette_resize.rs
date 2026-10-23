@@ -137,13 +137,10 @@ fn pixels_of_image(img: &Image) -> Vec<u8> {
     v
 }
 
-/// Pixels of the cell `id`; `None` if the cell is empty.
-fn cell_pixels(doc: &Document, id: ImageId) -> Option<Vec<u8>> {
-    doc.image(id).map(pixels_of_image)
-}
-
 fn palette_colors(doc: &Document) -> Vec<Rgba> {
-    doc.palette().unwrap().colors().to_vec()
+    doc.palette()
+        .map(|p| p.colors().to_vec())
+        .unwrap_or_default()
 }
 
 fn transparent_of(doc: &Document) -> Option<u8> {
@@ -169,11 +166,15 @@ fn print_of(doc: &Document) -> Print {
         .iter()
         .map(|l| {
             let detail = doc.image(l.cel()).map(|img| {
-                let p = img.palette().unwrap();
+                let p = img.palette();
                 (
-                    p.colors().to_vec(),
-                    p.transparent_index(),
-                    pixels_of_image(img),
+                    p.map(|p| p.colors().to_vec()).unwrap_or_default(),
+                    p.and_then(Palette::transparent_index),
+                    if p.is_some() {
+                        pixels_of_image(img)
+                    } else {
+                        Vec::new()
+                    },
                 )
             });
             (l.id(), l.cel(), detail)
@@ -786,13 +787,15 @@ fn row_03_the_cost_is_proportional_to_the_affected_pixels_not_to_the_removed_ent
     // And it does pay for the pixels it moves: at least one byte per affected pixel.
     assert!(cost_one >= affected, "cost {cost_one}");
     assert!(cost_many >= affected, "cost {cost_many}");
-    // Sanity upper bound: ~1.125 B per pixel, 4 B per color and a small constant.
+    // Sanity upper bound: one byte per affected pixel, the mask of the cell (one bit per pixel of
+    // the 64 x 64 cell: 512 B), 4 B per removed color and a small constant for the step itself.
+    let mask = 64 * 64 / 8;
     assert!(
-        cost_one <= 2 * affected + 4 + 512,
+        cost_one <= affected + mask + 4 + 512,
         "history_bytes() went up {cost_one}"
     );
     assert!(
-        cost_many <= 2 * affected + 4 * 200 + 512,
+        cost_many <= affected + mask + 4 * 200 + 512,
         "history_bytes() went up {cost_many}"
     );
 
@@ -1273,9 +1276,9 @@ proptest! {
         prop_assert!(!doc.can_undo());
         prop_assert_eq!(doc.undo(), Err(DocumentError::NothingToUndo));
         // Redo to the end.
-        for k in 1..=steps {
+        for moment in moments.iter().take(steps + 1).skip(1) {
             prop_assert_eq!(doc.redo(), Ok(()));
-            is_moment(&doc, &moments[k])?;
+            is_moment(&doc, moment)?;
         }
         prop_assert!(!doc.can_redo());
         prop_assert_eq!(doc.redo(), Err(DocumentError::NothingToRedo));
