@@ -4,7 +4,7 @@ Material de otros autores que se distribuye con Pixoko y no es una dependencia d
 
 ## Iconos de la interfaz
 
-Los 14 iconos de `assets/icons/` (carpeta con su `README.md`) son originales de Pixoko, dibujados nuevos bajo la licencia MIT del proyecto: **no proceden de terceros** (ni de otros programas ni de bibliotecas de iconos) y no hay nada que atribuir ni ninguna licencia que añadir.
+Los 22 iconos de `assets/icons/` (carpeta con su `README.md`) son originales de Pixoko, dibujados nuevos bajo la licencia MIT del proyecto: **no proceden de terceros** (ni de otros programas ni de bibliotecas de iconos) y no hay nada que atribuir ni ninguna licencia que añadir.
 
 ## Departure Mono (fuente de la interfaz)
 

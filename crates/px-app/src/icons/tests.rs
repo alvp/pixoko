@@ -59,7 +59,7 @@ fn row_1_the_14_pngs_are_16x16_with_alpha_0_or_255_white_neither_empty_nor_full_
         );
         assert!(seen.insert(mask), "{name_2}: es igual que otro icono");
     }
-    assert_eq!(seen.len(), 21);
+    assert_eq!(seen.len(), 22);
 }
 
 #[test]
@@ -110,6 +110,7 @@ fn row_1_there_is_one_file_per_icon_none_extra_and_the_readme_says_original_mit_
             "duplicar",
             "subir",
             "bajar",
+            "intercambiar",
         ]
     );
     let readme = std::fs::read_to_string(folder().join("README.md")).expect("README.md");
@@ -169,7 +170,7 @@ fn row_2_load_uploads_14_textures_of_16x16_with_nearest_neighbor_and_different()
         );
         images.insert(pixels_2.clone());
     }
-    assert_eq!(images.len(), 21, "las 21 son distintas");
+    assert_eq!(images.len(), 22, "las 22 son distintas");
     // Se cargan una vez: otro fotograma no sube nada más.
     assert!(textures_uploads(&ctx).is_empty());
 }
