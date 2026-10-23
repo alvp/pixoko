@@ -2,6 +2,8 @@
 
 Estado: **aprobada** (2026-10-23), con los cambios del visto bueno incorporados (marcados «visto bueno»); **cerrada** (implementada y verificada por el usuario en la prueba manual); véase al final «Corrección posterior». Cambios previstos: `px-ui` y `px-app`. **No se toca `px-core` ni `px-raster`.** Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia; sin `license-auditor` (ni dependencias ni cambios en `px-core`, `px-formats` o `px-raster`). **No cambia ningún comportamiento de edición ni de color** ni la tabla de atajos (36 filas, sin acciones nuevas): cambia dónde se ve cada cosa y cómo se abren las opciones.
 
+**Actualización de la unidad C3 (2026-10-23), que prevalece:** la regla de capacidad de la caja pasa a `head(20 herramientas, 10 columnas) = 159 ≤ 286 − 127` (0 u de sobra: con 21 herramientas ya no cabe); el panel mínimo es de 286 u y la ventana mínima de 322 u de alto (el ancho, 468 u, y la columna mínima de 10 columnas no cambian); la fila de iconos son cuatro y termina en 117 u, así que ya no es ella la que fija la columna mínima; con una quita o un recorte pendientes la columna sigue siendo de al menos 16 columnas. ([`ui-palette-handle.md`](ui-palette-handle.md))
+
 Referencias: la composición de la columna y los mínimos de hoy, [`ui-composition.md`](ui-composition.md) (C1); la caja, el recuadro de opciones y el clic derecho, [`interfaz-caja-derecha.md`](interfaz-caja-derecha.md) (I.3); la rejilla de iconos de 24 u, [`interfaz-iconos.md`](interfaz-iconos.md) (I.4); el indicador y los roles, [`interfaz-dos-colores.md`](interfaz-dos-colores.md); el modelo de ventana flotante (`Area` exacta, `place`, arrastre por la barra, bloqueo con modal), [`hito-3-capas-interfaz.md`](hito-3-capas-interfaz.md) (3.4).
 
 ## Objetivo
