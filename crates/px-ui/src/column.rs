@@ -14,7 +14,8 @@ use px_core::Image;
 
 use crate::actions::Platform;
 use crate::chrome::{
-    COLUMN_GRIP_U, TOOL_LABELS, column_cols, column_width_u, head_u, max_cols, wide_cols,
+    COLUMN_GRIP_U, COLUMN_MIN_COLS, TOOL_LABELS, column_cols, column_width_u, head_u, max_cols,
+    wide_cols,
 };
 use crate::color::SlotColors;
 use crate::color_edit::{ColorEditor, EditTarget};
@@ -177,7 +178,7 @@ fn edge_drag(
     let u = ui_unit(ppp);
     let n = i64::from(text_scale(ppp));
     let state: Option<EdgeDrag> = ctx.data(|d| d.get_temp(drag_id()));
-    let may = view.enabled && k_max >= 9;
+    let may = view.enabled && k_max > COLUMN_MIN_COLS;
     if !may {
         // Disabled (or nothing to go to): no cursor and no drag; one in course ends.
         if state.is_some() {
@@ -254,7 +255,7 @@ fn edge_drag(
             let travelled = ((d.press_x - now.x) * ppp).round() as i64;
             let step = 14 * n;
             let steps = (travelled + step / 2).div_euclid(step);
-            let wanted = (d.shown0 + steps).clamp(8, k_max.max(8));
+            let wanted = (d.shown0 + steps).clamp(COLUMN_MIN_COLS, k_max.max(COLUMN_MIN_COLS));
             if wanted != view.cols {
                 output.resized = Some(wanted);
             }

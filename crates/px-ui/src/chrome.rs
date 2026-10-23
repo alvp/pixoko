@@ -26,8 +26,10 @@ pub const TOOLBOX_BUTTONS: usize = 9;
 /// `y` de la primera fila de herramientas.
 pub const TOOLS_Y_U: i64 = TOOLBAR_MARGIN_U;
 
-/// Columnas de muestras mínimas, por defecto y las que necesita el editor de color (233 u).
-pub const COLUMN_MIN_COLS: i64 = 8;
+/// Columnas de muestras mínimas, por defecto y las que necesita el editor de color (233 u). El mínimo
+/// (149 u) es la columna más estrecha que contiene entera la fila de iconos de la paleta, que termina
+/// en 142 u y pide 4 u de margen a la derecha: con 9 columnas (135 u) se recorta el quinto icono.
+pub const COLUMN_MIN_COLS: i64 = 10;
 pub const COLUMN_DEFAULT_COLS: i64 = 16;
 pub const COLUMN_EDITOR_COLS: i64 = 16;
 /// Zona de arrastre del borde izquierdo de la columna, dentro de ella, en `u`.
@@ -48,13 +50,13 @@ pub fn column_width_u(cols: i64) -> i64 {
 }
 
 /// Mayor número de columnas de muestras que deja a una ventana de `window_w_px` píxeles físicos su
-/// lienzo mínimo (128 u): `max(8, ⌊(w − 137·n)/(14·n)⌋)`.
+/// lienzo mínimo (128 u): `max(10, ⌊(w − 137·n)/(14·n)⌋)`.
 pub fn max_cols(window_w_px: i64, n: u32) -> i64 {
     let n = scale(n);
     ((window_w_px - 137 * n).div_euclid(14 * n)).max(COLUMN_MIN_COLS)
 }
 
-/// Las columnas con que se pinta la columna: lo elegido (`wanted`) recortado a `[8, max_cols]`. Lo
+/// Las columnas con que se pinta la columna: lo elegido (`wanted`) recortado a `[10, max_cols]`. Lo
 /// elegido no se toca: al ensanchar la ventana vuelve el ancho elegido. Es la única función que
 /// recorta.
 pub fn column_cols(window_w_px: i64, n: u32, wanted: i64) -> i64 {
