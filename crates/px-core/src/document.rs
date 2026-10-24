@@ -247,6 +247,18 @@ pub enum Command {
     /// siguen vacías. Con una sola capa equivale a `ConvertMode`; con varias, `ConvertMode`
     /// sigue dando `MultiLayerConvert`. Solo como comando suelto.
     ConvertAll { target: Mode, allowed: Allowed },
+    /// Replaces the size of the canvas and the image of every cell in a single step
+    /// (specs/hito-4-imagen.md): `images[i]` is the cell of layer `i` (bottom to top), `None` for an
+    /// empty one. Every `Some` has the new size and the mode and palette of the canvas, and a cell
+    /// is empty after the command exactly when it was before. The images are computed by the
+    /// caller (flips, turns and canvas resizing live in `px-raster`) over the state `based_on`
+    /// (`state_id`): if the document already changed, it is `StaleImage`. Only as a single command.
+    ReplaceImages {
+        width: u32,
+        height: u32,
+        images: Vec<Option<Image>>,
+        based_on: u64,
+    },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -445,6 +457,8 @@ impl LayerStep {
 struct Converted {
     cels: Vec<(ImageId, Image)>,
     template: Image,
+    /// In a `ReplaceImages` step, the size of the canvas on the other side of the step.
+    size: Option<(u32, u32)>,
 }
 
 /// Lo que intercambia un paso de conversión de modo.
@@ -857,6 +871,12 @@ impl Document {
             Command::ConvertAll { target, allowed } => {
                 return self.apply_convert_all(target, allowed);
             }
+            Command::ReplaceImages {
+                width,
+                height,
+                images,
+                based_on,
+            } => return self.apply_replace_images(width, height, images, based_on),
             _ => {}
         }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
@@ -1266,6 +1286,98 @@ impl Document {
             converted: Some(Converted {
                 cels: swaps,
                 template,
+                size: None,
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `ReplaceImages`: everything that can fail or reserve happens before touching the document;
+    /// afterwards the images and the size are only swapped. Nothing to do (`false`, no step) when
+    /// the size and every image stay the same.
+    fn apply_replace_images(
+        &mut self,
+        width: u32,
+        height: u32,
+        mut images: Vec<Option<Image>>,
+        based_on: u64,
+    ) -> Result<bool, DocumentError> {
+        if width == 0 || height == 0 || images.len() != self.layers.len() {
+            return Err(if images.len() != self.layers.len() {
+                DocumentError::ReplaceCountMismatch {
+                    expected: self.layers.len(),
+                    found: images.len(),
+                }
+            } else {
+                DocumentError::ReplaceImageMismatch
+            });
+        }
+        if based_on != self.current_id {
+            return Err(DocumentError::StaleImage {
+                based_on,
+                current: self.current_id,
+            });
+        }
+        let mut new_bytes = 0usize;
+        let mut unchanged = width == self.canvas.width && height == self.canvas.height;
+        for (layer, new) in self.layers.iter().zip(&images) {
+            if layer.image.is_some() != new.is_some() {
+                return Err(DocumentError::ReplaceEmptiness);
+            }
+            if let Some(new) = new {
+                let fits = new.width() == width
+                    && new.height() == height
+                    && new.mode() == self.canvas.template.mode()
+                    && new.palette() == self.canvas.template.palette();
+                if !fits {
+                    return Err(DocumentError::ReplaceImageMismatch);
+                }
+                new_bytes = new_bytes.saturating_add(new.bytes().len());
+                unchanged = unchanged && layer.image.as_ref() == Some(new);
+            }
+        }
+        if unchanged {
+            return Ok(false);
+        }
+        let before = self.materialized_bytes();
+        if new_bytes > self.cells_limit && new_bytes > before {
+            return Err(DocumentError::CelsTooLarge {
+                needed: new_bytes,
+                limit: self.cells_limit,
+            });
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let template = self
+            .canvas
+            .template
+            .try_clone()
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let mut swaps = Vec::new();
+        swaps
+            .try_reserve_exact(images.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        // Up to here nothing has changed; from here on images are only swapped.
+        for (layer, new) in self.layers.iter_mut().zip(images.iter_mut()) {
+            if let (Some(slot), Some(new)) = (layer.image.as_mut(), new.as_mut()) {
+                std::mem::swap(slot, new);
+            }
+        }
+        for (layer, new) in self.layers.iter().zip(images) {
+            if let Some(old) = new {
+                swaps.push((layer.cel, old));
+            }
+        }
+        let old_size = (self.canvas.width, self.canvas.height);
+        self.canvas.width = width;
+        self.canvas.height = height;
+        self.commit(Step {
+            converted: Some(Converted {
+                cels: swaps,
+                template,
+                size: Some(old_size),
             }),
             ..Step::default()
         });
@@ -1839,6 +1951,10 @@ impl Document {
                 }
             }
             std::mem::swap(&mut self.canvas.template, &mut converted.template);
+            if let Some(size) = converted.size.as_mut() {
+                std::mem::swap(&mut self.canvas.width, &mut size.0);
+                std::mem::swap(&mut self.canvas.height, &mut size.1);
+            }
         }
     }
 
@@ -2262,6 +2378,16 @@ pub enum DocumentError {
     },
     /// La imagen de `MergeLayers` no tiene el ancho, alto, modo o paleta del lienzo.
     MergeImageMismatch,
+    /// `ReplaceImages` with a number of images different from the number of layers.
+    ReplaceCountMismatch {
+        expected: usize,
+        found: usize,
+    },
+    /// `ReplaceImages` with a zero size or an image that does not have the new size, or the mode
+    /// or the palette of the canvas.
+    ReplaceImageMismatch,
+    /// `ReplaceImages` that fills an empty cell or empties one that has an image.
+    ReplaceEmptiness,
     /// El documento no tiene esa capa.
     UnknownLayer(LayerId),
     /// Posición de capa fuera de rango; `max` es la mayor válida.
@@ -2359,6 +2485,18 @@ impl fmt::Display for DocumentError {
             DocumentError::MergeImageMismatch => write!(
                 f,
                 "la imagen combinada no tiene el tamaño, el modo o la paleta del lienzo"
+            ),
+            DocumentError::ReplaceCountMismatch { expected, found } => write!(
+                f,
+                "hacen falta {expected} imágenes (una por capa) y hay {found}"
+            ),
+            DocumentError::ReplaceImageMismatch => write!(
+                f,
+                "las imágenes nuevas no tienen el tamaño nuevo ni el modo o la paleta del lienzo"
+            ),
+            DocumentError::ReplaceEmptiness => write!(
+                f,
+                "una celda vacía no puede pasar a tener imagen ni al revés"
             ),
             DocumentError::NotBatchable => write!(
                 f,

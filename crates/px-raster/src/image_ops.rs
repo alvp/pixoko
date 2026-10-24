@@ -1,0 +1,267 @@
+//! Image operations (specs/hito-4-imagen.md, unit 4.1): flips, turns of 90° and canvas resizing as
+//! pure functions over an [`Image`], and [`image_command`], which applies one of them to every
+//! cell of a document and returns the `Command::ReplaceImages` for `Document::apply` (same
+//! pattern as `merge_down_command`: the core only validates, the pixels are computed here).
+
+use std::error::Error;
+use std::fmt;
+
+use px_core::{Command, Document, DocumentError, Image, ImageError, Pixel};
+
+/// Where the old content sits when the canvas changes size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Anchor {
+    TopLeft,
+    Top,
+    TopRight,
+    Left,
+    Center,
+    Right,
+    BottomLeft,
+    Bottom,
+    BottomRight,
+}
+
+/// One of the image operations of the `Imagen` menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageOp {
+    FlipH,
+    FlipV,
+    /// Turn 90° clockwise.
+    Cw,
+    /// Turn 90° counterclockwise.
+    Ccw,
+    /// Turn 180°.
+    Half,
+    Canvas {
+        width: u32,
+        height: u32,
+        anchor: Anchor,
+    },
+}
+
+/// Why the command could not be built.
+#[derive(Debug, PartialEq)]
+pub enum ImageOpError {
+    Image(ImageError),
+    Document(DocumentError),
+}
+
+impl fmt::Display for ImageOpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ImageOpError::Image(error) => write!(f, "{error}"),
+            ImageOpError::Document(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl Error for ImageOpError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ImageOpError::Image(error) => Some(error),
+            ImageOpError::Document(error) => Some(error),
+        }
+    }
+}
+
+impl From<ImageError> for ImageOpError {
+    fn from(error: ImageError) -> ImageOpError {
+        ImageOpError::Image(error)
+    }
+}
+
+impl From<DocumentError> for ImageOpError {
+    fn from(error: DocumentError) -> ImageOpError {
+        ImageOpError::Document(error)
+    }
+}
+
+/// A zeroed buffer for an image of `width × height`, or the error of an image that cannot exist.
+fn buffer(src: &Image, width: u32, height: u32) -> Result<Vec<u8>, ImageError> {
+    let len = Image::byte_len(width, height, src.mode())?;
+    let mut data = Vec::new();
+    data.try_reserve_exact(len)
+        .map_err(|_| ImageError::TooLarge { width, height })?;
+    data.resize(len, 0);
+    Ok(data)
+}
+
+fn rebuild(src: &Image, width: u32, height: u32, data: Vec<u8>) -> Result<Image, ImageError> {
+    match src.palette() {
+        Some(palette) => Image::from_bytes_indexed(width, height, palette.clone(), data),
+        None => Image::from_bytes(width, height, src.mode(), data),
+    }
+}
+
+/// The image `width × height` whose pixel `(x, y)` is the source pixel `from(x, y)`.
+fn remap(
+    src: &Image,
+    width: u32,
+    height: u32,
+    from: impl Fn(u32, u32) -> (u32, u32),
+) -> Result<Image, ImageError> {
+    let bpp = src.mode().bytes_per_pixel();
+    let mut data = buffer(src, width, height)?;
+    let row = src.row_len();
+    let bytes = src.bytes();
+    for (y, out_row) in data.chunks_exact_mut(width as usize * bpp).enumerate() {
+        for (x, out) in out_row.chunks_exact_mut(bpp).enumerate() {
+            let (sx, sy) = from(x as u32, y as u32);
+            let at = sy as usize * row + sx as usize * bpp;
+            out.copy_from_slice(&bytes[at..at + bpp]);
+        }
+    }
+    rebuild(src, width, height, data)
+}
+
+pub fn flip_horizontal(image: &Image) -> Result<Image, ImageError> {
+    let w = image.width();
+    remap(image, w, image.height(), |x, y| (w - 1 - x, y))
+}
+
+pub fn flip_vertical(image: &Image) -> Result<Image, ImageError> {
+    let h = image.height();
+    remap(image, image.width(), h, |x, y| (x, h - 1 - y))
+}
+
+/// 90° clockwise: the source pixel `(x, y)` ends at `(h − 1 − y, x)`.
+pub fn rotate_cw(image: &Image) -> Result<Image, ImageError> {
+    let h = image.height();
+    remap(image, h, image.width(), |x, y| (y, h - 1 - x))
+}
+
+/// 90° counterclockwise: the source pixel `(x, y)` ends at `(y, w − 1 − x)`.
+pub fn rotate_ccw(image: &Image) -> Result<Image, ImageError> {
+    let w = image.width();
+    remap(image, image.height(), image.width(), |x, y| (w - 1 - y, x))
+}
+
+pub fn rotate_180(image: &Image) -> Result<Image, ImageError> {
+    let (w, h) = (image.width(), image.height());
+    remap(image, w, h, |x, y| (w - 1 - x, h - 1 - y))
+}
+
+/// Offset of the old content along one axis: `0`, `⌊(new − old) / 2⌋` (toward −∞) or `new − old`.
+fn offset(old: u32, new: u32, side: i8) -> i64 {
+    let diff = i64::from(new) - i64::from(old);
+    match side {
+        -1 => 0,
+        0 => diff.div_euclid(2),
+        _ => diff,
+    }
+}
+
+fn sides(anchor: Anchor) -> (i8, i8) {
+    match anchor {
+        Anchor::TopLeft => (-1, -1),
+        Anchor::Top => (0, -1),
+        Anchor::TopRight => (1, -1),
+        Anchor::Left => (-1, 0),
+        Anchor::Center => (0, 0),
+        Anchor::Right => (1, 0),
+        Anchor::BottomLeft => (-1, 1),
+        Anchor::Bottom => (0, 1),
+        Anchor::BottomRight => (1, 1),
+    }
+}
+
+/// The image resized to `width × height` with the old content placed by `anchor`; what is left
+/// uncovered takes `fill`, and what no longer fits is lost. Mode and palette do not change.
+pub fn resize_canvas(
+    image: &Image,
+    width: u32,
+    height: u32,
+    anchor: Anchor,
+    fill: Pixel,
+) -> Result<Image, ImageError> {
+    let mut data = buffer(image, width, height)?;
+    image.check_pixel(fill)?;
+    let cell = match (fill, image.palette()) {
+        (Pixel::Indexed(index), Some(palette)) => {
+            Image::filled_indexed(1, 1, palette.clone(), index)?
+        }
+        (fill, _) => Image::filled(1, 1, fill)?,
+    };
+    let bpp = image.mode().bytes_per_pixel();
+    for out in data.chunks_exact_mut(bpp) {
+        out.copy_from_slice(cell.bytes());
+    }
+    let (sx, sy) = sides(anchor);
+    let dx = offset(image.width(), width, sx);
+    let dy = offset(image.height(), height, sy);
+    let (old_w, old_h) = (i64::from(image.width()), i64::from(image.height()));
+    let x_from = dx.max(0);
+    let x_to = (dx + old_w).min(i64::from(width));
+    if x_from < x_to {
+        let count = (x_to - x_from) as usize * bpp;
+        for ny in 0..i64::from(height) {
+            let oy = ny - dy;
+            if oy < 0 || oy >= old_h {
+                continue;
+            }
+            let src_row = image.row(oy as u32).unwrap_or(&[]);
+            let from = (x_from - dx) as usize * bpp;
+            let at = (ny as usize * width as usize + x_from as usize) * bpp;
+            data[at..at + count].copy_from_slice(&src_row[from..from + count]);
+        }
+    }
+    rebuild(image, width, height, data)
+}
+
+fn apply_op(image: &Image, op: ImageOp, fill: Pixel) -> Result<Image, ImageError> {
+    match op {
+        ImageOp::FlipH => flip_horizontal(image),
+        ImageOp::FlipV => flip_vertical(image),
+        ImageOp::Cw => rotate_cw(image),
+        ImageOp::Ccw => rotate_ccw(image),
+        ImageOp::Half => rotate_180(image),
+        ImageOp::Canvas {
+            width,
+            height,
+            anchor,
+        } => resize_canvas(image, width, height, anchor, fill),
+    }
+}
+
+/// The command that applies `op` to every cell with an image of `doc` (empty cells stay empty)
+/// and, for a turn or a resize, changes the canvas size. `fill` is only used by `Canvas`. The
+/// limit of the cells is checked before reserving anything: it fails only if the result is over
+/// `cells_limit()` **and** bigger than what the document has now.
+pub fn image_command(doc: &Document, op: ImageOp, fill: Pixel) -> Result<Command, ImageOpError> {
+    let (width, height) = match op {
+        ImageOp::FlipH | ImageOp::FlipV | ImageOp::Half => (doc.width(), doc.height()),
+        ImageOp::Cw | ImageOp::Ccw => (doc.height(), doc.width()),
+        ImageOp::Canvas { width, height, .. } => (width, height),
+    };
+    let per_cel = Image::byte_len(width, height, doc.mode())?;
+    let cels = doc
+        .layers()
+        .iter()
+        .filter(|layer| doc.image(layer.cel()).is_some())
+        .count();
+    let needed = per_cel.saturating_mul(cels);
+    if needed > doc.cells_limit() && needed > doc.materialized_bytes() {
+        return Err(DocumentError::CelsTooLarge {
+            needed,
+            limit: doc.cells_limit(),
+        }
+        .into());
+    }
+    let mut images = Vec::new();
+    images
+        .try_reserve_exact(doc.layers().len())
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    for layer in doc.layers() {
+        images.push(match doc.image(layer.cel()) {
+            Some(image) => Some(apply_op(image, op, fill)?),
+            None => None,
+        });
+    }
+    Ok(Command::ReplaceImages {
+        width,
+        height,
+        images,
+        based_on: doc.state_id(),
+    })
+}

@@ -40,8 +40,9 @@ const MODES: [Mode; 4] = [Mode::Rgba, Mode::Gray, Mode::GrayAlpha, Mode::Indexed
 type Grid = Vec<Vec<Pixel>>;
 
 fn palette(transparent: bool) -> Palette {
-    let mut palette = Palette::from_colors((0..5u8).map(|i| Rgba::new(i * 40, 255 - i * 40, i, 255)))
-        .expect("palette");
+    let mut palette =
+        Palette::from_colors((0..5u8).map(|i| Rgba::new(i * 40, 255 - i * 40, i, 255)))
+            .expect("palette");
     if transparent {
         palette.set_transparent_index(Some(0)).expect("transparent");
     }
@@ -78,7 +79,9 @@ fn grid(image: &Image) -> Grid {
 }
 
 fn flip_h_model(g: &Grid) -> Grid {
-    g.iter().map(|row| row.iter().rev().copied().collect()).collect()
+    g.iter()
+        .map(|row| row.iter().rev().copied().collect())
+        .collect()
 }
 
 fn flip_v_model(g: &Grid) -> Grid {
@@ -301,7 +304,14 @@ fn spec(
 
 fn three_layers() -> Document {
     let layers = vec![
-        spec("base", true, false, 255, BlendMode::Normal, Some(from_seed(Mode::Rgba, 3, 2, false, 1))),
+        spec(
+            "base",
+            true,
+            false,
+            255,
+            BlendMode::Normal,
+            Some(from_seed(Mode::Rgba, 3, 2, false, 1)),
+        ),
         spec("empty", true, false, 255, BlendMode::Normal, None),
         spec(
             "top",
@@ -471,7 +481,7 @@ fn arb_doc() -> impl Strategy<Value = Document> {
 }
 
 fn doc_fill(doc: &Document) -> Pixel {
-    fill_for(&doc.canvas_image().expect("canvas image"))
+    fill_for(doc.canvas_image())
 }
 
 proptest! {
@@ -509,9 +519,12 @@ proptest! {
         let out = resize_canvas(&image, w, h, anchor, fill).unwrap();
         let g = grid(&image);
         prop_assert_eq!(grid(&out), resize_model(&g, w, h, anchor, fill));
-        // Enlarge and cut back with the same anchor: only possible when nothing was cut.
+        // Enlarge and cut back with the same anchor: only possible when nothing was cut, and a
+        // centered axis needs an even difference (`⌊d / 2⌋` and `⌊−d / 2⌋` differ when `d` is odd).
         let (ow, oh) = (image.width(), image.height());
-        if w >= ow && h >= oh {
+        let (sx, sy) = sides(anchor);
+        let odd_center = (sx == 0 && w.abs_diff(ow) % 2 == 1) || (sy == 0 && h.abs_diff(oh) % 2 == 1);
+        if w >= ow && h >= oh && !odd_center {
             let back = resize_canvas(&out, ow, oh, anchor, fill).unwrap();
             prop_assert_eq!(&back, &image);
         }
@@ -535,8 +548,13 @@ proptest! {
                 prop_assert_ne!(doc.state_id(), id);
                 prop_assert_eq!(doc.history_bytes() > before.history_bytes(), true);
                 if is_geometric(op) {
-                    let after = compose(&doc).unwrap();
-                    prop_assert_eq!(after, transform(&compose(&before).unwrap(), op, fill));
+                    // A gray document with nothing visible has no composition (before or after).
+                    match (compose(&before), compose(&doc)) {
+                        (Ok(prior), Ok(after)) => {
+                            prop_assert_eq!(after, transform(&prior, op, fill));
+                        }
+                        (prior, after) => prop_assert_eq!(prior.is_err(), after.is_err()),
+                    }
                 }
                 snapshots.push(doc.clone());
             } else {
@@ -593,7 +611,8 @@ proptest! {
         }
         // The error of the limit is the document's, not a panic.
         if let Ok(Err(error)) = applied {
-            prop_assert!(matches!(error, DocumentError::CelsTooLarge { .. }));
+            let too_large = matches!(error, DocumentError::CelsTooLarge { .. });
+            prop_assert!(too_large);
         }
     }
 }

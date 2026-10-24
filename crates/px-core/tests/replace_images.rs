@@ -34,7 +34,14 @@ fn filled(w: u32, h: u32, value: u8) -> Image {
 /// Three layers of 3 × 2: a plain one, an empty one and a hidden, locked, translucent one.
 fn document() -> Document {
     let layers = vec![
-        layer("base", true, false, 255, BlendMode::Normal, Some(filled(3, 2, 10))),
+        layer(
+            "base",
+            true,
+            false,
+            255,
+            BlendMode::Normal,
+            Some(filled(3, 2, 10)),
+        ),
         layer("empty", true, false, 255, BlendMode::Normal, None),
         layer(
             "top",
@@ -79,7 +86,11 @@ fn row_5_replace_images_is_one_step_and_undo_and_redo_are_exact() {
     let layers = doc.layers();
     assert_eq!(layers.len(), 3);
     assert_eq!(doc.image(layers[0].cel()), Some(&filled(2, 4, 1)));
-    assert_eq!(doc.image(layers[1].cel()), None, "an empty cell stays empty");
+    assert_eq!(
+        doc.image(layers[1].cel()),
+        None,
+        "an empty cell stays empty"
+    );
     assert_eq!(doc.image(layers[2].cel()), Some(&filled(2, 4, 2)));
     for (new, old) in layers.iter().zip(before.0.layers()) {
         assert_eq!(new.id(), old.id());
@@ -107,12 +118,15 @@ fn row_5_replace_images_is_one_step_and_undo_and_redo_are_exact() {
 fn row_6_replace_images_rejects_and_leaves_the_document_untouched() {
     let mut doc = document();
     let good = || vec![Some(filled(3, 2, 1)), None, Some(filled(3, 2, 2))];
-    let mut indexed_palette = Palette::from_colors([Rgba::new(0, 0, 0, 255), Rgba::new(9, 9, 9, 255)])
-        .expect("palette");
-    indexed_palette.set_transparent_index(Some(0)).expect("transparent");
-    let other_palette = Palette::from_colors([Rgba::new(1, 1, 1, 255), Rgba::new(9, 9, 9, 255)])
-        .expect("palette");
-    let cases: Vec<(&str, Command, fn(&DocumentError) -> bool)> = vec![
+    let mut indexed_palette =
+        Palette::from_colors([Rgba::new(0, 0, 0, 255), Rgba::new(9, 9, 9, 255)]).expect("palette");
+    indexed_palette
+        .set_transparent_index(Some(0))
+        .expect("transparent");
+    let other_palette =
+        Palette::from_colors([Rgba::new(1, 1, 1, 255), Rgba::new(9, 9, 9, 255)]).expect("palette");
+    type Case = (&'static str, Command, fn(&DocumentError) -> bool);
+    let cases: Vec<Case> = vec![
         (
             "stale",
             Command::ReplaceImages {
@@ -126,11 +140,24 @@ fn row_6_replace_images_rejects_and_leaves_the_document_untouched() {
         (
             "too few",
             replace(&doc, 3, 2, vec![Some(filled(3, 2, 1)), None]),
-            |e| matches!(e, DocumentError::ReplaceCountMismatch { expected: 3, found: 2 }),
+            |e| {
+                matches!(
+                    e,
+                    DocumentError::ReplaceCountMismatch {
+                        expected: 3,
+                        found: 2
+                    }
+                )
+            },
         ),
         (
             "size",
-            replace(&doc, 3, 2, vec![Some(filled(2, 2, 1)), None, Some(filled(3, 2, 2))]),
+            replace(
+                &doc,
+                3,
+                2,
+                vec![Some(filled(2, 2, 1)), None, Some(filled(3, 2, 2))],
+            ),
             |e| matches!(e, DocumentError::ReplaceImageMismatch),
         ),
         (
@@ -163,7 +190,16 @@ fn row_6_replace_images_rejects_and_leaves_the_document_untouched() {
         ),
         (
             "an empty cell gets an image",
-            replace(&doc, 3, 2, vec![Some(filled(3, 2, 1)), Some(filled(3, 2, 5)), Some(filled(3, 2, 2))]),
+            replace(
+                &doc,
+                3,
+                2,
+                vec![
+                    Some(filled(3, 2, 1)),
+                    Some(filled(3, 2, 5)),
+                    Some(filled(3, 2, 2)),
+                ],
+            ),
             |e| matches!(e, DocumentError::ReplaceEmptiness),
         ),
         (
@@ -171,15 +207,13 @@ fn row_6_replace_images_rejects_and_leaves_the_document_untouched() {
             replace(&doc, 3, 2, vec![None, None, Some(filled(3, 2, 2))]),
             |e| matches!(e, DocumentError::ReplaceEmptiness),
         ),
-        (
-            "zero width",
-            replace(&doc, 0, 2, good()),
-            |e| matches!(e, DocumentError::ReplaceImageMismatch),
-        ),
+        ("zero width", replace(&doc, 0, 2, good()), |e| {
+            matches!(e, DocumentError::ReplaceImageMismatch)
+        }),
         (
             "inside a batch",
             Command::Batch(vec![replace(&doc, 3, 2, good())]),
-            |e| matches!(e, DocumentError::NotBatchable | DocumentError::Batch { .. }),
+            |e| format!("{e:?}").contains("NotBatchable"),
         ),
     ];
     for (name, command, expected) in cases {
@@ -194,7 +228,10 @@ fn row_6_replace_images_rejects_and_leaves_the_document_untouched() {
     let before = view(&indexed);
     let wrong = Image::filled_indexed(2, 2, other_palette, 1).expect("indexed");
     let command = replace(&indexed, 2, 2, vec![Some(wrong)]);
-    assert_eq!(indexed.apply(command), Err(DocumentError::ReplaceImageMismatch));
+    assert_eq!(
+        indexed.apply(command),
+        Err(DocumentError::ReplaceImageMismatch)
+    );
     assert_eq!(view(&indexed), before);
 }
 
@@ -203,30 +240,58 @@ fn row_8_the_cells_limit_applies_to_the_result_and_only_if_it_grows() {
     // At the limit: replacing with images of the same size is allowed.
     let mut doc = document();
     doc.set_cells_limit(doc.materialized_bytes());
-    let command = replace(&doc, 3, 2, vec![Some(filled(3, 2, 1)), None, Some(filled(3, 2, 2))]);
+    let command = replace(
+        &doc,
+        3,
+        2,
+        vec![Some(filled(3, 2, 1)), None, Some(filled(3, 2, 2))],
+    );
     assert_eq!(doc.apply(command), Ok(true));
     // A turn keeps the number of bytes: allowed at the limit too.
-    let command = replace(&doc, 2, 3, vec![Some(filled(2, 3, 1)), None, Some(filled(2, 3, 2))]);
+    let command = replace(
+        &doc,
+        2,
+        3,
+        vec![Some(filled(2, 3, 1)), None, Some(filled(2, 3, 2))],
+    );
     assert_eq!(doc.apply(command), Ok(true));
     // Growing above the limit is `CelsTooLarge`, before touching anything.
     let before = view(&doc);
-    let command = replace(&doc, 4, 3, vec![Some(filled(4, 3, 1)), None, Some(filled(4, 3, 2))]);
+    let command = replace(
+        &doc,
+        4,
+        3,
+        vec![Some(filled(4, 3, 1)), None, Some(filled(4, 3, 2))],
+    );
     assert!(matches!(
         doc.apply(command),
         Err(DocumentError::CelsTooLarge { .. })
     ));
     assert_eq!(view(&doc), before);
     // Shrinking is always fine, and the bytes follow the cells.
-    let command = replace(&doc, 1, 1, vec![Some(filled(1, 1, 1)), None, Some(filled(1, 1, 2))]);
+    let command = replace(
+        &doc,
+        1,
+        1,
+        vec![Some(filled(1, 1, 1)), None, Some(filled(1, 1, 2))],
+    );
     assert_eq!(doc.apply(command), Ok(true));
     assert_eq!(doc.materialized_bytes(), 2 * 4);
     // A step bigger than the history limit is kept (the last step is never dropped) and undone.
     let mut big = document();
     big.set_history_limit(1);
-    let command = replace(&big, 6, 4, vec![Some(filled(6, 4, 1)), None, Some(filled(6, 4, 2))]);
+    let command = replace(
+        &big,
+        6,
+        4,
+        vec![Some(filled(6, 4, 1)), None, Some(filled(6, 4, 2))],
+    );
     assert_eq!(big.apply(command), Ok(true));
     assert!(big.can_undo());
-    assert!(big.history_bytes() >= 2 * 3 * 2 * 4, "the old cells are counted");
+    assert!(
+        big.history_bytes() >= 2 * 3 * 2 * 4,
+        "the old cells are counted"
+    );
     assert_eq!(big.undo(), Ok(()));
     assert_eq!((big.width(), big.height()), (3, 2));
     assert_eq!(big.image(big.layers()[0].cel()), Some(&filled(3, 2, 10)));
