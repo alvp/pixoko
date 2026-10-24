@@ -34,6 +34,7 @@ mod help_texts_merge_es;
 pub mod help_texts_palette_es;
 pub mod icon_button;
 pub mod icons;
+pub mod image_ops_es;
 pub mod key_events;
 pub mod keymap;
 pub mod keymap_file;

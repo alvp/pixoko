@@ -106,6 +106,12 @@ fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
             "Imagen",
             vec![
                 ("Convertir modo…", AppAction::ConvertMode),
+                ("Voltear horizontal", AppAction::FlipHorizontal),
+                ("Voltear vertical", AppAction::FlipVertical),
+                ("Girar a la derecha", AppAction::TurnRight),
+                ("Girar a la izquierda", AppAction::TurnLeft),
+                ("Girar media vuelta", AppAction::TurnHalf),
+                ("Tamaño del lienzo…", AppAction::CanvasSize),
                 ("Añadir entrada", AppAction::AddPaletteEntry),
                 ("Quitar entrada", AppAction::RemovePaletteEntry),
                 ("Tamaño de la paleta…", AppAction::PaletteSize),
@@ -172,9 +178,9 @@ fn row_1_the_separator_goes_only_before_quit() {
 }
 
 #[test]
-fn row_1_there_are_thirty_three_entries_and_no_action_repeats() {
+fn row_1_there_are_thirty_nine_entries_and_no_action_repeats() {
     let actions: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
-    assert_eq!(actions.len(), 33);
+    assert_eq!(actions.len(), 39);
     for (i, a) in actions.iter().enumerate() {
         assert!(
             !actions[i + 1..].contains(a),
@@ -193,6 +199,13 @@ fn row_1_there_are_thirty_three_entries_and_no_action_repeats() {
     // `Intercambiar colores` (C4) follows `Borrar página`, still in `Editar`.
     expected_2.push(AppAction::SwapColors);
     expected_2.push(AppAction::ConvertMode);
+    // The six image operations of 4.1 follow `Convertir modo…`.
+    expected_2.push(AppAction::FlipHorizontal);
+    expected_2.push(AppAction::FlipVertical);
+    expected_2.push(AppAction::TurnRight);
+    expected_2.push(AppAction::TurnLeft);
+    expected_2.push(AppAction::TurnHalf);
+    expected_2.push(AppAction::CanvasSize);
     // The three palette actions of C3 follow `Convertir modo…`.
     expected_2.extend([
         AppAction::AddPaletteEntry,
@@ -244,7 +257,7 @@ fn texts_of_shortcut(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn some(texts: [Option<&str>; 33]) -> Vec<Option<String>> {
+fn some(texts: [Option<&str>; 39]) -> Vec<Option<String>> {
     texts.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -262,6 +275,12 @@ fn row_1_shortcuts_on_linux() {
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             Some("K"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -309,6 +328,12 @@ fn row_1_shortcuts_on_windows_are_those_of_linux_except_quit_which_has_none() {
             None,
             None,
             None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             Some(";"),
             None,
             None,
@@ -347,6 +372,12 @@ fn row_1_shortcuts_on_mac_use_cmd_redo_is_cmd_shift_z_and_quit_has_none() {
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
             Some("K"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -962,8 +993,8 @@ fn row_10_image_is_the_third_menu_between_edit_and_view_with_convert_and_three_p
     let image_2 = menu_image();
     assert_eq!(
         image_2.items.len(),
-        4,
-        "convertir y las tres de la paleta (C3)"
+        10,
+        "convertir, las seis de imagen (4.1) y las tres de la paleta (C3)"
     );
     let input_2 = image_2.items[0];
     assert_eq!(input_2.label, "Convertir modo…");

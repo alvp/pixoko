@@ -13,6 +13,9 @@ use crate::color_block_es::MENU_SWAP;
 use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
 use crate::help::HelpTarget;
 use crate::help_texts_palette_es::{MENU_ADD_ENTRY, MENU_PALETTE_SIZE, MENU_REMOVE_ENTRY};
+use crate::image_ops_es::{
+    MENU_CANVAS_SIZE, MENU_FLIP_H, MENU_FLIP_V, MENU_TURN_HALF, MENU_TURN_LEFT, MENU_TURN_RIGHT,
+};
 use crate::keymap::{Chord, Keymap, default_keymap};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
@@ -82,6 +85,12 @@ pub const MENUS: [Menu; 6] = [
         title: "Imagen",
         items: &[
             item("Convertir modo…", AppAction::ConvertMode),
+            item(MENU_FLIP_H, AppAction::FlipHorizontal),
+            item(MENU_FLIP_V, AppAction::FlipVertical),
+            item(MENU_TURN_RIGHT, AppAction::TurnRight),
+            item(MENU_TURN_LEFT, AppAction::TurnLeft),
+            item(MENU_TURN_HALF, AppAction::TurnHalf),
+            item(MENU_CANVAS_SIZE, AppAction::CanvasSize),
             item(MENU_ADD_ENTRY, AppAction::AddPaletteEntry),
             item(MENU_REMOVE_ENTRY, AppAction::RemovePaletteEntry),
             item(MENU_PALETTE_SIZE, AppAction::PaletteSize),

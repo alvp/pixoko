@@ -346,6 +346,13 @@ impl Canvas {
         !self.tiles.is_empty() && self.size == Some(Size::new(image.width(), image.height()))
     }
 
+    /// The canvas has an image and its size is not that of `image` (a turn or a canvas resize, also
+    /// when undone): the app reloads it with [`Canvas::load_with`].
+    pub fn size_differs(&self, image: &(impl PixelSource + ?Sized)) -> bool {
+        self.size
+            .is_some_and(|size| size != Size::new(image.width(), image.height()))
+    }
+
     /// Marca como sucios los bloques de `blocks` (lo que cambió en el documento). No sube nada: lo
     /// hace [`Canvas::sync`]. Si hay una superposición viva se descarta antes: sus copias de
     /// trabajo ya no valen y sus bloques se regeneran desde el documento.

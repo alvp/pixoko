@@ -1335,6 +1335,9 @@ mod convert_tests;
 mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;
+mod image_ops;
+#[cfg(test)]
+mod image_ops_tests;
 mod layer_ops;
 pub use layer_ops::*;
 mod merge_ops;

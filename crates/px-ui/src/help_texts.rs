@@ -11,6 +11,7 @@ use crate::help_texts_es::{HELP_ES, UI_ES};
 use crate::help_texts_layers_es::HELP_LAYERS_ES;
 use crate::help_texts_merge_es::HELP_MERGE_ES;
 use crate::help_texts_palette_es::HELP_PALETTE_ES;
+use crate::image_ops_es::HELP_IMAGE_ES;
 use crate::tool::Tool;
 
 /// The help text of an action.
@@ -82,6 +83,7 @@ pub fn help_table() -> &'static [HelpEntry] {
             .chain(HELP_MERGE_ES.iter())
             .chain(HELP_COLOR_ES.iter())
             .chain(HELP_PALETTE_ES.iter())
+            .chain(HELP_IMAGE_ES.iter())
             .copied()
             .collect()
     });
@@ -140,6 +142,12 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::AddPaletteEntry => "palette.add_entry",
         AppAction::RemovePaletteEntry => "palette.remove_entry",
         AppAction::PaletteSize => "palette.size",
+        AppAction::FlipHorizontal => "image.flip-h",
+        AppAction::FlipVertical => "image.flip-v",
+        AppAction::TurnRight => "image.turn-right",
+        AppAction::TurnLeft => "image.turn-left",
+        AppAction::TurnHalf => "image.turn-half",
+        AppAction::CanvasSize => "image.canvas-size",
         _ => return None,
     })
 }
@@ -185,6 +193,12 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "palette.add_entry" => AppAction::AddPaletteEntry,
         "palette.remove_entry" => AppAction::RemovePaletteEntry,
         "palette.size" => AppAction::PaletteSize,
+        "image.flip-h" => AppAction::FlipHorizontal,
+        "image.flip-v" => AppAction::FlipVertical,
+        "image.turn-right" => AppAction::TurnRight,
+        "image.turn-left" => AppAction::TurnLeft,
+        "image.turn-half" => AppAction::TurnHalf,
+        "image.canvas-size" => AppAction::CanvasSize,
         _ => return None,
     })
 }

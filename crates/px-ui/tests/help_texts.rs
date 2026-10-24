@@ -45,7 +45,7 @@ const TARGETS_OF_BUTTON: [HelpTarget; 9] = [
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.
-const KEYS: [&str; 40] = [
+const KEYS: [&str; 46] = [
     "tool.pencil",
     "tool.line",
     "tool.fill",
@@ -88,6 +88,12 @@ const KEYS: [&str; 40] = [
     "palette.add_entry",
     "palette.remove_entry",
     "palette.size",
+    "image.flip-h",
+    "image.flip-v",
+    "image.turn-right",
+    "image.turn-left",
+    "image.turn-half",
+    "image.canvas-size",
 ];
 
 /// The two entries of the palette panel that belong to no action.
@@ -150,9 +156,9 @@ fn press(c: char) -> Press {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn row_1_the_table_has_40_entries_with_unique_keys_and_limits() {
+fn row_1_the_table_has_46_entries_with_unique_keys_and_limits() {
     let table = help_table();
-    assert_eq!(table.len(), 40);
+    assert_eq!(table.len(), 46);
     let keys: Vec<&str> = table.iter().map(|e| e.key).collect();
     assert_eq!(keys, KEYS, "claves estables y en el orden del anexo");
     for (i, e) in table.iter().enumerate() {
@@ -211,7 +217,7 @@ fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() 
         .iter()
         .filter(|e| action_of_key(e.key).is_some_and(is_editable))
         .count();
-    assert_eq!(editable, 33);
+    assert_eq!(editable, 39);
     for key in [
         "file.new",
         "file.open",
