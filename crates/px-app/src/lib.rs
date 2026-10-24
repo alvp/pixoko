@@ -4,6 +4,7 @@
 //! argumento o arrastrando, y los guarda con `Ctrl`+`S` (specs/hito-2-abrir-guardar.md).
 
 mod background_color;
+mod canvas_size;
 #[cfg(test)]
 mod checker_saved;
 mod config;
@@ -67,6 +68,7 @@ use px_ui::tiles::{SystemTileAlloc, TileAlloc};
 use px_ui::tool::{Tool, ToolAction, ToolEvent, ToolState, tool_color_label};
 use px_ui::toolbar::{ToolboxOutput, ToolboxView, zoom_label};
 
+use crate::canvas_size::{op_from_values, open_canvas_size};
 use crate::config::{SaveError, ShortcutStore, shortcuts_path};
 use crate::confirm::{
     Confirm, Confirmation, Request, close_warning, new_warning, open_dialog_warning, open_warning,
@@ -891,6 +893,16 @@ impl App {
                     self.modal_focus = None;
                 }
             }
+            Dispatched::CanvasSize => {
+                let locks = self.locks(ctx);
+                let (width, height) = (
+                    self.session.document.width(),
+                    self.session.document.height(),
+                );
+                if open_canvas_size(&mut self.modal, width, height, locks) {
+                    self.modal_focus = None;
+                }
+            }
             Dispatched::BackgroundColor => {
                 let locks = self.locks(ctx);
                 if open_background_color(&mut self.modal, self.canvas.background(), locks) {
@@ -1442,6 +1454,16 @@ impl App {
             let result = self.session.request_resize(len);
             self.after_resize(ctx, result);
         }
+        if kind == ModalKind::CanvasSize
+            && let Reaction::Accepted(values) = &reaction
+            && let Some(op) = op_from_values(values)
+        {
+            let report = self.session.image_op(op);
+            self.finish::<std::convert::Infallible>(ctx, Ok(report.changed));
+            if let Some(text) = report.notice {
+                self.notify(ctx, text);
+            }
+        }
         if kind == ModalKind::TransparentLoss {
             let asked = self.transparent_loss.take();
             if let (Reaction::Accepted(_), Some((len, into))) = (&reaction, asked) {
@@ -1773,6 +1795,12 @@ impl eframe::App for App {
         let mut sync_error = None;
         {
             let source = DocSource(&self.session.document);
+            // A turn or a canvas resize (also when undone) changes the size: the tiles are rebuilt.
+            if self.canvas.size_differs(&source)
+                && let Err(error) = self.canvas.load_with(&ctx, &source, &mut *self.tile_alloc)
+            {
+                sync_error = Some(error.to_string());
+            }
             match self.session.editor.preview() {
                 Some((EditTarget::Entry(index), color)) => {
                     self.canvas.preview_entry(&ctx, &source, index, color);

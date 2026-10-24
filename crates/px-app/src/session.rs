@@ -1328,8 +1328,6 @@ mod c3_tests;
 #[cfg(test)]
 mod c4_tests;
 #[cfg(test)]
-mod image_ops_tests;
-#[cfg(test)]
 mod color_cycle_tests;
 #[cfg(test)]
 mod convert_tests;
@@ -1337,6 +1335,9 @@ mod convert_tests;
 mod dialog_tests;
 #[cfg(test)]
 mod edit_tests;
+mod image_ops;
+#[cfg(test)]
+mod image_ops_tests;
 mod layer_ops;
 pub use layer_ops::*;
 mod merge_ops;

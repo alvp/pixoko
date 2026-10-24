@@ -8,12 +8,28 @@ use px_ui::menu::{MENUS, shortcut_for};
 use px_ui::text::INTERFACE_CHARSET;
 
 const SIX: [(&str, AppAction, &str); 6] = [
-    ("Voltear horizontal", AppAction::FlipHorizontal, "image.flip-h"),
+    (
+        "Voltear horizontal",
+        AppAction::FlipHorizontal,
+        "image.flip-h",
+    ),
     ("Voltear vertical", AppAction::FlipVertical, "image.flip-v"),
-    ("Girar a la derecha", AppAction::TurnRight, "image.turn-right"),
-    ("Girar a la izquierda", AppAction::TurnLeft, "image.turn-left"),
+    (
+        "Girar a la derecha",
+        AppAction::TurnRight,
+        "image.turn-right",
+    ),
+    (
+        "Girar a la izquierda",
+        AppAction::TurnLeft,
+        "image.turn-left",
+    ),
     ("Girar media vuelta", AppAction::TurnHalf, "image.turn-half"),
-    ("Tamaño del lienzo…", AppAction::CanvasSize, "image.canvas-size"),
+    (
+        "Tamaño del lienzo…",
+        AppAction::CanvasSize,
+        "image.canvas-size",
+    ),
 ];
 
 #[test]
@@ -48,12 +64,18 @@ fn row_9_the_six_have_no_default_key_are_editable_and_have_help() {
         assert!(entry.name.chars().count() <= 20, "{key}");
         assert!(entry.description.chars().count() <= 8 * 42, "{key}");
         for text in [label, entry.name, entry.description] {
-            assert!(text.chars().all(|c| INTERFACE_CHARSET.contains(c)), "{text}");
+            assert!(
+                text.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+                "{text}"
+            );
         }
     }
     assert_eq!(help_table().len(), 46);
     for text in CANVAS_ANCHORS.iter().chain([&IMAGE_OP_NOTHING]) {
-        assert!(text.chars().all(|c| INTERFACE_CHARSET.contains(c)), "{text}");
+        assert!(
+            text.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+            "{text}"
+        );
     }
 }
 
@@ -64,13 +86,31 @@ fn row_9_they_are_blocked_like_a_change_of_the_document() {
         assert!(action.changes_image());
         assert!(!is_blocked(action, free, Origin::Menu), "{action:?} free");
         for locks in [
-            Locks { gesture: true, ..free },
-            Locks { text_focus: true, ..free },
-            Locks { removal: true, ..free },
-            Locks { modal: true, ..free },
-            Locks { dialog: true, ..free },
+            Locks {
+                gesture: true,
+                ..free
+            },
+            Locks {
+                text_focus: true,
+                ..free
+            },
+            Locks {
+                removal: true,
+                ..free
+            },
+            Locks {
+                modal: true,
+                ..free
+            },
+            Locks {
+                dialog: true,
+                ..free
+            },
         ] {
-            assert!(is_blocked(action, locks, Origin::Menu), "{action:?} {locks:?}");
+            assert!(
+                is_blocked(action, locks, Origin::Menu),
+                "{action:?} {locks:?}"
+            );
         }
     }
     assert!(AppAction::CanvasSize.opens_dialog());

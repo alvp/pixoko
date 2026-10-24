@@ -17,7 +17,9 @@ use crate::canvas_size::{
 use crate::dispatch::{Dispatched, Targets, dispatch};
 
 fn rgba_cel(seed: u8) -> Image {
-    let bytes: Vec<u8> = (0..3 * 2 * 4).map(|i| seed.wrapping_add(i as u8 * 9)).collect();
+    let bytes: Vec<u8> = (0..3 * 2 * 4)
+        .map(|i| seed.wrapping_add(i as u8 * 9))
+        .collect();
     Image::from_bytes(3, 2, Mode::Rgba, bytes).expect("cel")
 }
 
@@ -34,7 +36,14 @@ fn three_layers() -> Session {
     let layers = vec![
         layer("a", true, false, 255, BlendMode::Normal, Some(rgba_cel(1))),
         layer("b", true, false, 255, BlendMode::Normal, None),
-        layer("c", false, true, 128, BlendMode::Multiply, Some(rgba_cel(50))),
+        layer(
+            "c",
+            false,
+            true,
+            128,
+            BlendMode::Multiply,
+            Some(rgba_cel(50)),
+        ),
     ];
     Session::sample(Document::from_layers(3, 2, Mode::Rgba, None, layers).expect("document"))
 }
@@ -49,9 +58,11 @@ fn single(mode: Mode, palette: Option<Palette>) -> Session {
 }
 
 fn palette(transparent: Option<u8>) -> Palette {
-    let mut palette =
-        Palette::from_colors((0..8u8).map(|i| Rgba::opaque(i * 30, 255 - i * 30, i))).expect("palette");
-    palette.set_transparent_index(transparent).expect("transparent");
+    let mut palette = Palette::from_colors((0..8u8).map(|i| Rgba::opaque(i * 30, 255 - i * 30, i)))
+        .expect("palette");
+    palette
+        .set_transparent_index(transparent)
+        .expect("transparent");
     palette
 }
 
@@ -73,8 +84,18 @@ fn row_10_the_form_starts_at_the_current_size_with_the_center_anchor_and_rejects
         height: 2,
         anchor: Anchor::Center,
     };
-    assert_eq!(dialog.values().and_then(|v| op_from_values(&v)), Some(center));
-    for (text, valid) in [("1", true), ("16384", true), ("0", false), ("16385", false), ("", false), ("7x", false)] {
+    assert_eq!(
+        dialog.values().and_then(|v| op_from_values(&v)),
+        Some(center)
+    );
+    for (text, valid) in [
+        ("1", true),
+        ("16384", true),
+        ("0", false),
+        ("16385", false),
+        ("", false),
+        ("7x", false),
+    ] {
         dialog.event(Event::Number {
             field: FIELD_WIDTH,
             text: text.to_string(),
@@ -144,14 +165,22 @@ fn row_11_each_operation_is_one_step_keeps_the_active_layer_and_undo_restores_it
     ];
     for (op, size) in ops {
         let mut session = three_layers();
-        let (before, active, layers) = (session.document.clone(), session.active_layer(), session.document.layers().len());
+        let (before, active, layers) = (
+            session.document.clone(),
+            session.active_layer(),
+            session.document.layers().len(),
+        );
         let id = session.document.state_id();
         let report = session.image_op(op);
         assert!(report.changed, "{op:?}");
         assert_eq!(size_of(&session), size, "{op:?}");
         assert_ne!(session.document.state_id(), id);
         assert!(session.modified());
-        assert_eq!(session.active_layer(), active, "the active layer does not change");
+        assert_eq!(
+            session.active_layer(),
+            active,
+            "the active layer does not change"
+        );
         assert_eq!(session.document.layers().len(), layers);
         let after = session.document.clone();
         session.undo().expect("undo");
@@ -172,7 +201,12 @@ fn row_11_the_new_area_is_transparent_where_the_mode_allows_it_and_the_backgroun
     };
     let corner = |session: &Session| {
         let cel = session.active_cel();
-        session.document.image(cel).expect("cel").get_pixel(3, 0).expect("pixel")
+        session
+            .document
+            .image(cel)
+            .expect("cel")
+            .get_pixel(3, 0)
+            .expect("pixel")
     };
     // RGBA: transparent.
     let mut rgba = three_layers();
@@ -203,7 +237,10 @@ fn row_11_an_operation_that_changes_nothing_says_so_and_a_refusal_changes_nothin
     let id = session.document.state_id();
     let report = session.image_op(ImageOp::FlipH);
     assert!(!report.changed);
-    assert_eq!(report.notice.as_deref(), Some(px_ui::image_ops_es::IMAGE_OP_NOTHING));
+    assert_eq!(
+        report.notice.as_deref(),
+        Some(px_ui::image_ops_es::IMAGE_OP_NOTHING)
+    );
     assert_eq!(session.document.state_id(), id);
     // Over the limit of the cells: notice and the document intact.
     let mut tight = three_layers();
@@ -264,14 +301,18 @@ fn row_12_a_turned_image_is_saved_with_the_new_size() {
     indexed.image_op(ImageOp::Cw);
     let path = dir.join("turned.png");
     indexed.save_to(&path).expect("save");
-    let read = read_png(&std::fs::read(&path).expect("file")).expect("png").image;
+    let read = read_png(&std::fs::read(&path).expect("file"))
+        .expect("png")
+        .image;
     assert_eq!((read.width(), read.height()), (2, 3));
     // Two layers: the flattened PNG has the new size too.
     let mut layers = three_layers();
     layers.image_op(ImageOp::Ccw);
     let path = dir.join("layers.png");
     layers.save_to(&path).expect("save");
-    let read = read_png(&std::fs::read(&path).expect("file")).expect("png").image;
+    let read = read_png(&std::fs::read(&path).expect("file"))
+        .expect("png")
+        .image;
     assert_eq!((read.width(), read.height()), (2, 3));
     let _ = std::fs::remove_dir_all(&dir);
 }

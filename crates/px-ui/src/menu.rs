@@ -12,10 +12,10 @@ use crate::chrome::MENU_H_U;
 use crate::color_block_es::MENU_SWAP;
 use crate::edit_layout::{TEXT_BUTTON_H_U, TEXT_BUTTON_TEXT_Y_U};
 use crate::help::HelpTarget;
+use crate::help_texts_palette_es::{MENU_ADD_ENTRY, MENU_PALETTE_SIZE, MENU_REMOVE_ENTRY};
 use crate::image_ops_es::{
     MENU_CANVAS_SIZE, MENU_FLIP_H, MENU_FLIP_V, MENU_TURN_HALF, MENU_TURN_LEFT, MENU_TURN_RIGHT,
 };
-use crate::help_texts_palette_es::{MENU_ADD_ENTRY, MENU_PALETTE_SIZE, MENU_REMOVE_ENTRY};
 use crate::keymap::{Chord, Keymap, default_keymap};
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};

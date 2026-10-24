@@ -7,11 +7,11 @@ use crate::actions::AppAction;
 use std::sync::LazyLock;
 
 use crate::help_texts_color_es::HELP_COLOR_ES;
-use crate::image_ops_es::HELP_IMAGE_ES;
 use crate::help_texts_es::{HELP_ES, UI_ES};
 use crate::help_texts_layers_es::HELP_LAYERS_ES;
 use crate::help_texts_merge_es::HELP_MERGE_ES;
 use crate::help_texts_palette_es::HELP_PALETTE_ES;
+use crate::image_ops_es::HELP_IMAGE_ES;
 use crate::tool::Tool;
 
 /// The help text of an action.

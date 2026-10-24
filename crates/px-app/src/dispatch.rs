@@ -5,6 +5,7 @@
 //! need one (dialogs, closing, the zoom of the canvas, the licenses panel) is returned as
 //! [`Dispatched`] and `App` runs it. Without egui: it is tested without a window.
 
+use px_raster::ImageOp;
 use px_ui::actions::{AppAction, Locks, Origin, is_blocked};
 use px_ui::background::CanvasBackground;
 use px_ui::color::key_choice;
@@ -48,6 +49,8 @@ pub enum Dispatched {
     BackgroundColor,
     /// `Image → Palette size…`: `App` opens the dialog with the current length.
     PaletteSize,
+    /// `Imagen → Tamaño del lienzo…`: the app opens the dialog with the current size.
+    CanvasSize,
     /// `F1` or `Help → Tool help`: `App` opens the help of that target.
     Help(HelpTarget),
     /// `Help → Keyboard shortcuts…`: `App` opens the list of shortcuts.
@@ -202,6 +205,12 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::RemovePaletteEntry => palette_done(session.menu_remove_entry()),
         AppAction::PaletteSize if session.document.palette().is_none() => done(false),
         AppAction::PaletteSize => Dispatched::PaletteSize,
+        AppAction::FlipHorizontal => layer_done(action, session.image_op(ImageOp::FlipH)),
+        AppAction::FlipVertical => layer_done(action, session.image_op(ImageOp::FlipV)),
+        AppAction::TurnRight => layer_done(action, session.image_op(ImageOp::Cw)),
+        AppAction::TurnLeft => layer_done(action, session.image_op(ImageOp::Ccw)),
+        AppAction::TurnHalf => layer_done(action, session.image_op(ImageOp::Half)),
+        AppAction::CanvasSize => Dispatched::CanvasSize,
         AppAction::ClearPage => match session.clear_page() {
             Ok(changed) => done(changed),
             Err(error) => Dispatched::Done {

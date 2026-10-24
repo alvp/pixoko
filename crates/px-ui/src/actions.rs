@@ -272,8 +272,7 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal
-        && (action.opens_dialog() || action.changes_palette() || action.changes_image())
+    locks.removal && (action.opens_dialog() || action.changes_palette() || action.changes_image())
 }
 
 /// Whether a modal dialog can be opened: neither a gesture in progress, nor a pending removal, nor a file dialog,
