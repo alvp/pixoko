@@ -3,7 +3,7 @@
 
 use px_ui::actions::{AppAction, Locks, Origin, Platform, is_blocked};
 use px_ui::help_texts::{action_of_key, help_key, help_table, is_editable};
-use px_ui::image_ops_es::{CANVAS_ANCHORS, CANVAS_TOO_BIG, IMAGE_OP_NOTHING};
+use px_ui::image_ops_es::{CANVAS_ANCHORS, IMAGE_OP_NOTHING};
 use px_ui::menu::{MENUS, shortcut_for};
 use px_ui::text::INTERFACE_CHARSET;
 
@@ -52,7 +52,7 @@ fn row_9_the_six_have_no_default_key_are_editable_and_have_help() {
         }
     }
     assert_eq!(help_table().len(), 46);
-    for text in CANVAS_ANCHORS.iter().chain([&CANVAS_TOO_BIG, &IMAGE_OP_NOTHING]) {
+    for text in CANVAS_ANCHORS.iter().chain([&IMAGE_OP_NOTHING]) {
         assert!(text.chars().all(|c| INTERFACE_CHARSET.contains(c)), "{text}");
     }
 }

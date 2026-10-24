@@ -31,8 +31,6 @@ pub const CANVAS_ANCHORS: [&str; 9] = [
     "Abajo",
     "Abajo a la derecha",
 ];
-/// The size does not fit in memory (the check of the form, before touching anything).
-pub const CANVAS_TOO_BIG: &str = "El lienzo sería demasiado grande";
 /// Notice when the operation does not change anything.
 pub const IMAGE_OP_NOTHING: &str = "Sin cambios: la imagen queda igual";
 

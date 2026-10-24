@@ -1328,6 +1328,8 @@ mod c3_tests;
 #[cfg(test)]
 mod c4_tests;
 #[cfg(test)]
+mod image_ops_tests;
+#[cfg(test)]
 mod color_cycle_tests;
 #[cfg(test)]
 mod convert_tests;
