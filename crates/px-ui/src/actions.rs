@@ -91,6 +91,18 @@ pub enum AppAction {
     RemovePaletteEntry,
     /// `Imagen → Tamaño de la paleta…`: opens a dialog with the exact length (no default key).
     PaletteSize,
+    /// `Imagen → Voltear horizontal`: flips the whole image, every layer (specs/hito-4-imagen.md; no default key).
+    FlipHorizontal,
+    /// `Imagen → Voltear vertical`.
+    FlipVertical,
+    /// `Imagen → Girar a la derecha`: a quarter turn clockwise.
+    TurnRight,
+    /// `Imagen → Girar a la izquierda`: a quarter turn counterclockwise.
+    TurnLeft,
+    /// `Imagen → Girar media vuelta`.
+    TurnHalf,
+    /// `Imagen → Tamaño del lienzo…`: opens a dialog with the size and the anchor.
+    CanvasSize,
 }
 
 impl AppAction {
@@ -119,6 +131,21 @@ impl AppAction {
                 | AppAction::ShowHelp(_)
                 | AppAction::ShowShortcuts
                 | AppAction::PaletteSize
+                | AppAction::CanvasSize
+        )
+    }
+
+    /// The actions of the `Imagen` menu that transform the whole image (4.1): blocked like any
+    /// change of the document and also with a pending removal or resize of the palette.
+    pub fn changes_image(self) -> bool {
+        matches!(
+            self,
+            AppAction::FlipHorizontal
+                | AppAction::FlipVertical
+                | AppAction::TurnRight
+                | AppAction::TurnLeft
+                | AppAction::TurnHalf
+                | AppAction::CanvasSize
         )
     }
 
@@ -245,7 +272,8 @@ pub fn is_blocked(action: AppAction, locks: Locks, origin: Origin) -> bool {
     if locks.gesture || locks.text_focus {
         return true;
     }
-    locks.removal && (action.opens_dialog() || action.changes_palette())
+    locks.removal
+        && (action.opens_dialog() || action.changes_palette() || action.changes_image())
 }
 
 /// Whether a modal dialog can be opened: neither a gesture in progress, nor a pending removal, nor a file dialog,

@@ -332,6 +332,8 @@ pub enum DialogKind {
     PaletteSize,
     /// La pérdida de la entrada transparente con varias capas (specs/ui-palette-handle.md).
     TransparentLoss,
+    /// `Imagen → Tamaño del lienzo…` (specs/hito-4-imagen.md).
+    CanvasSize,
 }
 
 /// Lo que le pasa a un diálogo abierto.

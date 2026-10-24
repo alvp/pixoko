@@ -28,6 +28,7 @@ pub mod gestures;
 pub mod help;
 pub mod help_texts;
 mod help_texts_color_es;
+pub mod image_ops_es;
 mod help_texts_es;
 mod help_texts_layers_es;
 mod help_texts_merge_es;
