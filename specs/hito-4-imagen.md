@@ -1,6 +1,6 @@
 # Hito 4 · Unidad 4.1: operaciones de imagen (voltear, girar 90° y tamaño del lienzo)
 
-Estado: **pendiente de tu visto bueno** (2026-10-24). Cambios previstos: `px-core` y `px-raster` (**solo los listados abajo; necesito tu aprobación expresa**, D02), `px-ui` y `px-app`. Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia. Como toca `px-core` y `px-raster`: pruebas de esos dos crates por `test-writer` antes del código, las de interfaz las escribe la sesión principal, y un `license-auditor` al final sobre el rango de commits. Código, comentarios y nombres de pruebas nuevos en inglés; textos visibles en español en `*_es.rs`.
+Estado: **aprobada** (2026-10-24; el usuario delegó las decisiones: se confirman las siete de «Decisiones que necesito que confirmes» tal como están, ver «Visto bueno»). Cambios previstos: `px-core` y `px-raster` (**solo los listados abajo; necesito tu aprobación expresa**, D02), `px-ui` y `px-app`. Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia. Como toca `px-core` y `px-raster`: pruebas de esos dos crates por `test-writer` antes del código, las de interfaz las escribe la sesión principal, y un `license-auditor` al final sobre el rango de commits. Código, comentarios y nombres de pruebas nuevos en inglés; textos visibles en español en `*_es.rs`.
 
 Referencias: fila 4.1 y decisiones D02, D04 a D10 de [`mapa-funciones.md`](mapa-funciones.md); [`hito-3-combinar.md`](hito-3-combinar.md) (patrón `based_on`, composición en `px-raster`, pico de memoria, «Combinando…»); [`hito-3-capas-modelo.md`](hito-3-capas-modelo.md) (celdas del tamaño del lienzo, vacías sin memoria, límites, paso de historia nunca descartado); `ConvertAll` (precedente de un comando que cambia todas las celdas en un paso).
 
@@ -111,3 +111,7 @@ Escalar o remuestrear la imagen, recortar a una selección (4.8), voltear o gira
 5. **D8:** al cambiar el tamaño, mantener el zoom y el centro relativo de la vista.
 6. **D10:** rechazar solo si el resultado supera el tope **y crece**; «Aplicando…» con más de 2²⁴ píxeles.
 7. **C-01 a C-05 y R-01 y R-02:** tu aprobación expresa para tocar `px-core` y `px-raster` solo con esa lista.
+
+## Visto bueno (2026-10-24; el usuario delegó en mi criterio)
+
+Confirmadas tal como están las siete decisiones del final: D1 (documento entero), D3 (`⌊·⌋` hacia arriba y la izquierda), D4 (relleno transparente o fondo de la sesión), D7 (sin tecla por defecto), D8 (zoom y centro relativo), D10 (rechazo solo si supera el tope y crece; «Aplicando…» con más de 2²⁴ píxeles). Aprobación expresa de `px-core` y `px-raster` **solo para C-01 a C-05 y R-01 y R-02**; si hiciera falta algo más, parar y decirlo. Modo ahorro de `CLAUDE.md`: una sola corrección posterior de esta spec, al final; informe final de 20 líneas como máximo.
