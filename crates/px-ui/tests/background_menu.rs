@@ -217,6 +217,13 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
     expected_2.push(AppAction::ClearPage);
     expected_2.push(AppAction::SwapColors);
     expected_2.push(AppAction::ConvertMode);
+    // The six image operations of 4.1 follow `Convertir modo…`.
+    expected_2.push(AppAction::FlipHorizontal);
+    expected_2.push(AppAction::FlipVertical);
+    expected_2.push(AppAction::TurnRight);
+    expected_2.push(AppAction::TurnLeft);
+    expected_2.push(AppAction::TurnHalf);
+    expected_2.push(AppAction::CanvasSize);
     // The three palette actions of C3 follow `Convertir modo…`.
     expected_2.extend([
         AppAction::AddPaletteEntry,
@@ -274,6 +281,12 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         labels_and_actions(menu_titled("Imagen").items),
         [
             ("Convertir modo…", AppAction::ConvertMode),
+            ("Voltear horizontal", AppAction::FlipHorizontal),
+            ("Voltear vertical", AppAction::FlipVertical),
+            ("Girar a la derecha", AppAction::TurnRight),
+            ("Girar a la izquierda", AppAction::TurnLeft),
+            ("Girar media vuelta", AppAction::TurnHalf),
+            ("Tamaño del lienzo…", AppAction::CanvasSize),
             ("Añadir entrada", AppAction::AddPaletteEntry),
             ("Quitar entrada", AppAction::RemovePaletteEntry),
             ("Tamaño de la paleta…", AppAction::PaletteSize),
