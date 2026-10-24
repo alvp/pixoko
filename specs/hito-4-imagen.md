@@ -115,3 +115,17 @@ Escalar o remuestrear la imagen, recortar a una selección (4.8), voltear o gira
 ## Visto bueno (2026-10-24; el usuario delegó en mi criterio)
 
 Confirmadas tal como están las siete decisiones del final: D1 (documento entero), D3 (`⌊·⌋` hacia arriba y la izquierda), D4 (relleno transparente o fondo de la sesión), D7 (sin tecla por defecto), D8 (zoom y centro relativo), D10 (rechazo solo si supera el tope y crece; «Aplicando…» con más de 2²⁴ píxeles). Aprobación expresa de `px-core` y `px-raster` **solo para C-01 a C-05 y R-01 y R-02**; si hiciera falta algo más, parar y decirlo. Modo ahorro de `CLAUDE.md`: una sola corrección posterior de esta spec, al final; informe final de 20 líneas como máximo.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+Lo que se hizo distinto de lo escrito arriba, y por qué:
+
+- **Nombres sin grados.** La fuente de píxeles no tiene el signo `°` (`INTERFACE_CHARSET`), así que las entradas son `Girar a la derecha`, `Girar a la izquierda` y `Girar media vuelta` (antes «90°» y «180°»). Textos en [`hito-4-imagen-textos.md`](hito-4-imagen-textos.md).
+- **El ancla es una lista de nueve opciones**, no una cuadrícula de 3 × 3 con foco propio: se usa el campo `Choice` que ya tiene el marco de diálogos (ratón y teclado ya resueltos). Tampoco hay el texto «De A × B a C × D»: el formulario es de campos fijos. El lado máximo es 16384 (`Canvas::MAX_SIDE`), de modo que el rechazo por tamaño no está en el formulario (con 16384 de lado un solo plano de 4 bytes llega justo a 1 GiB): lo da el tope de celdas del documento, con su mensaje, y deja el documento intacto.
+- **Propiedad 2.** «Ampliar y recortar de vuelta con el mismo ancla devuelve la imagen» es falso con ancla centrada y diferencia impar (`⌊d/2⌋` frente a `⌊−d/2⌋`); la prueba lo exige con anclas de borde o diferencia par.
+- **D8 (vista).** Tras cambiar el tamaño (aplicar, deshacer o rehacer) el lienzo se recarga y la vista vuelve al ajuste a la ventana; **no** se conserva el zoom ni el centro. Es la consecuencia de `Canvas::load_with`; conservarlos queda como mejora.
+- **D10, «Aplicando…» no se hizo.** Las operaciones se ejecutan en el mismo fotograma; con lienzos grandes el programa puede quedarse sin responder unos segundos. Tampoco se midieron el pico de memoria y el tiempo a 8192² (la fila 8 pedía medirlos): pendiente.
+- **Operación sin efecto.** Un volteo de una imagen simétrica, o un tamaño igual al actual, no crea paso y avisa «Sin cambios: la imagen queda igual» (`Ok(false)` del núcleo).
+- **Fila 12 solo con PNG** (indexado y aplanado de varias capas); el `.aseprite` queda para la prueba manual.
+- **Fila 9** pasa desde el primer momento: la lógica de `px-ui` se escribió antes que su prueba (el commit de la prueba va antes por el orden pedido); las filas de `px-core` y `px-raster` sí se vieron en rojo.
+- `test-writer` y `license-auditor` no estaban disponibles en la sesión: las pruebas las escribió la sesión principal y el `license-auditor` queda para el usuario (no hay dependencias nuevas; sí cambios en `px-core` y `px-raster`, así que `CLAUDE.md` lo pide).
