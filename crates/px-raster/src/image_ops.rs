@@ -156,11 +156,10 @@ fn reversed_n<const N: usize>(src: &Image, per_row: bool) -> Result<Image, Image
         let (left, right) = part.split_at_mut(half * N);
         // The middle pixel of an odd count is the first of `right` and stays where it is.
         let skip = right.len() - half * N;
-        for (a, b) in left
-            .chunks_exact_mut(N)
-            .zip(right[skip..].chunks_exact_mut(N).rev())
-        {
-            a.swap_with_slice(b);
+        let (left, _) = left.as_chunks_mut::<N>();
+        let (right, _) = right[skip..].as_chunks_mut::<N>();
+        for (a, b) in left.iter_mut().zip(right.iter_mut().rev()) {
+            std::mem::swap(a, b);
         }
     }
     rebuild(src, width, height, data)
