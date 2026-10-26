@@ -1,6 +1,6 @@
 # Hito 4 · Unidad 4.2: cuantizador de color
 
-Estado: **aprobada** (2026-10-26; el usuario delegó todas las decisiones: se confirman las de «Decisiones» tal como están, ver «Visto bueno»). Cambios previstos: `px-core` y `px-raster` (**solo los listados abajo, aprobados de antemano por el usuario para esa lista y no más**, D02), `px-ui`, `px-app` y `px-golden`. Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia. Código, comentarios y nombres de pruebas nuevos en inglés; textos visibles en español en `quantize_es.rs` (revisión en [`hito-4-cuantizador-textos.md`](hito-4-cuantizador-textos.md)). Sin subagentes (`CLAUDE.md`, presupuesto): las pruebas las escribe la sesión principal antes del código; `license-auditor` queda para el usuario (hay cambios en `px-core` y `px-raster`).
+Estado: **aprobada** y **implementada** (2026-10-26; a falta del cierre completo, el `license-auditor` y la prueba manual; el usuario delegó todas las decisiones: se confirman las de «Decisiones» tal como están, ver «Visto bueno»). Cambios previstos: `px-core` y `px-raster` (**solo los listados abajo, aprobados de antemano por el usuario para esa lista y no más**, D02), `px-ui`, `px-app` y `px-golden`. Sin dependencias nuevas ni `unsafe`; `docs/DEPENDENCIES.md` no cambia. Código, comentarios y nombres de pruebas nuevos en inglés; textos visibles en español en `quantize_es.rs` (revisión en [`hito-4-cuantizador-textos.md`](hito-4-cuantizador-textos.md)). Sin subagentes (`CLAUDE.md`, presupuesto): las pruebas las escribe la sesión principal antes del código; `license-auditor` queda para el usuario (hay cambios en `px-core` y `px-raster`).
 
 Referencias: fila 4.2 y decisiones D02 y D13 de [`mapa-funciones.md`](mapa-funciones.md); [`hito-2-convertir-modo.md`](hito-2-convertir-modo.md) (diálogo, informe, dos tiempos, `TooManyColors`); [`hito-4-imagen.md`](hito-4-imagen.md) (patrón aditivo: `px-raster` calcula, `px-core` valida y mueve, `based_on`); `convert_cels`/`ConvertAll` (paleta común, el 0 transparente).
 
@@ -115,3 +115,18 @@ Reducir un indexado a menos colores, cargar la paleta de un fichero (4.6), matri
 ## Visto bueno (2026-10-26; el usuario delegó en mi criterio)
 
 Confirmadas tal como están las ocho decisiones del final. Aprobación expresa (de antemano) de `px-core` y `px-raster` **solo para Q-01 a Q-04 y Z-01 a Z-03**; si hiciera falta algo más, parar y decirlo. Modo ahorro de `CLAUDE.md`: una sola corrección posterior de esta spec, al final; informe final de 20 líneas como máximo.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+Lo que se hizo distinto de lo escrito arriba, y por qué:
+
+- **Rótulos de los campos numéricos.** El formulario admite 12 caracteres en un campo numérico: son `Colores` y `Alfa mínimo` (no «Número de colores» ni «Alfa mínimo para ser opaco»); el alfa mínimo se explica en la ayuda. Textos en [`hito-4-cuantizador-textos.md`](hito-4-cuantizador-textos.md).
+- **Tramado ordenado (D6).** El desplazamiento usa `s = 256 / ⌈∛k⌉` con `k` = entradas **opacas** de la paleta (en una calculada, N menos la transparente; en una ajena, las suyas), no N: con una paleta ajena N no se usa.
+- **`QuantizeStats`** lleva además `opaque_pixels` y `abs_error` (el error medio sale del mismo barrido del mapeo; `mae_milli()`), y `QuantizeError` tiene `SizeMismatch` y `TooLarge { needed, limit }`. Es el mismo tipo de Z-01, con más campos; `mean_abs_error` (Z-03) sigue siendo la medida independiente que usan las pruebas.
+- **`QuantizeAll` (Q-02).** Se comprueba `based_on` antes del modo del documento: un comando viejo sobre un documento ya indexado da `StaleImage`, no `QuantizeSource`.
+- **Mapeo (D5).** La tabla de 6 bits se rellena de forma perezosa (solo las casillas que aparecen), para no pagar 262 144 búsquedas con una imagen de 12 × 9; el resultado es el mismo.
+- **Paleta guardada (D3).** Se guarda al abrir un documento indexado y al salir de uno indexado con `Convertir modo…` (también con varias capas). `Nueva imagen` indexada cuenta como abrir.
+- **Medidas** (release, 8192² RGBA, 64 colores, máquina virtual de la nube; `px-raster/tests/quantize_perf.rs`, `#[ignore]`, no es puerta de CI): 1 capa 1,1 s sin tramado, 1,4 s con difusión y 1,1 s con ordenado; 4 capas 5,0 / 6,1 / 4,7 s. La memoria extra es 1 byte por píxel de celda más unos 10 MiB de tablas (calculado, no medido). Con más de 2²² píxeles el aceptar va en dos tiempos con «Reduciendo colores…».
+- **Referencia (fila 12).** El script de Lua y la prueba existen pero **no se han ejecutado**: faltan los 42 ficheros de `golden/aseprite-quant/` (pasos en [`corpus-hito-4-cuantizador.md`](corpus-hito-4-cuantizador.md)); la prueba está `#[ignore]` hasta entonces. Hasta tenerlos, la calidad solo está respaldada por el oráculo interno (la rejilla uniforme, propiedad 3).
+- **Subagentes.** `test-writer` y `license-auditor` no se usaron (presupuesto de `CLAUDE.md`): las pruebas las escribió la sesión principal antes del código y el `license-auditor` queda para el usuario (no hay dependencias nuevas; sí cambios en `px-core` y `px-raster`).
+- **Pruebas anteriores adaptadas:** además de las de la lista, `px-ui/tests/image_ops.rs` (fila 9 de 4.1: 11 entradas en `Imagen`) y una cifra de `convert_mode/tests.rs` (el motivo medía 35 caracteres y ahora 34). Ninguna cambió de intención.
