@@ -407,7 +407,7 @@ fn active_2_2() -> [Option<Rgba>; 4] {
 // --- Textos literales de la spec ---
 
 const PENDING: &str = "calculando el informe";
-const WITHOUT_QUANTIZER: &str = "más de 256 colores: sin cuantizador";
+const TOO_MANY_REASON: &str = "más de 256 colores: reduce colores";
 const NOT_FITS: &str = "la imagen convertida no cabe";
 const MISSING_COLOR: &str = "falta: permitir perder el color";
 const CHOOSES_BACKGROUND: &str = "falta: elegir el fondo del alfa";
@@ -416,7 +416,7 @@ const MISSING_COLOR_AND_VALUE: &str = "falta: perder el color; fondo válido";
 
 const REPORT_COMPUTING: &str = "Calculando el informe…";
 const REPORT_EXACT: &str = "Sin pérdidas: la conversión es exacta.";
-const REPORT_QUANTIZER: &str = "Esta imagen tiene más de 256 colores y una paleta indexada no los admite. Más de 256 colores: el cuantizador llega en el hito 4; hasta entonces no se puede pasar a Indexado.";
+const REPORT_TOO_MANY: &str = "Esta imagen tiene más de 256 colores y una paleta indexada no los admite. Pulsa Reducir colores… para elegir cuántos conservar.";
 const NOTICE_SIZE: &str = "aviso: más de 16777216 px; puede tardar";
 const NOTICE_HISTORY_ALL: &str = "aviso: convertir descarta el historial anterior; solo se podrá deshacer hasta tu próxima edición";
 const NOTICE_HISTORY_PART: &str = "aviso: convertir descarta parte del historial anterior";
@@ -987,7 +987,7 @@ fn reason_expected(
         return Some(PENDING.to_string());
     };
     let report = match analysis {
-        Analysis::TooManyColors => return Some(WITHOUT_QUANTIZER.to_string()),
+        Analysis::TooManyColors => return Some(TOO_MANY_REASON.to_string()),
         Analysis::TooLarge => return Some(NOT_FITS.to_string()),
         Analysis::Blocked(block) => return Some(block.reason().to_string()),
         Analysis::Exact { .. } => ConversionReport::default(),
@@ -1255,7 +1255,7 @@ fn row_3_a_non_opaque_active_color_blocks_even_if_the_alpha_is_not_lost() {
 #[test]
 fn row_3_the_impossible_ones_always_have_a_reason_with_any_permission() {
     for (analysis, expected_2) in [
-        (Analysis::TooManyColors, WITHOUT_QUANTIZER),
+        (Analysis::TooManyColors, TOO_MANY_REASON),
         (Analysis::TooLarge, NOT_FITS),
     ] {
         for luma in [false, true] {
@@ -1296,10 +1296,10 @@ fn row_3_pending_says_computing_the_report_with_any_permission() {
 #[test]
 fn row_3_the_reason_texts_are_the_literals_and_measure_at_most_37() {
     assert_eq!(PENDING.chars().count(), 21);
-    assert_eq!(WITHOUT_QUANTIZER.chars().count(), 35);
+    assert_eq!(TOO_MANY_REASON.chars().count(), 35);
     for text_2 in [
         PENDING,
-        WITHOUT_QUANTIZER,
+        TOO_MANY_REASON,
         NOT_FITS,
         MISSING_COLOR,
         CHOOSES_BACKGROUND,
@@ -1914,11 +1914,11 @@ fn row_5_with_one_lost_pixel_it_goes_in_the_singular() {
 }
 
 #[test]
-fn row_5_the_too_many_colors_text_explains_the_quantizer_and_milestone_4_without_blaming() {
+fn row_5_the_too_many_colors_text_points_to_the_reduce_colors_button_without_blaming() {
     let text_2 = report(Some(&Analysis::TooManyColors), (4, 4));
-    assert!(contains(&text_2, REPORT_QUANTIZER), "{text_2:?}");
-    assert!(contains(&text_2, "cuantizador"), "{text_2:?}");
-    assert!(contains(&text_2, "hito 4"), "{text_2:?}");
+    assert!(contains(&text_2, REPORT_TOO_MANY), "{text_2:?}");
+    assert!(contains(&text_2, "Reducir colores"), "{text_2:?}");
+    assert!(!contains(&text_2, "hito 4"), "{text_2:?}");
     assert!(contains(&text_2, "más de 256 colores"), "{text_2:?}");
     checks_report(&text_2);
 }
@@ -4420,7 +4420,7 @@ fn reason_per_table(
         return Some("calculando el informe".to_string());
     };
     let (color, background_2) = match analysis {
-        Analysis::TooManyColors => return Some("más de 256 colores: sin cuantizador".to_string()),
+        Analysis::TooManyColors => return Some("más de 256 colores: reduce colores".to_string()),
         Analysis::TooLarge => return Some("la imagen convertida no cabe".to_string()),
         Analysis::Blocked(block) => return Some(block.reason().to_string()),
         Analysis::Lossy(r) => (r.color_lost > 0 && !luma, r.alpha_lost > 0 && alpha_2 == 0),
@@ -4527,7 +4527,7 @@ fn row_5_20b_there_are_never_two_mixed_reasons() {
         MISSING_BOTH,
         MISSING_COLOR_AND_VALUE,
         PENDING,
-        WITHOUT_QUANTIZER,
+        TOO_MANY_REASON,
         NOT_FITS,
         "no hay color activo",
     ];
