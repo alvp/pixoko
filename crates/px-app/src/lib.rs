@@ -5,6 +5,7 @@
 
 mod background_color;
 mod canvas_size;
+mod quantize_flow;
 #[cfg(test)]
 mod checker_saved;
 mod config;
