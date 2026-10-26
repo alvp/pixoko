@@ -34,7 +34,10 @@ fn row_10_the_menu_entry_follows_convert_and_has_no_key_but_help_and_editing() {
     assert!(entry.name.chars().count() <= 20);
     assert!(entry.description.chars().count() <= 8 * 42);
     for text in [entry.name, entry.description] {
-        assert!(text.chars().all(|c| INTERFACE_CHARSET.contains(c)), "{text}");
+        assert!(
+            text.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+            "{text}"
+        );
     }
 }
 
@@ -45,13 +48,31 @@ fn row_10_quantize_opens_a_dialog_and_is_blocked_like_a_change_of_the_document()
     assert!(AppAction::Quantize.opens_dialog());
     assert!(!is_blocked(AppAction::Quantize, free, Origin::Menu));
     for locks in [
-        Locks { gesture: true, ..free },
-        Locks { text_focus: true, ..free },
-        Locks { removal: true, ..free },
-        Locks { modal: true, ..free },
-        Locks { dialog: true, ..free },
+        Locks {
+            gesture: true,
+            ..free
+        },
+        Locks {
+            text_focus: true,
+            ..free
+        },
+        Locks {
+            removal: true,
+            ..free
+        },
+        Locks {
+            modal: true,
+            ..free
+        },
+        Locks {
+            dialog: true,
+            ..free
+        },
     ] {
-        assert!(is_blocked(AppAction::Quantize, locks, Origin::Menu), "{locks:?}");
+        assert!(
+            is_blocked(AppAction::Quantize, locks, Origin::Menu),
+            "{locks:?}"
+        );
     }
     assert_ne!(DialogKind::Quantize, DialogKind::ConvertMode);
 }
@@ -75,7 +96,10 @@ fn row_10_the_texts_are_spanish_short_and_inside_the_charset() {
         .chain(QUANTIZE_PALETTES_ONE.iter())
         .chain(QUANTIZE_PALETTES_TWO.iter())
     {
-        assert!(text.chars().all(|c| INTERFACE_CHARSET.contains(c)), "{text}");
+        assert!(
+            text.chars().all(|c| INTERFACE_CHARSET.contains(c)),
+            "{text}"
+        );
         assert!(text.chars().count() <= 42, "{text}");
     }
     assert_eq!(QUANTIZE_DITHERS.len(), 3);

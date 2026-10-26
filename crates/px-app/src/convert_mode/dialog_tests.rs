@@ -2412,10 +2412,7 @@ fn pies_set() -> Vec<(String, Via)> {
             "el color activo #ff000080 tiene alfa".to_string(),
             Via::Block,
         ),
-        (
-            "más de 256 colores: reduce colores".to_string(),
-            Via::Block,
-        ),
+        ("más de 256 colores: reduce colores".to_string(), Via::Block),
         ("la imagen convertida no cabe".to_string(), Via::Block),
         ("calculando el informe".to_string(), Via::Block),
         // El motivo más largo con `error: `: 37 caracteres, 44 en total.

@@ -169,10 +169,7 @@ fn grid_mae_milli(original: &Image, n: usize, threshold: u8) -> u64 {
             if alpha < threshold {
                 continue;
             }
-            let best = grid
-                .iter()
-                .min_by_key(|g| sq_dist(**g, rgb))
-                .expect("grid");
+            let best = grid.iter().min_by_key(|g| sq_dist(**g, rgb)).expect("grid");
             sum += rgb
                 .iter()
                 .zip(best)
@@ -186,7 +183,9 @@ fn grid_mae_milli(original: &Image, n: usize, threshold: u8) -> u64 {
 
 fn palette_of(colors: &[Rgba], transparent: Option<u8>) -> Palette {
     let mut palette = Palette::from_colors(colors.iter().copied()).expect("palette");
-    palette.set_transparent_index(transparent).expect("transparent");
+    palette
+        .set_transparent_index(transparent)
+        .expect("transparent");
     palette
 }
 
@@ -264,8 +263,14 @@ fn row_01_gray_alpha_is_converted_like_rgb_gray() {
     for y in 0..2 {
         for x in 0..4 {
             let pixel = match (x + y) % 3 {
-                0 => Pixel::GrayAlpha { gray: 10, alpha: 255 },
-                1 => Pixel::GrayAlpha { gray: 200, alpha: 255 },
+                0 => Pixel::GrayAlpha {
+                    gray: 10,
+                    alpha: 255,
+                },
+                1 => Pixel::GrayAlpha {
+                    gray: 200,
+                    alpha: 255,
+                },
                 _ => Pixel::GrayAlpha { gray: 77, alpha: 0 },
             };
             image.set_pixel(x, y, pixel).expect("pixel");
@@ -283,7 +288,9 @@ fn row_01_gray_alpha_is_converted_like_rgb_gray() {
 // ---------------------------------------------------------------------------------------------
 
 fn gradient() -> Image {
-    rgba_image(64, 64, |x, y| [(x * 4) as u8, (y * 4) as u8, ((x + y) * 2) as u8, 255])
+    rgba_image(64, 64, |x, y| {
+        [(x * 4) as u8, (y * 4) as u8, ((x + y) * 2) as u8, 255]
+    })
 }
 
 #[test]
@@ -292,8 +299,12 @@ fn row_02_a_gradient_of_4096_colors_is_reduced_to_at_most_n_and_no_worse_than_th
     for n in [2u16, 4, 16, 256] {
         let q = quant(&image, &opts(n)).expect("quantize");
         assert!(!q.stats.exact, "n {n}");
-        assert!(q.palette.len() <= usize::from(n), "n {n}: {}", q.palette.len());
-        assert!(q.palette.len() >= 1);
+        assert!(
+            q.palette.len() <= usize::from(n),
+            "n {n}: {}",
+            q.palette.len()
+        );
+        assert!(!q.palette.is_empty());
         for y in 0..64 {
             for x in 0..64 {
                 assert!(usize::from(index_at(&q, x, y)) < q.palette.len());
@@ -335,12 +346,21 @@ fn row_02_the_error_in_the_stats_matches_the_independent_measure() {
         let q = quant(&image, &opts(n)).expect("quantize");
         let measured = mae_milli(&image, &q, 128);
         let reported = q.stats.mae_milli().expect("opaque pixels");
-        assert!(measured.abs_diff(reported) <= 1, "n {n}: {measured} vs {reported}");
+        assert!(
+            measured.abs_diff(reported) <= 1,
+            "n {n}: {measured} vs {reported}"
+        );
     }
     let exact = quant(&six_colors(false), &opts(16)).expect("exact");
     assert_eq!(exact.stats.mae_milli(), Some(0));
     let transparent_only = rgba_image(2, 2, |_, _| [1, 2, 3, 0]);
-    assert_eq!(quant(&transparent_only, &opts(4)).expect("all transparent").stats.mae_milli(), None);
+    assert_eq!(
+        quant(&transparent_only, &opts(4))
+            .expect("all transparent")
+            .stats
+            .mae_milli(),
+        None
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -351,7 +371,12 @@ fn row_02_the_error_in_the_stats_matches_the_independent_measure() {
 fn row_03_a_pixel_is_transparent_exactly_when_its_alpha_is_below_the_threshold() {
     let alphas = [0u8, 1, 127, 128, 255];
     let image = rgba_image(5, 1, |x, _| {
-        [(x * 40 + 20) as u8, (x * 10) as u8, 200 - (x * 30) as u8, alphas[x as usize]]
+        [
+            (x * 40 + 20) as u8,
+            (x * 10) as u8,
+            200 - (x * 30) as u8,
+            alphas[x as usize],
+        ]
     });
     for threshold in [1u8, 128, 255] {
         for n in [256u16, 3] {
@@ -388,7 +413,14 @@ fn row_03_gray_alpha_follows_the_same_threshold() {
     let mut image = Image::new(3, 1, Mode::GrayAlpha).expect("image");
     for (x, alpha) in [10u8, 127, 128].into_iter().enumerate() {
         image
-            .set_pixel(x as u32, 0, Pixel::GrayAlpha { gray: 50 + alpha / 2, alpha })
+            .set_pixel(
+                x as u32,
+                0,
+                Pixel::GrayAlpha {
+                    gray: 50 + alpha / 2,
+                    alpha,
+                },
+            )
             .unwrap();
     }
     let q = quant(&image, &opts(256)).expect("quantize");
@@ -415,7 +447,10 @@ const BAYER: [[u8; 8]; 8] = [
 ];
 
 fn black_and_white() -> Palette {
-    palette_of(&[Rgba::new(0, 0, 0, 255), Rgba::new(255, 255, 255, 255)], None)
+    palette_of(
+        &[Rgba::new(0, 0, 0, 255), Rgba::new(255, 255, 255, 255)],
+        None,
+    )
 }
 
 #[test]
@@ -432,7 +467,9 @@ fn row_04_ordered_dithering_of_a_flat_gray_draws_the_bayer_pattern() {
     }
     assert_eq!(white, 4 * 32, "half of every 8 x 8 tile is white");
     assert_eq!(
-        quant(&image, &fixed(black_and_white(), Dither::Ordered)).unwrap().images,
+        quant(&image, &fixed(black_and_white(), Dither::Ordered))
+            .unwrap()
+            .images,
         q.images,
         "deterministic"
     );
@@ -485,7 +522,9 @@ fn row_04_error_diffusion_lowers_the_error_of_a_gray_ramp_in_blocks() {
     assert!(e_fs * 2 < e_none, "diffusion {e_fs} vs none {e_none}");
     assert!(e_ord < e_none, "ordered {e_ord} vs none {e_none}");
     assert_eq!(
-        quant(&image, &fixed(four_grays(), Dither::FloydSteinberg)).unwrap().images,
+        quant(&image, &fixed(four_grays(), Dither::FloydSteinberg))
+            .unwrap()
+            .images,
         diffused.images,
         "deterministic"
     );
@@ -501,11 +540,21 @@ fn row_04_diffused_error_does_not_cross_a_transparent_pixel() {
         ],
         Some(0),
     );
-    let image = rgba_image(3, 1, |x, _| if x == 1 { [0, 0, 0, 0] } else { [100, 100, 100, 255] });
+    let image = rgba_image(3, 1, |x, _| {
+        if x == 1 {
+            [0, 0, 0, 0]
+        } else {
+            [100, 100, 100, 255]
+        }
+    });
     let q = quant(&image, &fixed(palette, Dither::FloydSteinberg)).expect("quantize");
     assert_eq!(index_at(&q, 0, 0), 1, "100 is closer to black");
     assert_eq!(index_at(&q, 1, 0), 0, "the transparent entry");
-    assert_eq!(index_at(&q, 2, 0), 1, "no error arrives through the transparent pixel");
+    assert_eq!(
+        index_at(&q, 2, 0),
+        1,
+        "no error arrives through the transparent pixel"
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -533,7 +582,12 @@ fn row_05_a_fixed_palette_is_the_palette_of_the_result_and_pixels_take_the_close
     let q = quant(&image, &options).expect("quantize");
     assert_eq!(q.palette, given);
     assert_eq!(
-        [index_at(&q, 0, 0), index_at(&q, 1, 0), index_at(&q, 0, 1), index_at(&q, 1, 1)],
+        [
+            index_at(&q, 0, 0),
+            index_at(&q, 1, 0),
+            index_at(&q, 0, 1),
+            index_at(&q, 1, 1)
+        ],
         [2, 0, 1, 2]
     );
 }
@@ -549,7 +603,11 @@ fn row_05_a_fixed_palette_with_a_transparent_entry_maps_transparent_pixels_to_it
         ],
         Some(3),
     );
-    let image = rgba_image(2, 1, |x, _| if x == 0 { [5, 5, 5, 0] } else { [5, 5, 5, 255] });
+    let image = rgba_image(
+        2,
+        1,
+        |x, _| if x == 0 { [5, 5, 5, 0] } else { [5, 5, 5, 255] },
+    );
     let q = quant(&image, &fixed(given.clone(), Dither::None)).expect("quantize");
     assert_eq!(q.palette, given);
     assert_eq!(index_at(&q, 0, 0), 3);
@@ -558,7 +616,11 @@ fn row_05_a_fixed_palette_with_a_transparent_entry_maps_transparent_pixels_to_it
 
 #[test]
 fn row_05_a_fixed_palette_without_a_transparent_entry_fails_when_one_is_needed() {
-    let image = rgba_image(2, 1, |x, _| if x == 0 { [5, 5, 5, 0] } else { [5, 5, 5, 255] });
+    let image = rgba_image(
+        2,
+        1,
+        |x, _| if x == 0 { [5, 5, 5, 0] } else { [5, 5, 5, 255] },
+    );
     assert_eq!(
         quant(&image, &fixed(black_and_white(), Dither::None)).unwrap_err(),
         QuantizeError::FixedNeedsTransparent
@@ -590,7 +652,10 @@ fn row_06_several_cells_share_one_palette_with_a_transparent_entry() {
     assert_eq!(q.images.len(), 3);
     assert!(q.images[1].is_none(), "an empty cell stays empty");
     assert!(q.palette.len() <= 16);
-    let transparent = q.palette.transparent_index().expect("several cells need one");
+    let transparent = q
+        .palette
+        .transparent_index()
+        .expect("several cells need one");
     for (cell, original) in [(0usize, &a), (2, &b)] {
         let image = q.images[cell].as_ref().expect("cell");
         assert_eq!(image.palette(), Some(&q.palette));
@@ -599,7 +664,10 @@ fn row_06_several_cells_share_one_palette_with_a_transparent_entry() {
                 let Ok(Pixel::Indexed(i)) = image.get_pixel(x, y) else {
                     panic!("indexed")
                 };
-                assert_ne!(i, transparent, "opaque pixels never use the transparent entry");
+                assert_ne!(
+                    i, transparent,
+                    "opaque pixels never use the transparent entry"
+                );
                 let (rgb, _) = rgb_of(original.get_pixel(x, y).unwrap());
                 let e = q.palette.get(i).unwrap();
                 let chosen = f64::from(sq_dist([e.r, e.g, e.b], rgb)).sqrt();
@@ -617,14 +685,26 @@ fn row_06_several_cells_share_one_palette_with_a_transparent_entry() {
 #[test]
 fn row_07_invalid_options_and_sources_are_errors() {
     let image = six_colors(false);
-    assert_eq!(quant(&image, &opts(0)).unwrap_err(), QuantizeError::InvalidColorCount);
-    assert_eq!(quant(&image, &opts(257)).unwrap_err(), QuantizeError::InvalidColorCount);
+    assert_eq!(
+        quant(&image, &opts(0)).unwrap_err(),
+        QuantizeError::InvalidColorCount
+    );
+    assert_eq!(
+        quant(&image, &opts(257)).unwrap_err(),
+        QuantizeError::InvalidColorCount
+    );
     let mut zero = opts(8);
     zero.alpha_threshold = 0;
-    assert_eq!(quant(&image, &zero).unwrap_err(), QuantizeError::InvalidThreshold);
+    assert_eq!(
+        quant(&image, &zero).unwrap_err(),
+        QuantizeError::InvalidThreshold
+    );
     // One color and a transparent entry needed: no slot for any color.
     let with_hole = six_colors(true);
-    assert_eq!(quant(&with_hole, &opts(1)).unwrap_err(), QuantizeError::NoColorSlots);
+    assert_eq!(
+        quant(&with_hole, &opts(1)).unwrap_err(),
+        QuantizeError::NoColorSlots
+    );
     // Sources other than RGBA and gray with alpha.
     let gray = Image::filled(2, 2, Pixel::Gray(3)).unwrap();
     assert_eq!(
@@ -644,7 +724,11 @@ fn row_07_invalid_options_and_sources_are_errors() {
 // ---------------------------------------------------------------------------------------------
 
 fn build(w: u32, h: u32, gray_alpha: bool, few: bool, bytes: &[u8]) -> Image {
-    let mode = if gray_alpha { Mode::GrayAlpha } else { Mode::Rgba };
+    let mode = if gray_alpha {
+        Mode::GrayAlpha
+    } else {
+        Mode::Rgba
+    };
     let mut image = Image::new(w, h, mode).expect("image");
     for y in 0..h {
         for x in 0..w {

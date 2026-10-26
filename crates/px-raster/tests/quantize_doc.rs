@@ -17,7 +17,13 @@ fn options(colors: u16, dither: Dither) -> QuantizeOptions {
     }
 }
 
-fn spec(image: Option<Image>, opacity: u8, blend: BlendMode, visible: bool, locked: bool) -> LayerSpec {
+fn spec(
+    image: Option<Image>,
+    opacity: u8,
+    blend: BlendMode,
+    visible: bool,
+    locked: bool,
+) -> LayerSpec {
     LayerSpec {
         name: "layer".to_string(),
         visible,
@@ -35,7 +41,11 @@ fn picture(w: u32, h: u32, seed: u8) -> Image {
             let v = (x * 37 + y * 11) as u8;
             let a = if (x + y) % 5 == 0 { 0 } else { 255 };
             image
-                .set_pixel(x, y, Pixel::Rgba(Rgba::new(v, v.wrapping_mul(3).wrapping_add(seed), seed, a)))
+                .set_pixel(
+                    x,
+                    y,
+                    Pixel::Rgba(Rgba::new(v, v.wrapping_mul(3).wrapping_add(seed), seed, a)),
+                )
                 .expect("pixel");
         }
     }
@@ -49,7 +59,13 @@ fn row_07_layers_with_opacity_or_blend_cannot_become_indexed() {
         4,
         Mode::Rgba,
         None,
-        vec![spec(Some(picture(4, 4, 1)), 128, BlendMode::Normal, true, false)],
+        vec![spec(
+            Some(picture(4, 4, 1)),
+            128,
+            BlendMode::Normal,
+            true,
+            false,
+        )],
     )
     .expect("document");
     assert_eq!(
@@ -61,7 +77,13 @@ fn row_07_layers_with_opacity_or_blend_cannot_become_indexed() {
         4,
         Mode::Rgba,
         None,
-        vec![spec(Some(picture(4, 4, 1)), 255, BlendMode::Multiply, true, false)],
+        vec![spec(
+            Some(picture(4, 4, 1)),
+            255,
+            BlendMode::Multiply,
+            true,
+            false,
+        )],
     )
     .expect("document");
     assert_eq!(
@@ -97,16 +119,25 @@ fn row_07_the_command_quantizes_every_cell_including_hidden_and_locked_ones() {
         ],
     )
     .expect("document");
-    let (command, stats) = quantize_command(&doc, &options(8, Dither::FloydSteinberg)).expect("command");
+    let (command, stats) =
+        quantize_command(&doc, &options(8, Dither::FloydSteinberg)).expect("command");
     assert!(stats.colors <= 8);
     assert_eq!(doc.apply(command), Ok(true));
     assert_eq!(doc.mode(), Mode::Indexed);
     let layers = doc.layers();
     assert!(doc.image(layers[0].cel()).is_some());
-    assert!(doc.image(layers[1].cel()).is_none(), "an empty cell stays empty");
+    assert!(
+        doc.image(layers[1].cel()).is_none(),
+        "an empty cell stays empty"
+    );
     assert!(doc.image(layers[2].cel()).is_some());
     assert!(!layers[2].visible() && layers[2].locked());
-    assert!(doc.palette().expect("palette").transparent_index().is_some());
+    assert!(
+        doc.palette()
+            .expect("palette")
+            .transparent_index()
+            .is_some()
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -126,7 +157,9 @@ fn cell_strategy() -> impl Strategy<Value = Option<Image>> {
                         (k, k.wrapping_mul(5), k.wrapping_mul(11))
                     };
                     let a = if k % 7 == 0 { 0 } else { 255 };
-                    image.set_pixel(x, y, Pixel::Rgba(Rgba::new(r, g, b, a))).unwrap();
+                    image
+                        .set_pixel(x, y, Pixel::Rgba(Rgba::new(r, g, b, a)))
+                        .unwrap();
                 }
             }
             image
@@ -135,13 +168,17 @@ fn cell_strategy() -> impl Strategy<Value = Option<Image>> {
 }
 
 fn document_strategy() -> impl Strategy<Value = Document> {
-    proptest::collection::vec((cell_strategy(), any::<bool>(), any::<bool>()), 1..=3).prop_map(|cells| {
-        let layers = cells
-            .into_iter()
-            .map(|(image, visible, locked)| spec(image, 255, BlendMode::Normal, visible, locked))
-            .collect();
-        Document::from_layers(5, 4, Mode::Rgba, None, layers).expect("document")
-    })
+    proptest::collection::vec((cell_strategy(), any::<bool>(), any::<bool>()), 1..=3).prop_map(
+        |cells| {
+            let layers = cells
+                .into_iter()
+                .map(|(image, visible, locked)| {
+                    spec(image, 255, BlendMode::Normal, visible, locked)
+                })
+                .collect();
+            Document::from_layers(5, 4, Mode::Rgba, None, layers).expect("document")
+        },
+    )
 }
 
 proptest! {

@@ -5,7 +5,6 @@
 
 mod background_color;
 mod canvas_size;
-mod quantize_flow;
 #[cfg(test)]
 mod checker_saved;
 mod config;
@@ -24,6 +23,7 @@ mod licenses;
 mod merge_flow;
 mod new_image;
 mod palette_size;
+mod quantize_flow;
 mod save_wait;
 mod session;
 mod shortcuts_flow;

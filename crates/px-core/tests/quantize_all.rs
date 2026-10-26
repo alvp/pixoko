@@ -33,7 +33,14 @@ fn filled(value: u8) -> Image {
 /// Three layers of 3 × 2 RGBA: a plain one, an empty one and a hidden, locked one.
 fn document_with(opacity: u8, blend: BlendMode) -> Document {
     let layers = vec![
-        layer("base", true, false, 255, BlendMode::Normal, Some(filled(10))),
+        layer(
+            "base",
+            true,
+            false,
+            255,
+            BlendMode::Normal,
+            Some(filled(10)),
+        ),
         layer("empty", true, false, 255, BlendMode::Normal, None),
         layer("top", false, true, opacity, blend, Some(filled(20))),
     ];
@@ -98,9 +105,19 @@ fn row_8_quantize_all_is_one_step_and_undo_and_redo_are_exact() {
     assert_ne!(doc.state_id(), before.1);
     let layers = doc.layers();
     assert_eq!(layers.len(), 3);
-    assert_eq!(doc.image(layers[0].cel()), Some(&indexed(&palette, 3, 2, 1)));
-    assert_eq!(doc.image(layers[1].cel()), None, "an empty cell stays empty");
-    assert_eq!(doc.image(layers[2].cel()), Some(&indexed(&palette, 3, 2, 2)));
+    assert_eq!(
+        doc.image(layers[0].cel()),
+        Some(&indexed(&palette, 3, 2, 1))
+    );
+    assert_eq!(
+        doc.image(layers[1].cel()),
+        None,
+        "an empty cell stays empty"
+    );
+    assert_eq!(
+        doc.image(layers[2].cel()),
+        Some(&indexed(&palette, 3, 2, 2))
+    );
     for (new, old) in layers.iter().zip(before.0.layers()) {
         assert_eq!(new.id(), old.id());
         assert_eq!(new.name(), old.name());
@@ -122,11 +139,23 @@ fn row_8_quantize_all_is_one_step_and_undo_and_redo_are_exact() {
 
 #[test]
 fn row_8_a_gray_alpha_document_can_be_quantized_too() {
-    let image = Image::filled(2, 2, Pixel::GrayAlpha { gray: 9, alpha: 255 }).expect("image");
+    let image = Image::filled(
+        2,
+        2,
+        Pixel::GrayAlpha {
+            gray: 9,
+            alpha: 255,
+        },
+    )
+    .expect("image");
     let mut doc = Document::new(image);
     let mut palette = Palette::from_colors([Rgba::new(9, 9, 9, 255)]).expect("palette");
     palette.set_transparent_index(None).expect("none");
-    let command = quantize(&doc, vec![Some(indexed(&palette, 2, 2, 0))], palette.clone());
+    let command = quantize(
+        &doc,
+        vec![Some(indexed(&palette, 2, 2, 0))],
+        palette.clone(),
+    );
     assert_eq!(doc.apply(command), Ok(true));
     assert_eq!(doc.mode(), Mode::Indexed);
     assert_eq!(doc.undo(), Ok(()));
@@ -142,11 +171,9 @@ fn row_9_quantize_all_rejects_what_does_not_fit_and_leaves_the_document_identica
         p.set(1, Rgba::new(99, 99, 99, 255)).expect("set");
         p
     };
-    let no_transparent = Palette::from_colors([
-        Rgba::new(10, 10, 0, 255),
-        Rgba::new(20, 20, 0, 255),
-    ])
-    .expect("palette");
+    let no_transparent =
+        Palette::from_colors([Rgba::new(10, 10, 0, 255), Rgba::new(20, 20, 0, 255)])
+            .expect("palette");
     let stale = Command::QuantizeAll {
         palette: palette.clone(),
         images: good(&palette),
@@ -157,7 +184,11 @@ fn row_9_quantize_all_rejects_what_does_not_fit_and_leaves_the_document_identica
         (
             "count",
             doc.clone(),
-            quantize(&doc, vec![Some(indexed(&palette, 3, 2, 1))], palette.clone()),
+            quantize(
+                &doc,
+                vec![Some(indexed(&palette, 3, 2, 1))],
+                palette.clone(),
+            ),
             "ReplaceCountMismatch",
         ),
         (
@@ -258,7 +289,11 @@ fn row_9_quantize_all_rejects_what_does_not_fit_and_leaves_the_document_identica
             format!("{error:?}").contains(expected),
             "{name}: got {error:?}, wanted {expected}"
         );
-        assert_eq!(view(&target), before, "{name}: the document must not change");
+        assert_eq!(
+            view(&target),
+            before,
+            "{name}: the document must not change"
+        );
     }
 }
 
@@ -271,14 +306,23 @@ fn row_9_an_indexed_or_gray_document_cannot_be_quantized() {
     let error = doc
         .apply(quantize(&doc, vec![Some(image)], palette.clone()))
         .expect_err("indexed source");
-    assert_eq!(error, DocumentError::QuantizeSource { mode: Mode::Indexed });
+    assert_eq!(
+        error,
+        DocumentError::QuantizeSource {
+            mode: Mode::Indexed
+        }
+    );
     assert_eq!(view(&doc), before);
 
     let gray = Image::filled(3, 2, Pixel::Gray(5)).expect("gray");
     let mut doc = Document::new(gray);
     let before = view(&doc);
     let error = doc
-        .apply(quantize(&doc, vec![Some(indexed(&palette, 3, 2, 1))], palette.clone()))
+        .apply(quantize(
+            &doc,
+            vec![Some(indexed(&palette, 3, 2, 1))],
+            palette.clone(),
+        ))
         .expect_err("gray source");
     assert_eq!(error, DocumentError::QuantizeSource { mode: Mode::Gray });
     assert_eq!(view(&doc), before);

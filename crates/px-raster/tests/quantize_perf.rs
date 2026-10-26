@@ -13,7 +13,7 @@ fn big(seed: u32) -> Image {
     let side = 8192u32;
     let mut data = vec![0u8; (side as usize) * (side as usize) * 4];
     let mut state = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
-    for (i, px) in data.chunks_exact_mut(4).enumerate() {
+    for (i, px) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         let (x, y) = ((i as u32) % side, (i as u32) / side);
         state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
         let noise = (state >> 28) as u8;
@@ -41,7 +41,10 @@ fn measure_quantize_at_8192_squared_with_one_and_four_layers() {
             let start = Instant::now();
             let q = quantize_cels(&cels, (8192, 8192), Mode::Rgba, &options).expect("quantize");
             let seconds = start.elapsed().as_secs_f64();
-            println!("{layers} layer(s), {dither:?}: {seconds:.2} s, {} colors", q.palette.len());
+            println!(
+                "{layers} layer(s), {dither:?}: {seconds:.2} s, {} colors",
+                q.palette.len()
+            );
             assert!(seconds < 120.0, "safety net, not a goal");
         }
     }

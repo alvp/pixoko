@@ -1409,10 +1409,6 @@ impl Document {
         mut images: Vec<Option<Image>>,
         based_on: u64,
     ) -> Result<bool, DocumentError> {
-        let source = self.mode();
-        if !matches!(source, Mode::Rgba | Mode::GrayAlpha) {
-            return Err(DocumentError::QuantizeSource { mode: source });
-        }
         if images.len() != self.layers.len() {
             return Err(DocumentError::ReplaceCountMismatch {
                 expected: self.layers.len(),
@@ -1424,6 +1420,10 @@ impl Document {
                 based_on,
                 current: self.current_id,
             });
+        }
+        let source = self.mode();
+        if !matches!(source, Mode::Rgba | Mode::GrayAlpha) {
+            return Err(DocumentError::QuantizeSource { mode: source });
         }
         if self.layers.iter().any(|layer| layer.opacity != 255) {
             return Err(DocumentError::IndexedOpacity);
