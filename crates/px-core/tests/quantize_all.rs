@@ -72,7 +72,7 @@ fn good(palette: &Palette) -> Vec<Option<Image>> {
     vec![
         Some(indexed(palette, 3, 2, 1)),
         None,
-        Some(indexed(palette, 3, 2, 2)),
+        Some(indexed(palette, 3, 2, (palette.len() - 1).min(2) as u8)),
     ]
 }
 
