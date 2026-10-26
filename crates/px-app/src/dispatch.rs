@@ -51,6 +51,8 @@ pub enum Dispatched {
     PaletteSize,
     /// `Imagen → Tamaño del lienzo…`: the app opens the dialog with the current size.
     CanvasSize,
+    /// `Imagen → Reducir colores…`: the app checks the document and opens the dialog.
+    Quantize,
     /// `F1` or `Help → Tool help`: `App` opens the help of that target.
     Help(HelpTarget),
     /// `Help → Keyboard shortcuts…`: `App` opens the list of shortcuts.
@@ -211,6 +213,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::TurnLeft => layer_done(action, session.image_op(ImageOp::Ccw)),
         AppAction::TurnHalf => layer_done(action, session.image_op(ImageOp::Half)),
         AppAction::CanvasSize => Dispatched::CanvasSize,
+        AppAction::Quantize => Dispatched::Quantize,
         AppAction::ClearPage => match session.clear_page() {
             Ok(changed) => done(changed),
             Err(error) => Dispatched::Done {

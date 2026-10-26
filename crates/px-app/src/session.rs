@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::fmt;
 
 use px_core::{
-    Allowed, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Pixel, Span,
+    Allowed, Command, Document, DocumentError, Image, ImageId, LayerId, Mode, Palette, Pixel, Span,
 };
 use px_formats::{write_aseprite, write_png};
 use px_raster::ComposeError;
@@ -164,6 +164,9 @@ pub struct Session {
     /// Qué capa estaba activa antes y después de cada combinación reciente: deshacer y rehacer
     /// la devuelven (specs/hito-3-combinar.md, D2).
     merge_notes: Vec<MergeNote>,
+    /// La última paleta indexada que vio la sesión (la de un documento al abrirlo o la del que se
+    /// deja al convertir de modo): la «paleta guardada» de `Reducir colores…` (4.2, D3).
+    saved_palette: Option<Palette>,
 }
 
 impl Session {
@@ -195,7 +198,28 @@ impl Session {
             log: ChangeLog::new(),
             dirty: None,
             merge_notes: Vec::new(),
+            saved_palette: None,
         }
+        .remembering_palette()
+    }
+
+    fn remembering_palette(mut self) -> Session {
+        self.remember_palette();
+        self
+    }
+
+    /// Guarda la paleta del documento si es indexado.
+    fn remember_palette(&mut self) {
+        if self.document.mode() == Mode::Indexed
+            && let Some(palette) = self.document.palette()
+        {
+            self.saved_palette = Some(palette.clone());
+        }
+    }
+
+    /// La paleta guardada de la sesión, si la hay (specs/hito-4-cuantizador.md, D3).
+    pub fn saved_palette(&self) -> Option<&Palette> {
+        self.saved_palette.as_ref()
     }
 
     fn image_size(&self) -> Size {
@@ -522,12 +546,16 @@ impl Session {
     pub fn convert_mode(&mut self, target: Mode, allowed: Allowed) -> Result<bool, DocumentError> {
         let image = self.active_cel();
         let before = self.choice;
+        let leaving = self.document.palette().cloned();
         let changed = self.document.apply(Command::ConvertMode {
             image,
             target,
             allowed,
         })?;
         if changed {
+            if self.document.mode() != Mode::Indexed && leaving.is_some() {
+                self.saved_palette = leaving;
+            }
             self.note_applied(self.full());
             let layers = self.layer_ids();
             self.after_history_move(before, &layers);
@@ -1136,6 +1164,7 @@ impl Session {
         }
         self.editor.reset();
         self.document = document;
+        self.remember_palette();
         // Un `.aseprite` con varias capas se abre con la de arriba activa; un documento de una
         // capa, con la única.
         self.active_pos = self.document.layers().len() - 1;
@@ -1339,6 +1368,7 @@ mod image_ops;
 #[cfg(test)]
 mod image_ops_tests;
 mod layer_ops;
+mod quantize_ops;
 pub use layer_ops::*;
 mod merge_ops;
 

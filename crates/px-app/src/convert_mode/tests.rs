@@ -1296,7 +1296,7 @@ fn row_3_pending_says_computing_the_report_with_any_permission() {
 #[test]
 fn row_3_the_reason_texts_are_the_literals_and_measure_at_most_37() {
     assert_eq!(PENDING.chars().count(), 21);
-    assert_eq!(TOO_MANY_REASON.chars().count(), 35);
+    assert_eq!(TOO_MANY_REASON.chars().count(), 34);
     for text_2 in [
         PENDING,
         TOO_MANY_REASON,

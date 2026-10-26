@@ -103,6 +103,9 @@ pub enum AppAction {
     TurnHalf,
     /// `Imagen → Tamaño del lienzo…`: opens a dialog with the size and the anchor.
     CanvasSize,
+    /// `Imagen → Reducir colores…` (specs/hito-4-cuantizador.md): opens the dialog of the
+    /// quantizer.
+    Quantize,
 }
 
 impl AppAction {
@@ -132,6 +135,7 @@ impl AppAction {
                 | AppAction::ShowShortcuts
                 | AppAction::PaletteSize
                 | AppAction::CanvasSize
+                | AppAction::Quantize
         )
     }
 
@@ -146,6 +150,7 @@ impl AppAction {
                 | AppAction::TurnLeft
                 | AppAction::TurnHalf
                 | AppAction::CanvasSize
+                | AppAction::Quantize
         )
     }
 

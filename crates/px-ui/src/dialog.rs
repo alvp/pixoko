@@ -334,6 +334,8 @@ pub enum DialogKind {
     TransparentLoss,
     /// `Imagen → Tamaño del lienzo…` (specs/hito-4-imagen.md).
     CanvasSize,
+    /// `Imagen → Reducir colores…` (specs/hito-4-cuantizador.md).
+    Quantize,
 }
 
 /// Lo que le pasa a un diálogo abierto.
