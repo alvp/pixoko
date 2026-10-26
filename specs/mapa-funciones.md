@@ -246,7 +246,7 @@ De los modos de pintura, el hito 4 trae Matte, Color, Reemplazar, translucidez y
 
 **Nota tras C3 (2026-10-23, `ui-palette-handle.md`, para la primera unidad de interfaz del hito 4):** con la cola de la paleta (barra de color, campo hexadecimal e iconos: 64 u) el panel mínimo es de 286 u y la ventana mínima de 322 u de alto (429,33 pt a `ppp` 1,5, el 59,6 % de 720; techo 432). La regla de capacidad de la caja con 20 herramientas a 10 columnas (`head` 159 u) queda con **0 u de sobra** (con 21 ya no cabe) y en la ventana mínima solo se ve **una fila de rejilla** (antes 2). Revisar en esa unidad: desplazamiento de la caja, dos columnas o iconos menores, antes de añadir una herramienta más.
 
-**Estado 4.1 (2026-10-24):** cerrada (`hito-4-imagen.md`, verificada por el usuario); quedan pendientes «Aplicando…» y la medida de memoria a 8192².
+**Estado 4.1 (2026-10-24):** cerrada (`hito-4-imagen.md`, verificada por el usuario); medida a 8192² hecha (peor caso 1,9 s con 4 capas, +1 copia de las celdas) y sin «Aplicando…».
 
 **Puerta del hito:** dorados contra referencias en verde y la prueba manual del usuario; el cierre fija la decisión D29 (revisión de la pantalla).
 

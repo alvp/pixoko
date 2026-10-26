@@ -101,23 +101,80 @@ fn remap(
     height: u32,
     from: impl Fn(u32, u32) -> (u32, u32),
 ) -> Result<Image, ImageError> {
-    let bpp = src.mode().bytes_per_pixel();
+    match src.mode().bytes_per_pixel() {
+        1 => remap_n::<1>(src, width, height, from),
+        2 => remap_n::<2>(src, width, height, from),
+        _ => remap_n::<4>(src, width, height, from),
+    }
+}
+
+/// Side of the tiles of the remap: the reads of a turn jump a whole row between pixels, so the
+/// destination is filled by small tiles to keep the source rows in the cache.
+const TILE: usize = 32;
+
+/// `remap` for `N` bytes per pixel: with `N` known, each pixel is one load and one store instead
+/// of a call to `memcpy` with a variable length.
+fn remap_n<const N: usize>(
+    src: &Image,
+    width: u32,
+    height: u32,
+    from: impl Fn(u32, u32) -> (u32, u32),
+) -> Result<Image, ImageError> {
     let mut data = buffer(src, width, height)?;
     let row = src.row_len();
     let bytes = src.bytes();
-    for (y, out_row) in data.chunks_exact_mut(width as usize * bpp).enumerate() {
-        for (x, out) in out_row.chunks_exact_mut(bpp).enumerate() {
-            let (sx, sy) = from(x as u32, y as u32);
-            let at = sy as usize * row + sx as usize * bpp;
-            out.copy_from_slice(&bytes[at..at + bpp]);
+    let (w, h) = (width as usize, height as usize);
+    for ty in (0..h).step_by(TILE) {
+        for tx in (0..w).step_by(TILE) {
+            for y in ty..(ty + TILE).min(h) {
+                for x in tx..(tx + TILE).min(w) {
+                    let (sx, sy) = from(x as u32, y as u32);
+                    let at = sy as usize * row + sx as usize * N;
+                    let to = (y * w + x) * N;
+                    if let (Some(pixel), Some(out)) =
+                        (bytes.get(at..at + N), data.get_mut(to..to + N))
+                    {
+                        out.copy_from_slice(pixel);
+                    }
+                }
+            }
         }
     }
     rebuild(src, width, height, data)
 }
 
+/// The pixels of `src` in reverse order, row by row (`per_row`) or as a whole. It copies forward
+/// (a plain `memcpy`) and then swaps the pixels of both ends in place: reading backwards pixel by
+/// pixel was several times slower at 8192 × 8192.
+fn reversed_n<const N: usize>(src: &Image, per_row: bool) -> Result<Image, ImageError> {
+    let (width, height) = (src.width(), src.height());
+    let mut data = buffer(src, width, height)?;
+    data.copy_from_slice(src.bytes());
+    let span = if per_row { src.row_len() } else { data.len() };
+    for part in data.chunks_exact_mut(span) {
+        let half = part.len() / N / 2;
+        let (left, right) = part.split_at_mut(half * N);
+        // The middle pixel of an odd count is the first of `right` and stays where it is.
+        let skip = right.len() - half * N;
+        let (left, _) = left.as_chunks_mut::<N>();
+        let (right, _) = right[skip..].as_chunks_mut::<N>();
+        for (a, b) in left.iter_mut().zip(right.iter_mut().rev()) {
+            std::mem::swap(a, b);
+        }
+    }
+    rebuild(src, width, height, data)
+}
+
+fn reversed(src: &Image, per_row: bool) -> Result<Image, ImageError> {
+    match src.mode().bytes_per_pixel() {
+        1 => reversed_n::<1>(src, per_row),
+        2 => reversed_n::<2>(src, per_row),
+        _ => reversed_n::<4>(src, per_row),
+    }
+}
+
 pub fn flip_horizontal(image: &Image) -> Result<Image, ImageError> {
-    let w = image.width();
-    remap(image, w, image.height(), |x, y| (w - 1 - x, y))
+    reversed(image, true)
 }
 
 pub fn flip_vertical(image: &Image) -> Result<Image, ImageError> {
@@ -138,8 +195,7 @@ pub fn rotate_ccw(image: &Image) -> Result<Image, ImageError> {
 }
 
 pub fn rotate_180(image: &Image) -> Result<Image, ImageError> {
-    let (w, h) = (image.width(), image.height());
-    remap(image, w, h, |x, y| (w - 1 - x, h - 1 - y))
+    reversed(image, false)
 }
 
 /// Offset of the old content along one axis: `0`, `⌊(new − old) / 2⌋` (toward −∞) or `new − old`.
