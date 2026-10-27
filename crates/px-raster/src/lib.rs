@@ -12,6 +12,7 @@ mod image_ops;
 mod line;
 mod merge;
 mod quantize;
+mod shapes;
 
 pub use brush::{
     Brush, BrushShape, Spacing, curve_path, line_path, line_path_near, spaced_centers, stamp_pixels,
@@ -28,4 +29,8 @@ pub use merge::{MergeError, flatten_command, merge_down_command, merge_visible_c
 pub use quantize::{
     Dither, ErrorStats, PaletteSource, QuantizeError, QuantizeOptions, QuantizeStats, Quantized,
     mean_abs_error, quantize_cels, quantize_command,
+};
+pub use shapes::{
+    MAX_RADIUS, circle_radius, ellipse_ring, ellipse_spans, polygon_ring, polygon_spans, rect_ring,
+    rect_spans, spaced_centers_closed,
 };
