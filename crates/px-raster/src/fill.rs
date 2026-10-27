@@ -371,7 +371,12 @@ impl Rule {
 
     /// Si el píxel de bytes `chunk` pertenece a la región.
     fn holds(&self, chunk: &[u8]) -> bool {
-        (chunk == self.key.get(..self.len).unwrap_or(&[])) == self.equal
+        let same = match chunk {
+            // One byte per pixel (indexed, gray): no slice comparison.
+            [byte] => self.len == 1 && *byte == self.key[0],
+            _ => chunk == self.key.get(..self.len).unwrap_or(&[]),
+        };
+        same == self.equal
     }
 }
 
@@ -445,11 +450,17 @@ fn region_spans(
             let Some(bytes) = image.row(row) else {
                 continue;
             };
+            let (base, end) = (visited.at(0, row), span.x_end as usize);
             let mut cx = span.x_start;
             while cx < span.x_end {
+                // Jump over the pixels that are already in a span: the common case in big regions.
+                let free = visited.next_zero(base + cx as usize, base + end) - base;
+                cx = free as u32;
+                if cx >= span.x_end {
+                    break;
+                }
                 let at = cx as usize * bpp;
-                let holds = bytes.get(at..at + bpp).is_some_and(|c| rule.holds(c));
-                if holds && !visited.contains(cx, row) {
+                if bytes.get(at..at + bpp).is_some_and(|c| rule.holds(c)) {
                     cx = discover(&mut visited, &mut stack, cx, row)?;
                 } else {
                     cx += 1;
