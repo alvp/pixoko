@@ -17,6 +17,8 @@ use crate::image_ops_es::{
     MENU_CANVAS_SIZE, MENU_FLIP_H, MENU_FLIP_V, MENU_TURN_HALF, MENU_TURN_LEFT, MENU_TURN_RIGHT,
 };
 use crate::keymap::{Chord, Keymap, default_keymap};
+use crate::palette_tools::PaletteTool;
+use crate::palette_tools_es::{MENU_TITLE, menu_label};
 use crate::quantize_es::MENU_QUANTIZE;
 use crate::status::ADVANCE_PX;
 use crate::text::{printable, ui_unit};
@@ -55,7 +57,7 @@ const fn item(label: &'static str, action: AppAction) -> MenuItem {
 }
 
 /// The six menus. There are only entries for functions that exist.
-pub const MENUS: [Menu; 6] = [
+pub const MENUS: [Menu; 7] = [
     Menu {
         title: "Archivo",
         items: &[
@@ -96,6 +98,56 @@ pub const MENUS: [Menu; 6] = [
             item(MENU_ADD_ENTRY, AppAction::AddPaletteEntry),
             item(MENU_REMOVE_ENTRY, AppAction::RemovePaletteEntry),
             item(MENU_PALETTE_SIZE, AppAction::PaletteSize),
+        ],
+        submenus: &[],
+    },
+    Menu {
+        title: MENU_TITLE,
+        items: &[
+            item(
+                menu_label(PaletteTool::Copy),
+                AppAction::PaletteTool(PaletteTool::Copy),
+            ),
+            item(
+                menu_label(PaletteTool::Paste),
+                AppAction::PaletteTool(PaletteTool::Paste),
+            ),
+            item(
+                menu_label(PaletteTool::Swap),
+                AppAction::PaletteTool(PaletteTool::Swap),
+            ),
+            item(
+                menu_label(PaletteTool::Gradient),
+                AppAction::PaletteTool(PaletteTool::Gradient),
+            ),
+            item(
+                menu_label(PaletteTool::Delete),
+                AppAction::PaletteTool(PaletteTool::Delete),
+            ),
+            item(
+                menu_label(PaletteTool::Default),
+                AppAction::PaletteTool(PaletteTool::Default),
+            ),
+            item(
+                menu_label(PaletteTool::Load),
+                AppAction::PaletteTool(PaletteTool::Load),
+            ),
+            item(
+                menu_label(PaletteTool::LoadAt),
+                AppAction::PaletteTool(PaletteTool::LoadAt),
+            ),
+            item(
+                menu_label(PaletteTool::Save),
+                AppAction::PaletteTool(PaletteTool::Save),
+            ),
+            item(
+                menu_label(PaletteTool::ReplaceColor),
+                AppAction::PaletteTool(PaletteTool::ReplaceColor),
+            ),
+            item(
+                menu_label(PaletteTool::SwapColors),
+                AppAction::PaletteTool(PaletteTool::SwapColors),
+            ),
         ],
         submenus: &[],
     },

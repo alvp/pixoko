@@ -42,6 +42,7 @@ use crate::palette_resize::{
     HANDLE_HINT, HandleEnd, MAX_ENTRIES_HINT, MAX_LEN, PendingResize, dimmed, drag_status,
     drag_zone_cells, handle_bars, handle_index, resize_prompt,
 };
+use crate::palette_tools::selected_entries;
 use crate::status::columns;
 use crate::text::{text_scale, ui_unit};
 use crate::theme::{
@@ -681,6 +682,9 @@ pub(crate) fn panel_body(
                                         // With a pending cut, the destination is a swatch that is
                                         // kept; the ones that are cut off do not answer.
                                         ops.set_resize_destination(cell_u8);
+                                    } else if modifiers.command {
+                                        // `Ctrl` + click: toggles the entry in the selection.
+                                        ops.toggle_extra(cell_u8);
                                     } else if modifiers.shift {
                                         // `Shift` + click: sets the range, without choosing or dragging.
                                         ops.set_range_end(cell_u8);
@@ -1224,8 +1228,8 @@ fn paint(
 
     // Rings: those of the rotation range, the one of the cursor (if it is not the chosen one), the one
     // of the chosen one and the destination of a pending removal.
-    if let Some((low, high)) = marks.range {
-        for cell in (low..=high).filter(|cell| Some(*cell) != active) {
+    {
+        for &cell in marks.selected.iter().filter(|cell| Some(**cell) != active) {
             let Some(rect) = grid.cell_rect(cell) else {
                 continue;
             };
@@ -1348,7 +1352,7 @@ fn paint(
 #[derive(Default)]
 struct Marks {
     /// Swatches of the rotation range (ends included).
-    range: Option<(usize, usize)>,
+    selected: Vec<usize>,
     /// Chosen destination of the pending removal.
     dest: Option<usize>,
     /// Drag with destination: `(from, to)`.
@@ -1379,12 +1383,18 @@ impl Marks {
         let Some(ops) = ops.filter(|_| on) else {
             return Marks::default();
         };
-        let range = active
-            .zip(ops.range_end())
-            .map(|(a, e)| (usize::from(a.min(e)), usize::from(a.max(e))));
+        let selected = active
+            .filter(|_| ops.range_end().is_some() || !ops.extras().is_empty())
+            .map(|a| {
+                selected_entries(a, ops.range_end(), ops.extras())
+                    .into_iter()
+                    .map(usize::from)
+                    .collect()
+            })
+            .unwrap_or_default();
         let drag = ops.drag_state().filter(|drag| drag.dragging());
         Marks {
-            range,
+            selected,
             dest: ops
                 .removal()
                 .and_then(|r| r.into)
@@ -1404,8 +1414,7 @@ impl Marks {
     }
 
     fn in_range(&self, cell: usize) -> bool {
-        self.range
-            .is_some_and(|(low, high)| (low..=high).contains(&cell))
+        self.selected.contains(&cell)
     }
 }
 

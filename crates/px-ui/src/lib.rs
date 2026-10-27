@@ -54,6 +54,7 @@ pub mod palette_ops;
 pub mod palette_panel;
 pub mod palette_resize;
 pub mod palette_tools;
+pub mod palette_tools_es;
 pub mod pick;
 pub mod pointer_events;
 pub mod quantize_es;

@@ -13,6 +13,8 @@ use crate::help_texts_layers_es::HELP_LAYERS_ES;
 use crate::help_texts_merge_es::HELP_MERGE_ES;
 use crate::help_texts_palette_es::HELP_PALETTE_ES;
 use crate::image_ops_es::HELP_IMAGE_ES;
+use crate::palette_tools::PaletteTool;
+use crate::palette_tools_es::HELP_TOOLS_ES;
 use crate::quantize_es::HELP_QUANTIZE_ES;
 use crate::shapes_es::HELP_SHAPES_ES;
 use crate::tool::{ShapeKind, Tool};
@@ -90,6 +92,7 @@ pub fn help_table() -> &'static [HelpEntry] {
             .chain(HELP_QUANTIZE_ES.iter())
             .chain(HELP_BRUSH_ES.iter())
             .chain(HELP_SHAPES_ES.iter())
+            .chain(HELP_TOOLS_ES.iter())
             .copied()
             .collect()
     });
@@ -165,6 +168,7 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::TurnHalf => "image.turn-half",
         AppAction::CanvasSize => "image.canvas-size",
         AppAction::Quantize => "image.quantize",
+        AppAction::PaletteTool(tool) => tool.key(),
         _ => return None,
     })
 }
@@ -227,7 +231,7 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "image.turn-half" => AppAction::TurnHalf,
         "image.canvas-size" => AppAction::CanvasSize,
         "image.quantize" => AppAction::Quantize,
-        _ => return None,
+        _ => return PaletteTool::from_key(key).map(AppAction::PaletteTool),
     })
 }
 

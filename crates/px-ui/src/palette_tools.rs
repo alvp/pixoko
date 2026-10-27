@@ -143,3 +143,64 @@ pub fn swap_colors_command(
         }
     })
 }
+
+/// The actions of the `Paleta` menu (unit 4.6), all without a default key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PaletteTool {
+    Copy,
+    Paste,
+    Swap,
+    Gradient,
+    Delete,
+    Default,
+    Load,
+    LoadAt,
+    Save,
+    ReplaceColor,
+    SwapColors,
+}
+
+impl PaletteTool {
+    /// All of them, in menu order.
+    pub const ALL: [PaletteTool; 11] = [
+        PaletteTool::Copy,
+        PaletteTool::Paste,
+        PaletteTool::Swap,
+        PaletteTool::Gradient,
+        PaletteTool::Delete,
+        PaletteTool::Default,
+        PaletteTool::Load,
+        PaletteTool::LoadAt,
+        PaletteTool::Save,
+        PaletteTool::ReplaceColor,
+        PaletteTool::SwapColors,
+    ];
+
+    /// The stable help key.
+    pub fn key(self) -> &'static str {
+        match self {
+            PaletteTool::Copy => "palette.copy",
+            PaletteTool::Paste => "palette.paste",
+            PaletteTool::Swap => "palette.swap",
+            PaletteTool::Gradient => "palette.gradient",
+            PaletteTool::Delete => "palette.delete",
+            PaletteTool::Default => "palette.default",
+            PaletteTool::Load => "palette.load",
+            PaletteTool::LoadAt => "palette.load-at",
+            PaletteTool::Save => "palette.save",
+            PaletteTool::ReplaceColor => "palette.replace-color",
+            PaletteTool::SwapColors => "palette.swap-colors",
+        }
+    }
+
+    /// The tool of a help key.
+    pub fn from_key(key: &str) -> Option<PaletteTool> {
+        PaletteTool::ALL.into_iter().find(|tool| tool.key() == key)
+    }
+
+    /// Only indexed images have a palette to work on; replacing or swapping a color in the image works
+    /// in every mode.
+    pub fn needs_indexed(self) -> bool {
+        !matches!(self, PaletteTool::ReplaceColor | PaletteTool::SwapColors)
+    }
+}

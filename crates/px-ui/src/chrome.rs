@@ -34,8 +34,8 @@ pub const COLUMN_DEFAULT_COLS: i64 = 16;
 pub const COLUMN_EDITOR_COLS: i64 = 16;
 /// Zona de arrastre del borde izquierdo de la columna, dentro de ella, en `u`.
 pub const COLUMN_GRIP_U: i64 = 4;
-/// Ancho de la barra de menús: la suma de sus seis títulos (`chars·7 + 12` u cada uno).
-pub const MENU_BAR_W_U: i64 = 289;
+/// Ancho de la barra de menús: la suma de sus siete títulos (`chars·7 + 12` u cada uno).
+pub const MENU_BAR_W_U: i64 = 343;
 
 /// Rótulos de los botones de herramienta (sin la letra del atajo), en el orden de la columna.
 pub const TOOL_LABELS: [&str; 6] = [

@@ -3,7 +3,7 @@
 //! pasa a una entrada con cada operación, la selección resultante, el destino por defecto de una
 //! quita, el estado del arrastre y de la quita pendiente y los textos.
 
-use px_core::{Image, Palette};
+use px_core::{Image, Palette, Rgba};
 
 use crate::edit_layout::PaletteButton;
 use crate::help_texts_palette_es::RESIZE_CANCELLED;
@@ -456,6 +456,10 @@ pub struct PaletteOps {
     resize: Option<(PendingResize, u64)>,
     resize_cancelled: bool,
     range_end: Option<u8>,
+    /// Entries toggled with `Ctrl`+click (unit 4.6), sorted.
+    extras: Vec<u8>,
+    /// Colors copied with `Copiar entradas` (unit 4.6); they survive opening a document.
+    clipboard: Vec<Rgba>,
     doc_state: u64,
     text_focus: bool,
 }
@@ -466,6 +470,7 @@ impl PaletteOps {
     /// [`REMOVAL_CANCELLED_NOTICE`]).
     pub fn sync(&mut self, doc_state: u64, len: usize) -> bool {
         self.doc_state = doc_state;
+        self.extras.retain(|&entry| usize::from(entry) < len);
         // El otro extremo del rango se recorta a la última entrada.
         self.range_end = match (self.range_end, len.checked_sub(1)) {
             (Some(end), Some(last)) => Some(u8::try_from(last).map_or(end, |last| end.min(last))),
@@ -590,6 +595,31 @@ impl PaletteOps {
 
     pub fn clear_range(&mut self) {
         self.range_end = None;
+        self.extras.clear();
+    }
+
+    /// The colors copied by `Copiar entradas`.
+    pub fn clipboard(&self) -> &[Rgba] {
+        &self.clipboard
+    }
+
+    pub fn set_clipboard(&mut self, colors: Vec<Rgba>) {
+        self.clipboard = colors;
+    }
+
+    /// The entries toggled with `Ctrl`+click, in increasing order.
+    pub fn extras(&self) -> &[u8] {
+        &self.extras
+    }
+
+    /// `Ctrl`+click on an entry: adds it to the extras or takes it out.
+    pub fn toggle_extra(&mut self, entry: u8) {
+        match self.extras.binary_search(&entry) {
+            Ok(at) => {
+                self.extras.remove(at);
+            }
+            Err(at) => self.extras.insert(at, entry),
+        }
     }
 
     pub fn removal(&self) -> Option<Removal> {
@@ -635,6 +665,10 @@ impl PaletteOps {
     }
 
     pub fn reset(&mut self) {
-        *self = PaletteOps::default();
+        let clipboard = std::mem::take(&mut self.clipboard);
+        *self = PaletteOps {
+            clipboard,
+            ..PaletteOps::default()
+        };
     }
 }

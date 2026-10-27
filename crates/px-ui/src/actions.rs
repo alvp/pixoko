@@ -8,6 +8,7 @@ use crate::background::CanvasBackground;
 use crate::help::HelpTarget;
 use crate::key_events::press_from_key;
 use crate::keymap::default_keymap;
+use crate::palette_tools::PaletteTool;
 use crate::tool::{ShapeKind, Tool};
 use crate::view::Zoom;
 
@@ -116,6 +117,8 @@ pub enum AppAction {
     /// `Imagen → Reducir colores…` (specs/hito-4-cuantizador.md): opens the dialog of the
     /// quantizer.
     Quantize,
+    /// One action of the `Paleta` menu (specs/hito-4-paleta.md; no default key).
+    PaletteTool(PaletteTool),
 }
 
 impl AppAction {
@@ -161,7 +164,7 @@ impl AppAction {
                 | AppAction::TurnHalf
                 | AppAction::CanvasSize
                 | AppAction::Quantize
-        )
+        ) || matches!(self, AppAction::PaletteTool(tool) if !tool.needs_indexed())
     }
 
     /// The actions of the `Imagen` menu that edit the palette (C3): they are blocked like any
@@ -170,7 +173,7 @@ impl AppAction {
         matches!(
             self,
             AppAction::AddPaletteEntry | AppAction::RemovePaletteEntry | AppAction::PaletteSize
-        )
+        ) || matches!(self, AppAction::PaletteTool(tool) if tool.needs_indexed())
     }
 
     /// The four zoom actions, which do not modify the document.
