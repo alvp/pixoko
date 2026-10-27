@@ -163,7 +163,7 @@ fn press(c: char) -> Press {
 #[test]
 fn row_1_the_table_has_51_entries_with_unique_keys_and_limits() {
     let table = help_table();
-    assert_eq!(table.len(), 51);
+    assert_eq!(table.len(), 57);
     let keys: Vec<&str> = table.iter().map(|e| e.key).collect();
     assert_eq!(keys, KEYS, "claves estables y en el orden del anexo");
     for (i, e) in table.iter().enumerate() {
@@ -222,7 +222,7 @@ fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() 
         .iter()
         .filter(|e| action_of_key(e.key).is_some_and(is_editable))
         .count();
-    assert_eq!(editable, 44);
+    assert_eq!(editable, 49);
     for key in [
         "file.new",
         "file.open",

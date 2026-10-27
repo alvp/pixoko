@@ -663,9 +663,9 @@ fn row_8_gate_keys_without_focus_lets_comma_and_e_through() {
     let mut tool = ToolState::new();
     applies_tool_keys(&mut tool, &gate_keys(&key_single(Key::Comma), false));
     assert_eq!(tool.tool(), Tool::Dropper);
-    // La `E` ya no es atajo: el filtro la deja pasar y no cambia nada. El borrador se elige por
+    // La `J` no es atajo: el filtro la deja pasar y no cambia nada. El borrador se elige por
     // su acción (la del botón).
-    applies_tool_keys(&mut tool, &gate_keys(&key_single(Key::E), false));
+    applies_tool_keys(&mut tool, &gate_keys(&key_single(Key::J), false));
     assert_eq!(tool.tool(), Tool::Dropper);
     tool.apply_action(ToolAction::Select(Tool::Eraser));
     assert_eq!(tool.tool(), Tool::Eraser);

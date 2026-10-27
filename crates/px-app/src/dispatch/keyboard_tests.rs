@@ -1174,10 +1174,10 @@ fn row_9_the_eraser_notice_comes_out_the_same_from_the_button() {
         }
     );
     assert_eq!(a.snapshot(), b.snapshot());
-    // El Borrador tiene la `k` (la `e` no es nada, ni sola ni con `Mayús`).
-    for letter in ["e", "E"] {
+    // El Borrador tiene la `k` (la `j` no es nada, ni sola ni con `Mayús`).
+    for letter in ["j", "J"] {
         assert_eq!(
-            actions_of_keyboard(&writes(Key::E, Modifiers::NONE, letter), Platform::Linux),
+            actions_of_keyboard(&writes(Key::J, Modifiers::NONE, letter), Platform::Linux),
             vec![],
             "{letter}"
         );

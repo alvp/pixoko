@@ -141,7 +141,7 @@ fn row_5_only_the_editable_actions_have_an_editor() {
             "{action:?}"
         );
     }
-    assert_eq!(editable().len(), 44);
+    assert_eq!(editable().len(), 49);
     for action in editable() {
         assert!(ShortcutEditor::new(action, &table, Platform::Linux).is_some());
     }
@@ -208,8 +208,8 @@ fn row_5_assign_regenerates_the_rows_and_keeps_the_rest() {
         Some("Ctrl+Z")
     );
     // Rehacer no tiene casillas: asignar a la principal la crea (`shown` al ser la fija la que se muestra).
-    let r = assigns(&default, AppAction::Redo, Slot::Primary, 'r', false);
-    assert_eq!(slots_of(&r, AppAction::Redo).slots, vec![chord('r')]);
+    let r = assigns(&default, AppAction::Redo, Slot::Primary, 'j', false);
+    assert_eq!(slots_of(&r, AppAction::Redo).slots, vec![chord('j')]);
     assert_eq!(
         r.shown_text(AppAction::Redo, Platform::Linux).as_deref(),
         Some("Ctrl+Y")
@@ -219,13 +219,13 @@ fn row_5_assign_regenerates_the_rows_and_keeps_the_rest() {
         &default,
         AppAction::CenterOnCursor,
         Slot::Primary,
-        'w',
+        'g',
         false,
     );
     assert_eq!(
         c.shown_text(AppAction::CenterOnCursor, Platform::Linux)
             .as_deref(),
-        Some("w")
+        Some("g")
     );
     // Con la secundaria `=` de Pincel más grande: se conserva al cambiar la principal.
     let z = assigns(&default, AppAction::BrushBigger, Slot::Primary, 'x', false);

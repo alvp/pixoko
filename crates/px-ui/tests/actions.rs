@@ -25,7 +25,7 @@ use px_ui::actions::{
 use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::menu::{MENUS, Shortcut, shortcut_for};
 use px_ui::shortcuts::{Action, FileAction, action_for_key, file_action_for_key};
-use px_ui::tool::{Tool, ToolAction, tool_action_for_key};
+use px_ui::tool::{ShapeKind, Tool, ToolAction, tool_action_for_key};
 use px_ui::view::Zoom;
 
 mod common;
@@ -484,6 +484,10 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
         Key::K if m.shift && !m.alt && !m.ctrl && !m.command && !m.mac_cmd => {
             return Some(AppAction::ClearPage);
         }
+        // 4.4: `D` (con `Mayús` y nada más) elige la forma libre.
+        Key::D if m.shift && !m.alt && !m.ctrl && !m.command && !m.mac_cmd => {
+            return Some(AppAction::SelectShape(ShapeKind::Freeform));
+        }
         _ => {}
     }
     if !m.is_none() {
@@ -497,6 +501,10 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
         Key::K => Some(AppAction::SelectTool(Tool::Eraser)),
         Key::S => Some(AppAction::SelectDotted),
         Key::Q => Some(AppAction::SelectCurve),
+        Key::R => Some(AppAction::SelectShape(ShapeKind::Rectangle)),
+        Key::C => Some(AppAction::SelectShape(ShapeKind::Circle)),
+        Key::E => Some(AppAction::SelectShape(ShapeKind::Ellipse)),
+        Key::W => Some(AppAction::SelectShape(ShapeKind::Polygon)),
         Key::U => Some(AppAction::Undo),
         Key::N => Some(AppAction::CenterOnCursor),
         Key::CloseBracket => Some(AppAction::ColorNext),
@@ -676,6 +684,13 @@ fn row_3_composes_the_three_existing_key_functions_without_changing_them() {
                         assert_eq!(
                             shortcut_2,
                             Some(AppAction::SelectCurve),
+                            "{key:?} con {m:?}"
+                        );
+                    }
+                    Some(ToolAction::SelectShape(kind)) => {
+                        assert_eq!(
+                            shortcut_2,
+                            Some(AppAction::SelectShape(kind)),
                             "{key:?} con {m:?}"
                         );
                     }
