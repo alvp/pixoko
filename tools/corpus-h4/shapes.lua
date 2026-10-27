@@ -2,7 +2,7 @@
 -- que las filas 2 a 4 de la spec en un lienzo RGBA de 64 × 64 transparente, en rojo y con un pincel
 -- de 1 píxel, y escribe un PNG por caso en <salida>:
 --   rect-outline.png, rect-filled.png
---   circle-r<R>-outline.png, circle-r<R>-filled.png          R = 1, 2, 3, 5, 10 (centro 32,32)
+--   circle-r<R>-outline.png, circle-r<R>-filled.png          R = 1, 2, 3, 4, 5, 8, 10 (centro 32,32)
 --   ellipse-<A>x<B>-outline.png, ellipse-<A>x<B>-filled.png  (A,B) = (3,2), (5,1), (2,4), (12,7), (20,9)
 --   poly-<nombre>-outline.png, poly-<nombre>-filled.png      triangle, notch, bowtie, star
 --
@@ -49,7 +49,7 @@ local function elipse(nombre, a, b)
   dibuja(nombre .. "-outline", "ellipse", caja)
   dibuja(nombre .. "-filled", "filled_ellipse", caja)
 end
-for _, r in ipairs({ 1, 2, 3, 5, 10 }) do
+for _, r in ipairs({ 1, 2, 3, 4, 5, 8, 10 }) do
   elipse("circle-r" .. r, r, r)
 end
 for _, ab in ipairs({ { 3, 2 }, { 5, 1 }, { 2, 4 }, { 12, 7 }, { 20, 9 } }) do
@@ -64,8 +64,29 @@ local POLIGONOS = {
   { "bowtie", { { 5, 5 }, { 50, 5 }, { 5, 50 }, { 50, 50 } } },
   { "star", { { 32, 3 }, { 50, 58 }, { 3, 22 }, { 61, 22 }, { 14, 58 } } },
 }
+local function dibuja_lados(nombre, lados)
+  local sprite = Sprite(64, 64, ColorMode.RGB)
+  for _, lado in ipairs(lados) do
+    app.useTool {
+      tool = "line",
+      color = ROJO,
+      brush = Brush(1),
+      points = { Point(lado[1][1], lado[1][2]), Point(lado[2][1], lado[2][2]) },
+    }
+  end
+  sprite:saveCopyAs(salida .. "/" .. nombre .. ".png")
+  sprite:close()
+end
 for _, poligono in ipairs(POLIGONOS) do
-  dibuja("poly-" .. poligono[1] .. "-outline", "polygon", poligono[2])
+  local lados = {}
+  -- "polygon" no dibuja nada por script (necesita un doble clic para cerrar): el contorno son
+  -- los lados con la herramienta "line", el último de vuelta al primer vértice.
+  local vertices = poligono[2]
+  for i, p in ipairs(vertices) do
+    local q = vertices[i % #vertices + 1]
+    lados[#lados + 1] = { p, q }
+  end
+  dibuja_lados("poly-" .. poligono[1] .. "-outline", lados)
   -- No hay "filled_polygon" (comprobado con Aseprite): el relleno sale de la herramienta "contour"
   -- (a mano alzada, rellena siempre) con los vértices y el punto de cierre como trazo.
   local trazo = {}
