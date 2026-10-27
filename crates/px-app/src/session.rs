@@ -291,7 +291,10 @@ impl Session {
     /// Por qué la herramienta no puede pintar en la capa activa (oculta, bloqueada o ambas); el
     /// cuentagotas lee igualmente.
     pub fn paint_refusal(&self, tool: Tool) -> Option<&'static str> {
-        let paints = matches!(tool, Tool::Pencil | Tool::Line | Tool::Fill | Tool::Eraser);
+        let paints = matches!(
+            tool,
+            Tool::Pencil | Tool::Line | Tool::Fill | Tool::Eraser | Tool::Shape
+        );
         let layer = self.document.layer(self.active);
         let hidden = layer.is_some_and(|layer| !layer.visible());
         let locked = layer.is_some_and(|layer| layer.locked());

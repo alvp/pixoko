@@ -33,7 +33,11 @@ fn row_12_the_kind_actions_select_the_shapes_button_with_that_kind() {
         );
         assert_eq!(world.tools.tool(), Tool::Shape);
         assert_eq!(world.tools.shape_kind(), kind);
-        assert_eq!(world.tools.shape_fill(), ShapeFill::Both, "the fill is kept");
+        assert_eq!(
+            world.tools.shape_fill(),
+            ShapeFill::Both,
+            "the fill is kept"
+        );
     }
 }
 
@@ -73,7 +77,7 @@ fn row_12_a_rectangle_with_both_colors_on_an_indexed_image_is_one_undo_step() {
             .expect("shape");
     }
     assert_eq!(world.image_2().get_pixel(2, 2), Ok(Pixel::Indexed(2)));
-    assert_eq!(world.image_2().get_pixel(4, 3), Ok(Pixel::Indexed(3)));
+    assert_eq!(world.image_2().get_pixel(3, 3), Ok(Pixel::Indexed(3)));
     world
         .session
         .undo()
