@@ -127,7 +127,6 @@ fn cases() -> Vec<(String, Points, bool)> {
 }
 
 #[test]
-#[ignore = "needs golden/aseprite-shapes/ (tools/corpus-h4/generate-shapes.sh)"]
 fn reference_the_shapes_match_aseprite_within_the_margin() {
     let all = cases();
     assert_eq!(all.len(), 34, "lista exacta de casos");
