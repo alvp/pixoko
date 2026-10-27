@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 6937934529a50ad483b17f11c5493b5b9c2050eccdbb5232dc554ab3e74bf338 # shrinks to ppp = 1.0, extra_w = 0, k0 = 10, enabled = true, steps = [Move { dx: 0, fy: 0 }, Move { dx: -1, fy: 0 }, Press, Move { dx: 0, fy: 0 }, Press, Move { dx: 0, fy: 0 }]
