@@ -656,6 +656,49 @@ impl Image {
         Ok(())
     }
 
+    /// Los bytes con que se guarda un píxel y cuántos son (los de [`Image::bytes`]).
+    pub(crate) fn encode(pixel: Pixel) -> ([u8; 4], usize) {
+        match pixel {
+            Pixel::Rgba(c) => ([c.r, c.g, c.b, c.a], 4),
+            Pixel::Indexed(i) => ([i, 0, 0, 0], 1),
+            Pixel::Gray(g) => ([g, 0, 0, 0], 1),
+            Pixel::GrayAlpha { gray, alpha } => ([gray, alpha, 0, 0], 2),
+        }
+    }
+
+    /// Escribe `pixel` en los `len` píxeles de la fila `y` que empiezan en `x`, por filas. Si el
+    /// píxel no es del modo de la imagen (o su índice no cabe en la paleta) o la racha se sale de
+    /// la fila, no escribe nada y devuelve `false`.
+    pub(crate) fn fill_run(&mut self, x: u32, y: u32, len: u32, pixel: Pixel) -> bool {
+        if self.check_pixel(pixel).is_err() || y >= self.height {
+            return false;
+        }
+        let Some(end) = x.checked_add(len).filter(|&end| end <= self.width) else {
+            return false;
+        };
+        let bpp = self.mode.bytes_per_pixel();
+        let (key, _) = Image::encode(pixel);
+        let Some(key) = key.get(..bpp) else {
+            return false;
+        };
+        let row_len = self.row_len();
+        let at = y as usize * row_len;
+        let Some(part) = self
+            .data
+            .get_mut(at + x as usize * bpp..at + end as usize * bpp)
+        else {
+            return false;
+        };
+        if bpp == 1 {
+            part.fill(key[0]);
+        } else {
+            for chunk in part.chunks_exact_mut(bpp) {
+                chunk.copy_from_slice(key);
+            }
+        }
+        true
+    }
+
     /// Comprueba, sin escribir, que el píxel es del modo de la imagen y que su índice cabe
     /// en la paleta.
     ///
