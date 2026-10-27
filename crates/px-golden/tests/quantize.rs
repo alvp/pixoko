@@ -41,9 +41,9 @@ fn read(name: &str) -> px_core::Image {
 }
 
 #[test]
-#[ignore = "necesita golden/aseprite-quant (tools/corpus-h4/generate.sh, specs/corpus-hito-4-cuantizador.md)"]
 fn row_12_the_error_is_not_worse_than_the_reference_plus_the_margin() {
     let mut report = Vec::new();
+    let mut failures = Vec::new();
     for case in CASES {
         let source = read(&format!("{case}.src.png"));
         assert_eq!(source.mode(), Mode::Rgba, "{case}");
@@ -73,12 +73,20 @@ fn row_12_the_error_is_not_worse_than_the_reference_plus_the_margin() {
                 report.push(format!(
                     "{case} n{colors} {label}: ours {ours_milli} reference {reference_milli} limit {limit}"
                 ));
-                assert!(
-                    ours_milli <= limit,
-                    "{case} n{colors} {label}: ours {ours_milli} > limit {limit} (reference {reference_milli})"
-                );
+                if ours_milli > limit {
+                    failures.push(format!(
+                        "{case} n{colors} {label}: ours {ours_milli} > limit {limit} (reference {reference_milli})"
+                    ));
+                }
             }
         }
     }
+    // The whole report first, then the verdict: one run shows every case that is over the limit.
     println!("{}", report.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} cases over the limit:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
