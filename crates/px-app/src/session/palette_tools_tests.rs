@@ -23,7 +23,7 @@ fn cel(s: &Session) -> &Image {
 }
 
 fn resolved(s: &Session) -> Vec<Rgba> {
-    let image = cel(&s);
+    let image = cel(s);
     let palette = image.palette().unwrap();
     (0..5)
         .map(|x| match image.get_pixel(x, 0).unwrap() {
