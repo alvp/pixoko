@@ -11,7 +11,7 @@ use px_ui::background::CanvasBackground;
 use px_ui::color::key_choice;
 use px_ui::help::HelpTarget;
 use px_ui::shortcuts::FileAction;
-use px_ui::tool::{ToolAction, ToolState};
+use px_ui::tool::{Tool, ToolAction, ToolState};
 use px_ui::view::ViewOp;
 
 use crate::keys::select_tool;
@@ -180,6 +180,31 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::MergeVisibleLayers => Dispatched::Merge(MergeKind::Visible),
         AppAction::FlattenLayers => Dispatched::Merge(MergeKind::Flatten),
         AppAction::ExportFlat => Dispatched::ExportFlat,
+        // The buttons keep the mode (dotted, curve) of the pencil and the line that is already
+        // active; the keys `d` and `v` go back to the plain mode.
+        AppAction::SelectTool(tool)
+            if origin != Origin::Key
+                && tools.tool() == tool
+                && matches!(tool, Tool::Pencil | Tool::Line) =>
+        {
+            done(false)
+        }
+        AppAction::SelectDotted => Dispatched::Done {
+            refresh: false,
+            notice: select_tool(tools, ToolAction::SelectDotted, false, None),
+        },
+        AppAction::SelectCurve => Dispatched::Done {
+            refresh: false,
+            notice: select_tool(tools, ToolAction::SelectCurve, false, None),
+        },
+        AppAction::BrushBigger => {
+            tools.step_brush_size(1);
+            done(false)
+        }
+        AppAction::BrushSmaller => {
+            tools.step_brush_size(-1);
+            done(false)
+        }
         AppAction::SelectTool(tool) => {
             let image = Some(session.document.canvas_image());
             Dispatched::Done {

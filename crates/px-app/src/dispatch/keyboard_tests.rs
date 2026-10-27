@@ -868,7 +868,7 @@ fn row_8_with_a_file_dialog_every_row_of_the_table_gives_blocked_also_home_page_
     let rows = rows_active();
     assert_eq!(
         rows.len(),
-        36 + 35 + 35,
+        38 + 37 + 37,
         "filas activas en las tres plataformas"
     );
     for (action, platform) in rows {
@@ -1001,20 +1001,13 @@ fn cases_of_row_9() -> Vec<TestCase> {
             expected: AppAction::ZoomIn,
             menu: Some("Acercar"),
             button_2: Some("Acercar"),
-            keys_2: vec![
-                writes(Key::IntlBackslash, s, ">"),
-                writes(Key::Plus, s, "+"),
-                writes(Key::Equals, Modifiers::NONE, "="),
-            ],
+            keys_2: vec![writes(Key::IntlBackslash, s, ">")],
         },
         TestCase {
             expected: AppAction::ZoomOut,
             menu: Some("Alejar"),
             button_2: Some("Alejar"),
-            keys_2: vec![
-                writes(Key::IntlBackslash, Modifiers::NONE, "<"),
-                writes(Key::Minus, Modifiers::NONE, "-"),
-            ],
+            keys_2: vec![writes(Key::IntlBackslash, Modifiers::NONE, "<")],
         },
         TestCase {
             expected: AppAction::ColorNext,
