@@ -1,6 +1,6 @@
 # Hito 4 · Unidad 4.5: relleno ampliado y relleno por filas
 
-Estado: **aprobada** (decisiones delegadas por el usuario; se confirman las de «Decisiones» tal como están, ver «Visto bueno»). Cambios previstos: `px-raster` (funciones **aditivas** nuevas y la reescritura interna de `fill.rs`), `px-core` (**solo lo listado abajo**: una función `pub(crate)` nueva en `Image` y la reescritura de dos funciones privadas de `document.rs`; **ninguna firma pública cambia**), `px-ui` y `px-app`. Sin dependencias nuevas.
+Estado: **aprobada** (decisiones delegadas por el usuario; se confirman las de «Decisiones» tal como están, ver «Visto bueno») y **hecha, a falta de la prueba manual y de la referencia de Aseprite** (2026-10-27: ver «Medida final» y «Corrección posterior»). Cambios previstos: `px-raster` (funciones **aditivas** nuevas y la reescritura interna de `fill.rs`), `px-core` (**solo lo listado abajo**: una función `pub(crate)` nueva en `Image` y la reescritura de dos funciones privadas de `document.rs`; **ninguna firma pública cambia**), `px-ui` y `px-app`. Sin dependencias nuevas.
 
 Referencias: fila 4.5 y D22 de [`mapa-funciones.md`](mapa-funciones.md) (T11, T12); [`hito-2-notas-unidad-14.md`](hito-2-notas-unidad-14.md) («Rellenos»: el relleno por filas, aplazado en la 14c); [`hito-2-limites-relleno.md`](hito-2-limites-relleno.md) (los topes, que **no cambian**); [`hito-4-formas.md`](hito-4-formas.md) (patrón de una herramienta con filas en la ventana de opciones y `Batch`).
 
@@ -82,7 +82,7 @@ Commits separados: (1) esta spec con su fila del `INDEX`; (2) adaptación de pru
 7. Cada clic es un solo paso de `Ctrl+Z`.
 8. Capa con celda vacía: los tres modos funcionan y `Hasta el fondo` rellena todo salvo que el fondo sea transparente.
 9. Lienzo de 8192² de un color: rellenar tarda claramente menos de 2 s y `Ctrl+Z`/`Ctrl+Y` son notablemente más rápidos que antes.
-10. Y, por mi parte, nada de referencia de Aseprite: el relleno ya se compara con ella en la puerta 4.14 (patrón de pincel: decisión propia, anotada en D3).
+10. Y, por mi parte (ver «Corrección posterior»): `tools/corpus-h4/generate-fill.sh` para tener la referencia de Aseprite del relleno sólido; el patrón y «hasta el fondo» son decisión propia (D3).
 
 ## Fuera de alcance
 
@@ -100,3 +100,24 @@ Patrón de dos colores, patrón desde la selección (4.8), degradado (4.7), tole
 ## Visto bueno (2026-10-27; el usuario delegó en mi criterio)
 
 Confirmadas tal como están las seis decisiones del final. Aprobación expresa (de antemano) de `px-raster` solo para R-09 a R-11 y la reescritura interna de `fill.rs`, y de `px-core` solo para D7 (interna, sin API pública nueva); si hiciera falta algo más, parar y decirlo. Modo ahorro de `CLAUDE.md`: una sola corrección posterior de esta spec, al final; informe final de 20 líneas como máximo.
+
+## Medida final (release, Linux, 4 hilos, una pasada, ruido ±15 %; mismas pruebas que la medida de partida)
+
+| Caso a 8192² | `fill_command` | `apply` | `undo` | `redo` | Total | Antes |
+| --- | --- | --- | --- | --- | --- | --- |
+| uniforme RGBA | 148 ms | 503 | 108 | 113 | **970 ms** | 1954 ms |
+| uniforme indexado | 64 ms | 339 | 6 | 6 | **442 ms** | 1406 ms |
+| disperso RGBA (2 692 874 tramos) | 238 ms | 617 | 124 | 128 | **1711 ms** | 2457 ms |
+
+El relleno entero baja a la mitad (RGBA) y a un tercio (indexado); `undo` y `redo` caen a un tercio (RGBA) y a casi nada (indexado, `memset` por fila); el disperso, cuyo coste es sobre todo de `apply` (un `get_pixel` por trozo y la reserva), mejora un 30 %. `VmHWM` crece lo mismo que antes (+7 MiB). Las pruebas de 14c (filas 1 a 15, `#[ignore]` incluidas las dos de memoria y tiempo) siguen igual.
+
+## Corrección posterior (al cerrar la unidad; la única)
+
+- **Sin cambios en `px-app`.** La otra ranura ya viaja por `set_other_pixel` desde la 4.4 y las filas de la ventana son genéricas: el commit de `px-app` previsto no existe; la fila 11 son dos pruebas del despachador.
+- **Dos ajustes de rendimiento tras la primera medida** (en el mismo commit de `px-raster` y el siguiente): el escaneo de las filas vecinas salta con `next_zero` los píxeles ya visitados y `Rule::holds` compara un byte directo cuando el píxel ocupa uno. Sin ellos el indexado salía un 14 % peor en `fill_command` (216 → 246 ms).
+- **`PatternTile`** guarda `Vec<bool>` de `n²` casillas (tope 10 000); `Visited::contains` desaparece (el escaneo usa `next_zero`).
+- **Texto de ayuda de `tool.fill`** ampliado con los modos (la ayuda breve, la primera frase, no cambia).
+- **Referencia de Aseprite (añadida, no pedida por la spec):** el relleno sólido se compara con el cubo de Aseprite (contiguo, tolerancia 0) en 6 casos de 16 × 16 (`golden/aseprite-fill/cases.txt`, único origen de los casos para el script y la prueba): `uniform`, `ring`, `diagonal` (4 vecinos), `stripes`, `gap` e `islands`. `tools/corpus-h4/fill.lua` y `generate-fill.sh` los generan en local (sin ejecutar: marcas «comprobar» donde la API puede discrepar); `px-golden/tests/fill_reference.rs` comprueba que el fichero de casos es válido (activa) y compara píxel a píxel (`#[ignore]` hasta tener los PNG). El patrón y «hasta el fondo» no tienen equivalente en Aseprite: decisión propia (D3).
+- **Comentarios.** `fill.rs` (tocado a fondo) se traduce al inglés en esta unidad; en `document.rs`, `image.rs` y `tool.rs` solo se tocan unas líneas y su traducción queda para L3b.
+- **Pruebas nuevas:** 4 propiedades y 11 filas (7 de `px-raster` en un solo módulo, 2 de `px-core`, 4 de `px-ui`, 2 de `px-app`), más la de tiempo `#[ignore]` y 2 de `px-golden`. **Anteriores adaptadas:** 2 (`toolbar.rs` y `brush_tools.rs`, solo una cifra y la lista de herramientas sin filas).
+- **Cierre.** `fmt`, `clippy --workspace --all-targets --locked -D warnings` y `cargo test --workspace --locked` (4 492 pruebas, 0 fallos) pasan en el contenedor; `cargo deny` no está instalado aquí (sin dependencias nuevas: `Cargo.toml`, `Cargo.lock` y `deny.toml` intactos). `license-auditor` ejecutado una vez sobre el rango: sin hallazgos.
