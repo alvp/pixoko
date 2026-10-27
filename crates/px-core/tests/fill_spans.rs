@@ -2622,3 +2622,6 @@ mod limits {
         assert_eq!(inside.source().map(ToString::to_string), Some(text));
     }
 }
+
+#[path = "fill_spans/unit_4_5.rs"]
+mod unit_4_5;

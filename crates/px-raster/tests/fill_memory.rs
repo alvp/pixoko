@@ -195,3 +195,45 @@ fn row_14_uniform_indexed_8192() {
         growth / MIB
     );
 }
+
+/// Unit 4.5, timing: a scattered region (one `B` pixel every 5 in x and y of an RGBA 8192²: about
+/// 2.7 M spans, the worst case that the cap lets through) must still fill, apply, undo and redo
+/// exactly. The times are printed; it only fails above 60 s. Before and after the rewrite by rows
+/// (specs/hito-4-relleno.md).
+#[test]
+#[ignore = "mide tiempos: ejecutar sola y en release (ver la cabecera del fichero)"]
+fn unit_4_5_scattered_rgba_8192() {
+    let (a, b) = (a_rgba(), c_rgba());
+    let mut original = Image::filled(SIDE, SIDE, a).unwrap();
+    for y in (0..SIDE).step_by(5) {
+        for x in (0..SIDE).step_by(5) {
+            original.set_pixel(x, y, b).unwrap();
+        }
+    }
+    let new = Pixel::Rgba(Rgba::new(1, 2, 3, 255));
+    let mut doc = Document::new(original.clone());
+    let id = ImageId::from_raw(0);
+    let start = Instant::now();
+    let t0 = Instant::now();
+    let command = fill_command(&doc, id, 1, 1, new).unwrap().unwrap();
+    let t_fill = t0.elapsed();
+    let spans = spans_of(&command);
+    let t1 = Instant::now();
+    assert_eq!(doc.apply(command), Ok(true));
+    let t_apply = t1.elapsed();
+    let filled = doc.image(id).unwrap().clone();
+    let t2 = Instant::now();
+    assert_eq!(doc.undo(), Ok(()));
+    let t_undo = t2.elapsed();
+    assert_eq!(doc.image(id).unwrap().bytes(), original.bytes());
+    let t3 = Instant::now();
+    assert_eq!(doc.redo(), Ok(()));
+    let t_redo = t3.elapsed();
+    assert_eq!(doc.image(id).unwrap().bytes(), filled.bytes());
+    let total = start.elapsed();
+    println!(
+        "unit 4.5 scattered RGBA ({spans} spans): fill_command {t_fill:?}, apply {t_apply:?}, \
+         undo {t_undo:?}, redo {t_redo:?}, total {total:?}"
+    );
+    assert!(total < Duration::from_secs(60), "took {total:?}");
+}
