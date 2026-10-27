@@ -56,11 +56,8 @@ for _, ab in ipairs({ { 3, 2 }, { 5, 1 }, { 2, 4 }, { 12, 7 }, { 20, 9 } }) do
   elipse("ellipse-" .. ab[1] .. "x" .. ab[2], ab[1], ab[2])
 end
 
--- Polígonos. comprobar: los nombres de herramienta "polygon" (contorno) y "filled_polygon"
--- (relleno): no hay opción `fill` en las preferencias de la herramienta (la primera versión de este
--- script la usaba y Aseprite lo rechazó). Si "filled_polygon" no existe, el caso se salta con un
--- aviso y la lista de ficheros sale corta: se prueba entonces el nombre que dé `aseprite --help` o
--- la lista de herramientas de la versión instalada.
+-- Polígonos. Aseprite no tiene opción `fill` en la herramienta "polygon" ni una "filled_polygon"
+-- (las dos se probaron y las rechazó): el contorno es "polygon" y el relleno, "contour".
 local POLIGONOS = {
   { "triangle", { { 5, 5 }, { 40, 5 }, { 5, 40 } } },
   { "notch", { { 5, 5 }, { 20, 5 }, { 20, 30 }, { 35, 30 }, { 35, 5 }, { 50, 5 }, { 50, 50 }, { 5, 50 } } },
@@ -69,8 +66,13 @@ local POLIGONOS = {
 }
 for _, poligono in ipairs(POLIGONOS) do
   dibuja("poly-" .. poligono[1] .. "-outline", "polygon", poligono[2])
-  local ok, err = pcall(dibuja, "poly-" .. poligono[1] .. "-filled", "filled_polygon", poligono[2])
-  if not ok then
-    io.stderr:write("AVISO: poly-" .. poligono[1] .. "-filled no se pudo dibujar: " .. tostring(err) .. "\n")
+  -- No hay "filled_polygon" (comprobado con Aseprite): el relleno sale de la herramienta "contour"
+  -- (a mano alzada, rellena siempre) con los vértices y el punto de cierre como trazo.
+  local trazo = {}
+  for _, p in ipairs(poligono[2]) do
+    trazo[#trazo + 1] = p
   end
+  trazo[#trazo + 1] = poligono[2][1]
+  dibuja("poly-" .. poligono[1] .. "-filled", "contour", trazo)
+end
 end
