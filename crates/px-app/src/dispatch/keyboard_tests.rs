@@ -868,7 +868,7 @@ fn row_8_with_a_file_dialog_every_row_of_the_table_gives_blocked_also_home_page_
     let rows = rows_active();
     assert_eq!(
         rows.len(),
-        38 + 37 + 37,
+        43 + 42 + 42,
         "filas activas en las tres plataformas"
     );
     for (action, platform) in rows {
@@ -1174,10 +1174,10 @@ fn row_9_the_eraser_notice_comes_out_the_same_from_the_button() {
         }
     );
     assert_eq!(a.snapshot(), b.snapshot());
-    // El Borrador tiene la `k` (la `e` no es nada, ni sola ni con `Mayús`).
-    for letter in ["e", "E"] {
+    // El Borrador tiene la `k` (la `j` no es nada, ni sola ni con `Mayús`).
+    for letter in ["j", "J"] {
         assert_eq!(
-            actions_of_keyboard(&writes(Key::E, Modifiers::NONE, letter), Platform::Linux),
+            actions_of_keyboard(&writes(Key::J, Modifiers::NONE, letter), Platform::Linux),
             vec![],
             "{letter}"
         );

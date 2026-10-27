@@ -594,7 +594,7 @@ impl TestOutput {
             .iter()
             .filter_map(|e| match e {
                 CanvasInput::Stroke(ev) => Some(*ev),
-                CanvasInput::Escape => None,
+                CanvasInput::Escape | CanvasInput::Confirm => None,
             })
             .collect()
     }

@@ -56,13 +56,14 @@ const fn tool_button(label: &'static str, icon: Icon, tool: Tool) -> Button {
     }
 }
 
-/// Los cinco botones de herramienta, de arriba abajo. Los rótulos son los de `chrome::TOOL_LABELS`.
-pub const TOOL_BUTTONS: [Button; 5] = [
+/// Los seis botones de herramienta, de arriba abajo. Los rótulos son los de `chrome::TOOL_LABELS`.
+pub const TOOL_BUTTONS: [Button; 6] = [
     tool_button("Lápiz", Icon::Pencil, Tool::Pencil),
     tool_button("Línea", Icon::Line, Tool::Line),
     tool_button("Relleno", Icon::Fill, Tool::Fill),
     tool_button("Cuentagotas", Icon::Dropper, Tool::Dropper),
     tool_button("Borrador", Icon::Eraser, Tool::Eraser),
+    tool_button("Formas", Icon::Shapes, Tool::Shape),
 ];
 
 /// Los cuatro botones de zoom: el atajo se dice en el tooltip y en el menú Ver. `Acercar` y

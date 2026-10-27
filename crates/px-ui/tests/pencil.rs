@@ -116,7 +116,7 @@ impl Bench {
                 .into_iter()
                 .filter_map(|(input, _)| match input {
                     CanvasInput::Stroke(event) => Some(event),
-                    CanvasInput::Escape => None,
+                    CanvasInput::Escape | CanvasInput::Confirm => None,
                 })
                 .collect();
             canvas.set_overlay(ui.ctx(), image_2, &overlay);
@@ -567,6 +567,7 @@ fn row_15_space_in_the_middle_of_a_stroke_cancels_it() {
             match input_2 {
                 CanvasInput::Stroke(e) => app.apply(&[*e]),
                 CanvasInput::Escape => app.stroke = None,
+                CanvasInput::Confirm => {}
             }
         }
         (all, before, last_2, app)

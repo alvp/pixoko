@@ -277,8 +277,8 @@ fn row_10_bad_lines_are_ignored_and_good_ones_are_applied() {
         tool.line 3 none\n\
         tool.line 0 q\n\
         tool.line 1 ??\n\
-        tool.fill 1 w\n\
-        tool.fill 2 e\n\
+        tool.fill 1 j\n\
+        tool.fill 2 h\n\
         tool.fill 2 r\n",
     );
     // Ignoradas: acción fija, clave desconocida, casilla 0, atajo mal formado y la segunda línea de
@@ -288,7 +288,7 @@ fn row_10_bad_lines_are_ignored_and_good_ones_are_applied() {
     assert_eq!(slots_of(&l.keymap, pencil()).slots, vec![chord('x')]);
     assert_eq!(
         slots_of(&l.keymap, fill()).slots,
-        vec![chord('w'), chord('e')]
+        vec![chord('j'), chord('h')]
     );
     assert!(l.keymap.conflicts().is_empty());
     assert_eq!(
@@ -478,7 +478,7 @@ fn property_1b_round_trip_with_all_the_combinations_of_the_table() {
             }
         }
     }
-    assert_eq!(checked, 44 * 2 * shortcuts.len());
+    assert_eq!(checked, 50 * 2 * shortcuts.len());
 }
 
 /// Los atajos mostrados siguen funcionando tras leer un fichero cualquiera (la tabla leída es una

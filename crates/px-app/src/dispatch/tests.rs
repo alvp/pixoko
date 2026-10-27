@@ -43,6 +43,7 @@ use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::{ViewOp, Zoom};
 
 mod brush;
+mod shapes;
 
 use super::{Dispatched, Targets, dispatch};
 use crate::session::Session;

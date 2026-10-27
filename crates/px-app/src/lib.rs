@@ -1903,6 +1903,12 @@ impl eframe::App for App {
             // The one-use dropper started from a bar gives its color to the role of that bar.
             let role = self.dropper_once.role_for(role);
             let pixel = self.session.pixel_of(role);
+            // The fill of a shape with outline takes the color of the other slot.
+            let other = match role {
+                px_ui::color::Role::Foreground => px_ui::color::Role::Background,
+                px_ui::color::Role::Background => px_ui::color::Role::Foreground,
+            };
+            self.tools.set_other_pixel(self.session.pixel_of(other));
             let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
             self.tools.set_modifiers(shift, ctrl);
             let result = self

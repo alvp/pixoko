@@ -180,7 +180,7 @@ fn letter_of(action: AppAction) -> Option<char> {
 }
 
 #[test]
-fn tool_buttons_are_the_five_buttons_with_their_letter() {
+fn tool_buttons_are_the_six_buttons_with_their_letter() {
     let table: Vec<(&str, AppAction, Option<char>)> = TOOL_BUTTONS
         .iter()
         .map(|b| (b.label, b.action, letter_of(b.action)))
@@ -197,6 +197,7 @@ fn tool_buttons_are_the_five_buttons_with_their_letter() {
                 Some(',')
             ),
             ("Borrador", AppAction::SelectTool(Tool::Eraser), Some('k')),
+            ("Formas", AppAction::SelectTool(Tool::Shape), None),
         ]
     );
 }
@@ -408,11 +409,11 @@ fn the_shortcuts_are_no_longer_painted_on_the_buttons_and_come_out_in_the_toolti
 }
 
 #[test]
-fn the_nine_icons_are_painted_and_no_button_label() {
+fn the_ten_icons_are_painted_and_no_button_label() {
     let bench = Bench::new_2(1.0, state_2(Tool::Fill, x5(), Locks::default()));
     let painted = bench.rest_2_2();
     let textures_2: Vec<_> = painted.meshes.iter().map(|m| m.texture_2).collect();
-    assert_eq!(textures_2.len(), 9, "nueve iconos, uno por botón");
+    assert_eq!(textures_2.len(), 10, "diez iconos, uno por botón");
     for (i, a) in textures_2.iter().enumerate() {
         assert!(!textures_2[i + 1..].contains(a), "iconos repetidos");
     }
@@ -480,8 +481,8 @@ fn lock(f: impl FnOnce(&mut Locks)) -> Locks {
 }
 
 /// Qué botones responden a un clic: herramientas (5) y zoom (4).
-fn respond(bench: &Bench) -> ([bool; 5], [bool; 4]) {
-    let mut tools = [false; 5];
+fn respond(bench: &Bench) -> ([bool; 6], [bool; 4]) {
+    let mut tools = [false; 6];
     let mut zoom = [false; 4];
     for (i, button) in TOOL_BUTTONS.iter().enumerate() {
         tools[i] = bench.click_in_button(i) == vec![button.action];
@@ -499,7 +500,7 @@ fn with_a_gesture_or_a_focused_field_the_tools_do_not_respond_but_the_zoom_does(
             let bench = Bench::new_2(ppp, state_2(Tool::Pencil, x5(), locks));
             assert_eq!(
                 respond(&bench),
-                ([false; 5], [true; 4]),
+                ([false; 6], [true; 4]),
                 "ppp {ppp} con {locks:?}"
             );
         }
@@ -509,33 +510,33 @@ fn with_a_gesture_or_a_focused_field_the_tools_do_not_respond_but_the_zoom_does(
 #[test]
 fn with_a_pending_removal_the_tools_and_the_zoom_respond() {
     let bench = Bench::new_2(1.0, state_2(Tool::Pencil, x5(), lock(|l| l.removal = true)));
-    assert_eq!(respond(&bench), ([true; 5], [true; 4]));
+    assert_eq!(respond(&bench), ([true; 6], [true; 4]));
 }
 
 #[test]
 fn with_an_open_dialog_or_the_licenses_panel_nothing_responds() {
     for locks in [lock(|l| l.dialog = true), lock(|l| l.modal = true)] {
         let bench = Bench::new_2(1.0, state_2(Tool::Pencil, x5(), locks));
-        assert_eq!(respond(&bench), ([false; 5], [false; 4]), "{locks:?}");
+        assert_eq!(respond(&bench), ([false; 6], [false; 4]), "{locks:?}");
     }
 }
 
 #[test]
 fn without_an_image_the_zoom_does_not_respond_and_at_the_minimum_only_zoom_out_is_off() {
     let bench = Bench::new_2(1.0, state_2(Tool::Pencil, None, Locks::default()));
-    assert_eq!(respond(&bench), ([true; 5], [false; 4]));
+    assert_eq!(respond(&bench), ([true; 6], [false; 4]));
     let bench = Bench::new_2(
         1.0,
         state_2(Tool::Pencil, Some(Zoom::MIN), Locks::default()),
     );
     // Acercar, Alejar, Ajustar y 1:1: en el mínimo (1/64) solo `Alejar` está deshabilitado.
-    assert_eq!(respond(&bench), ([true; 5], [true, false, true, true]));
+    assert_eq!(respond(&bench), ([true; 6], [true, false, true, true]));
     // En ×1 (el mínimo de antes) `Alejar` ya vale (baja a 1/2) y `1:1` no.
     let bench = Bench::new_2(
         1.0,
         state_2(Tool::Pencil, Zoom::from_int(1), Locks::default()),
     );
-    assert_eq!(respond(&bench), ([true; 5], [true, true, true, false]));
+    assert_eq!(respond(&bench), ([true; 6], [true, true, true, false]));
 }
 
 #[test]
@@ -544,7 +545,7 @@ fn at_zoom_max_zoom_in_does_not_respond() {
         1.0,
         state_2(Tool::Pencil, Some(Zoom::MAX), Locks::default()),
     );
-    assert_eq!(respond(&bench), ([true; 5], [false, true, true, true]));
+    assert_eq!(respond(&bench), ([true; 6], [false, true, true, true]));
 }
 
 #[test]
@@ -574,7 +575,7 @@ fn a_disabled_button_is_painted_dimmed() {
         "el deshabilitado va atenuado"
     );
     // El zoom sigue habilitado con el gesto: su icono no cambia.
-    assert_eq!(ink(&free, 5), ink(&with_gesture, 5));
+    assert_eq!(ink(&free, 6), ink(&with_gesture, 6));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -694,7 +695,7 @@ mod toolbox_right {
 
         fn center_of_zoom(&self, i: i64) -> (i64, i64) {
             let n = self.n();
-            let (cx, cy) = center_u(5 + i as usize);
+            let (cx, cy) = center_u(6 + i as usize);
             (self.x0() + cx * n, cy * n)
         }
     }
@@ -858,6 +859,7 @@ mod toolbox_right {
                     Tool::Fill => "tecla f",
                     Tool::Dropper => "tecla ,",
                     Tool::Eraser => "tecla k",
+                    Tool::Shape => "sin tecla",
                 }
             );
         }
@@ -1176,6 +1178,7 @@ mod toolbox_right {
                 "Borrador (k)\nclic derecho: opciones\nel clic derecho también borra con el fondo"
                     .to_string(),
             ),
+            ("Formas", "Formas\nclic derecho: opciones".to_string()),
             ("Acercar", "Acercar (>)\nclic derecho: alejar".to_string()),
             ("Alejar", "Alejar (<)\nclic derecho: acercar".to_string()),
             ("Ajustar", "Ajustar (Inicio)".to_string()),
@@ -1241,10 +1244,10 @@ mod toolbox_right {
                 let without_hover = toolbox_2.rest_2_2();
                 let count = |p: &Painted, t: &str| p.texts.iter().filter(|x| x.text_2 == t).count();
                 let before = count(&without_hover, &first);
-                let (x, y) = if i < 5 {
+                let (x, y) = if i < 6 {
                     toolbox_2.center_of_tool(i as i64)
                 } else {
-                    toolbox_2.center_of_zoom(i as i64 - 5)
+                    toolbox_2.center_of_zoom(i as i64 - 6)
                 };
                 let pos = in_points(ppp, x, y);
                 let mut last_2 = toolbox_2.frame(vec![move_pointer(pos)]).0;

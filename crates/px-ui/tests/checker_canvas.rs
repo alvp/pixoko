@@ -742,7 +742,7 @@ impl Bench {
                 .into_iter()
                 .filter_map(|(input, _)| match input {
                     CanvasInput::Stroke(event) => Some(event),
-                    CanvasInput::Escape => None,
+                    CanvasInput::Escape | CanvasInput::Confirm => None,
                 })
                 .collect();
             canvas.set_overlay(ui.ctx(), &document, overlay);
@@ -765,7 +765,7 @@ impl Bench {
                 .into_iter()
                 .filter_map(|(input, _)| match input {
                     CanvasInput::Stroke(event) => Some(event),
-                    CanvasInput::Escape => None,
+                    CanvasInput::Escape | CanvasInput::Confirm => None,
                 })
                 .collect();
             (stroke_2, None)

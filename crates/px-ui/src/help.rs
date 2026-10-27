@@ -125,24 +125,25 @@ impl HelpTarget {
     }
 }
 
-/// The target of button `index` of the toolbox (the five tools and the four zoom ones, in the
+/// The target of button `index` of the toolbox (the six tools and the four zoom ones, in the
 /// order of `chrome::toolbox_hit`).
 pub fn help_target_for_button(index: usize) -> Option<HelpTarget> {
-    const TOOLS: [Tool; 5] = [
+    const TOOLS: [Tool; 6] = [
         Tool::Pencil,
         Tool::Line,
         Tool::Fill,
         Tool::Dropper,
         Tool::Eraser,
+        Tool::Shape,
     ];
     if index >= TOOLBOX_BUTTONS {
         return None;
     }
     Some(match index {
-        0..=4 => HelpTarget::Tool(TOOLS[index]),
-        5 => HelpTarget::ZoomIn,
-        6 => HelpTarget::ZoomOut,
-        7 => HelpTarget::ZoomFit,
+        0..=5 => HelpTarget::Tool(TOOLS[index]),
+        6 => HelpTarget::ZoomIn,
+        7 => HelpTarget::ZoomOut,
+        8 => HelpTarget::ZoomFit,
         _ => HelpTarget::ZoomActualSize,
     })
 }

@@ -89,7 +89,14 @@ fn row_7_tool_labels_are_the_labels_of_tool_buttons_without_the_letter() {
     assert_eq!(labels, TOOL_LABELS);
     assert_eq!(
         TOOL_LABELS,
-        ["Lápiz", "Línea", "Relleno", "Cuentagotas", "Borrador"]
+        [
+            "Lápiz",
+            "Línea",
+            "Relleno",
+            "Cuentagotas",
+            "Borrador",
+            "Formas"
+        ]
     );
 }
 
@@ -658,12 +665,13 @@ mod icons {
         a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3
     }
 
-    /// Los nueve botones escritos con los literales de la spec: casillas de 24 × 24 u con un hueco
-    /// de 1 u, `c(k) = ⌊(14k + 2)/25⌋` por fila (herramientas) y el zoom en una fila debajo.
-    fn buttons_of_the_spec(cols: i64) -> Vec<RectU> {
+    /// Los botones (`tools` herramientas y cuatro de zoom) escritos con los literales de la spec:
+    /// casillas de 24 × 24 u con un hueco de 1 u, `c(k) = ⌊(14k + 2)/25⌋` por fila (herramientas) y
+    /// el zoom en una fila debajo.
+    fn buttons_of_the_spec(cols: i64, tools: i64) -> Vec<RectU> {
         let per_row = (14 * cols + 2) / 25;
-        let rows = (5 + per_row - 1) / per_row;
-        let tools = (0..5).map(|i| (4 + 25 * (i % per_row), 4 + 25 * (i / per_row), 24, 24));
+        let rows = (tools + per_row - 1) / per_row;
+        let tools = (0..tools).map(|i| (4 + 25 * (i % per_row), 4 + 25 * (i / per_row), 24, 24));
         let zoom = (0..4).map(|i| (4 + 25 * i, 25 * rows + 30, 24, 24));
         tools.chain(zoom).collect()
     }
@@ -685,7 +693,7 @@ mod icons {
             assert_eq!(zoom_row_y_u(5, cols), zoom, "k = {cols}");
             assert_eq!(toolbox_height_u(5, cols), height, "k = {cols}");
             assert_eq!(head_u(5, cols), height + 1, "k = {cols}");
-            for (i, expected_2) in buttons_of_the_spec(cols).iter().enumerate() {
+            for (i, expected_2) in buttons_of_the_spec(cols, 5).iter().enumerate() {
                 assert_eq!(
                     toolbox_button_rect_u_at(i, 5, cols),
                     *expected_2,
@@ -710,14 +718,14 @@ mod icons {
             }
         }
         // Los botones de hoy con el ancho por defecto son los de `toolbox_button_rect_u`.
-        for (i, expected_2) in buttons_of_the_spec(16).iter().enumerate() {
+        for (i, expected_2) in buttons_of_the_spec(16, 6).iter().enumerate() {
             assert_eq!(toolbox_button_rect_u(i), *expected_2, "botón {i}");
         }
         // Todo es entero y múltiplo de `n` desde la esquina de la caja, a las cinco escalas.
         for ppp in PPPS {
             let n = n_of(ppp);
             for cols in [COLUMN_MIN_COLS, 14, 16] {
-                for (i, p) in buttons_of_the_spec(cols).iter().enumerate() {
+                for (i, p) in buttons_of_the_spec(cols, 5).iter().enumerate() {
                     for u in [p.0, p.1, p.2, p.3] {
                         let physical = (u * n) as f32 / ppp * ppp;
                         assert!(
@@ -822,13 +830,12 @@ mod icons {
             y in -60i64..=2200,
         ) {
             let k = i64::from(n);
-            let rects = buttons_of_the_spec(cols);
-            let expected_2 = rects
-                .iter()
-                .position(|r| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k);
+            let at = |r: &RectU| x >= r.0 * k && x < (r.0 + r.2) * k && y >= r.1 * k && y < (r.1 + r.3) * k;
+            let expected_2 = buttons_of_the_spec(cols, 5).iter().position(at);
             prop_assert_eq!(toolbox_hit_at(x, y, n, 5, cols), expected_2);
             if cols == 16 {
-                prop_assert_eq!(toolbox_hit(x, y, n), expected_2);
+                // The legacy entry point is that of the 6 tools of today.
+                prop_assert_eq!(toolbox_hit(x, y, n), buttons_of_the_spec(16, 6).iter().position(at));
             }
         }
     }

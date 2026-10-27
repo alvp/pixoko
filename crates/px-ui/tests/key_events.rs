@@ -34,7 +34,7 @@ use proptest::prelude::*;
 use px_ui::actions::{AppAction, Platform};
 use px_ui::key_events::presses;
 use px_ui::keymap::{KeyId, Keymap, Press};
-use px_ui::tool::Tool;
+use px_ui::tool::{ShapeKind, Tool};
 
 const PLATFORMS: [Platform; 3] = [Platform::Linux, Platform::Windows, Platform::Mac];
 
@@ -274,7 +274,7 @@ fn row_4_dvorak_the_d_at_another_physical_position_is_still_the_pencil() {
     assert_actions(
         "la posición de la D escribe e",
         &[key_physical(Key::E, Key::D, Modifiers::NONE), text_2("e")],
-        &[None],
+        &[Some(AppAction::SelectShape(ShapeKind::Ellipse))],
     );
     // La coma de Dvorak está donde la `w`.
     assert_actions(
@@ -342,17 +342,18 @@ fn row_4_caps_lock_text_capital_d_without_shift_is_the_pencil() {
 
 #[test]
 fn row_4_a_real_shift_with_d_is_not_the_pencil() {
-    // `Mayús` pulsada con la `d` (en las letras `shift` es exacto): sin acción.
+    // `Mayús` pulsada con la `d` (en las letras `shift` es exacto): no es el lápiz, es la forma
+    // libre (4.4).
     assert_actions(
         "Mayús+D",
         &[key_2(Key::D, Modifiers::SHIFT), text_2("D")],
-        &[None],
+        &[Some(AppAction::SelectShape(ShapeKind::Freeform))],
     );
-    // Bloq Mayús y `Mayús` a la vez escribe `d`, pero con `shift`: tampoco.
+    // Bloq Mayús y `Mayús` a la vez escribe `d`, pero con `shift`: tampoco el lápiz.
     assert_actions(
         "Bloq Mayús + Mayús + D",
         &[key_2(Key::D, Modifiers::SHIFT), text_2("d")],
-        &[None],
+        &[Some(AppAction::SelectShape(ShapeKind::Freeform))],
     );
 }
 

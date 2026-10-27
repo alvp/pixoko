@@ -185,7 +185,7 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::SelectTool(tool)
             if origin != Origin::Key
                 && tools.tool() == tool
-                && matches!(tool, Tool::Pencil | Tool::Line) =>
+                && matches!(tool, Tool::Pencil | Tool::Line | Tool::Shape) =>
         {
             done(false)
         }
@@ -196,6 +196,10 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::SelectCurve => Dispatched::Done {
             refresh: false,
             notice: select_tool(tools, ToolAction::SelectCurve, false, None),
+        },
+        AppAction::SelectShape(kind) => Dispatched::Done {
+            refresh: false,
+            notice: select_tool(tools, ToolAction::SelectShape(kind), false, None),
         },
         AppAction::BrushBigger => {
             tools.step_brush_size(1);

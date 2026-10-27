@@ -33,6 +33,7 @@
    `cargo test --workspace --locked` y `cargo deny check`; después, el `license-auditor`
    una sola vez, sobre el rango de commits de la unidad.
 7. **Prueba manual:** la hago yo. Al terminar me das una lista de pasos.
+8. **Cerrar antes de pedirme nada:** si te pido cerrar una unidad, haz todo el cierre primero (auditor, notas en `docs/PLAN-RESUMEN.md`, `specs/INDEX.md` y mapa, commit y push) y solo después me dices qué hago en mi local, paso por paso, numerado y con las órdenes exactas. Esta regla va en toda instrucción de unidad que me escribas.
 
 ## Flujo de comprobaciones (salida compacta)
 - `cargo test`: siempre con `-q` y recortado, p. ej. `cargo test -q --workspace --locked 2>&1 | tail -40`.

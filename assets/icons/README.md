@@ -1,6 +1,6 @@
 # Iconos de Pixoko
 
-Los 22 iconos de la interfaz son **originales de Pixoko**, **dibujados nuevos** para este proyecto y
+Los 23 iconos de la interfaz son **originales de Pixoko**, **dibujados nuevos** para este proyecto y
 se distribuyen bajo la **licencia MIT** del proyecto, como el resto del repositorio. No proceden de
 ningún otro programa, tema ni biblioteca de iconos y no se han copiado, traducido ni calcado de
 ninguno.
@@ -17,7 +17,7 @@ ninguno.
   pueden retocar con Pixoko: vale cualquier PNG que `px-formats` lea (RGBA, indexado con
   transparencia o gris con alfa); solo cuenta el alfa y el color del retoque da igual.
 
-## Los 22 iconos
+## Los 23 iconos
 
 | Fichero | Motivo | Dónde |
 | --- | --- | --- |
@@ -36,6 +36,7 @@ ninguno.
 | `candado.png`, `candado-abierto.png` | candado cerrado; candado con el arco levantado | candado de cada capa del panel de capas |
 | `duplicar.png` | dos cuadrados desplazados, el de delante tapa al de detrás | botón Duplicar del panel de capas |
 | `subir.png`, `bajar.png` | flecha hacia arriba; flecha hacia abajo | botones Subir y Bajar del panel de capas |
+| `formas.png` | rectángulo con un círculo solapado en la esquina de abajo a la derecha | botón `Formas` de la caja de herramientas |
 | `swap.png` | dos flechas horizontales opuestas, la de arriba hacia la derecha y la de abajo hacia la izquierda | botón de intercambiar primer plano y fondo, junto a las dos barras de color |
 
 ## Reservado

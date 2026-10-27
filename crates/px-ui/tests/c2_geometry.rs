@@ -187,9 +187,9 @@ fn row_2_the_toolbox_grid_with_5_12_and_20_tools_and_k_from_8_to_24() {
             );
         }
     }
-    // The legacy entry points are those of 5 tools and 16 columns.
-    for i in 0..9 {
-        assert_eq!(toolbox_button_rect_u(i), toolbox_button_rect_u_at(i, 5, 16));
+    // The legacy entry points are those of 6 tools and 16 columns.
+    for i in 0..10 {
+        assert_eq!(toolbox_button_rect_u(i), toolbox_button_rect_u_at(i, 6, 16));
     }
     // The icon row hangs under the first grid row of the palette, which starts at `head`.
     for tools in [5usize, 12, 20] {
@@ -459,7 +459,7 @@ fn row_4_window_layout_tiles_the_window_with_the_stacked_column_also_at_odd_widt
                 assert_eq!(layout.panel.x + layout.panel.width, window.0);
                 assert_eq!(layout.toolbar.y + layout.toolbar.height, layout.panel.y);
                 assert_eq!(layout.toolbar.y, MENU_H_U * k);
-                assert_eq!(layout.toolbar.height, head_u(5, cols) * k);
+                assert_eq!(layout.toolbar.height, head_u(6, cols) * k);
                 // The canvas takes what is left, from the origin, and never less than 128 u.
                 assert_eq!(layout.canvas.width, window.0 - width);
                 assert!(layout.canvas.width >= MIN_CANVAS_WIDTH_U * k);

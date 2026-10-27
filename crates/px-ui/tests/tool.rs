@@ -22,7 +22,7 @@ use px_raster::{flood_fill, line_command};
 use px_ui::canvas::{CanvasEvent, CanvasInput};
 use px_ui::color::pixel_for_slot;
 use px_ui::shortcuts::action_for_key;
-use px_ui::tool::{Tool, ToolAction, ToolState, status_text, tool_action_for_key};
+use px_ui::tool::{ShapeKind, Tool, ToolAction, ToolState, status_text, tool_action_for_key};
 
 const MIN: i32 = i32::MIN;
 const MAX: i32 = i32::MAX;
@@ -1248,6 +1248,10 @@ fn action_expected(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         Key::K => Some(ToolAction::Select(Tool::Eraser)),
         Key::S => Some(ToolAction::SelectDotted),
         Key::Q => Some(ToolAction::SelectCurve),
+        Key::R => Some(ToolAction::SelectShape(ShapeKind::Rectangle)),
+        Key::C => Some(ToolAction::SelectShape(ShapeKind::Circle)),
+        Key::E => Some(ToolAction::SelectShape(ShapeKind::Ellipse)),
+        Key::W => Some(ToolAction::SelectShape(ShapeKind::Polygon)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -1264,7 +1268,18 @@ fn checks_keys(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError> {
     );
     if matches!(
         key,
-        Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::S | Key::Q | Key::Escape
+        Key::D
+            | Key::V
+            | Key::F
+            | Key::Comma
+            | Key::K
+            | Key::S
+            | Key::Q
+            | Key::R
+            | Key::C
+            | Key::E
+            | Key::W
+            | Key::Escape
     ) {
         prop_assert_eq!(
             action_for_key(key, modifiers),

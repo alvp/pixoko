@@ -21,8 +21,8 @@ pub const MENU_H_U: i64 = 16;
 pub const TOOLBAR_MARGIN_U: i64 = 4;
 /// Margen del texto del nivel de zoom respecto del botón, en `u`.
 pub const BUTTON_PAD_U: i64 = 4;
-/// Botones de la caja: cinco herramientas y cuatro de zoom.
-pub const TOOLBOX_BUTTONS: usize = 9;
+/// Botones de la caja: seis herramientas y cuatro de zoom.
+pub const TOOLBOX_BUTTONS: usize = 10;
 /// `y` de la primera fila de herramientas.
 pub const TOOLS_Y_U: i64 = TOOLBAR_MARGIN_U;
 
@@ -38,7 +38,14 @@ pub const COLUMN_GRIP_U: i64 = 4;
 pub const MENU_BAR_W_U: i64 = 289;
 
 /// Rótulos de los botones de herramienta (sin la letra del atajo), en el orden de la columna.
-pub const TOOL_LABELS: [&str; 5] = ["Lápiz", "Línea", "Relleno", "Cuentagotas", "Borrador"];
+pub const TOOL_LABELS: [&str; 6] = [
+    "Lápiz",
+    "Línea",
+    "Relleno",
+    "Cuentagotas",
+    "Borrador",
+    "Formas",
+];
 
 fn scale(n: u32) -> i64 {
     i64::from(n.max(1))

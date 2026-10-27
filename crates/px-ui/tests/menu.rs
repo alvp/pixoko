@@ -844,6 +844,11 @@ proptest! {
         // La letra de la columna sale de la tabla y es la tecla de herramienta (el Borrador, `k`).
         for button in TOOL_BUTTONS.iter() {
             let letter = Keymap::default_scheme().shown(button.action, platform);
+            // 4.4: el botón Formas no tiene letra propia (sus cinco teclas eligen un tipo).
+            if button.action == AppAction::SelectTool(Tool::Shape) {
+                prop_assert_eq!(letter, None);
+                continue;
+            }
             let letter = letter.expect("los botones de herramienta la muestran");
             prop_assert_eq!(
                 Keymap::default_scheme().action_for(&pressed_2(letter), platform),

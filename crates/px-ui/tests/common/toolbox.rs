@@ -2,8 +2,8 @@
 //! decisión 13): sustituye a los envoltorios `show_toolbar` y `show_toolbar_with`, ya retirados. La
 //! caja se pinta sin iconos (un `IconSet` vacío): lo que se prueba aquí es dónde golpea cada botón.
 //!
-//! También da el centro de cada uno de los nueve botones en `u` desde la esquina de la caja con las
-//! 16 columnas de hoy, escrito con literales de la spec (specs/ui-single-column.md: las cinco
+//! También da el centro de cada uno de los diez botones en `u` desde la esquina de la caja con las
+//! 16 columnas de hoy, escrito con literales de la spec (specs/ui-single-column.md: las seis
 //! herramientas en una fila en y = 4, casilla `i` en `x = 4 + 25·i` de 24 × 24 u; el zoom, una fila
 //! en y = 55), independiente de `chrome`.
 
@@ -36,12 +36,12 @@ pub fn toolbox_2(ui: &mut Ui, state: &UiState, zoom_label: &str) -> Option<AppAc
     toolbox_with(ui, state, zoom_label, default_keymap(), Platform::current())
 }
 
-/// Centro `(x_u, y_u)` del botón `i` de la caja: 0 a 4 las herramientas, 5 a 8 el zoom.
+/// Centro `(x_u, y_u)` del botón `i` de la caja: 0 a 5 las herramientas, 6 a 9 el zoom.
 pub fn center_u(i: usize) -> (i64, i64) {
-    let (column, y) = if i < 5 {
+    let (column, y) = if i < 6 {
         (i as i64, 4)
     } else {
-        ((i - 5) as i64, 55)
+        ((i - 6) as i64, 55)
     };
     (4 + 25 * column + 12, y + 12)
 }

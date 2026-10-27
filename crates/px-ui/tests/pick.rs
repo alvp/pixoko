@@ -22,7 +22,9 @@ use px_ui::pick::{
     EraseError, Picked, eraser_label, eraser_pixel, is_erasable, pick_notice, picked_at,
 };
 use px_ui::shortcuts::{action_for_key, file_action_for_key};
-use px_ui::tool::{Tool, ToolAction, status_text, tool_action_for_key, tool_color_label};
+use px_ui::tool::{
+    ShapeKind, Tool, ToolAction, status_text, tool_action_for_key, tool_color_label,
+};
 
 const TEST_ALL: [Tool; 5] = [
     Tool::Pencil,
@@ -110,7 +112,7 @@ fn row_1_comma_is_dropper_and_e_is_no_longer_eraser_without_modifiers() {
         tool_action_for_key(Key::Comma, Modifiers::NONE),
         Some(ToolAction::Select(Tool::Dropper))
     );
-    assert_eq!(tool_action_for_key(Key::E, Modifiers::NONE), None);
+    assert_eq!(tool_action_for_key(Key::J, Modifiers::NONE), None);
 }
 
 #[test]
@@ -603,6 +605,10 @@ fn action_expected(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         Key::K => Some(ToolAction::Select(Tool::Eraser)),
         Key::S => Some(ToolAction::SelectDotted),
         Key::Q => Some(ToolAction::SelectCurve),
+        Key::R => Some(ToolAction::SelectShape(ShapeKind::Rectangle)),
+        Key::C => Some(ToolAction::SelectShape(ShapeKind::Circle)),
+        Key::E => Some(ToolAction::SelectShape(ShapeKind::Ellipse)),
+        Key::W => Some(ToolAction::SelectShape(ShapeKind::Polygon)),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -621,7 +627,18 @@ fn checks_keys(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError> {
         prop_assert!(
             matches!(
                 key,
-                Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::S | Key::Q | Key::Escape
+                Key::D
+                    | Key::V
+                    | Key::F
+                    | Key::Comma
+                    | Key::K
+                    | Key::S
+                    | Key::Q
+                    | Key::R
+                    | Key::C
+                    | Key::E
+                    | Key::W
+                    | Key::Escape
             ),
             "{:?} no debería dar acción",
             key
