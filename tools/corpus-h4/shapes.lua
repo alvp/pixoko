@@ -75,4 +75,3 @@ for _, poligono in ipairs(POLIGONOS) do
   trazo[#trazo + 1] = poligono[2][1]
   dibuja("poly-" .. poligono[1] .. "-filled", "contour", trazo)
 end
-end
