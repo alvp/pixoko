@@ -365,6 +365,148 @@ impl Image {
         true
     }
 
+    /// `table[v]` is the index of the pixel valued `v` after removing the entries `indices` (strictly
+    /// increasing) and sending their pixels to `into`; `None` if the arguments are invalid.
+    fn removal_table(&self, indices: &[u8], into: u8) -> Option<[u8; Palette::MAX_COLORS]> {
+        let len = self.palette.as_ref()?.len();
+        let removed = |v: u8| indices.binary_search(&v).is_ok();
+        if indices.is_empty()
+            || indices.len() >= len
+            || indices.windows(2).any(|pair| pair[0] >= pair[1])
+            || indices.last().is_some_and(|&last| usize::from(last) >= len)
+            || usize::from(into) >= len
+            || removed(into)
+        {
+            return None;
+        }
+        let below = |v: u8| indices.iter().filter(|&&i| i < v).count() as u8;
+        let mut table = [0u8; Palette::MAX_COLORS];
+        for v in 0..=u8::MAX {
+            let target = if removed(v) { into } else { v };
+            if let Some(slot) = table.get_mut(usize::from(v)) {
+                *slot = target - below(target);
+            }
+        }
+        Some(table)
+    }
+
+    /// Removes the entries `indices`: their pixels move to `into` (index before removing) and the
+    /// ones after go down. `false`, touching nothing, with invalid arguments.
+    pub(crate) fn remove_palette_entries(&mut self, indices: &[u8], into: u8) -> bool {
+        let Some(table) = self.removal_table(indices, into) else {
+            return false;
+        };
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        if !palette.remove_entries(indices) {
+            return false;
+        }
+        for byte in &mut self.data {
+            *byte = table.get(usize::from(*byte)).copied().unwrap_or(*byte);
+        }
+        true
+    }
+
+    /// Number of pixels whose value is one of `indices`.
+    pub(crate) fn count_pixels_in(&self, indices: &[u8]) -> usize {
+        self.data
+            .iter()
+            .filter(|&&byte| indices.binary_search(&byte).is_ok())
+            .count()
+    }
+
+    /// Marks in `mask` the pixels whose value is one of `indices` and copies their values, in order,
+    /// into `previous` (which must have room: it does not reserve). `false` if `mask` is too small.
+    pub(crate) fn fill_mask_in(
+        &self,
+        indices: &[u8],
+        mask: &mut [u64],
+        previous: &mut Vec<u8>,
+    ) -> bool {
+        if mask.len().saturating_mul(64) < self.data.len() {
+            return false;
+        }
+        for (position, &byte) in self.data.iter().enumerate() {
+            if indices.binary_search(&byte).is_ok()
+                && let Some(word) = mask.get_mut(position / 64)
+            {
+                *word |= 1 << (position % 64);
+                previous.push(byte);
+            }
+        }
+        true
+    }
+
+    /// Undoes `remove_palette_entries`: puts the colors back at `indices`, sets the previous
+    /// transparent index, gives the marked pixels their values of `previous` (in order) and
+    /// shifts the rest back up.
+    pub(crate) fn restore_palette_entries(
+        &mut self,
+        indices: &[u8],
+        colors: &[Rgba],
+        transparent: Option<u8>,
+        mask: &[u64],
+        previous: &[u8],
+    ) -> bool {
+        let marked: usize = mask.iter().map(|word| word.count_ones() as usize).sum();
+        let room = mask.len().saturating_mul(64) >= self.data.len();
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        if marked != previous.len() || (marked > 0 && !room) {
+            return false;
+        }
+        let old_len = palette.len() + indices.len();
+        if !palette.insert_entries(indices, colors, transparent) {
+            return false;
+        }
+        // `kept[new]` is the index that the surviving entry `new` had before removing.
+        let mut kept = [0u8; Palette::MAX_COLORS];
+        let mut slot = 0usize;
+        for old in 0..old_len {
+            if indices.binary_search(&(old as u8)).is_err() {
+                if let Some(entry) = kept.get_mut(slot) {
+                    *entry = old as u8;
+                }
+                slot += 1;
+            }
+        }
+        let mut values = previous.iter();
+        for (position, byte) in self.data.iter_mut().enumerate() {
+            let is_marked = mask
+                .get(position / 64)
+                .is_some_and(|word| word >> (position % 64) & 1 == 1);
+            if is_marked {
+                if let Some(value) = values.next() {
+                    *byte = *value;
+                }
+            } else {
+                *byte = kept.get(usize::from(*byte)).copied().unwrap_or(*byte);
+            }
+        }
+        true
+    }
+
+    /// Writes `colors` from entry `start` on (growing the palette with opaque black first if they do
+    /// not fit). The pixels and the transparent index do not change.
+    pub(crate) fn write_palette_range(&mut self, start: u8, colors: &[Rgba]) -> bool {
+        let Some(palette) = self.palette.as_mut() else {
+            return false;
+        };
+        let end = usize::from(start) + colors.len();
+        if end > Palette::MAX_COLORS || usize::from(start) > palette.len() {
+            return false;
+        }
+        if end > palette.len() && !palette.extend(end - palette.len(), Rgba::opaque(0, 0, 0)) {
+            return false;
+        }
+        colors
+            .iter()
+            .zip(start..=u8::MAX)
+            .all(|(&color, index)| palette.set(index, color).is_ok())
+    }
+
     /// Rota las entradas `start..start + len` de la paleta (ver `Palette::rotate_range`). Los
     /// píxeles no cambian de índice.
     pub(crate) fn rotate_palette_range(

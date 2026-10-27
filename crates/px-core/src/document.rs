@@ -299,6 +299,22 @@ pub enum Command {
         len: u16,
         into: Option<u8>,
     },
+    /// Writes `colors` into the entries `start..start + colors.len()` of the palette of the document
+    /// in a single step (specs/hito-4-paleta.md). If they go past the end the palette grows (up to
+    /// 256). Pixels and transparent index do not change.
+    SetPaletteRange {
+        image: ImageId,
+        start: u8,
+        colors: Vec<Rgba>,
+    },
+    /// Removes several entries in a single step (specs/hito-4-paleta.md): `indices` strictly
+    /// increasing; the pixels that use them go to `into` (an index before removing, not in
+    /// `indices`) and the others go down.
+    RemovePaletteEntries {
+        image: ImageId,
+        indices: Vec<u8>,
+        into: u8,
+    },
     /// Fija o quita el índice transparente.
     SetTransparentIndex { image: ImageId, index: Option<u8> },
     /// Rota `steps` posiciones (con signo, hacia índices mayores si es positivo) los colores

@@ -227,6 +227,59 @@ impl Palette {
         true
     }
 
+    /// Removes the entries `indices` (strictly increasing, all existing, not every entry). The
+    /// transparent index is dropped if it was removed and lowered by the removed entries before it
+    /// otherwise. `false`, touching nothing, with invalid arguments.
+    pub(crate) fn remove_entries(&mut self, indices: &[u8]) -> bool {
+        let len = self.colors.len();
+        if indices.is_empty()
+            || indices.len() >= len
+            || indices.windows(2).any(|pair| pair[0] >= pair[1])
+            || indices.last().is_some_and(|&last| usize::from(last) >= len)
+        {
+            return false;
+        }
+        let mut position = 0usize;
+        self.colors.retain(|_| {
+            let drop = indices.binary_search(&(position as u8)).is_ok();
+            position += 1;
+            !drop
+        });
+        self.transparent_index = match self.transparent_index {
+            Some(t) if indices.binary_search(&t).is_ok() => None,
+            Some(t) => {
+                let below = indices.iter().filter(|&&i| i < t).count();
+                Some(t - below as u8)
+            }
+            None => None,
+        };
+        true
+    }
+
+    /// Undoes `remove_entries`: puts `colors[k]` back at the final position `indices[k]` and sets
+    /// the transparent index as given. `false`, touching nothing, if it does not fit.
+    pub(crate) fn insert_entries(
+        &mut self,
+        indices: &[u8],
+        colors: &[Rgba],
+        transparent: Option<u8>,
+    ) -> bool {
+        let len = self.colors.len() + indices.len();
+        if indices.len() != colors.len()
+            || len > Palette::MAX_COLORS
+            || indices.windows(2).any(|pair| pair[0] >= pair[1])
+            || indices.last().is_some_and(|&last| usize::from(last) >= len)
+            || transparent.is_some_and(|t| usize::from(t) >= len)
+        {
+            return false;
+        }
+        for (&index, &color) in indices.iter().zip(colors) {
+            self.colors.insert(usize::from(index), color);
+        }
+        self.transparent_index = transparent;
+        true
+    }
+
     /// Rota hacia índices mayores (`right`) o menores `k` posiciones las entradas
     /// `start..start + len`. El índice transparente no se mueve. `false`, sin tocar nada, si el
     /// rango se sale de la paleta.

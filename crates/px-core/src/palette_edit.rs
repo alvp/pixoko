@@ -38,6 +38,8 @@ pub enum PaletteEditError {
     /// `ResizePalette` that cuts with some pixel of some cell using an entry that is left over and
     /// without `into`.
     NoDestination,
+    /// `RemovePaletteEntries` with no indices, or not strictly increasing.
+    BadSelection,
 }
 
 impl fmt::Display for PaletteEditError {
@@ -81,6 +83,10 @@ impl fmt::Display for PaletteEditError {
             PaletteEditError::NoDestination => write!(
                 f,
                 "hay píxeles que usan colores que se quitan y no se dijo adónde pasan"
+            ),
+            PaletteEditError::BadSelection => write!(
+                f,
+                "las entradas a quitar deben ser una lista creciente y sin repetir"
             ),
         }
     }
@@ -133,6 +139,23 @@ pub(crate) enum PaletteStep {
         transparent: Option<u8>,
         cells: Vec<(ImageId, CellUndo)>,
     },
+    /// Colors written from `start` (`SetPaletteRange`): the ones that were there (`before`, only the
+    /// part that existed), the ones written (`after`) and how many entries the palette grew by.
+    Colors {
+        start: u8,
+        before: Vec<Rgba>,
+        after: Vec<Rgba>,
+        grown: u16,
+    },
+    /// Several entries removed (`RemovePaletteEntries`): like `Shrink`, with the removed colors in
+    /// the order of `indices`.
+    RemoveSet {
+        indices: Vec<u8>,
+        into: u8,
+        colors: Vec<Rgba>,
+        transparent: Option<u8>,
+        cells: Vec<(ImageId, CellUndo)>,
+    },
 }
 
 /// What undoing a cut needs from a cell: a mask of the affected pixels (one
@@ -149,6 +172,7 @@ impl PaletteStep {
         match self {
             PaletteStep::Remove { .. } => 1,
             PaletteStep::Shrink { removed, .. } => removed.len(),
+            PaletteStep::RemoveSet { indices, .. } => indices.len(),
             _ => 0,
         }
     }
@@ -158,6 +182,7 @@ impl PaletteStep {
         match self {
             PaletteStep::Append { .. } => 1,
             PaletteStep::Grow { count } => usize::from(*count),
+            PaletteStep::Colors { grown, .. } => usize::from(*grown),
             _ => 0,
         }
     }
@@ -175,6 +200,28 @@ impl PaletteStep {
             PaletteStep::Shrink { removed, cells, .. } => removed
                 .capacity()
                 .saturating_mul(size_of::<Rgba>())
+                .saturating_add(
+                    cells
+                        .capacity()
+                        .saturating_mul(size_of::<(ImageId, CellUndo)>()),
+                )
+                .saturating_add(cells.iter().fold(0usize, |total, (_, cell)| {
+                    total
+                        .saturating_add(cell.mask.capacity().saturating_mul(size_of::<u64>()))
+                        .saturating_add(cell.previous.capacity())
+                })),
+            PaletteStep::Colors { before, after, .. } => before
+                .capacity()
+                .saturating_add(after.capacity())
+                .saturating_mul(size_of::<Rgba>()),
+            PaletteStep::RemoveSet {
+                indices,
+                colors,
+                cells,
+                ..
+            } => indices
+                .capacity()
+                .saturating_add(colors.capacity().saturating_mul(size_of::<Rgba>()))
                 .saturating_add(
                     cells
                         .capacity()
@@ -216,6 +263,12 @@ impl PaletteStep {
             }
             PaletteStep::Shrink { len, into, .. } => {
                 image.truncate_palette(usize::from(*len), *into);
+            }
+            PaletteStep::Colors { start, after, .. } => {
+                image.write_palette_range(*start, after);
+            }
+            PaletteStep::RemoveSet { indices, into, .. } => {
+                image.remove_palette_entries(indices, *into);
             }
         }
     }
@@ -280,6 +333,34 @@ impl PaletteStep {
                     });
                 image.restore_truncated_palette(removed, *transparent, mask, previous);
             }
+            PaletteStep::Colors {
+                start,
+                before,
+                grown,
+                ..
+            } => {
+                image.write_palette_range(*start, before);
+                if *grown > 0 {
+                    let len = image.palette().map_or(0, Palette::len);
+                    // The pixels did not change on growing: none uses the entries that are removed.
+                    image.truncate_palette(len.saturating_sub(usize::from(*grown)).max(1), 0);
+                }
+            }
+            PaletteStep::RemoveSet {
+                indices,
+                colors,
+                transparent,
+                cells,
+                ..
+            } => {
+                let (mask, previous): (&[u64], &[u8]) = cells
+                    .iter()
+                    .find(|(cell, _)| *cell == id)
+                    .map_or((&[], &[]), |(_, cell)| {
+                        (cell.mask.as_slice(), cell.previous.as_slice())
+                    });
+                image.restore_palette_entries(indices, colors, *transparent, mask, previous);
+            }
         }
     }
 }
@@ -294,7 +375,9 @@ pub(crate) fn command_image(command: &Command) -> Option<ImageId> {
         | Command::RemovePaletteEntry { image, .. }
         | Command::SetTransparentIndex { image, .. }
         | Command::RotateColors { image, .. }
-        | Command::ResizePalette { image, .. } => Some(*image),
+        | Command::ResizePalette { image, .. }
+        | Command::SetPaletteRange { image, .. }
+        | Command::RemovePaletteEntries { image, .. } => Some(*image),
         _ => None,
     }
 }
@@ -402,6 +485,42 @@ pub(crate) fn check(image: &Image, command: &Command) -> Result<bool, PaletteEdi
                 && let Some(into) = into
             {
                 check_index(*into, new_len)?;
+            }
+            Ok(true)
+        }
+        Command::SetPaletteRange { start, colors, .. } => {
+            if usize::from(*start) > len {
+                return Err(out_of_range(*start, len));
+            }
+            let end = usize::from(*start) + colors.len();
+            if end > Palette::MAX_COLORS {
+                return Err(PaletteEditError::RangeOutOfPalette {
+                    start: *start,
+                    len: u16::try_from(colors.len()).unwrap_or(u16::MAX),
+                    palette_len: len,
+                });
+            }
+            let current = palette.colors();
+            Ok(end > len || current.get(usize::from(*start)..end) != Some(colors.as_slice()))
+        }
+        Command::RemovePaletteEntries { indices, into, .. } => {
+            if indices.is_empty() {
+                return Err(PaletteEditError::BadSelection);
+            }
+            let mut previous: Option<u8> = None;
+            for &index in indices {
+                if previous.is_some_and(|p| index <= p) {
+                    return Err(PaletteEditError::BadSelection);
+                }
+                check_index(index, len)?;
+                previous = Some(index);
+            }
+            check_index(*into, len)?;
+            if indices.len() >= len {
+                return Err(PaletteEditError::LastEntry);
+            }
+            if indices.binary_search(into).is_ok() {
+                return Err(PaletteEditError::RemoveIntoSelf { index: *into });
             }
             Ok(true)
         }
@@ -520,6 +639,60 @@ pub(crate) fn build(
                 masks,
             })
         }
+        Command::SetPaletteRange { start, colors, .. } => {
+            let first = usize::from(*start);
+            let overlap = palette.colors().get(first..).unwrap_or_default();
+            let overlap = &overlap[..overlap.len().min(colors.len())];
+            let before = copy_vec(overlap)?;
+            let grown = u16::try_from(colors.len() - before.len()).map_err(|_| invalid())?;
+            Ok(PaletteStep::Colors {
+                start: *start,
+                before,
+                after: copy_vec(colors)?,
+                grown,
+            })
+        }
+        Command::RemovePaletteEntries { indices, into, .. } => {
+            let removed: Vec<Rgba> = {
+                let mut colors = Vec::new();
+                colors
+                    .try_reserve_exact(indices.len())
+                    .map_err(|_| DocumentError::OutOfMemory)?;
+                colors.extend(indices.iter().filter_map(|&i| palette.get(i).ok()));
+                colors
+            };
+            let mut cells: Vec<(ImageId, CellUndo)> = Vec::new();
+            cells
+                .try_reserve_exact(images.len())
+                .map_err(|_| DocumentError::OutOfMemory)?;
+            for (target, image) in images {
+                let count = image.count_pixels_in(indices);
+                if count == 0 {
+                    continue;
+                }
+                let pixels = usize::try_from(image.width())
+                    .ok()
+                    .and_then(|w| w.checked_mul(usize::try_from(image.height()).ok()?))
+                    .ok_or(DocumentError::OutOfMemory)?;
+                let mut mask: Vec<u64> = Vec::new();
+                mask.try_reserve_exact(pixels.div_ceil(64))
+                    .map_err(|_| DocumentError::OutOfMemory)?;
+                mask.resize(pixels.div_ceil(64), 0);
+                let mut previous: Vec<u8> = Vec::new();
+                previous
+                    .try_reserve_exact(count)
+                    .map_err(|_| DocumentError::OutOfMemory)?;
+                image.fill_mask_in(indices, &mut mask, &mut previous);
+                cells.push((*target, CellUndo { mask, previous }));
+            }
+            Ok(PaletteStep::RemoveSet {
+                indices: exact_copy(indices)?,
+                into: *into,
+                colors: removed,
+                transparent: palette.transparent_index(),
+                cells,
+            })
+        }
         Command::RotateColors {
             start,
             len: span,
@@ -611,6 +784,15 @@ fn build_shrink(
 
 /// Copia `source` en un `Vec` de capacidad exacta; `OutOfMemory` si no se puede reservar.
 fn exact_copy(source: &[u8]) -> Result<Vec<u8>, DocumentError> {
+    let mut copy = Vec::new();
+    copy.try_reserve_exact(source.len())
+        .map_err(|_| DocumentError::OutOfMemory)?;
+    copy.extend_from_slice(source);
+    Ok(copy)
+}
+
+/// Copies `source` into a `Vec` of exact capacity; `OutOfMemory` if it cannot be reserved.
+fn copy_vec(source: &[Rgba]) -> Result<Vec<Rgba>, DocumentError> {
     let mut copy = Vec::new();
     copy.try_reserve_exact(source.len())
         .map_err(|_| DocumentError::OutOfMemory)?;

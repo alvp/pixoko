@@ -7,7 +7,7 @@
 
 use proptest::prelude::*;
 use px_core::{
-    Command, Document, DocumentError, Image, ImageId, Mode, Palette, PaletteEditError, Pixel, Rgba,
+    Command, Document, DocumentError, Image, ImageId, Palette, PaletteEditError, Pixel, Rgba,
 };
 
 fn colors(n: usize) -> Vec<Rgba> {
@@ -32,7 +32,7 @@ fn id() -> ImageId {
 }
 
 fn px(d: &Document) -> Vec<u8> {
-    let img = d.canvas_image();
+    let img = d.image(id()).unwrap();
     (0..img.width())
         .map(|x| match img.get_pixel(x, 0) {
             Ok(Pixel::Indexed(v)) => v,
@@ -107,7 +107,7 @@ fn row_pc03_set_range_errors_and_no_ops() {
         PaletteEditError::IndexOutOfRange { .. }
     ));
     assert!(matches!(
-        edit_err(d.apply(set_range(255, vec![W, K]))),
+        edit_err(d.apply(set_range(2, vec![W; 255]))),
         PaletteEditError::RangeOutOfPalette { .. }
     ));
     assert_eq!(d.apply(set_range(1, vec![])), Ok(false));
@@ -175,7 +175,8 @@ fn row_pc06_remove_entries_errors() {
 }
 
 fn rgba_strategy() -> impl Strategy<Value = Rgba> {
-    (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>()).prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a))
+    (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>())
+        .prop_map(|(r, g, b, a)| Rgba::new(r, g, b, a))
 }
 
 proptest! {
