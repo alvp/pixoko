@@ -14,8 +14,9 @@ pub const ICON_PX: i64 = 16;
 /// Nombre y fichero reservados para el pincel (hito 4); no es un `Icon` ni tiene PNG todavía.
 pub const RESERVED_BRUSH_STEM: &str = "pincel";
 
-/// Los 22 iconos: cinco herramientas, cuatro botones de zoom, cinco del editor de paleta, siete
-/// del panel de capas y el de intercambiar colores.
+/// Los 23 iconos: cinco herramientas, cuatro botones de zoom, cinco del editor de paleta, siete
+/// del panel de capas, el de intercambiar colores y el de formas (que va al final para no mover
+/// el índice de los demás).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Icon {
     Pencil,
@@ -41,11 +42,13 @@ pub enum Icon {
     Down,
     /// Swap the foreground and the background (the button next to the two color bars; C4).
     Swap,
+    /// The shapes tool (4.4): a rectangle and a circle overlapped.
+    Shapes,
 }
 
 impl Icon {
     /// Todos, en el orden de la spec.
-    pub const ALL: [Icon; 22] = [
+    pub const ALL: [Icon; 23] = [
         Icon::Pencil,
         Icon::Line,
         Icon::Fill,
@@ -68,6 +71,7 @@ impl Icon {
         Icon::Up,
         Icon::Down,
         Icon::Swap,
+        Icon::Shapes,
     ];
 
     /// Posición en [`Icon::ALL`].
@@ -100,6 +104,7 @@ impl Icon {
             Icon::Up => "subir",
             Icon::Down => "bajar",
             Icon::Swap => "swap",
+            Icon::Shapes => "formas",
         }
     }
 }
@@ -108,13 +113,13 @@ impl Icon {
 /// `px-app` al arrancar y las texturas las mantiene vivas quien las creó.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct IconSet {
-    textures: [Option<TextureId>; 22],
+    textures: [Option<TextureId>; 23],
 }
 
 impl IconSet {
     /// Un conjunto con la textura que da `texture` para cada icono.
     pub fn new(mut texture: impl FnMut(Icon) -> TextureId) -> IconSet {
-        let mut textures = [None; 22];
+        let mut textures = [None; 23];
         for icon in Icon::ALL {
             textures[icon.index()] = Some(texture(icon));
         }

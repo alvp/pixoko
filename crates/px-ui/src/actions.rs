@@ -8,7 +8,7 @@ use crate::background::CanvasBackground;
 use crate::help::HelpTarget;
 use crate::key_events::press_from_key;
 use crate::keymap::default_keymap;
-use crate::tool::Tool;
+use crate::tool::{ShapeKind, Tool};
 use crate::view::Zoom;
 
 /// What can be asked of the app, wherever it comes from.
@@ -37,6 +37,8 @@ pub enum AppAction {
     SelectDotted,
     /// The line in curve mode (`q`).
     SelectCurve,
+    /// The shapes button with this kind (`r`, `c`, `e`, `w`, `D`); the fill is kept.
+    SelectShape(ShapeKind),
     /// The brush one pixel bigger (`+`, `=`).
     BrushBigger,
     /// The brush one pixel smaller (`-`).

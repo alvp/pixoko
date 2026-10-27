@@ -14,7 +14,8 @@ use crate::help_texts_merge_es::HELP_MERGE_ES;
 use crate::help_texts_palette_es::HELP_PALETTE_ES;
 use crate::image_ops_es::HELP_IMAGE_ES;
 use crate::quantize_es::HELP_QUANTIZE_ES;
-use crate::tool::Tool;
+use crate::shapes_es::HELP_SHAPES_ES;
+use crate::tool::{ShapeKind, Tool};
 
 /// The help text of an action.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +89,7 @@ pub fn help_table() -> &'static [HelpEntry] {
             .chain(HELP_IMAGE_ES.iter())
             .chain(HELP_QUANTIZE_ES.iter())
             .chain(HELP_BRUSH_ES.iter())
+            .chain(HELP_SHAPES_ES.iter())
             .copied()
             .collect()
     });
@@ -115,6 +117,12 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::SelectTool(Tool::Eraser) => "tool.eraser",
         AppAction::SelectDotted => "tool.dotted",
         AppAction::SelectCurve => "tool.curve",
+        AppAction::SelectTool(Tool::Shape) => "tool.shape",
+        AppAction::SelectShape(ShapeKind::Rectangle) => "tool.rectangle",
+        AppAction::SelectShape(ShapeKind::Circle) => "tool.circle",
+        AppAction::SelectShape(ShapeKind::Ellipse) => "tool.ellipse",
+        AppAction::SelectShape(ShapeKind::Polygon) => "tool.polygon",
+        AppAction::SelectShape(ShapeKind::Freeform) => "tool.freeform",
         AppAction::BrushBigger => "brush.bigger",
         AppAction::BrushSmaller => "brush.smaller",
         AppAction::ZoomIn => "view.zoom-in",
@@ -171,6 +179,12 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "tool.eraser" => AppAction::SelectTool(Tool::Eraser),
         "tool.dotted" => AppAction::SelectDotted,
         "tool.curve" => AppAction::SelectCurve,
+        "tool.shape" => AppAction::SelectTool(Tool::Shape),
+        "tool.rectangle" => AppAction::SelectShape(ShapeKind::Rectangle),
+        "tool.circle" => AppAction::SelectShape(ShapeKind::Circle),
+        "tool.ellipse" => AppAction::SelectShape(ShapeKind::Ellipse),
+        "tool.polygon" => AppAction::SelectShape(ShapeKind::Polygon),
+        "tool.freeform" => AppAction::SelectShape(ShapeKind::Freeform),
         "brush.bigger" => AppAction::BrushBigger,
         "brush.smaller" => AppAction::BrushSmaller,
         "view.zoom-in" => AppAction::ZoomIn,

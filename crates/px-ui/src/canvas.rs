@@ -74,6 +74,9 @@ pub enum CanvasEvent {
 pub enum CanvasInput {
     Stroke(CanvasEvent),
     Escape,
+    /// `Intro` without modifiers: closes the pending polygon of the shapes tool (fixed key, like
+    /// `Escape`).
+    Confirm,
 }
 
 /// Lo que el lienzo dejó en pantalla en el último fotograma.
@@ -824,6 +827,13 @@ impl Canvas {
                             _ => Role::Foreground,
                         };
                         strokes.push((CanvasInput::Escape, role));
+                    }
+                    Key::Enter if !repeat && modifiers.is_none() => {
+                        let role = match self.gesture {
+                            Gesture::Draw { role, .. } => role,
+                            _ => Role::Foreground,
+                        };
+                        strokes.push((CanvasInput::Confirm, role));
                     }
                     // `Espacio` con un trazo en curso lo cancela, como `Escape`; sin gesto es la
                     // tecla de la mano. Su repetición no cancela, y un desplazamiento no se cancela.

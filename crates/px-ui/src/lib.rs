@@ -54,6 +54,8 @@ pub mod palette_resize;
 pub mod pick;
 pub mod pointer_events;
 pub mod quantize_es;
+mod shape_tool;
+pub mod shapes_es;
 pub mod shortcut_editor;
 pub mod shortcuts;
 pub mod source;

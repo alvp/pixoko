@@ -12,7 +12,7 @@
 use std::sync::OnceLock;
 
 use crate::actions::{AppAction, Platform};
-use crate::tool::Tool;
+use crate::tool::{ShapeKind, Tool};
 
 /// A key of the table: a character (letters in lowercase) or a named key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,11 +165,12 @@ fn row(
 }
 
 impl Keymap {
-    /// The default scheme: 38 rows (29 without `command` and 9 with it).
+    /// The default scheme: 43 rows (34 without `command` and 9 with it).
     pub fn default_scheme() -> Keymap {
         use Platforms::{All, Except, Never, Only};
         let c = KeyId::Char;
         let tool = |tool| AppAction::SelectTool(tool);
+        let shape = AppAction::SelectShape;
         Keymap::new(vec![
             row(c('d'), false, false, tool(Tool::Pencil), All, All),
             row(c('v'), false, false, tool(Tool::Line), All, All),
@@ -178,6 +179,11 @@ impl Keymap {
             row(c('k'), false, false, tool(Tool::Eraser), All, All),
             row(c('s'), false, false, AppAction::SelectDotted, All, All),
             row(c('q'), false, false, AppAction::SelectCurve, All, All),
+            row(c('r'), false, false, shape(ShapeKind::Rectangle), All, All),
+            row(c('c'), false, false, shape(ShapeKind::Circle), All, All),
+            row(c('e'), false, false, shape(ShapeKind::Ellipse), All, All),
+            row(c('w'), false, false, shape(ShapeKind::Polygon), All, All),
+            row(c('d'), false, true, shape(ShapeKind::Freeform), All, All),
             row(c('z'), true, false, AppAction::Undo, All, All),
             row(c('u'), false, false, AppAction::Undo, All, Never),
             row(

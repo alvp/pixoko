@@ -1,7 +1,7 @@
 //! Tests of the shapes in `ToolState` and of the box with six buttons (specs/hito-4-formas.md,
 //! unit 4.4): rows 7 to 10 and the part of row 11 that lives in `px-ui`.
 //!
-//! Red phase: `Tool::Shape`, `ShapeKind`, `ShapeFill`, `ToolAction::{SelectShape, Finish}`,
+//! Red phase: `Tool::Shape`, `ShapeKind`, `ShapeFill`, `ToolAction::SelectShape`, `CanvasInput::Confirm`,
 //! `ToolState::{shape_kind, shape_fill, set_shape_fill, set_other_pixel}`, `OptionRow::{Kind,
 //! Fill}` and the six-button box do not exist yet, so this file does not compile until the logic
 //! of `px-ui`.
@@ -14,7 +14,7 @@ use px_raster::{
     rect_ring, rect_spans, spaced_centers_closed, stamp_pixels,
 };
 use px_ui::actions::AppAction;
-use px_ui::canvas::CanvasEvent;
+use px_ui::canvas::{CanvasEvent, CanvasInput};
 use px_ui::chrome::{TOOL_LABELS, TOOLBOX_BUTTONS, head_u, tool_rows};
 use px_ui::edit_layout::min_window_height_pt;
 use px_ui::options::options_row_count;
@@ -83,6 +83,13 @@ impl Scene {
         self.drag(&[(x, y)]);
     }
 
+    /// `Intro` on the canvas.
+    fn confirm(&mut self) {
+        self.tool
+            .canvas_input_with(&mut self.doc, self.id, Some(red()), CanvasInput::Confirm)
+            .expect("confirm");
+    }
+
     fn shift(&mut self, on: bool) {
         self.tool.set_modifiers(on, false);
     }
@@ -114,10 +121,6 @@ fn spans_set(spans: &[Span]) -> BTreeSet<(u32, u32)> {
         .collect()
 }
 
-fn ring_set(ring: &[(i32, i32)]) -> BTreeSet<(u32, u32)> {
-    ring.iter().map(|&(x, y)| (x as u32, y as u32)).collect()
-}
-
 fn paint(set: &BTreeSet<(u32, u32)>, pixel: Pixel) -> BTreeMap<(u32, u32), Pixel> {
     set.iter().map(|&p| (p, pixel)).collect()
 }
@@ -133,7 +136,11 @@ fn model(
 ) -> BTreeMap<(u32, u32), Pixel> {
     let mut out = BTreeMap::new();
     if fill != ShapeFill::Outline {
-        let color = if fill == ShapeFill::Both { blue() } else { red() };
+        let color = if fill == ShapeFill::Both {
+            blue()
+        } else {
+            red()
+        };
         out.extend(paint(fill_set, color));
     }
     if fill != ShapeFill::Filled {
@@ -226,7 +233,10 @@ fn row_07_shift_makes_a_square_and_a_circle() {
     up.drag(&[(20, 20), (17, 10)]);
     assert_eq!(
         up.painted(),
-        paint(&spans_set(&rect_spans((20, 20), (10, 10), SIZE, SIZE)), red()),
+        paint(
+            &spans_set(&rect_spans((20, 20), (10, 10), SIZE, SIZE)),
+            red()
+        ),
         "el lado es el mayor desplazamiento, en el sentido del arrastre"
     );
     let mut ellipse = Scene::new(ShapeKind::Ellipse, ShapeFill::Filled);
@@ -234,7 +244,10 @@ fn row_07_shift_makes_a_square_and_a_circle() {
     ellipse.drag(&[(20, 20), (24, 22)]);
     assert_eq!(
         ellipse.painted(),
-        paint(&spans_set(&ellipse_spans((20, 20), 4, 4, SIZE, SIZE)), red())
+        paint(
+            &spans_set(&ellipse_spans((20, 20), 4, 4, SIZE, SIZE)),
+            red()
+        )
     );
     // The circle ignores Shift.
     let mut circle = Scene::new(ShapeKind::Circle, ShapeFill::Filled);
@@ -242,7 +255,10 @@ fn row_07_shift_makes_a_square_and_a_circle() {
     circle.drag(&[(20, 20), (23, 24)]);
     assert_eq!(
         circle.painted(),
-        paint(&spans_set(&ellipse_spans((20, 20), 5, 5, SIZE, SIZE)), red())
+        paint(
+            &spans_set(&ellipse_spans((20, 20), 5, 5, SIZE, SIZE)),
+            red()
+        )
     );
 }
 
@@ -255,12 +271,18 @@ fn row_07_one_undo_step_and_the_preview_is_what_gets_applied() {
         scene.mov(24, 23);
         let preview = scene.preview();
         assert!(!preview.is_empty());
-        assert!(scene.painted().is_empty(), "nada en el documento hasta soltar");
+        assert!(
+            scene.painted().is_empty(),
+            "nada en el documento hasta soltar"
+        );
         scene.end();
         assert_eq!(scene.painted(), preview, "{fill:?}");
         assert!(scene.preview().is_empty());
         assert!(scene.doc.undo().is_ok());
-        assert!(scene.painted().is_empty(), "un paso deshace la forma entera");
+        assert!(
+            scene.painted().is_empty(),
+            "un paso deshace la forma entera"
+        );
         assert!(!scene.doc.can_undo(), "solo había un paso");
     }
 }
@@ -286,11 +308,7 @@ fn row_07_escape_and_a_gesture_without_size_in_the_corner_case() {
 #[test]
 fn row_08_the_outline_uses_the_brush_and_the_spacing() {
     let brush = Brush::new(BrushShape::Round, 3);
-    for spacing in [
-        Spacing::Continuous,
-        Spacing::EveryN(4),
-        Spacing::TotalN(5),
-    ] {
+    for spacing in [Spacing::Continuous, Spacing::EveryN(4), Spacing::TotalN(5)] {
         let mut scene = Scene::new(ShapeKind::Rectangle, ShapeFill::Outline);
         scene.tool.set_brush(brush);
         scene.tool.set_spacing(spacing);
@@ -306,7 +324,11 @@ fn row_08_the_outline_uses_the_brush_and_the_spacing() {
     five.tool.set_brush(Brush::new(BrushShape::Square, 1));
     five.tool.set_spacing(Spacing::TotalN(5));
     five.drag(&[(20, 20), (26, 20)]);
-    assert_eq!(five.painted().len(), 5, "N en total = cinco sellos de un píxel");
+    assert_eq!(
+        five.painted().len(),
+        5,
+        "N en total = cinco sellos de un píxel"
+    );
 }
 
 #[test]
@@ -326,10 +348,7 @@ fn row_08_the_fill_ignores_the_brush() {
 
 const TRIANGLE: [(i32, i32); 3] = [(5, 5), (15, 5), (5, 15)];
 
-fn polygon_model(
-    fill: ShapeFill,
-    vertices: &[(i32, i32)],
-) -> BTreeMap<(u32, u32), Pixel> {
+fn polygon_model(fill: ShapeFill, vertices: &[(i32, i32)]) -> BTreeMap<(u32, u32), Pixel> {
     model(
         fill,
         &spans_set(&polygon_spans(vertices, SIZE, SIZE)),
@@ -346,9 +365,15 @@ fn row_09_clicks_then_finish_apply_one_step() {
         for &(x, y) in &TRIANGLE {
             scene.click(x, y);
         }
-        assert!(scene.painted().is_empty(), "pendiente: el documento no cambia");
-        assert!(!scene.preview().is_empty(), "la vista previa es el polígono");
-        scene.tool.apply_action(ToolAction::Finish);
+        assert!(
+            scene.painted().is_empty(),
+            "pendiente: el documento no cambia"
+        );
+        assert!(
+            !scene.preview().is_empty(),
+            "la vista previa es el polígono"
+        );
+        scene.confirm();
         assert_eq!(scene.painted(), polygon_model(fill, &TRIANGLE), "{fill:?}");
         assert!(scene.preview().is_empty());
         assert!(scene.doc.undo().is_ok());
@@ -364,10 +389,7 @@ fn row_09_pressing_the_first_corner_again_closes_it() {
         scene.click(x, y);
     }
     scene.click(5, 5);
-    assert_eq!(
-        scene.painted(),
-        polygon_model(ShapeFill::Filled, &TRIANGLE)
-    );
+    assert_eq!(scene.painted(), polygon_model(ShapeFill::Filled, &TRIANGLE));
     // With only two corners, pressing the first does not close (it is not a polygon yet).
     let mut two = Scene::new(ShapeKind::Polygon, ShapeFill::Filled);
     two.click(5, 5);
@@ -391,8 +413,10 @@ fn row_09_escape_tool_change_and_kind_change_discard_the_pending_polygon() {
                 .apply_action(ToolAction::SelectShape(ShapeKind::Rectangle)),
         }
         assert!(scene.preview().is_empty(), "descartado ({discard})");
-        scene.tool.apply_action(ToolAction::SelectShape(ShapeKind::Polygon));
-        scene.tool.apply_action(ToolAction::Finish);
+        scene
+            .tool
+            .apply_action(ToolAction::SelectShape(ShapeKind::Polygon));
+        scene.confirm();
         assert!(scene.painted().is_empty(), "no queda nada ({discard})");
         assert!(!scene.doc.can_undo());
     }
@@ -401,17 +425,17 @@ fn row_09_escape_tool_change_and_kind_change_discard_the_pending_polygon() {
 #[test]
 fn row_09_finish_with_fewer_than_two_corners_does_nothing_and_two_make_a_line() {
     let mut none = Scene::new(ShapeKind::Polygon, ShapeFill::Outline);
-    none.tool.apply_action(ToolAction::Finish);
+    none.confirm();
     assert!(none.painted().is_empty());
     let mut one = Scene::new(ShapeKind::Polygon, ShapeFill::Outline);
     one.click(5, 5);
-    one.tool.apply_action(ToolAction::Finish);
+    one.confirm();
     assert!(one.painted().is_empty());
     assert!(!one.doc.can_undo());
     let mut two = Scene::new(ShapeKind::Polygon, ShapeFill::Outline);
     two.click(5, 5);
     two.click(15, 9);
-    two.tool.apply_action(ToolAction::Finish);
+    two.confirm();
     assert_eq!(
         two.painted(),
         polygon_model(ShapeFill::Outline, &[(5, 5), (15, 9)])
@@ -424,7 +448,7 @@ fn row_09_a_dragged_corner_is_where_it_is_released_and_shift_snaps_to_an_axis() 
     scene.click(5, 5);
     scene.drag(&[(15, 5), (20, 7), (25, 5)]);
     scene.click(5, 15);
-    scene.tool.apply_action(ToolAction::Finish);
+    scene.confirm();
     assert_eq!(
         scene.painted(),
         polygon_model(ShapeFill::Outline, &[(5, 5), (25, 5), (5, 15)])
@@ -435,7 +459,7 @@ fn row_09_a_dragged_corner_is_where_it_is_released_and_shift_snaps_to_an_axis() 
     shifted.click(15, 8);
     shifted.click(16, 30);
     shifted.shift(false);
-    shifted.tool.apply_action(ToolAction::Finish);
+    shifted.confirm();
     assert_eq!(
         shifted.painted(),
         polygon_model(ShapeFill::Outline, &[(5, 5), (15, 5), (15, 30)]),
@@ -465,7 +489,23 @@ fn row_10_a_crossing_path_fills_even_odd() {
     let path = [(5, 5), (15, 15), (15, 5), (5, 15)];
     scene.drag(&path);
     assert_eq!(scene.painted(), polygon_model(ShapeFill::Filled, &path));
-    assert!(!scene.painted().contains_key(&(5, 10)), "el hueco lateral está vacío");
+    let painted = scene.painted();
+    assert!(
+        painted.contains_key(&(7, 10)),
+        "el triángulo izquierdo se rellena"
+    );
+    assert!(
+        painted.contains_key(&(13, 10)),
+        "el triángulo derecho se rellena"
+    );
+    assert!(
+        !painted.contains_key(&(10, 7)),
+        "el triángulo de arriba queda vacío"
+    );
+    assert!(
+        !painted.contains_key(&(10, 13)),
+        "el triángulo de abajo queda vacío"
+    );
 }
 
 #[test]
@@ -504,7 +544,11 @@ fn row_11_a_kind_key_sets_the_kind_and_keeps_the_fill_and_the_button_keeps_the_k
     state.apply_action(ToolAction::SelectShape(ShapeKind::Ellipse));
     state.apply_action(ToolAction::Select(Tool::Eraser));
     state.apply_action(ToolAction::Select(Tool::Shape));
-    assert_eq!(state.shape_kind(), ShapeKind::Ellipse, "el botón conserva el tipo");
+    assert_eq!(
+        state.shape_kind(),
+        ShapeKind::Ellipse,
+        "el botón conserva el tipo"
+    );
     assert_eq!(state.shape_fill(), ShapeFill::Both);
 }
 
@@ -526,7 +570,11 @@ fn row_11_the_option_rows_depend_on_the_fill_and_the_spacing() {
     state.set_shape_fill(ShapeFill::Both);
     assert_eq!(state.option_rows().len(), 6, "con ambos hay contorno");
     state.set_shape_fill(ShapeFill::Filled);
-    assert_eq!(state.option_rows(), vec![Kind, Fill], "solo relleno: sin pincel");
+    assert_eq!(
+        state.option_rows(),
+        vec![Kind, Fill],
+        "solo relleno: sin pincel"
+    );
 }
 
 #[test]
@@ -547,7 +595,11 @@ fn row_11_clicks_on_the_kind_and_fill_rows_cycle_and_the_texts_say_so() {
         assert_eq!(state.shape_kind(), kinds[(i + 1) % 5].0);
     }
     state.click_option(OptionRow::Kind, false, false);
-    assert_eq!(state.shape_kind(), ShapeKind::Freeform, "el derecho va hacia atrás");
+    assert_eq!(
+        state.shape_kind(),
+        ShapeKind::Freeform,
+        "el derecho va hacia atrás"
+    );
     let fills = [
         (ShapeFill::Outline, "Relleno: Contorno"),
         (ShapeFill::Filled, "Relleno: Solo relleno"),
@@ -569,7 +621,10 @@ fn row_11_shift_steps_the_size_of_the_shape_brush_by_ten() {
     state.apply_action(ToolAction::Select(Tool::Shape));
     state.click_option(OptionRow::Size, true, true);
     assert_eq!(state.brush().size(), 11);
-    assert!(state.step_brush_size(1), "+ y - también valen con las formas");
+    assert!(
+        state.step_brush_size(1),
+        "+ y - también valen con las formas"
+    );
     assert_eq!(state.brush().size(), 12);
 }
 
@@ -646,6 +701,9 @@ fn row_12_an_empty_cell_is_filled_by_a_shape_without_materializing_it_before() {
         };
         assert_eq!(cell.get_pixel(8, 7), Ok(inside), "{fill:?}");
         doc.undo().expect("one step");
-        assert!(doc.image(id).is_none(), "undo leaves the cell empty ({fill:?})");
+        assert!(
+            doc.image(id).is_none(),
+            "undo leaves the cell empty ({fill:?})"
+        );
     }
 }

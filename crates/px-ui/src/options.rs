@@ -79,6 +79,7 @@ pub fn title(tool: Tool) -> &'static str {
         Tool::Fill => "Relleno",
         Tool::Dropper => "Cuentagotas",
         Tool::Eraser => "Borrador",
+        Tool::Shape => "Formas",
     }
 }
 
@@ -139,6 +140,7 @@ fn tool_index(tool: Tool) -> usize {
         Tool::Fill => 2,
         Tool::Dropper => 3,
         Tool::Eraser => 4,
+        Tool::Shape => 5,
     }
 }
 
@@ -152,7 +154,7 @@ pub struct OptionsWindow {
     /// The position when the drag of the title bar began.
     pub drag_from: Option<(i64, i64)>,
     /// The scroll of the body, in rows, of each tool (the order of the five buttons).
-    pub scroll: [usize; 5],
+    pub scroll: [usize; 6],
 }
 
 impl OptionsWindow {

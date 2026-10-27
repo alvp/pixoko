@@ -23,6 +23,8 @@ use crate::keymap::default_keymap;
 use crate::pick::{
     Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable, picked_at,
 };
+use crate::shape_tool::{Geom, ShapeStyle, drag_geom};
+use crate::shapes_es;
 use crate::source::visible_picked;
 use crate::stroke::Stroke;
 use crate::view::Size;
@@ -144,6 +146,44 @@ pub enum Tool {
     Fill,
     Dropper,
     Eraser,
+    /// Rectangle, circle, ellipse, polygon or freeform (the kind is in `ToolState`).
+    Shape,
+}
+
+/// The kind of figure that the shapes tool draws (specs/hito-4-formas.md, D1).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ShapeKind {
+    #[default]
+    Rectangle,
+    Circle,
+    Ellipse,
+    Polygon,
+    Freeform,
+}
+
+impl ShapeKind {
+    /// All the kinds, in the order in which the options window cycles them.
+    pub const ALL: [ShapeKind; 5] = [
+        ShapeKind::Rectangle,
+        ShapeKind::Circle,
+        ShapeKind::Ellipse,
+        ShapeKind::Polygon,
+        ShapeKind::Freeform,
+    ];
+}
+
+/// What a shape paints: only the outline (with the brush), only the fill or both (the outline
+/// with the color of the button, the fill with the other slot's).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ShapeFill {
+    #[default]
+    Outline,
+    Filled,
+    Both,
+}
+
+impl ShapeFill {
+    pub const ALL: [ShapeFill; 3] = [ShapeFill::Outline, ShapeFill::Filled, ShapeFill::Both];
 }
 
 impl Tool {
@@ -155,6 +195,7 @@ impl Tool {
             Tool::Fill => "relleno",
             Tool::Dropper => "cuentagotas",
             Tool::Eraser => "borrador",
+            Tool::Shape => "formas",
         }
     }
 }
@@ -167,6 +208,8 @@ pub enum ToolAction {
     SelectDotted,
     /// The line in curve mode (`q`).
     SelectCurve,
+    /// The shapes tool with this kind (`r`, `c`, `e`, `w`, `D`); the fill is kept.
+    SelectShape(ShapeKind),
     Cancel,
 }
 
@@ -184,6 +227,7 @@ pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction>
         AppAction::SelectTool(tool) => Some(ToolAction::Select(tool)),
         AppAction::SelectDotted => Some(ToolAction::SelectDotted),
         AppAction::SelectCurve => Some(ToolAction::SelectCurve),
+        AppAction::SelectShape(kind) => Some(ToolAction::SelectShape(kind)),
         _ => None,
     }
 }
@@ -208,7 +252,7 @@ pub fn tool_color_label(
 ) -> Option<String> {
     match tool {
         Tool::Eraser => Some(eraser_label(image)),
-        Tool::Pencil | Tool::Line | Tool::Fill | Tool::Dropper => {
+        Tool::Pencil | Tool::Line | Tool::Fill | Tool::Dropper | Tool::Shape => {
             choice_label_with(image, choice, slots)
         }
     }
@@ -250,6 +294,10 @@ enum Gesture {
     Dropper(Dropper),
     /// A segment or a curve being dragged.
     Figure(Box<Figure>),
+    /// A rectangle, circle, ellipse or freeform being dragged.
+    Shape(Box<ShapeDrag>),
+    /// A corner of the polygon being placed (the candidate is in `PendingPolygon`).
+    Corner,
 }
 
 /// The axis that `Mayús` locks.
@@ -350,6 +398,57 @@ impl Figure {
 /// Longest segment, in points, whose spacing is measured from its real start.
 const MAX_WHOLE_SEGMENT: u64 = 1 << 22;
 
+/// The shape being dragged.
+#[derive(Debug)]
+struct ShapeDrag {
+    kind: ShapeKind,
+    style: ShapeStyle,
+    from: (i32, i32),
+    to: (i32, i32),
+    shift: bool,
+    /// The positions of a freeform, without repeats in a row.
+    path: Vec<(i32, i32)>,
+}
+
+impl ShapeDrag {
+    fn geom(&self) -> Geom {
+        match self.kind {
+            ShapeKind::Freeform => Geom::Poly(self.path.clone()),
+            kind => drag_geom(kind, self.from, self.to, self.shift),
+        }
+    }
+}
+
+/// The polygon whose corners are being placed, one click each.
+#[derive(Debug)]
+struct PendingPolygon {
+    style: ShapeStyle,
+    vertices: Vec<(i32, i32)>,
+    /// The corner being placed (pressed and not yet released).
+    candidate: Option<(i32, i32)>,
+}
+
+impl PendingPolygon {
+    /// The corners as they are now, with the candidate if there is one.
+    fn geom(&self) -> Geom {
+        let mut vertices = self.vertices.clone();
+        if let Some(c) = self.candidate
+            && vertices.last() != Some(&c)
+        {
+            vertices.push(c);
+        }
+        Geom::Poly(vertices)
+    }
+
+    /// `pos` as a corner: with `Mayús`, on the axis of its larger displacement from the last one.
+    fn corner(&self, pos: (i32, i32), shift: bool) -> (i32, i32) {
+        match self.vertices.last() {
+            Some(&last) if shift => project(last, pos, dominant_axis(last, pos)),
+            _ => pos,
+        }
+    }
+}
+
 /// The first drag of a curve, waiting for the second.
 #[derive(Debug)]
 struct PendingCurve {
@@ -378,6 +477,11 @@ pub struct ToolState {
     shift: bool,
     ctrl: bool,
     pending: Option<PendingCurve>,
+    shape_kind: ShapeKind,
+    shape_fill: ShapeFill,
+    /// The pixel of the other slot, for the fill of a shape with outline.
+    other: Option<Pixel>,
+    polygon: Option<PendingPolygon>,
 }
 
 impl Default for ToolState {
@@ -396,8 +500,23 @@ impl Default for ToolState {
             shift: false,
             ctrl: false,
             pending: None,
+            shape_kind: ShapeKind::default(),
+            shape_fill: ShapeFill::default(),
+            other: None,
+            polygon: None,
         }
     }
+}
+
+/// The element after (or before) `current` in `all`, wrapping around.
+fn cycle<T: Copy + PartialEq>(all: &[T], current: T, forward: bool) -> T {
+    let at = all.iter().position(|&item| item == current).unwrap_or(0);
+    let next = if forward {
+        (at + 1) % all.len()
+    } else {
+        (at + all.len() - 1) % all.len()
+    };
+    all[next]
 }
 
 /// The `N` that the spacing starts with.
@@ -410,6 +529,10 @@ const MAX_SPACING_N: u32 = 999;
 pub enum OptionRow {
     /// Continuous or dotted (pencil), straight or curve (line).
     Mode,
+    /// The kind of shape.
+    Kind,
+    /// Outline, fill or both.
+    Fill,
     Shape,
     Size,
     Spacing,
@@ -424,6 +547,13 @@ pub fn default_option_rows(tool: Tool) -> &'static [OptionRow] {
         Tool::Pencil => &[OptionRow::Mode, OptionRow::Shape, OptionRow::Size],
         Tool::Line => &[
             OptionRow::Mode,
+            OptionRow::Shape,
+            OptionRow::Size,
+            OptionRow::Spacing,
+        ],
+        Tool::Shape => &[
+            OptionRow::Kind,
+            OptionRow::Fill,
             OptionRow::Shape,
             OptionRow::Size,
             OptionRow::Spacing,
@@ -476,9 +606,29 @@ impl ToolState {
         self.ctrl = ctrl;
     }
 
+    /// The kind of figure of the shapes tool.
+    pub fn shape_kind(&self) -> ShapeKind {
+        self.shape_kind
+    }
+
+    /// Outline, fill or both, for the shapes tool.
+    pub fn shape_fill(&self) -> ShapeFill {
+        self.shape_fill
+    }
+
+    pub fn set_shape_fill(&mut self, fill: ShapeFill) {
+        self.shape_fill = fill;
+    }
+
+    /// The pixel of the other slot (the fill of a shape that has an outline); `px-app` sets it
+    /// before each canvas event. Without it the fill takes the color of the outline.
+    pub fn set_other_pixel(&mut self, pixel: Option<Pixel>) {
+        self.other = pixel;
+    }
+
     /// Whether the active tool paints with the brush.
     fn is_stroke_tool(&self) -> bool {
-        matches!(self.tool, Tool::Pencil | Tool::Line)
+        matches!(self.tool, Tool::Pencil | Tool::Line | Tool::Shape)
     }
 
     /// Changes the size of the brush by `delta`, inside 1 to 100, only with a stroke tool. `true`
@@ -496,7 +646,14 @@ impl ToolState {
     /// The rows of the options window of the active tool.
     pub fn option_rows(&self) -> Vec<OptionRow> {
         let mut rows = default_option_rows(self.tool).to_vec();
-        if self.tool == Tool::Line && self.spacing != Spacing::Continuous {
+        if self.tool == Tool::Shape && self.shape_fill == ShapeFill::Filled {
+            // Only the fill: no brush, no spacing.
+            rows.truncate(2);
+        }
+        if matches!(self.tool, Tool::Line | Tool::Shape)
+            && rows.contains(&OptionRow::Spacing)
+            && self.spacing != Spacing::Continuous
+        {
             rows.push(OptionRow::SpacingN);
         }
         rows
@@ -521,6 +678,8 @@ impl ToolState {
                 };
                 brush_es::mode_text(self.tool == Tool::Line, on).to_string()
             }
+            OptionRow::Kind => shapes_es::kind_text(self.shape_kind).to_string(),
+            OptionRow::Fill => shapes_es::fill_text(self.shape_fill).to_string(),
             OptionRow::Shape => brush_es::shape_text(self.brush.shape()),
             OptionRow::Size => brush_es::size_text(self.brush.size()),
             OptionRow::Spacing => brush_es::spacing_text(self.spacing).to_string(),
@@ -541,6 +700,11 @@ impl ToolState {
                 self.pending = None;
             }
             OptionRow::Mode => self.dotted = !self.dotted,
+            OptionRow::Kind => {
+                self.shape_kind = cycle(&ShapeKind::ALL, self.shape_kind, forward);
+                self.polygon = None;
+            }
+            OptionRow::Fill => self.shape_fill = cycle(&ShapeFill::ALL, self.shape_fill, forward),
             OptionRow::Shape => {
                 let all = BrushShape::ALL;
                 let at = all
@@ -610,6 +774,11 @@ impl ToolState {
     fn apply(&mut self, doc: &mut Document, command: Command) -> Result<bool, DocumentError> {
         let image = match &command {
             Command::SetPixels { image, .. } | Command::FillSpans { image, .. } => Some(*image),
+            // A shape with outline and fill: both parts are on the same cell.
+            Command::Batch(commands) => commands.iter().find_map(|c| match c {
+                Command::SetPixels { image, .. } | Command::FillSpans { image, .. } => Some(*image),
+                _ => None,
+            }),
             _ => None,
         };
         let size = image
@@ -636,6 +805,15 @@ impl ToolState {
                 self.dotted = false;
                 self.curve = false;
                 self.pending = None;
+                self.polygon = None;
+            }
+            ToolAction::SelectShape(kind) if !self.busy() => {
+                self.tool = Tool::Shape;
+                self.shape_kind = kind;
+                self.dotted = false;
+                self.curve = false;
+                self.pending = None;
+                self.polygon = None;
             }
             ToolAction::SelectDotted if !self.busy() => {
                 self.tool = Tool::Pencil;
@@ -651,7 +829,11 @@ impl ToolState {
             }
             ToolAction::Cancel => {
                 self.pending = None;
-                if matches!(self.gesture, Gesture::Figure(_)) {
+                self.polygon = None;
+                if matches!(
+                    self.gesture,
+                    Gesture::Figure(_) | Gesture::Shape(_) | Gesture::Corner
+                ) {
                     self.gesture = Gesture::Waiting;
                 }
             }
@@ -739,6 +921,18 @@ impl ToolState {
                             figure.traces.add(pixels, pixel);
                         }
                     }
+                    Gesture::Shape(drag) => {
+                        drag.shift = shift;
+                        drag.to = pos;
+                        if drag.path.last() != Some(&pos) {
+                            drag.path.push(pos);
+                        }
+                    }
+                    Gesture::Corner => {
+                        if let Some(polygon) = &mut self.polygon {
+                            polygon.candidate = Some(polygon.corner(pos, shift));
+                        }
+                    }
                     Gesture::Dropper(dropper) => {
                         let source = self.dropper_source;
                         let picked =
@@ -796,6 +990,14 @@ impl ToolState {
                         self.apply(doc, Command::SetPixels { image, pixels })
                     }
                 },
+                Gesture::Shape(drag) => {
+                    let command = drag.style.command(image, &drag.geom());
+                    match command {
+                        Some(command) => self.apply(doc, command),
+                        None => Ok(false),
+                    }
+                }
+                Gesture::Corner => self.place_corner(doc, image),
                 Gesture::Idle | Gesture::Waiting | Gesture::Dropper(_) => Ok(false),
             },
         }
@@ -816,6 +1018,7 @@ impl ToolState {
                 self.apply_action(ToolAction::Cancel);
                 Ok(false)
             }
+            CanvasInput::Confirm => self.close_polygon(doc, image),
         }
     }
 
@@ -833,6 +1036,7 @@ impl ToolState {
                 self.apply_action(ToolAction::Cancel);
                 Ok(false)
             }
+            CanvasInput::Confirm => self.close_polygon(doc, image),
         }
     }
 
@@ -870,7 +1074,7 @@ impl ToolState {
                 }
                 return Ok(false);
             }
-            Tool::Pencil | Tool::Line | Tool::Fill => {}
+            Tool::Pencil | Tool::Line | Tool::Fill | Tool::Shape => {}
         }
         let Some(pixel) = pixel else {
             return Ok(false);
@@ -916,7 +1120,84 @@ impl ToolState {
                 Some(command) => self.apply(doc, command),
                 None => Ok(false),
             },
+            Tool::Shape => {
+                let style = ShapeStyle {
+                    pixel,
+                    other: self.other.unwrap_or(pixel),
+                    fill: self.shape_fill,
+                    brush: self.brush,
+                    spacing: self.spacing,
+                    width,
+                    height,
+                };
+                if self.shape_kind == ShapeKind::Polygon {
+                    // Pending corners of another image do not apply to this one.
+                    if self
+                        .polygon
+                        .as_ref()
+                        .is_some_and(|p| (p.style.width, p.style.height) != (width, height))
+                    {
+                        self.polygon = None;
+                    }
+                    let polygon = self.polygon.get_or_insert(PendingPolygon {
+                        style,
+                        vertices: Vec::new(),
+                        candidate: None,
+                    });
+                    polygon.candidate = Some(polygon.corner(pos, self.shift));
+                    self.gesture = Gesture::Corner;
+                } else {
+                    self.gesture = Gesture::Shape(Box::new(ShapeDrag {
+                        kind: self.shape_kind,
+                        style,
+                        from: pos,
+                        to: pos,
+                        shift: self.shift,
+                        path: vec![pos],
+                    }));
+                }
+                Ok(false)
+            }
             Tool::Dropper | Tool::Eraser => Ok(false),
+        }
+    }
+
+    /// Release of a polygon corner: a press on the first corner (with three or more) closes the
+    /// polygon; otherwise the corner is added.
+    fn place_corner(&mut self, doc: &mut Document, image: ImageId) -> Result<bool, DocumentError> {
+        let Some(polygon) = &mut self.polygon else {
+            return Ok(false);
+        };
+        let Some(corner) = polygon.candidate.take() else {
+            return Ok(false);
+        };
+        if polygon.vertices.len() >= 3 && polygon.vertices.first() == Some(&corner) {
+            return self.close_polygon(doc, image);
+        }
+        if polygon.vertices.last() != Some(&corner) {
+            polygon.vertices.push(corner);
+        }
+        Ok(false)
+    }
+
+    /// Applies the pending polygon (`Intro`, or a press on its first corner): it needs two corners
+    /// at least (two are a line). Without a pending polygon, or while a corner is being placed, it
+    /// does nothing.
+    fn close_polygon(&mut self, doc: &mut Document, image: ImageId) -> Result<bool, DocumentError> {
+        if self.busy() {
+            return Ok(false);
+        }
+        let Some(polygon) = &self.polygon else {
+            return Ok(false);
+        };
+        if polygon.vertices.len() < 2 {
+            return Ok(false);
+        }
+        let command = polygon.style.command(image, &polygon.geom());
+        self.polygon = None;
+        match command {
+            Some(command) => self.apply(doc, command),
+            None => Ok(false),
         }
     }
 
@@ -928,6 +1209,7 @@ impl ToolState {
             Gesture::Brush { stroke, .. } | Gesture::Erase { stroke, .. } => {
                 Box::new(stroke.pixels().iter().copied())
             }
+            Gesture::Shape(drag) => Box::new(drag.style.preview(&drag.geom()).into_iter()),
             Gesture::Figure(figure) => {
                 let pixel = figure.pixel;
                 let figure_pixels = figure.pixels();
@@ -938,6 +1220,10 @@ impl ToolState {
                             .map(move |(x, y)| PixelEdit { x, y, pixel }),
                     ),
                 )
+            }
+            _ if self.polygon.is_some() => {
+                let polygon = self.polygon.iter().next().into_iter();
+                Box::new(polygon.flat_map(|p| p.style.preview(&p.geom()).into_iter()))
             }
             _ => match &self.pending {
                 Some(p) => {
