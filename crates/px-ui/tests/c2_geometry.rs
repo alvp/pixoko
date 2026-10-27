@@ -410,7 +410,7 @@ fn row_3_the_minimum_window_at_the_five_scales_and_with_an_invalid_ppp() {
         column_width_u(COLUMN_MIN_COLS) + MIN_CANVAS_WIDTH_U
     );
     assert_eq!(column_and_canvas, 277);
-    assert_eq!(menu, 4 + 289);
+    assert_eq!(menu, 4 + 343);
     assert_eq!(dialog, 330 + 2 * 8);
     assert_eq!(status, 66 * 7 + 2 * 3);
     assert_eq!(

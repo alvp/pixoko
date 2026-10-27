@@ -202,9 +202,9 @@ fn dropdown_width_u(items: &[px_ui::menu::MenuItem], platform: Platform) -> i64 
 #[test]
 fn row_7_the_menu_titles_add_249_u_and_fit_with_their_margin_in_the_minimum_width() {
     let widths: Vec<i64> = MENUS.iter().map(|m| title_width_u(m.title)).collect();
-    assert_eq!(widths, [61, 54, 54, 40, 33, 47]);
+    assert_eq!(widths, [61, 54, 54, 54, 40, 33, 47]);
     let total: i64 = widths.iter().sum();
-    assert_eq!(total, 289);
+    assert_eq!(total, 343);
     assert_eq!(MENU_BAR_W_U, total);
     assert!(4 + total < min_window_width_u());
 }
@@ -412,8 +412,8 @@ fn row_8_minimum_width_term_the_minimum_column_and_the_minimum_canvas() {
 
 #[test]
 fn row_8_minimum_width_term_the_menu_bar_and_its_margin() {
-    assert_eq!(MENU_BAR_W_U + 4, 293);
-    assert!(min_window_width_u() >= 293);
+    assert_eq!(MENU_BAR_W_U + 4, 347);
+    assert!(min_window_width_u() >= 347);
 }
 
 #[test]
@@ -427,7 +427,7 @@ fn row_8_minimum_width_term_the_status_bar_keeps_its_66_columns() {
     // 66 columnas de 7 u y el relleno de 3 u a cada lado (la barra de estado de siempre).
     assert_eq!(66 * i64::from(ADVANCE_PX) + 2 * 3, 468);
     assert_eq!(min_window_width_u(), 468);
-    assert_eq!(min_width_terms_u(), [277, 293, 346, 468]);
+    assert_eq!(min_width_terms_u(), [277, 347, 346, 468]);
 }
 
 #[test]

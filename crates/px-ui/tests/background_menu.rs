@@ -193,7 +193,9 @@ fn row_12_the_rest_of_the_menus_have_no_submenus_and_there_are_five_in_order() {
     let titles: Vec<&str> = MENUS.iter().map(|m| m.title).collect();
     assert_eq!(
         titles,
-        ["Archivo", "Editar", "Imagen", "Capa", "Ver", "Ayuda"]
+        [
+            "Archivo", "Editar", "Imagen", "Paleta", "Capa", "Ver", "Ayuda"
+        ]
     );
     for title in ["Archivo", "Editar", "Imagen", "Capa", "Ayuda"] {
         assert!(menu_titled(title).submenus.is_empty(), "{title}");
@@ -232,6 +234,12 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         AppAction::RemovePaletteEntry,
         AppAction::PaletteSize,
     ]);
+    // The `Paleta` menu of 4.6 sits between `Imagen` and `Capa`.
+    expected_2.extend(
+        px_ui::palette_tools::PaletteTool::ALL
+            .iter()
+            .map(|&tool| AppAction::PaletteTool(tool)),
+    );
     expected_2.extend([
         AppAction::NewLayer,
         AppAction::DuplicateLayer,
@@ -497,7 +505,8 @@ fn state_2() -> UiState {
 
 #[test]
 fn show_menu_with_background_paints_the_bar_with_each_active_background_like_show_menu() {
-    let screen = egui::vec2(400.0, 300.0);
+    // 4.6 added the `Paleta` menu: seven titles need a wider screen than six did (400 pt).
+    let screen = egui::vec2(520.0, 300.0);
     for ppp in common::PPPS {
         let ctx = context(ppp);
         let state_2 = state_2();

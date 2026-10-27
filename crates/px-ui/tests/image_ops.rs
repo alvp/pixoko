@@ -72,7 +72,7 @@ fn row_9_the_six_have_no_default_key_are_editable_and_have_help() {
             );
         }
     }
-    assert_eq!(help_table().len(), 57);
+    assert_eq!(help_table().len(), 68);
     for text in CANVAS_ANCHORS.iter().chain([&IMAGE_OP_NOTHING]) {
         assert!(
             text.chars().all(|c| INTERFACE_CHARSET.contains(c)),

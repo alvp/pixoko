@@ -20,6 +20,7 @@ use px_ui::actions::{AppAction, Locks, Origin, Platform, UiState, enabled, is_bl
 use px_ui::help::HelpTarget;
 use px_ui::keymap::{KeyId, Keymap, Press};
 use px_ui::menu::{MENUS, Menu, MenuItem, Shortcut, shortcut_for, shortcut_text};
+use px_ui::palette_tools::PaletteTool;
 use px_ui::text::{INTERFACE_CHARSET, install_fonts, printable, replace_missing};
 use px_ui::tool::Tool;
 use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
@@ -75,13 +76,15 @@ fn row_1_five_menus_in_order_with_their_titles() {
     let titles: Vec<&str> = MENUS.iter().map(title).collect();
     assert_eq!(
         titles,
-        ["Archivo", "Editar", "Imagen", "Capa", "Ver", "Ayuda"]
+        [
+            "Archivo", "Editar", "Imagen", "Paleta", "Capa", "Ver", "Ayuda"
+        ]
     );
 }
 
 #[test]
 fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
-    let expected_2: [(&str, Vec<(&str, AppAction)>); 6] = [
+    let expected_2: [(&str, Vec<(&str, AppAction)>); 7] = [
         (
             "Archivo",
             vec![
@@ -116,6 +119,40 @@ fn row_1_each_menu_has_the_labels_and_actions_of_decision_2() {
                 ("Añadir entrada", AppAction::AddPaletteEntry),
                 ("Quitar entrada", AppAction::RemovePaletteEntry),
                 ("Tamaño de la paleta…", AppAction::PaletteSize),
+            ],
+        ),
+        (
+            "Paleta",
+            vec![
+                ("Copiar entradas", AppAction::PaletteTool(PaletteTool::Copy)),
+                ("Pegar entradas", AppAction::PaletteTool(PaletteTool::Paste)),
+                (
+                    "Intercambiar entradas",
+                    AppAction::PaletteTool(PaletteTool::Swap),
+                ),
+                ("Degradado", AppAction::PaletteTool(PaletteTool::Gradient)),
+                (
+                    "Borrar entradas",
+                    AppAction::PaletteTool(PaletteTool::Delete),
+                ),
+                (
+                    "Paleta por defecto",
+                    AppAction::PaletteTool(PaletteTool::Default),
+                ),
+                ("Cargar paleta…", AppAction::PaletteTool(PaletteTool::Load)),
+                (
+                    "Cargar en la activa…",
+                    AppAction::PaletteTool(PaletteTool::LoadAt),
+                ),
+                ("Guardar paleta…", AppAction::PaletteTool(PaletteTool::Save)),
+                (
+                    "Cambiar color en la imagen",
+                    AppAction::PaletteTool(PaletteTool::ReplaceColor),
+                ),
+                (
+                    "Intercambiar en la imagen",
+                    AppAction::PaletteTool(PaletteTool::SwapColors),
+                ),
             ],
         ),
         (
@@ -179,9 +216,9 @@ fn row_1_the_separator_goes_only_before_quit() {
 }
 
 #[test]
-fn row_1_there_are_forty_entries_and_no_action_repeats() {
+fn row_1_there_are_fifty_one_entries_and_no_action_repeats() {
     let actions: Vec<AppAction> = entries().iter().map(|i| i.action).collect();
-    assert_eq!(actions.len(), 40);
+    assert_eq!(actions.len(), 51);
     for (i, a) in actions.iter().enumerate() {
         assert!(
             !actions[i + 1..].contains(a),
@@ -215,6 +252,12 @@ fn row_1_there_are_forty_entries_and_no_action_repeats() {
         AppAction::RemovePaletteEntry,
         AppAction::PaletteSize,
     ]);
+    // The `Paleta` menu of 4.6 sits between `Imagen` and `Capa`.
+    expected_2.extend(
+        PaletteTool::ALL
+            .iter()
+            .map(|&tool| AppAction::PaletteTool(tool)),
+    );
     expected_2.extend([
         AppAction::NewLayer,
         AppAction::DuplicateLayer,
@@ -260,7 +303,7 @@ fn texts_of_shortcut(platform: Platform) -> Vec<Option<String>> {
         .collect()
 }
 
-fn some(texts: [Option<&str>; 40]) -> Vec<Option<String>> {
+fn some(texts: [Option<&str>; 51]) -> Vec<Option<String>> {
     texts.iter().map(|t| t.map(str::to_string)).collect()
 }
 
@@ -278,6 +321,17 @@ fn row_1_shortcuts_on_linux() {
             Some("Ctrl+Z"),
             Some("Ctrl+Y"),
             Some("K"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -339,6 +393,17 @@ fn row_1_shortcuts_on_windows_are_those_of_linux_except_quit_which_has_none() {
             None,
             None,
             None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             Some(";"),
             None,
             None,
@@ -377,6 +442,17 @@ fn row_1_shortcuts_on_mac_use_cmd_redo_is_cmd_shift_z_and_quit_has_none() {
             Some("Cmd+Z"),
             Some("Cmd+Mayús+Z"),
             Some("K"),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -998,8 +1074,9 @@ fn row_10_image_is_the_third_menu_between_edit_and_view_with_convert_and_three_p
     let titles: Vec<&str> = MENUS.iter().map(title).collect();
     assert_eq!(titles.iter().position(|t| *t == "Imagen"), Some(2));
     assert_eq!(titles[1], "Editar");
-    assert_eq!(titles[3], "Capa");
-    assert_eq!(titles[4], "Ver");
+    assert_eq!(titles[3], "Paleta");
+    assert_eq!(titles[4], "Capa");
+    assert_eq!(titles[5], "Ver");
 
     let image_2 = menu_image();
     assert_eq!(
@@ -1146,7 +1223,7 @@ fn row_10_the_image_dropdown_measures_166_u_and_the_view_one_208_the_widest() {
         // `Ver` sigue siendo el más ancho de los cinco.
         for menu in MENUS.iter().filter(|m| m.title != "Ver") {
             assert!(
-                popup_width_u(menu, platform) < 208,
+                popup_width_u(menu, platform) <= 208,
                 "{platform:?}: {} mide {}",
                 menu.title,
                 popup_width_u(menu, platform)
