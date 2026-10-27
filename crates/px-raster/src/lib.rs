@@ -19,7 +19,10 @@ pub use brush::{
 };
 pub use compose::{ComposeError, Rect, compose, compose_layers, compose_rect, composite_pixel};
 pub use draw::{draw_line, line_command};
-pub use fill::{fill_command, fill_command_with_limit, flood_fill};
+pub use fill::{
+    PatternTile, fill_command, fill_command_with_limit, fill_pattern_command, fill_until_command,
+    fill_until_command_with_limit, flood_fill, pattern_spans,
+};
 pub use image_ops::{
     Anchor, ImageOp, ImageOpError, flip_horizontal, flip_vertical, image_command, resize_canvas,
     rotate_180, rotate_ccw, rotate_cw,

@@ -1,4 +1,7 @@
-//! Relleno por inundación como comando de `Document` (specs/hito-2-relleno.md).
+//! Relleno por inundación como comando de `Document` (specs/hito-2-relleno.md), por filas desde
+//! la unidad 4.5 (specs/hito-4-relleno.md): se comparan los bytes de los píxeles sobre las filas
+//! de la imagen en vez de construir un `Pixel` por casilla. Además del relleno sólido, la región
+//! «hasta el color de fondo» y el patrón alineado al lienzo.
 //!
 //! Relleno por tramos con pila explícita: cada tramo (serie máxima de píxeles de la región en
 //! una fila) se marca en un mapa de visitados al descubrirlo y se apila una sola vez. Una pasada
@@ -6,6 +9,8 @@
 //! fusionados, como exige `Command::FillSpans`.
 
 use px_core::{Command, Document, DocumentError, Image, ImageId, Pixel, Span};
+
+use crate::Brush;
 
 /// `FillSpans` con la región de píxeles contiguos (4 vecinos) que valen lo mismo que la semilla
 /// `(x, y)`, comparados por valor almacenado; `None` si no hay nada que cambiar.
@@ -50,10 +55,189 @@ pub fn fill_command_with_limit(
     if seed == pixel {
         return Ok(None);
     }
-    let spans = region_spans(target, x, y, seed, max_spans)?;
+    let spans = region_spans(target, x, y, &Rule::same(seed), max_spans)?;
     Ok(Some(Command::FillSpans {
         image,
         spans,
+        pixel,
+    }))
+}
+
+/// Como [`fill_command`], pero la región es la de los píxeles conectados (4 vecinos) a la semilla
+/// que **no valen** `boundary` (el color de fondo): «relleno hasta el color de fondo». Si la
+/// semilla vale `boundary` no hay nada que rellenar (`None`); `pixel` puede ser igual a
+/// `boundary`. Los topes de 14c valen igual.
+pub fn fill_until_command(
+    doc: &Document,
+    image: ImageId,
+    x: i32,
+    y: i32,
+    pixel: Pixel,
+    boundary: Pixel,
+) -> Result<Option<Command>, DocumentError> {
+    fill_until_command_with_limit(doc, image, x, y, pixel, boundary, Document::MAX_FILL_SPANS)
+}
+
+/// Como [`fill_until_command`], con el tope de tramos como parámetro (ver
+/// [`fill_command_with_limit`]). Orden de comprobaciones: imagen desconocida, `pixel` y
+/// `boundary` que no son del modo de la imagen (`Pixel { pixel: 0 | 1, .. }`), semilla fuera
+/// (`None`), semilla igual al fondo (`None`) y, el último, el tope.
+pub fn fill_until_command_with_limit(
+    doc: &Document,
+    image: ImageId,
+    x: i32,
+    y: i32,
+    pixel: Pixel,
+    boundary: Pixel,
+    max_spans: usize,
+) -> Result<Option<Command>, DocumentError> {
+    let target = doc.image(image).ok_or(DocumentError::UnknownImage(image))?;
+    for (index, value) in [pixel, boundary].into_iter().enumerate() {
+        target
+            .check_pixel(value)
+            .map_err(|source| DocumentError::Pixel {
+                pixel: index,
+                source,
+            })?;
+    }
+    let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y)) else {
+        return Ok(None);
+    };
+    let Ok(seed) = target.get_pixel(x, y) else {
+        return Ok(None);
+    };
+    if seed == boundary {
+        return Ok(None);
+    }
+    let spans = region_spans(target, x, y, &Rule::not(boundary), max_spans)?;
+    Ok(Some(Command::FillSpans {
+        image,
+        spans,
+        pixel,
+    }))
+}
+
+/// La baldosa de un patrón: la máscara del pincel en su caja de `n × n`, repetida por todo el
+/// lienzo y **alineada a su origen** (el píxel `(x, y)` está pintado si lo está la casilla
+/// `(x mod n, y mod n)`), no a la semilla ni a la región.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PatternTile {
+    size: u32,
+    /// `size × size` casillas por filas.
+    cells: Vec<bool>,
+}
+
+impl PatternTile {
+    /// La máscara de `brush.offsets()` con el centro en `(⌊n/2⌋, ⌊n/2⌋)` de la caja.
+    pub fn from_brush(brush: &Brush) -> PatternTile {
+        let size = brush.size();
+        let n = size as usize;
+        let center = i64::from(size / 2);
+        let mut cells = vec![false; n * n];
+        for (dx, dy) in brush.offsets() {
+            let (tx, ty) = (i64::from(dx) + center, i64::from(dy) + center);
+            if let (Ok(tx), Ok(ty)) = (usize::try_from(tx), usize::try_from(ty))
+                && tx < n
+                && ty < n
+                && let Some(cell) = cells.get_mut(ty * n + tx)
+            {
+                *cell = true;
+            }
+        }
+        PatternTile { size, cells }
+    }
+
+    /// Si el píxel `(x, y)` del lienzo está pintado por el patrón.
+    pub fn contains(&self, x: u32, y: u32) -> bool {
+        let n = self.size as usize;
+        let at = (y % self.size) as usize * n + (x % self.size) as usize;
+        self.cells.get(at).copied().unwrap_or(false)
+    }
+
+    /// La fila `y mod n` de la baldosa.
+    fn row(&self, y: u32) -> &[bool] {
+        let n = self.size as usize;
+        let at = (y % self.size) as usize * n;
+        self.cells.get(at..at + n).unwrap_or(&[])
+    }
+}
+
+/// Los trozos de `region` (tramos ordenados y sin solapes) que pinta el patrón: ordenados, sin
+/// solapes, sin tramos vacíos y contenidos en la región. Si salen más de `max_spans`,
+/// `Err(FillTooFragmented { limit: max_spans })` sin haber reservado nada de más (la salida nunca
+/// pasa de `max_spans` tramos).
+pub fn pattern_spans(
+    region: &[Span],
+    tile: &PatternTile,
+    max_spans: usize,
+) -> Result<Vec<Span>, DocumentError> {
+    let n = tile.size;
+    let mut out: Vec<Span> = Vec::new();
+    for span in region {
+        let row = tile.row(span.y);
+        if row.iter().all(|&on| !on) {
+            continue;
+        }
+        let full = row.iter().all(|&on| on);
+        let mut open: Option<u32> = None;
+        let mut push = |x_start: u32, x_end: u32| {
+            if out.len() >= max_spans {
+                return Err(DocumentError::FillTooFragmented { limit: max_spans });
+            }
+            out.try_reserve(1).map_err(|_| DocumentError::OutOfMemory)?;
+            out.push(Span {
+                y: span.y,
+                x_start,
+                x_end,
+            });
+            Ok(())
+        };
+        if full {
+            push(span.x_start, span.x_end)?;
+            continue;
+        }
+        for x in span.x_start..span.x_end {
+            let on = row.get((x % n) as usize).copied().unwrap_or(false);
+            match (on, open) {
+                (true, None) => open = Some(x),
+                (false, Some(start)) => {
+                    push(start, x)?;
+                    open = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(start) = open {
+            push(start, span.x_end)?;
+        }
+    }
+    Ok(out)
+}
+
+/// Como [`fill_command`], pero solo pinta con `pixel` los píxeles de la región que cubre `tile`.
+/// `None` si la región no cambia (como `fill_command`) o si el patrón no toca ningún píxel de
+/// ella. Más de `Document::MAX_FILL_SPANS` tramos, en la región o en el patrón, es
+/// `Err(FillTooFragmented)`.
+pub fn fill_pattern_command(
+    doc: &Document,
+    image: ImageId,
+    x: i32,
+    y: i32,
+    pixel: Pixel,
+    tile: &PatternTile,
+) -> Result<Option<Command>, DocumentError> {
+    let Some(Command::FillSpans { spans, .. }) = fill_command(doc, image, x, y, pixel)? else {
+        return Ok(None);
+    };
+    let pieces = pattern_spans(&spans, tile, Document::MAX_FILL_SPANS)?;
+    // La región ya no hace falta: el pico es el máximo de las dos listas, no la suma.
+    drop(spans);
+    if pieces.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(Command::FillSpans {
+        image,
+        spans: pieces,
         pixel,
     }))
 }
@@ -156,32 +340,71 @@ impl Visited {
     }
 }
 
-fn matches(image: &Image, x: u32, y: u32, seed: Pixel) -> bool {
-    matches!(image.get_pixel(x, y), Ok(found) if found == seed)
+/// Qué píxeles pertenecen a la región, por sus bytes almacenados: los que valen la clave
+/// (`equal`) o todos los que no la valen.
+struct Rule {
+    key: [u8; 4],
+    len: usize,
+    equal: bool,
 }
 
-/// Tramo máximo de píxeles iguales a `seed` en la fila `y` que contiene a `x`.
-fn extend(image: &Image, x: u32, y: u32, seed: Pixel) -> Span {
-    let mut x_start = x;
-    while x_start > 0 && matches(image, x_start - 1, y, seed) {
-        x_start -= 1;
+impl Rule {
+    fn new(pixel: Pixel, equal: bool) -> Rule {
+        let (key, len) = match pixel {
+            Pixel::Rgba(c) => ([c.r, c.g, c.b, c.a], 4),
+            Pixel::Indexed(i) => ([i, 0, 0, 0], 1),
+            Pixel::Gray(g) => ([g, 0, 0, 0], 1),
+            Pixel::GrayAlpha { gray, alpha } => ([gray, alpha, 0, 0], 2),
+        };
+        Rule { key, len, equal }
     }
-    let mut x_end = x + 1;
-    while x_end < image.width() && matches(image, x_end, y, seed) {
-        x_end += 1;
+
+    /// Los píxeles que valen `seed`.
+    fn same(seed: Pixel) -> Rule {
+        Rule::new(seed, true)
     }
-    Span { y, x_start, x_end }
+
+    /// Los píxeles que no valen `boundary`.
+    fn not(boundary: Pixel) -> Rule {
+        Rule::new(boundary, false)
+    }
+
+    /// Si el píxel de bytes `chunk` pertenece a la región.
+    fn holds(&self, chunk: &[u8]) -> bool {
+        (chunk == self.key.get(..self.len).unwrap_or(&[])) == self.equal
+    }
 }
 
-/// Los tramos de la región de `(x, y)` (que vale `seed`), ordenados por `(y, x_start)`.
+/// Tramo máximo de píxeles de la región en la fila `row` (de la fila `y`) que contiene a `x`
+/// (que pertenece a ella).
+fn extend(row: &[u8], bpp: usize, x: u32, y: u32, rule: &Rule) -> Span {
+    let at = x as usize * bpp;
+    let left = row.get(..at).map_or(0, |head| {
+        head.rchunks_exact(bpp)
+            .take_while(|c| rule.holds(c))
+            .count()
+    });
+    let right = row.get(at..).map_or(0, |tail| {
+        tail.chunks_exact(bpp).take_while(|c| rule.holds(c)).count()
+    });
+    // `left <= x` y `x + right <= width`: salen de contar casillas de la propia fila.
+    Span {
+        y,
+        x_start: x - left as u32,
+        x_end: x + right as u32,
+    }
+}
+
+/// Los tramos de la región de `(x, y)` (que pertenece a ella), ordenados por `(y, x_start)`.
 fn region_spans(
     image: &Image,
     x: u32,
     y: u32,
-    seed: Pixel,
+    rule: &Rule,
     max_spans: usize,
 ) -> Result<Vec<Span>, DocumentError> {
     let (width, height) = (image.width(), image.height());
+    let bpp = image.mode().bytes_per_pixel();
     let mut visited = Visited::new(width, height)?;
     let mut stack: Vec<Span> = Vec::new();
     let mut count = 0usize;
@@ -194,7 +417,14 @@ fn region_spans(
         if count >= max_spans {
             return Err(DocumentError::FillTooFragmented { limit: max_spans });
         }
-        let span = extend(image, x, y, seed);
+        let span = match image.row(y) {
+            Some(row) => extend(row, bpp, x, y, rule),
+            None => Span {
+                y,
+                x_start: x,
+                x_end: x + 1,
+            },
+        };
         let row = visited.at(0, y);
         visited.set_range(row + span.x_start as usize, row + span.x_end as usize);
         stack
@@ -212,9 +442,14 @@ fn region_spans(
         let above = span.y.checked_sub(1);
         let below = span.y.checked_add(1).filter(|&next| next < height);
         for row in [above, below].into_iter().flatten() {
+            let Some(bytes) = image.row(row) else {
+                continue;
+            };
             let mut cx = span.x_start;
             while cx < span.x_end {
-                if !visited.contains(cx, row) && matches(image, cx, row, seed) {
+                let at = cx as usize * bpp;
+                let holds = bytes.get(at..at + bpp).is_some_and(|c| rule.holds(c));
+                if holds && !visited.contains(cx, row) {
                     cx = discover(&mut visited, &mut stack, cx, row)?;
                 } else {
                     cx += 1;

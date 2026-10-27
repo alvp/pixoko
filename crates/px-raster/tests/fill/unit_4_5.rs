@@ -475,7 +475,7 @@ proptest! {
     ) {
         let region_set_: BTreeSet<(u32, u32)> = rows.iter().enumerate()
             .flat_map(|(y, row)| row.iter().enumerate()
-                .filter(|(_, &on)| on).map(move |(x, _)| (x as u32, y as u32)))
+                .filter(|(_, on)| **on).map(move |(x, _)| (x as u32, y as u32)))
             .collect();
         let region = spans_from_set(&region_set_);
         let tile = PatternTile::from_brush(&Brush::new(BrushShape::ALL[shape], size));
