@@ -1,6 +1,6 @@
 # Hito 4 · Unidad 4.4: formas
 
-Estado: **aprobada** (decisiones delegadas por el usuario; se confirman las de «Decisiones» tal como están, ver «Visto bueno») y **hecha, referencia de Aseprite activa y a falta de la prueba manual** (2026-10-27: ver «Corrección posterior»). Cambios previstos: `px-raster` (**solo lo listado abajo, aprobado de antemano, aditivo y no más**), `px-ui` y `px-app`. **`px-core` no se toca.** Sin dependencias nuevas.
+Estado: **aprobada** (decisiones delegadas por el usuario; se confirman las de «Decisiones» tal como están, ver «Visto bueno») y **cerrada y verificada por el usuario (referencia de Aseprite activa)** (2026-10-27: ver «Corrección posterior»). Cambios previstos: `px-raster` (**solo lo listado abajo, aprobado de antemano, aditivo y no más**), `px-ui` y `px-app`. **`px-core` no se toca.** Sin dependencias nuevas.
 
 Referencias: fila 4.4 y decisión D15 de [`mapa-funciones.md`](mapa-funciones.md) (T04, T23 a T27, sección 4); [`hito-4-pincel.md`](hito-4-pincel.md) (`Brush`, `Spacing`, modos de herramienta, ventana de opciones con filas); [`ui-single-column.md`](ui-single-column.md) y [`ui-palette-handle.md`](ui-palette-handle.md) (geometría de la caja y techo de 432 pt); [`hito-2-relleno.md`](hito-2-relleno.md) (`FillSpans`).
 
