@@ -639,8 +639,8 @@ fn keys_comma_and_e() -> Vec<Event> {
     vec![
         key_2(Key::Comma, Modifiers::NONE),
         Event::Text(",".to_string()),
-        key_2(Key::E, Modifiers::NONE),
-        Event::Text("e".to_string()),
+        key_2(Key::J, Modifiers::NONE),
+        Event::Text("j".to_string()),
     ]
 }
 
@@ -732,7 +732,7 @@ fn row_8_egui_bench_with_a_focused_field() {
     assert_eq!(seen_2, events_2);
     let mut tool = ToolState::new();
     applies_tool_keys(&mut tool, &seen_2);
-    assert_eq!(tool.tool(), Tool::Dropper, "`,` y luego E (sin atajo)");
+    assert_eq!(tool.tool(), Tool::Dropper, "`,` y luego J (sin atajo)");
     tool.apply_action(ToolAction::Select(Tool::Eraser));
     assert_eq!(tool.tool(), Tool::Eraser, "el borrador, por su acción");
 }

@@ -640,9 +640,12 @@ fn row_3_each_tool_and_color_key_works_without_modifiers_on_the_three_platforms(
             // Con cualquier modificador (también `command`) no hacen nada.
             for bits in 1..32 {
                 let m = modifiers_2(bits);
+                // 4.4: `D` (con `Mayús` y nada más) elige la forma libre.
+                let shift_d =
+                    key == Key::D && m.shift && !(m.alt || m.ctrl || m.command || m.mac_cmd);
                 assert_eq!(
                     action_for_shortcut(key, m, platform),
-                    None,
+                    shift_d.then_some(AppAction::SelectShape(ShapeKind::Freeform)),
                     "{key:?} con {m:?} en {platform:?}"
                 );
             }

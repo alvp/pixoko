@@ -169,7 +169,7 @@ fn only_stroke(entries: &[CanvasInput]) -> Vec<CanvasEvent> {
         .iter()
         .filter_map(|e| match e {
             CanvasInput::Stroke(event) => Some(*event),
-            CanvasInput::Escape => None,
+            CanvasInput::Escape | CanvasInput::Confirm => None,
         })
         .collect()
 }

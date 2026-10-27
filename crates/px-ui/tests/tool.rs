@@ -1268,7 +1268,18 @@ fn checks_keys(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError> {
     );
     if matches!(
         key,
-        Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::S | Key::Q | Key::Escape
+        Key::D
+            | Key::V
+            | Key::F
+            | Key::Comma
+            | Key::K
+            | Key::S
+            | Key::Q
+            | Key::R
+            | Key::C
+            | Key::E
+            | Key::W
+            | Key::Escape
     ) {
         prop_assert_eq!(
             action_for_key(key, modifiers),

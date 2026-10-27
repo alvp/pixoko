@@ -551,7 +551,7 @@ fn interacts(bench: &mut Bench, events: Vec<Event>) -> Vec<CanvasEvent> {
             .into_iter()
             .filter_map(|(input, _)| match input {
                 CanvasInput::Stroke(event) => Some(event),
-                CanvasInput::Escape => None,
+                CanvasInput::Escape | CanvasInput::Confirm => None,
             })
             .collect();
     });

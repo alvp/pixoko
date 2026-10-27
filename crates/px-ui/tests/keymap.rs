@@ -778,8 +778,7 @@ fn row_2_p_toggles_the_color_editor_and_what_is_unassigned_gives_none_with_any_m
     }
     // Sin `command`: `l i e` y `P L I E` (sin convivencia), las cifras 1 a 9, `K` `D`, las
     // teclas del hito 4, y `. / { }`.
-    let mut without_assign: Vec<KeyId> =
-        "lieKDPLIE./rcwbtgmaxyzo".chars().map(KeyId::Char).collect();
+    let mut without_assign: Vec<KeyId> = "liKDPLIE./btgmaxyzo".chars().map(KeyId::Char).collect();
     without_assign.extend(('1'..='9').map(KeyId::Char));
     for platform in PLATFORMS {
         for key in &without_assign {
@@ -1102,7 +1101,7 @@ fn row_5_shown_text_is_the_text_of_shown() {
 #[test]
 fn row_5_the_tool_buttons_show_d_v_f_comma_and_k() {
     let km = default();
-    let expected_2 = [Some("d"), Some("v"), Some("f"), Some(","), Some("k")];
+    let expected_2 = [Some("d"), Some("v"), Some("f"), Some(","), Some("k"), None];
     for platform in PLATFORMS {
         let real: Vec<Option<String>> = TOOL_BUTTONS
             .iter()

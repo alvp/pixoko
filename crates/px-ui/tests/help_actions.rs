@@ -54,16 +54,17 @@ fn row_3_each_toolbox_button_has_its_target() {
         HelpTarget::Tool(Tool::Fill),
         HelpTarget::Tool(Tool::Dropper),
         HelpTarget::Tool(Tool::Eraser),
+        HelpTarget::Tool(Tool::Shape),
         HelpTarget::ZoomIn,
         HelpTarget::ZoomOut,
         HelpTarget::ZoomFit,
         HelpTarget::ZoomActualSize,
     ];
-    assert_eq!(TOOLBOX_BUTTONS, 9);
+    assert_eq!(TOOLBOX_BUTTONS, 10);
     for (i, target_2) in expected_2.into_iter().enumerate() {
         assert_eq!(help_target_for_button(i), Some(target_2), "botón {i}");
     }
-    assert_eq!(help_target_for_button(9), None);
+    assert_eq!(help_target_for_button(10), None);
 }
 
 #[test]
