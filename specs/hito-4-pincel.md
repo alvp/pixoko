@@ -1,6 +1,6 @@
 # Hito 4 · Unidad 4.3: pincel y trazos
 
-Estado: **aprobada** (decisiones delegadas por el usuario; se confirman las de «Decisiones» tal como están, ver «Visto bueno») y **hecha, a falta de la prueba manual** (2026-10-27: ver «Corrección posterior» para lo que cambió respecto de lo escrito). Cambios previstos: `px-raster` (**solo lo listado abajo, aprobado de antemano, aditivo y no más**), `px-ui` y `px-app`. **`px-core` no se toca.** Sin dependencias nuevas.
+Estado: **aprobada** (decisiones delegadas por el usuario; se confirman las de «Decisiones» tal como están, ver «Visto bueno») y **cerrada y verificada por el usuario** (2026-10-27: ver «Corrección posterior» para lo que cambió respecto de lo escrito). Cambios previstos: `px-raster` (**solo lo listado abajo, aprobado de antemano, aditivo y no más**), `px-ui` y `px-app`. **`px-core` no se toca.** Sin dependencias nuevas.
 
 Referencias: fila 4.3 y decisión D14 de [`mapa-funciones.md`](mapa-funciones.md) (T01 a T09, sección 4); [`hito-2-lapiz-deshacer.md`](hito-2-lapiz-deshacer.md) (`Stroke`, un paso por gesto); [`hito-2-linea.md`](hito-2-linea.md); [`ui-single-column.md`](ui-single-column.md) (ventana de opciones); [`interfaz-teclado.md`](interfaz-teclado.md) (tabla de atajos como datos).
 
