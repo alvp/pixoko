@@ -18,6 +18,7 @@ use crate::keys::select_tool;
 use crate::merge_flow::MergeKind;
 use crate::session::{LayerReport, PaletteOutcome, Session};
 use px_core::DocumentError;
+use px_ui::palette_tools::PaletteTool;
 
 /// What a dispatched action left.
 #[derive(Clone, Debug, PartialEq)]
@@ -51,6 +52,8 @@ pub enum Dispatched {
     PaletteSize,
     /// `Imagen → Tamaño del lienzo…`: the app opens the dialog with the current size.
     CanvasSize,
+    /// `Paleta → Cargar…`, `Cargar en la activa…` or `Guardar paleta…`: the app opens the file dialog.
+    PaletteFile(PaletteTool),
     /// `Imagen → Reducir colores…`: the app checks the document and opens the dialog.
     Quantize,
     /// `F1` or `Help → Tool help`: `App` opens the help of that target.
@@ -242,6 +245,19 @@ pub fn dispatch(action: AppAction, origin: Origin, targets: &mut Targets) -> Dis
         AppAction::TurnLeft => layer_done(action, session.image_op(ImageOp::Ccw)),
         AppAction::TurnHalf => layer_done(action, session.image_op(ImageOp::Half)),
         AppAction::CanvasSize => Dispatched::CanvasSize,
+        AppAction::PaletteTool(tool)
+            if matches!(
+                tool,
+                PaletteTool::Load | PaletteTool::LoadAt | PaletteTool::Save
+            ) =>
+        {
+            if session.document.palette().is_none() {
+                done(false)
+            } else {
+                Dispatched::PaletteFile(tool)
+            }
+        }
+        AppAction::PaletteTool(tool) => palette_done(session.palette_tool(tool)),
         AppAction::Quantize => Dispatched::Quantize,
         AppAction::ClearPage => match session.clear_page() {
             Ok(changed) => done(changed),

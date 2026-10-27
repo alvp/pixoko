@@ -1372,6 +1372,8 @@ mod image_ops;
 mod image_ops_tests;
 mod layer_ops;
 mod palette_tools;
+#[cfg(test)]
+mod palette_tools_tests;
 mod quantize_ops;
 pub use layer_ops::*;
 mod merge_ops;

@@ -59,8 +59,11 @@ use px_ui::menu::show_menu_full;
 use px_ui::notice::{NOTICE_SECS, Notice};
 use px_ui::options::OptionsWindow;
 use px_ui::options_view::{OptionsEvent, OptionsView, show_options_window};
+use px_ui::palette_file::PaletteFormat;
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE, RESIZE_CANCELLED_NOTICE};
 use px_ui::palette_panel::{BarClick, Roles};
+use px_ui::palette_tools::PaletteTool;
+use px_ui::palette_tools_es::{NOTICE_NOT_INDEXED, NOTICE_SAVED};
 use px_ui::pointer_events::window_actions;
 use px_ui::shortcuts::{FileAction, gate_keys};
 use px_ui::source::{DocSource, OverlayCache, flatten};
@@ -752,7 +755,57 @@ impl App {
                 }
                 // Escribe el aplanado y no tiene la segunda pulsación de guardar.
                 DialogKind::Export => self.request_save(ctx, SaveJob::Export(path)),
+                DialogKind::PaletteLoad => self.load_palette_file(ctx, &path, false),
+                DialogKind::PaletteLoadAt => self.load_palette_file(ctx, &path, true),
+                DialogKind::PaletteSave => self.save_palette_file(ctx, &path),
             },
+        }
+    }
+
+    /// `Paleta → Cargar…`: reads the file (at most 1 MiB) and writes its colors as one undo step.
+    fn load_palette_file(&mut self, ctx: &egui::Context, path: &Path, at_active: bool) {
+        const LIMIT: u64 = 1 << 20;
+        let text = std::fs::metadata(path)
+            .map_err(|error| error.to_string())
+            .and_then(|meta| {
+                if meta.len() > LIMIT {
+                    Err("el fichero es demasiado grande".to_string())
+                } else {
+                    std::fs::read_to_string(path).map_err(|error| error.to_string())
+                }
+            });
+        let text = match text {
+            Ok(text) => text,
+            Err(error) => return self.notify(ctx, format!("no se pudo leer: {error}")),
+        };
+        match self.session.load_palette_text(&text, at_active) {
+            Ok(outcome) => {
+                self.finish::<std::convert::Infallible>(ctx, Ok(outcome.changed));
+                if let Some(notice) = outcome.notice {
+                    self.notify(ctx, notice);
+                }
+            }
+            Err(error) => self.notify(ctx, error.to_string()),
+        }
+    }
+
+    /// `Paleta → Guardar…`: writes the whole palette in the format of the extension (`.pal` if it
+    /// has none or another one). It does not touch the path or the modified state of the document.
+    fn save_palette_file(&mut self, ctx: &egui::Context, path: &Path) {
+        let format = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .and_then(PaletteFormat::from_extension);
+        let (path, format) = match format {
+            Some(format) => (path.to_path_buf(), format),
+            None => (path.with_extension("pal"), PaletteFormat::Pal),
+        };
+        let Some(text) = self.session.palette_file_text(format) else {
+            return self.notify(ctx, NOTICE_NOT_INDEXED.to_string());
+        };
+        match std::fs::write(&path, text) {
+            Ok(()) => self.notify(ctx, NOTICE_SAVED.to_string()),
+            Err(error) => self.notify(ctx, format!("no se pudo guardar: {error}")),
         }
     }
 
@@ -911,6 +964,22 @@ impl App {
                     .map_or(1, |palette| palette.len());
                 if open_palette_size(&mut self.modal, len, locks) {
                     self.modal_focus = None;
+                }
+            }
+            Dispatched::PaletteFile(tool) => {
+                let kind = match tool {
+                    PaletteTool::Load => DialogKind::PaletteLoad,
+                    PaletteTool::LoadAt => DialogKind::PaletteLoadAt,
+                    _ => DialogKind::PaletteSave,
+                };
+                let now = ctx.input(|i| i.time);
+                self.dialogs.set_title(dialog_title(kind, 0, None));
+                if self
+                    .dialogs
+                    .begin(kind, false, None, false, now, Some(frame))
+                {
+                    self.confirm.clear();
+                    ctx.request_repaint();
                 }
             }
             Dispatched::CanvasSize => {

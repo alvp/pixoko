@@ -563,9 +563,12 @@ fn glue(s: &mut Session, finished: Finished) -> Pasted {
         Outcome::Unavailable => panic!("el selector falso nunca falla"),
         Outcome::Chosen(path_2) => match finished.kind {
             DialogKind::Open => Pasted::Open(s.open(&path_2, Canvas::MAX_SIDE, finished.discard)),
-            DialogKind::Save | DialogKind::SaveAs | DialogKind::Export => {
-                Pasted::TestSaved(save_in(s, &path_2))
-            }
+            DialogKind::Save
+            | DialogKind::SaveAs
+            | DialogKind::Export
+            | DialogKind::PaletteLoad
+            | DialogKind::PaletteLoadAt
+            | DialogKind::PaletteSave => Pasted::TestSaved(save_in(s, &path_2)),
         },
     }
 }
