@@ -81,7 +81,6 @@ fn the_cases_file_is_well_formed() {
 }
 
 #[test]
-#[ignore = "needs golden/aseprite-fill/*.png (tools/corpus-h4/generate-fill.sh)"]
 fn matches_aseprite() {
     for case in cases() {
         let mut doc = Document::new(case.image.clone());
