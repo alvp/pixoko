@@ -181,10 +181,14 @@ impl Session {
     /// color se ajusta al modo nuevo como tras deshacer o rehacer.
     pub fn convert_all(&mut self, target: Mode, allowed: Allowed) -> Result<bool, DocumentError> {
         let before = self.choice;
+        let leaving = self.document.palette().cloned();
         let changed = self
             .document
             .apply(Command::ConvertAll { target, allowed })?;
         if changed {
+            if self.document.mode() != Mode::Indexed && leaving.is_some() {
+                self.saved_palette = leaving;
+            }
             self.note_applied(self.full());
             let layers = self.layer_ids();
             self.after_history_move(before, &layers);

@@ -139,7 +139,7 @@ fn row_5_only_the_editable_actions_have_an_editor() {
             "{action:?}"
         );
     }
-    assert_eq!(editable().len(), 39);
+    assert_eq!(editable().len(), 40);
     for action in editable() {
         assert!(ShortcutEditor::new(action, &table, Platform::Linux).is_some());
     }

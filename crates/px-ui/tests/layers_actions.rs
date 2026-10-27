@@ -108,7 +108,7 @@ fn row_3_the_four_keys_give_their_actions_and_the_table_has_no_conflicts() {
 
 #[test]
 fn row_3_the_eight_actions_have_a_key_valid_text_and_are_editable() {
-    assert_eq!(help_table().len(), 46);
+    assert_eq!(help_table().len(), 47);
     for (action_2, key) in ACTIONS {
         assert_eq!(help_key(action_2), Some(key));
         assert_eq!(action_of_key(key), Some(action_2));

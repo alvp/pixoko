@@ -217,7 +217,9 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
     expected_2.push(AppAction::ClearPage);
     expected_2.push(AppAction::SwapColors);
     expected_2.push(AppAction::ConvertMode);
-    // The six image operations of 4.1 follow `Convertir modo…`.
+    // `Reducir colores…` (4.2) follows `Convertir modo…`.
+    expected_2.push(AppAction::Quantize);
+    // The six image operations of 4.1 follow.
     expected_2.push(AppAction::FlipHorizontal);
     expected_2.push(AppAction::FlipVertical);
     expected_2.push(AppAction::TurnRight);
@@ -281,6 +283,7 @@ fn row_12_menu_items_are_the_11_entries_of_the_17_new_image_of_the_19_and_conver
         labels_and_actions(menu_titled("Imagen").items),
         [
             ("Convertir modo…", AppAction::ConvertMode),
+            ("Reducir colores…", AppAction::Quantize),
             ("Voltear horizontal", AppAction::FlipHorizontal),
             ("Voltear vertical", AppAction::FlipVertical),
             ("Girar a la derecha", AppAction::TurnRight),

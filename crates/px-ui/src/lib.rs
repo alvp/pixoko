@@ -52,6 +52,7 @@ pub mod palette_panel;
 pub mod palette_resize;
 pub mod pick;
 pub mod pointer_events;
+pub mod quantize_es;
 pub mod shortcut_editor;
 pub mod shortcuts;
 pub mod source;

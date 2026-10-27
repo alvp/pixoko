@@ -1,7 +1,7 @@
 //! px-raster: algoritmos de dibujo deterministas. La línea de grosor 1, el relleno por inundación,
 //! la composición de capas (`compose`, `compose_rect`, `compose_layers`, `composite_pixel`) y los
 //! comandos de combinar y aplanar capas (`merge_down_command`, `merge_visible_command`,
-//! `flatten_command`).
+//! `flatten_command`) y el cuantizador de color (`quantize_cels`, `quantize_command`).
 
 mod compose;
 mod draw;
@@ -9,6 +9,7 @@ mod fill;
 mod image_ops;
 mod line;
 mod merge;
+mod quantize;
 
 pub use compose::{ComposeError, Rect, compose, compose_layers, compose_rect, composite_pixel};
 pub use draw::{draw_line, line_command};
@@ -19,3 +20,7 @@ pub use image_ops::{
 };
 pub use line::Line;
 pub use merge::{MergeError, flatten_command, merge_down_command, merge_visible_command};
+pub use quantize::{
+    Dither, ErrorStats, PaletteSource, QuantizeError, QuantizeOptions, QuantizeStats, Quantized,
+    mean_abs_error, quantize_cels, quantize_command,
+};

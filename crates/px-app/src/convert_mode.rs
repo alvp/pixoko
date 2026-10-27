@@ -14,6 +14,7 @@ use px_ui::dialog::{
     Dialog, DialogKind, FOOTER_COLUMNS, FieldId, FieldKind, FieldSpec, FormSpec, MISSING_PREFIX,
     Modal, Rows, ShowWhen, Values,
 };
+use px_ui::quantize_es::{QUANTIZE_BUTTON, QUANTIZE_BUTTON_LABEL};
 
 use crate::new_image::{ImageAlloc, WARN_PIXELS};
 
@@ -32,6 +33,8 @@ pub const FIELD_ALPHA: FieldId = "alfa_gris";
 pub const FIELD_ALPHA_HEX: FieldId = "fondo_hex";
 /// El botón `Aplanar` que ofrece el motivo «con varias capas: aplana antes» (3.5, condición (a)).
 pub const FIELD_FLATTEN: FieldId = "aplanar";
+/// The button that opens `Reducir colores…` (specs/hito-4-cuantizador.md, D11).
+pub const FIELD_QUANTIZE: FieldId = "reducir";
 
 /// Los modos en el orden de las opciones del destino.
 const MODES: [Mode; 4] = [Mode::Indexed, Mode::Rgba, Mode::GrayAlpha, Mode::Gray];
@@ -198,6 +201,22 @@ pub fn open_convert_mode_to(modal: &mut Modal, from: Mode, target: Mode, locks: 
 /// aplanar antes).
 pub fn convert_form_layers(from: Mode, layers: usize) -> FormSpec {
     let mut spec = convert_form(from);
+    if matches!(from, Mode::Rgba | Mode::GrayAlpha)
+        && let Some(indexed) = targets(from).iter().position(|mode| *mode == Mode::Indexed)
+    {
+        spec.fields.push(FieldSpec {
+            id: FIELD_QUANTIZE,
+            label: QUANTIZE_BUTTON_LABEL,
+            kind: FieldKind::Button {
+                text: QUANTIZE_BUTTON.to_string(),
+                aside: None,
+            },
+            shown_when: Some(ShowWhen {
+                field: FIELD_TARGET,
+                choice: indexed,
+            }),
+        });
+    }
     if layers > 1
         && let Some(gray) = targets(from).iter().position(|mode| *mode == Mode::Gray)
     {
@@ -215,6 +234,11 @@ pub fn convert_form_layers(from: Mode, layers: usize) -> FormSpec {
         });
     }
     spec
+}
+
+/// La acción que lanza el botón `Reducir colores…` del diálogo de convertir.
+pub fn quantize_offer(field: FieldId) -> Option<AppAction> {
+    (field == FIELD_QUANTIZE).then_some(AppAction::Quantize)
 }
 
 /// La acción que lanza el botón de un campo del diálogo de convertir, si lo es de una acción.
@@ -261,7 +285,7 @@ pub enum Analysis {
     Exact { palette: Option<PaletteInfo> },
     /// Con pérdida: los dos contadores completos.
     Lossy(ConversionReport),
-    /// Más de 256 colores a indexado (sin cuantizador hasta el hito 4).
+    /// Más de 256 colores a indexado (el botón `Reducir colores…` ofrece cuantizar).
     TooManyColors,
     /// La imagen convertida no cabe.
     TooLarge,
@@ -495,7 +519,7 @@ pub fn block_reason(
         return Some(PENDING_REASON.to_string());
     };
     match analysis {
-        Analysis::TooManyColors => return Some("más de 256 colores: sin cuantizador".to_string()),
+        Analysis::TooManyColors => return Some("más de 256 colores: reduce colores".to_string()),
         Analysis::TooLarge => return Some("la imagen convertida no cabe".to_string()),
         Analysis::Blocked(block) => return Some(block.reason().to_string()),
         Analysis::Exact { .. } | Analysis::Lossy(_) => {}
@@ -646,7 +670,7 @@ fn report_body(
             }
         }
         Some(Analysis::TooManyColors) => lines.push(
-            "Esta imagen tiene más de 256 colores y una paleta indexada no los admite. Más de 256 colores: el cuantizador llega en el hito 4; hasta entonces no se puede pasar a Indexado."
+            "Esta imagen tiene más de 256 colores y una paleta indexada no los admite. Pulsa Reducir colores… para elegir cuántos conservar."
                 .to_string(),
         ),
         Some(Analysis::TooLarge) => lines

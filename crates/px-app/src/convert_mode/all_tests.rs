@@ -92,9 +92,16 @@ fn report_of(d: &Dialog) -> String {
 #[test]
 fn row_12_with_several_layers_the_form_gains_a_flatten_button_only_with_a_gray_target() {
     for from in [Mode::Rgba, Mode::Indexed, Mode::GrayAlpha] {
-        // Con una capa es el formulario de siempre.
+        // Con una capa es el formulario de siempre (más el botón de reducir colores, 4.2, que
+        // solo tienen RGBA y gris con alfa).
         let a_2 = convert_form_layers(from, 1);
-        assert_eq!(a_2.fields, convert_form(from).fields, "{from:?}");
+        let without_quantize: Vec<_> = a_2
+            .fields
+            .iter()
+            .filter(|f| f.id != FIELD_QUANTIZE)
+            .cloned()
+            .collect();
+        assert_eq!(without_quantize, convert_form(from).fields, "{from:?}");
         assert!(field_2(&a_2, FIELD_FLATTEN).is_none(), "{from:?}");
 
         let several = convert_form_layers(from, 3);
@@ -117,7 +124,7 @@ fn row_12_with_several_layers_the_form_gains_a_flatten_button_only_with_a_gray_t
         let rest: Vec<_> = several
             .fields
             .iter()
-            .filter(|f| f.id != FIELD_FLATTEN)
+            .filter(|f| f.id != FIELD_FLATTEN && f.id != FIELD_QUANTIZE)
             .cloned()
             .collect();
         assert_eq!(rest, convert_form(from).fields, "{from:?}");

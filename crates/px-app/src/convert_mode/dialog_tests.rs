@@ -1473,18 +1473,18 @@ fn row_11_with_more_than_256_colors_accept_is_not_activated_by_anything_and_expl
             assert!(b.accept_disabled(), "{context}");
             assert!(
                 b.last_2_2
-                    .contains("error: más de 256 colores: sin cuantizador"),
+                    .contains("error: más de 256 colores: reduce colores"),
                 "{context}: el motivo del pie; hay {:?}",
                 b.last_2_2.list()
             );
             assert!(
-                b.last_2_2.contains("cuantizador"),
+                b.last_2_2.contains("Reducir colores"),
                 "{context}: el informe lo explica; hay {:?}",
                 b.last_2_2.list()
             );
             assert_eq!(
                 b.dialog().block(),
-                Some("más de 256 colores: sin cuantizador"),
+                Some("más de 256 colores: reduce colores"),
                 "{context}"
             );
             b.presses(Key::Enter);
@@ -2009,7 +2009,7 @@ fn row_11_all_painted_text_of_the_dialog_has_contrast_of_at_least_4_5() {
             b.writes("#ff0000");
             checks_contrast(&b, &context("hexadecimal válido"));
 
-            // Más de 256 colores: el informe del cuantizador y su motivo.
+            // Más de 256 colores: el informe que manda a Reducir colores y su motivo.
             let b = Bench::open_with(ppp, window, Mode::Rgba, rgba_of_257_colors(), Some(ACTIVE));
             checks_contrast(&b, &context("más de 256 colores"));
 
@@ -2050,7 +2050,7 @@ fn row_11_no_dialog_state_paints_a_missing_glyph() {
         b.writes("#ff000080");
         let mut b = Bench::open_with(ppp, Window::Large, Mode::Rgba, rgba_of_257_colors(), None);
         assert!(
-            b.last_2_2.contains("cuantizador"),
+            b.last_2_2.contains("Reducir colores"),
             "ppp {ppp}: {:?}",
             b.last_2_2.list()
         );
@@ -2412,10 +2412,7 @@ fn pies_set() -> Vec<(String, Via)> {
             "el color activo #ff000080 tiene alfa".to_string(),
             Via::Block,
         ),
-        (
-            "más de 256 colores: sin cuantizador".to_string(),
-            Via::Block,
-        ),
+        ("más de 256 colores: reduce colores".to_string(), Via::Block),
         ("la imagen convertida no cabe".to_string(), Via::Block),
         ("calculando el informe".to_string(), Via::Block),
         // El motivo más largo con `error: `: 37 caracteres, 44 en total.
@@ -2561,7 +2558,7 @@ fn row_8_20b_the_real_footers_of_each_state_fit_at_the_five_scales_in_the_two_wi
             let reason_2 = b.dialog().reason().expect("hay motivo");
             assert_eq!(
                 reason_2,
-                "más de 256 colores: sin cuantizador",
+                "más de 256 colores: reduce colores",
                 "{}",
                 ctx("257")
             );

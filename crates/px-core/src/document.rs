@@ -259,6 +259,18 @@ pub enum Command {
         images: Vec<Option<Image>>,
         based_on: u64,
     },
+    /// Turns an RGBA or gray-with-alpha document into an indexed one in a single step
+    /// (specs/hito-4-cuantizador.md, Q-01): `images[i]` is the cell of layer `i` (bottom to top),
+    /// indexed with `palette`, `None` for an empty one. A cell is empty after the command exactly
+    /// when it was before. The images come from the quantizer of `px-raster`, computed over the
+    /// state `based_on` (`state_id`): if the document already changed, it is `StaleImage`. Layers
+    /// must be opaque and `Normal`, and with several layers the palette needs a transparent index.
+    /// Only as a single command.
+    QuantizeAll {
+        palette: Palette,
+        images: Vec<Option<Image>>,
+        based_on: u64,
+    },
     /// Cambia el color guardado de la entrada `index` de la paleta; los píxeles no se tocan.
     SetPaletteColor {
         image: ImageId,
@@ -877,6 +889,11 @@ impl Document {
                 images,
                 based_on,
             } => return self.apply_replace_images(width, height, images, based_on),
+            Command::QuantizeAll {
+                palette,
+                images,
+                based_on,
+            } => return self.apply_quantize_all(palette, images, based_on),
             _ => {}
         }
         // Lo que tiene cota se reserva antes de modificar nada; los trozos de cada relleno,
@@ -1378,6 +1395,99 @@ impl Document {
                 cels: swaps,
                 template,
                 size: Some(old_size),
+            }),
+            ..Step::default()
+        });
+        Ok(true)
+    }
+
+    /// `QuantizeAll`: everything that can fail or reserve happens before touching the document;
+    /// afterwards the images and the template are only swapped (the step of `ConvertAll`).
+    fn apply_quantize_all(
+        &mut self,
+        palette: Palette,
+        mut images: Vec<Option<Image>>,
+        based_on: u64,
+    ) -> Result<bool, DocumentError> {
+        if images.len() != self.layers.len() {
+            return Err(DocumentError::ReplaceCountMismatch {
+                expected: self.layers.len(),
+                found: images.len(),
+            });
+        }
+        if based_on != self.current_id {
+            return Err(DocumentError::StaleImage {
+                based_on,
+                current: self.current_id,
+            });
+        }
+        let source = self.mode();
+        if !matches!(source, Mode::Rgba | Mode::GrayAlpha) {
+            return Err(DocumentError::QuantizeSource { mode: source });
+        }
+        if self.layers.iter().any(|layer| layer.opacity != 255) {
+            return Err(DocumentError::IndexedOpacity);
+        }
+        if self
+            .layers
+            .iter()
+            .any(|layer| layer.blend != BlendMode::Normal)
+        {
+            return Err(DocumentError::IndexedBlend);
+        }
+        let size = (self.canvas.width, self.canvas.height);
+        let mut new_bytes = 0usize;
+        for (layer, new) in self.layers.iter().zip(&images) {
+            if layer.image.is_some() != new.is_some() {
+                return Err(DocumentError::ReplaceEmptiness);
+            }
+            if let Some(new) = new {
+                let fits = (new.width(), new.height()) == size
+                    && new.mode() == Mode::Indexed
+                    && new.palette() == Some(&palette);
+                if !fits {
+                    return Err(DocumentError::ReplaceImageMismatch);
+                }
+                new_bytes = new_bytes.saturating_add(new.bytes().len());
+            }
+        }
+        if self.layers.len() > 1 && palette.transparent_index().is_none() {
+            return Err(DocumentError::NoTransparency {
+                mode: Mode::Indexed,
+            });
+        }
+        if new_bytes > self.cells_limit && new_bytes > self.materialized_bytes() {
+            return Err(DocumentError::CelsTooLarge {
+                needed: new_bytes,
+                limit: self.cells_limit,
+            });
+        }
+        self.undo
+            .try_reserve(1)
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        let mut template = Image::filled_indexed(1, 1, palette, 0)
+            .map_err(|_| DocumentError::ReplaceImageMismatch)?;
+        let mut swaps = Vec::new();
+        swaps
+            .try_reserve_exact(images.len())
+            .map_err(|_| DocumentError::OutOfMemory)?;
+        // Up to here nothing has changed; from here on images are only swapped.
+        for (layer, new) in self.layers.iter_mut().zip(images.iter_mut()) {
+            if let (Some(slot), Some(new)) = (layer.image.as_mut(), new.as_mut()) {
+                std::mem::swap(slot, new);
+            }
+        }
+        for (layer, new) in self.layers.iter().zip(images) {
+            if let Some(old) = new {
+                swaps.push((layer.cel, old));
+            }
+        }
+        std::mem::swap(&mut self.canvas.template, &mut template);
+        self.commit(Step {
+            converted: Some(Converted {
+                cels: swaps,
+                template,
+                size: None,
             }),
             ..Step::default()
         });
@@ -2388,6 +2498,10 @@ pub enum DocumentError {
     ReplaceImageMismatch,
     /// `ReplaceImages` that fills an empty cell or empties one that has an image.
     ReplaceEmptiness,
+    /// `QuantizeAll` on a document that is not RGBA or gray with alpha.
+    QuantizeSource {
+        mode: Mode,
+    },
     /// El documento no tiene esa capa.
     UnknownLayer(LayerId),
     /// Posición de capa fuera de rango; `max` es la mayor válida.
@@ -2497,6 +2611,10 @@ impl fmt::Display for DocumentError {
             DocumentError::ReplaceEmptiness => write!(
                 f,
                 "una celda vacía no puede pasar a tener imagen ni al revés"
+            ),
+            DocumentError::QuantizeSource { mode } => write!(
+                f,
+                "reducir colores solo vale con RGBA o gris con alfa, y el modo es {mode:?}"
             ),
             DocumentError::NotBatchable => write!(
                 f,

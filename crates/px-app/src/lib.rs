@@ -23,6 +23,7 @@ mod licenses;
 mod merge_flow;
 mod new_image;
 mod palette_size;
+mod quantize_flow;
 mod save_wait;
 mod session;
 mod shortcuts_flow;
@@ -76,7 +77,7 @@ use crate::confirm::{
 use crate::convert_mode::{
     Analysis, CONVERTING_NOTICE, ConvertModeError, ConvertSync, History, PendingConvert, Plan,
     Start, SystemAnalyzer, SystemDocAnalyzer, convert_memory_notice, convert_pixels,
-    describe_converted, flatten_offer, open_convert_mode_layers, plan_from_values,
+    describe_converted, flatten_offer, open_convert_mode_layers, plan_from_values, quantize_offer,
     reserve_for_convert, start_convert, sync_convert, sync_convert_all,
 };
 use crate::demo::{ENV_DEMO_DIALOG, demo_dialog_enabled, demo_form, demo_notice};
@@ -99,6 +100,10 @@ use crate::new_image::{
     open_new_image, spec_from_values, sync_form,
 };
 use crate::palette_size::{length_from_values, open_palette_size, open_transparent_loss};
+use crate::quantize_flow::{
+    PendingQuantize, QuantizeStart, can_quantize, open_quantize, options_of,
+    plan_from_values as quantize_plan, start_quantize,
+};
 use crate::save_wait::{
     EXPORTING_NOTICE, PendingSave, SAVING_NOTICE, StartSave, save_pixels, start_save,
 };
@@ -111,6 +116,15 @@ use crate::title::{
     app_title_info, colors_label, status_for, status_line_fit, title_text, title_with_file,
 };
 use crate::window_min::{ENV_NO_MIN, min_enabled, min_inner_size};
+use px_ui::quantize_es::QUANTIZE_WORKING;
+
+/// Una reducción de colores que espera su fotograma tras `Accept` (specs/hito-4-cuantizador.md,
+/// D10).
+struct QuantizeWait {
+    pending: PendingQuantize,
+    /// Fotogramas que se dejan pasar antes de contar (el aviso se pinta un fotograma después).
+    skip: u8,
+}
 
 /// Una conversión que espera su fotograma tras `Accept` (specs/hito-2-convertir-modo.md, D5).
 struct PendingConversion {
@@ -203,6 +217,8 @@ struct App {
     convert: Option<ConvertSync>,
     /// Una conversión de una imagen grande que espera su fotograma: la entrada está bloqueada.
     pending_convert: Option<PendingConversion>,
+    /// Una reducción de colores de una imagen grande que espera su fotograma.
+    pending_quantize: Option<QuantizeWait>,
     /// Un guardado que compone mucho y espera su fotograma: la entrada está bloqueada.
     pending_save: Option<(SaveJob, PendingSave)>,
     /// Combinar o aplanar un documento grande que espera su fotograma: la entrada está bloqueada.
@@ -303,6 +319,7 @@ impl App {
             new_image: None,
             convert: None,
             pending_convert: None,
+            pending_quantize: None,
             pending_save: None,
             pending_merge: None,
             overlay: OverlayCache::default(),
@@ -446,6 +463,7 @@ impl App {
     /// bloqueada.
     fn waiting(&self) -> bool {
         self.pending_convert.is_some()
+            || self.pending_quantize.is_some()
             || self.pending_save.is_some()
             || self.pending_merge.is_some()
     }
@@ -746,6 +764,7 @@ impl App {
         }
         self.dialogs.abandon();
         self.pending_convert = None;
+        self.pending_quantize = None;
         self.pending_save = None;
         self.pending_merge = None;
         let now = ctx.input(|i| i.time);
@@ -843,6 +862,7 @@ impl App {
             }
             Dispatched::NewImage => self.begin_new_image(ctx),
             Dispatched::ConvertMode => self.begin_convert_mode(ctx, None),
+            Dispatched::Quantize => self.begin_quantize(ctx),
             Dispatched::LayerPanel(op) => match op {
                 LayerPanelOp::Toggle => {
                     self.layers.toggle();
@@ -1181,6 +1201,97 @@ impl App {
         }
     }
 
+    /// `Imagen → Reducir colores…`: comprueba el documento y abre el diálogo con la paleta
+    /// guardada de la sesión, si la hay.
+    fn begin_quantize(&mut self, ctx: &egui::Context) {
+        if let Err(text) = can_quantize(&self.session.document) {
+            self.notify(ctx, text);
+            return;
+        }
+        let locks = self.locks(ctx);
+        let doc = &self.session.document;
+        let saved = self.session.saved_palette().map(|palette| palette.len());
+        if open_quantize(
+            &mut self.modal,
+            doc.width(),
+            doc.height(),
+            doc.layers().len(),
+            saved,
+            locks,
+        ) {
+            self.modal_focus = None;
+        }
+    }
+
+    /// El diálogo del cuantizador se aceptó: con una imagen grande avisa «Reduciendo colores…» y
+    /// reduce unos fotogramas después; si no, reduce ya.
+    fn finish_quantize(&mut self, ctx: &egui::Context, values: &px_ui::dialog::Values) {
+        let Some(plan) = quantize_plan(values) else {
+            return;
+        };
+        match start_quantize(plan, convert_pixels(&self.session.document)) {
+            QuantizeStart::Now(plan) => self.run_quantize(ctx, &plan),
+            QuantizeStart::Later(pending) => {
+                self.pending_quantize = Some(QuantizeWait { pending, skip: 1 });
+                self.notify(ctx, QUANTIZE_WORKING.to_string());
+                ctx.request_repaint();
+            }
+        }
+    }
+
+    /// Cuenta un fotograma de una reducción en espera y la ejecuta en el que toca.
+    fn advance_quantize(&mut self, ctx: &egui::Context) {
+        let Some(waiting) = &mut self.pending_quantize else {
+            return;
+        };
+        if waiting.skip > 0 {
+            waiting.skip -= 1;
+            ctx.request_repaint();
+            return;
+        }
+        match waiting.pending.tick() {
+            Some(plan) => {
+                self.pending_quantize = None;
+                self.run_quantize(ctx, &plan);
+            }
+            None => ctx.request_repaint(),
+        }
+    }
+
+    /// Reduce los colores como un paso de la historia; con un rechazo, aviso de 5 s y todo queda
+    /// como estaba.
+    fn run_quantize(&mut self, ctx: &egui::Context, plan: &crate::quantize_flow::QuantizePlan) {
+        let Some(options) = options_of(plan, self.session.saved_palette()) else {
+            return;
+        };
+        let (width, height) = (
+            self.session.document.width(),
+            self.session.document.height(),
+        );
+        let report = self.session.quantize(&options);
+        if report.changed && !self.refresh_now(ctx) {
+            // No hay memoria para regenerar las baldosas: el documento manda, así que se deshace
+            // la reducción (un intercambio que no reserva) y queda rehacer.
+            let _ = self.session.undo();
+            let blocks = self.session.take_dirty();
+            self.canvas.invalidate(&blocks);
+            self.notify(
+                ctx,
+                convert_memory_notice(
+                    width,
+                    height,
+                    Mode::Rgba,
+                    u64::from(width) * u64::from(height) * 4,
+                ),
+            );
+            return;
+        }
+        if let Some(text) = report.notice {
+            self.notify(ctx, text);
+        }
+        ctx.request_repaint();
+    }
+
     /// Cuenta un fotograma de una conversión en espera y la ejecuta en el que toca.
     fn advance_convert(&mut self, ctx: &egui::Context) {
         let Some(waiting) = &mut self.pending_convert else {
@@ -1395,6 +1506,18 @@ impl App {
             self.begin_merge(ctx, MergeKind::Flatten);
             return;
         }
+        // El botón `Reducir colores…` del informe de más de 256 colores: cierra el diálogo y abre
+        // el del cuantizador.
+        if kind == ModalKind::ConvertMode
+            && let Reaction::Pressed { field, .. } = &reaction
+            && quantize_offer(field).is_some()
+        {
+            self.modal.abandon();
+            self.modal_focus = None;
+            self.convert = None;
+            self.begin_quantize(ctx);
+            return;
+        }
         if kind == ModalKind::ConvertMode && self.convert.is_some() {
             let doc = &self.session.document;
             let history = History {
@@ -1437,6 +1560,11 @@ impl App {
             } else {
                 self.convert = None;
             }
+        }
+        if kind == ModalKind::Quantize
+            && let Reaction::Accepted(values) = &reaction
+        {
+            self.finish_quantize(ctx, values);
         }
         if kind == ModalKind::BackgroundColor
             && let Reaction::Accepted(values) = &reaction
@@ -1497,6 +1625,7 @@ impl eframe::App for App {
         // Con la captura de un atajo armada, el teclado es de la captura.
         self.handle_capture(&ctx);
         self.advance_convert(&ctx);
+        self.advance_quantize(&ctx);
         self.advance_save(&ctx);
         self.advance_merge(&ctx);
         // Las acciones del fotograma, en este orden: menú, columna y atajos.

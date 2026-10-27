@@ -33,16 +33,18 @@ const SIX: [(&str, AppAction, &str); 6] = [
 ];
 
 #[test]
-fn row_9_image_menu_has_the_six_after_convert_in_order() {
+fn row_9_image_menu_has_the_six_after_convert_and_quantize_in_order() {
     let image = MENUS.iter().find(|m| m.title == "Imagen").expect("menu");
     let items: Vec<_> = image.items.iter().map(|i| (i.label, i.action)).collect();
-    assert_eq!(items.len(), 10);
+    assert_eq!(items.len(), 11);
     assert_eq!(items[0].1, AppAction::ConvertMode);
+    // `Reducir colores…` (4.2) sits between `Convertir modo…` and the six.
+    assert_eq!(items[1].1, AppAction::Quantize);
     for (at, (label, action, _)) in SIX.iter().enumerate() {
-        assert_eq!(items[1 + at], (*label, *action));
+        assert_eq!(items[2 + at], (*label, *action));
     }
     assert_eq!(
-        items[7..].iter().map(|i| i.1).collect::<Vec<_>>(),
+        items[8..].iter().map(|i| i.1).collect::<Vec<_>>(),
         [
             AppAction::AddPaletteEntry,
             AppAction::RemovePaletteEntry,
@@ -70,7 +72,7 @@ fn row_9_the_six_have_no_default_key_are_editable_and_have_help() {
             );
         }
     }
-    assert_eq!(help_table().len(), 46);
+    assert_eq!(help_table().len(), 47);
     for text in CANVAS_ANCHORS.iter().chain([&IMAGE_OP_NOTHING]) {
         assert!(
             text.chars().all(|c| INTERFACE_CHARSET.contains(c)),
