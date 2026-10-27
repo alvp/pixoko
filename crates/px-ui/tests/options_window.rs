@@ -127,6 +127,7 @@ impl Bench {
         let view = OptionsView {
             tool: self.tool,
             rows: self.rows,
+            lines: &[],
             keymap: &self.keymap,
             platform: Platform::Linux,
             enabled: self.enabled,
