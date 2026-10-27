@@ -45,7 +45,7 @@ fn stack(count: usize, active_pos: usize) -> LayerNav {
 
 #[test]
 fn row_10_the_three_layer_actions_have_a_key_valid_text_and_are_editable() {
-    assert_eq!(help_table().len(), 47);
+    assert_eq!(help_table().len(), 51);
     for (action_2, key) in ACTIONS_OF_LAYER {
         assert_eq!(help_key(action_2), Some(key));
         assert_eq!(action_of_key(key), Some(action_2));
@@ -79,7 +79,7 @@ fn row_10_the_three_layer_actions_have_a_key_valid_text_and_are_editable() {
 fn row_10_none_of_the_four_has_a_default_key_and_the_table_does_not_change() {
     let table = Keymap::default_scheme();
     assert_eq!(table.conflicts(), vec![]);
-    assert_eq!(table.rows().len(), 36);
+    assert_eq!(table.rows().len(), 38);
     assert_eq!(table.rows().iter().filter(|f| f.command).count(), 9);
     for platform in PLATFORMS {
         for action_2 in THE_FOUR {

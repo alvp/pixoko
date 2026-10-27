@@ -472,8 +472,8 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
         };
     }
     match key {
-        Key::Plus | Key::Equals => return Some(AppAction::ZoomIn),
-        Key::Minus => return Some(AppAction::ZoomOut),
+        Key::Plus | Key::Equals => return Some(AppAction::BrushBigger),
+        Key::Minus => return Some(AppAction::BrushSmaller),
         Key::Home => return Some(AppAction::ZoomFit),
         // I.2a: con `Mayús`, `Re Pág` y `Av Pág` son el color de fondo; sin ella, el primer plano.
         Key::PageDown if m.shift => return Some(AppAction::BackgroundNext),
@@ -495,6 +495,8 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
         Key::F => Some(AppAction::SelectTool(Tool::Fill)),
         Key::Comma => Some(AppAction::SelectTool(Tool::Dropper)),
         Key::K => Some(AppAction::SelectTool(Tool::Eraser)),
+        Key::S => Some(AppAction::SelectDotted),
+        Key::Q => Some(AppAction::SelectCurve),
         Key::U => Some(AppAction::Undo),
         Key::N => Some(AppAction::CenterOnCursor),
         Key::CloseBracket => Some(AppAction::ColorNext),
@@ -554,14 +556,17 @@ fn row_3_command_q_only_quits_on_linux() {
         for bits in 0..32 {
             assert_eq!(
                 action_for_shortcut(Key::Q, modifiers_2(bits), platform),
-                None,
+                (bits == 0).then_some(AppAction::SelectCurve),
                 "{platform:?} con {bits:#07b}"
             );
         }
     }
-    // Sin `command`, la `Q` sola no hace nada en ninguna plataforma.
+    // Sin `command`, la `Q` sola ya no sale: elige la curva en todas las plataformas.
     for platform in PLATFORMS {
-        assert_eq!(action_for_shortcut(Key::Q, Modifiers::NONE, platform), None);
+        assert_eq!(
+            action_for_shortcut(Key::Q, Modifiers::NONE, platform),
+            Some(AppAction::SelectCurve)
+        );
     }
 }
 
@@ -582,12 +587,12 @@ fn row_3_ctrl_shift_q_and_alt_q_do_not_quit_on_linux() {
 }
 
 #[test]
-fn row_3_the_zoom_keys_work_without_command_and_with_any_other_modifier() {
+fn row_3_the_size_and_zoom_keys_work_without_command_and_with_any_other_modifier() {
     for platform in PLATFORMS {
         for (key, action_2) in [
-            (Key::Plus, AppAction::ZoomIn),
-            (Key::Equals, AppAction::ZoomIn),
-            (Key::Minus, AppAction::ZoomOut),
+            (Key::Plus, AppAction::BrushBigger),
+            (Key::Equals, AppAction::BrushBigger),
+            (Key::Minus, AppAction::BrushSmaller),
             (Key::Home, AppAction::ZoomFit),
         ] {
             for bits in 0..32 {
@@ -657,6 +662,20 @@ fn row_3_composes_the_three_existing_key_functions_without_changing_them() {
                         assert_eq!(
                             shortcut_2,
                             Some(AppAction::SelectTool(tool)),
+                            "{key:?} con {m:?}"
+                        );
+                    }
+                    Some(ToolAction::SelectDotted) => {
+                        assert_eq!(
+                            shortcut_2,
+                            Some(AppAction::SelectDotted),
+                            "{key:?} con {m:?}"
+                        );
+                    }
+                    Some(ToolAction::SelectCurve) => {
+                        assert_eq!(
+                            shortcut_2,
+                            Some(AppAction::SelectCurve),
                             "{key:?} con {m:?}"
                         );
                     }

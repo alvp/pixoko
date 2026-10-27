@@ -266,17 +266,17 @@ fn row_8_the_editor_responds_to_its_buttons() {
     m.opens_help(HelpTarget::ZoomIn);
     m.presses(HELP_PRIMARY, false);
     m.keys_2(&key_2(Key::Escape, None));
-    // `Remove` de la principal: la secundaria sube.
+    // `Remove` de la principal: Acercar ya no tiene secundaria (`+` y `=` son del pincel), queda vacía.
     m.presses(EDITOR_PRIMARY, true);
     assert_eq!(
         slots_of(m.flow.editor().unwrap().keymap(), AppAction::ZoomIn).slots,
-        vec![chord('+'), chord('=')]
+        vec![]
     );
     // `Restablecer` devuelve la acción a lo de fábrica.
     m.presses(EDITOR_RESET, false);
     assert_eq!(
         slots_of(m.flow.editor().unwrap().keymap(), AppAction::ZoomIn).slots,
-        vec![chord('>'), chord('+'), chord('=')]
+        vec![chord('>')]
     );
     // Pulsar una casilla la arma; `Reasignar` (botón principal) con un conflicto aplica.
     m.presses(EDITOR_PRIMARY, false);

@@ -57,7 +57,7 @@ use px_ui::layers_panel_view::{PanelEvent, PanelView, show_layer_panel};
 use px_ui::licenses_view::licenses_form;
 use px_ui::menu::show_menu_full;
 use px_ui::notice::{NOTICE_SECS, Notice};
-use px_ui::options::{OptionsWindow, options_row_count};
+use px_ui::options::OptionsWindow;
 use px_ui::options_view::{OptionsEvent, OptionsView, show_options_window};
 use px_ui::palette_ops::{PaletteOp, REMOVAL_CANCELLED_NOTICE, RESIZE_CANCELLED_NOTICE};
 use px_ui::palette_panel::{BarClick, Roles};
@@ -377,7 +377,7 @@ impl App {
                     && let Some(target) = help_target_in_options(
                         point,
                         self.options.current_rect(
-                            options_row_count(self.tools.tool()),
+                            self.tools.option_rows().len(),
                             window,
                             n,
                             self.column_cols,
@@ -1792,11 +1792,18 @@ impl eframe::App for App {
             );
             let tool = self.tools.tool();
             let responsive = !(self.dialogs.pending() || self.modal.is_open() || self.waiting());
+            let lines: Vec<String> = self
+                .tools
+                .option_rows()
+                .into_iter()
+                .map(|row| self.tools.option_text(row))
+                .collect();
             show_options_window(
                 &ctx,
                 &OptionsView {
                     tool,
-                    rows: options_row_count(tool),
+                    rows: lines.len(),
+                    lines: &lines,
                     keymap: &self.keymap,
                     platform: self.platform,
                     enabled: responsive,
@@ -1809,6 +1816,17 @@ impl eframe::App for App {
         for event in options_events {
             match event {
                 OptionsEvent::Close => self.options.close(),
+                OptionsEvent::Row {
+                    index,
+                    forward,
+                    big,
+                } => {
+                    if !self.tools.busy()
+                        && let Some(&row) = self.tools.option_rows().get(index)
+                    {
+                        self.tools.click_option(row, forward, big);
+                    }
+                }
             }
         }
         // El panel de capas (3.4): flota sobre el lienzo y se muestra antes que él para que egui lo
@@ -1885,6 +1903,8 @@ impl eframe::App for App {
             // The one-use dropper started from a bar gives its color to the role of that bar.
             let role = self.dropper_once.role_for(role);
             let pixel = self.session.pixel_of(role);
+            let (shift, ctrl) = ctx.input(|i| (i.modifiers.shift, i.modifiers.command));
+            self.tools.set_modifiers(shift, ctrl);
             let result = self
                 .tools
                 .canvas_input_with(&mut self.session.document, id, pixel, input);

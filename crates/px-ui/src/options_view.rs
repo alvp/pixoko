@@ -26,6 +26,13 @@ use crate::tool::Tool;
 pub enum OptionsEvent {
     /// The `x` of the title bar.
     Close,
+    /// A click on a row of the body: its index among all the rows (the scroll counted), whether
+    /// it was the left button and whether `Mayús` was held.
+    Row {
+        index: usize,
+        forward: bool,
+        big: bool,
+    },
 }
 
 /// What the window needs to be painted.
@@ -34,6 +41,8 @@ pub struct OptionsView<'a> {
     pub tool: Tool,
     /// Rows of options of the tool ([`crate::options::options_row_count`]; a test passes any number).
     pub rows: usize,
+    /// The text of each row of the body (`rows` of them; fewer paints only those).
+    pub lines: &'a [String],
     pub keymap: &'a Keymap,
     pub platform: Platform,
     /// `false` with a modal dialog (or a conversion or a save in wait) open: the window is painted
@@ -177,6 +186,40 @@ fn draw_window(
                 font.clone(),
                 TEXT_DIM,
             );
+    }
+    for k in 0..shown {
+        let Some(line) = view.lines.get(state.scroll_of(tool) + k) else {
+            break;
+        };
+        let row = rect(1, BODY_Y_U + ROW_H_U * k as i64, WINDOW_W_U - 2, ROW_H_U);
+        let response = ui.interact(
+            row,
+            base.with(("row", k)),
+            if view.enabled {
+                Sense::click()
+            } else {
+                Sense::hover()
+            },
+        );
+        if view.enabled && response.hovered() {
+            painter.rect_filled(row, 0.0, SURFACE_3);
+        }
+        painter
+            .with_clip_rect(row.intersect(painter.clip_rect()))
+            .text(
+                row.min + vec2((TEXT_X_U - 1) as f32 * u, 2.0 * u),
+                Align2::LEFT_TOP,
+                printable(ctx, line),
+                font.clone(),
+                TEXT,
+            );
+        if view.enabled && (response.clicked() || response.secondary_clicked()) {
+            events.push(OptionsEvent::Row {
+                index: state.scroll_of(tool) + k,
+                forward: response.clicked(),
+                big: ctx.input(|i| i.modifiers.shift),
+            });
+        }
     }
     if rows > BODY_MAX_ROWS {
         let track = rect(

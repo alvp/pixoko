@@ -165,7 +165,7 @@ fn row(
 }
 
 impl Keymap {
-    /// The default scheme: 36 rows (27 without `command` and 9 with it).
+    /// The default scheme: 38 rows (29 without `command` and 9 with it).
     pub fn default_scheme() -> Keymap {
         use Platforms::{All, Except, Never, Only};
         let c = KeyId::Char;
@@ -176,6 +176,8 @@ impl Keymap {
             row(c('f'), false, false, tool(Tool::Fill), All, All),
             row(c(','), false, false, tool(Tool::Dropper), All, All),
             row(c('k'), false, false, tool(Tool::Eraser), All, All),
+            row(c('s'), false, false, AppAction::SelectDotted, All, All),
+            row(c('q'), false, false, AppAction::SelectCurve, All, All),
             row(c('z'), true, false, AppAction::Undo, All, All),
             row(c('u'), false, false, AppAction::Undo, All, Never),
             row(
@@ -231,10 +233,10 @@ impl Keymap {
             row(c('}'), false, false, AppAction::BackgroundNext, All, All),
             row(c('{'), false, false, AppAction::BackgroundPrev, All, All),
             row(c('>'), false, false, AppAction::ZoomIn, All, All),
-            row(c('+'), false, false, AppAction::ZoomIn, All, Never),
-            row(c('='), false, false, AppAction::ZoomIn, All, Never),
+            row(c('+'), false, false, AppAction::BrushBigger, All, All),
+            row(c('='), false, false, AppAction::BrushBigger, All, Never),
             row(c('<'), false, false, AppAction::ZoomOut, All, All),
-            row(c('-'), false, false, AppAction::ZoomOut, All, Never),
+            row(c('-'), false, false, AppAction::BrushSmaller, All, All),
             row(KeyId::Home, false, false, AppAction::ZoomFit, All, All),
             row(c('1'), true, false, AppAction::ZoomActualSize, All, All),
             row(c('n'), false, false, AppAction::CenterOnCursor, All, All),

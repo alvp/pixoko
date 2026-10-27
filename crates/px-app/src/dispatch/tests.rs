@@ -42,6 +42,8 @@ use px_ui::tool::{Tool, ToolState};
 use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::{ViewOp, Zoom};
 
+mod brush;
+
 use super::{Dispatched, Targets, dispatch};
 use crate::session::Session;
 
@@ -620,7 +622,7 @@ fn cases_of_row_4() -> Vec<TestCase> {
             expected: AppAction::ZoomIn,
             menu: Some("Acercar"),
             button_2: Some("Acercar"),
-            shortcut: Some((Key::Plus, Modifiers::NONE)),
+            shortcut: None,
         },
         TestCase {
             expected: AppAction::ZoomFit,

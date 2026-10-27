@@ -511,20 +511,24 @@ fn with_the_view_keys_disabled_the_wheel_and_the_pinch_keep_working() {
 
 #[test]
 fn the_view_keys_are_active_by_default_and_can_be_reactivated() {
+    // 4.3: `+` y `-` ya no son zoom; la tecla de vista del lienzo es `Home` (reencuadrar).
     let mut bench = Bench::new_2(1.0);
     bench.info(vec![]);
-    let info = bench.info(vec![key_2(Key::Minus, Modifiers::NONE)]);
+    bench.canvas.request_view(ViewOp::ZoomOut);
+    assert_eq!(bench.info(vec![]).zoom, zoom(11));
+    let info = bench.info(vec![key_2(Key::Home, Modifiers::NONE)]);
     assert_eq!(
         info.zoom,
-        zoom(11),
+        zoom(12),
         "por defecto actúan (pruebas del lienzo sin cambios)"
     );
+    bench.canvas.request_view(ViewOp::ZoomOut);
     bench.canvas.set_view_keys(false);
-    let info = bench.info(vec![key_2(Key::Minus, Modifiers::NONE)]);
+    let info = bench.info(vec![key_2(Key::Home, Modifiers::NONE)]);
     assert_eq!(info.zoom, zoom(11));
     bench.canvas.set_view_keys(true);
-    let info = bench.info(vec![key_2(Key::Minus, Modifiers::NONE)]);
-    assert_eq!(info.zoom, zoom(10));
+    let info = bench.info(vec![key_2(Key::Home, Modifiers::NONE)]);
+    assert_eq!(info.zoom, zoom(12));
 }
 
 #[test]

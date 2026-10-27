@@ -608,6 +608,41 @@ fn ceil_cbrt(k: usize) -> i32 {
     c
 }
 
+/// Amplitude `s` of the ordered dither: the offsets go from about `-s/2` to `s/2`.
+///
+/// It is the smaller of the amplitude of a color cube with `k` opaque entries (`256 / ⌈∛k⌉`) and
+/// the mean distance from each opaque entry to its nearest neighbour (largest difference of a
+/// channel). A palette that is not a cube, such as a ramp of grays, has its entries much closer
+/// than the cube would say, and the cube amplitude would drown the image in noise. The result
+/// is at least 1.
+fn ordered_spread(palette: &Palette, transparent: Option<u8>, opaque: usize) -> i32 {
+    let cube = 256 / ceil_cbrt(opaque.max(1));
+    let colors: Vec<[i32; 3]> = (0..palette.len())
+        .filter(|&i| Some(i as u8) != transparent)
+        .filter_map(|i| palette.get(i as u8).ok())
+        .map(|c| [i32::from(c.r), i32::from(c.g), i32::from(c.b)])
+        .collect();
+    if colors.len() < 2 {
+        return cube;
+    }
+    let sum: i64 = colors
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            colors
+                .iter()
+                .enumerate()
+                .filter(|&(j, _)| j != i)
+                .map(|(_, b)| (0..3).map(|k| (a[k] - b[k]).abs()).max().unwrap_or(0))
+                .filter(|&d| d > 0)
+                .min()
+                .map_or(0, i64::from)
+        })
+        .sum();
+    let nearest = (sum / colors.len() as i64) as i32;
+    cube.min(nearest).max(1)
+}
+
 // ---------------------------------------------------------------------------------------------
 // The quantizer
 // ---------------------------------------------------------------------------------------------
@@ -709,7 +744,7 @@ pub fn quantize_cels(
     };
     let dither = if exact { Dither::None } else { options.dither };
     let matrix = bayer8();
-    let spread = 256 / ceil_cbrt(opaque_entries.max(1));
+    let spread = ordered_spread(&palette, transparent_index, opaque_entries);
     let transparent_byte = transparent_index.unwrap_or(0);
     let mut images = Vec::new();
     images

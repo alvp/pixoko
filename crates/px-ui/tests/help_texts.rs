@@ -45,7 +45,7 @@ const TARGETS_OF_BUTTON: [HelpTarget; 9] = [
 ];
 
 /// Las 22 claves del anexo de la spec, en el orden de la tabla.
-const KEYS: [&str; 47] = [
+const KEYS: [&str; 51] = [
     "tool.pencil",
     "tool.line",
     "tool.fill",
@@ -95,6 +95,10 @@ const KEYS: [&str; 47] = [
     "image.turn-half",
     "image.canvas-size",
     "image.quantize",
+    "tool.dotted",
+    "tool.curve",
+    "brush.bigger",
+    "brush.smaller",
 ];
 
 /// The two entries of the palette panel that belong to no action.
@@ -157,9 +161,9 @@ fn press(c: char) -> Press {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
-fn row_1_the_table_has_47_entries_with_unique_keys_and_limits() {
+fn row_1_the_table_has_51_entries_with_unique_keys_and_limits() {
     let table = help_table();
-    assert_eq!(table.len(), 47);
+    assert_eq!(table.len(), 51);
     let keys: Vec<&str> = table.iter().map(|e| e.key).collect();
     assert_eq!(keys, KEYS, "claves estables y en el orden del anexo");
     for (i, e) in table.iter().enumerate() {
@@ -218,7 +222,7 @@ fn row_1_every_action_of_the_keyboard_table_has_text_and_the_keys_are_inverse() 
         .iter()
         .filter(|e| action_of_key(e.key).is_some_and(is_editable))
         .count();
-    assert_eq!(editable, 40);
+    assert_eq!(editable, 44);
     for key in [
         "file.new",
         "file.open",
@@ -332,11 +336,17 @@ fn row_2_fixed_and_extra_shortcut_buttons() {
         Some("sin atajo")
     );
     assert!(text_of_the_area(&undo).contains("Fijos: Ctrl+Z"));
-    // Acercar: `>` y `+`, también `=`.
+    // Acercar: solo `>` (4.3: `+` y `=` pasaron al tamaño del pincel).
     let zoom_in = help_form(HelpTarget::ZoomIn, Tool::Pencil, &table, Platform::Linux);
     assert_eq!(button_2(&zoom_in, HELP_PRIMARY).as_deref(), Some(">"));
-    assert_eq!(button_2(&zoom_in, HELP_SECONDARY).as_deref(), Some("+"));
-    assert!(text_of_the_area(&zoom_in).contains("También: ="));
+    assert_eq!(
+        button_2(&zoom_in, HELP_SECONDARY).as_deref(),
+        Some("sin atajo")
+    );
+    // Pincel más grande: `+`, también `=`.
+    let bigger = help_form_for("brush.bigger", &table, Platform::Linux).unwrap();
+    assert_eq!(button_2(&bigger, HELP_PRIMARY).as_deref(), Some("+"));
+    assert_eq!(button_2(&bigger, HELP_SECONDARY).as_deref(), Some("="));
     // Archivo: sin botones y con el atajo fijo; Salir sin atajo fuera de Linux.
     let save = help_form_for("file.save", &table, Platform::Linux).unwrap();
     assert!(button_2(&save, HELP_PRIMARY).is_none() && button_2(&save, HELP_SECONDARY).is_none());

@@ -1247,11 +1247,16 @@ fn row_16_contrast_without_the_field_focused_the_canvas_does_attend_the_keys() {
     let mut bench = bench_f(1.0, 1);
     let zoom_fit = bench.rest_2_2().info.zoom;
     assert!(!bench.wants_keyboard());
+    // `+` ya no es zoom (es el tamaño del pincel): se acerca por la petición de vista y se
+    // comprueba que `Home` reencuadra, es decir, que el lienzo atiende el teclado.
+    bench.canvas.request_view(px_ui::view::ViewOp::ZoomIn);
+    let f = bench.frame(vec![]);
+    assert_eq!(f.info.zoom, zoom_fit.zoom_in());
     let f = bench.frame(vec![key_2(Key::Plus)]);
     assert_eq!(
         f.info.zoom,
         zoom_fit.zoom_in(),
-        "sin foco de texto, + acerca (el banco recoge las teclas)"
+        "+ ya no cambia el zoom (el banco recoge las teclas)"
     );
     let f = bench.frame(vec![key_2(Key::Home)]);
     assert_eq!(f.info.zoom, zoom_fit, "y Home reencuadra");
@@ -1301,13 +1306,10 @@ fn checks_field_output(name_2: &str, exit: impl FnOnce(&mut Bench)) {
         "{name_2}: los atajos vuelven, todos y en el mismo orden"
     );
 
-    // Y en el lienzo: `+` acerca y `Home` reencuadra.
-    let f = bench.frame(vec![key_2(Key::Plus)]);
-    assert_eq!(
-        f.info.zoom,
-        zoom_fit.zoom_in(),
-        "{name_2}: + vuelve a acercar"
-    );
+    // Y en el lienzo: tras acercar por petición, `Home` reencuadra (`+` ya no es zoom).
+    bench.canvas.request_view(px_ui::view::ViewOp::ZoomIn);
+    let f = bench.frame(vec![]);
+    assert_eq!(f.info.zoom, zoom_fit.zoom_in(), "{name_2}");
     let f = bench.frame(vec![key_2(Key::Home)]);
     assert_eq!(f.info.zoom, zoom_fit, "{name_2}: Home vuelve a reencuadrar");
 }

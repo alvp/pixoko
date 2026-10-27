@@ -6,6 +6,7 @@
 use crate::actions::AppAction;
 use std::sync::LazyLock;
 
+use crate::brush_es::HELP_BRUSH_ES;
 use crate::help_texts_color_es::HELP_COLOR_ES;
 use crate::help_texts_es::{HELP_ES, UI_ES};
 use crate::help_texts_layers_es::HELP_LAYERS_ES;
@@ -86,6 +87,7 @@ pub fn help_table() -> &'static [HelpEntry] {
             .chain(HELP_PALETTE_ES.iter())
             .chain(HELP_IMAGE_ES.iter())
             .chain(HELP_QUANTIZE_ES.iter())
+            .chain(HELP_BRUSH_ES.iter())
             .copied()
             .collect()
     });
@@ -111,6 +113,10 @@ pub fn help_key(action: AppAction) -> Option<&'static str> {
         AppAction::SelectTool(Tool::Fill) => "tool.fill",
         AppAction::SelectTool(Tool::Dropper) => "tool.dropper",
         AppAction::SelectTool(Tool::Eraser) => "tool.eraser",
+        AppAction::SelectDotted => "tool.dotted",
+        AppAction::SelectCurve => "tool.curve",
+        AppAction::BrushBigger => "brush.bigger",
+        AppAction::BrushSmaller => "brush.smaller",
         AppAction::ZoomIn => "view.zoom-in",
         AppAction::ZoomOut => "view.zoom-out",
         AppAction::ZoomFit => "view.zoom-fit",
@@ -163,6 +169,10 @@ pub fn action_of_key(key: &str) -> Option<AppAction> {
         "tool.fill" => AppAction::SelectTool(Tool::Fill),
         "tool.dropper" => AppAction::SelectTool(Tool::Dropper),
         "tool.eraser" => AppAction::SelectTool(Tool::Eraser),
+        "tool.dotted" => AppAction::SelectDotted,
+        "tool.curve" => AppAction::SelectCurve,
+        "brush.bigger" => AppAction::BrushBigger,
+        "brush.smaller" => AppAction::BrushSmaller,
         "view.zoom-in" => AppAction::ZoomIn,
         "view.zoom-out" => AppAction::ZoomOut,
         "view.zoom-fit" => AppAction::ZoomFit,

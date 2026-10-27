@@ -479,9 +479,9 @@ fn row_7_shift_page_up_and_page_down_are_the_background_and_without_shift_they_a
 }
 
 #[test]
-fn row_7_the_table_has_36_rows_without_clashes_and_only_the_nine_modern_ones_carry_command() {
+fn row_7_the_table_has_38_rows_without_clashes_and_only_the_nine_modern_ones_carry_command() {
     let keymap = Keymap::default_scheme();
-    assert_eq!(keymap.rows().len(), 36);
+    assert_eq!(keymap.rows().len(), 38);
     assert_eq!(keymap.conflicts(), Vec::<Conflict>::new());
     let with_command = keymap.rows().iter().filter(|row| row.command).count();
     assert_eq!(with_command, 9);

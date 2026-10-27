@@ -601,6 +601,8 @@ fn action_expected(key: Key, modifiers: Modifiers) -> Option<ToolAction> {
         Key::F => Some(ToolAction::Select(Tool::Fill)),
         Key::Comma => Some(ToolAction::Select(Tool::Dropper)),
         Key::K => Some(ToolAction::Select(Tool::Eraser)),
+        Key::S => Some(ToolAction::SelectDotted),
+        Key::Q => Some(ToolAction::SelectCurve),
         Key::Escape => Some(ToolAction::Cancel),
         _ => None,
     }
@@ -619,7 +621,7 @@ fn checks_keys(key: Key, modifiers: Modifiers) -> Result<(), TestCaseError> {
         prop_assert!(
             matches!(
                 key,
-                Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::Escape
+                Key::D | Key::V | Key::F | Key::Comma | Key::K | Key::S | Key::Q | Key::Escape
             ),
             "{:?} no debería dar acción",
             key

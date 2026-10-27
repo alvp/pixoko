@@ -127,16 +127,10 @@ fn model(v: View, op: ViewOp) -> View {
 }
 
 #[test]
-fn row_6_greater_minus_and_plus_equals_minus_give_zoom_in_and_zoom_out_as_before() {
+fn row_6_greater_and_smaller_give_zoom_in_and_zoom_out_as_before() {
     let km = Keymap::default_scheme();
     for platform in [Platform::Linux, Platform::Windows, Platform::Mac] {
-        for (key_2, expected) in [
-            ('>', ViewOp::ZoomIn),
-            ('+', ViewOp::ZoomIn),
-            ('=', ViewOp::ZoomIn),
-            ('<', ViewOp::ZoomOut),
-            ('-', ViewOp::ZoomOut),
-        ] {
+        for (key_2, expected) in [('>', ViewOp::ZoomIn), ('<', ViewOp::ZoomOut)] {
             let action = km
                 .action_for(&press_of(KeyId::Char(key_2), false), platform)
                 .unwrap_or_else(|| panic!("`{key_2}` no da acción en {platform:?}"));
@@ -154,10 +148,7 @@ fn row_6_the_zoom_keys_applied_to_the_view_give_the_same_as_the_previous_model()
     let km = Keymap::default_scheme();
     let keys = [
         (KeyId::Char('>'), false),
-        (KeyId::Char('+'), false),
-        (KeyId::Char('='), false),
         (KeyId::Char('<'), false),
-        (KeyId::Char('-'), false),
         (KeyId::Home, false),
         (KeyId::Char('1'), true),
     ];
@@ -171,18 +162,6 @@ fn row_6_the_zoom_keys_applied_to_the_view_give_the_same_as_the_previous_model()
             after_2.apply_op(op, CANVAS, IMAGE);
             assert_eq!(after_2, model(before, op), "{name_2}: {key:?}");
         }
-        // `>`, `+` y `=` son la misma operación: el mismo resultado.
-        let per = |key_2: char| {
-            let action = km
-                .action_for(&press_of(KeyId::Char(key_2), false), Platform::Linux)
-                .expect("acción");
-            let mut v = before;
-            v.apply_op(op_of(action), CANVAS, IMAGE);
-            v
-        };
-        assert_eq!(per('>'), per('+'), "{name_2}");
-        assert_eq!(per('>'), per('='), "{name_2}");
-        assert_eq!(per('<'), per('-'), "{name_2}");
     }
 }
 

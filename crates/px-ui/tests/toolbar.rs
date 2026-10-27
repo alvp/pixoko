@@ -791,6 +791,7 @@ mod toolbox_right {
             let view = OptionsView {
                 tool: self.tool,
                 rows: self.rows,
+                lines: &[],
                 keymap: &self.keymap,
                 platform: LINUX,
                 enabled: true,
@@ -885,8 +886,14 @@ mod toolbox_right {
 
     #[test]
     fn row_4_the_body_rows_and_their_scroll_are_prepared_but_empty() {
-        for tool in TEST_TOOLS {
-            assert_eq!(options_row_count(tool), 0, "{tool:?}");
+        for (tool, rows) in [
+            (Tool::Pencil, 3),
+            (Tool::Line, 4),
+            (Tool::Fill, 0),
+            (Tool::Dropper, 0),
+            (Tool::Eraser, 0),
+        ] {
+            assert_eq!(options_row_count(tool), rows, "{tool:?}");
         }
         for (rows_2, maximum_2) in [(0, 0), (8, 0), (9, 1), (30, 22)] {
             assert_eq!(options_max_scroll(rows_2), maximum_2, "{rows_2} filas");

@@ -259,16 +259,16 @@ fn home_returns_to_fit() {
 }
 
 #[test]
-fn plus_and_minus_change_the_zoom() {
+fn plus_and_minus_no_longer_change_the_zoom() {
     let mut bench = Bench::new_2();
     bench.canvas.set_image(&image_of_test());
     bench.frame(vec![], None).output.textures_delta.clear();
     let mut f = bench.frame(vec![key_2(Key::Minus)], None);
     Bench::clean(&mut f);
-    assert_eq!(Some(f.info.zoom), Zoom::from_int(11));
+    assert_eq!(Some(f.info.zoom), Zoom::from_int(12));
     let mut f = bench.frame(vec![key_2(Key::Plus), key_2(Key::Plus)], None);
     Bench::clean(&mut f);
-    assert_eq!(Some(f.info.zoom), Zoom::from_int(13));
+    assert_eq!(Some(f.info.zoom), Zoom::from_int(12));
 }
 
 #[test]

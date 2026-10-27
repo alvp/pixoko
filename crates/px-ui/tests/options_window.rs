@@ -127,6 +127,7 @@ impl Bench {
         let view = OptionsView {
             tool: self.tool,
             rows: self.rows,
+            lines: &[],
             keymap: &self.keymap,
             platform: Platform::Linux,
             enabled: self.enabled,
@@ -361,11 +362,8 @@ fn row_8_the_scroll_is_by_whole_rows_and_per_tool_and_the_position_is_shared() {
         window.right_click(Tool::Pencil, tool);
         window.right_click(tool, tool);
         window.right_click(Tool::Pencil, tool);
-        assert_eq!(
-            window.rect(options_row_count(tool), screen, n, 16),
-            moved,
-            "{tool:?}"
-        );
+        let rect = window.rect(options_row_count(tool), screen, n, 16);
+        assert_eq!((rect.x, rect.y), (moved.x, moved.y), "{tool:?}");
     }
 }
 
