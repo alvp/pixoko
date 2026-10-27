@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6ec6c444cf44d3d69f2ec8dc9a9b6365cea2e68176187bedfee2016f43f152f1 # shrinks to (image, spans) = (Image { width: 7, height: 1, mode: Rgba, data: [30, 225, 7, 255, 90, 165, 21, 255, 90, 165, 21, 255, 60, 195, 14, 255, 0, 255, 0, 255, 30, 225, 7, 255, 0, 255, 0, 255], palette: None }, [Span { y: 0, x_start: 2, x_end: 7 }])

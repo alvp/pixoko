@@ -2352,9 +2352,7 @@ struct Cursor(usize);
 /// Escribe `pixel` en los `run.len` píxeles del trozo. Los trozos salen de la propia imagen,
 /// así que no puede fallar; si fallara, se ignora como en `Document::write`.
 fn write_run(image: &mut Image, run: &Run, pixel: Pixel) {
-    for dx in 0..run.len {
-        let _ = image.set_pixel(run.x.saturating_add(dx), run.y, pixel);
-    }
+    let _ = image.fill_run(run.x, run.y, run.len, pixel);
 }
 
 /// Recorre los tramos sin modificar nada: los valida y llama a `emit` con cada trozo, en
@@ -2391,32 +2389,46 @@ fn scan_runs(
                 },
             });
         }
-        let mut open: Option<Run> = None;
-        for x in span.x_start..span.x_end {
-            let old = image
-                .get_pixel(x, span.y)
-                .map_err(|source| DocumentError::Span {
-                    span: index,
-                    source,
-                })?;
+        // Por filas: se comparan los bytes del tramo con los del valor nuevo y entre sí, y solo se
+        // construye el `Pixel` anterior al abrir un trozo.
+        let bpp = image.mode().bytes_per_pixel();
+        let (key, _) = Image::encode(pixel);
+        let key = key.get(..bpp).unwrap_or(&[]);
+        let part = image
+            .row(span.y)
+            .and_then(|row| row.get(span.x_start as usize * bpp..span.x_end as usize * bpp));
+        let mut open: Option<(Run, &[u8])> = None;
+        for (offset, chunk) in part.unwrap_or(&[]).chunks_exact(bpp).enumerate() {
+            let differs = chunk != key;
             match &mut open {
-                Some(run) if old != pixel && run.before == old => run.len += 1,
+                Some((run, bytes)) if differs && *bytes == chunk => run.len += 1,
                 _ => {
-                    if let Some(run) = open.take() {
+                    if let Some((run, _)) = open.take() {
                         emit(run);
                     }
-                    if old != pixel {
-                        open = Some(Run {
-                            y: span.y,
-                            x,
-                            len: 1,
-                            before: old,
-                        });
+                    if differs {
+                        let x = span.x_start + offset as u32;
+                        let before =
+                            image
+                                .get_pixel(x, span.y)
+                                .map_err(|source| DocumentError::Span {
+                                    span: index,
+                                    source,
+                                })?;
+                        open = Some((
+                            Run {
+                                y: span.y,
+                                x,
+                                len: 1,
+                                before,
+                            },
+                            chunk,
+                        ));
                     }
                 }
             }
         }
-        if let Some(run) = open {
+        if let Some((run, _)) = open {
             emit(run);
         }
     }

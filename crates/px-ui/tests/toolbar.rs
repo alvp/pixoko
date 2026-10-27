@@ -891,7 +891,7 @@ mod toolbox_right {
         for (tool, rows) in [
             (Tool::Pencil, 3),
             (Tool::Line, 4),
-            (Tool::Fill, 0),
+            (Tool::Fill, 1),
             (Tool::Dropper, 0),
             (Tool::Eraser, 0),
         ] {

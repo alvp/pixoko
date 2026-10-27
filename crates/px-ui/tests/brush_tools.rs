@@ -402,7 +402,11 @@ fn row_11_the_options_window_rows_per_tool() {
     assert_eq!(options_row_count(Tool::Line), 4);
     state.set_spacing(Spacing::EveryN(4));
     assert_eq!(state.option_rows().last(), Some(&OptionRow::SpacingN));
-    for tool in [Tool::Fill, Tool::Dropper, Tool::Eraser] {
+    // The fill has only its mode row by default (unit 4.5); the dropper and the eraser have none.
+    state.apply_action(ToolAction::Select(Tool::Fill));
+    assert_eq!(state.option_rows(), [OptionRow::FillMode]);
+    assert_eq!(options_row_count(Tool::Fill), 1);
+    for tool in [Tool::Dropper, Tool::Eraser] {
         state.apply_action(ToolAction::Select(tool));
         assert!(state.option_rows().is_empty(), "{tool:?}");
         assert_eq!(options_row_count(tool), 0, "{tool:?}");
