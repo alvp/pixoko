@@ -9,8 +9,8 @@ use px_core::{
     Command, Document, DocumentError, Image, ImageId, Mode, Pixel, PixelEdit, Rgba, Span,
 };
 use px_raster::{
-    Brush, BrushShape, Line, Spacing, curve_path, fill_command, line_path, line_path_near,
-    spaced_centers, stamp_pixels,
+    Brush, BrushShape, Line, PatternTile, Spacing, curve_path, fill_command, fill_pattern_command,
+    fill_until_command, line_path, line_path_near, pattern_spans, spaced_centers, stamp_pixels,
 };
 
 use crate::actions::{AppAction, Platform};
@@ -24,10 +24,10 @@ use crate::pick::{
     Dropper, EraseError, Picked, eraser_label, eraser_pixel, is_erasable, picked_at,
 };
 use crate::shape_tool::{Geom, ShapeStyle, drag_geom};
-use crate::shapes_es;
 use crate::source::visible_picked;
 use crate::stroke::Stroke;
 use crate::view::Size;
+use crate::{fill_es, shapes_es};
 
 /// `image` es la celda de alguna capa (vacía o no).
 fn is_cell(doc: &Document, image: ImageId) -> bool {
@@ -55,19 +55,14 @@ fn empty_value(canvas: &Image) -> Option<Pixel> {
     }
 }
 
-/// `fill_command` también sobre una celda vacía: todo el lienzo es una región del valor
-/// transparente, así que el relleno es un `FillSpans` de un tramo por fila (sin reservar la celda
-/// antes de aplicarlo). El color igual al transparente no cambia nada.
-fn fill_in(
+/// The checks that every fill of an empty cell shares: `pixel` belongs to the mode and `(x, y)` is
+/// inside the canvas. `Ok(None)` outside; inside, the value of an empty cell (the transparent).
+fn empty_seed(
     doc: &Document,
-    image: ImageId,
     x: i32,
     y: i32,
     pixel: Pixel,
-) -> Result<Option<Command>, DocumentError> {
-    if doc.image(image).is_some() || !is_cell(doc, image) {
-        return fill_command(doc, image, x, y, pixel);
-    }
+) -> Result<Option<Pixel>, DocumentError> {
     let canvas = doc.canvas_image();
     canvas
         .check_pixel(pixel)
@@ -79,9 +74,11 @@ fn fill_in(
         return Ok(None);
     }
     let seed = empty_value(canvas).ok_or(DocumentError::NoTransparency { mode: doc.mode() })?;
-    if seed == pixel {
-        return Ok(None);
-    }
+    Ok(Some(seed))
+}
+
+/// One span per row over the whole canvas: the region of an empty cell.
+fn canvas_spans(doc: &Document) -> Result<Vec<Span>, DocumentError> {
     let height = doc.height();
     let mut spans = Vec::new();
     spans
@@ -92,11 +89,98 @@ fn fill_in(
         x_start: 0,
         x_end: doc.width(),
     }));
+    Ok(spans)
+}
+
+/// Whether the target of the fill is an empty cell of the active layer (not materialized yet).
+fn is_empty_cell(doc: &Document, image: ImageId) -> bool {
+    doc.image(image).is_none() && is_cell(doc, image)
+}
+
+/// `fill_command` también sobre una celda vacía: todo el lienzo es una región del valor
+/// transparente, así que el relleno es un `FillSpans` de un tramo por fila (sin reservar la celda
+/// antes de aplicarlo). El color igual al transparente no cambia nada.
+fn fill_in(
+    doc: &Document,
+    image: ImageId,
+    x: i32,
+    y: i32,
+    pixel: Pixel,
+) -> Result<Option<Command>, DocumentError> {
+    if !is_empty_cell(doc, image) {
+        return fill_command(doc, image, x, y, pixel);
+    }
+    let Some(seed) = empty_seed(doc, x, y, pixel)? else {
+        return Ok(None);
+    };
+    if seed == pixel {
+        return Ok(None);
+    }
     Ok(Some(Command::FillSpans {
         image,
-        spans,
+        spans: canvas_spans(doc)?,
         pixel,
     }))
+}
+
+/// The fill of the active mode (specs/hito-4-relleno.md). `Hasta el fondo` without a color in the
+/// other slot is the solid fill. All of them also work on an empty cell without materializing it.
+fn fill_by_mode(
+    doc: &Document,
+    image: ImageId,
+    pos: (i32, i32),
+    pixel: Pixel,
+    mode: FillMode,
+    other: Option<Pixel>,
+    brush: Brush,
+) -> Result<Option<Command>, DocumentError> {
+    let (x, y) = pos;
+    match (mode, other) {
+        (FillMode::UntilBackground, Some(boundary)) => {
+            if !is_empty_cell(doc, image) {
+                return fill_until_command(doc, image, x, y, pixel, boundary);
+            }
+            let canvas = doc.canvas_image();
+            for (index, value) in [pixel, boundary].into_iter().enumerate() {
+                canvas
+                    .check_pixel(value)
+                    .map_err(|source| DocumentError::Pixel {
+                        pixel: index,
+                        source,
+                    })?;
+            }
+            let Some(seed) = empty_seed(doc, x, y, pixel)? else {
+                return Ok(None);
+            };
+            if seed == boundary {
+                return Ok(None);
+            }
+            Ok(Some(Command::FillSpans {
+                image,
+                spans: canvas_spans(doc)?,
+                pixel,
+            }))
+        }
+        (FillMode::Pattern, _) => {
+            let tile = PatternTile::from_brush(&brush);
+            if !is_empty_cell(doc, image) {
+                return fill_pattern_command(doc, image, x, y, pixel, &tile);
+            }
+            let Some(seed) = empty_seed(doc, x, y, pixel)? else {
+                return Ok(None);
+            };
+            if seed == pixel {
+                return Ok(None);
+            }
+            let pieces = pattern_spans(&canvas_spans(doc)?, &tile, Document::MAX_FILL_SPANS)?;
+            Ok((!pieces.is_empty()).then_some(Command::FillSpans {
+                image,
+                spans: pieces,
+                pixel,
+            }))
+        }
+        _ => fill_in(doc, image, x, y, pixel),
+    }
 }
 
 /// Qué lee el cuentagotas.
@@ -184,6 +268,25 @@ pub enum ShapeFill {
 
 impl ShapeFill {
     pub const ALL: [ShapeFill; 3] = [ShapeFill::Outline, ShapeFill::Filled, ShapeFill::Both];
+}
+
+/// How the fill tool fills (specs/hito-4-relleno.md, unit 4.5): the solid fill of always, the
+/// pattern (the mask of the brush, aligned to the canvas) or the fill that goes on until it
+/// touches the background color (the other slot).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum FillMode {
+    #[default]
+    Solid,
+    Pattern,
+    UntilBackground,
+}
+
+impl FillMode {
+    pub const ALL: [FillMode; 3] = [
+        FillMode::Solid,
+        FillMode::Pattern,
+        FillMode::UntilBackground,
+    ];
 }
 
 impl Tool {
@@ -479,7 +582,9 @@ pub struct ToolState {
     pending: Option<PendingCurve>,
     shape_kind: ShapeKind,
     shape_fill: ShapeFill,
-    /// The pixel of the other slot, for the fill of a shape with outline.
+    fill_mode: FillMode,
+    /// The pixel of the other slot: the fill of a shape with outline and the background color of
+    /// the fill "until the background".
     other: Option<Pixel>,
     polygon: Option<PendingPolygon>,
 }
@@ -502,6 +607,7 @@ impl Default for ToolState {
             pending: None,
             shape_kind: ShapeKind::default(),
             shape_fill: ShapeFill::default(),
+            fill_mode: FillMode::default(),
             other: None,
             polygon: None,
         }
@@ -533,6 +639,8 @@ pub enum OptionRow {
     Kind,
     /// Outline, fill or both.
     Fill,
+    /// Solid, pattern or until the background (the fill tool).
+    FillMode,
     Shape,
     Size,
     Spacing,
@@ -558,7 +666,8 @@ pub fn default_option_rows(tool: Tool) -> &'static [OptionRow] {
             OptionRow::Size,
             OptionRow::Spacing,
         ],
-        Tool::Fill | Tool::Dropper | Tool::Eraser => &[],
+        Tool::Fill => &[OptionRow::FillMode],
+        Tool::Dropper | Tool::Eraser => &[],
     }
 }
 
@@ -620,7 +729,17 @@ impl ToolState {
         self.shape_fill = fill;
     }
 
-    /// The pixel of the other slot (the fill of a shape that has an outline); `px-app` sets it
+    /// The mode of the fill tool.
+    pub fn fill_mode(&self) -> FillMode {
+        self.fill_mode
+    }
+
+    pub fn set_fill_mode(&mut self, mode: FillMode) {
+        self.fill_mode = mode;
+    }
+
+    /// The pixel of the other slot (the fill of a shape that has an outline, or the background
+    /// of the fill "until the background"); `px-app` sets it
     /// before each canvas event. Without it the fill takes the color of the outline.
     pub fn set_other_pixel(&mut self, pixel: Option<Pixel>) {
         self.other = pixel;
@@ -634,7 +753,9 @@ impl ToolState {
     /// Changes the size of the brush by `delta`, inside 1 to 100, only with a stroke tool. `true`
     /// if the size changed.
     pub fn step_brush_size(&mut self, delta: i32) -> bool {
-        if !self.is_stroke_tool() {
+        if !self.is_stroke_tool()
+            && !(self.tool == Tool::Fill && self.fill_mode == FillMode::Pattern)
+        {
             return false;
         }
         let size = (i64::from(self.brush.size()) + i64::from(delta)).clamp(1, 100) as u32;
@@ -649,6 +770,10 @@ impl ToolState {
         if self.tool == Tool::Shape && self.shape_fill == ShapeFill::Filled {
             // Only the fill: no brush, no spacing.
             rows.truncate(2);
+        }
+        if self.tool == Tool::Fill && self.fill_mode == FillMode::Pattern {
+            // The pattern is the mask of the brush: its shape and size.
+            rows.extend([OptionRow::Shape, OptionRow::Size]);
         }
         if matches!(self.tool, Tool::Line | Tool::Shape)
             && rows.contains(&OptionRow::Spacing)
@@ -680,6 +805,7 @@ impl ToolState {
             }
             OptionRow::Kind => shapes_es::kind_text(self.shape_kind).to_string(),
             OptionRow::Fill => shapes_es::fill_text(self.shape_fill).to_string(),
+            OptionRow::FillMode => fill_es::mode_text(self.fill_mode).to_string(),
             OptionRow::Shape => brush_es::shape_text(self.brush.shape()),
             OptionRow::Size => brush_es::size_text(self.brush.size()),
             OptionRow::Spacing => brush_es::spacing_text(self.spacing).to_string(),
@@ -705,6 +831,7 @@ impl ToolState {
                 self.polygon = None;
             }
             OptionRow::Fill => self.shape_fill = cycle(&ShapeFill::ALL, self.shape_fill, forward),
+            OptionRow::FillMode => self.fill_mode = cycle(&FillMode::ALL, self.fill_mode, forward),
             OptionRow::Shape => {
                 let all = BrushShape::ALL;
                 let at = all
@@ -1116,7 +1243,15 @@ impl ToolState {
                 }));
                 Ok(false)
             }
-            Tool::Fill => match fill_in(doc, image, pos.0, pos.1, pixel)? {
+            Tool::Fill => match fill_by_mode(
+                doc,
+                image,
+                pos,
+                pixel,
+                self.fill_mode,
+                self.other,
+                self.brush,
+            )? {
                 Some(command) => self.apply(doc, command),
                 None => Ok(false),
             },

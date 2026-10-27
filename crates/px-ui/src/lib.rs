@@ -24,6 +24,7 @@ pub mod dialog_layout;
 pub mod dialog_view;
 pub mod dirty;
 pub mod edit_layout;
+pub mod fill_es;
 pub mod float_window;
 pub mod gestures;
 pub mod help;

@@ -43,7 +43,7 @@ pub(crate) const HELP_ES: [HelpEntry; 22] = [
     entry(
         "tool.fill",
         "Relleno",
-        "Pinta la zona de píxeles iguales que rodea al que pulsas. Un clic es un solo paso de deshacer.",
+        "Pinta la zona de píxeles iguales que rodea al que pulsas. En su ventana de opciones, el modo puede ser sólido, patrón (la forma del pincel) o hasta el color de fondo. Un clic es un solo paso de deshacer.",
         Some("rellena con el primer plano"),
         Some("rellena con el fondo"),
     ),

@@ -287,11 +287,6 @@ impl Visited {
         y as usize * self.width + x as usize
     }
 
-    fn contains(&self, x: u32, y: u32) -> bool {
-        let bit = self.at(x, y);
-        (self.word(bit / 64) >> (bit % 64)) & 1 == 1
-    }
-
     /// Marca los bits `from..to`.
     fn set_range(&mut self, from: usize, to: usize) {
         let mut i = from;
