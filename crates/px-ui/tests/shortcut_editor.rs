@@ -88,12 +88,14 @@ fn row_5_the_boxes_of_the_default_table() {
     assert_eq!(slots(pencil()), vec![chord('d')]);
     assert_eq!(slots(AppAction::Undo), vec![chord('u')]);
     assert_eq!(slots(AppAction::Redo), vec![]);
+    assert_eq!(slots(AppAction::ZoomIn), vec![chord('>')]);
     assert_eq!(
-        slots(AppAction::ZoomIn),
-        vec![chord('>'), chord('+'), chord('=')],
-        "principal, secundaria y el extra `=`"
+        slots(AppAction::BrushBigger),
+        vec![chord('+'), chord('=')],
+        "principal y la secundaria `=`"
     );
-    assert_eq!(slots(AppAction::ZoomOut), vec![chord('<'), chord('-')]);
+    assert_eq!(slots(AppAction::ZoomOut), vec![chord('<')]);
+    assert_eq!(slots(AppAction::BrushSmaller), vec![chord('-')]);
     assert_eq!(
         slots(AppAction::ColorNext),
         vec![chord(']'), chord_with(KeyId::PageDown, false, false)]
@@ -217,19 +219,19 @@ fn row_5_assign_regenerates_the_rows_and_keeps_the_rest() {
         &default,
         AppAction::CenterOnCursor,
         Slot::Primary,
-        'q',
+        'w',
         false,
     );
     assert_eq!(
         c.shown_text(AppAction::CenterOnCursor, Platform::Linux)
             .as_deref(),
-        Some("q")
+        Some("w")
     );
-    // Con el extra `=` de Acercar: se conserva al cambiar la principal.
-    let z = assigns(&default, AppAction::ZoomIn, Slot::Primary, 'x', false);
+    // Con la secundaria `=` de Pincel más grande: se conserva al cambiar la principal.
+    let z = assigns(&default, AppAction::BrushBigger, Slot::Primary, 'x', false);
     assert_eq!(
-        slots_of(&z, AppAction::ZoomIn).slots,
-        vec![chord('x'), chord('+'), chord('=')]
+        slots_of(&z, AppAction::BrushBigger).slots,
+        vec![chord('x'), chord('=')]
     );
 }
 
@@ -283,8 +285,8 @@ fn row_7_the_rows_that_are_not_shown_also_count_and_the_name_comes_from_the_tabl
     let default = Keymap::default_scheme();
     for (c, owner) in [
         ('u', AppAction::Undo),
-        ('+', AppAction::ZoomIn),
-        ('-', AppAction::ZoomOut),
+        ('+', AppAction::BrushBigger),
+        ('-', AppAction::BrushSmaller),
         ('}', AppAction::BackgroundNext),
         ('n', AppAction::CenterOnCursor),
     ] {
@@ -307,19 +309,16 @@ fn row_7_the_rows_that_are_not_shown_also_count_and_the_name_comes_from_the_tabl
         e.capture(Capture::Press(av_page)),
         CaptureResult::Pending(AppAction::ColorNext)
     );
-    // Reasignar un extra (`=` de Acercar) lo quita de Acercar.
+    // Reasignar un extra (`=` de Pincel más grande) lo quita de ahí.
     let mut e = editor(pencil(), &default);
     e.begin_capture(Slot::Secondary);
     assert_eq!(
         e.capture(Capture::Press(press('='))),
-        CaptureResult::Pending(AppAction::ZoomIn)
+        CaptureResult::Pending(AppAction::BrushBigger)
     );
     e.resolve(true);
     let t = e.accept();
-    assert_eq!(
-        slots_of(&t, AppAction::ZoomIn).slots,
-        vec![chord('>'), chord('+')]
-    );
+    assert_eq!(slots_of(&t, AppAction::BrushBigger).slots, vec![chord('+')]);
     assert!(t.conflicts().is_empty());
 }
 
@@ -405,10 +404,10 @@ fn row_8_the_editor_form_follows_the_model() {
     assert!(spec.validate().is_ok());
     assert_eq!((spec.accept, spec.cancel), ("Aceptar", Some("Cancelar")));
     let mut dialog = Dialog::new(DialogKind::ShortcutEditor, spec).unwrap();
-    let mut e = editor(AppAction::ZoomIn, &default);
+    let mut e = editor(AppAction::BrushBigger, &default);
     sync_editor_dialog(&mut dialog, &e, Platform::Linux);
-    assert_eq!(dialog.button_text(EDITOR_PRIMARY).as_deref(), Some(">"));
-    assert_eq!(dialog.button_text(EDITOR_SECONDARY).as_deref(), Some("+"));
+    assert_eq!(dialog.button_text(EDITOR_PRIMARY).as_deref(), Some("+"));
+    assert_eq!(dialog.button_text(EDITOR_SECONDARY).as_deref(), Some("="));
     // Sin conflicto, los botones del conflicto están atenuados y el conjunto es válido.
     assert_eq!(dialog.button_disabled(EDITOR_CONFLICT), Some([true, true]));
     assert!(dialog.is_valid());
@@ -423,7 +422,7 @@ fn row_8_the_editor_form_follows_the_model() {
     );
     let message = zone(&dialog, EDITOR_MESSAGE);
     assert!(
-        message.contains("Acercar") && message.contains("Esc cancela"),
+        message.contains("Pincel más grande") && message.contains("Esc cancela"),
         "{message}"
     );
     // Con un conflicto: botones habilitados, `Accept` rechazado con el motivo.

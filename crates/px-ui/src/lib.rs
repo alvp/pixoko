@@ -6,6 +6,7 @@
 
 pub mod actions;
 pub mod background;
+pub mod brush_es;
 pub mod canvas;
 pub mod checker;
 pub mod chrome;

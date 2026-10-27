@@ -13,7 +13,9 @@ mod line;
 mod merge;
 mod quantize;
 
-pub use brush::{Brush, BrushShape, Spacing, curve_path, line_path, spaced_centers, stamp_pixels};
+pub use brush::{
+    Brush, BrushShape, Spacing, curve_path, line_path, line_path_near, spaced_centers, stamp_pixels,
+};
 pub use compose::{ComposeError, Rect, compose, compose_layers, compose_rect, composite_pixel};
 pub use draw::{draw_line, line_command};
 pub use fill::{fill_command, fill_command_with_limit, flood_fill};

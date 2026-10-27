@@ -756,10 +756,6 @@ impl Canvas {
                 _ => view.apply_op(op, viewport, size),
             }
         }
-        let center = (
-            i64::from(viewport.width) / 2,
-            i64::from(viewport.height) / 2,
-        );
         let to_image = |view: &View, p: egui::Pos2| {
             view.screen_to_image_i32((physical(p.x - rect.min.x), physical(p.y - rect.min.y)))
         };
@@ -822,10 +818,6 @@ impl Canvas {
                     ..
                 } if !modifiers.command && !typing => match key {
                     Key::Home if !self.view_keys_off => view = View::fit(viewport, size),
-                    Key::Plus | Key::Equals if !self.view_keys_off => {
-                        zoom_step(&mut view, true, center);
-                    }
-                    Key::Minus if !self.view_keys_off => zoom_step(&mut view, false, center),
                     Key::Escape if modifiers.is_none() => {
                         let role = match self.gesture {
                             Gesture::Draw { role, .. } => role,

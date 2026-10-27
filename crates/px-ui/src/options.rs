@@ -11,7 +11,7 @@ use crate::actions::{AppAction, Platform};
 use crate::float_window;
 use crate::help_texts::{help_entry, help_key};
 use crate::keymap::Keymap;
-use crate::tool::Tool;
+use crate::tool::{Tool, default_option_rows};
 use crate::view::ScreenRect;
 
 /// Text of the body when the tool has no options.
@@ -44,10 +44,11 @@ pub const HELP_LINE_H_U: i64 = 14;
 const DEFAULT_MARGIN_U: i64 = 8;
 const DEFAULT_CASCADE_U: i64 = 24;
 
-/// Rows of options of `tool`: 0 for the five tools of today. It is the only place that milestone 4
-/// extends.
-pub fn options_row_count(_tool: Tool) -> usize {
-    0
+/// Rows of options of `tool` with the default state (a continuous spacing): 3 for the pencil, 4
+/// for the line and 0 for the rest. The line grows to 5 with a spacing that is not continuous
+/// (`ToolState::option_rows`).
+pub fn options_row_count(tool: Tool) -> usize {
+    default_option_rows(tool).len()
 }
 
 /// Highest scroll of the body, in rows, with `rows` rows of options.

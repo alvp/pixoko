@@ -51,10 +51,6 @@ const KEYS: [&str; 51] = [
     "tool.fill",
     "tool.dropper",
     "tool.eraser",
-    "tool.dotted",
-    "tool.curve",
-    "brush.bigger",
-    "brush.smaller",
     "view.zoom-in",
     "view.zoom-out",
     "view.zoom-fit",
@@ -99,6 +95,10 @@ const KEYS: [&str; 51] = [
     "image.turn-half",
     "image.canvas-size",
     "image.quantize",
+    "tool.dotted",
+    "tool.curve",
+    "brush.bigger",
+    "brush.smaller",
 ];
 
 /// The two entries of the palette panel that belong to no action.
@@ -336,11 +336,17 @@ fn row_2_fixed_and_extra_shortcut_buttons() {
         Some("sin atajo")
     );
     assert!(text_of_the_area(&undo).contains("Fijos: Ctrl+Z"));
-    // Acercar: `>` y `+`, también `=`.
+    // Acercar: solo `>` (4.3: `+` y `=` pasaron al tamaño del pincel).
     let zoom_in = help_form(HelpTarget::ZoomIn, Tool::Pencil, &table, Platform::Linux);
     assert_eq!(button_2(&zoom_in, HELP_PRIMARY).as_deref(), Some(">"));
-    assert_eq!(button_2(&zoom_in, HELP_SECONDARY).as_deref(), Some("+"));
-    assert!(text_of_the_area(&zoom_in).contains("También: ="));
+    assert_eq!(
+        button_2(&zoom_in, HELP_SECONDARY).as_deref(),
+        Some("sin atajo")
+    );
+    // Pincel más grande: `+`, también `=`.
+    let bigger = help_form_for("brush.bigger", &table, Platform::Linux).unwrap();
+    assert_eq!(button_2(&bigger, HELP_PRIMARY).as_deref(), Some("+"));
+    assert_eq!(button_2(&bigger, HELP_SECONDARY).as_deref(), Some("="));
     // Archivo: sin botones y con el atajo fijo; Salir sin atajo fuera de Linux.
     let save = help_form_for("file.save", &table, Platform::Linux).unwrap();
     assert!(button_2(&save, HELP_PRIMARY).is_none() && button_2(&save, HELP_SECONDARY).is_none());

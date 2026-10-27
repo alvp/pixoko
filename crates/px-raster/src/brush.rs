@@ -166,6 +166,24 @@ pub fn line_path(a: (i32, i32), b: (i32, i32)) -> Vec<(i32, i32)> {
     Line::new(a, b).collect()
 }
 
+/// The part of the segment from `a` to `b` that is within `margin` pixels of the `width × height`
+/// canvas (a point farther away cannot be touched by a brush of `margin` pixels). It never
+/// builds more points than that, however far the ends are.
+pub fn line_path_near(
+    a: (i32, i32),
+    b: (i32, i32),
+    width: u32,
+    height: u32,
+    margin: u32,
+) -> Vec<(i32, i32)> {
+    Line::new(a, b)
+        .clip_with_margin(width, height, margin)
+        .collect()
+}
+
+/// Most steps that [`curve_path`] takes; a longer control polygon degrades to its two ends.
+pub const MAX_CURVE_STEPS: i64 = 1 << 22;
+
 /// The quadratic curve from `a` to `b` with `control` as its control point, as consecutive
 /// points (8-connected, no consecutive repeats).
 ///
@@ -178,6 +196,9 @@ pub fn curve_path(a: (i32, i32), b: (i32, i32), control: (i32, i32)) -> Vec<(i32
         i64::from(p.0.abs_diff(q.0)).max(i64::from(p.1.abs_diff(q.1)))
     };
     let n = (cheb(a, b) + cheb(a, control) + cheb(control, b)).max(1);
+    if n > MAX_CURVE_STEPS {
+        return vec![a, b];
+    }
     let point = |i: i64| {
         let at = |a: i32, c: i32, b: i32| {
             let num = i128::from((n - i) * (n - i)) * i128::from(a)

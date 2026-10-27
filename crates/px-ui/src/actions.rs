@@ -33,6 +33,14 @@ pub enum AppAction {
     ShowLicenses,
     CloseLicenses,
     SelectTool(Tool),
+    /// The pencil in dotted freehand mode (`s`).
+    SelectDotted,
+    /// The line in curve mode (`q`).
+    SelectCurve,
+    /// The brush one pixel bigger (`+`, `=`).
+    BrushBigger,
+    /// The brush one pixel smaller (`-`).
+    BrushSmaller,
     /// Color slot, from 1 to 9 (no default key: assignable in milestone 8).
     SelectColor(u8),
     /// Next color (`]`): the entry in indexed images, the slot in the other modes.

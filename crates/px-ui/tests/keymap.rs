@@ -310,10 +310,10 @@ fn scheme_expected() -> Vec<Expected> {
         e(AppAction::BackgroundNext, c('}'), false, false, all_2, t),
         e(AppAction::BackgroundPrev, c('{'), false, false, all_2, t),
         e(AppAction::ZoomIn, c('>'), false, false, all_2, t),
-        e(AppAction::BrushBigger, c('+'), false, false, all_2, None),
+        e(AppAction::BrushBigger, c('+'), false, false, all_2, t),
         e(AppAction::BrushBigger, c('='), false, false, all_2, None),
         e(AppAction::ZoomOut, c('<'), false, false, all_2, t),
-        e(AppAction::BrushSmaller, c('-'), false, false, all_2, None),
+        e(AppAction::BrushSmaller, c('-'), false, false, all_2, t),
         e(AppAction::ZoomFit, KeyId::Home, false, false, all_2, t),
         e(AppAction::ZoomActualSize, c('1'), true, false, all_2, t),
         e(AppAction::CenterOnCursor, c('n'), false, false, all_2, t),
@@ -731,10 +731,8 @@ fn row_2_p_toggles_the_color_editor_and_what_is_unassigned_gives_none_with_any_m
     }
     // Sin `command`: `l i e` y `P L I E` (sin convivencia), las cifras 1 a 9, `K` `D`, las
     // teclas del hito 4, y `. / { }`.
-    let mut without_assign: Vec<KeyId> = "lieKDPLIE./qrcwbtgmasxyzo"
-        .chars()
-        .map(KeyId::Char)
-        .collect();
+    let mut without_assign: Vec<KeyId> =
+        "lieKDPLIE./rcwbtgmaxyzo".chars().map(KeyId::Char).collect();
     without_assign.extend(('1'..='9').map(KeyId::Char));
     for platform in PLATFORMS {
         for key in &without_assign {
@@ -1929,6 +1927,8 @@ fn row_10_tool_action_for_key_gives_the_same_as_the_table_where_its_type_allows(
                 let of_the_table = km.action_for(&press_from_key(key, m), platform);
                 let expected_2 = match of_the_table {
                     Some(AppAction::SelectTool(tool)) => Some(ToolAction::Select(tool)),
+                    Some(AppAction::SelectDotted) => Some(ToolAction::SelectDotted),
+                    Some(AppAction::SelectCurve) => Some(ToolAction::SelectCurve),
                     // `Escape` cancela y no es de la tabla (es del lienzo).
                     _ if key == Key::Escape && m.is_none() => Some(ToolAction::Cancel),
                     _ => None,

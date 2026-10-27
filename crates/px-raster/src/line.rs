@@ -120,6 +120,20 @@ impl Line {
         self
     }
 
+    /// Como [`Line::clip_to`], pero con un margen de `margin` píxeles alrededor del lienzo: deja
+    /// los píxeles con `-margin <= x < width + margin` (y lo mismo en `y`), en el mismo orden. Es
+    /// para sellar un pincel cuyo centro cae fuera del lienzo pero cuyo cuerpo no.
+    pub(crate) fn clip_with_margin(mut self, width: u32, height: u32, margin: u32) -> Line {
+        let m = i64::from(margin);
+        self.major_start += m;
+        self.minor_start += m;
+        let extra = margin.saturating_mul(2);
+        let mut clipped = self.clip_to(width.saturating_add(extra), height.saturating_add(extra));
+        clipped.major_start -= m;
+        clipped.minor_start -= m;
+        clipped
+    }
+
     /// Coordenada del eje menor del píxel `i` (con `i <= n`).
     fn minor(&self, i: u64) -> i128 {
         let n = i128::from(self.n);

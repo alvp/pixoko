@@ -495,6 +495,8 @@ fn shortcut_expected(key: Key, m: Modifiers, platform: Platform) -> Option<AppAc
         Key::F => Some(AppAction::SelectTool(Tool::Fill)),
         Key::Comma => Some(AppAction::SelectTool(Tool::Dropper)),
         Key::K => Some(AppAction::SelectTool(Tool::Eraser)),
+        Key::S => Some(AppAction::SelectDotted),
+        Key::Q => Some(AppAction::SelectCurve),
         Key::U => Some(AppAction::Undo),
         Key::N => Some(AppAction::CenterOnCursor),
         Key::CloseBracket => Some(AppAction::ColorNext),
@@ -554,14 +556,17 @@ fn row_3_command_q_only_quits_on_linux() {
         for bits in 0..32 {
             assert_eq!(
                 action_for_shortcut(Key::Q, modifiers_2(bits), platform),
-                None,
+                (bits == 0).then_some(AppAction::SelectCurve),
                 "{platform:?} con {bits:#07b}"
             );
         }
     }
-    // Sin `command`, la `Q` sola no hace nada en ninguna plataforma.
+    // Sin `command`, la `Q` sola ya no sale: elige la curva en todas las plataformas.
     for platform in PLATFORMS {
-        assert_eq!(action_for_shortcut(Key::Q, Modifiers::NONE, platform), None);
+        assert_eq!(
+            action_for_shortcut(Key::Q, Modifiers::NONE, platform),
+            Some(AppAction::SelectCurve)
+        );
     }
 }
 
@@ -657,6 +662,20 @@ fn row_3_composes_the_three_existing_key_functions_without_changing_them() {
                         assert_eq!(
                             shortcut_2,
                             Some(AppAction::SelectTool(tool)),
+                            "{key:?} con {m:?}"
+                        );
+                    }
+                    Some(ToolAction::SelectDotted) => {
+                        assert_eq!(
+                            shortcut_2,
+                            Some(AppAction::SelectDotted),
+                            "{key:?} con {m:?}"
+                        );
+                    }
+                    Some(ToolAction::SelectCurve) => {
+                        assert_eq!(
+                            shortcut_2,
+                            Some(AppAction::SelectCurve),
                             "{key:?} con {m:?}"
                         );
                     }

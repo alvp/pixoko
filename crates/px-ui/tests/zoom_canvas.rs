@@ -878,36 +878,28 @@ fn row_a6_the_wheel_outward_saturates_at_1_64_and_half_way_goes_down_one_level_p
 }
 
 #[test]
-fn row_a6_the_plus_and_minus_keys_at_the_extremes_do_not_change_the_level() {
+fn row_a6_the_zoom_requests_at_the_extremes_do_not_change_the_level() {
     for ppp in PPPS {
         let mut bench = Bench::with_image(ppp, TEST_SCREEN, &image_64x48());
         bench.go_to_level(6);
-        let info = bench
-            .runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[])
-            .info;
+        let info = bench.asks(ViewOp::ZoomOut);
         assert_eq!(info.zoom.to_string(), "×1/2", "ppp {ppp}");
-        let info = bench
-            .runs(vec![key_2(Key::Plus, Modifiers::NONE)], &[])
-            .info;
+        let info = bench.asks(ViewOp::ZoomIn);
         assert_eq!(info.zoom, Zoom::ONE, "ppp {ppp}");
         for _ in 0..8 {
-            bench.runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[]);
+            bench.asks(ViewOp::ZoomOut);
         }
         assert_eq!(bench.canvas.zoom(), Some(Zoom::MIN), "ppp {ppp}");
         let before = bench.rest_2_2().image_rect;
-        let info = bench
-            .runs(vec![key_2(Key::Minus, Modifiers::NONE)], &[])
-            .info;
+        let info = bench.asks(ViewOp::ZoomOut);
         assert_eq!(info.zoom, Zoom::MIN, "ppp {ppp}: `-` satura");
         assert_eq!(info.image_rect, before, "ppp {ppp}");
         for _ in 0..80 {
-            bench.runs(vec![key_2(Key::Equals, Modifiers::NONE)], &[]);
+            bench.asks(ViewOp::ZoomIn);
         }
         assert_eq!(bench.canvas.zoom(), Some(Zoom::MAX), "ppp {ppp}");
         let before = bench.rest_2_2().image_rect;
-        let info = bench
-            .runs(vec![key_2(Key::Plus, Modifiers::NONE)], &[])
-            .info;
+        let info = bench.asks(ViewOp::ZoomIn);
         assert_eq!(info.zoom, Zoom::MAX, "ppp {ppp}: `+` satura");
         assert_eq!(info.image_rect, before, "ppp {ppp}");
     }

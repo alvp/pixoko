@@ -8,9 +8,13 @@ use egui::{Key, Modifiers};
 use px_core::{
     Command, Document, DocumentError, Image, ImageId, Mode, Pixel, PixelEdit, Rgba, Span,
 };
-use px_raster::{Line, fill_command, line_command};
+use px_raster::{
+    Brush, BrushShape, Line, Spacing, curve_path, fill_command, line_path, line_path_near,
+    spaced_centers, stamp_pixels,
+};
 
 use crate::actions::{AppAction, Platform};
+use crate::brush_es;
 use crate::canvas::{CanvasEvent, CanvasInput};
 use crate::color::{ColorChoice, SlotColors, choice_label_with, pixel_for_choice};
 use crate::dirty::{Change, dirty_of};
@@ -47,36 +51,6 @@ fn empty_value(canvas: &Image) -> Option<Pixel> {
             .map(Pixel::Indexed),
         Mode::Gray => None,
     }
-}
-
-/// `line_command` también sobre una celda vacía (que `px-raster` no ve): `SetPixels` con lo que
-/// cae dentro del lienzo, sin materializar nada antes de aplicarlo.
-fn line_in(
-    doc: &Document,
-    image: ImageId,
-    a: (i32, i32),
-    b: (i32, i32),
-    pixel: Pixel,
-) -> Result<Option<Command>, DocumentError> {
-    if doc.image(image).is_some() || !is_cell(doc, image) {
-        return line_command(doc, image, a, b, pixel);
-    }
-    let line = Line::new(a, b).clip_to(doc.width(), doc.height());
-    if line.is_empty() {
-        return Ok(None);
-    }
-    let len = usize::try_from(line.len()).map_err(|_| DocumentError::OutOfMemory)?;
-    let mut pixels = Vec::new();
-    pixels
-        .try_reserve_exact(len)
-        .map_err(|_| DocumentError::OutOfMemory)?;
-    for (x, y) in line {
-        // Tras recortar, `x` e `y` están dentro del lienzo.
-        if let (Ok(x), Ok(y)) = (u32::try_from(x), u32::try_from(y)) {
-            pixels.push(PixelEdit { x, y, pixel });
-        }
-    }
-    Ok(Some(Command::SetPixels { image, pixels }))
 }
 
 /// `fill_command` también sobre una celda vacía: todo el lienzo es una región del valor
@@ -189,6 +163,10 @@ impl Tool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolAction {
     Select(Tool),
+    /// The pencil in dotted mode (`s`).
+    SelectDotted,
+    /// The line in curve mode (`q`).
+    SelectCurve,
     Cancel,
 }
 
@@ -204,6 +182,8 @@ pub fn tool_action_for_key(key: Key, modifiers: Modifiers) -> Option<ToolAction>
     }
     match default_keymap().action_for(&press_from_key(key, modifiers), Platform::Linux)? {
         AppAction::SelectTool(tool) => Some(ToolAction::Select(tool)),
+        AppAction::SelectDotted => Some(ToolAction::SelectDotted),
+        AppAction::SelectCurve => Some(ToolAction::SelectCurve),
         _ => None,
     }
 }
@@ -251,9 +231,16 @@ enum Gesture {
     /// Pulsado sin nada pendiente: ranura sin color, relleno ya hecho o línea cancelada. Solo
     /// espera el `End`.
     Waiting,
-    Pencil {
+    /// Freehand with the brush (continuous or dotted).
+    Brush {
         stroke: Stroke,
         pixel: Pixel,
+        offsets: Vec<(i32, i32)>,
+        dotted: bool,
+        /// Where the gesture began and the last position stamped (after the `Mayús` projection).
+        start: (i32, i32),
+        last: (i32, i32),
+        axis: Option<Axis>,
     },
     /// Como el lápiz, con el valor de borrado de la imagen.
     Erase {
@@ -261,23 +248,188 @@ enum Gesture {
         pixel: Pixel,
     },
     Dropper(Dropper),
-    Line {
-        from: (i32, i32),
-        to: (i32, i32),
-        pixel: Pixel,
-        width: u32,
-        height: u32,
+    /// A segment or a curve being dragged.
+    Figure(Box<Figure>),
+}
+
+/// The axis that `Mayús` locks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Axis {
+    Horizontal,
+    Vertical,
+}
+
+/// `pos` projected on the axis of its larger displacement from `start` (a tie: horizontal).
+fn dominant_axis(start: (i32, i32), pos: (i32, i32)) -> Axis {
+    let (dx, dy) = (
+        i64::from(pos.0) - i64::from(start.0),
+        i64::from(pos.1) - i64::from(start.1),
+    );
+    if dx.abs() >= dy.abs() {
+        Axis::Horizontal
+    } else {
+        Axis::Vertical
+    }
+}
+
+fn project(start: (i32, i32), pos: (i32, i32), axis: Axis) -> (i32, i32) {
+    match axis {
+        Axis::Horizontal => (pos.0, start.1),
+        Axis::Vertical => (start.0, pos.1),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FigureKind {
+    Segment,
+    /// First drag of the curve: only a segment to preview.
+    CurveFirst,
+    /// Second drag: `to` is the control point.
+    CurveSecond {
+        a: (i32, i32),
+        b: (i32, i32),
     },
 }
 
+/// The segment or curve being dragged, with the traces `Ctrl` left.
+#[derive(Debug)]
+struct Figure {
+    kind: FigureKind,
+    from: (i32, i32),
+    to: (i32, i32),
+    pixel: Pixel,
+    brush: Brush,
+    spacing: Spacing,
+    traces: Stroke,
+    width: u32,
+    height: u32,
+}
+
+impl Figure {
+    /// The path of the segment: whole when the spacing needs its indices, if it is not too long.
+    fn segment(&self) -> Vec<(i32, i32)> {
+        let whole = Line::new(self.from, self.to).len() <= MAX_WHOLE_SEGMENT;
+        if self.spacing == Spacing::Continuous || !whole {
+            self.segment_near()
+        } else {
+            line_path(self.from, self.to)
+        }
+    }
+
+    /// Only the points that a brush can reach on the canvas.
+    fn segment_near(&self) -> Vec<(i32, i32)> {
+        line_path_near(
+            self.from,
+            self.to,
+            self.width,
+            self.height,
+            self.brush.size(),
+        )
+    }
+
+    /// The pixels of the figure as it is now.
+    fn pixels(&self) -> Vec<(u32, u32)> {
+        let (path, spacing) = match self.kind {
+            FigureKind::Segment => (self.segment(), self.spacing),
+            FigureKind::CurveFirst => (self.segment_near(), Spacing::Continuous),
+            FigureKind::CurveSecond { a, b } => (curve_path(a, b, self.to), self.spacing),
+        };
+        let centers = spaced_centers(&path, spacing);
+        stamp_pixels(self.brush, centers, self.width, self.height)
+    }
+
+    /// The traces plus the figure, as the edits to apply.
+    fn into_pixels(mut self) -> Vec<PixelEdit> {
+        let pixels = self.pixels();
+        let pixel = self.pixel;
+        self.traces.add(pixels, pixel);
+        self.traces.into_pixels()
+    }
+}
+
+/// Longest segment, in points, whose spacing is measured from its real start.
+const MAX_WHOLE_SEGMENT: u64 = 1 << 22;
+
+/// The first drag of a curve, waiting for the second.
+#[derive(Debug)]
+struct PendingCurve {
+    a: (i32, i32),
+    b: (i32, i32),
+    pixel: Pixel,
+    brush: Brush,
+    width: u32,
+    height: u32,
+}
+
 /// Herramienta activa y gesto en curso.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ToolState {
     tool: Tool,
     dropper_source: DropperSource,
     gesture: Gesture,
     events: Vec<ToolEvent>,
     changes: Vec<Change>,
+    brush: Brush,
+    spacing: Spacing,
+    /// The `N` of the spacing while it is `Continuous`.
+    spacing_n: u32,
+    dotted: bool,
+    curve: bool,
+    shift: bool,
+    ctrl: bool,
+    pending: Option<PendingCurve>,
+}
+
+impl Default for ToolState {
+    fn default() -> ToolState {
+        ToolState {
+            tool: Tool::default(),
+            dropper_source: DropperSource::default(),
+            gesture: Gesture::default(),
+            events: Vec::new(),
+            changes: Vec::new(),
+            brush: Brush::new(BrushShape::Round, 1),
+            spacing: Spacing::Continuous,
+            spacing_n: DEFAULT_SPACING_N,
+            dotted: false,
+            curve: false,
+            shift: false,
+            ctrl: false,
+            pending: None,
+        }
+    }
+}
+
+/// The `N` that the spacing starts with.
+const DEFAULT_SPACING_N: u32 = 4;
+/// Largest `N` of the spacing.
+const MAX_SPACING_N: u32 = 999;
+
+/// A row of the options window of a stroke tool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OptionRow {
+    /// Continuous or dotted (pencil), straight or curve (line).
+    Mode,
+    Shape,
+    Size,
+    Spacing,
+    /// The `N` of the spacing; only when it is not continuous.
+    SpacingN,
+}
+
+/// The rows of `tool` with the default spacing (continuous): the same that
+/// [`ToolState::option_rows`] gives before the spacing changes.
+pub fn default_option_rows(tool: Tool) -> &'static [OptionRow] {
+    match tool {
+        Tool::Pencil => &[OptionRow::Mode, OptionRow::Shape, OptionRow::Size],
+        Tool::Line => &[
+            OptionRow::Mode,
+            OptionRow::Shape,
+            OptionRow::Size,
+            OptionRow::Spacing,
+        ],
+        Tool::Fill | Tool::Dropper | Tool::Eraser => &[],
+    }
 }
 
 impl ToolState {
@@ -288,6 +440,142 @@ impl ToolState {
 
     pub fn tool(&self) -> Tool {
         self.tool
+    }
+
+    /// The brush shared by the stroke tools (pencil and line).
+    pub fn brush(&self) -> Brush {
+        self.brush
+    }
+
+    pub fn set_brush(&mut self, brush: Brush) {
+        self.brush = brush;
+    }
+
+    /// The spacing of the line and the curve.
+    pub fn spacing(&self) -> Spacing {
+        self.spacing
+    }
+
+    pub fn set_spacing(&mut self, spacing: Spacing) {
+        self.spacing = spacing;
+    }
+
+    /// The pencil is in dotted mode.
+    pub fn dotted(&self) -> bool {
+        self.dotted
+    }
+
+    /// The line is in curve mode.
+    pub fn curve(&self) -> bool {
+        self.curve
+    }
+
+    /// `Mayús` and `Ctrl`, as read before each canvas event. Without calling it they are off.
+    pub fn set_modifiers(&mut self, shift: bool, ctrl: bool) {
+        self.shift = shift;
+        self.ctrl = ctrl;
+    }
+
+    /// Whether the active tool paints with the brush.
+    fn is_stroke_tool(&self) -> bool {
+        matches!(self.tool, Tool::Pencil | Tool::Line)
+    }
+
+    /// Changes the size of the brush by `delta`, inside 1 to 100, only with a stroke tool. `true`
+    /// if the size changed.
+    pub fn step_brush_size(&mut self, delta: i32) -> bool {
+        if !self.is_stroke_tool() {
+            return false;
+        }
+        let size = (i64::from(self.brush.size()) + i64::from(delta)).clamp(1, 100) as u32;
+        let changed = size != self.brush.size();
+        self.brush = Brush::new(self.brush.shape(), size);
+        changed
+    }
+
+    /// The rows of the options window of the active tool.
+    pub fn option_rows(&self) -> Vec<OptionRow> {
+        let mut rows = default_option_rows(self.tool).to_vec();
+        if self.tool == Tool::Line && self.spacing != Spacing::Continuous {
+            rows.push(OptionRow::SpacingN);
+        }
+        rows
+    }
+
+    /// The `N` of the spacing: the current one or, if continuous, the last used.
+    fn spacing_count(&self) -> u32 {
+        match self.spacing {
+            Spacing::EveryN(n) | Spacing::TotalN(n) => n,
+            Spacing::Continuous => self.spacing_n,
+        }
+    }
+
+    /// The text of a row.
+    pub fn option_text(&self, row: OptionRow) -> String {
+        match row {
+            OptionRow::Mode => {
+                let on = if self.tool == Tool::Line {
+                    self.curve
+                } else {
+                    self.dotted
+                };
+                brush_es::mode_text(self.tool == Tool::Line, on).to_string()
+            }
+            OptionRow::Shape => brush_es::shape_text(self.brush.shape()),
+            OptionRow::Size => brush_es::size_text(self.brush.size()),
+            OptionRow::Spacing => brush_es::spacing_text(self.spacing).to_string(),
+            OptionRow::SpacingN => brush_es::spacing_n_text(self.spacing_count()),
+        }
+    }
+
+    /// A click on a row: `forward` is the left button and `big` is `Mayús` (steps of 10).
+    pub fn click_option(&mut self, row: OptionRow, forward: bool, big: bool) {
+        let step = |value: u32, max: u32| {
+            let delta: i64 = if big { 10 } else { 1 };
+            let delta = if forward { delta } else { -delta };
+            (i64::from(value) + delta).clamp(1, i64::from(max)) as u32
+        };
+        match row {
+            OptionRow::Mode if self.tool == Tool::Line => {
+                self.curve = !self.curve;
+                self.pending = None;
+            }
+            OptionRow::Mode => self.dotted = !self.dotted,
+            OptionRow::Shape => {
+                let all = BrushShape::ALL;
+                let at = all
+                    .iter()
+                    .position(|&s| s == self.brush.shape())
+                    .unwrap_or(0);
+                let next = if forward {
+                    (at + 1) % all.len()
+                } else {
+                    (at + all.len() - 1) % all.len()
+                };
+                self.brush = Brush::new(all[next], self.brush.size());
+            }
+            OptionRow::Size => {
+                self.brush = Brush::new(self.brush.shape(), step(self.brush.size(), 100))
+            }
+            OptionRow::Spacing => {
+                let n = self.spacing_count();
+                self.spacing_n = n;
+                self.spacing = match (self.spacing, forward) {
+                    (Spacing::Continuous, true) | (Spacing::TotalN(_), false) => Spacing::EveryN(n),
+                    (Spacing::EveryN(_), true) | (Spacing::Continuous, false) => Spacing::TotalN(n),
+                    (Spacing::TotalN(_), true) | (Spacing::EveryN(_), false) => Spacing::Continuous,
+                };
+            }
+            OptionRow::SpacingN => {
+                let n = step(self.spacing_count(), MAX_SPACING_N);
+                self.spacing_n = n;
+                self.spacing = match self.spacing {
+                    Spacing::Continuous => Spacing::Continuous,
+                    Spacing::EveryN(_) => Spacing::EveryN(n),
+                    Spacing::TotalN(_) => Spacing::TotalN(n),
+                };
+            }
+        }
     }
 
     /// Qué lee el cuentagotas (por defecto, lo visible). Sin gesto ni opción hasta el panel de
@@ -338,13 +626,34 @@ impl ToolState {
         Ok(changed)
     }
 
-    /// `Select` cambia de herramienta solo en reposo. `Cancel` descarta una línea pendiente
-    /// (el gesto sigue `busy` hasta su `End`); con lápiz, relleno o en reposo no hace nada.
+    /// `Select` (y sus dos modos) cambia de herramienta solo en reposo. `Cancel` descarta la
+    /// figura que se arrastra (el gesto sigue `busy` hasta su `End`) y el segmento pendiente de
+    /// la curva; con lápiz, relleno o en reposo no hace nada más.
     pub fn apply_action(&mut self, action: ToolAction) {
         match action {
-            ToolAction::Select(tool) if !self.busy() => self.tool = tool,
-            ToolAction::Cancel if matches!(self.gesture, Gesture::Line { .. }) => {
-                self.gesture = Gesture::Waiting;
+            ToolAction::Select(tool) if !self.busy() => {
+                self.tool = tool;
+                self.dotted = false;
+                self.curve = false;
+                self.pending = None;
+            }
+            ToolAction::SelectDotted if !self.busy() => {
+                self.tool = Tool::Pencil;
+                self.dotted = true;
+                self.curve = false;
+                self.pending = None;
+            }
+            ToolAction::SelectCurve if !self.busy() => {
+                self.tool = Tool::Line;
+                self.dotted = false;
+                self.curve = true;
+                self.pending = None;
+            }
+            ToolAction::Cancel => {
+                self.pending = None;
+                if matches!(self.gesture, Gesture::Figure(_)) {
+                    self.gesture = Gesture::Waiting;
+                }
             }
             _ => {}
         }
@@ -377,9 +686,58 @@ impl ToolState {
             CanvasEvent::StrokeBegin(pos) if !self.busy() => self.begin(doc, image, pixel, pos),
             CanvasEvent::StrokeBegin(_) => Ok(false),
             CanvasEvent::StrokeMove(pos) => {
+                let (shift, ctrl) = (self.shift, self.ctrl);
+                let brush_size = self.brush.size();
                 match &mut self.gesture {
-                    Gesture::Pencil { stroke, pixel } | Gesture::Erase { stroke, pixel } => {
+                    Gesture::Erase { stroke, pixel } => {
                         stroke.move_to(pos, *pixel);
+                    }
+                    Gesture::Brush {
+                        stroke,
+                        pixel,
+                        offsets,
+                        dotted,
+                        start,
+                        last,
+                        axis,
+                    } => {
+                        let pos = if shift {
+                            let locked = *axis.get_or_insert_with(|| dominant_axis(*start, pos));
+                            if pos == *start && axis.is_some() {
+                                pos
+                            } else {
+                                project(*start, pos, locked)
+                            }
+                        } else {
+                            *axis = None;
+                            pos
+                        };
+                        if pos != *last {
+                            if *dotted {
+                                stroke.stamp(offsets, pos, *pixel);
+                            } else {
+                                let reach = brush_size;
+                                let (w, h) = stroke.size();
+                                for center in line_path_near(*last, pos, w, h, reach) {
+                                    stroke.stamp(offsets, center, *pixel);
+                                }
+                            }
+                            *last = pos;
+                        }
+                    }
+                    Gesture::Figure(figure) => {
+                        figure.to = match figure.kind {
+                            FigureKind::CurveSecond { .. } => pos,
+                            _ if shift => {
+                                project(figure.from, pos, dominant_axis(figure.from, pos))
+                            }
+                            _ => pos,
+                        };
+                        if ctrl && figure.kind != FigureKind::CurveFirst {
+                            let pixels = figure.pixels();
+                            let pixel = figure.pixel;
+                            figure.traces.add(pixels, pixel);
+                        }
                     }
                     Gesture::Dropper(dropper) => {
                         let source = self.dropper_source;
@@ -389,13 +747,12 @@ impl ToolState {
                             });
                         self.events.extend(picked.map(ToolEvent::Picked));
                     }
-                    Gesture::Line { to, .. } => *to = pos,
                     _ => {}
                 }
                 Ok(false)
             }
             CanvasEvent::StrokeEnd => match std::mem::take(&mut self.gesture) {
-                Gesture::Pencil { stroke, .. } => {
+                Gesture::Brush { stroke, .. } => {
                     if stroke.is_empty() {
                         return Ok(false);
                     }
@@ -417,11 +774,27 @@ impl ToolState {
                     }
                     self.apply(doc, Command::SetPixels { image, pixels })
                 }
-                Gesture::Line {
-                    from, to, pixel, ..
-                } => match line_in(doc, image, from, to, pixel)? {
-                    Some(command) => self.apply(doc, command),
-                    None => Ok(false),
+                Gesture::Figure(figure) => match figure.kind {
+                    FigureKind::CurveFirst => {
+                        if figure.from != figure.to {
+                            self.pending = Some(PendingCurve {
+                                a: figure.from,
+                                b: figure.to,
+                                pixel: figure.pixel,
+                                brush: figure.brush,
+                                width: figure.width,
+                                height: figure.height,
+                            });
+                        }
+                        Ok(false)
+                    }
+                    FigureKind::Segment | FigureKind::CurveSecond { .. } => {
+                        let pixels = figure.into_pixels();
+                        if pixels.is_empty() {
+                            return Ok(false);
+                        }
+                        self.apply(doc, Command::SetPixels { image, pixels })
+                    }
                 },
                 Gesture::Idle | Gesture::Waiting | Gesture::Dropper(_) => Ok(false),
             },
@@ -504,19 +877,39 @@ impl ToolState {
         };
         match self.tool {
             Tool::Pencil => {
+                let offsets = self.brush.offsets();
                 let mut stroke = Stroke::new(width, height);
-                stroke.move_to(pos, pixel);
-                self.gesture = Gesture::Pencil { stroke, pixel };
+                stroke.stamp(&offsets, pos, pixel);
+                self.gesture = Gesture::Brush {
+                    stroke,
+                    pixel,
+                    offsets,
+                    dotted: self.dotted,
+                    start: pos,
+                    last: pos,
+                    axis: None,
+                };
                 Ok(false)
             }
             Tool::Line => {
-                self.gesture = Gesture::Line {
+                let kind = match self.pending.take() {
+                    Some(PendingCurve { a, b, .. }) if self.curve => {
+                        FigureKind::CurveSecond { a, b }
+                    }
+                    _ if self.curve => FigureKind::CurveFirst,
+                    _ => FigureKind::Segment,
+                };
+                self.gesture = Gesture::Figure(Box::new(Figure {
+                    kind,
                     from: pos,
                     to: pos,
                     pixel,
+                    brush: self.brush,
+                    spacing: self.spacing,
+                    traces: Stroke::new(width, height),
                     width,
                     height,
-                };
+                }));
                 Ok(false)
             }
             Tool::Fill => match fill_in(doc, image, pos.0, pos.1, pixel)? {
@@ -527,33 +920,38 @@ impl ToolState {
         }
     }
 
-    /// Píxeles pendientes para la superposición: el trazo del lápiz o la línea recortada al
-    /// lienzo (la misma que aplicará `draw_line`). Vacío en reposo y con el relleno.
+    /// Píxeles pendientes para la superposición: el trazo del pincel o del borrador, la figura
+    /// que se arrastra (con sus trazas) o el segmento pendiente de la curva. Vacío en reposo y con
+    /// el relleno.
     pub fn preview(&self) -> impl Iterator<Item = PixelEdit> + '_ {
         let pixels: Box<dyn Iterator<Item = PixelEdit> + '_> = match &self.gesture {
-            Gesture::Pencil { stroke, .. } | Gesture::Erase { stroke, .. } => {
+            Gesture::Brush { stroke, .. } | Gesture::Erase { stroke, .. } => {
                 Box::new(stroke.pixels().iter().copied())
             }
-            Gesture::Line {
-                from,
-                to,
-                pixel,
-                width,
-                height,
-            } => {
-                let pixel = *pixel;
-                Box::new(Line::new(*from, *to).clip_to(*width, *height).filter_map(
-                    move |(x, y)| {
-                        // Tras recortar, `x` e `y` están dentro del lienzo.
-                        Some(PixelEdit {
-                            x: u32::try_from(x).ok()?,
-                            y: u32::try_from(y).ok()?,
-                            pixel,
-                        })
-                    },
-                ))
+            Gesture::Figure(figure) => {
+                let pixel = figure.pixel;
+                let figure_pixels = figure.pixels();
+                Box::new(
+                    figure.traces.pixels().iter().copied().chain(
+                        figure_pixels
+                            .into_iter()
+                            .map(move |(x, y)| PixelEdit { x, y, pixel }),
+                    ),
+                )
             }
-            _ => Box::new(std::iter::empty()),
+            _ => match &self.pending {
+                Some(p) => {
+                    let pixel = p.pixel;
+                    let centers = line_path_near(p.a, p.b, p.width, p.height, p.brush.size());
+                    let pixels = stamp_pixels(p.brush, centers, p.width, p.height);
+                    Box::new(
+                        pixels
+                            .into_iter()
+                            .map(move |(x, y)| PixelEdit { x, y, pixel }),
+                    )
+                }
+                None => Box::new(std::iter::empty()),
+            },
         };
         pixels
     }
