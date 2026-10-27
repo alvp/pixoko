@@ -83,10 +83,11 @@ fn extent(a: i64, b: i64, dy: i64) -> Option<i64> {
         _ => {
             let (a, b, dy) = (i128::from(a), i128::from(b), i128::from(dy));
             let num = a * b * (2 * a * b + a + b) - 2 * a * a * dy * dy;
-            if num < 0 {
+            if num <= 0 {
                 return None;
             }
-            let reach = isqrt(num / (2 * b * b));
+            // Strict: `2b²dx² < num`, that is `dx² ≤ ⌊(num − 1) / 2b²⌋`.
+            let reach = isqrt((num - 1) / (2 * b * b));
             Some(reach.min(a) as i64)
         }
     }
@@ -98,7 +99,7 @@ fn clamp_radius(radius: u32) -> i64 {
 
 /// The filled ellipse (or circle) of radii `a` and `b` around `center`, clipped to the canvas: a
 /// pixel at `(dx, dy)` is inside when `|dx| ≤ a`, `|dy| ≤ b` and
-/// `2(b²dx² + a²dy²) ≤ ab(2ab + a + b)`.
+/// `2(b²dx² + a²dy²) < ab(2ab + a + b)`.
 pub fn ellipse_spans(center: (i32, i32), a: u32, b: u32, width: u32, height: u32) -> Vec<Span> {
     let (a, b) = (clamp_radius(a), clamp_radius(b));
     let (cx, cy) = (i64::from(center.0), i64::from(center.1));

@@ -62,7 +62,7 @@ fn naive_inside(a: i64, b: i64, dx: i64, dy: i64) -> bool {
         (0, 0) => dx == 0 && dy == 0,
         (0, _) => dx == 0 && dy.abs() <= b,
         (_, 0) => dy == 0 && dx.abs() <= a,
-        _ => 2 * (b * b * dx * dx + a * a * dy * dy) <= a * b * (2 * a * b + a + b),
+        _ => 2 * (b * b * dx * dx + a * a * dy * dy) < a * b * (2 * a * b + a + b),
     }
 }
 
@@ -152,7 +152,7 @@ fn row_01_circle_radius_satisfies_the_inequality_without_overflow() {
 /// `(a, b, filled, outline)`: the box of `2a+1` by `2b+1` pixels around the center.
 const ELLIPSES: [(u32, u32, &str, &str); 10] = [
     (0, 0, "#", "#"),
-    (1, 1, "###/###/###", "###/#.#/###"),
+    (1, 1, ".#./###/.#.", ".#./#.#/.#."),
     (
         2,
         2,
@@ -168,8 +168,8 @@ const ELLIPSES: [(u32, u32, &str, &str); 10] = [
     (
         4,
         4,
-        "..#####../.#######./#########/#########/#########/#########/#########/.#######./..#####..",
-        "..#####../.#.....#./#.......#/#.......#/#.......#/#.......#/#.......#/.#.....#./..#####..",
+        "...###.../.#######./.#######./#########/#########/#########/.#######./.#######./...###...",
+        "...###.../.##...##./.#.....#./#.......#/#.......#/#.......#/.#.....#./.##...##./...###...",
     ),
     (
         3,
@@ -237,19 +237,7 @@ fn row_02_outlines_are_the_four_neighbour_border_of_the_fill() {
 #[test]
 fn row_02_the_ring_goes_clockwise_from_the_east() {
     let ring = ellipse_ring((5, 5), 1, 1, 11, 11, 0);
-    assert_eq!(
-        ring,
-        vec![
-            (6, 5),
-            (6, 6),
-            (5, 6),
-            (4, 6),
-            (4, 5),
-            (4, 4),
-            (5, 4),
-            (6, 4)
-        ]
-    );
+    assert_eq!(ring, vec![(6, 5), (5, 6), (4, 5), (5, 4)]);
     for (a, b, _, _) in ELLIPSES.iter().filter(|(a, b, ..)| *a > 0 && *b > 0) {
         let (cx, cy) = (*a as i32 + 2, *b as i32 + 2);
         let ring = ellipse_ring((cx, cy), *a, *b, 2 * a + 5, 2 * b + 5, 0);

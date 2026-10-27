@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Corpus de las formas (specs/hito-4-formas.md, «Referencia»): genera en golden/aseprite-shapes/ los
-# 30 PNG de referencia con Aseprite por lotes.
+# 34 PNG de referencia con Aseprite por lotes.
 #
 # Uso:
 #   tools/corpus-h4/generate-shapes.sh --prueba       paso 0: versión y modo por lotes, sin tocar golden/
-#   tools/corpus-h4/generate-shapes.sh                genera los 30 ficheros (no pisa los que ya existen)
+#   tools/corpus-h4/generate-shapes.sh                genera los 34 ficheros (no pisa los que ya existen)
 #   tools/corpus-h4/generate-shapes.sh --sobrescribir lo mismo, pisando lo que haya
 # Variables: ASEPRITE (orden del programa, por defecto `aseprite`) y SALIDA (por defecto
 # golden/aseprite-shapes). Los resultados no se commitean solos: se revisan y se commitean a mano,
@@ -38,4 +38,4 @@ for f in "$PRUEBA"/*.png; do
     echo "NUEVO    $nombre"
   fi
 done
-echo "$total ficheros (se esperan 30: 2 rectángulos, 10 círculos, 10 elipses y 8 polígonos)"
+echo "$total ficheros (se esperan 34: 2 rectángulos, 14 círculos, 10 elipses y 8 polígonos)"
