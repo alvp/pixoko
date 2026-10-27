@@ -42,6 +42,8 @@ use px_ui::tool::{Tool, ToolState};
 use px_ui::toolbar::{TOOL_BUTTONS, ZOOM_BUTTONS};
 use px_ui::view::{ViewOp, Zoom};
 
+mod brush;
+
 use super::{Dispatched, Targets, dispatch};
 use crate::session::Session;
 
