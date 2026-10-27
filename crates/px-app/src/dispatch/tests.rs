@@ -620,7 +620,7 @@ fn cases_of_row_4() -> Vec<TestCase> {
             expected: AppAction::ZoomIn,
             menu: Some("Acercar"),
             button_2: Some("Acercar"),
-            shortcut: Some((Key::Plus, Modifiers::NONE)),
+            shortcut: None,
         },
         TestCase {
             expected: AppAction::ZoomFit,

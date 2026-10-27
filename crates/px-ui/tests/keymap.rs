@@ -253,6 +253,8 @@ fn scheme_expected() -> Vec<Expected> {
             all_2,
             t,
         ),
+        e(AppAction::SelectDotted, c('s'), false, false, all_2, t),
+        e(AppAction::SelectCurve, c('q'), false, false, all_2, t),
         e(AppAction::Undo, c('z'), true, false, all_2, t),
         e(AppAction::Undo, c('u'), false, false, all_2, None),
         e(
@@ -308,10 +310,10 @@ fn scheme_expected() -> Vec<Expected> {
         e(AppAction::BackgroundNext, c('}'), false, false, all_2, t),
         e(AppAction::BackgroundPrev, c('{'), false, false, all_2, t),
         e(AppAction::ZoomIn, c('>'), false, false, all_2, t),
-        e(AppAction::ZoomIn, c('+'), false, false, all_2, None),
-        e(AppAction::ZoomIn, c('='), false, false, all_2, None),
+        e(AppAction::BrushBigger, c('+'), false, false, all_2, None),
+        e(AppAction::BrushBigger, c('='), false, false, all_2, None),
         e(AppAction::ZoomOut, c('<'), false, false, all_2, t),
-        e(AppAction::ZoomOut, c('-'), false, false, all_2, None),
+        e(AppAction::BrushSmaller, c('-'), false, false, all_2, None),
         e(AppAction::ZoomFit, KeyId::Home, false, false, all_2, t),
         e(AppAction::ZoomActualSize, c('1'), true, false, all_2, t),
         e(AppAction::CenterOnCursor, c('n'), false, false, all_2, t),
@@ -351,11 +353,11 @@ fn row_1_the_types_of_the_table_have_the_derives_of_the_spec() {
 }
 
 #[test]
-fn row_1_the_default_table_is_the_36_rows_of_the_spec_in_order() {
+fn row_1_the_default_table_is_the_38_rows_of_the_spec_in_order() {
     let km = default();
     let expected_2 = scheme_expected();
-    assert_eq!(expected_2.len(), 36);
-    assert_eq!(km.rows().len(), 36, "filas de la tabla por defecto");
+    assert_eq!(expected_2.len(), 38);
+    assert_eq!(km.rows().len(), 38, "filas de la tabla por defecto");
     for (i, (real, expected)) in km.rows().iter().zip(&expected_2).enumerate() {
         assert_eq!(real.action, expected.action, "fila {i}: acción");
         assert_eq!(
@@ -389,11 +391,11 @@ fn row_1_the_default_table_is_the_36_rows_of_the_spec_in_order() {
 }
 
 #[test]
-fn row_1_there_are_27_rows_without_command_and_9_with_it_and_quit_only_on_linux() {
+fn row_1_there_are_29_rows_without_command_and_9_with_it_and_quit_only_on_linux() {
     let km = default();
     let without = km.rows().iter().filter(|f| !f.command).count();
     let with = km.rows().iter().filter(|f| f.command).count();
-    assert_eq!((without, with), (27, 9));
+    assert_eq!((without, with), (29, 9));
     let quit: Vec<&Binding> = km
         .rows()
         .iter()
@@ -404,12 +406,12 @@ fn row_1_there_are_27_rows_without_command_and_9_with_it_and_quit_only_on_linux(
 }
 
 #[test]
-fn row_1_there_are_36_active_rows_on_linux_and_35_on_windows_and_macos() {
+fn row_1_there_are_38_active_rows_on_linux_and_37_on_windows_and_macos() {
     let km = default();
     for (platform, expected_2) in [
-        (Platform::Linux, 36),
-        (Platform::Windows, 35),
-        (Platform::Mac, 35),
+        (Platform::Linux, 38),
+        (Platform::Windows, 37),
+        (Platform::Mac, 37),
     ] {
         let active = km
             .rows()
@@ -528,6 +530,8 @@ fn row_1_shown_of_redo_and_quit_depends_on_the_platform() {
 fn assigned_without_command() -> Vec<(KeyId, AppAction)> {
     vec![
         (c('d'), AppAction::SelectTool(Tool::Pencil)),
+        (c('s'), AppAction::SelectDotted),
+        (c('q'), AppAction::SelectCurve),
         (c('v'), AppAction::SelectTool(Tool::Line)),
         (c('f'), AppAction::SelectTool(Tool::Fill)),
         (c(','), AppAction::SelectTool(Tool::Dropper)),
@@ -539,9 +543,9 @@ fn assigned_without_command() -> Vec<(KeyId, AppAction)> {
         (c('{'), AppAction::BackgroundPrev),
         (c('<'), AppAction::ZoomOut),
         (c('>'), AppAction::ZoomIn),
-        (c('+'), AppAction::ZoomIn),
-        (c('='), AppAction::ZoomIn),
-        (c('-'), AppAction::ZoomOut),
+        (c('+'), AppAction::BrushBigger),
+        (c('='), AppAction::BrushBigger),
+        (c('-'), AppAction::BrushSmaller),
         (KeyId::Home, AppAction::ZoomFit),
         (KeyId::PageUp, AppAction::ColorPrev),
         (KeyId::PageDown, AppAction::ColorNext),
