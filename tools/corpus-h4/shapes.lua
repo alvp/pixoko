@@ -56,8 +56,11 @@ for _, ab in ipairs({ { 3, 2 }, { 5, 1 }, { 2, 4 }, { 12, 7 }, { 20, 9 } }) do
   elipse("ellipse-" .. ab[1] .. "x" .. ab[2], ab[1], ab[2])
 end
 
--- Polígonos. comprobar: la herramienta "polygon" y cómo se pide el relleno (en Aseprite lo da una
--- preferencia de la herramienta, no un nombre de herramienta distinto).
+-- Polígonos. comprobar: los nombres de herramienta "polygon" (contorno) y "filled_polygon"
+-- (relleno): no hay opción `fill` en las preferencias de la herramienta (la primera versión de este
+-- script la usaba y Aseprite lo rechazó). Si "filled_polygon" no existe, el caso se salta con un
+-- aviso y la lista de ficheros sale corta: se prueba entonces el nombre que dé `aseprite --help` o
+-- la lista de herramientas de la versión instalada.
 local POLIGONOS = {
   { "triangle", { { 5, 5 }, { 40, 5 }, { 5, 40 } } },
   { "notch", { { 5, 5 }, { 20, 5 }, { 20, 30 }, { 35, 30 }, { 35, 5 }, { 50, 5 }, { 50, 50 }, { 5, 50 } } },
@@ -65,8 +68,9 @@ local POLIGONOS = {
   { "star", { { 32, 3 }, { 50, 58 }, { 3, 22 }, { 61, 22 }, { 14, 58 } } },
 }
 for _, poligono in ipairs(POLIGONOS) do
-  app.preferences.tool("polygon").fill.enabled = false -- comprobar: app.preferences.tool
   dibuja("poly-" .. poligono[1] .. "-outline", "polygon", poligono[2])
-  app.preferences.tool("polygon").fill.enabled = true
-  dibuja("poly-" .. poligono[1] .. "-filled", "polygon", poligono[2])
+  local ok, err = pcall(dibuja, "poly-" .. poligono[1] .. "-filled", "filled_polygon", poligono[2])
+  if not ok then
+    io.stderr:write("AVISO: poly-" .. poligono[1] .. "-filled no se pudo dibujar: " .. tostring(err) .. "\n")
+  end
 end
